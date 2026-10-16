@@ -32868,7 +32868,9 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 	let activeCard = null;
 	let activeWorkId = null;
 	let prepared = null;
-	let serial = 0;
+	let workSerial = 0;
+	let previewSerial = 0;
+	let attemptsSerial = 0;
 	let loading = false;
 	let attempts = [];
 	let latestAttempt = null;
@@ -32898,10 +32900,26 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 		class: "pm-work-start-panel",
 		"data-work-start": ""
 	}, h("h3", {}, t("wst_heading")), attemptsView, editorView, statusView);
-	const valid = (ticket) => {
+	const validWork = (ticket, workId) => {
 		try {
 			alive();
-			return serial === ticket;
+			return workSerial === ticket && activeWorkId === workId;
+		} catch {
+			return false;
+		}
+	};
+	const validPreview = (ticket, workId) => {
+		try {
+			alive();
+			return previewSerial === ticket && activeWorkId === workId;
+		} catch {
+			return false;
+		}
+	};
+	const validAttempts = (ticket, workId) => {
+		try {
+			alive();
+			return attemptsSerial === ticket && activeWorkId === workId;
 		} catch {
 			return false;
 		}
@@ -32959,7 +32977,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			const query = new URLSearchParams({ limit: "100" });
 			if (after) query.set("after", after);
 			const res = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${encodeURIComponent(workId)}/attempts?${query}`);
-			if (!valid(ticket)) return null;
+			if (!validAttempts(ticket, workId)) return null;
 			if (res.visibility_filtered) visFiltered = true;
 			const arr = Array.isArray(res.attempts) ? res.attempts : [];
 			for (const row of arr) {
@@ -33321,7 +33339,8 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 				instruction.focus();
 				return;
 			}
-			const ticket = ++serial;
+			const ticket = ++previewSerial;
+			const workId = card.work_item_id;
 			checking = true;
 			factsBox.replaceChildren();
 			factsBox.hidden = true;
@@ -33345,7 +33364,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 				}
 				if (chosenCandidate) body.code_target = chosenCandidate;
 				const data = await api("POST", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${encodeURIComponent(card.work_item_id)}/start-preview`, body);
-				if (!valid(ticket)) return;
+				if (!validPreview(ticket, workId)) return;
 				if (data.workspace_id !== workspaceId || data.work_item_id !== card.work_item_id) throw Error(t("wst_invalid_preview"));
 				if (!data.code_target) {
 					prepared = null;
@@ -33420,7 +33439,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 				}, ...checks));
 				checksBox.hidden = false;
 			} catch (err) {
-				if (!valid(ticket)) return;
+				if (!validPreview(ticket, workId)) return;
 				prepared = null;
 				factsBox.replaceChildren();
 				factsBox.hidden = true;
@@ -33435,8 +33454,8 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 				errorStatusBox.replaceChildren(panelErrorBox(err, { within: errorStatusBox }));
 				errorStatusBox.hidden = false;
 			} finally {
-				if (valid(ticket)) {
-					checking = false;
+				checking = false;
+				if (validPreview(ticket, workId)) {
 					readinessButton.disabled = false;
 					readinessButton.textContent = t("wst_check_readiness");
 					editorInstance.update();
@@ -33550,18 +33569,19 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 	}
 	async function refreshAttempts() {
 		if (!activeWorkId) return;
-		const ticket = serial;
+		const ticket = ++attemptsSerial;
+		const workId = activeWorkId;
 		try {
-			const data = await fetchAttempts(activeWorkId, ticket);
-			if (!data || !valid(ticket)) return;
+			const data = await fetchAttempts(workId, ticket);
+			if (!data || !validAttempts(ticket, workId)) return;
 			attempts = data.attempts;
 			visibilityFiltered = data.visibilityFiltered;
 			partialAttempts = data.partial;
 			latestAttempt = attempts.length > 0 ? attempts[attempts.length - 1] : null;
-			const editor = editors.get(activeWorkId);
+			const editor = editors.get(workId);
 			if (editor?.locked()) editor.recheck();
 		} catch (err) {
-			if (valid(ticket)) statusView.replaceChildren(panelErrorBox(err, { within: statusView }));
+			if (validAttempts(ticket, workId)) statusView.replaceChildren(panelErrorBox(err, { within: statusView }));
 		}
 	}
 	function updateUI() {
@@ -33577,8 +33597,11 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 		onStartableChange(startable());
 	}
 	function withdraw() {
-		serial++;
+		workSerial++;
+		previewSerial++;
+		attemptsSerial++;
 		loading = false;
+		checking = false;
 		prepared = null;
 		attempts = [];
 		latestAttempt = null;
@@ -33615,14 +33638,14 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			attemptsView.replaceChildren();
 			statusView.replaceChildren();
 		}
-		const ticket = ++serial;
+		const ticket = ++workSerial;
 		updateUI();
 		try {
 			if (!editors.has(card.work_item_id)) {
 				defaultInstruction = "";
 				try {
 					const itemData = await api("GET", `/work-items/${encodeURIComponent(card.work_item_id)}`);
-					if (valid(ticket)) {
+					if (validWork(ticket, card.work_item_id)) {
 						const item = itemData?.work_item;
 						defaultInstruction = (item?.request || item?.goal || item?.title || "").trim().slice(0, 4e3);
 					}
@@ -33630,11 +33653,12 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 					defaultInstruction = "";
 				}
 			}
-			if (!valid(ticket)) return;
+			if (!validWork(ticket, card.work_item_id)) return;
 			const editor = getEditor(card);
 			editor?.checkPlanChange();
-			const attemptsData = await fetchAttempts(card.work_item_id, ticket);
-			if (!valid(ticket)) return;
+			const attemptsTicket = ++attemptsSerial;
+			const attemptsData = await fetchAttempts(card.work_item_id, attemptsTicket);
+			if (!validAttempts(attemptsTicket, card.work_item_id)) return;
 			if (attemptsData) {
 				attempts = attemptsData.attempts;
 				visibilityFiltered = attemptsData.visibilityFiltered;
@@ -33643,10 +33667,10 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			}
 			if (editor?.locked()) editor.recheck();
 		} catch (err) {
-			if (valid(ticket)) statusView.replaceChildren(panelErrorBox(err, { within: statusView }));
+			if (validWork(ticket, card.work_item_id)) statusView.replaceChildren(panelErrorBox(err, { within: statusView }));
 		} finally {
-			if (valid(ticket)) {
-				if (!sameWork) loading = false;
+			if (!sameWork) loading = false;
+			if (validWork(ticket, card.work_item_id)) {
 				editors.get(card.work_item_id)?.update();
 				updateUI();
 			}
@@ -42234,7 +42258,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			errorBox,
 			statusText: threadId ? (value) => discussionLabel(t, "pd_op_", value) : void 0,
 			...options,
-			canSend,
+			canSend: () => (options.canSend ? options.canSend() : true) && canSend(),
 			permitted: () => initialReadComplete && options.permitted() && (lifecycle?.newActionAllowed(options.action, () => options.params(Object.fromEntries(Object.entries(options.fields).map(([key, input]) => [key, input.value])))) ?? true),
 			recoverPermitted: () => initialReadComplete && (options.recoverPermitted || options.permitted)(),
 			onConnectionChange: (connected) => {
