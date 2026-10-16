@@ -13790,21 +13790,28 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 				title: label,
 				"aria-label": `${t("ui_switch_workspace")}: ${label}`
 			}),
-			items: [...workspaces.map((row) => ({
-				label: row.name,
-				href: `#/pm/${row.workspace_id}`
-			})), ...creator && currentRoute === "pm" ? [{
-				label: t("ui_new_workspace"),
-				icon: "plus",
-				onSelect: () => {
-					closeDrawer(false);
-					if (!media.matches) toggle.focus();
-					creator?.();
-				}
-			}] : [{
-				label: t("ui_new_workspace"),
-				href: "#/pm/new"
-			}]]
+			items: [
+				...workspaces.map((row) => ({
+					label: row.name,
+					href: `#/pm/${row.workspace_id}`
+				})),
+				...creator && currentRoute === "pm" ? [{
+					label: t("ui_new_workspace"),
+					icon: "plus",
+					onSelect: () => {
+						closeDrawer(false);
+						if (!media.matches) toggle.focus();
+						creator?.();
+					}
+				}] : [{
+					label: t("ui_new_workspace"),
+					href: "#/pm/new"
+				}],
+				...candidate ? [{
+					label: t("ui_all_projects"),
+					href: "#/projects"
+				}] : []
+			]
 		});
 		menus.push(control);
 		return control;
@@ -22140,6 +22147,10 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			}
 		}
 	}
+	const onScroll = () => {
+		if (visible && !busy && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+	};
+	window.addEventListener("scroll", onScroll, { passive: true });
 	function setActive(value) {
 		if (visible === value) {
 			if (value && signature) {
@@ -22155,14 +22166,21 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			stale = true;
 			serial++;
 			detailSerial++;
-			preference.scroll = window.scrollY;
+			if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
 			closeRetaining();
 		} else {
 			const generation = ++scrollGeneration;
 			const read = activate();
 			if (!stale && selected && cards.length) select(selected, false, true);
+			let restoreY = 0;
 			requestAnimationFrame(() => {
-				if (generation === scrollGeneration) window.scrollTo(0, preference.scroll || 0);
+				if (generation === scrollGeneration) {
+					window.scrollTo(0, preference.scroll || 0);
+					restoreY = window.scrollY;
+				}
+			});
+			if (read?.then) read.then(() => {
+				if (generation === scrollGeneration && window.scrollY === restoreY) window.scrollTo(0, preference.scroll || 0);
 			});
 			return read;
 		}
@@ -22258,6 +22276,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			tools = value;
 		},
 		dispose: () => {
+			window.removeEventListener("scroll", onScroll);
 			Object.assign(preference, {
 				selected,
 				expanded: [...expanded],
@@ -32676,7 +32695,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 	const integer = (value) => Number.isSafeInteger(value) && value >= 0;
 	if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error("Invalid Kanban page size");
 	let serial = 0, detailSerial = 0, next = null, reading = false, rows = new Map(), page = null, sources = new Map(), plan = null, earlierPlans = new Map(), milestones = [], pages = 1;
-	let selected = preference.selected || null, active = !embedded, preserveSelection = false, toolItems = () => [], deliveryPages = 1, stale = true;
+	let selected = preference.selected || null, active = !embedded, preserveSelection = false, toolItems = () => [], deliveryPages = 1, stale = true, scrollGeneration = 0;
 	let failureSignature = "";
 	const observers = new Map();
 	const withdrawObservers = () => {
@@ -32813,6 +32832,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		withdrawObservers();
 		++serial;
 		++detailSerial;
+		++scrollGeneration;
 		reading = false;
 		rows.clear();
 		sources.clear();
@@ -33405,6 +33425,10 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		preference.laneScroll = list.scrollLeft;
 		updateEdges();
 	});
+	const onScroll = () => {
+		if (active && !reading && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+	};
+	window.addEventListener("scroll", onScroll, { passive: true });
 	function setActive(value) {
 		const routeId = new URLSearchParams(location.hash.split("?")[1]).get("select");
 		if (active === value) {
@@ -33416,13 +33440,23 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			stale = true;
 			serial++;
 			detailSerial++;
-			preference.scroll = window.scrollY;
+			if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
 			closeRetaining();
 		} else {
+			const generation = ++scrollGeneration;
 			const read = stale || !page ? refresh() : null;
 			if (!read && selected && rows.has(selected)) select(selected, true);
 			list.scrollLeft = preference.laneScroll || 0;
-			requestAnimationFrame(() => window.scrollTo(0, preference.scroll || 0));
+			let restoreY = 0;
+			requestAnimationFrame(() => {
+				if (generation === scrollGeneration) {
+					window.scrollTo(0, preference.scroll || 0);
+					restoreY = window.scrollY;
+				}
+			});
+			if (read?.then) read.then(() => {
+				if (generation === scrollGeneration && window.scrollY === restoreY) window.scrollTo(0, preference.scroll || 0);
+			});
 			return read;
 		}
 	}
@@ -33439,6 +33473,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			toolItems = value;
 		},
 		dispose: () => {
+			window.removeEventListener("scroll", onScroll);
 			resize.disconnect();
 			withdraw({ forgetRoute: false });
 		}

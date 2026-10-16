@@ -75,7 +75,8 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
     const control = menu({button: trigger, items: [...workspaces.map(row => ({label: row.name, href: `#/pm/${row.workspace_id}`})),
       ...(creator && currentRoute === 'pm' ? [{label: t('ui_new_workspace'), icon: 'plus', onSelect: () => {
         closeDrawer(false); if (!media.matches) toggle.focus(); creator?.();
-      }}] : [{label: t('ui_new_workspace'), href: '#/pm/new'}])]});
+      }}] : [{label: t('ui_new_workspace'), href: '#/pm/new'}]),
+      ...(candidate ? [{label: t('ui_all_projects'), href: '#/projects'}] : [])]});
     menus.push(control); return control;
   }
   function render() {
