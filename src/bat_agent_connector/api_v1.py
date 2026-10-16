@@ -189,8 +189,9 @@ class ApiV1:
         pm_execution_verification.install(daemon.ops)
         from . import pr_publication
         pr_publication.install(daemon.ops)
-        from . import pm_work_start
+        from . import pm_attempt_results, pm_work_start
         pm_work_start.install(daemon.ops)
+        pm_attempt_results.install(daemon.ops)
         from .session_observation import SessionObservation
         self.session_observation = SessionObservation(daemon)
         self.allowed_origins = allowed_origins
