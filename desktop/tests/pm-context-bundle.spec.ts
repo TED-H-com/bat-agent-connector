@@ -29,26 +29,32 @@ for(const native of [false,true])for(const bat of [false,true])test(`${native?'n
   await expect(box).toContainText('All accepted document files included');expect(f.state.writes).toHaveLength(0);
   await box.getByRole('button',{name:'Include this accepted version',exact:true}).click();
   await request.locator('textarea').fill('Compare the accepted requirements with the discussion.');await request.getByRole('button',{name:'Request PM analysis',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
   expect(f.state.writes).toHaveLength(1);expect(f.state.writes[0].body.params.context_bundle_ref).toEqual(original);expect(Object.keys(f.state.writes[0].body.params)).toEqual(['purpose','context_bundle_ref']);
 });
 test('partial coverage is explicit; preview alone selects nothing and discussion-only remains unchanged',async({page})=>{
   const f=fixture();f.bundle.partial=true;await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);await openThreadAnalysis(page);const box=await inspect(page);
   await expect(box).toContainText('some files are omitted');await expect(box.locator('[data-pm-context-selection]')).toBeEmpty();
   await box.getByRole('button',{name:'Include this partial document',exact:true}).click();await expect(box.locator('[data-pm-context-selection]')).toContainText('some files are omitted');
-  await box.getByRole('button',{name:'Use discussion only',exact:true}).click();await form(page).locator('textarea').fill('Discussion only');await form(page).getByRole('button',{name:'Request PM analysis',exact:true}).click();expect(f.state.writes[0].body.params).toEqual({purpose:'Discussion only'});
+  await box.getByRole('button',{name:'Use discussion only',exact:true}).click();await form(page).locator('textarea').fill('Discussion only');await form(page).getByRole('button',{name:'Request PM analysis',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
+  expect(f.state.writes[0].body.params).toEqual({purpose:'Discussion only'});
 });
 test('restored draft rechecks sources and never substitutes a new accepted version',async({page})=>{
   const f=fixture();await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);await openThreadAnalysis(page);let box=await inspect(page);
   await box.getByRole('button',{name:'Include this accepted version',exact:true}).click();await form(page).locator('textarea').fill('A durable draft');await page.reload();await openThreadAnalysis(page);box=form(page).locator('[data-pm-context-bundle]');await box.locator('summary').click();
   await expect(form(page).getByRole('button',{name:'Request PM analysis',exact:true})).toBeDisabled();f.bundle.revision='2';await box.getByRole('button',{name:'Preview accepted plan',exact:true}).click();
   await expect(box.locator('[data-pm-context-selection]')).toContainText('pmrev_'+'1'.repeat(32));await expect(form(page).getByRole('button',{name:'Request PM analysis',exact:true})).toBeDisabled();
-  await box.getByRole('button',{name:'Include this accepted version',exact:true}).click();await form(page).getByRole('button',{name:'Request PM analysis',exact:true}).click();expect(f.state.writes[0].body.params.context_bundle_ref.revision_id).toBe('pmrev_'+'2'.repeat(32));
+  await box.getByRole('button',{name:'Include this accepted version',exact:true}).click();await form(page).getByRole('button',{name:'Request PM analysis',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
+  expect(f.state.writes[0].body.params.context_bundle_ref.revision_id).toBe('pmrev_'+'2'.repeat(32));
 });
 test('unknown request recovers original selected version and key after source loss',async({page})=>{
   const f=fixture();f.state.lost=true;await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);await openThreadAnalysis(page);const box=await inspect(page);
   await box.getByRole('button',{name:'Include this accepted version',exact:true}).click();await form(page).locator('textarea').fill('One fixed request');await form(page).getByRole('button',{name:'Request PM analysis',exact:true}).click();await expect(form(page)).toContainText('Reply unavailable');
   const first=structuredClone(f.state.writes[0]);f.bundle.denied=true;f.bundle.available=false;f.bundle.revision='2';await page.reload();await openThreadAnalysis(page);const restored=form(page).locator('[data-pm-context-bundle]');await restored.locator('summary').click();
   await expect(restored).toContainText('pmrev_'+'1'.repeat(32));await expect(restored.getByRole('button',{name:'Use discussion only',exact:true})).toBeDisabled();await form(page).getByRole('button',{name:'Check original request',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(2);
   expect(f.state.writes[1].body).toEqual(first.body);expect(f.state.writes[1].idempotency_key).toBe(first.idempotency_key);expect(f.bundle.reads).toBe(1);
 });
 test('denied preview removes stale options and blocks saved selection',async({page})=>{

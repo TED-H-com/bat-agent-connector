@@ -41,6 +41,8 @@ def schema(journal) -> None:
         install_pm_access(journal.db)
         from .pm_lifecycle import schema as lifecycle_schema
         lifecycle_schema(journal)
+        from .pm_work_start import schema as work_start_schema
+        work_start_schema(journal)
 
 
 def server_id(db) -> str:
@@ -110,6 +112,9 @@ def get_workspace(db, principal: Principal, workspace_id: str) -> dict:
 
 def operation_visible(db, principal: Principal, op: dict) -> bool:
     """Read filter for all PM actions; callers retain their ordinary scope checks."""
+    if op.get("action") == "work.start":
+        from .pm_work_start import operation_visible as work_start_visible
+        return work_start_visible(db, principal, op)
     if not op.get("action", "").startswith("pm."):
         return True
     workspace_id = (op.get("target") or {}).get("workspace_id")

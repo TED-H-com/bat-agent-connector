@@ -37,6 +37,7 @@ test('lost receipt retains the original candidate and key after destination ente
   const original=structuredClone(f.state.writes[0]);f.state.threads[0].mode='planning';f.state.threads[0].version++;
   await page.reload();await boot(page);await importBox(page).locator('summary').first().click();
   await importBox(page).getByRole('button',{name:'Check original request',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(2);
   expect(f.state.writes.at(-1)).toEqual(original);expect(f.state.ops.size).toBe(1);
 });
 
@@ -67,6 +68,7 @@ test('two candidate receipts and an ordinary input draft keep separate keys for 
     await box.locator('summary').first().click();
     await expect(box.getByLabel('Choose an existing Idea discussion',{exact:true})).toBeDisabled();
     await box.getByRole('button',{name:'Check original request',exact:true}).click();
+    await expect.poll(() => f.state.writes.length).toBe(index + 3);
     expect(f.state.writes.at(-1)).toEqual(originals[index]);
   }
   expect(f.state.ops.size).toBe(2);

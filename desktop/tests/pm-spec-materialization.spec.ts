@@ -63,12 +63,15 @@ test('selected attachment handoff freezes exact spec and artifact references',as
 
 test('inline handoff never silently selects the available saved artifact',async({page})=>{
   const f=specFixture();f.save();await mountSpec(page,f);await review(page);await fill(page);await startForm(page).locator('button[type=submit]').click();
+  await expect.poll(() => f.base.state.writes.length).toBe(1);
   expect(f.base.state.writes[0].body.params).not.toHaveProperty('pm_spec_ref');expect(f.base.state.writes[0].body.params).not.toHaveProperty('artifacts');
 });
 
 test('lost attachment handoff survives reload and pause without changing its request',async({page})=>{
   const f=specFixture(),row=f.save();await mountSpec(page,f);await choose(page,row.materialization_id);await fill(page);f.base.state.lost=true;await startForm(page).locator('button[type=submit]').click();await expect(startForm(page)).toContainText('Reply unavailable');
-  const original=structuredClone(f.base.state.writes[0]);f.base.fixture.state.stage='paused';await page.reload();await bootSpec(page);await startForm(page).getByRole('button',{name:'Check original request',exact:true}).click();expect(f.base.state.writes.at(-1)).toEqual(original);expect(f.base.state.ops.size).toBe(1);
+  const original=structuredClone(f.base.state.writes[0]);f.base.fixture.state.stage='paused';await page.reload();await bootSpec(page);await startForm(page).getByRole('button',{name:'Check original request',exact:true}).click();
+  await expect.poll(() => f.base.state.writes.length).toBe(2);
+  expect(f.base.state.writes.at(-1)).toEqual(original);expect(f.base.state.ops.size).toBe(1);
 });
 
 test('withdrawn selected attachment never falls back to inline specification',async({page})=>{

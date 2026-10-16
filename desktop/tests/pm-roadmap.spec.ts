@@ -28,6 +28,7 @@ for(const native of [false,true])test.describe(native?'native Roadmap':'web Road
     await form.getByLabel('Milestone',{exact:true}).selectOption('first_release');await form.getByLabel('Reason for this change',{exact:true}).fill('Date remains unknown');f.state.lost=true;
     await form.getByRole('button',{name:'Save forecast',exact:true}).click();await expect(form).toContainText('Reply unavailable');f.state.version=4;f.state.baseline.revision_id='pmrb_'+'e'.repeat(32);
     await page.reload();await openPmSection(page, 'schedule');await page.getByText('Update a forecast',{exact:true}).click();await form.getByRole('button',{name:'Check original request',exact:true}).click();
+    await expect.poll(() => f.state.writes.length).toBe(2);
     expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key);
   });
   test('unsent baseline draft survives reload and successive saves use the new version',async({page})=>{
