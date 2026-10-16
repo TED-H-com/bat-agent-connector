@@ -144,3 +144,110 @@ for(const native of [false,true])for(const retained of [false,true])test(`${nati
  }
  expect(state.errors).toEqual([]);
 });
+
+const saveButton = (panel: any) => panel.locator('.session-label-editor .actions button').nth(0);
+const held = (control: any) => control.evaluate((el: HTMLButtonElement) => {
+  const status = (el.closest('[data-session-labels]') as HTMLElement).querySelector('[role="status"]');
+  return {focused: document.activeElement === el, ariaDisabled: el.getAttribute('aria-disabled'), disabled: el.disabled, busy: status?.getAttribute('aria-busy') ?? null};
+});
+const operationReads = (state: {reads: string[]}) => state.reads.filter(path => path === '/operations/'+opId).length;
+
+test('busy: Save labels with Enter keeps focus while the POST is held', async ({page}) => {
+  const state = await labelsFixture(page, false, {delayPost: true});
+  const panel = await openLabels(page);
+  await panel.getByRole('textbox').fill('Alpha');
+  const save = saveButton(panel);
+  await save.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => Boolean(state.holdPost)).toBe(true);
+  await expect.poll(() => held(save)).toEqual({focused: true, ariaDisabled: 'true', disabled: false, busy: 'true'});
+  await page.keyboard.press('Enter');
+  await save.evaluate((el: HTMLButtonElement) => el.click());
+  await expect.poll(() => state.posts.length).toBe(1);
+  state.delayPost = false; state.holdPost();
+  await expect(panel.getByRole('button', {name: 'Check original operation'})).toBeFocused();
+  expect(state.posts).toHaveLength(1);
+  await expect(panel.locator('[role="status"]')).not.toHaveAttribute('aria-busy', 'true');
+});
+
+test('busy: typing labels survives an operation event', async ({page}) => {
+  const state = await labelsFixture(page, false);
+  const panel = await openLabels(page);
+  const field = panel.getByRole('textbox');
+  await field.fill('Alpha');
+  await field.focus();
+  state.delaySession = true;
+  state.events.push({seq: 1, resource_type: 'operation', resource_id: 'op_other', kind: 'operation.updated'});
+  await expect.poll(() => Boolean(state.holdSession)).toBe(true);
+  await expect(field).toBeEnabled();
+  await expect(field).toBeFocused();
+  await page.keyboard.type('XY');
+  await expect(field).toHaveValue('AlphaXY');
+  state.delaySession = false; state.holdSession();
+  await expect(field).toHaveValue('AlphaXY');
+  await expect(field).toBeFocused();
+  await expect(field).toBeEnabled();
+});
+
+test('busy: a refused save moves focus to Review current version', async ({page}) => {
+  const state = await labelsFixture(page, false, {refuse: 'METADATA_VERSION_CONFLICT'});
+  const panel = await openLabels(page);
+  await panel.getByRole('textbox').fill('Mine');
+  await saveButton(panel).focus();
+  await page.keyboard.press('Enter');
+  await expect(panel.getByRole('button', {name: 'Review current version and prepare change'})).toBeFocused();
+  expect(state.posts).toHaveLength(1);
+});
+
+test('busy: Review current version moves focus to the label text', async ({page}) => {
+  const state = await labelsFixture(page, false, {refuse: 'METADATA_VERSION_CONFLICT'});
+  const panel = await openLabels(page);
+  await panel.getByRole('textbox').fill('Mine');
+  await saveButton(panel).focus();
+  await page.keyboard.press('Enter');
+  const review = panel.getByRole('button', {name: 'Review current version and prepare change'});
+  await expect(review).toBeVisible();
+  await review.focus();
+  await page.keyboard.press('Enter');
+  await expect(panel.getByRole('textbox')).toBeFocused();
+  expect(state.posts).toHaveLength(1);
+});
+
+test('busy: Check keeps focus while the label read is held', async ({page}) => {
+  const state = await labelsFixture(page, false);
+  const panel = await openLabels(page);
+  await panel.getByRole('textbox').fill('Alpha');
+  await panel.getByRole('button', {name: 'Save labels', exact: true}).click();
+  const check = panel.getByRole('button', {name: 'Check original operation'});
+  await expect(check).toBeVisible();
+  const before = operationReads(state);
+  await check.focus();
+  state.delayRead = true;
+  await page.keyboard.press('Enter');
+  await expect.poll(() => Boolean(state.holdRead)).toBe(true);
+  await expect.poll(() => held(check)).toEqual({focused: true, ariaDisabled: 'true', disabled: false, busy: 'true'});
+  await page.keyboard.press('Enter');
+  await check.evaluate((el: HTMLButtonElement) => el.click());
+  expect(operationReads(state)).toBe(before + 1);
+  state.delayRead = false; state.holdRead();
+  await expect(check).toBeFocused();
+  await expect(check).not.toHaveAttribute('aria-disabled', 'true');
+  expect(operationReads(state)).toBe(before + 1);
+});
+
+test('busy: Save labels stays disabled with no aria-disabled while invalid labels block it during an event read', async ({page}) => {
+  const state = await labelsFixture(page, false);
+  const panel = await openLabels(page);
+  await panel.getByRole('textbox').fill(Array.from({length: 9}, (_, index) => 'L'+index).join('\n'));
+  const save = panel.getByRole('button', {name: 'Save labels', exact: true});
+  await expect(save).toBeDisabled();
+  expect(await save.getAttribute('aria-disabled')).toBeNull();
+  state.delaySession = true;
+  state.events.push({seq: 1, resource_type: 'operation', resource_id: 'op_other', kind: 'operation.updated'});
+  await expect.poll(() => Boolean(state.holdSession)).toBe(true);
+  await expect(save).toBeDisabled();
+  expect(await save.getAttribute('aria-disabled')).toBeNull();
+  state.delaySession = false; state.holdSession();
+  await expect(save).toBeDisabled();
+  expect(await save.getAttribute('aria-disabled')).toBeNull();
+});

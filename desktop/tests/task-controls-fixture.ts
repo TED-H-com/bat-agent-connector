@@ -30,12 +30,14 @@ export async function taskFixture(page: Page, native = false, options: any = {})
     }
     state.reads.push(input.path);
     if (path === '/tasks/'+taskId) {
+      if (state.delayTask) await new Promise(resolve => {state.holdTask = resolve;});
       if (state.failTask) return {status: 503, data: {error: {code: 'READ_FAILED', message: 'Task read failed'}}};
       return {status: 200, data: {task: {task_id: taskId, host: 'demo', session_id: 'managed-fixture-session',
         project: 'Review the shared dashboard', state: state.taskState, paused: state.paused, control_version: state.version,
         events: state.taskEvents}}};
     }
     if (path === '/operations/'+opId) {
+      if (state.delayRead) await new Promise(resolve => {state.holdRead = resolve;});
       if (state.failRead) return {status: 503, data: {error: {code: 'READ_FAILED', message: 'Operation read failed'}}};
       return {status: 200, data: {operation: {...state.operation, status: state.status}}};
     }
