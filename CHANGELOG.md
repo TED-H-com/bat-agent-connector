@@ -24,8 +24,7 @@
 
 - Project Board and Requirements remember the scroll position when switching
   views inside a project or leaving the project route while a read is in flight,
-  restoring the position accurately on return without dropping events or saving
-  clamped positions.
+  restoring the position accurately on return.
 
 - Tools → Workbench preview opens a reversible layout with Today, Projects,
   Work and Resources, a project management selector and an optional Results

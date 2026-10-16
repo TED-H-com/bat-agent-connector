@@ -334,9 +334,11 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
       });
       if (read?.then) {
         void read.then(() => {
-          if (generation === scrollGeneration && window.scrollY === restoreY) {
-            window.scrollTo(0, preference.scroll || 0);
-          }
+          requestAnimationFrame(() => {
+            if (generation === scrollGeneration && window.scrollY === restoreY) {
+              window.scrollTo(0, preference.scroll || 0);
+            }
+          });
         });
       }
       return read;

@@ -377,9 +377,11 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       });
       if (read?.then) {
         void read.then(() => {
-          if (generation === scrollGeneration && window.scrollY === restoreY) {
-            window.scrollTo(0, preference.scroll || 0);
-          }
+          requestAnimationFrame(() => {
+            if (generation === scrollGeneration && window.scrollY === restoreY) {
+              window.scrollTo(0, preference.scroll || 0);
+            }
+          });
         });
       }
       return read;

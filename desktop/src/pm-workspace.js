@@ -887,7 +887,6 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (previous === 'overview') brief?.setActive?.(false);
       if (previous === 'board') kanban?.rememberScroll?.();
       if (previous === 'requirements') traceability?.rememberScroll?.();
-      if (previous === 'issues') register?.rememberScroll?.();
     }, onSelect: id => {
       if (shownView === 'issues' && id !== 'issues') register?.rememberScroll();
       if (id !== 'issues') brief?.closeRelated?.();
@@ -1730,7 +1729,6 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const dispose = () => {
     if (workbench?.selected() === 'board') kanban?.rememberScroll?.();
     if (workbench?.selected() === 'requirements') traceability?.rememberScroll?.();
-    if (workbench?.selected() === 'issues') register?.rememberScroll?.();
     uiState.listScroll = workspaceList.scrollTop;
     threadState.scroll = content.querySelector('.pd-transcript')?.scrollTop || 0;
     disposed = true; main.removeEventListener('toggle', openedSource, true); for (const placeholder of maskedSources.values()) placeholder.remove(); maskedSources.clear();
