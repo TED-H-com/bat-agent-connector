@@ -593,8 +593,14 @@ The same compact presentation applies below a 720px table-container width, even
 on larger viewports. Its entire header is hidden; the wide table retains its header.
 
 `pm-work-inspector.js` supplies both views (and the future Schedule caller) with
-six ordered work sections: Requirements served; Status & ownership; Latest result;
-Blocker & next step; Delivery; Details. Discuss uses exact context objects through
+ordered work sections: Requirements served; Status & ownership; Start work (when the
+`features.pm_workspaces.work_start` capability is available); Latest result;
+Blocker & next step; Delivery; Details. When the card is startable, the inspector
+header offers a Start work action alongside Discuss that scrolls and focuses the instruction
+field. The Start work panel previews readiness facts, candidate code targets, and requirement
+selection for cards needing plan rebinding with workspace owner permission; durable submissions
+use the preview's preconditions and preserve drafts and idempotency keys across reloads.
+Discuss uses exact context objects through
 `discussHref`. Managed and manual session links use central session identity and
 access metadata; manual sessions carry Read-only. Missing attempt start/end times
 and CI results remain unknown; observation or send-acceptance time does not imply
@@ -1199,8 +1205,9 @@ inspectors and the mobile drawer open; ordinary Escape retains focus restoration
 
 PM panels with their own failure sentence pass that sentence as the error summary.
 The original error reaches the renderer unchanged, so its code and server message
-remain in one Details disclosure and the refresh gate retains the failure. Retry
-stays adjacent. Fixed-source mismatch failures keep the panel's mismatch sentence;
+remain in one Details disclosure and the refresh gate retains the failure.
+When an error code is shared across domains (such as lifecycle stops, plan, package or repository changes), the panel passes a panel-local summary explaining the action's specific context, while action-specific codes resolve directly from global `error_code_*` translations.
+Retry stays adjacent. Fixed-source mismatch failures keep the panel's mismatch sentence;
 other failures keep its unavailable sentence. Report reads reuse Charter's status
 element by reference in the live inspector or saved Overview, preserving its
 children and withdrawal/retry ownership without a second error in Versions.

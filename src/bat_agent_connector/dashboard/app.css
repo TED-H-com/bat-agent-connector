@@ -2698,6 +2698,24 @@ body.pm-mode #main { padding: 0; }
 @media (min-width: 1200px) {
   .pm-work-layout:has(> .pm-work-inspector) { grid-template-columns: minmax(0, 1fr) 400px; gap: var(--space-4); }
 }
+
+.pm-work-start-panel { display: flex; flex-direction: column; gap: var(--space-3); }
+.pm-work-start-fields { display: flex; flex-direction: column; gap: var(--space-3); }
+.pm-work-start-instruction { width: 100%; box-sizing: border-box; min-height: 80px; resize: vertical; }
+.pm-work-start-facts { margin: var(--space-2) 0; }
+.pm-work-start-checks { list-style: none; padding-left: 0; margin: var(--space-2) 0; }
+.pm-work-start-checks li { margin: var(--space-1) 0; }
+.pm-work-start-checks p { margin: var(--space-1) 0 0 var(--space-3); }
+.pm-work-start-reqs { display: flex; flex-direction: column; gap: var(--space-1); margin: var(--space-2) 0; }
+.pm-shell label.pm-work-start-req,
+.pm-work-start-panel label.pm-work-start-req,
+.pm-work-start-req { display: flex; flex-direction: row; align-items: center; gap: var(--space-2); }
+.pm-work-start-req input[type="checkbox"] { margin: 0; flex-shrink: 0; }
+.pm-work-start-req-text { flex: 1; min-width: 0; }
+.pm-work-start-links { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin: var(--space-2) 0; }
+.pm-work-start-options { margin-top: var(--space-2); display: flex; flex-direction: column; gap: var(--space-2); }
+.pm-work-start-panel :is(.pm-work-start-attempts, .pm-work-start-bind, .pm-work-start-candidates, .pm-work-start-facts-box, .pm-work-start-checks-box, .pm-work-start-status, [role="status"]):empty { display: none; }
+
 /* Session workspace. Scoped so other views keep their own layout. */
 .session-workspace { min-width: 0; }
 main.session-view { display: flex; flex-direction: column; height: calc(100dvh - 48px); overflow: auto; }

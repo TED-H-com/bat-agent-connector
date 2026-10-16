@@ -278,6 +278,7 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
       open: panel.body.querySelector('[data-work-section="details"]')?.open || false});
     details.dataset.workSection = 'details';
     const keys = new Set([...sections, details].map(node => node.dataset.workSection));
+    if (panel.body.querySelector('[data-work-section="start"]')) keys.add('start');
     for (const node of panel.body.querySelectorAll('[data-work-section]')) if (!keys.has(node.dataset.workSection)) node.remove();
     for (const node of [...sections, details]) {
       const previous = panel.body.querySelector(`[data-work-section="${node.dataset.workSection}"]`);
