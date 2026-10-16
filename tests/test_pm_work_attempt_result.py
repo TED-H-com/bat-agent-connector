@@ -1636,17 +1636,9 @@ async def test_cursor_before_snapshot_missing_turn_fields_and_zh_tw_self_reporte
     )
     assert res_benign["execution"]["state_facets"]["self_reported"] == "claimed_done"
 
-    # 4. Real collector path when service.session_read omits turn_started/turn_done/turn_phase/turn_attribution:
-    # the stored receipt holds None (not True/'terminal'/'correlated') and /result returns 'unknown'.
+    # 4. Collector behavior when service.session_read omits turn facts (never infers a boundary):
     orig_session_read = service.session_read
-
-    async def session_read_without_turn_fields(*args, **kwargs):
-        out = dict(await orig_session_read(*args, **kwargs))
-        for k in ("turn_started", "turn_done", "turn_phase", "turn_attribution"):
-            out.pop(k, None)
-        return out
-
-    monkeypatch.setattr(service, "session_read", session_read_without_turn_fields)
+    receipts_before_count = len(pm_attempt_results.receipts(d.ops.db, wid, aid)["receipts"])
     _set_turn_messages(
         mock,
         sid,
@@ -1656,21 +1648,57 @@ async def test_cursor_before_snapshot_missing_turn_fields_and_zh_tw_self_reporte
         assistant_text="Completed another turn without turn metadata.",
         last_data_at=1_790_001_080_000,
     )
+
+    # (c) All four facts omitted: no receipt is written; last_check records 'turn_marker_not_visible'.
+    async def session_read_without_four_facts(*args, **kwargs):
+        out = dict(await orig_session_read(*args, **kwargs))
+        for k in ("turn_started", "turn_done", "turn_phase", "turn_attribution"):
+            out.pop(k, None)
+        return out
+
+    monkeypatch.setattr(service, "session_read", session_read_without_four_facts)
+    await d.inventory._refresh_scheduled("h1")
+    assert len(pm_attempt_results.receipts(d.ops.db, wid, aid)["receipts"]) == receipts_before_count
+    assert d.result_collector.last_check[aid]["outcome"] == "turn_marker_not_visible"
+
+    # (b) turn_started, turn_done, turn_phase omitted, turn_attribution == 'correlated', session still live & no error:
+    # no receipt is written; last_check records 'no_boundary'.
+    async def session_read_without_three_facts(*args, **kwargs):
+        out = dict(await orig_session_read(*args, **kwargs))
+        for k in ("turn_started", "turn_done", "turn_phase"):
+            out.pop(k, None)
+        out["turn_attribution"] = "correlated"
+        return out
+
+    monkeypatch.setattr(service, "session_read", session_read_without_three_facts)
+    d.result_collector._memo.pop(aid, None)
+    await d.inventory._refresh_scheduled("h1")
+    assert len(pm_attempt_results.receipts(d.ops.db, wid, aid)["receipts"]) == receipts_before_count
+    assert d.result_collector.last_check[aid]["outcome"] == "no_boundary"
+
+    # (a) Same omission with the session's process ended (runtimeStatus == 'exited'):
+    # receipt is stored with boundary 'process_ended' and None for the three omitted facts; /result reports 'unknown'.
+    mock.metas[sid]["runtimeStatus"] = "exited"
+    d.result_collector._memo.pop(aid, None)
     await d.inventory._refresh_scheduled("h1")
     monkeypatch.setattr(service, "session_read", orig_session_read)
 
-    latest_stored_doc = pm_attempt_results.receipts(d.ops.db, wid, aid)["receipts"][0]["document"]
+    assert d.result_collector.last_check[aid]["outcome"] == "recorded"
+    stored_after_a = pm_attempt_results.receipts(d.ops.db, wid, aid)["receipts"]
+    assert len(stored_after_a) == receipts_before_count + 1
+    latest_stored_doc = stored_after_a[0]["document"]
     assert latest_stored_doc["last_message_id"] == "m-asst-3"
+    assert latest_stored_doc["boundary"] == "process_ended"
     assert latest_stored_doc["turn_started"] is None
     assert latest_stored_doc["turn_done"] is None
     assert latest_stored_doc["turn_phase"] is None
-    assert latest_stored_doc["turn_attribution"] is None
+    assert latest_stored_doc["turn_attribution"] == "correlated"
     assert latest_stored_doc["turn_progress"] == {
         "turn_started": None,
         "turn_done": None,
         "turn_phase": None,
-        "turn_attribution": None,
-        "boundary": "turn_done",
+        "turn_attribution": "correlated",
+        "boundary": "process_ended",
     }
 
     _, res_missing = await http(
@@ -1682,10 +1710,13 @@ async def test_cursor_before_snapshot_missing_turn_fields_and_zh_tw_self_reporte
     assert res_missing["conversation"]["turn_started"] == "unknown"
     assert res_missing["conversation"]["turn_done"] == "unknown"
     assert res_missing["conversation"]["turn_phase"] == "unknown"
-    assert res_missing["conversation"]["turn_attribution"] == "unknown"
+    assert res_missing["conversation"]["turn_attribution"] == "correlated"
+    assert res_missing["execution"]["state"] == "process-ended"
     assert res_missing["execution"]["state_facets"]["self_reported"] == "none"
 
     # 5. Receipt with boundary == 'agent_error' sets self_reported == 'reported_blocker' and execution.state == 'failed'.
+    mock.metas[sid].pop("runtimeStatus", None)
+    await d.inventory._refresh_scheduled("h1")
     err_doc = pm_attempt_results.build_result_document(
         result_id="res_" + "e" * 32,
         turn_marker=att["turn_marker"],
@@ -1908,9 +1939,9 @@ async def test_verification_latest_timestamp_unknown_status_review_matching_and_
     assert res_other_rev["execution"]["state_facets"]["acceptance"]["status"] == "unassessed"
 
     # 4. Delivery lineage attribution & fixed_result_commit priority-1 timestamp tie-breaking:
-    # Clear the verification rows first so priority-3 (verification) does not mask priority-4 (turn_end_observation).
-    with d.journal.tx():
-        d.ops.db.execute("DELETE FROM operations WHERE action=?", (pm_execution_verification.ACTION,))
+    before_fixed = res_other_rev["changes"]["fixed_result_commit"]
+    assert before_fixed["source_kind"] == "execution_verification"
+    assert before_fixed["commit_sha"] == c2
 
     # 4a. Another attempt's merge and integration change nothing for this attempt.
     monkeypatch.setattr(
@@ -1966,8 +1997,7 @@ async def test_verification_latest_timestamp_unknown_status_review_matching_and_
     assert res_other_dlv["delivery"]["integrations"] == []
     assert res_other_dlv["delivery"]["merges"] == []
     assert res_other_dlv["execution"]["state_facets"]["merge"] == "not_started"
-    assert res_other_dlv["changes"]["fixed_result_commit"]["source_kind"] == "turn_end_observation"
-    assert res_other_dlv["changes"]["fixed_result_commit"]["commit_sha"] == c2
+    assert res_other_dlv["changes"]["fixed_result_commit"] == before_fixed
 
     # 4b. An integration.preview for this attempt is listed under delivery.integrations, merge stays not_started, pull_requests is [].
     monkeypatch.setattr(
@@ -2009,8 +2039,7 @@ async def test_verification_latest_timestamp_unknown_status_review_matching_and_
     assert res_prev_dlv["delivery"]["integrations"][0]["action"] == "integration.preview"
     assert res_prev_dlv["delivery"]["integrations"][0]["operation_id"] == "op_dlv_preview_1"
     assert res_prev_dlv["execution"]["state_facets"]["merge"] == "not_started"
-    assert res_prev_dlv["changes"]["fixed_result_commit"]["source_kind"] == "turn_end_observation"
-    assert res_prev_dlv["changes"]["fixed_result_commit"]["commit_sha"] == c2
+    assert res_prev_dlv["changes"]["fixed_result_commit"] == before_fixed
 
     # 4c. An attributed integration.apply with delivered_sha becomes fixed_result_commit;
     # and an attributed github.pr.publish receipt has no invented state/html_url/draft fields.
