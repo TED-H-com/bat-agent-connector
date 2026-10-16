@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- The Windows fixture-helper test injects a deterministic clock into its deadline and
+  retry helpers, making transient read recovery independent of runner speed and slow
+  .NET exception unwinds.
+
 - Keyboard focus stays inside an inspector while its content is still loading, instead of leaving the dialog for the page.
 
 - Add the `work.start` compound action, read-only `pm_work_start_preview` and
