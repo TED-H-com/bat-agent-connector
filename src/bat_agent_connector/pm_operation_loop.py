@@ -452,6 +452,7 @@ _ACTOR_ONLY = frozenset({
     "Only the original requester controls this proposal",
     "Only the original requester may control native analysis",
     "Only the original requester may control this adoption",
+    "Only the original owner controls this review",
     "relay child controls retain the original actor",
 })
 _SCOPE_ONLY = frozenset({
@@ -463,6 +464,8 @@ _SCOPE_ONLY = frozenset({
     "Publication requires observe, manage and integrate authority",
     "dispatch linked work needs manage",
     "Starting work requires observe, manage and start scopes",
+    "Evidence reads require observe; changes also require manage",
+    "task operation control requires its current action scope",
     "resuming merge-and-deploy needs both merge and deploy scopes",
 })
 _MEMBERSHIP = "Workspace membership does not permit this action"
@@ -563,8 +566,10 @@ def _pure_scopes(operation, verb):
     if action == "github.pr.publish":
         from .pr_publication import REQUIRED
         found.extend(sorted(REQUIRED))
-    if action == "work.start":
-        found.extend(("observe", "manage", "start"))
+    if action == "pm.work.bind":
+        found.extend(("observe", "manage"))
+    if action == "pm.maintenance.repair":
+        found.append("manage")
     if action == "repository.continue" and params.get("work_item_id"):
         found.append("manage")
     if verb == "resume" and action == "delivery.merge_and_deploy":
@@ -630,7 +635,7 @@ def _owner_gate(ops, operation) -> bool:
     action = operation.get("action")
     params = operation.get("params") if isinstance(operation.get("params"), dict) else {}
     target = operation.get("target") if isinstance(operation.get("target"), dict) else {}
-    if action in {"pm.plan.adopt", "pm.conversation.adopt"}:
+    if action in {"pm.plan.adopt", "pm.conversation.adopt", "pm.work.bind"}:
         return True
     from .pm_discussions import ACTIONS, _decision
 

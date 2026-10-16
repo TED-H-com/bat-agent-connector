@@ -32,6 +32,8 @@ from tests.operation_helpers import settle_operations
 from tests.test_api_v1 import MANUAL, http, token
 from tests.test_api_v1 import daemon as daemon_fixture
 from tests.test_api_v1 import served as served_fixture
+from tests.test_operations_unification import capability_caller
+from tests.test_operations_unification import owned as task_owned_fixture
 from tests.test_pm_plan_operations import OWNER as PACKAGE_OWNER
 from tests.test_pm_work_packages import action as pkg_action
 from tests.test_pm_work_packages import create as create_package
@@ -43,6 +45,7 @@ from tests.test_repository_sync import world as world_fixture
 
 daemon, served = daemon_fixture, served_fixture
 ready, pm, world = ready_fixture, pm_fixture, world_fixture
+task_owned = task_owned_fixture
 
 OWNER = Principal("loop-owner", frozenset({"observe", "manage", "start", "operate"}))
 WS = "ws_" + "ab" * 16
@@ -1436,3 +1439,91 @@ async def test_first_start_of_an_unbound_work_keeps_the_work_hash(loop_start, mo
             assert reply["links"]["work_item_hash"] == shown == f"#/pm/{wid}/board?select={work_id}"
     finally:
         await fleet.close()
+
+
+def _verb(loop, verb):
+    offered = [row for row in loop["next_allowed_actions"]
+               if row.get("kind") == "operation_endpoint" and row.get("endpoint") == verb]
+    blocked = [row for row in loop["blocked_actions"] if row.get("action") == verb]
+    return offered, blocked
+
+
+async def _http_verb(port, tok, operation_id, verb):
+    status, body = await http(port, "GET", "/api/v1/operations/" + operation_id, tok=tok)
+    assert status == 200, body
+    offered, blocked = _verb(body["operation"]["loop"], verb)
+    status, result = await http(port, "POST", f"/api/v1/operations/{operation_id}/{verb}", tok=tok)
+    return offered, blocked, status, result
+
+
+async def test_proven_bind_child_eligibility_matches_the_endpoint(loop_start, monkeypatch):
+    """A proven bind child omits a reader, names a missing scope, and lists its scopes."""
+    from dataclasses import replace
+
+    from bat_agent_connector import work_items
+    from bat_agent_connector.operations import Wait
+
+    w = loop_start
+    daemon, ops, port = w["d"], w["d"].ops, w["port"]
+    wid = w["workspace_id"]
+    project_id = work_items._get_item(ops.db, w["target"]["work_item_id"])["project_id"]
+    work_id = (await pkg_action(
+        w, "work_item.create", {"project_id": project_id},
+        {"title": "Bind child eligibility", "goal": "Authenticate members",
+         "acceptance": "Valid credentials pass, invalid fail"},
+    ))["work_item_id"]
+    await _add_member(ops, STARTER_OWNER, wid, "loop-bind-reader", "reader")
+
+    async def hold_bind(_ctx):
+        raise Wait("waiting_external", "hold the bind child", delay_s=30)
+
+    monkeypatch.setitem(ops.actions, "pm.work.bind", replace(ops.actions["pm.work.bind"], run=hold_bind))
+    owner_tok = token(daemon, STARTER_OWNER.actor, *sorted(STARTER_OWNER.scopes))
+    env = await _start_envelope(w, work_item_id=work_id, key="loop-bind-child")
+    assert env["preconditions"]["expected_binding_id"] is None
+    created, fresh = ops.create(STARTER_OWNER, **env)
+    assert fresh is True
+    await settle_operations(ops)
+    parent = ops.get(created["operation_id"])
+    assert parent["status"] == "waiting_external", (
+        parent["status"], parent.get("error_code"), parent.get("status_reason"), parent.get("result"))
+    child_id = parent["result"]["children"]["bind"]
+    assert isinstance(child_id, str), parent["result"]
+    child = ops.get(child_id)
+    assert child["action"] == "pm.work.bind" and child["status"] == "waiting_external", child
+
+    reader_tok = token(daemon, "loop-bind-reader", "observe", "manage")
+    narrow_tok = token(daemon, STARTER_OWNER.actor, "observe")
+    offered, blocked, status, result = await _http_verb(port, reader_tok, child_id, "cancel")
+    assert offered == [] and blocked == [], (offered, blocked, result)
+    assert status >= 400 and result["error"]["message"] == "Workspace membership does not permit this action"
+    offered, blocked, status, result = await _http_verb(port, narrow_tok, child_id, "cancel")
+    assert blocked == [{"action": "cancel", "reason": "missing_scope"}], (blocked, result)
+    assert status >= 400
+    assert result["error"]["message"] == "Evidence reads require observe; changes also require manage"
+    offered, blocked, status, result = await _http_verb(port, owner_tok, child_id, "cancel")
+    assert blocked == [] and status < 400, (blocked, status, result)
+    assert offered[0]["required_scopes"] == ["observe", "manage"]
+
+
+async def test_task_bound_send_scope_matches_the_endpoint(task_owned):
+    """A task-bound session.send without operate is missing_scope."""
+    daemon, tid = task_owned
+    caller = capability_caller(daemon, tid)
+    created, fresh = daemon.ops.create(
+        caller, action="session.send", target={"task_id": tid},
+        params={"text": "one fixed instruction", "step_id": "loop-step"},
+        idempotency_key="loop-task-send")
+    assert fresh is True and daemon.ops.get(created["operation_id"])["status"] == "accepted"
+    server = await asyncio.start_server(daemon._handle, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    try:
+        tok = token(daemon, "loop-task-reader", "observe", "manage")
+        offered, blocked, status, result = await _http_verb(port, tok, created["operation_id"], "cancel")
+        assert offered == []
+        assert blocked == [{"action": "cancel", "reason": "missing_scope"}], (blocked, result)
+        assert status >= 400
+        assert result["error"]["message"] == "task operation control requires its current action scope"
+    finally:
+        server.close()
+        await server.wait_closed()
