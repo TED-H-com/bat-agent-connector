@@ -508,9 +508,7 @@ def get_profile(db, principal: Principal, workspace_id: str, profile_id: str) ->
 
 
 def _changed(revision: int) -> OperationError:
-    error = _bad("PM_WORK_PROFILE_CHANGED", f"Work profile changed; current revision is {revision}", 409)
-    error.revision = revision
-    return error
+    return _bad("PM_WORK_PROFILE_CHANGED", f"Work profile changed; current revision is {revision}", 409)
 
 
 def pinned_revision(db, principal, workspace_id, profile_id, revision, *, digest=None, admission=False):

@@ -801,7 +801,8 @@ async def test_work_start_pins_profile_revision_and_refuses_when_it_changes(star
     with pytest.raises(OperationError) as digest_mismatch:
         _open_start(w, viewed, saved, digest="ab" * 32)
     assert digest_mismatch.value.code == "PM_WORK_PROFILE_CHANGED"
-    assert digest_mismatch.value.revision == saved["revision"]
+    assert digest_mismatch.value.status == 409
+    assert not hasattr(digest_mismatch.value, "revision")
     assert saved["digest"] not in digest_mismatch.value.message
     assert _child_count(ops) == children and _start_count(ops) == starts
 
@@ -813,13 +814,46 @@ async def test_work_start_pins_profile_revision_and_refuses_when_it_changes(star
         await _view(w, _body(saved))
     assert stale_preview.value.code == "PM_WORK_PROFILE_CHANGED"
     assert stale_preview.value.status == 409
-    assert stale_preview.value.revision == updated["revision"]
+    assert not hasattr(stale_preview.value, "revision")
+    assert str(updated["revision"]) in stale_preview.value.message
     assert updated["digest"] not in stale_preview.value.message
+
+    from tests.test_api_v1 import http, token
+    auth = token(w["d"], STARTER_OWNER.actor, "observe", "manage", "start")
+    preview_path = (
+        f"/api/v1/pm/workspaces/{w['workspace_id']}/work/"
+        f"{w['target']['work_item_id']}/start-preview"
+    )
+    status, http_body = await http(w["port"], "POST", preview_path, tok=auth, body=_body(saved))
+    assert status == 409, http_body
+    assert set(http_body["error"]) == {"code", "message"}
+    assert http_body["error"]["code"] == "PM_WORK_PROFILE_CHANGED"
+    assert str(updated["revision"]) in http_body["error"]["message"]
+    rpc_status, rpc_body = await http(w["port"], "POST", "/rpc", tok=auth, body={
+        "method": "pm_work_start_preview",
+        "params": {
+            "workspace_id": w["workspace_id"],
+            "work_item_id": w["target"]["work_item_id"],
+            "body": _body(saved),
+        },
+    })
+    assert rpc_status == 400, rpc_body
+    assert rpc_body["error"] == "PM_WORK_PROFILE_CHANGED"
+    assert set(rpc_body) == {"error", "message"}
+    assert str(updated["revision"]) in rpc_body["message"]
+    get_status, got = await http(
+        w["port"], "GET",
+        f"/api/v1/pm/workspaces/{w['workspace_id']}/work-profiles/{saved['profile_id']}",
+        tok=auth,
+    )
+    assert get_status == 200, got
+    assert got["revision"] == updated["revision"]
 
     with pytest.raises(OperationError) as stale_start:
         _open_start(w, viewed, saved)
     assert stale_start.value.code == "PM_WORK_PROFILE_CHANGED"
-    assert stale_start.value.revision == updated["revision"]
+    assert stale_start.value.status == 409
+    assert not hasattr(stale_start.value, "revision")
     assert _child_count(ops) == children and _start_count(ops) == starts
 
     other = await _save_start(w, _start_doc(agent="codex"))

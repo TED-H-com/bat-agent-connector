@@ -918,7 +918,8 @@ Submit `work.start` with the same `profile_id` and those twelve preconditions.
 saved binding; `source_ref` may be omitted. If the saved delivery goal is set,
 send that `delivery`. Omitting it is invalid and does not read GitHub or BAT.
 If the profile changed after the preview, admission returns `PM_WORK_PROFILE_CHANGED`
-and inserts no child operation. A target that does not match the saved binding,
+and inserts no child operation. The message names the current revision. Read the
+profile again with `pm_work_profile_get` to see that revision. A target that does not match the saved binding,
 agent, model or delivery returns `PM_WORK_PROFILE_TARGET_MISMATCH` and inserts no
 child operation. A start that does not send `profile_id` keeps the ten preconditions
 above. A saved default is not selected automatically.

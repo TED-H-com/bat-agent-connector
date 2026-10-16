@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "9a5352fca0fdc2e11db35df136362ac248a35521ce4e01b5568013781ff1399b"
+  canonical_sha256: "97bcdf060e8cb62af96c00ec3c6d088c3383b643b3761aea3e07dd04868df404"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -941,7 +941,8 @@ Submit `work.start` with the same `profile_id` and those twelve preconditions.
 saved binding; `source_ref` may be omitted. If the saved delivery goal is set,
 send that `delivery`. Omitting it is invalid and does not read GitHub or BAT.
 If the profile changed after the preview, admission returns `PM_WORK_PROFILE_CHANGED`
-and inserts no child operation. A target that does not match the saved binding,
+and inserts no child operation. The message names the current revision. Read the
+profile again with `pm_work_profile_get` to see that revision. A target that does not match the saved binding,
 agent, model or delivery returns `PM_WORK_PROFILE_TARGET_MISMATCH` and inserts no
 child operation. A start that does not send `profile_id` keeps the ten preconditions
 above. A saved default is not selected automatically.
