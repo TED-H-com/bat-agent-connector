@@ -56116,15 +56116,34 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		fields: saved.fields
 	});
 	const ready = () => pendingSelections === 0 && saved.attachments.every((a) => a.ref);
+	const attachmentKeys = new WeakMap();
+	let attachmentSerial = 0, catalogBusy = false;
+	const attachmentKey = (a) => {
+		let key = attachmentKeys.get(a);
+		if (!key) attachmentKeys.set(a, key = "a" + ++attachmentSerial);
+		return key;
+	};
+	const syncStatusBusy = () => {
+		if (catalogBusy || saved.attachments.some((item) => item.busy)) status.setAttribute("aria-busy", "true");
+		else status.removeAttribute("aria-busy");
+	};
 	const render = () => {
 		changed();
 		promptHint.hidden = roles || Boolean(text.value.trim()) || !saved.attachments.some((a) => a.ref);
-		return fill(rows, ...saved.attachments.filter((a) => !nativeFiles || !a.native_handle || a.ref || !native?.has(a.native_handle)).map((a) => h("div", { class: "row attachment-row" }, previews.has(a) ? h("img", {
+		const active = document.activeElement;
+		const focusKey = active?.closest?.("[data-attachment]")?.getAttribute("data-attachment") || "";
+		const focusControl = active?.getAttribute?.("data-attachment-control") || "";
+		const visible = saved.attachments.filter((a) => !nativeFiles || !a.native_handle || a.ref || !native?.has(a.native_handle));
+		fill(rows, ...visible.map((a) => h("div", {
+			class: "row attachment-row",
+			"data-attachment": attachmentKey(a)
+		}, previews.has(a) ? h("img", {
 			class: "attachment-thumb",
 			src: previews.get(a),
 			alt: a.name || t("attachments")
 		}) : null, h("div", { class: "grow" }, a.name, a.ref ? h("div", { class: "muted" }, `${a.ref.artifact_id} · r${a.ref.revision} · ${a.ref.digest.slice(0, 12)}`) : h("div", { class: "muted" }, a.error || (a.native_handle ? t("files_unavailable") : files.has(a) ? t("uploading") : t("choose_again")))), a.ref && roles ? h("select", {
 			"aria-label": t("attachment_role"),
+			"data-attachment-control": "role",
 			onchange: (e) => {
 				guard();
 				a.ref.role = e.target.value;
@@ -56133,14 +56152,18 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		}, ...["input", "result"].map((role) => h("option", {
 			value: role,
 			selected: (a.ref.role || "input") === role
-		}, t(`attachment_${role}`)))) : null, a.ref && native ? native.actions(a.ref) : null, !a.ref && files.has(a) && !a.busy ? h("button", {
+		}, t(`attachment_${role}`)))) : null, a.ref && native ? native.actions(a.ref) : null, !a.ref && files.has(a) ? h("button", {
 			class: "secondary",
+			"data-attachment-control": "retry",
+			"aria-disabled": a.busy ? "true" : null,
 			onclick: () => upload(a)
 		}, t("retry")) : null, h("button", {
 			class: "secondary",
-			disabled: a.busy,
+			"data-attachment-control": "remove",
+			"aria-disabled": a.busy ? "true" : null,
 			onclick: () => {
 				guard();
+				if (a.busy) return;
 				if (a.native_handle) {
 					saved.native_ignored ||= [];
 					saved.native_ignored.push(a.native_handle);
@@ -56152,6 +56175,15 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 				render();
 			}
 		}, t("remove")))));
+		syncStatusBusy();
+		if (!focusKey) return;
+		const row = rows.querySelector(`[data-attachment="${CSS.escape(focusKey)}"]`);
+		const same = focusControl && row?.querySelector(`[data-attachment-control="${CSS.escape(focusControl)}"]`);
+		if (same) {
+			same.focus();
+			return;
+		}
+		if (focusControl === "retry" && row) (row.querySelector("[data-attachment-control=\"role\"]") || row.querySelector("[data-attachment-control=\"remove\"]"))?.focus();
 	};
 	if (nativeFiles) {
 		if (!Array.isArray(saved.native_ignored)) saved.native_ignored = [];
@@ -56449,13 +56481,24 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		class: "secondary",
 		hidden: true,
 		onclick: async () => {
-			more.disabled = true;
+			if (catalogBusy) return;
+			catalogBusy = true;
+			more.setAttribute("aria-disabled", "true");
+			syncStatusBusy();
 			try {
 				await loadCatalog(catalogCursor);
 			} catch (e) {
 				if (box.isConnected) fill(status, errorBox(e, { within: status }));
 			} finally {
-				more.disabled = false;
+				catalogBusy = false;
+				if (!box.isConnected || connection.epoch !== state.epoch || connection.generation !== generation) return;
+				more.removeAttribute("aria-disabled");
+				syncStatusBusy();
+				const active = document.activeElement;
+				if ((more.hidden || more.disabled) && (active === more || active === document.body)) {
+					status.tabIndex = -1;
+					status.focus();
+				}
 			}
 		}
 	}, t("more"));
@@ -57785,10 +57828,13 @@ async function viewSession(main, host, sid, context = null) {
 		class: "primary",
 		disabled: true,
 		onclick: async () => {
-			if (!box.value.trim() || send.disabled) return;
+			if (sending) return;
+			if (!box.value.trim() || !allowed("session.send")) return;
 			const submitted = box.value;
 			sending = true;
-			send.disabled = true;
+			send.disabled = false;
+			send.setAttribute("aria-disabled", "true");
+			status.setAttribute("aria-busy", "true");
 			try {
 				assertView(connection);
 				queue.onchange();
@@ -57813,8 +57859,18 @@ async function viewSession(main, host, sid, context = null) {
 			} catch (e) {
 				status.replaceChildren(sessionErrorBox(e, sendRecovery(e), { within: status }));
 			} finally {
+				const active = document.activeElement;
+				const owned = active === send || active === document.body;
 				sending = false;
-				send.disabled = !allowed("session.send");
+				if (send.isConnected) {
+					send.removeAttribute("aria-disabled");
+					status.removeAttribute("aria-busy");
+					send.disabled = !allowed("session.send");
+					if (owned && (send.disabled || send.hidden)) {
+						status.tabIndex = -1;
+						status.focus();
+					}
+				}
 			}
 		}
 	}, t("send"));
@@ -58360,7 +58416,9 @@ async function viewSession(main, host, sid, context = null) {
 	};
 	const updateControls = () => {
 		permissions?.update();
-		send.disabled = !allowed("session.send") || sending;
+		send.disabled = sending ? false : !allowed("session.send");
+		if (sending) send.setAttribute("aria-disabled", "true");
+		else send.removeAttribute("aria-disabled");
 		stop.disabled = !allowed("session.interrupt");
 		stop.hidden = withdrawn || row?.api_access !== "managed";
 		let reason = "";
@@ -58813,7 +58871,10 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 	const can = (state.caps?.features?.checkpoints || []).includes(host) && actionAllowed(state.caps, "checkpoint.create");
 	const mayStart = (state.caps?.scopes || []).includes("start") && actionAllowed(state.caps, "checkpoint.continue");
 	const list = h("div", {});
-	const status = h("div", { class: "muted" });
+	const status = h("div", {
+		class: "muted",
+		"data-checkpoint-status": ""
+	});
 	const rows = new Map();
 	let preview = null;
 	let ticket = 0;
@@ -58824,13 +58885,16 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 		const out = h("div", { class: "muted session-checkpoint-result" });
 		const draft = attachmentDraft(`continue.${cp.checkpoint_id}`, instr, cp.artifacts || []);
 		draft.bindFields({ agent });
-		let expectedHead = null;
+		let expectedHead = null, starting = false;
 		const go = h("button", {
 			class: "primary",
 			onclick: async () => {
 				const instructions = instr.value.trim() ? instr.value : draft.refs().length ? t("dispatch_inspect_images") : "";
-				if (!instructions) return;
-				go.disabled = true;
+				if (!instructions || starting) return;
+				starting = true;
+				go.disabled = false;
+				go.setAttribute("aria-disabled", "true");
+				out.setAttribute("aria-busy", "true");
 				try {
 					if (!draft.ready() && !draft.pending()) throw new Error(t("attachments_not_ready"));
 					if (state.caps?.artifacts && !expectedHead && !draft.pending()) throw new Error(t("source_unavailable"));
@@ -58850,8 +58914,14 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 						label: t("ui_retry"),
 						run: () => go.click()
 					}, { within: out }));
+				} finally {
+					starting = false;
+					if (go.isConnected) {
+						go.removeAttribute("aria-disabled");
+						out.removeAttribute("aria-busy");
+						go.disabled = false;
+					}
 				}
-				go.disabled = false;
 			}
 		}, t("start_agent_work"));
 		const limits = disclosure({
@@ -58909,7 +58979,8 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 		placeholder: t("checkpoint_note_placeholder"),
 		hidden: true
 	});
-	let previewFailed = false;
+	let previewFailed = false, recording = false;
+	let applyCreateAvailability = () => {};
 	const loadPreview = async (mine = ticket) => {
 		if (!can) return;
 		try {
@@ -58921,14 +58992,15 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 			pick.replaceChildren(...preview.commits.map((c) => h("option", { value: c.hash }, `${c.hash.slice(0, 10)} · ${c.message}`)));
 			if (preview.commits.some((c) => c.hash === selectedCommit)) pick.value = selectedCommit;
 			pick.hidden = note.hidden = false;
-			create.disabled = false;
-			if (previewFailed) status.replaceChildren();
+			const failedBefore = previewFailed;
 			previewFailed = false;
+			applyCreateAvailability();
+			if (failedBefore) status.replaceChildren();
 			if (preview.dirty) status.replaceChildren(h("span", { class: "error" }, t("dirty_warning", { n: preview.dirty })));
 		} catch (error) {
 			if (mine !== ticket) return;
 			previewFailed = true;
-			create.disabled = true;
+			applyCreateAvailability();
 			status.replaceChildren(sessionErrorBox(error, {
 				label: t("ui_retry"),
 				run: () => loadPreview().catch(() => {})
@@ -58940,7 +59012,10 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 		hidden: !can,
 		disabled: !can,
 		onclick: async () => {
-			create.disabled = true;
+			if (recording) return;
+			recording = true;
+			applyCreateAvailability();
+			status.setAttribute("aria-busy", "true");
 			try {
 				const params = {
 					last_n: 20,
@@ -58962,10 +59037,30 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 					label: t("ui_retry"),
 					run: () => load().catch(() => {})
 				}, { within: status }));
+			} finally {
+				const active = document.activeElement;
+				const owned = active === create || active === document.body;
+				recording = false;
+				status.removeAttribute("aria-busy");
+				if (create.isConnected) {
+					applyCreateAvailability();
+					if (owned && (create.disabled || create.hidden)) {
+						status.tabIndex = -1;
+						status.focus();
+					}
+				}
 			}
-			create.disabled = !can || previewFailed;
 		}
 	}, t("checkpoint_record"));
+	applyCreateAvailability = () => {
+		if (recording) {
+			create.disabled = false;
+			create.setAttribute("aria-disabled", "true");
+			return;
+		}
+		create.removeAttribute("aria-disabled");
+		create.disabled = !can || previewFailed;
+	};
 	const recordForm = h("div", {
 		class: "session-checkpoint-record",
 		hidden: true,
@@ -59839,22 +59934,33 @@ function repairControl(op) {
 		"RESOLUTION_INCOMPLETE",
 		"RESOLUTION_INVALID"
 	].includes(op.error_code);
-	const out = h("div", {});
+	const out = h("div", { "data-handoff-status": "" });
 	let handoff = null;
 	let repair = null;
 	if (conflict && (state.caps?.scopes || []).includes("start")) {
 		const agent = h("select", { "aria-label": t("agent") }, h("option", { value: "claude" }, "Claude"), h("option", { value: "codex" }, "Codex"));
+		let starting = false;
 		const go = h("button", {
 			class: "secondary",
 			onclick: async () => {
-				go.disabled = true;
+				if (starting) return;
+				starting = true;
+				go.disabled = false;
+				go.setAttribute("aria-disabled", "true");
+				out.setAttribute("aria-busy", "true");
 				try {
 					const o = await submit("integration.handoff", { operation_id: op.operation_id }, { agent: agent.value }, {}, `handoff.${op.operation_id}`);
 					out.append(h("p", {}, opStatus(o), " ", t("handoff_started"), " ", h("a", { href: `#/op/${o.operation_id}` }, o.operation_id)));
 				} catch (e) {
 					out.append(errorBox(e, { within: out }));
+				} finally {
+					starting = false;
+					if (go.isConnected) {
+						go.removeAttribute("aria-disabled");
+						out.removeAttribute("aria-busy");
+						go.disabled = false;
+					}
 				}
-				go.disabled = false;
 			}
 		}, t("start_agent_work"));
 		const d = drawer(confinementNote(op.target?.host || op.external_refs?.host, agent), h("div", { class: "actions" }, agent, go));
@@ -61791,16 +61897,19 @@ function continueFrom(w, checkpointId, notice, children = []) {
 		w.steps.length ? `${t("steps_title")}:\n${w.steps.map((s) => `- [${s.done ? "x" : " "}] ${s.text}`).join("\n")}` : ""
 	].filter(Boolean).join("\n\n"));
 	const agent = h("select", { "aria-label": t("agent") }, h("option", { value: "claude" }, "Claude"), h("option", { value: "codex" }, "Codex"));
-	const out = h("div", {});
+	const out = h("div", { "data-work-start-status": "" });
 	const draft = attachmentDraft(`continue.${checkpointId}.${w.work_item_id}`, instr, (w.attachments || []).filter((x) => x.role === "input"));
 	draft.bindFields({ agent });
-	let expectedHead = null;
+	let expectedHead = null, starting = false;
 	const go = h("button", {
 		class: "primary",
 		onclick: async () => {
 			const instructions = instr.value.trim() ? instr.value : draft.refs().length ? t("dispatch_inspect_images") : "";
-			if (!instructions) return;
-			go.disabled = true;
+			if (!instructions || starting) return;
+			starting = true;
+			go.disabled = false;
+			go.setAttribute("aria-disabled", "true");
+			out.setAttribute("aria-busy", "true");
 			let op;
 			try {
 				if (!draft.ready() && !draft.pending()) throw new Error(t("attachments_not_ready"));
@@ -61818,11 +61927,25 @@ function continueFrom(w, checkpointId, notice, children = []) {
 				} : {}, `continue.${checkpointId}`);
 			} catch (e) {
 				fill(out, errorBox(e, { within: out }));
-				go.disabled = false;
+				if (go.isConnected) {
+					go.removeAttribute("aria-disabled");
+					out.removeAttribute("aria-busy");
+					go.disabled = false;
+				}
+				starting = false;
 				return;
 			}
 			assertView(connection);
-			fill(out, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id));
+			const link = h("a", { href: `#/op/${op.operation_id}` }, op.operation_id);
+			fill(out, opStatus(op), " ", link);
+			const active = document.activeElement;
+			const owned = active === go || active === document.body;
+			if (go.isConnected) {
+				go.removeAttribute("aria-disabled");
+				out.removeAttribute("aria-busy");
+				go.disabled = true;
+				if (owned) link.focus();
+			}
 			if (TERMINAL.includes(op.status) && op.status !== "succeeded") return;
 			if (!state.caps?.artifacts) {
 				if (await change(notice, "work_item.link", { work_item_id: w.work_item_id }, {
