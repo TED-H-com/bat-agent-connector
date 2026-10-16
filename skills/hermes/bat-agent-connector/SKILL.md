@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "e680fda35d1da87f15242adff1b633b2479467cb1bb48eefed77a0b99db500ec"
+  canonical_sha256: "9a5352fca0fdc2e11db35df136362ac248a35521ce4e01b5568013781ff1399b"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -916,6 +916,10 @@ When `features.pm_workspaces.work_profiles` is advertised, read saved profiles w
 `pm_work_profiles_list(workspace_id, limit?, cursor?)`,
 `pm_work_profile_get(workspace_id, profile_id)` and
 `pm_work_profile_readiness_get(workspace_id, profile_id)`.
+Readiness omits a `repository.continue` receipt the caller cannot see, and it does not
+hint that the receipt exists. A direct continue with no lineage stays visible to
+every member. `work_start_operation_id` is included only when that start is visible
+to the caller.
 `pm_work_profiles_list` returns every live profile in `sequence` order. The default
 stays in that position and is named by `default_profile_id` on every page. Pass the
 returned `next_cursor` to read the next page. A profile revised between pages can

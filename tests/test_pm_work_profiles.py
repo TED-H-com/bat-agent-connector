@@ -1480,3 +1480,137 @@ async def test_list_pages_follow_sequence_and_name_the_default(world, monkeypatc
         assert await mcp_page(2, opened["next_cursor"]) == after
     finally:
         await fleet.close()
+
+
+def _direct_continue(ops, created_at):
+    operation_id = "op_" + uuid.uuid4().hex
+    session_id = "ses_" + uuid.uuid4().hex[:16]
+    target = {"repository": "o/r", "host": "h1", "workspace_id": "ws-1"}
+    ops.db.execute(
+        """INSERT INTO operations(operation_id,actor,entry,idem_key,request_hash,action,target,
+           params,preconditions,status,result,external_refs,created_at,updated_at)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (operation_id, "profile-owner", "test", operation_id, "hash", "repository.continue",
+         json.dumps(target), json.dumps({"agent": "claude"}), "{}", "succeeded",
+         json.dumps({"host": "h1", "session_id": session_id}), "{}", created_at, created_at),
+    )
+    ops.db.execute(
+        """INSERT INTO sessions_observed(
+            host,session_id,body,digest,provenance,api_access,first_seen_at,last_seen_at
+        ) VALUES(?,?,?,?,?,?,?,?)""",
+        ("h1", session_id, json.dumps({"agent_kind": "claude", "workspace_id": "ws-1"}),
+         "d" * 64, "connector_managed", "managed", created_at, created_at),
+    )
+    return operation_id
+
+
+async def test_readiness_skips_continue_receipts_the_caller_cannot_see(start_ready, monkeypatch):
+    from bat_agent_connector import mcp_server
+    from tests.test_api_v1 import http, token
+    from tests.test_pm_run_api import unpack
+    from tests.test_pm_work_start import _advance_start, _start_envelope
+
+    w = start_ready
+    daemon = w["d"]
+    ops = daemon.ops
+    env = await _start_envelope(w, key="visible-handoff")
+    parent, created = ops.create(STARTER_OWNER, **env)
+    assert created
+    done = await _advance_start(ops, parent["operation_id"])
+    assert done["status"] == "succeeded", done
+    handoff_id = ops.db.execute(
+        "SELECT operation_id FROM pm_work_start_children WHERE parent_id=? AND slot='handoff'",
+        (parent["operation_id"],),
+    ).fetchone()[0]
+    handoff = ops.get(handoff_id)
+    assert handoff["action"] == "repository.continue" and handoff["status"] == "succeeded"
+    assert handoff["external_refs"]["admission_binding"]["pm_handoff"]
+    assert handoff["target"]["host"] == "h1" and handoff["target"]["workspace_id"] == "ws-1"
+    assert str(handoff["target"]["repository"]).lower() == "o/r"
+    assert handoff["params"].get("agent", "claude") == "claude"
+    session_host = handoff["result"].get("host") or handoff["target"]["host"]
+    session_id = handoff["result"]["session_id"]
+    observed = json.dumps({"agent_kind": "claude", "workspace_id": "ws-1"})
+    existing = ops.db.execute(
+        "SELECT 1 FROM sessions_observed WHERE host=? AND session_id=?", (session_host, session_id),
+    ).fetchone()
+    if existing is None:
+        ops.db.execute(
+            """INSERT INTO sessions_observed(
+                host,session_id,body,digest,provenance,api_access,first_seen_at,last_seen_at
+            ) VALUES(?,?,?,?,?,?,?,?)""",
+            (session_host, session_id, observed, "d" * 64, "connector_managed", "managed",
+             handoff["created_at"], handoff["created_at"]),
+        )
+    else:
+        ops.db.execute(
+            """UPDATE sessions_observed
+               SET body=?, provenance=?, api_access=?, gone_at=NULL
+               WHERE host=? AND session_id=?""",
+            (observed, "connector_managed", "managed", session_host, session_id),
+        )
+
+    w1_owner = Principal("w1-only", frozenset({"observe", "manage"}))
+    created_ws, inserted = ops.create(
+        w1_owner, action="pm.workspace.create",
+        params={"name": "W1 only", "repositories": ["o/r"]},
+        idempotency_key="w1-only-workspace",
+    )
+    assert inserted
+    await settle_operations(ops)
+    workspace = ops.get(created_ws["operation_id"])
+    assert workspace["status"] == "succeeded", workspace
+    w1 = workspace["result"]["workspace"]["workspace_id"]
+    saved_w2 = await _save_start(w)
+    operation, _ = ops.create(
+        w1_owner, action=pm_work_profiles.ACTION, target={"workspace_id": w1},
+        params={"document": _start_doc()}, preconditions={}, idempotency_key="w1-profile",
+    )
+    await settle_operations(ops)
+    saved_w1 = ops.get(operation["operation_id"])
+    assert saved_w1["status"] == "succeeded", saved_w1
+    profile_w1 = saved_w1["result"]["profile_id"]
+    profile_w2 = saved_w2["profile_id"]
+    w1_auth = token(daemon, w1_owner.actor, "observe", "manage")
+    w2_auth = token(daemon, STARTER_OWNER.actor, "observe", "manage", "start")
+
+    async def read_ready(auth, workspace_id, profile_id):
+        path = f"/api/v1/pm/workspaces/{workspace_id}/work-profiles/{profile_id}/readiness"
+        status, http_body = await http(w["port"], "GET", path, tok=auth)
+        assert status == 200, http_body
+        rpc_status, rpc_body = await http(w["port"], "POST", "/rpc", tok=auth, body={
+            "method": "pm_work_profile_readiness_get",
+            "params": {"workspace_id": workspace_id, "profile_id": profile_id},
+        })
+        assert rpc_status == 200, rpc_body
+        monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{w['port']}/rpc")
+        monkeypatch.setenv("BATC_API_TOKEN", auth)
+        server, fleet = mcp_server.build_server(daemon.fleet.config, read_only=False, principal_only=True)
+        try:
+            mcp_body = unpack(await server.call_tool("pm_work_profile_readiness_get", {
+                "workspace_id": workspace_id, "profile_id": profile_id,
+            }))
+        finally:
+            await fleet.close()
+        assert _without_observed(http_body) == _without_observed(rpc_body["result"]) == _without_observed(mcp_body)
+        return http_body
+
+    hidden = (handoff_id, parent["operation_id"])
+    seen = await read_ready(w2_auth, w["workspace_id"], profile_w2)
+    assert handoff_id in json.dumps(seen)
+    withheld = await read_ready(w1_auth, w1, profile_w1)
+    dumped = json.dumps(withheld)
+    assert all(secret not in dumped for secret in hidden)
+
+    direct_id = _direct_continue(ops, handoff["created_at"] + 10)
+    assert ops.db.execute(
+        "SELECT 1 FROM pm_source_lineage WHERE resource_id=?", (direct_id,),
+    ).fetchone() is None
+    for auth, workspace_id, profile_id in (
+        (w1_auth, w1, profile_w1),
+        (w2_auth, w["workspace_id"], profile_w2),
+    ):
+        body = await read_ready(auth, workspace_id, profile_id)
+        raw = json.dumps(body)
+        assert direct_id in raw
+        assert handoff_id not in raw

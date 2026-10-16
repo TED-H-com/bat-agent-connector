@@ -706,22 +706,39 @@ def _binding_known(ops, repository: str, host: str, bat_workspace: str) -> bool:
     return False
 
 
-def _matching_continue(db, host, bat_workspace, repository, agent):
+def _continue_matches(row, repository, agent) -> bool:
+    target = _object(row["target"])
+    params = _object(row["params"])
+    repo = target.get("repository")
+    if not isinstance(repo, str) or not isinstance(repository, str) or repo.lower() != repository.lower():
+        return False
+    if "agent" in params:
+        return params.get("agent") == agent
+    return agent == "claude"
+
+
+def _matching_continue(db, principal, host, bat_workspace, repository, agent):
+    """Newest visible succeeded continue. An invisible receipt is not a match and is not counted."""
     if not isinstance(host, str) or not isinstance(bat_workspace, str):
         return None
-    for row in db.execute(_CONTINUE_SQL, (host, bat_workspace)).fetchall():
-        target = _object(row["target"])
-        params = _object(row["params"])
-        repo = target.get("repository")
-        if not isinstance(repo, str) or not isinstance(repository, str) or repo.lower() != repository.lower():
-            continue
-        if "agent" in params:
-            if params.get("agent") != agent:
-                continue
-        elif agent != "claude":
-            continue
-        return row
-    return None
+    from .pm_source_lineage import visible
+    # The cursor stays open only inside this scope, so visible() joins it instead of beginning
+    # another transaction. The barrier's scopes are already closed around this handler.
+    with pm_source_reads.scope(db, principal):
+        cursor = db.execute(_CONTINUE_SQL, (host, bat_workspace))
+        found = None
+        try:
+            row = cursor.fetchone()
+            while row is not None:
+                if _continue_matches(row, repository, agent) and visible(
+                    db, principal, "operation", row["operation_id"],
+                ):
+                    found = {key: row[key] for key in row.keys()}
+                    break
+                row = cursor.fetchone()
+        finally:
+            cursor.close()
+        return found
 
 
 def _session_of(row) -> tuple[str, str] | None:
@@ -745,7 +762,7 @@ def _observed_session(db, host: str, session_id: str):
     ).fetchone()
 
 
-def _execution(db, row, agent, bat_workspace):
+def _execution(db, principal, row, agent, bat_workspace):
     """The one latest matching repository.continue, its handoff parent, and its observed session."""
     if row is None:
         return None
@@ -758,7 +775,9 @@ def _execution(db, row, agent, bat_workspace):
         parent = child["parent_id"] if child is not None else None
     evidence = {"kind": "operation", "operation_id": row["operation_id"]}
     if parent is not None:
-        evidence["work_start_operation_id"] = parent
+        from .pm_source_lineage import visible
+        if visible(db, principal, "operation", parent):
+            evidence["work_start_operation_id"] = parent
     located = _session_of(row)
     observed = _observed_session(db, located[0], located[1]) if located is not None else None
     body = _object(observed["body"]) if observed is not None else {}
@@ -823,8 +842,8 @@ def _readiness_body(ops, principal: Principal, workspace_id: str, row) -> dict:
     succeeded = [body for body in bodies if body.get("status") == "succeeded"]
     covering = [body for body in succeeded if _covers(body, bat_workspace)]
     provider = _usage_provider(ops.db, host, agent)
-    receipt = _matching_continue(ops.db, host, bat_workspace, repository, agent)
-    execution = _execution(ops.db, receipt, agent, bat_workspace)
+    receipt = _matching_continue(ops.db, principal, host, bat_workspace, repository, agent)
+    execution = _execution(ops.db, principal, receipt, agent, bat_workspace)
 
     if not bound:
         discovered = _state("missing", "REPOSITORY_NOT_BOUND")
