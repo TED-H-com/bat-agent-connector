@@ -1,16 +1,25 @@
 # Fixture-only helpers. Dot-sourcing does not start or stop a process.
-function Wait-FixtureUntil([scriptblock]$Condition, [string]$Failure, [int]$Seconds = 30) {
-    $deadline = [DateTime]::UtcNow.AddSeconds($Seconds)
-    while ([DateTime]::UtcNow -lt $deadline) {
+function Wait-FixtureUntil(
+    [scriptblock]$Condition,
+    [string]$Failure,
+    [int]$Seconds = 30,
+    [scriptblock]$Now = { [DateTime]::UtcNow },
+    [scriptblock]$Sleep = { param($Milliseconds) Start-Sleep -Milliseconds $Milliseconds }
+) {
+    $deadline = (& $Now).AddSeconds($Seconds)
+    while ((& $Now) -lt $deadline) {
         if (& $Condition $deadline) { return }
-        $remaining = ($deadline - [DateTime]::UtcNow).TotalMilliseconds
-        if ($remaining -gt 0) { Start-Sleep -Milliseconds ([int][Math]::Min(150, $remaining)) }
+        $remaining = ($deadline - (& $Now)).TotalMilliseconds
+        if ($remaining -gt 0) { & $Sleep ([int][Math]::Min(150, $remaining)) }
     }
     throw $Failure
 }
-function Get-FixtureViewTimeout([DateTime]$Deadline) {
+function Get-FixtureViewTimeout(
+    [DateTime]$Deadline,
+    [scriptblock]$Now = { [DateTime]::UtcNow }
+) {
     # Keep the 8 s process cap inside the caller's original readiness deadline.
-    return [int][Math]::Max(0, [Math]::Floor([Math]::Min(8000, ($Deadline - [DateTime]::UtcNow).TotalMilliseconds)))
+    return [int][Math]::Max(0, [Math]::Floor([Math]::Min(8000, ($Deadline - (& $Now)).TotalMilliseconds)))
 }
 function New-FixtureViewAttempt([System.Collections.IDictionary]$Diagnostics) {
     $Diagnostics.attempt_count++
@@ -63,9 +72,10 @@ function Test-FixtureTransportFailure([Exception]$Exception) {
 }
 function Get-FixturePollCount {
     param([string]$Endpoint, [DateTime]$Deadline, [System.Collections.IDictionary]$Diagnostics,
-        [scriptblock]$Read = { param($Url, $Timeout) Invoke-RestMethod $Url -TimeoutSec $Timeout -NoProxy })
+        [scriptblock]$Read = { param($Url, $Timeout) Invoke-RestMethod $Url -TimeoutSec $Timeout -NoProxy },
+        [scriptblock]$Now = { [DateTime]::UtcNow })
     # A request's timeout fits the caller's original readiness budget. No nested deadline.
-    $seconds = [int][Math]::Floor(($Deadline - [DateTime]::UtcNow).TotalSeconds)
+    $seconds = [int][Math]::Floor(($Deadline - (& $Now)).TotalSeconds)
     if ($seconds -lt 1) { return $null }
     $Diagnostics.attempts++
     try { $state = & $Read "$Endpoint/_fixture/status" ([Math]::Min(3, $seconds)) }
@@ -96,7 +106,9 @@ function Invoke-FixtureCleanupStep([string]$Name, [scriptblock]$Action, [System.
 function Remove-FixturePath {
     param([string]$Path, [DateTime]$Deadline, [System.Collections.IDictionary]$Diagnostics,
         [scriptblock]$Exists = { param($Value) Test-Path -LiteralPath $Value },
-        [scriptblock]$Remove = { param($Value) Remove-Item -LiteralPath $Value -Recurse -Force })
+        [scriptblock]$Remove = { param($Value) Remove-Item -LiteralPath $Value -Recurse -Force },
+        [scriptblock]$Now = { [DateTime]::UtcNow },
+        [scriptblock]$Sleep = { param($Milliseconds) Start-Sleep -Milliseconds $Milliseconds })
     while (& $Exists $Path) {
         $Diagnostics.attempts++
         try { & $Remove $Path; return }
@@ -105,10 +117,10 @@ function Remove-FixturePath {
             for ($cause = $_.Exception; $null -ne $cause; $cause = $cause.InnerException) {
                 if ($cause -is [IO.IOException] -or $cause -is [UnauthorizedAccessException]) { $retry = $true }
             }
-            if (-not $retry -or [DateTime]::UtcNow -ge $Deadline) { throw }
+            if (-not $retry -or (& $Now) -ge $Deadline) { throw }
             $Diagnostics.retries++
-            $remaining = ($Deadline - [DateTime]::UtcNow).TotalMilliseconds
-            if ($remaining -gt 0) { Start-Sleep -Milliseconds ([int][Math]::Min(150, $remaining)) }
+            $remaining = ($Deadline - (& $Now)).TotalMilliseconds
+            if ($remaining -gt 0) { & $Sleep ([int][Math]::Min(150, $remaining)) }
         }
     }
 }

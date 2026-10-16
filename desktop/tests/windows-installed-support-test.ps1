@@ -4,11 +4,26 @@ Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot 'windows-installed-support.ps1')
 function Assert-Fixture([bool]$Value, [string]$Message) { if (-not $Value) { throw $Message } }
 function New-Diagnostics { return [ordered]@{attempts=0; transient_failures=0; last_transport_error_type=$null} }
+function New-FakeClock([DateTime]$StartTime = [DateTime]::UtcNow) {
+    $state = [ordered]@{ current = $StartTime }
+    return [pscustomobject]@{
+        Now = { $state.current }.GetNewClosure()
+        Sleep = { param([int]$Milliseconds) $state.current = $state.current.AddMilliseconds($Milliseconds) }.GetNewClosure()
+        Advance = { param([int]$Milliseconds) $state.current = $state.current.AddMilliseconds($Milliseconds) }.GetNewClosure()
+    }
+}
+$clock = New-FakeClock
 $pollProbe = @{calls=0; deadline=$null}
 $diagnostics = New-Diagnostics
 Wait-FixtureUntil {
     param($Deadline)
-    if ($null -eq $pollProbe.deadline) { $pollProbe.deadline = $Deadline }
+    if ($null -eq $pollProbe.deadline) {
+        $pollProbe.deadline = $Deadline
+        # Advance by 1 ms on the first probe pass to model the sub-millisecond execution time
+        # between setting the deadline and the first poll, ensuring the initial request budget
+        # reflects floor(deadline - now) <= 2 s.
+        & $clock.Advance 1
+    }
     Assert-Fixture ($pollProbe.deadline -eq $Deadline) 'Read retries replaced the original deadline'
     $count = Get-FixturePollCount 'http://127.0.0.1:1' $Deadline $diagnostics {
         param($Url, $Timeout)
@@ -17,23 +32,72 @@ Wait-FixtureUntil {
         if ($pollProbe.calls -eq 1) { throw [Threading.Tasks.TaskCanceledException]::new('synthetic timeout') }
         if ($pollProbe.calls -eq 2) { throw [TimeoutException]::new('synthetic wrapped timeout') }
         return [pscustomobject]@{requests=@([pscustomobject]@{method='GET'; path='/api/v1/events'}); violations=@()}
-    }
+    } -Now $clock.Now
     return $count -gt 0
-} 'Transient fixture read did not recover' 3
+} 'Transient fixture read did not recover' 3 -Now $clock.Now -Sleep $clock.Sleep
 Assert-Fixture ($pollProbe.calls -eq 3 -and $diagnostics.transient_failures -eq 2) 'Typed timeouts were not retried'
 Write-Host 'Passed helper: typed timeout retries within one original deadline'
 
-$expired = Get-FixturePollCount 'http://127.0.0.1:1' ([DateTime]::UtcNow.AddSeconds(-1)) $diagnostics { throw 'Expired request was sent' }
+# Prove runner independence under synthetic latency.
+# Note: 900 ms per read is impossible under Get-FixturePollCount's floor rule:
+# 2 reads (1800 ms) + 2 backoff sleeps (300 ms) = 2100 ms elapsed. At 2100 ms,
+# remaining budget is 900 ms (< 1 s). Floor(0.9 s) = 0, so Get-FixturePollCount
+# returns $null without reading once floor(deadline - now) < 1 s.
+# The maximum per-read cost permitting 3 reads within 3 s is (3000 - 1000 - 300) / 2 = 850 ms.
+$slowClock = New-FakeClock
+$slowProbe = @{calls=0; deadline=$null}
+$slowDiagnostics = New-Diagnostics
+Wait-FixtureUntil {
+    param($Deadline)
+    if ($null -eq $slowProbe.deadline) { $slowProbe.deadline = $Deadline }
+    Assert-Fixture ($slowProbe.deadline -eq $Deadline) 'Slow read retries replaced original deadline'
+    $count = Get-FixturePollCount 'http://127.0.0.1:1' $Deadline $slowDiagnostics {
+        param($Url, $Timeout)
+        $slowProbe.calls++
+        & $slowClock.Advance 850
+        Assert-Fixture ($Timeout -gt 0 -and $Timeout -le 3) 'Request exceeded original readiness budget'
+        if ($slowProbe.calls -eq 1) { throw [Threading.Tasks.TaskCanceledException]::new('synthetic timeout') }
+        if ($slowProbe.calls -eq 2) { throw [TimeoutException]::new('synthetic wrapped timeout') }
+        return [pscustomobject]@{requests=@([pscustomobject]@{method='GET'; path='/api/v1/events'}); violations=@()}
+    } -Now $slowClock.Now
+    return $count -gt 0
+} 'Slow runner probe did not recover within budget' 3 -Now $slowClock.Now -Sleep $slowClock.Sleep
+Assert-Fixture ($slowProbe.calls -eq 3 -and $slowDiagnostics.transient_failures -eq 2) 'Slow runner did not complete 3 reads'
+Write-Host 'Passed helper: slow runner recovers within 3 s budget under floor rule (850 ms/read)'
+
+$floorExhausted = $false
+$floorClock = New-FakeClock
+$floorProbe = @{calls=0}
+$floorDiagnostics = New-Diagnostics
+try {
+    Wait-FixtureUntil {
+        param($Deadline)
+        $count = Get-FixturePollCount 'http://127.0.0.1:1' $Deadline $floorDiagnostics {
+            param($Url, $Timeout)
+            $floorProbe.calls++
+            & $floorClock.Advance 900
+            if ($floorProbe.calls -le 2) { throw [TimeoutException]::new('synthetic wrapped timeout') }
+            return [pscustomobject]@{requests=@([pscustomobject]@{method='GET'; path='/api/v1/events'}); violations=@()}
+        } -Now $floorClock.Now
+        return $count -gt 0
+    } 'Probe with 900 ms per read exhausted budget under floor rule' 3 -Now $floorClock.Now -Sleep $floorClock.Sleep
+} catch {
+    $floorExhausted = $_.Exception.Message -ceq 'Probe with 900 ms per read exhausted budget under floor rule'
+}
+Assert-Fixture ($floorExhausted -and $floorProbe.calls -eq 2 -and $floorDiagnostics.transient_failures -eq 2) 'Floor rule did not exhaust 900 ms reads after 2 attempts'
+Write-Host 'Passed helper: 900 ms/read documented as impossible under floor rule (3rd read denied at <1 s budget)'
+
+$expired = Get-FixturePollCount 'http://127.0.0.1:1' ((& $clock.Now).AddSeconds(-1)) $diagnostics { throw 'Expired request was sent' } -Now $clock.Now
 Assert-Fixture ($null -eq $expired -and $diagnostics.attempts -eq 3) 'Expired readiness sent a request'
 foreach ($kind in @('http', 'mutation', 'schema')) {
     $observed = $false
     try {
-        Get-FixturePollCount 'http://127.0.0.1:1' ([DateTime]::UtcNow.AddSeconds(3)) $diagnostics {
+        Get-FixturePollCount 'http://127.0.0.1:1' ((& $clock.Now).AddSeconds(3)) $diagnostics {
             param($Url, $Timeout)
             if ($kind -eq 'http') { throw [Net.Http.HttpRequestException]::new('synthetic HTTP failure', [TimeoutException]::new('nested timeout'), [Net.HttpStatusCode]::Forbidden) }
             if ($kind -eq 'mutation') { return [pscustomobject]@{requests=@(); violations=@('unauthorized')} }
             return [pscustomobject]@{requests=@()}
-        } | Out-Null
+        } -Now $clock.Now | Out-Null
     } catch { $observed = $true }
     Assert-Fixture $observed "$kind contract failure was swallowed"
 }
@@ -42,11 +106,11 @@ Write-Host 'Passed helper: expired budget sends nothing; HTTP, mutation and malf
 
 $state = @{exists=$true; calls=0}
 $removal = [ordered]@{attempts=0; retries=0}
-Remove-FixturePath 'synthetic' ([DateTime]::UtcNow.AddSeconds(3)) $removal { $state.exists } {
+Remove-FixturePath 'synthetic' ((& $clock.Now).AddSeconds(3)) $removal { $state.exists } {
     $state.calls++
     if ($state.calls -eq 1) { throw [IO.IOException]::new('synthetic sharing lock') }
     $state.exists = $false
-}
+} -Now $clock.Now -Sleep $clock.Sleep
 Assert-Fixture (-not $state.exists -and $removal.retries -eq 1) 'Natural file unlock did not complete bounded cleanup'
 $failures = [Collections.Generic.List[object]]::new()
 $primary = [InvalidOperationException]::new('original readiness failure')
@@ -54,7 +118,7 @@ $recovered = @{ran=$false}
 try { throw $primary } catch {
     $original = $_
     $clean = Invoke-FixtureCleanupStep 'locked_file' {
-        Remove-FixturePath 'synthetic' ([DateTime]::UtcNow.AddSeconds(-1)) $removal { $true } { throw [IO.IOException]::new('retained sharing lock') }
+        Remove-FixturePath 'synthetic' ((& $clock.Now).AddSeconds(-1)) $removal { $true } { throw [IO.IOException]::new('retained sharing lock') } -Now $clock.Now -Sleep $clock.Sleep
     } $failures
     Assert-Fixture (-not $clean) 'Unresolved file lock was reported cleaned'
     $clean = Invoke-FixtureCleanupStep 'next_owned_step' { $recovered.ran=$true } $failures
