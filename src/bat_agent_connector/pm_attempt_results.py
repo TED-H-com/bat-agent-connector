@@ -90,6 +90,9 @@ def schema(journal) -> None:
     ON session_results(workspace_id, attempt_id, sequence DESC)""",
             """CREATE INDEX IF NOT EXISTS session_results_by_position
     ON session_results(workspace_id, source_key, source_generation, source_position, sequence ASC)""",
+            """CREATE INDEX IF NOT EXISTS pm_execution_verify_by_attempt ON operations
+    (json_extract(target,'$.workspace_id'), json_extract(target,'$.execution_operation_id'), created_at)
+    WHERE action='pm.execution.verify'""",
             """CREATE TRIGGER IF NOT EXISTS session_results_no_update
 BEFORE UPDATE ON session_results BEGIN
     SELECT RAISE(ABORT, 'session_results is append-only');
@@ -378,10 +381,10 @@ def build_result_document(
     slice_items: list[dict],
     slice_complete: bool = True,
     slice_reason: str | None = None,
-    turn_started: bool = True,
-    turn_done: bool = True,
-    turn_phase: str = "terminal",
-    turn_attribution: str = "correlated",
+    turn_started: bool | None = None,
+    turn_done: bool | None = None,
+    turn_phase: str | None = None,
+    turn_attribution: str | None = None,
     boundary: str = "turn_done",
     meta: dict | None = None,
     agent_kind: str | None = None,
@@ -514,6 +517,12 @@ def build_result_document(
 
     deduped_reasons = _dedup_reasons(reasons)
     m = meta if isinstance(meta, dict) else {}
+    resolved_turn_started = turn_started if isinstance(turn_started, bool) else None
+    resolved_turn_done = turn_done if isinstance(turn_done, bool) else None
+    resolved_turn_phase = turn_phase if isinstance(turn_phase, str) and turn_phase else None
+    resolved_turn_attribution = (
+        turn_attribution if isinstance(turn_attribution, str) and turn_attribution else None
+    )
     doc: dict[str, Any] = {
         "schema_version": RESULT_DOC_SCHEMA,
         "decoder_version": str(decoder_version),
@@ -524,15 +533,16 @@ def build_result_document(
         "latest_assistant_summary": latest_summary,
         "messages_preview": messages_preview,
         "tool_activity": tool_activity,
-        "turn_done": bool(turn_done),
-        "turn_phase": str(turn_phase),
-        "turn_attribution": str(turn_attribution),
+        "turn_started": resolved_turn_started,
+        "turn_done": resolved_turn_done,
+        "turn_phase": resolved_turn_phase,
+        "turn_attribution": resolved_turn_attribution,
         "boundary": boundary,
         "turn_progress": {
-            "turn_started": bool(turn_started),
-            "turn_done": bool(turn_done),
-            "turn_phase": str(turn_phase),
-            "turn_attribution": str(turn_attribution),
+            "turn_started": resolved_turn_started,
+            "turn_done": resolved_turn_done,
+            "turn_phase": resolved_turn_phase,
+            "turn_attribution": resolved_turn_attribution,
             "boundary": boundary,
         },
         "usage": _usage_from_meta(m),
@@ -1525,7 +1535,10 @@ class AttemptResultCollector:
         turn_slice = read_res.pop("_turn_slice", None) or {"items": [], "complete": True, "reason": None}
 
         # 0.1 If user echo is not visible, write no receipt
-        if read_res.get("turn_attribution") != "correlated":
+        after_meta = read_res.get("after") if isinstance(read_res.get("after"), dict) else {}
+        raw_attr = read_res.get("turn_attribution")
+        marker_visible = (raw_attr == "correlated") if raw_attr is not None else bool(after_meta.get("echo_found"))
+        if not marker_visible:
             self._record_check(attempt_id, "turn_marker_not_visible")
             return None
 
@@ -1546,7 +1559,11 @@ class AttemptResultCollector:
         gone_at = obs_row.get("gone_at") if obs_row is not None else None
         has_process_ended = (runtime_status in {"exited", "stopped"}) or (gone_at is not None)
         has_agent_error = self._has_agent_error_event(host, session_id)
-        turn_done_ready = (read_res.get("turn_done") is True) and (read_res.get("pending") is None)
+        raw_td = read_res.get("turn_done")
+        turn_done_ready = (
+            (raw_td is True if isinstance(raw_td, bool) else bool(turn_slice.get("items")))
+            and (read_res.get("pending") is None)
+        )
 
         if has_agent_error:
             boundary = "agent_error"
@@ -1620,6 +1637,8 @@ class AttemptResultCollector:
         if head_obs.get("worktree_unreachable"):
             extra_reasons.append("worktree_unreachable")
 
+        raw_ts = read_res.get("turn_started")
+        raw_tp = read_res.get("turn_phase")
         doc = build_result_document(
             result_id=rid,
             turn_marker=turn_marker,
@@ -1627,10 +1646,10 @@ class AttemptResultCollector:
             slice_items=slice_items,
             slice_complete=bool(turn_slice.get("complete", True)),
             slice_reason=turn_slice.get("reason"),
-            turn_started=bool(read_res.get("turn_started", True)),
-            turn_done=bool(read_res.get("turn_done", False)),
-            turn_phase=str(read_res.get("turn_phase") or "terminal"),
-            turn_attribution=str(read_res.get("turn_attribution") or "correlated"),
+            turn_started=raw_ts if isinstance(raw_ts, bool) else None,
+            turn_done=raw_td if isinstance(raw_td, bool) else None,
+            turn_phase=raw_tp if isinstance(raw_tp, str) and raw_tp else None,
+            turn_attribution=raw_attr if isinstance(raw_attr, str) and raw_attr else None,
             boundary=boundary,
             meta=read_res.get("meta") if isinstance(read_res.get("meta"), dict) else {},
             agent_kind=read_res.get("agent_kind"),
