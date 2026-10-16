@@ -4,7 +4,8 @@
 
 - A workspace can save a work profile for one repository binding, agent and
   delivery, and can read whether that coding route is ready without contacting
-  the host. Starting work can name one saved revision. Starting work without a
+  the host. The profile list is in sequence order and names the current default
+  on every page. Starting work can name one saved revision. Starting work without a
   profile is unchanged.
 
 - PM forms keep keyboard focus on the submit button while an operation is in flight

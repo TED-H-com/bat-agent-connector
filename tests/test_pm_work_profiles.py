@@ -1,6 +1,7 @@
 """Tests for PM work profiles and readiness (v1.3 E01)."""
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import time
@@ -369,8 +370,10 @@ async def test_default_change_is_one_transaction(ops):
     ).fetchone() is None
     assert ops.db.execute("SELECT profile_id FROM work_profile_defaults").fetchone()["profile_id"] == winner["profile_id"]
     listed = pm_work_profiles.list_profiles(ops.db, OWNER, WS)
-    assert listed["profiles"][0]["profile_id"] == winner["profile_id"] and listed["profiles"][0]["is_default"] is True
+    assert listed["default_profile_id"] == winner["profile_id"]
     assert listed["count"] == 3
+    assert [item["profile_id"] for item in listed["profiles"] if item["is_default"]] == [winner["profile_id"]]
+    assert listed["profiles"][-1]["profile_id"] == winner["profile_id"]
 
     document = _document() if winner["profile_id"] == primary["profile_id"] else _document(agent="codex")
     cleared = await _finish(ops, _save(
@@ -1264,5 +1267,216 @@ async def test_mcp_readiness_matches_http_and_save_matches_operation(world, monk
         assert ops.db.execute(
             "SELECT COUNT(*) FROM work_profiles WHERE profile_id=?", (profile_id,)
         ).fetchone()[0] == 1
+    finally:
+        await fleet.close()
+
+
+def _plant_profile(ops, workspace_id, profile_id, created_at, *, model="listed"):
+    document = {
+        "version": 1,
+        "binding": {"repository": "o/r", "host": "h1", "workspace_id": "ws-1"},
+        "agent": "claude",
+        "model": model,
+        "delivery_policy_ref": {"goal": "pull_request"},
+        "budget_policy_ref": None,
+    }
+    text = json.dumps(document, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    operation_id = "op_" + uuid.uuid4().hex
+    ops.db.execute(
+        """INSERT INTO operations(
+            operation_id, actor, entry, idem_key, request_hash, action, target, params, preconditions,
+            status, result, external_refs, created_at, updated_at
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (operation_id, "profile-owner", "test", operation_id, "h" * 64, pm_work_profiles.ACTION,
+         json.dumps({"workspace_id": workspace_id}), "{}", "{}", "succeeded", "{}", "{}", created_at, created_at),
+    )
+    ops.db.execute(
+        """INSERT INTO work_profiles(
+            profile_id, workspace_id, revision, withdrawn, document, digest, operation_id, created_at
+        ) VALUES(?,?,?,?,?,?,?,?)""",
+        (profile_id, workspace_id, 1, 0, text, hashlib.sha256(text.encode()).hexdigest(), operation_id, created_at),
+    )
+
+
+def _plant_default(ops, workspace_id, profile_id):
+    ops.db.execute(
+        """INSERT INTO work_profile_defaults(workspace_id, profile_id, operation_id, created_at)
+           VALUES(?,?,?,?)""",
+        (workspace_id, profile_id, "op_" + uuid.uuid4().hex, 1000.0),
+    )
+
+
+async def _walk_profiles(fetch, limit):
+    pages = []
+    cursor = None
+    for _ in range(8):
+        body = await fetch(limit, cursor)
+        pages.append(body)
+        cursor = body["next_cursor"]
+        if cursor is None:
+            return pages
+    raise AssertionError("profile list did not end")
+
+
+def _page_ids(pages):
+    return [[row["profile_id"] for row in page["profiles"]] for page in pages]
+
+
+def _latest_sequence(ops, workspace_id, profile_id):
+    return ops.db.execute(
+        """SELECT sequence FROM work_profiles
+           WHERE workspace_id=? AND profile_id=? ORDER BY revision DESC LIMIT 1""",
+        (workspace_id, profile_id),
+    ).fetchone()["sequence"]
+
+
+def _assert_pages(ops, workspace_id, pages, expected, default_id, total, *, repeated=()):
+    assert _page_ids(pages) == expected
+    flat = [profile_id for page in expected for profile_id in page]
+    assert [profile_id for profile_id in flat if profile_id not in repeated] == list(
+        dict.fromkeys(profile_id for profile_id in flat if profile_id not in repeated)
+    )
+    sequences = [
+        _latest_sequence(ops, workspace_id, row["profile_id"])
+        for page in pages for row in page["profiles"]
+    ]
+    assert sequences == sorted(sequences)
+    for page in pages:
+        assert page["count"] == total
+        assert page["default_profile_id"] == default_id
+        for row in page["profiles"]:
+            assert "sequence" not in row
+            assert row["is_default"] is (default_id is not None and row["profile_id"] == default_id)
+            assert row["actor"] == "profile-owner"
+    assert pages[-1]["next_cursor"] is None
+    for page in pages[:-1]:
+        last = page["profiles"][-1]["profile_id"]
+        assert page["next_cursor"] == _latest_sequence(ops, workspace_id, last)
+
+
+async def test_list_pages_follow_sequence_and_name_the_default(world, monkeypatch):
+    from bat_agent_connector import mcp_server
+    from tests.test_api_v1 import http, token
+    from tests.test_pm_run_api import unpack
+
+    daemon = world["d"]
+    ops = daemon.ops
+    owner = Principal("profile-owner", frozenset({"observe", "manage"}))
+    auth = token(daemon, owner.actor, "observe", "manage")
+    created, inserted = ops.create(
+        owner, action="pm.workspace.create", params={"name": "Paged profiles"},
+        idempotency_key="paged-profiles",
+    )
+    assert inserted
+    await settle_operations(ops)
+    workspace = ops.get(created["operation_id"])
+    assert workspace["status"] == "succeeded", workspace
+    wid = workspace["result"]["workspace"]["workspace_id"]
+    stamped = 1000.0
+    identifiers = [("wpf_" + letter * 32) for letter in ("d", "c", "b", "a")]
+    for profile_id in identifiers:
+        _plant_profile(ops, wid, profile_id, stamped)
+    first, second, third, fourth = identifiers
+
+    monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{world['port']}/rpc")
+    monkeypatch.setenv("BATC_API_TOKEN", auth)
+    server, fleet = mcp_server.build_server(daemon.fleet.config, read_only=False, principal_only=True)
+
+    async def http_page(limit, cursor):
+        query = f"limit={limit}" if cursor is None else f"limit={limit}&cursor={cursor}"
+        status, body = await http(
+            world["port"], "GET", f"/api/v1/pm/workspaces/{wid}/work-profiles?{query}", tok=auth,
+        )
+        assert status == 200, body
+        return body
+
+    async def rpc_page(limit, cursor):
+        params = {"workspace_id": wid, "limit": limit}
+        if cursor is not None:
+            params["cursor"] = cursor
+        return await daemon.call_api("pm_work_profiles_list", params, owner)
+
+    async def mcp_page(limit, cursor):
+        params = {"workspace_id": wid, "limit": limit}
+        if cursor is not None:
+            params["cursor"] = cursor
+        return unpack(await server.call_tool("pm_work_profiles_list", params))
+
+    async def agree(limit, expected, default_id, total, *, repeated=()):
+        walks = [await _walk_profiles(fetch, limit) for fetch in (http_page, rpc_page, mcp_page)]
+        for pages in walks[1:]:
+            assert pages == walks[0]
+        _assert_pages(ops, wid, walks[0], expected, default_id, total, repeated=repeated)
+
+    try:
+        await agree(2, [[first, second], [third, fourth]], None, 4)
+        await agree(1, [[first], [second], [third], [fourth]], None, 4)
+        await agree(100, [[first, second, third, fourth]], None, 4)
+
+        _plant_default(ops, wid, first)
+        await agree(2, [[first, second], [third, fourth]], first, 4)
+        _plant_default(ops, wid, third)
+        await agree(2, [[first, second], [third, fourth]], third, 4)
+        _plant_default(ops, wid, fourth)
+        await agree(1, [[first], [second], [third], [fourth]], fourth, 4)
+        _plant_default(ops, wid, None)
+        await agree(2, [[first, second], [third, fourth]], None, 4)
+
+        opened = await http_page(2, None)
+        assert [row["profile_id"] for row in opened["profiles"]] == [first, second]
+        revised = {
+            "version": 1,
+            "binding": {"repository": "o/r", "host": "h1", "workspace_id": "ws-1"},
+            "agent": "claude",
+            "model": "revised-between-pages",
+            "delivery_policy_ref": {"goal": "pull_request"},
+        }
+        status, saved = await http(
+            world["port"], "POST", "/api/v1/operations", tok=auth,
+            body={
+                "action": pm_work_profiles.ACTION,
+                "target": {"workspace_id": wid},
+                "params": {"document": revised, "profile_id": first, "expected_revision": 1},
+                "preconditions": {},
+            },
+            headers={"Idempotency-Key": "revise-between-pages"},
+        )
+        assert status == 202, saved
+        await settle_operations(ops)
+        done = ops.get(saved["operation"]["operation_id"])
+        assert done["status"] == "succeeded", done
+        continued = await http_page(2, opened["next_cursor"])
+        tail = await http_page(2, continued["next_cursor"])
+        assert [row["profile_id"] for row in continued["profiles"]] == [third, fourth]
+        assert [row["profile_id"] for row in tail["profiles"]] == [first]
+        assert tail["profiles"][0]["revision"] == 2
+        assert tail["next_cursor"] is None
+        for page in (continued, tail):
+            assert page["count"] == 4 and page["default_profile_id"] is None
+        rpc_tail = await rpc_page(2, continued["next_cursor"])
+        mcp_tail = await mcp_page(2, continued["next_cursor"])
+        assert rpc_tail == mcp_tail == tail
+
+        status, withdrawn = await http(
+            world["port"], "POST", "/api/v1/operations", tok=auth,
+            body={
+                "action": pm_work_profiles.ACTION,
+                "target": {"workspace_id": wid},
+                "params": {
+                    "document": revised, "profile_id": fourth, "expected_revision": 1, "withdrawn": True,
+                },
+                "preconditions": {},
+            },
+            headers={"Idempotency-Key": "withdraw-between-pages"},
+        )
+        assert status == 202, withdrawn
+        await settle_operations(ops)
+        assert ops.get(withdrawn["operation"]["operation_id"])["status"] == "succeeded"
+        after = await http_page(2, opened["next_cursor"])
+        assert [row["profile_id"] for row in after["profiles"]] == [third, first]
+        assert fourth not in json.dumps(after)
+        assert after["count"] == 3 and after["default_profile_id"] is None
+        assert await rpc_page(2, opened["next_cursor"]) == after
+        assert await mcp_page(2, opened["next_cursor"]) == after
     finally:
         await fleet.close()

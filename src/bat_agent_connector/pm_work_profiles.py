@@ -9,6 +9,7 @@ import sqlite3
 import time
 import uuid
 
+from . import pm_source_reads
 from .api_auth import Principal
 from .host_git import LOCAL_GIT_REASONS
 from .operations import ActionDef, OperationError
@@ -425,7 +426,8 @@ def _live_rows(db, workspace_id: str):
                SELECT profile_id, MAX(revision) AS revision
                FROM work_profiles WHERE workspace_id=? GROUP BY profile_id
            ) latest ON latest.profile_id=wp.profile_id AND latest.revision=wp.revision
-           WHERE wp.workspace_id=? AND wp.withdrawn=0""",
+           WHERE wp.workspace_id=? AND wp.withdrawn=0
+           ORDER BY wp.sequence ASC""",
         (workspace_id, workspace_id),
     ).fetchall()
 
@@ -482,25 +484,19 @@ def list_profiles(db, principal: Principal, workspace_id: str, query: dict | Non
             raise _bad("INVALID_PARAMS", "cursor must be a work profile sequence")
     else:
         cursor = 0
-    require_member(db, principal, workspace_id)
-    rows = list(_live_rows(db, workspace_id))
-    default_id = _current_default_id(db, workspace_id)
-    default = next((row for row in rows if row["profile_id"] == default_id), None)
-    ordered = []
-    if default is not None and default["sequence"] > cursor:
-        ordered.append(default)
-    rest = [
-        row for row in rows
-        if row["sequence"] > cursor and (default is None or row["profile_id"] != default["profile_id"])
-    ]
-    rest.sort(key=lambda row: (row["created_at"], row["profile_id"]))
-    ordered.extend(rest)
-    page = ordered[:limit]
-    return {
-        "profiles": [_project(db, row, default_id) for row in page],
-        "count": len(rows),
-        "next_cursor": page[-1]["sequence"] if len(ordered) > limit else None,
-    }
+    # One read point. The barrier's own scopes close before and after this handler.
+    with pm_source_reads.scope(db, principal):
+        require_member(db, principal, workspace_id)
+        default_id = _current_default_id(db, workspace_id)
+        rows = list(_live_rows(db, workspace_id))
+        visible = [row for row in rows if row["sequence"] > cursor]
+        page = visible[:limit]
+        return {
+            "profiles": [_project(db, row, default_id) for row in page],
+            "count": len(rows),
+            "default_profile_id": default_id,
+            "next_cursor": page[-1]["sequence"] if len(visible) > limit else None,
+        }
 
 
 def get_profile(db, principal: Principal, workspace_id: str, profile_id: str) -> dict:
