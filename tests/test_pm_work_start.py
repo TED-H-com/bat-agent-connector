@@ -1,6 +1,7 @@
 """Tests for the work.start compound action and pm_work_start_preview (v1.3 E02, slice P3)."""
 from __future__ import annotations
 
+import asyncio
 import json
 import sqlite3
 import time
@@ -1767,6 +1768,65 @@ async def test_cancel_parent_cancels_needs_attention_child_and_allows_new_start(
         assert done2["status"] == "succeeded", done2
         assert done2["result"]["predecessor_attempt_id"] == "att_" + op1["operation_id"][3:]
         assert done2["result"]["session"]["session_id"]
+    finally:
+        ops.actions["pm.work_package.create"] = pkg_act
+
+
+async def test_active_parent_with_pending_cancel_ends_cancelled_not_failed(start_ready, mock):
+    w = start_ready
+    ops = w["d"].ops
+
+    pkg_act = ops.actions["pm.work_package.create"]
+    child_entered = asyncio.Event()
+    child_release = asyncio.Event()
+    calls = 0
+
+    async def pkg_run_controlled(ctx):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise NeedsAttention("PKG_HOLD", "Initial pause before active cancel")
+        child_entered.set()
+        await child_release.wait()
+        ctx.check_cancel()
+        return await pkg_act.run(ctx)
+
+    ops.actions["pm.work_package.create"] = ActionDef(
+        pkg_act.name,
+        pkg_act.scope,
+        pkg_act.summary,
+        pkg_run_controlled,
+        pkg_act.admit,
+        pkg_act.target_keys,
+        authorize_existing=pkg_act.authorize_existing,
+    )
+    try:
+        env1 = await _start_envelope(w, key="active-cancel-parent-1")
+        op1, _ = ops.create(STARTER_OWNER, **env1)
+        paused = await _advance_start(ops, op1["operation_id"])
+        assert paused["status"] == "needs_attention"
+        pkg_child_id = paused["result"]["children"]["package"]
+        assert ops.get(pkg_child_id)["status"] == "needs_attention"
+
+        # Resume the child into an active run waiting on child_release, then cancel the child directly.
+        ops.resume(STARTER_OWNER, pkg_child_id)
+        await ops.run_due()
+        await child_entered.wait()
+        assert ops._running(pkg_child_id) is True
+        ops.cancel(STARTER_OWNER, pkg_child_id)
+        child_release.set()
+        await ops.drain()
+        assert ops.get(pkg_child_id)["status"] == "cancelled"
+
+        # Resume the parent, start its active run via run_due, and cancel the parent while its run is active.
+        ops.resume(STARTER_OWNER, op1["operation_id"])
+        await ops.run_due()
+        assert ops._running(op1["operation_id"]) is True
+        ops.cancel(STARTER_OWNER, op1["operation_id"])
+        await ops.drain()
+
+        settled_parent = ops.get(op1["operation_id"])
+        assert settled_parent["status"] == "cancelled", settled_parent
     finally:
         ops.actions["pm.work_package.create"] = pkg_act
 

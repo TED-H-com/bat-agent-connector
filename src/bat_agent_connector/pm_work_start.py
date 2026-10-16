@@ -1502,6 +1502,8 @@ def _raise_child_stopped(
     package_id: str | None = None,
     session: dict | None = None,
 ) -> None:
+    # A parent with its own pending cancel must end cancelled rather than failing on a cancelled child.
+    ctx.check_cancel()
     is_uncertain = child["status"] == "uncertain" or _uncertain(ctx.service, child)
     is_failed = not is_uncertain and child["status"] in {"failed", "cancelled"}
     stage = "start_unknown" if is_uncertain else ("start_failed" if is_failed else in_progress_stage)
