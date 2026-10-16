@@ -542,59 +542,134 @@ test.describe('PM Scroll Leave & Restore', () => {
   }
 
   // Hidden view keeps its hands off the window
-  const HIDDEN_VIEW_CASES: Array<{
-    firstView: 'board' | 'requirements';
-    secondView: 'board' | 'requirements';
-    width: 1440 | 390;
-  }> = [
-    {firstView: 'board', secondView: 'requirements', width: 1440},
-    {firstView: 'board', secondView: 'requirements', width: 390},
-    {firstView: 'requirements', secondView: 'board', width: 1440},
-    {firstView: 'requirements', secondView: 'board', width: 390},
-  ];
-
-  for (const tc of HIDDEN_VIEW_CASES) {
-    test(`hidden view keeps its hands off the window: ${tc.firstView} to ${tc.secondView} (en ${tc.width})`, async ({page}) => {
-      const height = tc.width === 1440 ? 900 : 844;
+  for (const width of [1440, 390] as const) {
+    test(`hidden view keeps its hands off the window: board to requirements (en ${width})`, async ({page}) => {
+      const height = width === 1440 ? 900 : 844;
       await page.addInitScript(l => Object.defineProperty(navigator, 'language', {value: l}), 'en');
-      await page.setViewportSize({width: tc.width, height});
+      await page.addInitScript(() => {
+        const originalFetch = window.fetch;
+        (window as any).__bodyCompletedUrls = [];
+        window.fetch = async function(...args) {
+          const response = await originalFetch.apply(this, args);
+          const url = typeof args[0] === 'string' ? args[0] : (args[0] && (args[0] as any).url) || '';
+          const originalJson = response.json.bind(response);
+          response.json = async function() {
+            const data = await originalJson();
+            (window as any).__bodyCompletedUrls.push(url);
+            return data;
+          };
+          return response;
+        };
+      });
+      await page.setViewportSize({width, height});
 
       const f = createScrollFixture('en');
       await mountAttention(page, false, {...f.ws.fixture, caps: f.combinedCaps}, f.dispatch);
 
-      await page.goto(`/dashboard/?workbench=1#/pm/${fixtureWorkspaceId}/${tc.firstView}`);
-      const firstTitle = tc.firstView === 'board' ? 'Board' : 'Requirements';
-      await expect(page.locator('#main h1').first()).toHaveText(firstTitle);
-      const firstSelector = tc.firstView === 'board' ? '[data-pm-kanban] .pm-kanban-card' : '[data-rtm-requirement]';
-      await expect(page.locator(firstSelector).first()).toBeVisible();
+      // 1. Open Board, wait for the cards and the refresh button, and scroll to 200.
+      await page.goto(`/dashboard/?workbench=1#/pm/${fixtureWorkspaceId}/board`);
+      await expect(page.locator('#main h1').first()).toHaveText('Board');
+      await expect(page.locator('[data-pm-kanban] .pm-kanban-card').first()).toBeVisible();
+      await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
+      await page.evaluate(() => window.scrollTo(0, 200));
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
+
+      // 2. Switch to Requirements, wait for it to render and settle, and scroll to 200.
+      await page.evaluate(({wsId}) => {
+        location.hash = `#/pm/${wsId}/requirements`;
+      }, {wsId: fixtureWorkspaceId});
+      await expect(page.locator('#main h1').first()).toHaveText('Requirements');
+      await expect(page.locator('[data-rtm-requirement]').first()).toBeVisible();
+      await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
+      await page.evaluate(() => window.scrollTo(0, 200));
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
+
+      // 3. Hold the next /kanban read and switch back to Board. Board keeps its cards, so its first frame restores to 200.
+      const holdPath = `/pm/workspaces/${fixtureWorkspaceId}/kanban`;
+      f.holdNext(holdPath);
+      await page.evaluate(({wsId}) => {
+        location.hash = `#/pm/${wsId}/board`;
+      }, {wsId: fixtureWorkspaceId});
+      await expect.poll(() => f.isReadStarted()).toBe(true);
+      await expect(page.locator('#main h1').first()).toHaveText('Board');
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
+
+      // 4. While the read is held, scroll the window to 400.
+      await page.evaluate(() => window.scrollTo(0, 400));
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(400);
+
+      // 5. Switch to Requirements, and wait for it to render, settle and sit at 200.
+      await page.evaluate(({wsId}) => {
+        location.hash = `#/pm/${wsId}/requirements`;
+      }, {wsId: fixtureWorkspaceId});
+      await expect(page.locator('#main h1').first()).toHaveText('Requirements');
+      await expect(page.locator('[data-rtm-requirement]').first()).toBeVisible();
+      await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
+
+      // 6. Release the read, sync (Required 3), and expect 200.
+      f.release();
+      await page.waitForFunction(prefix => {
+        const urls = (window as any).__bodyCompletedUrls || [];
+        return urls.some((u: string) => u.includes(prefix));
+      }, holdPath);
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+
+      await expect.poll(async () => page.evaluate(() => window.scrollY)).toBe(200);
+    });
+
+    test(`hidden view keeps its hands off the window: requirements to board (en ${width})`, async ({page}) => {
+      const height = width === 1440 ? 900 : 844;
+      await page.addInitScript(l => Object.defineProperty(navigator, 'language', {value: l}), 'en');
+      await page.addInitScript(() => {
+        const originalFetch = window.fetch;
+        (window as any).__bodyCompletedUrls = [];
+        window.fetch = async function(...args) {
+          const response = await originalFetch.apply(this, args);
+          const url = typeof args[0] === 'string' ? args[0] : (args[0] && (args[0] as any).url) || '';
+          const originalJson = response.json.bind(response);
+          response.json = async function() {
+            const data = await originalJson();
+            (window as any).__bodyCompletedUrls.push(url);
+            return data;
+          };
+          return response;
+        };
+      });
+      await page.setViewportSize({width, height});
+
+      const f = createScrollFixture('en');
+      await mountAttention(page, false, {...f.ws.fixture, caps: f.combinedCaps}, f.dispatch);
+
+      // 1. Open Requirements, wait for items and refresh button, scroll to 200.
+      await page.goto(`/dashboard/?workbench=1#/pm/${fixtureWorkspaceId}/requirements`);
+      await expect(page.locator('#main h1').first()).toHaveText('Requirements');
+      await expect(page.locator('[data-rtm-requirement]').first()).toBeVisible();
       await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
 
       await page.evaluate(() => window.scrollTo(0, 200));
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
 
-      await leaveByProjectsEntry(page, tc.width);
+      // 2. Leave by Projects entry, scroll to 0.
+      await leaveByProjectsEntry(page, width);
       await page.evaluate(() => window.scrollTo(0, 0));
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
 
       f.release();
 
-      // On Back, hold that view's read.
-      const holdPath = tc.firstView === 'board'
-        ? `/pm/workspaces/${fixtureWorkspaceId}/kanban`
-        : `/pm/workspaces/${fixtureWorkspaceId}/plans/accepted`;
+      // 3. On Back, hold /plans/accepted.
+      const holdPath = `/pm/workspaces/${fixtureWorkspaceId}/plans/accepted`;
       f.holdNext(holdPath);
       await page.goBack();
       await expect.poll(() => f.isReadStarted()).toBe(true);
 
-      // Once the workspace has settled, switch to the second view and wait for it to render and settle.
-      await page.evaluate(({wsId, view}) => {
-        location.hash = `#/pm/${wsId}/${view}`;
-      }, {wsId: fixtureWorkspaceId, view: tc.secondView});
+      // Switch to Board and wait for it to render and settle.
+      await page.evaluate(({wsId}) => {
+        location.hash = `#/pm/${wsId}/board`;
+      }, {wsId: fixtureWorkspaceId});
 
-      const secondTitle = tc.secondView === 'board' ? 'Board' : 'Requirements';
-      await expect(page.locator('#main h1').first()).toHaveText(secondTitle);
-      const secondSelector = tc.secondView === 'board' ? '[data-pm-kanban] .pm-kanban-card' : '[data-rtm-requirement]';
-      await expect(page.locator(secondSelector).first()).toBeVisible();
+      await expect(page.locator('#main h1').first()).toHaveText('Board');
+      await expect(page.locator('[data-pm-kanban] .pm-kanban-card').first()).toBeVisible();
       await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
 
       const expectedScrollY = await page.evaluate(() => window.scrollY);
@@ -602,10 +677,13 @@ test.describe('PM Scroll Leave & Restore', () => {
 
       // Release the held read.
       f.release();
-      await expect.poll(() => f.heldResolvedCount()).toBeGreaterThan(0);
-      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      await page.waitForFunction(prefix => {
+        const urls = (window as any).__bodyCompletedUrls || [];
+        return urls.some((u: string) => u.includes(prefix));
+      }, holdPath);
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
 
-      // Expect the window to stay at the second view's position.
+      // Expect the window to stay at the second view's position (0).
       await expect.poll(async () => page.evaluate(() => window.scrollY)).toBe(expectedScrollY);
     });
   }

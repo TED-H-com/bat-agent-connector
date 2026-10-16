@@ -1427,8 +1427,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   }
   async function loadEarlier() {
     if (!historyCursor || refreshing || !loaded) return;
-    headerReads++;
     const ticket = ++sequence; refreshing = true; earlier.disabled = true; refresh.disabled = true;
+    headerReads++;
     try {
       alive(); const data = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}?before_message=${historyCursor}`); alive();
       if (ticket !== sequence) return;
@@ -1471,10 +1471,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     filterThreads();
   }
   async function load({event = false} = {}) {
-    headerReads++;
     const ticket = ++sequence; refreshing = true; refresh.disabled = true;
     if (!event) {invalidateSections(); withdrawNames(); lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();
       ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();qualityReviews?.withdraw();qualitySelections.clear();}
+    headerReads++;
     try {
       alive(); const list = event ? {workspaces:lastList} : await api('GET', '/pm/workspaces'); alive();
       let detail = null, threadList = null, data = null, runs = null, plans = null, accepted = null, workspaceCaps = null, draftRefs = null;
@@ -1657,8 +1657,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const authorityHidden = new Map();
   let authorityTool = null;
   async function refreshAuthority() {
-    headerReads++;
     const ticket = ++sequence;
+    headerReads++;
     try {
       const detail = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}`); alive();
       if (ticket !== sequence) return;

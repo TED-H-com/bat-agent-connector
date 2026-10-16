@@ -93,7 +93,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
     for (const kind of Object.keys(pages)) cursors[kind] = null; controls();
   }
   function fail(error, ticket) {
-    try {alive(); if (ticket !== serial) return;} catch {withdraw(); return;}
+    try {alive(); if (ticket !== serial) return;} catch {return;}
     // Keep the shared event-cycle failure signal, with concise local presentation.
     errorBox(error); withdraw();
     status.replaceChildren(h('p', {class: 'error'}, t(error.code === 'SNAPSHOT_CHANGED' ? 'wb_plan_changed' : error.status === 403 ? 'forbidden_scope' : 'wv_requirements_unavailable')),
