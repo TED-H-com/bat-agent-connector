@@ -23,6 +23,12 @@ management views, discussions and bound work. A form submission is not evidence 
 completion. Unknown, partial, stale and withdrawn states must remain distinguishable.
 Never substitute zero for missing data or count a loaded page as a complete inventory.
 
+Durable PM forms retain keyboard focus on the submit button while an action is in flight
+or being checked automatically via `aria-disabled="true"` and an `aria-busy="true"` status region,
+preventing focus ejection to `<body>`. Submitting from a field shifts focus to the submit
+button before locking fields, duplicate submissions while busy or during automatic checks
+are ignored, and terminal failures or admission refusals move focus to the reset button.
+
 Keep existing drafts, stable IDs, operation keys, receipt recovery and read-only
 manual resources. A source withdrawal removes its facts, counts and inspector;
 late responses cannot restore them. View changes do not start another event reader.
@@ -626,7 +632,7 @@ Existing quality, evidence, specs, package, handoff and publication controls mov
 intact into drawers reached from the Requirements overflow and work inspector;
 Board's overflow opens Batches. Drafts, original request keys and recovery controls
 remain owned by their existing modules. Both work inspectors expose the same
-Requirements tools; Batches stays in Board's header overflow. The shell provides the single refresh.
+Requirements tools; Batches stays in Board's header overflow. The shell provides the single refresh; whichever read completes with the current sequence resets the busy state so Refresh does not stay disabled when an event arrives during a refresh.
 `requirements?select=<work_item_id|requirement_id>` expands and scrolls to the
 selection, clearing a previous search when following an explicit selection link.
 Overview and Issues links preserve the exact revision, expand the destination row with
