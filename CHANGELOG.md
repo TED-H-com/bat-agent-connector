@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Creating a workspace changes the member's access checkpoint. If that reset lands while a new discussion's rename is open, the page rebuilds and reopens the same draft, caret and focus, so Save can still commit the local title once.
+
 - An open rename on a new discussion keeps its draft, caret and focus while a background refresh rereads the project lifecycle. Save still commits that local title once.
 
 - PM forms keep keyboard focus on the submit button while an operation is in flight

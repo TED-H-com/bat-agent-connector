@@ -336,6 +336,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   }
   const launch = parseDiscussRefs(location.hash.split('?')[1] || '');
   const uiState = viewState(namespace, workspaceId, 'discussions');
+  const titleSession = viewState(namespace, workspaceId, 'discussion-title.' + (threadId || 'list'));
   const handoffKey = `batc.pm.${namespace}.discussion-send.${workspaceId}`;
   const originKey = `batc.pm.${namespace}.discussion-origin.${workspaceId}.`;
   let sendHandoff = null, firstMessagePending = false;
@@ -1577,7 +1578,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
             },
             onSaved: result => {alive(); location.replace(`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(result.thread_id)}`);},
             extra: threadId === 'new' ? text : h('div', {}, labelled('pd_title', name), text)});
-          titleDraft = threadId === 'new' ? discussionTitle({t, field: name, form: create, value: name.value, local: true}) : null;
+          titleDraft = threadId === 'new' ? discussionTitle({t, field: name, form: create, value: name.value, local: true,
+            resume: titleSession.open === true,
+            onEditing: (open, start, end) => {titleSession.open = open; if (open) {titleSession.caret = start; titleSession.caretEnd = end;}}}) : null;
+          if (titleDraft) titleView = titleDraft;
           if (threadId === 'new' && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis)) {
             workspaceCaps = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`); alive();
             if (ticket !== sequence) return;
@@ -1676,7 +1680,13 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   workspaceList.scrollTop = uiState.listScroll || 0;
   const initialTranscript = content.querySelector('.pd-transcript');
   if (initialTranscript && threadState.scroll) initialTranscript.scrollTop = threadState.scroll;
-  if (threadId === 'new') setTimeout(() => {if (!disposed) content.querySelector('[data-discussion-composer]')?.focus();}, 0);
+  if (threadId === 'new') setTimeout(() => {
+    if (disposed) return;
+    // An access reset rebuilds this page while rename is open. Restore that
+    // field instead of moving focus to the composer.
+    if (titleView?.editing()) titleView.focus(titleSession.caret, titleSession.caretEnd);
+    else content.querySelector('[data-discussion-composer]')?.focus();
+  }, 0);
   proposalReview?.recheck(); nativeAnalysis?.recheck();
   if (firstMessagePending) setTimeout(() => {
     if (!disposed) {firstMessagePending = false; void noteForm.submit();}
