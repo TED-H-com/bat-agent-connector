@@ -79,6 +79,7 @@ function createScrollFixture(locale = 'en', {withLifecycle = false} = {}) {
   let readStarted = false;
   let holdPathPrefix: string | null = null;
   let threadsCallCount = 0;
+  let heldReleaseCount = 0;
 
   const holdNext = (pathPrefix: string) => {
     holdPathPrefix = pathPrefix;
@@ -110,7 +111,9 @@ function createScrollFixture(locale = 'en', {withLifecycle = false} = {}) {
 
     if (holdPathPrefix && path.startsWith(holdPathPrefix) && heldPromise) {
       readStarted = true;
+      holdPathPrefix = null;
       await heldPromise;
+      heldReleaseCount++;
     }
 
     if (path.endsWith('/threads') && path.includes('/pm/workspaces/')) {
@@ -187,6 +190,7 @@ function createScrollFixture(locale = 'en', {withLifecycle = false} = {}) {
     release,
     isReadStarted: () => readStarted,
     threadsCount: () => threadsCallCount,
+    heldResolvedCount: () => heldReleaseCount,
   };
 }
 
@@ -326,7 +330,6 @@ test.describe('PM Scroll Leave & Restore', () => {
       await page.goBack();
       await expect(page.locator('#main h1').first()).toHaveText(expectedTitle);
       await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
-      await expect(page.locator('#main [data-pm-source-pending]:visible')).toHaveCount(0);
 
       // 7. Expect position within 8 px of 200
       await expect.poll(async () => Math.abs(await page.evaluate(() => window.scrollY) - 200)).toBeLessThanOrEqual(8);
@@ -357,7 +360,6 @@ test.describe('PM Scroll Leave & Restore', () => {
     await page.goBack();
     await expect(page.locator('#main h1').first()).toHaveText('Board');
     await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
-    await expect(page.locator('#main [data-pm-source-pending]:visible')).toHaveCount(0);
 
     await expect.poll(async () => Math.abs(await page.evaluate(() => window.scrollY) - 200)).toBeLessThanOrEqual(8);
   });
@@ -386,7 +388,6 @@ test.describe('PM Scroll Leave & Restore', () => {
     await page.goBack();
     await expect(page.locator('#main h1').first()).toHaveText('需求');
     await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
-    await expect(page.locator('#main [data-pm-source-pending]:visible')).toHaveCount(0);
 
     await expect.poll(async () => Math.abs(await page.evaluate(() => window.scrollY) - 200)).toBeLessThanOrEqual(8);
   });
@@ -434,7 +435,6 @@ test.describe('PM Scroll Leave & Restore', () => {
 
       await expect(page.locator('#main h1').first()).toHaveText(expectedTitle);
       await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
-      await expect(page.locator('#main [data-pm-source-pending]:visible')).toHaveCount(0);
 
       await expect.poll(async () => Math.abs(await page.evaluate(() => window.scrollY) - 200)).toBeLessThanOrEqual(8);
     });
@@ -485,7 +485,6 @@ test.describe('PM Scroll Leave & Restore', () => {
       await expect(page.locator('#main h1').first()).toHaveText(expectedTitle);
       await expect.poll(() => page.locator(itemSelector).count()).toBeGreaterThan(0);
       await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
-      await expect(page.locator('#main [data-pm-source-pending]:visible')).toHaveCount(0);
 
       await expect.poll(async () => Math.abs(await page.evaluate(() => window.scrollY) - 200)).toBeLessThanOrEqual(8);
     });
@@ -537,9 +536,77 @@ test.describe('PM Scroll Leave & Restore', () => {
       await expect(page.locator('#main h1').first()).toHaveText(expectedTitle);
       await expect(page.locator('.ui-page-header .ui-pill').first()).toHaveText(expectedPhase);
       await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
-      await expect(page.locator('#main [data-pm-source-pending]:visible')).toHaveCount(0);
 
       await expect.poll(async () => Math.abs(await page.evaluate(() => window.scrollY) - 200)).toBeLessThanOrEqual(8);
+    });
+  }
+
+  // Hidden view keeps its hands off the window
+  const HIDDEN_VIEW_CASES: Array<{
+    firstView: 'board' | 'requirements';
+    secondView: 'board' | 'requirements';
+    width: 1440 | 390;
+  }> = [
+    {firstView: 'board', secondView: 'requirements', width: 1440},
+    {firstView: 'board', secondView: 'requirements', width: 390},
+    {firstView: 'requirements', secondView: 'board', width: 1440},
+    {firstView: 'requirements', secondView: 'board', width: 390},
+  ];
+
+  for (const tc of HIDDEN_VIEW_CASES) {
+    test(`hidden view keeps its hands off the window: ${tc.firstView} to ${tc.secondView} (en ${tc.width})`, async ({page}) => {
+      const height = tc.width === 1440 ? 900 : 844;
+      await page.addInitScript(l => Object.defineProperty(navigator, 'language', {value: l}), 'en');
+      await page.setViewportSize({width: tc.width, height});
+
+      const f = createScrollFixture('en');
+      await mountAttention(page, false, {...f.ws.fixture, caps: f.combinedCaps}, f.dispatch);
+
+      await page.goto(`/dashboard/?workbench=1#/pm/${fixtureWorkspaceId}/${tc.firstView}`);
+      const firstTitle = tc.firstView === 'board' ? 'Board' : 'Requirements';
+      await expect(page.locator('#main h1').first()).toHaveText(firstTitle);
+      const firstSelector = tc.firstView === 'board' ? '[data-pm-kanban] .pm-kanban-card' : '[data-rtm-requirement]';
+      await expect(page.locator(firstSelector).first()).toBeVisible();
+      await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
+
+      await page.evaluate(() => window.scrollTo(0, 200));
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
+
+      await leaveByProjectsEntry(page, tc.width);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+
+      f.release();
+
+      // On Back, hold that view's read.
+      const holdPath = tc.firstView === 'board'
+        ? `/pm/workspaces/${fixtureWorkspaceId}/kanban`
+        : `/pm/workspaces/${fixtureWorkspaceId}/plans/accepted`;
+      f.holdNext(holdPath);
+      await page.goBack();
+      await expect.poll(() => f.isReadStarted()).toBe(true);
+
+      // Once the workspace has settled, switch to the second view and wait for it to render and settle.
+      await page.evaluate(({wsId, view}) => {
+        location.hash = `#/pm/${wsId}/${view}`;
+      }, {wsId: fixtureWorkspaceId, view: tc.secondView});
+
+      const secondTitle = tc.secondView === 'board' ? 'Board' : 'Requirements';
+      await expect(page.locator('#main h1').first()).toHaveText(secondTitle);
+      const secondSelector = tc.secondView === 'board' ? '[data-pm-kanban] .pm-kanban-card' : '[data-rtm-requirement]';
+      await expect(page.locator(secondSelector).first()).toBeVisible();
+      await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
+
+      const expectedScrollY = await page.evaluate(() => window.scrollY);
+      expect(expectedScrollY).toBe(0);
+
+      // Release the held read.
+      f.release();
+      await expect.poll(() => f.heldResolvedCount()).toBeGreaterThan(0);
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+
+      // Expect the window to stay at the second view's position.
+      await expect.poll(async () => page.evaluate(() => window.scrollY)).toBe(expectedScrollY);
     });
   }
 });

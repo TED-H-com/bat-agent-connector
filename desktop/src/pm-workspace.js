@@ -278,9 +278,21 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   // Navigation preference must not wait for unrelated secondary reads to settle.
   if (workspaceId && threadId) rememberProjectView(namespace, workspaceId, 'discussions');
   let disposed = false, workspace = null, threadData = null, loaded = false, initialReadComplete = false, refreshing = true, sequence = 0, threadPages = 1, lifecycle = null;
-  let settleResolvers = [];
-  function settled() {
-    if (!refreshing) return Promise.resolve();
+  let headerReads = 0, initialHeaderSettled = false, settleResolvers = [];
+  function resolveSettleWaiters() {
+    if (headerReads === 0) {
+      initialHeaderSettled = true;
+      const resolvers = settleResolvers;
+      settleResolvers = [];
+      for (const resolve of resolvers) resolve();
+    }
+  }
+  function settleReadComplete() {
+    if (headerReads > 0) headerReads--;
+    if (headerReads === 0) resolveSettleWaiters();
+  }
+  function workspaceSettled() {
+    if (disposed || (initialHeaderSettled && headerReads === 0)) return Promise.resolve();
     return new Promise(resolve => settleResolvers.push(resolve));
   }
   const launch = parseDiscussRefs(location.hash.split('?')[1] || '');
@@ -560,7 +572,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       && caps()?.scopes?.some(scope => scope === 'observe' || scope === 'admin')}) : null;
   if (schedule) body.insertBefore(schedule.element, content);
   const kanban = workspaceId && !threadId && caps()?.features?.pm_workspaces?.kanban
-    ? workspaceKanban({h,t,api,alive,namespace,workspaceId,errorBox,caps,permitted,form,embedded:true,settled}) : null;
+    ? workspaceKanban({h,t,api,alive,namespace,workspaceId,errorBox,caps,permitted,form,embedded:true,workspaceSettled}) : null;
   if(kanban)body.insertBefore(kanban.element,content);
   const sprints = workspaceId && !threadId && caps()?.features?.pm_workspaces?.sprints
     ? workspaceSprints({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,qualitySelection}) : null;
@@ -657,7 +669,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       onSelectionChange:(id,ref)=>{if(ref)qualitySelections.set(id,ref);else qualitySelections.delete(id);}}) : null;
   if(qualityReviews)body.insertBefore(qualityReviews.element,sprints?.box||content);
   const traceability = charter && brief && kanban
-    ? workspaceTraceability({h, t, api, alive, namespace, workspaceId, caps, errorBox, settled}) : null;
+    ? workspaceTraceability({h, t, api, alive, namespace, workspaceId, caps, errorBox, workspaceSettled}) : null;
   if (traceability) body.insertBefore(traceability.element, content);
   const resources = workspaceId && !threadId && caps()?.features?.pm_resources
     ? workspaceResources({h, t, api, alive, namespace, workspaceId, errorBox, bucketsSupported: caps()?.features?.pm_resources?.buckets?.granularity === 'day'}) : null;
@@ -1415,6 +1427,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   }
   async function loadEarlier() {
     if (!historyCursor || refreshing || !loaded) return;
+    headerReads++;
     const ticket = ++sequence; refreshing = true; earlier.disabled = true; refresh.disabled = true;
     try {
       alive(); const data = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}?before_message=${historyCursor}`); alive();
@@ -1427,7 +1440,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         for (const section of sourceSections()) section.hidden = true;
         updateForms(); status.replaceChildren(errorBox(error, {summary: t('pm_stale'), within: status}));
       }
-    } finally {if (ticket === sequence) {refreshing = false; refresh.disabled = false; earlier.disabled = !loaded;}}
+    } finally {
+      if (ticket === sequence) {refreshing = false; refresh.disabled = false; earlier.disabled = !loaded;}
+      settleReadComplete();
+    }
   }
   function filterThreads() {
     const query = (uiState.search || '').trim().toLocaleLowerCase();
@@ -1455,6 +1471,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     filterThreads();
   }
   async function load({event = false} = {}) {
+    headerReads++;
     const ticket = ++sequence; refreshing = true; refresh.disabled = true;
     if (!event) {invalidateSections(); withdrawNames(); lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();
       ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();qualityReviews?.withdraw();qualitySelections.clear();}
@@ -1608,9 +1625,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       }
     } finally {
       if (ticket === sequence) {refreshing = false; refresh.disabled = false;}
-      const resolvers = settleResolvers;
-      settleResolvers = [];
-      for (const resolve of resolvers) resolve();
+      settleReadComplete();
     }
   }
   await load();
@@ -1642,6 +1657,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const authorityHidden = new Map();
   let authorityTool = null;
   async function refreshAuthority() {
+    headerReads++;
     const ticket = ++sequence;
     try {
       const detail = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}`); alive();
@@ -1670,6 +1686,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       detailPanel?.close(); discussionTools?.close(); publishContext(); updateForms();
       status.replaceChildren(errorBox(error, {within:status}));
       throw error;
+    } finally {
+      settleReadComplete();
     }
   }
   let contextSequence = 0;
@@ -1748,9 +1766,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     for (const control of viewToolMenus.values()) control.dispose();
     for (const value of forms) value.dispose();
     refreshing = false;
-    const resolvers = settleResolvers;
-    settleResolvers = [];
-    for (const resolve of resolvers) resolve();
+    initialHeaderSettled = true;
+    headerReads = 0;
+    resolveSettleWaiters();
   };
   dispose.navigate = (nextWorkspace, nextThread, nextView) => {
     if (disposed || nextWorkspace !== workspaceId || (nextThread || null) !== (threadId || null) || !workbench) return false;

@@ -9,7 +9,7 @@ import {firstLabel, joinLabel, labelSegment} from './label-text.js';
 import {workInspector, workStatusLabel, workStatusPill, blockedWork, blockerText, workAgents, prGroups, readWorkSources, deliveryCoverage, elapsed, readEarlierPlans} from './pm-work-inspector.js';
 
 // Central management columns stay separate from execution, quality and delivery.
-export function workspaceKanban({t, api, alive, namespace = '', workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false, settled = () => Promise.resolve()}) {
+export function workspaceKanban({t, api, alive, namespace = '', workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false, workspaceSettled = () => Promise.resolve()}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, preference = viewState(namespace, workspaceId, 'board');
   const integer = value => Number.isSafeInteger(value) && value >= 0;
   if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error('Invalid Kanban page size');
@@ -362,7 +362,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   function setActive(value) {
     const routeId = new URLSearchParams(location.hash.split('?')[1]).get('select');
     if (active === value) {if (value && routeId && routeId !== selected) void select(routeId); return;} active = value;
-    if (!value) {stale = true; serial++; detailSerial++; rememberScroll(); closeRetaining();}
+    if (!value) {stale = true; serial++; detailSerial++; ++scrollGeneration; rememberScroll(); closeRetaining();}
     else {
       const generation = ++scrollGeneration;
       const read = stale || !page ? refresh() : null;
@@ -375,7 +375,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
           restoreY = window.scrollY;
         }
       });
-      void Promise.all([read, settled?.() || Promise.resolve()]).then(() => {
+      void Promise.all([read, workspaceSettled()]).then(() => {
         if (generation === scrollGeneration && window.scrollY === restoreY) {
           window.scrollTo(0, preference.scroll || 0);
         }
