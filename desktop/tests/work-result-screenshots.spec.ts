@@ -71,11 +71,140 @@ test.describe('Work Result Screenshots', () => {
     await expect(diffDetails.locator('.pm-work-result-diff-pre')).toBeVisible();
 
     await resultSection.scrollIntoViewIfNeeded();
+    await inspector.screenshot({path: path.join(SHOTS_DIR!, 'shot-1-en-1440-diff.png')});
     await inspector.screenshot({path: path.join(SHOTS_DIR!, 'en-1440-current-changes-diff.png')});
   });
 
-  // 2. zh-TW 390 with the same ("Current changes" read and one diff open)
-  test('zh-TW-390-current-changes-diff', async ({browser}) => {
+  // 2. zh-TW 1440 with open diff and Chinese notice
+  test('shot-2-zh-TW-1440-diff-notice', async ({browser}) => {
+    const context = await browser.newContext({locale: 'zh-TW', viewport: {width: 1440, height: 1600}});
+    const page = await context.newPage();
+    const f = workResultFixture();
+    const attId = 'att_' + '1'.repeat(32);
+    const commitSha = 'abcdef1234567890abcdef1234567890abcdef12';
+
+    f.state.currentEnvelope = buildResultEnvelope({
+      attempt_id: attId,
+      summary_text: '已實作登入流程並驗證憑證處理。',
+    });
+
+    f.state.changesResponse = buildChangesResponse({
+      attempt_id: attId,
+      live_head_commit: commitSha,
+      head_freshness: 'live',
+      summary: {
+        aggregation: 'per_commit',
+        commits: [commitSha],
+        commit_count: 1,
+        files: [
+          {path: 'src/login.ts', status: 'M', additions: 8, deletions: 1, commits_touched: [commitSha]},
+        ],
+        file_count: 1,
+        additions: 8,
+        deletions: 1,
+        complete: true,
+      },
+    });
+
+    f.state.diffResponses.set(`${commitSha}:src/login.ts`, buildDiffResponse({
+      attempt_id: attId,
+      commit: commitSha,
+      path: 'src/login.ts',
+      diff: `--- a/src/login.ts\n+++ b/src/login.ts\n@@ -10,3 +10,10 @@\n+export function validateLogin(username: string): boolean {\n+  return username.length > 0;\n+}\n`,
+      stats: {additions: 8, deletions: 1},
+      truncated: true,
+    }));
+
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const inspector = page.locator('[data-work-inspector]');
+    await expect(inspector).toBeVisible();
+
+    const resultSection = inspector.locator('[data-work-section="attempt-result"]');
+    await expect(resultSection).toBeVisible();
+
+    f.state.expectedChanges = 1;
+    await resultSection.locator('.pm-work-result-read-changes').click();
+
+    f.state.expectedDiff = 1;
+    const diffDetails = resultSection.locator('.pm-work-result-diff-details').first();
+    await diffDetails.locator('summary').click();
+    await expect(diffDetails.locator('.pm-work-result-diff-pre')).toBeVisible();
+    await expect(diffDetails.locator('.pm-work-result-diff-notice')).toContainText('僅顯示此差異的前 256 KiB。');
+
+    await resultSection.scrollIntoViewIfNeeded();
+    await inspector.screenshot({path: path.join(SHOTS_DIR!, 'shot-2-zh-TW-1440-diff-notice.png')});
+    await context.close();
+  });
+
+  // 3. en 390 mobile with open diff
+  test('shot-3-en-390-diff', async ({browser}) => {
+    const context = await browser.newContext({locale: 'en-US', viewport: {width: 390, height: 844}});
+    const page = await context.newPage();
+    const f = workResultFixture();
+    const attId = 'att_' + '1'.repeat(32);
+    const commitSha = 'abcdef1234567890abcdef1234567890abcdef12';
+
+    f.state.changesResponse = buildChangesResponse({
+      attempt_id: attId,
+      live_head_commit: commitSha,
+      head_freshness: 'live',
+      summary: {
+        aggregation: 'per_commit',
+        commits: [commitSha],
+        commit_count: 1,
+        files: [
+          {path: 'src/login.ts', status: 'M', additions: 8, deletions: 1, commits_touched: [commitSha]},
+        ],
+        file_count: 1,
+        additions: 8,
+        deletions: 1,
+        complete: true,
+      },
+    });
+
+    f.state.diffResponses.set(`${commitSha}:src/login.ts`, buildDiffResponse({
+      attempt_id: attId,
+      commit: commitSha,
+      path: 'src/login.ts',
+      diff: `--- a/src/login.ts\n+++ b/src/login.ts\n@@ -10,3 +10,10 @@\n+export function validateLogin(username: string): boolean {\n+  return username.length > 0;\n+}\n`,
+      stats: {additions: 8, deletions: 1},
+    }));
+
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('#workspace-menu').click();
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const inspector = page.locator('[data-work-inspector]');
+    await expect(inspector).toBeVisible();
+
+    const resultSection = inspector.locator('[data-work-section="attempt-result"]');
+    await expect(resultSection).toBeVisible();
+
+    f.state.expectedChanges = 1;
+    await resultSection.locator('.pm-work-result-read-changes').click();
+
+    f.state.expectedDiff = 1;
+    const diffDetails = resultSection.locator('.pm-work-result-diff-details').first();
+    await diffDetails.locator('summary').click();
+    await expect(diffDetails.locator('.pm-work-result-diff-pre')).toBeVisible();
+
+    await resultSection.scrollIntoViewIfNeeded();
+    await inspector.screenshot({path: path.join(SHOTS_DIR!, 'shot-3-en-390-diff.png')});
+    await context.close();
+  });
+
+  // 4. zh-TW 390 with the same ("Current changes" read and one diff open)
+  test('shot-4-zh-TW-390-diff', async ({browser}) => {
     const context = await browser.newContext({locale: 'zh-TW', viewport: {width: 390, height: 844}});
     const page = await context.newPage();
     const f = workResultFixture();
@@ -139,6 +268,7 @@ test.describe('Work Result Screenshots', () => {
     await expect(diffDetails.locator('.pm-work-result-diff-pre')).toBeVisible();
 
     await resultSection.scrollIntoViewIfNeeded();
+    await inspector.screenshot({path: path.join(SHOTS_DIR!, 'shot-4-zh-TW-390-diff.png')});
     await inspector.screenshot({path: path.join(SHOTS_DIR!, 'zh-TW-390-current-changes-diff.png')});
     await context.close();
   });
