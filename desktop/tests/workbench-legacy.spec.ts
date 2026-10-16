@@ -680,14 +680,32 @@ for (const {lang, width} of featureMapMatrix) {
 
       // Check if reachable via Project Switcher / Catalog link (.shell-all-projects)
       if (!reached && dest.href === '#/projects') {
-        await ensureDrawerOpen(page, width);
-        const catalogLink = page.locator('.shell-all-projects, a[href="#/projects"]').first();
-        // Optional probe: check if catalog link is visible in sidebar/drawer
-        if (await catalogLink.isVisible().catch(() => false)) {
-          await catalogLink.click();
+        if (width >= 1000) {
           await ensureDrawerClosed(page, width);
-          reached = true;
-          uiMethod = 'catalog-link';
+          const switcherBtn = page.locator('.shell-workspace-switch').first();
+          // Optional probe: check if switcher button is visible
+          if (await switcherBtn.isVisible().catch(() => false)) {
+            await switcherBtn.click();
+            const switcherItem = page.locator('.ui-menu:has(.shell-workspace-switch) .ui-menu-panel [role="menuitem"][href="#/projects"]').first();
+            // Optional probe: check if switcher item is visible
+            if (await switcherItem.isVisible().catch(() => false)) {
+              await switcherItem.click();
+              reached = true;
+              uiMethod = 'switcher-menu';
+            } else {
+              await page.keyboard.press('Escape');
+            }
+          }
+        } else {
+          await ensureDrawerOpen(page, width);
+          const catalogLink = page.locator('.shell-all-projects').first();
+          // Optional probe: check if catalog link is visible in sidebar/drawer
+          if (await catalogLink.isVisible().catch(() => false)) {
+            await catalogLink.click();
+            await ensureDrawerClosed(page, width);
+            reached = true;
+            uiMethod = 'catalog-link';
+          }
         }
       }
 

@@ -47,7 +47,7 @@ workspace binding, partial-source and permission rules still select its rows.
 | Sessions | `#/sessions` | Tools menu | Tools menu (`[data-shell-tools]` → `.ui-menu-panel [role="menuitem"][href="#/sessions"]`) |
 | Pending | `#/home` | Today daily entry | Daily entry (`.wc-daily a[href="#/home"]`) |
 | Settings | `#/settings` | Settings link | Navigation footer link (`a[data-shell-settings]`) |
-| All projects | `#/projects` | Switcher / Catalog link | Drawer catalog link (`.shell-all-projects, a[href="#/projects"]` at 390px; unreachable via UI at desktop 1440px in preview mode when bound to PM workspace) |
+| All projects | `#/projects` | Switcher / Catalog link | Workspace switcher menu (`.shell-workspace-switch` → `.ui-menu-panel [role="menuitem"][href="#/projects"]`) at desktop; drawer catalog link (`.shell-all-projects, a[href="#/projects"]`) at 390px |
 
 ## Source mapping
 
