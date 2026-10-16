@@ -55,7 +55,16 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       if (cap?.version === 1 && cap.available === true && cap.action === 'work.start') {
         const resultCap = caps()?.features?.pm_workspaces?.work_attempt_results;
         if (resultCap?.version === 1) {
-          resultPanel = workResultPanel({h, t, api, alive, workspaceId, caps, errorBox});
+          resultPanel = workResultPanel({
+            h, t, api, alive, workspaceId, caps, errorBox,
+            onVisibility: visible => {
+              const attemptSection = detail.element?.body?.querySelector('[data-work-section="attempt-result"]');
+              if (attemptSection) {
+                attemptSection.hidden = !visible;
+              }
+              detail.setAttemptResultVisible?.(visible);
+            },
+          });
         }
         startPanel = workStartPanel({
           h, t, api, alive, namespace, workspaceId, caps, permitted, form, errorBox, plan: () => plan,
@@ -320,22 +329,21 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
         startSection.replaceChildren(panel.element);
       }
       if (resultPanel) {
-        let resultSection = detail.element.body.querySelector('[data-work-section="result"]');
-        if (!resultSection) {
-          resultSection = h('section', {'data-work-section': 'result'});
+        let attemptResultSection = detail.element.body.querySelector('[data-work-section="attempt-result"]');
+        if (!attemptResultSection) {
+          attemptResultSection = h('section', {'data-work-section': 'attempt-result'});
+          attemptResultSection.hidden = true;
           if (startSection && startSection.nextSibling) {
-            detail.element.body.insertBefore(resultSection, startSection.nextSibling);
+            detail.element.body.insertBefore(attemptResultSection, startSection.nextSibling);
           } else {
-            detail.element.body.append(resultSection);
+            detail.element.body.append(attemptResultSection);
           }
         }
-        if (!resultSection.contains(resultPanel.element)) {
-          resultSection.replaceChildren(resultPanel.element);
+        if (!attemptResultSection.contains(resultPanel.element)) {
+          attemptResultSection.replaceChildren(resultPanel.element);
         }
-        resultSection.hidden = resultPanel.element.hidden;
-        if (resultPanel.element.hidden) {
-          resultSection.remove();
-        }
+        attemptResultSection.hidden = resultPanel.element.hidden;
+        detail.setAttemptResultVisible?.(!attemptResultSection.hidden);
       }
       panel.setWork(card);
       updateHeaderButton(panel.startable());

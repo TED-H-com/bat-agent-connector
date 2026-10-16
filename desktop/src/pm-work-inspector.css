@@ -64,7 +64,9 @@
 .pm-work-result-turns-list { list-style: none; padding-left: 0; margin: var(--space-1) 0; }
 .pm-work-result-turn-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-1) 0; }
 .pm-work-result-completeness { display: flex; flex-direction: column; gap: var(--space-1); margin: var(--space-2) 0; }
+.pm-work-result-completeness .ui-pill { align-self: flex-start; width: fit-content; }
 .pm-work-result-completeness-reasons { padding-left: var(--space-4); margin: var(--space-1) 0; }
+.pm-work-result-changes-reasons { padding-left: var(--space-4); margin: var(--space-1) 0; }
 .pm-work-result-details-body { display: flex; flex-direction: column; gap: var(--space-1); }
 .pm-work-result-details-body p { margin: var(--space-1) 0; }
 .pm-work-result-error-box { display: flex; align-items: center; gap: var(--space-2); margin: var(--space-2) 0; }

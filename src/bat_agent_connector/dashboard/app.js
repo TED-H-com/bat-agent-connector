@@ -8137,6 +8137,9 @@ var workResultStrings = {
 		wres_goal_reviewable_changes: "可審閱修改",
 		wres_unknown: "未知",
 		wres_changes_summary: "{commits} 個 commit 共修改 {files} 個檔案，+{additions} −{deletions}",
+		wres_changes_summary_one: "{commits} 個 commit 共修改 {files} 個檔案，+{additions} −{deletions}",
+		wres_changes_summary_one_file: "{commits} 個 commit 共修改 {files} 個檔案，+{additions} −{deletions}",
+		wres_changes_summary_one_commit: "{commits} 個 commit 共修改 {files} 個檔案，+{additions} −{deletions}",
 		wres_changes_partly_read: "修改只讀取到一部分",
 		wres_as_of_last_turn: "以最後記錄的回合為準",
 		wres_file_added: "新增",
@@ -8144,6 +8147,7 @@ var workResultStrings = {
 		wres_file_deleted: "刪除",
 		wres_file_renamed: "重新命名",
 		wres_show_all_files: "顯示全部 {n} 個檔案",
+		wres_show_all_files_one: "顯示 1 個檔案",
 		wres_base_commit: "基準",
 		wres_result_commit: "成果 commit",
 		wres_source_turn_end_observation: "回合結束時觀察到",
@@ -8151,6 +8155,7 @@ var workResultStrings = {
 		wres_source_delivered_commit: "已交付的 commit",
 		wres_uncommitted_changes: "未提交的修改：{n}",
 		wres_uncommitted_unknown: "未知：BAT 無法證明工作樹沒有未提交的修改。",
+		wres_status_unavailable: "不可用",
 		wres_reason_session_not_found: "找不到工作階段。",
 		wres_reason_transcript_truncated_by_size: "對話記錄因大小限制已截斷。",
 		wres_reason_archived_messages_omitted: "已略過封存的訊息。",
@@ -8168,6 +8173,7 @@ var workResultStrings = {
 		wres_reason_source_digest_conflict: "同一回合位置觀察到不同的內容。",
 		wres_reason_generic_limit: "另有其他限制",
 		wres_recorded_turns_count: "已記錄的回合（{n}）",
+		wres_recorded_turns_count_one: "已記錄的回合（1）",
 		wres_latest_turn: "最新",
 		wres_showing_latest_20: "僅顯示最新 20 筆。",
 		wres_details: "詳細資料",
@@ -8181,8 +8187,11 @@ var workResultStrings = {
 		wres_raw_state: "原始狀態",
 		wres_raw_stage: "原始階段",
 		wres_raw_reasons: "原因",
+		wres_unlisted_completeness_reasons: "未列出的完整度原因",
+		wres_unlisted_facets: "未列出的狀態",
+		wres_unlisted_file_statuses: "未列出的檔案狀態",
 		wres_usage: "用量",
-		wres_usage_context_tokens: "上下文 Token",
+		wres_usage_context_tokens: "上下文詞元",
 		wres_usage_context_window: "上下文視窗",
 		wres_usage_num_turns: "回合數",
 		wres_exit_code_not_exposed: "結束碼：BAT 不提供"
@@ -8250,6 +8259,9 @@ var workResultStrings = {
 		wres_goal_reviewable_changes: "Reviewable changes",
 		wres_unknown: "Unknown",
 		wres_changes_summary: "{files} files changed in {commits} commits, +{additions} −{deletions}",
+		wres_changes_summary_one: "1 file changed in 1 commit, +{additions} −{deletions}",
+		wres_changes_summary_one_file: "1 file changed in {commits} commits, +{additions} −{deletions}",
+		wres_changes_summary_one_commit: "{files} files changed in 1 commit, +{additions} −{deletions}",
 		wres_changes_partly_read: "Changes were only partly read",
 		wres_as_of_last_turn: "As of the last recorded turn",
 		wres_file_added: "added",
@@ -8257,6 +8269,7 @@ var workResultStrings = {
 		wres_file_deleted: "deleted",
 		wres_file_renamed: "renamed",
 		wres_show_all_files: "Show all {n} files",
+		wres_show_all_files_one: "Show 1 file",
 		wres_base_commit: "Base",
 		wres_result_commit: "Result commit",
 		wres_source_turn_end_observation: "seen at the end of a turn",
@@ -8264,6 +8277,7 @@ var workResultStrings = {
 		wres_source_delivered_commit: "the delivered commit",
 		wres_uncommitted_changes: "Uncommitted changes: {n}",
 		wres_uncommitted_unknown: "Unknown: BAT cannot prove the working tree has no uncommitted changes.",
+		wres_status_unavailable: "Unavailable",
 		wres_reason_session_not_found: "The session was not found.",
 		wres_reason_transcript_truncated_by_size: "The transcript was truncated due to size limits.",
 		wres_reason_archived_messages_omitted: "Archived messages were omitted.",
@@ -8281,6 +8295,7 @@ var workResultStrings = {
 		wres_reason_source_digest_conflict: "Different content was observed for the same turn position.",
 		wres_reason_generic_limit: "Another limit applies",
 		wres_recorded_turns_count: "Recorded turns ({n})",
+		wres_recorded_turns_count_one: "Recorded turn (1)",
 		wres_latest_turn: "latest",
 		wres_showing_latest_20: "Showing the latest 20.",
 		wres_details: "Details",
@@ -8294,6 +8309,9 @@ var workResultStrings = {
 		wres_raw_state: "Raw state",
 		wres_raw_stage: "Raw stage",
 		wres_raw_reasons: "Reasons",
+		wres_unlisted_completeness_reasons: "Unlisted completeness reasons",
+		wres_unlisted_facets: "Unlisted state facets",
+		wres_unlisted_file_statuses: "Unlisted file statuses",
 		wres_usage: "Usage",
 		wres_usage_context_tokens: "Context tokens",
 		wres_usage_context_window: "Context window",
@@ -15466,7 +15484,7 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 		details.dataset.workSection = "details";
 		const keys = new Set([...sections, details].map((node) => node.dataset.workSection));
 		if (panel.body.querySelector("[data-work-section=\"start\"]")) keys.add("start");
-		if (panel.body.querySelector("[data-work-section=\"result\"]")) keys.add("result");
+		if (panel.body.querySelector("[data-work-section=\"attempt-result\"]")) keys.add("attempt-result");
 		for (const node of panel.body.querySelectorAll("[data-work-section]")) if (!keys.has(node.dataset.workSection)) node.remove();
 		for (const node of [...sections, details]) {
 			const previous = panel.body.querySelector(`[data-work-section="${node.dataset.workSection}"]`);
@@ -15476,6 +15494,9 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 				else previous.replaceChildren(...node.childNodes);
 			}
 		}
+		const attemptResult = panel.body.querySelector("[data-work-section=\"attempt-result\"]");
+		const staticResult = panel.body.querySelector("[data-work-section=\"result\"]");
+		if (staticResult) staticResult.hidden = Boolean(attemptResult && !attemptResult.hidden);
 	}
 	return {
 		show,
@@ -15486,6 +15507,10 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 		},
 		get selection() {
 			return selection;
+		},
+		setAttemptResultVisible(visible) {
+			const res = panel.body.querySelector("[data-work-section=\"result\"]");
+			if (res) res.hidden = Boolean(visible);
 		}
 	};
 }
@@ -33831,6 +33856,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			onLatestAttempt(latestAttempt);
 		} catch (err) {
 			if (validAttempts(ticket, workId)) statusView.replaceChildren(panelErrorBox(err, { within: statusView }));
+			onLatestAttempt(null);
 		}
 	}
 	function updateUI() {
@@ -33886,6 +33912,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			partialAttempts = false;
 			attemptsView.replaceChildren();
 			statusView.replaceChildren();
+			onLatestAttempt(null);
 		}
 		const ticket = ++workSerial;
 		updateUI();
@@ -33907,6 +33934,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			await refreshAttempts();
 		} catch (err) {
 			if (validWork(ticket, card.work_item_id)) statusView.replaceChildren(panelErrorBox(err, { within: statusView }));
+			onLatestAttempt(null);
 		} finally {
 			if (!sameWork) loading = false;
 			if (validWork(ticket, card.work_item_id)) {
@@ -33966,6 +33994,7 @@ var KNOWN_REASONS = new Set([
 	"parse_error",
 	"session_not_started_yet",
 	"start_outcome_uncertain",
+	"handoff_outcome_uncertain",
 	"unloaded_history_session",
 	"turn_marker_not_visible",
 	"turn_boundary_not_collected",
@@ -33989,7 +34018,7 @@ function normalizeForComparison(envelope) {
 	if (clone.collection) delete clone.collection.checked_at;
 	return clone;
 }
-function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox }) {
+function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisibility = () => {} }) {
 	let activeAttempt = null;
 	let readSerial = 0;
 	let lastEnvelope = null;
@@ -34003,18 +34032,9 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox }) {
 		"data-work-result": ""
 	});
 	panelElement.hidden = true;
-	function setContainerHidden(hidden) {
-		panelElement.hidden = hidden;
-		const section = panelElement.parentElement?.dataset.workSection === "result" ? panelElement.parentElement : document.querySelector("[data-work-inspector] [data-work-section=\"result\"]");
-		if (section) {
-			section.hidden = hidden;
-			if (hidden) section.remove();
-			else if (!section.isConnected) {
-				const start = document.querySelector("[data-work-inspector] [data-work-section=\"start\"]");
-				if (start && start.nextSibling) start.parentElement.insertBefore(section, start.nextSibling);
-				else if (start) start.parentElement.append(section);
-			}
-		}
+	function updateVisibility(visible) {
+		panelElement.hidden = !visible;
+		onVisibility(visible);
 	}
 	function withdraw() {
 		readSerial++;
@@ -34025,34 +34045,30 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox }) {
 		detailsOpen = false;
 		filesOpen = false;
 		panelElement.replaceChildren();
-		setContainerHidden(true);
+		updateVisibility(false);
 	}
 	function dispose() {
 		activeAttempt = null;
 		withdraw();
 	}
 	async function setAttempt(attempt) {
-		if (!attempt || !attempt.session?.session_id) {
+		if (!attempt || !attempt.attempt_id) {
 			activeAttempt = null;
 			withdraw();
 			return;
 		}
-		const previousAttemptId = activeAttempt?.attempt_id;
-		activeAttempt = attempt;
-		setContainerHidden(false);
-		if (previousAttemptId !== attempt.attempt_id) {
-			lastEnvelope = null;
-			lastNormalized = null;
-			lastStale = false;
-			turnsOpen = false;
-			detailsOpen = false;
-			filesOpen = false;
-			panelElement.replaceChildren();
+		if (!Boolean(attempt.session?.session_id || attempt.native_session?.session_id || attempt.session_id)) {
+			activeAttempt = attempt;
+			withdraw();
+			return;
 		}
+		if (activeAttempt?.attempt_id !== attempt.attempt_id) withdraw();
+		activeAttempt = attempt;
 		await readResult();
 	}
 	async function refresh() {
-		if (!activeAttempt || !activeAttempt.session?.session_id) return;
+		if (!activeAttempt) return;
+		if (!Boolean(activeAttempt.session?.session_id || activeAttempt.native_session?.session_id || activeAttempt.session_id)) return;
 		await readResult();
 	}
 	async function readResult() {
@@ -34100,6 +34116,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox }) {
 	}
 	function renderInvalid() {
 		panelElement.replaceChildren(h("h3", {}, t("wres_heading")), h("p", { class: "pm-work-result-invalid" }, t("wres_invalid_envelope")));
+		updateVisibility(true);
 	}
 	function renderError(err, attempt) {
 		const heading = h("h3", {}, t("wres_heading"));
@@ -34112,70 +34129,74 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox }) {
 		});
 		const errorContainer = h("div", { class: "pm-work-result-error-box" }, errorBox ? errorBox(err, { within: panelElement }) : h("div", { class: "error" }, err?.message || String(err)), retryBtn);
 		if (lastEnvelope) renderEnvelope(lastEnvelope, attempt, errorContainer);
-		else panelElement.replaceChildren(heading, errorContainer);
+		else {
+			panelElement.replaceChildren(heading, errorContainer);
+			updateVisibility(true);
+		}
 	}
-	function captureFocus() {
+	function formatCount(val) {
+		if (val === "unknown" || val == null) return t("wres_unknown");
+		return String(val);
+	}
+	function saveFocus() {
 		const active = document.activeElement;
-		if (!active || !panelElement.contains(active)) return null;
-		if (active.tagName === "A" && active.getAttribute("href")) return {
-			type: "link",
-			href: active.getAttribute("href")
-		};
-		if (active.dataset.workResultFocus) return {
-			type: "key",
-			key: active.dataset.workResultFocus
-		};
-		if (active.getAttribute("aria-label")) return {
-			type: "label",
-			label: active.getAttribute("aria-label")
-		};
-		return {
-			type: "tag",
-			tag: active.tagName
-		};
+		if (active && panelElement.contains(active)) {
+			if (active.dataset?.workResultFocus) return {
+				type: "attr",
+				value: active.dataset.workResultFocus
+			};
+			if (active.tagName === "SUMMARY" && active.parentElement?.tagName === "DETAILS") {
+				const details = active.parentElement;
+				if (details.dataset.workResultTurns !== void 0) return { type: "turns" };
+				if (details.dataset.workResultDetails !== void 0) return { type: "details" };
+				if (details.classList.contains("pm-work-result-files")) return { type: "files" };
+			}
+		}
+		return null;
 	}
 	function restoreFocus(token) {
 		if (!token) return;
-		let target = null;
-		if (token.type === "link") target = panelElement.querySelector(`a[href="${CSS.escape(token.href)}"]`);
-		else if (token.type === "key") target = panelElement.querySelector(`[data-work-result-focus="${CSS.escape(token.key)}"]`);
-		else if (token.type === "label") target = panelElement.querySelector(`[aria-label="${CSS.escape(token.label)}"]`);
-		else if (token.type === "tag") target = panelElement.querySelector(token.tag);
-		if (target && typeof target.focus === "function") target.focus();
+		requestAnimationFrame(() => {
+			if (token.type === "attr") panelElement.querySelector(`[data-work-result-focus="${token.value}"]`)?.focus();
+			else if (token.type === "turns") panelElement.querySelector("[data-work-result-turns] > summary")?.focus();
+			else if (token.type === "details") panelElement.querySelector("[data-work-result-details] > summary")?.focus();
+			else if (token.type === "files") panelElement.querySelector(".pm-work-result-files > summary")?.focus();
+		});
 	}
-	function renderEnvelope(envelope, attempt, errorContainer = null) {
+	function renderEnvelope(envelope, attempt, errorBoxNode = null) {
+		const focusToken = saveFocus();
 		const existingTurns = panelElement.querySelector("[data-work-result-turns]");
 		if (existingTurns) turnsOpen = existingTurns.open;
 		const existingDetails = panelElement.querySelector("[data-work-result-details]");
 		if (existingDetails) detailsOpen = existingDetails.open;
-		const existingFiles = panelElement.querySelector("[data-work-result-all-files]");
+		const existingFiles = panelElement.querySelector(".pm-work-result-files");
 		if (existingFiles) filesOpen = existingFiles.open;
-		const focusToken = captureFocus();
 		const sections = [];
+		const unlistedFacets = [];
+		const unlistedFileStatuses = [];
 		const heading = h("h3", {}, t("wres_heading"));
 		sections.push(heading);
-		if (errorContainer) sections.push(errorContainer);
+		if (errorBoxNode) {
+			const stalePill = h("span", {
+				class: "ui-pill tone-warn",
+				"data-status": "stale"
+			}, t("ui_status_stale"));
+			sections.push(h("div", { class: "pm-work-result-stale-banner" }, stalePill, errorBoxNode));
+		}
 		const exec = envelope.execution || {};
-		const stateWord = t(`wres_state_${exec.state ? exec.state.replace(/-/g, "_") : "unknown"}`) || t("wres_state_unknown");
+		const stateKey = `wres_state_${exec.state?.replace(/-/g, "_")}`;
+		const stateLabel = t(stateKey) !== stateKey ? t(stateKey) : t("wres_unknown");
 		const stateP = h("p", { class: "pm-work-result-state" });
-		stateP.append(h("strong", {}, stateWord));
-		if (lastStale) stateP.append(" ", statusPill("stale"));
+		stateP.append(h("strong", {}, stateLabel));
 		if (exec.observed_at) stateP.append(" · ", timeStamp(exec.observed_at));
 		sections.push(stateP);
-		if (exec.state === "unknown") {
-			const reason = exec.state_reason;
-			let reasonSentence = null;
-			if (reason === "handoff_outcome_uncertain") reasonSentence = t("wres_reason_handoff_outcome_uncertain");
-			else if (reason === "bat_unreachable") reasonSentence = t("wres_reason_bat_unreachable");
-			else if (reason === "observation_stale") reasonSentence = t("wres_reason_observation_stale");
-			else if (reason === "unloaded_history_session") reasonSentence = t("wres_reason_unloaded_history_session");
-			else if (reason === "turn_marker_not_visible" || reason === "turn_boundary_not_collected") reasonSentence = t("wres_reason_turn_boundary_not_collected");
-			else if (reason === "session_not_managed_by_attempt") reasonSentence = t("wres_reason_session_not_managed_by_attempt");
-			if (reasonSentence) sections.push(h("p", { class: "muted pm-work-result-reason" }, reasonSentence));
-		} else if (exec.state === "failed") {
+		if (exec.state_reason) {
 			const reason = exec.state_reason;
 			if (reason === "agent_error") sections.push(h("p", { class: "muted pm-work-result-reason" }, t("wres_agent_error")));
-			else if (reason) {
+			else if (KNOWN_REASONS.has(reason)) {
+				const textKey = `wres_reason_${reason}`;
+				if (t(textKey) !== textKey) sections.push(h("p", { class: "muted pm-work-result-reason" }, t(textKey)));
+			} else if (exec.state === "failed") {
 				const wstKey = `wst_error_${reason}`;
 				const errKey = `error_code_${reason}`;
 				let failText = "";
@@ -34190,7 +34211,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox }) {
 			sections.push(h("p", { class: "muted pm-work-result-attention" }, attnText));
 		}
 		const linkItems = [];
-		const sess = attempt?.session;
+		const sess = attempt?.session || attempt?.native_session;
 		if (sess?.session_id && sess?.host) {
 			const liveHref = sessionHref$1({
 				host: sess.host,
@@ -34211,9 +34232,10 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox }) {
 		const summaryHeader = h("div", { class: "pm-work-result-summary-header" });
 		summaryHeader.append(h("h4", {}, t("wres_agent_summary_label")));
 		if (exec.state_facets?.self_reported === "claimed_done") {
-			const pill = statusPill("neutral");
-			pill.textContent = t("wres_pill_claimed_done");
-			pill.dataset.workResultPill = "claimed_done";
+			const pill = h("span", {
+				class: "ui-pill tone-neutral",
+				"data-work-result-pill": "claimed_done"
+			}, t("wres_pill_claimed_done"));
 			summaryHeader.append(" ", pill);
 		}
 		sections.push(summaryHeader);
@@ -34230,31 +34252,53 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox }) {
 			sections.push(summaryBox);
 		} else sections.push(h("p", { class: "muted pm-work-result-empty-summary" }, t("wres_no_recorded_turn")));
 		const dl = h("dl", { class: "pm-work-result-checks" });
-		const verifStatus = envelope.verification?.status || exec.state_facets?.verification || "unknown";
-		let verifText = t(`wres_verification_${verifStatus}`);
-		if (!verifText || verifText === `wres_verification_${verifStatus}`) verifText = t("wres_unknown");
+		const verifStatus = exec.state_facets?.verification || envelope.verification?.status;
+		let verifText = t("wres_unknown");
+		if (verifStatus && [
+			"unverified",
+			"running",
+			"verified",
+			"failed",
+			"stale",
+			"unknown"
+		].includes(verifStatus)) verifText = t(`wres_verification_${verifStatus}`);
+		else if (verifStatus) unlistedFacets.push(`verification: ${verifStatus}`);
 		dl.append(h("dt", {}, t("wres_check_verification")), h("dd", { "data-check": "verification" }, verifText));
 		const reviewDecision = exec.state_facets?.review_decision || envelope.verification?.quality_reviews?.current?.decision;
 		let reviewText = t("wres_unknown");
 		if (typeof reviewDecision === "string") {
 			if (reviewDecision === "unassessed") reviewText = t("wres_review_unassessed");
 			else if (reviewDecision === "revocation") reviewText = t("wres_review_revocation");
+			else unlistedFacets.push(`review_decision: ${reviewDecision}`);
 		} else if (reviewDecision && typeof reviewDecision === "object") {
 			if (reviewDecision.kind === "unassessed") reviewText = t("wres_review_unassessed");
 			else if (reviewDecision.kind === "revocation") reviewText = t("wres_review_revocation");
 			else if (reviewDecision.kind === "assessment" || reviewDecision.acceptance) {
 				if (reviewDecision.acceptance === "accepted") reviewText = t("wres_review_accepted");
 				else if (reviewDecision.acceptance === "rejected") reviewText = t("wres_review_rejected");
-			}
-		} else if (!reviewDecision) reviewText = t("wres_review_unassessed");
+				else if (reviewDecision.acceptance === "unassessed") reviewText = t("wres_review_unassessed");
+				else if (reviewDecision.acceptance) unlistedFacets.push(`review_acceptance: ${reviewDecision.acceptance}`);
+			} else if (reviewDecision.kind) unlistedFacets.push(`review_kind: ${reviewDecision.kind}`);
+		}
 		dl.append(h("dt", {}, t("wres_check_review")), h("dd", { "data-check": "review" }, reviewText));
-		const acceptStatus = exec.state_facets?.acceptance?.status || "unassessed";
-		let acceptText = t(`wres_acceptance_${acceptStatus}`);
-		if (!acceptText || acceptText === `wres_acceptance_${acceptStatus}`) acceptText = t("wres_unknown");
+		const acceptStatus = (exec.state_facets?.acceptance)?.status;
+		let acceptText = t("wres_unknown");
+		if (acceptStatus === "passed") acceptText = t("wres_acceptance_passed");
+		else if (acceptStatus === "blocked") acceptText = t("wres_acceptance_blocked");
+		else if (acceptStatus === "unassessed") acceptText = t("wres_acceptance_unassessed");
+		else if (acceptStatus) unlistedFacets.push(`acceptance_status: ${acceptStatus}`);
 		dl.append(h("dt", {}, t("wres_check_acceptance")), h("dd", { "data-check": "acceptance" }, acceptText));
-		const mergeStatus = exec.state_facets?.merge || "not_started";
-		let mergeText = t(`wres_merge_${mergeStatus}`);
-		if (!mergeText || mergeText === `wres_merge_${mergeStatus}`) mergeText = t("wres_unknown");
+		const mergeStatus = exec.state_facets?.merge;
+		let mergeText = t("wres_unknown");
+		if ([
+			"not_started",
+			"not_merged",
+			"pr_open",
+			"pr_closed_unmerged",
+			"merge_pending",
+			"merged"
+		].includes(mergeStatus)) mergeText = t(`wres_merge_${mergeStatus}`);
+		else if (mergeStatus) unlistedFacets.push(`merge: ${mergeStatus}`);
 		const prDd = h("dd", { "data-check": "pr" });
 		prDd.append(h("span", { class: "pm-work-result-pr-status" }, mergeText));
 		const prs = envelope.delivery?.pull_requests || [];
@@ -34267,26 +34311,42 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox }) {
 			prDd.append(prList);
 		}
 		dl.append(h("dt", {}, t("wres_check_pr")), prDd);
-		const deployState = exec.state_facets?.deployment?.state || "not_deployed";
-		const deployVerified = exec.state_facets?.deployment?.verified === true;
-		let deployText = t(`wres_deploy_${deployState}`);
-		if (deployState === "succeeded" && deployVerified) deployText = t("wres_deploy_succeeded_verified");
-		else if (!deployText || deployText === `wres_deploy_${deployState}`) deployText = t("wres_unknown");
+		const deployObj = exec.state_facets?.deployment;
+		const deployState = deployObj?.state;
+		const deployVerified = deployObj?.verified === true;
+		let deployText = t("wres_unknown");
+		if ([
+			"not_deployed",
+			"pending",
+			"running",
+			"failed",
+			"needs_attention",
+			"cancelled"
+		].includes(deployState)) deployText = t(`wres_deploy_${deployState}`);
+		else if (deployState === "succeeded") deployText = deployVerified ? t("wres_deploy_succeeded_verified") : t("wres_deploy_succeeded");
+		else if (deployState) unlistedFacets.push(`deployment_state: ${deployState}`);
 		dl.append(h("dt", {}, t("wres_check_deployment")), h("dd", { "data-check": "deployment" }, deployText));
-		const goal = envelope.delivery?.delivery_goal || "unknown";
+		const goal = envelope.delivery?.delivery_goal;
 		let goalText = t("wres_unknown");
 		if (goal === "pull_request") goalText = t("wres_goal_pr");
 		else if (goal === "reviewable_changes") goalText = t("wres_goal_reviewable_changes");
+		else if (goal && goal !== "unknown") unlistedFacets.push(`delivery_goal: ${goal}`);
 		dl.append(h("dt", {}, t("wres_check_delivery_goal")), h("dd", { "data-check": "delivery-goal" }, goalText));
 		sections.push(dl);
 		const changesBox = h("div", { class: "pm-work-result-changes" });
 		const ch = envelope.changes || {};
 		const summary = ch.summary || {};
-		const formatCount = (val) => val === "unknown" || val == null ? "?" : String(val);
-		if (summary.complete === true) {
-			const summaryText = t("wres_changes_summary", {
-				files: formatCount(summary.file_count ?? summary.files?.length),
-				commits: formatCount(summary.commit_count ?? summary.commits?.length),
+		const isComplete = summary.complete === true && (!summary.unavailable || summary.unavailable.length === 0);
+		const filesCountNum = Number.isSafeInteger(summary.file_count) ? summary.file_count : Array.isArray(summary.files) ? summary.files.length : null;
+		const commitsCountNum = Number.isSafeInteger(summary.commit_count) ? summary.commit_count : Array.isArray(summary.commits) ? summary.commits.length : null;
+		if (isComplete) {
+			let summaryKey = "wres_changes_summary";
+			if (filesCountNum === 1 && commitsCountNum === 1) summaryKey = "wres_changes_summary_one";
+			else if (filesCountNum === 1) summaryKey = "wres_changes_summary_one_file";
+			else if (commitsCountNum === 1) summaryKey = "wres_changes_summary_one_commit";
+			const summaryText = t(summaryKey, {
+				files: formatCount(filesCountNum),
+				commits: formatCount(commitsCountNum),
 				additions: formatCount(summary.additions),
 				deletions: formatCount(summary.deletions)
 			});
@@ -34294,15 +34354,31 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox }) {
 		} else {
 			const partlyText = h("p", { class: "pm-work-result-changes-summary" }, t("wres_changes_partly_read"), " · ", t("wres_as_of_last_turn"));
 			changesBox.append(partlyText);
+			const changeReasons = [];
+			if (summary.reason) changeReasons.push(summary.reason);
+			if (Array.isArray(summary.reasons)) {
+				for (const r of summary.reasons) if (!changeReasons.includes(r)) changeReasons.push(r);
+			}
+			if (changeReasons.length > 0) {
+				const reasonsList = h("ul", { class: "pm-work-result-changes-reasons" });
+				for (const code of changeReasons) {
+					const key = `wres_reason_${code}`;
+					let text = t(key);
+					if (!text || text === key) text = t("wres_reason_generic_limit");
+					reasonsList.append(h("li", {}, text));
+				}
+				changesBox.append(reasonsList);
+			}
 		}
 		const files = summary.files || [];
 		if (files.length > 0) {
 			const renderFileRow = (f) => {
-				let statusLabel = f.status || "";
-				if (f.status === "M") statusLabel = t("wres_file_modified");
-				else if (f.status === "A") statusLabel = t("wres_file_added");
-				else if (f.status === "D") statusLabel = t("wres_file_deleted");
-				else if (typeof f.status === "string" && f.status.startsWith("R")) statusLabel = t("wres_file_renamed");
+				let statusLabel = t("wres_unknown");
+				if (f.status === "M" || f.status === "modified") statusLabel = t("wres_file_modified");
+				else if (f.status === "A" || f.status === "added") statusLabel = t("wres_file_added");
+				else if (f.status === "D" || f.status === "deleted") statusLabel = t("wres_file_deleted");
+				else if (typeof f.status === "string" && (f.status.startsWith("R") || f.status === "renamed")) statusLabel = t("wres_file_renamed");
+				else if (f.status) unlistedFileStatuses.push(`${f.path}: ${f.status}`);
 				const adds = f.additions === "unknown" || f.additions == null ? "?" : `+${f.additions}`;
 				const dels = f.deletions === "unknown" || f.deletions == null ? "?" : `−${f.deletions}`;
 				return h("li", { class: "pm-work-result-file-row" }, h("span", { class: "pm-work-result-file-path mono" }, f.path), " ", h("span", { class: "pm-work-result-file-status muted" }, statusLabel), " ", h("span", { class: "pm-work-result-file-diff mono" }, `${adds} ${dels}`));
@@ -34310,40 +34386,42 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox }) {
 			const fileList = h("ul", { class: "pm-work-result-file-list" }, ...files.slice(0, 20).map(renderFileRow));
 			changesBox.append(fileList);
 			if (files.length > 20) {
-				const extraList = h("ul", { class: "pm-work-result-file-list" }, ...files.slice(20).map(renderFileRow));
-				const allFilesDisclosure = disclosure({
-					label: t("wres_show_all_files", { n: files.length }),
-					body: extraList,
+				const remainingFiles = files.slice(20);
+				const remainingList = h("ul", { class: "pm-work-result-file-list" }, ...remainingFiles.map(renderFileRow));
+				const filesDisclosure = disclosure({
+					label: remainingFiles.length === 1 ? t("wres_show_all_files_one") : t("wres_show_all_files", { n: files.length }),
+					body: remainingList,
 					open: filesOpen
 				});
-				allFilesDisclosure.dataset.workResultAllFiles = "";
-				changesBox.append(allFilesDisclosure);
+				filesDisclosure.classList.add("pm-work-result-files");
+				changesBox.append(filesDisclosure);
 			}
 		}
-		const commitsDiv = h("div", { class: "pm-work-result-commits" });
-		if (ch.base_commit) commitsDiv.append(h("p", {}, h("strong", {}, `${t("wres_base_commit")}: `), h("code", { class: "mono" }, ch.base_commit.slice(0, 12))));
-		if (ch.fixed_result_commit?.commit_sha) {
-			const fixed = ch.fixed_result_commit;
-			let srcText = t("wres_unknown");
-			if (fixed.source_kind === "turn_end_observation") srcText = t("wres_source_turn_end_observation");
-			else if (fixed.source_kind === "session_verification" || fixed.source_kind === "execution_verification") srcText = t("wres_source_verified_commit");
-			else if (fixed.source_kind === "integration") srcText = t("wres_source_delivered_commit");
-			commitsDiv.append(h("p", {}, h("strong", {}, `${t("wres_result_commit")}: `), h("code", { class: "mono" }, fixed.commit_sha.slice(0, 12)), " · ", h("span", { class: "muted" }, srcText)));
+		if (ch.base_commit) changesBox.append(h("p", { class: "pm-work-result-base-commit" }, h("strong", {}, `${t("wres_base_commit")}: `), h("span", { class: "mono" }, ch.base_commit.slice(0, 12))));
+		const fixedCommit = ch.fixed_result_commit;
+		if (fixedCommit && fixedCommit.commit_sha) {
+			const srcKind = fixedCommit.source_kind;
+			let srcText = "";
+			if (srcKind === "turn_end_observation") srcText = t("wres_source_turn_end_observation");
+			else if (srcKind === "execution_verification" || srcKind === "session_verification") srcText = t("wres_source_verified_commit");
+			else if (srcKind === "integration") srcText = t("wres_source_delivered_commit");
+			const commitP = h("p", { class: "pm-work-result-commit" }, h("strong", {}, `${t("wres_result_commit")}: `), h("span", { class: "mono" }, fixedCommit.commit_sha.slice(0, 12)));
+			if (srcText) commitP.append(" · ", srcText);
+			changesBox.append(commitP);
 		}
-		changesBox.append(commitsDiv);
-		const uncommitted = ch.uncommitted;
-		if (uncommitted) {
-			if (typeof uncommitted.count === "number") changesBox.append(h("p", { class: "pm-work-result-uncommitted" }, t("wres_uncommitted_changes", { n: uncommitted.count })));
-			else changesBox.append(h("p", { class: "pm-work-result-uncommitted muted" }, t("wres_uncommitted_unknown")));
-		}
+		const uncommitted = ch.uncommitted || {};
+		if (uncommitted.count === "unknown") changesBox.append(h("p", { class: "muted pm-work-result-uncommitted" }, t("wres_uncommitted_unknown")));
+		else if (Number.isSafeInteger(uncommitted.count) && uncommitted.count > 0) changesBox.append(h("p", { class: "pm-work-result-uncommitted" }, t("wres_uncommitted_changes", { n: uncommitted.count })));
 		sections.push(changesBox);
 		const completeness = envelope.completeness;
 		const completenessStatus = completeness?.status;
 		if (completenessStatus && completenessStatus !== "complete") {
 			const compDiv = h("div", { class: "pm-work-result-completeness" });
-			const compPill = statusPill(completenessStatus === "unavailable" ? "bad" : "warn");
-			compPill.textContent = completenessStatus;
-			compDiv.append(compPill);
+			if (completenessStatus === "partial") compDiv.append(statusPill("partial"));
+			else compDiv.append(h("span", {
+				class: "ui-pill tone-bad",
+				"data-status": "unavailable"
+			}, t("wres_status_unavailable")));
 			const reasons = completeness.reasons || [];
 			if (reasons.length > 0) {
 				const reasonList = h("ul", { class: "pm-work-result-completeness-reasons" });
@@ -34367,23 +34445,16 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox }) {
 				const row = h("li", { class: "pm-work-result-turn-row" });
 				if (turn.observed_at) row.append(timeStamp(turn.observed_at), " ");
 				const sha = turn.head_commit ? turn.head_commit.slice(0, 12) : "—";
-				const link = h("a", {
-					href: `#/turn/${encodeURIComponent(turn.turn_marker || turn.result_id || String(i))}`,
-					class: "mono pm-work-result-turn-link",
-					"data-work-result-focus": `turn-${i}`
-				}, sha);
-				row.append(link);
-				if (i === 0) {
-					const latestPill = statusPill("neutral");
-					latestPill.textContent = t("wres_latest_turn");
-					latestPill.classList.add("ui-xs");
-					row.append(" ", latestPill);
-				}
+				row.append(h("span", { class: "mono" }, sha));
+				if (i === 0) row.append(" ", h("span", {
+					class: "ui-pill tone-neutral ui-xs",
+					"data-work-result-pill": "latest_turn"
+				}, t("wres_latest_turn")));
 				turnsList.append(row);
 			}
 			turnsBody.append(turnsList);
 			const turnsDisclosure = disclosure({
-				label: t("wres_recorded_turns_count", { n: results.length }),
+				label: results.length === 1 ? t("wres_recorded_turns_count_one") : t("wres_recorded_turns_count", { n: results.length }),
 				body: turnsBody,
 				open: turnsOpen
 			});
@@ -34405,12 +34476,15 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox }) {
 		addDetailRow(t("wres_raw_state"), exec.state);
 		addDetailRow(t("wres_raw_stage"), exec.stage);
 		if (exec.state_reason) addDetailRow(t("wres_raw_reasons"), exec.state_reason);
+		if (unlistedFacets.length > 0) addDetailRow(t("wres_unlisted_facets"), unlistedFacets.join(", "));
+		if (unlistedFileStatuses.length > 0) addDetailRow(t("wres_unlisted_file_statuses"), unlistedFileStatuses.join(", "));
 		const unlistedReasons = (completeness?.reasons || []).filter((r) => !KNOWN_REASONS.has(r));
-		if (unlistedReasons.length > 0) addDetailRow("Unlisted completeness reasons", unlistedReasons.join(", "));
+		if (unlistedReasons.length > 0) addDetailRow(t("wres_unlisted_completeness_reasons"), unlistedReasons.join(", "));
 		const usage = envelope.usage || {};
-		addDetailRow(t("wres_usage_context_tokens"), usage.context_tokens ?? "unknown");
-		addDetailRow(t("wres_usage_context_window"), usage.context_window ?? "unknown");
-		addDetailRow(t("wres_usage_num_turns"), usage.num_turns ?? "unknown");
+		const formatUsageVal = (val) => val == null || val === "unknown" ? t("ui_status_unknown") : String(val);
+		addDetailRow(t("wres_usage_context_tokens"), formatUsageVal(usage.context_tokens));
+		addDetailRow(t("wres_usage_context_window"), formatUsageVal(usage.context_window));
+		addDetailRow(t("wres_usage_num_turns"), formatUsageVal(usage.num_turns));
 		detailsBody.append(h("p", { class: "muted" }, t("wres_exit_code_not_exposed")));
 		const detailsDisclosure = disclosure({
 			label: t("wres_details"),
@@ -34420,6 +34494,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox }) {
 		detailsDisclosure.dataset.workResultDetails = "";
 		sections.push(detailsDisclosure);
 		panelElement.replaceChildren(...sections);
+		updateVisibility(true);
 		restoreFocus(focusToken);
 	}
 	return {
@@ -34478,7 +34553,12 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 					alive,
 					workspaceId,
 					caps,
-					errorBox
+					errorBox,
+					onVisibility: (visible) => {
+						const attemptSection = detail.element?.body?.querySelector("[data-work-section=\"attempt-result\"]");
+						if (attemptSection) attemptSection.hidden = !visible;
+						detail.setAttemptResultVisible?.(visible);
+					}
 				});
 				startPanel = workStartPanel({
 					h: h$1,
@@ -35001,15 +35081,16 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			}
 			if (!startSection.contains(panel.element)) startSection.replaceChildren(panel.element);
 			if (resultPanel) {
-				let resultSection = detail.element.body.querySelector("[data-work-section=\"result\"]");
-				if (!resultSection) {
-					resultSection = h$1("section", { "data-work-section": "result" });
-					if (startSection && startSection.nextSibling) detail.element.body.insertBefore(resultSection, startSection.nextSibling);
-					else detail.element.body.append(resultSection);
+				let attemptResultSection = detail.element.body.querySelector("[data-work-section=\"attempt-result\"]");
+				if (!attemptResultSection) {
+					attemptResultSection = h$1("section", { "data-work-section": "attempt-result" });
+					attemptResultSection.hidden = true;
+					if (startSection && startSection.nextSibling) detail.element.body.insertBefore(attemptResultSection, startSection.nextSibling);
+					else detail.element.body.append(attemptResultSection);
 				}
-				if (!resultSection.contains(resultPanel.element)) resultSection.replaceChildren(resultPanel.element);
-				resultSection.hidden = resultPanel.element.hidden;
-				if (resultPanel.element.hidden) resultSection.remove();
+				if (!attemptResultSection.contains(resultPanel.element)) attemptResultSection.replaceChildren(resultPanel.element);
+				attemptResultSection.hidden = resultPanel.element.hidden;
+				detail.setAttemptResultVisible?.(!attemptResultSection.hidden);
 			}
 			panel.setWork(card);
 			updateHeaderButton(panel.startable());

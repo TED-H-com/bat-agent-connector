@@ -82,6 +82,9 @@ export const workResultStrings = {
 
     // Changes
     wres_changes_summary: '{commits} 個 commit 共修改 {files} 個檔案，+{additions} −{deletions}',
+    wres_changes_summary_one: '{commits} 個 commit 共修改 {files} 個檔案，+{additions} −{deletions}',
+    wres_changes_summary_one_file: '{commits} 個 commit 共修改 {files} 個檔案，+{additions} −{deletions}',
+    wres_changes_summary_one_commit: '{commits} 個 commit 共修改 {files} 個檔案，+{additions} −{deletions}',
     wres_changes_partly_read: '修改只讀取到一部分',
     wres_as_of_last_turn: '以最後記錄的回合為準',
     wres_file_added: '新增',
@@ -89,6 +92,7 @@ export const workResultStrings = {
     wres_file_deleted: '刪除',
     wres_file_renamed: '重新命名',
     wres_show_all_files: '顯示全部 {n} 個檔案',
+    wres_show_all_files_one: '顯示 1 個檔案',
     wres_base_commit: '基準',
     wres_result_commit: '成果 commit',
     wres_source_turn_end_observation: '回合結束時觀察到',
@@ -96,6 +100,7 @@ export const workResultStrings = {
     wres_source_delivered_commit: '已交付的 commit',
     wres_uncommitted_changes: '未提交的修改：{n}',
     wres_uncommitted_unknown: '未知：BAT 無法證明工作樹沒有未提交的修改。',
+    wres_status_unavailable: '不可用',
 
     // Completeness reasons
     wres_reason_session_not_found: '找不到工作階段。',
@@ -117,6 +122,7 @@ export const workResultStrings = {
 
     // Recorded turns
     wres_recorded_turns_count: '已記錄的回合（{n}）',
+    wres_recorded_turns_count_one: '已記錄的回合（1）',
     wres_latest_turn: '最新',
     wres_showing_latest_20: '僅顯示最新 20 筆。',
 
@@ -132,8 +138,11 @@ export const workResultStrings = {
     wres_raw_state: '原始狀態',
     wres_raw_stage: '原始階段',
     wres_raw_reasons: '原因',
+    wres_unlisted_completeness_reasons: '未列出的完整度原因',
+    wres_unlisted_facets: '未列出的狀態',
+    wres_unlisted_file_statuses: '未列出的檔案狀態',
     wres_usage: '用量',
-    wres_usage_context_tokens: '上下文 Token',
+    wres_usage_context_tokens: '上下文詞元',
     wres_usage_context_window: '上下文視窗',
     wres_usage_num_turns: '回合數',
     wres_exit_code_not_exposed: '結束碼：BAT 不提供',
@@ -218,6 +227,9 @@ export const workResultStrings = {
 
     // Changes
     wres_changes_summary: '{files} files changed in {commits} commits, +{additions} −{deletions}',
+    wres_changes_summary_one: '1 file changed in 1 commit, +{additions} −{deletions}',
+    wres_changes_summary_one_file: '1 file changed in {commits} commits, +{additions} −{deletions}',
+    wres_changes_summary_one_commit: '{files} files changed in 1 commit, +{additions} −{deletions}',
     wres_changes_partly_read: 'Changes were only partly read',
     wres_as_of_last_turn: 'As of the last recorded turn',
     wres_file_added: 'added',
@@ -225,6 +237,7 @@ export const workResultStrings = {
     wres_file_deleted: 'deleted',
     wres_file_renamed: 'renamed',
     wres_show_all_files: 'Show all {n} files',
+    wres_show_all_files_one: 'Show 1 file',
     wres_base_commit: 'Base',
     wres_result_commit: 'Result commit',
     wres_source_turn_end_observation: 'seen at the end of a turn',
@@ -232,6 +245,7 @@ export const workResultStrings = {
     wres_source_delivered_commit: 'the delivered commit',
     wres_uncommitted_changes: 'Uncommitted changes: {n}',
     wres_uncommitted_unknown: 'Unknown: BAT cannot prove the working tree has no uncommitted changes.',
+    wres_status_unavailable: 'Unavailable',
 
     // Completeness reasons
     wres_reason_session_not_found: 'The session was not found.',
@@ -253,6 +267,7 @@ export const workResultStrings = {
 
     // Recorded turns
     wres_recorded_turns_count: 'Recorded turns ({n})',
+    wres_recorded_turns_count_one: 'Recorded turn (1)',
     wres_latest_turn: 'latest',
     wres_showing_latest_20: 'Showing the latest 20.',
 
@@ -268,6 +283,9 @@ export const workResultStrings = {
     wres_raw_state: 'Raw state',
     wres_raw_stage: 'Raw stage',
     wres_raw_reasons: 'Reasons',
+    wres_unlisted_completeness_reasons: 'Unlisted completeness reasons',
+    wres_unlisted_facets: 'Unlisted state facets',
+    wres_unlisted_file_statuses: 'Unlisted file statuses',
     wres_usage: 'Usage',
     wres_usage_context_tokens: 'Context tokens',
     wres_usage_context_window: 'Context window',
