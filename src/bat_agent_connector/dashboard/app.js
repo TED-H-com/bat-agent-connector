@@ -54373,6 +54373,8 @@ function retainFocus(button) {
 		document.removeEventListener("keydown", onKeyDown, true);
 		document.removeEventListener("pointerdown", onPointerDown, true);
 		if (!alive || moved) return;
+		const active = document.activeElement;
+		if (active !== button && active !== document.body && active !== null) return;
 		const usable = (node) => Boolean(node && node.isConnected && !node.closest("[hidden]") && !node.disabled);
 		const target = usable(button) ? button : usable(successor) ? successor : fallback;
 		if (!target || !target.isConnected) return;
@@ -54389,7 +54391,7 @@ function artifactContent({ h, t, api, guard, getArtifact, canRead, validArtifact
 		hidden: true
 	});
 	const box = h("div", { class: "artifact-content" }), receipts = new Map(), controller = new AbortController();
-	let current = null, busy = false, disposed = false, timer, readingStatus = null;
+	let current = null, busy = false, disposed = false, timer, readingStatus = null, pressed = null;
 	const live = (expected) => {
 		guard();
 		if (disposed || !canRead() || expected && !same(expected, getArtifact())) throw new Error(t("ar_content_changed"));
@@ -54479,8 +54481,9 @@ function artifactContent({ h, t, api, guard, getArtifact, canRead, validArtifact
 	}
 	async function perform(action) {
 		const button = action === "preview" ? peek : save;
-		if (busy || button.getAttribute("aria-disabled") === "true") return;
+		if (busy || button.disabled || button.getAttribute("aria-disabled") === "true") return;
 		const settle = retainFocus(button);
+		pressed = button;
 		busy = true;
 		update();
 		status.textContent = t("ar_content_reading");
@@ -54534,6 +54537,7 @@ function artifactContent({ h, t, api, guard, getArtifact, canRead, validArtifact
 			fail(error);
 		} finally {
 			busy = false;
+			pressed = null;
 			update();
 			settle(null, status, !disposed);
 		}
@@ -54560,14 +54564,14 @@ function artifactContent({ h, t, api, guard, getArtifact, canRead, validArtifact
 		}
 		box.hidden = !next;
 		const blocked = !next || !canRead() || nativeDesktop && !nativeFileSupport;
-		for (const button of [peek, save]) if (busy) {
+		for (const button of [peek, save]) if (button === pressed || busy && !blocked) {
 			button.disabled = false;
 			button.setAttribute("aria-disabled", "true");
 		} else {
 			button.removeAttribute("aria-disabled");
 			button.disabled = blocked;
 		}
-		if (busy) status.setAttribute("aria-busy", "true");
+		if ([peek, save].some((button) => button.getAttribute("aria-disabled") === "true" && !button.closest("[hidden]"))) status.setAttribute("aria-busy", "true");
 		else status.removeAttribute("aria-busy");
 		if (next && nativeDesktop && !nativeFileSupport) status.textContent = t("ar_content_native_unavailable");
 		if (changed && next && nativeDesktop && nativeFileSupport) queueMicrotask(() => refresh().catch(fail));
@@ -54664,7 +54668,8 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		raw = JSON.parse(localStorage.getItem(storageKey));
 	} catch {}
 	let saved = restore(raw), source = null, artifact = null, busy = false, readFailed = false, disposed = false;
-	let refreshing = null, submission = null, revision = 0, catalogCursor = null, catalogReading = null, catalogPages = 0;
+	let refreshing = null, submission = null, revision = 0, catalogCursor = null, catalogReading = null, catalogPages = 0, executionReads = 0;
+	const pressed = new Set();
 	let catalogRows = new Map();
 	const operations = {
 		capture: null,
@@ -54711,7 +54716,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	};
 	const inert = (button) => button.getAttribute("aria-disabled") === "true";
 	function gate(button, flight, blocked) {
-		if (flight) {
+		if (pressed.has(button) || flight && !blocked) {
 			button.disabled = false;
 			button.setAttribute("aria-disabled", "true");
 		} else {
@@ -54827,7 +54832,9 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	}
 	async function submit(kind) {
 		if (busy || refreshing || readFailed || !saved[kind]?.request) return;
-		const settle = retainFocus(kind === "capture" ? capture : accept);
+		const button = kind === "capture" ? capture : accept;
+		const settle = retainFocus(button);
+		pressed.add(button);
 		try {
 			guard();
 			busy = true;
@@ -54861,11 +54868,13 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 				if (kind === "capture" && error.status === 403) notice.append(h("p", { class: "muted" }, t("ar_original_credential")));
 			} finally {
 				busy = false;
+				pressed.delete(button);
 				finish();
 				submission = null;
 				if (currentView()) render();
 			}
 		} finally {
+			pressed.delete(button);
 			settle(saved[kind]?.operation_id ? check : saved[kind]?.refused ? kind === "capture" ? reset : newReview : null, notice, currentView());
 		}
 	}
@@ -54874,6 +54883,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		onclick: async () => {
 			if (inert(preview) || busy || frozen() || !source || !scope("observe") || !supported() || !safePath(path.value) || !selectorValid(saved.selector)) return;
 			const settle = retainFocus(preview);
+			pressed.add(preview);
 			try {
 				guard();
 				const ticket = ++revision, fixed = structuredClone(input());
@@ -54898,9 +54908,11 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 					if (ticket === revision) showError(error);
 				} finally {
 					busy = false;
+					pressed.delete(preview);
 					if (currentView()) render();
 				}
 			} finally {
+				pressed.delete(preview);
 				settle(null, notice, currentView());
 			}
 		}
@@ -54968,7 +54980,12 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		onclick: () => {
 			if (inert(check)) return;
 			const settle = retainFocus(check);
-			refresh(true).catch(showError).finally(() => settle(null, notice, currentView()));
+			pressed.add(check);
+			refresh(true).catch(showError).finally(() => {
+				pressed.delete(check);
+				if (currentView()) update();
+				settle(null, notice, currentView());
+			});
 		}
 	}, t("ar_check"));
 	const reload = h("button", {
@@ -54976,6 +54993,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		onclick: async () => {
 			if (inert(reload) || busy || refreshing || frozen()) return;
 			const settle = retainFocus(reload);
+			pressed.add(reload);
 			busy = true;
 			update();
 			try {
@@ -54987,6 +55005,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 				showError(error);
 			} finally {
 				busy = false;
+				pressed.delete(reload);
 				const alive = currentView();
 				if (alive) render();
 				settle(null, notice, alive);
@@ -54998,6 +55017,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		onclick: async () => {
 			if (inert(reset)) return;
 			const settle = retainFocus(reset);
+			pressed.add(reset);
 			try {
 				guard();
 				if (busy || refreshing || readFailed || active("capture") || active("accept")) return;
@@ -55024,9 +55044,11 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 					showError(error);
 				} finally {
 					busy = false;
+					pressed.delete(reset);
 					if (currentView()) render();
 				}
 			} finally {
+				pressed.delete(reset);
 				settle(choice, notice, currentView());
 			}
 		}
@@ -55053,7 +55075,12 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		onclick: () => {
 			if (inert(moreExecutions)) return;
 			const settle = retainFocus(moreExecutions);
-			loadExecutions(true).catch(showError).finally(() => settle(null, notice, currentView()));
+			pressed.add(moreExecutions);
+			loadExecutions(true).catch(showError).finally(() => {
+				pressed.delete(moreExecutions);
+				if (currentView()) update();
+				settle(null, notice, currentView());
+			});
 		}
 	}, t("ar_more_executions"));
 	const content = artifactContent({
@@ -55080,7 +55107,12 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		onclick: () => {
 			if (inert(moreArtifacts)) return;
 			const settle = retainFocus(moreArtifacts);
-			loadCatalog(true).catch((e) => catalogNotice.replaceChildren(errorBox(e, { within: catalogNotice }))).finally(() => settle(null, notice, currentView()));
+			pressed.add(moreArtifacts);
+			loadCatalog(true).catch((e) => catalogNotice.replaceChildren(errorBox(e, { within: catalogNotice }))).finally(() => {
+				pressed.delete(moreArtifacts);
+				if (currentView()) update();
+				settle(null, notice, currentView());
+			});
 		}
 	}, t("more"));
 	const catalogPanel = h("section", { class: "panel" }, h("h2", {}, t("ar_catalog")), catalog, catalogNotice, h("div", { class: "actions" }, moreArtifacts));
@@ -55114,13 +55146,15 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		gate(reset, flight, readFailed || Boolean(active("capture") || active("accept")));
 		newReview.hidden = !saved.accept;
 		gate(newReview, flight, readFailed || Boolean(active("accept")));
-		gate(moreExecutions, busy, frozen());
+		gate(moreExecutions, busy || executionReads > 0, frozen());
 		gate(reload, busy, frozen());
 		moreExecutions.hidden = ![...pages.values()].some((value) => value !== null);
 		gate(moreArtifacts, Boolean(catalogReading), false);
-		if (flight) notice.setAttribute("aria-busy", "true");
+		const shownBusy = (button) => button.getAttribute("aria-disabled") === "true" && !button.closest("[hidden]");
+		const panelBusy = (panel) => [...panel.querySelectorAll("button")].some(shownBusy);
+		if (panelBusy(capturePanel) || panelBusy(reviewPanel) || shownBusy(check)) notice.setAttribute("aria-busy", "true");
 		else notice.removeAttribute("aria-busy");
-		if (catalogReading) catalogPanel.setAttribute("aria-busy", "true");
+		if (shownBusy(moreArtifacts)) catalogPanel.setAttribute("aria-busy", "true");
 		else catalogPanel.removeAttribute("aria-busy");
 	}
 	function render() {
@@ -55151,31 +55185,37 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	}
 	async function loadExecutions(more = false) {
 		if (!source || frozen()) return;
-		const results = await Promise.all(executions.map(async (action) => {
-			if (more && pages.get(action) === null) return;
-			const before = more ? pages.get(action) : null;
-			return {
-				action,
-				data: await api("GET", `/operations?status=succeeded&action=${action}&limit=50${before ? `&before=${before}` : ""}`)
-			};
-		}));
-		guard();
-		if (frozen()) return;
-		for (const result of results.filter(Boolean)) {
-			pages.set(result.action, result.data.next_before ?? null);
-			for (const op of result.data.operations || []) {
-				const bound = sourceFromOperation(op);
-				if (managedCaptureExecution(op) && bound?.host === source.host && bound.session_id === source.session_id) {
-					const selector = { execution_operation_id: op.operation_id };
-					candidates.set(stable(selector), {
-						selector,
-						label: `${actionLabel(op.action)} · ${op.operation_id}`
-					});
+		executionReads++;
+		try {
+			if (currentView()) update();
+			const results = await Promise.all(executions.map(async (action) => {
+				if (more && pages.get(action) === null) return;
+				const before = more ? pages.get(action) : null;
+				return {
+					action,
+					data: await api("GET", `/operations?status=succeeded&action=${action}&limit=50${before ? `&before=${before}` : ""}`)
+				};
+			}));
+			guard();
+			if (frozen()) return;
+			for (const result of results.filter(Boolean)) {
+				pages.set(result.action, result.data.next_before ?? null);
+				for (const op of result.data.operations || []) {
+					const bound = sourceFromOperation(op);
+					if (managedCaptureExecution(op) && bound?.host === source.host && bound.session_id === source.session_id) {
+						const selector = { execution_operation_id: op.operation_id };
+						candidates.set(stable(selector), {
+							selector,
+							label: `${actionLabel(op.action)} · ${op.operation_id}`
+						});
+					}
 				}
 			}
+			renderChoice();
+		} finally {
+			executionReads--;
+			if (currentView()) update();
 		}
-		renderChoice();
-		update();
 	}
 	async function loadSource() {
 		let task, data, bound;
