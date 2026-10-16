@@ -279,6 +279,7 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
     details.dataset.workSection = 'details';
     const keys = new Set([...sections, details].map(node => node.dataset.workSection));
     if (panel.body.querySelector('[data-work-section="start"]')) keys.add('start');
+    if (panel.body.querySelector('[data-work-section="attempt-result"]')) keys.add('attempt-result');
     for (const node of panel.body.querySelectorAll('[data-work-section]')) if (!keys.has(node.dataset.workSection)) node.remove();
     for (const node of [...sections, details]) {
       const previous = panel.body.querySelector(`[data-work-section="${node.dataset.workSection}"]`);
@@ -288,6 +289,23 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
         else previous.replaceChildren(...node.childNodes);
       }
     }
+    const attemptResult = panel.body.querySelector('[data-work-section="attempt-result"]');
+    const staticResult = panel.body.querySelector('[data-work-section="result"]');
+    if (staticResult) {
+      staticResult.hidden = Boolean(attemptResult && !attemptResult.hidden);
+    }
   }
-  return {show, close, dispose: close, get element() {return panel;}, get selection() {return selection;}};
+  return {
+    show,
+    close,
+    dispose: close,
+    get element() {return panel;},
+    get selection() {return selection;},
+    setAttemptResultVisible(visible) {
+      // Close and board disposal null this panel before Result reports visibility.
+      if (!panel) return;
+      const res = panel.body.querySelector('[data-work-section="result"]');
+      if (res) res.hidden = Boolean(visible);
+    },
+  };
 }

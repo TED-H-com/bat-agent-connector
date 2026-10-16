@@ -8,6 +8,7 @@ import {runtimeCompletion} from './pm-runtime-completion.js';
 import {firstLabel, joinLabel, labelSegment} from './label-text.js';
 import {workInspector, workStatusLabel, workStatusPill, blockedWork, blockerText, workAgents, prGroups, readWorkSources, deliveryCoverage, elapsed, readEarlierPlans} from './pm-work-inspector.js';
 import {workStartPanel} from './pm-work-start.js';
+import {workResultPanel} from './pm-work-result.js';
 
 // Central management columns stay separate from execution, quality and delivery.
 export function workspaceKanban({t, api, alive, namespace = '', workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false, workspaceSettled = () => Promise.resolve()}) {
@@ -20,6 +21,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   const observers = new Map();
   const withdrawObservers = () => {for (const observer of observers.values()) observer.withdraw();};
   let startPanel = null;
+  let resultPanel = null;
   const updateHeaderButton = startable => {
     if (!detail.element) return;
     const actionRow = detail.element.querySelector('[data-work-actions]');
@@ -51,9 +53,25 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     if (!startPanel && form) {
       const cap = caps()?.features?.pm_workspaces?.work_start;
       if (cap?.version === 1 && cap.available === true && cap.action === 'work.start') {
+        const resultCap = caps()?.features?.pm_workspaces?.work_attempt_results;
+        if (resultCap?.version === 1) {
+          resultPanel = workResultPanel({
+            h, t, api, alive, workspaceId, caps, errorBox,
+            onVisibility: visible => {
+              const attemptSection = detail.element?.body?.querySelector('[data-work-section="attempt-result"]');
+              if (attemptSection) {
+                attemptSection.hidden = !visible;
+              }
+              detail.setAttemptResultVisible?.(visible);
+            },
+          });
+        }
         startPanel = workStartPanel({
           h, t, api, alive, namespace, workspaceId, caps, permitted, form, errorBox, plan: () => plan,
           onStartableChange: updateHeaderButton,
+          onLatestAttempt: attempt => {
+            resultPanel?.setAttempt(attempt);
+          },
         });
       }
     }
@@ -79,6 +97,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   const detail = workInspector({t, workspaceId, from: 'board', mount: layout, tools: () => toolItems(), returnFocus: () => rows.get(selected)?.node.querySelector('[data-board-open]') || viewHeading(), onClose: () => {
     withdrawObservers();
     startPanel?.withdraw();
+    resultPanel?.withdraw();
     updateHeaderButton(false);
     detailSerial++; if (!preserveSelection) {selected = null; preference.selected = null; writeSelection(null); markSelection();}
     requestAnimationFrame(updateEdges);
@@ -309,6 +328,23 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       if (!startSection.contains(panel.element)) {
         startSection.replaceChildren(panel.element);
       }
+      if (resultPanel) {
+        let attemptResultSection = detail.element.body.querySelector('[data-work-section="attempt-result"]');
+        if (!attemptResultSection) {
+          attemptResultSection = h('section', {'data-work-section': 'attempt-result'});
+          attemptResultSection.hidden = true;
+          if (startSection && startSection.nextSibling) {
+            detail.element.body.insertBefore(attemptResultSection, startSection.nextSibling);
+          } else {
+            detail.element.body.append(attemptResultSection);
+          }
+        }
+        if (!attemptResultSection.contains(resultPanel.element)) {
+          attemptResultSection.replaceChildren(resultPanel.element);
+        }
+        attemptResultSection.hidden = resultPanel.element.hidden;
+        detail.setAttemptResultVisible?.(!attemptResultSection.hidden);
+      }
       panel.setWork(card);
       updateHeaderButton(panel.startable());
     }
@@ -445,5 +481,5 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       return read;
     }
   }
-  return {element, box: element, meta, refresh, titleFor, withdraw, setActive, rememberScroll, hideInspector: closeRetaining, setTools: value => {toolItems = value;}, dispose: () => {rememberScroll(); window.removeEventListener('scroll', onScroll); startPanel?.dispose(); startPanel = null; resize.disconnect(); withdraw({forgetRoute: false});}};
+  return {element, box: element, meta, refresh, titleFor, withdraw, setActive, rememberScroll, hideInspector: closeRetaining, setTools: value => {toolItems = value;}, dispose: () => {rememberScroll(); window.removeEventListener('scroll', onScroll); startPanel?.dispose(); startPanel = null; resultPanel?.dispose(); resultPanel = null; resize.disconnect(); withdraw({forgetRoute: false});}};
 }
