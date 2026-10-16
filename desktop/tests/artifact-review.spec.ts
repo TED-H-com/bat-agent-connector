@@ -25,19 +25,20 @@ async function fixture(page:Page,native:boolean,options:any={}) {
     return {status:200,data:{preview:{preview_id:'acpv_'+'2'.repeat(32),preview_token:'fixture-managed-preview',fingerprint:proof.fingerprint,source:{...source,selector:input.body.task_id?{task_id:input.body.task_id,command_id:input.body.command_id}:selector,session_id:state.badPreview?'other-source':source.session_id},evidence,relative_path:input.body.relative_path,snapshot:false,expires_at:state.expired?1:Date.now()/1000+600}}};
    }
    state.writes.push(structuredClone(input));const kind=input.body.action==='artifact.capture.managed'?'capture':'accept';
-   if(kind==='capture'&&state.captureError)return {status:403,data:{error:{code:state.captureError,message:'Original credential required'}}};
+   if(state.holdWrite){state.holdWrite=false;await new Promise(resolve=>{state.releaseWrite=resolve;});}
+   if(kind==='capture'&&state.captureError)return {status:state.captureErrorStatus||403,data:{error:{code:state.captureError,message:'Original credential required'}}};
    if(kind==='capture')state.captured||=structuredClone(input);else state.accepted||=structuredClone(input);
    if(kind==='capture'&&state.lostCapture||kind==='accept'&&state.lostAccept){state.lostCapture=state.lostAccept=false;return {status:503,data:{error:{code:'LOST',message:'Reply lost'}}};}
    return {status:200,data:{operation:operation(kind)}};
   }
   state.reads.push(input.path);
-  if(path==='/sessions/demo/managed-session')return state.sourceGone?{status:404,data:{error:{code:'NOT_FOUND',message:'Source removed'}}}:{status:200,data:{session:{host:'demo',session_id:'managed-session',provenance:state.manual?'manual':'connector_managed',api_access:state.manual||state.foreign?'read_only':'managed',...(state.foreign?{read_only_code:'FOREIGN_CONTROLLER'}:{})},relations_summary:[]}};
+  if(path==='/sessions/demo/managed-session'){if(state.holdSource){state.holdSource=false;await new Promise(resolve=>{state.releaseSource=resolve;});}return state.sourceGone?{status:404,data:{error:{code:'NOT_FOUND',message:'Source removed'}}}:{status:200,data:{session:{host:'demo',session_id:'managed-session',provenance:state.manual?'manual':'connector_managed',api_access:state.manual||state.foreign?'read_only':'managed',...(state.foreign?{read_only_code:'FOREIGN_CONTROLLER'}:{})},relations_summary:[]}};}
   if(path==='/operations/'+captureId||path==='/operations/'+acceptId){if(state.failRead)return {status:503,data:{error:{code:'READ_FAILED',message:'Read unavailable'}}};if(state.holdRead){state.holdRead=false;await new Promise(resolve=>{state.releaseRead=resolve;});}return {status:200,data:{operation:operation(path.endsWith(captureId)?'capture':'accept')}};}
   if(path==='/operations/'+executionId)return {status:200,data:{operation:execution()}};
   if(path==='/operations')return {status:200,data:{operations:url.searchParams.get('action')===execution().action?[execution()]:[],next_before:null}};
   if(path==='/tasks/'+taskId)return {status:200,data:{task:{task_id:taskId,host:'demo',session_id:'managed-session',commands:[{task_id:taskId,session_id:'managed-session',command_id:'cmd-accepted',kind:'send',status:'accepted'},{task_id:taskId,session_id:'managed-session',command_id:'cmd-unknown',kind:'send',status:'uncertain'}]}}};
   if(path.startsWith('/artifacts/'))return state.artifactMissing?{status:404,data:{error:{code:'ARTIFACT_NOT_FOUND',message:'Artifact unavailable'}}}:{status:200,data:{artifact:state.changedArtifactRevision?{...(state.row||row),revision:2}:state.badArtifact?{...(state.row||row),source:{...(state.row||row).source,fingerprint:'0'.repeat(64)}}:(state.row||row)}};
-  if(path==='/artifacts'){if(state.catalogFail)return{status:503,data:{error:{code:'READ_FAILED',message:'Catalog read unavailable'}}};const i=url.searchParams.get('cursor')==='second'?1:0;return {status:200,data:{artifacts:(state.catalogPages?.[i]||[state.row||row]).map((revision:any)=>({revision})),next_cursor:state.catalogPages?.[i+1]?'second':null}};}
+  if(path==='/artifacts'){if(state.holdCatalog){state.holdCatalog=false;await new Promise(resolve=>{state.releaseCatalog=resolve;});}if(state.catalogFail)return{status:503,data:{error:{code:'READ_FAILED',message:'Catalog read unavailable'}}};const i=url.searchParams.get('cursor')==='second'?1:0;return {status:200,data:{artifacts:(state.catalogPages?.[i]||[state.row||row]).map((revision:any)=>({revision})),next_cursor:state.catalogPages?.[i+1]?'second':null}};}
   if(path==='/events')state.after=Number(url.searchParams.get('after'));const events=state.events.filter((e:any)=>e.seq>state.after),cursor=events.at(-1)?.seq||state.after;
   return {status:200,data:path==='/capabilities'?caps:path==='/bootstrap'?{capabilities:caps,sync:{version:1,server_id:state.server,principal_id:state.principal,checkpoint:{cursor:0,token:'proof-0'}}}:path==='/events'?{events,next_cursor:cursor,head_cursor:cursor,sync:{checkpoint:{cursor,token:'proof-'+cursor}}}:{sessions:[],operations:[],messages:[],hosts:[],work_items:[],checkpoints:[]}};
  };
@@ -50,7 +51,7 @@ async function fixture(page:Page,native:boolean,options:any={}) {
   throw new Error(command);
  });await page.addInitScript(()=>Object.assign(window,{isTauri:true,__TAURI_INTERNALS__:{invoke:async(command:string,args:any)=>{if(command==='native_status')return {endpoint:'https://fixture.example',credential_available:true,file_transfers:true};if(command==='connector_connect')return (await (window as any).artifactReviewFixture({method:'GET',path:'/capabilities'})).data;if(command==='connector_disconnect')return;if(command==='connector_request')return (window as any).artifactReviewFixture(args.input);if(command.startsWith('native_files_'))return (window as any).artifactContentFixture(command,args);if(command==='fleet_availability')return {configured:false,platform_supported:false};throw new Error(command);}}}));}
  else await page.addInitScript(()=>sessionStorage.setItem('batc.dashboard.token','fixture-token'));
- await page.route('**/api/v1/**',async route=>{if(native)throw new Error('Native managed artifact UI used browser HTTP');const r=route.request(),url=new URL(r.url());if(url.pathname.endsWith('/content')){state.contentRequests.push({url:r.url(),headers:r.headers()});if(state.holdContent)await new Promise(resolve=>{state.releaseContent=resolve;});if(state.contentRedirect)return route.fulfill({status:302,headers:{location:'https://other.invalid/file'}});return route.fulfill({status:200,headers:{'content-length':String(state.wrongLength??state.content.length),'content-type':'application/octet-stream'},body:state.wrongBytes||state.content});}const reply=await dispatch({method:r.method(),path:url.pathname.slice('/api/v1'.length)+url.search,body:r.postDataJSON(),idempotency_key:r.headers()['idempotency-key']});await route.fulfill({status:reply.status,json:reply.data});});return state;
+ await page.route('**/api/v1/**',async route=>{if(native)throw new Error('Native managed artifact UI used browser HTTP');const r=route.request(),url=new URL(r.url());if(url.pathname.endsWith('/content')){state.contentRequests.push({url:r.url(),headers:r.headers()});if(state.holdContent)await new Promise(resolve=>{const previous=state.releaseContent;state.releaseContent=()=>{resolve();if(typeof previous==='function')previous();};});if(state.contentRedirect)return route.fulfill({status:302,headers:{location:'https://other.invalid/file'}});return route.fulfill({status:200,headers:{'content-length':String(state.wrongLength??state.content.length),'content-type':'application/octet-stream'},body:state.wrongBytes||state.content});}const reply=await dispatch({method:r.method(),path:url.pathname.slice('/api/v1'.length)+url.search,body:r.postDataJSON(),idempotency_key:r.headers()['idempotency-key']});await route.fulfill({status:reply.status,json:reply.data});});return state;
 }
 
 async function contentFixture(page:Page,native:boolean,options:any={}){
@@ -232,4 +233,287 @@ for(const locale of ['en-US','zh-TW']) test.describe(`managed artifact review ${
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(state.writes).toHaveLength(0);expect(state.errors).toEqual([]);
   await page.screenshot({path:`test-results/artifact-review-${locale}-${width}.png`,fullPage:true});
  });
+});
+
+const notice = (page: Page) => page.locator('.artifact-review > [role=status]');
+const sessionReads = (state: {reads: string[]}) => state.reads.filter(path => path.startsWith('/sessions/demo/managed-session')).length;
+const operationGets = (state: {reads: string[]}) => state.reads.filter(path => path === '/operations/' + captureId).length;
+const cursorReads = (state: {reads: string[]}) => state.reads.filter(path => path.includes('cursor=second')).length;
+async function refuseSecond(page: Page, button: import('@playwright/test').Locator) {
+  await page.keyboard.press('Enter');
+  await button.click({force: true});
+}
+async function focusFacts(page: Page) {
+  return page.evaluate(() => {
+    const el = document.activeElement as HTMLElement | null;
+    return {tag: el?.tagName || '', text: (el?.textContent || '').trim().slice(0, 80), ariaDisabled: el?.getAttribute('aria-disabled'), disabled: el instanceof HTMLButtonElement ? el.disabled : null};
+  });
+}
+
+test('preview capture keeps focus and ignores a second press', async ({page}) => {
+  const state = await fixture(page, false, {holdPreview: true});
+  await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');
+  const box = page.locator('[data-managed-capture]');
+  await box.getByRole('combobox', {name: 'Connector execution evidence'}).selectOption(JSON.stringify(selector));
+  await box.getByRole('textbox', {name: 'Relative file path'}).fill('result.txt');
+  const preview = box.getByRole('button', {name: 'Preview source file', exact: true});
+  await preview.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => typeof state.releasePreview).toBe('function');
+  await expect(preview).toBeFocused();
+  await expect(preview).toHaveAttribute('aria-disabled', 'true');
+  expect(await preview.evaluate(el => (el as HTMLButtonElement).disabled)).toBe(false);
+  await expect(notice(page)).toHaveAttribute('aria-busy', 'true');
+  await refuseSecond(page, preview);
+  expect(state.previews).toHaveLength(1);
+  state.releasePreview();
+  await expect(preview).toBeFocused();
+  await expect(preview).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(notice(page)).not.toHaveAttribute('aria-busy', 'true');
+  expect(state.previews).toHaveLength(1);
+  expect(state.writes).toHaveLength(0);
+  expect(state.errors).toEqual([]);
+  expect(await focusFacts(page)).toMatchObject({tag: 'BUTTON', ariaDisabled: null, disabled: false});
+});
+
+test('save artifact moves focus to check status', async ({page}) => {
+  const state = await fixture(page, false, {holdWrite: true});
+  const box = await captureForm(page);
+  const save = box.locator('button.primary');
+  await save.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => typeof state.releaseWrite).toBe('function');
+  await expect(save).toBeFocused();
+  await expect(save).toHaveAttribute('aria-disabled', 'true');
+  expect(await save.evaluate(el => (el as HTMLButtonElement).disabled)).toBe(false);
+  await expect(notice(page)).toHaveAttribute('aria-busy', 'true');
+  await refuseSecond(page, save);
+  expect(state.writes).toHaveLength(1);
+  state.releaseWrite();
+  const check = page.getByRole('button', {name: 'Check original operations', exact: true});
+  await expect(check).toBeFocused();
+  await expect(notice(page)).not.toHaveAttribute('aria-busy', 'true');
+  expect(state.writes).toHaveLength(1);
+  expect(state.writes[0].body.action).toBe('artifact.capture.managed');
+  expect(state.errors).toEqual([]);
+});
+
+test('accept moves focus to check status', async ({page}) => {
+  const state = await fixture(page, false, {holdWrite: true});
+  await page.goto('/dashboard/#/artifact-review/artifact/' + artifactId + '/1');
+  const review = page.locator('[data-artifact-accept]');
+  await review.getByRole('textbox').fill('Reviewed the exact report.');
+  const accept = review.locator('button.primary');
+  await accept.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => typeof state.releaseWrite).toBe('function');
+  await expect(accept).toBeFocused();
+  await expect(accept).toHaveAttribute('aria-disabled', 'true');
+  expect(await accept.evaluate(el => (el as HTMLButtonElement).disabled)).toBe(false);
+  await expect(notice(page)).toHaveAttribute('aria-busy', 'true');
+  await refuseSecond(page, accept);
+  expect(state.writes).toHaveLength(1);
+  state.releaseWrite();
+  await expect(page.getByRole('button', {name: 'Check original operations', exact: true})).toBeFocused();
+  expect(state.writes).toHaveLength(1);
+  expect(state.writes[0].body.action).toBe('artifact.accept');
+  expect(state.errors).toEqual([]);
+});
+
+test('refused capture moves focus to new capture', async ({page}) => {
+  const state = await fixture(page, false, {holdWrite: true});
+  const box = await captureForm(page);
+  const save = box.locator('button.primary');
+  await save.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => typeof state.releaseWrite).toBe('function');
+  state.captureError = 'PREVIEW_EXPIRED';
+  state.captureErrorStatus = 422;
+  state.releaseWrite();
+  await expect(page.getByRole('button', {name: 'Capture another file', exact: true})).toBeFocused();
+  expect(state.writes).toHaveLength(1);
+  await expect(page.getByText('PREVIEW_EXPIRED', {exact: true})).toBeVisible();
+  expect(state.errors).toEqual([]);
+});
+
+test('automatic refresh keeps focus on check status', async ({page}) => {
+  await page.clock.install();
+  const state = await fixture(page, false, {captureStatus: 'running'});
+  const box = await captureForm(page);
+  await box.getByRole('button', {name: 'Save reviewed file', exact: true}).click();
+  const check = page.getByRole('button', {name: 'Check original operations', exact: true});
+  await expect(check).toBeVisible();
+  await check.focus();
+  expect(operationGets(state)).toBe(0);
+  state.holdRead = true;
+  await page.clock.fastForward(1000);
+  await expect.poll(() => typeof state.releaseRead).toBe('function');
+  await expect(check).toBeFocused();
+  await expect(check).toHaveAttribute('aria-disabled', 'true');
+  expect(await check.evaluate(el => (el as HTMLButtonElement).disabled)).toBe(false);
+  await expect(notice(page)).toHaveAttribute('aria-busy', 'true');
+  await refuseSecond(page, check);
+  expect(operationGets(state)).toBe(1);
+  state.releaseRead();
+  await expect(check).not.toHaveAttribute('aria-disabled', 'true');
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  expect(operationGets(state)).toBe(1);
+  await expect(check).toBeFocused();
+  expect(state.writes).toHaveLength(1);
+  expect(state.errors).toEqual([]);
+});
+
+test('refresh sources keeps focus', async ({page}) => {
+  const state = await fixture(page, false);
+  await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');
+  const reload = page.getByRole('button', {name: 'Reload execution evidence', exact: true});
+  await expect(reload).toBeEnabled();
+  const before = sessionReads(state);
+  state.holdSource = true;
+  await reload.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => typeof state.releaseSource).toBe('function');
+  await expect(reload).toBeFocused();
+  await expect(reload).toHaveAttribute('aria-disabled', 'true');
+  expect(await reload.evaluate(el => (el as HTMLButtonElement).disabled)).toBe(false);
+  await expect(notice(page)).toHaveAttribute('aria-busy', 'true');
+  await refuseSecond(page, reload);
+  expect(sessionReads(state)).toBe(before + 1);
+  state.releaseSource();
+  await expect(reload).toBeFocused();
+  await expect(reload).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(notice(page)).not.toHaveAttribute('aria-busy', 'true');
+  expect(sessionReads(state)).toBe(before + 1);
+  expect(state.errors).toEqual([]);
+});
+
+test('more artifacts keeps focus and ignores a second page request', async ({page}) => {
+  const second = {...row, artifact_id: 'art_' + '7'.repeat(32)};
+  const state = await fixture(page, false, {catalogPages: [[row], [second]]});
+  await page.goto('/dashboard/#/artifact-review');
+  const catalog = page.getByRole('heading', {name: 'Saved results from managed sources'}).locator('..');
+  const more = catalog.getByRole('button', {name: 'More', exact: true});
+  await expect(more).toBeVisible();
+  state.holdCatalog = true;
+  await more.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => typeof state.releaseCatalog).toBe('function');
+  await expect(more).toBeFocused();
+  await expect(more).toHaveAttribute('aria-disabled', 'true');
+  expect(await more.evaluate(el => (el as HTMLButtonElement).disabled)).toBe(false);
+  await expect(catalog).toHaveAttribute('aria-busy', 'true');
+  await refuseSecond(page, more);
+  expect(cursorReads(state)).toBe(1);
+  state.releaseCatalog();
+  await expect(more).toBeHidden();
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  expect(cursorReads(state)).toBe(1);
+  await expect(notice(page)).toBeFocused();
+  expect(state.errors).toEqual([]);
+});
+
+test('artifact event catalog read keeps focus on more', async ({page}) => {
+  await page.clock.install();
+  const second = {...row, artifact_id: 'art_' + '7'.repeat(32)};
+  const state = await fixture(page, false, {catalogPages: [[row], [second]]});
+  await page.goto('/dashboard/#/artifact-review');
+  const catalog = page.getByRole('heading', {name: 'Saved results from managed sources'}).locator('..');
+  const more = catalog.getByRole('button', {name: 'More', exact: true});
+  await expect(more).toBeVisible();
+  await more.focus();
+  state.holdCatalog = true;
+  state.events = [{seq: 1, kind: 'artifact.ready', resource_type: 'artifact', resource_id: artifactId}];
+  await page.clock.fastForward(1000);
+  await expect.poll(() => typeof state.releaseCatalog).toBe('function');
+  await expect(more).toBeFocused();
+  await expect(more).toHaveAttribute('aria-disabled', 'true');
+  expect(await more.evaluate(el => (el as HTMLButtonElement).disabled)).toBe(false);
+  await expect(catalog).toHaveAttribute('aria-busy', 'true');
+  state.releaseCatalog();
+  await expect(more).toBeFocused();
+  await expect(more).not.toHaveAttribute('aria-disabled', 'true');
+  expect(state.errors).toEqual([]);
+});
+
+test('new capture and new review move focus to their successors', async ({page}) => {
+  const state = await fixture(page, false);
+  const box = await captureForm(page);
+  await box.getByRole('button', {name: 'Save reviewed file', exact: true}).click();
+  await expect(page.locator('[data-artifact-ready]')).toBeVisible();
+  const reset = page.getByRole('button', {name: 'Capture another file', exact: true});
+  await reset.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('combobox', {name: 'Connector execution evidence'})).toBeFocused();
+  await page.goto('/dashboard/#/artifact-review/artifact/' + artifactId + '/1');
+  const review = page.locator('[data-artifact-accept]');
+  await review.getByRole('textbox').fill('Reviewed the exact report.');
+  await review.getByRole('button', {name: 'Record review of this revision', exact: true}).click();
+  await expect(page.locator('[data-artifact-accepted]')).toBeVisible();
+  await review.getByRole('button', {name: 'Record another review', exact: true}).focus();
+  await page.keyboard.press('Enter');
+  await expect(review.getByRole('textbox')).toBeFocused();
+  await expect(review.getByRole('textbox')).toBeEnabled();
+  expect(state.writes.map((entry: {body: {action: string}}) => entry.body.action)).toEqual(['artifact.capture.managed', 'artifact.accept']);
+  expect(state.errors).toEqual([]);
+});
+
+test('content preview and download keep focus while the read is held', async ({page}) => {
+  const state = await contentFixture(page, false, {holdContent: true});
+  await page.goto('/dashboard/#/artifact-review/artifact/' + artifactId + '/1');
+  const content = page.locator('.artifact-content');
+  const status = content.locator('[role=status]');
+  const preview = content.getByRole('button', {name: 'Preview', exact: true});
+  const download = content.getByRole('button', {name: 'Download this revision', exact: true});
+  await preview.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => typeof state.releaseContent).toBe('function');
+  await expect(preview).toBeFocused();
+  await expect(preview).toHaveAttribute('aria-disabled', 'true');
+  await expect(download).toHaveAttribute('aria-disabled', 'true');
+  expect(await preview.evaluate(el => (el as HTMLButtonElement).disabled)).toBe(false);
+  expect(await download.evaluate(el => (el as HTMLButtonElement).disabled)).toBe(false);
+  await expect(status).toHaveAttribute('aria-busy', 'true');
+  await page.keyboard.press('Enter');
+  await preview.click({force: true});
+  expect(state.contentRequests).toHaveLength(1);
+  state.releaseContent();
+  await expect(content.locator('pre')).toBeVisible();
+  await expect(preview).toBeFocused();
+  await expect(preview).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(status).not.toHaveAttribute('aria-busy', 'true');
+  expect(state.contentRequests).toHaveLength(1);
+  state.holdContent = true;
+  await download.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => state.contentRequests.length).toBe(2);
+  await expect.poll(() => typeof state.releaseContent).toBe('function');
+  await expect(download).toBeFocused();
+  await expect(download).toHaveAttribute('aria-disabled', 'true');
+  await expect(status).toHaveAttribute('aria-busy', 'true');
+  await page.keyboard.press('Enter');
+  await download.click({force: true});
+  expect(state.contentRequests).toHaveLength(2);
+  state.releaseContent();
+  await expect(download).toBeFocused();
+  await expect(download).not.toHaveAttribute('aria-disabled', 'true');
+  expect(state.contentRequests).toHaveLength(2);
+  expect(state.writes).toHaveLength(0);
+  expect(state.errors).toEqual([]);
+});
+
+test('tab reaches save artifact while its post is held', async ({page}) => {
+  const state = await fixture(page, false, {holdWrite: true});
+  const box = await captureForm(page);
+  const save = box.locator('button.primary');
+  await save.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => typeof state.releaseWrite).toBe('function');
+  await box.getByRole('button', {name: 'Preview source file', exact: true}).evaluate(el => (el as HTMLElement).focus());
+  await page.keyboard.press('Tab');
+  await expect(save).toBeFocused();
+  await expect(save).toHaveAttribute('aria-disabled', 'true');
+  state.releaseWrite();
+  await expect(page.getByRole('button', {name: 'Check original operations', exact: true})).toBeVisible();
+  expect(state.writes).toHaveLength(1);
+  expect(state.errors).toEqual([]);
 });
