@@ -2,6 +2,15 @@
 
 ## Next release (unreleased)
 
+- Artifact review keeps keyboard focus on the button you pressed while a
+  preview, save, review, execution page, source reload, catalog page, or file
+  read is in progress. That button looks unavailable and a second press is
+  ignored. A button that cannot be used stays unavailable, including during a
+  poll or a save. When the pressed button closes, focus moves to Check
+  original operations, Capture another file, Record another review, the
+  execution list, or the review text, and only while focus is still on that
+  button.
+
 - Capture a remote file: the button you pressed keeps keyboard focus and
   ignores a second press until that preview or save finishes. A button that
   cannot be used stays unavailable. When Save closes, or Capture another file
