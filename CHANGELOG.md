@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Design note: v1.3 E05 maps the BAT loop (new work, live output, the fixed
+  Result, the next turn, busy, and recovery of the original operation) onto the
+  pieces already merged or still in review. See
+  `docs/design/v1.3-e05-bat-loop.md`. No behavior change.
+
 - Capture a remote file: the button you pressed keeps keyboard focus and
   ignores a second press until that preview or save finishes. A button that
   cannot be used stays unavailable. When Save closes, or Capture another file
