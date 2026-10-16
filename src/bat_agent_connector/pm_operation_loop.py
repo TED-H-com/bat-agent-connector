@@ -66,7 +66,7 @@ async def attach(ops, principal, operation):
             return operation
     elif operation["action"] not in LOOP_ACTIONS:
         return operation
-    return {**operation, "loop": _project(ops, principal, operation, parent)}
+    return {**operation, "loop": await _project(ops, principal, operation, parent)}
 
 
 def _classify(db, operation):
@@ -93,7 +93,7 @@ def _parent_visible(ops, principal, parent) -> bool:
     return bool(visible(ops.db, principal, parent))
 
 
-def _project(ops, principal, operation, parent):
+async def _project(ops, principal, operation, parent):
     from .pm_delivery_lineage import ACTIONS as delivery_actions
 
     action = operation["action"]
@@ -135,13 +135,14 @@ def _project(ops, principal, operation, parent):
         dashboard = published_session
     else:
         dashboard = f"#/op/{operation['operation_id']}"
+    allowed, blocked = await _actions(ops, principal, operation, parent, attempt)
     return {
         "operation_id": operation["operation_id"],
         "work_item_id": work_item_id,
         "attempt_id": attempt_id,
         "state": state,
-        "next_allowed_actions": [],
-        "blocked_actions": [],
+        "next_allowed_actions": allowed,
+        "blocked_actions": blocked,
         "links": _links(start_id, workspace_id, work_item_id, execution_id, link_session),
         "dashboard_hash": dashboard,
         "result_read": _result_read(attempt_id),
@@ -427,3 +428,222 @@ def _operation_visible(ops, principal, operation_id) -> bool:
 
     row = ops._row(operation_id)
     return bool(row and visible(ops.db, principal, row))
+
+
+# Refusal strings already used by the Result envelope. Anything else is omitted.
+_NOT_CONTROLLER = "not_controller"
+_MISSING_SCOPE = "missing_scope"
+_NOT_WRITER = "not_writer_member"
+_RECONCILE = "WAIT_ORIGINAL_OPERATION_RECONCILE"
+_ACTOR_ONLY = frozenset({
+    "Only the original requester controls this proposal",
+    "Only the original requester may control native analysis",
+    "Only the original requester may control this adoption",
+    "relay child controls retain the original actor",
+})
+_SCOPE_ONLY = frozenset({
+    "PM operation controls require manage scope",
+    "Package reads need observe; creation also needs manage",
+    "Native PM analysis requires observe, manage and start scopes",
+    "Plan operations require manage scope",
+    "Plan adoption requires observe, manage and start scopes",
+    "Publication requires observe, manage and integrate authority",
+    "dispatch linked work needs manage",
+    "Starting work requires observe, manage and start scopes",
+    "resuming merge-and-deploy needs both merge and deploy scopes",
+})
+_MEMBERSHIP = "Workspace membership does not permit this action"
+_STEER_BLOCKED = frozenset({"cancel", "resume", "work.start"})
+
+
+async def _actions(ops, principal, operation, parent, attempt):
+    """Cancel and resume for this operation.
+
+    ``work.start`` copies this principal's Result envelope. Every other action,
+    including a proven child, reads the same conditions ``cancel`` and ``resume``
+    read. This does not call ``_may_steer`` and does not write.
+    """
+    if parent is None and operation["action"] == "work.start":
+        return await _work_start_actions(ops, principal, attempt)
+    return _status_actions(ops, principal, operation)
+
+
+async def _work_start_actions(ops, principal, attempt):
+    if attempt is None:
+        return [], []
+    from .operations import OperationError
+    from .pm_attempt_result_reads import RESULT_GET, read
+
+    try:
+        envelope = await read(ops, principal, RESULT_GET, {
+            "workspace_id": attempt["workspace_id"],
+            "attempt_id": attempt["attempt_id"],
+            "wait_ms": 0,
+        })
+    except OperationError as error:
+        if error.code == "NOT_FOUND":
+            return [], []
+        raise
+    allowed = [row for row in envelope.get("next_allowed_actions") or [] if row.get("kind") == "operation_endpoint"]
+    blocked = [row for row in envelope.get("blocked_actions") or [] if row.get("action") in _STEER_BLOCKED]
+    return allowed, blocked
+
+
+def _status_actions(ops, principal, operation):
+    from .operations import TERMINAL
+
+    allowed, blocked = [], []
+    status = operation.get("status")
+    if status not in TERMINAL:
+        _consider(ops, principal, operation, "cancel", allowed, blocked)
+    if status == "uncertain":
+        blocked.append({"action": operation["action"], "reason": _RECONCILE})
+    elif status == "needs_attention":
+        _consider(ops, principal, operation, "resume", allowed, blocked)
+    return allowed, blocked
+
+
+def _consider(ops, principal, operation, verb, allowed, blocked):
+    reason = _steer_reason(ops, principal, operation, verb)
+    if reason is None:
+        allowed.append(_endpoint(operation, verb, _required_scopes(principal, operation, verb)))
+    elif reason != "omit":
+        blocked.append({"action": verb, "reason": reason})
+
+
+def _endpoint(operation, verb, scopes):
+    operation_id = operation["operation_id"]
+    return {
+        "kind": "operation_endpoint",
+        "endpoint": verb,
+        "operation_id": operation_id,
+        "http_method": "POST",
+        "http_path": f"/api/v1/operations/{operation_id}/{verb}",
+        "required_scopes": scopes,
+    }
+
+
+def _required_scopes(principal, operation, verb):
+    """Scopes a pure scope check required. Actor or admin allowance stays an empty list."""
+    if principal.admin:
+        return []
+    return _pure_scopes(operation, verb)
+
+
+def _pure_scopes(operation, verb):
+    action = operation.get("action")
+    params = operation.get("params") if isinstance(operation.get("params"), dict) else {}
+    found = []
+    from .pm_discussions import ACTIONS as discussion
+
+    if action in discussion:
+        found.append("manage")
+    if action == "pm.work_package.create":
+        found.extend(("observe", "manage"))
+    if action in {"pm.run.analyze", "pm.run.bat.analyze", "pm.conversation.propose", "pm.conversation.adopt"}:
+        found.extend(("observe", "manage", "start"))
+    if action in {"pm.plan.draft", "pm.plan.adopt"}:
+        found.append("manage")
+    if action == "pm.plan.adopt":
+        found.extend(("observe", "start"))
+    if action == "github.pr.publish":
+        from .pr_publication import REQUIRED
+        found.extend(sorted(REQUIRED))
+    if action == "work.start":
+        found.extend(("observe", "manage", "start"))
+    if action == "repository.continue" and params.get("work_item_id"):
+        found.append("manage")
+    if verb == "resume" and action == "delivery.merge_and_deploy":
+        found.extend(("merge", "deploy"))
+    return list(dict.fromkeys(found))
+
+
+def _steer_reason(ops, principal, operation, verb):
+    """Return a blocked reason, ``omit``, or None when the verb is allowed."""
+    from .errors import ResourceReadOnly
+    from .operations import OperationError
+
+    try:
+        _steer_checks(ops, principal, operation, verb)
+    except OperationError as error:
+        return _map_refusal(error, ops, principal, operation) or "omit"
+    except (KeyError, TypeError, ResourceReadOnly):
+        return "omit"
+    return None
+
+
+def _steer_checks(ops, principal, operation, verb):
+    from . import bulk_approval, orchestration_operations
+    from .operations import OperationError
+    from .pm_access import require_visible
+
+    require_visible(ops.db, principal, operation)
+    ops._authorize_controller(principal, operation, verb)
+    bulk_approval.authorize_child(ops, principal, operation, verb)
+    orchestration_operations.authorize_child(ops, principal, operation, verb)
+    defined = ops.actions.get(operation["action"])
+    if defined and defined.authorize_existing:
+        defined.authorize_existing(ops, principal, operation, verb)
+    if not (operation.get("actor") == principal.actor or principal.admin
+            or (defined and principal.allows(defined.scope))):
+        raise OperationError(
+            "FORBIDDEN", f"{verb} needs the operation's own actor or its {operation['action']} scope", 403)
+    if (verb == "resume" and operation.get("action") == "delivery.merge_and_deploy"
+            and not (principal.allows("merge") and principal.allows("deploy"))):
+        raise OperationError("FORBIDDEN", "resuming merge-and-deploy needs both merge and deploy scopes", 403)
+
+
+def _map_refusal(error, ops, principal, operation):
+    """First matching §3.2 row for the refusal the endpoint would raise."""
+    if error.code == "CONTROLLER_MISMATCH":
+        return _NOT_CONTROLLER
+    if error.code != "FORBIDDEN":
+        return None
+    message = error.message
+    if message in _ACTOR_ONLY:
+        return _NOT_CONTROLLER
+    if message == _MEMBERSHIP:
+        if _owner_gate(ops, operation) or _member_role(ops, principal, operation) != "reader":
+            return None
+        return _NOT_WRITER
+    if message in _SCOPE_ONLY:
+        return _MISSING_SCOPE
+    return None
+
+
+def _owner_gate(ops, operation) -> bool:
+    """True when this action's membership check is ``decide=True`` (an owner check)."""
+    action = operation.get("action")
+    params = operation.get("params") if isinstance(operation.get("params"), dict) else {}
+    target = operation.get("target") if isinstance(operation.get("target"), dict) else {}
+    if action in {"pm.plan.adopt", "pm.conversation.adopt"}:
+        return True
+    from .pm_discussions import ACTIONS, _decision
+
+    if action not in ACTIONS:
+        return False
+    decide = _decision(action, params)
+    superseded = params.get("supersedes_input_id")
+    if action == "pm.input.record" and isinstance(superseded, str):
+        old = ops.db.execute(
+            "SELECT confirmed_by FROM pm_inputs WHERE thread_id=? AND input_id=?",
+            (target.get("thread_id"), superseded),
+        ).fetchone()
+        decide = decide or bool(old and old[0])
+    return bool(decide)
+
+
+def _member_role(ops, principal, operation):
+    target = operation.get("target") if isinstance(operation.get("target"), dict) else {}
+    workspace_id = target.get("workspace_id")
+    if not isinstance(workspace_id, str):
+        return None
+    row = ops.db.execute(
+        "SELECT role FROM pm_workspace_members WHERE workspace_id=? AND actor=?",
+        (workspace_id, principal.actor),
+    ).fetchone()
+    if row is not None:
+        return row["role"]
+    if principal.admin:
+        return "owner"
+    return None

@@ -5,11 +5,19 @@ tests call ``attach`` directly. Exit tests use the HTTP app and the RPC door.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 import uuid
 
-from bat_agent_connector import pm_discussions, pm_evidence, pm_source_lineage, pm_work_start, pm_workspace
+from bat_agent_connector import (
+    controller_authority,
+    pm_discussions,
+    pm_evidence,
+    pm_source_lineage,
+    pm_work_start,
+    pm_workspace,
+)
 from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.operations import OperationService
 from bat_agent_connector.pm_delivery_lineage import ACTIONS as DELIVERY_ACTIONS
@@ -19,8 +27,15 @@ from tests.operation_helpers import settle_operations
 from tests.test_api_v1 import daemon as daemon_fixture
 from tests.test_api_v1 import http, token
 from tests.test_api_v1 import served as served_fixture
+from tests.test_pm_plan_operations import OWNER as PACKAGE_OWNER
+from tests.test_pm_work_packages import create as create_package
+from tests.test_pm_work_packages import member as add_member
+from tests.test_pm_work_packages import ready as ready_fixture
+from tests.test_pm_worktree import pm as pm_fixture
+from tests.test_repository_sync import world as world_fixture
 
 daemon, served = daemon_fixture, served_fixture
+ready, pm, world = ready_fixture, pm_fixture, world_fixture
 
 OWNER = Principal("loop-owner", frozenset({"observe", "manage", "start", "operate"}))
 WS = "ws_" + "ab" * 16
@@ -632,3 +647,286 @@ async def test_single_operation_exits_attach_loop_and_lists_do_not(served):
         "action": "pm.thread.create", "target": {}, "params": {"title": "No workspace"},
         "preconditions": {"expected_version": version}, "idempotency_key": "loop-rpc-refused"})
     assert status == 400 and "operation" not in rpc_refused and isinstance(rpc_refused["error"], str)
+
+
+# The §3.2 rows, identified from the refusal the endpoint returned. This is not a
+# principal-by-action outcome matrix: the HTTP call supplies the code.
+_ACTOR_ONLY = frozenset({
+    "Only the original requester controls this proposal",
+    "Only the original requester may control native analysis",
+    "Only the original requester may control this adoption",
+    "relay child controls retain the original actor",
+})
+_SCOPE_ONLY = frozenset({
+    "PM operation controls require manage scope",
+    "Package reads need observe; creation also needs manage",
+    "Native PM analysis requires observe, manage and start scopes",
+    "Plan operations require manage scope",
+    "Plan adoption requires observe, manage and start scopes",
+    "Publication requires observe, manage and integrate authority",
+    "dispatch linked work needs manage",
+    "Starting work requires observe, manage and start scopes",
+    "resuming merge-and-deploy needs both merge and deploy scopes",
+})
+_MEMBERSHIP = "Workspace membership does not permit this action"
+
+
+def _spec_reason(code, message, operation, principal, ops):
+    """§3.2 reason for this refusal, or None when the table says to omit the verb."""
+    if code == "CONTROLLER_MISMATCH":
+        return "not_controller"
+    if code != "FORBIDDEN":
+        return None
+    if message in _ACTOR_ONLY:
+        return "not_controller"
+    if message == _MEMBERSHIP:
+        if _owner_gate(ops, operation) or _member_role(ops, principal, operation) != "reader":
+            return None
+        return "not_writer_member"
+    if message in _SCOPE_ONLY:
+        return "missing_scope"
+    return None
+
+
+def _owner_gate(ops, operation) -> bool:
+    action = operation.get("action")
+    params = operation.get("params") if isinstance(operation.get("params"), dict) else {}
+    target = operation.get("target") if isinstance(operation.get("target"), dict) else {}
+    if action in {"pm.plan.adopt", "pm.conversation.adopt"}:
+        return True
+    if action not in pm_discussions.ACTIONS:
+        return False
+    decide = pm_discussions._decision(action, params)
+    superseded = params.get("supersedes_input_id")
+    if action == "pm.input.record" and isinstance(superseded, str):
+        old = ops.db.execute(
+            "SELECT confirmed_by FROM pm_inputs WHERE thread_id=? AND input_id=?",
+            (target.get("thread_id"), superseded)).fetchone()
+        decide = decide or bool(old and old[0])
+    return bool(decide)
+
+
+def _member_role(ops, principal, operation):
+    target = operation.get("target") if isinstance(operation.get("target"), dict) else {}
+    workspace_id = target.get("workspace_id")
+    if not isinstance(workspace_id, str):
+        return None
+    row = ops.db.execute(
+        "SELECT role FROM pm_workspace_members WHERE workspace_id=? AND actor=?",
+        (workspace_id, principal.actor)).fetchone()
+    if row is not None:
+        return row["role"]
+    if principal.admin:
+        return "owner"
+    return None
+
+
+def _insert_operation(ops, *, actor, action, status, target=None, params=None, refs=None):
+    operation_id = "op_" + uuid.uuid4().hex
+    now = time.time()
+    ops.db.execute(
+        """INSERT INTO operations(operation_id,actor,entry,idem_key,request_hash,action,target,params,preconditions,
+           status,external_refs,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (operation_id, actor, "test", operation_id, "hash", action, json.dumps(target or {}),
+         json.dumps(params or {}), "{}", status, json.dumps(refs) if refs is not None else None, now, now))
+    return operation_id
+
+
+async def _agree(daemon, port, tok, principal, operation_id, verb):
+    """Read ``loop`` as this principal, then call the real HTTP verb as the same principal."""
+    status, body = await http(port, "GET", "/api/v1/operations/" + operation_id, tok=tok)
+    assert status == 200, body
+    operation = body["operation"]
+    loop = operation["loop"]
+    offered = [row for row in loop["next_allowed_actions"]
+               if row.get("kind") == "operation_endpoint" and row.get("endpoint") == verb]
+    blocked = [row for row in loop["blocked_actions"] if row.get("action") == verb]
+    assert not offered or not blocked
+    status, result = await http(port, "POST", f"/api/v1/operations/{operation_id}/{verb}", tok=tok)
+    where = (operation["action"], verb, principal.actor, result)
+    if offered:
+        assert status < 400, where
+        return
+    assert status >= 400, where
+    reason = _spec_reason(result["error"]["code"], result["error"]["message"], operation, principal, daemon.ops)
+    if reason is None:
+        assert blocked == [], where
+    else:
+        assert blocked == [{"action": verb, "reason": reason}], where
+
+
+def _plant_attempt(ops, operation_id, workspace_id, work_item_id):
+    attempt_id = "att_" + uuid.uuid4().hex
+    ops.db.execute(
+        """INSERT INTO work_attempts(attempt_id,workspace_id,work_item_id,origin_kind,origin_id,start_operation_id,
+           predecessor_attempt_id,admission_digest,created_at) VALUES(?,?,?,?,?,?,?,?,?)""",
+        (attempt_id, workspace_id, work_item_id, "operation", operation_id, operation_id, None, "digest", time.time()))
+    return attempt_id
+
+
+def _endpoint_rows(rows):
+    return [row for row in rows if row.get("kind") == "operation_endpoint"]
+
+
+def _steering_blocks(rows):
+    return [row for row in rows if row.get("action") in {"cancel", "resume", "work.start"}]
+
+
+async def test_work_start_steering_copies_the_result_envelope(served):
+    daemon, port = served
+    ops = daemon.ops
+    principal = Principal("loop-start", frozenset({"observe", "manage", "start"}))
+    created, _ = ops.create(principal, action="pm.workspace.create", params={"name": "A useful product"},
+                            idempotency_key=uuid.uuid4().hex)
+    await settle_operations(ops)
+    workspace = ops.get(created["operation_id"])["result"]["workspace"]
+    wid = workspace["workspace_id"]
+    work_id = "wi_" + "ab" * 10
+    controller = controller_authority.binding(ops.db, principal, pm_workspace_id=wid)
+    intent = {"workspace_id": wid, "work_item_id": work_id, "package_plan": {}, "controller": controller}
+    refs = {"admission_binding": {"work_start": intent, "work_start_digest": pm_work_start._digest(intent)}}
+    tok = token(daemon, principal.actor, "observe", "manage", "start")
+    target = {"workspace_id": wid, "work_item_id": work_id}
+
+    async def compare(status_name, *, attempt):
+        operation_id = _insert_operation(
+            ops, actor=principal.actor, action="work.start", status=status_name, target=target, refs=refs)
+        attempt_id = _plant_attempt(ops, operation_id, wid, work_id) if attempt else None
+        status, body = await http(port, "GET", "/api/v1/operations/" + operation_id, tok=tok)
+        assert status == 200, body
+        loop = body["operation"]["loop"]
+        if attempt_id is None:
+            assert loop["next_allowed_actions"] == [] and loop["blocked_actions"] == []
+            return
+        status, envelope = await http(
+            port, "GET", f"/api/v1/pm/workspaces/{wid}/work-attempts/{attempt_id}/result", tok=tok)
+        assert status == 200, envelope
+        assert loop["next_allowed_actions"] == _endpoint_rows(envelope["next_allowed_actions"])
+        assert loop["blocked_actions"] == _steering_blocks(envelope["blocked_actions"])
+        assert loop["next_allowed_actions"] or loop["blocked_actions"]
+
+    for status_name in ("accepted", "needs_attention", "uncertain"):
+        await compare(status_name, attempt=True)
+    await compare("accepted", attempt=False)
+
+
+async def _workspace(ops, principal):
+    created, _ = ops.create(principal, action="pm.workspace.create", params={"name": "A useful product"},
+                            idempotency_key=uuid.uuid4().hex)
+    await settle_operations(ops)
+    return ops.get(created["operation_id"])["result"]["workspace"]
+
+
+async def _add_member(ops, principal, workspace_id, actor, role):
+    current = pm_workspace.get_workspace(ops.db, principal, workspace_id)
+    created, _ = ops.create(
+        principal, action="pm.workspace.member.set", target={"workspace_id": workspace_id},
+        params={"actor": actor, "role": role}, preconditions={"expected_version": current["version"]},
+        idempotency_key=uuid.uuid4().hex)
+    await settle_operations(ops)
+    done = ops.get(created["operation_id"])
+    assert done["status"] == "succeeded", done
+
+
+async def test_discussion_session_and_delivery_cancel_and_resume_match_http(served, mock):
+    daemon, port = served
+    ops = daemon.ops
+    actor = Principal("loop-actor", frozenset({"observe", "manage", "start", "operate", "merge", "deploy"}))
+    writer = Principal("loop-writer", frozenset({"observe", "manage", "operate", "merge", "deploy"}))
+    reader = Principal("loop-reader", frozenset({"observe", "manage", "operate"}))
+    narrow = Principal(actor.actor, frozenset({"observe"}))
+    other = Principal("loop-other", writer.scopes)
+    workspace = await _workspace(ops, actor)
+    wid = workspace["workspace_id"]
+    await _add_member(ops, actor, wid, writer.actor, "contributor")
+    await _add_member(ops, actor, wid, reader.actor, "reader")
+    await _add_member(ops, actor, wid, other.actor, "contributor")
+    version = pm_workspace.get_workspace(ops.db, actor, wid)["version"]
+    thread, _ = ops.create(
+        actor, action="pm.thread.create", target={"workspace_id": wid}, params={"title": "Paid membership"},
+        preconditions={"expected_version": version}, idempotency_key=uuid.uuid4().hex)
+    await settle_operations(ops)
+    thread = ops.get(thread["operation_id"])
+    assert thread["status"] == "succeeded", thread
+    thread_id = thread["result"]["thread_id"]
+    message_version = pm_discussions.get_thread(ops, actor, wid, thread_id)["thread"]["version"]
+    mock.handlers["git:log"] = lambda _payload: [{"hash": "a" * 40}]
+    started, _ = ops.create(actor, action="session.start", target={"host": "h1", "workspace": "ws-1"},
+                            idempotency_key=uuid.uuid4().hex)
+    await settle_operations(ops)
+    started = ops.get(started["operation_id"])
+    assert started["status"] == "succeeded", started
+    session_id = started["result"]["session_id"]
+    tokens = {
+        actor: token(daemon, actor.actor, "observe", "manage", "start", "operate", "merge", "deploy"),
+        writer: token(daemon, writer.actor, *sorted(writer.scopes)),
+        reader: token(daemon, reader.actor, *sorted(reader.scopes)),
+        narrow: token(daemon, narrow.actor, "observe"),
+        other: token(daemon, other.actor, *sorted(other.scopes)),
+    }
+
+    def message():
+        created, _ = ops.create(
+            actor, action="pm.message.append", target={"workspace_id": wid, "thread_id": thread_id},
+            params={"content": "A paid tier may be useful"}, preconditions={"expected_version": message_version},
+            idempotency_key=uuid.uuid4().hex)
+        return created["operation_id"]
+
+    def send():
+        created, _ = ops.create(
+            actor, action="session.send", target={"host": "h1", "session_id": session_id},
+            params={"text": "Discuss the current goal"}, idempotency_key=uuid.uuid4().hex)
+        return created["operation_id"]
+
+    def delivery(status):
+        return _insert_operation(
+            ops, actor=actor.actor, action="delivery.merge_and_deploy", status=status,
+            target={"repository": "o/r", "recipe": "prod"})
+
+    def attention(make):
+        operation_id = make()
+        ops.db.execute("UPDATE operations SET status='needs_attention' WHERE operation_id=?", (operation_id,))
+        return operation_id
+
+    cases = (
+        ("pm.message.append", message, lambda: attention(message)),
+        ("session.send", send, lambda: attention(send)),
+        ("delivery.merge_and_deploy", lambda: delivery("accepted"), lambda: delivery("needs_attention")),
+    )
+    for _action, cancel_make, resume_make in cases:
+        for principal in (actor, writer, reader, narrow, other):
+            await _agree(daemon, port, tokens[principal], principal, cancel_make(), "cancel")
+            await _agree(daemon, port, tokens[principal], principal, resume_make(), "resume")
+
+
+async def test_package_cancel_and_resume_match_http(ready):
+    w = ready
+    daemon = w["d"]
+    ops = daemon.ops
+    source = await create_package(w)
+    await add_member(w, "pkg-writer", "contributor")
+    await add_member(w, "pkg-reader", "reader")
+    await add_member(w, "pkg-other", "contributor")
+    writer = Principal("pkg-writer", frozenset({"observe", "manage"}))
+    reader = Principal("pkg-reader", frozenset({"observe", "manage"}))
+    narrow = Principal(PACKAGE_OWNER.actor, frozenset({"observe"}))
+    other = Principal("pkg-other", frozenset({"observe", "manage"}))
+    tokens = {
+        PACKAGE_OWNER: token(daemon, PACKAGE_OWNER.actor, *sorted(PACKAGE_OWNER.scopes)),
+        writer: token(daemon, writer.actor, "observe", "manage"),
+        reader: token(daemon, reader.actor, "observe", "manage"),
+        narrow: token(daemon, narrow.actor, "observe"),
+        other: token(daemon, other.actor, "observe", "manage"),
+    }
+    server = await asyncio.start_server(daemon._handle, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    try:
+        for principal in (PACKAGE_OWNER, writer, reader, narrow, other):
+            for status, verb in (("accepted", "cancel"), ("needs_attention", "resume")):
+                operation_id = _insert_operation(
+                    ops, actor=source["actor"], action=source["action"], status=status, target=source["target"],
+                    params=source["params"], refs=source["external_refs"])
+                await _agree(daemon, port, tokens[principal], principal, operation_id, verb)
+    finally:
+        server.close()
+        await server.wait_closed()
