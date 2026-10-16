@@ -2,8 +2,10 @@ import {test, expect} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {workStartFixture, workspaceId, workId, route} from './work-start-fixture.ts';
 import * as path from 'path';
+import * as fs from 'fs';
 
-const SHOTS_DIR = path.resolve(process.env.HOME || '/home/ted-h', 'agent-work/tmp/work-start-ui/shots/r2');
+const SHOTS_DIR = path.resolve(process.env.HOME || '/home/ted-h', 'agent-work/tmp/work-start-ui/shots/r3');
+fs.mkdirSync(SHOTS_DIR, {recursive: true});
 
 async function ensureScrolled(locator: any) {
   await locator.evaluate((el: HTMLElement) => {
@@ -15,7 +17,7 @@ async function ensureScrolled(locator: any) {
   });
 }
 
-test.describe('Work Start Screenshots (Round 2)', () => {
+test.describe('Work Start Screenshots (Round 3)', () => {
   test('en 1440 - in-progress', async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
     const f = workStartFixture();
@@ -143,10 +145,10 @@ test.describe('Work Start Screenshots (Round 2)', () => {
     await startSection.screenshot({path: path.join(SHOTS_DIR, 'en-1440-admission-refusal.png')});
   });
 
-  test('en 1440 - bind-needed contributor', async ({page}) => {
+  test('en 1440 - bind-needed', async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
     const f = workStartFixture();
-    f.state.role = 'contributor';
+    // Default role is owner, so checkbox rows are shown and active
 
     await mountConversation(page, false, f.dispatch);
     await page.goto(route);
@@ -162,10 +164,9 @@ test.describe('Work Start Screenshots (Round 2)', () => {
     const startSection = inspector.locator('[data-work-section="start"]');
     await expect(startSection).toBeVisible();
 
-    // Contributor explanation visible
-    const disabledNotice = startSection.locator('[data-work-start-disabled]');
-    await expect(disabledNotice).toBeVisible();
-    await expect(disabledNotice).toContainText('Workspace owner required to bind this Work to the current plan.');
+    // Checkbox rows visible
+    const reqLabels = startSection.locator('.pm-work-start-reqs label.pm-work-start-req');
+    await expect(reqLabels).toHaveCount(2);
 
     await ensureScrolled(startSection);
 
@@ -192,6 +193,16 @@ test.describe('Work Start Screenshots (Round 2)', () => {
     const startSection = inspector.locator('[data-work-section="start"]');
     await expect(startSection).toBeVisible();
     await expect(startSection.locator('h3')).toHaveText('開始工作');
+
+    // Assert Start button is disabled before readiness check
+    const submitBtn = startSection.locator('[data-pm-action="work.start"] button[type="submit"]');
+    await expect(submitBtn).toBeDisabled();
+
+    // Assert PR delivery option is visible / present with text "PR"
+    const deliverySelect = startSection.locator('select[aria-label="交付成果"]');
+    await expect(deliverySelect).toBeVisible();
+    const prOption = deliverySelect.locator('option[value="pull_request"]');
+    await expect(prOption).toHaveText('PR');
 
     await ensureScrolled(startSection);
 
@@ -228,6 +239,9 @@ test.describe('Work Start Screenshots (Round 2)', () => {
 
     const blockedCheck = checksList.locator('[data-readiness-check="acceptance:membership.login"]');
     await expect(blockedCheck).toBeVisible();
+    // Requirement text from current plan is visible in the check row header
+    await expect(blockedCheck.locator('strong')).toContainText('Members can sign in');
+    await expect(blockedCheck).toContainText('接受條件的預定驗證 · Members can sign in');
     // Localized help is visible
     await expect(blockedCheck).toContainText('每個原始接受條件都需有預定驗證方式；這些方法尚未執行。');
     // English server detail is NOT shown
