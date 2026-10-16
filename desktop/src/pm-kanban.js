@@ -9,7 +9,7 @@ import {firstLabel, joinLabel, labelSegment} from './label-text.js';
 import {workInspector, workStatusLabel, workStatusPill, blockedWork, blockerText, workAgents, prGroups, readWorkSources, deliveryCoverage, elapsed, readEarlierPlans} from './pm-work-inspector.js';
 
 // Central management columns stay separate from execution, quality and delivery.
-export function workspaceKanban({t, api, alive, namespace = '', workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false}) {
+export function workspaceKanban({t, api, alive, namespace = '', workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false, settled = () => Promise.resolve()}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, preference = viewState(namespace, workspaceId, 'board');
   const integer = value => Number.isSafeInteger(value) && value >= 0;
   if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error('Invalid Kanban page size');
@@ -375,15 +375,11 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
           restoreY = window.scrollY;
         }
       });
-      if (read?.then) {
-        void read.then(() => {
-          requestAnimationFrame(() => {
-            if (generation === scrollGeneration && window.scrollY === restoreY) {
-              window.scrollTo(0, preference.scroll || 0);
-            }
-          });
-        });
-      }
+      void Promise.all([read, settled?.() || Promise.resolve()]).then(() => {
+        if (generation === scrollGeneration && window.scrollY === restoreY) {
+          window.scrollTo(0, preference.scroll || 0);
+        }
+      });
       return read;
     }
   }

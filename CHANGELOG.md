@@ -22,9 +22,10 @@
   removing the fixed one-second pause between completed steps. Child failures
   still stop the adoption; recovery keeps the original requests and receipts.
 
-- Project Board and Requirements remember the scroll position when switching
-  views inside a project or leaving the project route while a read is in flight,
-  restoring the position accurately on return.
+- Board and Requirements now return to where you left them when you switch to
+  another project view or leave the project while they are still loading. On
+  narrow windows they no longer land about 50 px further down when the page
+  header finishes loading after the view.
 
 - Tools → Workbench preview opens a reversible layout with Today, Projects,
   Work and Resources, a project management selector and an optional Results

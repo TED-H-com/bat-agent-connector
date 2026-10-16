@@ -16,7 +16,7 @@ export function requirementReviews(plan, requirement, reviews) {
       && result.criterion.requirement_id === requirement.id && result.criterion.input_id === id && result.status === 'accepted')));
 }
 
-export function workspaceTraceability({t, api, alive, namespace, workspaceId, caps, errorBox}) {
+export function workspaceTraceability({t, api, alive, namespace, workspaceId, caps, errorBox, settled = () => Promise.resolve()}) {
   const preference = viewState(namespace, workspaceId, 'requirements'), endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   let serial = 0, detailSerial = 0, active = false, visible = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [], sources = new Map(), earlierPlans = new Map();
   let pendingFocus = null, pendingNavigation = null, currentRequirement = null, currentMilestone = null, scrollGeneration = 0;
@@ -332,15 +332,11 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
           restoreY = window.scrollY;
         }
       });
-      if (read?.then) {
-        void read.then(() => {
-          requestAnimationFrame(() => {
-            if (generation === scrollGeneration && window.scrollY === restoreY) {
-              window.scrollTo(0, preference.scroll || 0);
-            }
-          });
-        });
-      }
+      void Promise.all([read, settled?.() || Promise.resolve()]).then(() => {
+        if (generation === scrollGeneration && window.scrollY === restoreY) {
+          window.scrollTo(0, preference.scroll || 0);
+        }
+      });
       return read;
     }
   }

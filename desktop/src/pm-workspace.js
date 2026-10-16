@@ -277,7 +277,12 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   if (!pmAvailable(caps())) {main.append(h('p', {}, t('pm_unavailable'))); return;}
   // Navigation preference must not wait for unrelated secondary reads to settle.
   if (workspaceId && threadId) rememberProjectView(namespace, workspaceId, 'discussions');
-  let disposed = false, workspace = null, threadData = null, loaded = false, initialReadComplete = false, refreshing = false, sequence = 0, threadPages = 1, lifecycle = null;
+  let disposed = false, workspace = null, threadData = null, loaded = false, initialReadComplete = false, refreshing = true, sequence = 0, threadPages = 1, lifecycle = null;
+  let settleResolvers = [];
+  function settled() {
+    if (!refreshing) return Promise.resolve();
+    return new Promise(resolve => settleResolvers.push(resolve));
+  }
   const launch = parseDiscussRefs(location.hash.split('?')[1] || '');
   const uiState = viewState(namespace, workspaceId, 'discussions');
   const handoffKey = `batc.pm.${namespace}.discussion-send.${workspaceId}`;
@@ -555,7 +560,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       && caps()?.scopes?.some(scope => scope === 'observe' || scope === 'admin')}) : null;
   if (schedule) body.insertBefore(schedule.element, content);
   const kanban = workspaceId && !threadId && caps()?.features?.pm_workspaces?.kanban
-    ? workspaceKanban({h,t,api,alive,namespace,workspaceId,errorBox,caps,permitted,form,embedded:true}) : null;
+    ? workspaceKanban({h,t,api,alive,namespace,workspaceId,errorBox,caps,permitted,form,embedded:true,settled}) : null;
   if(kanban)body.insertBefore(kanban.element,content);
   const sprints = workspaceId && !threadId && caps()?.features?.pm_workspaces?.sprints
     ? workspaceSprints({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,qualitySelection}) : null;
@@ -652,7 +657,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       onSelectionChange:(id,ref)=>{if(ref)qualitySelections.set(id,ref);else qualitySelections.delete(id);}}) : null;
   if(qualityReviews)body.insertBefore(qualityReviews.element,sprints?.box||content);
   const traceability = charter && brief && kanban
-    ? workspaceTraceability({h, t, api, alive, namespace, workspaceId, caps, errorBox}) : null;
+    ? workspaceTraceability({h, t, api, alive, namespace, workspaceId, caps, errorBox, settled}) : null;
   if (traceability) body.insertBefore(traceability.element, content);
   const resources = workspaceId && !threadId && caps()?.features?.pm_resources
     ? workspaceResources({h, t, api, alive, namespace, workspaceId, errorBox, bucketsSupported: caps()?.features?.pm_resources?.buckets?.granularity === 'day'}) : null;
@@ -1601,7 +1606,12 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         for (const section of sourceSections()) section.hidden = true;
         updateForms(); status.replaceChildren(errorBox(error, {summary: t('pm_stale'), within: status}));
       }
-    } finally {if (ticket === sequence) {refreshing = false; refresh.disabled = false;}}
+    } finally {
+      if (ticket === sequence) {refreshing = false; refresh.disabled = false;}
+      const resolvers = settleResolvers;
+      settleResolvers = [];
+      for (const resolve of resolvers) resolve();
+    }
   }
   await load();
   // The router admits POSTs only after this complete initial snapshot returns.
@@ -1737,6 +1747,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     proposalReview?.dispose();nativeAnalysis?.dispose();ahp?.dispose();
     for (const control of viewToolMenus.values()) control.dispose();
     for (const value of forms) value.dispose();
+    refreshing = false;
+    const resolvers = settleResolvers;
+    settleResolvers = [];
+    for (const resolve of resolvers) resolve();
   };
   dispose.navigate = (nextWorkspace, nextThread, nextView) => {
     if (disposed || nextWorkspace !== workspaceId || (nextThread || null) !== (threadId || null) || !workbench) return false;

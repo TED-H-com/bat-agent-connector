@@ -3,7 +3,7 @@ import {workspaceFixture} from './workspace-fixture.ts';
 import {workbenchFixture, workspaceId as fixtureWorkspaceId, revisionId} from './pm-workbench-fixture.ts';
 import {mountAttention} from './attention-fixture.ts';
 
-function createScrollFixture(locale = 'en') {
+function createScrollFixture(locale = 'en', {withLifecycle = false} = {}) {
   const ws = workspaceFixture(locale);
   const pm = workbenchFixture();
 
@@ -21,6 +21,7 @@ function createScrollFixture(locale = 'en') {
       work_evidence: true,
       plan_drafting: true,
       plan_adoption: true,
+      ...(withLifecycle ? {lifecycle: {version: 1, gated_actions: [], record_actions: []}} : {}),
     };
     c.actions.push(
       {action: 'pm.workspace.create', allowed: true},
@@ -77,6 +78,7 @@ function createScrollFixture(locale = 'en') {
   let releaseHeld: (() => void) | null = null;
   let readStarted = false;
   let holdPathPrefix: string | null = null;
+  let threadsCallCount = 0;
 
   const holdNext = (pathPrefix: string) => {
     holdPathPrefix = pathPrefix;
@@ -111,6 +113,10 @@ function createScrollFixture(locale = 'en') {
       await heldPromise;
     }
 
+    if (path.endsWith('/threads') && path.includes('/pm/workspaces/')) {
+      threadsCallCount++;
+    }
+
     if (path === '/capabilities') return {status: 200, data: combinedCaps()};
     if (path === '/bootstrap') {
       return {
@@ -118,6 +124,30 @@ function createScrollFixture(locale = 'en') {
         data: {
           capabilities: combinedCaps(),
           sync: {version: 1, server_id: 'scroll-fixture', principal_id: ws.fixture.data.principal, checkpoint: {cursor: 0, token: 'w-0'}}
+        }
+      };
+    }
+
+    if (path === `/pm/workspaces/${fixtureWorkspaceId}/lifecycle`) {
+      return {
+        status: 200,
+        data: {
+          workspace_id: fixtureWorkspaceId,
+          lifecycle: {
+            stage: 'planning',
+            status: 'active',
+            revision: 1,
+            execution_epoch: 1,
+            transition_id: null,
+            coverage: 'recorded'
+          },
+          transition: null,
+          transition_visibility_filtered: false,
+          blocked_actions: [],
+          record_actions: [],
+          available_stages: ['idea', 'planning', 'development'],
+          maintenance: {available: false, reason: 'release_baseline_and_policy_required'},
+          inflight_summary: {visible_unresolved: 0, visible_retained: 0, visibility_filtered: false}
         }
       };
     }
@@ -156,6 +186,7 @@ function createScrollFixture(locale = 'en') {
     holdNext,
     release,
     isReadStarted: () => readStarted,
+    threadsCount: () => threadsCallCount,
   };
 }
 
@@ -210,6 +241,31 @@ const MATRIX_CASES: Array<{
   {view: 'requirements', leaveBy: 'projects', lang: 'en', width: 390},
   {view: 'requirements', leaveBy: 'projects', lang: 'zh-TW', width: 1440},
   {view: 'requirements', leaveBy: 'projects', lang: 'zh-TW', width: 390},
+];
+
+const WORKSPACE_LAST_CASES: Array<{
+  view: 'board' | 'requirements';
+  lang: 'en' | 'zh-TW';
+  width: 1440 | 390;
+}> = [
+  {view: 'board', lang: 'en', width: 1440},
+  {view: 'board', lang: 'en', width: 390},
+  {view: 'board', lang: 'zh-TW', width: 1440},
+  {view: 'board', lang: 'zh-TW', width: 390},
+  {view: 'requirements', lang: 'en', width: 1440},
+  {view: 'requirements', lang: 'en', width: 390},
+  {view: 'requirements', lang: 'zh-TW', width: 1440},
+  {view: 'requirements', lang: 'zh-TW', width: 390},
+];
+
+const PRODUCTION_HEADER_CASES: Array<{
+  view: 'board' | 'requirements';
+  lang: 'en' | 'zh-TW';
+}> = [
+  {view: 'board', lang: 'en'},
+  {view: 'board', lang: 'zh-TW'},
+  {view: 'requirements', lang: 'en'},
+  {view: 'requirements', lang: 'zh-TW'},
 ];
 
 test.describe('PM Scroll Leave & Restore', () => {
@@ -269,6 +325,8 @@ test.describe('PM Scroll Leave & Restore', () => {
       // 6. Press Back
       await page.goBack();
       await expect(page.locator('#main h1').first()).toHaveText(expectedTitle);
+      await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
+      await expect(page.locator('#main [data-pm-source-pending]:visible')).toHaveCount(0);
 
       // 7. Expect position within 8 px of 200
       await expect.poll(async () => Math.abs(await page.evaluate(() => window.scrollY) - 200)).toBeLessThanOrEqual(8);
@@ -298,6 +356,8 @@ test.describe('PM Scroll Leave & Restore', () => {
 
     await page.goBack();
     await expect(page.locator('#main h1').first()).toHaveText('Board');
+    await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
+    await expect(page.locator('#main [data-pm-source-pending]:visible')).toHaveCount(0);
 
     await expect.poll(async () => Math.abs(await page.evaluate(() => window.scrollY) - 200)).toBeLessThanOrEqual(8);
   });
@@ -325,7 +385,161 @@ test.describe('PM Scroll Leave & Restore', () => {
 
     await page.goBack();
     await expect(page.locator('#main h1').first()).toHaveText('需求');
+    await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
+    await expect(page.locator('#main [data-pm-source-pending]:visible')).toHaveCount(0);
 
     await expect.poll(async () => Math.abs(await page.evaluate(() => window.scrollY) - 200)).toBeLessThanOrEqual(8);
   });
+
+  // Workspace finishes last: threads held on Back until view items render, then released
+  for (const tc of WORKSPACE_LAST_CASES) {
+    test(`workspace finishes last: ${tc.view} scroll restore after leave by Projects entry (${tc.lang} ${tc.width})`, async ({page}) => {
+      const height = tc.width === 1440 ? 900 : 844;
+      await page.addInitScript(l => Object.defineProperty(navigator, 'language', {value: l}), tc.lang);
+      await page.setViewportSize({width: tc.width, height});
+
+      const f = createScrollFixture(tc.lang);
+      await mountAttention(page, false, {...f.ws.fixture, caps: f.combinedCaps}, f.dispatch);
+
+      await page.goto(`/dashboard/?workbench=1#/pm/${fixtureWorkspaceId}/${tc.view}`);
+      const expectedTitle = tc.view === 'board'
+        ? (tc.lang === 'en' ? 'Board' : '工作看板')
+        : (tc.lang === 'en' ? 'Requirements' : '需求');
+      await expect(page.locator('#main h1').first()).toHaveText(expectedTitle);
+      const itemSelector = tc.view === 'board' ? '[data-pm-kanban] .pm-kanban-card' : '[data-rtm-requirement]';
+      await expect(page.locator(itemSelector).first()).toBeVisible();
+
+      const holdPath = tc.view === 'board'
+        ? `/pm/workspaces/${fixtureWorkspaceId}/kanban`
+        : `/pm/workspaces/${fixtureWorkspaceId}/plans/accepted`;
+      f.holdNext(holdPath);
+      await page.locator('button[data-pm-refresh]').click();
+      await expect.poll(() => f.isReadStarted()).toBe(true);
+
+      await page.evaluate(() => window.scrollTo(0, 200));
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
+
+      await leaveByProjectsEntry(page, tc.width);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+
+      f.release();
+
+      // On Back, hold /pm/workspaces/{id}/threads until the view's items render, then release.
+      f.holdNext(`/pm/workspaces/${fixtureWorkspaceId}/threads`);
+      await page.goBack();
+      await expect.poll(() => f.isReadStarted()).toBe(true);
+      await expect.poll(() => page.locator(itemSelector).count()).toBeGreaterThan(0);
+      f.release();
+
+      await expect(page.locator('#main h1').first()).toHaveText(expectedTitle);
+      await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
+      await expect(page.locator('#main [data-pm-source-pending]:visible')).toHaveCount(0);
+
+      await expect.poll(async () => Math.abs(await page.evaluate(() => window.scrollY) - 200)).toBeLessThanOrEqual(8);
+    });
+  }
+
+  // View finishes last: view's own read held on Back until workspace reads finish, then released
+  for (const tc of WORKSPACE_LAST_CASES) {
+    test(`view finishes last: ${tc.view} scroll restore after leave by Projects entry (${tc.lang} ${tc.width})`, async ({page}) => {
+      const height = tc.width === 1440 ? 900 : 844;
+      await page.addInitScript(l => Object.defineProperty(navigator, 'language', {value: l}), tc.lang);
+      await page.setViewportSize({width: tc.width, height});
+
+      const f = createScrollFixture(tc.lang);
+      await mountAttention(page, false, {...f.ws.fixture, caps: f.combinedCaps}, f.dispatch);
+
+      await page.goto(`/dashboard/?workbench=1#/pm/${fixtureWorkspaceId}/${tc.view}`);
+      const expectedTitle = tc.view === 'board'
+        ? (tc.lang === 'en' ? 'Board' : '工作看板')
+        : (tc.lang === 'en' ? 'Requirements' : '需求');
+      await expect(page.locator('#main h1').first()).toHaveText(expectedTitle);
+      const itemSelector = tc.view === 'board' ? '[data-pm-kanban] .pm-kanban-card' : '[data-rtm-requirement]';
+      await expect(page.locator(itemSelector).first()).toBeVisible();
+
+      const holdPath = tc.view === 'board'
+        ? `/pm/workspaces/${fixtureWorkspaceId}/kanban`
+        : `/pm/workspaces/${fixtureWorkspaceId}/plans/accepted`;
+      f.holdNext(holdPath);
+      await page.locator('button[data-pm-refresh]').click();
+      await expect.poll(() => f.isReadStarted()).toBe(true);
+
+      await page.evaluate(() => window.scrollTo(0, 200));
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
+
+      await leaveByProjectsEntry(page, tc.width);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+
+      f.release();
+
+      // On Back, hold the view's own read until workspace reads have completed, then release.
+      const threadsBefore = f.threadsCount();
+      f.holdNext(holdPath);
+      await page.goBack();
+      await expect.poll(() => f.isReadStarted()).toBe(true);
+      await expect.poll(() => f.threadsCount()).toBeGreaterThan(threadsBefore);
+      f.release();
+
+      await expect(page.locator('#main h1').first()).toHaveText(expectedTitle);
+      await expect.poll(() => page.locator(itemSelector).count()).toBeGreaterThan(0);
+      await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
+      await expect(page.locator('#main [data-pm-source-pending]:visible')).toHaveCount(0);
+
+      await expect.poll(async () => Math.abs(await page.evaluate(() => window.scrollY) - 200)).toBeLessThanOrEqual(8);
+    });
+  }
+
+  // Production-like header: lifecycle stage enabled, phase pill shows
+  for (const tc of PRODUCTION_HEADER_CASES) {
+    test(`production-like header: ${tc.view} scroll restore with lifecycle phase pill (${tc.lang} 390)`, async ({page}) => {
+      await page.addInitScript(l => Object.defineProperty(navigator, 'language', {value: l}), tc.lang);
+      await page.setViewportSize({width: 390, height: 844});
+
+      const f = createScrollFixture(tc.lang, {withLifecycle: true});
+      await mountAttention(page, false, {...f.ws.fixture, caps: f.combinedCaps}, f.dispatch);
+
+      await page.goto(`/dashboard/?workbench=1#/pm/${fixtureWorkspaceId}/${tc.view}`);
+      const expectedTitle = tc.view === 'board'
+        ? (tc.lang === 'en' ? 'Board' : '工作看板')
+        : (tc.lang === 'en' ? 'Requirements' : '需求');
+      await expect(page.locator('#main h1').first()).toHaveText(expectedTitle);
+      const itemSelector = tc.view === 'board' ? '[data-pm-kanban] .pm-kanban-card' : '[data-rtm-requirement]';
+      await expect(page.locator(itemSelector).first()).toBeVisible();
+
+      const expectedPhase = tc.lang === 'en' ? 'Planning' : '規劃';
+      await expect(page.locator('.ui-page-header .ui-pill').first()).toHaveText(expectedPhase);
+
+      const holdPath = tc.view === 'board'
+        ? `/pm/workspaces/${fixtureWorkspaceId}/kanban`
+        : `/pm/workspaces/${fixtureWorkspaceId}/plans/accepted`;
+      f.holdNext(holdPath);
+      await page.locator('button[data-pm-refresh]').click();
+      await expect.poll(() => f.isReadStarted()).toBe(true);
+
+      await page.evaluate(() => window.scrollTo(0, 200));
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
+
+      await leaveByProjectsEntry(page, 390);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+
+      f.release();
+
+      // On Back, hold the lifecycle read so it finishes last.
+      f.holdNext(`/pm/workspaces/${fixtureWorkspaceId}/lifecycle`);
+      await page.goBack();
+      await expect.poll(() => f.isReadStarted()).toBe(true);
+      await expect.poll(() => page.locator(itemSelector).count()).toBeGreaterThan(0);
+      f.release();
+
+      await expect(page.locator('#main h1').first()).toHaveText(expectedTitle);
+      await expect(page.locator('.ui-page-header .ui-pill').first()).toHaveText(expectedPhase);
+      await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
+      await expect(page.locator('#main [data-pm-source-pending]:visible')).toHaveCount(0);
+
+      await expect.poll(async () => Math.abs(await page.evaluate(() => window.scrollY) - 200)).toBeLessThanOrEqual(8);
+    });
+  }
 });
