@@ -1352,9 +1352,9 @@ async def _assert_pre_child_failed(w, mock, parent_id: str, package_operation: s
     return done
 
 
-async def _admit_next_start(w, parent_id: str) -> dict:
+async def _admit_next_start(w, parent_id: str, *, requirement_ids: list[str] | None = None) -> dict:
     ops = w["d"].ops
-    env = await _start_envelope(w, key=uuid.uuid4().hex)
+    env = await _start_envelope(w, key=uuid.uuid4().hex, requirement_ids=requirement_ids)
     try:
         nxt, fresh = ops.create(STARTER_OWNER, **env)
     except OperationError as exc:
@@ -1727,7 +1727,11 @@ async def test_scope_revision_change_ends_unresumable_start_failed(start_ready, 
     await _assert_pre_child_failed(
         w, mock, parent_id, package_operation, "PM_PACKAGE_SCOPE_CHANGED", "Adopted scope changed",
     )
-    await _admit_next_start(w, parent_id)
+    # The existing association still names the previous plan revision, so the new
+    # start states the current plan's requirement ids and binds them.
+    await _admit_next_start(
+        w, parent_id, requirement_ids=[row["id"] for row in w["requirements"]],
+    )
 
 
 async def test_document_only_adoption_lets_the_held_start_continue(start_ready, mock):
