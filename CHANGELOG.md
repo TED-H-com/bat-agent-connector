@@ -4,6 +4,8 @@
 
 - Document the closed-loop screens for adopting and starting selected work, queuing the next instruction on a busy work, and choosing a saved profile in the Start work panel. The screens are specified only; they are not in the Dashboard yet. English and zh-TW copy is in the spec.
 
+- Correct that closed-loop screen spec. A refused adopt-and-start can start a new request once the server marks the refusal, a chosen profile pins the Start work panel, and each selected work's start fields come from the preview. The screens are still specified only.
+
 - Capture a remote file: the button you pressed keeps keyboard focus and
   ignores a second press until that preview or save finishes. A button that
   cannot be used stays unavailable. When Save closes, or Capture another file
