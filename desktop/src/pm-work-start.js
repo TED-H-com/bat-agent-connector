@@ -23,9 +23,11 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
   let activeWorkId = null;
   let prepared = null;
   let serial = 0;
-  let reading = false;
+  let loading = false;
   let attempts = [];
   let latestAttempt = null;
+  let lastAttemptSignature = null;
+  let detailsWasOpen = false;
   let visibilityFiltered = false;
   let partialAttempts = false;
   let chosenCandidate = null;
@@ -59,10 +61,19 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     return Boolean(cap?.version === 1 && cap?.available === true && cap?.action === 'work.start');
   };
 
-  const isBindNeeded = card => {
+  const isBindNeeded = (card = activeCard) => {
     if (!card) return false;
     const currentPlan = getPlan();
-    return Boolean(card.binding?.plan_revision_id !== currentPlan?.revision_id);
+    if (!currentPlan) return true;
+    const binding = card.binding;
+    if (!binding) return true;
+    if (binding.plan_revision_id !== currentPlan.revision_id) return true;
+    const boundIds = binding.requirement_ids;
+    if (!Array.isArray(boundIds) || boundIds.length === 0) return true;
+    const planReqs = currentPlan.document?.requirements;
+    if (!Array.isArray(planReqs)) return true;
+    const planReqIds = new Set(planReqs.map(r => r.id));
+    return !boundIds.every(id => planReqIds.has(id));
   };
 
   const canStartWorkspaces = () => {
@@ -88,6 +99,19 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     }
     return writer(card);
   };
+
+  function getSavedIntentReqs(workId) {
+    try {
+      const storageKey = `batc.pm.${namespace}.work-start.work.start.${JSON.stringify({workspace_id: workspaceId, work_item_id: workId})}`;
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (parsed?.intent?.request?.params?.requirement_ids) {
+        return parsed.intent.request.params.requirement_ids;
+      }
+    } catch {}
+    return null;
+  }
 
   async function fetchAttempts(workId, ticket) {
     let after = '';
@@ -125,6 +149,19 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
   }
 
   function renderLatestAttempt(attempt) {
+    const sig = JSON.stringify({
+      attempt,
+      visibilityFiltered,
+      partialAttempts,
+    });
+    if (sig === lastAttemptSignature) return;
+
+    const existingDetails = attemptsView.querySelector('details');
+    if (existingDetails) {
+      detailsWasOpen = existingDetails.open;
+    }
+    lastAttemptSignature = sig;
+
     attemptsView.replaceChildren();
     if (!attempt) return;
 
@@ -221,7 +258,11 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       attempt.execution_operation_id ? h('p', {class: 'mono'}, `${t('wst_execution_op_id')}: ${attempt.execution_operation_id}`) : null,
       attempt.session ? h('p', {class: 'mono'}, `${t('wst_session_id')}: ${attempt.session.host} · ${attempt.session.session_id}`) : null,
     );
-    row.append(disclosure({label: t('wst_details'), body: detailsContent}));
+    const detailsDisclosure = disclosure({label: t('wst_details'), body: detailsContent});
+    if (detailsWasOpen) {
+      detailsDisclosure.open = true;
+    }
+    row.append(detailsDisclosure);
 
     if (visibilityFiltered) {
       row.append(h('p', {class: 'muted'}, t('wst_visibility_filtered')));
@@ -240,7 +281,10 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       return editors.get(workId);
     }
 
-    const bindNeeded = isBindNeeded(card);
+    let checking = false;
+    let renderedPlanRevision = null;
+    let checkboxes = [];
+
     const bindBox = h('div', {class: 'pm-work-start-bind'});
     const candidatesBox = h('div', {class: 'pm-work-start-candidates'});
     const factsBox = h('div', {class: 'pm-work-start-facts-box'});
@@ -294,7 +338,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     reviewInput.value = '';
 
     const currentFingerprint = () => {
-      const reqs = bindNeeded ? JSON.parse(requirementsInput.value || '[]') : null;
+      const reqs = isBindNeeded(activeCard) ? JSON.parse(requirementsInput.value || '[]') : null;
       const targetChoice = chosenCandidate ? `${chosenCandidate.repository}:${chosenCandidate.host}:${chosenCandidate.workspace_id}` : null;
       return JSON.stringify({
         instruction: instruction.value.trim(),
@@ -320,19 +364,68 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     delivery.addEventListener('change', onFingerprintChanged);
     model.addEventListener('input', onFingerprintChanged);
 
-    // Build bindBox checkboxes if bindNeeded
-    const renderBindBox = () => {
-      bindBox.replaceChildren();
-      if (!bindNeeded) return;
+    function buildOrUpdateBindBox(initial = false) {
+      const needed = isBindNeeded(activeCard);
+      bindBox.hidden = !needed;
+      if (!needed) {
+        bindBox.replaceChildren();
+        renderedPlanRevision = null;
+        return;
+      }
       const curPlan = getPlan();
       if (!curPlan) {
         bindBox.replaceChildren(h('p', {class: 'muted'}, t('wst_no_adopted_plan')));
+        renderedPlanRevision = null;
         return;
       }
+      const curRevision = curPlan.revision_id;
+      if (!initial && curRevision === renderedPlanRevision) {
+        if (editorInstance?.locked()) {
+          const intentReqs = getSavedIntentReqs(card.work_item_id);
+          if (intentReqs) {
+            const set = new Set(intentReqs);
+            for (const cb of checkboxes) {
+              cb.checked = set.has(cb.value);
+              cb.disabled = true;
+            }
+          }
+        }
+        return;
+      }
+
       const planReqs = curPlan.document?.requirements || [];
-      const boundIds = new Set(card.binding?.requirement_ids || []);
-      const checkboxes = [];
-      const reqWarning = h('p', {class: 'error', hidden: true}, t('wst_requirements_required'));
+      const planReqIds = new Set(planReqs.map(r => r.id));
+      let checkedIds = new Set();
+
+      if (initial) {
+        let restored = null;
+        try {
+          const parsed = JSON.parse(requirementsInput.value || '');
+          if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(id => planReqIds.has(id))) {
+            restored = parsed;
+          }
+        } catch {}
+        if (restored) {
+          checkedIds = new Set(restored);
+        } else {
+          checkedIds = new Set((card.binding?.requirement_ids || []).filter(id => planReqIds.has(id)));
+          requirementsInput.value = JSON.stringify([...checkedIds]);
+          requirementsInput.dataset.pmDefault = JSON.stringify([...checkedIds]);
+        }
+      } else {
+        const prevChecked = checkboxes.filter(cb => cb.checked).map(cb => cb.value);
+        checkedIds = new Set(prevChecked.filter(id => planReqIds.has(id)));
+        requirementsInput.value = JSON.stringify([...checkedIds]);
+        if (prepared) {
+          prepared = null;
+          staleNotice.hidden = false;
+          editorInstance?.update();
+        }
+      }
+
+      renderedPlanRevision = curRevision;
+      checkboxes = [];
+      const reqWarning = h('p', {class: 'error', hidden: checkedIds.size > 0}, t('wst_requirements_required'));
 
       const updateSelectedReqs = () => {
         const selected = checkboxes.filter(cb => cb.checked).map(cb => cb.value);
@@ -341,13 +434,16 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         onFingerprintChanged();
       };
 
+      const isLocked = editorInstance?.locked();
+      const intentReqs = isLocked ? getSavedIntentReqs(card.work_item_id) : null;
+      const lockedSet = intentReqs ? new Set(intentReqs) : null;
+
       const list = h('div', {class: 'pm-work-start-reqs'},
         h('h4', {}, t('wst_requirements_to_bind')),
         ...planReqs.map(req => {
           const cb = h('input', {type: 'checkbox', value: req.id});
-          if (boundIds.has(req.id)) {
-            cb.checked = true;
-          }
+          cb.checked = lockedSet ? lockedSet.has(req.id) : checkedIds.has(req.id);
+          if (isLocked) cb.disabled = true;
           cb.addEventListener('change', updateSelectedReqs);
           checkboxes.push(cb);
           return h('label', {class: 'pm-work-start-req'}, cb, req.text || req.id);
@@ -355,12 +451,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         reqWarning,
       );
       bindBox.replaceChildren(list);
-      const initialSelected = checkboxes.filter(cb => cb.checked).map(cb => cb.value);
-      requirementsInput.value = JSON.stringify(initialSelected);
-      requirementsInput.dataset.pmDefault = JSON.stringify(initialSelected);
-    };
-
-    renderBindBox();
+    }
 
     const readinessButton = button({
       variant: 'secondary',
@@ -375,6 +466,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         return;
       }
       const reasons = [];
+      const bindNeeded = isBindNeeded(activeCard);
       if (bindNeeded && !getPlan()) {
         reasons.push(t('wst_no_adopted_plan'));
       }
@@ -399,9 +491,9 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     };
 
     async function inspectReadiness() {
-      if (reading || !writer(card)) return;
+      if (checking || loading || !writer(card)) return;
       const ticket = ++serial;
-      reading = true;
+      checking = true;
       factsBox.replaceChildren();
       checksBox.replaceChildren();
       errorStatusBox.replaceChildren();
@@ -548,7 +640,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         errorStatusBox.replaceChildren(errorBox(err, {within: errorStatusBox}));
       } finally {
         if (valid(ticket)) {
-          reading = false;
+          checking = false;
           readinessButton.disabled = false;
           readinessButton.textContent = t('wst_check_readiness');
           editorInstance.update();
@@ -622,7 +714,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
           return {};
         }
       },
-      permitted: () => writer(card) && startable(card) && !reading,
+      permitted: () => writer(card),
       recoverPermitted: () => writer(card),
       label: 'wst_start',
       onStateChange: () => {
@@ -646,7 +738,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     });
 
     const canSubmit = () => {
-      if (!writer(card) || !startable(card) || reading) return false;
+      if (!writer(card) || !startable(card) || checking || loading) return false;
       if (!prepared || !reviewInput.value) return false;
       try {
         if (!equal(JSON.parse(reviewInput.value), prepared.fixed)) return false;
@@ -660,7 +752,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     const origUpdate = editorInstance.update;
     editorInstance.update = () => {
       origUpdate();
-      readinessButton.disabled = reading || !writer(card) || editorInstance.locked();
+      readinessButton.disabled = checking || loading || !writer(card) || editorInstance.locked();
       updateDisabledNotice();
       const submitBtn = editorInstance.box.querySelector('button[type="submit"]');
       if (submitBtn && !editorInstance.locked()) {
@@ -668,11 +760,13 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       }
     };
 
+    buildOrUpdateBindBox(true);
+
     editorInstance.currentFingerprint = currentFingerprint;
     editorInstance.inspectReadiness = inspectReadiness;
-    editorInstance.renderBindBox = renderBindBox;
+    editorInstance.checkPlanChange = () => buildOrUpdateBindBox(false);
+    editorInstance.checking = () => checking;
     editorInstance.instructionNode = instruction;
-    editorInstance.bindNeeded = bindNeeded;
 
     editors.set(workId, editorInstance);
     return editorInstance;
@@ -721,10 +815,12 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
 
   function withdraw() {
     serial++;
-    reading = false;
+    loading = false;
     prepared = null;
     attempts = [];
     latestAttempt = null;
+    lastAttemptSignature = null;
+    detailsWasOpen = false;
     visibilityFiltered = false;
     partialAttempts = false;
     chosenCandidate = null;
@@ -747,10 +843,13 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     activeWorkId = card.work_item_id;
 
     if (!sameWork) {
+      loading = true;
       prepared = null;
       chosenCandidate = null;
       attempts = [];
       latestAttempt = null;
+      lastAttemptSignature = null;
+      detailsWasOpen = false;
       visibilityFiltered = false;
       partialAttempts = false;
       attemptsView.replaceChildren();
@@ -758,7 +857,6 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     }
 
     const ticket = ++serial;
-    reading = true;
     updateUI();
 
     try {
@@ -780,7 +878,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       if (!valid(ticket)) return;
 
       const editor = getEditor(card);
-      editor?.renderBindBox();
+      editor?.checkPlanChange();
 
       const attemptsData = await fetchAttempts(card.work_item_id, ticket);
       if (!valid(ticket)) return;
@@ -800,7 +898,9 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       }
     } finally {
       if (valid(ticket)) {
-        reading = false;
+        if (!sameWork) {
+          loading = false;
+        }
         const editor = editors.get(card.work_item_id);
         editor?.update();
         updateUI();
