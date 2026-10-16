@@ -80,10 +80,10 @@ for (const native of [false,true]) test(`complete copy and no inferred mapping (
  else await expect(page.getByRole('menuitem',{name:'Open in BAT',exact:true})).toBeDisabled();
 });
 test('explicit profile review launches only the fixed native request and preserves manual read-only',async({page})=>{
- await setup(page);await review(page);expect(await calls(page,'preview_profile')).toEqual([{action:'preview_profile',profile_id:'profile-1'}]);
+ await setup(page);await review(page);await expect.poll(()=>calls(page,'preview_profile')).toEqual([{action:'preview_profile',profile_id:'profile-1'}]);
  expect(await calls(page,'launch')).toHaveLength(0);await expect(page.getByRole('combobox',{name:'BAT profile'})).toBeDisabled();
  await page.getByRole('button',{name:'Open selected profile',exact:true}).click();
- expect(await calls(page,'launch')).toEqual([{action:'launch',preview_id:'1'.repeat(32)}]);
+ await expect.poll(()=>calls(page,'launch')).toEqual([{action:'launch',preview_id:'1'.repeat(32)}]);
  await expect(page.getByRole('button',{name:'Choose another profile',exact:true})).toBeVisible();
  expect(await calls(page,'apply_choices')).toHaveLength(0);expect(await calls(page,'save_login')).toHaveLength(0);
  await expect(page.getByRole('button',{name:'Send',exact:true})).toBeHidden();
@@ -114,7 +114,7 @@ test('storage failure before effect prevents launch; retry retains same preview'
  await page.evaluate(()=>{const set=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k.startsWith('batc.session-bat.'))throw new Error('Fixture full storage');return set.call(this,k,v)};(window as any).__restoreStorage=()=>Storage.prototype.setItem=set});
  await page.getByRole('button',{name:'Open selected profile',exact:true}).click();await expect(page.getByText(/Fixture full storage/)).toBeVisible();expect(await calls(page,'launch')).toHaveLength(0);
  await page.evaluate(()=>(window as any).__restoreStorage());await page.getByRole('button',{name:'Open selected profile',exact:true}).click();
- expect(await calls(page,'launch')).toEqual([{action:'launch',preview_id:'1'.repeat(32)}]);
+ await expect.poll(()=>calls(page,'launch')).toEqual([{action:'launch',preview_id:'1'.repeat(32)}]);
 });
 test('already running BAT and missing installation never launch',async({page})=>{
  await setup(page,true,{running:true});await review(page);
@@ -184,9 +184,9 @@ test('restart never submits an unattempted lost native handle; explicit re-revie
  await expect(page.getByRole('button',{name:'Cancel',exact:true})).toBeVisible();
  expect(await calls(page,'launch')).toHaveLength(0);expect(await calls(page,'preview_profile')).toHaveLength(0);
  await page.getByRole('button',{name:'Review original choice again',exact:true}).click();
- expect(await calls(page,'preview_profile')).toEqual([{action:'preview_profile',profile_id:'profile-1'}]);
+ await expect.poll(()=>calls(page,'preview_profile')).toEqual([{action:'preview_profile',profile_id:'profile-1'}]);
  await page.getByRole('button',{name:'Open selected profile',exact:true}).click();
- expect(await calls(page,'launch')).toEqual([{action:'launch',preview_id:'2'.repeat(32)}]);
+ await expect.poll(()=>calls(page,'launch')).toEqual([{action:'launch',preview_id:'2'.repeat(32)}]);
  await expect(page.getByRole('button',{name:'Choose another profile',exact:true})).toBeVisible();
 });
 test('attempted lost reply with missing native receipt cannot become a new preview after restart',async({page})=>{

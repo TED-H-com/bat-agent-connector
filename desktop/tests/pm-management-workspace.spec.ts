@@ -129,6 +129,7 @@ for(const native of [false,true])test.describe(native?'native management workspa
     await action(page,'complete').getByRole('button',{name:'Complete discussion',exact:true}).click();
     await expect(action(page,'complete')).toContainText('Reply unavailable');const original=structuredClone(f.meetings.state.writes.at(-1));
     await page.reload();await openPmSection(page,'discussions','ui_meetings');await action(page,'complete').getByRole('button',{name:'Check original request',exact:true}).click();
+    await expect.poll(() => f.meetings.state.writes.length).toBe(4);
     expect(f.meetings.state.writes.at(-1)).toEqual(original);expect(f.meetings.state.ops.size).toBe(3);
     await expect(action(page,'complete').getByRole('button',{name:'Check original request',exact:true})).toHaveCount(0);
     await expect(page.getByLabel('Meeting',{exact:true})).toBeEnabled();

@@ -227,6 +227,7 @@ for (const native of [false, true]) test(`roadmap drawer retains drafts and orig
   await expect(form).toContainText('Reply unavailable');
   await page.reload(); await open(); await page.getByText('Update a forecast', {exact: true}).click();
   await form.getByRole('button', {name: 'Check original request', exact: true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(2);
   expect(f.state.writes).toHaveLength(2); expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);
   expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key); expect(f.base.state.writes).toHaveLength(0);
 });
