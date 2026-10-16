@@ -15459,12 +15459,15 @@ var discussionDom = (create, keyPrefix) => (tag, attrs, ...children) => {
 		key
 	}) : node;
 };
-function discussionTitle({ t, field, form, value, local = false }) {
+function discussionTitle({ t, field, form, value, local = false, resume = false, onEditing = () => {} }) {
 	let current = value, restoreFocus = false;
 	const title = h$1("h2", {
 		"data-discussion-title": "",
 		title: value
 	}, value);
+	const remember = () => {
+		if (!edit.hidden) onEditing(true, field.selectionStart ?? 0, field.selectionEnd ?? field.selectionStart ?? 0);
+	};
 	const pencil = iconButton({
 		icon: "pencil",
 		label: t("pd_rename"),
@@ -15476,6 +15479,7 @@ function discussionTitle({ t, field, form, value, local = false }) {
 			display.hidden = true;
 			field.focus();
 			field.select();
+			remember();
 		}
 	});
 	const display = h$1("div", { class: "pd-title-display" }, title, pencil);
@@ -15514,19 +15518,30 @@ function discussionTitle({ t, field, form, value, local = false }) {
 			cancel.click();
 		}
 	});
-	function finish({ focus = false } = {}) {
+	for (const eventName of [
+		"input",
+		"keyup",
+		"mouseup",
+		"select"
+	]) field.addEventListener(eventName, remember);
+	function finish({ focus = false, notify = true } = {}) {
 		restoreFocus = focus && (edit.contains(document.activeElement) || document.activeElement === document.body);
 		edit.hidden = true;
 		display.hidden = false;
+		if (notify) onEditing(false, 0, 0);
 	}
 	function updateState() {
 		pencil.disabled = field.disabled || field.readOnly;
 		cancel.disabled = form.locked();
 		if (local) edit.querySelector("button[type=submit]").disabled = field.disabled;
 	}
-	finish();
+	finish({ notify: false });
 	updateState();
 	if (!local && (form.locked() || form.hasDraft() && field.value !== current)) {
+		edit.hidden = false;
+		display.hidden = true;
+	}
+	if (local && resume) {
 		edit.hidden = false;
 		display.hidden = true;
 	}
@@ -15535,6 +15550,14 @@ function discussionTitle({ t, field, form, value, local = false }) {
 		finish,
 		updateState,
 		editing: () => !edit.hidden,
+		focus(start, end) {
+			if (edit.hidden) return;
+			field.focus();
+			if (!Number.isInteger(start)) return;
+			const point = Math.max(0, Math.min(start, field.value.length));
+			const stop = Number.isInteger(end) ? Math.max(point, Math.min(end, field.value.length)) : point;
+			field.setSelectionRange(point, stop);
+		},
 		update(next) {
 			current = next;
 			title.textContent = next;
@@ -42148,6 +42171,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	}
 	const launch = parseDiscussRefs(location.hash.split("?")[1] || "");
 	const uiState = viewState(namespace, workspaceId, "discussions");
+	const titleSession = viewState(namespace, workspaceId, "discussion-title." + (threadId || "list"));
 	const handoffKey = `batc.pm.${namespace}.discussion-send.${workspaceId}`;
 	const originKey = `batc.pm.${namespace}.discussion-origin.${workspaceId}.`;
 	let sendHandoff = null, firstMessagePending = false;
@@ -44731,8 +44755,17 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						field: name,
 						form: create,
 						value: name.value,
-						local: true
+						local: true,
+						resume: titleSession.open === true,
+						onEditing: (open, start, end) => {
+							titleSession.open = open;
+							if (open) {
+								titleSession.caret = start;
+								titleSession.caretEnd = end;
+							}
+						}
 					}) : null;
+					if (titleDraft) titleView = titleDraft;
 					if (threadId === "new" && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis)) {
 						workspaceCaps = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`);
 						alive();
@@ -44913,7 +44946,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const initialTranscript = content.querySelector(".pd-transcript");
 	if (initialTranscript && threadState.scroll) initialTranscript.scrollTop = threadState.scroll;
 	if (threadId === "new") setTimeout(() => {
-		if (!disposed) content.querySelector("[data-discussion-composer]")?.focus();
+		if (disposed) return;
+		if (titleView?.editing()) titleView.focus(titleSession.caret, titleSession.caretEnd);
+		else content.querySelector("[data-discussion-composer]")?.focus();
 	}, 0);
 	proposalReview?.recheck();
 	nativeAnalysis?.recheck();
