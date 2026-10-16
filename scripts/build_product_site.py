@@ -68,16 +68,16 @@ parts += [
     + '<a href="demo/?lang=zh-TW" class="button primary lang-zh">開啟互動展示</a>'
     + link("#start", "Install and start", "安裝與開始使用", "text-link")
     + "</div>",
-    bi("Explore the current Dashboard with sample data. The v1.3 work-flow preview is available inside the demo.",
-       "用展示資料操作目前的 Dashboard；也可以從展示內試走 v1.3 的新工作流程。", "p", "hero-description"),
+    bi("Explore the current Dashboard with sample data. The v1.3 workflow preview simulates start, follow-up and decision. The real Start work panel is on main and needs a configured BAT host and a bound repository.",
+       "用展示資料操作目前的 Dashboard。v1.3 工作流程預覽會模擬開始工作、追加修改與驗收決策。主線上已有真正的「開始工作」面板，它需要已設定的 BAT 主機與已綁定的儲存庫。", "p", "hero-description"),
     '</div></div></section>',
 ]
 release_note = (
     '<div class="release-note">'
     + bi("Development preview", "開發預覽", "strong")
     + bi(
-        "Screenshots pin merged main at d66f032d342562322479c5087c6982d662d11a01, through #181 on October 15, 2026. They show the read-only session page with its ways to continue, single-line owner columns and updated zh-TW wording. This refresh provides no installation or live acceptance evidence. Match the package to its source before installing.",
-        "截圖固定於已合併主線的 d66f032d342562322479c5087c6982d662d11a01，包含 2026 年 10 月 15 日的 #181。展示唯讀工作階段頁面及其接續方式、單行負責人欄位與更新後的繁體中文用詞。本次沒有安裝或實機驗收證據；安裝前請核對套件來源。",
+        "Screenshots pin merged main at 265026d4c1fc2bc04a9aaa727d566c1a2906b256, through #205 on October 16, 2026. They show the synthetic Dashboard in Development: Needs attention, a four-section live charter, an unadopted discussion proposal, twelve register records, and a manual session whose host is not set up for managed work. The gallery does not open Start work or the Result section. This refresh provides no installation or live acceptance evidence. Match the package to its source before installing.",
+        "截圖固定於已合併主線的 265026d4c1fc2bc04a9aaa727d566c1a2906b256，包含 2026 年 10 月 16 日的 #205。畫面是開發階段的合成 Dashboard：需要關注、四段即時專案章程、一份尚未採用的討論提案、十二筆登記，以及人工工作階段寫明此主機尚未設定受管工作。圖庫沒有打開「開始工作」或成果區。本次沒有安裝或實機驗收證據；安裝前請核對套件來源。",
     )
     + link("#status", "Current scope", "目前範圍")
     + "</div>"
@@ -86,29 +86,29 @@ parts.append('<section class="section product-tour" id="product" aria-label="Pro
 
 shots = [
     ("overview", "Overview", "專案總覽",
-     "Start with live progress, blockers, open decisions and Recently decided history; saved reports stay separate.",
-     "先看即時進度、阻礙、待決事項與近期決策；已存報告保留原快照。"),
+     "Live Overview in Development: Needs attention, honest progress and a four-section charter. Saved reports stay separate.",
+     "開發階段的即時總覽：需要關注、誠實進度與四段專案章程。已存報告另外保留。"),
     ("discussions", "Discussions", "討論",
-     "Discuss the blocker with its context chip and automatic title. Discussion info opens beside the proposal; it is ready for review and remains unadopted.",
-     "從阻礙開啟討論，保留來源標籤與標題。討論資料在提案旁開啟；這份提案可供審閱，尚未採用。"),
+     "The proposal stays in the conversation, Proposed and Unresolved. Discussion info is not open over it. Save note only and Make a plan are shown. This synthetic session says ordinary PM replies are unavailable.",
+     "提案留在對話中，狀態是建議、未決。討論資料沒有蓋在上面。畫面提供只存筆記與整理計畫。這個合成工作階段顯示一般 PM 對話目前無法使用。"),
     ("requirements", "Requirements", "需求",
      "Expand the email sign-in row and read its work inspector. Acceptance, merged PRs and partial delivery each retain their evidence.",
      "展開電子郵件登入需求與工作詳情，分開查看驗收、已合併 PR 及部分交付證據。"),
     ("issues", "Issues &amp; changes", "問題與變更",
-     "Read named maintenance findings alongside risks, issues, actions, changes and decisions; open records remain open.",
-     "在登記表追蹤具名維護發現、風險、問題、行動、變更與決策；未結案項目保持原狀態。"),
+     "Both pages show twelve records, including named maintenance findings and one adopted decision. Open records stay open; one has no known age.",
+     "兩頁共十二筆，含具名維護發現與一項已採用決策。未結案項目保持原狀態；其中一筆沒有已知時間。"),
     ("schedule", "Schedule", "時程",
-     "Compare recorded baseline, forecast and actual dates on a labelled axis; undated attempts stay unscheduled.",
-     "在標示日期的時間軸對照基準、預測與實際日期；沒有起訖證據的執行仍列為未排期。"),
+     "Compare recorded baseline, forecast and actual dates. Recovery review is forecast three days late. Unscheduled (6) stays collapsed.",
+     "對照已記錄的基準、預測與實際日期。復原審查預測晚三天。未排期（6）保持收合。"),
     ("dependencies", "Dependencies", "技術相依",
      "Read a pinned inventory graph with evidence styles and explicit partial coverage.",
      "查看固定版本的相依圖，分清證據種類與部分涵蓋。"),
     ("board", "Board", "工作看板",
-     "Search or filter twelve demo work items in five lanes. Content approval, requirement acceptance and deployment remain separate.",
-     "搜尋或篩選五欄中的十二項展示工作；內容核准、需求驗收與部署各有自己的證據。"),
+     "Twelve demo work items in Not started, In progress, Waiting, In review and Content approved. Content approval stays separate from requirement acceptance and deployment.",
+     "十二項展示工作分在未開始、進行中、等待中、審閱中與內容已核准。內容核准與需求驗收、部署各自獨立。"),
     ("session", "Session", "工作階段",
-     "Read the manual BAT session on demo-host; Connector cannot send or interrupt it.",
-     "閱讀 demo-host 上的人工 BAT 工作階段；Connector 對它保持唯讀。"),
+     "Read the manual BAT session on demo-host. View only says this host is not set up for managed work. There is no send or interrupt control.",
+     "閱讀 demo-host 上的人工 BAT 工作階段。僅供檢視寫明此主機尚未設定受管工作。沒有送出或中斷控制。"),
 ]
 parts.append(
     '<div class="tour-controls" role="group" aria-label="Screenshot view / 介面展示">'
@@ -596,8 +596,8 @@ for label, lz, en, zh in [
     (
         "Merged workspace",
         "已合併工作台",
-        "Since #161, merged main at d66f032d adds quiet session status (#152), focused workspace tasks (#155), one message per PM failure (#162, #175), M4 lifecycle evidence (#116), the exact build and redacted diagnostics in Settings (#171), read-only session paths and Settings → Agents (#169), on-demand PM views (#174), the Git transport contract with local Git still disabled (#167), TED-H-com links (#177), and wording and layout fixes (#172, #179, #180). Installation and live acceptance remain separate.",
-        "自 #161 之後，已合併主線 d66f032d 新增：只在需要處理時顯示的工作階段狀態（#152）、聚焦的工作區任務（#155）、PM 每次失敗只顯示一則訊息（#162、#175）、M4 生命週期證據（#116）、設定中的確切版本與已遮蔽的診斷資訊（#171）、唯讀工作階段路徑與設定 → 代理（#169）、PM 視圖按需載入（#174）、Git 傳輸合約（本機 Git 仍停用，#167）、TED-H-com 連結（#177），以及用詞與版面修正（#172、#179、#180）。安裝與實機驗收另列。",
+        "Since d66f032d, merged main at 265026d4 through #205 on 16 October 2026 adds Overview records that open the exact item, honest progress and one primary action (#185); one localized error with the code in closed Details (#186); proposals reviewed, adopted and resolved in the conversation, settling as each child finishes (#188, #189); Send to PM, Save note only and Make a plan (#192); a link to the interactive synthetic read-only demo (#191); and Tools → Workbench preview, with the classic layout still the default (#193, #195). work.start starts a bound Work in its own managed BAT worktree and session, from a reviewed published commit and an adopted plan (#194). The Start work panel needs the work.start capability, a configured BAT host and a bound repository (#197). Fixed Result reads (#196) and a read-only Result section in the Board's Work inspector (E03 part A, #205) read a started attempt; they do not start, send or merge. The public gallery does not open that panel. The v1.3 workflow preview still simulates the flow. v1.3 documents and a synthetic clickable prototype are included (#183, #187, #190); the prototype makes no Connector, BAT, GitHub or model requests. Focus, scroll and refresh fixes are #199, #202, #204, #208 and #210. #198, #200 and #201 are test reliability fixes, not features. Not merged: a second instruction to the same Work (P5), adopt-and-start in one step (P6), on-request current changes and per-commit diffs (E03 part B), work profiles and readiness (E01), MCP/API loop parity (E10), and the closed loop end to end. No real BAT start, follow-up or Result has been observed. Nothing is installed or live-tested.",
+        "自 d66f032d 之後，2026 年 10 月 16 日已合併主線 265026d4（截至 #205）新增：總覽開啟原紀錄、顯示誠實進度與一個主要動作（#185）；一則在地化錯誤，代碼收在收合的詳細資料（#186）；提案在對話中審閱、採用與解決，並隨每個子操作完成而結算（#188、#189）；傳送給 PM、只存筆記與整理計畫（#192）；連到合成且唯讀的互動展示（#191）；以及工具 → 工作台預覽，經典版面仍是預設（#193、#195）。work.start 從已審閱的已發布 commit 與已採用計畫，在自己的受管 BAT worktree 與工作階段開始已綁定的工作（#194）。「開始工作」面板需要 work.start 能力、已設定的 BAT 主機與已綁定的儲存庫（#197）。固定成果讀取（#196）與看板工作詳情的唯讀成果區（E03 part A，#205）只讀取已開始的嘗試，不開始、不送出、不合併。公開圖庫沒有打開這個面板。v1.3 工作流程預覽仍是模擬。v1.3 文件與合成的可點選原型已包含在內（#183、#187、#190）；原型不向 Connector、BAT、GitHub 或模型發出請求。焦點、捲動與重新整理的修正是 #199、#202、#204、#208 與 #210。#198、#200 與 #201 是測試可靠度修正，不是功能。尚未合併：對同一工作的第二次指示（P5）、一步採用並開始（P6）、依要求讀取目前變更與逐 commit 差異（E03 part B）、工作 profile 與 readiness（E01）、MCP／API 迴圈對等（E10），以及端到端閉環。尚未觀察到真實的 BAT 開始、追加或成果。沒有安裝或實機驗收。",
     ),
     (
         "Still ahead",
@@ -615,7 +615,7 @@ for label, lz, en, zh in [
     parts.append("<div>" + bi(label, lz, "dt") + bi(en, zh, "dd") + "</div>")
 parts.append(
     '</dl><div class="evidence-links">'
-    + doc("docs/product/progress-2026-10-14.md", "Progress and evidence ↗", "進度與證據 ↗", "")
+    + doc("docs/product/progress-2026-10-16.md", "Progress and evidence ↗", "進度與證據 ↗", "")
     + doc("docs/product/pm-v1.2-plan.md", "Adopted plan ↗", "已採用計畫 ↗", "")
     + link(repo + "/actions?query=branch%3Amain", "Current main checks ↗", "目前 main 檢查 ↗")
     + "</div></section>"
@@ -649,7 +649,7 @@ for i, (en, zh, d, dz, path, zpath) in enumerate(
             "進度報告",
             "Merged, candidate, tested and remaining scope.",
             "已合併、候選、已驗證及剩餘範圍。",
-            "docs/product/progress-2026-10-14.md",
+            "docs/product/progress-2026-10-16.md",
             None,
         ),
         (

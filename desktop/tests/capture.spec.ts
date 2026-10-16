@@ -28,12 +28,28 @@ async function fixture(page: Page, native: boolean, options: any = {}) {
       }
       state.writes.push(input);
       if (state.lost) {state.lost = false; return {status: 503, data: {error: {code: 'LOST', message: 'Lost capture reply'}}};}
+      if (state.holdOperation) await new Promise(resolve => {state.releaseOperation = resolve;});
+      if (state.operationError) {
+        const error = state.operationError;
+        return {status: error.status || 409, data: {error: {code: error.code, message: error.message || error.code}}};
+      }
       return {status: 200, data: {operation}};
     }
     state.reads.push(input.path);
     if (path === '/operations/'+op) {
       state.operationReads++;
       if (state.delayRead) {state.delayRead = false; await new Promise(resolve => {state.holdRead = resolve;});}
+      if (state.holdOperationRead) {
+        if (!state.operationReadGate || state.operationReadReleased) {
+          state.operationReadReleased = false;
+          state.operationReadEpoch = (state.operationReadEpoch || 0) + 1;
+          state.operationReadGate = new Promise(resolve => {
+            state.releaseOperationRead = () => {state.operationReadReleased = true; resolve();};
+          });
+        }
+        await state.operationReadGate;
+      }
+      if (state.operationNote) operation.status_reason = state.operationNote;
       if (state.failRead) return {status: 503, data: {error: {code: 'READ_FAILED', message: 'Capture read failed'}}};
       return {status: 200, data: {operation}};
     }
@@ -225,6 +241,234 @@ for (const native of [false, true]) {
     expect(stored.result).toBeUndefined(); expect(state.errors).toEqual([]);
   });
 }
+async function reviewed(page: Page, options: any = {}, attachment = false) {
+  const state = await fixture(page, false, options);
+  const box = await form(page, attachment);
+  await box.getByRole('button', {name: 'Preview source file', exact: true}).click();
+  await expect(box.locator('[data-capture-evidence]')).toContainText(ref.digest);
+  await box.getByRole('checkbox', {name: 'I reviewed this file and its source evidence', exact: true}).check();
+  return {state, box};
+}
+function release(state: any) {
+  state.holdOperation = false; state.holdOperationRead = false; state.delayPreview = false;
+  state.holdPreview?.(); state.releaseOperation?.(); state.releaseOperationRead?.();
+}
+const previewButton = (box: ReturnType<Page['locator']>) => box.getByRole('button', {name: 'Preview source file', exact: true});
+const saveButton = (box: ReturnType<Page['locator']>) => box.getByRole('button', {name: 'Save reviewed file', exact: true});
+const checkButton = (box: ReturnType<Page['locator']>) => box.getByRole('button', {name: 'Check original capture', exact: true});
+const anotherButton = (box: ReturnType<Page['locator']>) => box.getByRole('button', {name: 'Capture another file', exact: true});
+const attachButton = (box: ReturnType<Page['locator']>) => box.getByRole('button', {name: 'Add to attachment draft', exact: true});
+const captureNotice = (box: ReturnType<Page['locator']>) => box.getByRole('status');
+test('preview capture keeps keyboard focus while its read is in flight', async ({page}) => {
+  const state = await fixture(page, false, {delayPreview: true});
+  try {
+    const box = await form(page);
+    const preview = previewButton(box);
+    const notice = captureNotice(box);
+    await preview.focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => typeof state.holdPreview).toBe('function');
+    await expect(preview).toBeFocused();
+    await expect(preview).toHaveAttribute('aria-disabled', 'true');
+    await expect.poll(() => preview.evaluate(node => (node as HTMLButtonElement).disabled)).toBe(false);
+    await expect(notice).toHaveAttribute('aria-busy', 'true');
+    expect(state.previews).toHaveLength(1);
+    await page.keyboard.press('Enter');
+    await preview.click({force: true});
+    expect(state.previews).toHaveLength(1);
+    expect(state.writes).toEqual([]);
+    state.delayPreview = false; state.holdPreview();
+    await expect(preview).toBeFocused();
+    await expect(preview).not.toHaveAttribute('aria-disabled', 'true');
+    await expect(notice).not.toHaveAttribute('aria-busy', 'true');
+    await expect(box.locator('[data-capture-evidence]')).toContainText(ref.digest);
+    expect(state.previews).toHaveLength(1);
+    expect(state.errors).toEqual([]);
+  } finally {release(state);}
+});
+test('save capture keeps keyboard focus and moves to attach when the result can be added', async ({page}) => {
+  const {state, box} = await reviewed(page, {holdOperation: true}, true);
+  try {
+    const notice = captureNotice(box);
+    await saveButton(box).focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => typeof state.releaseOperation).toBe('function');
+    const apply = checkButton(box);
+    await expect(apply).toBeFocused();
+    await expect(apply).toHaveAttribute('aria-disabled', 'true');
+    await expect.poll(() => apply.evaluate(node => (node as HTMLButtonElement).disabled)).toBe(false);
+    await expect(notice).toHaveAttribute('aria-busy', 'true');
+    expect(state.writes).toHaveLength(1);
+    await page.keyboard.press('Enter');
+    await apply.click({force: true});
+    expect(state.writes).toHaveLength(1);
+    state.holdOperation = false; state.releaseOperation();
+    await expect(attachButton(box)).toBeFocused();
+    await expect(apply).toBeHidden();
+    await expect(notice).not.toHaveAttribute('aria-busy', 'true');
+    expect(state.writes).toHaveLength(1);
+    expect(state.errors).toEqual([]);
+  } finally {release(state);}
+});
+test('save capture keeps keyboard focus and moves to capture another file without attach', async ({page}) => {
+  const {state, box} = await reviewed(page, {holdOperation: true});
+  try {
+    const notice = captureNotice(box);
+    await saveButton(box).focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => typeof state.releaseOperation).toBe('function');
+    const apply = checkButton(box);
+    await expect(apply).toBeFocused();
+    await expect(apply).toHaveAttribute('aria-disabled', 'true');
+    await expect(notice).toHaveAttribute('aria-busy', 'true');
+    state.holdOperation = false; state.releaseOperation();
+    await expect(anotherButton(box)).toBeFocused();
+    await expect(attachButton(box)).toHaveCount(0);
+    await expect(apply).toBeHidden();
+    expect(state.writes).toHaveLength(1);
+    expect(state.errors).toEqual([]);
+  } finally {release(state);}
+});
+test('a refused capture moves focus to capture another file', async ({page}) => {
+  const {state, box} = await reviewed(page, {holdOperation: true, operationError: {code: 'PREVIEW_EXPIRED', message: 'Preview expired'}});
+  try {
+    await saveButton(box).focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => typeof state.releaseOperation).toBe('function');
+    const apply = checkButton(box);
+    await expect(apply).toBeFocused();
+    state.holdOperation = false; state.releaseOperation();
+    await expect(anotherButton(box)).toBeFocused();
+    await expect.poll(() => apply.evaluate(node => (node as HTMLButtonElement).disabled)).toBe(true);
+    await expect(apply).not.toHaveAttribute('aria-disabled', 'true');
+    expect(state.writes).toHaveLength(1);
+    expect(state.errors).toEqual([]);
+  } finally {release(state);}
+});
+test('a failed capture moves focus to capture another file', async ({page}) => {
+  const {state, box} = await reviewed(page, {holdOperation: true, status: 'failed'});
+  try {
+    await saveButton(box).focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => typeof state.releaseOperation).toBe('function');
+    const apply = checkButton(box);
+    state.holdOperation = false; state.releaseOperation();
+    await expect(anotherButton(box)).toBeFocused();
+    await expect(apply).toBeHidden();
+    await expect(box).toContainText('failed');
+    expect(state.writes).toHaveLength(1);
+    expect(state.errors).toEqual([]);
+  } finally {release(state);}
+});
+test('a refresh keeps focus on capture another file and ignores a second press', async ({page}) => {
+  const {state, box} = await reviewed(page);
+  await saveButton(box).click();
+  await expect(box).toContainText(aid);
+  const again = anotherButton(box);
+  await expect(again).toBeVisible();
+  await again.focus();
+  state.holdOperationRead = true;
+  state.events = [{seq: 1, kind: 'operation.updated', resource_type: 'operation', resource_id: op}];
+  try {
+    await expect.poll(() => typeof state.releaseOperationRead).toBe('function');
+    await expect(again).toBeFocused();
+    await expect(again).toHaveAttribute('aria-disabled', 'true');
+    await expect.poll(() => again.evaluate(node => (node as HTMLButtonElement).disabled)).toBe(false);
+    await expect(captureNotice(box)).toHaveAttribute('aria-busy', 'true');
+    const writes = state.writes.length, previews = state.previews.length, reads = state.operationReads;
+    await page.keyboard.press('Enter');
+    await again.click({force: true});
+    expect(state.writes).toHaveLength(writes);
+    expect(state.previews).toHaveLength(previews);
+    expect(state.operationReads).toBe(reads);
+    await expect(again).toBeVisible();
+    await expect(box).toContainText(aid);
+    state.holdOperationRead = false; state.releaseOperationRead();
+    await expect(again).toBeFocused();
+    await expect(again).not.toHaveAttribute('aria-disabled', 'true');
+    await expect(captureNotice(box)).not.toHaveAttribute('aria-busy', 'true');
+    expect(state.writes).toHaveLength(writes);
+    expect(state.previews).toHaveLength(previews);
+    expect(state.operationReads).toBe(reads);
+    expect(state.errors).toEqual([]);
+  } finally {release(state);}
+});
+test('new capture moves focus to preview when the source is still valid', async ({page}) => {
+  const {state, box} = await reviewed(page);
+  await saveButton(box).click();
+  await expect(box).toContainText(aid);
+  const again = anotherButton(box);
+  await expect(again).toBeVisible();
+  await again.focus();
+  await page.keyboard.press('Enter');
+  await expect(previewButton(box)).toBeFocused();
+  await expect(again).toBeHidden();
+  expect(state.writes).toHaveLength(1);
+  expect(state.errors).toEqual([]);
+});
+test('new capture moves focus to the host when the source is no longer valid', async ({page}) => {
+  const {state, box} = await reviewed(page);
+  await saveButton(box).click();
+  await expect(box).toContainText(aid);
+  const again = anotherButton(box);
+  const host = box.getByRole('combobox', {name: 'Source host', exact: true});
+  await expect(again).toBeVisible();
+  await host.evaluate(node => {(node as HTMLSelectElement).value = '';});
+  await again.focus();
+  await page.keyboard.press('Enter');
+  await expect(host).toBeFocused();
+  await expect(previewButton(box)).toBeDisabled();
+  await expect(again).toBeHidden();
+  expect(state.writes).toHaveLength(1);
+  expect(state.errors).toEqual([]);
+});
+test('shift+tab during a save returns to check and leaves preview disabled', async ({page}) => {
+  const {state, box} = await reviewed(page, {holdOperation: true});
+  try {
+    await saveButton(box).focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => typeof state.releaseOperation).toBe('function');
+    const apply = checkButton(box);
+    const preview = previewButton(box);
+    await expect(apply).toBeFocused();
+    await expect(apply).toHaveAttribute('aria-disabled', 'true');
+    await expect.poll(() => preview.evaluate(node => (node as HTMLButtonElement).disabled)).toBe(true);
+    await expect(preview).not.toHaveAttribute('aria-disabled', 'true');
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Tab');
+    await expect(apply).toBeFocused();
+    await expect(apply).toHaveAttribute('aria-disabled', 'true');
+    expect(state.writes).toHaveLength(1);
+    expect(state.errors).toEqual([]);
+  } finally {release(state);}
+});
+test('a running capture poll leaves capture another file disabled', async ({page}) => {
+  await page.clock.install();
+  const {state, box} = await reviewed(page, {status: 'running'});
+  await saveButton(box).click();
+  await expect(box.getByRole('link', {name: op, exact: true})).toBeVisible();
+  const busyState = () => box.evaluate(root => {
+    const button = [...root.querySelectorAll('button')].find(item => item.textContent === 'Capture another file');
+    const notice = root.querySelector('[role="status"]');
+    return {disabled: Boolean(button && (button as HTMLButtonElement).disabled),
+      ariaDisabled: button ? button.getAttribute('aria-disabled') : null,
+      ariaBusy: notice ? notice.getAttribute('aria-busy') : null};
+  });
+  state.holdOperationRead = true;
+  try {
+    await page.clock.fastForward(1000);
+    await expect.poll(() => state.operationReadEpoch).toBe(1);
+    await expect.poll(busyState).toEqual({disabled: true, ariaDisabled: null, ariaBusy: null});
+    state.operationNote = 'still-running';
+    state.releaseOperationRead();
+    await expect(box).toContainText('still-running');
+    await page.clock.fastForward(1000);
+    await expect.poll(() => state.operationReadEpoch).toBe(2);
+    await expect.poll(busyState).toEqual({disabled: true, ariaDisabled: null, ariaBusy: null});
+    expect(state.writes).toHaveLength(1);
+    expect(state.errors).toEqual([]);
+  } finally {release(state);}
+});
 test('observe-only capture preview remains read-only', async ({page}) => {
   const state = await fixture(page, false, {scopes: ['observe']});
   const box = await form(page);

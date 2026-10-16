@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test';
+import {test, expect, type Page} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
 import {conversationFixture, mountConversation} from './conversation-fixture.ts';
 const pid = 'prj_' + 'a'.repeat(20), other = 'prj_' + 'b'.repeat(20), wid = 'wi_' + 'a'.repeat(20);
@@ -304,5 +304,204 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
     await expect(page.locator('[data-managed-locations]')).toContainText('Connector stores your identity, operation history and artifacts');
     await expect(page.locator('[data-managed-locations]')).toContainText('selected BAT host and workspace');
     expect(f.state.writes).toHaveLength(0);
+  });
+});
+
+// Hold the creation POST until release. The count increments when the request
+// arrives, before the response, so assertions during the hold do not wait on a timer.
+function holdPosts() {
+  let release = () => {};
+  const promise = new Promise<void>(resolve => { release = resolve; });
+  const posts = {n: 0};
+  return {promise, release: () => release(), posts};
+}
+function countPosts(f: ReturnType<typeof fixture>, hold: ReturnType<typeof holdPosts>, status?: string) {
+  const inner = f.dispatch;
+  f.dispatch = async (input: any) => {
+    const path = new URL(input.path, 'http://fixture').pathname;
+    const creating = input.method === 'POST' && path === '/operations';
+    if (creating) { hold.posts.n += 1; await hold.promise; }
+    const result = await inner(input);
+    if (creating && status && result?.data?.operation) result.data.operation.status = status;
+    return result;
+  };
+  return f;
+}
+async function createBusy(page: Page, kind: string) {
+  return page.evaluate(recordKind => {
+    const form = document.querySelector(`[data-create-record="${recordKind}"]`);
+    const button = form?.querySelector('button[type="submit"]') as HTMLButtonElement | null;
+    const status = form?.querySelector(':scope > [role="status"]');
+    const active = document.activeElement;
+    return {
+      active: active === document.body ? 'body' : active === button ? 'submit'
+        : `${active?.tagName || ''}:${(active?.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 48)}`,
+      disabled: button ? button.disabled : null,
+      ariaDisabled: button?.getAttribute('aria-disabled') ?? null,
+      ariaBusy: status?.getAttribute('aria-busy') ?? null,
+    };
+  }, kind);
+}
+
+test.describe('create record busy focus', () => {
+  test('1. Enter on Add item, with the POST held', async ({page}) => {
+    const hold = holdPosts(), f = countPosts(fixture(), hold);
+    await mountConversation(page, false, f.dispatch);
+    await page.goto('/dashboard/#/project/' + pid);
+    await page.locator('[data-project-work-create]').click();
+    const form = page.locator('[data-create-record="work_item"]');
+    const title = form.getByLabel('New work item', {exact: true});
+    await title.fill('Focus stays on Add');
+    const add = form.locator('button[type="submit"]');
+    await add.focus();
+    await expect(add).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => hold.posts.n).toBe(1);
+    try {
+      await expect.poll(() => createBusy(page, 'work_item')).toEqual({
+        active: 'submit', disabled: false, ariaDisabled: 'true', ariaBusy: 'true',
+      });
+      await expect(title).toBeDisabled();
+      await page.keyboard.press('Enter');
+      await add.click({force: true});
+      expect(hold.posts.n).toBe(1);
+      await expect(add).toBeFocused();
+    } finally { hold.release(); }
+    await expect(page.locator('[data-project-work-create]')).toBeFocused();
+    await expect(add).not.toHaveAttribute('aria-disabled');
+    await expect(form.locator(':scope > [role="status"]')).not.toHaveAttribute('aria-busy');
+    expect(hold.posts.n).toBe(1);
+    expect(f.state.writes).toHaveLength(1);
+    expect(f.state.writes[0].body.action).toBe('work_item.create');
+  });
+
+  test('2. Enter in a text field, with the POST held', async ({page}) => {
+    const hold = holdPosts(), f = countPosts(fixture(), hold);
+    await mountConversation(page, false, f.dispatch);
+    await page.goto('/dashboard/#/project/' + pid);
+    await page.locator('[data-project-work-create]').click();
+    const form = page.locator('[data-create-record="work_item"]');
+    const title = form.getByLabel('New work item', {exact: true});
+    const add = form.locator('button[type="submit"]');
+    await title.fill('Implicit submit');
+    await title.press('Enter');
+    await expect.poll(() => hold.posts.n).toBe(1);
+    try {
+      await expect(add).toBeFocused();
+      await expect(add).toHaveAttribute('aria-disabled', 'true');
+      expect(await add.evaluate(node => (node as HTMLButtonElement).disabled)).toBe(false);
+      await expect(title).toBeDisabled();
+      await page.keyboard.press('Enter');
+      expect(hold.posts.n).toBe(1);
+    } finally { hold.release(); }
+    expect(hold.posts.n).toBe(1);
+    await expect(page.locator('[data-project-work-create]')).toBeFocused();
+    expect(f.state.writes).toHaveLength(1);
+  });
+
+  test('3. A terminal failure moves focus to Edit request', async ({page}) => {
+    const hold = holdPosts(), f = countPosts(fixture(), hold, 'failed');
+    await mountConversation(page, false, f.dispatch);
+    await page.goto('/dashboard/#/project/' + pid);
+    await page.locator('[data-project-work-create]').click();
+    const form = page.locator('[data-create-record="work_item"]');
+    await form.getByLabel('New work item', {exact: true}).fill('Terminal failure');
+    const add = form.locator('button[type="submit"]');
+    await add.focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => hold.posts.n).toBe(1);
+    try { await expect(add).toBeFocused(); }
+    finally { hold.release(); }
+    const review = form.getByRole('button', {name: 'Edit a new creation request', exact: true});
+    await expect(review).toBeFocused();
+    expect(await add.evaluate(node => (node as HTMLButtonElement).disabled)).toBe(true);
+    await expect(add).not.toHaveAttribute('aria-disabled');
+    await expect(form.locator(':scope > [role="status"]')).not.toHaveAttribute('aria-busy');
+    expect(hold.posts.n).toBe(1);
+    expect(f.state.writes).toHaveLength(1);
+    expect([...f.state.ops.values()][0].status).toBe('failed');
+  });
+
+  test('4. An initial admission refusal moves focus to Edit request', async ({page}) => {
+    const hold = holdPosts(), f = countPosts(fixture(), hold);
+    f.state.reject = {status: 422, code: 'INVALID_PARAMS'};
+    await mountConversation(page, false, f.dispatch);
+    await page.goto('/dashboard/#/project/' + pid);
+    await page.locator('[data-project-work-create]').click();
+    const form = page.locator('[data-create-record="work_item"]');
+    await form.getByLabel('New work item', {exact: true}).fill('Refused original');
+    const add = form.locator('button[type="submit"]');
+    await add.focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => hold.posts.n).toBe(1);
+    try { await expect(add).toBeFocused(); }
+    finally { hold.release(); }
+    const review = form.getByRole('button', {name: 'Edit a new creation request', exact: true});
+    await expect(review).toBeFocused();
+    expect(await add.evaluate(node => (node as HTMLButtonElement).disabled)).toBe(true);
+    await expect(add).not.toHaveAttribute('aria-disabled');
+    await expect(form.locator(':scope > [role="status"]')).not.toHaveAttribute('aria-busy');
+    expect(hold.posts.n).toBe(1);
+    expect(f.state.ops.size).toBe(0);
+    expect(f.state.writes).toHaveLength(1);
+  });
+
+  test('5. Tab while busy reaches the busy Add button', async ({page}) => {
+    const hold = holdPosts(), f = countPosts(fixture(), hold);
+    await mountConversation(page, false, f.dispatch);
+    await page.goto('/dashboard/#/project/' + pid);
+    await page.locator('[data-project-work-create]').click();
+    const form = page.locator('[data-create-record="work_item"]');
+    await form.getByLabel('New work item', {exact: true}).fill('Tab while busy');
+    const add = form.locator('button[type="submit"]');
+    await add.focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => hold.posts.n).toBe(1);
+    try {
+      await expect(add).toHaveAttribute('aria-disabled', 'true');
+      // Text fields are disabled while the request is in flight, so the tab stop
+      // before Add is the details summary.
+      const summary = form.locator('[data-create-advanced] > summary');
+      await summary.focus();
+      await expect(summary).toBeFocused();
+      await page.keyboard.press('Tab');
+      await expect(add).toBeFocused();
+      expect(hold.posts.n).toBe(1);
+    } finally { hold.release(); }
+    await expect(page.locator('[data-project-work-create]')).toBeFocused();
+    expect(hold.posts.n).toBe(1);
+  });
+
+  test('6. Enter on Add project, with the POST held', async ({page}) => {
+    const hold = holdPosts(), f = countPosts(fixture(), hold);
+    await mountConversation(page, false, f.dispatch);
+    await page.goto('/dashboard/#/projects');
+    await page.locator('[data-project-new]').click();
+    const form = page.locator('[data-create-record="project"]');
+    await form.getByLabel('New project name', {exact: true}).fill('Focus stays on Add');
+    const add = form.locator('button[type="submit"]');
+    await add.focus();
+    await expect(add).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => hold.posts.n).toBe(1);
+    try {
+      await expect.poll(() => createBusy(page, 'project')).toEqual({
+        active: 'submit', disabled: false, ariaDisabled: 'true', ariaBusy: 'true',
+      });
+      await page.keyboard.press('Enter');
+      await add.click({force: true});
+      expect(hold.posts.n).toBe(1);
+      await expect(add).toBeFocused();
+    } finally { hold.release(); }
+    await expect(page.locator('[data-project-summary]')).toBeVisible();
+    expect(hold.posts.n).toBe(1);
+    expect(f.state.writes).toHaveLength(1);
+    expect(f.state.writes[0].body.action).toBe('project.create');
+    await expect(page.locator('[data-create-record="project"]')).toHaveCount(0);
+    await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+    // viewProjects sets location.hash to the new project. route() removes the
+    // projects view, including this disclosure's toggle, before toggle.focus()
+    // can run. The project page does not move focus.
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
   });
 });

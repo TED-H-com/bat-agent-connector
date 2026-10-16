@@ -6,6 +6,45 @@
   refresh or your own action runs. The control looks unavailable until that
   work finishes, a second press is ignored, and a background refresh stays quiet.
 
+- Choosing a file does not show Retry while that first upload runs. Retry appears
+  after the upload fails, and pressing it keeps the button until the retry finishes.
+
+- Sending a message, uploading or paging attachments, and starting or recording a
+  checkpoint keep keyboard focus on the control that is working. The control looks
+  unavailable until that work finishes, and pressing it again does nothing. A
+  finished upload moves focus to that file's role or Remove. Starting agent work
+  from a work item moves focus to the new operation.
+
+- Artifact review keeps keyboard focus on the button you pressed while a
+  preview, save, review, execution page, source reload, catalog page, or file
+  read is in progress. That button looks unavailable and a second press is
+  ignored. A button that cannot be used stays unavailable, including during a
+  poll or a save. When the pressed button closes, focus moves to Check
+  original operations, Capture another file, Record another review, the
+  execution list, or the review text, and only while focus is still on that
+  button.
+
+- Capture a remote file: the button you pressed keeps keyboard focus and
+  ignores a second press until that preview or save finishes. A button that
+  cannot be used stays unavailable. When Save closes, or Capture another file
+  starts over, focus moves to the next available control.
+
+- The hidden Board and Requirements scroll checks wait for the read the test held, so a second read of the same address cannot make that wait miss.
+
+- Projects and work items: Tab reaches Add while a creation request is sending,
+  and pressing it keeps keyboard focus on the button. The button looks unavailable
+  until the request finishes, and a second press is ignored. A failed or refused
+  request moves focus to Edit request.
+
+- PM forms keep keyboard focus on the submit button while an operation is in flight
+  or being checked automatically, instead of dropping focus to the page. Pressing
+  Enter from a field moves focus to the submit button before fields are locked,
+  duplicate submissions are ignored, and a terminal failure or refusal moves focus
+  to "New request".
+
+- Refresh in a project no longer stays disabled when the project changes while
+  it is refreshing.
+
 - Settings → Agents: Tab reaches Check again while the first check runs, and
   pressing it keeps keyboard focus on the button. The button looks unavailable
   until the check finishes, and a second press is ignored.
@@ -18,6 +57,12 @@
   The attempts timeline renders live progress states with links to the operation
   or session output, preserving user drafts and requests across reloads and lost replies
   in English and zh-TW.
+
+- The PM Work inspector on the board adds a read-only Result section (v1.3 E03 Part A)
+  for finished and in-progress work attempts. It presents the agent's summary alongside
+  its observed progress, separate indicators for verification, review, requirement
+  acceptance, pull requests and deployment, summary statistics for touched files and
+  commits, uncommitted change warnings, and recorded turns in English and zh-TW.
 
 - The Windows fixture-helper test injects a deterministic clock into its deadline and
   retry helpers, making transient read recovery independent of runner speed and slow
