@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Opening a project names that view in the header while the workspace is still
+  loading, in English and Traditional Chinese. The view menu stays hidden until
+  the workspace loads, so an empty menu is not in the keyboard order. If the
+  workspace cannot be loaded, the header still uses the project-discussions
+  title and the menu stays hidden.
+
 - PM forms keep keyboard focus on the submit button while an operation is in flight
   or being checked automatically, instead of dropping focus to the page. Pressing
   Enter from a field moves focus to the submit button before fields are locked,
