@@ -24,7 +24,6 @@ from . import (
     orchestrate,
     pm_attempt_results,
     pm_delivery_lineage,
-    pm_evidence,
     pm_execution_verification,
     pm_quality_reviews,
     pm_source_lineage,
@@ -32,10 +31,11 @@ from . import (
     pm_workspace,
     pr_publication,
     registry,
+    verification,
     work_item_results,
 )
 from .api_auth import Principal
-from .errors import BatError, ConnectionLost, InvokeTimeout
+from .errors import BatError, ConnectionLost, InvokeTimeout, ResourceReadOnly
 from .operations import OperationError
 from .pm_attempt_results import (
     BRANCH_DIFF_MAX_COMMITS,
@@ -51,21 +51,18 @@ CHANGES_GET = "pm_work_attempt_changes_get"
 DIFF_GET = "pm_work_attempt_diff_get"
 
 CHANGESET_MEMO_MAX_ENTRIES = 128
-CHANGESET_MEMO_TTL_S = 15.0
+CHANGESET_MEMO_TTL_S = 300.0
 WAIT_MS_MAX = 10_000
 WAIT_POLL_INTERVAL_S = 0.5
 MAX_DIFF_BYTES = 262_144
+
+_OBSERVE_SCOPES: frozenset[str] = pm_execution_verification.REQUIRED & pr_publication.REQUIRED
 
 FIELDS: dict[str, tuple[str, ...]] = {
     RESULT_GET: ("workspace_id", "attempt_id", "cursor", "wait_ms"),
     CHANGES_GET: ("workspace_id", "attempt_id", "max_commits", "max_files"),
     DIFF_GET: ("workspace_id", "attempt_id", "commit", "path"),
 }
-
-# In-memory LRU memo for /changes: key (attempt_id, base_sha, live_head, max_commits, max_files)
-_CHANGESET_MEMO: OrderedDict[tuple[str, str, str, int, int], dict[str, Any]] = OrderedDict()
-# Single-flight tasks per (attempt_id, max_commits, max_files)
-_INFLIGHT_CHANGES: dict[tuple[str, int, int], asyncio.Task] = {}
 
 
 def capabilities(ops=None) -> dict[str, Any]:
@@ -89,6 +86,16 @@ def _bad(code: str, message: str, status: int = 422) -> OperationError:
     return OperationError(code, message, status)
 
 
+def _has_table(db, name: str) -> bool:
+    return (
+        db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            (name,),
+        ).fetchone()
+        is not None
+    )
+
+
 def _truncate_utf8(text: str, max_bytes: int) -> tuple[str, bool]:
     encoded = text.encode("utf-8")
     if len(encoded) <= max_bytes:
@@ -97,25 +104,44 @@ def _truncate_utf8(text: str, max_bytes: int) -> tuple[str, bool]:
     return clipped, True
 
 
+def _changeset_memo(ops) -> OrderedDict[tuple[str, str, str, int, int], dict[str, Any]]:
+    memo = ops.context.get("attempt_changes_memo")
+    if not isinstance(memo, OrderedDict):
+        memo = OrderedDict()
+        ops.context["attempt_changes_memo"] = memo
+    return memo
+
+
+def _inflight_changes(ops) -> dict[tuple[str, int, int], asyncio.Task]:
+    inflight = ops.context.get("attempt_changes_inflight")
+    if not isinstance(inflight, dict):
+        inflight = {}
+        ops.context["attempt_changes_inflight"] = inflight
+    return inflight
+
+
 def _memo_get(
+    ops,
     attempt_id: str,
     base_sha: str,
     live_head: str,
     max_commits: int,
     max_files: int,
 ) -> dict[str, Any] | None:
+    memo = _changeset_memo(ops)
     key = (attempt_id, base_sha, live_head, max_commits, max_files)
-    entry = _CHANGESET_MEMO.get(key)
+    entry = memo.get(key)
     if entry is None:
         return None
     if (time.monotonic() - float(entry.get("stored_at", 0.0))) >= CHANGESET_MEMO_TTL_S:
-        _CHANGESET_MEMO.pop(key, None)
+        memo.pop(key, None)
         return None
-    _CHANGESET_MEMO.move_to_end(key)
+    memo.move_to_end(key)
     return copy.deepcopy(entry["summary"])
 
 
 def _memo_put(
+    ops,
     attempt_id: str,
     base_sha: str,
     live_head: str,
@@ -123,14 +149,15 @@ def _memo_put(
     max_files: int,
     summary: dict[str, Any],
 ) -> None:
+    memo = _changeset_memo(ops)
     key = (attempt_id, base_sha, live_head, max_commits, max_files)
-    _CHANGESET_MEMO[key] = {
+    memo[key] = {
         "stored_at": time.monotonic(),
         "summary": copy.deepcopy(summary),
     }
-    _CHANGESET_MEMO.move_to_end(key)
-    while len(_CHANGESET_MEMO) > CHANGESET_MEMO_MAX_ENTRIES:
-        _CHANGESET_MEMO.popitem(last=False)
+    memo.move_to_end(key)
+    while len(memo) > CHANGESET_MEMO_MAX_ENTRIES:
+        memo.popitem(last=False)
 
 
 def _links(
@@ -157,10 +184,10 @@ def _attempt_context(ops, principal: Principal, workspace_id: str, attempt_id: s
     member_info = pm_workspace.require_member(ops.db, principal, workspace_id, write=False)
 
     start_op_id = view["start_operation_id"] or view["origin_id"]
-    parent = pm_work_start._op(ops.db, start_op_id)
-    intent = pm_work_start._intent(parent)
-    children = pm_work_start._children(ops, parent)
-    handoff = children.get("handoff")
+    parent = ops.get(start_op_id, steps=False)
+    saved_binding = (parent.get("external_refs") or {}).get("admission_binding") or {}
+    intent = saved_binding.get("work_start") if isinstance(saved_binding.get("work_start"), dict) else {}
+    handoff = view.get("execution_operation") if isinstance(view.get("execution_operation"), dict) else None
     execution_op_id = view.get("execution_operation_id")
 
     session = view.get("session") if isinstance(view.get("session"), dict) else None
@@ -199,7 +226,7 @@ def _attempt_context(ops, principal: Principal, workspace_id: str, attempt_id: s
         "start_op_id": start_op_id,
         "parent": parent,
         "intent": intent,
-        "children": children,
+        "children": view.get("children") or {},
         "handoff": handoff,
         "execution_op_id": execution_op_id,
         "sess_host": sess_host,
@@ -219,9 +246,13 @@ def _check_managed_session_registry(ops, ctx: dict[str, Any]) -> tuple[bool, str
     worktree_path = ctx["worktree_path"]
     if handoff is None or sess_host is None or sess_id is None:
         return False, "session_not_started_yet", None
-    if handoff.get("status") != "succeeded" or pm_work_start._uncertain(ops, handoff):
+    if handoff.get("status") != "succeeded" or ctx["view"].get("stage") == "start_unknown":
         return False, "session_not_managed_by_attempt", None
-    if not worktree_path or pm_work_start._child_session(handoff) != {"host": sess_host, "session_id": sess_id}:
+    handoff_res = handoff.get("result") if isinstance(handoff.get("result"), dict) else {}
+    handoff_sess = handoff_res.get("session") if isinstance(handoff_res.get("session"), dict) else None
+    if handoff_sess is None and handoff_res.get("host") and handoff_res.get("session_id"):
+        handoff_sess = {"host": handoff_res["host"], "session_id": handoff_res["session_id"]}
+    if not worktree_path or handoff_sess != {"host": sess_host, "session_id": sess_id}:
         return False, "session_not_managed_by_attempt", None
     reg = registry.get(sess_host, sess_id)
     if not isinstance(reg, dict) or reg.get("start_operation_id") != handoff["operation_id"]:
@@ -238,14 +269,14 @@ def _observed_inventory(ops, host: str | None, session_id: str | None) -> tuple[
     host_row = None
     obs_row = None
     obs_body: dict[str, Any] = {}
-    if host and pm_source_lineage._table(ops.db, "hosts_observed"):
+    if host and _has_table(ops.db, "hosts_observed"):
         h = ops.db.execute(
             "SELECT host, reachable, last_success_at, error FROM hosts_observed WHERE host=?",
             (host,),
         ).fetchone()
         if h is not None:
             host_row = dict(h)
-    if host and session_id and pm_source_lineage._table(ops.db, "sessions_observed"):
+    if host and session_id and _has_table(ops.db, "sessions_observed"):
         s = ops.db.execute(
             "SELECT body, digest, sort_key, last_seen_at, missing_count, gone_at FROM sessions_observed WHERE host=? AND session_id=?",
             (host, session_id),
@@ -263,7 +294,7 @@ def _observed_inventory(ops, host: str | None, session_id: str | None) -> tuple[
 
 
 def _collector_status(ops, attempt_id: str) -> dict[str, Any]:
-    collector = ops.context.get("attempt_result_collector") if hasattr(ops, "context") else None
+    collector = ops.context.get("attempt_result_collector")
     if collector is not None:
         last_check = getattr(collector, "last_check", None)
         if isinstance(last_check, dict) and attempt_id in last_check:
@@ -276,17 +307,38 @@ def _collector_status(ops, attempt_id: str) -> dict[str, Any]:
     return {"status": "not_checked_since_start"}
 
 
-def _self_reported_facet(latest_assistant_summary: dict[str, Any] | None) -> str:
-    if not isinstance(latest_assistant_summary, dict):
+def _self_reported_facet(
+    current_receipt_doc: dict[str, Any] | None,
+    latest_assistant_summary: dict[str, Any] | None,
+    turn_done: bool | str,
+    pending: dict[str, Any] | None = None,
+) -> str:
+    if not isinstance(current_receipt_doc, dict):
         return "none"
-    text = str(latest_assistant_summary.get("text") or "").strip()
-    if not text:
-        return "none"
-    lower = text.lower()
-    for token in ("blocker:", "blocked by", "cannot proceed", "unable to proceed"):
-        if token in lower:
-            return "reported_blocker"
-    return "claimed_done"
+    turn_prog = (
+        current_receipt_doc.get("turn_progress")
+        if isinstance(current_receipt_doc.get("turn_progress"), dict)
+        else {}
+    )
+    boundary = (
+        current_receipt_doc.get("boundary")
+        or current_receipt_doc.get("boundary_reason")
+        or turn_prog.get("boundary")
+    )
+    receipt_pending = current_receipt_doc.get("pending") or turn_prog.get("pending") or pending
+    if (
+        boundary == "agent_error"
+        or boundary in {"pending_question", "pending_permission", "pending_input", "waiting_input"}
+        or (isinstance(receipt_pending, dict) and bool(receipt_pending))
+    ):
+        return "reported_blocker"
+    if (
+        turn_done is True
+        and isinstance(latest_assistant_summary, dict)
+        and bool(str(latest_assistant_summary.get("text") or "").strip())
+    ):
+        return "claimed_done"
+    return "none"
 
 
 def _verification_section(
@@ -296,31 +348,52 @@ def _verification_section(
     work_item_id: str,
     start_op_id: str,
     execution_op_id: str | None,
+    sess_host: str | None,
+    sess_id: str | None,
     target_commit_sha: str | None,
-) -> tuple[dict[str, Any], str, dict[str, Any], dict[str, Any], dict[str, Any] | None]:
+) -> tuple[dict[str, Any], str, dict[str, Any], dict[str, Any], dict[str, Any] | None, str]:
     runs: list[dict[str, Any]] = []
     exec_verify_commit: dict[str, Any] | None = None
     sess_verify_commit: dict[str, Any] | None = None
+    verification_partial = False
 
-    if execution_op_id and pm_source_lineage._table(ops.db, "operations"):
+    if execution_op_id and _has_table(ops.db, "operations"):
         rows = ops.db.execute(
-            "SELECT * FROM operations WHERE action=? ORDER BY created_at ASC",
-            (pm_execution_verification.ACTION,),
+            """SELECT operation_id, params, actor, created_at, updated_at
+               FROM operations
+               WHERE action=?
+                 AND json_extract(target, '$.workspace_id')=?
+                 AND json_extract(target, '$.execution_operation_id')=?
+               ORDER BY created_at ASC, operation_id ASC
+               LIMIT 51""",
+            (pm_execution_verification.ACTION, workspace_id, execution_op_id),
         ).fetchall()
+        if len(rows) > 50:
+            verification_partial = True
+            rows = rows[:50]
         for r in rows:
-            op = ops._decode(r)
-            if op.get("target") != {"workspace_id": workspace_id, "execution_operation_id": execution_op_id}:
+            oid = r["operation_id"]
+            if not pm_execution_verification.operation_visible(ops.db, principal, {"operation_id": oid}):
+                verification_partial = True
                 continue
-            if not pm_source_lineage.visible(ops.db, principal, "operation", op["operation_id"]):
+            try:
+                ver_env = pm_execution_verification.get_verification(ops, principal, workspace_id, oid)
+            except OperationError:
+                verification_partial = True
                 continue
-            saved = pm_execution_verification._saved(ops, op)
-            if saved is not None:
-                pub = pm_execution_verification._public(saved)
+            pub = ver_env.get("verification")
+            op_st = ver_env.get("operation_status")
+            if isinstance(pub, dict):
                 cand_sha = (pub.get("reference") or {}).get("candidate_commit")
-                passed = pub.get("status") == "passed"
-                run_status = "verified" if passed else "failed"
+                raw_pub_st = str(pub.get("status") or "").lower()
+                if raw_pub_st in {"passed", "verified", "succeeded"}:
+                    run_status = "verified"
+                elif raw_pub_st in {"failed", "blocked", "error"}:
+                    run_status = "failed"
+                else:
+                    run_status = "unknown"
                 if (
-                    passed
+                    run_status == "verified"
                     and isinstance(cand_sha, str)
                     and SHA40.fullmatch(cand_sha)
                     and isinstance(target_commit_sha, str)
@@ -328,51 +401,80 @@ def _verification_section(
                     and cand_sha != target_commit_sha
                 ):
                     run_status = "stale"
+                rec_at = pub.get("created_at") or r["updated_at"] or r["created_at"]
                 runs.append(
                     {
                         "kind": "execution_verification",
-                        "verification_id": op["operation_id"],
-                        "operation_id": op["operation_id"],
+                        "verification_id": oid,
+                        "operation_id": oid,
                         "status": run_status,
                         "commit_sha": cand_sha,
                         "exit_code": pub.get("exit_code"),
-                        "recorded_by": op.get("actor"),
-                        "recorded_at": pub.get("created_at") or op.get("updated_at"),
+                        "recorded_by": r["actor"],
+                        "recorded_at": rec_at,
                     }
                 )
                 if isinstance(cand_sha, str) and SHA40.fullmatch(cand_sha):
                     exec_verify_commit = {
                         "commit_sha": cand_sha,
                         "source_kind": "execution_verification",
-                        "source_id": op["operation_id"],
-                        "recorded_by": op.get("actor"),
-                        "recorded_at": pub.get("created_at") or op.get("updated_at"),
+                        "source_id": oid,
+                        "recorded_by": r["actor"],
+                        "recorded_at": rec_at,
                     }
-            elif op.get("status") in {"queued", "running", "waiting_external"}:
+            elif op_st in {"accepted", "queued", "running", "waiting_external", "waiting_checks"}:
+                try:
+                    op_params = json.loads(r["params"] or "{}")
+                except (TypeError, ValueError):
+                    op_params = {}
                 runs.append(
                     {
                         "kind": "execution_verification",
-                        "verification_id": op["operation_id"],
-                        "operation_id": op["operation_id"],
+                        "verification_id": oid,
+                        "operation_id": oid,
                         "status": "running",
-                        "commit_sha": (op.get("params") or {}).get("candidate_commit"),
+                        "commit_sha": op_params.get("candidate_commit") if isinstance(op_params, dict) else None,
                         "exit_code": None,
-                        "recorded_by": op.get("actor"),
-                        "recorded_at": op.get("updated_at") or op.get("created_at"),
+                        "recorded_by": r["actor"],
+                        "recorded_at": r["updated_at"] or r["created_at"],
+                    }
+                )
+            elif op_st == "failed":
+                try:
+                    op_params = json.loads(r["params"] or "{}")
+                except (TypeError, ValueError):
+                    op_params = {}
+                runs.append(
+                    {
+                        "kind": "execution_verification",
+                        "verification_id": oid,
+                        "operation_id": oid,
+                        "status": "failed",
+                        "commit_sha": op_params.get("candidate_commit") if isinstance(op_params, dict) else None,
+                        "exit_code": None,
+                        "recorded_by": r["actor"],
+                        "recorded_at": r["updated_at"] or r["created_at"],
                     }
                 )
 
-    for op_id in [oid for oid in (execution_op_id, start_op_id) if oid]:
-        ver = ops.journal.get_verification(op_id) if hasattr(ops.journal, "get_verification") else None
+    if sess_host and sess_id:
+        ver = verification.get(sess_host, sess_id)
         if isinstance(ver, dict):
-            v_sha = ver.get("commit_sha") or ver.get("head_sha")
-            raw_st = str(ver.get("status") or "")
-            if raw_st in {"passed", "verified", "succeeded"}:
-                v_status = "verified"
-            elif raw_st == "running":
-                v_status = "running"
+            v_sha = ver.get("candidate_commit") or ver.get("commit_sha") or ver.get("head_sha")
+            if isinstance(ver.get("status"), str) and ver.get("status"):
+                raw_st = ver["status"].lower()
+                if raw_st in {"passed", "verified", "succeeded"}:
+                    v_status = "verified"
+                elif raw_st in {"running", "pending", "queued"}:
+                    v_status = "running"
+                elif raw_st in {"failed", "blocked", "error"}:
+                    v_status = "failed"
+                else:
+                    v_status = "unknown"
+            elif type(ver.get("exit_code")) is int:
+                v_status = "verified" if ver["exit_code"] == 0 else "failed"
             else:
-                v_status = "failed"
+                v_status = "unknown"
             if (
                 v_status == "verified"
                 and isinstance(v_sha, str)
@@ -382,78 +484,57 @@ def _verification_section(
                 and v_sha != target_commit_sha
             ):
                 v_status = "stale"
+            rec_by = ver.get("actor") or ver.get("verified_by")
+            rec_at = ver.get("recorded_at") if ver.get("recorded_at") is not None else ver.get("verified_at")
             runs.append(
                 {
                     "kind": "session_verification",
-                    "operation_id": op_id,
+                    "operation_id": execution_op_id or start_op_id,
                     "status": v_status,
                     "commit_sha": v_sha,
-                    "recorded_by": ver.get("verified_by") or ver.get("actor"),
-                    "recorded_at": ver.get("verified_at"),
+                    "exit_code": ver.get("exit_code"),
+                    "recorded_by": rec_by,
+                    "recorded_at": rec_at,
                 }
             )
             if isinstance(v_sha, str) and SHA40.fullmatch(v_sha):
                 sess_verify_commit = {
                     "commit_sha": v_sha,
                     "source_kind": "session_verification",
-                    "source_id": op_id,
-                    "recorded_by": ver.get("verified_by") or ver.get("actor"),
-                    "recorded_at": ver.get("verified_at"),
+                    "source_id": f"{sess_host}/{sess_id}",
+                    "recorded_by": rec_by,
+                    "recorded_at": rec_at,
                 }
-        obs_ver = (
-            ops.journal.get_observed_verification(op_id)
-            if hasattr(ops.journal, "get_observed_verification")
-            else None
-        )
-        if isinstance(obs_ver, dict):
-            ov_sha = obs_ver.get("head_sha") or obs_ver.get("commit_sha")
-            raw_ov = str(obs_ver.get("status") or "")
-            if raw_ov in {"passed", "verified", "succeeded"}:
-                ov_status = "verified"
-            elif raw_ov == "running":
-                ov_status = "running"
-            else:
-                ov_status = "failed"
-            if (
-                ov_status == "verified"
-                and isinstance(ov_sha, str)
-                and SHA40.fullmatch(ov_sha)
-                and isinstance(target_commit_sha, str)
-                and SHA40.fullmatch(target_commit_sha)
-                and ov_sha != target_commit_sha
-            ):
-                ov_status = "stale"
-            runs.append(
-                {
-                    "kind": "observed_verification",
-                    "operation_id": op_id,
-                    "status": ov_status,
-                    "commit_sha": ov_sha,
-                    "exit_code": obs_ver.get("exit_code"),
-                    "recorded_by": "connector",
-                    "recorded_at": obs_ver.get("completed_at") or obs_ver.get("started_at"),
-                }
-            )
 
     if not runs:
         overall_ver_status = "unverified"
     else:
+        indexed_runs = list(enumerate(runs))
+        indexed_runs.sort(
+            key=lambda pair: (
+                float(pair[1]["recorded_at"]) if isinstance(pair[1].get("recorded_at"), (int, float)) else 0.0,
+                pair[0],
+            )
+        )
+        runs = [pair[1] for pair in indexed_runs]
         overall_ver_status = runs[-1]["status"]
 
     qr_envelope: dict[str, Any] = {"reviews": [], "next_cursor": None, "visibility_filtered": False}
-    if pm_source_lineage._table(ops.db, "pm_quality_reviews"):
+    if _has_table(ops.db, "pm_quality_reviews"):
         try:
             qr_envelope = pm_quality_reviews.for_work(ops, principal, workspace_id, work_item_id)
+            if qr_envelope.get("visibility_filtered") or qr_envelope.get("source_visibility_filtered") or qr_envelope.get("next_cursor") is not None:
+                verification_partial = True
         except OperationError:
+            verification_partial = True
             qr_envelope = {"reviews": [], "next_cursor": None, "visibility_filtered": False}
 
     reviews = qr_envelope.get("reviews") if isinstance(qr_envelope.get("reviews"), list) else []
     matched_review = None
-    for rev in reviews:
-        if isinstance(rev, dict) and (rev.get("context") or {}).get("execution_operation_id") == execution_op_id:
-            matched_review = rev
-    if matched_review is None and reviews:
-        matched_review = reviews[-1]
+    if execution_op_id:
+        for rev in reviews:
+            if isinstance(rev, dict) and (rev.get("context") or {}).get("execution_operation_id") == execution_op_id:
+                matched_review = rev
 
     if matched_review is None:
         review_decision = {
@@ -502,7 +583,8 @@ def _verification_section(
             ),
         },
     }
-    return verification_block, overall_ver_status, review_decision, acceptance_facet, chosen_ver_commit
+    ver_coverage = "partial" if verification_partial else "complete"
+    return verification_block, overall_ver_status, review_decision, acceptance_facet, chosen_ver_commit, ver_coverage
 
 
 def _delivery_section(
@@ -514,79 +596,117 @@ def _delivery_section(
     delivery_goal: str,
     repository: str | None,
     target_commit_sha: str | None,
-) -> tuple[dict[str, Any], str, dict[str, Any], dict[str, Any] | None]:
+) -> tuple[dict[str, Any], str, dict[str, Any], dict[str, Any] | None, str]:
     pull_requests: list[dict[str, Any]] = []
     merges: list[dict[str, Any]] = []
     deployments: list[dict[str, Any]] = []
     integration_commit: dict[str, Any] | None = None
+    delivery_partial = False
+    pr_closed_unmerged = False
 
-    if pm_evidence._binding(ops.db, workspace_id, work_item_id) is not None:
-        try:
-            deliv = pm_delivery_lineage.for_work(ops, principal, workspace_id, work_item_id)
-            for item in deliv.get("deliveries") or []:
-                if not isinstance(item, dict):
-                    continue
-                if "integration" in item:
-                    integ = item["integration"]
-                    pr_num = (item.get("target") or {}).get("pull_number")
-                    head_sha = integ.get("new_head") or integ.get("head_sha")
-                    pull_requests.append(
-                        {
-                            "operation_id": item["operation_id"],
-                            "repository": (item.get("target") or {}).get("repository") or repository,
-                            "pull_number": pr_num,
-                            "head_sha": head_sha,
-                            "status": item.get("status"),
-                            "requirement_acceptance": "not_evaluated_by_delivery",
-                        }
-                    )
-                    if isinstance(head_sha, str) and SHA40.fullmatch(head_sha):
-                        integration_commit = {
-                            "commit_sha": head_sha,
-                            "source_kind": "integration",
-                            "source_id": item["operation_id"],
-                            "recorded_by": None,
-                            "recorded_at": item.get("updated_at") or item.get("created_at"),
-                        }
-                if "merge" in item:
-                    m = item["merge"]
-                    merges.append(
-                        {
-                            "operation_id": item["operation_id"],
-                            "repository": (item.get("target") or {}).get("repository") or repository,
-                            "pull_number": (item.get("target") or {}).get("pull_number"),
-                            "merged": bool(m.get("merged")),
-                            "merged_sha": m.get("merged_sha"),
-                            "head_sha": m.get("head_sha"),
-                            "status": item.get("status"),
-                            "requirement_acceptance": "not_evaluated_by_delivery",
-                        }
-                    )
-                    m_sha = m.get("merged_sha") or m.get("head_sha")
-                    if isinstance(m_sha, str) and SHA40.fullmatch(m_sha):
-                        integration_commit = {
-                            "commit_sha": m_sha,
-                            "source_kind": "integration",
-                            "source_id": item["operation_id"],
-                            "recorded_by": None,
-                            "recorded_at": item.get("updated_at") or item.get("created_at"),
-                        }
-                if "deployment" in item:
-                    d = item["deployment"]
-                    deployments.append(
-                        {
-                            **d,
-                            "operation_id": item["operation_id"],
-                            "requirement_acceptance": "not_evaluated_by_delivery",
-                        }
-                    )
-        except OperationError:
-            pass
+    try:
+        deliv = pm_delivery_lineage.for_work(ops, principal, workspace_id, work_item_id)
+        if deliv.get("source_visibility_filtered") or deliv.get("next_after") is not None:
+            delivery_partial = True
+        for item in deliv.get("deliveries") or []:
+            if not isinstance(item, dict):
+                continue
+            if "integration" in item:
+                integ = item["integration"]
+                pr_num = (item.get("target") or {}).get("pull_number")
+                head_sha = integ.get("new_head") or integ.get("head_sha")
+                if not head_sha:
+                    for src in integ.get("sources") or []:
+                        if isinstance(src, dict) and (src.get("delivered_sha") or src.get("pinned_sha")):
+                            head_sha = src.get("delivered_sha") or src.get("pinned_sha")
+                            break
+                pull_requests.append(
+                    {
+                        "operation_id": item["operation_id"],
+                        "repository": (item.get("target") or {}).get("repository") or repository,
+                        "pull_number": pr_num,
+                        "head_sha": head_sha,
+                        "status": item.get("status"),
+                        "requirement_acceptance": "not_evaluated_by_delivery",
+                    }
+                )
+                if isinstance(head_sha, str) and SHA40.fullmatch(head_sha):
+                    integration_commit = {
+                        "commit_sha": head_sha,
+                        "source_kind": "integration",
+                        "source_id": item["operation_id"],
+                        "recorded_by": None,
+                        "recorded_at": item.get("updated_at") or item.get("created_at"),
+                    }
+            if "merge" in item:
+                m = item["merge"]
+                m_pr_num = (item.get("target") or {}).get("pull_number")
+                m_repo = (item.get("target") or {}).get("repository") or repository
+                m_err = item.get("error_code")
+                merges.append(
+                    {
+                        "operation_id": item["operation_id"],
+                        "repository": m_repo,
+                        "pull_number": m_pr_num,
+                        "merged": bool(m.get("merged")),
+                        "merged_sha": m.get("merged_sha"),
+                        "head_sha": m.get("head_sha"),
+                        "status": item.get("status"),
+                        "error_code": m_err,
+                        "requirement_acceptance": "not_evaluated_by_delivery",
+                    }
+                )
+                if m_err in {"PR_CLOSED", "PR_NOT_OPEN"} and not m.get("merged"):
+                    pr_closed_unmerged = True
+                    existing_pr = next((p for p in pull_requests if p.get("pull_number") == m_pr_num), None)
+                    if existing_pr is not None:
+                        existing_pr["state"] = "closed"
+                        existing_pr["merged"] = False
+                    else:
+                        pull_requests.append(
+                            {
+                                "operation_id": item["operation_id"],
+                                "repository": m_repo,
+                                "pull_number": m_pr_num,
+                                "head_sha": m.get("head_sha"),
+                                "state": "closed",
+                                "merged": False,
+                                "requirement_acceptance": "not_evaluated_by_delivery",
+                            }
+                        )
+                m_sha = m.get("merged_sha") or m.get("head_sha")
+                if isinstance(m_sha, str) and SHA40.fullmatch(m_sha):
+                    integration_commit = {
+                        "commit_sha": m_sha,
+                        "source_kind": "integration",
+                        "source_id": item["operation_id"],
+                        "recorded_by": None,
+                        "recorded_at": item.get("updated_at") or item.get("created_at"),
+                    }
+            if "deployment" in item:
+                d = item["deployment"]
+                deployments.append(
+                    {
+                        **d,
+                        "operation_id": item["operation_id"],
+                        "requirement_acceptance": "not_evaluated_by_delivery",
+                    }
+                )
+    except OperationError as exc:
+        if exc.code != "NOT_FOUND":
+            delivery_partial = True
 
-    if execution_op_id and pm_source_lineage._table(ops.db, "pr_creation_receipts"):
+    if execution_op_id and _has_table(ops.db, "pr_creation_receipts"):
         try:
+            total_pr_rows = ops.db.execute(
+                "SELECT COUNT(*) FROM pr_creation_receipts WHERE repair_parent_id IS NULL AND child_operation_id=?",
+                (execution_op_id,),
+            ).fetchone()[0]
             pr_list = pr_publication.list_creation_receipts(ops, principal, None, execution_op_id)
-            for entry in pr_list.get("creation_receipts") or []:
+            visible_entries = pr_list.get("creation_receipts") or []
+            if len(visible_entries) < int(total_pr_rows or 0) or pr_list.get("next_after") is not None:
+                delivery_partial = True
+            for entry in visible_entries:
                 rec = entry.get("receipt") if isinstance(entry, dict) else None
                 if isinstance(rec, dict):
                     c_sha = rec.get("candidate_sha") or rec.get("observed_head_sha") or rec.get("head_sha")
@@ -612,89 +732,10 @@ def _delivery_section(
                             "recorded_at": rec.get("created_at") or rec.get("recorded_at"),
                         }
         except OperationError:
-            pass
+            delivery_partial = True
 
-    if execution_op_id and pm_source_lineage._table(ops.db, "integration_receipts"):
-        int_rows, _ = work_item_results._receipts(ops.db, "operation", execution_op_id)
-        for ir in int_rows:
-            d_sha = ir.get("delivered_sha") or ir.get("pinned_sha")
-            if not any(p.get("operation_id") == ir.get("operation_id") for p in pull_requests):
-                pull_requests.append(
-                    {
-                        "operation_id": ir.get("operation_id"),
-                        "repository": ir.get("repository") or repository,
-                        "pull_number": ir.get("pull_number"),
-                        "head_sha": d_sha,
-                        "status": "delivered",
-                        "requirement_acceptance": "not_evaluated_by_delivery",
-                    }
-                )
-            if isinstance(d_sha, str) and SHA40.fullmatch(d_sha) and integration_commit is None:
-                op_row = ops.db.execute(
-                    "SELECT actor FROM operations WHERE operation_id=?",
-                    (ir.get("operation_id"),),
-                ).fetchone()
-                integration_commit = {
-                    "commit_sha": d_sha,
-                    "source_kind": "integration",
-                    "source_id": ir.get("operation_id"),
-                    "recorded_by": op_row["actor"] if op_row else None,
-                    "recorded_at": ir.get("delivered_at"),
-                }
-
-    pr_closed_unmerged = False
     pr_open_found = False
     pr_merged_found = False
-    known_pr_numbers = {p.get("pull_number") for p in pull_requests if p.get("pull_number") is not None}
-
-    if repository and pm_source_lineage._table(ops.db, "pr_merge_previews"):
-        mpv_rows = ops.db.execute(
-            "SELECT pull_number, document FROM pr_merge_previews WHERE repository=? ORDER BY created_at DESC LIMIT 20",
-            (repository,),
-        ).fetchall()
-        for mpv in mpv_rows:
-            try:
-                doc = json.loads(mpv["document"])
-            except (TypeError, ValueError):
-                continue
-            if not isinstance(doc, dict):
-                continue
-            tgt = doc.get("target") if isinstance(doc.get("target"), dict) else {}
-            pr_num = mpv["pull_number"]
-            pr_head_sha = tgt.get("head_sha")
-            if pr_num in known_pr_numbers or (target_commit_sha and pr_head_sha == target_commit_sha):
-                blocking_codes = {
-                    b.get("code") for b in (doc.get("blocking") or []) if isinstance(b, dict)
-                }
-                is_closed = (
-                    tgt.get("state") == "closed"
-                    or doc.get("state") == "closed"
-                    or bool(blocking_codes & {"PR_CLOSED", "PR_NOT_OPEN"})
-                )
-                is_merged = bool(tgt.get("merged") or doc.get("merged"))
-                st_str = "closed" if is_closed else str(tgt.get("state") or doc.get("state") or "open")
-                existing = next((p for p in pull_requests if p.get("pull_number") == pr_num), None)
-                if existing is not None:
-                    existing["state"] = st_str
-                    existing["merged"] = is_merged
-                else:
-                    pull_requests.append(
-                        {
-                            "repository": repository,
-                            "pull_number": pr_num,
-                            "head_sha": pr_head_sha,
-                            "state": st_str,
-                            "merged": is_merged,
-                            "requirement_acceptance": "not_evaluated_by_delivery",
-                        }
-                    )
-                if is_merged:
-                    pr_merged_found = True
-                elif is_closed:
-                    pr_closed_unmerged = True
-                else:
-                    pr_open_found = True
-
     for p in pull_requests:
         if p.get("merged") is True:
             pr_merged_found = True
@@ -705,7 +746,7 @@ def _delivery_section(
 
     if any(m.get("merged") for m in merges) or pr_merged_found:
         merge_facet = "merged"
-    elif any(m.get("status") in {"queued", "running", "waiting_external"} for m in merges):
+    elif any(m.get("status") in {"queued", "running", "waiting_external", "waiting_checks", "accepted", "uncertain"} for m in merges):
         merge_facet = "merge_pending"
     elif pr_closed_unmerged and not pr_open_found:
         merge_facet = "pr_closed_unmerged"
@@ -734,7 +775,39 @@ def _delivery_section(
         "merges": merges,
         "deployments": deployments,
     }
-    return delivery_block, merge_facet, deployment_facet, integration_commit
+    deliv_coverage = "partial" if delivery_partial else "complete"
+    return delivery_block, merge_facet, deployment_facet, integration_commit, deliv_coverage
+
+
+def _is_attempt_controller(
+    ops,
+    principal: Principal,
+    workspace_id: str,
+    attempt_ctrl: dict[str, Any] | None,
+) -> bool:
+    if not isinstance(attempt_ctrl, dict):
+        return False
+    try:
+        caller_ctrl = controller_authority.binding(
+            ops.db,
+            principal,
+            pm_workspace_id=workspace_id,
+        )
+        return controller_authority.same_controller(caller_ctrl, attempt_ctrl)
+    except (OperationError, ResourceReadOnly, KeyError, TypeError, ValueError):
+        return False
+
+
+def _is_writer_member(ops, principal: Principal, workspace_id: str) -> bool:
+    try:
+        pm_workspace.require_member(ops.db, principal, workspace_id, write=True)
+        return True
+    except OperationError:
+        return False
+
+
+def _action_scopes(ops, action_name: str, extra: frozenset[str] = frozenset()) -> list[str]:
+    return sorted(_OBSERVE_SCOPES | {ops.actions[action_name].scope} | extra)
 
 
 def _compute_actions(
@@ -746,7 +819,7 @@ def _compute_actions(
     delivery_goal: str,
     candidate_sha: str | None,
     has_receipt: bool,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], bool]:
     workspace_id = ctx["workspace_id"]
     work_item_id = ctx["work_item_id"]
     start_op_id = ctx["start_op_id"]
@@ -756,23 +829,10 @@ def _compute_actions(
     view = ctx["view"]
     stage = view["stage"]
     op_status = view["operation_status"]
-    member_role = ctx["member_info"]["membership"]["role"]
-    is_writer = bool(principal.admin or member_role in {"owner", "contributor"})
+    requester_actor = ctx["parent"].get("actor")
 
-    caller_ctrl = {
-        "server_id": pm_workspace.server_id(ops.db),
-        "controller_id": pm_workspace.controller_for(ops.db, principal),
-        "actor": principal.actor,
-        "scopes": sorted(principal.scopes),
-        "admin": principal.admin,
-        "pm_workspace_id": workspace_id,
-    }
-    attempt_ctrl = ctx["controller"]
-    is_controller = (
-        controller_authority.same_controller(caller_ctrl, attempt_ctrl)
-        if isinstance(attempt_ctrl, dict)
-        else False
-    )
+    is_writer = _is_writer_member(ops, principal, workspace_id)
+    is_controller = _is_attempt_controller(ops, principal, workspace_id, ctx["controller"])
 
     allowed: list[dict[str, Any]] = []
     blocked: list[dict[str, Any]] = []
@@ -782,25 +842,41 @@ def _compute_actions(
         *,
         action_name: str,
         requires_controller: bool = True,
+        requires_original_actor: bool = False,
         requires_writer: bool = False,
         reconcile_blocked: bool = False,
     ) -> None:
+        is_registered_action = action_name in ops.actions
+        if entry.get("kind") == "action" and not is_registered_action:
+            return
         req_scopes = entry.get("required_scopes") or []
         if reconcile_blocked:
-            blocked.append({"action": action_name, "reason": "WAIT_ORIGINAL_OPERATION_RECONCILE"})
+            if is_registered_action:
+                blocked.append({"action": action_name, "reason": "WAIT_ORIGINAL_OPERATION_RECONCILE"})
             return
         if requires_controller and not is_controller:
-            blocked.append({"action": action_name, "reason": "not_controller"})
+            if is_registered_action:
+                blocked.append({"action": action_name, "reason": "not_controller"})
+            return
+        if requires_original_actor and requester_actor and principal.actor != requester_actor:
+            if is_registered_action:
+                blocked.append({"action": action_name, "reason": "not_controller"})
             return
         if requires_writer and not is_writer:
-            blocked.append({"action": action_name, "reason": "not_writer_member"})
+            if is_registered_action:
+                blocked.append({"action": action_name, "reason": "not_writer_member"})
             return
         if not all(principal.allows(s) for s in req_scopes):
-            blocked.append({"action": action_name, "reason": "missing_scope"})
+            if is_registered_action:
+                blocked.append({"action": action_name, "reason": "missing_scope"})
             return
         allowed.append(entry)
 
-    # 1. Operation lifecycle endpoints
+    # 1. Operation lifecycle endpoints: api_v1.py:357-358 has route scope None; handlers call
+    # operations._may_steer (operations.py:633-646) + pm_work_start._authorize_existing (pm_work_start.py:956-961),
+    # which require operation_visible (observe scope), same_controller, workspace writer member (write=True),
+    # and principal.actor == op["actor"] (satisfying op["actor"] == principal.actor at operations.py:644).
+    work_start_steer_scopes = sorted(_OBSERVE_SCOPES)
     if op_status not in {"succeeded", "failed", "cancelled"}:
         consider(
             {
@@ -809,31 +885,19 @@ def _compute_actions(
                 "operation_id": start_op_id,
                 "http_method": "POST",
                 "http_path": f"/api/v1/operations/{start_op_id}/cancel",
-                "required_scopes": ["observe", "manage"],
+                "required_scopes": work_start_steer_scopes,
             },
             action_name="cancel",
             requires_controller=True,
-            requires_writer=False,
+            requires_original_actor=True,
+            requires_writer=True,
             reconcile_blocked=False,
         )
 
     if stage == "start_unknown":
-        consider(
-            {
-                "kind": "operation_endpoint",
-                "endpoint": "resume",
-                "operation_id": start_op_id,
-                "http_method": "POST",
-                "http_path": f"/api/v1/operations/{start_op_id}/resume",
-                "required_scopes": ["observe", "manage"],
-            },
-            action_name="resume",
-            requires_controller=True,
-            requires_writer=False,
-            reconcile_blocked=True,
-        )
-        blocked.append({"action": "work.start", "reason": "WAIT_ORIGINAL_OPERATION_RECONCILE"})
-        return allowed, blocked
+        if pm_work_start.ACTION in ops.actions:
+            blocked.append({"action": pm_work_start.ACTION, "reason": "WAIT_ORIGINAL_OPERATION_RECONCILE"})
+        return allowed, blocked, is_controller
 
     if op_status == "needs_attention":
         consider(
@@ -843,11 +907,12 @@ def _compute_actions(
                 "operation_id": start_op_id,
                 "http_method": "POST",
                 "http_path": f"/api/v1/operations/{start_op_id}/resume",
-                "required_scopes": ["observe", "manage"],
+                "required_scopes": work_start_steer_scopes,
             },
             action_name="resume",
             requires_controller=True,
-            requires_writer=False,
+            requires_original_actor=True,
+            requires_writer=True,
             reconcile_blocked=False,
         )
 
@@ -856,66 +921,75 @@ def _compute_actions(
         sess_target = {"host": sess_host, "session_id": sess_id}
         if execution_state == "waiting":
             for act in ("session.answer", "session.approve_pending", "session.permissions"):
-                consider(
-                    {
-                        "kind": "action",
-                        "action": act,
-                        "target": dict(sess_target),
-                        "required_scopes": ["observe", "manage"],
-                    },
-                    action_name=act,
-                    requires_controller=True,
-                )
-        elif execution_state == "active":
-            consider(
-                {
-                    "kind": "action",
-                    "action": "session.interrupt",
-                    "target": dict(sess_target),
-                    "required_scopes": ["observe", "manage"],
-                },
-                action_name="session.interrupt",
-                requires_controller=True,
-            )
-        elif execution_state == "turn-ended":
-            consider(
-                {
-                    "kind": "action",
-                    "action": "session.send",
-                    "target": dict(sess_target),
-                    "required_scopes": ["observe", "manage"],
-                },
-                action_name="session.send",
-                requires_controller=True,
-            )
-            if execution_op_id:
-                consider(
-                    {
-                        "kind": "action",
-                        "action": "pm.execution.verify",
-                        "target": {
-                            "workspace_id": workspace_id,
-                            "execution_operation_id": execution_op_id,
+                if act in ops.actions:
+                    consider(
+                        {
+                            "kind": "action",
+                            "action": act,
+                            "target": dict(sess_target),
+                            "required_scopes": _action_scopes(ops, act),
                         },
-                        "required_scopes": ["observe", "manage"],
-                    },
-                    action_name="pm.execution.verify",
-                    requires_controller=True,
-                    requires_writer=True,
-                )
+                        action_name=act,
+                        requires_controller=True,
+                    )
+        elif execution_state == "active":
+            if "session.interrupt" in ops.actions:
                 consider(
                     {
                         "kind": "action",
-                        "action": "session.record_verification",
-                        "target": {"operation_id": execution_op_id},
-                        "required_scopes": ["observe", "manage"],
+                        "action": "session.interrupt",
+                        "target": dict(sess_target),
+                        "required_scopes": _action_scopes(ops, "session.interrupt"),
                     },
-                    action_name="session.record_verification",
+                    action_name="session.interrupt",
                     requires_controller=True,
                 )
+        elif execution_state == "turn-ended":
+            if "session.send" in ops.actions:
+                consider(
+                    {
+                        "kind": "action",
+                        "action": "session.send",
+                        "target": dict(sess_target),
+                        "required_scopes": _action_scopes(ops, "session.send"),
+                    },
+                    action_name="session.send",
+                    requires_controller=True,
+                )
+            if execution_op_id:
+                if pm_execution_verification.ACTION in ops.actions:
+                    consider(
+                        {
+                            "kind": "action",
+                            "action": pm_execution_verification.ACTION,
+                            "target": {
+                                "workspace_id": workspace_id,
+                                "execution_operation_id": execution_op_id,
+                            },
+                            "required_scopes": _action_scopes(
+                                ops,
+                                pm_execution_verification.ACTION,
+                                pm_execution_verification.REQUIRED,
+                            ),
+                        },
+                        action_name=pm_execution_verification.ACTION,
+                        requires_controller=True,
+                        requires_writer=True,
+                    )
+                if "session.record_verification" in ops.actions:
+                    consider(
+                        {
+                            "kind": "action",
+                            "action": "session.record_verification",
+                            "target": {"operation_id": execution_op_id},
+                            "required_scopes": _action_scopes(ops, "session.record_verification"),
+                        },
+                        action_name="session.record_verification",
+                        requires_controller=True,
+                    )
 
         if execution_state in {"turn-ended", "process-ended"}:
-            if delivery_goal == "pull_request" and execution_op_id:
+            if delivery_goal == "pull_request" and execution_op_id and pr_publication.ACTION in ops.actions:
                 repository = (ctx["code_source"] or {}).get("repository")
                 prefilled: dict[str, Any] = {}
                 if isinstance(candidate_sha, str) and SHA40.fullmatch(candidate_sha):
@@ -923,14 +997,18 @@ def _compute_actions(
                 consider(
                     {
                         "kind": "action",
-                        "action": "github.pr.publish",
+                        "action": pr_publication.ACTION,
                         "target": {
                             "workspace_id": workspace_id,
                             "repository": repository,
                             "host": sess_host,
                             "source_operation_id": execution_op_id,
                         },
-                        "required_scopes": ["observe", "manage", "integrate"],
+                        "required_scopes": _action_scopes(
+                            ops,
+                            pr_publication.ACTION,
+                            pr_publication.REQUIRED,
+                        ),
                         "required_params": [
                             "candidate_sha",
                             "base_ref",
@@ -941,28 +1019,29 @@ def _compute_actions(
                         "optional_params": ["quality_ref"],
                         "prefilled_params": prefilled,
                     },
-                    action_name="github.pr.publish",
+                    action_name=pr_publication.ACTION,
                     requires_controller=True,
                     requires_writer=True,
                 )
             if has_receipt or execution_op_id:
                 for qr_act in ("pm.quality.review.create", "pm.quality.review.record"):
-                    consider(
-                        {
-                            "kind": "action",
-                            "action": qr_act,
-                            "target": {
-                                "workspace_id": workspace_id,
-                                "work_item_id": work_item_id,
+                    if qr_act in ops.actions:
+                        consider(
+                            {
+                                "kind": "action",
+                                "action": qr_act,
+                                "target": {
+                                    "workspace_id": workspace_id,
+                                    "work_item_id": work_item_id,
+                                },
+                                "required_scopes": _action_scopes(ops, qr_act),
                             },
-                            "required_scopes": ["observe", "manage"],
-                        },
-                        action_name=qr_act,
-                        requires_controller=False,
-                        requires_writer=True,
-                    )
+                            action_name=qr_act,
+                            requires_controller=False,
+                            requires_writer=True,
+                        )
 
-    return allowed, blocked
+    return allowed, blocked, is_controller
 
 
 def _find_related_event(
@@ -970,7 +1049,7 @@ def _find_related_event(
     principal: Principal,
     after_cursor: int,
     related: set[tuple[str, str]],
-) -> dict[str, Any] | None:
+) -> tuple[dict[str, Any] | None, int]:
     scan = after_cursor
     while True:
         try:
@@ -979,11 +1058,12 @@ def _find_related_event(
             raise _bad("DASHBOARD_RESET_REQUIRED", f"Event cursor reset required ({exc.reason})", 409) from exc
         for ev in page.get("events") or []:
             if ev["seq"] > after_cursor and (ev.get("resource_type"), ev.get("resource_id")) in related:
-                return ev
+                return ev, int(ev["seq"])
         next_cur = page.get("next_cursor")
-        if not page.get("has_more") or next_cur is None or next_cur <= scan:
-            return None
-        scan = int(next_cur)
+        if next_cur is not None and int(next_cur) > scan:
+            scan = int(next_cur)
+        if not page.get("has_more") or next_cur is None:
+            return None, scan
 
 
 async def _wait_for_related_event(
@@ -1002,8 +1082,9 @@ async def _wait_for_related_event(
     if ctx["sess_host"] and ctx["sess_id"]:
         related.add(("session", f"{ctx['sess_host']}/{ctx['sess_id']}"))
 
-    if cursor is not None:
-        matched = _find_related_event(ops, principal, cursor, related)
+    scan_cursor = cursor
+    if scan_cursor is not None:
+        matched, scan_cursor = _find_related_event(ops, principal, scan_cursor, related)
         if matched is not None:
             return {
                 "requested_ms": wait_ms,
@@ -1019,10 +1100,10 @@ async def _wait_for_related_event(
             "retry_after_ms": 0,
         }
 
-    wait_cursor = ops.journal.api_head() if cursor is None else cursor
+    wait_cursor = ops.journal.api_head() if scan_cursor is None else scan_cursor
     deadline = time.monotonic() + (wait_ms / 1000.0)
     while True:
-        matched = _find_related_event(ops, principal, wait_cursor, related)
+        matched, wait_cursor = _find_related_event(ops, principal, wait_cursor, related)
         if matched is not None:
             return {
                 "requested_ms": wait_ms,
@@ -1056,8 +1137,8 @@ async def _read_result(
 
     ctx = _attempt_context(ops, principal, workspace_id, attempt_id)
     wait_info = await _wait_for_related_event(ops, principal, ctx, cursor, wait_ms)
-    if wait_ms > 0:
-        ctx = _attempt_context(ops, principal, workspace_id, attempt_id)
+    current_head_cursor = ops.journal.api_head()
+    ctx = _attempt_context(ops, principal, workspace_id, attempt_id)
 
     view = ctx["view"]
     work_item_id = ctx["work_item_id"]
@@ -1107,7 +1188,7 @@ async def _read_result(
         state_source = "work_start"
         state_observed_at = work_start_ts
         state_reason = "start_cancelled"
-    elif stage == "start_unknown" or op_status == "uncertain":
+    elif stage == "start_unknown":
         exec_state = "unknown"
         state_source = "work_start"
         state_observed_at = work_start_ts
@@ -1224,10 +1305,26 @@ async def _read_result(
     # Conversation section (bounded projection from current_receipt only)
     if current_receipt is not None:
         turn_prog = cur_doc.get("turn_progress") if isinstance(cur_doc.get("turn_progress"), dict) else {}
-        turn_started: bool | str = bool(cur_doc.get("turn_started", turn_prog.get("turn_started", True)))
-        turn_done: bool | str = bool(cur_doc.get("turn_done", turn_prog.get("turn_done", False)))
-        turn_phase: str = str(cur_doc.get("turn_phase") or turn_prog.get("turn_phase") or "terminal")
-        turn_attribution: str = str(cur_doc.get("turn_attribution") or turn_prog.get("turn_attribution") or "correlated")
+        raw_started = cur_doc.get("turn_started")
+        if raw_started is None:
+            raw_started = turn_prog.get("turn_started")
+        turn_started: bool | str = raw_started if isinstance(raw_started, bool) else "unknown"
+
+        raw_done = cur_doc.get("turn_done")
+        if raw_done is None:
+            raw_done = turn_prog.get("turn_done")
+        turn_done: bool | str = raw_done if isinstance(raw_done, bool) else "unknown"
+
+        raw_phase = cur_doc.get("turn_phase")
+        if raw_phase is None:
+            raw_phase = turn_prog.get("turn_phase")
+        turn_phase: str = str(raw_phase) if isinstance(raw_phase, str) and raw_phase else "unknown"
+
+        raw_attr = cur_doc.get("turn_attribution")
+        if raw_attr is None:
+            raw_attr = turn_prog.get("turn_attribution")
+        turn_attribution: str = str(raw_attr) if isinstance(raw_attr, str) and raw_attr else "unknown"
+
         latest_assistant_summary = cur_doc.get("latest_assistant_summary")
         messages_preview = list(cur_doc.get("messages_preview") or [])
         tool_activity = list(cur_doc.get("tool_activity") or [])
@@ -1256,8 +1353,14 @@ async def _read_result(
     )
 
     # Artifact references / attachments for the work item
-    wi_summary = work_item_results._summary(ops, work_item_id)
-    result_artifacts = wi_summary.get("result_artifacts") or []
+    result_artifacts: list[dict[str, Any]] = []
+    if work_item_id:
+        try:
+            wi_res = work_item_results.read(ops, principal, work_item_id)
+            wi_item = wi_res.get("item") if isinstance(wi_res.get("item"), dict) else {}
+            result_artifacts = list(wi_item.get("result_artifacts") or [])
+        except OperationError:
+            result_artifacts = []
 
     # Changes section from latest receipt
     if latest_row is not None:
@@ -1317,18 +1420,21 @@ async def _read_result(
     )
 
     # Verification, Quality Reviews & Delivery
-    delivery_goal = str(view.get("delivery") or intent.get("delivery") or "pull_request")
+    raw_delivery = view.get("delivery") or intent.get("delivery")
+    delivery_goal = str(raw_delivery) if isinstance(raw_delivery, str) and raw_delivery else "unknown"
     repository = (ctx["code_source"] or {}).get("repository")
-    verification_block, ver_facet, review_decision, acceptance_facet, ver_commit = _verification_section(
+    verification_block, ver_facet, review_decision, acceptance_facet, ver_commit, ver_coverage = _verification_section(
         ops,
         principal,
         workspace_id,
         work_item_id,
         start_op_id,
         execution_op_id,
+        sess_host,
+        sess_id,
         target_sha,
     )
-    delivery_block, merge_facet, deployment_facet, integ_commit = _delivery_section(
+    delivery_block, merge_facet, deployment_facet, integ_commit, deliv_coverage = _delivery_section(
         ops,
         principal,
         workspace_id,
@@ -1349,6 +1455,21 @@ async def _read_result(
     else:
         fixed_result_commit = receipt_fixed_commit
 
+    cand_sha_for_pr = (
+        (receipt_fixed_commit or {}).get("commit_sha")
+        if isinstance(receipt_fixed_commit, dict)
+        else (fixed_result_commit.get("commit_sha") if isinstance(fixed_result_commit, dict) else None)
+    )
+    next_allowed_actions, blocked_actions, is_controller = _compute_actions(
+        ops,
+        principal,
+        ctx,
+        execution_state=exec_state,
+        delivery_goal=delivery_goal,
+        candidate_sha=cand_sha_for_pr,
+        has_receipt=latest_row is not None,
+    )
+
     # Identity & Sources
     reg_entry = registry.get(sess_host, sess_id) if (sess_host and sess_id) else None
     reg_origin = None
@@ -1367,6 +1488,15 @@ async def _read_result(
     agent_kind = sess_meta.get("agent_kind") or intent.get("agent") or "unknown"
     model_name = sess_meta.get("model") or obs_body.get("model") or intent.get("model") or "unknown"
 
+    raw_ctrl = ctx["controller"]
+    public_controller = (
+        {
+            "server_id": raw_ctrl.get("server_id"),
+            "controller_id": raw_ctrl.get("controller_id"),
+        }
+        if isinstance(raw_ctrl, dict)
+        else None
+    )
     identity_block = {
         "server_id": pm_workspace.server_id(ops.db),
         "workspace_id": workspace_id,
@@ -1380,7 +1510,8 @@ async def _read_result(
         "package_id": view.get("package_id"),
         "scope_revision": (intent.get("plan_ref") or {}).get("scope_revision"),
         "requester_actor": parent.get("actor"),
-        "controller": ctx["controller"],
+        "controller": public_controller,
+        "caller_is_controller": is_controller,
         "adapter": {
             "kind": "bat",
             "instance_id": sess_host or (ctx["code_source"] or {}).get("host"),
@@ -1445,11 +1576,16 @@ async def _read_result(
         "transcript_read": transcript_read,
     }
 
-    self_reported = _self_reported_facet(latest_assistant_summary)
     pending_out = (
         obs_body.get("pending")
         if (obs_row is not None and obs_body.get("pending") is not None)
         else None
+    )
+    self_reported = _self_reported_facet(
+        cur_doc if current_receipt is not None else None,
+        latest_assistant_summary=latest_assistant_summary,
+        turn_done=turn_done,
+        pending=pending_out,
     )
     execution_block = {
         "state": exec_state,
@@ -1505,12 +1641,28 @@ async def _read_result(
         if isinstance(u_reason, str) and u_reason and u_reason not in reasons:
             reasons.append(u_reason)
     if isinstance(changes_summary, dict):
-        if changes_summary.get("unavailable"):
-            if "diff_exceeded_pipe_limit" not in reasons:
-                reasons.append("diff_exceeded_pipe_limit")
-        cs_reason = changes_summary.get("reason")
-        if isinstance(cs_reason, str) and cs_reason and cs_reason not in {"no_receipt_changes_summary"} and cs_reason not in reasons:
-            reasons.append(cs_reason)
+        cs_reasons = changes_summary.get("reasons")
+        if isinstance(cs_reasons, list) and cs_reasons:
+            for r_code in cs_reasons:
+                if (
+                    isinstance(r_code, str)
+                    and r_code
+                    and r_code not in {"no_receipt_changes_summary"}
+                    and r_code not in reasons
+                ):
+                    reasons.append(r_code)
+        else:
+            if changes_summary.get("unavailable") and not changes_summary.get("reason"):
+                if "diff_exceeded_pipe_limit" not in reasons:
+                    reasons.append("diff_exceeded_pipe_limit")
+            cs_reason = changes_summary.get("reason")
+            if (
+                isinstance(cs_reason, str)
+                and cs_reason
+                and cs_reason not in {"no_receipt_changes_summary"}
+                and cs_reason not in reasons
+            ):
+                reasons.append(cs_reason)
 
     has_conflict = False
     if latest_row is not None and pm_attempt_results.installed(ops.db):
@@ -1554,6 +1706,8 @@ async def _read_result(
         and current_receipt is not None
         and bool(changes_summary.get("complete"))
         and not changes_summary.get("unavailable")
+        and ver_coverage == "complete"
+        and deliv_coverage == "complete"
         and not has_conflict
         and not doc_truncated
         and not reasons
@@ -1584,8 +1738,8 @@ async def _read_result(
             "conversation": "complete" if (current_receipt is not None and not doc_truncated) else ("partial" if current_receipt is not None else "unavailable"),
             "execution": "complete" if exec_state not in {"unknown"} else "partial",
             "changes": "complete" if (latest_row is not None and bool(changes_summary.get("complete")) and not changes_summary.get("unavailable")) else ("partial" if latest_row is not None else "unavailable"),
-            "verification": "complete",
-            "delivery": "complete",
+            "verification": ver_coverage,
+            "delivery": deliv_coverage,
             "document_truncated": doc_truncated,
             "transcript_window": transcript_meta,
             "changes_window": {
@@ -1598,22 +1752,6 @@ async def _read_result(
         "last_successful_observation": last_obs,
     }
 
-    cand_sha_for_pr = (
-        (receipt_fixed_commit or {}).get("commit_sha")
-        if isinstance(receipt_fixed_commit, dict)
-        else (fixed_result_commit.get("commit_sha") if isinstance(fixed_result_commit, dict) else None)
-    )
-    next_allowed_actions, blocked_actions = _compute_actions(
-        ops,
-        principal,
-        ctx,
-        execution_state=exec_state,
-        delivery_goal=delivery_goal,
-        candidate_sha=cand_sha_for_pr,
-        has_receipt=latest_row is not None,
-    )
-
-    current_head_cursor = ops.journal.api_head()
     return {
         "contract": CONTRACT,
         "workspace_id": workspace_id,
@@ -1621,7 +1759,8 @@ async def _read_result(
         "cursor": current_head_cursor,
         "events_read": {
             "http": f"/api/v1/events?after={current_head_cursor}&resource_type=pm_work_attempt&resource_id={attempt_id}",
-            "rpc": "events_get",
+            "rpc": "api_events",
+            "mcp": "events_list",
             "resource_type": "pm_work_attempt",
             "resource_id": attempt_id,
         },
@@ -1651,6 +1790,7 @@ async def _compute_changes_live(
     max_commits: int,
     max_files: int,
     latest_row: dict[str, Any] | None,
+    head_cursor: int,
 ) -> dict[str, Any]:
     workspace_id = ctx["workspace_id"]
     attempt_id = ctx["attempt_id"]
@@ -1696,6 +1836,7 @@ async def _compute_changes_live(
             latest_row=latest_row,
             reasons=reasons,
             status="partial" if latest_row is not None else "unavailable",
+            head_cursor=head_cursor,
         )
     except (BatError, InvokeTimeout, asyncio.TimeoutError):
         reasons.append("worktree_unreachable")
@@ -1705,11 +1846,12 @@ async def _compute_changes_live(
             latest_row=latest_row,
             reasons=reasons,
             status="partial" if latest_row is not None else "unavailable",
+            head_cursor=head_cursor,
         )
 
-    # Check if live_head matches receipt or in-memory LRU memo
+    # Check if live_head matches receipt or per-daemon LRU memo
     memo_hit = False
-    summary = _memo_get(attempt_id, base_sha, head_sha, max_commits, max_files)
+    summary = _memo_get(ops, attempt_id, base_sha, head_sha, max_commits, max_files)
     if summary is not None:
         memo_hit = True
     elif (
@@ -1718,9 +1860,10 @@ async def _compute_changes_live(
         and max_commits == BRANCH_DIFF_MAX_COMMITS
         and max_files == BRANCH_DIFF_MAX_FILES
         and isinstance(latest_doc.get("changes_summary"), dict)
+        and latest_doc["changes_summary"].get("reason") is None
     ):
         summary = copy.deepcopy(latest_doc["changes_summary"])
-        _memo_put(attempt_id, base_sha, head_sha, max_commits, max_files, summary)
+        _memo_put(ops, attempt_id, base_sha, head_sha, max_commits, max_files, summary)
         memo_hit = True
     else:
         rem = max(0.001, CHANGESET_TOTAL_BUDGET_S - (time.monotonic() - started))
@@ -1733,19 +1876,25 @@ async def _compute_changes_live(
             max_files=max_files,
             budget_s=rem,
         )
-        if summary.get("reason") not in {"worktree_unreachable"}:
-            _memo_put(attempt_id, base_sha, head_sha, max_commits, max_files, summary)
+        if summary.get("reason") is None:
+            _memo_put(ops, attempt_id, base_sha, head_sha, max_commits, max_files, summary)
 
     if isinstance(uncommitted, dict) and uncommitted.get("count") == "unknown":
         u_reason = uncommitted.get("reason")
         if isinstance(u_reason, str) and u_reason and u_reason not in reasons:
             reasons.append(u_reason)
-    if summary.get("unavailable"):
-        if "diff_exceeded_pipe_limit" not in reasons:
-            reasons.append("diff_exceeded_pipe_limit")
-    s_reason = summary.get("reason")
-    if isinstance(s_reason, str) and s_reason and s_reason not in reasons:
-        reasons.append(s_reason)
+    s_reasons = summary.get("reasons")
+    if isinstance(s_reasons, list) and s_reasons:
+        for r_code in s_reasons:
+            if isinstance(r_code, str) and r_code and r_code not in reasons:
+                reasons.append(r_code)
+    else:
+        if summary.get("unavailable") and not summary.get("reason"):
+            if "diff_exceeded_pipe_limit" not in reasons:
+                reasons.append("diff_exceeded_pipe_limit")
+        s_reason = summary.get("reason")
+        if isinstance(s_reason, str) and s_reason and s_reason not in reasons:
+            reasons.append(s_reason)
 
     comp_status = "complete" if (bool(summary.get("complete")) and not summary.get("unavailable") and not reasons) else "partial"
     return {
@@ -1762,7 +1911,7 @@ async def _compute_changes_live(
             "status": comp_status,
             "reasons": reasons,
         },
-        "cursor": ops.journal.api_head(),
+        "cursor": head_cursor,
         "links": _links(workspace_id, work_item_id, start_op_id, execution_op_id, sess_host, sess_id),
     }
 
@@ -1774,6 +1923,7 @@ def _fallback_changes_response(
     latest_row: dict[str, Any] | None,
     reasons: list[str],
     status: str,
+    head_cursor: int,
 ) -> dict[str, Any]:
     workspace_id = ctx["workspace_id"]
     attempt_id = ctx["attempt_id"]
@@ -1849,7 +1999,7 @@ def _fallback_changes_response(
             "status": status,
             "reasons": reasons,
         },
-        "cursor": ops.journal.api_head(),
+        "cursor": head_cursor,
         "links": _links(workspace_id, work_item_id, start_op_id, execution_op_id, sess_host, sess_id),
     }
 
@@ -1868,6 +2018,7 @@ async def _read_changes(
     if type(max_files) is not int or not 1 <= max_files <= BRANCH_DIFF_MAX_FILES:
         raise _bad("INVALID_PARAMS", f"max_files must be an integer between 1 and {BRANCH_DIFF_MAX_FILES}", 422)
 
+    head_cursor = ops.journal.api_head()
     ctx = _attempt_context(ops, principal, workspace_id, attempt_id)
     rec_data = pm_attempt_results.receipts(ops.db, workspace_id, attempt_id, limit=1)
     latest_row = rec_data["receipts"][0] if rec_data["receipts"] else None
@@ -1881,10 +2032,12 @@ async def _read_changes(
             latest_row=None,
             reasons=[reg_reason],
             status="unavailable",
+            head_cursor=head_cursor,
         )
 
+    inflight = _inflight_changes(ops)
     flight_key = (attempt_id, max_commits, max_files)
-    task = _INFLIGHT_CHANGES.get(flight_key)
+    task = inflight.get(flight_key)
     if task is None or task.done():
         task = asyncio.create_task(
             _compute_changes_live(
@@ -1893,14 +2046,15 @@ async def _read_changes(
                 max_commits=max_commits,
                 max_files=max_files,
                 latest_row=latest_row,
+                head_cursor=head_cursor,
             )
         )
-        _INFLIGHT_CHANGES[flight_key] = task
+        inflight[flight_key] = task
     try:
         return copy.deepcopy(await asyncio.shield(task))
     finally:
-        if _INFLIGHT_CHANGES.get(flight_key) is task and task.done():
-            _INFLIGHT_CHANGES.pop(flight_key, None)
+        if inflight.get(flight_key) is task and task.done():
+            inflight.pop(flight_key, None)
 
 
 async def _read_diff(
@@ -2025,7 +2179,7 @@ async def _read_diff(
 
 
 async def read(ops, principal: Principal, method: str, params: dict[str, Any]) -> dict[str, Any]:
-    if not principal.allows("observe"):
+    if not principal.allows(*_OBSERVE_SCOPES):
         raise _bad("FORBIDDEN", "Work attempt result reads require observe scope", 403)
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise _bad("INVALID_PARAMS", "Unknown work attempt result read parameters", 422)
@@ -2058,3 +2212,4 @@ async def read(ops, principal: Principal, method: str, params: dict[str, Any]) -
         commit=params.get("commit"),
         path=params.get("path"),
     )
+

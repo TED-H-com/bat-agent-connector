@@ -3,20 +3,26 @@
 from __future__ import annotations
 
 import asyncio
+import json
+from pathlib import Path
 
 import pytest
 
 from bat_agent_connector import (
+    checkpoints,
     mcp_server,
     pm_attempt_result_reads,
     pm_attempt_results,
+    pm_delivery_lineage,
+    pm_execution_verification,
+    pm_quality_reviews,
     pm_work_start,
     pm_workspace,
-    pr_delivery,
     registry,
+    verification,
     work_items,
 )
-from bat_agent_connector.errors import BatError, InvokeTimeout
+from bat_agent_connector.errors import BatError, ConnectionLost, InvokeTimeout
 from bat_agent_connector.operations import OperationError, OperationService
 from tests.operation_helpers import settle_operations
 from tests.test_api_v1 import http, token
@@ -51,6 +57,13 @@ pm = handoff_pm_fixture
 ready = handoff_ready_fixture
 
 
+def _write_sample_turn_ended_result(tmp_path: Path, payload: dict) -> Path:
+    out_file = tmp_path / "sample_turn_ended_result.json"
+    out_file.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"SAMPLE_TURN_ENDED_RESULT_PATH={out_file}")
+    return out_file
+
+
 class OverridableGitLog(RealGitLog):
     """Uses explicit per-path overrides when set, otherwise falls back to RealGitLog."""
 
@@ -73,9 +86,6 @@ async def start_ready(ready, mock):
     ops = w["d"].ops
     pm_work_start.install(ops)
     pm_attempt_results.install(ops)
-    pm_AttemptResultReads = pm_attempt_result_reads
-    pm_AttemptResultReads._CHANGESET_MEMO.clear()
-    pm_AttemptResultReads._INFLIGHT_CHANGES.clear()
     w["owner_token"] = token(
         w["d"],
         STARTER_OWNER.actor,
@@ -108,11 +118,14 @@ async def _start_managed_attempt(
     key: str = "e04-b2-start",  # gitleaks:allow (test idempotency key)
     echo_send: bool = True,
     work_item_id: str | None = None,
+    delivery: str | None = "pull_request",
 ) -> dict:
     """Drive a real work.start to a started managed session on mock BAT."""
     mock.echo_sends = echo_send
     ops = w["d"].ops
-    env = await _start_envelope(w, work_item_id=work_item_id, key=key)
+    env = await _start_envelope(w, work_item_id=work_item_id, key=key, delivery=delivery)
+    if delivery is None:
+        env["params"].pop("delivery", None)
     parent, fresh = ops.create(STARTER_OWNER, **env)
     assert fresh is True
     done = await _advance_start_public(ops, parent["operation_id"])
@@ -1066,7 +1079,18 @@ async def test_mcp_read_equals_http_read_for_result_changes_and_diff(start_ready
     assert att_after == att_base
 
 
-async def test_state_facets_next_actions_and_links_invariants(start_ready, mock, monkeypatch):
+def _assert_action_registry_invariants(ops: OperationService, payload: dict) -> None:
+    for entry in payload["next_allowed_actions"]:
+        if entry.get("kind") == "action":
+            act = entry["action"]
+            assert act in ops.actions, act
+            assert ops.actions[act].scope in entry["required_scopes"], (act, entry["required_scopes"])
+            assert "observe" in entry["required_scopes"], (act, entry["required_scopes"])
+    for b in payload["blocked_actions"]:
+        assert b["action"] in ops.actions, b
+
+
+async def test_state_facets_next_actions_and_links_invariants(start_ready, mock, monkeypatch, tmp_path):
     w = start_ready
     d = w["d"]
     ops = d.ops
@@ -1083,31 +1107,6 @@ async def test_state_facets_next_actions_and_links_invariants(start_ready, mock,
     )
     await d.inventory._refresh_scheduled("h1")
 
-    # Record a closed-unmerged PR in SQLite pr_merge_previews for target commit c2.
-    pr_delivery.save_preview(
-        ops,
-        {
-            "repository": "o/r",
-            "provider": w["gh"].url,
-            "target": {
-                "number": 42,
-                "head_sha": c2,
-                "base_sha": att["base_sha"],
-                "head_ref": f"bat/{sid}",
-                "base_ref": "main",
-                "html_url": "https://github.example/o/r/pull/42",
-                "state": "closed",
-            },
-            "method": "merge",
-            "commits": [],
-            "files": [],
-            "stacks": [],
-            "affected_prs": [],
-            "blocking": [{"code": "PR_CLOSED", "message": "PR is closed"}],
-            "warnings": [],
-        },
-    )
-
     st_res, res = await http(
         w["port"],
         "GET",
@@ -1115,6 +1114,27 @@ async def test_state_facets_next_actions_and_links_invariants(start_ready, mock,
         tok=w["owner_token"],
     )
     assert st_res == 200
+    _assert_action_registry_invariants(ops, res)
+
+    # Write the real turn-ended /result JSON to tmp_path and verify it round-trips.
+    sample_path = _write_sample_turn_ended_result(tmp_path, res)
+    assert json.loads(sample_path.read_text(encoding="utf-8")) == res
+
+    # Events read link names the real RPC and MCP methods.
+    assert res["events_read"] == {
+        "http": f"/api/v1/events?after={res['cursor']}&resource_type=pm_work_attempt&resource_id={aid}",
+        "rpc": "api_events",
+        "mcp": "events_list",
+        "resource_type": "pm_work_attempt",
+        "resource_id": aid,
+    }
+
+    # Controller identity disclosure: only {server_id, controller_id} plus caller_is_controller and requester_actor.
+    assert res["identity"]["requester_actor"] == STARTER_OWNER.actor
+    assert res["identity"]["caller_is_controller"] is True
+    assert set(res["identity"]["controller"].keys()) == {"server_id", "controller_id"}
+    assert "scopes" not in res["identity"]
+    assert "admin" not in res["identity"]
 
     # 1. State facets separation & usage invariants.
     facets = res["execution"]["state_facets"]
@@ -1127,7 +1147,7 @@ async def test_state_facets_next_actions_and_links_invariants(start_ready, mock,
         "dod": "unassessed",
         "qualified": False,
     }
-    assert facets["merge"] == "pr_closed_unmerged"
+    assert facets["merge"] == "not_started"
     assert facets["deployment"] == {"state": "not_deployed", "verified": False, "is_current": False}
     assert res["execution"]["exit_code"] == "unknown"
     assert res["execution"]["exit_code_reason"] == "not_exposed_by_bat"
@@ -1143,8 +1163,13 @@ async def test_state_facets_next_actions_and_links_invariants(start_ready, mock,
         "work_item_hash": f"#/pm/{wid}/board?select={att['work_item_id']}",
     }
 
-    # 3. Next allowed actions for controller with integrate scope at turn-ended:
-    # includes github.pr.publish with prefilled candidate_sha and NO public_title or public_body.
+    # 3. Next allowed actions for controller with integrate + operate + manage scopes at turn-ended:
+    # session.send and pm.execution.verify carry 'operate' from the registry; github.pr.publish carries sorted scopes.
+    send_act = next(a for a in res["next_allowed_actions"] if a.get("action") == "session.send")
+    assert send_act["required_scopes"] == ["observe", "operate"]
+    ver_act = next(a for a in res["next_allowed_actions"] if a.get("action") == "pm.execution.verify")
+    assert ver_act["required_scopes"] == ["observe", "operate"]
+
     pr_act = next(a for a in res["next_allowed_actions"] if a.get("action") == "github.pr.publish")
     assert pr_act == {
         "kind": "action",
@@ -1155,7 +1180,7 @@ async def test_state_facets_next_actions_and_links_invariants(start_ready, mock,
             "host": "h1",
             "source_operation_id": att["handoff_operation_id"],
         },
-        "required_scopes": ["observe", "manage", "integrate"],
+        "required_scopes": ["integrate", "manage", "observe"],
         "required_params": ["candidate_sha", "base_ref", "public_title", "public_body", "draft"],
         "optional_params": ["quality_ref"],
         "prefilled_params": {"candidate_sha": c2},
@@ -1163,7 +1188,7 @@ async def test_state_facets_next_actions_and_links_invariants(start_ready, mock,
     assert "public_title" not in pr_act["prefilled_params"]
     assert "public_body" not in pr_act["prefilled_params"]
 
-    # Caller missing 'integrate' scope gets github.pr.publish in blocked_actions with 'missing_scope'.
+    # Caller missing 'integrate' and 'operate' scopes gets those actions in blocked_actions with 'missing_scope'.
     no_integ_tok = token(d, STARTER_OWNER.actor, "observe", "manage", "start")
     _, res_no_integ = await http(
         w["port"],
@@ -1171,9 +1196,12 @@ async def test_state_facets_next_actions_and_links_invariants(start_ready, mock,
         f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result",
         tok=no_integ_tok,
     )
+    _assert_action_registry_invariants(ops, res_no_integ)
     assert {"action": "github.pr.publish", "reason": "missing_scope"} in res_no_integ["blocked_actions"]
+    assert {"action": "session.send", "reason": "missing_scope"} in res_no_integ["blocked_actions"]
+    assert {"action": "pm.execution.verify", "reason": "missing_scope"} in res_no_integ["blocked_actions"]
 
-    # Non-controller member gets controller-bound actions in blocked_actions with 'not_controller'.
+    # Non-controller contributor member gets controller-bound actions in blocked_actions with 'not_controller'.
     ws_cur = pm_workspace.get_workspace(ops.db, PLAN_OWNER, wid)
     await pkg_action(
         w,
@@ -1182,15 +1210,43 @@ async def test_state_facets_next_actions_and_links_invariants(start_ready, mock,
         {"actor": "colleague", "role": "contributor"},
         {"expected_version": ws_cur["version"]},
     )
-    colleague_tok = token(d, "colleague", "observe", "manage", "integrate")
+    colleague_tok = token(d, "colleague", "observe", "manage", "operate", "integrate")
     _, res_other = await http(
         w["port"],
         "GET",
         f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result",
         tok=colleague_tok,
     )
+    _assert_action_registry_invariants(ops, res_other)
+    assert res_other["identity"]["caller_is_controller"] is False
     assert {"action": "session.send", "reason": "not_controller"} in res_other["blocked_actions"]
     assert {"action": "github.pr.publish", "reason": "not_controller"} in res_other["blocked_actions"]
+
+    # Reader member sees neither 'scopes' nor 'admin' in identity, and writer actions are blocked with 'not_writer_member'.
+    ws_cur2 = pm_workspace.get_workspace(ops.db, PLAN_OWNER, wid)
+    await pkg_action(
+        w,
+        "pm.workspace.member.set",
+        {"workspace_id": wid},
+        {"actor": "reader-user", "role": "reader"},
+        {"expected_version": ws_cur2["version"]},
+    )
+    reader_tok = token(d, "reader-user", "observe", "manage", "operate", "integrate")
+    _, res_reader = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result",
+        tok=reader_tok,
+    )
+    _assert_action_registry_invariants(ops, res_reader)
+    assert res_reader["identity"]["caller_is_controller"] is False
+    assert set(res_reader["identity"]["controller"].keys()) == {"server_id", "controller_id"}
+    assert "scopes" not in res_reader["identity"]
+    assert "admin" not in res_reader["identity"]
+    assert "scopes" not in res_reader["identity"]["controller"]
+    assert "admin" not in res_reader["identity"]["controller"]
+    assert {"action": "pm.quality.review.create", "reason": "not_writer_member"} in res_reader["blocked_actions"]
+    assert {"action": "pm.quality.review.record", "reason": "not_writer_member"} in res_reader["blocked_actions"]
 
     # 4. needs_attention on a second work item maps to 'accepted' (never 'failed') with resume & cancel endpoints.
     base_work = work_items._get_item(ops.db, w["target"]["work_item_id"])
@@ -1213,12 +1269,14 @@ async def test_state_facets_next_actions_and_links_invariants(start_ready, mock,
     await _advance_start_public(ops, op_attn["operation_id"], rounds=2)
     assert ops.get(op_attn["operation_id"])["status"] == "needs_attention"
 
+    observe_only_tok = token(d, STARTER_OWNER.actor, "observe")
     _, res_attn = await http(
         w["port"],
         "GET",
         f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid_attn}/result",
-        tok=w["owner_token"],
+        tok=observe_only_tok,
     )
+    _assert_action_registry_invariants(ops, res_attn)
     assert res_attn["execution"]["operation_status"] == "needs_attention"
     assert res_attn["execution"]["state"] == "accepted"
     assert res_attn["execution"]["state_source"] == "work_start"
@@ -1227,8 +1285,22 @@ async def test_state_facets_next_actions_and_links_invariants(start_ready, mock,
         a["endpoint"] for a in res_attn["next_allowed_actions"] if a.get("kind") == "operation_endpoint"
     ]
     assert endpoints_attn == ["cancel", "resume"]
+    for ep in res_attn["next_allowed_actions"]:
+        if ep.get("kind") == "operation_endpoint":
+            assert ep["required_scopes"] == ["observe"]
 
-    # 5. start_unknown on a third work item offers only cancel and blocks resume/work.start with WAIT_ORIGINAL_OPERATION_RECONCILE.
+    _, res_attn_colleague = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid_attn}/result",
+        tok=colleague_tok,
+    )
+    _assert_action_registry_invariants(ops, res_attn_colleague)
+    assert [
+        a["endpoint"] for a in res_attn_colleague["next_allowed_actions"] if a.get("kind") == "operation_endpoint"
+    ] == []
+
+    # 5. start_unknown on a third work item offers only cancel and blocks work.start with WAIT_ORIGINAL_OPERATION_RECONCILE.
     wi_unk = (
         await pkg_action(
             w,
@@ -1266,9 +1338,385 @@ async def test_state_facets_next_actions_and_links_invariants(start_ready, mock,
         f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid_unk}/result",
         tok=w["owner_token"],
     )
+    _assert_action_registry_invariants(ops, res_unk)
     assert res_unk["execution"]["stage"] == "start_unknown"
     assert res_unk["execution"]["state"] == "unknown"
     assert res_unk["execution"]["state_reason"] == "handoff_outcome_uncertain"
     assert [a.get("endpoint") for a in res_unk["next_allowed_actions"]] == ["cancel"]
-    assert {"action": "resume", "reason": "WAIT_ORIGINAL_OPERATION_RECONCILE"} in res_unk["blocked_actions"]
     assert {"action": "work.start", "reason": "WAIT_ORIGINAL_OPERATION_RECONCILE"} in res_unk["blocked_actions"]
+
+    # 6. Without a recorded delivery goal, delivery_goal is 'unknown' and github.pr.publish is not offered.
+    orig_get_attempt = pm_work_start.get_attempt
+    orig_ops_get = ops.get
+
+    def get_attempt_no_delivery(ops_arg, principal_arg, wid_arg, aid_arg):
+        env_att = orig_get_attempt(ops_arg, principal_arg, wid_arg, aid_arg)
+        att_copy = dict(env_att["attempt"])
+        att_copy.pop("delivery", None)
+        return {**env_att, "attempt": att_copy}
+
+    def ops_get_no_delivery(op_id, *args, **kwargs):
+        op_row = orig_ops_get(op_id, *args, **kwargs)
+        if op_id == att["start_operation_id"] and isinstance(op_row, dict):
+            op_copy = copy.deepcopy(op_row)
+            ws_intent = ((op_copy.get("external_refs") or {}).get("admission_binding") or {}).get("work_start")
+            if isinstance(ws_intent, dict):
+                ws_intent.pop("delivery", None)
+            return op_copy
+        return op_row
+
+    import copy
+
+    monkeypatch.setattr(pm_work_start, "get_attempt", get_attempt_no_delivery)
+    monkeypatch.setattr(ops, "get", ops_get_no_delivery)
+    _, res_nodeliv = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result",
+        tok=w["owner_token"],
+    )
+    monkeypatch.setattr(pm_work_start, "get_attempt", orig_get_attempt)
+    monkeypatch.setattr(ops, "get", orig_ops_get)
+    _assert_action_registry_invariants(ops, res_nodeliv)
+    assert res_nodeliv["delivery"]["delivery_goal"] == "unknown"
+    assert all(a.get("action") != "github.pr.publish" for a in res_nodeliv["next_allowed_actions"])
+    assert all(b.get("action") != "github.pr.publish" for b in res_nodeliv["blocked_actions"])
+
+
+async def test_cursor_before_snapshot_missing_turn_fields_and_zh_tw_self_reported(start_ready, mock, monkeypatch):
+    w = start_ready
+    d = w["d"]
+    att = await _start_managed_attempt(w, mock, key="e04-cursor-zh-tw")  # gitleaks:allow (test idempotency key)
+    wid, aid, sid, wt = att["workspace_id"], att["attempt_id"], att["session_id"], att["worktree_path"]
+    _seed_worktree_commits(mock, wt, att["base_sha"])
+
+    # 1. Pure zh-TW final assistant message with no English words -> self_reported == 'claimed_done'.
+    _set_turn_messages(
+        mock,
+        sid,
+        att["turn_marker"],
+        streaming=False,
+        assistant_text="已完成權杖驗證與單元測試，所有檢查皆已通過。",
+    )
+    await d.inventory._refresh_scheduled("h1")
+
+    # 2. Wrap pm_attempt_results.receipts so it appends one related event while the snapshot is being assembled.
+    orig_receipts = pm_attempt_results.receipts
+    injected_seq: list[int] = []
+
+    def receipts_with_concurrent_event(db, workspace_id, attempt_id, **kwargs):
+        if not injected_seq:
+            with d.journal.tx():
+                ev_seq = d.journal.api_event(
+                    "pm_work_attempt",
+                    aid,
+                    "work.attempt.result_recorded",
+                    {
+                        "workspace_id": wid,
+                        "work_item_id": att["work_item_id"],
+                        "attempt_id": aid,
+                        "operation_id": att["start_operation_id"],
+                        "execution_operation_id": att["handoff_operation_id"],
+                        "note": "concurrent",
+                    },
+                    actor="connector",
+                )
+            injected_seq.append(int(ev_seq))
+        return orig_receipts(db, workspace_id, attempt_id, **kwargs)
+
+    monkeypatch.setattr(pm_attempt_results, "receipts", receipts_with_concurrent_event)
+    st_r1, res1 = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result",
+        tok=w["owner_token"],
+    )
+    monkeypatch.setattr(pm_attempt_results, "receipts", orig_receipts)
+    assert st_r1 == 200
+    assert len(injected_seq) == 1
+    assert res1["cursor"] < injected_seq[0]
+    assert res1["execution"]["state_facets"]["self_reported"] == "claimed_done"
+
+    # Next read with that cursor and wait_ms=100 immediately sees the event in wait.matched_seq.
+    st_r2, res2 = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result?cursor={res1['cursor']}&wait_ms=100",
+        tok=w["owner_token"],
+    )
+    assert st_r2 == 200
+    assert res2["wait"]["timed_out"] is False
+    assert res2["wait"]["matched_seq"] == injected_seq[0]
+
+    # 3. English message containing 'blocked' in a benign sentence is NOT misclassified as 'reported_blocker'.
+    _set_turn_messages(
+        mock,
+        sid,
+        att["turn_marker"],
+        streaming=False,
+        assistant_id="m-asst-2",
+        assistant_text="No errors or blocked items remain.",
+        last_data_at=1_790_001_050_000,
+    )
+    await d.inventory._refresh_scheduled("h1")
+    _, res_benign = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result",
+        tok=w["owner_token"],
+    )
+    assert res_benign["execution"]["state_facets"]["self_reported"] == "claimed_done"
+
+    # 4. Missing (None) turn fields in current receipt return 'unknown' (never True, False, 'terminal', or 'correlated').
+    def receipts_with_missing_turn_fields(db, workspace_id, attempt_id, **kwargs):
+        data = orig_receipts(db, workspace_id, attempt_id, **kwargs)
+        for row in data["receipts"]:
+            doc = dict(row["document"])
+            doc.pop("turn_started", None)
+            doc.pop("turn_done", None)
+            doc.pop("turn_phase", None)
+            doc.pop("turn_attribution", None)
+            doc["turn_progress"] = {}
+            doc["boundary"] = "agent_error"
+            row["document"] = doc
+        return data
+
+    monkeypatch.setattr(pm_attempt_results, "receipts", receipts_with_missing_turn_fields)
+    _, res_missing = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result",
+        tok=w["owner_token"],
+    )
+    monkeypatch.setattr(pm_attempt_results, "receipts", orig_receipts)
+    assert res_missing["conversation"]["turn_started"] == "unknown"
+    assert res_missing["conversation"]["turn_done"] == "unknown"
+    assert res_missing["conversation"]["turn_phase"] == "unknown"
+    assert res_missing["conversation"]["turn_attribution"] == "unknown"
+    assert res_missing["execution"]["state_facets"]["self_reported"] == "reported_blocker"
+
+
+async def test_verification_latest_timestamp_unknown_status_review_matching_and_coverage(
+    start_ready, mock, monkeypatch
+):
+    w = start_ready
+    d = w["d"]
+    att = await _start_managed_attempt(w, mock, key="e04-ver-cov")  # gitleaks:allow (test idempotency key)
+    wid, aid, sid, wt = att["workspace_id"], att["attempt_id"], att["session_id"], att["worktree_path"]
+    _, c2 = _seed_worktree_commits(mock, wt, att["base_sha"])
+    _set_turn_messages(mock, sid, att["turn_marker"], streaming=False)
+    await d.inventory._refresh_scheduled("h1")
+
+    # 1. Record a session_verification with an unmapped status -> maps to 'unknown', never 'failed'.
+    monkeypatch.setattr(
+        verification,
+        "get",
+        lambda host, session_id: (
+            {
+                "status": "custom_unmapped_status",
+                "candidate_commit": c2,
+                "actor": STARTER_OWNER.actor,
+                "recorded_at": 100.0,
+            }
+            if (host, session_id) == ("h1", sid)
+            else None
+        ),
+    )
+    _, res_unmapped = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result",
+        tok=w["owner_token"],
+    )
+    assert res_unmapped["verification"]["status"] == "unknown"
+    assert res_unmapped["execution"]["state_facets"]["verification"] == "unknown"
+
+    # 2. When two verification runs exist across kinds, overall status comes from the latest recorded_at timestamp.
+    ver_op_id = "op_" + "a" * 32
+    with d.journal.tx():
+        d.ops.db.execute(
+            """INSERT INTO operations
+               (operation_id, actor, entry, idem_key, request_hash, action, target, params, preconditions, status, created_at, updated_at)
+               VALUES (?, ?, 'operations.create', 'e04-ver-op', 'hash', ?, ?, ?, '{}', 'succeeded', 200.0, 200.0)""",
+            (
+                ver_op_id,
+                STARTER_OWNER.actor,
+                pm_execution_verification.ACTION,
+                json.dumps({"workspace_id": wid, "execution_operation_id": att["handoff_operation_id"]}),
+                json.dumps({"candidate_commit": c2}),
+            ),
+        )
+    monkeypatch.setattr(pm_execution_verification, "operation_visible", lambda _db, _p, _row: True)
+    monkeypatch.setattr(
+        pm_execution_verification,
+        "get_verification",
+        lambda _ops, _p, _wid, oid: {
+            "operation_status": "succeeded",
+            "verification": {
+                "status": "failed",
+                "exit_code": 1,
+                "created_at": 200.0,
+                "reference": {"candidate_commit": c2},
+            },
+        },
+    )
+    monkeypatch.setattr(
+        verification,
+        "get",
+        lambda host, session_id: (
+            {
+                "status": "passed",
+                "candidate_commit": c2,
+                "exit_code": 0,
+                "actor": STARTER_OWNER.actor,
+                "recorded_at": 500.0,
+            }
+            if (host, session_id) == ("h1", sid)
+            else None
+        ),
+    )
+    _, res_latest_wins = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result",
+        tok=w["owner_token"],
+    )
+    assert res_latest_wins["verification"]["status"] == "verified"
+    assert res_latest_wins["execution"]["state_facets"]["verification"] == "verified"
+    assert [r["status"] for r in res_latest_wins["verification"]["runs"]] == ["failed", "verified"]
+
+    # 3. Quality review for a different execution_operation_id does not apply to this attempt.
+    monkeypatch.setattr(
+        pm_quality_reviews,
+        "for_work",
+        lambda _ops, _p, _wid, _wiid: {
+            "reviews": [
+                {
+                    "review_id": "qrev_other",
+                    "version": 2,
+                    "assessment": {"kind": "assessment"},
+                    "qualified": True,
+                    "acceptance": "accepted",
+                    "dod": "satisfied",
+                    "context": {"execution_operation_id": "op_other_attempt_handoff"},
+                }
+            ],
+            "next_cursor": None,
+            "visibility_filtered": False,
+        },
+    )
+    _, res_other_rev = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result",
+        tok=w["owner_token"],
+    )
+    assert res_other_rev["verification"]["quality_reviews"]["current"] is None
+    assert res_other_rev["execution"]["state_facets"]["review_decision"]["kind"] == "unassessed"
+    assert res_other_rev["execution"]["state_facets"]["acceptance"]["status"] == "unassessed"
+
+    # 4. Visibility-filtered verification or delivery sets coverage.verification / coverage.delivery to 'partial'.
+    monkeypatch.setattr(
+        pm_quality_reviews,
+        "for_work",
+        lambda _ops, _p, _wid, _wiid: {
+            "reviews": [],
+            "next_cursor": None,
+            "visibility_filtered": True,
+        },
+    )
+    monkeypatch.setattr(
+        pm_delivery_lineage,
+        "for_work",
+        lambda _ops, _p, _wid, _wiid, **_kw: {
+            "deliveries": [],
+            "next_after": None,
+            "source_visibility_filtered": True,
+        },
+    )
+    _, res_part_ver = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result",
+        tok=w["owner_token"],
+    )
+    assert res_part_ver["completeness"]["coverage"]["verification"] == "partial"
+    assert res_part_ver["completeness"]["coverage"]["delivery"] == "partial"
+    assert res_part_ver["completeness"]["status"] == "partial"
+
+
+async def test_changes_connection_lost_during_diff_reports_bat_unreachable_and_skips_memo(
+    start_ready, mock, monkeypatch
+):
+    w = start_ready
+    d = w["d"]
+    att = await _start_managed_attempt(w, mock, key="e04-changes-conn-lost")  # gitleaks:allow (test idempotency key)
+    wid, aid, sid, wt = att["workspace_id"], att["attempt_id"], att["session_id"], att["worktree_path"]
+    _seed_worktree_commits(mock, wt, att["base_sha"])
+    _set_turn_messages(mock, sid, att["turn_marker"], streaming=False)
+    await d.inventory._refresh_scheduled("h1")
+
+    # Add a new commit c3 with two files so /changes walks git:diff live.
+    c3 = "3" * 40
+    mock.git_logs[wt] = [
+        {"hash": c3, "author": "dev", "date": "2026-10-15", "message": "feat: two files"},
+        *mock.git_logs[wt],
+    ]
+    mock.commit_files[c3] = [
+        {"file": "src/first.py", "status": "A"},
+        {"file": "src/second.py", "status": "A"},
+    ]
+    mock.commit_diffs[(c3, "src/first.py")] = (
+        "diff --git a/src/first.py b/src/first.py\n"
+        "--- /dev/null\n"
+        "+++ b/src/first.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+x = 1\n"
+    )
+    mock.commit_diffs[(c3, "src/second.py")] = (
+        "diff --git a/src/second.py b/src/second.py\n"
+        "--- /dev/null\n"
+        "+++ b/src/second.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+y = 2\n"
+    )
+
+    read_client = checkpoints._read_fleet(d.ops).client("h1")
+    orig_invoke = read_client.invoke
+
+    async def drop_on_second_diff(name, params=None, *args, **kwargs):
+        if name == "git:diff" and isinstance(params, dict) and params.get("filePath") == "src/second.py":
+            raise ConnectionLost("simulated connection drop during git:diff")
+        return await orig_invoke(name, params, *args, **kwargs)
+
+    monkeypatch.setattr(read_client, "invoke", drop_on_second_diff)
+    st_drop, ch_drop = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/changes",
+        tok=w["owner_token"],
+    )
+    monkeypatch.setattr(read_client, "invoke", orig_invoke)
+
+    assert st_drop == 200
+    assert ch_drop["completeness"]["status"] == "partial"
+    assert "bat_unreachable" in ch_drop["completeness"]["reasons"]
+    assert "diff_exceeded_pipe_limit" not in ch_drop["completeness"]["reasons"]
+    assert ch_drop["summary"]["unavailable"] == ["src/second.py"]
+    by_path = {f["path"]: f for f in ch_drop["summary"]["files"]}
+    assert by_path["src/second.py"]["additions"] == "unknown"
+    assert by_path["src/second.py"]["deletions"] == "unknown"
+
+    # Because summary.reason == 'bat_unreachable' was not memoized, the next call recomputes live and succeeds.
+    st_ok, ch_ok = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/changes",
+        tok=w["owner_token"],
+    )
+    assert st_ok == 200
+    assert ch_ok["memo_hit"] is False
+    assert "bat_unreachable" not in ch_ok["completeness"]["reasons"]
+    by_path_ok = {f["path"]: f for f in ch_ok["summary"]["files"]}
+    assert by_path_ok["src/second.py"]["additions"] == 1
+

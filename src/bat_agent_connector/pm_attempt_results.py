@@ -1052,7 +1052,9 @@ async def collect_changes_summary(
         )
     except (asyncio.TimeoutError, InvokeTimeout):
         return _incomplete_changes(frozen_base, "unknown", "changeset_time_budget_exceeded", result_id=result_id)
-    except (BatError, ConnectionLost):
+    except ConnectionLost:
+        return _incomplete_changes(frozen_base, "unknown", "bat_unreachable", result_id=result_id)
+    except BatError:
         return _incomplete_changes(frozen_base, "unknown", "worktree_unreachable", result_id=result_id)
 
     if not isinstance(wl, list) or not wl:
@@ -1123,7 +1125,15 @@ async def collect_changes_summary(
                 result_id=result_id,
                 commits=chronological,
             )
-        except (BatError, ConnectionLost):
+        except ConnectionLost:
+            return _incomplete_changes(
+                frozen_base,
+                head_sha,
+                "bat_unreachable",
+                result_id=result_id,
+                commits=chronological,
+            )
+        except BatError:
             return _incomplete_changes(
                 frozen_base,
                 head_sha,
@@ -1148,6 +1158,7 @@ async def collect_changes_summary(
     reasons: list[str] = []
     diff_calls = 0
     budget_exceeded = False
+    conn_lost = False
     file_limit_exceeded = False
 
     def _mark_unavailable(p: str) -> None:
@@ -1174,6 +1185,10 @@ async def collect_changes_summary(
             if h not in entry["commits_touched"]:
                 entry["commits_touched"].append(h)
 
+            if conn_lost:
+                _mark_unavailable(path)
+                continue
+
             if budget_exceeded or remaining() <= 0:
                 budget_exceeded = True
                 _mark_unavailable(path)
@@ -1199,8 +1214,17 @@ async def collect_changes_summary(
                 if "changeset_time_budget_exceeded" not in reasons:
                     reasons.append("changeset_time_budget_exceeded")
                 continue
-            except (BatError, ConnectionLost):
-                d = ""
+            except ConnectionLost:
+                conn_lost = True
+                _mark_unavailable(path)
+                if "bat_unreachable" not in reasons:
+                    reasons.append("bat_unreachable")
+                continue
+            except BatError:
+                _mark_unavailable(path)
+                if "worktree_unreachable" not in reasons:
+                    reasons.append("worktree_unreachable")
+                continue
 
             if not isinstance(d, str) or not d.strip():
                 _mark_unavailable(path)
@@ -1334,7 +1358,7 @@ class AttemptResultCollector:
         ro_client = self.fleet._clients.get(host)
         if ro_client is not None:
             candidates.append(ro_client)
-        ops_fleet = self.ops.context.get("fleet") if hasattr(self.ops, "context") else None
+        ops_fleet = self.ops.context.get("fleet")
         if isinstance(ops_fleet, Fleet):
             rw_client = ops_fleet._clients.get(host)
             if rw_client is not None and rw_client is not ro_client:
