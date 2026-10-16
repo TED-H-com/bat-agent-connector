@@ -40,7 +40,7 @@ from .operations import (
     StepFailed,
     Wait,
 )
-from .pm_release_baselines import _snapshot
+from .pm_release_baselines import _snapshot, _snapshot_read
 from .redact import redact
 
 ACTION = "session.send"
@@ -1675,6 +1675,7 @@ def enrich_operation(db, op: dict[str, Any] | None) -> dict[str, Any] | None:
     return op
 
 
+@_snapshot_read
 def list_inputs(
     ops: OperationService,
     principal: Principal,
@@ -1688,7 +1689,6 @@ def list_inputs(
     """List Work follow-up inputs in `sequence ASC` (`position ASC`) order with visibility filtering (§8.3)."""
     if not principal.allows("observe"):
         raise _bad("FORBIDDEN", "Observing work inputs requires observe", 403)
-    schema(ops.journal)
     if type(after) is not int or not 0 <= after < 2**63:
         raise _bad("INVALID_PARAMS", "after must be a nonnegative integer", 422)
     if type(limit) is not int or not 1 <= limit <= 100:
@@ -1698,83 +1698,82 @@ def list_inputs(
     ):
         raise _bad("INVALID_PARAMS", "attempt_id must be a valid attempt ID", 422)
 
-    with ops.journal.tx():
-        pm_workspace.require_member(ops.db, principal, workspace_id, write=False)
-        work = work_items._get_item(ops.db, work_item_id)
-        if not ops.db.execute(
-            "SELECT 1 FROM pm_project_bindings WHERE workspace_id=? AND project_id=?",
-            (workspace_id, work["project_id"]),
-        ).fetchone():
-            raise _bad("WORK_ITEM_NOT_FOUND", "Work item is not bound to this workspace", 404)
-        pm_source_lineage.require(ops.db, principal, "work_item", work_item_id)
+    pm_workspace.require_member(ops.db, principal, workspace_id, write=False)
+    work = work_items._get_item(ops.db, work_item_id)
+    if not ops.db.execute(
+        "SELECT 1 FROM pm_project_bindings WHERE workspace_id=? AND project_id=?",
+        (workspace_id, work["project_id"]),
+    ).fetchone():
+        raise _bad("WORK_ITEM_NOT_FOUND", "Work item is not bound to this workspace", 404)
+    pm_source_lineage.require(ops.db, principal, "work_item", work_item_id)
 
+    if attempt_id is not None:
+        att_exists = ops.db.execute(
+            "SELECT 1 FROM work_attempts WHERE workspace_id=? AND work_item_id=? AND attempt_id=?",
+            (workspace_id, work_item_id, attempt_id),
+        ).fetchone()
+        if att_exists is None:
+            raise _bad("NOT_FOUND", "Work attempt not found", 404)
+
+    items: list[dict[str, Any]] = []
+    filtered = False
+    cursor = after
+    has_more = False
+
+    while len(items) <= limit:
+        sql = """SELECT * FROM work_inputs
+                 WHERE workspace_id=? AND work_item_id=? AND sequence>?"""
+        args: list[Any] = [workspace_id, work_item_id, cursor]
         if attempt_id is not None:
-            att_exists = ops.db.execute(
-                "SELECT 1 FROM work_attempts WHERE workspace_id=? AND work_item_id=? AND attempt_id=?",
-                (workspace_id, work_item_id, attempt_id),
+            sql += " AND attempt_id=?"
+            args.append(attempt_id)
+        sql += " ORDER BY sequence ASC LIMIT ?"
+        args.append(max(limit + 1, 32))
+        rows = ops.db.execute(sql, tuple(args)).fetchall()
+        if not rows:
+            break
+        for row in rows:
+            cursor = int(row["sequence"])
+            op_row = ops.db.execute(
+                "SELECT * FROM operations WHERE operation_id=?",
+                (row["operation_id"],),
             ).fetchone()
-            if att_exists is None:
-                raise _bad("NOT_FOUND", "Work attempt not found", 404)
-
-        items: list[dict[str, Any]] = []
-        filtered = False
-        cursor = after
-        has_more = False
-
-        while len(items) <= limit:
-            sql = """SELECT * FROM work_inputs
-                     WHERE workspace_id=? AND work_item_id=? AND sequence>?"""
-            args: list[Any] = [workspace_id, work_item_id, cursor]
-            if attempt_id is not None:
-                sql += " AND attempt_id=?"
-                args.append(attempt_id)
-            sql += " ORDER BY sequence ASC LIMIT ?"
-            args.append(max(limit + 1, 32))
-            rows = ops.db.execute(sql, tuple(args)).fetchall()
-            if not rows:
+            if op_row is None:
+                filtered = True
+                continue
+            op = OperationService._decode(op_row)
+            if not operation_visible(ops.db, principal, op):
+                filtered = True
+                continue
+            if len(items) == limit:
+                has_more = True
                 break
-            for row in rows:
-                cursor = int(row["sequence"])
-                op_row = ops.db.execute(
-                    "SELECT * FROM operations WHERE operation_id=?",
-                    (row["operation_id"],),
-                ).fetchone()
-                if op_row is None:
-                    filtered = True
-                    continue
-                op = OperationService._decode(op_row)
-                if not operation_visible(ops.db, principal, op):
-                    filtered = True
-                    continue
-                if len(items) == limit:
-                    has_more = True
-                    break
-                receipt = build_input_receipt(ops.db, op, wi_row=row)
-                if receipt is not None:
-                    items.append(receipt)
-            if has_more or len(rows) < max(limit + 1, 32):
-                break
+            receipt = build_input_receipt(ops.db, op, wi_row=row)
+            if receipt is not None:
+                items.append(receipt)
+        if has_more or len(rows) < max(limit + 1, 32):
+            break
 
-        latest_att_id = pm_work_start.latest_attempt_id(ops.db, workspace_id, work_item_id)
-        if latest_att_id:
-            att_r = ops.db.execute(
-                "SELECT * FROM work_attempts WHERE workspace_id=? AND work_item_id=? AND attempt_id=?",
-                (workspace_id, work_item_id, latest_att_id),
-            ).fetchone()
-            start_id = None if att_r is None else (att_r["start_operation_id"] or att_r["origin_id"])
-            if not start_id or not pm_work_start.operation_visible(
-                ops.db, principal, {"operation_id": start_id},
-            ):
-                latest_att_id = None
+    latest_att_id = pm_work_start.latest_attempt_id(ops.db, workspace_id, work_item_id)
+    if latest_att_id:
+        att_r = ops.db.execute(
+            "SELECT * FROM work_attempts WHERE workspace_id=? AND work_item_id=? AND attempt_id=?",
+            (workspace_id, work_item_id, latest_att_id),
+        ).fetchone()
+        start_id = None if att_r is None else (att_r["start_operation_id"] or att_r["origin_id"])
+        if not start_id or not pm_work_start.operation_visible(
+            ops.db, principal, {"operation_id": start_id},
+        ):
+            latest_att_id = None
 
-        next_cursor = items[-1]["sequence"] if (has_more and items) else None
-        return {
-            "workspace_id": workspace_id,
-            "work_item_id": work_item_id,
-            "attempt_id": attempt_id,
-            "latest_attempt_id": latest_att_id,
-            "items": items,
-            "next_cursor": next_cursor,
-            "has_more": has_more,
-            "visibility_filtered": filtered,
-        }
+    next_cursor = items[-1]["sequence"] if (has_more and items) else None
+    return {
+        "workspace_id": workspace_id,
+        "work_item_id": work_item_id,
+        "attempt_id": attempt_id,
+        "latest_attempt_id": latest_att_id,
+        "items": items,
+        "next_cursor": next_cursor,
+        "has_more": has_more,
+        "visibility_filtered": filtered,
+    }
