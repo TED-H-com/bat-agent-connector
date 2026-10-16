@@ -797,10 +797,17 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
     if (!Array.isArray(allCommits) || allCommits.length === 0) return [...commitsTouched];
     const order = new Map();
     allCommits.forEach((sha, idx) => order.set(sha, idx));
+    const originalIndex = new Map();
+    commitsTouched.forEach((sha, idx) => originalIndex.set(sha, idx));
     return [...commitsTouched].sort((a, b) => {
-      const idxA = order.has(a) ? order.get(a) : -1;
-      const idxB = order.has(b) ? order.get(b) : -1;
-      return idxB - idxA;
+      const hasA = order.has(a);
+      const hasB = order.has(b);
+      if (hasA && hasB) {
+        return order.get(a) - order.get(b);
+      }
+      if (hasA) return -1;
+      if (hasB) return 1;
+      return originalIndex.get(a) - originalIndex.get(b);
     });
   }
 
