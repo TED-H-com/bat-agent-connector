@@ -1155,7 +1155,7 @@ class ApiV1:
             worktree_merge_operations,
         )
         gh_cfg = self.daemon.ops.context["github_config"]
-        from . import pm_attempt_result_reads, pm_work_start, pr_publication
+        from . import pm_attempt_result_reads, pm_work_follow_up, pm_work_start, pr_publication
         actions = [{"action": a.name, "scope": a.scope, "summary": a.summary, "allowed": principal.allows(a.scope)
                                and a.name not in {pm_execution_runtime.ACTION, pm_maintenance_repair_runtime.ACTION}
                                and (a.name != "delivery.merge_and_deploy" or principal.allows("deploy"))
@@ -1236,6 +1236,7 @@ class ApiV1:
                                                     "work_batches": pm_work_batches.capabilities(self.daemon.ops),
                                                     "work_start": pm_work_start.capabilities(self.daemon.ops),
                                                     "work_attempt_results": pm_attempt_result_reads.capabilities(self.daemon.ops),
+                                                    "work_follow_up": pm_work_follow_up.capabilities(self.daemon.ops),
                                                     "workload": pm_workload.capabilities(),
                                                     "work_package_prepare": "pm.work_package.create" in self.daemon.ops.actions,
                                                     "issue_mapping": all(action in self.daemon.ops.actions for action in ("pm.issue.publish", "pm.issue.cancel")),
