@@ -11,7 +11,7 @@ import {workStartPanel} from './pm-work-start.js';
 import {workResultPanel} from './pm-work-result.js';
 
 // Central management columns stay separate from execution, quality and delivery.
-export function workspaceKanban({t, api, alive, namespace = '', workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false}) {
+export function workspaceKanban({t, api, alive, namespace = '', workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false, workspaceSettled = () => Promise.resolve()}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, preference = viewState(namespace, workspaceId, 'board');
   const integer = value => Number.isSafeInteger(value) && value >= 0;
   if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error('Invalid Kanban page size');
@@ -450,6 +450,9 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   }
   const resize = new ResizeObserver(() => {updateEdges(); if (detail.element && selected) {const node = rows.get(selected)?.node; if (node) requestAnimationFrame(() => revealCard(node));}}); resize.observe(list);
   list.addEventListener('scroll', () => {preference.laneScroll = list.scrollLeft; updateEdges();});
+  function rememberScroll() {
+    if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+  }
   const onScroll = () => {
     if (active && !reading && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
   };
@@ -457,7 +460,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   function setActive(value) {
     const routeId = new URLSearchParams(location.hash.split('?')[1]).get('select');
     if (active === value) {if (value && routeId && routeId !== selected) void select(routeId); return;} active = value;
-    if (!value) {stale = true; serial++; detailSerial++; if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY; closeRetaining();}
+    if (!value) {stale = true; serial++; detailSerial++; ++scrollGeneration; rememberScroll(); closeRetaining();}
     else {
       const generation = ++scrollGeneration;
       const read = stale || !page ? refresh() : null;
@@ -470,15 +473,13 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
           restoreY = window.scrollY;
         }
       });
-      if (read?.then) {
-        void read.then(() => {
-          if (generation === scrollGeneration && window.scrollY === restoreY) {
-            window.scrollTo(0, preference.scroll || 0);
-          }
-        });
-      }
+      void Promise.all([read, workspaceSettled()]).then(() => {
+        if (generation === scrollGeneration && window.scrollY === restoreY) {
+          window.scrollTo(0, preference.scroll || 0);
+        }
+      });
       return read;
     }
   }
-  return {element, box: element, meta, refresh, titleFor, withdraw, setActive, hideInspector: closeRetaining, setTools: value => {toolItems = value;}, dispose: () => {window.removeEventListener('scroll', onScroll); startPanel?.dispose(); startPanel = null; resultPanel?.dispose(); resultPanel = null; resize.disconnect(); withdraw({forgetRoute: false});}};
+  return {element, box: element, meta, refresh, titleFor, withdraw, setActive, rememberScroll, hideInspector: closeRetaining, setTools: value => {toolItems = value;}, dispose: () => {rememberScroll(); window.removeEventListener('scroll', onScroll); startPanel?.dispose(); startPanel = null; resultPanel?.dispose(); resultPanel = null; resize.disconnect(); withdraw({forgetRoute: false});}};
 }

@@ -17814,7 +17814,8 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		const submit = create.box.querySelector("button[type=submit]"), recovering = create.locked();
 		create.box.hidden = !recovering && (!head || !canCreate());
 		submit.hidden = !recovering && !create.canSubmit();
-		pending.hidden = create.box.hidden || submit.hidden || !submit.disabled;
+		const unavailable = submit.disabled || submit.getAttribute("aria-disabled") === "true";
+		pending.hidden = create.box.hidden || submit.hidden || !unavailable;
 		pending.textContent = t(create.checking() ? "pd_report_pending" : "pd_report_unavailable");
 		if (!pending.hidden) submit.setAttribute("aria-describedby", pending.id);
 		else submit.removeAttribute("aria-describedby");
@@ -21935,7 +21936,7 @@ function requirementReviews(plan, requirement, reviews) {
 	if (!ids.length || ids.some((id) => !id) || !plan.document_digest || !plan.adoption?.scope_revision) return [];
 	return reviews.filter((row) => row.qualified === true && row.applicable === true && row.assessment?.document?.qualified === true && row.context?.plan_ref?.revision_id === plan.revision_id && row.context.plan_ref.document_digest === plan.document_digest && row.context.plan_ref.scope_revision === plan.adoption?.scope_revision && ids.every((id) => row.assessment.document.criteria?.some((result) => result.criterion?.kind === "acceptance" && result.criterion.requirement_id === requirement.id && result.criterion.input_id === id && result.status === "accepted")));
 }
-function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, errorBox }) {
+function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, errorBox, workspaceSettled = () => Promise.resolve() }) {
 	const preference = viewState(namespace, workspaceId, "requirements"), endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	let serial = 0, detailSerial = 0, active = false, visible = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [], sources = new Map(), earlierPlans = new Map();
 	let pendingFocus = null, pendingNavigation = null, currentRequirement = null, currentMilestone = null, scrollGeneration = 0;
@@ -22103,6 +22104,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			alive();
 			if (ticket !== serial) return;
 		} catch {
+			++scrollGeneration;
 			return;
 		}
 		errorBox(error);
@@ -22626,6 +22628,9 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			}
 		}
 	}
+	function rememberScroll() {
+		if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+	}
 	const onScroll = () => {
 		if (visible && !busy && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
 	};
@@ -22645,7 +22650,8 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			stale = true;
 			serial++;
 			detailSerial++;
-			if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+			++scrollGeneration;
+			rememberScroll();
 			closeRetaining();
 		} else {
 			const generation = ++scrollGeneration;
@@ -22658,7 +22664,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 					restoreY = window.scrollY;
 				}
 			});
-			if (read?.then) read.then(() => {
+			Promise.all([read, workspaceSettled()]).then(() => {
 				if (generation === scrollGeneration && window.scrollY === restoreY) window.scrollTo(0, preference.scroll || 0);
 			});
 			return read;
@@ -22749,12 +22755,14 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		focusRequirement,
 		labelFor,
 		setActive,
+		rememberScroll,
 		hideInspector: closeRetaining,
 		activate,
 		setTools: (value) => {
 			tools = value;
 		},
 		dispose: () => {
+			rememberScroll();
 			window.removeEventListener("scroll", onScroll);
 			Object.assign(preference, {
 				selected,
@@ -34989,7 +34997,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 }
 //#endregion
 //#region src/pm-kanban.js
-function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false }) {
+function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false, workspaceSettled = () => Promise.resolve() }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, preference = viewState(namespace, workspaceId, "board");
 	const integer = (value) => Number.isSafeInteger(value) && value >= 0;
 	if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error("Invalid Kanban page size");
@@ -35819,6 +35827,9 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		preference.laneScroll = list.scrollLeft;
 		updateEdges();
 	});
+	function rememberScroll() {
+		if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+	}
 	const onScroll = () => {
 		if (active && !reading && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
 	};
@@ -35834,7 +35845,8 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			stale = true;
 			serial++;
 			detailSerial++;
-			if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+			++scrollGeneration;
+			rememberScroll();
 			closeRetaining();
 		} else {
 			const generation = ++scrollGeneration;
@@ -35848,7 +35860,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 					restoreY = window.scrollY;
 				}
 			});
-			if (read?.then) read.then(() => {
+			Promise.all([read, workspaceSettled()]).then(() => {
 				if (generation === scrollGeneration && window.scrollY === restoreY) window.scrollTo(0, preference.scroll || 0);
 			});
 			return read;
@@ -35862,11 +35874,13 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		titleFor,
 		withdraw,
 		setActive,
+		rememberScroll,
 		hideInspector: closeRetaining,
 		setTools: (value) => {
 			toolItems = value;
 		},
 		dispose: () => {
+			rememberScroll();
 			window.removeEventListener("scroll", onScroll);
 			startPanel?.dispose();
 			startPanel = null;
@@ -43114,14 +43128,20 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			}
 		}
 	}, t("pm_edit_request"));
+	const isFieldFocused = () => Object.values(fields).some((f) => f === document.activeElement || f.contains?.(document.activeElement));
 	const button = h("button", {
 		type: "submit",
 		class: "ui-button primary"
 	}, t(label));
+	button.addEventListener("click", (event) => {
+		if (busy || initialChecking && (busy || receiptTimer !== null)) event.preventDefault();
+	});
 	const form = h("form", {
 		"data-pm-action": action,
 		onsubmit: (event) => {
 			event.preventDefault();
+			if (busy || initialChecking && (busy || receiptTimer !== null)) return;
+			if (isFieldFocused()) button.focus();
 			run();
 		}
 	}, extra, h("div", { class: "actions" }, button, reset), status, receipt);
@@ -43147,24 +43167,46 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		}, receiptDelays[receiptAttempt++]);
 	}
 	function update() {
-		if (disposed || !form.isConnected) return;
+		if (disposed || !form.isConnected) {
+			button.removeAttribute("aria-disabled");
+			status.removeAttribute("aria-busy");
+			return;
+		}
 		pollReceipt();
 		if (!busy && receiptTimer === null) initialChecking = false;
 		const autoChecking = initialChecking && (busy || receiptTimer !== null);
+		const inFlight = busy || autoChecking;
 		const frozen = busy || damaged || Boolean(saved.intent), locked = frozen || !allowed();
 		for (const input of Object.values(fields)) {
 			input.disabled = locked && (!readOnlyWhenUnavailable || frozen);
 			if (readOnlyWhenUnavailable) input.readOnly = locked;
 		}
-		button.disabled = busy || autoChecking || damaged || !allowed() || !sendReady() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
-		button.hidden = terminal() || Boolean(saved.intent?.initialAdmissionRefused);
+		const hadFocus = document.activeElement === button;
+		const hadResetFocus = document.activeElement === reset;
+		if (inFlight) {
+			button.setAttribute("aria-disabled", "true");
+			button.disabled = false;
+		} else {
+			button.removeAttribute("aria-disabled");
+			button.disabled = damaged || !allowed() || !sendReady() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
+		}
+		if (busy) status.setAttribute("aria-busy", "true");
+		else status.removeAttribute("aria-busy");
+		button.hidden = !inFlight && (terminal() || Boolean(saved.intent?.initialAdmissionRefused));
 		button.textContent = t(saved.intent && !autoChecking ? "pm_check_original" : label);
-		reset.hidden = !terminal() && !saved.intent?.initialAdmissionRefused;
+		reset.hidden = inFlight || !terminal() && !saved.intent?.initialAdmissionRefused;
 		reset.disabled = busy || !allowed();
+		if (hadFocus && (button.hidden || button.disabled)) {
+			if (!reset.hidden && !reset.disabled) reset.focus();
+			else if (document.activeElement === document.body || document.activeElement === button) {
+				status.tabIndex = -1;
+				status.focus();
+			}
+		} else if (hadResetFocus && reset.hidden && !button.hidden && !button.disabled) button.focus();
 		onStateChange();
 	}
 	async function run(automatic = false) {
-		if (disposed || busy || damaged || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
+		if (disposed || busy || damaged || !automatic && initialChecking && (busy || receiptTimer !== null) || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
 		if (!allowed() || !sendReady()) {
 			if (!automatic) {
 				status.replaceChildren(h("p", { class: "muted" }, t("pm_action_unavailable")));
@@ -43172,6 +43214,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			}
 			return;
 		}
+		if (!automatic && isFieldFocused()) button.focus();
 		stopTimer();
 		if (!automatic) {
 			receiptAttempt = 0;
@@ -43377,7 +43420,24 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		return;
 	}
 	if (workspaceId && threadId) rememberProjectView(namespace, workspaceId, "discussions");
-	let disposed = false, workspace = null, threadData = null, loaded = false, initialReadComplete = false, refreshing = false, sequence = 0, threadPages = 1, lifecycle = null;
+	let disposed = false, workspace = null, threadData = null, loaded = false, initialReadComplete = false, refreshing = true, sequence = 0, threadPages = 1, lifecycle = null;
+	let headerReads = 0, initialHeaderSettled = false, settleResolvers = [];
+	function resolveSettleWaiters() {
+		if (headerReads === 0) {
+			initialHeaderSettled = true;
+			const resolvers = settleResolvers;
+			settleResolvers = [];
+			for (const resolve of resolvers) resolve();
+		}
+	}
+	function settleReadComplete() {
+		if (headerReads > 0) headerReads--;
+		if (headerReads === 0) resolveSettleWaiters();
+	}
+	function workspaceSettled() {
+		if (disposed || initialHeaderSettled && headerReads === 0) return Promise.resolve();
+		return new Promise((resolve) => settleResolvers.push(resolve));
+	}
 	const launch = parseDiscussRefs(location.hash.split("?")[1] || "");
 	const uiState = viewState(namespace, workspaceId, "discussions");
 	const handoffKey = `batc.pm.${namespace}.discussion-send.${workspaceId}`;
@@ -43976,7 +44036,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		caps,
 		permitted,
 		form,
-		embedded: true
+		embedded: true,
+		workspaceSettled
 	}) : null;
 	if (kanban) body.insertBefore(kanban.element, content);
 	const sprints = workspaceId && !threadId && caps()?.features?.pm_workspaces?.sprints ? workspaceSprints({
@@ -44264,7 +44325,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		namespace,
 		workspaceId,
 		caps,
-		errorBox
+		errorBox,
+		workspaceSettled
 	}) : null;
 	if (traceability) body.insertBefore(traceability.element, content);
 	const resources = workspaceId && !threadId && caps()?.features?.pm_resources ? workspaceResources({
@@ -44745,6 +44807,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			beforeSelect: (id, previous) => {
 				maskStaleView(id);
 				if (previous === "overview") brief?.setActive?.(false);
+				if (previous === "board") kanban?.rememberScroll?.();
+				if (previous === "requirements") traceability?.rememberScroll?.();
 			},
 			onSelect: (id) => {
 				if (shownView === "issues" && id !== "issues") register?.rememberScroll();
@@ -45711,6 +45775,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		refreshing = true;
 		earlier.disabled = true;
 		refresh.disabled = true;
+		headerReads++;
 		try {
 			alive();
 			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}?before_message=${historyCursor}`);
@@ -45745,6 +45810,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				refresh.disabled = false;
 				earlier.disabled = !loaded;
 			}
+			settleReadComplete();
 		}
 	}
 	function filterThreads() {
@@ -45807,6 +45873,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			qualityReviews?.withdraw();
 			qualitySelections.clear();
 		}
+		headerReads++;
 		try {
 			alive();
 			const list = event ? { workspaces: lastList } : await api("GET", "/pm/workspaces");
@@ -46127,6 +46194,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				refreshing = false;
 				refresh.disabled = false;
 			}
+			settleReadComplete();
 		}
 	}
 	await load();
@@ -46167,6 +46235,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	let authorityTool = null;
 	async function refreshAuthority() {
 		const ticket = ++sequence;
+		headerReads++;
 		try {
 			const detail = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}`);
 			alive();
@@ -46219,6 +46288,12 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			updateForms();
 			status.replaceChildren(errorBox(error, { within: status }));
 			throw error;
+		} finally {
+			if (ticket === sequence) {
+				refreshing = false;
+				refresh.disabled = false;
+			}
+			settleReadComplete();
 		}
 	}
 	let contextSequence = 0;
@@ -46327,6 +46402,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		return settleRefreshes(reads).then(refreshNames);
 	});
 	const dispose = () => {
+		if (workbench?.selected() === "board") kanban?.rememberScroll?.();
+		if (workbench?.selected() === "requirements") traceability?.rememberScroll?.();
 		uiState.listScroll = workspaceList.scrollTop;
 		threadState.scroll = content.querySelector(".pd-transcript")?.scrollTop || 0;
 		disposed = true;
@@ -46354,6 +46431,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		ahp?.dispose();
 		for (const control of viewToolMenus.values()) control.dispose();
 		for (const value of forms) value.dispose();
+		refreshing = false;
+		initialHeaderSettled = true;
+		headerReads = 0;
+		resolveSettleWaiters();
 	};
 	dispose.navigate = (nextWorkspace, nextThread, nextView) => {
 		if (disposed || nextWorkspace !== workspaceId || (nextThread || null) !== (threadId || null) || !workbench) return false;
