@@ -1,5 +1,5 @@
 import {timeStamp} from './ui/stamps.js';
-import {discussionFeedback} from './pm-discussions.js';
+import {discussionFeedback, discussionSettingsHref} from './pm-discussions.js';
 import {agentMark} from './ui/components.js';
 import {pmContextBundle} from './pm-context-bundle.js';
 // A native turn consumes a frozen central snapshot; the client never starts a local agent.
@@ -23,7 +23,7 @@ export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capabi
   const authorized = () => permitted(false) && thread()?.capabilities?.write === true
     && caps()?.scopes?.includes('start');
   const requests = [];
-  let composerNode = null, ask = null, connection = null, working = null, clock = null;
+  let primary = true, composerNode = null, ask = null, connection = null, working = null, clock = null, composerText = null, clearDraft = null, limit = null, requestDetails = null;
   const otherLocked = spec => requests.some(row => row.spec !== spec && row.request.locked());
   for (const spec of specs) {
     const purpose = input('pm_native_purpose', {multiline: true, max: 4000});
@@ -36,6 +36,7 @@ export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capabi
       permitted: () => selected === spec.key && advertised(spec) && authorized() && !otherLocked(spec)
         && context.valid() && capability()?.[spec.key]?.authorized !== false && capability()?.[spec.key]?.eligible_for_preflight === true,
       recoverPermitted: authorized, label: 'pm_native_analyze', onSaved: refresh,
+      onBeforeSaved: (_result, values) => clearDraft?.(values.purpose),
       onStateChange: () => {context.update();if (ready) render();},
       extra: h('div', {class: 'pm-fields'}, labelled('pm_native_purpose', purpose), context.box, labelled('pm_native_model', model))});
     context.bind(request);
@@ -78,9 +79,17 @@ export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capabi
       : reason[descriptor?.reason] || (selected === 'bat_analysis' ? 'pm_analysis_bat_unavailable' : 'pm_native_unavailable'));
     if (composerNode) {
       const request = requests.find(row => row.spec === active)?.request;
-      ask.textContent = t(request?.locked() ? 'pm_check_original' : 'pd_ask');
-      ask.hidden = !eligible && !request?.locked(); ask.disabled = !request?.canSubmit();
-      connection.hidden = eligible; discussionFeedback({t, request, node: working, eligible});
+      const mayReply = eligible && authorized() && descriptor?.authorized !== false
+        && caps()?.actions?.some(row => row.action === active.action && row.allowed === true);
+      ask.textContent = t(request?.locked() ? 'pm_check_original' : 'pd_send_pm');
+      const content = composerText.value.trim();
+      ask.hidden = request?.replaceable() || !mayReply && !request?.locked();
+      ask.classList.toggle('primary', primary); ask.classList.toggle('secondary', !primary);
+      ask.disabled = !request?.canSubmit() || !request?.locked() && (!content || content.length > 4000);
+      limit.hidden = request?.locked() || content.length <= 4000;
+      requestDetails.hidden = !request?.operation() && !request?.box.querySelector(':scope > [role=status] .error');
+      connection.hidden = mayReply;
+      discussionFeedback({t, request, node: working, eligible: mayReply});
     }
     const source = thread() && selected === 'bat_analysis' && advertised(active) ? descriptor?.selected_binding : null;
     if (!thread()) current.replaceChildren();
@@ -100,20 +109,37 @@ export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capabi
   }
   ready = true;
   update();
-  return {box, update, recheck() {for (const {request} of requests) request.recheck();}, composer(textarea) {
-    ask = h('button', {type: 'button', class: 'secondary', 'data-discussion-ask': '', onclick: () => {
+  return {box, update, setPrimary(value) {primary = value;if (composerNode) render();}, recheck() {for (const {request} of requests) request.recheck();}, composer(textarea, onCompleted, onDetails) {
+    composerText = textarea; clearDraft = onCompleted;
+    ask = h('button', {type: 'button', class: 'primary', 'data-discussion-reply': '', onclick: () => {
       const request = requests.find(row => row.spec.key === selected)?.request;
       if (!request) return;
-      if (!request.locked()) request.set('purpose', textarea.value.trim() || thread()?.messages?.at(-1)?.content || thread()?.thread?.title || t('pd_ask'));
+      if (!request.locked()) {
+        const content = textarea.value.trim();
+        if (!content || content.length > 4000) return;
+        request.set('purpose', content);
+      }
       void request.submit();
-    }}, t('pd_ask'));
-    connection = h('p', {class: 'muted'}, h('span', {}, t('pd_not_connected')), ' · ', h('a', {href: '#/settings'}, t('pd_setup')));
-    working = h('p', {class: 'muted', role: 'status', 'data-discussion-working': ''});
-    composerNode = h('div', {class: 'pd-ask'}, ask, connection, working);
+    }}, t('pd_send_pm'));
+    connection = h('p', {class: 'muted'}, h('span', {}, t('pd_reply_unavailable')), ' · ', h('a', {href: discussionSettingsHref()}, t('pd_setup')));
+    working = h('p', {class: 'muted', role: 'status', 'data-discussion-reply-working': ''});
+    limit = h('p', {class: 'muted', hidden: true}, t('pd_reply_limit'));
+    requestDetails = h('button', {type: 'button', class: 'ui-button ghost ui-sm', hidden: true, 'data-discussion-reply-details': '', onclick: onDetails}, t('pd_details'));
+    composerNode = h('div', {class: 'pd-ask'}, ask, connection, h('div', {class: 'actions'}, working, requestDetails), limit);
+    textarea.addEventListener('input', render);
     clock = setInterval(() => {const request = requests.find(row => row.spec.key === selected)?.request;
       if (composerNode.isConnected && request?.checking() && ['running', 'accepted', 'queued', 'pending'].includes(request?.operation()?.status)) render();}, 1000);
     render(); return composerNode;
-  }, dispose() {clearInterval(clock);}};
+  }, dispose() {clearInterval(clock);composerText?.removeEventListener('input', render);}};
+}
+
+export function pmDiscussionRequest({h, t, run}) {
+  return h('article', {class: 'pm-note', 'data-pm-request': run.run_id},
+    h('div', {class: 'pm-note-stamp'}, h('strong', {}, run.requester || t('pd_request')), timeStamp(run.created_at),
+      run.requester ? h('span', {class: 'ui-meta'}, t('pd_request')) : ''),
+    h('div', {class: 'pm-note-text'}, run.purpose),
+    h('p', {class: 'pm-source'}, nativeRunState(t, run), ' · ',
+      h('a', {href: '#/op/' + encodeURIComponent(run.operation_id)}, t('pm_operation'))));
 }
 
 export function nativeRunState(t, run) {

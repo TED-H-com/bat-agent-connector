@@ -49,7 +49,7 @@ for (const locale of ['en', 'zh-TW']) {
     await expect(page.getByRole('button',{name:zh ? '儲存報告' : 'Save report',exact:true})).toBeHidden();
     await expect(page.locator('[data-pm-action="pm.snapshot.create"]')).toBeHidden();
     if (width < 1200) await page.keyboard.press('Escape');
-    await expect(page.getByRole('button',{name:zh ? '傳送' : 'Send',exact:true})).toBeEnabled();
+    await expect(page.getByRole('button',{name:zh ? '只存筆記' : 'Save note only',exact:true})).toBeEnabled();
     expect(f.discussion.writes).toEqual([]); await context.close();
   });
 

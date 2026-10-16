@@ -11,7 +11,7 @@ for (const locale of ['en', 'zh-TW']) test(`saved context keeps its caption, age
   const runId = 'pmrun_' + '7'.repeat(32), zh = locale === 'zh-TW';
   await mountConversation(page, false, async input => {
     if (new URL(input.path, 'http://fixture').pathname === `/pm/workspaces/${f.ids.workspaceId}/runs`) return {status: 200,
-      data: {workspace_id: f.ids.workspaceId, runs: [{run_id: runId, created_at: Date.now() / 1000 - 20,
+      data: {workspace_id: f.ids.workspaceId, runs: [{run_id: runId, workspace_id: f.ids.workspaceId, thread_id: f.ids.threadFollow, operation_id: 'op_' + '7'.repeat(32), created_at: Date.now() / 1000 - 20,
         purpose: zh ? '確認重設連結效期為 15 分鐘；保留登入與密碼重設，推薦獎勵不在本輪範圍。'
           : 'Agree a 15-minute reset-link expiry; keep sign-in and recovery, and exclude referral rewards.',
         adapter: 'codex-native-linux', state: 'completed'}], next_cursor: null}};
@@ -62,7 +62,7 @@ for (const locale of ['en', 'zh-TW']) test(`new discussion stays focused when ce
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/new`);
   await expect(page.locator('[data-discussion-composer]')).toBeFocused();
   await expect(page.locator('[data-discussion-composer]')).toBeInViewport();
-  await expect(page.locator('[data-discussion-draft-ready]')).toHaveText(locale === 'zh-TW' ? '傳送第一則訊息後即可詢問 PM' : 'Send the first message to ask the PM');
+  await expect(page.locator('[data-discussion-draft-ready]')).toHaveText(locale === 'zh-TW' ? '先儲存第一則筆記建立討論，再傳送要求給 PM。' : 'Save the first note to create this discussion, then send a request to the PM.');
   await expect(page.locator('[data-discussion-pm-unavailable]')).toHaveCount(0);
   await expect(page.locator('[data-pm-action]:visible')).toHaveCount(1);
   await expect(page.locator('.pm-main > [data-pm-follow-up], .pm-main > [data-pm-meetings], .pm-main > .pm-evidence, .pm-main > .pm-spec-sources')).toHaveCount(0);
@@ -105,7 +105,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
     await composer.fill(zh ? '請整理這個阻礙，保留尚未確認的預算。' : 'Review this blocker and keep the budget uncertainty explicit.');
     await page.reload(); await expect(composer).not.toHaveValue(''); expect(f.discussion.writes).toHaveLength(0);
     await expect(page.locator('[data-discussion-title]')).toHaveText(draftTitle);
-    const sendDraft = page.getByRole('button', {name: zh ? '傳送' : 'Send', exact: true});
+    const sendDraft = page.getByRole('button', {name: zh ? '只存筆記' : 'Save note only', exact: true});
     await expect(sendDraft).toBeEnabled();
     await composer.press('Tab');
     await sendDraft.focus(); await expect(sendDraft).toBeFocused();
@@ -128,7 +128,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
     await expect(rename).toBeHidden();
     await expect(page.locator('[data-discussion-title]')).toHaveText(zh ? '解除復原阻礙' : 'Unblock recovery');
     await expect(page.locator('[data-proposal-review]')).toBeInViewport();
-    const send = await page.getByRole('button', {name: zh ? '傳送' : 'Send', exact: true}).boundingBox();
+    const send = await page.getByRole('button', {name: zh ? '只存筆記' : 'Save note only', exact: true}).boundingBox();
     const ask = await page.locator('[data-discussion-ask]').boundingBox();
     expect(send!.y).toBe(ask!.y); expect(send!.x).toBeLessThan(ask!.x);
     await expect(page.locator('[data-discussion-working]')).toHaveText(zh ? 'PM 已完成' : 'PM finished');
@@ -194,7 +194,7 @@ for (const status of [403, 404]) test(`draft governance context withdrawn with $
   await expect(page.locator('#main')).not.toContainText(f.copy.blocker);
   await expect(chip).not.toContainText(id);
   await expect(composer).toHaveValue('Keep this local draft');
-  await expect(page.getByRole('button', {name: 'Send', exact: true})).toBeDisabled();
+  await expect(page.getByRole('button', {name: 'Save note only', exact: true})).toBeDisabled();
   expect(f.discussion.writes).toHaveLength(0);
 });
 
@@ -221,7 +221,7 @@ test('a late draft context response cannot revive a withdrawn record', async ({p
   release!(); await response;
   await expect(chip).toContainText('Unavailable');
   await expect(page.locator('#main')).not.toContainText(f.copy.blocker);
-  await expect(page.getByRole('button', {name: 'Send', exact: true})).toBeDisabled();
+  await expect(page.getByRole('button', {name: 'Save note only', exact: true})).toBeDisabled();
   expect(f.discussion.writes).toHaveLength(0);
 });
 
@@ -260,7 +260,7 @@ test('a new message makes the proposal out of date while preserving review choic
   const candidate = page.locator('[data-proposal-candidate]').first();
   await candidate.locator(':scope > summary').click(); await candidate.getByLabel('Reviewed wording').fill('Retained owner review');
   await page.locator('[data-discussion-composer]').fill('New evidence requires another proposal.');
-  await page.getByRole('button', {name: 'Send', exact: true}).click();
+  await page.getByRole('button', {name: 'Save note only', exact: true}).click();
   await expect(page.locator('[data-proposal-reason]')).toHaveText('Out of date · Discussion changed');
   await expect(candidate.getByLabel('Reviewed wording')).toHaveValue('Retained owner review');
   await page.getByRole('button', {name: 'Ask PM again', exact: true}).click();
@@ -306,7 +306,7 @@ test('the complete review path works with the keyboard, including a second propo
   await page.goto('/dashboard/' + discussHref({workspaceId: f.ids.workspaceId, title: f.copy.blocker, from: 'overview'}));
   await expect(page.locator('[data-discussion-composer]')).toBeFocused();
   await page.keyboard.type('Review the top blocker.');
-  await tabTo(page.getByRole('button', {name: 'Send', exact: true})); await page.keyboard.press('Enter');
+  await tabTo(page.getByRole('button', {name: 'Save note only', exact: true})); await page.keyboard.press('Enter');
   await expect(page.locator('.pm-notes')).toContainText('Review the top blocker.');
   await tabTo(page.locator('[data-discussion-ask]')); await page.keyboard.press('Enter');
   await expect(page.locator('[data-proposal-review]')).toBeVisible();
@@ -338,7 +338,7 @@ test('rename remains reviewable when the fixed discussion exceeds the latest mes
   await page.getByLabel('Reason for adopting this update').fill('Review the original complete fixed context.');
   await expect(page.getByRole('button', {name: 'Adopt', exact: true})).toBeEnabled();
   await page.locator('[data-discussion-composer]').fill('A newer message changes the content.');
-  await page.getByRole('button', {name: 'Send', exact: true}).click();
+  await page.getByRole('button', {name: 'Save note only', exact: true}).click();
   await expect(page.locator('[data-proposal-reason]')).toHaveText('Out of date · Discussion changed');
   await expect(page.getByRole('button', {name: 'Adopt', exact: true})).toBeDisabled();
 });
@@ -472,7 +472,7 @@ for (const locale of ['en', 'zh-TW']) test(`missing PM adapter occupies only the
   });
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
   const status = page.locator('.pd-composer-status');
-  await expect(status).toContainText(locale === 'en' ? 'Messages are saved. The PM is not connected and will not reply.' : '訊息會儲存；PM 尚未連線，不會回覆。');
+  await expect(status).toContainText(locale === 'en' ? 'Ordinary PM replies are unavailable. You can still save notes.' : '一般 PM 對話目前無法使用，仍可儲存筆記。');
   await expect(status.getByRole('link')).toHaveAttribute('href', '#/settings?section=agents&from=' + encodeURIComponent(`#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`));
   await expect(page.locator('[data-discussion-ask]')).toBeHidden();
   expect(f.discussion.writes).toHaveLength(0); await context.close();
@@ -518,7 +518,7 @@ for (const outcome of ['failed', 'uncertain']) test(`first-message ${outcome} ne
   });
   await page.goto('/dashboard/' + discussHref({workspaceId: f.ids.workspaceId, title: 'Topic A', from: 'overview'}));
   const composer = page.locator('[data-discussion-composer]'); await composer.fill('Original first note');
-  await page.getByRole('button', {name: 'Send', exact: true}).click();
+  await page.getByRole('button', {name: 'Save note only', exact: true}).click();
   await expect.poll(() => f.discussion.writes.length).toBe(2);
   await expect(page.locator('.pd-composer-status > [role=status]')).toBeVisible();
   const thread = page.url().split('/').at(-1)!;
@@ -622,7 +622,7 @@ for (const trigger of ['refresh', 'pm_run', 'pm_conversation_proposal']) test(`w
   const op: any = [...f.discussion.operations.values()][0]; op.status = 'succeeded';
   if (trigger === 'refresh') await page.getByRole('button', {name: 'Refresh', exact: true}).click();
   else events.push({seq: 1, resource_type: trigger, resource_id: 'analysis', kind: trigger + '.updated'});
-  await expect(working).toHaveText('PM finished', {timeout: 10000}); await expect(page.locator('[data-discussion-ask]')).toHaveText('Ask PM');
+  await expect(working).toHaveText('PM finished', {timeout: 10000}); await expect(page.locator('[data-discussion-ask]')).toHaveText('Make a plan');
   expect(reads).toHaveLength(7); expect(new Set(reads)).toEqual(new Set(['/operations/' + op.operation_id]));
   expect(f.discussion.writes).toHaveLength(1);
 });
@@ -643,7 +643,7 @@ test('a list-opened mobile thread returns to its filtered discussion list', asyn
 test('completed launch storage is pruned and origins use a bounded index', async ({page}) => {
   const f = demoFixture({discussions: true}); await mountConversation(page, false, f.dispatch);
   const launch = discussHref({workspaceId: f.ids.workspaceId, title: 'First launch', from: 'overview'});
-  await page.goto('/dashboard/' + launch); await page.locator('[data-discussion-composer]').fill('First note'); await page.getByRole('button', {name: 'Send', exact: true}).click();
+  await page.goto('/dashboard/' + launch); await page.locator('[data-discussion-composer]').fill('First note'); await page.getByRole('button', {name: 'Save note only', exact: true}).click();
   await expect(page.locator('.pm-notes')).toContainText('First note');
   await page.evaluate(() => {
     const indexKey = Object.keys(localStorage).find(key => key.includes('discussion-origin') && key.endsWith('.index'))!;
@@ -651,7 +651,7 @@ test('completed launch storage is pruned and origins use a bounded index', async
     for (const id of ids) localStorage.setItem(prefix + id, JSON.stringify({from: 'overview'})); localStorage.setItem(indexKey, JSON.stringify(ids));
   });
   await page.evaluate(href => {location.hash = href;}, discussHref({workspaceId: f.ids.workspaceId, title: 'Second launch', from: 'requirements'}));
-  await page.locator('[data-discussion-composer]').fill('Second note'); await page.getByRole('button', {name: 'Send', exact: true}).click();
+  await page.locator('[data-discussion-composer]').fill('Second note'); await page.getByRole('button', {name: 'Save note only', exact: true}).click();
   await expect(page.locator('.pm-notes')).toContainText('Second note');
   const stored = await page.evaluate(() => ({origins: Object.keys(localStorage).filter(key => key.includes('discussion-origin')),
     launches: Object.keys(localStorage).filter(key => key.includes('.discussion.') && key.includes('pm.thread.create'))}));
@@ -705,7 +705,7 @@ test('reload during the first thread mount preserves the staged intent without a
     return f.dispatch(input);
   });
   await page.goto('/dashboard/' + discussHref({workspaceId: f.ids.workspaceId, title: 'Interrupted first mount'}));
-  await page.locator('[data-discussion-composer]').fill('Keep my first note'); await page.getByRole('button', {name: 'Send', exact: true}).click();
+  await page.locator('[data-discussion-composer]').fill('Keep my first note'); await page.getByRole('button', {name: 'Save note only', exact: true}).click();
   await expect(page).toHaveURL(/\/discussions\/pmt_[a-f0-9]{32}$/);
   await expect(page.locator('[data-discussion-composer]')).toHaveValue('Keep my first note');
   const saved = await page.evaluate(() => {const key = Object.keys(localStorage).find(key => key.includes('.pm.message.append.'))!; return JSON.parse(localStorage.getItem(key)!);});

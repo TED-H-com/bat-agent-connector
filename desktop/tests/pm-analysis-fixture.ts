@@ -10,16 +10,17 @@ export function nativeFixture() {
   const capability = () => ({adapter: 'codex-native-linux', contract: 'codex-pm-linux-v1', execution_scope: 'frozen_context_only',
     eligible_for_preflight: native.eligible, reason: native.reason, options_confirmed: false, auth_validity: 'unverified', model_execution_verified: false});
   const complete = (adapter = 'codex-native-linux') => {
-    const run = f.state.runs.find(run => run.adapter === adapter);
+    const run = f.state.runs.findLast(run => run.adapter === adapter && run.state !== 'completed');
     if (!run || run.state === 'completed') return;
-    const provenance = {run_id: runId, native_turn_id: 'native-turn', native_message_id: 'native-answer',
+    const replyId = run.run_id === runId ? messageId : 'pmm_' + run.run_id.slice(4);
+    const provenance = {run_id: run.run_id, native_turn_id: 'native-turn', native_message_id: 'native-answer',
       sdk_session_id: 'native-thread', model: nativeModel, completeness: 'complete', context_digest: 'c'.repeat(64),
       source_refs: {adapter: run.adapter, native_thread_id: 'native-thread'}};
-    f.state.messages.push({message_id: messageId, sequence: 2, actor: 'pm:' + workspaceId,
+    f.state.messages.push({message_id: replyId, sequence: f.state.messages.length + 1, actor: 'pm:' + workspaceId,
       role: 'assistant', provenance, content: answer, created_at: Date.parse('2026-10-11T12:02:00Z') / 1000} as any);
-    run.state = 'completed'; run.outcome = {message_id: messageId, actual_model: nativeModel, completeness: 'complete'};
+    run.state = 'completed'; run.outcome = {message_id: replyId, actual_model: nativeModel, completeness: 'complete'};
     const op = [...f.state.ops.values()].find(op => op.operation_id === run.operation_id);
-    op.status = 'succeeded'; op.result = {run_id: runId, workspace_id: workspaceId, thread_id: threadId,
+    op.status = 'succeeded'; op.result = {run_id: run.run_id, workspace_id: workspaceId, thread_id: threadId,
       state: run.state, context_digest: 'c'.repeat(64), adapter: run.adapter, execution_authorized: false, outcome: run.outcome};
     f.state.thread.version++; f.state.cursor++;
   };
@@ -32,11 +33,12 @@ export function nativeFixture() {
       if (f.state.reject) return {status: f.state.reject.status, data: {error: {code: f.state.reject.code, message: 'Rejected request', admission_refused: true}}};
       let op = f.state.ops.get(input.idempotency_key);
       if (!op) {
-        const operation_id = 'op_' + 'f'.repeat(32);
+        const index = f.state.runs.length;
+        const operation_id = index ? 'op_' + index.toString(16).padStart(32, '0') : 'op_' + 'f'.repeat(32);
         op = {...structuredClone(input.body), actor: f.state.actor, idempotency_key: input.idempotency_key,
           operation_id, status: 'running', result: null};
         f.state.ops.set(input.idempotency_key, op);
-        f.state.runs.push({run_id: runId, workspace_id: workspaceId, thread_id: threadId,
+        f.state.runs.push({run_id: index ? 'pmr_' + index.toString(16).padStart(32, '0') : runId, workspace_id: workspaceId, thread_id: threadId,
           purpose: input.body.params.purpose, state: 'running', adapter, operation_id,
           created_at: Date.parse('2026-10-11T12:01:00Z') / 1000,
           context: {thread_version: f.state.thread.version, messages: structuredClone(f.state.messages), inputs_by_status: {}, coverage: {}}});

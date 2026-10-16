@@ -146,7 +146,7 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale, () => {
     await mountConversation(page, false, f.dispatch); await page.goto(pmRoute);
     const form = page.locator('[data-pm-action="pm.message.append"]'), field = form.locator('textarea');
     await field.fill('Keep this original draft');
-    await form.getByRole('button', {name: locale === 'en' ? 'Send' : '傳送', exact: true}).click();
+    await form.getByRole('button', {name: locale === 'en' ? 'Save note only' : '只存筆記', exact: true}).click();
     const sentence = locale === 'en'
       ? 'Could not confirm the current version. Your draft is preserved. Refresh and review before another change.'
       : '目前無法確認最新版本。草稿仍保留；請重新整理並檢視後，再進行變更。';

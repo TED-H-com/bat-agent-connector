@@ -1,0 +1,6 @@
+/* Same tokens and controls as the product; only the tour banner is additional. */
+#demo-bar {display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); padding:var(--space-3) var(--space-4); background:var(--surface-2); border-bottom:1px solid var(--line);}
+.demo-description {display:grid; gap:var(--space-1); min-width:0; font-size:var(--fs-small);}
+.demo-description > span {color:var(--muted);}
+#demo-bar nav {display:flex; flex-wrap:wrap; gap:var(--space-2); flex-shrink:0;}
+@media (max-width:999px) {#demo-bar {align-items:flex-start; flex-direction:column;} #demo-bar nav {flex-shrink:1;}}

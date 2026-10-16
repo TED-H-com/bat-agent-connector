@@ -98,7 +98,7 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
     const note=action(page,'pm.message.append');
     await note.getByLabel('Message the PM…',{exact:true}).fill('Keep literal <script>notes</script> and compare two options.');
     await page.reload();await expect(note.getByLabel('Message the PM…',{exact:true})).toHaveValue('Keep literal <script>notes</script> and compare two options.');
-    await note.getByRole('button',{name:'Send',exact:true}).click();
+    await note.getByRole('button',{name:'Save note only',exact:true}).click();
     await expect(page.locator('.pm-notes')).toContainText('Keep literal <script>notes</script>');
     await expect(note.getByLabel('Message the PM…',{exact:true})).toHaveValue('');
     await page.reload();await expect(page.locator('.pm-notes')).toContainText('Keep literal <script>notes</script>');
@@ -137,7 +137,7 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
   test('lost reply then auth rejection keeps exact key across reload and receipt recovery',async({page})=>{
     const f=pmFixture();f.state.lost=true;await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
     const note=action(page,'pm.message.append');await note.getByLabel('Message the PM…',{exact:true}).fill('Save once only');
-    await note.getByRole('button',{name:'Send',exact:true}).click();await expect(note).toContainText('Reply unavailable');
+    await note.getByRole('button',{name:'Save note only',exact:true}).click();await expect(note).toContainText('Reply unavailable');
     f.state.reject={status:403,code:'FORBIDDEN'};await note.getByRole('button',{name:'Check original request',exact:true}).click();
     await expect.poll(()=>f.state.writes.length).toBe(2);await expect(note.getByRole('button',{name:'New request',exact:true})).toBeHidden();
     await page.reload();await expect(note.getByLabel('Message the PM…',{exact:true})).toBeDisabled();f.state.reject=null;
@@ -148,26 +148,26 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
   test('stale admission retains text and read failure freezes mutation until refresh',async({page})=>{
     const f=pmFixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);const note=action(page,'pm.message.append');
     await note.getByLabel('Message the PM…',{exact:true}).fill('Keep this draft');f.state.reject={status:409,code:'VERSION_CONFLICT'};
-    await note.getByRole('button',{name:'Send',exact:true}).click();await expect(note).toContainText('Could not confirm the current version. Your draft is preserved. Refresh and review before another change.');
+    await note.getByRole('button',{name:'Save note only',exact:true}).click();await expect(note).toContainText('Could not confirm the current version. Your draft is preserved. Refresh and review before another change.');
     await expect(note.getByLabel('Message the PM…',{exact:true})).toHaveValue('Keep this draft');
     await note.getByRole('button',{name:'New request',exact:true}).click();f.state.reject=null;f.state.thread.version=9;
     f.state.failRead=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(page.locator('.pm-status')).toContainText('PM read unavailable');
     await expect(note).toBeHidden();await expect(note.locator('button[type=submit]')).toBeDisabled();await expect(note.getByLabel('Message the PM…',{exact:true})).toHaveValue('Keep this draft');
-    f.state.failRead=false;await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(note.getByRole('button',{name:'Send',exact:true})).toBeEnabled();
-    await note.getByRole('button',{name:'Send',exact:true}).click();await expect(page.locator('.pm-notes')).toContainText('Keep this draft');expect(f.state.writes[1].body.preconditions).toEqual({expected_version:9});
+    f.state.failRead=false;await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(note.getByRole('button',{name:'Save note only',exact:true})).toBeEnabled();
+    await note.getByRole('button',{name:'Save note only',exact:true}).click();await expect(page.locator('.pm-notes')).toContainText('Keep this draft');expect(f.state.writes[1].body.preconditions).toEqual({expected_version:9});
   });
   test('readers cannot edit; contributors cannot confirm or select a direction',async({page})=>{
     const f=pmFixture();f.state.role='reader';await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
-    await expect(action(page,'pm.message.append').getByRole('button',{name:'Send',exact:true})).toBeDisabled();
+    await expect(action(page,'pm.message.append').getByRole('button',{name:'Save note only',exact:true})).toBeDisabled();
     await expect(page.locator('[data-pm-plan]')).toBeHidden();await expect(page.getByText('Review and confirm',{exact:true})).toHaveCount(0);
-    f.state.role='contributor';await page.reload();await expect(action(page,'pm.message.append').getByRole('button',{name:'Send',exact:true})).toBeEnabled();
+    f.state.role='contributor';await page.reload();await expect(action(page,'pm.message.append').getByRole('button',{name:'Save note only',exact:true})).toBeEnabled();
     await expect(page.locator('[data-pm-plan]')).toBeHidden();await expect(page.getByText('Review and confirm',{exact:true})).toHaveCount(0);
     expect(f.state.writes).toHaveLength(0);
   });
   test('connection identity isolates drafts and late receipts cannot navigate or clear the original',async({page})=>{
     const f=pmFixture();let resolve:()=>void=()=>{};f.state.defer=new Promise<void>(r=>resolve=r);
     await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);const note=action(page,'pm.message.append');
-    await note.getByLabel('Message the PM…',{exact:true}).fill('Original account note');await note.getByRole('button',{name:'Send',exact:true}).click();
+    await note.getByLabel('Message the PM…',{exact:true}).fill('Original account note');await note.getByRole('button',{name:'Save note only',exact:true}).click();
     await expect.poll(()=>f.state.writes.length).toBe(1);await page.goto('/dashboard/#/settings');
     await page.getByRole('button',{name:'Disconnect',exact:true}).click();resolve();
     await expect(page).toHaveURL(/#\/settings$/);expect(f.state.writes).toHaveLength(1);
@@ -190,7 +190,7 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
     const f=pmFixture();f.state.mismatch=true;await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);const note=action(page,'pm.message.append');
     await note.getByLabel('Message the PM…',{exact:true}).fill('Identity-bound note');
     await page.evaluate(()=>{const original=Storage.prototype.setItem;(window as any).restorePmStorage=()=>Storage.prototype.setItem=original;Storage.prototype.setItem=function(key,value){if(key.startsWith('batc.pm.'))throw Error('Draft storage unavailable');return original.call(this,key,value);};});
-    await note.getByRole('button',{name:'Send',exact:true}).click();await expect(note).toContainText('Draft storage unavailable');
+    await note.getByRole('button',{name:'Save note only',exact:true}).click();await expect(note).toContainText('Draft storage unavailable');
     await note.getByRole('button',{name:'Check original request',exact:true}).click();expect(f.state.writes).toHaveLength(0);
     await page.evaluate(()=>(window as any).restorePmStorage());await note.getByRole('button',{name:'Check original request',exact:true}).click();
     await expect(note).toContainText('The receipt does not match');await expect(note.getByLabel('Message the PM…',{exact:true})).toHaveValue('Identity-bound note');

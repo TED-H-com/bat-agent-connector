@@ -293,7 +293,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
   }
   async function loadMore(){if(cursor===null||loading)return;loading=true;const own=ticket;updateControls();try{const result=await api('GET',`${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=${cursor}&limit=20`);alive();if(own!==ticket)return;page(result,true);}catch(error){if(own===ticket){withdraw();notice.replaceChildren(errorBox(error, {within:notice}));box.hidden=false;}}finally{loading=false;updateControls();}}
   function withdraw(){ticket++;refreshAgain=false;queuedPreferred=null;visible=false;active=head=latestId=null;rows=[];cursor=null;rendered='';candidateFields=[];requirementFields=[];picker.replaceChildren(h('option',{value:''},t('pcp_choose')));detail.replaceChildren();content.replaceChildren();notice.replaceChildren();more.hidden=true;reviewButton=null;resolution?.withdraw();prepare?.update();adopt?.update();}
-  function composer(textarea){
+  function composer(textarea,{connectionNotice=true}={}){
     ask=actionButton({type:'button',class:'secondary','data-discussion-ask':'',onclick:()=>{
       if(adopt.replaceable())adopt.edit();
       if(!prepare.locked())prepare.set('purpose',textarea.value.trim()||thread()?.messages?.at(-1)?.content||thread()?.thread?.title||t('pd_ask'));
@@ -301,7 +301,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     }},t('pd_ask'));
     connection=h('p',{class:'muted'},h('span',{},t('pd_not_connected')),' · ',h('a',{href:discussionSettingsHref()},t('pd_setup')));
     working=h('p',{'data-discussion-working':'',role:'status',class:'muted'});
-    composerNode=h('div',{class:'pd-ask'},ask,connection,working);
+    composerNode=h('div',{class:'pd-ask'},ask,...(connectionNotice?[connection]:[]),working);
     clock=setInterval(()=>{if(composerNode.isConnected&&prepare.checking()&&['running','accepted','queued','pending'].includes(prepare.operation()?.status))updateControls();},1000);
     updateControls();return composerNode;
   }

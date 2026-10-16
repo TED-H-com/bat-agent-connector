@@ -23,13 +23,13 @@ async function bounded(promise, milliseconds, message) {
   finally {clearTimeout(timer);}
 }
 const labels = {
-  en: {send: 'Send', ask: 'Ask PM', retry: 'Check original request', adopted: 'Adopted',
+  en: {send: 'Save note only', ask: 'Make a plan', retry: 'Check original request', adopted: 'Adopted',
     resolve: 'Resolve issue', resolutionRationale: 'Reason for resolving', resolved: 'Reported resolved', unassessed: 'Not assessed',
     recently: 'Recently decided', resolution: 'The reviewed expiry decision removes the recovery implementation blocker.',
     accepted: 'Open revision', rationale: 'Reason for adopting this update', adopt: 'Adopt',
     progress: '0 of 2 accepted', emptyMessages: 'No messages yet',
     message: 'Agree a 15-minute reset-link expiry; keep sign-in and recovery, and exclude referral rewards.'},
-  'zh-TW': {send: '傳送', ask: '詢問 PM', retry: '查回原請求', adopted: '已採用',
+  'zh-TW': {send: '只存筆記', ask: '整理計畫', retry: '查回原請求', adopted: '已採用',
     resolve: '回報解決', resolutionRationale: '回報解決的理由', resolved: '回報已解決', unassessed: '未評估',
     recently: '近期決策', resolution: '已審閱的效期決策解除了密碼重設實作的阻礙。',
     accepted: '檢視版本', rationale: '採用這組更新的理由', adopt: '採用',
@@ -183,6 +183,29 @@ async function walkthrough(locale, width, {lostAcknowledgement = false} = {}) {
     await expect(page.locator('.pm-discussion .ui-button.primary:visible')).toHaveCount(1);
     await screenshot(5, 'message-sent');
 
+    step = 'ordinary-pm-replies';
+    const questions = locale === 'en'
+      ? ['Which delivery evidence is still missing?', 'Explain what we should verify next.']
+      : ['目前還缺哪些交付證據？', '請接著說明下一步應該驗證什麼。'];
+    for (const [index, question] of questions.entries()) {
+      await composer.fill(question);
+      await page.locator('[data-discussion-reply]').click();
+      await expect(page.locator('[data-pm-request]')).toHaveCount(index + 1);
+      await expect(page.locator('[data-pm-role=assistant]')).toHaveCount(index + 1);
+      await expect(page.locator('[data-pm-role=assistant]').last()).toContainText(copy.summary);
+      await expect(composer).toHaveValue('');
+    }
+    const analysisRequests = requests.filter(row => row.body.action === 'pm.run.analyze');
+    assert.equal(analysisRequests.length, 2);
+    assert.notEqual(analysisRequests[0].key, analysisRequests[1].key);
+    assert.equal(analysisRequests[1].body.preconditions.expected_version,
+      analysisRequests[0].body.preconditions.expected_version + 1);
+    await page.reload();
+    await expect(page.locator('[data-pm-request]')).toHaveCount(2);
+    await expect(page.locator('[data-pm-role=assistant]')).toHaveCount(2);
+    assert.equal(requests.filter(row => row.body.action === 'pm.run.analyze').length, 2);
+    await screenshot(5, 'ordinary-pm-replies');
+
     step = 'proposal';
     await page.locator('[data-discussion-ask]').click();
     const proposal = page.locator('[data-pm-plan-proposals]');
@@ -290,7 +313,7 @@ async function walkthrough(locale, width, {lostAcknowledgement = false} = {}) {
     child.stdin.write(JSON.stringify({action: 'verify', mode, requests: requests.map(row => ({
       key: row.key, action: row.body.action, operation_id: operationReplies.get(row.key)?.operation_id}))}) + '\n');
     assert.equal((await next()).verified, true);
-    console.log(JSON.stringify({locale, width, mode, centralSafetyVerified: true, browserOperations: 5,
+    console.log(JSON.stringify({locale, width, mode, centralSafetyVerified: true, browserOperations: 7,
       adoptionAttempts: expectedAttempts, resolutionAttempts: expectedAttempts}));
     step = 'decision-overview';
     await openPmSection(page, 'overview');
@@ -345,7 +368,7 @@ async function walkthrough(locale, width, {lostAcknowledgement = false} = {}) {
     assert.deepEqual(failures.map(row => row.action),
       lostAcknowledgement ? ['pm.conversation.adopt', 'pm.governance.revise'] : []);
     for (const row of requests) assert.match(row.key, /^[A-Za-z0-9._:-]{8,200}$/, 'Every UI operation needs a stable key');
-    console.log(JSON.stringify({locale, width, mode, passed: true, operations: 5,
+    console.log(JSON.stringify({locale, width, mode, passed: true, operations: 7,
       adoptionAttempts: expectedAttempts, resolutionAttempts: expectedAttempts,
       seconds: Number(((performance.now() - started) / 1000).toFixed(2))}));
   } catch (error) {
