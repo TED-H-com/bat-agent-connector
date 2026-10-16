@@ -1484,8 +1484,16 @@ class ApiV1:
                 principal, action=body.get("action"), target=body.get("target"), params=body.get("params"),
                 preconditions=body.get("preconditions"), idempotency_key=key, entry="http")
         except OperationError as error:
-            if (not str(body.get("action", "")).startswith("pm.")
-                    and body.get("action") not in {"setup.host", "setup.repository", "setup.verification", "work.start"}):
+            action = body.get("action") if isinstance(body, dict) else None
+            target = body.get("target") if isinstance(body, dict) else None
+            is_work_send = (
+                action == "session.send"
+                and isinstance(target, dict)
+                and ("workspace_id" in target or "work_item_id" in target)
+            )
+            if (not str(action or "").startswith("pm.")
+                    and action not in {"setup.host", "setup.repository", "setup.verification", "work.start"}
+                    and not is_work_send):
                 raise
             # A source-hidden replay is still the original admitted operation.
             # Only proven absence in this actor/key namespace permits a fresh UI key.

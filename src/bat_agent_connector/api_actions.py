@@ -76,7 +76,16 @@ def check_controller_binding(ctx, target):
     return expected["controller_incarnation"]
 
 
+def _authorize_send(ops: OperationService, principal: Principal, op: dict, verb: str) -> None:
+    """Work-target sends authorize the workspace writer. Direct session sends are unchanged."""
+    from . import pm_work_follow_up
+    pm_work_follow_up.authorize_existing(ops, principal, op, verb)
+
+
 def _admit_send(ops: OperationService, principal: Principal, target: dict, params: dict, pre: dict) -> dict | None:
+    if "workspace_id" in target or "work_item_id" in target:
+        from . import pm_work_follow_up
+        return pm_work_follow_up.admit_send(ops, principal, target, params, pre)
     if target.get("task_id"):
         from .task_actions import admit_send
         return admit_send(ops, principal, target, params, pre)
@@ -375,7 +384,7 @@ ACTIONS = [
               session_permissions.run, session_permissions.admit, SESSION_TARGET,
               authorize_existing=session_permissions.authorize_existing),
     ActionDef("session.send", "operate", "Send a message to a connector-managed session",
-              _send, _admit_send),
+              _send, _admit_send, authorize_existing=_authorize_send),
     ActionDef("session.answer", "operate", "Answer a managed session's pending question or permission prompt",
               _answer, _admit_answer, SESSION_TARGET),
     ActionDef("session.interrupt", "operate", "Interrupt a managed session's running turn",

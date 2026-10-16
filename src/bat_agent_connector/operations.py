@@ -628,6 +628,8 @@ class OperationService:
             bind_operation(self.db, operation_id, _resolved_target or target, params, binding)
             from .pm_work_start import admit_operation as admit_work_start
             admit_work_start(self.db, operation_id, action, target, binding, now)
+            from .pm_work_follow_up import admit_operation as admit_work_follow_up
+            admit_work_follow_up(self.db, operation_id, action, target, params, preconditions, binding, now)
             self.journal.api_event("operation", operation_id, "operation.accepted",
                                    {"action": action, "target": target, "entry": entry}, actor=principal.actor)
         self.kick()
