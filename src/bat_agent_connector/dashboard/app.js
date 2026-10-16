@@ -42397,7 +42397,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		},
 		extra: h("div", { class: "pm-fields" }, labelled("pm_workspace_name", name), h("details", {}, h("summary", {}, t("pm_repositories_optional")), labelled("pm_repositories", repositories), h("p", { class: "muted" }, t("pm_repository_help"))))
 	});
-	const title = h("span", {}, t("pm_title"));
+	const title = h("span", {}, t(threadId ? "ui_discussions" : "pm_title"));
 	const refresh = iconButton({
 		icon: "refresh-cw",
 		label: t("pm_refresh"),
@@ -42419,6 +42419,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const management = workbenchEnabled() ? h("select", {
 		"aria-label": t("wc_management"),
 		"data-workbench-management": "",
+		hidden: true,
 		onchange: (event) => {
 			location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${event.target.value}`;
 		}
@@ -43543,6 +43544,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			}
 		});
 		workbench.apply();
+		const openedView = workbench.selected();
+		if (openedView) title.textContent = t("ui_" + openedView);
 		brief?.setActive?.(workbench.selected() === "overview");
 		if (scheduleTools) scheduleTools.hidden = workbench.selected() !== "schedule";
 		shownView = workbench.selected();
