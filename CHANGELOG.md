@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Leaving a project view while it is still loading does not mark the next
+  view's update as failed or pause actions.
+
 - Capture a remote file: the button you pressed keeps keyboard focus and
   ignores a second press until that preview or save finishes. A button that
   cannot be used stays unavailable. When Save closes, or Capture another file

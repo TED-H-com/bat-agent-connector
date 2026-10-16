@@ -641,7 +641,9 @@ on narrow screens. Explicit destinations cancel queued scroll restoration; revis
 a view restores its own scroll. Board and Requirements record their scroll position before
 a view switch hides them or on route departure (including during in-flight reads). The restore
 waits until the workspace header has settled. A hidden view, or a view retired before its mount
-finished, never moves the window. Unassigned
+finished, never moves the window. A read that finishes after a project view was left does not
+mark the next view's update as failed or pause its actions. An error in the view that is still
+current still stops that update. Unassigned
 work remains selectable before plan adoption. Preferences are bounded by connection/principal and workspace; fetched
 facts are reauthorized, never stored in the preference map.
 
