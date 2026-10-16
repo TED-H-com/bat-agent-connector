@@ -50483,6 +50483,7 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 	const run = async () => {
 		if (busy || damaged || !allowed || !permitted()) return;
 		if (!saved.intent && !form.reportValidity()) return;
+		if ([...fields.values()].some((input) => input === document.activeElement)) create.focus();
 		busy = true;
 		update();
 		status.replaceChildren();
@@ -50532,6 +50533,9 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 		type: "submit",
 		label: t(project ? "add_project" : "add_item")
 	});
+	create.addEventListener("click", (event) => {
+		if (busy) event.preventDefault();
+	});
 	const review = button({
 		variant: "secondary",
 		hidden: true,
@@ -50560,15 +50564,33 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 		"data-create-record": kind,
 		onsubmit: (event) => {
 			event.preventDefault();
+			if (busy) return;
 			run();
 		}
 	}, showScope ? scope : null, compact, advanced, h("div", { class: "actions" }, create, review, unsaved), status, receipt);
 	function update() {
+		const hadCreateFocus = document.activeElement === create;
 		for (const input of fields.values()) input.disabled = !allowed || !permitted() || busy || !!saved.intent || damaged;
-		create.disabled = !allowed || !permitted() || busy || damaged || !!saved.intent?.initialAdmissionRefused || !!saved.intent && terminal$7(operation);
+		const blocked = !allowed || !permitted() || damaged || !!saved.intent?.initialAdmissionRefused || !!saved.intent && terminal$7(operation);
+		if (busy) {
+			create.disabled = false;
+			create.setAttribute("aria-disabled", "true");
+			status.setAttribute("aria-busy", "true");
+		} else {
+			create.removeAttribute("aria-disabled");
+			status.removeAttribute("aria-busy");
+			create.disabled = blocked;
+		}
 		create.textContent = t(saved.intent ? "create_check_original" : project ? "add_project" : "add_item");
 		review.hidden = !(saved.intent?.initialAdmissionRefused || saved.intent && terminal$7(operation) && operation.status !== "succeeded");
 		review.disabled = busy || !allowed || !permitted();
+		if (hadCreateFocus && (create.disabled || create.hidden)) {
+			if (!review.hidden && !review.disabled) review.focus();
+			else if (document.activeElement === document.body || document.activeElement === create) {
+				status.tabIndex = -1;
+				status.focus();
+			}
+		}
 		onStateChange();
 	}
 	if (damaged) status.replaceChildren(h("p", { class: "error" }, t("create_invalid_draft")));
