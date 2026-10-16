@@ -18,6 +18,13 @@
   on BAT before starting again), alongside unready requirement and foreign
   controller checks.
 
+- Tools → Workbench preview opens a reversible layout with Today, Projects,
+  Work and Resources, a project management selector and an optional Results
+  inspector. Work, Lineage and Live preserve the same conversation and draft,
+  reading recorded links and activity from the existing Connector sources.
+  Unknown queue state and source withdrawal remain explicit. The classic layout
+  stays the default; this is not the completed v1.3 execution or live acceptance.
+
 - Existing discussions offer Send to PM for ordinary native or BAT PM analysis,
   Save note only for a stored note, and Make a plan for an explicit proposal.
   Saved PM requests and replies appear together in the transcript. Recovery

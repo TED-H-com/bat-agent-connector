@@ -1,3 +1,4 @@
+import {workbenchEnabled} from './workbench-mode.js';
 import {operationStatusLabel} from './global-labels.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
 import {discussionContext, discussionLabel, discussionPanel, discussionDom, discussionTitle, discussionComposer} from './pm-discussions.js';
@@ -443,7 +444,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const refresh = iconButton({icon: 'refresh-cw', label: t('pm_refresh'), 'data-pm-refresh': '', onClick: () => {for (const value of forms) value.stopAutoCheck?.(); void load();}});
   const phasePill = h('span', {class: 'ui-pill tone-neutral', hidden: true});
   const viewMeta = h('p', {class: 'ui-meta', 'data-pm-work-meta': '', hidden: true});
-  const heading = pageHeader({title, pill: phasePill, meta: viewMeta, actions: [refresh]});
+  const management = workbenchEnabled() ? h('select', {'aria-label': t('wc_management'), 'data-workbench-management': '', onchange: event => {
+    location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${event.target.value}`;
+  }}) : null;
+  const heading = pageHeader({title, pill: phasePill, meta: viewMeta, actions: [management, refresh].filter(Boolean)});
   viewMeta.hidden = true;
   const headerMeta = h('p', {class: 'ui-meta', 'data-dependencies-meta': '', hidden: true});
   const headerPills = h('span', {class: 'dep-header-pills', hidden: true});
@@ -469,6 +473,16 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     const stage = workspace ? lifecycle ? lifecycle.phase() : !staleSections.has(brief) ? brief?.phase?.() : null : null;
     phasePill.hidden = !['idea','planning','development','maintain','paused','closed'].includes(stage);
     phasePill.textContent = phasePill.hidden ? '' : t('ui_phase_' + stage);
+    if (management) {
+      const choices = threadId ? availableProjectViews(caps()) : workbench?.views || [];
+      const signature = choices.join(',');
+      if (management.dataset.views !== signature) {
+        management.replaceChildren(...choices.map(id => h('option', {value: id}, t('ui_' + id))));
+        management.dataset.views = signature;
+      }
+      management.value = threadId ? 'discussions' : workbench?.selected() || view || 'overview';
+      management.hidden = !workspace || !choices.length;
+    }
     onContext({workspace, workspaces: lastList, view: threadId ? 'discussions' : workbench?.selected() || view || 'discussions',
       views: threadId ? availableProjectViews(caps()) : workbench?.views || (workspace ? ['discussions'] : []), create: showCreate,
       phase: phasePill.hidden ? null : phasePill.textContent,
