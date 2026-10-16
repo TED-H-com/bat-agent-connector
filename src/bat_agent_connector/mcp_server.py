@@ -907,7 +907,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                                     requirement_ids: list[str] | None = None,
                                     instruction: str | None = None,
                                     profile_id: str | None = None,
-                                    profile_revision: int | None = None) -> dict[str, Any]:
+                                    profile_revision: StrictInt | None = None) -> dict[str, Any]:
         """Preview code basis, package plan, readiness and exact preconditions before work.start; read-only."""
         body = {k: v for k, v in {"code_target": code_target, "delivery": delivery,
                                   "requirement_ids": requirement_ids, "instruction": instruction,

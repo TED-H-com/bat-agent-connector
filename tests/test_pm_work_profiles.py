@@ -207,6 +207,20 @@ async def test_save_profile_appends_revision_and_conflict_keeps_original(ops):
     ).fetchone() is None
 
 
+async def test_save_rejects_a_whitespace_model(ops):
+    before = _counts(ops)
+    for model in (" ", "   ", "\t", " \n "):
+        with pytest.raises(OperationError) as rejected:
+            _save(ops, _document(model=model))
+        assert rejected.value.code == "INVALID_PARAMS" and rejected.value.status == 422
+    assert _counts(ops) == before
+    kept = await _finish(ops, _save(ops, _document(model=" haiku "), key="spaced-model")[0])
+    stored = json.loads(ops.db.execute(
+        "SELECT document FROM work_profiles WHERE profile_id=?", (kept["result"]["profile_id"],)
+    ).fetchone()["document"])
+    assert stored["model"] == " haiku "
+
+
 async def test_withdraw_removes_list_get_and_readiness_together(ops):
     first = (await _finish(ops, _save(ops, key="first")[0]))["result"]
     second = (await _finish(ops, _save(ops, _document(agent="codex"), key="second")[0]))["result"]
@@ -579,10 +593,45 @@ async def test_readiness_does_not_call_bat_or_write(ops):
     assert "operations_continue_succeeded" in detail
     assert "USE TEMP B-TREE" not in detail
     before = ops.db.total_changes
+    schema_version = ops.db.execute("PRAGMA schema_version").fetchone()[0]
     body = pm_work_profiles.readiness(ops, OWNER, WS, profile_id)
     assert ops.db.total_changes == before
+    assert ops.db.execute("PRAGMA schema_version").fetchone()[0] == schema_version
     assert invokes["n"] == 0
     assert body["calls_bat"] is False and body["coding_route_ready"] is False
+
+
+def _discovery(ops, profile_key, body):
+    ops.db.execute(
+        """CREATE TABLE IF NOT EXISTS discovery_latest(
+            host TEXT NOT NULL, profile_id TEXT NOT NULL, binding TEXT NOT NULL, body TEXT NOT NULL,
+            PRIMARY KEY(host, profile_id))"""
+    )
+    ops.db.execute(
+        "INSERT INTO discovery_latest VALUES(?,?,?,?)",
+        ("h1", profile_key, "binding", json.dumps(body)),
+    )
+
+
+async def test_discovered_verified_requires_this_workspace(ops):
+    _configure(ops)
+    profile_id = await _profile(ops)
+    _discovery(ops, "other", {
+        "status": "succeeded", "scan_id": "scan-other", "finished_at": 100,
+        "coverage": {"workspace_ids": ["other-ws"]},
+    })
+    missed = pm_work_profiles.readiness(ops, OWNER, WS, profile_id)
+    assert missed["states"]["discovered"]["verified"] is None
+    assert "scan-other" not in json.dumps(missed["states"]["discovered"])
+    _discovery(ops, "here", {
+        "status": "succeeded", "scan_id": "scan-here", "finished_at": 200,
+        "coverage": {"workspace_ids": ["bat-ws", "other-ws"]},
+    })
+    covered = pm_work_profiles.readiness(ops, OWNER, WS, profile_id)
+    verified = covered["states"]["discovered"]["verified"]
+    assert verified["evidence_ref"]["scan_id"] == "scan-here"
+    assert verified["evidence_ref"]["status"] == "succeeded"
+    assert "scan-other" not in json.dumps(verified)
 
 
 async def test_pm_eligibility_does_not_mark_coding_route_ready(ops, monkeypatch):
@@ -1023,6 +1072,25 @@ async def test_profile_preconditions_are_twelve_and_plain_start_stays_ten(start_
     }
     assert viewed["preconditions"]["expected_profile_revision"] == saved["revision"]
     assert viewed["preconditions"]["expected_profile_digest"] == saved["digest"]
+
+    children, starts = _child_count(ops), _start_count(ops)
+    short = {key: viewed["preconditions"][key] for key in _PLAIN_PRECONDITIONS}
+    with pytest.raises(OperationError) as wrong_set:
+        ops.create(
+            STARTER_OWNER, action="work.start",
+            target={"workspace_id": w["workspace_id"], "work_item_id": w["target"]["work_item_id"]},
+            params={
+                "instruction": "Implement credential validation and tests.",
+                "agent": "claude",
+                "delivery": "pull_request",
+                "code_target": viewed["code_target"],
+                "profile_id": saved["profile_id"],
+            },
+            preconditions=short, idempotency_key=uuid.uuid4().hex,
+        )
+    assert wrong_set.value.code == "PRECONDITION_REQUIRED" and wrong_set.value.status == 422
+    assert wrong_set.value.message == "work.start requires all twelve preview preconditions"
+    assert _child_count(ops) == children and _start_count(ops) == starts
 
     plain = await _view(w, {
         "code_target": dict(_CODE),
@@ -1858,5 +1926,39 @@ async def test_pm_analysis_reports_registered_and_unregistered_actions(world, mo
             ops.actions[pm_bat_operations.ACTION] = held
         assert unregistered["action_registered"] is False
         assert unregistered["reason"] == "action_unavailable"
+    finally:
+        await fleet.close()
+
+
+async def test_preview_profile_revision_is_a_strict_int(monkeypatch):
+    from mcp.server.mcpserver.exceptions import ToolError, UnexpectedToolError
+    from pydantic import ValidationError
+
+    from bat_agent_connector import mcp_server
+    from bat_agent_connector.config import parse_config
+
+    monkeypatch.delenv("BATC_API_TOKEN", raising=False)
+    monkeypatch.delenv("BATC_TASK_URL", raising=False)
+    server, fleet = mcp_server.build_server(parse_config({"hosts": {"h1": {
+        "url": "wss://127.0.0.1:9876/", "fingerprint": "aa" * 32,
+        "token_ref": "env:FIXTURE_TOKEN", "git": "local",
+    }}}), read_only=True, principal_only=True)
+    arguments = {
+        "workspace_id": "ws_" + "a" * 32,
+        "work_item_id": "wi_" + "b" * 20,
+        "profile_id": "wpf_" + "c" * 32,
+    }
+    try:
+        for revision in (True, 1.0, "1"):
+            with pytest.raises(ToolError) as rejected:
+                await server.call_tool("pm_work_start_preview", {**arguments, "profile_revision": revision})
+            assert not isinstance(rejected.value, UnexpectedToolError)
+            assert isinstance(rejected.value.__cause__, ValidationError)
+            assert "profile_revision" in str(rejected.value)
+        with pytest.raises(ToolError) as allowed:
+            await server.call_tool("pm_work_start_preview", {**arguments, "profile_revision": 1})
+        assert not isinstance(allowed.value.__cause__, ValidationError)
+        assert "BATC_API_TOKEN" in str(allowed.value)
+        assert "validation error" not in str(allowed.value)
     finally:
         await fleet.close()

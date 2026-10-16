@@ -711,7 +711,7 @@ def _validate_preconditions_shape(pre: dict) -> None:
 def _validate_profile_preconditions(pre: dict) -> None:
     expected = PRECONDITIONS | {"expected_profile_revision", "expected_profile_digest"}
     if not isinstance(pre, dict) or set(pre) != expected:
-        raise _bad("PRECONDITION_REQUIRED", "work.start requires all ten preview preconditions", 422)
+        raise _bad("PRECONDITION_REQUIRED", "work.start requires all twelve preview preconditions", 422)
     _validate_preconditions_shape({key: pre[key] for key in PRECONDITIONS})
     revision = pre["expected_profile_revision"]
     digest = pre["expected_profile_digest"]

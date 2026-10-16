@@ -195,7 +195,7 @@ def normalize_document(document) -> dict:
         raise _bad("INVALID_PARAMS", "agent must be claude or codex")
     if "model" in document and document["model"] is not None:
         model = document["model"]
-        if not isinstance(model, str) or not 1 <= len(model) <= 256:
+        if not isinstance(model, str) or not model.strip() or not 1 <= len(model) <= 256:
             raise _bad("INVALID_PARAMS", "model must be a string of 1-256 characters or null")
     else:
         model = None
@@ -828,8 +828,7 @@ def _readiness_body(ops, principal: Principal, workspace_id: str, row) -> dict:
     observed_reason = _observation_reason(host_row, observed_at, stale_after)
     last_success = host_row["last_success_at"] if host_row is not None else None
     bodies = _discovery_bodies(ops.db, host)
-    succeeded = [body for body in bodies if body.get("status") == "succeeded"]
-    covering = [body for body in succeeded if _covers(body, bat_workspace)]
+    covering = [body for body in bodies if _covers(body, bat_workspace)]
     provider = _usage_provider(ops.db, host, agent)
     receipt = _matching_continue(ops.db, principal, host, bat_workspace, repository, agent)
     execution = _execution(ops.db, principal, receipt, agent, bat_workspace)
@@ -846,8 +845,8 @@ def _readiness_body(ops, principal: Principal, workspace_id: str, row) -> dict:
     else:
         coded = next((body.get("error_code") for body in bodies if body.get("error_code") in _DISCOVERY_REASONS), None)
         discovered = _state("unknown", coded or "configured_unverified")
-    if succeeded:
-        past = covering[0] if covering else succeeded[0]
+    if covering:
+        past = covering[0]
         discovered["verified"] = _verified("ready", None, {
             "kind": "discovery_latest", "host": host, "scan_id": past.get("scan_id"),
             "status": past.get("status"), "finished_at": past.get("finished_at"),
