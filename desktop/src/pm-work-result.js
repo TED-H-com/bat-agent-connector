@@ -281,35 +281,34 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
 
   function restoreFocus(token) {
     if (!token) return;
-    requestAnimationFrame(() => {
-      if (token.type === 'attr') {
-        const target = panelElement.querySelector(`[data-work-result-focus="${token.value}"]`);
-        target?.focus();
-      } else if (token.type === 'diff-summary') {
-        panelElement.querySelector(`[data-work-result-diff-summary="${token.key}"]`)?.focus();
-      } else if (token.type === 'diff-region') {
-        panelElement.querySelector(`[data-work-result-diff-region="${token.key}"]`)?.focus();
-      } else if (token.type === 'read-changes') {
-        panelElement.querySelector('.pm-work-result-read-changes')?.focus();
-      } else if (token.type === 'read-again') {
-        const target = panelElement.querySelector('.pm-work-result-read-again') || panelElement.querySelector('.pm-work-result-read-changes');
-        target?.focus();
-      } else if (token.type === 'retry-changes') {
-        const target = panelElement.querySelector('[data-work-result-retry="changes"]') || panelElement.querySelector('.pm-work-result-read-changes');
-        target?.focus();
-      } else if (token.type === 'retry-diff') {
-        const target = panelElement.querySelector(`[data-work-result-retry-diff="${token.key}"]`) || panelElement.querySelector(`[data-work-result-diff-summary="${token.key}"]`);
-        target?.focus();
-      } else if (token.type === 'retry') {
-        panelElement.querySelector('.pm-work-result-retry')?.focus();
-      } else if (token.type === 'turns') {
-        panelElement.querySelector('[data-work-result-turns] > summary')?.focus();
-      } else if (token.type === 'details') {
-        panelElement.querySelector('[data-work-result-details] > summary')?.focus();
-      } else if (token.type === 'files') {
-        panelElement.querySelector('.pm-work-result-files > summary')?.focus();
-      }
-    });
+    if (token.type === 'attr') {
+      const target = panelElement.querySelector(`[data-work-result-focus="${token.value}"]`);
+      target?.focus();
+    } else if (token.type === 'diff-summary') {
+      panelElement.querySelector(`[data-work-result-diff-summary="${token.key}"]`)?.focus();
+    } else if (token.type === 'diff-region') {
+      panelElement.querySelector(`[data-work-result-diff-region="${token.key}"]`)?.focus();
+    } else if (token.type === 'read-changes') {
+      const target = panelElement.querySelector('.pm-work-result-read-changes') || panelElement.querySelector('[data-work-result-retry="changes"]');
+      target?.focus();
+    } else if (token.type === 'read-again') {
+      const target = panelElement.querySelector('.pm-work-result-read-again') || panelElement.querySelector('.pm-work-result-read-changes') || panelElement.querySelector('[data-work-result-retry="changes"]');
+      target?.focus();
+    } else if (token.type === 'retry-changes') {
+      const target = panelElement.querySelector('[data-work-result-retry="changes"]') || panelElement.querySelector('.pm-work-result-read-changes');
+      target?.focus();
+    } else if (token.type === 'retry-diff') {
+      const target = panelElement.querySelector(`[data-work-result-retry-diff="${token.key}"]`) || panelElement.querySelector(`[data-work-result-diff-summary="${token.key}"]`);
+      target?.focus();
+    } else if (token.type === 'retry') {
+      panelElement.querySelector('.pm-work-result-retry')?.focus();
+    } else if (token.type === 'turns') {
+      panelElement.querySelector('[data-work-result-turns] > summary')?.focus();
+    } else if (token.type === 'details') {
+      panelElement.querySelector('[data-work-result-details] > summary')?.focus();
+    } else if (token.type === 'files') {
+      panelElement.querySelector('.pm-work-result-files > summary')?.focus();
+    }
   }
 
   function renderEnvelope(envelope, attempt, errorBoxNode = null) {
@@ -909,6 +908,10 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
     const keyTicket = (diffKeySerials.get(key) || 0) + 1;
     diffKeySerials.set(key, keyTicket);
     const attemptId = activeAttempt?.attempt_id;
+    const hadFocusInContainer = Boolean(document.activeElement && (container.contains(document.activeElement) || document.activeElement === summaryNode));
+    if (hadFocusInContainer) {
+      summaryNode.focus();
+    }
     renderDiffContent(container, commit, path, key, summaryNode);
 
     try {
@@ -924,13 +927,14 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
       if (generation === diffGeneration && diffKeySerials.get(key) === keyTicket) {
         diffLoading.delete(key);
         if (activeAttempt?.attempt_id === attemptId && panelElement.contains(container)) {
-          const hadFocusInContainer = document.activeElement && container.contains(document.activeElement);
           if (hadFocusInContainer && !diffErrors.has(key)) {
             summaryNode.focus();
           }
           renderDiffContent(container, commit, path, key, summaryNode);
           if (hadFocusInContainer && diffErrors.has(key)) {
-            container.querySelector(`[data-work-result-retry-diff="${key}"]`)?.focus();
+            const retry = container.querySelector(`[data-work-result-retry-diff="${key}"]`);
+            if (retry) retry.focus();
+            else summaryNode.focus();
           }
         }
       }

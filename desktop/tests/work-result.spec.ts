@@ -2306,8 +2306,8 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     expect(f.state.diffCallsByFile.get(key502)).toBe(1);
 
     // 3. Re-opening a failed diff without clicking Try again must NOT ask BAT again
-    await diff502.locator('summary').click(); // close
-    await diff502.locator('summary').click(); // re-open
+    await diff502.locator(':scope > summary').click(); // close
+    await diff502.locator(':scope > summary').click(); // re-open
     expect(f.state.diffCallsByFile.get(key502)).toBe(1);
 
     // 4. Click "Try again" on the 502 diff; only then does /diff get called again
