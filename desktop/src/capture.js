@@ -33,7 +33,7 @@ export function capturePanel({h, t, api, caps, guard, onEvents, errorBox, storag
   let saved;
   try { saved = JSON.parse(localStorage.getItem(storageKey)); } catch { /* retain in memory */ }
   saved = restore(saved, source);
-  let busy = false, revision = 0, disposed = false, refreshing = null;
+  let busy = false, revision = 0, disposed = false, refreshing = null, pressed = null;
   const host = h("select", {"aria-label": t("capture_host")}, h("option", {value: ""}, t("capture_host")),
     ...(caps()?.hosts || []).map(item => h("option", {value: item.host}, item.host)));
   const session = h("input", {"aria-label": t("capture_session"), placeholder: "sess-…", maxlength: 256});
@@ -62,7 +62,7 @@ export function capturePanel({h, t, api, caps, guard, onEvents, errorBox, storag
     const input = current(); guard();
     if (busy || saved.intent || !mayPreview() || !validInput(input)) return;
     const ticket = ++revision, owned = owns(preview);
-    busy = true; saved.preview = null; reviewed.checked = false; persist(); render();
+    pressed = preview; busy = true; saved.preview = null; reviewed.checked = false; persist(); render();
     try {
       // This is a helpful read-model gate; central preview repeats current source/policy checks.
       const row = (await api("GET", `/sessions/${encodeURIComponent(input.host)}/${encodeURIComponent(input.session_id)}`)).session;
@@ -77,7 +77,7 @@ export function capturePanel({h, t, api, caps, guard, onEvents, errorBox, storag
         throw new Error(t("capture_invalid_preview"));
       saved.preview = doc; persist(); notice.replaceChildren();
     } catch (error) {if (ticket === revision) showError(error);}
-    finally {busy = false; render(); if (ticket === revision) placeFocus(preview, owned);}
+    finally {busy = false; pressed = null; render(); if (ticket === revision) placeFocus(preview, owned);}
   }}, t("capture_preview"));
   const accept = async operation => {
     guard();
@@ -112,7 +112,7 @@ export function capturePanel({h, t, api, caps, guard, onEvents, errorBox, storag
       persist();
     }
     const owned = owns(apply);
-    busy = true; update();
+    pressed = apply; busy = true; update();
     try {
       const intent = saved.intent;
       const result = intent.operation_id ? await api("GET", `/operations/${intent.operation_id}`)
@@ -124,7 +124,7 @@ export function capturePanel({h, t, api, caps, guard, onEvents, errorBox, storag
       if (!saved.intent.operation_id && ["PREVIEW_EXPIRED", "PREVIEW_TOKEN_INVALID", "PREVIEW_MISMATCH", "INVALID_PARAMS"].includes(error.code))
         saved.refused = true;
       persist(); showError(error);
-    } finally {busy = false; render(); placeFocus(apply, owned);}
+    } finally {busy = false; pressed = null; render(); placeFocus(apply, owned);}
   }}, t("capture_save"));
   const reset = h("button", {class: "secondary", "data-capture-new": "", onclick: () => {
     guard(); if (busy || refreshing || active()) return;
@@ -141,10 +141,12 @@ export function capturePanel({h, t, api, caps, guard, onEvents, errorBox, storag
     h("div", {class: "capture-fields"},
       h("label", {}, t("capture_host"), host), h("label", {}, t("capture_session"), session), h("label", {}, t("capture_path"), path)),
     h("div", {class: "actions"}, preview), evidence, review, h("div", {class: "actions"}, apply, attach, reset), notice);
-  // In-flight work stays focusable. disabled is only a static block; it would drop keyboard focus.
+  // The pressed button stays focusable until its own work ends. A static block on any other button stays disabled.
   function lock(node, inflight, blocked) {
-    if (inflight) {node.disabled = false; node.setAttribute("aria-disabled", "true");}
-    else {node.removeAttribute("aria-disabled"); node.disabled = Boolean(blocked);}
+    if (node === pressed && inflight) {node.disabled = false; node.setAttribute("aria-disabled", "true"); return;}
+    if (blocked) {node.removeAttribute("aria-disabled"); node.disabled = true; return;}
+    if (inflight) {node.disabled = false; node.setAttribute("aria-disabled", "true"); return;}
+    node.removeAttribute("aria-disabled"); node.disabled = false;
   }
   function shown(node) {return Boolean(node && node.isConnected && !node.disabled && !node.closest("[hidden]"));}
   function owns(button) {const active = document.activeElement; return active === button || active === document.body;}
@@ -170,13 +172,13 @@ export function capturePanel({h, t, api, caps, guard, onEvents, errorBox, storag
     const frozen = busy || Boolean(saved.intent), reading = Boolean(refreshing);
     for (const field of [host, session, path]) field.disabled = frozen;
     lock(preview, busy, Boolean(saved.intent) || !mayPreview() || !validInput(current()));
-    // Keep the review in the tab order during the save that just left it, then hide it once that save settles.
-    review.hidden = !saved.preview || (Boolean(saved.intent) && !busy); reviewed.disabled = expired();
+    review.hidden = !saved.preview || Boolean(saved.intent); reviewed.disabled = expired();
     apply.hidden = settled() && (saved.operation.status !== "succeeded" || saved.result); apply.textContent = saved.intent ? t("capture_check") : t("capture_save");
     lock(apply, busy, !mayCapture() || Boolean(saved.refused) || (!saved.intent && (expired() || !reviewed.checked)));
     reset.hidden = !saved.intent; lock(reset, busy || reading, active());
     if (attach) {attach.hidden = !saved.result; lock(attach, busy, false);}
-    if (busy || reading) notice.setAttribute("aria-busy", "true"); else notice.removeAttribute("aria-busy");
+    const flying = [preview, apply, reset, attach].some(node => node && node.getAttribute("aria-disabled") === "true");
+    if (flying) notice.setAttribute("aria-busy", "true"); else notice.removeAttribute("aria-busy");
     const expiry = evidence.querySelector("[data-capture-expiry]");
     if (expiry) expiry.textContent = saved.intent ? t("capture_fixed") : expired() ? t("capture_expired") : t("capture_single_file");
   }

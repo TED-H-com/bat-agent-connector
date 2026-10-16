@@ -1012,11 +1012,11 @@ stay quiet and say Not open in BAT / BAT 中未開啟 in Details; loaded tabs wi
 reported activity say BAT did not report activity / BAT 未回報活動狀態 there.
 A manual or unconfirmed session has one Read-only line and no send, answer, or
 interrupt control. Capture a remote file, on that session or beside an attachment
-draft, keeps Preview, Save, Attach and Capture another file focusable while a
-preview, save or status read is in progress. Those buttons look unavailable and a
-second press does nothing. When Save closes, or Capture another file starts over,
-focus moves to the next available control. A reply that arrives after the panel
-is gone does not move focus. Details label Session ID / 工作階段 ID and Workspace / 工作區
+draft, keeps the pressed button focusable while its preview or save is in
+progress. That button looks unavailable and a second press does nothing. A
+button that cannot be used stays unavailable. When Save closes, or Capture
+another file starts over, focus moves to the next available control. A reply
+that arrives after the panel is gone does not move focus. Details label Session ID / 工作階段 ID and Workspace / 工作區
 and show each observed time once, formatted with the shared time stamp.
 On mobile, the Session title and metadata use the full header width, with actions
 on the next row. Wider fonts must not turn the title into a tall narrow column
