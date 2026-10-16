@@ -36,19 +36,18 @@ workspace binding, partial-source and permission rules still select its rows.
 
 | Classic destination | Route | Preview location | Reached via |
 | --- | --- | --- | --- |
-| Pending | `#/home` | Today daily entry | Daily entry (`data-daily="today"`) / header badge |
-| Settings | `#/settings` | Resources fallback / footer link | Navigation footer / Resources daily entry (when unbound) |
-| All projects | `#/projects` | Projects fallback / Switcher | Projects daily entry (when unbound) / direct link |
-| Operations | `#/operations` | Tools menu | Tools menu (`[data-shell-tools]`) |
-| Delivery | `#/delivery` | Tools menu | Tools menu (`[data-shell-tools]`) |
-| Artifact review | `#/artifact-review` | Tools menu | Tools menu (`[data-shell-tools]`) |
-| Cleanup | `#/cleanup` | Tools menu | Tools menu (`[data-shell-tools]`) |
-| Sessions | `#/sessions` | Work fallback / Tools menu | Work daily entry (when unbound) / Tools menu |
-| New workspace | `#/pm/new` | Tools menu / Switcher | Tools menu (`[data-shell-tools]`) / Switcher |
-| Overview | `#/pm/{id}/overview` | Projects daily entry | Daily entry (`data-daily="projects"`) / management selector |
-| Discussions | `#/pm/{id}/discussions` | Project management selector | Management selector (`select[data-workbench-management]`) |
-| Requirements | `#/pm/{id}/requirements` | Project management selector | Management selector (`select[data-workbench-management]`) |
-| Board | `#/pm/{id}/board` | Work daily entry | Daily entry (`data-daily="work"`) / management selector |
+| Overview | `#/pm/{id}/overview` | Projects daily entry | Daily entry (`.wc-daily a[href="#/pm/{id}/overview"]`) / Management selector (`select[data-workbench-management]` value `overview`) |
+| Discussions | `#/pm/{id}/discussions` | Project management selector | Management selector (`select[data-workbench-management]` value `discussions`) |
+| Requirements | `#/pm/{id}/requirements` | Project management selector | Management selector (`select[data-workbench-management]` value `requirements`) |
+| Board | `#/pm/{id}/board` | Work daily entry | Daily entry (`.wc-daily a[href="#/pm/{id}/board"]`) / Management selector (`select[data-workbench-management]` value `board`) |
+| Operations | `#/operations` | Tools menu | Tools menu (`[data-shell-tools]` → `.ui-menu-panel [role="menuitem"][href="#/operations"]`) |
+| Delivery | `#/delivery` | Tools menu | Tools menu (`[data-shell-tools]` → `.ui-menu-panel [role="menuitem"][href="#/delivery"]`) |
+| Artifact review | `#/artifact-review` | Tools menu | Tools menu (`[data-shell-tools]` → `.ui-menu-panel [role="menuitem"][href="#/artifact-review"]`) |
+| Cleanup | `#/cleanup` | Tools menu | Tools menu (`[data-shell-tools]` → `.ui-menu-panel [role="menuitem"][href="#/cleanup"]`) |
+| Sessions | `#/sessions` | Tools menu | Tools menu (`[data-shell-tools]` → `.ui-menu-panel [role="menuitem"][href="#/sessions"]`) |
+| Pending | `#/home` | Today daily entry | Daily entry (`.wc-daily a[href="#/home"]`) |
+| Settings | `#/settings` | Settings link | Navigation footer link (`a[data-shell-settings]`) |
+| All projects | `#/projects` | Switcher / Catalog link | Drawer catalog link (`.shell-all-projects, a[href="#/projects"]` at 390px; unreachable via UI at desktop 1440px in preview mode when bound to PM workspace) |
 
 ## Source mapping
 
