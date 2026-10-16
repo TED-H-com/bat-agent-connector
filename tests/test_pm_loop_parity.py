@@ -324,6 +324,196 @@ async def test_delivery_work_id_is_exactly_one_visible_lineage_row(tmp_path):
     journal.close()
 
 
+def _member(ops, actor, role):
+    ops.db.execute(
+        "INSERT INTO pm_workspace_members VALUES(?,?,?,?,?,?)",
+        (WS, actor, role, pm_workspace.controller_for(ops.db, Principal(actor, frozenset())), time.time(), time.time()),
+    )
+
+
+def _child_row(ops, parent_id, slot, operation_id, ordinal):
+    ops.db.execute(
+        """INSERT INTO pm_work_start_children(parent_id,slot,ordinal,operation_id,request,request_digest,created_at)
+           VALUES(?,?,?,?,?,?,?)""",
+        (parent_id, slot, ordinal, operation_id, "{}", "digest", time.time()),
+    )
+
+
+async def test_child_rule_requires_equal_links_and_a_visible_parent(tmp_path):
+    ops, journal = _service(tmp_path)
+    _bind(ops, WI)
+    _bind(ops, WI_OTHER, binding_id="pmb_child_other", operation_id="op_bind_child_other")
+    parent = _op(ops, action="work.start", operation_id="op_child_parent",
+                 target={"workspace_id": WS, "work_item_id": WI}, refs=_work_start_refs())
+    _attempt(ops, parent["operation_id"], attempt_id=ATT)
+    other = _op(ops, action="session.send", operation_id="op_not_start", target={"host": "h1", "session_id": "s1"})
+
+    def linked(operation_id, action, parent_id, slot, ordinal, *, target, refs_slot=None):
+        op = _op(ops, action=action, operation_id=operation_id, target=target,
+                 refs={"work_start_parent": {"operation_id": parent_id, "slot": refs_slot or slot}})
+        _child_row(ops, parent_id, slot, operation_id, ordinal)
+        return ops.get(op["operation_id"])
+
+    proven = linked("op_pkg_child", "pm.work_package.create", parent["operation_id"], "package", 1,
+                    target={"workspace_id": WS, "work_item_id": WI_OTHER})
+    loop = (await attach(ops, OWNER, proven))["loop"]
+    assert loop["operation_id"] == "op_pkg_child"
+    assert loop["work_item_id"] == WI and loop["attempt_id"] == ATT
+    assert loop["links"]["start_operation_hash"] == "#/op/op_child_parent"
+    assert WI_OTHER not in json.dumps(loop)
+    assert "PM_WORK_START_CHILD_CHANGED" not in json.dumps(loop)
+
+    no_attempt_parent = _op(ops, action="work.start", operation_id="op_child_no_attempt",
+                            target={"workspace_id": WS, "work_item_id": WI}, refs=_work_start_refs())
+    no_attempt = linked("op_pkg_no_attempt", "pm.work_package.create", no_attempt_parent["operation_id"], "handoff", 1,
+                        target={"workspace_id": WS, "work_item_id": WI_OTHER})
+    waiting = (await attach(ops, OWNER, no_attempt))["loop"]
+    assert waiting["work_item_id"] is None and waiting["attempt_id"] is None
+    assert waiting["completeness"] == {"status": "partial", "reason": "no_attempt"}
+    assert WI_OTHER not in json.dumps(waiting)
+
+    unequal = linked("op_pkg_unequal", "pm.work_package.create", parent["operation_id"], "bind", 2,
+                     target={"workspace_id": WS, "work_item_id": WI}, refs_slot="package")
+    assert await attach(ops, OWNER, unequal) is unequal
+    table_only = _op(ops, action="pm.work_package.create", operation_id="op_pkg_table_only",
+                     target={"workspace_id": WS, "work_item_id": WI})
+    _child_row(ops, parent["operation_id"], "preview", table_only["operation_id"], 3)
+    table_only = ops.get(table_only["operation_id"])
+    assert await attach(ops, OWNER, table_only) is table_only
+    missing_parent = linked("op_child_missing_parent", "repository.continue", "op_absent_parent", "handoff", 1,
+                            target={})
+    assert await attach(ops, OWNER, missing_parent) is missing_parent
+    wrong_action = linked("op_child_wrong_action", "repository.continue", other["operation_id"], "package", 1,
+                          target={})
+    assert await attach(ops, OWNER, wrong_action) is wrong_action
+
+    _member(ops, "loop-reader", "reader")
+    _member(ops, "loop-blind", "contributor")
+    reader = Principal("loop-reader", frozenset({"observe"}))
+    blind = Principal("loop-blind", frozenset({"manage"}))
+    outsider = Principal("loop-outsider", frozenset({"observe", "manage"}))
+    assert (await attach(ops, reader, proven))["loop"]["work_item_id"] == WI
+    assert await attach(ops, blind, proven) is proven
+    assert await attach(ops, outsider, proven) is proven
+    journal.close()
+
+
+async def test_completeness_uses_the_first_matching_reason(tmp_path):
+    ops, journal = _service(tmp_path)
+    _bind(ops, WI)
+    pm_discussions.install(ops)
+
+    hidden_attempt = _op(ops, action="work.start", operation_id="op_start_hidden_work",
+                         target={"workspace_id": WS, "work_item_id": WI}, refs=_work_start_refs())
+    _attempt(ops, hidden_attempt["operation_id"], attempt_id="att_" + "34" * 16, work_item_id=WI_OTHER)
+    hidden_loop = (await attach(ops, OWNER, hidden_attempt))["loop"]
+    assert hidden_loop["work_item_id"] is None
+    assert hidden_loop["completeness"] == {"status": "unavailable", "reason": "source_withdrawn"}
+
+    no_work = _op(ops, action="work.start", operation_id="op_start_no_work",
+                  target={"workspace_id": WS, "work_item_id": WI_OTHER}, refs=_work_start_refs(WI_OTHER))
+    assert (await attach(ops, OWNER, no_work))["loop"]["completeness"] == {
+        "status": "partial", "reason": "no_work_item"}
+    malformed = _op(ops, action="pm.work_package.create", operation_id="op_pkg_malformed",
+                    target={"workspace_id": WS, "work_item_id": "wi_nope"})
+    absent_key = _op(ops, action="pm.work_package.create", operation_id="op_pkg_absent",
+                     target={"workspace_id": WS})
+    assert (await attach(ops, OWNER, malformed))["loop"]["completeness"]["reason"] == "no_work_item"
+    assert (await attach(ops, OWNER, absent_key))["loop"]["completeness"]["reason"] == "no_work_item"
+
+    _member(ops, "loop-reader", "reader")
+    reader = Principal("loop-reader", frozenset({"observe"}))
+    outsider = Principal("loop-outsider", frozenset({"observe", "manage"}))
+    package = _op(ops, action="pm.work_package.create", operation_id="op_pkg_member",
+                  target={"workspace_id": WS, "work_item_id": WI})
+    assert (await attach(ops, reader, package))["loop"]["work_item_id"] == WI
+    outsider_loop = (await attach(ops, outsider, package))["loop"]
+    assert outsider_loop["work_item_id"] is None
+    assert outsider_loop["completeness"]["reason"] == "source_withdrawn"
+
+    thread_id = "pmt_" + "ab" * 16
+    missing_thread = _op(ops, action="pm.message.append", operation_id="op_msg_missing",
+                         target={"workspace_id": WS, "thread_id": thread_id})
+    missing_loop = (await attach(ops, OWNER, missing_thread))["loop"]
+    assert missing_loop["dashboard_hash"] == "#/op/op_msg_missing"
+    assert thread_id not in json.dumps(missing_loop)
+    assert missing_loop["completeness"] == {"status": "unavailable", "reason": "source_withdrawn"}
+    pending = _op(ops, action="pm.thread.create", operation_id="op_thread_pending",
+                  target={"workspace_id": WS})
+    bad_thread = _op(ops, action="pm.message.append", operation_id="op_msg_bad_thread",
+                     target={"workspace_id": WS, "thread_id": "thread-1"})
+    assert (await attach(ops, OWNER, pending))["loop"]["completeness"] == {"status": "complete", "reason": None}
+    assert (await attach(ops, OWNER, bad_thread))["loop"]["completeness"]["reason"] is None
+    assert (await attach(ops, OWNER, bad_thread))["loop"]["dashboard_hash"] == "#/op/op_msg_bad_thread"
+
+    with_work = _op(ops, action="session.send", operation_id="op_send_work",
+                    target={"host": "h1", "session_id": "s4", "work_item_id": WI})
+    assert (await attach(ops, OWNER, with_work))["loop"]["completeness"] == {"status": "complete", "reason": None}
+
+    visible_exec = _op(ops, action="session.send", operation_id="op_exec_visible",
+                       target={"host": "h1", "session_id": "s9"})
+    shown = _op(ops, action="work.start", operation_id="op_start_exec",
+                target={"workspace_id": WS, "work_item_id": WI}, refs=_work_start_refs(),
+                result={"execution_operation_id": visible_exec["operation_id"], "stage": "started"})
+    _attempt(ops, shown["operation_id"], attempt_id="att_" + "56" * 16)
+    shown_loop = (await attach(ops, OWNER, shown))["loop"]
+    assert shown_loop["links"]["execution_operation_hash"] == "#/op/op_exec_visible"
+    assert shown_loop["completeness"] == {"status": "complete", "reason": None}
+    withheld = _op(ops, action="work.start", operation_id="op_start_exec_hidden",
+                   target={"workspace_id": WS, "work_item_id": WI}, refs=_work_start_refs(),
+                   result={"execution_operation_id": "op_exec_missing", "stage": "started"})
+    _attempt(ops, withheld["operation_id"], attempt_id="att_" + "78" * 16)
+    withheld_loop = (await attach(ops, OWNER, withheld))["loop"]
+    assert withheld_loop["links"]["execution_operation_hash"] is None
+    assert "op_exec_missing" not in json.dumps(withheld_loop)
+    assert withheld_loop["completeness"] == {"status": "unavailable", "reason": "source_withdrawn"}
+
+    sessioned = _op(ops, action="work.start", operation_id="op_start_session",
+                    target={"workspace_id": WS, "work_item_id": WI}, refs=_work_start_refs(),
+                    result={"session": {"host": "h1", "session_id": "s3"}, "stage": "started"})
+    _attempt(ops, sessioned["operation_id"], attempt_id="att_" + "9a" * 16)
+    assert (await attach(ops, OWNER, sessioned))["loop"]["links"]["session_hash"] == "#/session/h1/s3"
+    ops.db.execute(
+        "INSERT INTO pm_source_lineage VALUES('session', 'h1/s3', 'op_missing_link', 'op_missing_link')")
+    withdrawn_session = (await attach(ops, OWNER, sessioned))["loop"]
+    assert withdrawn_session["links"]["session_hash"] is None
+    assert "s3" not in json.dumps(withdrawn_session["links"])
+    assert withdrawn_session["completeness"]["reason"] == "source_withdrawn"
+
+    original = _op(ops, action="work.start", operation_id="op_del_root_recorded",
+                   target={"workspace_id": WS, "work_item_id": WI}, refs=_work_start_refs())
+    delivery = _op(ops, action="integration.apply", operation_id="op_del_recorded",
+                   target={"workspace_id": "ws_" + "ff" * 16})
+    ops.db.execute("INSERT INTO pm_source_lineage VALUES('operation', ?, ?, ?)",
+                   (delivery["operation_id"], original["operation_id"], delivery["operation_id"]))
+    ops.db.execute("INSERT INTO pm_source_lineage VALUES('work_item', ?, ?, ?)",
+                   (WI, original["operation_id"], delivery["operation_id"]))
+    recorded = (await attach(ops, OWNER, delivery))["loop"]
+    assert recorded["work_item_id"] is None and WI not in json.dumps(recorded)
+    assert recorded["completeness"] == {"status": "partial", "reason": "delivery_unlinked"}
+    journal.close()
+
+
+async def test_missing_child_stores_fall_through_to_the_allowlist(tmp_path):
+    journal = Journal(tmp_path / "bare.db")
+    ops = OperationService(journal)
+    send = _op(ops, action="session.send", operation_id="op_bare_send",
+               target={"host": "h1", "session_id": "s1"})
+    loop = (await attach(ops, OWNER, send))["loop"]
+    assert loop["operation_id"] == "op_bare_send"
+    assert loop["work_item_id"] is None and loop["attempt_id"] is None
+    assert loop["dashboard_hash"] == "#/op/op_bare_send"
+    assert loop["completeness"] == {"status": "partial", "reason": "session_target"}
+    linked = _op(
+        ops, action="session.send", operation_id="op_bare_linked", target={"host": "h1", "session_id": "s1"},
+        refs={"work_start_parent": {"operation_id": "op_none", "slot": "handoff"}})
+    assert await attach(ops, OWNER, linked) is linked
+    plain = {"operation_id": "op_bare_continue", "action": "repository.continue", "status": "succeeded",
+             "updated_at": 1.0, "target": {}, "external_refs": {}}
+    assert await attach(ops, OWNER, plain) is plain
+    journal.close()
+
+
 def _loop_of(operation):
     assert "loop" in operation
     assert operation["loop"]["operation_id"] == operation["operation_id"]
