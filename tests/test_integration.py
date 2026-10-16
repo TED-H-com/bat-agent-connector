@@ -94,7 +94,7 @@ class World:
     def __init__(self, tmp: Path, mock, gh: FakeGitHub) -> None:
         self.tmp, self.mock, self.gh = tmp, mock, gh
         self.remote = tmp / "remote.git"
-        git(tmp, "init", "-q", "--bare", str(self.remote))
+        git(tmp, "init", "--template=", "-q", "--bare", str(self.remote))
         git(self.remote, "config", "core.logAllRefUpdates", "always")
         seed = tmp / "seed"
         git(tmp, "clone", "-q", str(self.remote), str(seed))

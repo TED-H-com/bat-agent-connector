@@ -50,7 +50,7 @@ async def world(mock, tmp_path, monkeypatch):
     human, remote, managed = tmp_path / "human", tmp_path / "remote.git", tmp_path / "managed"
     human.mkdir()
     managed.mkdir()
-    git(human, "init", "-q", "-b", "main")
+    git(human, "init", "--template=", "-q", "-b", "main")
     git(human, "config", "user.name", "fixture")
     git(human, "config", "user.email", "fixture@example.invalid")
     (human / "hello.txt").write_text("published bytes\n")

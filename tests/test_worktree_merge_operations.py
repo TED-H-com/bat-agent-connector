@@ -79,7 +79,7 @@ def host_git_context(tmp_path, monkeypatch):
 def carriers(daemon, mock, tmp_path, host_git_context):
     origin, source = tmp_path / 'clone', tmp_path / 'worktree'
     origin.mkdir()
-    git(origin, 'init', '-b', 'main')
+    git(origin, 'init', '--template=', '-b', 'main')
     git(origin, 'config', 'user.name', 'Fixture')
     git(origin, 'config', 'user.email', 'fixture@example.invalid')
     (origin / 'base').write_text('base')
@@ -591,7 +591,9 @@ async def test_effective_git_diff_programs_refuse_before_bat_status(daemon, mock
     script.write_text('touch ' + shlex.quote(str(marker)) + '\nprintf fixture\n')
     key = 'diff.external' if program == 'external' else 'diff.proof.' + program
     if program != 'external':
-        (origin / '.git' / 'info' / 'attributes').write_text('feature diff=proof\n')
+        attributes = origin / '.git' / 'info' / 'attributes'
+        attributes.parent.mkdir(parents=True, exist_ok=True)
+        attributes.write_text('feature diff=proof\n')
     args = []
     if location == 'include':
         config = tmp_path / 'included-diff.conf'
