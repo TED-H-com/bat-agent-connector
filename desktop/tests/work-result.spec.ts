@@ -13,6 +13,89 @@ function recordPageErrors(p: any) {
   p.on('pageerror', (err: any) => pageErrors.push(err?.message || String(err)));
 }
 
+// CSSOM CSS.escape. Test locators pass file paths through this before they go into a selector.
+function cssEscape(value: string): string {
+  const string = String(value);
+  const length = string.length;
+  let result = '';
+  const first = string.charCodeAt(0);
+  for (let index = 0; index < length; index++) {
+    const code = string.charCodeAt(index);
+    if (code === 0x0000) {
+      result += '\uFFFD';
+      continue;
+    }
+    if ((code >= 0x0001 && code <= 0x001F) || code === 0x007F
+      || (index === 0 && code >= 0x0030 && code <= 0x0039)
+      || (index === 1 && code >= 0x0030 && code <= 0x0039 && first === 0x002D)) {
+      result += '\\' + code.toString(16) + ' ';
+      continue;
+    }
+    if (index === 0 && length === 1 && code === 0x002D) {
+      result += '\\' + string.charAt(index);
+      continue;
+    }
+    if (code >= 0x0080 || code === 0x002D || code === 0x005F
+      || (code >= 0x0030 && code <= 0x0039)
+      || (code >= 0x0041 && code <= 0x005A)
+      || (code >= 0x0061 && code <= 0x007A)) {
+      result += string.charAt(index);
+      continue;
+    }
+    result += '\\' + string.charAt(index);
+  }
+  return result;
+}
+
+function attrSelector(name: string, value: string): string {
+  return `[${name}="${cssEscape(value)}"]`;
+}
+
+function armDiffHold(f: any, key: string) {
+  let release: () => void = () => {};
+  f.state.holdDiffByKey.set(key, new Promise<void>(resolve => { release = resolve; }));
+  return () => {
+    release();
+    f.state.holdDiffByKey.delete(key);
+  };
+}
+
+function armChangesHold(f: any) {
+  let release: () => void = () => {};
+  f.state.holdChanges = new Promise<void>(resolve => { release = resolve; });
+  return () => {
+    release();
+    f.state.holdChanges = null;
+  };
+}
+
+async function focusedSnapshot(page: any) {
+  return page.evaluate(() => {
+    const el = document.activeElement as HTMLElement | null;
+    const className = el && typeof (el as HTMLElement).className === 'string' ? (el as HTMLElement).className : '';
+    return {
+      tag: el ? el.tagName : null,
+      className,
+      retry: el?.getAttribute?.('data-work-result-retry') ?? null,
+      retryDiff: el?.getAttribute?.('data-work-result-retry-diff') ?? null,
+      summary: el?.getAttribute?.('data-work-result-diff-summary') ?? null,
+      ariaDisabled: el?.getAttribute?.('aria-disabled') ?? null,
+      disabled: Boolean(el?.hasAttribute?.('disabled')),
+      pmView: el?.getAttribute?.('data-pm-view') ?? null,
+      text: (el?.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 140),
+      readAgain: className.includes('pm-work-result-read-again'),
+      readChanges: className.includes('pm-work-result-read-changes'),
+    };
+  });
+}
+
+async function expectFocus(page: any, expected: Record<string, unknown>) {
+  await expect.poll(async () => {
+    const snap = await focusedSnapshot(page);
+    return {...snap, pageErrors: pageErrors.slice()};
+  }).toMatchObject({...expected, pageErrors: []});
+}
+
 test.describe('Work Result UI (v1.3 E03 Part A)', () => {
   test.beforeEach(async ({page, context}) => {
     pageErrors = [];
@@ -2317,6 +2400,427 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     await diff502.locator('.pm-work-result-retry').click();
     await expect(diff502.locator('.pm-work-result-diff-pre')).toContainText('DIFF_RESOLVED');
     expect(f.state.diffCallsByFile.get(key502)).toBe(2);
+  });
+
+  test('30b. Part B: held Enter keeps focus on the successor during the read and after it', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workResultFixture();
+    activeFixture = f;
+    const attId = 'att_' + '1'.repeat(32);
+    const commit = 'abcdef1234567890abcdef1234567890abcdef12';
+    const fileA = 'src/focus-file.ts';
+    const keyA = `${commit}:${fileA}`;
+
+    f.state.changesResponse = buildChangesResponse({
+      attempt_id: attId,
+      live_head_commit: commit,
+      summary: {
+        commits: [commit],
+        files: [{path: fileA, status: 'M', additions: 1, deletions: 0, commits_touched: [commit]}],
+      },
+    });
+    f.state.diffStatusByFile.set(keyA, {status: 502});
+
+    await installBodyCompletedCounter(page);
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+    await page.locator(`[data-pm-kanban-work="${workId(1)}"]`).locator('[data-board-open]').click();
+
+    const result = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+    f.state.expectedChanges = 1;
+    await result.locator('.pm-work-result-read-changes').click();
+
+    const summary = result.locator(attrSelector('data-work-result-diff-summary', keyA));
+    const details = summary.locator('..');
+    await expect(summary).toBeVisible();
+
+    // Diff Try again. The button is replaced while the read is held, so the successor is this summary.
+    f.state.expectedDiff = 1;
+    await summary.focus();
+    await page.keyboard.press('Enter');
+    const retryDiff = () => details.locator(attrSelector('data-work-result-retry-diff', keyA));
+    await expect(retryDiff()).toBeVisible();
+
+    const releaseDiffFail = armDiffHold(f, keyA);
+    f.state.expectedDiff = 2;
+    await retryDiff().focus();
+    await page.keyboard.press('Enter');
+    await expect(details.locator('.pm-work-result-diff-loading')).toBeVisible();
+    await expectFocus(page, {tag: 'SUMMARY', summary: keyA});
+    const beforeDiffFail = await countCompletedBodies(page, '/diff');
+    releaseDiffFail();
+    await syncHeldBodyCompletion(page, '/diff', beforeDiffFail);
+    await expect(details.locator('[data-error-summary]')).toContainText('Worktree diff could not be read from BAT.');
+    await expectFocus(page, {tag: 'BUTTON', retryDiff: keyA, ariaDisabled: null, disabled: false});
+
+    f.state.diffStatusByFile.delete(keyA);
+    f.state.diffResponses.set(keyA, buildDiffResponse({commit, path: fileA, diff: 'DIFF_FOCUS_OK'}));
+    const releaseDiffOk = armDiffHold(f, keyA);
+    f.state.expectedDiff = 3;
+    await retryDiff().focus();
+    await page.keyboard.press('Enter');
+    await expect(details.locator('.pm-work-result-diff-loading')).toBeVisible();
+    await expectFocus(page, {tag: 'SUMMARY', summary: keyA});
+    const beforeDiffOk = await countCompletedBodies(page, '/diff');
+    releaseDiffOk();
+    await syncHeldBodyCompletion(page, '/diff', beforeDiffOk);
+    await expect(details.locator('.pm-work-result-diff-pre')).toContainText('DIFF_FOCUS_OK');
+    await expectFocus(page, {tag: 'SUMMARY', summary: keyA});
+
+    // /changes Try again, reached while the changes are not out of date, so the held successor is Read current changes.
+    f.state.changesStatus = 500;
+    f.state.expectedChanges = 2;
+    await result.locator('.pm-work-result-read-changes').focus();
+    await page.keyboard.press('Enter');
+    await expect(result.locator('[data-work-result-retry="changes"]')).toBeVisible();
+
+    const releaseChangesFail = armChangesHold(f);
+    f.state.expectedChanges = 3;
+    await result.locator('[data-work-result-retry="changes"]').focus();
+    await page.keyboard.press('Enter');
+    await expectFocus(page, {tag: 'BUTTON', readChanges: true, ariaDisabled: 'true', disabled: false});
+    const beforeChangesFail = await countCompletedBodies(page, '/changes');
+    releaseChangesFail();
+    await syncHeldBodyCompletion(page, '/changes', beforeChangesFail);
+    await expect(result.locator('[data-work-result-retry="changes"]')).toBeVisible();
+    await expectFocus(page, {tag: 'BUTTON', retry: 'changes', ariaDisabled: null, disabled: false});
+
+    f.state.changesStatus = null;
+    const releaseChangesOk = armChangesHold(f);
+    f.state.expectedChanges = 4;
+    await result.locator('[data-work-result-retry="changes"]').focus();
+    await page.keyboard.press('Enter');
+    await expectFocus(page, {tag: 'BUTTON', readChanges: true, ariaDisabled: 'true', disabled: false});
+    const beforeChangesOk = await countCompletedBodies(page, '/changes');
+    releaseChangesOk();
+    await syncHeldBodyCompletion(page, '/changes', beforeChangesOk);
+    await expect(result.locator('.pm-work-result-head')).toBeVisible();
+    await expectFocus(page, {tag: 'BUTTON', readChanges: true, readAgain: false, ariaDisabled: null, disabled: false});
+
+    // Read again, success then failure.
+    const beforeOutOfDate = await countCompletedBodies(page, '/result');
+    f.emitResultRecorded(attId, buildResultEnvelope({attempt_id: attId, state: 'process-ended', stage: 'completed'}));
+    await syncCompletedBodies(page, '/result', beforeOutOfDate + 1);
+    const readAgain = result.locator('.pm-work-result-read-again');
+    await expect(readAgain).toBeVisible();
+
+    const releaseAgainOk = armChangesHold(f);
+    f.state.expectedChanges = 5;
+    await readAgain.focus();
+    await page.keyboard.press('Enter');
+    await expectFocus(page, {tag: 'BUTTON', readAgain: true, ariaDisabled: 'true', disabled: false});
+    const beforeAgainOk = await countCompletedBodies(page, '/changes');
+    releaseAgainOk();
+    await syncHeldBodyCompletion(page, '/changes', beforeAgainOk);
+    await expectFocus(page, {tag: 'BUTTON', readChanges: true, readAgain: false, ariaDisabled: null, disabled: false});
+
+    const beforeOutOfDateAgain = await countCompletedBodies(page, '/result');
+    f.emitResultRecorded(attId, buildResultEnvelope({attempt_id: attId, state: 'turn-ended', stage: 'completed'}));
+    await syncCompletedBodies(page, '/result', beforeOutOfDateAgain + 1);
+    const readAgainFail = result.locator('.pm-work-result-read-again');
+    await expect(readAgainFail).toBeVisible();
+
+    f.state.changesStatus = 500;
+    const releaseAgainFail = armChangesHold(f);
+    f.state.expectedChanges = 6;
+    await readAgainFail.focus();
+    await page.keyboard.press('Enter');
+    await expectFocus(page, {tag: 'BUTTON', readAgain: true, ariaDisabled: 'true', disabled: false});
+    const beforeAgainFail = await countCompletedBodies(page, '/changes');
+    releaseAgainFail();
+    await syncHeldBodyCompletion(page, '/changes', beforeAgainFail);
+    await expect(result.locator('[data-work-result-retry="changes"]')).toBeVisible();
+    await expectFocus(page, {tag: 'BUTTON', retry: 'changes', ariaDisabled: null, disabled: false});
+  });
+
+  async function openTwoHeldDiffs(page: any) {
+    const f = workResultFixture();
+    activeFixture = f;
+    const commit = 'abcdef1234567890abcdef1234567890abcdef12';
+    const fileA = 'src/fileA.ts';
+    const fileB = 'src/fileB.ts';
+    const keyA = `${commit}:${fileA}`;
+    const keyB = `${commit}:${fileB}`;
+    f.state.changesResponse = buildChangesResponse({
+      attempt_id: 'att_' + '1'.repeat(32),
+      live_head_commit: commit,
+      summary: {
+        commits: [commit],
+        files: [
+          {path: fileA, status: 'M', additions: 1, deletions: 0, commits_touched: [commit]},
+          {path: fileB, status: 'M', additions: 2, deletions: 0, commits_touched: [commit]},
+        ],
+      },
+    });
+    f.state.diffResponses.set(keyA, buildDiffResponse({commit, path: fileA, diff: 'DIFF_A_READY'}));
+    f.state.diffResponses.set(keyB, buildDiffResponse({commit, path: fileB, diff: 'DIFF_B_READY'}));
+
+    await page.setViewportSize({width: 1440, height: 900});
+    await installBodyCompletedCounter(page);
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+    await page.locator(`[data-pm-kanban-work="${workId(1)}"]`).locator('[data-board-open]').click();
+
+    const result = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+    f.state.expectedChanges = 1;
+    await result.locator('.pm-work-result-read-changes').click();
+    const summaryA = result.locator(attrSelector('data-work-result-diff-summary', keyA));
+    const summaryB = result.locator(attrSelector('data-work-result-diff-summary', keyB));
+    const detailsA = summaryA.locator('..');
+    const detailsB = summaryB.locator('..');
+    await expect(summaryA).toBeVisible();
+    await expect(summaryB).toBeVisible();
+
+    const releaseA = armDiffHold(f, keyA);
+    const releaseB = armDiffHold(f, keyB);
+    f.state.expectedDiff = 1;
+    await summaryA.focus();
+    await page.keyboard.press('Enter');
+    await expect(detailsA.locator('.pm-work-result-diff-loading')).toBeVisible();
+    await expectFocus(page, {tag: 'SUMMARY', summary: keyA});
+    await page.keyboard.press('Tab');
+    await expectFocus(page, {tag: 'SUMMARY', summary: keyB});
+    f.state.expectedDiff = 2;
+    await page.keyboard.press('Enter');
+    await expect(detailsB.locator('.pm-work-result-diff-loading')).toBeVisible();
+    await expectFocus(page, {tag: 'SUMMARY', summary: keyB});
+    return {keyA, keyB, summaryB, detailsA, detailsB, releaseA, releaseB};
+  }
+
+  async function releaseOneDiff(page: any, release: () => void, details: any, text: string) {
+    const before = await countCompletedBodies(page, '/diff');
+    release();
+    await syncHeldBodyCompletion(page, '/diff', before);
+    await expect(details.locator('.pm-work-result-diff-pre')).toContainText(text);
+  }
+
+  test('32. Part B: releasing an earlier diff leaves focus on the summary the person moved to', async ({page}) => {
+    const held = await openTwoHeldDiffs(page);
+    await releaseOneDiff(page, held.releaseA, held.detailsA, 'DIFF_A_READY');
+    await expectFocus(page, {tag: 'SUMMARY', summary: held.keyB});
+    await releaseOneDiff(page, held.releaseB, held.detailsB, 'DIFF_B_READY');
+    await expectFocus(page, {tag: 'SUMMARY', summary: held.keyB});
+  });
+
+  test('33. Part B: releasing the current diff first still leaves focus there when the earlier diff replies', async ({page}) => {
+    const held = await openTwoHeldDiffs(page);
+    await releaseOneDiff(page, held.releaseB, held.detailsB, 'DIFF_B_READY');
+    await expectFocus(page, {tag: 'SUMMARY', summary: held.keyB});
+    await releaseOneDiff(page, held.releaseA, held.detailsA, 'DIFF_A_READY');
+    await expectFocus(page, {tag: 'SUMMARY', summary: held.keyB});
+  });
+
+  async function openHeldDiffThenFocusOverview(page: any, status: number | null) {
+    const f = workResultFixture();
+    activeFixture = f;
+    const commit = 'abcdef1234567890abcdef1234567890abcdef12';
+    const file = 'src/outside.ts';
+    const key = `${commit}:${file}`;
+    f.state.changesResponse = buildChangesResponse({
+      attempt_id: 'att_' + '1'.repeat(32),
+      live_head_commit: commit,
+      summary: {
+        commits: [commit],
+        files: [{path: file, status: 'M', additions: 1, deletions: 0, commits_touched: [commit]}],
+      },
+    });
+    if (status) f.state.diffStatusByFile.set(key, {status});
+    else f.state.diffResponses.set(key, buildDiffResponse({commit, path: file, diff: 'DIFF_OUTSIDE_OK'}));
+
+    await page.setViewportSize({width: 1440, height: 900});
+    await installBodyCompletedCounter(page);
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+    await page.locator(`[data-pm-kanban-work="${workId(1)}"]`).locator('[data-board-open]').click();
+
+    const result = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+    f.state.expectedChanges = 1;
+    await result.locator('.pm-work-result-read-changes').click();
+    const summary = result.locator(attrSelector('data-work-result-diff-summary', key));
+    const details = summary.locator('..');
+    await expect(summary).toBeVisible();
+
+    const release = armDiffHold(f, key);
+    f.state.expectedDiff = 1;
+    await summary.focus();
+    await page.keyboard.press('Enter');
+    await expect(details.locator('.pm-work-result-diff-loading')).toBeVisible();
+
+    const overview = page.locator('[data-pm-view="overview"]');
+    await expect(overview).toHaveAccessibleName('Overview');
+    expect(await overview.evaluate(el => el.closest('[data-work-inspector]') === null)).toBe(true);
+    await overview.focus();
+    await expectFocus(page, {tag: 'BUTTON', pmView: 'overview'});
+    return {release, details, overview};
+  }
+
+  test('34. Part B: a successful diff reply leaves focus on Overview outside the inspector', async ({page}) => {
+    const held = await openHeldDiffThenFocusOverview(page, null);
+    const before = await countCompletedBodies(page, '/diff');
+    held.release();
+    await syncHeldBodyCompletion(page, '/diff', before);
+    await expect(held.details.locator('.pm-work-result-diff-pre')).toContainText('DIFF_OUTSIDE_OK');
+    await expectFocus(page, {tag: 'BUTTON', pmView: 'overview'});
+    await expect(held.overview).toHaveAccessibleName('Overview');
+  });
+
+  test('35. Part B: a failed diff reply leaves focus on Overview outside the inspector', async ({page}) => {
+    const held = await openHeldDiffThenFocusOverview(page, 502);
+    const before = await countCompletedBodies(page, '/diff');
+    held.release();
+    await syncHeldBodyCompletion(page, '/diff', before);
+    await expect(held.details.locator('[data-error-summary]')).toContainText('Worktree diff could not be read from BAT.');
+    await expect(held.details.locator('.pm-work-result-retry')).toBeVisible();
+    await expectFocus(page, {tag: 'BUTTON', pmView: 'overview'});
+    await expect(held.overview).toHaveAccessibleName('Overview');
+  });
+
+  test('36. Part B: a diff opened from its summary keeps focus there when the read fails', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workResultFixture();
+    activeFixture = f;
+    const commit = 'abcdef1234567890abcdef1234567890abcdef12';
+    const file = 'src/summary-fail.ts';
+    const key = `${commit}:${file}`;
+    f.state.changesResponse = buildChangesResponse({
+      attempt_id: 'att_' + '1'.repeat(32),
+      live_head_commit: commit,
+      summary: {
+        commits: [commit],
+        files: [{path: file, status: 'M', additions: 1, deletions: 0, commits_touched: [commit]}],
+      },
+    });
+    f.state.diffStatusByFile.set(key, {status: 502});
+
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+    await page.locator(`[data-pm-kanban-work="${workId(1)}"]`).locator('[data-board-open]').click();
+
+    const result = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+    f.state.expectedChanges = 1;
+    await result.locator('.pm-work-result-read-changes').click();
+    const summary = result.locator(attrSelector('data-work-result-diff-summary', key));
+    const details = summary.locator('..');
+    await expect(summary).toBeVisible();
+
+    f.state.expectedDiff = 1;
+    await summary.focus();
+    await page.keyboard.press('Enter');
+    await expect(details.locator('[data-error-summary]')).toContainText('Worktree diff could not be read from BAT.');
+    await expect(details.locator(attrSelector('data-work-result-retry-diff', key))).toBeVisible();
+    await expectFocus(page, {tag: 'SUMMARY', summary: key});
+  });
+
+  test('37. Part B: a file path with quotes, backslashes and brackets does not break focus', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workResultFixture();
+    activeFixture = f;
+    const attId = 'att_' + '1'.repeat(32);
+    const commit = 'abcdef1234567890abcdef1234567890abcdef12';
+    const file = 'src/a"b\\c]d.ts';
+    const key = `${commit}:${file}`;
+    f.state.changesResponse = buildChangesResponse({
+      attempt_id: attId,
+      live_head_commit: commit,
+      summary: {
+        commits: [commit],
+        files: [{path: file, status: 'M', additions: 1, deletions: 0, commits_touched: [commit]}],
+      },
+    });
+    f.state.diffStatusByFile.set(key, {status: 502});
+
+    await installBodyCompletedCounter(page);
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    expect(await page.evaluate(value => CSS.escape(value), key)).toBe(cssEscape(key));
+    await page.locator('[data-pm-view="board"]').click();
+    await page.locator(`[data-pm-kanban-work="${workId(1)}"]`).locator('[data-board-open]').click();
+
+    const result = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+    f.state.expectedChanges = 1;
+    await result.locator('.pm-work-result-read-changes').click();
+    const summary = result.locator(attrSelector('data-work-result-diff-summary', key));
+    const details = summary.locator('..');
+    const retry = () => details.locator(attrSelector('data-work-result-retry-diff', key));
+    await expect(summary).toBeVisible();
+    await expect(result.locator('.pm-work-result-current-changes .pm-work-result-file-path')).toHaveText(file);
+
+    f.state.expectedDiff = 1;
+    await summary.focus();
+    await page.keyboard.press('Enter');
+    await expect(details.locator('[data-error-summary]')).toContainText('Worktree diff could not be read from BAT.');
+    await expect(retry()).toBeVisible();
+    await expectFocus(page, {tag: 'SUMMARY', summary: key});
+
+    const releaseFail = armDiffHold(f, key);
+    f.state.expectedDiff = 2;
+    await retry().focus();
+    await page.keyboard.press('Enter');
+    await expect(details.locator('.pm-work-result-diff-loading')).toBeVisible();
+    await expectFocus(page, {tag: 'SUMMARY', summary: key});
+    const beforeFail = await countCompletedBodies(page, '/diff');
+    releaseFail();
+    await syncHeldBodyCompletion(page, '/diff', beforeFail);
+    await expect(details.locator('[data-error-summary]')).toContainText('Worktree diff could not be read from BAT.');
+    await expectFocus(page, {tag: 'BUTTON', retryDiff: key, ariaDisabled: null, disabled: false});
+
+    f.state.diffStatusByFile.delete(key);
+    f.state.diffResponses.set(key, buildDiffResponse({commit, path: file, diff: 'DIFF_QUOTE_OK'}));
+    const releaseOk = armDiffHold(f, key);
+    f.state.expectedDiff = 3;
+    await retry().focus();
+    await page.keyboard.press('Enter');
+    await expect(details.locator('.pm-work-result-diff-loading')).toBeVisible();
+    await expectFocus(page, {tag: 'SUMMARY', summary: key});
+    const beforeOk = await countCompletedBodies(page, '/diff');
+    releaseOk();
+    await syncHeldBodyCompletion(page, '/diff', beforeOk);
+    await expect(details.locator('.pm-work-result-diff-pre')).toContainText('DIFF_QUOTE_OK');
+    await expect(details.locator('.pm-work-result-diff-pre')).toHaveAttribute('data-work-result-diff-region', key);
+    await expectFocus(page, {tag: 'SUMMARY', summary: key});
+
+    const beforeRefresh = await countCompletedBodies(page, '/result');
+    f.emitResultRecorded(attId, buildResultEnvelope({attempt_id: attId, state: 'process-ended', stage: 'completed'}));
+    await syncCompletedBodies(page, '/result', beforeRefresh + 1);
+    await expect(result.locator('.pm-work-result-diff-pre')).toContainText('DIFF_QUOTE_OK');
+    await expectFocus(page, {tag: 'SUMMARY', summary: key});
+  });
+
+  test('38. Part B: the result Try again keeps its own focus across a re-render', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workResultFixture();
+    activeFixture = f;
+    const attId = 'att_' + '1'.repeat(32);
+
+    await installBodyCompletedCounter(page);
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+    await page.locator(`[data-pm-kanban-work="${workId(1)}"]`).locator('[data-board-open]').click();
+
+    const result = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+    await expect(result.locator('.pm-work-result-state')).toContainText('Turn ended');
+
+    f.state.resultStatus = 500;
+    const before = await countCompletedBodies(page, '/result');
+    f.emitResultRecorded(attId);
+    await syncCompletedBodies(page, '/result', before + 1);
+
+    const retry = result.locator('.pm-work-result-stale-banner [data-work-result-retry="result"]');
+    await expect(retry).toBeVisible();
+    await expect(retry).toHaveAttribute('data-work-result-retry', 'result');
+    await retry.focus();
+    await expectFocus(page, {tag: 'BUTTON', retry: 'result', disabled: false, ariaDisabled: null});
+
+    const beforeAgain = await countCompletedBodies(page, '/result');
+    f.emitResultRecorded(attId);
+    await syncCompletedBodies(page, '/result', beforeAgain + 1);
+    await expect(result.locator('.pm-work-result-stale-banner [data-work-result-retry="result"]')).toBeVisible();
+    await expectFocus(page, {tag: 'BUTTON', retry: 'result', disabled: false, ariaDisabled: null});
   });
 });
 
