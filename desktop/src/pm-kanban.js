@@ -352,30 +352,40 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   }
   const resize = new ResizeObserver(() => {updateEdges(); if (detail.element && selected) {const node = rows.get(selected)?.node; if (node) requestAnimationFrame(() => revealCard(node));}}); resize.observe(list);
   list.addEventListener('scroll', () => {preference.laneScroll = list.scrollLeft; updateEdges();});
+  let restoring = false;
   const onScroll = () => {
-    if (active && !reading && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+    if (active && !reading && !restoring && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
   };
   window.addEventListener('scroll', onScroll, {passive: true});
   function setActive(value) {
     const routeId = new URLSearchParams(location.hash.split('?')[1]).get('select');
     if (active === value) {if (value && routeId && routeId !== selected) void select(routeId); return;} active = value;
-    if (!value) {stale = true; serial++; detailSerial++; if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY; closeRetaining();}
+    if (!value) {restoring = false; stale = true; serial++; detailSerial++; if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY; closeRetaining();}
     else {
+      restoring = true;
       const generation = ++scrollGeneration;
       const read = stale || !page ? refresh() : null;
       if (!read && selected && rows.has(selected)) void select(selected, true);
       list.scrollLeft = preference.laneScroll || 0;
-      let restoreY = 0;
+      let restoreY = null;
       requestAnimationFrame(() => {
         if (generation === scrollGeneration) {
           window.scrollTo(0, preference.scroll || 0);
           restoreY = window.scrollY;
+          if (!read) restoring = false;
         }
       });
       if (read?.then) {
         void read.then(() => {
-          if (generation === scrollGeneration && window.scrollY === restoreY) {
-            window.scrollTo(0, preference.scroll || 0);
+          if (generation === scrollGeneration && (restoreY === null || window.scrollY === restoreY)) {
+            requestAnimationFrame(() => {
+              if (generation === scrollGeneration) {
+                window.scrollTo(0, preference.scroll || 0);
+                restoring = false;
+              }
+            });
+          } else {
+            restoring = false;
           }
         });
       }

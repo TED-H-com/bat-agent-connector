@@ -207,6 +207,12 @@ async function ensureDrawerClosed(page: Page, width: number) {
   }
 }
 
+async function waitForViewSettled(page: Page) {
+  await expect(page.locator('[data-pm-source-loading]:visible')).toHaveCount(0);
+  await expect(page.locator('#main [aria-busy="true"]:visible')).toHaveCount(0);
+  await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+}
+
 // --------------------------------------------------------------------------
 // UX-A05: Legacy deep links (preview mode, EN and zh-TW, 1440 and 390)
 // --------------------------------------------------------------------------
@@ -378,6 +384,7 @@ for (const lang of ['en', 'zh-TW'] as const) {
         if (route.contentSelector) {
           await expect(page.locator(route.contentSelector).first()).toBeVisible();
         }
+        await waitForViewSettled(page);
 
         // Measure scroller
         const scrollInfo = await page.evaluate(selector => {
@@ -423,6 +430,7 @@ for (const lang of ['en', 'zh-TW'] as const) {
           await expect.poll(() => page.evaluate(() => location.hash)).not.toBe(expectedHash);
           await expect(otherEntry).toHaveAttribute('aria-current', 'page');
           await expect(page.locator('#main h1').first()).toBeVisible();
+          await waitForViewSettled(page);
 
           // Press Back
           await page.goBack();
@@ -437,6 +445,7 @@ for (const lang of ['en', 'zh-TW'] as const) {
           if (route.contentSelector) {
             await expect(page.locator(route.contentSelector).first()).toBeVisible();
           }
+          await waitForViewSettled(page);
 
           // Scroll position lands within 8px of saved position
           await expect.poll(async () => {
@@ -476,6 +485,7 @@ for (const lang of ['en', 'zh-TW'] as const) {
             await expect.poll(() => page.evaluate(() => location.hash)).not.toBe(expectedHash);
             await expect(other).toHaveAttribute('aria-current', 'page');
             await expect(page.locator('#main h1').first()).toBeVisible();
+            await waitForViewSettled(page);
 
             await page.goBack();
 
@@ -484,6 +494,7 @@ for (const lang of ['en', 'zh-TW'] as const) {
             if (route.contentSelector) {
               await expect(page.locator(route.contentSelector).first()).toBeVisible();
             }
+            await waitForViewSettled(page);
 
             await expect.poll(async () => {
               return await page.evaluate(() => window.scrollY);
