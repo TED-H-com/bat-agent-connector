@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Sending a message, uploading or paging attachments, and starting or recording a
+  checkpoint keep keyboard focus on the control that is working. The control looks
+  unavailable until that work finishes, and pressing it again does nothing. A
+  finished upload moves focus to that file's role or Remove. Starting agent work
+  from a work item moves focus to the new operation.
+
 - Settings → Agents: Tab reaches Check again while the first check runs, and
   pressing it keeps keyboard focus on the button. The button looks unavailable
   until the check finishes, and a second press is ignored.
