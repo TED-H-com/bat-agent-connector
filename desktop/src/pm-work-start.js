@@ -1,5 +1,5 @@
 import {button, disclosure, statusPill} from './ui/components.js';
-import {timeStamp} from './ui/stamps.js';
+import {timeStamp, timeLabel} from './ui/stamps.js';
 import {sessionHref} from './session-navigation.js';
 import {operationStatusLabel} from './global-labels.js';
 
@@ -19,6 +19,15 @@ const PRECONDITION_KEYS = [
 ];
 
 export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, permitted, form, errorBox, plan: getPlan, onStartableChange = () => {}}) {
+  const panelErrorBox = (err, opts = {}) => {
+    const code = err?.code || '';
+    const panelKey = `wst_error_${code}`;
+    let summary = opts.summary;
+    if (!summary && code && t(panelKey) !== panelKey) {
+      summary = t(panelKey);
+    }
+    return errorBox(err, {...opts, summary});
+  };
   let activeCard = null;
   let activeWorkId = null;
   let prepared = null;
@@ -197,22 +206,24 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         case 'start_failed':
           statusWord = t('wst_status_start_failed');
           if (attempt.error_code) {
-            const key = 'error_code_' + attempt.error_code;
-            const msg = t(key);
-            if (msg && msg !== key) {
-              extraText = msg;
-            } else if (attempt.status_reason) {
-              extraText = attempt.status_reason;
+            const panelKey = 'wst_error_' + attempt.error_code;
+            const globalKey = 'error_code_' + attempt.error_code;
+            if (t(panelKey) !== panelKey) {
+              extraText = t(panelKey);
+            } else if (t(globalKey) !== globalKey) {
+              extraText = t(globalKey);
+            } else {
+              extraText = t('wst_start_failed_generic');
             }
-          } else if (attempt.status_reason) {
-            extraText = attempt.status_reason;
+          } else {
+            extraText = t('wst_start_failed_generic');
           }
           break;
         case 'cancelled':
           statusWord = t('wst_status_cancelled');
           break;
         default:
-          statusWord = attempt.stage || t('ui_status_unknown');
+          statusWord = t('ui_status_unknown');
           break;
       }
     }
@@ -257,6 +268,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       attempt.start_operation_id ? h('p', {class: 'mono'}, `${t('wst_operation_id')}: ${attempt.start_operation_id}`) : null,
       attempt.execution_operation_id ? h('p', {class: 'mono'}, `${t('wst_execution_op_id')}: ${attempt.execution_operation_id}`) : null,
       attempt.session ? h('p', {class: 'mono'}, `${t('wst_session_id')}: ${attempt.session.host} · ${attempt.session.session_id}`) : null,
+      attempt.status_reason ? h('p', {class: 'muted'}, attempt.status_reason) : null,
     );
     const detailsDisclosure = disclosure({label: t('wst_details'), body: detailsContent});
     if (detailsWasOpen) {
@@ -606,7 +618,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
             h('p', {}, `${data.code_target.repository} · ${branchName} · ${shaShort} · ${hostWs}`),
             h('p', {class: 'muted'}, pkgText),
             bindNote ? h('p', {class: 'muted'}, bindNote) : null,
-            h('p', {class: 'muted'}, timeStamp(data.observed_at || Date.now() / 1000)),
+            typeof data.observed_at === 'number' && data.observed_at > 0 ? h('p', {class: 'muted'}, timeLabel(t, 'wst_checked_at', {time: timeStamp(data.observed_at)})) : null,
           )
         );
 
@@ -621,8 +633,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
             h('strong', {}, label === key ? check.check : label + (suffix.length ? ' · ' + suffix.join(':') : '')),
             ' — ',
             t(passed ? 'wp_passed' : 'wp_attention'),
-            !passed && help !== key + '_help' ? h('p', {class: 'muted'}, help) : null,
-            !passed && check.detail ? h('p', {class: 'muted'}, check.detail) : null,
+            !passed && help !== key + '_help' ? h('p', {class: 'muted'}, help) : !passed && check.detail ? h('p', {class: 'muted'}, check.detail) : null,
           );
         });
 
@@ -639,7 +650,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         if ([401, 403, 404].includes(err.status)) {
           withdraw();
         }
-        errorStatusBox.replaceChildren(errorBox(err, {within: errorStatusBox}));
+        errorStatusBox.replaceChildren(panelErrorBox(err, {within: errorStatusBox}));
       } finally {
         if (valid(ticket)) {
           checking = false;
@@ -718,6 +729,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       },
       permitted: () => writer(card),
       recoverPermitted: () => writer(card),
+      errorBox: panelErrorBox,
       label: 'wst_start',
       onStateChange: () => {
         updateUI();
@@ -791,7 +803,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       }
     } catch (err) {
       if (valid(ticket)) {
-        statusView.replaceChildren(errorBox(err, {within: statusView}));
+        statusView.replaceChildren(panelErrorBox(err, {within: statusView}));
       }
     }
   }
@@ -896,7 +908,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       }
     } catch (err) {
       if (valid(ticket)) {
-        statusView.replaceChildren(errorBox(err, {within: statusView}));
+        statusView.replaceChildren(panelErrorBox(err, {within: statusView}));
       }
     } finally {
       if (valid(ticket)) {
