@@ -206,7 +206,7 @@ test('busy: Review current version moves focus to the label text', async ({page}
   await saveButton(panel).focus();
   await page.keyboard.press('Enter');
   const review = panel.getByRole('button', {name: 'Review current version and prepare change'});
-  await expect(review).toBeVisible();
+  await expect(review).toBeEnabled();
   await review.focus();
   await page.keyboard.press('Enter');
   await expect(panel.getByRole('textbox')).toBeFocused();

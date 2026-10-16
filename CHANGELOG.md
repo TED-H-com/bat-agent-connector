@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Starting a session, saving labels, reloading workspaces, and pausing or
+  resuming an execution keep the keyboard on the pressed control while the
+  request runs. A second press is ignored. Focus then moves to Check, or to
+  the control that replaces a refused action. Typing labels is not interrupted
+  by a background refresh.
+
 - Settings → Agents: Tab reaches Check again while the first check runs, and
   pressing it keeps keyboard focus on the button. The button looks unavailable
   until the check finishes, and a second press is ignored.

@@ -7,6 +7,32 @@ const version = value => Number.isSafeInteger(value) && value >= 0;
 const equal = (a, b) => a === b || (object(a) && object(b) && Object.keys(a).length === Object.keys(b).length &&
   Object.keys(a).every(k => equal(a[k], b[k])));
 const terminal = op => ["succeeded", "failed", "cancelled"].includes(op?.status);
+function markControl(el, blocked, flight, own = false) {
+  if (!el.hidden && flight && (own || !blocked)) {el.disabled = false; el.setAttribute("aria-disabled", "true");}
+  else {el.disabled = Boolean(blocked || flight); el.removeAttribute("aria-disabled");}
+}
+function markRegion(region, controls) {
+  if (controls.some(el => !el.hidden && el.getAttribute("aria-disabled") === "true")) region.setAttribute("aria-busy", "true");
+  else region.removeAttribute("aria-busy");
+}
+function controlShown(el) {
+  return Boolean(el?.isConnected && !el.disabled && !el.closest("[hidden]"));
+}
+function moveFocus(from, candidate, root, region) {
+  if (controlShown(candidate)) {candidate.focus(); return;}
+  const controls = [...root.querySelectorAll("button, a[href], input, select, textarea")];
+  const start = Math.max(controls.indexOf(from), 0);
+  const next = [...controls.slice(start + 1), ...controls.slice(0, start)].find(el => controlShown(el) && el.getAttribute("aria-disabled") !== "true");
+  if (next) {next.focus(); return;}
+  region.tabIndex = -1; region.focus();
+}
+function settleFocus(before, buttons, candidate, root, region) {
+  if (!root?.isConnected || !buttons.includes(before)) return;
+  const active = document.activeElement;
+  if (active !== before && active !== document.body && active !== document.documentElement) return;
+  if (!before.disabled && !before.closest("[hidden]")) return;
+  moveFocus(before, candidate, root, region);
+}
 function valid(request, id) {
   return ["task.pause", "task.resume"].includes(request?.action) && equal(request.target, {task_id: id}) &&
     object(request.params) && (request.action === "task.pause" ? typeof request.params.abort_current === "boolean" &&
@@ -16,7 +42,7 @@ function valid(request, id) {
 export function taskControlsPanel({h, t, api, caps, guard, ready, task, taskId, storageKey, errorBox, opStatus, onSettled}) {
   let raw;
   try {raw = JSON.parse(localStorage.getItem(storageKey));} catch { /* no saved draft */ }
-  let saved = {abort: raw?.abort === true}, operation = null, submission = null, refreshing = null, busy = false, readFailed = false;
+  let saved = {abort: raw?.abort === true}, operation = null, submission = null, refreshing = null, busy = false, checking = false, readFailed = false;
   if (raw?.intent) {
     const proven = valid(raw.intent.request, taskId) && typeof raw.intent.key === "string" && raw.intent.key.length > 0 && raw.intent.key.length <= 200;
     saved.intent = {request: proven ? raw.intent.request : null, key: proven ? raw.intent.key : null,
@@ -45,7 +71,7 @@ export function taskControlsPanel({h, t, api, caps, guard, ready, task, taskId, 
     operation = candidate; intent.operation_id = candidate.operation_id; persist(); readFailed = false; message.replaceChildren(); update();
   };
   const apply = button({variant: "secondary", label: t("task_pause"), onClick: async () => {
-    if (!live() || busy || refreshing || readFailed || !writable() || saved.intent?.operation_id ||
+    if (!live() || busy || refreshing || checking || readFailed || !writable() || saved.intent?.operation_id ||
         saved.intent && (!saved.intent.request || saved.intent.refused)) return;
     const previous = saved;
     if (!saved.intent) saved = {...saved, intent: {request: {action: action(), target: {task_id: taskId},
@@ -63,9 +89,17 @@ export function taskControlsPanel({h, t, api, caps, guard, ready, task, taskId, 
     try {await submission;} finally {submission = null;}
     if (live()) try {await onSettled?.();} catch (e) {showError(e);}
   }});
-  const check = button({variant: "secondary", label: t("permissions_check"), onClick: () => (onSettled ? onSettled() : refresh(true)).catch(showError)});
+  const check = button({variant: "secondary", label: t("permissions_check"), onClick: () => {
+    if (!live() || busy || refreshing || checking) return;
+    // The page load continues after the operation read. Hold this press until that promise settles.
+    checking = true; update();
+    let run;
+    try {run = onSettled ? onSettled() : refresh(true);}
+    catch (error) {checking = false; if (live()) update(); showError(error); return;}
+    Promise.resolve(run).then(() => {}, showError).finally(() => {checking = false; if (live()) update();});
+  }});
   const another = button({variant: "secondary", label: t("task_control_new"), onClick: () => {
-    if (!live() || busy || refreshing || readFailed || !writable() || !(terminal(operation) || saved.intent?.refused)) return;
+    if (!live() || busy || refreshing || checking || readFailed || !writable() || !(terminal(operation) || saved.intent?.refused)) return;
     const previous = saved; saved = {abort: false};
     try {persist();} catch (e) {saved = previous; showError(e); return;}
     operation = null; abort.checked = false; message.replaceChildren(); update();
@@ -80,16 +114,23 @@ export function taskControlsPanel({h, t, api, caps, guard, ready, task, taskId, 
     h("div", {class: "actions"}, apply, check, another), restriction, result, message)});
   box.dataset.taskControls = "";
   function update() {
+    const before = document.activeElement;
     const fixed = Boolean(saved.intent);
     const canOperate = permitted();
+    const flight = busy || Boolean(refreshing) || checking;
     box.hidden = !(caps()?.scopes || []).includes("operate");
     help.hidden = !canOperate;
     abortLabel.hidden = !canOperate || action() !== "task.pause"; abort.disabled = fixed || busy;
     apply.hidden = !canOperate || Boolean(saved.intent?.operation_id || saved.intent?.refused);
-    apply.disabled = busy || Boolean(refreshing) || readFailed || !writable() || Boolean(fixed && !saved.intent.request);
     apply.textContent = t(fixed ? "permissions_retry" : action() === "task.pause" ? "task_pause" : "task_resume");
-    check.hidden = !saved.intent?.operation_id; check.disabled = busy || Boolean(refreshing);
-    another.hidden = !canOperate || !(terminal(operation) || saved.intent?.refused); another.disabled = busy || Boolean(refreshing) || readFailed || !writable();
+    markControl(apply, readFailed || !writable() || Boolean(fixed && !saved.intent.request), flight, busy);
+    check.hidden = !saved.intent?.operation_id;
+    markControl(check, false, flight, checking);
+    another.hidden = !canOperate || !(terminal(operation) || saved.intent?.refused);
+    markControl(another, readFailed || !writable(), flight, false);
+    markRegion(message, [apply, check, another]);
+    const candidate = before === apply ? (saved.intent?.operation_id ? check : saved.intent?.refused ? another : null) : before === another ? apply : null;
+    settleFocus(before, [apply, check, another], candidate, box, message);
     restriction.textContent = writable() ? "" : observedText(t, !canOperate ? "or_readonly_task"
       : ["done", "failed"].includes(task()?.state) ? "or_work_ended" : "or_controls_unavailable");
     result.replaceChildren();

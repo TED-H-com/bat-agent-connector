@@ -12,6 +12,32 @@ const fields = ["host", "workspace", "agent", "model", "title", "prompt"];
 // This action's host tier check runs after existing-key replay and before INSERT.
 // Scope/auth, generic validation and key conflicts are not no-admission proof.
 const admissionRefusals = new Set(["TIER_DISABLED", "START_WORKTREE_REQUIRED"]);
+function markControl(el, blocked, flight, own = false) {
+  if (!el.hidden && flight && (own || !blocked)) {el.disabled = false; el.setAttribute("aria-disabled", "true");}
+  else {el.disabled = Boolean(blocked || flight); el.removeAttribute("aria-disabled");}
+}
+function markRegion(region, controls) {
+  if (controls.some(el => !el.hidden && el.getAttribute("aria-disabled") === "true")) region.setAttribute("aria-busy", "true");
+  else region.removeAttribute("aria-busy");
+}
+function controlShown(el) {
+  return Boolean(el?.isConnected && !el.disabled && !el.closest("[hidden]"));
+}
+function moveFocus(from, candidate, root, region) {
+  if (controlShown(candidate)) {candidate.focus(); return;}
+  const controls = [...root.querySelectorAll("button, a[href], input, select, textarea")];
+  const start = Math.max(controls.indexOf(from), 0);
+  const next = [...controls.slice(start + 1), ...controls.slice(0, start)].find(el => controlShown(el) && el.getAttribute("aria-disabled") !== "true");
+  if (next) {next.focus(); return;}
+  region.tabIndex = -1; region.focus();
+}
+function settleFocus(before, buttons, candidate, root, region) {
+  if (!root?.isConnected || !buttons.includes(before)) return;
+  const active = document.activeElement;
+  if (active !== before && active !== document.body && active !== document.documentElement) return;
+  if (!before.disabled && !before.closest("[hidden]")) return;
+  moveFocus(before, candidate, root, region);
+}
 function validRequest(r) {
   return r?.action === "session.start" && object(r.target) && Object.keys(r.target).length === 2 &&
     text(r.target.host, 256) && text(r.target.workspace, 256) && object(r.params) &&
@@ -37,7 +63,7 @@ export function sessionStartPanel({h, t, api, caps, guard, ready, errorBox, opSt
     saved.host = initialHost; saved.workspace = "";
   }
   let operation = null, busy = false, submission = null, refreshing = null, readFailed = false;
-  let workspaces = [], discovery = 0, discovering = false, discoveredHost = "";
+  let workspaces = [], discovery = 0, discovering = false, discoveredHost = "", ownedDiscovery = 0;
   const current = () => {try {guard(); return true;} catch {return false;}};
   const persist = () => {guard(); localStorage.setItem(storageKey, JSON.stringify(saved));};
   const observe = () => caps()?.scopes?.includes("observe");
@@ -83,7 +109,12 @@ export function sessionStartPanel({h, t, api, caps, guard, ready, errorBox, opSt
     } catch (e) {if (current() && expected === discovery) {discoveryStatus.textContent = t("start_discovery_failed"); showError(e);}}
     finally {if (expected === discovery && current()) {discovering = false; update();}}
   }
-  const reload = h("button", {class: "secondary", onclick: discover}, t("start_reload_workspaces"));
+  const reload = h("button", {class: "secondary", onclick: () => {
+    if (discovering) return;
+    const ticket = discovery;
+    discover();
+    if (discovery !== ticket) ownedDiscovery = discovery;
+  }}, t("start_reload_workspaces"));
   const accept = candidate => {
     guard(); const intent = saved.intent;
     if (!intent || !intent.request || !intent.key || !operationId(candidate?.operation_id) || candidate.actor !== caps()?.actor ||
@@ -109,6 +140,8 @@ export function sessionStartPanel({h, t, api, caps, guard, ready, errorBox, opSt
     }
     if (!saved.intent.request || !saved.intent.key) return;
     try {persist();} catch (e) {showError(e); update(); return;} // never submit without the durable original envelope/key
+    // The shortcut activates Start from a field. Focus the button before those fields lock.
+    if (Object.values(inputs).includes(document.activeElement)) apply.focus();
     busy = true; update(); const intent = saved.intent;
     submission = (async () => {
       try {const data = await api("POST", "/operations?wait=3", intent.request, intent.key); guard(); accept(data.operation);}
@@ -119,7 +152,10 @@ export function sessionStartPanel({h, t, api, caps, guard, ready, errorBox, opSt
     })();
     try {await submission;} finally {submission = null;}
   }}, t("start_apply"));
-  const check = h("button", {class: "secondary", onclick: () => refresh(true).catch(() => {})}, t("permissions_check"));
+  const check = h("button", {class: "secondary", onclick: () => {
+    if (!current() || busy || refreshing) return;
+    refresh(true).catch(() => {});
+  }}, t("permissions_check"));
   const another = h("button", {class: "secondary", onclick: async () => {
     if (!current() || busy || refreshing || readFailed || !(terminal(operation) || saved.intent?.refused)) return;
     const previous = saved;
@@ -142,17 +178,25 @@ export function sessionStartPanel({h, t, api, caps, guard, ready, errorBox, opSt
       models.box, label("start_prompt", prompt), shortcut.box, h("p", {class: "muted"}, t("start_prompt_help"))),
     h("div", {class: "actions"}, apply, check, another), result, status);
   function update() {
+    const before = document.activeElement;
     const fixed = Boolean(saved.intent);
     for (const el of Object.values(inputs)) el.disabled = busy || fixed;
     models.update();
     workspace.disabled ||= discovering || !saved.host;
-    reload.hidden = fixed; reload.disabled = discovering || !observe() || !saved.host;
+    reload.hidden = fixed;
+    markControl(reload, !observe() || !saved.host, discovering, discovering && ownedDiscovery === discovery);
     apply.hidden = Boolean(saved.intent?.operation_id || saved.intent?.refused);
     apply.textContent = t(fixed ? "permissions_retry" : "start_apply");
-    apply.disabled = busy || readFailed || !ready() || !allowed() || (fixed ? !saved.intent.request || !saved.intent.key :
-      !hostAllowed() || discoveredHost !== saved.host || !workspaces.some(w => w.workspace_id === saved.workspace) || !validRequest(request()));
-    check.hidden = !saved.intent?.operation_id; check.disabled = busy || Boolean(refreshing);
-    another.hidden = !(terminal(operation) || saved.intent?.refused); another.disabled = busy || Boolean(refreshing) || readFailed;
+    markControl(apply, readFailed || !ready() || !allowed() || (fixed ? !saved.intent.request || !saved.intent.key :
+      !hostAllowed() || discoveredHost !== saved.host || !workspaces.some(w => w.workspace_id === saved.workspace) || !validRequest(request())), busy, busy);
+    check.hidden = !saved.intent?.operation_id;
+    markControl(check, false, busy || Boolean(refreshing), busy);
+    another.hidden = !(terminal(operation) || saved.intent?.refused);
+    markControl(another, readFailed, busy || Boolean(refreshing), false);
+    markRegion(status, [apply, check, another]);
+    markRegion(discoveryStatus, [reload]);
+    const candidate = before === apply ? (saved.intent?.operation_id ? check : saved.intent?.refused ? another : null) : before === another ? host : null;
+    settleFocus(before, [apply, check, another, reload], candidate, box, before === reload ? discoveryStatus : status);
     result.replaceChildren();
     if (!allowed()) result.append(h("p", {class: "muted"}, t("start_unavailable")));
     if (!fixed) return;
