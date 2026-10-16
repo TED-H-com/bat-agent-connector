@@ -127,6 +127,9 @@
 - The UX-A07 feature-map test waits for destination view containers and heading updates
   before recording classic headings, preventing stale headings captured during route transitions.
 
+- The UX-A05 deep-link test waits for PM views to settle before each scroll, departure and
+  return step, so it no longer scrolls while a view is still reading.
+
 - Unsigned macOS desktop packaging logs `bundle_dmg.sh` with `--verbose` and retries the same
   build once after detaching only this job's leftover `/Volumes` images.
 
