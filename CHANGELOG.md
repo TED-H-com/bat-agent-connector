@@ -127,11 +127,6 @@
 - The UX-A07 feature-map test waits for destination view containers and heading updates
   before recording classic headings, preventing stale headings captured during route transitions.
 
-- PM Kanban and Traceability views suppress scroll preference updates while restoring
-  view scroll position and defer post-read scroll adjustments to an animation frame,
-  preventing browser history clamp events from resetting saved scroll offsets on back navigation.
-  Traceability marks its root element with `aria-busy` during refreshes.
-
 - Unsigned macOS desktop packaging logs `bundle_dmg.sh` with `--verbose` and retries the same
   build once after detaching only this job's leftover `/Volumes` images.
 

@@ -86,7 +86,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
   function controls() {for (const [kind, button] of Object.entries(moreButtons)) {button.disabled = busy; button.hidden = cursors[kind] == null;}}
   function closeRetaining() {detailSerial++; preserveSelection = true; detail.close(); preserveSelection = false;}
   function withdraw({forgetRoute = true} = {}) {
-    pendingFocus = null; pendingNavigation = null; currentRequirement = null; currentMilestone = null; scrollGeneration++; serial++; detailSerial++; busy = false; element.removeAttribute('aria-busy'); plan = null; cards = []; issues = []; reviews = []; milestones = []; sources.clear(); earlierPlans.clear(); signature = '';
+    pendingFocus = null; pendingNavigation = null; currentRequirement = null; currentMilestone = null; scrollGeneration++; serial++; detailSerial++; busy = false; plan = null; cards = []; issues = []; reviews = []; milestones = []; sources.clear(); earlierPlans.clear(); signature = '';
     if (forgetRoute) writeSelection(null);
     closeRetaining(); tables.replaceChildren(); meta.replaceChildren(); status.replaceChildren();
     if (forgetRoute && visible) viewHeading()?.focus({preventScroll: true});
@@ -205,7 +205,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
   async function refresh() {
     if (!active || !visible) {stale = true; return;}
     stale = false;
-    const ticket = ++serial; detailSerial++; busy = true; controls(); element.setAttribute('aria-busy', 'true');
+    const ticket = ++serial; detailSerial++; busy = true; controls();
     try {
       const accepted = await api('GET', `${endpoint}/plans/accepted`); alive(); if (ticket !== serial) return;
       if (accepted.head?.workspace_id !== workspaceId || accepted.plan && (accepted.plan.workspace_id !== workspaceId || accepted.plan.revision_id !== accepted.head.accepted_revision_id)) throw Error(t('pm_scope_mismatch'));
@@ -253,7 +253,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
       busy = false;
       if (pendingFocus) await applyPending();
       if (pendingNavigation) {const ref = pendingNavigation; pendingNavigation = null; await openRef(ref);}
-    } catch (error) {fail(error, ticket);} finally {if (ticket === serial) {busy = false; controls(); element.removeAttribute('aria-busy');}}
+    } catch (error) {fail(error, ticket);} finally {if (ticket === serial) {busy = false; controls();}}
   }
   async function select(id, scroll = false, retain = false) {
     if (id.startsWith('milestone:')) {
@@ -312,37 +312,27 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
       detail.show({title: card.work.title, error, onRetry: () => void refresh()});
     }}
   }
-  let restoring = false;
   const onScroll = () => {
-    if (visible && !busy && !restoring && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+    if (visible && !busy && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
   };
   window.addEventListener('scroll', onScroll, {passive: true});
   function setActive(value) {
     if (visible === value) {if (value && signature) {const id = new URLSearchParams(location.hash.split('?')[1]).get('select'); if (!id) currentMilestone = null; if (id && id !== currentMilestone && (id !== selected || !detail.element)) void select(id, id !== selected);} return;}
     visible = value;
-    if (!value) {restoring = false; active = false; stale = true; serial++; detailSerial++; if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY; closeRetaining();}
+    if (!value) {active = false; stale = true; serial++; detailSerial++; if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY; closeRetaining();}
     else {
-      restoring = true;
       const generation = ++scrollGeneration; const read = activate(); if (!stale && selected && cards.length) void select(selected, false, true);
-      let restoreY = null;
+      let restoreY = 0;
       requestAnimationFrame(() => {
         if (generation === scrollGeneration) {
           window.scrollTo(0, preference.scroll || 0);
           restoreY = window.scrollY;
-          if (!read) restoring = false;
         }
       });
       if (read?.then) {
         void read.then(() => {
-          if (generation === scrollGeneration && (restoreY === null || window.scrollY === restoreY)) {
-            requestAnimationFrame(() => {
-              if (generation === scrollGeneration) {
-                window.scrollTo(0, preference.scroll || 0);
-                restoring = false;
-              }
-            });
-          } else {
-            restoring = false;
+          if (generation === scrollGeneration && window.scrollY === restoreY) {
+            window.scrollTo(0, preference.scroll || 0);
           }
         });
       }

@@ -21602,7 +21602,6 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		serial++;
 		detailSerial++;
 		busy = false;
-		element.removeAttribute("aria-busy");
 		plan = null;
 		cards = [];
 		issues = [];
@@ -21849,7 +21848,6 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		detailSerial++;
 		busy = true;
 		controls();
-		element.setAttribute("aria-busy", "true");
 		try {
 			const accepted = await api("GET", `${endpoint}/plans/accepted`);
 			alive();
@@ -21986,7 +21984,6 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			if (ticket === serial) {
 				busy = false;
 				controls();
-				element.removeAttribute("aria-busy");
 			}
 		}
 	}
@@ -22150,9 +22147,8 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			}
 		}
 	}
-	let restoring = false;
 	const onScroll = () => {
-		if (visible && !busy && !restoring && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+		if (visible && !busy && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
 	};
 	window.addEventListener("scroll", onScroll, { passive: true });
 	function setActive(value) {
@@ -22166,7 +22162,6 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		}
 		visible = value;
 		if (!value) {
-			restoring = false;
 			active = false;
 			stale = true;
 			serial++;
@@ -22174,26 +22169,18 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
 			closeRetaining();
 		} else {
-			restoring = true;
 			const generation = ++scrollGeneration;
 			const read = activate();
 			if (!stale && selected && cards.length) select(selected, false, true);
-			let restoreY = null;
+			let restoreY = 0;
 			requestAnimationFrame(() => {
 				if (generation === scrollGeneration) {
 					window.scrollTo(0, preference.scroll || 0);
 					restoreY = window.scrollY;
-					if (!read) restoring = false;
 				}
 			});
 			if (read?.then) read.then(() => {
-				if (generation === scrollGeneration && (restoreY === null || window.scrollY === restoreY)) requestAnimationFrame(() => {
-					if (generation === scrollGeneration) {
-						window.scrollTo(0, preference.scroll || 0);
-						restoring = false;
-					}
-				});
-				else restoring = false;
+				if (generation === scrollGeneration && window.scrollY === restoreY) window.scrollTo(0, preference.scroll || 0);
 			});
 			return read;
 		}
@@ -33438,9 +33425,8 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		preference.laneScroll = list.scrollLeft;
 		updateEdges();
 	});
-	let restoring = false;
 	const onScroll = () => {
-		if (active && !reading && !restoring && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+		if (active && !reading && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
 	};
 	window.addEventListener("scroll", onScroll, { passive: true });
 	function setActive(value) {
@@ -33451,34 +33437,25 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		}
 		active = value;
 		if (!value) {
-			restoring = false;
 			stale = true;
 			serial++;
 			detailSerial++;
 			if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
 			closeRetaining();
 		} else {
-			restoring = true;
 			const generation = ++scrollGeneration;
 			const read = stale || !page ? refresh() : null;
 			if (!read && selected && rows.has(selected)) select(selected, true);
 			list.scrollLeft = preference.laneScroll || 0;
-			let restoreY = null;
+			let restoreY = 0;
 			requestAnimationFrame(() => {
 				if (generation === scrollGeneration) {
 					window.scrollTo(0, preference.scroll || 0);
 					restoreY = window.scrollY;
-					if (!read) restoring = false;
 				}
 			});
 			if (read?.then) read.then(() => {
-				if (generation === scrollGeneration && (restoreY === null || window.scrollY === restoreY)) requestAnimationFrame(() => {
-					if (generation === scrollGeneration) {
-						window.scrollTo(0, preference.scroll || 0);
-						restoring = false;
-					}
-				});
-				else restoring = false;
+				if (generation === scrollGeneration && window.scrollY === restoreY) window.scrollTo(0, preference.scroll || 0);
 			});
 			return read;
 		}
