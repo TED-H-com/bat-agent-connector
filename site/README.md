@@ -17,12 +17,12 @@ problem, discuss it with the PM and review a decision in the same context.
 It retains Windows Fleet, central authority, platform differences and installation guidance.
 
 The redesigned views and sixteen screenshots are a **development preview from merged main**
-pinned to `d66f032d342562322479c5087c6982d662d11a01`.
-This pin includes merged updates through #181 on October 15, 2026. Since the previous pin (#161) it adds quiet session status and explained partial history (#152), focused workspace tasks and short empty states (#155), one message per PM failure and Meetings guidance (#162, #175), M4 lifecycle evidence (#116), the exact build and redacted diagnostics in Settings (#171), read-only session paths and Settings → Agents (#169), on-demand PM views (#174), the Git transport contract with local Git still disabled (#167), TED-H-com repository links (#177), and wording and layout fixes for phone headers, owner columns and zh-TW terms (#172, #179, #180).
+pinned to `265026d4c1fc2bc04a9aaa727d566c1a2906b256`.
+This pin is merged main through #205 on October 16, 2026. It includes `work.start`, the Start work panel, fixed Result reads, and a read-only Result section in the Board's Work inspector (E03 part A). The public gallery does not open that panel. The panel needs the `work.start` capability, a configured BAT host and a bound repository. Not merged: a second instruction to the same Work (P5), adopt-and-start in one step (P6), on-request current changes and per-commit diffs (E03 part B), work profiles and readiness (E01), MCP/API loop parity (E10), and the closed loop end to end. No real BAT start, follow-up or Result has been observed.
 It includes the first-run connection URL flow; repository binding and verification
 are optional collapsed steps. This refresh provides no installation or live evidence.
 CI and browser screenshots do not establish native or live acceptance.
-Keep validation outcomes in the dated [progress report](../docs/product/progress-2026-10-14.md);
+Keep validation outcomes in the dated [progress report](../docs/product/progress-2026-10-16.md);
 link it from the site. The [October 12 report](../docs/product/progress-2026-10-12.md) retains historical evidence.
 The [handoff](../docs/handoff/2026-10-14-docs-ux-v2.md) has development continuation
 steps, while [PM status](../docs/product/pm-v1.2-status.md) retains the full backlog.
