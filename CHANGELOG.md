@@ -40,7 +40,8 @@
 - Board and Requirements now return to where you left them when you switch to
   another project view or leave the project while they are still loading. On
   narrow windows they no longer land about 50 px further down when the page
-  header finishes loading after the view.
+  header finishes loading after the view. A view you switch away from while it
+  is still loading no longer moves the page when its read finishes.
 
 - Tools → Workbench preview opens a reversible layout with Today, Projects,
   Work and Resources, a project management selector and an optional Results
