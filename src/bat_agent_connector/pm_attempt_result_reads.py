@@ -215,6 +215,12 @@ def _attempt_context(ops, principal: Principal, workspace_id: str, attempt_id: s
                     if isinstance(mid, str) and mid.strip():
                         turn_marker = mid
                         break
+    latest_input_operation_id = None
+    from .pm_work_follow_up import latest_sent_turn
+    sent_mid, sent_op = latest_sent_turn(ops.db, attempt_id)
+    if isinstance(sent_mid, str) and sent_mid.strip():
+        turn_marker = sent_mid
+        latest_input_operation_id = sent_op
     worktree_path = handoff_res.get("worktree_path") if isinstance(handoff_res.get("worktree_path"), str) else None
     code_source = view.get("code_source") if isinstance(view.get("code_source"), dict) else (intent.get("code_source") or {})
     base_sha = (
@@ -242,6 +248,7 @@ def _attempt_context(ops, principal: Principal, workspace_id: str, attempt_id: s
         "sess_host": sess_host,
         "sess_id": sess_id,
         "turn_marker": turn_marker,
+        "latest_input_operation_id": latest_input_operation_id,
         "worktree_path": worktree_path,
         "code_source": code_source,
         "base_sha": str(base_sha) if isinstance(base_sha, str) and base_sha else None,
@@ -1001,6 +1008,29 @@ def _compute_actions(
     # 2. Session & PM actions when a session exists
     if sess_host and sess_id:
         sess_target = {"host": sess_host, "session_id": sess_id}
+        def offer_work_send(schedules: list[str]) -> None:
+            if stage != "started" or "session.send" not in ops.actions:
+                return
+            agent = (ctx.get("intent") or {}).get("agent") or (view or {}).get("agent")
+            if agent == "codex":
+                blocked.append({"action": "session.send", "reason": "codex_uncorrelated_turn_boundary"})
+                return
+            consider(
+                {
+                    "kind": "action",
+                    "action": "session.send",
+                    "target": {"workspace_id": workspace_id, "work_item_id": work_item_id},
+                    "required_scopes": _action_scopes(ops, "session.send"),
+                    "allowed_schedules": list(schedules),
+                    "default_schedule": "after_current",
+                    "requires_controller": True,
+                    "requires_writer": True,
+                },
+                action_name="session.send",
+                requires_controller=True,
+                requires_writer=True,
+            )
+
         if execution_state == "waiting":
             if "session.answer" in ops.actions:
                 consider(
@@ -1013,6 +1043,7 @@ def _compute_actions(
                     action_name="session.answer",
                     requires_controller=True,
                 )
+            offer_work_send(["after_current"])
         elif execution_state == "active":
             if "session.interrupt" in ops.actions:
                 consider(
@@ -1025,18 +1056,9 @@ def _compute_actions(
                     action_name="session.interrupt",
                     requires_controller=True,
                 )
+            offer_work_send(["after_current"])
         elif execution_state == "turn-ended":
-            if "session.send" in ops.actions:
-                consider(
-                    {
-                        "kind": "action",
-                        "action": "session.send",
-                        "target": dict(sess_target),
-                        "required_scopes": _action_scopes(ops, "session.send"),
-                    },
-                    action_name="session.send",
-                    requires_controller=True,
-                )
+            offer_work_send(["after_current", "now"])
             if execution_op_id:
                 if pm_execution_verification.ACTION in ops.actions:
                     consider(
@@ -1193,6 +1215,8 @@ async def _wait_for_related_event(
     }
     if ctx["execution_op_id"]:
         related_set.add(("operation", ctx["execution_op_id"]))
+    if ctx.get("latest_input_operation_id"):
+        related_set.add(("operation", ctx["latest_input_operation_id"]))
     if ctx["sess_host"] and ctx["sess_id"]:
         related_set.add(("session", f"{ctx['sess_host']}/{ctx['sess_id']}"))
     related = sorted(related_set)

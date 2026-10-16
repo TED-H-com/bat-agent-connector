@@ -1215,6 +1215,11 @@ async def test_state_facets_next_actions_and_links_invariants(start_ready, mock,
     # session.send, pm.execution.verify, and session.record_verification carry targets matching ActionDef.target_keys.
     send_act = next(a for a in res["next_allowed_actions"] if a.get("action") == "session.send")
     assert send_act["required_scopes"] == ["observe", "operate"]
+    assert send_act["target"] == {"workspace_id": wid, "work_item_id": att["work_item_id"]}
+    assert send_act["allowed_schedules"] == ["after_current", "now"]
+    assert send_act["default_schedule"] == "after_current"
+    assert send_act["requires_controller"] is True
+    assert send_act["requires_writer"] is True
     ver_act = next(a for a in res["next_allowed_actions"] if a.get("action") == "pm.execution.verify")
     assert ver_act["required_scopes"] == ["observe", "operate"]
     sess_ver_act = next(a for a in res["next_allowed_actions"] if a.get("action") == "session.record_verification")
@@ -1301,6 +1306,7 @@ async def test_state_facets_next_actions_and_links_invariants(start_ready, mock,
     assert "scopes" not in res_reader["identity"]["controller"]
     assert "admin" not in res_reader["identity"]["controller"]
     assert {"action": "pm.quality.review.create", "reason": "not_writer_member"} in res_reader["blocked_actions"]
+    assert {"action": "session.send", "reason": "not_controller"} in res_reader["blocked_actions"]
     assert all(b.get("action") != "pm.quality.review.record" for b in res_reader["blocked_actions"])
 
     # When a current quality review exists for this execution, pm.quality.review.record is offered with {workspace_id, review_id}.
@@ -1368,7 +1374,10 @@ async def test_state_facets_next_actions_and_links_invariants(start_ready, mock,
     assert res_waiting["execution"]["state_facets"]["self_reported"] == "claimed_done"
     assert [
         a["action"] for a in res_waiting["next_allowed_actions"] if a.get("kind") == "action"
-    ] == ["session.answer"]
+    ] == ["session.answer", "session.send"]
+    waiting_send = next(a for a in res_waiting["next_allowed_actions"] if a.get("action") == "session.send")
+    assert waiting_send["target"] == {"workspace_id": wid, "work_item_id": att["work_item_id"]}
+    assert waiting_send["allowed_schedules"] == ["after_current"]
     # Restore turn-ended state on the session.
     _set_turn_messages(
         mock,
