@@ -35,7 +35,7 @@ async function fixture(page:Page,native:boolean,options:any={}) {
   if(path==='/sessions/demo/managed-session'){if(state.holdSource){state.holdSource=false;await new Promise(resolve=>{state.releaseSource=resolve;});}return state.sourceGone?{status:404,data:{error:{code:'NOT_FOUND',message:'Source removed'}}}:{status:200,data:{session:{host:'demo',session_id:'managed-session',provenance:state.manual?'manual':'connector_managed',api_access:state.manual||state.foreign?'read_only':'managed',...(state.foreign?{read_only_code:'FOREIGN_CONTROLLER'}:{})},relations_summary:[]}};}
   if(path==='/operations/'+captureId||path==='/operations/'+acceptId){if(state.failRead)return {status:503,data:{error:{code:'READ_FAILED',message:'Read unavailable'}}};if(state.holdRead){state.holdRead=false;await new Promise(resolve=>{state.releaseRead=resolve;});}return {status:200,data:{operation:operation(path.endsWith(captureId)?'capture':'accept')}};}
   if(path==='/operations/'+executionId)return {status:200,data:{operation:execution()}};
-  if(path==='/operations')return {status:200,data:{operations:url.searchParams.get('action')===execution().action?[execution()]:[],next_before:null}};
+  if(path==='/operations'){const action=url.searchParams.get('action'),before=url.searchParams.get('before'),mine=action===(state.executionAction||'checkpoint.continue');if(state.executionCursor&&mine){if(before&&state.holdExecutions){state.holdExecutions=false;await new Promise(resolve=>{state.releaseExecutions=resolve;});}return {status:200,data:{operations:before?[]:[execution()],next_before:before?null:state.executionCursor}};}return {status:200,data:{operations:mine?[execution()]:[],next_before:null}};}
   if(path==='/tasks/'+taskId)return {status:200,data:{task:{task_id:taskId,host:'demo',session_id:'managed-session',commands:[{task_id:taskId,session_id:'managed-session',command_id:'cmd-accepted',kind:'send',status:'accepted'},{task_id:taskId,session_id:'managed-session',command_id:'cmd-unknown',kind:'send',status:'uncertain'}]}}};
   if(path.startsWith('/artifacts/'))return state.artifactMissing?{status:404,data:{error:{code:'ARTIFACT_NOT_FOUND',message:'Artifact unavailable'}}}:{status:200,data:{artifact:state.changedArtifactRevision?{...(state.row||row),revision:2}:state.badArtifact?{...(state.row||row),source:{...(state.row||row).source,fingerprint:'0'.repeat(64)}}:(state.row||row)}};
   if(path==='/artifacts'){if(state.holdCatalog){state.holdCatalog=false;await new Promise(resolve=>{state.releaseCatalog=resolve;});}if(state.catalogFail)return{status:503,data:{error:{code:'READ_FAILED',message:'Catalog read unavailable'}}};const i=url.searchParams.get('cursor')==='second'?1:0;return {status:200,data:{artifacts:(state.catalogPages?.[i]||[state.row||row]).map((revision:any)=>({revision})),next_cursor:state.catalogPages?.[i+1]?'second':null}};}
@@ -501,19 +501,150 @@ test('content preview and download keep focus while the read is held', async ({p
   expect(state.errors).toEqual([]);
 });
 
-test('tab reaches save artifact while its post is held', async ({page}) => {
+test('shift tab returns to save while its post is held', async ({page}) => {
   const state = await fixture(page, false, {holdWrite: true});
   const box = await captureForm(page);
   const save = box.locator('button.primary');
+  const preview = box.getByRole('button', {name: 'Preview source file', exact: true});
   await save.focus();
   await page.keyboard.press('Enter');
   await expect.poll(() => typeof state.releaseWrite).toBe('function');
-  await box.getByRole('button', {name: 'Preview source file', exact: true}).evaluate(el => (el as HTMLElement).focus());
+  expect(await preview.evaluate(el => ({disabled: (el as HTMLButtonElement).disabled, aria: el.getAttribute('aria-disabled')}))).toEqual({disabled: true, aria: null});
+  await page.keyboard.press('Shift+Tab');
   await page.keyboard.press('Tab');
   await expect(save).toBeFocused();
   await expect(save).toHaveAttribute('aria-disabled', 'true');
+  expect(await save.evaluate(el => (el as HTMLButtonElement).disabled)).toBe(false);
   state.releaseWrite();
   await expect(page.getByRole('button', {name: 'Check original operations', exact: true})).toBeVisible();
   expect(state.writes).toHaveLength(1);
+  expect(state.errors).toEqual([]);
+});
+
+async function htmlDisabled(button: import('@playwright/test').Locator) {
+  expect(await button.evaluate(el => ({disabled: (el as HTMLButtonElement).disabled, aria: el.getAttribute('aria-disabled')}))).toEqual({disabled: true, aria: null});
+}
+
+test('polling keeps static blocks', async ({page}) => {
+  await page.clock.install();
+  const state = await fixture(page, false, {captureStatus: 'running'});
+  const box = await captureForm(page);
+  await box.getByRole('button', {name: 'Save reviewed file', exact: true}).click();
+  const check = page.getByRole('button', {name: 'Check original operations', exact: true});
+  await expect(check).toBeVisible();
+  const reset = page.getByRole('button', {name: 'Capture another file', exact: true});
+  const accept = page.locator('[data-artifact-accept] button.primary');
+  const preview = box.getByRole('button', {name: 'Preview source file', exact: true});
+  const duringPoll = async () => {
+    await htmlDisabled(reset);
+    await htmlDisabled(accept);
+    await htmlDisabled(preview);
+    await expect(check).toHaveAttribute('aria-disabled', 'true');
+    expect(await check.evaluate(el => (el as HTMLButtonElement).disabled)).toBe(false);
+    await expect(notice(page)).toHaveAttribute('aria-busy', 'true');
+  };
+  state.holdRead = true;
+  await page.clock.fastForward(1000);
+  await expect.poll(() => typeof state.releaseRead).toBe('function');
+  await duringPoll();
+  state.releaseRead();
+  await expect(check).not.toHaveAttribute('aria-disabled', 'true');
+  state.holdRead = true;
+  await page.clock.fastForward(1000);
+  await expect.poll(() => typeof state.releaseRead).toBe('function');
+  await duringPoll();
+  state.releaseRead();
+  await expect(check).not.toHaveAttribute('aria-disabled', 'true');
+  expect(operationGets(state)).toBe(2);
+  expect(state.writes).toHaveLength(1);
+  expect(state.errors).toEqual([]);
+});
+
+test('focus moved elsewhere stays on reload', async ({page}) => {
+  const state = await fixture(page, false, {holdPreview: true});
+  await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');
+  const box = page.locator('[data-managed-capture]');
+  await box.getByRole('combobox', {name: 'Connector execution evidence'}).selectOption(JSON.stringify(selector));
+  await box.getByRole('textbox', {name: 'Relative file path'}).fill('result.txt');
+  const preview = box.getByRole('button', {name: 'Preview source file', exact: true});
+  const reload = page.getByRole('button', {name: 'Reload execution evidence', exact: true});
+  await preview.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => typeof state.releasePreview).toBe('function');
+  await reload.evaluate(el => (el as HTMLElement).focus());
+  await expect(reload).toBeFocused();
+  state.releasePreview();
+  await expect(preview).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(reload).toBeFocused();
+  expect(state.previews).toHaveLength(1);
+  expect(state.writes).toHaveLength(0);
+  expect(state.errors).toEqual([]);
+});
+
+test('more executions ignores a second press', async ({page}) => {
+  const state = await fixture(page, false, {executionCursor: 'page-2', holdExecutions: true});
+  await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');
+  const more = page.locator('[data-managed-capture]').getByRole('button', {name: 'More executions', exact: true});
+  await expect(more).toBeVisible();
+  const before = state.reads.filter(path => path.includes('before=page-2')).length;
+  await more.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => typeof state.releaseExecutions).toBe('function');
+  await expect(more).toBeFocused();
+  await expect(more).toHaveAttribute('aria-disabled', 'true');
+  expect(await more.evaluate(el => (el as HTMLButtonElement).disabled)).toBe(false);
+  await refuseSecond(page, more);
+  expect(state.reads.filter(path => path.includes('before=page-2')).length).toBe(before + 1);
+  state.releaseExecutions();
+  await expect(more).toBeHidden();
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  expect(state.reads.filter(path => path.includes('before=page-2')).length).toBe(before + 1);
+  await expect(notice(page)).toBeFocused();
+  expect(state.errors).toEqual([]);
+});
+
+test('content preview keeps focus when reading becomes blocked', async ({page}) => {
+  await page.clock.install();
+  const state = await contentFixture(page, false, {holdContent: true});
+  await page.goto('/dashboard/#/artifact-review/artifact/' + artifactId + '/1');
+  const content = page.locator('.artifact-content');
+  const status = content.locator('[role=status]');
+  const preview = content.getByRole('button', {name: 'Preview', exact: true});
+  const download = content.getByRole('button', {name: 'Download this revision', exact: true});
+  await preview.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => typeof state.releaseContent).toBe('function');
+  state.artifactMissing = true;
+  state.events = [{seq: 1, kind: 'artifact.ready', resource_type: 'artifact', resource_id: artifactId}];
+  await page.clock.fastForward(1000);
+  await expect.poll(() => download.evaluate(el => (el as HTMLButtonElement).disabled)).toBe(true);
+  await htmlDisabled(download);
+  await expect(preview).toBeFocused();
+  await expect(preview).toHaveAttribute('aria-disabled', 'true');
+  expect(await preview.evaluate(el => (el as HTMLButtonElement).disabled)).toBe(false);
+  await expect(status).toHaveAttribute('aria-busy', 'true');
+  state.releaseContent();
+  await htmlDisabled(preview);
+  await expect(status).toBeFocused();
+  await expect(status).toHaveAttribute('tabindex', '-1');
+  expect(state.contentRequests).toHaveLength(1);
+  expect(state.writes).toHaveLength(0);
+  expect(state.errors).toEqual([]);
+});
+
+test('hidden more leaves the catalog panel idle', async ({page}) => {
+  await page.clock.install();
+  const state = await fixture(page, false, {holdCatalog: true});
+  await page.goto('/dashboard/#/artifact-review');
+  const catalog = page.getByRole('heading', {name: 'Saved results from managed sources'}).locator('..');
+  const more = catalog.getByRole('button', {name: 'More', exact: true});
+  await expect(more).toBeHidden();
+  state.events = [{seq: 1, kind: 'artifact.ready', resource_type: 'artifact', resource_id: artifactId}];
+  await page.clock.fastForward(1000);
+  await expect.poll(() => typeof state.releaseCatalog).toBe('function');
+  await expect(more).toBeHidden();
+  await expect(catalog).not.toHaveAttribute('aria-busy', 'true');
+  state.releaseCatalog();
+  await expect(catalog).not.toHaveAttribute('aria-busy', 'true');
   expect(state.errors).toEqual([]);
 });
