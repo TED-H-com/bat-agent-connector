@@ -512,8 +512,8 @@ async def start_in_worktree(ctx: OpContext, *, host: str, workspace: str, agent:
     """Start a confined managed session in a connector worktree and send its first instruction, as recorded steps.
 
     ``verify.start``: BAT itself sees the folder at ``head`` (a step, so a replay after the agent committed returns
-    this result instead of checking a moved HEAD). ``session.start``: started again only when no registry
-    reservation exists. ``send``: settled from the turn record (Claude) or the transcript line starting with
+    this result instead of checking a moved HEAD). ``session.start``: started again only when read-back proves
+    the start frame did not leave. ``send``: settled from the turn record (Claude) or the transcript line starting with
     ``marker`` (Codex), never sent twice."""
     ops = ctx.service
     fleet = ops.context["fleet"]
@@ -556,15 +556,25 @@ async def start_in_worktree(ctx: OpContext, *, host: str, workspace: str, agent:
     async def restart(_request: dict) -> dict | None:
         entry = registry.get(host, sid)
         if creation_fields is not None:
+            # reserve commits the row with start_sent false, then the reservation ref, and only then can
+            # the start frame leave. A later writer clears start_sent only while that same call's frame is
+            # still unsent, and a row is removed only when its own start_sent is false. No row and no ref,
+            # or a row still marked unsent, is therefore proof that no frame left. Anything else is not.
             reserved = (ops.get(ctx.operation_id).get("external_refs") or {}).get("repository_reservation")
-            if not entry or not reserved or reserved != {"session_id": sid, "created_at": entry.get("created_at")}:
+            ref_matches = entry is not None and reserved == {"session_id": sid, "created_at": entry.get("created_at")}
+            unsent = entry is not None and entry.get("start_sent") is False
+            never_reserved = entry is None and not reserved
+            if not ref_matches and not unsent and not never_reserved:
                 raise NeedsAttention("REPOSITORY_START_UNPROVEN", "original published start reservation is unavailable")
-            if entry.get("task_id") or entry.get("status") not in {"starting", "uncertain", "active", "failed"}:
+            if entry is not None and (entry.get("task_id") or entry.get("status") not in
+                                      {"starting", "uncertain", "active", "failed"}):
                 raise NeedsAttention("REPOSITORY_BINDING_CHANGED", "published start no longer owns the original runtime")
-        if creation_fields is not None and entry and any(entry.get(k) != v for k, v in creation_fields.items()):
-            raise NeedsAttention("REPOSITORY_BINDING_CHANGED", "published start reservation no longer matches its operation")
-        if not entry or entry.get("start_sent") is False:
-            return RERUN  # never reserved in the registry, so no start frame left this process
+            if entry is not None and any(entry.get(k) != v for k, v in creation_fields.items()):
+                raise NeedsAttention("REPOSITORY_BINDING_CHANGED", "published start reservation no longer matches its operation")
+            if unsent or never_reserved:
+                return RERUN  # proven unsent; step() still applies cancel and lifecycle checks before the new attempt
+        elif not entry or entry.get("start_sent") is False:
+            return RERUN  # checkpoint continue has no published reservation; an unsent row never left a frame
         if not entry.get("confinement"):
             raise NeedsAttention("CONFINEMENT_EVIDENCE_MISSING", "reserved start has no confinement evidence")
         try:

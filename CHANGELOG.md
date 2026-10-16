@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- A Work can start again when its handoff stopped before the session start was
+  reserved. A start that may already have been sent is left unchanged.
+
 - Fleet: keyboard focus stays on the control you are using while a status
   refresh or your own action runs. The control looks unavailable until that
   work finishes, a second press is ignored, and a background refresh stays quiet.
