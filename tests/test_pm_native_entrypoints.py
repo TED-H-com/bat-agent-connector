@@ -47,7 +47,23 @@ async def test_http_and_rpc_native_analysis_recover_original_reply_and_native_pr
     assert len(instances) == 1 and instances[0].sends == 1 and instances[0].closed
     status, replay = await http(port, "POST", "/api/v1/operations", tok=auth, body=body,
                                 headers={"Idempotency-Key": "native-original"})
-    assert status == 200 and not replay["created"] and replay["operation"] == op
+    assert status == 200 and not replay["created"]
+    shown = dict(replay["operation"])
+    loop = shown.pop("loop")
+    assert shown == op
+    # docs/design/v1.3-e10-parity.md, a succeeded discussion action (pm.run.analyze).
+    assert loop == {
+        "operation_id": op["operation_id"],  # :238
+        "work_item_id": None,  # :225, :239
+        "attempt_id": None,  # :240
+        "state": {"operation_status": "succeeded", "updated_at": op["updated_at"]},  # :241-243
+        "next_allowed_actions": [],  # :266-267, terminal omits cancel
+        "blocked_actions": [],  # :266-267
+        "links": None,  # :246
+        "dashboard_hash": f"#/pm/{target['workspace_id']}/discussions/{target['thread_id']}",  # :247, :259
+        "result_read": None,  # :248
+        "completeness": {"status": "complete", "reason": None},  # :232, :292
+    }
     path = f"/api/v1/pm/workspaces/{target['workspace_id']}/threads/{target['thread_id']}"
     status, thread = await http(port, "GET", path, tok=auth)
     assert status == 200 and thread == await d.call_api("pm_thread_get", target, REQUESTER)
