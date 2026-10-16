@@ -1964,5 +1964,83 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     expect(f.state.diffCallsByFile.get(keyC)).toBe(1);
     expect(f.state.diffCallsByFile.get(keyD)).toBe(1);
   });
+
+  test('28. Part B: 15. Read again drops in-flight diff and leaves cache clean', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workResultFixture();
+    activeFixture = f;
+    const attId = 'att_' + '1'.repeat(32);
+    const commit = 'abcdef1234567890abcdef1234567890abcdef12';
+    const fileA = 'src/fileA.ts';
+    const keyA = `${commit}:${fileA}`;
+
+    f.state.changesResponse = buildChangesResponse({
+      attempt_id: attId,
+      live_head_commit: commit,
+      summary: {
+        commits: [commit],
+        files: [
+          {path: fileA, status: 'M', additions: 1, deletions: 0, commits_touched: [commit]},
+        ],
+      },
+    });
+
+    f.state.diffResponses.set(keyA, buildDiffResponse({commit, path: fileA, diff: 'DIFF_CONTENT_A'}));
+
+    await installBodyCompletedCounter(page);
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const resultSection = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+    f.state.expectedChanges = 1;
+    await resultSection.locator('.pm-work-result-read-changes').click();
+
+    // Trigger out of date banner with changed envelope
+    const changedEnv = buildResultEnvelope({
+      attempt_id: attId,
+      state: 'process-ended',
+      stage: 'completed',
+    });
+    const beforeResultBodies = await countCompletedBodies(page, '/result');
+    f.emitResultRecorded(attId, changedEnv);
+    await syncCompletedBodies(page, '/result', beforeResultBodies + 1);
+
+    const readAgainBtn = resultSection.locator('.pm-work-result-read-again');
+    await expect(readAgainBtn).toBeVisible();
+
+    // Hold diff read for fileA
+    let releaseA: () => void = () => {};
+    f.state.holdDiffByKey.set(keyA, new Promise<void>(resolve => { releaseA = resolve; }));
+
+    // Open diff for fileA
+    f.state.expectedDiff = 1;
+    const diffDetails = resultSection.locator('.pm-work-result-diff-details').first();
+    await diffDetails.locator('summary').click();
+
+    // Click "Read again" while diff is in-flight
+    f.state.expectedChanges = 2;
+    await readAgainBtn.click();
+
+    // Release the in-flight diff read; its reply should be dropped because diffGeneration changed
+    releaseA();
+    f.state.holdDiffByKey.delete(keyA);
+
+    // After "Read again" completes, the "Read current changes" button returns
+    await expect(resultSection.locator('.pm-work-result-read-changes')).toBeVisible();
+
+    // Open the diff disclosure again: it must send a new /diff request instead of using stale cache
+    f.state.expectedDiff = 2;
+    const newDiffDetails = resultSection.locator('.pm-work-result-diff-details').first();
+    await newDiffDetails.locator('summary').click();
+    await expect(newDiffDetails.locator('.pm-work-result-diff-pre')).toContainText('DIFF_CONTENT_A');
+
+    // Both the first and second open sent a /diff call
+    expect(f.state.diffCallsByFile.get(keyA)).toBe(2);
+  });
 });
+
 
