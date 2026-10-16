@@ -16,7 +16,7 @@ export function requirementReviews(plan, requirement, reviews) {
       && result.criterion.requirement_id === requirement.id && result.criterion.input_id === id && result.status === 'accepted')));
 }
 
-export function workspaceTraceability({t, api, alive, namespace, workspaceId, caps, errorBox}) {
+export function workspaceTraceability({t, api, alive, namespace, workspaceId, caps, errorBox, workspaceSettled = () => Promise.resolve()}) {
   const preference = viewState(namespace, workspaceId, 'requirements'), endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   let serial = 0, detailSerial = 0, active = false, visible = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [], sources = new Map(), earlierPlans = new Map();
   let pendingFocus = null, pendingNavigation = null, currentRequirement = null, currentMilestone = null, scrollGeneration = 0;
@@ -93,7 +93,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
     for (const kind of Object.keys(pages)) cursors[kind] = null; controls();
   }
   function fail(error, ticket) {
-    try {alive(); if (ticket !== serial) return;} catch {return;}
+    try {alive(); if (ticket !== serial) return;} catch {++scrollGeneration; return;}
     // Keep the shared event-cycle failure signal, with concise local presentation.
     errorBox(error); withdraw();
     status.replaceChildren(h('p', {class: 'error'}, t(error.code === 'SNAPSHOT_CHANGED' ? 'wb_plan_changed' : error.status === 403 ? 'forbidden_scope' : 'wv_requirements_unavailable')),
@@ -312,6 +312,9 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
       detail.show({title: card.work.title, error, onRetry: () => void refresh()});
     }}
   }
+  function rememberScroll() {
+    if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+  }
   const onScroll = () => {
     if (visible && !busy && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
   };
@@ -319,7 +322,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
   function setActive(value) {
     if (visible === value) {if (value && signature) {const id = new URLSearchParams(location.hash.split('?')[1]).get('select'); if (!id) currentMilestone = null; if (id && id !== currentMilestone && (id !== selected || !detail.element)) void select(id, id !== selected);} return;}
     visible = value;
-    if (!value) {active = false; stale = true; serial++; detailSerial++; if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY; closeRetaining();}
+    if (!value) {active = false; stale = true; serial++; detailSerial++; ++scrollGeneration; rememberScroll(); closeRetaining();}
     else {
       const generation = ++scrollGeneration; const read = activate(); if (!stale && selected && cards.length) void select(selected, false, true);
       let restoreY = 0;
@@ -329,13 +332,11 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
           restoreY = window.scrollY;
         }
       });
-      if (read?.then) {
-        void read.then(() => {
-          if (generation === scrollGeneration && window.scrollY === restoreY) {
-            window.scrollTo(0, preference.scroll || 0);
-          }
-        });
-      }
+      void Promise.all([read, workspaceSettled()]).then(() => {
+        if (generation === scrollGeneration && window.scrollY === restoreY) {
+          window.scrollTo(0, preference.scroll || 0);
+        }
+      });
       return read;
     }
   }
@@ -368,5 +369,5 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
       : kind === 'work_item' ? cards.find(row => row.work_item_id === id)?.work?.title : '';
     return typeof value === 'string' ? value : '';
   }
-  return {element, meta, refresh, withdraw, openRef, focusWork, focusRequirement, labelFor, setActive, hideInspector: closeRetaining, activate, setTools: value => {tools = value;}, dispose: () => {window.removeEventListener('scroll', onScroll); Object.assign(preference, {selected, expanded: [...expanded], filter: filter.value}); withdraw({forgetRoute: false});}};
+  return {element, meta, refresh, withdraw, openRef, focusWork, focusRequirement, labelFor, setActive, rememberScroll, hideInspector: closeRetaining, activate, setTools: value => {tools = value;}, dispose: () => {rememberScroll(); window.removeEventListener('scroll', onScroll); Object.assign(preference, {selected, expanded: [...expanded], filter: filter.value}); withdraw({forgetRoute: false});}};
 }
