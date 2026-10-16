@@ -56117,6 +56117,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 	});
 	const ready = () => pendingSelections === 0 && saved.attachments.every((a) => a.ref);
 	const attachmentKeys = new WeakMap();
+	const retrying = new WeakSet();
 	let attachmentSerial = 0, catalogBusy = false;
 	const attachmentKey = (a) => {
 		let key = attachmentKeys.get(a);
@@ -56152,11 +56153,15 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		}, ...["input", "result"].map((role) => h("option", {
 			value: role,
 			selected: (a.ref.role || "input") === role
-		}, t(`attachment_${role}`)))) : null, a.ref && native ? native.actions(a.ref) : null, !a.ref && files.has(a) ? h("button", {
+		}, t(`attachment_${role}`)))) : null, a.ref && native ? native.actions(a.ref) : null, !a.ref && files.has(a) && (!a.busy || retrying.has(a)) ? h("button", {
 			class: "secondary",
 			"data-attachment-control": "retry",
 			"aria-disabled": a.busy ? "true" : null,
-			onclick: () => upload(a)
+			onclick: () => {
+				if (a.busy) return;
+				retrying.add(a);
+				upload(a);
+			}
 		}, t("retry")) : null, h("button", {
 			class: "secondary",
 			"data-attachment-control": "remove",
@@ -56322,6 +56327,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 			a.error = e.message;
 		} finally {
 			delete a.busy;
+			retrying.delete(a);
 			if (connection.epoch === state.epoch && connection.generation === generation && box.isConnected) {
 				persist();
 				render();
