@@ -5,8 +5,8 @@
 .ui-button.secondary { background: var(--surface); color: var(--text); }
 .ui-button.ghost { border-color: transparent; background: transparent; color: var(--text-2); }
 .ui-button.danger { color: var(--bad); border-color: var(--bad); background: transparent; }
-.ui-button:hover:not(:disabled) { background: var(--surface-2); }
-.ui-button.primary:hover:not(:disabled) { background: var(--accent-hover); }
+.ui-button:hover:not(:disabled, [aria-disabled="true"]) { background: var(--surface-2); }
+.ui-button.primary:hover:not(:disabled, [aria-disabled="true"]) { background: var(--accent-hover); }
 .ui-button.ui-sm { min-height: 28px; padding: 2px 8px; font-size: var(--fs-small); }
 .ui-button.ui-icon-button { width: 32px; height: 32px; min-width: 32px; padding: 0; }
 .ui-segmented, .ui-tabs { display: flex; gap: var(--space-1); max-width: 100%; flex-wrap: wrap; }

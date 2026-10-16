@@ -13458,10 +13458,14 @@ function settingsAgents({ h, t, api, caps, guard, from }) {
 		if (!ready && descriptors.length > 1) codes.prepend(h("p", {}, t(failures[1])));
 		technical.hidden = !codes.childElementCount;
 	};
+	let busy = false;
 	const load = async () => {
+		if (busy) return;
+		busy = true;
 		const mine = ++ticket;
 		notChecked();
-		check.disabled = true;
+		check.setAttribute("aria-disabled", "true");
+		status.setAttribute("aria-busy", "true");
 		const features = caps()?.features?.pm_workspaces;
 		const endpoint = workspaceId && (features?.native_analysis || features?.bat_analysis || features?.installation_eligibility) ? `/pm/workspaces/${workspaceId}/capabilities` : features?.installation_eligibility ? "/pm/installation-capabilities" : null;
 		try {
@@ -13471,7 +13475,11 @@ function settingsAgents({ h, t, api, caps, guard, from }) {
 		} catch {
 			if (current(mine)) notChecked();
 		} finally {
-			if (current(mine)) check.disabled = false;
+			if (mine === ticket) busy = false;
+			if (current(mine)) {
+				check.removeAttribute("aria-disabled");
+				status.removeAttribute("aria-busy");
+			}
 		}
 	};
 	const check = button({
