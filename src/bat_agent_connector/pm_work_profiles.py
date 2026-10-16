@@ -325,10 +325,10 @@ def _check_update(db, workspace_id: str, params: dict):
     row = _latest(db, workspace_id, profile_id)
     if row is None:
         raise _bad("NOT_FOUND", "Work profile not found", 404)
-    if row["revision"] != expected:
-        raise _bad("PM_WORK_PROFILE_REVISION_CONFLICT", "Work profile revision changed; read its current revision", 409)
     if row["withdrawn"]:
         raise _bad("PM_WORK_PROFILE_WITHDRAWN", "Work profile is withdrawn", 409)
+    if row["revision"] != expected:
+        raise _bad("PM_WORK_PROFILE_REVISION_CONFLICT", "Work profile revision changed; read its current revision", 409)
     return profile_id, row["revision"] + 1
 
 
@@ -514,10 +514,10 @@ def _changed(revision: int) -> OperationError:
 
 
 def pinned_revision(db, principal, workspace_id, profile_id, revision, *, digest=None, admission=False):
-    """Load one revision only when it is still the latest. Membership is checked before the row.
+    """Load one revision only when it is still the latest live row.
 
-    A stale pin is PM_WORK_PROFILE_CHANGED even when the latest row is withdrawn. The current
-    revision is on the error; the document is not. Preview uses 404 for a withdrawn latest and
+    Order is membership, id shape, unknown, withdrawn, then revision and digest. A withdrawn
+    latest row is PM_WORK_PROFILE_WITHDRAWN even for an older pin. Preview uses 404 and
     admission uses 409. This read does not write.
     """
     require_member(db, principal, workspace_id)
@@ -530,11 +530,9 @@ def pinned_revision(db, principal, workspace_id, profile_id, revision, *, digest
     latest = _latest(db, workspace_id, profile_id)
     if latest is None:
         raise _bad("NOT_FOUND", "Work profile not found", 404)
-    if latest["revision"] != revision:
-        raise _changed(int(latest["revision"]))
     if latest["withdrawn"]:
         raise _bad("PM_WORK_PROFILE_WITHDRAWN", "Work profile is withdrawn", 409 if admission else 404)
-    if digest is not None and digest != latest["digest"]:
+    if latest["revision"] != revision or (digest is not None and digest != latest["digest"]):
         raise _changed(int(latest["revision"]))
     document = json.loads(latest["document"])
     delivery = document.get("delivery_policy_ref") if isinstance(document, dict) else None

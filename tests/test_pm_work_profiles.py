@@ -837,8 +837,26 @@ async def test_work_start_pins_profile_revision_and_refuses_when_it_changes(star
     assert admit_withdrawn.value.status == 409
     with pytest.raises(OperationError) as older:
         _open_start(w, viewed, withdrawn, revision=other["revision"], digest=other["digest"])
-    assert older.value.code == "PM_WORK_PROFILE_CHANGED"
-    assert older.value.revision == withdrawn["revision"]
+    assert older.value.code == "PM_WORK_PROFILE_WITHDRAWN"
+    assert older.value.status == 409
+    with pytest.raises(OperationError) as preview_old:
+        await _view(w, _body(other))
+    assert preview_old.value.code == "PM_WORK_PROFILE_WITHDRAWN"
+    assert preview_old.value.status == 404
+    with pytest.raises(OperationError) as stale_save:
+        ops.create(
+            STARTER_OWNER, action=pm_work_profiles.ACTION,
+            target={"workspace_id": w["workspace_id"]},
+            params={
+                "document": _start_doc(agent="codex"),
+                "profile_id": other["profile_id"],
+                "expected_revision": other["revision"],
+            },
+            preconditions={}, idempotency_key="stale-withdrawn-save",
+        )
+    assert stale_save.value.code == "PM_WORK_PROFILE_WITHDRAWN"
+    assert stale_save.value.status == 409
+    assert _revisions(ops, other["profile_id"]) == 2
     assert _child_count(ops) == children and _start_count(ops) == starts
 
     current = await _view(w, _body(updated))
