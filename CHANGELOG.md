@@ -6,6 +6,10 @@
   Python for every search, so the same checks finish on a busy disk without
   a longer time limit.
 
+- Fleet: keyboard focus stays on the control you are using while a status
+  refresh or your own action runs. The control looks unavailable until that
+  work finishes, a second press is ignored, and a background refresh stays quiet.
+
 - Choosing a file does not show Retry while that first upload runs. Retry appears
   after the upload fails, and pressing it keeps the button until the retry finishes.
 
