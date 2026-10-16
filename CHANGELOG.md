@@ -2,6 +2,13 @@
 
 ## Next release (unreleased)
 
+- A started Work item can take another instruction. Send `session.send` with
+  the Work as the target. The instruction waits until the current turn finishes,
+  or it goes out immediately when that session is already idle. You can read the
+  queue, cancel an instruction that has not been sent, and reconcile an
+  unconfirmed send with its original operation. A Codex session is refused.
+  The dashboard composer is not part of this change.
+
 - Settings → Agents: Tab reaches Check again while the first check runs, and
   pressing it keeps keyboard focus on the button. The button looks unavailable
   until the check finishes, and a second press is ignored.
