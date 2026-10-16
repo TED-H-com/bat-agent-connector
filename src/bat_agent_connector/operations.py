@@ -299,6 +299,23 @@ class OpContext:
             self.service._step_start(self.operation_id, name, request or {}, bookkeeping=receipt_only)
         try:
             response = await fn()
+        except Wait as exc:
+            fresh = self.service._row(self.operation_id) or {}
+            sent = (fresh.get("external_refs") or {}).get(f"{name}_sent")
+            if sent is False:
+                raise
+            if sent is True:
+                self.service._step_status(
+                    self.operation_id,
+                    name,
+                    "uncertain",
+                    error={"code": "UNCERTAIN", "message": "wait requested after transport fence"},
+                )
+                raise Uncertain(name, f"step {name!r} requested wait after transport fence") from None
+            code = _error_code(exc)
+            message = type(exc).__name__
+            self.service._step_status(self.operation_id, name, "failed", error={"code": code, "message": message})
+            raise StepFailed(code, message) from exc
         except NeedsAttention:
             self.service._step_status(self.operation_id, name, "uncertain")
             raise
@@ -417,10 +434,15 @@ class OperationService:
                              _canonical(result) if result is not None else None, next_run_at, attempts,
                              uncertain_tries, now, operation_id))
             if status != old:
-                self.journal.api_event("operation", operation_id, "operation." + status,
-                                       {"action": row["action"], "from": old, "to": status,
-                                        "error_code": error_code, "reason": (reason or "")[:200] or None},
+                body = {"action": row["action"], "from": old, "to": status,
+                        "error_code": error_code, "reason": (reason or "")[:200] or None}
+                from .pm_work_follow_up import transition_event_fields
+                body.update(transition_event_fields(self.db, operation_id, row["action"]))
+                self.journal.api_event("operation", operation_id, "operation." + status, body,
                                        actor=actor or row["actor"])
+        if status != old and status in {"succeeded", "failed", "cancelled"}:
+            from .pm_work_follow_up import on_transition
+            on_transition(self, operation_id, status)
         if status != old and status in TERMINAL | {"needs_attention"}:
             # A compound action may have made its parent due in the same commit.
             self.kick()
@@ -687,6 +709,8 @@ class OperationService:
         cancelled operation never hides an action that happened."""
         op = self.get(operation_id, steps=False)
         self._may_steer(principal, op, "cancel")
+        from .pm_work_follow_up import cancel as cancel_work_follow_up
+        cancel_work_follow_up(self, principal, op)
         if op["status"] in TERMINAL:
             return op
         if op["action"] == "worktree.merge":
@@ -742,6 +766,8 @@ class OperationService:
         re-sent), and the handler's checks run afresh."""
         op = self.get(operation_id, steps=False)
         self._may_steer(principal, op, "resume")
+        from .pm_work_follow_up import resume as resume_work_follow_up
+        resume_work_follow_up(self, principal, op)
         if op["action"] == "delivery.merge_and_deploy" and not (
                 principal.allows("merge") and principal.allows("deploy")):
             raise OperationError("FORBIDDEN", "resuming merge-and-deploy needs both merge and deploy scopes", 403)
