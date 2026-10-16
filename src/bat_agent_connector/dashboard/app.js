@@ -8207,6 +8207,7 @@ var workResultStrings = {
 		wres_show_diff_label: "顯示差異",
 		wres_diff_region_label: "{path} 於 {sha} 的差異",
 		wres_diff_truncated: "僅顯示此差異的前 256 KiB。",
+		wres_diff_loading: "載入差異中…",
 		wres_diff_not_found: "此 commit 或檔案已不在本嘗試的範圍內。請重新讀取目前修改。",
 		wres_uncommitted_no_diff: "BAT 不提供未提交檔案的差異。",
 		wres_reason_uncommitted_diff_not_supported_by_bat: "BAT 不提供未提交檔案的差異。",
@@ -8347,6 +8348,7 @@ var workResultStrings = {
 		wres_show_diff_label: "Show diff",
 		wres_diff_region_label: "Diff for {path} at {sha}",
 		wres_diff_truncated: "Showing the first 256 KiB of this diff.",
+		wres_diff_loading: "Loading diff…",
 		wres_diff_not_found: "This commit or file is no longer in this attempt's range. Read current changes again.",
 		wres_uncommitted_no_diff: "BAT does not show diffs of uncommitted files.",
 		wres_reason_uncommitted_diff_not_supported_by_bat: "BAT does not show diffs of uncommitted files.",
@@ -34073,7 +34075,8 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 	let changesBusy = false;
 	let isOutOfDate = false;
 	let changesSerial = 0;
-	let diffSerial = 0;
+	let diffGeneration = 0;
+	const diffKeySerials = new Map();
 	const diffCache = new Map();
 	const diffErrors = new Map();
 	const diffLoading = new Set();
@@ -34093,7 +34096,8 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 	function withdraw() {
 		readSerial++;
 		changesSerial++;
-		diffSerial++;
+		diffGeneration++;
+		diffKeySerials.clear();
 		lastEnvelope = null;
 		lastNormalized = null;
 		lastStale = false;
@@ -34219,6 +34223,11 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 				type: "diff-region",
 				key: active.dataset.workResultDiffRegion
 			};
+			if (active.getAttribute("data-work-result-retry") === "changes") return { type: "retry-changes" };
+			if (active.getAttribute("data-work-result-retry-diff")) return {
+				type: "retry-diff",
+				key: active.getAttribute("data-work-result-retry-diff")
+			};
 			if (active.classList.contains("pm-work-result-read-changes")) return { type: "read-changes" };
 			if (active.classList.contains("pm-work-result-read-again")) return { type: "read-again" };
 			if (active.classList.contains("pm-work-result-retry")) return { type: "retry" };
@@ -34233,17 +34242,17 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 	}
 	function restoreFocus(token) {
 		if (!token) return;
-		requestAnimationFrame(() => {
-			if (token.type === "attr") panelElement.querySelector(`[data-work-result-focus="${token.value}"]`)?.focus();
-			else if (token.type === "diff-summary") panelElement.querySelector(`[data-work-result-diff-summary="${token.key}"]`)?.focus();
-			else if (token.type === "diff-region") panelElement.querySelector(`[data-work-result-diff-region="${token.key}"]`)?.focus();
-			else if (token.type === "read-changes") panelElement.querySelector(".pm-work-result-read-changes")?.focus();
-			else if (token.type === "read-again") panelElement.querySelector(".pm-work-result-read-again")?.focus();
-			else if (token.type === "retry") panelElement.querySelector(".pm-work-result-retry")?.focus();
-			else if (token.type === "turns") panelElement.querySelector("[data-work-result-turns] > summary")?.focus();
-			else if (token.type === "details") panelElement.querySelector("[data-work-result-details] > summary")?.focus();
-			else if (token.type === "files") panelElement.querySelector(".pm-work-result-files > summary")?.focus();
-		});
+		if (token.type === "attr") panelElement.querySelector(`[data-work-result-focus="${token.value}"]`)?.focus();
+		else if (token.type === "diff-summary") panelElement.querySelector(`[data-work-result-diff-summary="${token.key}"]`)?.focus();
+		else if (token.type === "diff-region") panelElement.querySelector(`[data-work-result-diff-region="${token.key}"]`)?.focus();
+		else if (token.type === "read-changes") (panelElement.querySelector(".pm-work-result-read-changes") || panelElement.querySelector("[data-work-result-retry=\"changes\"]"))?.focus();
+		else if (token.type === "read-again") (panelElement.querySelector(".pm-work-result-read-again") || panelElement.querySelector(".pm-work-result-read-changes") || panelElement.querySelector("[data-work-result-retry=\"changes\"]"))?.focus();
+		else if (token.type === "retry-changes") (panelElement.querySelector("[data-work-result-retry=\"changes\"]") || panelElement.querySelector(".pm-work-result-read-changes"))?.focus();
+		else if (token.type === "retry-diff") (panelElement.querySelector(`[data-work-result-retry-diff="${token.key}"]`) || panelElement.querySelector(`[data-work-result-diff-summary="${token.key}"]`))?.focus();
+		else if (token.type === "retry") panelElement.querySelector(".pm-work-result-retry")?.focus();
+		else if (token.type === "turns") panelElement.querySelector("[data-work-result-turns] > summary")?.focus();
+		else if (token.type === "details") panelElement.querySelector("[data-work-result-details] > summary")?.focus();
+		else if (token.type === "files") panelElement.querySelector(".pm-work-result-files > summary")?.focus();
 	}
 	function renderEnvelope(envelope, attempt, errorBoxNode = null) {
 		const focusToken = saveFocus();
@@ -34612,15 +34621,21 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		if (!Array.isArray(allCommits) || allCommits.length === 0) return [...commitsTouched];
 		const order = new Map();
 		allCommits.forEach((sha, idx) => order.set(sha, idx));
+		const originalIndex = new Map();
+		commitsTouched.forEach((sha, idx) => originalIndex.set(sha, idx));
 		return [...commitsTouched].sort((a, b) => {
-			const idxA = order.has(a) ? order.get(a) : -1;
-			return (order.has(b) ? order.get(b) : -1) - idxA;
+			const hasA = order.has(a);
+			const hasB = order.has(b);
+			if (hasA && hasB) return order.get(a) - order.get(b);
+			if (hasA) return -1;
+			if (hasB) return 1;
+			return originalIndex.get(a) - originalIndex.get(b);
 		});
 	}
 	function renderDiffContent(container, commit, path, key, summaryNode) {
 		container.replaceChildren();
 		if (diffLoading.has(key)) {
-			container.append(h("p", { class: "muted pm-work-result-diff-loading" }, t("ui_loading") || "Loading…"));
+			container.append(h("p", { class: "muted pm-work-result-diff-loading" }, t("wres_diff_loading")));
 			return;
 		}
 		const err = diffErrors.get(key);
@@ -34632,9 +34647,11 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 					label: t("wres_try_again"),
 					class: "ui-button secondary ui-sm pm-work-result-retry",
 					onClick: () => {
+						diffErrors.delete(key);
 						loadDiff(commit, path, key, container, summaryNode);
 					}
 				});
+				retryBtn.setAttribute("data-work-result-retry-diff", key);
 				container.append(h("div", { class: "pm-work-result-error-box" }, errBoxNode, retryBtn));
 			}
 			return;
@@ -34680,8 +34697,12 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		if (diffLoading.has(key)) return;
 		diffLoading.add(key);
 		diffErrors.delete(key);
-		const ticket = ++diffSerial;
+		const generation = diffGeneration;
+		const keyTicket = (diffKeySerials.get(key) || 0) + 1;
+		diffKeySerials.set(key, keyTicket);
 		const attemptId = activeAttempt?.attempt_id;
+		const hadFocusInContainer = Boolean(document.activeElement && (container.contains(document.activeElement) || document.activeElement === summaryNode));
+		if (hadFocusInContainer) summaryNode.focus();
 		renderDiffContent(container, commit, path, key, summaryNode);
 		try {
 			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/diff?commit=${encodeURIComponent(commit)}&path=${encodeURIComponent(path)}`);
@@ -34690,7 +34711,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 			} catch {
 				return;
 			}
-			if (ticket !== diffSerial || activeAttempt?.attempt_id !== attemptId) return;
+			if (generation !== diffGeneration || diffKeySerials.get(key) !== keyTicket || activeAttempt?.attempt_id !== attemptId) return;
 			diffCache.set(key, data);
 		} catch (err) {
 			try {
@@ -34698,13 +34719,20 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 			} catch {
 				return;
 			}
-			if (ticket !== diffSerial || activeAttempt?.attempt_id !== attemptId) return;
+			if (generation !== diffGeneration || diffKeySerials.get(key) !== keyTicket || activeAttempt?.attempt_id !== attemptId) return;
 			diffErrors.set(key, err);
 		} finally {
-			diffLoading.delete(key);
-			if (ticket === diffSerial && activeAttempt?.attempt_id === attemptId && panelElement.contains(container)) {
-				renderDiffContent(container, commit, path, key, summaryNode);
-				if (document.activeElement === summaryNode || container.contains(document.activeElement)) summaryNode.focus();
+			if (generation === diffGeneration && diffKeySerials.get(key) === keyTicket) {
+				diffLoading.delete(key);
+				if (activeAttempt?.attempt_id === attemptId && panelElement.contains(container)) {
+					if (hadFocusInContainer && !diffErrors.has(key)) summaryNode.focus();
+					renderDiffContent(container, commit, path, key, summaryNode);
+					if (hadFocusInContainer && diffErrors.has(key)) {
+						const retry = container.querySelector(`[data-work-result-retry-diff="${key}"]`);
+						if (retry) retry.focus();
+						else summaryNode.focus();
+					}
+				}
 			}
 		}
 	}
@@ -34714,6 +34742,8 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		const ticket = ++changesSerial;
 		const attemptId = activeAttempt?.attempt_id;
 		if (isReadAgain) {
+			diffGeneration++;
+			diffKeySerials.clear();
 			diffCache.clear();
 			diffErrors.clear();
 			diffLoading.clear();
@@ -34742,7 +34772,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 			if (ticket !== changesSerial || activeAttempt?.attempt_id !== attemptId) return;
 			currentChangesError = err;
 		} finally {
-			changesBusy = false;
+			if (ticket === changesSerial) changesBusy = false;
 			if (ticket === changesSerial && activeAttempt?.attempt_id === attemptId && lastEnvelope) renderEnvelope(lastEnvelope, activeAttempt);
 		}
 	}
@@ -34761,6 +34791,8 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 					readCurrentChanges(false);
 				}
 			});
+			retryBtn.setAttribute("data-work-result-retry", "changes");
+			if (changesBusy) retryBtn.setAttribute("aria-disabled", "true");
 			block.append(h("div", { class: "pm-work-result-error-box" }, errBoxNode, retryBtn));
 			return block;
 		}
@@ -34898,7 +34930,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 						diffDetails.addEventListener("toggle", () => {
 							if (diffDetails.open) {
 								openDiffs.add(key);
-								if (!diffCache.has(key) && !diffLoading.has(key)) loadDiff(commit, f.path, key, bodyContainer, summaryNode);
+								if (!diffCache.has(key) && !diffLoading.has(key) && !diffErrors.has(key)) loadDiff(commit, f.path, key, bodyContainer, summaryNode);
 							} else openDiffs.delete(key);
 						});
 						row.append(diffDetails);

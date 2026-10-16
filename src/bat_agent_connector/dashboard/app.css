@@ -2763,10 +2763,10 @@ body.pm-mode #main { padding: 0; }
   margin: var(--space-1) 0;
   padding: var(--space-2);
   background: var(--surface-2);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-size: var(--fs-mono);
   line-height: 1.4;
   white-space: pre;
 }
