@@ -1535,10 +1535,8 @@ class AttemptResultCollector:
         turn_slice = read_res.pop("_turn_slice", None) or {"items": [], "complete": True, "reason": None}
 
         # 0.1 If user echo is not visible, write no receipt
-        after_meta = read_res.get("after") if isinstance(read_res.get("after"), dict) else {}
         raw_attr = read_res.get("turn_attribution")
-        marker_visible = (raw_attr == "correlated") if raw_attr is not None else bool(after_meta.get("echo_found"))
-        if not marker_visible:
+        if raw_attr != "correlated":
             self._record_check(attempt_id, "turn_marker_not_visible")
             return None
 
@@ -1560,10 +1558,7 @@ class AttemptResultCollector:
         has_process_ended = (runtime_status in {"exited", "stopped"}) or (gone_at is not None)
         has_agent_error = self._has_agent_error_event(host, session_id)
         raw_td = read_res.get("turn_done")
-        turn_done_ready = (
-            (raw_td is True if isinstance(raw_td, bool) else bool(turn_slice.get("items")))
-            and (read_res.get("pending") is None)
-        )
+        turn_done_ready = (raw_td is True) and (read_res.get("pending") is None)
 
         if has_agent_error:
             boundary = "agent_error"
