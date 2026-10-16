@@ -7918,8 +7918,8 @@ var workStartStrings = {
 		wst_instruction_help: "描述交由代理執行的工作內容。",
 		wst_agent: "代理",
 		wst_delivery: "交付成果",
-		wst_delivery_pr: "Pull request",
-		wst_delivery_changes: "可審閱的修改",
+		wst_delivery_pr: "PR",
+		wst_delivery_changes: "可審閱修改",
 		wst_options: "進階選項",
 		wst_model: "模型",
 		wst_model_placeholder: "預設模型",
@@ -7958,7 +7958,7 @@ var workStartStrings = {
 		wst_visibility_filtered: "部分嘗試記錄已隱藏。",
 		wst_attempts_partial: "只讀取了前 1,000 筆開始記錄，因此無法開始。",
 		wst_no_adopted_plan: "尚無已採納計畫。開始前請先採納計畫。",
-		wst_owner_required_to_bind: "需要工作區擁有者權限以將此工作綁定至目前計畫。",
+		wst_owner_required_to_bind: "只有工作區擁有者可以將此工作綁定至目前計畫。",
 		wst_requirements_required: "請至少選取一項需求。",
 		wst_permission_missing: "開始工作需要檢視、管理與開始權限。",
 		wst_draft_retained: "草稿已保留。",
@@ -7972,7 +7972,7 @@ var workStartStrings = {
 		wst_checked_at: "檢查時間：{time}",
 		wst_error_WORK_ITEM_CHANGED: "工作項目已變更，請檢視最新內容，再重新檢查就緒狀態。",
 		wst_error_PROJECT_CHANGED: "專案設定已變更，請重新整理專案，再重新檢查就緒狀態。",
-		wst_error_PM_PACKAGE_SCOPE_CHANGED: "工作包範圍已變更，請重新檢查就緒狀態。",
+		wst_error_PM_PACKAGE_SCOPE_CHANGED: "已採納的範圍已變更，請檢視已採納的計畫，再重新檢查就緒狀態。",
 		wst_error_PM_PACKAGE_VERSION_CONFLICT: "工作包版本衝突，請重新檢查就緒狀態。",
 		wst_error_PM_WORK_BINDING_CHANGED: "工作綁定已變更，請檢視需求關聯，再重新檢查就緒狀態。",
 		wst_error_PROJECT_REPOSITORY_CHANGED: "專案儲存庫已變更，請選取相符的儲存庫，再重新檢查就緒狀態。",
@@ -8038,7 +8038,7 @@ var workStartStrings = {
 		wst_visibility_filtered: "Some attempts are hidden.",
 		wst_attempts_partial: "Only the first 1,000 attempts were read, so Start is unavailable.",
 		wst_no_adopted_plan: "No adopted plan. Adopt a plan before starting.",
-		wst_owner_required_to_bind: "Workspace owner required to bind this Work to the current plan.",
+		wst_owner_required_to_bind: "Only a workspace owner can bind this Work to the current plan.",
 		wst_requirements_required: "Select at least one requirement.",
 		wst_permission_missing: "Starting work requires observe, manage and start access.",
 		wst_draft_retained: "Your draft is kept.",
@@ -32948,19 +32948,6 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 		}
 		return writer(card);
 	};
-	function getSavedIntentReqs(workId) {
-		try {
-			const storageKey = `batc.pm.${namespace}.work-start.work.start.${JSON.stringify({
-				workspace_id: workspaceId,
-				work_item_id: workId
-			})}`;
-			const raw = localStorage.getItem(storageKey);
-			if (!raw) return null;
-			const parsed = JSON.parse(raw);
-			if (parsed?.intent?.request?.params?.requirement_ids) return parsed.intent.request.params.requirement_ids;
-		} catch {}
-		return null;
-	}
 	async function fetchAttempts(workId, ticket) {
 		let after = "";
 		let pages = 0;
@@ -33036,9 +33023,13 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			case "cancelled":
 				statusWord = t("wst_status_cancelled");
 				break;
-			default: statusWord = t("ui_status_unknown");
+			default: {
+				const statusText = attempt.status ? operationStatusLabel(attempt.status) : "";
+				statusWord = attempt.stage ? statusText ? `${attempt.stage} — ${statusText}` : attempt.stage : t("ui_status_unknown");
+				break;
+			}
 		}
-		if (attempt.status === "start_failed" || attempt.stage === "start_failed") {
+		if (attempt.stage === "start_failed") {
 			if (attempt.error_code) {
 				const panelKey = "wst_error_" + attempt.error_code;
 				const globalKey = "error_code_" + attempt.error_code;
@@ -33197,16 +33188,24 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 				return;
 			}
 			const curRevision = curPlan.revision_id;
+			function getLockedIntentReqs() {
+				if (!editorInstance?.locked()) return null;
+				try {
+					const rev = JSON.parse(reviewInput.value || "");
+					if (Array.isArray(rev?.requirement_ids)) return rev.requirement_ids;
+				} catch {}
+				return null;
+			}
 			if (!initial && curRevision === renderedPlanRevision) {
 				if (editorInstance?.locked()) {
-					const intentReqs = getSavedIntentReqs(card.work_item_id);
+					const intentReqs = getLockedIntentReqs();
 					if (intentReqs) {
 						const set = new Set(intentReqs);
 						for (const cb of checkboxes) {
 							cb.checked = set.has(cb.value);
 							cb.disabled = true;
 						}
-					}
+					} else for (const cb of checkboxes) cb.disabled = true;
 				}
 				return;
 			}
@@ -33222,8 +33221,10 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 				if (restored) checkedIds = new Set(restored);
 				else {
 					checkedIds = new Set((card.binding?.requirement_ids || []).filter((id) => planReqIds.has(id)));
-					requirementsInput.value = JSON.stringify([...checkedIds]);
-					requirementsInput.dataset.pmDefault = JSON.stringify([...checkedIds]);
+					if (!editorInstance?.locked()) {
+						requirementsInput.value = JSON.stringify([...checkedIds]);
+						requirementsInput.dataset.pmDefault = JSON.stringify([...checkedIds]);
+					}
 				}
 			} else {
 				const prevChecked = checkboxes.filter((cb) => cb.checked).map((cb) => cb.value);
@@ -33237,9 +33238,12 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			}
 			renderedPlanRevision = curRevision;
 			checkboxes = [];
+			const isLocked = editorInstance?.locked();
+			const intentReqs = isLocked ? getLockedIntentReqs() : null;
+			const lockedSet = intentReqs ? new Set(intentReqs) : null;
 			const reqWarning = h("p", {
 				class: "error",
-				hidden: checkedIds.size > 0
+				hidden: lockedSet ? lockedSet.size > 0 : checkedIds.size > 0
 			}, t("wst_requirements_required"));
 			const updateSelectedReqs = () => {
 				const selected = checkboxes.filter((cb) => cb.checked).map((cb) => cb.value);
@@ -33249,9 +33253,6 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 				reqWarning.hidden = selected.length > 0;
 				onFingerprintChanged();
 			};
-			const isLocked = editorInstance?.locked();
-			const intentReqs = isLocked ? getSavedIntentReqs(card.work_item_id) : null;
-			const lockedSet = intentReqs ? new Set(intentReqs) : null;
 			const list = h("div", { class: "pm-work-start-reqs" }, h("h4", {}, t("wst_requirements_to_bind")), ...planReqs.map((req) => {
 				const cb = h("input", {
 					type: "checkbox",
@@ -33261,7 +33262,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 				if (isLocked) cb.disabled = true;
 				cb.addEventListener("change", updateSelectedReqs);
 				checkboxes.push(cb);
-				return h("label", { class: "pm-work-start-req" }, cb, req.text || req.id);
+				return h("label", { class: "pm-work-start-req" }, cb, h("span", { class: "pm-work-start-req-text" }, req.text || req.id));
 			}), reqWarning);
 			bindBox.replaceChildren(list);
 		}
@@ -33288,6 +33289,26 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 				disabledNotice.hidden = false;
 			} else disabledNotice.hidden = true;
 		};
+		function renderCandidateSelector(candidates, selectedKey, includePlaceholder = false) {
+			const options = candidates.map((c, i) => {
+				return h("option", { value: String(i) }, `${c.repository} · ${c.host} · ${c.workspace_id}`);
+			});
+			if (includePlaceholder) options.unshift(h("option", { value: "" }, t("wst_choose_candidate")));
+			const select = h("select", {
+				"aria-label": t("wst_choose_candidate"),
+				"data-work-start-candidate": ""
+			}, ...options);
+			if (selectedKey) {
+				const idx = candidates.findIndex((c) => `${c.repository}:${c.host}:${c.workspace_id}` === selectedKey);
+				if (idx >= 0) select.value = String(idx);
+			}
+			select.addEventListener("change", () => {
+				if (select.value === "") return;
+				chosenCandidate = candidates[Number(select.value)];
+				inspectReadiness();
+			});
+			return h("label", {}, t("wst_choose_candidate"), select);
+		}
 		async function inspectReadiness() {
 			if (checking || loading || !writer(card)) return;
 			const text = instruction.value;
@@ -33338,39 +33359,15 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 						}, t("wst_no_candidates")));
 						candidatesBox.hidden = false;
 					} else {
-						const select = h("select", {
-							"aria-label": t("wst_choose_candidate"),
-							"data-work-start-candidate": ""
-						}, h("option", { value: "" }, t("wst_choose_candidate")), ...candidates.map((c, i) => h("option", { value: String(i) }, `${c.repository} · ${c.host} · ${c.workspace_id}`)));
-						if (chosenCandidate) {
-							const idx = candidates.findIndex((c) => c.repository === chosenCandidate.repository && c.host === chosenCandidate.host && c.workspace_id === chosenCandidate.workspace_id);
-							if (idx >= 0) select.value = String(idx);
-						}
-						select.addEventListener("change", () => {
-							if (select.value === "") return;
-							const idx = Number(select.value);
-							chosenCandidate = candidates[idx];
-							inspectReadiness();
-						});
-						candidatesBox.replaceChildren(h("label", {}, t("wst_choose_candidate"), select));
+						const chosenKey = chosenCandidate ? `${chosenCandidate.repository}:${chosenCandidate.host}:${chosenCandidate.workspace_id}` : null;
+						candidatesBox.replaceChildren(renderCandidateSelector(candidates, chosenKey, true));
 						candidatesBox.hidden = false;
 					}
 					return;
 				}
 				if (availableCandidates && availableCandidates.length > 1) {
-					const select = h("select", {
-						"aria-label": t("wst_choose_candidate"),
-						"data-work-start-candidate": ""
-					}, ...availableCandidates.map((c, i) => h("option", { value: String(i) }, `${c.repository} · ${c.host} · ${c.workspace_id}`)));
-					const chosenIdx = availableCandidates.findIndex((c) => c.repository === data.code_target.repository && c.host === data.code_target.host && c.workspace_id === data.code_target.workspace_id);
-					if (chosenIdx >= 0) select.value = String(chosenIdx);
-					select.addEventListener("change", () => {
-						if (select.value === "") return;
-						const idx = Number(select.value);
-						chosenCandidate = availableCandidates[idx];
-						inspectReadiness();
-					});
-					candidatesBox.replaceChildren(h("label", {}, t("wst_choose_candidate"), select));
+					const chosenKey = data.code_target ? `${data.code_target.repository}:${data.code_target.host}:${data.code_target.workspace_id}` : null;
+					candidatesBox.replaceChildren(renderCandidateSelector(availableCandidates, chosenKey, false));
 					candidatesBox.hidden = false;
 				} else {
 					candidatesBox.replaceChildren();
@@ -33402,13 +33399,20 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 					"data-work-start-facts": ""
 				}, h("h4", {}, t("wst_readiness_checked")), h("p", {}, `${data.code_target.repository} · ${branchName} · ${shaShort} · ${hostWs}`), h("p", { class: "muted" }, pkgText), bindNote ? h("p", { class: "muted" }, bindNote) : null, typeof data.observed_at === "number" && data.observed_at > 0 ? h("p", { class: "muted" }, timeLabel(t, "wst_checked_at", { time: timeStamp(data.observed_at) })) : null));
 				factsBox.hidden = false;
+				const plan = getPlan();
 				const checks = (data.readiness.checks || []).map((check) => {
 					const [kind, ...suffix] = check.check.split(":");
 					const key = "wp_check_" + kind;
 					const label = t(key);
 					const help = t(key + "_help");
 					const passed = check.status === "passed";
-					return h("li", { "data-readiness-check": check.check }, h("strong", {}, label === key ? check.check : label + (suffix.length ? " · " + suffix.join(":") : "")), " — ", t(passed ? "wp_passed" : "wp_attention"), !passed && help !== key + "_help" ? h("p", { class: "muted" }, help) : !passed && check.detail ? h("p", { class: "muted" }, check.detail) : null);
+					let suffixText = suffix.join(":");
+					if (suffix.length > 0) {
+						const reqId = suffix.join(":");
+						const planReq = plan?.document?.requirements?.find((r) => r.id === reqId);
+						if (planReq?.text) suffixText = planReq.text;
+					}
+					return h("li", { "data-readiness-check": check.check }, h("strong", {}, label === key ? check.check : label + (suffix.length ? " · " + suffixText : "")), " — ", t(passed ? "wp_passed" : "wp_attention"), !passed && help !== key + "_help" ? h("p", { class: "muted" }, help) : !passed && check.detail ? h("p", { class: "muted" }, check.detail) : null);
 				});
 				checksBox.replaceChildren(h("ul", {
 					class: "pm-work-start-checks",
@@ -33445,7 +33449,19 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			body: h("div", { class: "pm-work-start-options" }, h("label", {}, t("wst_model"), model))
 		});
 		const extra = h("div", { class: "pm-work-start-fields" }, bindBox, h("label", {}, t("wst_instruction"), instruction), h("p", { class: "muted" }, t("wst_instruction_help")), h("label", {}, t("wst_agent"), agent), h("label", {}, t("wst_delivery"), delivery), optionsDisclosure, candidatesBox, staleNotice, h("div", { class: "pm-work-start-readiness-action" }, readinessButton), factsBox, checksBox, disabledNotice, errorStatusBox);
-		const editorInstance = form({
+		let editorInstance;
+		const canSubmit = () => {
+			if (!writer(card) || !startable(card) || checking || loading) return false;
+			if (!prepared || !reviewInput.value) return false;
+			try {
+				if (!equal$9(JSON.parse(reviewInput.value), prepared.fixed)) return false;
+			} catch {
+				return false;
+			}
+			if (currentFingerprint() !== prepared.fixed.fingerprint) return false;
+			return prepared.readinessStatus === "ready";
+		};
+		editorInstance = form({
 			namespace: `${namespace}.work-start`,
 			action: "work.start",
 			target: {
@@ -33485,6 +33501,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 				}
 			},
 			permitted: () => writer(card),
+			canSend: () => Boolean(editorInstance?.locked()) || canSubmit(),
 			recoverPermitted: () => writer(card),
 			errorBox: panelErrorBox,
 			label: "wst_start",
@@ -33513,17 +33530,6 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			},
 			extra
 		});
-		const canSubmit = () => {
-			if (!writer(card) || !startable(card) || checking || loading) return false;
-			if (!prepared || !reviewInput.value) return false;
-			try {
-				if (!equal$9(JSON.parse(reviewInput.value), prepared.fixed)) return false;
-			} catch {
-				return false;
-			}
-			if (currentFingerprint() !== prepared.fixed.fingerprint) return false;
-			return prepared.readinessStatus === "ready";
-		};
 		const origUpdate = editorInstance.update;
 		editorInstance.update = () => {
 			origUpdate();
@@ -33533,6 +33539,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			if (submitBtn && !editorInstance.locked()) submitBtn.disabled = submitBtn.disabled || !canSubmit();
 		};
 		buildOrUpdateBindBox(true);
+		editorInstance.update();
 		editorInstance.currentFingerprint = currentFingerprint;
 		editorInstance.inspectReadiness = inspectReadiness;
 		editorInstance.checkPlanChange = () => buildOrUpdateBindBox(false);
