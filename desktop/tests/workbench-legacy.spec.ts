@@ -54,6 +54,48 @@ function createLegacyFixture(locale = 'en') {
     });
   }
 
+  // Ensure requirements view is tall enough to be generously scrollable at mobile widths
+  for (let i = 3; i <= 8; i++) {
+    pm.plan.document.requirements.push({
+      id: `membership.req_${i}`,
+      text: `Additional requirement item ${i} ensuring scroll depth verification`,
+      acceptance: [{source_input_id: `crit-${i}`, text: `Criteria ${i} detail.`}]
+    });
+  }
+
+  // Ensure board view is tall enough to be generously scrollable at mobile widths
+  for (let i = 4; i <= 8; i++) {
+    const wid = 'wi_' + String(i).repeat(20);
+    pm.board.state.cards.push({
+      work_item_id: wid,
+      binding: {
+        workspace_id: fixtureWorkspaceId,
+        work_item_id: wid,
+        sequence: i,
+        binding_id: 'pmwb_' + String(i).repeat(32),
+        project_id: 'prj_' + '2'.repeat(20),
+        plan_revision_id: 'pmrev_' + '4'.repeat(32),
+        requirement_ids: ['membership.login'],
+        work_version: 1
+      },
+      work: {
+        work_item_id: wid,
+        title: `Card ${i} scroll height verification`,
+        version: 1,
+        project_id: 'prj_' + '2'.repeat(20),
+        state: 'doing'
+      },
+      column: 'in_progress',
+      completion: {approved: false, pending: false},
+      flow: {wip: true, age_seconds: 3600, waiting_seconds: null, history: 'available_central_events', reopened: 0},
+      quality: {dod: 'unassessed'},
+      execution: {accepted_attempts: 0, tasks: [], operations: [], sessions: [], attempts: [], coverage: {network_checked: false, unavailable_sources: false, truncated: false}},
+      latest_capture: null,
+      capture_matches_binding: true,
+      capture_matches_work_version: true
+    });
+  }
+
   const dispatch = async (input: any) => {
     const url = new URL(input.path, 'http://fixture');
     const path = url.pathname;
@@ -415,9 +457,15 @@ for (const lang of ['en', 'zh-TW'] as const) {
               const doc = document.scrollingElement || document.documentElement;
               return Math.max(0, doc.scrollHeight - window.innerHeight);
             });
-            const target200 = Math.min(200, currentMax);
-            await page.evaluate(target => window.scrollTo(0, target), target200);
+            expect(currentMax, `Route ${route.id} at 390px must have currentMax >= 200 to test scroll-to-top`).toBeGreaterThanOrEqual(200);
+
+            await page.evaluate(() => window.scrollTo(0, 200));
+            await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThanOrEqual(200);
+            await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+
             await page.evaluate(() => window.scrollTo(0, 0));
+            await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+            await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
 
             await ensureDrawerOpen(page, width);
             const other = page.locator(`.wc-daily a[data-daily="${route.otherEntry}"]`);
