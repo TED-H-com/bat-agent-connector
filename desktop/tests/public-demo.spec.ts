@@ -80,6 +80,27 @@ test('sample schedule cursors work in browsers and retain distinct pages', () =>
   expect([...next.rows, ...next.unscheduled].map(row => row.id)).not.toEqual([...first.rows, ...first.unscheduled].map(row => row.id));
 });
 
+for (const lang of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test(`workbench preview retains all project views and Idea reading ${lang} ${width}`, async ({page}) => {
+  await page.setViewportSize({width, height: 900});
+  const project = demoProject(lang);
+  const errors: string[] = [], writes: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('request', request => {if (request.method() !== 'GET') writes.push(request.url());});
+  await page.goto(`/demo/?lang=${lang}&workbench=1`);
+  await expect(page.locator('[data-pm-overview]')).toBeVisible();
+  const selector = page.locator('[data-workbench-management]');
+  await expect(selector).toBeVisible();
+  for (const view of ['requirements', 'board', 'schedule', 'dependencies', 'issues', 'agents', 'discussions', 'overview']) {
+    await selector.selectOption(view);
+    await expect(page.locator(`[data-pm-region="${view}"]`)).toBeVisible();
+    await expect(page.locator('#main [data-api-error]:visible')).toHaveCount(0);
+  }
+  await page.goto(`/demo/?lang=${lang}&workbench=1#/pm/${project.ids.workspaceId}/discussions/${project.ids.threadIdea}`);
+  await expect(page.locator('.pd-thread-header')).toBeVisible();
+  await expect(page.locator('.pd-panel-home')).toBeHidden();
+  expect(errors).toEqual([]); expect(writes).toEqual([]);
+});
+
 test('global pages and manual session expose records without write controls', async ({page}) => {
   await page.goto('/demo/?lang=en');
   await expect(page.locator('[data-pm-overview]')).toBeVisible();

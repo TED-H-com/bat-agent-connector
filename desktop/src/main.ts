@@ -25,4 +25,5 @@ import "./observed-resource.css";
 import "./pm-requirements.css";
 import "./pm-work-inspector.css";
 import "./pm-session.css";
+import "./workbench.css";
 import "./app.js";
