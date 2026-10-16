@@ -131,151 +131,163 @@ async function setupPage(page: Page, locale: string, width: number, height: numb
 
 test('refresh stays enabled when a PM event arrives during a board refresh (en 1440)', async ({browser, baseURL}) => {
   const context = await browser.newContext({baseURL, locale: 'en', viewport: {width: 1440, height: 900}});
-  const page = await context.newPage();
-  const errors: string[] = [];
-  page.on('pageerror', error => errors.push(error.message));
+  try {
+    const page = await context.newPage();
+    const errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
 
-  await setupPage(page, 'en', 1440, 900);
-  const fixture = createRefreshFixture({locale: 'en'});
-  await mountConversation(page, false, fixture.dispatch);
+    await setupPage(page, 'en', 1440, 900);
+    const fixture = createRefreshFixture({locale: 'en'});
+    await mountConversation(page, false, fixture.dispatch);
 
-  // 1. Open Board at en 1440 and wait until the first load has settled (Refresh enabled).
-  await page.goto(`/dashboard/#/pm/${fixture.workspaceId}/board`);
-  const refresh = page.locator('[data-pm-refresh]');
-  await expect(refresh).toBeEnabled();
-  await expect(page.locator('#main h1')).toHaveText('Board');
-  await expect(page.locator('[data-pm-kanban]')).toBeVisible();
+    // 1. Open Board at en 1440 and wait until the first load has settled (Refresh enabled).
+    await page.goto(`/dashboard/#/pm/${fixture.workspaceId}/board`);
+    const refresh = page.locator('[data-pm-refresh]');
+    await expect(refresh).toBeEnabled();
+    await expect(page.locator('#main h1')).toHaveText('Board');
+    await expect(page.locator('[data-pm-kanban]')).toBeVisible();
 
-  // 2. Hold the next GET /pm/workspaces. Press Refresh. Refresh is disabled.
-  fixture.holdWorkspaces();
-  await refresh.click();
-  await expect(refresh).toBeDisabled();
-  await expect.poll(fixture.isHeldWorkspaces).toBe(true);
+    // 2. Hold the next GET /pm/workspaces. Press Refresh. Refresh is disabled.
+    fixture.holdWorkspaces();
+    await refresh.click();
+    await expect(refresh).toBeDisabled();
+    await expect.poll(fixture.isHeldWorkspaces).toBe(true);
 
-  // 3. Emit one pm_* event for this workspace. Wait until authority read completes.
-  const beforeAuthority = await countCompletedBodies(page, `/pm/workspaces/${fixture.workspaceId}`);
-  fixture.emitEvent();
-  await syncHeldBodyCompletion(page, `/pm/workspaces/${fixture.workspaceId}`, beforeAuthority);
+    // 3. Emit one pm_* event for this workspace. Wait until authority read completes.
+    const beforeAuthority = await countCompletedBodies(page, `/pm/workspaces/${fixture.workspaceId}`);
+    fixture.emitEvent();
+    await syncHeldBodyCompletion(page, `/pm/workspaces/${fixture.workspaceId}`, beforeAuthority);
 
-  // 4. Release the held read, then sync on its completed body plus one frame.
-  const beforeWorkspaces = await countCompletedBodies(page, '/pm/workspaces');
-  fixture.releaseWorkspaces();
-  await syncHeldBodyCompletion(page, '/pm/workspaces', beforeWorkspaces);
+    // 4. Release the held read, then sync on its completed body plus one frame.
+    const beforeWorkspaces = await countCompletedBodies(page, '/pm/workspaces');
+    fixture.releaseWorkspaces();
+    await syncHeldBodyCompletion(page, '/pm/workspaces', beforeWorkspaces);
 
-  // Assertions:
-  // - Refresh is enabled;
-  // - the workspace header and the board are shown, with no error in the status area;
-  // - pressing Refresh again makes exactly one new GET /pm/workspaces, and Refresh is enabled once it settles.
-  await expect(refresh).toBeEnabled();
-  await expect(page.locator('#main h1')).toHaveText('Board');
-  await expect(page.locator('[data-pm-kanban]')).toBeVisible();
-  await expect(page.locator('.pm-status .error, .pm-status [data-api-error]')).toHaveCount(0);
+    // Assertions:
+    // - Refresh is enabled;
+    // - the workspace header and the board are shown, with no error in the status area;
+    // - pressing Refresh again makes exactly one new GET /pm/workspaces, and Refresh is enabled once it settles.
+    await expect(refresh).toBeEnabled();
+    await expect(page.locator('#main h1')).toHaveText('Board');
+    await expect(page.locator('[data-pm-kanban]')).toBeVisible();
+    await expect(page.locator('.pm-status .error, .pm-status [data-api-error]')).toHaveCount(0);
 
-  const countBefore = fixture.getWorkspacesReadCount();
-  await refresh.click();
-  await expect(refresh).toBeEnabled();
-  expect(fixture.getWorkspacesReadCount() - countBefore).toBe(1);
+    const countBefore = fixture.getWorkspacesReadCount();
+    await refresh.click();
+    await expect(refresh).toBeEnabled();
+    expect(fixture.getWorkspacesReadCount() - countBefore).toBe(1);
 
-  expect(errors).toEqual([]);
+    expect(errors).toEqual([]);
+  } finally {
+    await context.close();
+  }
 });
 
 test('refresh stays enabled when a PM event arrives during more threads on discussions (en 1440)', async ({browser, baseURL}) => {
   const context = await browser.newContext({baseURL, locale: 'en', viewport: {width: 1440, height: 900}});
-  const page = await context.newPage();
-  const errors: string[] = [];
-  page.on('pageerror', error => errors.push(error.message));
+  try {
+    const page = await context.newPage();
+    const errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
 
-  await setupPage(page, 'en', 1440, 900);
-  const fixture = createRefreshFixture({locale: 'en', moreThreads: true});
-  await mountConversation(page, false, fixture.dispatch);
+    await setupPage(page, 'en', 1440, 900);
+    const fixture = createRefreshFixture({locale: 'en', moreThreads: true});
+    await mountConversation(page, false, fixture.dispatch);
 
-  // 1. Open Discussions at en 1440 and wait until the first load has settled (Refresh enabled).
-  await page.goto(`/dashboard/#/pm/${fixture.workspaceId}/discussions`);
-  const refresh = page.locator('[data-pm-refresh]');
-  await expect(refresh).toBeEnabled();
-  await expect(page.locator('#main h1')).toHaveText('Discussions');
-  const moreThreads = page.locator('[data-discussion-more]');
-  await expect(moreThreads).toBeVisible();
+    // 1. Open Discussions at en 1440 and wait until the first load has settled (Refresh enabled).
+    await page.goto(`/dashboard/#/pm/${fixture.workspaceId}/discussions`);
+    const refresh = page.locator('[data-pm-refresh]');
+    await expect(refresh).toBeEnabled();
+    await expect(page.locator('#main h1')).toHaveText('Discussions');
+    const moreThreads = page.locator('[data-discussion-more]');
+    await expect(moreThreads).toBeVisible();
 
-  // 2. Hold the next GET /pm/workspaces. Press More threads. Refresh is disabled.
-  fixture.holdWorkspaces();
-  await moreThreads.click();
-  await expect(refresh).toBeDisabled();
-  await expect.poll(fixture.isHeldWorkspaces).toBe(true);
+    // 2. Hold the next GET /pm/workspaces. Press More threads. Refresh is disabled.
+    fixture.holdWorkspaces();
+    await moreThreads.click();
+    await expect(refresh).toBeDisabled();
+    await expect.poll(fixture.isHeldWorkspaces).toBe(true);
 
-  // 3. Emit one pm_* event for this workspace. Wait until authority read completes.
-  const beforeAuthority = await countCompletedBodies(page, `/pm/workspaces/${fixture.workspaceId}`);
-  fixture.emitEvent();
-  await syncHeldBodyCompletion(page, `/pm/workspaces/${fixture.workspaceId}`, beforeAuthority);
+    // 3. Emit one pm_* event for this workspace. Wait until authority read completes.
+    const beforeAuthority = await countCompletedBodies(page, `/pm/workspaces/${fixture.workspaceId}`);
+    fixture.emitEvent();
+    await syncHeldBodyCompletion(page, `/pm/workspaces/${fixture.workspaceId}`, beforeAuthority);
 
-  // 4. Release the held read, then sync on its completed body plus one frame.
-  const beforeWorkspaces = await countCompletedBodies(page, '/pm/workspaces');
-  fixture.releaseWorkspaces();
-  await syncHeldBodyCompletion(page, '/pm/workspaces', beforeWorkspaces);
+    // 4. Release the held read, then sync on its completed body plus one frame.
+    const beforeWorkspaces = await countCompletedBodies(page, '/pm/workspaces');
+    fixture.releaseWorkspaces();
+    await syncHeldBodyCompletion(page, '/pm/workspaces', beforeWorkspaces);
 
-  // Assertions:
-  // - Refresh is enabled;
-  // - the workspace header and discussions are shown, with no error in the status area;
-  // - pressing Refresh again makes exactly one new GET /pm/workspaces, and Refresh is enabled once it settles.
-  await expect(refresh).toBeEnabled();
-  await expect(page.locator('#main h1')).toHaveText('Discussions');
-  await expect(page.locator('[data-discussions]')).toBeVisible();
-  await expect(page.locator('.pm-status .error, .pm-status [data-api-error]')).toHaveCount(0);
+    // Assertions:
+    // - Refresh is enabled;
+    // - the workspace header and discussions are shown, with no error in the status area;
+    // - pressing Refresh again makes exactly one new GET /pm/workspaces, and Refresh is enabled once it settles.
+    await expect(refresh).toBeEnabled();
+    await expect(page.locator('#main h1')).toHaveText('Discussions');
+    await expect(page.locator('[data-discussions]')).toBeVisible();
+    await expect(page.locator('.pm-status .error, .pm-status [data-api-error]')).toHaveCount(0);
 
-  const countBefore = fixture.getWorkspacesReadCount();
-  await refresh.click();
-  await expect(refresh).toBeEnabled();
-  expect(fixture.getWorkspacesReadCount() - countBefore).toBe(1);
+    const countBefore = fixture.getWorkspacesReadCount();
+    await refresh.click();
+    await expect(refresh).toBeEnabled();
+    expect(fixture.getWorkspacesReadCount() - countBefore).toBe(1);
 
-  expect(errors).toEqual([]);
+    expect(errors).toEqual([]);
+  } finally {
+    await context.close();
+  }
 });
 
 test('refresh stays enabled when a PM event arrives during a refresh (zh-TW 390)', async ({browser, baseURL}) => {
   const context = await browser.newContext({baseURL, locale: 'zh-TW', viewport: {width: 390, height: 844}});
-  const page = await context.newPage();
-  const errors: string[] = [];
-  page.on('pageerror', error => errors.push(error.message));
+  try {
+    const page = await context.newPage();
+    const errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
 
-  await setupPage(page, 'zh-TW', 390, 844);
-  const fixture = createRefreshFixture({locale: 'zh-TW'});
-  await mountConversation(page, false, fixture.dispatch);
+    await setupPage(page, 'zh-TW', 390, 844);
+    const fixture = createRefreshFixture({locale: 'zh-TW'});
+    await mountConversation(page, false, fixture.dispatch);
 
-  // 1. Open Board at zh-TW 390 and wait until the first load has settled (Refresh enabled).
-  await page.goto(`/dashboard/#/pm/${fixture.workspaceId}/board`);
-  const refresh = page.locator('[data-pm-refresh]');
-  await expect(refresh).toBeEnabled();
-  await expect(page.locator('#main h1')).toHaveText('工作看板');
-  await expect(page.locator('[data-pm-kanban]')).toBeVisible();
+    // 1. Open Board at zh-TW 390 and wait until the first load has settled (Refresh enabled).
+    await page.goto(`/dashboard/#/pm/${fixture.workspaceId}/board`);
+    const refresh = page.locator('[data-pm-refresh]');
+    await expect(refresh).toBeEnabled();
+    await expect(page.locator('#main h1')).toHaveText('工作看板');
+    await expect(page.locator('[data-pm-kanban]')).toBeVisible();
 
-  // 2. Hold the next GET /pm/workspaces. Press Refresh. Refresh is disabled.
-  fixture.holdWorkspaces();
-  await refresh.click();
-  await expect(refresh).toBeDisabled();
-  await expect.poll(fixture.isHeldWorkspaces).toBe(true);
+    // 2. Hold the next GET /pm/workspaces. Press Refresh. Refresh is disabled.
+    fixture.holdWorkspaces();
+    await refresh.click();
+    await expect(refresh).toBeDisabled();
+    await expect.poll(fixture.isHeldWorkspaces).toBe(true);
 
-  // 3. Emit one pm_* event for this workspace. Wait until authority read completes.
-  const beforeAuthority = await countCompletedBodies(page, `/pm/workspaces/${fixture.workspaceId}`);
-  fixture.emitEvent();
-  await syncHeldBodyCompletion(page, `/pm/workspaces/${fixture.workspaceId}`, beforeAuthority);
+    // 3. Emit one pm_* event for this workspace. Wait until authority read completes.
+    const beforeAuthority = await countCompletedBodies(page, `/pm/workspaces/${fixture.workspaceId}`);
+    fixture.emitEvent();
+    await syncHeldBodyCompletion(page, `/pm/workspaces/${fixture.workspaceId}`, beforeAuthority);
 
-  // 4. Release the held read, then sync on its completed body plus one frame.
-  const beforeWorkspaces = await countCompletedBodies(page, '/pm/workspaces');
-  fixture.releaseWorkspaces();
-  await syncHeldBodyCompletion(page, '/pm/workspaces', beforeWorkspaces);
+    // 4. Release the held read, then sync on its completed body plus one frame.
+    const beforeWorkspaces = await countCompletedBodies(page, '/pm/workspaces');
+    fixture.releaseWorkspaces();
+    await syncHeldBodyCompletion(page, '/pm/workspaces', beforeWorkspaces);
 
-  // Assertions:
-  // - Refresh is enabled;
-  // - the workspace header and the board are shown, with no error in the status area;
-  // - pressing Refresh again makes exactly one new GET /pm/workspaces, and Refresh is enabled once it settles.
-  await expect(refresh).toBeEnabled();
-  await expect(page.locator('#main h1')).toHaveText('工作看板');
-  await expect(page.locator('[data-pm-kanban]')).toBeVisible();
-  await expect(page.locator('.pm-status .error, .pm-status [data-api-error]')).toHaveCount(0);
+    // Assertions:
+    // - Refresh is enabled;
+    // - the workspace header and the board are shown, with no error in the status area;
+    // - pressing Refresh again makes exactly one new GET /pm/workspaces, and Refresh is enabled once it settles.
+    await expect(refresh).toBeEnabled();
+    await expect(page.locator('#main h1')).toHaveText('工作看板');
+    await expect(page.locator('[data-pm-kanban]')).toBeVisible();
+    await expect(page.locator('.pm-status .error, .pm-status [data-api-error]')).toHaveCount(0);
 
-  const countBefore = fixture.getWorkspacesReadCount();
-  await refresh.click();
-  await expect(refresh).toBeEnabled();
-  expect(fixture.getWorkspacesReadCount() - countBefore).toBe(1);
+    const countBefore = fixture.getWorkspacesReadCount();
+    await refresh.click();
+    await expect(refresh).toBeEnabled();
+    expect(fixture.getWorkspacesReadCount() - countBefore).toBe(1);
 
-  expect(errors).toEqual([]);
+    expect(errors).toEqual([]);
+  } finally {
+    await context.close();
+  }
 });
