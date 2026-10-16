@@ -33,6 +33,7 @@ from tests.test_api_v1 import MANUAL, http, token
 from tests.test_api_v1 import daemon as daemon_fixture
 from tests.test_api_v1 import served as served_fixture
 from tests.test_pm_plan_operations import OWNER as PACKAGE_OWNER
+from tests.test_pm_work_packages import action as pkg_action
 from tests.test_pm_work_packages import create as create_package
 from tests.test_pm_work_packages import member as add_member
 from tests.test_pm_work_packages import ready as ready_fixture
@@ -179,15 +180,17 @@ async def test_package_work_id_follows_visibility(tmp_path):
     assert shown["loop"]["dashboard_hash"] == f"#/pm/{WS}/board?select={WI}"
     assert shown["loop"]["completeness"] == {"status": "complete", "reason": None}
     assert shown["loop"]["links"] is None and shown["loop"]["result_read"] is None
-    assert withheld["loop"]["work_item_id"] is None
-    assert withheld["loop"]["completeness"] == {"status": "unavailable", "reason": "source_withdrawn"}
+    # No binding and no lineage row: E04 still accepts the Work.
+    assert withheld["loop"]["work_item_id"] == WI_OTHER
+    assert withheld["loop"]["completeness"] == {"status": "complete", "reason": None}
+    assert withheld["loop"]["dashboard_hash"] == f"#/pm/{WS}/board?select={WI_OTHER}"
     assert withheld["loop"]["operation_id"] == "op_pkg_hidden"
 
     ops.db.execute(
         "INSERT INTO pm_source_lineage VALUES('work_item', ?, 'op_missing_root', 'op_missing_root')", (WI,))
     again = await attach(ops, OWNER, visible)
     assert again["loop"]["work_item_id"] is None
-    assert again["loop"]["completeness"]["reason"] == "source_withdrawn"
+    assert again["loop"]["completeness"]["reason"] == "no_work_item"
     assert again["loop"]["dashboard_hash"] == "#/op/op_pkg_visible"
     journal.close()
 
@@ -428,9 +431,12 @@ async def test_completeness_uses_the_first_matching_reason(tmp_path):
     hidden_attempt = _op(ops, action="work.start", operation_id="op_start_hidden_work",
                          target={"workspace_id": WS, "work_item_id": WI}, refs=_work_start_refs())
     _attempt(ops, hidden_attempt["operation_id"], attempt_id="att_" + "34" * 16, work_item_id=WI_OTHER)
+    ops.db.execute(
+        "INSERT INTO pm_source_lineage VALUES('work_item', ?, 'op_missing_attempt_work', 'op_missing_attempt_work')",
+        (WI_OTHER,))
     hidden_loop = (await attach(ops, OWNER, hidden_attempt))["loop"]
     assert hidden_loop["work_item_id"] is None
-    assert hidden_loop["completeness"] == {"status": "unavailable", "reason": "source_withdrawn"}
+    assert hidden_loop["completeness"] == {"status": "partial", "reason": "no_work_item"}
 
     no_work = _op(ops, action="work.start", operation_id="op_start_no_work",
                   target={"workspace_id": WS, "work_item_id": WI_OTHER}, refs=_work_start_refs(WI_OTHER))
@@ -451,7 +457,7 @@ async def test_completeness_uses_the_first_matching_reason(tmp_path):
     assert (await attach(ops, reader, package))["loop"]["work_item_id"] == WI
     outsider_loop = (await attach(ops, outsider, package))["loop"]
     assert outsider_loop["work_item_id"] is None
-    assert outsider_loop["completeness"]["reason"] == "source_withdrawn"
+    assert outsider_loop["completeness"]["reason"] == "no_work_item"
 
     thread_id = "pmt_" + "ab" * 16
     missing_thread = _op(ops, action="pm.message.append", operation_id="op_msg_missing",
@@ -459,7 +465,7 @@ async def test_completeness_uses_the_first_matching_reason(tmp_path):
     missing_loop = (await attach(ops, OWNER, missing_thread))["loop"]
     assert missing_loop["dashboard_hash"] == "#/op/op_msg_missing"
     assert thread_id not in json.dumps(missing_loop)
-    assert missing_loop["completeness"] == {"status": "unavailable", "reason": "source_withdrawn"}
+    assert missing_loop["completeness"] == {"status": "complete", "reason": None}
     pending = _op(ops, action="pm.thread.create", operation_id="op_thread_pending",
                   target={"workspace_id": WS})
     bad_thread = _op(ops, action="pm.message.append", operation_id="op_msg_bad_thread",
@@ -1357,5 +1363,76 @@ async def test_changed_child_receipt_stays_readable_as_attempt_unreadable(loop_s
         assert loop["links"]["session_hash"] is None
         assert loop["links"]["execution_operation_hash"] is None
         assert "PM_WORK_START_CHILD_CHANGED" not in json.dumps(loop)
+    finally:
+        await fleet.close()
+
+
+async def test_first_start_of_an_unbound_work_keeps_the_work_hash(loop_start, monkeypatch):
+    """A Work with no binding yet is visible on the create, the MCP submit, and the GET."""
+    from bat_agent_connector import work_items
+
+    w = loop_start
+    daemon, ops, port = w["d"], w["d"].ops, w["port"]
+    wid = w["workspace_id"]
+    tok = token(daemon, STARTER_OWNER.actor, *sorted(STARTER_OWNER.scopes))
+    monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
+    monkeypatch.setenv("BATC_API_TOKEN", tok)
+    server, fleet = build_server(daemon.fleet.config, principal_only=True)
+    project_id = work_items._get_item(ops.db, w["target"]["work_item_id"])["project_id"]
+
+    async def unbound_work(title):
+        work_id = (await pkg_action(
+            w, "work_item.create", {"project_id": project_id},
+            {"title": title, "goal": "Authenticate members",
+             "acceptance": "Valid credentials pass, invalid fail"},
+        ))["work_item_id"]
+        assert pm_evidence._binding(ops.db, wid, work_id) is None
+        return work_id
+
+    async def hold_due():
+        return None
+
+    try:
+        http_work = await unbound_work("Unbound start over HTTP")
+        mcp_work = await unbound_work("Unbound start over MCP")
+        # Admission records the attempt. Hold the worker so this read is before the bind child.
+        monkeypatch.setattr(ops, "run_due", hold_due)
+        http_env = await _start_envelope(w, work_item_id=http_work, key="loop-unbound-http")
+        mcp_env = await _start_envelope(w, work_item_id=mcp_work, key="loop-unbound-mcp")
+        assert http_env["preconditions"]["expected_binding_id"] is None
+        assert http_env["params"]["requirement_ids"]
+        http_body = {key: http_env[key] for key in ("action", "target", "params", "preconditions")}
+        mcp_body = {key: mcp_env[key] for key in ("action", "target", "params", "preconditions")}
+        status, created = await _submit(port, tok, http_body, http_env["idempotency_key"])
+        assert status == 202 and created["created"] is True, created
+        parent_id = created["operation"]["operation_id"]
+        submitted = await _mcp_submit(server, mcp_body, mcp_env["idempotency_key"])
+        assert submitted["created"] is True
+        status, got = await http(port, "GET", "/api/v1/operations/" + parent_id, tok=tok)
+        assert status == 200, got
+        assert ops.get(parent_id)["status"] == "accepted"
+        assert pm_evidence._binding(ops.db, wid, http_work) is None
+        assert pm_evidence._binding(ops.db, wid, mcp_work) is None
+        attempt_id = ops.db.execute(
+            "SELECT attempt_id FROM work_attempts WHERE start_operation_id=?", (parent_id,)).fetchone()["attempt_id"]
+        status, result = await http(
+            port, "GET",
+            f"/api/v1/pm/workspaces/{wid}/work-attempts/{attempt_id}/result?wait_ms=0", tok=tok)
+        assert status == 200, result
+        work_hash = result["links"]["work_item_hash"]
+        mcp_id = submitted["operation"]["operation_id"]
+        mcp_attempt = ops.db.execute(
+            "SELECT attempt_id FROM work_attempts WHERE start_operation_id=?", (mcp_id,)).fetchone()["attempt_id"]
+        status, mcp_result = await http(
+            port, "GET",
+            f"/api/v1/pm/workspaces/{wid}/work-attempts/{mcp_attempt}/result?wait_ms=0", tok=tok)
+        assert status == 200, mcp_result
+        for reply, work_id, shown in (
+            (created["operation"]["loop"], http_work, work_hash),
+            (got["operation"]["loop"], http_work, work_hash),
+            (submitted["operation"]["loop"], mcp_work, mcp_result["links"]["work_item_hash"]),
+        ):
+            assert reply["work_item_id"] == work_id, reply
+            assert reply["links"]["work_item_hash"] == shown == f"#/pm/{wid}/board?select={work_id}"
     finally:
         await fleet.close()

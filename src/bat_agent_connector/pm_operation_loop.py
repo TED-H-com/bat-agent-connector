@@ -162,13 +162,14 @@ async def _project(ops, principal, operation, parent):
 
 
 def _start_work(ops, principal, source, attempt, dropped):
-    """Publish ``work_attempts.work_item_id`` only. A missing row does not copy the target."""
+    """Publish ``work_attempts.work_item_id`` only. A missing row does not copy the target.
+
+    An invisible Work is ``no_work_item``. This path never records ``dropped``.
+    """
     if attempt is not None:
         candidate, workspace_id = attempt["work_item_id"], attempt["workspace_id"]
         if _work_visible(ops, principal, workspace_id, candidate):
             return candidate, workspace_id, True, dropped
-        if _work_id(candidate):
-            dropped = True
         return None, None, False, dropped
     target = source.get("target") if isinstance(source.get("target"), dict) else {}
     visible = _work_visible(ops, principal, target.get("workspace_id"), target.get("work_item_id"))
@@ -180,8 +181,6 @@ def _package_work(ops, principal, operation, dropped):
     candidate, workspace_id = target.get("work_item_id"), target.get("workspace_id")
     if _work_visible(ops, principal, workspace_id, candidate):
         return candidate, workspace_id, True, dropped
-    if _work_id(candidate):
-        dropped = True
     return None, None, False, dropped
 
 
@@ -209,12 +208,22 @@ def _delivery_work(ops, principal, operation):
 
 
 def _visible_workspace(ops, principal, operation, work_id):
+    """Delivery reverse lookup. ``for_work`` also requires a current binding."""
     recorded = _recorded_workspace(operation)
     spaces = [recorded] if recorded else _binding_workspaces(ops.db, work_id)
     for workspace_id in spaces:
-        if _work_visible(ops, principal, workspace_id, work_id):
+        if _work_visible(ops, principal, workspace_id, work_id) and _bound(ops.db, workspace_id, work_id):
             return workspace_id
     return None
+
+
+def _bound(db, workspace_id, work_id) -> bool:
+    from . import pm_evidence
+    from .pm_source_lineage import _table
+
+    if not _table(db, "pm_work_bindings"):
+        return False
+    return pm_evidence._binding(db, workspace_id, work_id) is not None
 
 
 def _discussion_hash(ops, principal, operation, dropped):
@@ -224,11 +233,20 @@ def _discussion_hash(ops, principal, operation, dropped):
     workspace_id, thread_id = recorded
     from .pm_discussions import THREAD_ID
 
-    if not isinstance(thread_id, str) or not THREAD_ID.fullmatch(thread_id):
+    if not isinstance(thread_id, str) or not THREAD_ID.fullmatch(thread_id) or not isinstance(workspace_id, str):
         return None, dropped
-    if _thread_visible(ops, principal, workspace_id, thread_id):
-        return f"#/pm/{workspace_id}/discussions/{thread_id}", dropped
-    return None, True
+    from . import pm_discussions, pm_workspace
+    from .operations import OperationError
+
+    try:
+        pm_workspace.require_member(ops.db, principal, workspace_id)
+        pm_discussions._thread(ops.db, workspace_id, thread_id)
+    except OperationError:
+        # A non-member or a missing thread omits the hash and is not source_withdrawn.
+        return None, dropped
+    if not pm_discussions._thread_sources_visible(ops.db, principal, thread_id):
+        return None, True
+    return f"#/pm/{workspace_id}/discussions/{thread_id}", dropped
 
 
 def _sessions(ops, principal, operation, view, dropped):
@@ -332,20 +350,18 @@ def _attempt_view(ops, row):
 
 
 def _work_visible(ops, principal, workspace_id, work_item_id) -> bool:
-    from . import pm_evidence, pm_source_lineage, pm_workspace
+    """E04 attempt context: observe, membership, and lineage. A binding is not required."""
+    from . import pm_source_lineage, pm_workspace
     from .operations import OperationError
 
     if not _work_id(work_item_id) or not isinstance(workspace_id, str) or not principal.allows("observe"):
         return False
     try:
-        pm_workspace.require_member(ops.db, principal, workspace_id)
+        pm_workspace.require_member(ops.db, principal, workspace_id, write=False)
+        pm_source_lineage.require(ops.db, principal, "work_item", work_item_id)
     except OperationError:
         return False
-    if not pm_source_lineage._table(ops.db, "pm_work_bindings"):
-        return False
-    if pm_evidence._binding(ops.db, workspace_id, work_item_id) is None:
-        return False
-    return bool(pm_source_lineage.visible(ops.db, principal, "work_item", work_item_id))
+    return True
 
 
 def _work_id(value) -> bool:
@@ -392,20 +408,6 @@ def _recorded_thread(operation):
     if isinstance(thread_id, str) and thread_id:
         return target.get("workspace_id"), thread_id
     return None
-
-
-def _thread_visible(ops, principal, workspace_id, thread_id) -> bool:
-    from . import pm_discussions, pm_workspace
-    from .operations import OperationError
-
-    if not isinstance(workspace_id, str):
-        return False
-    try:
-        pm_workspace.require_member(ops.db, principal, workspace_id)
-        pm_discussions._thread(ops.db, workspace_id, thread_id)
-    except OperationError:
-        return False
-    return bool(pm_discussions._thread_sources_visible(ops.db, principal, thread_id))
 
 
 def _session_pair(value):
