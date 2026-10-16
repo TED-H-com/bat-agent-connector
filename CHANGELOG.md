@@ -4,6 +4,11 @@
 
 - The hidden Board and Requirements scroll checks wait for the read the test held, so a second read of the same address cannot make that wait miss.
 
+- Projects and work items: Tab reaches Add while a creation request is sending,
+  and pressing it keeps keyboard focus on the button. The button looks unavailable
+  until the request finishes, and a second press is ignored. A failed or refused
+  request moves focus to Edit request.
+
 - PM forms keep keyboard focus on the submit button while an operation is in flight
   or being checked automatically, instead of dropping focus to the page. Pressing
   Enter from a field moves focus to the submit button before fields are locked,

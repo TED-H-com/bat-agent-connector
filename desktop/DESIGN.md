@@ -1242,7 +1242,10 @@ its original mapping identity stays in Details. Projects and Resources Work item
 share a creation disclosure, starting closed behind New project or New work item.
 Cancel sits after Add and Review, before the draft note; it closes the form and
 returns focus without discarding the draft. A pending original request stays open
-for receipt recovery. A verified project creation opens its project page for Quick
+for receipt recovery. While Add is sending, it stays in the tab order and keeps
+keyboard focus; it looks unavailable, and a second press does not send another
+request. Enter in a field moves focus to Add before those fields lock. A failed
+or refused request moves focus to Edit request. A verified project creation opens its project page for Quick
 project dispatch. A verified work-item creation refreshes the same list, closes the
 form and returns focus to New work item. Source withdrawal
 hides the form and action together. Project header chips center beside touch-sized
