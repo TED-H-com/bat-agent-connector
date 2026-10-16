@@ -864,16 +864,26 @@ When `features.pm_workspaces.work_start` is advertised, first call
 `pm_work_start_preview(workspace_id, work_item_id, code_target?, delivery?, requirement_ids?, instruction?)`
 with `observe` and workspace membership. It resolves eligible repository bindings
 (auto-selecting only when exactly one candidate matches, never guessing among zero
-or multiple), the published branch head, current work/plan/package state, readiness
-checks and the exact `preconditions` object without writing to the journal. Then
-submit `work.start` through `operation_submit` with target `{workspace_id, work_item_id}`,
-params `{instruction, agent, model?, delivery, requirement_ids?, code_target}` (all four
-`code_target` fields required), and the nine preview `preconditions`. It requires
+or multiple), the published branch head, current work/plan/package/attempt state,
+readiness checks and the exact ten `preconditions` (including `expected_latest_attempt_id`,
+which is the latest `attempt_id` or `null` for a first start) without writing to the
+journal. Then submit `work.start` through `operation_submit` with target
+`{workspace_id, work_item_id}`, params `{instruction, agent, model?, delivery, requirement_ids?, code_target}`
+(all four `code_target` fields required), and the ten preview `preconditions`. It requires
 `observe`, `manage` and `start` scopes plus write membership, and composes at most
 one `pm.work.bind`, one deterministic `work_start_thin_v1` `pm.work_package.create`
 (or reuses the matching ready latest package) and one `repository.continue` child
-under the same controller. A second concurrent start on the same Work item is
-refused with `PM_WORK_START_IN_PROGRESS` (409); keep the original key and read
+under the same controller. A definite child failure ends `work.start` as `failed` so a
+new reviewed start can reuse the prepared package when the basis is unchanged; a
+`needs_attention` child or pre-child guard pause puts the parent in `needs_attention`.
+Cancelling `work.start` also cancels its unfinished children while preserving read-back
+of any possibly sent step and leaving already-started sessions under original authority.
+On `PM_WORK_ATTEMPT_CHANGED` (409), follow the named latest attempt and start operation
+or call `pm_work_start_preview` again before deciding whether a new attempt is needed;
+on `PM_WORK_START_IN_PROGRESS` (409), follow the named start operation with `operation_get`
+(or resume/cancel it first before previewing again); on `PM_WORK_START_OUTCOME_UNPROVEN`
+(409), inspect the named child operation and check the Work's sessions on BAT before
+starting again, never resending an unproven handoff. Keep the original key and read
 `pm_work_attempts_list(workspace_id, work_item_id, after?, limit?)` or
 `pm_work_attempt_get(workspace_id, attempt_id)` to inspect immutable attempts,
 child operations and the resulting managed session.
