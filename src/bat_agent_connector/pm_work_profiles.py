@@ -1,13 +1,16 @@
 """PM work profiles (v1.3 E01): append-only revisions, defaults and readiness."""
 from __future__ import annotations
 
+import calendar
 import hashlib
 import json
 import re
+import sqlite3
 import time
 import uuid
 
 from .api_auth import Principal
+from .host_git import LOCAL_GIT_REASONS
 from .operations import ActionDef, OperationError
 from .pm_workspace import admitted_principal, principal_binding, require_member
 
@@ -27,6 +30,23 @@ _FORBIDDEN = frozenset({
 })
 _AGENTS = frozenset({"claude", "codex"})
 _OMITTED = object()
+_ABSENT = object()
+_CONTRACT = "work-profile-readiness/v1"
+_FIX_ROUTE = "POST /api/v1/operations"
+_FIX_HASH = "#/settings?section=connection"
+_DISCOVERY_REASONS = frozenset({"DISCOVERY_SCOPE_CHANGED", "SOURCE_UNAVAILABLE"})
+_STATE_NAMES = (
+    "discovered", "signed_in_or_available", "can_observe", "can_start_own",
+    "can_continue_own", "last_verified_execution",
+)
+# action and status stay literals so the plan does not depend on bound values.
+_CONTINUE_SQL = """SELECT operation_id, target, params, result, external_refs, created_at
+FROM operations
+WHERE action = 'repository.continue'
+  AND status = 'succeeded'
+  AND json_extract(target, '$.host') = ?
+  AND json_extract(target, '$.workspace_id') = ?
+ORDER BY created_at DESC, operation_id DESC"""
 
 _PROFILE_DDL = (
     """CREATE TABLE IF NOT EXISTS work_profiles (
@@ -466,10 +486,415 @@ def get_profile(db, principal: Principal, workspace_id: str, profile_id: str) ->
 
 
 def readiness(ops, principal: Principal, workspace_id: str, profile_id: str) -> dict:
-    """Member and withdrawal gate. The success body is the readiness reader."""
-    _require_live(ops.db, principal, workspace_id, profile_id)
-    return _readiness_body(ops, principal, workspace_id, profile_id)
+    """Member and withdrawal gate, then a local readiness document. No BAT call and no write."""
+    row = _require_live(ops.db, principal, workspace_id, profile_id)
+    return _readiness_body(ops, principal, workspace_id, row)
 
 
-def _readiness_body(ops, principal: Principal, workspace_id: str, profile_id: str) -> dict:
-    raise NotImplementedError(profile_id)
+def _table(db, name: str) -> bool:
+    return db.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
+    ).fetchone() is not None
+
+
+def _object(value) -> dict:
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except (TypeError, ValueError):
+            return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _epoch(value):
+    if type(value) in (int, float):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(calendar.timegm(time.strptime(value, "%Y-%m-%dT%H:%M:%SZ")))
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _state(value, reason, evidence=None, verified=None) -> dict:
+    return {"value": value, "reason": reason, "evidence_ref": evidence, "verified": verified}
+
+
+def _verified(value, reason, evidence, observed_at) -> dict:
+    return {"value": value, "reason": reason, "evidence_ref": evidence, "verified": None, "observed_at": observed_at}
+
+
+def _gap(reason, fix_action=None, last_success_at=_ABSENT) -> dict:
+    fix = None if fix_action is None else {
+        "action": fix_action, "route": _FIX_ROUTE, "ui_hash": _FIX_HASH,
+    }
+    gap = {"reason": reason, "fix": fix, "fallback": None}
+    if last_success_at is not _ABSENT:
+        gap["last_success_at"] = last_success_at
+    return gap
+
+
+def _host_config(ops, host):
+    fleet = ops.context.get("fleet")
+    hosts = getattr(getattr(fleet, "config", None), "hosts", None)
+    if isinstance(hosts, dict) and host in hosts:
+        return hosts[host]
+    return None
+
+
+def _token_available(host_cfg) -> bool:
+    method = getattr(host_cfg, "token_available", None)
+    if method is None:
+        return False
+    try:
+        return bool(method())
+    except Exception:  # noqa: BLE001 - a token failure is only a boolean, never an exception message
+        return False
+
+
+def _orchestrate_enabled(ops, host, host_cfg) -> bool:
+    fleet = ops.context.get("fleet")
+    method = getattr(fleet, "orchestrate_enabled", None)
+    if host_cfg is None or method is None:
+        return False
+    return bool(method(host))
+
+
+def _git_status(ops, host) -> dict:
+    runner = ops.context.get("git_runner")
+    status = runner.status(host) if runner is not None and hasattr(runner, "status") else None
+    if not isinstance(status, dict) or "reason" not in status:
+        return {"available": False, "reason": "host_unknown", "details": {}}
+    return status
+
+
+def _stale_after_s(ops) -> float:
+    inventory = ops.context.get("inventory")
+    settings = getattr(inventory, "settings", None)
+    if settings is not None and getattr(settings, "stale_after_s", None) is not None:
+        return float(settings.stale_after_s)
+    api = getattr(getattr(getattr(ops.context.get("fleet"), "config", None), "api", None), "stale_after_s", None)
+    if api is not None:
+        return float(api)
+    return 180.0
+
+
+def _host_observation(db, host):
+    if not _table(db, "hosts_observed"):
+        return None
+    return db.execute(
+        "SELECT reachable, last_success_at FROM hosts_observed WHERE host=?", (host,)
+    ).fetchone()
+
+
+def _observation_reason(row, now: float, stale_after_s: float):
+    """Same three reasons as Inventory._host_stale. This read does not call hosts()."""
+    if row is None:
+        return "never_observed"
+    if not row["reachable"]:
+        return "host_unreachable"
+    if now - (row["last_success_at"] or 0) > stale_after_s:
+        return "host_not_refreshed"
+    return None
+
+
+def _discovery_bodies(db, host) -> list:
+    if not _table(db, "discovery_latest"):
+        return []
+    bodies = []
+    for row in db.execute("SELECT body FROM discovery_latest WHERE host=?", (host,)).fetchall():
+        body = _object(row["body"])
+        if body:
+            bodies.append(body)
+    return bodies
+
+
+def _covers(body, bat_workspace: str) -> bool:
+    coverage = body.get("coverage")
+    ids = coverage.get("workspace_ids") if isinstance(coverage, dict) else None
+    return body.get("status") == "succeeded" and isinstance(ids, list) and bat_workspace in ids
+
+
+def _usage_provider(db, host, agent):
+    if not _table(db, "product_host_observations"):
+        return None
+    row = db.execute(
+        "SELECT * FROM product_host_observations WHERE host=? AND kind=? AND scope=?",
+        (host, "usage", ""),
+    ).fetchone()
+    document = _object(row["document"]) if row is not None else {}
+    providers = document.get("providers")
+    if not isinstance(providers, list):
+        return None
+    for item in providers:
+        if isinstance(item, dict) and item.get("provider") == agent:
+            return item
+    return None
+
+
+def _binding_known(ops, repository: str, host: str, bat_workspace: str) -> bool:
+    from . import repository_sync
+    for item in repository_sync.capabilities(ops):
+        repo = item.get("repository")
+        if (isinstance(repo, str) and isinstance(repository, str) and repo.lower() == repository.lower()
+                and item.get("host") == host and item.get("workspace_id") == bat_workspace):
+            return True
+    return False
+
+
+def _matching_continue(db, host, bat_workspace, repository, agent):
+    if not isinstance(host, str) or not isinstance(bat_workspace, str):
+        return None
+    for row in db.execute(_CONTINUE_SQL, (host, bat_workspace)).fetchall():
+        target = _object(row["target"])
+        params = _object(row["params"])
+        repo = target.get("repository")
+        if not isinstance(repo, str) or not isinstance(repository, str) or repo.lower() != repository.lower():
+            continue
+        if "agent" in params:
+            if params.get("agent") != agent:
+                continue
+        elif agent != "claude":
+            continue
+        return row
+    return None
+
+
+def _session_of(row) -> tuple[str, str] | None:
+    """Same host and session_id rule as pm_work_start._child_session."""
+    result = _object(row["result"])
+    refs = _object(row["external_refs"])
+    target = _object(row["target"])
+    host = result.get("host") or refs.get("host") or target.get("host")
+    session_id = result.get("session_id") or refs.get("session_id")
+    if isinstance(host, str) and host and isinstance(session_id, str) and session_id:
+        return host, session_id
+    return None
+
+
+def _observed_session(db, host: str, session_id: str):
+    if not _table(db, "sessions_observed"):
+        return None
+    return db.execute(
+        "SELECT provenance, api_access, gone_at, body FROM sessions_observed WHERE host=? AND session_id=?",
+        (host, session_id),
+    ).fetchone()
+
+
+def _execution(db, row, agent, bat_workspace):
+    """The one latest matching repository.continue, its handoff parent, and its observed session."""
+    if row is None:
+        return None
+    parent = None
+    if _table(db, "pm_work_start_children"):
+        child = db.execute(
+            "SELECT parent_id, slot FROM pm_work_start_children WHERE operation_id=? AND slot='handoff'",
+            (row["operation_id"],),
+        ).fetchone()
+        parent = child["parent_id"] if child is not None else None
+    evidence = {"kind": "operation", "operation_id": row["operation_id"]}
+    if parent is not None:
+        evidence["work_start_operation_id"] = parent
+    located = _session_of(row)
+    observed = _observed_session(db, located[0], located[1]) if located is not None else None
+    body = _object(observed["body"]) if observed is not None else {}
+    owned = (observed is not None and observed["provenance"] == "connector_managed"
+             and observed["api_access"] == "managed" and body.get("agent_kind") == agent
+             and body.get("workspace_id") == bat_workspace)
+    return {
+        "evidence": evidence,
+        "owned": owned,
+        "gone_at": observed["gone_at"] if observed is not None else None,
+        "observed_at": row["created_at"],
+    }
+
+
+def _pm_analysis(ops, principal, workspace_id: str) -> dict:
+    from . import pm_bat_operations, pm_native_capabilities
+    workspace = require_member(ops.db, principal, workspace_id)
+    native = pm_native_capabilities.read(ops, principal, workspace)
+    try:
+        bat = pm_bat_operations.capabilities(ops, principal, workspace)
+    except sqlite3.OperationalError as exc:
+        if "no such table" not in str(exc):
+            raise
+        # The PM worktree table is created by its own install. A readiness read must not create it.
+        bat = {
+            "action_registered": False, "authorized": False, "eligible_for_preflight": False,
+            "reason": "pm_worktree_required", "auth_validity": "unverified", "model_execution_verified": False,
+        }
+    permitted = all(principal.allows(scope) for scope in ("observe", "manage", "start"))
+    pm_ready = permitted and any(
+        isinstance(item, dict) and item.get("eligible_for_preflight") is True
+        and item.get("action_registered") is True and item.get("authorized") is not False
+        for item in (native, bat)
+    )
+    return {"pm_ready": pm_ready, "native_analysis": native, "bat_analysis": bat}
+
+
+def _readiness_body(ops, principal: Principal, workspace_id: str, row) -> dict:
+    observed_at = time.time()
+    document = _object(row["document"])
+    binding = document.get("binding") if isinstance(document.get("binding"), dict) else {}
+    repository = binding.get("repository")
+    host = binding.get("host")
+    bat_workspace = binding.get("workspace_id")
+    agent = document.get("agent")
+    delivery = document.get("delivery_policy_ref")
+    goal = delivery.get("goal") if isinstance(delivery, dict) else None
+    host_cfg = _host_config(ops, host)
+    token = _token_available(host_cfg)
+    git = _git_status(ops, host)
+    git_reason = git.get("reason")
+    roots = bool(getattr(host_cfg, "managed_roots", None))
+    orchestrate = _orchestrate_enabled(ops, host, host_cfg)
+    continue_registered = "repository.continue" in ops.actions
+    send_registered = "session.send" in ops.actions
+    bound = _binding_known(ops, repository, host, bat_workspace)
+    host_row = _host_observation(ops.db, host)
+    stale_after = _stale_after_s(ops)
+    observed_reason = _observation_reason(host_row, observed_at, stale_after)
+    last_success = host_row["last_success_at"] if host_row is not None else None
+    bodies = _discovery_bodies(ops.db, host)
+    succeeded = [body for body in bodies if body.get("status") == "succeeded"]
+    covering = [body for body in succeeded if _covers(body, bat_workspace)]
+    provider = _usage_provider(ops.db, host, agent)
+    receipt = _matching_continue(ops.db, host, bat_workspace, repository, agent)
+    execution = _execution(ops.db, receipt, agent, bat_workspace)
+
+    if not bound:
+        discovered = _state("missing", "REPOSITORY_NOT_BOUND")
+    elif git_reason == "host_unknown":
+        discovered = _state("unavailable", "host_unknown")
+    elif observed_reason is None and covering:
+        found = covering[0]
+        discovered = _state("ready", None, {
+            "kind": "discovery_latest", "host": host, "scan_id": found.get("scan_id"), "status": found.get("status"),
+        })
+    else:
+        coded = next((body.get("error_code") for body in bodies if body.get("error_code") in _DISCOVERY_REASONS), None)
+        discovered = _state("unknown", coded or "configured_unverified")
+    if succeeded:
+        past = covering[0] if covering else succeeded[0]
+        discovered["verified"] = _verified("ready", None, {
+            "kind": "discovery_latest", "host": host, "scan_id": past.get("scan_id"),
+            "status": past.get("status"), "finished_at": past.get("finished_at"),
+        }, _epoch(past.get("finished_at")))
+
+    if not token:
+        signed_in = _state("missing", "CREDENTIAL_REQUIRED")
+    elif isinstance(provider, dict) and provider.get("reason") == "unauthorized":
+        signed_in = _state("unavailable", "unauthorized")
+    else:
+        signed_in = _state("unknown", "auth_validity_unverified", {"auth_validity": "unverified"})
+
+    if not continue_registered:
+        can_observe = _state("unavailable", "action_unavailable")
+    elif git_reason in LOCAL_GIT_REASONS | {"git_execution_location_changed", "host_unknown"}:
+        can_observe = _state("unavailable", git_reason)
+    elif git_reason == "ssh_alias_missing":
+        can_observe = _state("missing", "ssh_alias_missing")
+    elif not orchestrate or not roots:
+        can_observe = _state("unavailable", "REPOSITORY_HOST_UNAVAILABLE")
+    elif observed_reason == "never_observed":
+        can_observe = _state("unknown", "never_observed")
+    elif observed_reason == "host_unreachable":
+        can_observe = _state("unavailable", "host_unreachable")
+    elif observed_reason == "host_not_refreshed":
+        can_observe = _state("unavailable", "host_not_refreshed")
+    else:
+        can_observe = _state("ready", None, {"kind": "hosts_observed", "last_success_at": last_success})
+    if last_success is not None:
+        can_observe["verified"] = _verified(
+            "ready", None, {"kind": "hosts_observed", "last_success_at": last_success}, last_success,
+        )
+
+    blockers = []
+    if not bound:
+        blockers.append(("missing", "REPOSITORY_NOT_BOUND"))
+    if git_reason == "host_unknown":
+        blockers.append(("unavailable", "host_unknown"))
+    if git_reason in LOCAL_GIT_REASONS:
+        blockers.append(("unavailable", git_reason))
+    if git_reason == "ssh_alias_missing":
+        blockers.append(("missing", "ssh_alias_missing"))
+    if git_reason == "git_execution_location_changed":
+        blockers.append(("unavailable", "git_execution_location_changed"))
+    if observed_reason == "host_unreachable":
+        blockers.append(("unavailable", "host_unreachable"))
+    if observed_reason == "host_not_refreshed":
+        blockers.append(("unavailable", "host_not_refreshed"))
+    if not continue_registered:
+        blockers.append(("unavailable", "action_unavailable"))
+    if not orchestrate or not roots:
+        blockers.append(("unavailable", "REPOSITORY_HOST_UNAVAILABLE"))
+    if blockers:
+        can_start = _state(blockers[0][0], blockers[0][1])
+    else:
+        can_start = _state("unknown", "configured_unverified")
+
+    if not send_registered:
+        can_continue = _state("unavailable", "action_unavailable")
+    else:
+        can_continue = _state("unknown", "no_owned_session_verified")
+    if (execution is not None and execution["owned"] and execution["gone_at"] is None and send_registered):
+        can_continue["verified"] = _verified("ready", None, execution["evidence"], execution["observed_at"])
+
+    if execution is None or not execution["owned"]:
+        last_execution = _state("unknown", "execution_not_verified")
+    else:
+        last_execution = _state("ready", None, execution["evidence"])
+        last_execution["verified"] = _verified("ready", None, execution["evidence"], execution["observed_at"])
+
+    states = {
+        "discovered": discovered,
+        "signed_in_or_available": signed_in,
+        "can_observe": can_observe,
+        "can_start_own": can_start,
+        "can_continue_own": can_continue,
+        "last_verified_execution": last_execution,
+    }
+    if not bound:
+        smallest = _gap("REPOSITORY_NOT_BOUND", "setup.repository")
+    elif host_cfg is None:
+        smallest = _gap("host_unknown", "setup.host")
+    elif git_reason in LOCAL_GIT_REASONS:
+        smallest = _gap(git_reason)
+    elif git_reason == "ssh_alias_missing" or not token or not orchestrate or not roots:
+        if git_reason == "ssh_alias_missing":
+            gap_reason = "ssh_alias_missing"
+        elif not token:
+            gap_reason = "CREDENTIAL_REQUIRED"
+        else:
+            gap_reason = "REPOSITORY_HOST_UNAVAILABLE"
+        smallest = _gap(gap_reason, "setup.host")
+    elif git_reason == "git_execution_location_changed":
+        smallest = _gap("git_execution_location_changed")
+    elif observed_reason in {"host_unreachable", "host_not_refreshed"}:
+        smallest = _gap(observed_reason, last_success_at=last_success)
+    elif not continue_registered or not send_registered:
+        smallest = _gap("action_unavailable")
+    else:
+        smallest = None
+    return {
+        "contract": _CONTRACT,
+        "workspace_id": workspace_id,
+        "profile_id": row["profile_id"],
+        "revision": row["revision"],
+        "digest": row["digest"],
+        "observed_at": observed_at,
+        "calls_bat": False,
+        "coding_route_ready": states["can_start_own"]["value"] == "ready",
+        "configured": {
+            "agent": agent,
+            "model": document.get("model"),
+            "delivery_goal": goal,
+            "binding": {"repository": repository, "host": host, "workspace_id": bat_workspace},
+        },
+        "states": states,
+        "smallest_gap": smallest,
+        "unverified": [name for name in _STATE_NAMES if states[name]["value"] == "unknown"],
+        "resume": {"kind": "client_draft", "stored_on_server": False},
+        "pm_analysis": _pm_analysis(ops, principal, workspace_id),
+    }

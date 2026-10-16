@@ -12,7 +12,7 @@ import pytest
 from bat_agent_connector import pm_lifecycle, pm_work_profiles, pm_workspace
 from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.config import GitHubConfig, GitHubRepo, RepositorySyncConfig
-from bat_agent_connector.operations import OpContext, OperationError, OperationService
+from bat_agent_connector.operations import ActionDef, OpContext, OperationError, OperationService
 from bat_agent_connector.task_journal import Journal
 from tests.operation_helpers import settle_operations
 
@@ -341,3 +341,277 @@ async def test_default_change_is_one_transaction(ops):
     ).fetchone()["profile_id"] is None
     assert _revisions(ops, loser_id) == (1 if loser_id == other["profile_id"] else 2)
     assert _revisions(ops, untouched["profile_id"]) == 1
+
+
+async def _idle(_ctx):
+    return {}
+
+
+def _note(ops, name):
+    if name not in ops.actions:
+        ops.actions[name] = ActionDef(name, "start", "test double", _idle)
+
+
+def _configure(ops, *, reason=None, available=True, token=True, orchestrate=True, roots=("/srv/repos",),
+               reachable=_UNSET, register_continue=True, register_send=False):
+    fleet = _fleet()
+    host = SimpleNamespace(writes=True, orchestrate=orchestrate, managed_roots=roots)
+    host.token_available = lambda: bool(token)
+    fleet.config.hosts = {"h1": host}
+    fleet.read_only = False
+
+    def orchestrate_enabled(name):
+        item = fleet.config.hosts[name]
+        return (not fleet.read_only) and item.writes and item.orchestrate
+
+    fleet.orchestrate_enabled = orchestrate_enabled
+    invokes = {"n": 0}
+
+    def client(_name):
+        invokes["n"] += 1
+        raise AssertionError("readiness called BAT")
+
+    fleet.client = client
+    ops.context["fleet"] = fleet
+    ops.context["git_runner"] = SimpleNamespace(
+        status=lambda _host: {"available": available, "reason": reason, "details": {}},
+    )
+    if register_continue:
+        _note(ops, "repository.continue")
+    if register_send:
+        _note(ops, "session.send")
+    if reachable is not _UNSET:
+        ops.db.execute(
+            """INSERT INTO hosts_observed(host, reachable, last_attempt_at, last_success_at, consecutive_failures)
+               VALUES(?,?,?,?,?)""",
+            ("h1", 1 if reachable else 0, time.time(), time.time() if reachable else None, 0),
+        )
+    return invokes
+
+
+def _usage_table(ops):
+    ops.db.execute(
+        """CREATE TABLE IF NOT EXISTS product_host_observations (
+            host TEXT NOT NULL, kind TEXT NOT NULL, scope TEXT NOT NULL, document TEXT NOT NULL,
+            observed_at REAL NOT NULL, PRIMARY KEY(host,kind,scope))"""
+    )
+
+
+def _usage(ops, providers, *, kind="usage", scope=""):
+    ops.db.execute(
+        """INSERT INTO product_host_observations(host, kind, scope, document, observed_at)
+           VALUES(?,?,?,?,?)
+           ON CONFLICT(host, kind, scope) DO UPDATE SET document=excluded.document""",
+        ("h1", kind, scope, json.dumps({"providers": providers, "_source_binding": "hidden-binding"}), time.time()),
+    )
+
+
+def _continue_row(ops, *, created_at, session_id, provenance, api_access, gone_at=None, agent=_UNSET,
+                  body_agent="claude", body_workspace="bat-ws"):
+    operation_id = "op_" + uuid.uuid4().hex
+    target = {"repository": "Acme/Widget", "host": "h1", "workspace_id": "bat-ws"}
+    params = {} if agent is _UNSET else {"agent": agent}
+    ops.db.execute(
+        """INSERT INTO operations(operation_id,actor,entry,idem_key,request_hash,action,target,
+           params,preconditions,status,result,external_refs,created_at,updated_at)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (operation_id, "alice", "test", operation_id, "hash", "repository.continue", json.dumps(target),
+         json.dumps(params), "{}", "succeeded", json.dumps({"host": "h1", "session_id": session_id}),
+         "{}", created_at, created_at),
+    )
+    ops.db.execute(
+        """INSERT INTO sessions_observed(
+            host,session_id,body,digest,provenance,api_access,first_seen_at,last_seen_at,gone_at
+        ) VALUES(?,?,?,?,?,?,?,?,?)""",
+        ("h1", session_id, json.dumps({
+            "agent_kind": body_agent, "workspace_id": body_workspace, "account_email": "hidden@example.com",
+        }), "d" * 64, provenance, api_access, created_at, created_at, gone_at),
+    )
+    return operation_id
+
+
+async def _profile(ops):
+    saved = await _finish(ops, _save(ops)[0])
+    return saved["result"]["profile_id"]
+
+
+async def test_configured_host_never_verified_is_unknown_not_ready(ops):
+    _configure(ops)
+    profile_id = await _profile(ops)
+    assert ops.db.execute("SELECT COUNT(*) FROM hosts_observed").fetchone()[0] == 0
+    assert ops.db.execute("SELECT COUNT(*) FROM discovery_latest").fetchone()[0] == 0
+    body = pm_work_profiles.readiness(ops, OWNER, WS, profile_id)
+    for name in ("discovered", "signed_in_or_available", "can_start_own"):
+        assert body["states"][name]["value"] != "ready"
+    assert body["states"]["can_start_own"]["reason"] == "configured_unverified"
+    assert body["coding_route_ready"] is False
+    assert body["calls_bat"] is False
+    assert body["contract"] == "work-profile-readiness/v1"
+    assert body["resume"] == {"kind": "client_draft", "stored_on_server": False}
+    assert body["configured"]["binding"] == {"repository": "Acme/Widget", "host": "h1", "workspace_id": "bat-ws"}
+    assert body["workspace_id"] == WS
+    from bat_agent_connector.pm_reads import read
+    listed = read(ops, OWNER, "pm_work_profiles_list", {"workspace_id": WS})
+    assert listed["count"] == 1 and listed["profiles"][0]["profile_id"] == profile_id
+    got = read(ops, OWNER, "pm_work_profile_get", {"workspace_id": WS, "profile_id": profile_id})
+    assert got["profile_id"] == profile_id and got["repository"] == "Acme/Widget"
+    again = read(ops, OWNER, "pm_work_profile_readiness_get", {"workspace_id": WS, "profile_id": profile_id})
+    assert again["states"] == body["states"] and again["calls_bat"] is False
+    with pytest.raises(OperationError) as unexpected:
+        read(ops, OWNER, "pm_work_profiles_list", {"workspace_id": WS, "draft": "back"})
+    assert unexpected.value.code == "INVALID_PARAMS"
+
+
+async def test_offline_host_and_unsigned_agent_stay_separate(ops):
+    invokes = _configure(ops, reachable=False, register_send=True)
+    profile_id = await _profile(ops)
+    _usage_table(ops)
+    _usage(ops, [
+        {"provider": "claude", "reason": "unauthorized", "account_email": "secret@example.com"},
+        {"provider": "codex", "reason": None, "account_email": "other@example.com"},
+    ])
+    _usage(ops, [{"provider": "claude", "reason": "unauthorized", "account_email": "model@example.com"}],
+           kind="models", scope="claude:session")
+    body = pm_work_profiles.readiness(ops, OWNER, WS, profile_id)
+    assert body["states"]["can_observe"]["value"] == "unavailable"
+    assert body["states"]["can_observe"]["reason"] == "host_unreachable"
+    assert body["states"]["can_observe"]["value"] != "missing"
+    assert body["states"]["can_start_own"]["value"] == "unavailable"
+    assert body["states"]["can_start_own"]["reason"] == "host_unreachable"
+    assert body["states"]["signed_in_or_available"]["value"] == "unavailable"
+    assert body["states"]["signed_in_or_available"]["reason"] == "unauthorized"
+    dumped = json.dumps(body)
+    assert "secret@example.com" not in dumped and "other@example.com" not in dumped and "model@example.com" not in dumped
+    assert "account_email" not in dumped and "_source_binding" not in dumped
+    assert invokes["n"] == 0
+
+    _usage(ops, [
+        {"provider": "claude", "reason": "network", "account_email": "secret@example.com"},
+        {"provider": "codex", "reason": "unauthorized", "account_email": "other@example.com"},
+    ])
+    body = pm_work_profiles.readiness(ops, OWNER, WS, profile_id)
+    assert body["states"]["signed_in_or_available"]["value"] == "unknown"
+    assert body["states"]["signed_in_or_available"]["reason"] == "auth_validity_unverified"
+    assert body["states"]["can_observe"]["reason"] == "host_unreachable"
+    dumped = json.dumps(body)
+    assert "secret@example.com" not in dumped and "account_email" not in dumped
+    assert invokes["n"] == 0
+
+
+async def test_local_git_unavailable_has_no_ssh_fallback(ops):
+    from bat_agent_connector.host_git import LOCAL_GIT_REASONS
+
+    state = {"reason": "local_git_not_enabled"}
+    invokes = _configure(ops, token=False, register_continue=True, register_send=True)
+    ops.context["git_runner"] = SimpleNamespace(
+        status=lambda _host: {"available": False, "reason": state["reason"], "details": {}},
+    )
+    profile_id = await _profile(ops)
+    body = pm_work_profiles.readiness(ops, OWNER, WS, profile_id)
+    assert state["reason"] in LOCAL_GIT_REASONS
+    assert body["states"]["can_observe"]["reason"] == state["reason"]
+    assert body["states"]["can_start_own"]["reason"] == state["reason"]
+    assert body["smallest_gap"]["reason"] == state["reason"]
+    assert body["smallest_gap"]["fix"] is None and body["smallest_gap"]["fallback"] is None
+    assert "ssh" not in json.dumps(body["smallest_gap"])
+    assert invokes["n"] == 0
+
+    state["reason"] = "local_git_platform_unsupported"
+    body = pm_work_profiles.readiness(ops, OWNER, WS, profile_id)
+    assert body["states"]["can_observe"]["reason"] == "local_git_platform_unsupported"
+    assert body["states"]["can_start_own"]["reason"] == "local_git_platform_unsupported"
+    assert body["smallest_gap"]["reason"] == "local_git_platform_unsupported"
+    assert body["smallest_gap"]["fix"] is None and body["smallest_gap"]["fallback"] is None
+
+
+async def test_readiness_does_not_call_bat_or_write(ops):
+    invokes = _configure(ops, reachable=True, register_send=True)
+    profile_id = await _profile(ops)
+    assert "action = 'repository.continue'" in pm_work_profiles._CONTINUE_SQL
+    assert "status = 'succeeded'" in pm_work_profiles._CONTINUE_SQL
+    plan = ops.db.execute(
+        "EXPLAIN QUERY PLAN " + pm_work_profiles._CONTINUE_SQL, ("h1", "bat-ws")
+    ).fetchall()
+    detail = " ".join(row[3] for row in plan)
+    assert "operations_continue_succeeded" in detail
+    assert "USE TEMP B-TREE" not in detail
+    before = ops.db.total_changes
+    body = pm_work_profiles.readiness(ops, OWNER, WS, profile_id)
+    assert ops.db.total_changes == before
+    assert invokes["n"] == 0
+    assert body["calls_bat"] is False and body["coding_route_ready"] is False
+
+
+async def test_pm_eligibility_does_not_mark_coding_route_ready(ops, monkeypatch):
+    from bat_agent_connector import pm_bat_operations, pm_native_capabilities
+
+    analyst = Principal("carol", frozenset({"observe", "manage", "start"}))
+    now = time.time()
+    ops.db.execute(
+        "INSERT INTO pm_workspace_members VALUES(?,?,?,?,?,?)",
+        (WS, analyst.actor, "owner", pm_workspace.controller_for(ops.db, analyst), now, now),
+    )
+    _configure(ops, register_send=True)
+    profile_id = await _profile(ops)
+
+    def native(_service, _principal, _workspace, *, eligible):
+        return {"eligible_for_preflight": eligible, "action_registered": True, "authorized": True}
+
+    def bat(_service, _principal, _workspace):
+        return {"eligible_for_preflight": False, "action_registered": True, "authorized": False}
+
+    monkeypatch.setattr(pm_native_capabilities, "read", lambda *args: native(*args, eligible=True))
+    monkeypatch.setattr(pm_bat_operations, "capabilities", bat)
+    ready = pm_work_profiles.readiness(ops, analyst, WS, profile_id)
+    assert ready["pm_analysis"]["pm_ready"] is True
+    assert ready["coding_route_ready"] is False
+    assert ready["states"]["can_start_own"]["value"] == "unknown"
+
+    monkeypatch.setattr(pm_native_capabilities, "read", lambda *args: native(*args, eligible=False))
+    unknown = pm_work_profiles.readiness(ops, analyst, WS, profile_id)
+    assert unknown["states"]["can_start_own"]["value"] == "unknown"
+    assert unknown["pm_analysis"]["pm_ready"] is False
+    assert unknown["coding_route_ready"] is False
+
+
+async def test_manual_session_does_not_satisfy_continue(ops):
+    invokes = _configure(ops, register_send=True)
+    profile_id = await _profile(ops)
+    _continue_row(
+        ops, created_at=10, session_id="codex-owned", provenance="connector_managed", api_access="managed",
+        agent="codex", body_agent="claude",
+    )
+    body = pm_work_profiles.readiness(ops, OWNER, WS, profile_id)
+    assert body["states"]["last_verified_execution"]["value"] != "ready"
+    assert body["states"]["can_continue_own"]["verified"] is None
+
+    _continue_row(
+        ops, created_at=20, session_id="manual-one", provenance="manual", api_access="read_only", agent="claude",
+    )
+    body = pm_work_profiles.readiness(ops, OWNER, WS, profile_id)
+    assert body["states"]["last_verified_execution"]["value"] != "ready"
+    assert (body["states"]["can_continue_own"]["verified"] or {}).get("value") != "ready"
+
+    _continue_row(
+        ops, created_at=30, session_id="unknown-one", provenance="unknown", api_access="managed", agent="claude",
+    )
+    body = pm_work_profiles.readiness(ops, OWNER, WS, profile_id)
+    assert body["states"]["last_verified_execution"]["value"] != "ready"
+    assert (body["states"]["can_continue_own"]["verified"] or {}).get("value") != "ready"
+
+    managed = _continue_row(
+        ops, created_at=40, session_id="owned", provenance="connector_managed", api_access="managed",
+    )
+    body = pm_work_profiles.readiness(ops, OWNER, WS, profile_id)
+    assert body["states"]["can_continue_own"]["verified"]["value"] == "ready"
+    assert body["states"]["last_verified_execution"]["value"] == "ready"
+    assert body["states"]["last_verified_execution"]["evidence_ref"]["operation_id"] == managed
+    assert "hidden@example.com" not in json.dumps(body)
+    assert invokes["n"] == 0
+
+    ops.db.execute("UPDATE sessions_observed SET gone_at=? WHERE session_id=?", (50, "owned"))
+    body = pm_work_profiles.readiness(ops, OWNER, WS, profile_id)
+    assert body["states"]["last_verified_execution"]["value"] == "ready"
+    assert body["states"]["can_continue_own"]["verified"] is None
+    assert body["coding_route_ready"] is False
+    assert invokes["n"] == 0

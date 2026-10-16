@@ -69,6 +69,7 @@ READ_TOOLS = [
     "pm_snapshots_list", "pm_snapshot_get", "pm_snapshot_latest_get",
     "pm_governance_list", "pm_governance_get", "pm_governance_history_list",
     "pm_work_packages_list", "pm_work_package_get", "pm_work_package_readiness_get",
+    "pm_work_profiles_list", "pm_work_profile_get", "pm_work_profile_readiness_get",
     "pm_work_start_preview", "pm_work_attempts_list", "pm_work_attempt_get",
     "pm_work_attempt_result_get", "pm_work_attempt_changes_get", "pm_work_attempt_diff_get",
     "pm_issue_mappings_list", "pm_issue_mapping_get",
@@ -888,6 +889,18 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         return await pm_daemon("pm_work_package_readiness_get", workspace_id=workspace_id, package_id=package_id,
                                **({'quality_refs': quality_refs} if quality_refs is not None else {}))
 
+    async def pm_work_profiles_list(workspace_id: str, limit: StrictInt = 50, cursor: StrictInt = 0) -> dict[str, Any]:
+        """List current PM work profiles. Read-only; this does not call BAT."""
+        return await pm_daemon("pm_work_profiles_list", workspace_id=workspace_id, limit=limit, cursor=cursor)
+
+    async def pm_work_profile_get(workspace_id: str, profile_id: str) -> dict[str, Any]:
+        """Read one current PM work profile. Read-only; this does not call BAT."""
+        return await pm_daemon("pm_work_profile_get", workspace_id=workspace_id, profile_id=profile_id)
+
+    async def pm_work_profile_readiness_get(workspace_id: str, profile_id: str) -> dict[str, Any]:
+        """Read work-profile readiness from the local journal. This does not call BAT or write."""
+        return await pm_daemon("pm_work_profile_readiness_get", workspace_id=workspace_id, profile_id=profile_id)
+
     async def pm_work_start_preview(workspace_id: str, work_item_id: str,
                                     code_target: dict[str, Any] | None = None,
                                     delivery: str | None = None,
@@ -1158,6 +1171,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_snapshots_list, pm_snapshot_get, pm_snapshot_latest_get,
                pm_governance_list, pm_governance_get, pm_governance_history_list,
                pm_work_packages_list, pm_work_package_get, pm_work_package_readiness_get,
+               pm_work_profiles_list, pm_work_profile_get, pm_work_profile_readiness_get,
                pm_work_start_preview, pm_work_attempts_list, pm_work_attempt_get,
                pm_work_attempt_result_get, pm_work_attempt_changes_get, pm_work_attempt_diff_get,
                pm_issue_mappings_list, pm_issue_mapping_get,
