@@ -1466,9 +1466,9 @@ class AttemptResultCollector:
                 and self.ops.db.execute(
                     """SELECT 1 FROM session_results
                        WHERE workspace_id=? AND attempt_id=?
-                         AND (source_position LIKE ? OR json_extract(document, '$.turn_marker') = ?)
+                         AND json_extract(document, '$.turn_marker') = ?
                        LIMIT 1""",
-                    (workspace_id, attempt_id, f"{cand_mid}:%", cand_mid),
+                    (workspace_id, attempt_id, cand_mid),
                 ).fetchone()
                 is not None
             )

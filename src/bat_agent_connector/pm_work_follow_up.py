@@ -336,16 +336,9 @@ def _has_turn_boundary_receipt(
            ORDER BY sequence DESC""",
         (workspace_id, attempt_id),
     ).fetchall()
-    prefix = f"{turn_marker}:"
     for row in rows:
-        raw_pos = row["source_position"]
-        matched_marker = False
-        if isinstance(raw_pos, str) and raw_pos.startswith(prefix):
-            matched_marker = True
-        else:
-            parsed_pos = pm_attempt_results.parse_source_position(raw_pos or "")
-            if parsed_pos.get("turn_marker") == turn_marker:
-                matched_marker = True
+        parsed_pos = pm_attempt_results.parse_source_position(row["source_position"] or "")
+        matched_marker = parsed_pos.get("turn_marker") == turn_marker
         try:
             doc = json.loads(row["document"] or "{}")
         except (TypeError, ValueError):
