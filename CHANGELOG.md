@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Pressing Check again in Settings → Agents keeps keyboard focus on the button
+  while the check runs by using `aria-disabled` and exposing `aria-busy` on the
+  eligibility status instead of disabling the button.
+
 - The PM Work inspector adds a Start work panel and header action to start
   eligible Work cards. The panel previews readiness facts, explains candidate
   code targets or offers a selector when multiple match, and displays requirement
