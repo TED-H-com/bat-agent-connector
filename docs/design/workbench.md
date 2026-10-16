@@ -32,6 +32,23 @@ allows. The list moves into the existing keyboard-accessible mobile drawer at
 less than 1000px. No second catalog or search cache is created. The original
 workspace binding, partial-source and permission rules still select its rows.
 
+### Classic → preview location
+
+| Classic destination | Route | Preview location | Reached via |
+| --- | --- | --- | --- |
+| Overview | `#/pm/{id}/overview` | Projects daily entry | Daily entry (`.wc-daily a[href="#/pm/{id}/overview"]`) / Management selector (`select[data-workbench-management]` value `overview`) |
+| Discussions | `#/pm/{id}/discussions` | Project management selector | Management selector (`select[data-workbench-management]` value `discussions`) |
+| Requirements | `#/pm/{id}/requirements` | Project management selector | Management selector (`select[data-workbench-management]` value `requirements`) |
+| Board | `#/pm/{id}/board` | Work daily entry | Daily entry (`.wc-daily a[href="#/pm/{id}/board"]`) / Management selector (`select[data-workbench-management]` value `board`) |
+| Operations | `#/operations` | Tools menu | Tools menu (`[data-shell-tools]` → `.ui-menu-panel [role="menuitem"][href="#/operations"]`) |
+| Delivery | `#/delivery` | Tools menu | Tools menu (`[data-shell-tools]` → `.ui-menu-panel [role="menuitem"][href="#/delivery"]`) |
+| Artifact review | `#/artifact-review` | Tools menu | Tools menu (`[data-shell-tools]` → `.ui-menu-panel [role="menuitem"][href="#/artifact-review"]`) |
+| Cleanup | `#/cleanup` | Tools menu | Tools menu (`[data-shell-tools]` → `.ui-menu-panel [role="menuitem"][href="#/cleanup"]`) |
+| Sessions | `#/sessions` | Tools menu | Tools menu (`[data-shell-tools]` → `.ui-menu-panel [role="menuitem"][href="#/sessions"]`) |
+| Pending | `#/home` | Today daily entry | Daily entry (`.wc-daily a[href="#/home"]`) |
+| Settings | `#/settings` | Settings link | Navigation footer link (`a[data-shell-settings]`) |
+| All projects | `#/projects` | Switcher / Catalog link | Workspace switcher menu (`.shell-workspace-switch` → `.ui-menu-panel [role="menuitem"][href="#/projects"]`) at desktop; drawer catalog link (`.shell-all-projects, a[href="#/projects"]`) at 390px |
+
 ## Source mapping
 
 | Presentation | Existing authority | Current limit |

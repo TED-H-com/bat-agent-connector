@@ -27,6 +27,10 @@
   on BAT before starting again), alongside unready requirement and foreign
   controller checks.
 
+- Conversation adoption advances as each original child operation finishes,
+  removing the fixed one-second pause between completed steps. Child failures
+  still stop the adoption; recovery keeps the original requests and receipts.
+
 - Tools → Workbench preview opens a reversible layout with Today, Projects,
   Work and Resources, a project management selector and an optional Results
   inspector. Work, Lineage and Live preserve the same conversation and draft,
