@@ -624,7 +624,9 @@ selection, clearing a previous search when following an explicit selection link.
 Overview and Issues links preserve the exact revision, expand the destination row with
 `aria-current`, and focus its visible target. Work links focus the shared sheet title
 on narrow screens. Explicit destinations cancel queued scroll restoration; revisiting
-a view restores its own scroll. Unassigned work remains selectable before plan adoption. Preferences are bounded by connection/principal and workspace; fetched
+a view restores its own scroll. Board and Requirements record their scroll position before
+a view switch hides them or on route departure (including during in-flight reads). Unassigned
+work remains selectable before plan adoption. Preferences are bounded by connection/principal and workspace; fetched
 facts are reauthorized, never stored in the preference map.
 
 The package entry preserves the existing read-only catalogue. This foundation has

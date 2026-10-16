@@ -352,6 +352,9 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   }
   const resize = new ResizeObserver(() => {updateEdges(); if (detail.element && selected) {const node = rows.get(selected)?.node; if (node) requestAnimationFrame(() => revealCard(node));}}); resize.observe(list);
   list.addEventListener('scroll', () => {preference.laneScroll = list.scrollLeft; updateEdges();});
+  function rememberScroll() {
+    if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+  }
   const onScroll = () => {
     if (active && !reading && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
   };
@@ -359,7 +362,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   function setActive(value) {
     const routeId = new URLSearchParams(location.hash.split('?')[1]).get('select');
     if (active === value) {if (value && routeId && routeId !== selected) void select(routeId); return;} active = value;
-    if (!value) {stale = true; serial++; detailSerial++; if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY; closeRetaining();}
+    if (!value) {stale = true; serial++; detailSerial++; rememberScroll(); closeRetaining();}
     else {
       const generation = ++scrollGeneration;
       const read = stale || !page ? refresh() : null;
@@ -382,5 +385,5 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       return read;
     }
   }
-  return {element, box: element, meta, refresh, titleFor, withdraw, setActive, hideInspector: closeRetaining, setTools: value => {toolItems = value;}, dispose: () => {window.removeEventListener('scroll', onScroll); resize.disconnect(); withdraw({forgetRoute: false});}};
+  return {element, box: element, meta, refresh, titleFor, withdraw, setActive, rememberScroll, hideInspector: closeRetaining, setTools: value => {toolItems = value;}, dispose: () => {rememberScroll(); window.removeEventListener('scroll', onScroll); resize.disconnect(); withdraw({forgetRoute: false});}};
 }

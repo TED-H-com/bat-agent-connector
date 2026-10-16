@@ -22150,6 +22150,9 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			}
 		}
 	}
+	function rememberScroll() {
+		if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+	}
 	const onScroll = () => {
 		if (visible && !busy && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
 	};
@@ -22169,7 +22172,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			stale = true;
 			serial++;
 			detailSerial++;
-			if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+			rememberScroll();
 			closeRetaining();
 		} else {
 			const generation = ++scrollGeneration;
@@ -22273,12 +22276,14 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		focusRequirement,
 		labelFor,
 		setActive,
+		rememberScroll,
 		hideInspector: closeRetaining,
 		activate,
 		setTools: (value) => {
 			tools = value;
 		},
 		dispose: () => {
+			rememberScroll();
 			window.removeEventListener("scroll", onScroll);
 			Object.assign(preference, {
 				selected,
@@ -33428,6 +33433,9 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		preference.laneScroll = list.scrollLeft;
 		updateEdges();
 	});
+	function rememberScroll() {
+		if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+	}
 	const onScroll = () => {
 		if (active && !reading && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
 	};
@@ -33443,7 +33451,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			stale = true;
 			serial++;
 			detailSerial++;
-			if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+			rememberScroll();
 			closeRetaining();
 		} else {
 			const generation = ++scrollGeneration;
@@ -33471,11 +33479,13 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		titleFor,
 		withdraw,
 		setActive,
+		rememberScroll,
 		hideInspector: closeRetaining,
 		setTools: (value) => {
 			toolItems = value;
 		},
 		dispose: () => {
+			rememberScroll();
 			window.removeEventListener("scroll", onScroll);
 			resize.disconnect();
 			withdraw({ forgetRoute: false });
@@ -42350,6 +42360,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			beforeSelect: (id, previous) => {
 				maskStaleView(id);
 				if (previous === "overview") brief?.setActive?.(false);
+				if (previous === "board") kanban?.rememberScroll?.();
+				if (previous === "requirements") traceability?.rememberScroll?.();
+				if (previous === "issues") register?.rememberScroll?.();
 			},
 			onSelect: (id) => {
 				if (shownView === "issues" && id !== "issues") register?.rememberScroll();
@@ -43932,6 +43945,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		return settleRefreshes(reads).then(refreshNames);
 	});
 	const dispose = () => {
+		if (workbench?.selected() === "board") kanban?.rememberScroll?.();
+		if (workbench?.selected() === "requirements") traceability?.rememberScroll?.();
+		if (workbench?.selected() === "issues") register?.rememberScroll?.();
 		uiState.listScroll = workspaceList.scrollTop;
 		threadState.scroll = content.querySelector(".pd-transcript")?.scrollTop || 0;
 		disposed = true;

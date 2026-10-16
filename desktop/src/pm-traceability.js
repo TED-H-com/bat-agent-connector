@@ -312,6 +312,9 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
       detail.show({title: card.work.title, error, onRetry: () => void refresh()});
     }}
   }
+  function rememberScroll() {
+    if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+  }
   const onScroll = () => {
     if (visible && !busy && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
   };
@@ -319,7 +322,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
   function setActive(value) {
     if (visible === value) {if (value && signature) {const id = new URLSearchParams(location.hash.split('?')[1]).get('select'); if (!id) currentMilestone = null; if (id && id !== currentMilestone && (id !== selected || !detail.element)) void select(id, id !== selected);} return;}
     visible = value;
-    if (!value) {active = false; stale = true; serial++; detailSerial++; if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY; closeRetaining();}
+    if (!value) {active = false; stale = true; serial++; detailSerial++; rememberScroll(); closeRetaining();}
     else {
       const generation = ++scrollGeneration; const read = activate(); if (!stale && selected && cards.length) void select(selected, false, true);
       let restoreY = 0;
@@ -368,5 +371,5 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
       : kind === 'work_item' ? cards.find(row => row.work_item_id === id)?.work?.title : '';
     return typeof value === 'string' ? value : '';
   }
-  return {element, meta, refresh, withdraw, openRef, focusWork, focusRequirement, labelFor, setActive, hideInspector: closeRetaining, activate, setTools: value => {tools = value;}, dispose: () => {window.removeEventListener('scroll', onScroll); Object.assign(preference, {selected, expanded: [...expanded], filter: filter.value}); withdraw({forgetRoute: false});}};
+  return {element, meta, refresh, withdraw, openRef, focusWork, focusRequirement, labelFor, setActive, rememberScroll, hideInspector: closeRetaining, activate, setTools: value => {tools = value;}, dispose: () => {rememberScroll(); window.removeEventListener('scroll', onScroll); Object.assign(preference, {selected, expanded: [...expanded], filter: filter.value}); withdraw({forgetRoute: false});}};
 }
