@@ -1772,4 +1772,97 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     await expect(summaries.first()).toContainText('111111111111');
     await expect(summaries.nth(1)).toContainText('222222222222');
   });
+
+  test('26. Part B: 13. Diff loading indicator in en and zh-TW', async ({browser}) => {
+    // 1. English
+    const contextEn = await browser.newContext({locale: 'en-US', viewport: {width: 1440, height: 900}});
+    const pageEn = await contextEn.newPage();
+    recordPageErrors(pageEn);
+    const fEn = workResultFixture();
+    activeFixture = fEn;
+    const attId = 'att_' + '1'.repeat(32);
+    const commitSha = 'abcdef1234567890abcdef1234567890abcdef12';
+    const filePath = 'src/app.ts';
+
+    fEn.state.changesResponse = buildChangesResponse({
+      attempt_id: attId,
+      live_head_commit: commitSha,
+      summary: {
+        commits: [commitSha],
+        files: [{path: filePath, status: 'M', additions: 1, deletions: 1, commits_touched: [commitSha]}],
+      },
+    });
+
+    let releaseDiffEn: () => void = () => {};
+    fEn.state.holdDiff = new Promise<void>(resolve => { releaseDiffEn = resolve; });
+
+    await mountConversation(pageEn, false, fEn.dispatch);
+    await pageEn.goto(route);
+    await pageEn.locator('[data-pm-view="board"]').click();
+
+    const cardEn = pageEn.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await cardEn.locator('[data-board-open]').click();
+
+    const resultSectionEn = pageEn.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+    fEn.state.expectedChanges = 1;
+    await resultSectionEn.locator('.pm-work-result-read-changes').click();
+
+    fEn.state.expectedDiff = 1;
+    const diffDetailsEn = resultSectionEn.locator('.pm-work-result-diff-details');
+    await diffDetailsEn.locator('summary').click();
+
+    const loadingEn = diffDetailsEn.locator('.pm-work-result-diff-loading');
+    await expect(loadingEn).toBeVisible();
+    await expect(loadingEn).toContainText('Loading diff…');
+    expect(await loadingEn.textContent()).not.toContain('ui_loading');
+
+    releaseDiffEn();
+    fEn.state.holdDiff = null;
+    await expect(diffDetailsEn.locator('.pm-work-result-diff-pre')).toBeVisible();
+    await contextEn.close();
+
+    // 2. zh-TW
+    const contextZh = await browser.newContext({locale: 'zh-TW', viewport: {width: 1440, height: 900}});
+    const pageZh = await contextZh.newPage();
+    recordPageErrors(pageZh);
+    const fZh = workResultFixture();
+    activeFixture = fZh;
+
+    fZh.state.changesResponse = buildChangesResponse({
+      attempt_id: attId,
+      live_head_commit: commitSha,
+      summary: {
+        commits: [commitSha],
+        files: [{path: filePath, status: 'M', additions: 1, deletions: 1, commits_touched: [commitSha]}],
+      },
+    });
+
+    let releaseDiffZh: () => void = () => {};
+    fZh.state.holdDiff = new Promise<void>(resolve => { releaseDiffZh = resolve; });
+
+    await mountConversation(pageZh, false, fZh.dispatch);
+    await pageZh.goto(route);
+    await pageZh.locator('[data-pm-view="board"]').click();
+
+    const cardZh = pageZh.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await cardZh.locator('[data-board-open]').click();
+
+    const resultSectionZh = pageZh.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+    fZh.state.expectedChanges = 1;
+    await resultSectionZh.locator('.pm-work-result-read-changes').click();
+
+    fZh.state.expectedDiff = 1;
+    const diffDetailsZh = resultSectionZh.locator('.pm-work-result-diff-details');
+    await diffDetailsZh.locator('summary').click();
+
+    const loadingZh = diffDetailsZh.locator('.pm-work-result-diff-loading');
+    await expect(loadingZh).toBeVisible();
+    await expect(loadingZh).toContainText('載入差異中…');
+    expect(await loadingZh.textContent()).not.toContain('ui_loading');
+
+    releaseDiffZh();
+    fZh.state.holdDiff = null;
+    await expect(diffDetailsZh.locator('.pm-work-result-diff-pre')).toBeVisible();
+    await contextZh.close();
+  });
 });
