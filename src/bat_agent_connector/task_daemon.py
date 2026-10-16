@@ -99,6 +99,7 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "pm_release_baseline_deployments_list": "observe", "pm_release_baseline_preview": "observe",
            "pm_work_packages_list": "observe", "pm_work_package_get": "observe", "pm_work_package_readiness_get": "observe",
            "pm_work_start_preview": "observe", "pm_work_attempts_list": "observe", "pm_work_attempt_get": "observe",
+           "pm_work_attempt_result_get": "observe", "pm_work_attempt_changes_get": "observe", "pm_work_attempt_diff_get": "observe",
            "pm_issue_mappings_list": "observe", "pm_issue_mapping_get": "observe",
            "pm_follow_up_assessments_list": "observe", "pm_follow_up_assessment_get": "observe",
            "pm_conversation_proposals_list": "observe", "pm_conversation_proposal_get": "observe",
@@ -161,6 +162,7 @@ class TaskDaemon:
         self._endpoint = DEFAULT_URL
 
     _lazy_attributes = {"journal", "fleet", "adapter", "coordinator", "ops", "api", "inventory",
+                        "result_collector",
                         "goose", "jev", "router", "_admin_token", "admin_token_path", "pusher",
                         "minimal_router", "minimal_review_gate", "default_task_path", "_submit_lock",
                         "verification_timeout_s", "verification_timeout_default_s",
@@ -257,6 +259,10 @@ class TaskDaemon:
         self.fleet.confinement_journal = self.journal
         self.inventory.fleet.confinement_runner = self.fleet.confinement_runner
         self.inventory.fleet.confinement_journal = self.journal
+        from .pm_attempt_results import AttemptResultCollector
+        self.result_collector = AttemptResultCollector(self.ops)
+        self.inventory.after_refresh.append(self.result_collector.after_refresh)
+        self.ops.context["attempt_result_collector"] = self.result_collector
         from .usage_collector import UsageCollector
         self.usage_collector = UsageCollector(self.journal, config.usage)
         self.ops.context["usage_collector"] = self.usage_collector
@@ -356,6 +362,13 @@ class TaskDaemon:
             else:
                 body = params
             return await pm_work_start.preview(self.ops, principal, wid, wi_id, body)
+        if method in {"pm_work_attempt_result_get", "pm_work_attempt_changes_get", "pm_work_attempt_diff_get"}:
+            from . import dashboard_sync, pm_attempt_result_reads
+            try:
+                return await pm_attempt_result_reads.read(self.ops, principal, method, params)
+            except dashboard_sync.ResetRequired as exc:
+                doc = exc.document()["error"]
+                raise OperationError(doc["code"], doc["message"], 409) from None
         if method.startswith("pm_"):
             from .pm_reads import read
             return read(self.ops, principal, method, params)
@@ -1209,6 +1222,7 @@ class TaskDaemon:
             await asyncio.gather(*list(self.ops._active.values()), return_exceptions=True)
             await self.artifact_store.close_reaper()
             await self.api.session_observation.close()
+            await self.result_collector.close()
             await self.inventory.close()
             await self.fleet.close()
             self.journal.close()

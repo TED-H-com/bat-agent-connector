@@ -27,6 +27,8 @@ from .summarize import clip, iso_local, summarize_message, summarize_pending, ts
 MAX_LAST_N = 100
 MAX_READ_CHARS = 60_000
 MAX_PROMPT_CHARS = 20_000
+DIGEST_TEXT_MAX_CHARS = 20_000
+TURN_SLICE_MAX_ITEMS = 2000
 SESSION_WAITING_FIELDS = (
     "pendingPermission", "pendingQuestion", "pendingPermissions", "pendingQuestions", "queuedMessages",
     "pendingApproval", "pendingAskUser", "queuedMessageCount", "isWaitingForInput",
@@ -649,6 +651,8 @@ async def session_read(
     max_message_chars: int = 2_000,
     after: Any = None,
     index_reading: bool = False,
+    *,
+    turn_slice: bool = False,
 ) -> dict:
     last_n = max(1, min(MAX_LAST_N, int(last_n)))
     offset = max(0, int(offset))
@@ -719,6 +723,21 @@ async def session_read(
             selected = []
         else:
             selected = [m for m in selected if _msg_ms(m) > turn.get("boundary_ms", 0)]
+    slice_info: dict[str, Any] = {}
+    if turn_slice:
+        slice_items = [
+            s
+            for m in selected
+            if (s := summarize_message(m, include_tools=True, max_chars=DIGEST_TEXT_MAX_CHARS)) is not None
+        ]
+        slice_complete = len(slice_items) <= TURN_SLICE_MAX_ITEMS
+        if not slice_complete:
+            slice_items = slice_items[-TURN_SLICE_MAX_ITEMS:]
+        slice_info["_turn_slice"] = {
+            "items": slice_items,
+            "complete": slice_complete,
+            "reason": None if slice_complete else "turn_slice_bounded",
+        }
     visible = [m for m in reversed(selected) if summarize_message(m, include_tools=include_tools, max_chars=50) is not None]
     page = visible[offset : offset + last_n]
     out_msgs: list[dict] = []
@@ -769,6 +788,7 @@ async def session_read(
         )
     return {
         **reading_index,
+        **slice_info,
         **since,
         "host": host,
         "session_id": sid,

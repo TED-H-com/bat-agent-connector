@@ -886,7 +886,20 @@ on `PM_WORK_START_IN_PROGRESS` (409), follow the named start operation with `ope
 starting again, never resending an unproven handoff. Keep the original key and read
 `pm_work_attempts_list(workspace_id, work_item_id, after?, limit?)` or
 `pm_work_attempt_get(workspace_id, attempt_id)` to inspect immutable attempts,
-child operations and the resulting managed session.
+child operations and the resulting managed session. To inspect the normalized
+execution result without issuing live BAT calls or writing to the database,
+call `pm_work_attempt_result_get(workspace_id, attempt_id, cursor?, wait_ms?)`:
+it returns the `pm-work-attempt-result/v1` envelope (`identity`, `sources`,
+`conversation`, `execution`, `changes`, `verification`, `delivery`, `usage`,
+`completeness`, `next_allowed_actions`, `blocked_actions`, `links`, `results`),
+where `conversation.turn_started`, `turn_done`, `turn_phase` and `turn_attribution`
+come from the latest turn-boundary receipt matching the current `turn_marker`
+(and are `"unknown"`, never `false`, before a receipt is collected), and
+`changes.summary` reflects the receipt's cached per-commit changeset summary.
+When you need live worktree `HEAD` and uncommitted status or commits added after
+the last turn-end receipt, call `pm_work_attempt_changes_get(workspace_id, attempt_id, max_commits?, max_files?)`;
+to read a single file's unified diff in a specific commit within `(base_commit..head_commit]`,
+call `pm_work_attempt_diff_get(workspace_id, attempt_id, commit, path)`.
 
 ## Concept
 
