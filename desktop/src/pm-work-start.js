@@ -31,7 +31,9 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
   let activeCard = null;
   let activeWorkId = null;
   let prepared = null;
-  let serial = 0;
+  let workSerial = 0;
+  let previewSerial = 0;
+  let attemptsSerial = 0;
   let loading = false;
   let attempts = [];
   let latestAttempt = null;
@@ -54,10 +56,28 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     statusView,
   );
 
-  const valid = ticket => {
+  const validWork = (ticket, workId) => {
     try {
       alive();
-      return serial === ticket;
+      return workSerial === ticket && activeWorkId === workId;
+    } catch {
+      return false;
+    }
+  };
+
+  const validPreview = (ticket, workId) => {
+    try {
+      alive();
+      return previewSerial === ticket && activeWorkId === workId;
+    } catch {
+      return false;
+    }
+  };
+
+  const validAttempts = (ticket, workId) => {
+    try {
+      alive();
+      return attemptsSerial === ticket && activeWorkId === workId;
     } catch {
       return false;
     }
@@ -121,7 +141,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       const query = new URLSearchParams({limit: '100'});
       if (after) query.set('after', after);
       const res = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${encodeURIComponent(workId)}/attempts?${query}`);
-      if (!valid(ticket)) return null;
+      if (!validAttempts(ticket, workId)) return null;
       if (res.visibility_filtered) visFiltered = true;
       const arr = Array.isArray(res.attempts) ? res.attempts : [];
       for (const row of arr) {
@@ -557,7 +577,8 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         instruction.focus();
         return;
       }
-      const ticket = ++serial;
+      const ticket = ++previewSerial;
+      const workId = card.work_item_id;
       checking = true;
       factsBox.replaceChildren();
       factsBox.hidden = true;
@@ -587,7 +608,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         }
 
         const data = await api('POST', `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${encodeURIComponent(card.work_item_id)}/start-preview`, body);
-        if (!valid(ticket)) return;
+        if (!validPreview(ticket, workId)) return;
 
         if (data.workspace_id !== workspaceId || data.work_item_id !== card.work_item_id) {
           throw Error(t('wst_invalid_preview'));
@@ -699,7 +720,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         checksBox.hidden = false;
 
       } catch (err) {
-        if (!valid(ticket)) return;
+        if (!validPreview(ticket, workId)) return;
         prepared = null;
         factsBox.replaceChildren();
         factsBox.hidden = true;
@@ -714,8 +735,8 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         errorStatusBox.replaceChildren(panelErrorBox(err, {within: errorStatusBox}));
         errorStatusBox.hidden = false;
       } finally {
-        if (valid(ticket)) {
-          checking = false;
+        checking = false;
+        if (validPreview(ticket, workId)) {
           readinessButton.disabled = false;
           readinessButton.textContent = t('wst_check_readiness');
           editorInstance.update();
@@ -861,21 +882,22 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
 
   async function refreshAttempts() {
     if (!activeWorkId) return;
-    const ticket = serial;
+    const ticket = ++attemptsSerial;
+    const workId = activeWorkId;
     try {
-      const data = await fetchAttempts(activeWorkId, ticket);
-      if (!data || !valid(ticket)) return;
+      const data = await fetchAttempts(workId, ticket);
+      if (!data || !validAttempts(ticket, workId)) return;
       attempts = data.attempts;
       visibilityFiltered = data.visibilityFiltered;
       partialAttempts = data.partial;
       latestAttempt = attempts.length > 0 ? attempts[attempts.length - 1] : null;
 
-      const editor = editors.get(activeWorkId);
+      const editor = editors.get(workId);
       if (editor?.locked()) {
         editor.recheck();
       }
     } catch (err) {
-      if (valid(ticket)) {
+      if (validAttempts(ticket, workId)) {
         statusView.replaceChildren(panelErrorBox(err, {within: statusView}));
       }
     }
@@ -901,8 +923,11 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
   }
 
   function withdraw() {
-    serial++;
+    workSerial++;
+    previewSerial++;
+    attemptsSerial++;
     loading = false;
+    checking = false;
     prepared = null;
     attempts = [];
     latestAttempt = null;
@@ -943,7 +968,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       statusView.replaceChildren();
     }
 
-    const ticket = ++serial;
+    const ticket = ++workSerial;
     updateUI();
 
     try {
@@ -952,7 +977,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         defaultInstruction = '';
         try {
           const itemData = await api('GET', `/work-items/${encodeURIComponent(card.work_item_id)}`);
-          if (valid(ticket)) {
+          if (validWork(ticket, card.work_item_id)) {
             const item = itemData?.work_item;
             defaultInstruction = (item?.request || item?.goal || item?.title || '').trim().slice(0, 4000);
           }
@@ -962,13 +987,14 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         }
       }
 
-      if (!valid(ticket)) return;
+      if (!validWork(ticket, card.work_item_id)) return;
 
       const editor = getEditor(card);
       editor?.checkPlanChange();
 
-      const attemptsData = await fetchAttempts(card.work_item_id, ticket);
-      if (!valid(ticket)) return;
+      const attemptsTicket = ++attemptsSerial;
+      const attemptsData = await fetchAttempts(card.work_item_id, attemptsTicket);
+      if (!validAttempts(attemptsTicket, card.work_item_id)) return;
       if (attemptsData) {
         attempts = attemptsData.attempts;
         visibilityFiltered = attemptsData.visibilityFiltered;
@@ -980,14 +1006,14 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         editor.recheck();
       }
     } catch (err) {
-      if (valid(ticket)) {
+      if (validWork(ticket, card.work_item_id)) {
         statusView.replaceChildren(panelErrorBox(err, {within: statusView}));
       }
     } finally {
-      if (valid(ticket)) {
-        if (!sameWork) {
-          loading = false;
-        }
+      if (!sameWork) {
+        loading = false;
+      }
+      if (validWork(ticket, card.work_item_id)) {
         const editor = editors.get(card.work_item_id);
         editor?.update();
         updateUI();

@@ -420,7 +420,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   };
   const labelled = (label, field) => h('label', {}, t(label), field);
   const form = options => {
-    const value = durableForm({h, t, api, caps, guard: alive, namespace, errorBox, statusText: threadId ? value => discussionLabel(t, 'pd_op_', value) : undefined, ...options, canSend,
+    const value = durableForm({h, t, api, caps, guard: alive, namespace, errorBox, statusText: threadId ? value => discussionLabel(t, 'pd_op_', value) : undefined, ...options,
+      canSend: () => (options.canSend ? options.canSend() : true) && canSend(),
       permitted:()=>initialReadComplete&&options.permitted()&&(lifecycle?.newActionAllowed(options.action,()=>options.params(Object.fromEntries(Object.entries(options.fields).map(([key,input])=>[key,input.value]))))??true),
       recoverPermitted:()=>initialReadComplete&&(options.recoverPermitted||options.permitted)(),
       onConnectionChange: connected => {

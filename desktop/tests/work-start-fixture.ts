@@ -272,7 +272,8 @@ export function workStartFixture() {
           preconditions: input.body.preconditions,
           actor: base.state.actor,
           idempotency_key: key,
-          status: 'running',
+          status: 'succeeded',
+          result: {attempt_id: 'att_' + '1'.repeat(32)},
         };
         state.ops.set(key, op);
         return {status: 503, data: {error: {code: 'LOST_REPLY', message: 'Reply unavailable'}}};

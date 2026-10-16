@@ -170,6 +170,7 @@ test.describe('Work Start UI (v1.3 P3)', () => {
     expect(f.state.writes[1].idempotency_key).toBe(originalKey);
     expect(f.state.writes[1].body).toEqual(originalBody);
     expect(f.state.writes).toHaveLength(2);
+    await expect(inspector.locator('[data-pm-saved]')).toBeVisible();
   });
 
   test('3. Stale preview disables Start until checked again', async ({page}) => {
