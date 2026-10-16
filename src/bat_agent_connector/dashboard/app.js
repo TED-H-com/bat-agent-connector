@@ -51206,7 +51206,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 		saved = JSON.parse(localStorage.getItem(storageKey));
 	} catch {}
 	saved = restore$2(saved, source);
-	let busy = false, revision = 0, disposed = false, refreshing = null;
+	let busy = false, revision = 0, disposed = false, refreshing = null, pressed = null;
 	const host = h("select", { "aria-label": t("capture_host") }, h("option", { value: "" }, t("capture_host")), ...(caps()?.hosts || []).map((item) => h("option", { value: item.host }, item.host)));
 	const session = h("input", {
 		"aria-label": t("capture_session"),
@@ -51271,6 +51271,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 			guard();
 			if (busy || saved.intent || !mayPreview() || !validInput(input)) return;
 			const ticket = ++revision, owned = owns(preview);
+			pressed = preview;
 			busy = true;
 			saved.preview = null;
 			reviewed.checked = false;
@@ -51293,6 +51294,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 				if (ticket === revision) showError(error);
 			} finally {
 				busy = false;
+				pressed = null;
 				render();
 				if (ticket === revision) placeFocus(preview, owned);
 			}
@@ -51343,6 +51345,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 				persist();
 			}
 			const owned = owns(apply);
+			pressed = apply;
 			busy = true;
 			update();
 			try {
@@ -51363,6 +51366,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 				showError(error);
 			} finally {
 				busy = false;
+				pressed = null;
 				render();
 				placeFocus(apply, owned);
 			}
@@ -51400,13 +51404,23 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 		hidden: !supported()
 	}, h("summary", {}, t("capture_title")), h("p", { class: "muted" }, t("capture_help")), h("div", { class: "capture-fields" }, h("label", {}, t("capture_host"), host), h("label", {}, t("capture_session"), session), h("label", {}, t("capture_path"), path)), h("div", { class: "actions" }, preview), evidence, review, h("div", { class: "actions" }, apply, attach, reset), notice);
 	function lock(node, inflight, blocked) {
+		if (node === pressed && inflight) {
+			node.disabled = false;
+			node.setAttribute("aria-disabled", "true");
+			return;
+		}
+		if (blocked) {
+			node.removeAttribute("aria-disabled");
+			node.disabled = true;
+			return;
+		}
 		if (inflight) {
 			node.disabled = false;
 			node.setAttribute("aria-disabled", "true");
-		} else {
-			node.removeAttribute("aria-disabled");
-			node.disabled = Boolean(blocked);
+			return;
 		}
+		node.removeAttribute("aria-disabled");
+		node.disabled = false;
 	}
 	function shown(node) {
 		return Boolean(node && node.isConnected && !node.disabled && !node.closest("[hidden]"));
@@ -51444,7 +51458,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 			path
 		]) field.disabled = frozen;
 		lock(preview, busy, Boolean(saved.intent) || !mayPreview() || !validInput(current()));
-		review.hidden = !saved.preview || Boolean(saved.intent) && !busy;
+		review.hidden = !saved.preview || Boolean(saved.intent);
 		reviewed.disabled = expired();
 		apply.hidden = settled() && (saved.operation.status !== "succeeded" || saved.result);
 		apply.textContent = saved.intent ? t("capture_check") : t("capture_save");
@@ -51455,7 +51469,12 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 			attach.hidden = !saved.result;
 			lock(attach, busy, false);
 		}
-		if (busy || reading) notice.setAttribute("aria-busy", "true");
+		if ([
+			preview,
+			apply,
+			reset,
+			attach
+		].some((node) => node && node.getAttribute("aria-disabled") === "true")) notice.setAttribute("aria-busy", "true");
 		else notice.removeAttribute("aria-busy");
 		const expiry = evidence.querySelector("[data-capture-expiry]");
 		if (expiry) expiry.textContent = saved.intent ? t("capture_fixed") : expired() ? t("capture_expired") : t("capture_single_file");
