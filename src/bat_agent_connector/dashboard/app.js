@@ -46961,7 +46961,13 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			refresh(state, state.pages + 1).finally(() => {
 				state.pressed = false;
 				syncBusy();
-				if (release() && (more.hidden || more.disabled)) (firstAdded(state, previous) || refreshButton).focus();
+				const keep = release();
+				try {
+					guard();
+				} catch {
+					return;
+				}
+				if (keep && (more.hidden || more.disabled)) (firstAdded(state, previous) || refreshButton).focus();
 			}).catch(() => {});
 		};
 		sections.push(state);
@@ -49227,7 +49233,8 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 			} finally {
 				reading = false;
 				if (alive()) update();
-				if (alive() && release() && (reload.hidden || reload.disabled)) moveFrom(reload);
+				const keep = release();
+				if (alive() && keep && (reload.hidden || reload.disabled)) moveFrom(reload);
 			}
 		}
 	}, t("repair_read"));
@@ -49247,7 +49254,8 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 			} finally {
 				busy = false;
 				if (alive()) update();
-				if (alive() && release() && (create.hidden || create.disabled)) moveFrom(create);
+				const keep = release();
+				if (alive() && keep && (create.hidden || create.disabled)) moveFrom(create);
 			}
 		}
 	}, t("repair_create"));
