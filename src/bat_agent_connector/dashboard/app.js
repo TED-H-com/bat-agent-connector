@@ -33855,8 +33855,10 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			if (editor?.locked()) editor.recheck();
 			onLatestAttempt(latestAttempt);
 		} catch (err) {
-			if (validAttempts(ticket, workId)) statusView.replaceChildren(panelErrorBox(err, { within: statusView }));
-			onLatestAttempt(null);
+			if (validAttempts(ticket, workId)) {
+				statusView.replaceChildren(panelErrorBox(err, { within: statusView }));
+				onLatestAttempt(null);
+			}
 		}
 	}
 	function updateUI() {
@@ -33934,7 +33936,6 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			await refreshAttempts();
 		} catch (err) {
 			if (validWork(ticket, card.work_item_id)) statusView.replaceChildren(panelErrorBox(err, { within: statusView }));
-			onLatestAttempt(null);
 		} finally {
 			if (!sameWork) loading = false;
 			if (validWork(ticket, card.work_item_id)) {
