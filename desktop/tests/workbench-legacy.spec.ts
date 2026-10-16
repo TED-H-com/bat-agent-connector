@@ -207,6 +207,12 @@ async function ensureDrawerClosed(page: Page, width: number) {
   }
 }
 
+async function waitForViewSettled(page: Page) {
+  await expect(page.locator('[data-pm-source-loading]:visible')).toHaveCount(0);
+  await expect(page.locator('#main [aria-busy="true"]:visible')).toHaveCount(0);
+  await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+}
+
 // --------------------------------------------------------------------------
 // UX-A05: Legacy deep links (preview mode, EN and zh-TW, 1440 and 390)
 // --------------------------------------------------------------------------
@@ -378,6 +384,7 @@ for (const lang of ['en', 'zh-TW'] as const) {
         if (route.contentSelector) {
           await expect(page.locator(route.contentSelector).first()).toBeVisible();
         }
+        await waitForViewSettled(page);
 
         // Measure scroller
         const scrollInfo = await page.evaluate(selector => {
@@ -423,6 +430,7 @@ for (const lang of ['en', 'zh-TW'] as const) {
           await expect.poll(() => page.evaluate(() => location.hash)).not.toBe(expectedHash);
           await expect(otherEntry).toHaveAttribute('aria-current', 'page');
           await expect(page.locator('#main h1').first()).toBeVisible();
+          await waitForViewSettled(page);
 
           // Press Back
           await page.goBack();
@@ -437,6 +445,7 @@ for (const lang of ['en', 'zh-TW'] as const) {
           if (route.contentSelector) {
             await expect(page.locator(route.contentSelector).first()).toBeVisible();
           }
+          await waitForViewSettled(page);
 
           // Scroll position lands within 8px of saved position
           await expect.poll(async () => {
@@ -476,6 +485,7 @@ for (const lang of ['en', 'zh-TW'] as const) {
             await expect.poll(() => page.evaluate(() => location.hash)).not.toBe(expectedHash);
             await expect(other).toHaveAttribute('aria-current', 'page');
             await expect(page.locator('#main h1').first()).toBeVisible();
+            await waitForViewSettled(page);
 
             await page.goBack();
 
@@ -484,6 +494,7 @@ for (const lang of ['en', 'zh-TW'] as const) {
             if (route.contentSelector) {
               await expect(page.locator(route.contentSelector).first()).toBeVisible();
             }
+            await waitForViewSettled(page);
 
             await expect.poll(async () => {
               return await page.evaluate(() => window.scrollY);
@@ -514,7 +525,19 @@ const pmViewSelectors: Record<string, string> = {
   overview: '[data-pm-overview]',
   discussions: '[data-discussions]',
   requirements: '[data-pm-rtm]',
+  schedule: '[data-pm-schedule]',
+  dependencies: '[data-pm-dependencies]',
+  issues: '[data-pm-register]',
+  agents: '[data-pm-resources]',
   board: '[data-pm-kanban]',
+};
+
+const toolsViewSelectors: Record<string, string> = {
+  operations: '.global-ops-tools',
+  delivery: '.delivery-controls, .delivery-card',
+  'artifact-review': '.artifact-review',
+  cleanup: '.cleanup-choice',
+  sessions: '.session-inventory, .session-scope',
 };
 
 const featureMapMatrix = [
@@ -559,6 +582,7 @@ for (const {lang, width} of featureMapMatrix) {
         await expect(page.locator(pmViewSelectors[view]).first()).toBeVisible();
       }
       await expect(page.locator('#main h1').first()).toBeVisible();
+      await expect(page.locator('#main h1').first()).not.toBeEmpty();
       const classicHeading = (await page.locator('#main h1').first().textContent())?.trim() || '';
       destinations.push({
         id: `pm-${view}`,
@@ -591,15 +615,25 @@ for (const {lang, width} of featureMapMatrix) {
     await page.keyboard.press('Escape');
     await ensureDrawerClosed(page, width);
 
+    let lastHeading = '';
     for (const {key, label, href} of toolsItems) {
       await closeAnyOpenDialog(page);
       await ensureDrawerOpen(page, width);
+      const prevHeading = lastHeading || (await page.locator('#main h1').first().textContent())?.trim() || '';
       await page.locator('[data-shell-tools]').click();
       const item = page.locator(`.ui-menu:has([data-shell-tools]) .ui-menu-panel [role="menuitem"][href="${href}"]`);
       await item.click();
       await ensureDrawerClosed(page, width);
+      await expect.poll(() => page.evaluate(() => location.hash)).toBe(href);
+      if (toolsViewSelectors[key]) {
+        await expect(page.locator(toolsViewSelectors[key]).first()).toBeVisible();
+      }
       await expect(page.locator('#main h1').first()).toBeVisible();
+      if (prevHeading) {
+        await expect(page.locator('#main h1').first()).not.toHaveText(prevHeading);
+      }
       const classicHeading = (await page.locator('#main h1').first().textContent())?.trim() || '';
+      lastHeading = classicHeading;
       destinations.push({
         id: key || href.replace(/^#\//, ''),
         label,
@@ -613,12 +647,17 @@ for (const {lang, width} of featureMapMatrix) {
     // C. Record classic navigation items
     // Pending
     await ensureDrawerOpen(page, width);
+    const prevHeadingBeforePending = lastHeading || (await page.locator('#main h1').first().textContent())?.trim() || '';
     const pendingLink = page.locator('a[data-shell-pending]');
     const pendingLabel = (await pendingLink.textContent())?.trim() || 'Pending';
     await pendingLink.click();
     await ensureDrawerClosed(page, width);
     await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/home');
+    await expect(page.locator('.global-pending-main').first()).toBeVisible();
     await expect(page.locator('#main h1').first()).toBeVisible();
+    if (prevHeadingBeforePending) {
+      await expect(page.locator('#main h1').first()).not.toHaveText(prevHeadingBeforePending);
+    }
     const pendingHeading = (await page.locator('#main h1').first().textContent())?.trim() || '';
     destinations.push({
       id: 'pending',
@@ -635,7 +674,11 @@ for (const {lang, width} of featureMapMatrix) {
     await settingsLink.click();
     await ensureDrawerClosed(page, width);
     await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/settings');
+    await expect(page.locator('.global-settings, [data-settings-panel]').first()).toBeVisible();
     await expect(page.locator('#main h1').first()).toBeVisible();
+    if (pendingHeading) {
+      await expect(page.locator('#main h1').first()).not.toHaveText(pendingHeading);
+    }
     const settingsHeading = (await page.locator('#main h1').first().textContent())?.trim() || '';
     destinations.push({
       id: 'settings',
@@ -652,7 +695,11 @@ for (const {lang, width} of featureMapMatrix) {
     await projectsLink.click();
     await ensureDrawerClosed(page, width);
     await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/projects');
+    await expect(page.locator('[data-project-list], .or-item-list').first()).toBeVisible();
     await expect(page.locator('#main h1').first()).toBeVisible();
+    if (settingsHeading) {
+      await expect(page.locator('#main h1').first()).not.toHaveText(settingsHeading);
+    }
     const projectsHeading = (await page.locator('#main h1').first().textContent())?.trim() || '';
     destinations.push({
       id: 'projects',

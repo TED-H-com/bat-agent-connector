@@ -2,6 +2,21 @@
 
 ## Next release (unreleased)
 
+- The PM Work inspector adds a Start work panel and header action to start
+  eligible Work cards. The panel previews readiness facts, explains candidate
+  code targets or offers a selector when multiple match, and displays requirement
+  selection for cards needing plan re-binding. Stale preview guards require re-checking
+  after instruction, delivery, requirement or target edits before enabling submission.
+  The attempts timeline renders live progress states with links to the operation
+  or session output, preserving user drafts and requests across reloads and lost replies
+  in English and zh-TW.
+
+- The Windows fixture-helper test injects a deterministic clock into its deadline and
+  retry helpers, making transient read recovery independent of runner speed and slow
+  .NET exception unwinds.
+
+- Keyboard focus stays inside an inspector while its content is still loading, instead of leaving the dialog for the page.
+
 - Add the `work.start` compound action, read-only `pm_work_start_preview` and
   immutable `work_attempts` reads (`pm_work_attempts_list`, `pm_work_attempt_get`)
   to start a bound Work item in its own managed BAT worktree and session from a
@@ -144,6 +159,12 @@
 
 - The Windows installed-fixture self-test gives its UIA probe compile and run a 60-second
   budget, prints which phase is running, and reports the timeout or exit code when it fails.
+
+- The UX-A07 feature-map test waits for destination view containers and heading updates
+  before recording classic headings, preventing stale headings captured during route transitions.
+
+- The UX-A05 deep-link test waits for PM views to settle before each scroll, departure and
+  return step, so it no longer scrolls while a view is still reading.
 
 - Unsigned macOS desktop packaging logs `bundle_dmg.sh` with `--verbose` and retries the same
   build once after detaching only this job's leftover `/Volumes` images.
