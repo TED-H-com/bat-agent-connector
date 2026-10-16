@@ -65,12 +65,17 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     return Boolean(card.binding?.plan_revision_id !== currentPlan?.revision_id);
   };
 
-  const writer = (card = activeCard) => {
+  const canStartWorkspaces = () => {
     if (!available()) return false;
     const scopes = caps()?.scopes || [];
     if (!['observe', 'manage', 'start'].every(s => scopes.includes(s))) return false;
     const actions = caps()?.actions || [];
     if (!actions.some(a => a.action === 'work.start' && a.allowed)) return false;
+    return Boolean(permitted(false));
+  };
+
+  const writer = (card = activeCard) => {
+    if (!canStartWorkspaces()) return false;
     return Boolean(permitted(isBindNeeded(card)));
   };
 
@@ -127,7 +132,10 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     let statusWord = '';
     let extraText = null;
 
-    if (attempt.status === 'needs_attention') {
+    if (attempt.stage === 'start_unknown') {
+      statusWord = t('wst_status_start_unknown');
+      extraText = t('wst_check_bat_sessions');
+    } else if (attempt.status === 'needs_attention') {
       statusWord = t('wst_status_needs_attention');
     } else if (['accepted', 'queued'].includes(attempt.status) && (!attempt.children || Object.values(attempt.children).every(c => !c))) {
       statusWord = t('wst_status_accepted');
@@ -372,8 +380,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       }
       if (bindNeeded && !permitted(true)) {
         reasons.push(t('wst_owner_required_to_bind'));
-      }
-      if (!writer(card)) {
+      } else if (!writer(card)) {
         reasons.push(t('wst_permission_missing'));
       }
       if (prepared && prepared.readinessStatus === 'blocked') {
@@ -590,6 +597,9 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         review: reviewInput,
       },
       params: values => {
+        if (!canSubmit()) {
+          throw Error(t('wst_not_ready_to_start'));
+        }
         const rev = JSON.parse(values.review || '{}');
         const p = {
           instruction: values.instruction,
@@ -612,17 +622,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
           return {};
         }
       },
-      permitted: () => {
-        if (!writer(card) || !startable(card) || reading) return false;
-        if (!prepared || !reviewInput.value) return false;
-        try {
-          if (!equal(JSON.parse(reviewInput.value), prepared.fixed)) return false;
-        } catch {
-          return false;
-        }
-        if (currentFingerprint() !== prepared.fixed.fingerprint) return false;
-        return prepared.readinessStatus === 'ready';
-      },
+      permitted: () => writer(card) && startable(card) && !reading,
       recoverPermitted: () => writer(card),
       label: 'wst_start',
       onStateChange: () => {
@@ -645,11 +645,27 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       extra,
     });
 
+    const canSubmit = () => {
+      if (!writer(card) || !startable(card) || reading) return false;
+      if (!prepared || !reviewInput.value) return false;
+      try {
+        if (!equal(JSON.parse(reviewInput.value), prepared.fixed)) return false;
+      } catch {
+        return false;
+      }
+      if (currentFingerprint() !== prepared.fixed.fingerprint) return false;
+      return prepared.readinessStatus === 'ready';
+    };
+
     const origUpdate = editorInstance.update;
     editorInstance.update = () => {
       origUpdate();
       readinessButton.disabled = reading || !writer(card) || editorInstance.locked();
       updateDisabledNotice();
+      const submitBtn = editorInstance.box.querySelector('button[type="submit"]');
+      if (submitBtn && !editorInstance.locked()) {
+        submitBtn.disabled = submitBtn.disabled || !canSubmit();
+      }
     };
 
     editorInstance.currentFingerprint = currentFingerprint;
@@ -689,14 +705,13 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     renderLatestAttempt(latestAttempt);
 
     if (editor) {
-      const isStartable = startable();
       const isLocked = editor.locked();
-      const show = (isStartable || isLocked) && (writer() || isLocked);
+      const activeAttempt = latestAttempt && (!['failed', 'cancelled'].includes(latestAttempt.status) || latestAttempt.stage === 'start_unknown');
+      const show = isLocked || (canStartWorkspaces() && !activeAttempt && !partialAttempts);
       editorView.hidden = !show;
       if (editorView.firstChild !== editor.box) {
         editorView.replaceChildren(editor.box);
       }
-      editor.update();
     } else {
       editorView.hidden = true;
     }
@@ -786,6 +801,8 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     } finally {
       if (valid(ticket)) {
         reading = false;
+        const editor = editors.get(card.work_item_id);
+        editor?.update();
         updateUI();
       }
     }

@@ -16,6 +16,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error('Invalid Kanban page size');
   let serial = 0, detailSerial = 0, next = null, reading = false, rows = new Map(), page = null, sources = new Map(), plan = null, earlierPlans = new Map(), milestones = [], pages = 1;
   let selected = preference.selected || null, active = !embedded, preserveSelection = false, toolItems = () => [], deliveryPages = 1, stale = true;
+  let failureSignature = '';
   const observers = new Map();
   const withdrawObservers = () => {for (const observer of observers.values()) observer.withdraw();};
   let startPanel = null;
