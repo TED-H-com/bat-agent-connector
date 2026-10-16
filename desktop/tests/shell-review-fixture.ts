@@ -1,7 +1,7 @@
 import {workbenchFixture, workspaceId} from './pm-workbench-fixture.ts';
 export function shellReviewFixture() {
   const base = workbenchFixture(), endpoint = `/pm/workspaces/${workspaceId}`;
-  const state = {stage: 'development' as string | null, projectError: 0, holdEvidence: null as Promise<void> | null, holdLifecycle: null as Promise<void> | null};
+  const state = {stage: 'development' as string | null, projectError: 0, holdEvidence: null as Promise<void> | null};
   const dispatch = async (input: any) => {
     const path = new URL(input.path, 'http://fixture').pathname;
     if (path === '/bootstrap' || path === '/capabilities') {
@@ -13,7 +13,6 @@ export function shellReviewFixture() {
       return result;
     }
     if (path === endpoint + '/lifecycle') {
-      if (state.holdLifecycle) await state.holdLifecycle;
       return {status: 200, data: {workspace_id: workspaceId,
         lifecycle: {stage: state.stage, status: state.stage ? 'active' : 'unclassified', revision: 2, execution_epoch: 1,
           transition_id: null, coverage: state.stage ? 'recorded' : 'legacy_unclassified'},
