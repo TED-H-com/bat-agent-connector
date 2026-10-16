@@ -2,6 +2,13 @@
 
 ## Next release (unreleased)
 
+- A single operation read can include a loop for the actions on this work
+  loop and for a proven work.start child. It names that operation, the Work
+  and attempt when those sources are still visible, a dashboard hash, and
+  whether this caller may cancel or resume. HTTP and MCP return the same
+  loop. Capabilities advertise operation_loop version 1, and the agent skill
+  teaches when to read it and when a missing loop is expected.
+
 - Refresh in a project no longer stays disabled when the project changes while
   it is refreshing.
 
