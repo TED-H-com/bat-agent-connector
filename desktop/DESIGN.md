@@ -1008,6 +1008,8 @@ remains recoverable. Closing, refreshing or withdrawing the Board invalidates pe
 observation reads and clears receipts with rows and counts. Drafts and original keys
 survive remounting; a changed native identity requires an explicit new selection.
 
+Adopt and start, the next instruction on a started work, and saved work profiles in the Start work panel are specified in `docs/design/v1.3-e03-loop-ui.md`. Those controls are not on this screen yet.
+
 ## Session workspace
 
 Opened from Work or a project tree. The page header shows the session title and agent
