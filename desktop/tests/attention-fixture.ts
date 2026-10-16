@@ -70,6 +70,8 @@ export async function mountAttention(page: Page, native: boolean, fixture: Retur
     const req = route.request(), url = new URL(req.url());
     const result = await dispatch({method: req.method(), path: url.pathname.slice(7) + url.search,
       body: req.postData() ? req.postDataJSON() : null, idempotency_key: req.headers()['idempotency-key']});
-    await route.fulfill({status: result.status, json: result.data});
+    const fulfill: {status: number, json: unknown, headers?: Record<string, string>} = {status: result.status, json: result.data};
+    if (result.headers) fulfill.headers = {'content-type': 'application/json', ...result.headers};
+    await route.fulfill(fulfill);
   });
 }
