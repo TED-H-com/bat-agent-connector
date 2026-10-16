@@ -1576,7 +1576,12 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
               if (values.content.trim()) localStorage.setItem(handoffKey, JSON.stringify({threadId: result.thread_id, content: values.content}));
               rememberOrigin(result.thread_id, {from: launch.from || 'discussions', report: launch.report});
             },
-            onSaved: result => {alive(); location.replace(`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(result.thread_id)}`);},
+            onSaved: result => {
+              // The thread now exists, so this local draft is gone. A later new
+              // discussion must not reopen the rename from that finished draft.
+              if (threadId === 'new') titleSession.open = false;
+              alive(); location.replace(`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(result.thread_id)}`);
+            },
             extra: threadId === 'new' ? text : h('div', {}, labelled('pd_title', name), text)});
           titleDraft = threadId === 'new' ? discussionTitle({t, field: name, form: create, value: name.value, local: true,
             resume: titleSession.open === true,
