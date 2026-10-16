@@ -541,6 +541,34 @@ test.describe('PM Scroll Leave & Restore', () => {
     });
   }
 
+  async function countCompletedBodies(page: Page, prefix: string): Promise<number> {
+    return await page.evaluate(p => {
+      const urls = (window as any).__bodyCompletedUrls || [];
+      return urls.filter((u: string) => u.includes(p)).length;
+    }, prefix);
+  }
+
+  /**
+   * Waits until the completed body count for holdPath is exactly one higher than beforeCount,
+   * then waits one animation frame.
+   *
+   * Assumption: no other read of holdPath completes between the count and the release of the held read.
+   * - In board to requirements: Board is hidden (setActive(false)), its controls are disabled,
+   *   and no background polling requests /kanban.
+   * - In requirements to board: Requirements view was unmounted during load and retired; no background
+   *   polling requests /plans/accepted, and the held read is the only one in flight.
+   */
+  async function syncHeldBodyCompletion(page: Page, holdPath: string, beforeCount: number): Promise<void> {
+    await page.waitForFunction(
+      ({prefix, target}) => {
+        const urls = (window as any).__bodyCompletedUrls || [];
+        return urls.filter((u: string) => u.includes(prefix)).length === target;
+      },
+      {prefix: holdPath, target: beforeCount + 1}
+    );
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+  }
+
   // Hidden view keeps its hands off the window
   for (const width of [1440, 390] as const) {
     test(`hidden view keeps its hands off the window: board to requirements (en ${width})`, async ({page}) => {
@@ -607,13 +635,12 @@ test.describe('PM Scroll Leave & Restore', () => {
       await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
 
-      // 6. Release the read, sync (Required 3), and expect 200.
+      // 6. Release the read, sync, and expect 200.
+      // Assumption: no other read of holdPath completes between the count and f.release().
+      // Why this holds: Board is hidden (setActive(false)), its controls are disabled, and no background polling requests /kanban.
+      const beforeCount = await countCompletedBodies(page, holdPath);
       f.release();
-      await page.waitForFunction(prefix => {
-        const urls = (window as any).__bodyCompletedUrls || [];
-        return urls.some((u: string) => u.includes(prefix));
-      }, holdPath);
-      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+      await syncHeldBodyCompletion(page, holdPath, beforeCount);
 
       await expect.poll(async () => page.evaluate(() => window.scrollY)).toBe(200);
     });
@@ -675,15 +702,13 @@ test.describe('PM Scroll Leave & Restore', () => {
       const expectedScrollY = await page.evaluate(() => window.scrollY);
       expect(expectedScrollY).toBe(0);
 
-      // Release the held read.
+      // Release the held read, sync, and expect the window to stay at the second view's position (0).
+      // Assumption: no other read of holdPath completes between the count and f.release().
+      // Why this holds: Requirements view was unmounted during load and retired; no background polling requests /plans/accepted.
+      const beforeCount = await countCompletedBodies(page, holdPath);
       f.release();
-      await page.waitForFunction(prefix => {
-        const urls = (window as any).__bodyCompletedUrls || [];
-        return urls.some((u: string) => u.includes(prefix));
-      }, holdPath);
-      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+      await syncHeldBodyCompletion(page, holdPath, beforeCount);
 
-      // Expect the window to stay at the second view's position (0).
       await expect.poll(async () => page.evaluate(() => window.scrollY)).toBe(expectedScrollY);
     });
   }
