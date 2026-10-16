@@ -2041,6 +2041,77 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     // Both the first and second open sent a /diff call
     expect(f.state.diffCallsByFile.get(keyA)).toBe(2);
   });
+
+  test('29. Part B: 16. Stale /changes reply must not reset changesBusy for a newer read', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workResultFixture();
+    activeFixture = f;
+    const att1 = 'att_' + '1'.repeat(32);
+    const att2 = 'att_' + '2'.repeat(32);
+
+    f.state.attempts.push({
+      attempt_id: att2,
+      workspace_id: workspaceId,
+      work_item_id: workId(2),
+      start_operation_id: 'op_' + '2'.repeat(32),
+      stage: 'started',
+      status: 'succeeded',
+      session: {host: 'fixture-host', session_id: 'session-456'},
+      created_at: 1791705600,
+    });
+
+    f.state.resultEnvelopes.set(att2, buildResultEnvelope({
+      attempt_id: att2,
+      summary_text: 'Summary Work 2',
+    }));
+
+    let releaseChangesA: () => void = () => {};
+    let releaseChangesB: () => void = () => {};
+    f.state.holdChangesByAttemptId.set(att1, new Promise<void>(resolve => { releaseChangesA = resolve; }));
+    f.state.holdChangesByAttemptId.set(att2, new Promise<void>(resolve => { releaseChangesB = resolve; }));
+
+    await installBodyCompletedCounter(page);
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card1 = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    const card2 = page.locator(`[data-pm-kanban-work="${workId(2)}"]`);
+    const attemptResult = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+
+    // 1. Open Work A, click Read current changes (held)
+    await card1.locator('[data-board-open]').click();
+    f.state.expectedChanges = 1;
+    await attemptResult.locator('.pm-work-result-read-changes').click();
+
+    // 2. Switch to Work B, click Read current changes (held)
+    await card2.locator('[data-board-open]').click();
+    await expect(attemptResult.locator('.pm-work-result-summary-box')).toContainText('Summary Work 2');
+    f.state.expectedChanges = 2;
+    const readBtnB = attemptResult.locator('.pm-work-result-read-changes');
+    await readBtnB.click();
+    await expect(readBtnB).toHaveAttribute('aria-disabled', 'true');
+
+    // 3. Release A's read
+    const beforeChanges = await countCompletedBodies(page, '/changes');
+    releaseChangesA();
+    f.state.holdChangesByAttemptId.delete(att1);
+    await syncHeldBodyCompletion(page, '/changes', beforeChanges);
+
+    // 4. B's button must still be busy: aria-disabled is true, clicks are ignored
+    await expect(readBtnB).toHaveAttribute('aria-disabled', 'true');
+    await readBtnB.click({force: true});
+    await readBtnB.press('Enter');
+    expect(f.state.changesRequests.filter(r => r.attempt_id === att2).length).toBe(1);
+
+    // 5. Release B's read; finishes normally with one request
+    releaseChangesB();
+    f.state.holdChangesByAttemptId.delete(att2);
+    await expect(attemptResult.locator('.pm-work-result-head')).toBeVisible();
+    expect(f.state.changesRequests.filter(r => r.attempt_id === att2).length).toBe(1);
+    expect(f.state.changesCount).toBe(2);
+  });
 });
+
 
 
