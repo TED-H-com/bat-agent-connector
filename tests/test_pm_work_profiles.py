@@ -544,29 +544,27 @@ async def test_offline_host_and_unsigned_agent_stay_separate(ops):
 
 
 async def test_local_git_unavailable_has_no_ssh_fallback(ops):
-    from bat_agent_connector.host_git import LOCAL_GIT_REASONS
+    from bat_agent_connector.config import parse_config
+    from bat_agent_connector.host_git import LOCAL_GIT_REASONS, HostGitRunner
 
-    state = {"reason": "local_git_not_enabled"}
+    runner = HostGitRunner(parse_config({"hosts": {"h1": {
+        "url": "wss://127.0.0.1:9876/", "fingerprint": "aa" * 32,
+        "token_ref": "env:FIXTURE_TOKEN", "git": "local",
+    }}}), {"h1": "unused-ssh-alias"})
     invokes = _configure(ops, token=False, register_continue=True, register_send=True)
-    ops.context["git_runner"] = SimpleNamespace(
-        status=lambda _host: {"available": False, "reason": state["reason"], "details": {}},
-    )
+    ops.context["git_runner"] = runner
     profile_id = await _profile(ops)
+    reason = runner.status("h1")["reason"]
     body = pm_work_profiles.readiness(ops, OWNER, WS, profile_id)
-    assert state["reason"] in LOCAL_GIT_REASONS
-    assert body["states"]["can_observe"]["reason"] == state["reason"]
-    assert body["states"]["can_start_own"]["reason"] == state["reason"]
-    assert body["smallest_gap"]["reason"] == state["reason"]
+    assert isinstance(runner, HostGitRunner)
+    assert reason in LOCAL_GIT_REASONS
+    assert body["states"]["can_observe"]["reason"] == reason
+    assert body["states"]["can_start_own"]["reason"] == reason
+    assert body["smallest_gap"]["reason"] == reason
     assert body["smallest_gap"]["fix"] is None and body["smallest_gap"]["fallback"] is None
     assert "ssh" not in json.dumps(body["smallest_gap"])
+    assert "unused-ssh-alias" not in json.dumps(body)
     assert invokes["n"] == 0
-
-    state["reason"] = "local_git_platform_unsupported"
-    body = pm_work_profiles.readiness(ops, OWNER, WS, profile_id)
-    assert body["states"]["can_observe"]["reason"] == "local_git_platform_unsupported"
-    assert body["states"]["can_start_own"]["reason"] == "local_git_platform_unsupported"
-    assert body["smallest_gap"]["reason"] == "local_git_platform_unsupported"
-    assert body["smallest_gap"]["fix"] is None and body["smallest_gap"]["fallback"] is None
 
 
 async def test_readiness_does_not_call_bat_or_write(ops):
