@@ -2111,7 +2111,136 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     expect(f.state.changesRequests.filter(r => r.attempt_id === att2).length).toBe(1);
     expect(f.state.changesCount).toBe(2);
   });
+
+  test('30. Part B: 17. Focus moves to successor when replacement button replaces its trigger', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workResultFixture();
+    activeFixture = f;
+    const attId = 'att_' + '1'.repeat(32);
+    const commit = 'abcdef1234567890abcdef1234567890abcdef12';
+    const fileA = 'src/fileA.ts';
+    const keyA = `${commit}:${fileA}`;
+
+    f.state.changesResponse = buildChangesResponse({
+      attempt_id: attId,
+      live_head_commit: commit,
+      summary: {
+        commits: [commit],
+        files: [
+          {path: fileA, status: 'M', additions: 1, deletions: 0, commits_touched: [commit]},
+        ],
+      },
+    });
+
+    await installBodyCompletedCounter(page);
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const resultSection = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+
+    // --- Control 1: Read again button ---
+    // First read changes successfully
+    f.state.expectedChanges = 1;
+    await resultSection.locator('.pm-work-result-read-changes').click();
+
+    // Trigger out-of-date banner
+    const changedEnv = buildResultEnvelope({
+      attempt_id: attId,
+      state: 'process-ended',
+      stage: 'completed',
+    });
+    const beforeResultBodies = await countCompletedBodies(page, '/result');
+    f.emitResultRecorded(attId, changedEnv);
+    await syncCompletedBodies(page, '/result', beforeResultBodies + 1);
+
+    const readAgainBtn = resultSection.locator('.pm-work-result-read-again');
+    await expect(readAgainBtn).toBeVisible();
+
+    // Focus Read again button and activate
+    await readAgainBtn.focus();
+    expect(await page.evaluate(() => document.activeElement?.classList.contains('pm-work-result-read-again'))).toBe(true);
+
+    f.state.expectedChanges = 2;
+    await readAgainBtn.click();
+
+    // Wait for fresh read to complete and assert focus moved to successor ("Read current changes" button), not body
+    const freshReadBtn = resultSection.locator('.pm-work-result-read-changes');
+    await expect(freshReadBtn).toBeVisible();
+    const active1 = await page.evaluate(() => ({
+      tagName: document.activeElement?.tagName,
+      className: document.activeElement?.className,
+    }));
+    expect(active1.tagName).toBe('BUTTON');
+    expect(active1.className).toContain('pm-work-result-read-changes');
+
+    // --- Control 2: Try again on failed /changes ---
+    f.state.changesStatus = 500;
+    f.state.expectedChanges = 3;
+    await freshReadBtn.click();
+
+    const retryChangesBtn = resultSection.locator('[data-work-result-retry="changes"]');
+    await expect(retryChangesBtn).toBeVisible();
+
+    // Case 2b: Try again fails again -> successor is the new "Try again" button
+    await retryChangesBtn.focus();
+    expect(await page.evaluate(() => document.activeElement?.getAttribute('data-work-result-retry'))).toBe('changes');
+
+    f.state.expectedChanges = 4;
+    await retryChangesBtn.click();
+    await expect(resultSection.locator('[data-work-result-retry="changes"]')).toBeVisible();
+    const active2b = await page.evaluate(() => ({
+      tagName: document.activeElement?.tagName,
+      retryAttr: document.activeElement?.getAttribute('data-work-result-retry'),
+    }));
+    expect(active2b.tagName).toBe('BUTTON');
+    expect(active2b.retryAttr).toBe('changes');
+
+    // Case 2a: Try again succeeds -> successor is "Read current changes"
+    f.state.changesStatus = null;
+    f.state.expectedChanges = 5;
+    await resultSection.locator('[data-work-result-retry="changes"]').click();
+    await expect(resultSection.locator('.pm-work-result-read-changes')).toBeVisible();
+    const active2a = await page.evaluate(() => ({
+      tagName: document.activeElement?.tagName,
+      className: document.activeElement?.className,
+    }));
+    expect(active2a.tagName).toBe('BUTTON');
+    expect(active2a.className).toContain('pm-work-result-read-changes');
+
+    // --- Control 3: Try again on failed diff ---
+    f.state.diffStatusByFile.set(keyA, {status: 500});
+    f.state.expectedDiff = 1;
+    const diffDetails = resultSection.locator('.pm-work-result-diff-details').first();
+    const diffSummary = diffDetails.locator('summary');
+    await diffSummary.click();
+
+    const retryDiffBtn = diffDetails.locator(`[data-work-result-retry-diff="${keyA}"]`);
+    await expect(retryDiffBtn).toBeVisible();
+
+    // Focus diff retry button
+    await retryDiffBtn.focus();
+    expect(await page.evaluate(() => document.activeElement?.getAttribute('data-work-result-retry-diff'))).toBe(keyA);
+
+    // Make diff succeed and click retry
+    f.state.diffStatusByFile.delete(keyA);
+    f.state.diffResponses.set(keyA, buildDiffResponse({commit, path: fileA, diff: 'DIFF_OK'}));
+    f.state.expectedDiff = 2;
+    await retryDiffBtn.click();
+
+    // Wait for diff pre to appear and assert focus moved to diff summary, not body
+    await expect(diffDetails.locator('.pm-work-result-diff-pre')).toContainText('DIFF_OK');
+    const active3 = await page.evaluate(() => ({
+      tagName: document.activeElement?.tagName,
+      isSummary: document.activeElement?.tagName === 'SUMMARY',
+    }));
+    expect(active3.isSummary).toBe(true);
+  });
 });
+
 
 
 
