@@ -83,7 +83,6 @@ test.describe('PM durable form focus and busy navigation', () => {
       text: document.activeElement?.textContent?.slice(0, 30),
       isBody: document.activeElement === document.body,
     }));
-    console.log('ITEM_5_FOCUS_TEST_1:', JSON.stringify(activeFocus));
   });
 
   test('2. Enter in a text field (implicit submission), with the POST held', async ({page}) => {
@@ -258,10 +257,16 @@ test.describe('PM durable form focus and busy navigation', () => {
 
     await page.clock.install();
 
+    let releaseGet: () => void = () => {};
+    let holdGet = false;
+    let lastPost: any = null;
+    const gate = new Promise<void>(resolve => { releaseGet = resolve; });
+
     await mountConversation(page, false, async (input: any) => {
       const path = new URL(input.path, 'http://fixture').pathname;
       requests.push({method: input.method, path});
       if (input.method === 'POST' && path === '/operations') {
+        lastPost = input;
         const response = await f.dispatch(input);
         return {
           status: 202,
@@ -276,17 +281,18 @@ test.describe('PM durable form focus and busy navigation', () => {
         };
       }
       if (input.method === 'GET' && path === `/operations/${opId}`) {
+        if (holdGet) await gate;
         return {
           status: 200,
           data: {
             operation: {
               operation_id: opId,
               actor: f.state.actor,
-              idempotency_key: 'key',
-              action: 'pm.input.record',
-              target: {workspace_id: workspaceId, thread_id: threadId},
-              params: {},
-              preconditions: {},
+              idempotency_key: lastPost?.idempotency_key,
+              action: lastPost?.body.action,
+              target: lastPost?.body.target,
+              params: lastPost?.body.params,
+              preconditions: lastPost?.body.preconditions,
               status: 'running',
             },
           },
@@ -315,17 +321,36 @@ test.describe('PM durable form focus and busy navigation', () => {
     await expect(saveButton).toHaveAttribute('aria-disabled', 'true');
     expect(await saveButton.evaluate((el: HTMLButtonElement) => el.disabled)).toBe(false);
 
+    const status = form.locator(':scope > [role="status"]');
+    await expect(status).not.toHaveAttribute('aria-busy');
+
     const getsBefore = () => requests.filter(r => r.method === 'GET' && r.path === `/operations/${opId}`).length;
     expect(getsBefore()).toBe(0);
 
+    // Any manual request during autoChecking would be held and trigger busy state
+    holdGet = true;
+
     // A click and an Enter on the button while autoChecking start no manual GET /operations/{id}
     await saveButton.click({force: true});
+    await expect(status).not.toHaveAttribute('aria-busy');
+    expect(getsBefore()).toBe(0);
+
     await saveButton.press('Enter');
+    await expect(status).not.toHaveAttribute('aria-busy');
     expect(getsBefore()).toBe(0);
 
     // Advance clock by 250ms to allow automatic receipt poll to fire
     await page.clock.runFor(250);
     await expect.poll(() => getsBefore()).toBe(1);
+    await expect(status).toHaveAttribute('aria-busy', 'true');
+
+    // Release held GET so automatic receipt check completes
+    releaseGet();
+
+    // After the automatic GET has been answered and rendered, the total GET count is exactly 1
+    const receipt = form.locator(':scope > .pm-receipt');
+    await expect(receipt.getByRole('link', {name: 'View operation', exact: true})).toBeVisible();
+    await expect(status).not.toHaveAttribute('aria-busy');
 
     // Exactly 1 POST and 1 automatic GET
     const postTotal = requests.filter(r => r.method === 'POST' && r.path === '/operations').length;
