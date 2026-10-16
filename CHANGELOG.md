@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- The hidden Board and Requirements scroll checks wait for the read the test held, so a second read of the same address cannot make that wait miss.
+
 - Projects and work items: Tab reaches Add while a creation request is sending,
   and pressing it keeps keyboard focus on the button. The button looks unavailable
   until the request finishes, and a second press is ignored. A failed or refused
