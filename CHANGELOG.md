@@ -17,6 +17,10 @@
   acceptance, pull requests and deployment, summary statistics for touched files and
   commits, uncommitted change warnings, and recorded turns in English and zh-TW.
 
+- The PM Work inspector Result section adds on-demand reading of current changes and diffs (v1.3 E03 Part B).
+  People can inspect live worktree changes with "Read current changes" and open plain-text diffs for individual
+  files in a commit with "Show diff", keeping focus and state intact and flagging stale views with "May be out of date".
+
 - The Windows fixture-helper test injects a deterministic clock into its deadline and
   retry helpers, making transient read recovery independent of runner speed and slow
   .NET exception unwinds.
