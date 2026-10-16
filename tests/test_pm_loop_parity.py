@@ -94,7 +94,8 @@ def _op(ops, *, action, operation_id, target=None, result=None, refs=None, statu
 
 
 def _work_start_refs(work_item_id=WI):
-    intent = {"workspace_id": WS, "work_item_id": work_item_id, "package_plan": {}}
+    # A planted child walks package_plan["mode"]. A missing mode is a KeyError, which the loop does not catch.
+    intent = {"workspace_id": WS, "work_item_id": work_item_id, "package_plan": {"mode": "recorded"}}
     return {"admission_binding": {"work_start": intent, "work_start_digest": pm_work_start._digest(intent)}}
 
 
@@ -1312,5 +1313,49 @@ async def test_child_session_withdrawn_from_another_row_stays_readable(loop_star
         assert hidden["operation"]["loop"]["links"]["session_hash"] is None
         assert sid in json.dumps(kept)
         assert ops.get(child_id)["status"] == "succeeded"
+    finally:
+        await fleet.close()
+
+
+async def test_changed_child_receipt_stays_readable_as_attempt_unreadable(loop_start, monkeypatch):
+    """A work.start whose child receipt no longer matches still returns the operation."""
+    w = loop_start
+    daemon, ops, port = w["d"], w["d"].ops, w["port"]
+    tok = token(daemon, STARTER_OWNER.actor, *sorted(STARTER_OWNER.scopes))
+    monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
+    monkeypatch.setenv("BATC_API_TOKEN", tok)
+    server, fleet = build_server(daemon.fleet.config, principal_only=True)
+    try:
+        env = await _start_envelope(w, key="loop-child-changed")
+        body = {key: env[key] for key in ("action", "target", "params", "preconditions")}
+        status, created = await _submit(port, tok, body, env["idempotency_key"])
+        assert status == 202 and created["created"] is True, created
+        parent_id = created["operation"]["operation_id"]
+        done = await _advance_start(ops, parent_id)
+        assert done["status"] == "succeeded", done
+        child_id = done["result"]["children"]["package"]
+        # The child link row is immutable. _child compares this operation's params
+        # with the stored request (pm_work_start.py:1124-1127).
+        child = ops.get(child_id)
+        changed = dict(child["params"])
+        changed["title"] = str(changed.get("title") or "package") + " receipt changed"
+        ops.db.execute(
+            "UPDATE operations SET params=? WHERE operation_id=?",
+            (json.dumps(changed, ensure_ascii=False), child_id))
+
+        status, got = await http(port, "GET", "/api/v1/operations/" + parent_id, tok=tok)
+        assert status == 200, got
+        via_mcp = unpack(await server.call_tool("operation_get", {"operation_id": parent_id}))
+        status, cancelled = await http(port, "POST", f"/api/v1/operations/{parent_id}/cancel", tok=tok)
+        assert status == 200, cancelled
+        assert got["operation"]["loop"] == via_mcp["operation"]["loop"] == cancelled["operation"]["loop"]
+        loop = got["operation"]["loop"]
+        assert loop["completeness"] == {"status": "partial", "reason": "attempt_unreadable"}
+        assert "attempt_stage" not in loop["state"]
+        assert loop["result_read"]["result"]["name"]
+        assert loop["next_allowed_actions"] == [] and loop["blocked_actions"] == []
+        assert loop["links"]["session_hash"] is None
+        assert loop["links"]["execution_operation_hash"] is None
+        assert "PM_WORK_START_CHILD_CHANGED" not in json.dumps(loop)
     finally:
         await fleet.close()

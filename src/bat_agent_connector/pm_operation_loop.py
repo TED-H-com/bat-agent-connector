@@ -100,7 +100,7 @@ async def _project(ops, principal, operation, parent):
     proven = parent is not None
     start_id = parent["operation_id"] if proven else (operation["operation_id"] if action == "work.start" else None)
     attempt = _attempt_row(ops.db, start_id) if start_id else None
-    view = _attempt_view(ops, attempt) if attempt else None
+    view, view_unreadable = _attempt_view(ops, attempt) if attempt else (None, False)
     dropped = False
     delivery_unlinked = False
     expects_work = proven or action in {"work.start", "pm.work_package.create"}
@@ -122,7 +122,16 @@ async def _project(ops, principal, operation, parent):
     thread_hash, dropped = _discussion_hash(ops, principal, operation, dropped)
     session_hash, link_session, dropped = _sessions(ops, principal, operation, view, dropped)
     execution_id, dropped = _execution(ops, principal, view, dropped)
-    stage = view.get("stage") if view and isinstance(view.get("stage"), str) else None
+    allowed, blocked, actions_unreadable = await _actions(ops, principal, operation, parent, attempt)
+    unreadable = view_unreadable or actions_unreadable
+    if unreadable:
+        # The view and the copied work.start rows are one read. A refusal omits both.
+        link_session = None
+        execution_id = None
+        if parent is None and action == "work.start":
+            allowed, blocked = [], []
+    stage = None if unreadable else (
+        view.get("stage") if view and isinstance(view.get("stage"), str) else None)
     state = {"operation_status": operation.get("status"), "updated_at": operation.get("updated_at")}
     if attempt_id is not None and stage is not None:
         state["attempt_stage"] = stage
@@ -135,7 +144,6 @@ async def _project(ops, principal, operation, parent):
         dashboard = published_session
     else:
         dashboard = f"#/op/{operation['operation_id']}"
-    allowed, blocked = await _actions(ops, principal, operation, parent, attempt)
     return {
         "operation_id": operation["operation_id"],
         "work_item_id": work_item_id,
@@ -148,7 +156,8 @@ async def _project(ops, principal, operation, parent):
         "result_read": _result_read(attempt_id),
         "completeness": _completeness(
             operation, dropped=dropped, delivery_unlinked=delivery_unlinked, expects_work=expects_work,
-            work_visible=work_visible, expects_attempt=expects_attempt, attempt_present=attempt is not None),
+            work_visible=work_visible, expects_attempt=expects_attempt, attempt_present=attempt is not None,
+            attempt_unreadable=unreadable),
     }
 
 
@@ -284,7 +293,7 @@ def _result_read(attempt_id):
 
 
 def _completeness(operation, *, dropped, delivery_unlinked, expects_work, work_visible, expects_attempt,
-                  attempt_present):
+                  attempt_present, attempt_unreadable):
     if dropped:
         return {"status": "unavailable", "reason": "source_withdrawn"}
     if delivery_unlinked:
@@ -293,6 +302,8 @@ def _completeness(operation, *, dropped, delivery_unlinked, expects_work, work_v
         return {"status": "partial", "reason": "no_work_item"}
     if expects_attempt and work_visible and not attempt_present:
         return {"status": "partial", "reason": "no_attempt"}
+    if attempt_unreadable:
+        return {"status": "partial", "reason": "attempt_unreadable"}
     target = operation.get("target") if isinstance(operation.get("target"), dict) else {}
     if operation.get("action") == "session.send" and not target.get("work_item_id"):
         return {"status": "partial", "reason": "session_target"}
@@ -313,11 +324,11 @@ def _attempt_view(ops, row):
     from .pm_work_start import _attempt_view as view
 
     try:
-        return view(ops, row)
-    except (OperationError, KeyError, TypeError):
-        # An unproven child receipt makes the attempt view raise. Omit the
-        # stage and the link fields that come from it; do not fail the read.
-        return None
+        return view(ops, row), False
+    except OperationError as error:
+        # NOT_FOUND omits the view. Any other OperationError is attempt_unreadable.
+        # KeyError and TypeError are bugs and are not caught.
+        return None, error.code != "NOT_FOUND"
 
 
 def _work_visible(ops, principal, workspace_id, work_item_id) -> bool:
@@ -465,12 +476,13 @@ async def _actions(ops, principal, operation, parent, attempt):
     """
     if parent is None and operation["action"] == "work.start":
         return await _work_start_actions(ops, principal, attempt)
-    return _status_actions(ops, principal, operation)
+    allowed, blocked = _status_actions(ops, principal, operation)
+    return allowed, blocked, False
 
 
 async def _work_start_actions(ops, principal, attempt):
     if attempt is None:
-        return [], []
+        return [], [], False
     from .operations import OperationError
     from .pm_attempt_result_reads import RESULT_GET, read
 
@@ -482,11 +494,11 @@ async def _work_start_actions(ops, principal, attempt):
         })
     except OperationError as error:
         if error.code == "NOT_FOUND":
-            return [], []
-        raise
+            return [], [], False
+        return [], [], True
     allowed = [row for row in envelope.get("next_allowed_actions") or [] if row.get("kind") == "operation_endpoint"]
     blocked = [row for row in envelope.get("blocked_actions") or [] if row.get("action") in _STEER_BLOCKED]
-    return allowed, blocked
+    return allowed, blocked, False
 
 
 def _status_actions(ops, principal, operation):
