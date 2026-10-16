@@ -593,8 +593,14 @@ The same compact presentation applies below a 720px table-container width, even
 on larger viewports. Its entire header is hidden; the wide table retains its header.
 
 `pm-work-inspector.js` supplies both views (and the future Schedule caller) with
-six ordered work sections: Requirements served; Status & ownership; Latest result;
-Blocker & next step; Delivery; Details. Discuss uses exact context objects through
+ordered work sections: Requirements served; Status & ownership; Start work (when the
+`features.pm_workspaces.work_start` capability is available); Latest result;
+Blocker & next step; Delivery; Details. When the card is startable, the inspector
+header offers a Start work action alongside Discuss that scrolls and focuses the instruction
+field. The Start work panel previews readiness facts, candidate code targets, and requirement
+selection for cards needing plan rebinding with workspace owner permission; durable submissions
+use the preview's preconditions and preserve drafts and idempotency keys across reloads.
+Discuss uses exact context objects through
 `discussHref`. Managed and manual session links use central session identity and
 access metadata; manual sessions carry Read-only. Missing attempt start/end times
 and CI results remain unknown; observation or send-acceptance time does not imply
