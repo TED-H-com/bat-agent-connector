@@ -1783,3 +1783,82 @@ async def test_token_probe_does_not_hide_an_unexpected_error(world):
         raw = json.dumps(body)
         assert secret not in raw
         assert "CREDENTIAL_REQUIRED" not in raw
+
+
+async def test_missing_pm_worktree_table_surfaces(ops):
+    from bat_agent_connector import pm_bat_operations
+
+    ops.actions[pm_bat_operations.ACTION] = ActionDef(
+        pm_bat_operations.ACTION, "manage", "placeholder", lambda ctx: None,
+    )
+    profile_id = await _profile(ops)
+    with pytest.raises(sqlite3.OperationalError, match="no such table"):
+        pm_work_profiles.readiness(ops, OWNER, WS, profile_id)
+
+
+async def test_pm_analysis_reports_registered_and_unregistered_actions(world, monkeypatch):
+    from bat_agent_connector import mcp_server, pm_bat_operations
+    from tests.test_api_v1 import http, token
+    from tests.test_pm_run_api import unpack
+
+    daemon = world["d"]
+    ops = daemon.ops
+    owner = Principal("profile-owner", frozenset({"observe", "manage", "start"}))
+    auth = token(daemon, owner.actor, "observe", "manage", "start")
+    created, inserted = ops.create(
+        owner, action="pm.workspace.create", params={"name": "Analysis states"},
+        idempotency_key="analysis-states",
+    )
+    assert inserted
+    await settle_operations(ops)
+    workspace = ops.get(created["operation_id"])
+    assert workspace["status"] == "succeeded", workspace
+    wid = workspace["result"]["workspace"]["workspace_id"]
+    status, saved = await http(
+        world["port"], "POST", "/api/v1/operations", tok=auth,
+        body={
+            "action": pm_work_profiles.ACTION,
+            "target": {"workspace_id": wid},
+            "params": {"document": _shape_document()},
+            "preconditions": {},
+        },
+        headers={"Idempotency-Key": "analysis-save"},
+    )
+    assert status == 202, saved
+    await settle_operations(ops)
+    profile_id = ops.get(saved["operation"]["operation_id"])["result"]["profile_id"]
+    path = f"/api/v1/pm/workspaces/{wid}/work-profiles/{profile_id}/readiness"
+    monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{world['port']}/rpc")
+    monkeypatch.setenv("BATC_API_TOKEN", auth)
+    server, fleet = mcp_server.build_server(daemon.fleet.config, read_only=False, principal_only=True)
+
+    async def bat_reason():
+        status, http_body = await http(world["port"], "GET", path, tok=auth)
+        assert status == 200, http_body
+        rpc_status, rpc_body = await http(world["port"], "POST", "/rpc", tok=auth, body={
+            "method": "pm_work_profile_readiness_get",
+            "params": {"workspace_id": wid, "profile_id": profile_id},
+        })
+        assert rpc_status == 200, rpc_body
+        mcp_body = unpack(await server.call_tool("pm_work_profile_readiness_get", {
+            "workspace_id": wid, "profile_id": profile_id,
+        }))
+        http_bat = http_body["pm_analysis"]["bat_analysis"]
+        assert http_bat == rpc_body["result"]["pm_analysis"]["bat_analysis"] == mcp_body["pm_analysis"]["bat_analysis"]
+        assert "pm_worktree_required" not in json.dumps(http_bat)
+        return http_bat
+
+    try:
+        assert pm_bat_operations.ACTION in ops.actions
+        registered = await bat_reason()
+        assert registered["action_registered"] is True
+        assert registered["reason"] == "PM_WORKTREE_REQUIRED"
+        held = ops.actions.pop(pm_bat_operations.ACTION)
+        try:
+            unregistered = await bat_reason()
+        finally:
+            ops.actions[pm_bat_operations.ACTION] = held
+        assert unregistered["action_registered"] is False
+        assert unregistered["reason"] == "action_unavailable"
+    finally:
+        await fleet.close()

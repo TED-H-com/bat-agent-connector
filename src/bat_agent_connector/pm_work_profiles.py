@@ -5,7 +5,6 @@ import calendar
 import hashlib
 import json
 import re
-import sqlite3
 import time
 import uuid
 
@@ -795,16 +794,7 @@ def _pm_analysis(ops, principal, workspace_id: str) -> dict:
     from . import pm_bat_operations, pm_native_capabilities
     workspace = require_member(ops.db, principal, workspace_id)
     native = pm_native_capabilities.read(ops, principal, workspace)
-    try:
-        bat = pm_bat_operations.capabilities(ops, principal, workspace)
-    except sqlite3.OperationalError as exc:
-        if "no such table" not in str(exc):
-            raise
-        # The PM worktree table is created by its own install. A readiness read must not create it.
-        bat = {
-            "action_registered": False, "authorized": False, "eligible_for_preflight": False,
-            "reason": "pm_worktree_required", "auth_validity": "unverified", "model_execution_verified": False,
-        }
+    bat = pm_bat_operations.capabilities(ops, principal, workspace)
     permitted = all(principal.allows(scope) for scope in ("observe", "manage", "start"))
     pm_ready = permitted and any(
         isinstance(item, dict) and item.get("eligible_for_preflight") is True
