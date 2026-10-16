@@ -1,7 +1,8 @@
 import {test, expect} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
-import {workResultFixture, buildResultEnvelope, workspaceId, workId, route} from './work-result-fixture.ts';
+import {workResultFixture, buildResultEnvelope, buildChangesResponse, buildDiffResponse, workspaceId, workId, route} from './work-result-fixture.ts';
 import {workResultStrings} from '../src/pm-work-result-strings.js';
+import {installBodyCompletedCounter, countCompletedBodies, syncCompletedBodies, syncHeldBodyCompletion} from './page-sync.ts';
 
 let pageErrors: string[] = [];
 let activeFixture: any = null;
@@ -23,8 +24,8 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
   test.afterEach(async () => {
     expect(pageErrors).toEqual([]);
     if (activeFixture) {
-      expect(activeFixture.state.changesCount).toBe(0);
-      expect(activeFixture.state.diffCount).toBe(0);
+      expect(activeFixture.state.changesCount).toBe(activeFixture.state.expectedChanges || 0);
+      expect(activeFixture.state.diffCount).toBe(activeFixture.state.expectedDiff || 0);
     }
   });
 
@@ -131,6 +132,7 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
       ],
     });
 
+    await installBodyCompletedCounter(page);
     await mountConversation(page, false, f.dispatch);
     await page.goto(route);
     await page.locator('[data-pm-view="board"]').click();
@@ -192,8 +194,10 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     );
     expect(sectionKeysAfter).toEqual(sectionKeysBefore);
 
-    // Event refresh: emit event again with same attempt/result
+    // Event refresh: emit event again with same attempt/result, synced on completed body
+    const beforeResultBodies = await countCompletedBodies(page, '/result');
     f.emitResultRecorded(attId, updatedEnvelope);
+    await syncCompletedBodies(page, '/result', beforeResultBodies + 1);
 
     // After event refresh: section order remains identical
     const sectionKeysAfterRefresh = await inspector.locator('.ui-inspector-body > [data-work-section]').evaluateAll(nodes =>
@@ -386,11 +390,10 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     await expect(fileRow).toContainText('src/main.ts');
     await expect(fileRow).toContainText('? ?');
 
-    // Completeness partial pill & reasons
+    // Completeness partial pill & reasons (deduplicated against changes reasons: list left empty is not rendered, pill stays)
     const compDiv = resultSection.locator('.pm-work-result-completeness');
     await expect(compDiv).toBeVisible();
-    await expect(compDiv).toContainText('BAT is not reachable.');
-    await expect(compDiv).toContainText('Another limit applies');
+    await expect(compDiv.locator('.pm-work-result-completeness-reasons')).toHaveCount(0);
 
     // Details disclosure has raw unlisted reason
     const details = resultSection.locator('[data-work-result-details]');
@@ -612,6 +615,7 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
       summary_text: 'Summary for Work 2 ONLY',
     }));
 
+    await installBodyCompletedCounter(page);
     await mountConversation(page, false, f.dispatch);
     await page.goto(route);
     await page.locator('[data-pm-view="board"]').click();
@@ -637,9 +641,11 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     await expect(staticResult).toBeHidden();
 
     // 3. Fail A's held read
+    const beforeAttempts = await countCompletedBodies(page, '/attempts');
     f.state.attemptsFailWorkId = workId(1);
     releaseA();
     f.state.holdAttempts = null;
+    await syncHeldBodyCompletion(page, '/attempts', beforeAttempts);
 
     // 4. B's Result stays visible, with its content, and B's panel shows no error from A
     await expect(attemptResult).toBeVisible();
@@ -843,5 +849,883 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     expect(partialDisallowedWords, `Found unexpected Latin words in partial zh-TW panel: ${partialDisallowedWords.join(', ')}`).toEqual([]);
 
     await context.close();
+  });
+
+  test('14. Part B: 1. No call without a click', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workResultFixture();
+    activeFixture = f;
+    const attId1 = 'att_' + '1'.repeat(32);
+    const attId2 = 'att_' + '2'.repeat(32);
+
+    f.state.attempts.push({
+      attempt_id: attId2,
+      workspace_id: workspaceId,
+      work_item_id: workId(2),
+      start_operation_id: 'op_' + '2'.repeat(32),
+      stage: 'started',
+      status: 'succeeded',
+      session: {host: 'fixture-host', session_id: 'session-456'},
+      created_at: 1791705600,
+    });
+
+    f.state.resultEnvelopes.set(attId1, buildResultEnvelope({attempt_id: attId1, summary_text: 'Summary Work 1'}));
+    f.state.resultEnvelopes.set(attId2, buildResultEnvelope({attempt_id: attId2, summary_text: 'Summary Work 2'}));
+
+    await installBodyCompletedCounter(page);
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    // 1. Open Work 1, wait for Result
+    const card1 = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    const card2 = page.locator(`[data-pm-kanban-work="${workId(2)}"]`);
+    const inspector = page.locator('[data-work-inspector]');
+    const resultSection = inspector.locator('[data-work-section="attempt-result"]');
+
+    await card1.locator('[data-board-open]').click();
+    await expect(resultSection).toBeVisible();
+    await expect(resultSection.locator('.pm-work-result-summary-box')).toContainText('Summary Work 1');
+    await expect(resultSection.locator('.pm-work-result-read-changes')).toBeVisible();
+
+    // 2. Run an event refresh with sync point
+    const beforeRefreshBodies = await countCompletedBodies(page, '/result');
+    f.emitResultRecorded(attId1, buildResultEnvelope({attempt_id: attId1, summary_text: 'Summary Work 1'}));
+    await syncCompletedBodies(page, '/result', beforeRefreshBodies + 1);
+
+    // 3. Switch Works to Work 2 and come back to Work 1
+    await card2.locator('[data-board-open]').click();
+    await expect(resultSection.locator('.pm-work-result-summary-box')).toContainText('Summary Work 2');
+    await card1.locator('[data-board-open]').click();
+    await expect(resultSection.locator('.pm-work-result-summary-box')).toContainText('Summary Work 1');
+
+    // Page-side sync before asserting: sync on latest completed /result body
+    const finalResultBodies = await countCompletedBodies(page, '/result');
+    expect(finalResultBodies).toBeGreaterThanOrEqual(2);
+
+    // /changes and /diff stay at 0
+    expect(f.state.changesCount).toBe(0);
+    expect(f.state.diffCount).toBe(0);
+  });
+
+  test('15. Part B: 2. Read, complete', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workResultFixture();
+    activeFixture = f;
+    const attId = 'att_' + '1'.repeat(32);
+    const headCommit = 'abcdef1234567890abcdef1234567890abcdef12';
+
+    f.state.changesResponse = buildChangesResponse({
+      attempt_id: attId,
+      live_head_commit: headCommit,
+      head_freshness: 'live',
+      uncommitted: {
+        count: 2,
+        files: [
+          {path: 'uncommitted/file1.ts', status: 'M'},
+          {path: 'uncommitted/file2.ts', status: 'A'},
+        ],
+        evidence: 'bat_git_status',
+        reason: null,
+      },
+      summary: {
+        aggregation: 'per_commit',
+        commits: [headCommit],
+        commit_count: 1,
+        files: [
+          {path: 'src/app.ts', status: 'M', additions: 15, deletions: 3, commits_touched: [headCommit]},
+        ],
+        file_count: 1,
+        additions: 15,
+        deletions: 3,
+        unavailable: [],
+        complete: true,
+        reason: null,
+        reasons: [],
+      },
+    });
+
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const resultSection = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+    await expect(resultSection).toBeVisible();
+
+    // Check Part A summary text before read
+    const partASummaryBefore = await resultSection.locator('.pm-work-result-changes > .pm-work-result-changes-summary').textContent();
+    expect(partASummaryBefore).toContain('As of the last recorded turn');
+
+    // Click "Read current changes"
+    f.state.expectedChanges = 1;
+    const readChangesBtn = resultSection.locator('.pm-work-result-read-changes');
+    await readChangesBtn.click();
+
+    // Check head (first 12 chars: abcdef123456)
+    const headP = resultSection.locator('.pm-work-result-head');
+    await expect(headP).toBeVisible();
+    await expect(headP).toContainText('abcdef123456');
+
+    // Check freshness: "Read from BAT just now"
+    const freshnessP = resultSection.locator('.pm-work-result-freshness');
+    await expect(freshnessP).toContainText('Read from BAT just now');
+
+    // Check summary line (singular: 1 file changed in 1 commit, +15 −3)
+    const currentChangesBlock = resultSection.locator('.pm-work-result-current-changes');
+    const currentSummary = currentChangesBlock.locator('.pm-work-result-changes-summary');
+    await expect(currentSummary).toContainText('1 file changed in 1 commit, +15 −3');
+    expect(await currentSummary.textContent()).not.toContain('As of the last recorded turn');
+
+    // Check rows in current changes
+    const fileRow = currentChangesBlock.locator('.pm-work-result-file-row').first();
+    await expect(fileRow).toContainText('src/app.ts');
+    await expect(fileRow).toContainText('modified');
+    await expect(fileRow).toContainText('+15 −3');
+
+    // Check uncommitted paths and notice
+    const uncommittedBox = currentChangesBlock.locator('.pm-work-result-uncommitted-box');
+    await expect(uncommittedBox).toContainText('Uncommitted changes: 2');
+    await expect(uncommittedBox).toContainText('uncommitted/file1.ts');
+    await expect(uncommittedBox).toContainText('uncommitted/file2.ts');
+    await expect(uncommittedBox).toContainText('BAT does not show diffs of uncommitted files.');
+
+    // The Part A summary text does not change
+    const partASummaryAfter = await resultSection.locator('.pm-work-result-changes > .pm-work-result-changes-summary').textContent();
+    expect(partASummaryAfter).toBe(partASummaryBefore);
+  });
+
+  test('16. Part B: 3. Read, partial and unavailable', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workResultFixture();
+    activeFixture = f;
+    const attId = 'att_' + '1'.repeat(32);
+
+    // 1. cached_receipt with partial reasons
+    f.state.changesResponse = buildChangesResponse({
+      attempt_id: attId,
+      live_head_commit: '1111222233334444555566667777888899990000',
+      head_freshness: 'cached_receipt',
+      completeness_status: 'partial',
+      completeness_reasons: ['worktree_unreachable'],
+      summary: {
+        aggregation: 'per_commit',
+        commits: ['1111222233334444555566667777888899990000'],
+        commit_count: 1,
+        files: [],
+        file_count: 0,
+        additions: 'unknown',
+        deletions: 'unknown',
+        unavailable: [],
+        complete: false,
+        reasons: [],
+      },
+    });
+
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const resultSection = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+    f.state.expectedChanges = 1;
+    await resultSection.locator('.pm-work-result-read-changes').click();
+
+    const currentBlock = resultSection.locator('.pm-work-result-current-changes');
+    // Check freshness: "BAT could not be read. Showing the last recorded turn."
+    await expect(currentBlock.locator('.pm-work-result-freshness')).toContainText('BAT could not be read. Showing the last recorded turn.');
+    // Check completeness pill & partial reason
+    await expect(currentBlock.locator('.pm-work-result-completeness')).toContainText('The worktree is not reachable.');
+
+    // 2. unavailable with live_head_commit: "unknown" and unknown uncommitted count
+    f.state.changesResponse = buildChangesResponse({
+      attempt_id: attId,
+      live_head_commit: 'unknown',
+      head_freshness: 'unavailable',
+      uncommitted: {
+        count: 'unknown',
+        files: 'unknown',
+        evidence: 'unproven',
+        reason: 'worktree_unreachable',
+      },
+      completeness_status: 'unavailable',
+      completeness_reasons: ['worktree_unreachable'],
+      summary: {
+        aggregation: 'per_commit',
+        commits: [],
+        commit_count: 0,
+        files: [],
+        file_count: 0,
+        additions: 'unknown',
+        deletions: 'unknown',
+        unavailable: [],
+        complete: false,
+        reasons: ['worktree_unreachable'],
+      },
+    });
+
+    f.state.expectedChanges = 2;
+    await currentBlock.locator('.pm-work-result-read-changes').click();
+
+    // Head shows Unknown
+    await expect(currentBlock.locator('.pm-work-result-head')).toContainText('Unknown');
+    // Freshness: Not available
+    await expect(currentBlock.locator('.pm-work-result-freshness')).toContainText('Not available');
+    // Completeness: unavailable
+    await expect(currentBlock.locator('.pm-work-result-completeness [data-status="unavailable"]')).toBeVisible();
+    // Unknown uncommitted sentence & BAT diffs disclaimer
+    const uncommittedBox = currentBlock.locator('.pm-work-result-uncommitted-box');
+    await expect(uncommittedBox).toContainText('Unknown: BAT cannot prove the working tree has no uncommitted changes.');
+    await expect(uncommittedBox).toContainText('BAT does not show diffs of uncommitted files.');
+  });
+
+  test('17. Part B: 4. Busy', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workResultFixture();
+    activeFixture = f;
+    const attId = 'att_' + '1'.repeat(32);
+
+    f.state.changesResponse = buildChangesResponse({attempt_id: attId});
+
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const resultSection = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+    const readBtn = resultSection.locator('.pm-work-result-read-changes');
+
+    // Hold /changes
+    let releaseChanges: () => void = () => {};
+    f.state.holdChanges = new Promise<void>(resolve => {
+      releaseChanges = resolve;
+    });
+
+    // Click button to start read
+    f.state.expectedChanges = 1;
+    await readBtn.click();
+
+    // While held: button keeps focus and has aria-disabled="true", block has aria-busy="true"
+    await expect(readBtn).toHaveAttribute('aria-disabled', 'true');
+    await expect(readBtn).toBeFocused();
+    const currentBlock = resultSection.locator('.pm-work-result-current-changes');
+    await expect(currentBlock).toHaveAttribute('aria-busy', 'true');
+
+    // Clicking twice and pressing Enter make zero extra requests
+    await readBtn.click({force: true});
+    await readBtn.click({force: true});
+    await readBtn.press('Enter');
+    expect(f.state.changesCount).toBe(1);
+
+    // Release /changes
+    releaseChanges();
+    f.state.holdChanges = null;
+
+    // After release: aria-disabled is gone, aria-busy is gone, focus is still on the button
+    await expect(readBtn).not.toHaveAttribute('aria-disabled', 'true');
+    await expect(currentBlock).not.toHaveAttribute('aria-busy', 'true');
+    await expect(readBtn).toBeFocused();
+    expect(f.state.changesCount).toBe(1);
+  });
+
+  test('18. Part B: 5. Diff', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workResultFixture();
+    activeFixture = f;
+    const attId = 'att_' + '1'.repeat(32);
+    const commitSha = 'abcdef1234567890abcdef1234567890abcdef12';
+    const filePath = 'src/xss-test.ts';
+    const filePath2 = 'src/second-file.ts';
+    const payload = 'const x = "<img src=x onerror=alert(1)>";';
+
+    f.state.changesResponse = buildChangesResponse({
+      attempt_id: attId,
+      live_head_commit: commitSha,
+      summary: {
+        aggregation: 'per_commit',
+        commits: [commitSha],
+        commit_count: 1,
+        files: [
+          {path: filePath, status: 'M', additions: 1, deletions: 0, commits_touched: [commitSha]},
+          {path: filePath2, status: 'A', additions: 5, deletions: 0, commits_touched: [commitSha]},
+        ],
+        file_count: 2,
+        additions: 6,
+        deletions: 0,
+        unavailable: [],
+        complete: true,
+      },
+    });
+
+    f.state.diffResponses.set(`${commitSha}:${filePath}`, buildDiffResponse({
+      attempt_id: attId,
+      commit: commitSha,
+      path: filePath,
+      diff: `--- a/${filePath}\n+++ b/${filePath}\n@@ -1 +1 @@\n+${payload}\n`,
+      stats: {additions: 1, deletions: 0},
+    }));
+
+    f.state.diffResponses.set(`${commitSha}:${filePath2}`, buildDiffResponse({
+      attempt_id: attId,
+      commit: commitSha,
+      path: filePath2,
+      diff: `--- /dev/null\n+++ b/${filePath2}\n@@ -0,0 +1,5 @@\n+// second file\n`,
+      stats: {additions: 5, deletions: 0},
+    }));
+
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const resultSection = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+    f.state.expectedChanges = 1;
+    await resultSection.locator('.pm-work-result-read-changes').click();
+
+    // Find the Show diff disclosure
+    const diffDetails = resultSection.locator('.pm-work-result-diff-details').first();
+    const diffSummary = diffDetails.locator('summary');
+    await expect(diffSummary).toContainText('Show diff');
+    await expect(diffSummary).toContainText('abcdef123456');
+
+    // First open: makes exactly one request with exact commit and path
+    f.state.expectedDiff = 1;
+    await diffSummary.click();
+    await expect(diffDetails).toHaveAttribute('open', '');
+
+    // Diff shows textContent, never innerHTML; no <img> element exists
+    const diffPre = diffDetails.locator('.pm-work-result-diff-pre');
+    await expect(diffPre).toBeVisible();
+    await expect(diffPre).toContainText(payload);
+    const imgCount = await page.locator('.pm-work-result-diff-pre img').count();
+    expect(imgCount).toBe(0);
+
+    expect(f.state.diffRequests).toHaveLength(1);
+    expect(f.state.diffRequests[0].commit).toBe(commitSha);
+    expect(f.state.diffRequests[0].filePath).toBe(filePath);
+
+    // Stats line: +A −D
+    await expect(diffDetails.locator('.pm-work-result-diff-stats')).toContainText('+1 −0');
+
+    // Region role & aria-label
+    await expect(diffPre).toHaveAttribute('role', 'region');
+    await expect(diffPre).toHaveAttribute('aria-label', `Diff for ${filePath} at abcdef123456`);
+
+    // Second open: close and reopen makes no new request
+    await diffSummary.click(); // close
+    await expect(diffDetails).not.toHaveAttribute('open', '');
+    await diffSummary.click(); // reopen
+    await expect(diffDetails).toHaveAttribute('open', '');
+    expect(f.state.diffCount).toBe(1);
+
+    // Second file in same commit: clicking it makes one request for that file, previous diff stays open
+    f.state.expectedDiff = 2;
+    const diffDetails2 = resultSection.locator('.pm-work-result-diff-details').nth(1);
+    await diffDetails2.locator('summary').click();
+    await expect(diffDetails2).toHaveAttribute('open', '');
+    await expect(diffDetails2.locator('.pm-work-result-diff-pre')).toBeVisible();
+    await expect(diffDetails).toHaveAttribute('open', '');
+    expect(f.state.diffCount).toBe(2);
+  });
+
+  test('19. Part B: 6. Diff notices', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workResultFixture();
+    activeFixture = f;
+    const attId = 'att_' + '1'.repeat(32);
+    const commitSha = 'abcdef1234567890abcdef1234567890abcdef12';
+
+    f.state.changesResponse = buildChangesResponse({
+      attempt_id: attId,
+      live_head_commit: commitSha,
+      summary: {
+        aggregation: 'per_commit',
+        commits: [commitSha],
+        commit_count: 1,
+        files: [
+          {path: 'file1-truncated.ts', status: 'M', additions: 100, deletions: 50, commits_touched: [commitSha]},
+          {path: 'file2-pipe-limit.ts', status: 'M', additions: 'unknown', deletions: 'unknown', commits_touched: [commitSha]},
+          {path: 'file3-not-found.ts', status: 'M', additions: 1, deletions: 1, commits_touched: [commitSha]},
+          {path: 'file4-retry.ts', status: 'M', additions: 2, deletions: 2, commits_touched: [commitSha]},
+        ],
+        file_count: 4,
+        additions: 103,
+        deletions: 53,
+        unavailable: [],
+        complete: true,
+      },
+    });
+
+    // 1. Truncated
+    f.state.diffResponses.set(`${commitSha}:file1-truncated.ts`, buildDiffResponse({
+      commit: commitSha,
+      path: 'file1-truncated.ts',
+      truncated: true,
+      diff: 'truncated diff content...',
+    }));
+
+    // 2. available: false
+    f.state.diffResponses.set(`${commitSha}:file2-pipe-limit.ts`, buildDiffResponse({
+      commit: commitSha,
+      path: 'file2-pipe-limit.ts',
+      available: false,
+      reason: 'diff_exceeded_pipe_limit',
+    }));
+
+    // 3. 404 PM_DIFF_NOT_FOUND
+    f.state.diffStatusByFile.set(`${commitSha}:file3-not-found.ts`, {
+      status: 404,
+      data: {error: {code: 'PM_DIFF_NOT_FOUND', message: 'Not found'}},
+    });
+
+    // 4. 502 PM_DIFF_UNAVAILABLE
+    f.state.diffStatusByFile.set(`${commitSha}:file4-retry.ts`, {
+      status: 502,
+      data: {error: {code: 'PM_DIFF_UNAVAILABLE', message: 'Unavailable'}},
+    });
+
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const resultSection = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+    f.state.expectedChanges = 1;
+    await resultSection.locator('.pm-work-result-read-changes').click();
+
+    const disclosures = resultSection.locator('.pm-work-result-diff-details');
+
+    // Check 1: Truncated
+    f.state.expectedDiff = 1;
+    await disclosures.nth(0).locator('summary').click();
+    await expect(disclosures.nth(0).locator('.pm-work-result-diff-notice')).toContainText('Showing the first 256 KiB of this diff.');
+
+    // Check 2: available: false with reason
+    f.state.expectedDiff = 2;
+    await disclosures.nth(1).locator('summary').click();
+    await expect(disclosures.nth(1).locator('.pm-work-result-diff-notice')).toContainText('The diff exceeded the pipe buffer limit.');
+
+    // Check 3: 404 PM_DIFF_NOT_FOUND - message shown, NO retry button
+    f.state.expectedDiff = 3;
+    await disclosures.nth(2).locator('summary').click();
+    await expect(disclosures.nth(2).locator('.pm-work-result-diff-notice')).toContainText("This commit or file is no longer in this attempt's range. Read current changes again.");
+    await expect(disclosures.nth(2).locator('.pm-work-result-retry')).toHaveCount(0);
+
+    // Check 4: 502 then "Try again" (two requests in total)
+    f.state.expectedDiff = 4;
+    await disclosures.nth(3).locator('summary').click();
+    await expect(disclosures.nth(3).locator('.pm-work-result-error-box')).toBeVisible();
+    const retryBtn = disclosures.nth(3).locator('.pm-work-result-retry');
+    await expect(retryBtn).toBeVisible();
+
+    // Now clear the error so retry succeeds
+    f.state.diffStatusByFile.delete(`${commitSha}:file4-retry.ts`);
+    f.state.diffResponses.set(`${commitSha}:file4-retry.ts`, buildDiffResponse({
+      commit: commitSha,
+      path: 'file4-retry.ts',
+      diff: 'success on retry',
+    }));
+
+    f.state.expectedDiff = 5;
+    await retryBtn.click();
+    await expect(disclosures.nth(3).locator('.pm-work-result-diff-pre')).toContainText('success on retry');
+  });
+
+  test('20. Part B: 7. Out of date', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workResultFixture();
+    activeFixture = f;
+    const attId = 'att_' + '1'.repeat(32);
+    const commit1 = 'abcdef1234567890abcdef1234567890abcdef12';
+
+    f.state.changesResponse = buildChangesResponse({
+      attempt_id: attId,
+      live_head_commit: commit1,
+      summary: {
+        aggregation: 'per_commit',
+        commits: [commit1],
+        commit_count: 1,
+        files: [{path: 'src/file.ts', status: 'M', additions: 1, deletions: 1, commits_touched: [commit1]}],
+        file_count: 1,
+        additions: 1,
+        deletions: 1,
+        complete: true,
+      },
+    });
+
+    f.state.diffResponses.set(`${commit1}:src/file.ts`, buildDiffResponse({
+      commit: commit1,
+      path: 'src/file.ts',
+      diff: 'loaded diff content',
+    }));
+
+    await installBodyCompletedCounter(page);
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const resultSection = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+    // Read changes
+    f.state.expectedChanges = 1;
+    await resultSection.locator('.pm-work-result-read-changes').click();
+
+    // Open diff
+    f.state.expectedDiff = 1;
+    const diffDetails = resultSection.locator('.pm-work-result-diff-details');
+    await diffDetails.locator('summary').click();
+    await expect(diffDetails.locator('.pm-work-result-diff-pre')).toContainText('loaded diff content');
+
+    // Event refresh with a changed envelope (e.g. state becomes process-ended)
+    const changedEnv = buildResultEnvelope({
+      attempt_id: attId,
+      state: 'process-ended',
+      stage: 'completed',
+    });
+    const beforeResultBodies = await countCompletedBodies(page, '/result');
+    f.emitResultRecorded(attId, changedEnv);
+    await syncCompletedBodies(page, '/result', beforeResultBodies + 1);
+
+    // Shows "May be out of date" pill and "Read again" button
+    const currentBlock = resultSection.locator('.pm-work-result-current-changes');
+    const outOfDatePill = currentBlock.locator('[data-status="out-of-date"]');
+    await expect(outOfDatePill).toContainText('May be out of date');
+    const readAgainBtn = currentBlock.locator('.pm-work-result-read-again');
+    await expect(readAgainBtn).toContainText('Read again');
+
+    // Content and open diff are kept, changesCount is still 1
+    await expect(diffDetails).toHaveAttribute('open', '');
+    await expect(diffDetails.locator('.pm-work-result-diff-pre')).toContainText('loaded diff content');
+    expect(f.state.changesCount).toBe(1);
+
+    // Click "Read again": makes one request and clears loaded diffs
+    f.state.expectedChanges = 2;
+    await readAgainBtn.click();
+
+    // Pill and "Read again" button disappear, "Read current changes" button returns
+    await expect(currentBlock.locator('[data-status="out-of-date"]')).toHaveCount(0);
+    await expect(currentBlock.locator('.pm-work-result-read-changes')).toBeVisible();
+
+    // Diff disclosure was cleared/closed, opening it again fetches diff afresh
+    f.state.expectedDiff = 2;
+    const newDiffDetails = currentBlock.locator('.pm-work-result-diff-details');
+    await expect(newDiffDetails).not.toHaveAttribute('open', '');
+    await newDiffDetails.locator('summary').click();
+    await expect(newDiffDetails).toHaveAttribute('open', '');
+    await expect(newDiffDetails.locator('.pm-work-result-diff-pre')).toContainText('loaded diff content');
+    expect(f.state.diffCount).toBe(2);
+  });
+
+  test('21. Part B: 8. Switch', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workResultFixture();
+    activeFixture = f;
+    const att1 = 'att_' + '1'.repeat(32);
+    const att2 = 'att_' + '2'.repeat(32);
+    const commit1 = 'abcdef1234567890abcdef1234567890abcdef12';
+
+    f.state.attempts.push({
+      attempt_id: att2,
+      workspace_id: workspaceId,
+      work_item_id: workId(2),
+      start_operation_id: 'op_' + '2'.repeat(32),
+      stage: 'started',
+      status: 'succeeded',
+      session: {host: 'fixture-host', session_id: 'session-456'},
+      created_at: 1791705600,
+    });
+
+    f.state.resultEnvelopes.set(att1, buildResultEnvelope({attempt_id: att1, summary_text: 'Summary Work 1'}));
+    f.state.resultEnvelopes.set(att2, buildResultEnvelope({attempt_id: att2, summary_text: 'Summary Work 2'}));
+
+    f.state.changesResponse = buildChangesResponse({
+      attempt_id: att1,
+      live_head_commit: commit1,
+      summary: {
+        commits: [commit1],
+        files: [{path: 'work1-exclusive.ts', status: 'M', additions: 10, deletions: 2, commits_touched: [commit1]}],
+      },
+    });
+
+    await installBodyCompletedCounter(page);
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card1 = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    const card2 = page.locator(`[data-pm-kanban-work="${workId(2)}"]`);
+    const inspector = page.locator('[data-work-inspector]');
+    const attemptResult = inspector.locator('[data-work-section="attempt-result"]');
+
+    // 1. Hold Work A's /changes
+    let releaseChangesA: () => void = () => {};
+    f.state.holdChanges = new Promise<void>(resolve => {
+      releaseChangesA = resolve;
+    });
+
+    await card1.locator('[data-board-open]').click();
+    await expect(attemptResult.locator('.pm-work-result-summary-box')).toContainText('Summary Work 1');
+
+    // Click Read current changes on Work A
+    f.state.expectedChanges = 1;
+    await attemptResult.locator('.pm-work-result-read-changes').click();
+
+    // 2. Switch to Work B
+    await card2.locator('[data-board-open]').click();
+    await expect(attemptResult.locator('.pm-work-result-summary-box')).toContainText('Summary Work 2');
+
+    // 3. Release Work A's held /changes, synced via page-side counter
+    const beforeChanges = await countCompletedBodies(page, '/changes');
+    releaseChangesA();
+    f.state.holdChanges = null;
+    await syncHeldBodyCompletion(page, '/changes', beforeChanges);
+
+    // Nothing from A renders in B, and B shows no "Current changes" (no head, no files from A)
+    await expect(attemptResult.locator('.pm-work-result-head')).toHaveCount(0);
+    await expect(attemptResult).not.toContainText('work1-exclusive.ts');
+
+    // 4. Now test held /diff switch
+    await card1.locator('[data-board-open]').click();
+    await expect(attemptResult.locator('.pm-work-result-summary-box')).toContainText('Summary Work 1');
+
+    // Read changes for A
+    f.state.expectedChanges = 2;
+    await attemptResult.locator('.pm-work-result-read-changes').click();
+    await expect(attemptResult.locator('.pm-work-result-head')).toContainText('abcdef123456');
+
+    // Hold /diff
+    let releaseDiffA: () => void = () => {};
+    f.state.holdDiff = new Promise<void>(resolve => {
+      releaseDiffA = resolve;
+    });
+
+    f.state.diffResponses.set(`${commit1}:work1-exclusive.ts`, buildDiffResponse({
+      commit: commit1,
+      path: 'work1-exclusive.ts',
+      diff: 'SECRET_DIFF_WORK_1',
+    }));
+
+    f.state.expectedDiff = 1;
+    const diffSummary = attemptResult.locator('.pm-work-result-diff-details summary');
+    await diffSummary.click();
+
+    // Switch to Work B while A's /diff is in flight
+    await card2.locator('[data-board-open]').click();
+    await expect(attemptResult.locator('.pm-work-result-summary-box')).toContainText('Summary Work 2');
+
+    // Release A's held diff, synced via page-side counter
+    const beforeDiff = await countCompletedBodies(page, '/diff');
+    releaseDiffA();
+    f.state.holdDiff = null;
+    await syncHeldBodyCompletion(page, '/diff', beforeDiff);
+
+    // B has no diff from A
+    await expect(attemptResult).not.toContainText('SECRET_DIFF_WORK_1');
+  });
+
+  test('22. Part B: 9. Keyboard', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workResultFixture();
+    activeFixture = f;
+    const attId = 'att_' + '1'.repeat(32);
+    const commitSha = 'abcdef1234567890abcdef1234567890abcdef12';
+    const filePath = 'src/app.ts';
+
+    f.state.changesResponse = buildChangesResponse({
+      attempt_id: attId,
+      live_head_commit: commitSha,
+      summary: {
+        commits: [commitSha],
+        files: [{path: filePath, status: 'M', additions: 5, deletions: 2, commits_touched: [commitSha]}],
+      },
+    });
+
+    f.state.diffResponses.set(`${commitSha}:${filePath}`, buildDiffResponse({
+      commit: commitSha,
+      path: filePath,
+      diff: 'keyboard diff content',
+    }));
+
+    await installBodyCompletedCounter(page);
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const resultSection = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+    const readBtn = resultSection.locator('.pm-work-result-read-changes');
+
+    // Focus read button and press Enter
+    await readBtn.focus();
+    await expect(readBtn).toBeFocused();
+
+    f.state.expectedChanges = 1;
+    await page.keyboard.press('Enter');
+
+    // Wait for changes to be read and rendered
+    const diffSummary = resultSection.locator('.pm-work-result-diff-details summary');
+    await expect(diffSummary).toBeVisible();
+    await expect(readBtn).toBeFocused();
+
+    // Tab reaches "Show diff" summary
+    await page.keyboard.press('Tab');
+    await expect(diffSummary).toBeFocused();
+
+    // Space opens diff
+    f.state.expectedDiff = 1;
+    await page.keyboard.press('Space');
+    const diffDetails = resultSection.locator('.pm-work-result-diff-details');
+    await expect(diffDetails).toHaveAttribute('open', '');
+
+    // Focus stays on summary after diff loads
+    await expect(diffDetails.locator('.pm-work-result-diff-pre')).toBeVisible();
+    await expect(diffSummary).toBeFocused();
+
+    // Tab reaches diff region
+    await page.keyboard.press('Tab');
+    const diffRegion = resultSection.locator('.pm-work-result-diff-pre');
+    await expect(diffRegion).toBeFocused();
+
+    // Event re-render preserves focus on summary if focused
+    await diffSummary.focus();
+    await expect(diffSummary).toBeFocused();
+
+    const beforeBodies = await countCompletedBodies(page, '/result');
+    f.emitResultRecorded(attId, buildResultEnvelope({attempt_id: attId, state: 'turn-ended'}));
+    await syncCompletedBodies(page, '/result', beforeBodies + 1);
+
+    await expect(diffSummary).toBeFocused();
+  });
+
+  test('23. Part B: 10. zh-TW', async ({browser}) => {
+    const context = await browser.newContext({locale: 'zh-TW', viewport: {width: 390, height: 844}});
+    const page = await context.newPage();
+    const f = workResultFixture();
+    activeFixture = f;
+    const attId = 'att_' + '1'.repeat(32);
+    const commitSha = 'abcdef1234567890abcdef1234567890abcdef12';
+    const filePath = 'src/app.ts';
+
+    f.state.changesResponse = buildChangesResponse({
+      attempt_id: attId,
+      live_head_commit: commitSha,
+      summary: {
+        commits: [commitSha],
+        files: [{path: filePath, status: 'M', additions: 5, deletions: 2, commits_touched: [commitSha]}],
+      },
+      uncommitted: {
+        count: 1,
+        files: [{path: 'uncommitted.ts', status: 'M'}],
+      },
+    });
+
+    f.state.diffResponses.set(`${commitSha}:${filePath}`, buildDiffResponse({
+      commit: commitSha,
+      path: filePath,
+      diff: 'chinese diff content',
+      truncated: true,
+    }));
+
+    recordPageErrors(page);
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('#workspace-menu').click();
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const resultSection = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+    f.state.expectedChanges = 1;
+    await resultSection.locator('.pm-work-result-read-changes').click();
+
+    f.state.expectedDiff = 1;
+    const diffDetails = resultSection.locator('.pm-work-result-diff-details');
+    await diffDetails.locator('summary').click();
+    await expect(diffDetails.locator('.pm-work-result-diff-pre')).toBeVisible();
+
+    const currentBlock = resultSection.locator('.pm-work-result-current-changes');
+
+    // Check no stray English words outside allow-list
+    const disallowed = await currentBlock.evaluate((el: HTMLElement) => {
+      const allowed = new Set(['PR', 'BAT', 'COMMIT', 'SHA']);
+      const clone = el.cloneNode(true) as HTMLElement;
+      for (const node of clone.querySelectorAll('code, .mono, pre')) {
+        node.remove();
+      }
+      const text = clone.innerText || '';
+      const words = text.match(/[A-Za-z]+/g) || [];
+      return words.filter(w => !allowed.has(w.toUpperCase()));
+    });
+    expect(disallowed, `Found unexpected Latin words in Current changes zh-TW: ${disallowed.join(', ')}`).toEqual([]);
+
+    await context.close();
+  });
+
+  test('24. Part B: 11. Part A follow-ups', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workResultFixture();
+    activeFixture = f;
+    const attId = 'att_' + '1'.repeat(32);
+
+    // State reason, changes reasons, and completeness reasons all give bat_unreachable
+    f.state.currentEnvelope = buildResultEnvelope({
+      attempt_id: attId,
+      state: 'unknown',
+      state_reason: 'bat_unreachable',
+      changes_summary: {
+        complete: false,
+        files: [],
+        reasons: ['bat_unreachable'],
+      },
+      completeness_status: 'unavailable',
+      completeness_reasons: ['bat_unreachable'],
+    });
+
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const resultSection = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+
+    // Separator between Result links
+    const linksDiv = resultSection.locator('.pm-work-result-links');
+    await expect(linksDiv).toBeVisible();
+    const linksText = await linksDiv.textContent();
+    expect(linksText).toContain('Open live output · View operation');
+
+    // Reason deduplication: bat_unreachable shows exactly once in the entire panel
+    // State line displays it
+    await expect(resultSection.locator('.pm-work-result-state ~ .pm-work-result-reason')).toContainText('BAT is not reachable.');
+
+    // Changes reasons list does not render
+    await expect(resultSection.locator('.pm-work-result-changes .pm-work-result-changes-reasons')).toHaveCount(0);
+
+    // Completeness reasons list does not render, but the pill stays
+    const compDiv = resultSection.locator('.pm-work-result-completeness');
+    await expect(compDiv).toBeVisible();
+    await expect(compDiv.locator('[data-status="unavailable"]')).toBeVisible();
+    await expect(compDiv.locator('.pm-work-result-completeness-reasons')).toHaveCount(0);
+
+    // In the entire resultSection, "BAT is not reachable." appears exactly once
+    const allMatches = await resultSection.getByText('BAT is not reachable.').count();
+    expect(allMatches).toBe(1);
   });
 });
