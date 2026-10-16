@@ -128,13 +128,13 @@ function createLegacyFixture(locale = 'en') {
 async function closeAnyOpenDialog(page: Page) {
   const inspectorBack = page.locator('.ui-inspector-back');
   // Optional probe: check if an inspector back button is visible to close it
-  if (await inspectorBack.isVisible().catch(() => false)) {
+  if (await inspectorBack.isVisible()) {
     await inspectorBack.click();
     await expect(inspectorBack).toBeHidden();
   }
   const dialog = page.locator('dialog[open]');
   // Optional probe: check if an HTML5 dialog is open to close it
-  if (await dialog.isVisible().catch(() => false)) {
+  if (await dialog.isVisible()) {
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
   }
@@ -157,7 +157,7 @@ async function ensureDrawerClosed(page: Page, width: number) {
   if (width < 1000) {
     const modalSidebar = page.locator('aside#workspace-sidebar[aria-modal="true"]');
     // Optional probe: check if mobile drawer is currently in modal state
-    const isModal = await modalSidebar.isVisible().catch(() => false);
+    const isModal = await modalSidebar.isVisible();
     if (isModal) {
       await page.keyboard.press('Escape');
       await expect(modalSidebar).toBeHidden();
@@ -631,7 +631,7 @@ for (const {lang, width} of featureMapMatrix) {
       await ensureDrawerOpen(page, width);
       const dailyEntry = page.locator(`.wc-daily a[href="${dest.href}"]`).first();
       // Optional probe: check if daily entry link with matching href is present and visible
-      if (await dailyEntry.isVisible().catch(() => false)) {
+      if (await dailyEntry.isVisible()) {
         await dailyEntry.click();
         await ensureDrawerClosed(page, width);
         reached = true;
@@ -644,7 +644,7 @@ for (const {lang, width} of featureMapMatrix) {
         // If not in PM workspace, use Projects daily entry to return to workspace
         const mgmtSelect = page.locator('select[data-workbench-management]');
         // Optional probe: check if workbench management select is visible
-        if (!await mgmtSelect.isVisible().catch(() => false)) {
+        if (!await mgmtSelect.isVisible()) {
           await ensureDrawerOpen(page, width);
           await page.locator('.wc-daily a[data-daily="projects"]').click();
           await ensureDrawerClosed(page, width);
@@ -667,7 +667,7 @@ for (const {lang, width} of featureMapMatrix) {
         await tools.click();
         const menuItem = page.locator(`.ui-menu:has([data-shell-tools]) .ui-menu-panel [role="menuitem"][href="${dest.href}"]`).first();
         // Optional probe: check if tools menuitem with target href is present and visible
-        if (await menuItem.isVisible().catch(() => false)) {
+        if (await menuItem.isVisible()) {
           await menuItem.click();
           await ensureDrawerClosed(page, width);
           reached = true;
@@ -684,11 +684,11 @@ for (const {lang, width} of featureMapMatrix) {
           await ensureDrawerClosed(page, width);
           const switcherBtn = page.locator('.shell-workspace-switch').first();
           // Optional probe: check if switcher button is visible
-          if (await switcherBtn.isVisible().catch(() => false)) {
+          if (await switcherBtn.isVisible()) {
             await switcherBtn.click();
             const switcherItem = page.locator('.ui-menu:has(.shell-workspace-switch) .ui-menu-panel [role="menuitem"][href="#/projects"]').first();
             // Optional probe: check if switcher item is visible
-            if (await switcherItem.isVisible().catch(() => false)) {
+            if (await switcherItem.isVisible()) {
               await switcherItem.click();
               reached = true;
               uiMethod = 'switcher-menu';
@@ -700,7 +700,7 @@ for (const {lang, width} of featureMapMatrix) {
           await ensureDrawerOpen(page, width);
           const catalogLink = page.locator('.shell-all-projects').first();
           // Optional probe: check if catalog link is visible in sidebar/drawer
-          if (await catalogLink.isVisible().catch(() => false)) {
+          if (await catalogLink.isVisible()) {
             await catalogLink.click();
             await ensureDrawerClosed(page, width);
             reached = true;
@@ -714,7 +714,7 @@ for (const {lang, width} of featureMapMatrix) {
         await ensureDrawerOpen(page, width);
         const settingsLink = page.locator('a[data-shell-settings]').first();
         // Optional probe: check if settings link is visible in sidebar/drawer
-        if (await settingsLink.isVisible().catch(() => false)) {
+        if (await settingsLink.isVisible()) {
           await settingsLink.click();
           await ensureDrawerClosed(page, width);
           reached = true;
