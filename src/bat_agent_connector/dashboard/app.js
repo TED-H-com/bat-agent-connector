@@ -50160,7 +50160,7 @@ async function mountFleetDesktop(main, { h, t }) {
 	panel.append(h("h2", {}, t("fleet_desktop_title")), h("p", { class: "muted" }, t("fleet_independent")), content, message);
 	if (!main.isConnected) return () => {};
 	main.append(panel);
-	let disposed = false, busy = false, readable = false, snapshot, draft, binding, choicePreview, launch, migration, timer;
+	let disposed = false, busy = false, readable = false, snapshot, draft, binding, choicePreview, launch, migration, timer, pressed = null;
 	let backend = "rust", autostart = false;
 	const alive = () => !disposed && panel.isConnected;
 	const key = () => `batc.desktop.fleet.controls.${binding}`;
@@ -50205,7 +50205,7 @@ async function mountFleetDesktop(main, { h, t }) {
 			}));
 		} catch {}
 	};
-	const enabled = () => readable && !busy && snapshot?.configuration.valid && !snapshot.pending_migration && (snapshot.monitor.state === "stopped" || snapshot.monitor.controllable);
+	const canEnable = () => readable && snapshot?.configuration.valid && !snapshot.pending_migration && (snapshot.monitor.state === "stopped" || snapshot.monitor.controllable);
 	const stale = () => draft && (draft.revision !== snapshot.selection.revision || draft.epoch !== snapshot.monitor.epoch);
 	const discardPreview = () => {
 		if (choicePreview) fleetControl({
@@ -50215,7 +50215,7 @@ async function mountFleetDesktop(main, { h, t }) {
 		choicePreview = null;
 	};
 	const edit = (field, value) => {
-		if (!enabled() || stale()) return;
+		if (busy || !canEnable() || stale()) return;
 		discardPreview();
 		draft ||= {
 			...choices(snapshot.selection),
@@ -50274,18 +50274,20 @@ async function mountFleetDesktop(main, { h, t }) {
 			save();
 		}
 	};
-	const run = async (fn) => {
+	const run = async (fn, quiet = false, action = null) => {
 		if (!alive() || busy) return;
+		if (action) pressed = action;
 		busy = true;
-		message.textContent = t("fleet_working");
+		if (!quiet) message.textContent = t("fleet_working");
 		render();
 		try {
 			await fn();
-			if (alive()) message.textContent = "";
+			if (alive() && !quiet) message.textContent = "";
 		} catch (error) {
 			if (alive()) message.textContent = `${t("fleet_unknown")} ${String(error)}`;
 		} finally {
 			busy = false;
+			pressed = null;
 			if (alive()) {
 				save();
 				render();
@@ -50328,7 +50330,7 @@ async function mountFleetDesktop(main, { h, t }) {
 			if (!validId(value.preview_id) || !equivalent(value.summary?.choices, draft)) throw new Error(t("fleet_unknown"));
 			choicePreview = value;
 		}
-	});
+	}, false, "choices");
 	const launchApply = () => run(async () => {
 		launch.attempted = true;
 		save();
@@ -50337,23 +50339,96 @@ async function mountFleetDesktop(main, { h, t }) {
 			preview_id: launch.preview_id
 		});
 		if (alive()) acceptLaunch(value);
-	});
+	}, false, "launch");
 	const label = (id) => id === "default" ? t("fleet_local_bat") : snapshot.profiles.find((row) => row.id === id)?.label || snapshot.configuration.connections.find((row) => row.name === id)?.label || id;
+	const gate = (blocked, action) => busy && action && pressed === action ? { "aria-disabled": "true" } : blocked ? { disabled: true } : busy ? { "aria-disabled": "true" } : {};
+	const focusKeys = [
+		"data-fleet-action",
+		"data-fleet-choice",
+		"data-fleet-login",
+		"data-fleet-autostart",
+		"data-fleet-backend"
+	];
+	const focusKey = (node) => {
+		for (let current = node; current && current !== panel; current = current.parentElement) for (const attr of focusKeys) if (current.hasAttribute?.(attr)) return [attr, current.getAttribute(attr)];
+		return null;
+	};
+	const controlByKey = (key) => {
+		if (!key) return null;
+		for (const node of content.querySelectorAll("button, input, select")) if (node.getAttribute(key[0]) === key[1]) return node;
+		return null;
+	};
+	const groups = [
+		["start", "quit"],
+		[
+			"choices",
+			"use-current",
+			"refresh"
+		],
+		[
+			"review-launch",
+			"launch",
+			"refresh-launch",
+			"new-launch",
+			"cancel-launch"
+		],
+		[
+			"review-migration",
+			"apply-migration",
+			"continue-migration",
+			"refresh-migration",
+			"retry-migration",
+			"new-migration",
+			"cancel-migration",
+			"restore-migration"
+		]
+	];
+	const successor = (key) => {
+		if (key?.[0] === "data-fleet-action") {
+			const group = groups.find((items) => items.includes(key[1]));
+			if (group) for (const candidate of group.slice(group.indexOf(key[1]) + 1)) {
+				const node = controlByKey(["data-fleet-action", candidate]);
+				if (node && !node.disabled && node.getAttribute("aria-disabled") !== "true") return node;
+			}
+		}
+		message.tabIndex = -1;
+		return message;
+	};
 	const render = () => {
 		if (!alive() || !snapshot) return;
-		const focus = document.activeElement?.dataset?.fleetChoice;
+		const previous = panel.contains(document.activeElement) ? focusKey(document.activeElement) : null;
 		const selected = draft || snapshot.selection, ready = new Map([...snapshot.readiness.hosts, snapshot.readiness.connector].filter(Boolean).map((row) => [row.name, row]));
-		const checkbox = (field, id, text) => h("label", { class: "fleet-choice" }, h("input", {
-			type: "checkbox",
-			checked: field === "dashboard" ? selected.dashboard : selected[field].includes(id),
-			"data-fleet-choice": field + ":" + id,
-			disabled: !enabled() || !!stale(),
-			onchange: (e) => edit(field, field === "dashboard" ? e.target.checked : e.target.checked ? [...selected[field], id] : selected[field].filter((v) => v !== id))
-		}), " ", text);
-		const button = (text, fn, disabled = false, primary = false) => h("button", {
+		const checkbox = (field, id, text) => {
+			const checked = field === "dashboard" ? selected.dashboard : selected[field].includes(id);
+			const blocked = !canEnable() || !!stale();
+			return h("label", { class: "fleet-choice" }, h("input", {
+				type: "checkbox",
+				checked,
+				...gate(blocked),
+				"data-fleet-choice": field + ":" + id,
+				onkeydown: (event) => {
+					if (busy && event.key === " ") event.preventDefault();
+				},
+				onclick: (event) => {
+					if (busy) event.preventDefault();
+				},
+				onchange: (event) => {
+					if (busy || blocked) {
+						event.target.checked = checked;
+						return;
+					}
+					edit(field, field === "dashboard" ? event.target.checked : event.target.checked ? [...selected[field], id] : selected[field].filter((value) => value !== id));
+				}
+			}), " ", text);
+		};
+		const button = (action, text, fn, blocked = false, primary = false) => h("button", {
 			class: primary ? "primary" : "secondary",
-			disabled: busy || disabled,
-			onclick: fn
+			...gate(blocked, action),
+			"data-fleet-action": action,
+			onclick: () => {
+				if (busy || blocked) return;
+				fn();
+			}
 		}, t(text));
 		const fields = [
 			h("p", { "data-fleet-current-backend": true }, t("delivery_fleet_current_backend", { backend: t(["rust", "powershell"].includes(snapshot.backend) ? "fleet_backend_" + snapshot.backend : "obs_unknown") })),
@@ -50361,20 +50436,20 @@ async function mountFleetDesktop(main, { h, t }) {
 			h("p", {}, t("fleet_monitor_" + snapshot.monitor.state), " · ", t("fleet_" + snapshot.readiness.state)),
 			snapshot.monitor.state === "running" && !snapshot.monitor.controllable ? h("p", { class: "note" }, t("fleet_other_owner")) : null,
 			snapshot.login_launch ? h("p", { class: "note" }, t("fleet_login_" + snapshot.login_launch.state), snapshot.login_launch.code ? ` (${snapshot.login_launch.code})` : null) : null,
-			h("div", { class: "actions" }, button("fleet_start", () => run(async () => {
+			h("div", { class: "actions" }, button("start", "fleet_start", () => run(async () => {
 				await fleetRequest({
 					action: "ensure_monitor",
 					expected_configuration_binding: binding
 				});
 				await read();
-			}), !enabled() || !!draft || snapshot.monitor.state !== "stopped"), button("fleet_quit", () => run(async () => {
+			}, false, "start"), !canEnable() || !!draft || snapshot.monitor.state !== "stopped"), button("quit", "fleet_quit", () => run(async () => {
 				await fleetRequest({
 					action: "quit_owned",
 					expected_configuration_binding: binding,
 					expected_monitor_epoch: snapshot.monitor.epoch
 				});
 				await read();
-			}), !enabled() || !!draft || !snapshot.monitor.controllable)),
+			}, false, "quit"), !canEnable() || !!draft || !snapshot.monitor.controllable)),
 			h("h3", {}, t("fleet_connections")),
 			h("div", { class: "fleet-options" }, ...snapshot.configuration.connections.map((row) => h("div", { class: "row" }, h("div", { class: "grow" }, checkbox("connections", row.name, row.label)), h("span", { class: "chip" }, t("fleet_" + (ready.get(row.name)?.level || "unavailable")))))),
 			h("h3", {}, t("fleet_windows_title")),
@@ -50382,29 +50457,31 @@ async function mountFleetDesktop(main, { h, t }) {
 			h("p", { class: "muted" }, t("fleet_selection_help")),
 			stale() ? h("p", { class: "error" }, t("fleet_changed")) : null,
 			choicePreview ? h("p", { class: "note" }, t("fleet_prerequisites", { names: choicePreview.summary.added_connections.map(label).join(", ") || t("fleet_none") })) : null,
-			h("div", { class: "actions" }, button(choicePreview ? "fleet_save_choices" : "fleet_review_choices", () => choicePreview ? run(async () => {
+			h("div", { class: "actions" }, button("choices", choicePreview ? "fleet_save_choices" : "fleet_review_choices", () => choicePreview ? run(async () => {
 				await fleetControl({
 					action: "apply_choices",
 					preview_id: choicePreview.preview_id
 				});
 				await read();
-			}) : reviewChoices(), !enabled() || !draft || !!stale(), true), button("fleet_use_current", () => {
+			}, false, "choices") : reviewChoices(), !canEnable() || !draft || !!stale(), true), button("use-current", "fleet_use_current", () => {
+				if (busy) return;
 				draft = null;
 				discardPreview();
 				save();
 				render();
-			}, !draft), button("fleet_refresh", () => run(read))),
+			}, !draft), button("refresh", "fleet_refresh", () => run(read, false, "refresh"))),
 			h("h3", {}, t("fleet_launch_title")),
 			h("p", { class: "muted" }, t("fleet_launch_help")),
 			launch ? h("p", { class: "note" }, launch.receipt ? t("fleet_launch_" + (launch.receipt.state === "prepared" ? "uncertain" : launch.receipt.state || "uncertain")) : t(launch.attempted ? "fleet_launch_uncertain" : "fleet_launch_review")) : null,
 			launch?.summary?.bat_may_open_local_window ? h("p", { class: "muted" }, t("fleet_local_anchor")) : null,
-			h("div", { class: "actions" }, button("fleet_review_launch", () => run(async () => {
+			h("div", { class: "actions" }, button("review-launch", "fleet_review_launch", () => run(async () => {
 				const value = await fleetControl({ action: "preview_launch" });
 				if (alive()) {
 					if (!validId(value.preview_id) || !validSummary(value.summary, value.preview_id)) throw new Error(t("fleet_unknown"));
 					launch = value;
 				}
-			}), !enabled() || !!draft || !!launch?.attempted), launch && !launch.receipt && launch.summary ? button(launch.attempted ? "fleet_retry_launch" : "fleet_launch_apply", launchApply, !enabled() || !!draft || snapshot.login_launch?.state === "waiting") : null, launch ? button("fleet_refresh", () => run(read)) : null, knownLaunch() ? button("fleet_new_launch", () => {
+			}, false, "review-launch"), !canEnable() || !!draft || !!launch?.attempted), launch && !launch.receipt && launch.summary ? button("launch", launch.attempted ? "fleet_retry_launch" : "fleet_launch_apply", launchApply, !canEnable() || !!draft || snapshot.login_launch?.state === "waiting") : null, launch ? button("refresh-launch", "fleet_refresh", () => run(read, false, "refresh-launch")) : null, knownLaunch() ? button("new-launch", "fleet_new_launch", () => {
+				if (busy) return;
 				fleetControl({
 					action: "discard",
 					preview_id: launch.preview_id
@@ -50412,7 +50489,8 @@ async function mountFleetDesktop(main, { h, t }) {
 				launch = null;
 				save();
 				render();
-			}) : null, launch && !launch.attempted ? button("cancel", () => {
+			}) : null, launch && !launch.attempted ? button("cancel-launch", "cancel", () => {
+				if (busy) return;
 				fleetControl({
 					action: "discard",
 					preview_id: launch.preview_id
@@ -50425,25 +50503,43 @@ async function mountFleetDesktop(main, { h, t }) {
 			h("label", { class: "fleet-choice" }, h("input", {
 				type: "checkbox",
 				checked: snapshot.login.show_picker,
-				disabled: !enabled(),
+				...gate(!canEnable()),
 				"data-fleet-login": "picker",
-				onchange: (e) => run(async () => {
-					const value = await fleetControl({
-						action: "save_login",
-						expected_revision: snapshot.login.revision,
-						show_picker: e.target.checked
+				onkeydown: (event) => {
+					if (busy && event.key === " ") event.preventDefault();
+				},
+				onclick: (event) => {
+					if (busy) event.preventDefault();
+				},
+				onchange: (event) => {
+					if (busy || !canEnable()) {
+						event.target.checked = snapshot.login.show_picker;
+						return;
+					}
+					const show = event.target.checked;
+					run(async () => {
+						const value = await fleetControl({
+							action: "save_login",
+							expected_revision: snapshot.login.revision,
+							show_picker: show
+						});
+						if (alive()) snapshot.login = value;
 					});
-					if (alive()) snapshot.login = value;
-				})
+				}
 			}), " ", t("fleet_login_picker")),
 			h("h3", {}, t("fleet_backend_title")),
 			h("p", { class: "muted" }, t("fleet_backend_help")),
 			h("div", { class: "actions" }, h("select", {
 				value: backend,
-				disabled: busy || !!migration,
+				"data-fleet-backend": "choice",
 				"aria-label": t("fleet_backend_title"),
-				onchange: (e) => {
-					backend = e.target.value;
+				...gate(!!migration),
+				onchange: (event) => {
+					if (busy || migration) {
+						event.target.value = backend;
+						return;
+					}
+					backend = event.target.value;
 				}
 			}, h("option", {
 				value: "rust",
@@ -50454,11 +50550,21 @@ async function mountFleetDesktop(main, { h, t }) {
 			}, t("fleet_backend_powershell"))), h("label", { class: "fleet-choice" }, h("input", {
 				type: "checkbox",
 				checked: autostart,
-				disabled: busy || !!migration,
-				onchange: (e) => {
-					autostart = e.target.checked;
+				...gate(!!migration),
+				"data-fleet-autostart": "enabled",
+				onkeydown: (event) => {
+					if (busy && event.key === " ") event.preventDefault();
 				},
-				"data-fleet-autostart": "enabled"
+				onclick: (event) => {
+					if (busy) event.preventDefault();
+				},
+				onchange: (event) => {
+					if (busy || migration) {
+						event.target.checked = autostart;
+						return;
+					}
+					autostart = event.target.checked;
+				}
 			}), " ", t("fleet_autostart"))),
 			migration ? h("p", { class: "note" }, migration.receipt ? t("fleet_migration_" + migration.receipt.phase) : t(migration.accepted ? "fleet_migration_unknown" : "fleet_migration_review", {
 				from: t("fleet_backend_" + migration.from),
@@ -50466,7 +50572,7 @@ async function mountFleetDesktop(main, { h, t }) {
 				before: t(migration.autostart_before ? "fleet_enabled" : "fleet_disabled"),
 				after: t(migration.autostart ? "fleet_enabled" : "fleet_disabled")
 			})) : null,
-			h("div", { class: "actions" }, button("fleet_review_migration", () => run(async () => {
+			h("div", { class: "actions" }, button("review-migration", "fleet_review_migration", () => run(async () => {
 				const value = await fleetControl({
 					action: "preview_migration",
 					backend,
@@ -50476,7 +50582,7 @@ async function mountFleetDesktop(main, { h, t }) {
 					if (!validId(value.preview_id) || typeof value.fingerprint !== "string") throw new Error(t("fleet_unknown"));
 					migration = value;
 				}
-			}), !enabled() || !!migration), migration && !migration.accepted ? button("fleet_apply_migration", () => run(async () => {
+			}, false, "review-migration"), !canEnable() || !!migration), migration && !migration.accepted ? button("apply-migration", "fleet_apply_migration", () => run(async () => {
 				migration.accepted = true;
 				save();
 				const value = await fleetControl({
@@ -50486,14 +50592,14 @@ async function mountFleetDesktop(main, { h, t }) {
 				});
 				if (alive()) acceptMigration(value);
 				await read();
-			}), !readable) : null, migration?.accepted && migration.receipt && migration.receipt.phase !== "complete" ? button("fleet_continue_migration", () => run(async () => {
+			}, false, "apply-migration"), !readable) : null, migration?.accepted && migration.receipt && migration.receipt.phase !== "complete" ? button("continue-migration", "fleet_continue_migration", () => run(async () => {
 				const value = await fleetControl({
 					action: "advance_migration",
 					migration_id: migration.preview_id
 				});
 				if (alive()) acceptMigration(value);
 				await read();
-			}), !readable) : null, migration?.accepted ? button("fleet_refresh", () => run(read)) : null, migration?.accepted && !migration.receipt ? button("fleet_retry_migration", () => run(async () => {
+			}, false, "continue-migration"), !readable) : null, migration?.accepted ? button("refresh-migration", "fleet_refresh", () => run(read, false, "refresh-migration")) : null, migration?.accepted && !migration.receipt ? button("retry-migration", "fleet_retry_migration", () => run(async () => {
 				const value = await fleetControl(migration.restore_source ? {
 					action: "restore_migration",
 					source_id: migration.restore_source,
@@ -50505,7 +50611,8 @@ async function mountFleetDesktop(main, { h, t }) {
 				});
 				if (alive()) acceptMigration(value);
 				await read();
-			}), !migration.restore_source && !migration.fingerprint) : null, migration?.receipt?.phase === "complete" ? button("fleet_new_migration", () => {
+			}, false, "retry-migration"), !migration.restore_source && !migration.fingerprint) : null, migration?.receipt?.phase === "complete" ? button("new-migration", "fleet_new_migration", () => {
+				if (busy) return;
 				fleetControl({
 					action: "discard",
 					preview_id: migration.preview_id
@@ -50513,7 +50620,8 @@ async function mountFleetDesktop(main, { h, t }) {
 				migration = null;
 				save();
 				render();
-			}) : null, migration && !migration.accepted ? button("cancel", () => {
+			}) : null, migration && !migration.accepted ? button("cancel-migration", "cancel", () => {
+				if (busy) return;
 				fleetControl({
 					action: "discard",
 					preview_id: migration.preview_id
@@ -50521,7 +50629,7 @@ async function mountFleetDesktop(main, { h, t }) {
 				migration = null;
 				save();
 				render();
-			}) : null, migration?.receipt?.phase === "complete" ? button("fleet_restore_migration", () => run(async () => {
+			}) : null, migration?.receipt?.phase === "complete" ? button("restore-migration", "fleet_restore_migration", () => run(async () => {
 				const source = migration.preview_id;
 				const restoreId = crypto.randomUUID().replaceAll("-", "");
 				migration = {
@@ -50537,15 +50645,19 @@ async function mountFleetDesktop(main, { h, t }) {
 				});
 				if (alive()) acceptMigration(value);
 				await read();
-			}), !readable) : null)
+			}, false, "restore-migration"), !readable) : null)
 		];
 		content.replaceChildren(...fields.filter(Boolean));
-		if (focus) [...content.querySelectorAll("input")].find((input) => input.dataset.fleetChoice === focus)?.focus();
+		if ([...content.querySelectorAll("button")].some((node) => node.getAttribute("aria-disabled") === "true")) message.setAttribute("aria-busy", "true");
+		else message.removeAttribute("aria-busy");
+		const again = controlByKey(previous);
+		if (again && !again.disabled) again.focus();
+		else if (previous) successor(previous).focus();
 	};
 	await run(read);
 	const poll = async () => {
 		if (!alive()) return;
-		if (!busy) await run(read);
+		if (!busy) await run(read, true);
 		if (alive()) timer = setTimeout(poll, 5e3);
 	};
 	timer = setTimeout(poll, 5e3);
@@ -50731,7 +50843,7 @@ async function mountFleet(main, { h, t }) {
 	panel.append(h("h2", {}, t("fleet_title")), h("p", { class: "muted" }, t("fleet_help")), content, message);
 	main.append(panel);
 	let nativeCleanup, bootstrapCleanup;
-	let disposed = false, busy = false, readable = false, timer, snapshot, draft, binding;
+	let disposed = false, busy = false, readable = false, timer, snapshot, draft, binding, pressed = null;
 	const alive = () => !disposed && panel.isConnected;
 	const key = () => `batc.desktop.fleet.selection.${binding}`;
 	const save = () => {
@@ -50742,19 +50854,58 @@ async function mountFleet(main, { h, t }) {
 	};
 	const same = (a, b) => a.length === b.length && [...a].sort().every((x, i) => x === [...b].sort()[i]);
 	const changed = () => draft && (draft.revision !== snapshot.selection.revision || draft.epoch !== snapshot.monitor.epoch);
-	const editable = () => readable && !busy && snapshot?.configuration.valid && (snapshot.monitor.state === "stopped" || snapshot.monitor.controllable);
+	const canEdit = () => readable && snapshot?.configuration.valid && (snapshot.monitor.state === "stopped" || snapshot.monitor.controllable);
+	const gate = (blocked, action) => busy && action && pressed === action ? { "aria-disabled": "true" } : blocked ? { disabled: true } : busy ? { "aria-disabled": "true" } : {};
+	const focusKeys = ["data-fleet-action", "data-fleet-name"];
+	const focusKey = (node) => {
+		for (let current = node; current && current !== panel; current = current.parentElement) for (const attr of focusKeys) if (current.hasAttribute?.(attr)) return [attr, current.getAttribute(attr)];
+		return null;
+	};
+	const controlByKey = (key) => {
+		if (!key) return null;
+		for (const node of content.querySelectorAll("button, input, select")) if (node.getAttribute(key[0]) === key[1]) return node;
+		return null;
+	};
+	const groups = [[
+		"apply",
+		"refresh",
+		"use-current"
+	], ["start", "quit"]];
+	const successor = (key) => {
+		if (key?.[0] === "data-fleet-action") {
+			const group = groups.find((items) => items.includes(key[1]));
+			if (group) for (const candidate of group.slice(group.indexOf(key[1]) + 1)) {
+				const node = controlByKey(["data-fleet-action", candidate]);
+				if (node && !node.disabled && node.getAttribute("aria-disabled") !== "true") return node;
+			}
+		}
+		message.tabIndex = -1;
+		return message;
+	};
 	const render = () => {
 		if (!alive() || !snapshot) return;
 		const names = draft?.connections || snapshot.selection.connections;
 		const ready = new Map([...snapshot.readiness.hosts || [], snapshot.readiness.connector].filter(Boolean).map((row) => [row.name, row]));
-		const focus = document.activeElement?.dataset?.fleetName;
+		const previous = panel.contains(document.activeElement) ? focusKey(document.activeElement) : null;
 		const rows = snapshot.configuration.connections.map((entry) => {
+			const checked = names.includes(entry.name);
+			const blocked = !canEdit() || !!changed();
 			const input = h("input", {
 				type: "checkbox",
-				checked: names.includes(entry.name),
-				disabled: !editable() || !!changed(),
+				checked,
+				...gate(blocked),
 				"data-fleet-name": entry.name,
+				onkeydown: (event) => {
+					if (busy && event.key === " ") event.preventDefault();
+				},
+				onclick: (event) => {
+					if (busy) event.preventDefault();
+				},
 				onchange: () => {
+					if (busy || blocked) {
+						input.checked = checked;
+						return;
+					}
 					if (!draft) draft = {
 						revision: snapshot.selection.revision,
 						epoch: snapshot.monitor.epoch,
@@ -50778,24 +50929,33 @@ async function mountFleet(main, { h, t }) {
 			changed() ? h("p", { class: "error" }, t("fleet_changed")) : h("span"),
 			h("div", { class: "actions" }, h("button", {
 				class: "primary",
-				disabled: !editable() || !draft || !!changed(),
-				onclick: () => mutate({
-					action: "set_connections",
-					connections: [...draft.connections],
-					expected_selection_revision: draft.revision,
-					expected_monitor_epoch: draft.epoch,
-					expected_configuration_binding: binding
-				})
+				...gate(!canEdit() || !draft || !!changed(), "apply"),
+				"data-fleet-action": "apply",
+				onclick: () => {
+					if (busy || !canEdit() || !draft || changed()) return;
+					mutate({
+						action: "set_connections",
+						connections: [...draft.connections],
+						expected_selection_revision: draft.revision,
+						expected_monitor_epoch: draft.epoch,
+						expected_configuration_binding: binding
+					}, "apply");
+				}
 			}, t("fleet_apply")), iconButton({
 				icon: "refresh-cw",
 				label: t("fleet_refresh"),
-				class: "secondary",
-				disabled: busy,
-				onclick: () => read(true)
+				...gate(false, "refresh"),
+				"data-fleet-action": "refresh",
+				onclick: () => {
+					if (busy) return;
+					read(true);
+				}
 			}), h("button", {
 				class: "secondary",
-				disabled: !readable || busy || !draft,
+				...gate(!readable || !draft, "use-current"),
+				"data-fleet-action": "use-current",
 				onclick: () => {
+					if (busy || !readable || !draft) return;
 					draft = null;
 					save();
 					message.textContent = "";
@@ -50804,22 +50964,34 @@ async function mountFleet(main, { h, t }) {
 			}, t("fleet_use_current"))),
 			h("div", { class: "actions" }, h("button", {
 				class: "secondary",
-				disabled: !editable() || !!draft || snapshot.monitor.state !== "stopped",
-				onclick: () => mutate({
-					action: "ensure_monitor",
-					expected_configuration_binding: binding
-				})
+				...gate(!canEdit() || !!draft || snapshot.monitor.state !== "stopped", "start"),
+				"data-fleet-action": "start",
+				onclick: () => {
+					if (busy || !canEdit() || draft || snapshot.monitor.state !== "stopped") return;
+					mutate({
+						action: "ensure_monitor",
+						expected_configuration_binding: binding
+					}, "start");
+				}
 			}, t("fleet_start")), h("button", {
 				class: "danger",
-				disabled: !editable() || !!draft || !snapshot.monitor.controllable,
-				onclick: () => mutate({
-					action: "quit_owned",
-					expected_configuration_binding: binding,
-					expected_monitor_epoch: snapshot.monitor.epoch
-				})
+				...gate(!canEdit() || !!draft || !snapshot.monitor.controllable, "quit"),
+				"data-fleet-action": "quit",
+				onclick: () => {
+					if (busy || !canEdit() || draft || !snapshot.monitor.controllable) return;
+					mutate({
+						action: "quit_owned",
+						expected_configuration_binding: binding,
+						expected_monitor_epoch: snapshot.monitor.epoch
+					}, "quit");
+				}
 			}, t("fleet_quit")))
 		].filter(Boolean));
-		if (focus) [...content.querySelectorAll("input")].find((input) => input.dataset.fleetName === focus)?.focus();
+		if ([...content.querySelectorAll("button")].some((node) => node.getAttribute("aria-disabled") === "true")) message.setAttribute("aria-busy", "true");
+		else message.removeAttribute("aria-busy");
+		const again = controlByKey(previous);
+		if (again && !again.disabled) again.focus();
+		else if (previous) successor(previous).focus();
 	};
 	const accept = (value) => {
 		if (!value?.configuration?.connections || !value?.monitor || !value?.selection || !value?.readiness) throw new Error(t("fleet_unavailable"));
@@ -50840,6 +51012,7 @@ async function mountFleet(main, { h, t }) {
 	};
 	const read = async (explicit = false) => {
 		if (!alive() || busy) return;
+		if (explicit) pressed = "refresh";
 		busy = true;
 		render();
 		try {
@@ -50854,11 +51027,13 @@ async function mountFleet(main, { h, t }) {
 			}
 		} finally {
 			busy = false;
+			pressed = null;
 			render();
 		}
 	};
-	const mutate = async (input) => {
-		if (!editable() || !alive()) return;
+	const mutate = async (input, action) => {
+		if (busy || !alive() || !canEdit()) return;
+		pressed = action;
 		busy = true;
 		readable = false;
 		message.textContent = t("fleet_working");
@@ -50872,6 +51047,7 @@ async function mountFleet(main, { h, t }) {
 			if (alive()) message.textContent = `${t("fleet_unknown")} ${String(error)}`;
 		} finally {
 			busy = false;
+			pressed = null;
 			render();
 		}
 	};
