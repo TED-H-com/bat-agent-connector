@@ -1022,6 +1022,8 @@ async def collect_changes_summary(
     *,
     base_sha: str | None,
     result_id: str | None = None,
+    max_commits: int = BRANCH_DIFF_MAX_COMMITS,
+    max_files: int = BRANCH_DIFF_MAX_FILES,
     budget_s: float = CHANGESET_TOTAL_BUDGET_S,
 ) -> dict[str, Any]:
     """Walk ``(base_sha..head]`` oldest-first on ``worktree_path`` and compute per-commit file stats.
@@ -1045,7 +1047,7 @@ async def collect_changes_summary(
         return _incomplete_changes(frozen_base, "unknown", "changeset_time_budget_exceeded", result_id=result_id)
     try:
         wl = await asyncio.wait_for(
-            client.invoke("git:log", {"cwd": wt, "count": BRANCH_DIFF_MAX_COMMITS + 1}),
+            client.invoke("git:log", {"cwd": wt, "count": max_commits + 1}),
             timeout=rem,
         )
     except (asyncio.TimeoutError, InvokeTimeout):
@@ -1073,7 +1075,7 @@ async def collect_changes_summary(
     if not found_base:
         reason = (
             "commit_limit_exceeded"
-            if len(ahead_hashes) > BRANCH_DIFF_MAX_COMMITS
+            if len(ahead_hashes) > max_commits
             else "base_commit_not_ancestor"
         )
         return _incomplete_changes(frozen_base, head_sha, reason, result_id=result_id)
@@ -1180,7 +1182,7 @@ async def collect_changes_summary(
                 continue
 
             diff_calls += 1
-            if diff_calls > BRANCH_DIFF_MAX_FILES:
+            if diff_calls > max_files:
                 file_limit_exceeded = True
                 _mark_unavailable(path)
                 continue
@@ -1283,6 +1285,7 @@ class AttemptResultCollector:
     ) -> None:
         self.ops = ops
         self._fleet = fleet
+        self._owns_fleet = False
         self.pass_budget_s = float(pass_budget_s)
         self.max_per_pass = int(max_per_pass)
         self.memo_recheck_s = float(memo_recheck_s)
@@ -1291,6 +1294,7 @@ class AttemptResultCollector:
         self._host_locks: dict[str, asyncio.Lock] = {}
         self._memo: dict[str, dict[str, Any]] = {}
         self._last_checked_at: dict[str, float] = {}
+        self.last_check: dict[str, dict[str, Any]] = {}
         self.last_digest_bytes: bytes | None = None
         self.digest_bytes_by_attempt: dict[str, bytes] = {}
 
@@ -1302,8 +1306,22 @@ class AttemptResultCollector:
         f = checkpoints._read_fleet(self.ops)
         if not f.read_only:
             self._fleet = Fleet(f.config, read_only=True, idle_timeout=0, actor=ACTOR)
+            self._owns_fleet = True
             return self._fleet
         return f
+
+    async def close(self) -> None:
+        """Close the read-only Fleet only when this collector created it."""
+        if self._owns_fleet and self._fleet is not None:
+            await self._fleet.close()
+            self._fleet = None
+            self._owns_fleet = False
+
+    def _record_check(self, attempt_id: str, outcome: str) -> None:
+        self.last_check[attempt_id] = {
+            "checked_at": time.time(),
+            "outcome": outcome,
+        }
 
     async def after_refresh(self, host: str, result: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         if isinstance(result, dict) and not result.get("reachable", True):
@@ -1380,16 +1398,19 @@ class AttemptResultCollector:
             if session_ref != {"host": cand_host, "session_id": cand_sid}:
                 continue
 
+            attempt_id = str(row["attempt_id"])
+            workspace_id = str(row["workspace_id"])
+
             # 0.2 Registry check: require start_operation_id == handoff operation id and matching controller
             reg = registry.get(cand_host, cand_sid)
-            if not isinstance(reg, dict):
-                continue
-            if reg.get("start_operation_id") != handoff["operation_id"]:
+            if not isinstance(reg, dict) or reg.get("start_operation_id") != handoff["operation_id"]:
+                self._record_check(attempt_id, "registry_mismatch")
                 continue
             handoff_ctrl = controller_authority.operation_binding(handoff)
             if handoff_ctrl is not None and not controller_authority.same_controller(
                 reg.get("controller_authority"), handoff_ctrl
             ):
+                self._record_check(attempt_id, "registry_mismatch")
                 continue
 
             obs_row = self._observed_session_row(cand_host, cand_sid)
@@ -1398,8 +1419,6 @@ class AttemptResultCollector:
                 if obs_row is not None
                 else None
             )
-            attempt_id = str(row["attempt_id"])
-            workspace_id = str(row["workspace_id"])
             has_receipt = (
                 installed(self.ops.db)
                 and self.ops.db.execute(
@@ -1416,6 +1435,7 @@ class AttemptResultCollector:
                 and memo_entry.get("obs_tuple") == obs_tuple
                 and (now_mono - float(memo_entry.get("checked_at", 0.0))) < self.memo_recheck_s
             ):
+                self._record_check(attempt_id, "unchanged")
                 continue
 
             base_sha = str(res.get("source_sha") or (handoff.get("params") or {}).get("source_sha") or "")
@@ -1427,6 +1447,7 @@ class AttemptResultCollector:
                     "work_item_id": str(row["work_item_id"]),
                     "start_operation_id": str(start_op_id),
                     "handoff_operation_id": str(handoff["operation_id"]),
+                    "handoff_controller": handoff_ctrl,
                     "host": cand_host,
                     "session_id": cand_sid,
                     "worktree_path": cand_wt,
@@ -1456,7 +1477,16 @@ class AttemptResultCollector:
 
         # Re-verify registry ownership right before reading
         current_reg = registry.get(host, session_id)
-        if not isinstance(current_reg, dict) or current_reg.get("start_operation_id") != cand["handoff_operation_id"]:
+        handoff_ctrl = cand.get("handoff_controller")
+        if (
+            not isinstance(current_reg, dict)
+            or current_reg.get("start_operation_id") != cand["handoff_operation_id"]
+            or (
+                handoff_ctrl is not None
+                and not controller_authority.same_controller(current_reg.get("controller_authority"), handoff_ctrl)
+            )
+        ):
+            self._record_check(attempt_id, "registry_mismatch")
             return None
 
         read_res = await service.session_read(
@@ -1472,10 +1502,12 @@ class AttemptResultCollector:
 
         # 0.1 If user echo is not visible, write no receipt
         if read_res.get("turn_attribution") != "correlated":
+            self._record_check(attempt_id, "turn_marker_not_visible")
             return None
 
         # Boundary rule (§2.2 and r3): never write mid-turn
         if bool(read_res.get("streaming")):
+            self._record_check(attempt_id, "mid_turn")
             return None
 
         obs_body: dict[str, Any] = {}
@@ -1499,6 +1531,7 @@ class AttemptResultCollector:
         elif turn_done_ready:
             boundary = "turn_done"
         else:
+            self._record_check(attempt_id, "no_boundary")
             return None
 
         slice_items = list(turn_slice.get("items") or [])
@@ -1535,6 +1568,7 @@ class AttemptResultCollector:
         if latest is not None and latest["source_position"] == source_position and latest["digest"] == digest:
             if obs_tuple is not None:
                 self._memo[attempt_id] = {"obs_tuple": obs_tuple, "checked_at": time.monotonic()}
+            self._record_check(attempt_id, "unchanged")
             return None
 
         rid = new_result_id()
@@ -1609,7 +1643,11 @@ class AttemptResultCollector:
         )
         if obs_tuple is not None:
             self._memo[attempt_id] = {"obs_tuple": obs_tuple, "checked_at": time.monotonic()}
-        return stored if inserted else None
+        if inserted:
+            self._record_check(attempt_id, "recorded")
+            return stored
+        self._record_check(attempt_id, "unchanged")
+        return None
 
     async def collect_host(self, host: str) -> list[dict[str, Any]]:
         """Collect turn-boundary receipts for up to ``max_per_pass`` managed attempts on ``host``."""
@@ -1634,7 +1672,9 @@ class AttemptResultCollector:
                     if row is not None:
                         collected.append(row)
                 except (BatError, ConnectionLost, InvokeTimeout, asyncio.TimeoutError):
+                    self._record_check(cand["attempt_id"], "bat_error")
                     continue
             return collected
+
 
 
