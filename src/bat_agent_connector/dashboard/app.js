@@ -33041,11 +33041,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			case "cancelled":
 				statusWord = t("wst_status_cancelled");
 				break;
-			default: {
-				const statusText = attempt.status ? operationStatusLabel(attempt.status) : "";
-				statusWord = attempt.stage ? statusText ? `${attempt.stage} — ${statusText}` : attempt.stage : t("ui_status_unknown");
-				break;
-			}
+			default: statusWord = t("ui_status_unknown");
 		}
 		if (attempt.stage === "start_failed") {
 			if (attempt.error_code) {
@@ -33082,7 +33078,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			links.append(liveLink, " · ", workLink);
 		}
 		if (links.childNodes.length > 0) row.append(links);
-		const detailsContent = h("div", {}, h("p", { class: "mono" }, `${t("wst_attempt_id")}: ${attempt.attempt_id}`), attempt.start_operation_id ? h("p", { class: "mono" }, `${t("wst_operation_id")}: ${attempt.start_operation_id}`) : null, attempt.execution_operation_id ? h("p", { class: "mono" }, `${t("wst_execution_op_id")}: ${attempt.execution_operation_id}`) : null, attempt.session ? h("p", { class: "mono" }, `${t("wst_session_id")}: ${attempt.session.host} · ${attempt.session.session_id}`) : null, attempt.status_reason ? h("p", { class: "muted" }, attempt.status_reason) : null);
+		const detailsContent = h("div", {}, h("p", { class: "mono" }, `${t("wst_attempt_id")}: ${attempt.attempt_id}`), attempt.stage ? h("p", { class: "mono" }, `stage: ${attempt.stage}`) : null, attempt.status ? h("p", { class: "mono" }, `status: ${attempt.status}`) : null, attempt.start_operation_id ? h("p", { class: "mono" }, `${t("wst_operation_id")}: ${attempt.start_operation_id}`) : null, attempt.execution_operation_id ? h("p", { class: "mono" }, `${t("wst_execution_op_id")}: ${attempt.execution_operation_id}`) : null, attempt.session ? h("p", { class: "mono" }, `${t("wst_session_id")}: ${attempt.session.host} · ${attempt.session.session_id}`) : null, attempt.status_reason ? h("p", { class: "muted" }, attempt.status_reason) : null);
 		const detailsDisclosure = disclosure({
 			label: t("wst_details"),
 			body: detailsContent
