@@ -52131,7 +52131,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 		saved = JSON.parse(localStorage.getItem(storageKey));
 	} catch {}
 	saved = restore$2(saved, source);
-	let busy = false, revision = 0, disposed = false, refreshing = null;
+	let busy = false, revision = 0, disposed = false, refreshing = null, pressed = null;
 	const host = h("select", { "aria-label": t("capture_host") }, h("option", { value: "" }, t("capture_host")), ...(caps()?.hosts || []).map((item) => h("option", { value: item.host }, item.host)));
 	const session = h("input", {
 		"aria-label": t("capture_session"),
@@ -52145,7 +52145,10 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 	host.value = saved.input.host || "";
 	session.value = saved.input.session_id || "";
 	path.value = saved.input.relative_path || "";
-	const notice = h("div", { role: "status" }), evidence = h("div", { "data-capture-evidence": "" });
+	const notice = h("div", {
+		role: "status",
+		"data-capture-notice": ""
+	}), evidence = h("div", { "data-capture-evidence": "" });
 	const reviewed = h("input", {
 		type: "checkbox",
 		onchange: () => update()
@@ -52187,11 +52190,13 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 	};
 	const preview = h("button", {
 		class: "secondary",
+		"data-capture-preview": "",
 		onclick: async () => {
 			const input = current();
 			guard();
 			if (busy || saved.intent || !mayPreview() || !validInput(input)) return;
-			const ticket = ++revision;
+			const ticket = ++revision, owned = owns(preview);
+			pressed = preview;
 			busy = true;
 			saved.preview = null;
 			reviewed.checked = false;
@@ -52214,7 +52219,9 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 				if (ticket === revision) showError(error);
 			} finally {
 				busy = false;
+				pressed = null;
 				render();
+				if (ticket === revision) placeFocus(preview, owned);
 			}
 		}
 	}, t("capture_preview"));
@@ -52243,6 +52250,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 	};
 	const apply = h("button", {
 		class: "secondary",
+		"data-capture-apply": "",
 		onclick: async () => {
 			guard();
 			if (busy || !mayCapture() || settled() && (saved.operation.status !== "succeeded" || saved.result) || saved.refused) return;
@@ -52261,6 +52269,8 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 				};
 				persist();
 			}
+			const owned = owns(apply);
+			pressed = apply;
 			busy = true;
 			update();
 			try {
@@ -52281,31 +52291,36 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 				showError(error);
 			} finally {
 				busy = false;
+				pressed = null;
 				render();
+				placeFocus(apply, owned);
 			}
 		}
 	}, t("capture_save"));
 	const reset = h("button", {
 		class: "secondary",
+		"data-capture-new": "",
 		onclick: () => {
 			guard();
 			if (busy || refreshing || active()) return;
+			const owned = owns(reset);
 			saved = { input: current() };
 			reviewed.checked = false;
 			revision++;
 			persist();
 			notice.replaceChildren();
 			render();
+			placeFocus(reset, owned);
 		}
 	}, t("capture_new"));
 	const attach = onAttach ? h("button", {
 		class: "secondary",
+		"data-capture-attach": "",
 		onclick: () => {
 			guard();
-			if (saved.result) {
-				onAttach({ ...saved.result }, (saved.preview?.relative_path || saved.input.relative_path).split("/").at(-1));
-				notice.textContent = t("capture_attached");
-			}
+			if (busy || !saved.result) return;
+			onAttach({ ...saved.result }, (saved.preview?.relative_path || saved.input.relative_path).split("/").at(-1));
+			notice.textContent = t("capture_attached");
 		}
 	}, t("capture_attach")) : null;
 	const box = h("details", {
@@ -52313,25 +52328,79 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 		"data-capture": "",
 		hidden: !supported()
 	}, h("summary", {}, t("capture_title")), h("p", { class: "muted" }, t("capture_help")), h("div", { class: "capture-fields" }, h("label", {}, t("capture_host"), host), h("label", {}, t("capture_session"), session), h("label", {}, t("capture_path"), path)), h("div", { class: "actions" }, preview), evidence, review, h("div", { class: "actions" }, apply, attach, reset), notice);
+	function lock(node, inflight, blocked) {
+		if (node === pressed && inflight) {
+			node.disabled = false;
+			node.setAttribute("aria-disabled", "true");
+			return;
+		}
+		if (blocked) {
+			node.removeAttribute("aria-disabled");
+			node.disabled = true;
+			return;
+		}
+		if (inflight) {
+			node.disabled = false;
+			node.setAttribute("aria-disabled", "true");
+			return;
+		}
+		node.removeAttribute("aria-disabled");
+		node.disabled = false;
+	}
+	function shown(node) {
+		return Boolean(node && node.isConnected && !node.disabled && !node.closest("[hidden]"));
+	}
+	function owns(button) {
+		const active = document.activeElement;
+		return active === button || active === document.body;
+	}
+	function successor(button) {
+		let next = null;
+		if (button === apply) {
+			if (saved.operation?.status === "succeeded" && saved.result) next = shown(attach) ? attach : reset;
+			else if (["failed", "cancelled"].includes(saved.operation?.status) || saved.refused) next = reset;
+		} else if (button === reset) next = shown(preview) ? preview : host;
+		else next = host;
+		if (!shown(next)) {
+			notice.tabIndex = -1;
+			return notice;
+		}
+		return next;
+	}
+	function placeFocus(button, owned) {
+		if (!owned || !currentView() || !box.isConnected) return;
+		const active = document.activeElement;
+		if (active !== button && active !== document.body) return;
+		if (shown(button)) return;
+		const next = successor(button);
+		if (next !== active) next.focus();
+	}
 	function update() {
-		const frozen = busy || Boolean(saved.intent);
+		const frozen = busy || Boolean(saved.intent), reading = Boolean(refreshing);
 		for (const field of [
 			host,
 			session,
 			path
 		]) field.disabled = frozen;
-		preview.disabled = busy || Boolean(saved.intent) || !mayPreview() || !validInput(current());
+		lock(preview, busy, Boolean(saved.intent) || !mayPreview() || !validInput(current()));
 		review.hidden = !saved.preview || Boolean(saved.intent);
 		reviewed.disabled = expired();
 		apply.hidden = settled() && (saved.operation.status !== "succeeded" || saved.result);
 		apply.textContent = saved.intent ? t("capture_check") : t("capture_save");
-		apply.disabled = busy || !mayCapture() || Boolean(saved.refused) || !saved.intent && (expired() || !reviewed.checked);
+		lock(apply, busy, !mayCapture() || Boolean(saved.refused) || !saved.intent && (expired() || !reviewed.checked));
 		reset.hidden = !saved.intent;
-		reset.disabled = busy || Boolean(refreshing) || active();
+		lock(reset, busy || reading, active());
 		if (attach) {
 			attach.hidden = !saved.result;
-			attach.disabled = busy;
+			lock(attach, busy, false);
 		}
+		if ([
+			preview,
+			apply,
+			reset,
+			attach
+		].some((node) => node && node.getAttribute("aria-disabled") === "true")) notice.setAttribute("aria-busy", "true");
+		else notice.removeAttribute("aria-busy");
 		const expiry = evidence.querySelector("[data-capture-expiry]");
 		if (expiry) expiry.textContent = saved.intent ? t("capture_fixed") : expired() ? t("capture_expired") : t("capture_single_file");
 	}
@@ -52394,10 +52463,12 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 			guard();
 			if (saved.intent?.operation_id === id) await accept(operation);
 		})();
+		if (currentView()) update();
 		try {
 			await refreshing;
 		} finally {
 			refreshing = null;
+			if (currentView()) update();
 		}
 	};
 	const off = onEvents((event) => {

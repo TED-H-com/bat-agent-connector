@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Capture a remote file: the button you pressed keeps keyboard focus and
+  ignores a second press until that preview or save finishes. A button that
+  cannot be used stays unavailable. When Save closes, or Capture another file
+  starts over, focus moves to the next available control.
+
 - The hidden Board and Requirements scroll checks wait for the read the test held, so a second read of the same address cannot make that wait miss.
 
 - Projects and work items: Tab reaches Add while a creation request is sending,
