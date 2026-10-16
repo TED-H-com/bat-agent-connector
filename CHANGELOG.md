@@ -5,7 +5,10 @@
 - Design spec for publishing a Work Result as a pull request
   (`docs/design/v1.3-e03-publish-pr.md`). The Dashboard still cannot publish:
   `github.pr.publish` remains a label until that spec is implemented. The spec
-  adds no merge, deploy, or session controls on the Result.
+  shows the start's base branch and base commit as read-only, does not offer a
+  second pull request for the same commit, and does not call an integration
+  commit delivered. It adds no merge, deploy, or session controls on the Result.
+  A backend Result entry, which this spec does not add, still has to land first.
 
 - Capture a remote file: the button you pressed keeps keyboard focus and
   ignores a second press until that preview or save finishes. A button that
