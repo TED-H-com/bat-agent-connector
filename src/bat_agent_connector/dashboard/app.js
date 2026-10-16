@@ -21794,7 +21794,6 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			alive();
 			if (ticket !== serial) return;
 		} catch {
-			withdraw();
 			return;
 		}
 		errorBox(error);
@@ -44439,11 +44438,11 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	}
 	async function loadEarlier() {
 		if (!historyCursor || refreshing || !loaded) return;
-		headerReads++;
 		const ticket = ++sequence;
 		refreshing = true;
 		earlier.disabled = true;
 		refresh.disabled = true;
+		headerReads++;
 		try {
 			alive();
 			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}?before_message=${historyCursor}`);
@@ -44521,7 +44520,6 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		filterThreads();
 	}
 	async function load({ event = false } = {}) {
-		headerReads++;
 		const ticket = ++sequence;
 		refreshing = true;
 		refresh.disabled = true;
@@ -44542,6 +44540,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			qualityReviews?.withdraw();
 			qualitySelections.clear();
 		}
+		headerReads++;
 		try {
 			alive();
 			const list = event ? { workspaces: lastList } : await api("GET", "/pm/workspaces");
@@ -44902,8 +44901,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const authorityHidden = new Map();
 	let authorityTool = null;
 	async function refreshAuthority() {
-		headerReads++;
 		const ticket = ++sequence;
+		headerReads++;
 		try {
 			const detail = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}`);
 			alive();
