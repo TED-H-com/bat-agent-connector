@@ -1073,3 +1073,196 @@ async def test_work_start_without_profile_matches_existing_contract(start_ready)
     )
     assert created is True and operation["status"] == "accepted"
     assert ops.db.execute("SELECT COUNT(*) FROM work_profiles").fetchone()[0] == 0
+
+
+def _without_observed(body):
+    return {key: value for key, value in body.items() if key != "observed_at"}
+
+
+def _hidden(body, needles):
+    raw = json.dumps(body)
+    return next((needle for needle in needles if needle in raw), None)
+
+
+async def test_responses_omit_credentials(ops, tmp_path):
+    from bat_agent_connector import dashboard_sync, managed_setup, platform_files
+
+    secret = "planted-secret-value-9f3aC"
+    token_ref = "env:PLANTED_TOKEN_VALUE"
+    root = tmp_path / "managed"
+    platform_files.ensure_private_directory(root / "config")
+    platform_files.atomic_write(root / "config" / "hosts.toml", b'client = {label = "Fixture"}\n')
+    daemon = SimpleNamespace(
+        managed_installation={
+            "data_dir": root, "actor": OWNER.actor, **dashboard_sync.identity(ops.journal, OWNER),
+        },
+        journal=ops.journal,
+    )
+    staged = managed_setup.stage_secret(daemon, OWNER, {"kind": "github", "value": secret})
+    secret_ref = staged["secret_ref"]
+    needles = (secret, token_ref, secret_ref, "token_ref", "secret_ref")
+
+    clean = await _finish(ops, _save(ops, key="clean-save")[0])
+    assert _hidden(clean["result"], needles) is None
+
+    planted_id = "wpf_" + "c" * 32
+    planted = _document()
+    planted["token_ref"] = token_ref
+    planted["secret_ref"] = secret_ref
+    planted["binding"] = {**planted["binding"], "token": secret}
+    ops.db.execute(
+        """INSERT INTO work_profiles(
+            profile_id, workspace_id, revision, withdrawn, document, digest, operation_id, created_at
+        ) VALUES(?,?,?,?,?,?,?,?)""",
+        (planted_id, WS, 1, 0, json.dumps(planted), "e" * 64, "op_" + "f" * 32, time.time()),
+    )
+    listed = pm_work_profiles.list_profiles(ops.db, OWNER, WS)
+    got = pm_work_profiles.get_profile(ops.db, OWNER, WS, planted_id)
+    ready = pm_work_profiles.readiness(ops, OWNER, WS, planted_id)
+    assert got["profile_id"] == planted_id
+    for body in (listed, got, ready, clean["result"]):
+        assert _hidden(body, needles) is None
+
+    before = _counts(ops)
+    with pytest.raises(OperationError) as rejected:
+        _save(ops, planted, key="rejected-secret")
+    error_body = {"error": {"code": rejected.value.code, "message": rejected.value.message}}
+    assert rejected.value.code == "INVALID_PARAMS" and rejected.value.status == 422
+    assert _hidden(error_body, needles) is None
+    assert _counts(ops) == before
+
+
+async def test_non_member_sees_404_and_no_profile_body(ops):
+    marker = "marker-model-phrase"
+    saved = await _finish(ops, _save(ops, _document(model=marker), key="member-save")[0])
+    profile_id = saved["result"]["profile_id"]
+    outsider = Principal("outsider", frozenset({"observe", "manage"}))
+    for call in (
+        lambda: pm_work_profiles.list_profiles(ops.db, outsider, WS),
+        lambda: pm_work_profiles.get_profile(ops.db, outsider, WS, profile_id),
+        lambda: pm_work_profiles.readiness(ops, outsider, WS, profile_id),
+    ):
+        with pytest.raises(OperationError) as missing:
+            call()
+        assert missing.value.code == "NOT_FOUND" and missing.value.status == 404
+        assert missing.value.message == "Workspace not found"
+        assert marker not in missing.value.message and profile_id not in missing.value.message
+    before = _counts(ops)
+    with pytest.raises(OperationError) as missing:
+        _save(ops, _document(model=marker), who=outsider, key="outsider-save")
+    assert missing.value.code == "NOT_FOUND" and missing.value.message == "Workspace not found"
+    assert marker not in missing.value.message
+    assert _counts(ops) == before
+
+    workspace = pm_workspace.get_workspace(ops.db, OWNER, WS)
+    member, inserted = ops.create(
+        OWNER, action="pm.workspace.member.set", target={"workspace_id": WS},
+        params={"actor": "reader-user", "role": "reader"},
+        preconditions={"expected_version": workspace["version"]}, idempotency_key="add-reader",
+    )
+    assert inserted
+    await _finish(ops, member)
+    reader = Principal("reader-user", frozenset({"observe", "manage"}))
+    viewed = pm_work_profiles.get_profile(ops.db, reader, WS, profile_id)
+    assert viewed["model"] == marker and viewed["profile_id"] == profile_id
+    before = _counts(ops)
+    with pytest.raises(OperationError) as forbidden:
+        _save(ops, who=reader, profile_id=profile_id, expected_revision=1, key="reader-save")
+    assert forbidden.value.code == "FORBIDDEN" and forbidden.value.status == 403
+    assert marker not in forbidden.value.message
+    assert _counts(ops) == before
+
+    cap = pm_work_profiles.capabilities(ops)
+    scopes = set(cap["required_scopes"]["read"]) | set(cap["required_scopes"]["write"])
+    assert scopes == {"observe", "manage"}
+    assert "start" not in json.dumps(cap["required_scopes"])
+    assert cap["write_action"] == pm_work_profiles.ACTION
+    assert ops.actions[pm_work_profiles.ACTION].scope == "manage"
+
+
+async def test_mcp_readiness_matches_http_and_save_matches_operation(world, monkeypatch):
+    from bat_agent_connector import mcp_server
+    from tests.test_api_v1 import http, token
+    from tests.test_pm_run_api import unpack
+
+    daemon = world["d"]
+    ops = daemon.ops
+    assert pm_work_profiles.ACTION in ops.actions
+    owner = Principal("profile-owner", frozenset({"observe", "manage"}))
+    auth = token(daemon, owner.actor, "observe", "manage")
+    created, inserted = ops.create(
+        owner, action="pm.workspace.create", params={"name": "Profiles"},
+        idempotency_key="profile-workspace",
+    )
+    assert inserted
+    await settle_operations(ops)
+    workspace = ops.get(created["operation_id"])
+    assert workspace["status"] == "succeeded", workspace
+    wid = workspace["result"]["workspace"]["workspace_id"]
+    document = {
+        "version": 1,
+        "binding": {"repository": "o/r", "host": "h1", "workspace_id": "ws-1"},
+        "agent": "claude",
+        "delivery_policy_ref": {"goal": "pull_request"},
+    }
+    request = {
+        "action": pm_work_profiles.ACTION,
+        "target": {"workspace_id": wid},
+        "params": {"document": document},
+        "preconditions": {},
+    }
+    status, http_save = await http(
+        world["port"], "POST", "/api/v1/operations", tok=auth, body=request,
+        headers={"Idempotency-Key": "profile-save"},
+    )
+    assert status == 202 and http_save["created"] is True, http_save
+    monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{world['port']}/rpc")
+    monkeypatch.setenv("BATC_API_TOKEN", auth)
+    server, fleet = mcp_server.build_server(daemon.fleet.config, read_only=False, principal_only=True)
+    try:
+        mcp_save = unpack(await server.call_tool("operation_submit", {
+            **request, "idempotency_key": "profile-save", "confirm": True, "wait_s": 0,
+        }))
+        assert mcp_save["operation"] == http_save["operation"]
+        assert mcp_save["created"] is False
+        await settle_operations(ops)
+        settled = ops.get(http_save["operation"]["operation_id"])
+        assert settled["status"] == "succeeded", settled
+        profile_id = settled["result"]["profile_id"]
+        path = f"/api/v1/pm/workspaces/{wid}/work-profiles/{profile_id}/readiness"
+        status, http_ready = await http(world["port"], "GET", path, tok=auth)
+        assert status == 200, http_ready
+        rpc_ready = await daemon.call_api(
+            "pm_work_profile_readiness_get", {"workspace_id": wid, "profile_id": profile_id}, owner,
+        )
+        mcp_ready = unpack(await server.call_tool(
+            "pm_work_profile_readiness_get", {"workspace_id": wid, "profile_id": profile_id},
+        ))
+        assert _without_observed(http_ready) == _without_observed(rpc_ready) == _without_observed(mcp_ready)
+        assert http_ready["calls_bat"] is False
+        status, features = await http(world["port"], "GET", "/api/v1/capabilities", tok=auth)
+        assert status == 200
+        status, http_caps = await http(
+            world["port"], "GET", f"/api/v1/pm/workspaces/{wid}/capabilities", tok=auth,
+        )
+        assert status == 200, http_caps
+        rpc_caps = await daemon.call_api("pm_capabilities_get", {"workspace_id": wid}, owner)
+        mcp_caps = unpack(await server.call_tool("pm_capabilities_get", {"workspace_id": wid}))
+        expected = pm_work_profiles.capabilities(ops)
+        assert features["features"]["pm_workspaces"]["work_profiles"] == expected
+        assert http_caps["work_profiles"] == rpc_caps["work_profiles"] == mcp_caps["work_profiles"] == expected
+        status, http_replay = await http(
+            world["port"], "POST", "/api/v1/operations", tok=auth, body=request,
+            headers={"Idempotency-Key": "profile-save"},
+        )
+        assert status == 200 and http_replay["created"] is False
+        mcp_replay = unpack(await server.call_tool("operation_submit", {
+            **request, "idempotency_key": "profile-save", "confirm": True, "wait_s": 0,
+        }))
+        assert mcp_replay == {"operation": http_replay["operation"], "created": False}
+        assert http_replay["operation"]["result"]["profile_id"] == profile_id
+        assert ops.db.execute(
+            "SELECT COUNT(*) FROM work_profiles WHERE profile_id=?", (profile_id,)
+        ).fetchone()[0] == 1
+    finally:
+        await fleet.close()

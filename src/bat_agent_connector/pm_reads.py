@@ -418,6 +418,7 @@ def read(ops, principal, method, params):
             pm_native_capabilities,
             pm_runs,
             pm_runtime,
+            pm_work_profiles,
             pm_worktree,
         )
         workspace = pm_workspace.require_member(ops.db, principal, workspace_id)
@@ -456,6 +457,7 @@ def read(ops, principal, method, params):
                 "conversation_proposals": {"version": 1, "analysis": native, "adoption_available": adoption_reason is None,
                     "adoption_scopes": ["observe", "manage", "start"], "adoption_role": "owner"},
                 "work_attempt_results": pm_attempt_result_reads.capabilities(ops),
+                "work_profiles": pm_work_profiles.capabilities(ops),
                 "worktrees": [entry for entry in pm_worktree.capabilities(ops)
                               if entry["repository"].lower() in repositories]}
     if method == "pm_workspaces_list":

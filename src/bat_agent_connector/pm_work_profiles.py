@@ -107,6 +107,29 @@ def install(ops) -> None:
         ))
 
 
+def capabilities(ops=None) -> dict:
+    """The same object for features.pm_workspaces and pm_capabilities_get."""
+    available = True if ops is None else ACTION in ops.actions
+    return {
+        "version": 1,
+        "contract": _CONTRACT,
+        "supported": available,
+        "available": available,
+        "write_action": ACTION,
+        "reads": ["pm_work_profiles_list", "pm_work_profile_get", "pm_work_profile_readiness_get"],
+        "mcp_tools": ["pm_work_profiles_list", "pm_work_profile_get", "pm_work_profile_readiness_get"],
+        "routes": {
+            "list": "/api/v1/pm/workspaces/{workspace_id}/work-profiles",
+            "get": "/api/v1/pm/workspaces/{workspace_id}/work-profiles/{profile_id}",
+            "readiness": "/api/v1/pm/workspaces/{workspace_id}/work-profiles/{profile_id}/readiness",
+        },
+        "required_scopes": {"read": ["observe"], "write": ["observe", "manage"]},
+        "reads_never_write": True,
+        "calls_bat": False,
+        "adapters": {"bat": {"discover": "stored_observation_only", "start_owned": "not_probed"}},
+    }
+
+
 def _bad(code: str, message: str, status: int = 422) -> OperationError:
     return OperationError(code, message, status)
 
