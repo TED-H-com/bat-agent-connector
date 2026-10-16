@@ -624,7 +624,7 @@ Existing quality, evidence, specs, package, handoff and publication controls mov
 intact into drawers reached from the Requirements overflow and work inspector;
 Board's overflow opens Batches. Drafts, original request keys and recovery controls
 remain owned by their existing modules. Both work inspectors expose the same
-Requirements tools; Batches stays in Board's header overflow. The shell provides the single refresh.
+Requirements tools; Batches stays in Board's header overflow. The shell provides the single refresh; whichever read completes with the current sequence resets the busy state so Refresh does not stay disabled when an event arrives during a refresh.
 `requirements?select=<work_item_id|requirement_id>` expands and scrolls to the
 selection, clearing a previous search when following an explicit selection link.
 Overview and Issues links preserve the exact revision, expand the destination row with
