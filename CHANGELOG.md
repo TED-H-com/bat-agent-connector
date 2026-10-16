@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Fleet: keyboard focus stays on the control you are using while a status
+  refresh or your own action runs. The control looks unavailable until that
+  work finishes, a second press is ignored, and a background refresh stays quiet.
+
 - Settings → Agents: Tab reaches Check again while the first check runs, and
   pressing it keeps keyboard focus on the button. The button looks unavailable
   until the check finishes, and a second press is ignored.
