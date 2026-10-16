@@ -24,6 +24,19 @@
   on BAT before starting again), alongside unready requirement and foreign
   controller checks.
 
+- Work attempts started with `work.start` keep a fixed Result for each finished
+  turn. Read it with
+  `GET /api/v1/pm/workspaces/{workspace_id}/work-attempts/{attempt_id}/result`
+  or the RPC/MCP read `pm_work_attempt_result_get`, and the attempt's changes
+  and a file's diff with `/changes` (`pm_work_attempt_changes_get`) and `/diff`
+  (`pm_work_attempt_diff_get`), all under the `observe` scope. Connector records
+  a Result only when it sees the attempt's own turn end, the session's process
+  end or an agent error. Turn facts the session read did not report, and an
+  empty BAT status, read as `unknown`, never as done or clean. `/result` reads
+  Connector's database only and can wait up to 10 s for related events after a
+  `cursor`; `/changes` and `/diff` read the managed worktree without writing and
+  make no BAT call for manual, foreign or unknown sessions.
+
 - Conversation adoption advances as each original child operation finishes,
   removing the fixed one-second pause between completed steps. Child failures
   still stop the adoption; recovery keeps the original requests and receipts.
