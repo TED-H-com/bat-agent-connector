@@ -671,6 +671,7 @@ def _seed_plan_and_work(
         "repository_id": 42,
         "binding_digest": binding_digest,
         "expected_source_sha": "c" * 40,
+        "expected_latest_attempt_id": pm_work_start.latest_attempt_id(ops.db, ws, wi_id),
     }
     params = {
         "instruction": "Implement the login endpoint and tests.",
@@ -1107,7 +1108,11 @@ def test_admin_principal_and_concurrent_start_rejection_and_reuse_after_failure(
             ),
         )
 
-    pre2 = {**ctx["preconditions"], "expected_previous_package_id": pkg_id}
+    pre2 = {
+        **ctx["preconditions"],
+        "expected_previous_package_id": pkg_id,
+        "expected_latest_attempt_id": "att_" + op_admin["operation_id"][3:],
+    }
     op_admin2, fresh_admin2 = ops.create(
         minimal_admin,
         action="work.start",
@@ -1125,6 +1130,59 @@ def test_admin_principal_and_concurrent_start_rejection_and_reuse_after_failure(
         "SELECT * FROM work_attempts WHERE start_operation_id=?", (op_admin2["operation_id"],)
     ).fetchone()
     assert attempt2["predecessor_attempt_id"] == "att_" + op_admin["operation_id"][3:]
+
+
+def test_concurrent_first_starts_with_null_expected_latest_attempt_id_serialize(tmp_path, monkeypatch):
+    ops, ws = _setup_full_pm_world(tmp_path)
+    ctx = _seed_plan_and_work(ops, ws)
+    assert ctx["preconditions"]["expected_latest_attempt_id"] is None
+
+    # Simulate two concurrent first starts that both pass _check_admission while expected_latest_attempt_id is None;
+    # the first commits in the INSERT transaction and the second rolls back in admit_operation.
+    both_admitted = [
+        pm_work_start._admit(ops, OWNER, ctx["target"], ctx["params"], ctx["preconditions"]),
+        pm_work_start._admit(ops, OWNER, ctx["target"], ctx["params"], ctx["preconditions"]),
+    ]
+    ops.actions[pm_work_start.ACTION] = ActionDef(
+        pm_work_start.ACTION,
+        "start",
+        "Start work",
+        pm_work_start._run,
+        lambda service, principal, target, params, pre: both_admitted.pop(0),
+        ("workspace_id", "work_item_id"),
+        authorize_existing=pm_work_start._authorize_existing,
+    )
+
+    op1, fresh1 = ops.create(
+        OWNER,
+        action="work.start",
+        target=ctx["target"],
+        params=ctx["params"],
+        preconditions=ctx["preconditions"],
+        idempotency_key="k-conc-first-1",
+    )
+    assert fresh1 is True
+    att1_id = "att_" + op1["operation_id"][3:]
+    ops_after_first = ops.db.execute("SELECT COUNT(*) FROM operations").fetchone()[0]
+    attempts_after_first = ops.db.execute("SELECT COUNT(*) FROM work_attempts").fetchone()[0]
+    assert attempts_after_first == 1
+
+    with pytest.raises(OperationError) as exc_second:
+        ops.create(
+            OWNER,
+            action="work.start",
+            target=ctx["target"],
+            params=ctx["params"],
+            preconditions=ctx["preconditions"],
+            idempotency_key="k-conc-first-2",
+        )
+    assert exc_second.value.code == "PM_WORK_ATTEMPT_CHANGED"
+    assert exc_second.value.status == 409
+    assert att1_id in exc_second.value.message
+    assert op1["operation_id"] in exc_second.value.message
+    # Second INSERT rolled back cleanly: no second operation row and no second attempt row.
+    assert ops.db.execute("SELECT COUNT(*) FROM operations").fetchone()[0] == ops_after_first
+    assert ops.db.execute("SELECT COUNT(*) FROM work_attempts").fetchone()[0] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -1194,6 +1252,7 @@ async def _start_envelope(
         "repository_id": pv["repository_id"],
         "binding_digest": pv["binding_digest"],
         "expected_source_sha": source_sha or pv["source_sha"],
+        "expected_latest_attempt_id": pm_work_start.latest_attempt_id(ops.db, wid, wi_id),
     }
     params: dict = {
         "instruction": instruction,
@@ -1563,6 +1622,185 @@ async def test_restart_mid_chain_and_parent_cancellation_preserve_child_authorit
         ).fetchone()[0]
         == 1
     )
+
+
+async def test_lost_ack_after_fast_reuse_start_refused_by_expected_latest_attempt_id(start_ready, mock):
+    w = start_ready
+    ops = w["d"].ops
+    wid = w["workspace_id"]
+    wi_id = w["target"]["work_item_id"]
+
+    # Create the engineering package ahead of time so the first work.start takes the fast reuse path.
+    pv_compose = await pm_work_start.preview(
+        ops, STARTER_OWNER, wid, wi_id, {"instruction": "Fast reuse start."}
+    )
+    assert pv_compose["package_plan"]["mode"] == "compose"
+    pkg_op, _ = ops.create(
+        STARTER_OWNER,
+        action="pm.work_package.create",
+        target={"workspace_id": wid, "work_item_id": wi_id},
+        params=pv_compose["package_plan"]["description"],
+        preconditions={
+            "expected_binding_id": pv_compose["preconditions"]["expected_binding_id"],
+            "expected_work_fingerprint": pv_compose["preconditions"]["expected_work_item_fingerprint"],
+            "expected_scope_revision": pv_compose["preconditions"]["expected_scope_revision"],
+            "expected_previous_package_id": None,
+        },
+        idempotency_key="precreate-pkg-for-reuse",
+    )
+    await settle_operations(ops)
+    pkg_id = ops.get(pkg_op["operation_id"])["result"]["package_id"]
+
+    pv_reuse = await pm_work_start.preview(
+        ops, STARTER_OWNER, wid, wi_id, {"instruction": "Fast reuse start."}
+    )
+    assert pv_reuse["package_plan"]["mode"] == "reuse"
+    assert pv_reuse["package_plan"]["package_id"] == pkg_id
+    assert pv_reuse["preconditions"]["expected_latest_attempt_id"] is None
+
+    start_params = {
+        "instruction": "Fast reuse start.",
+        "agent": "claude",
+        "delivery": "pull_request",
+        "code_target": pv_reuse["code_target"],
+    }
+    op1, fresh1 = ops.create(
+        STARTER_OWNER,
+        action="work.start",
+        target={"workspace_id": wid, "work_item_id": wi_id},
+        params=start_params,
+        preconditions=pv_reuse["preconditions"],
+        idempotency_key="fast-reuse-key-1",
+    )
+    assert fresh1 is True
+    done1 = await _advance_start(ops, op1["operation_id"])
+    assert done1["status"] == "succeeded", done1
+    assert done1["result"]["package_reused"] is True
+    att1_id = done1["result"]["attempt_id"]
+    assert mock.channels().count("claude:start-session") == 1
+    assert (
+        ops.db.execute(
+            "SELECT COUNT(*) FROM work_attempts WHERE workspace_id=? AND work_item_id=?", (wid, wi_id)
+        ).fetchone()[0]
+        == 1
+    )
+    assert ops.db.execute("SELECT COUNT(*) FROM pm_work_start_children").fetchone()[0] == 1
+
+    # Simulate UI losing the ACK after the fast reuse start succeeded and resubmitting with a new key
+    # and the original preconditions (expected_latest_attempt_id=None).
+    with pytest.raises(OperationError) as exc_resubmit:
+        ops.create(
+            STARTER_OWNER,
+            action="work.start",
+            target={"workspace_id": wid, "work_item_id": wi_id},
+            params=start_params,
+            preconditions=pv_reuse["preconditions"],
+            idempotency_key="fast-reuse-key-2",
+        )
+    assert exc_resubmit.value.code == "PM_WORK_ATTEMPT_CHANGED"
+    assert exc_resubmit.value.status == 409
+    assert att1_id in exc_resubmit.value.message
+    assert op1["operation_id"] in exc_resubmit.value.message
+    assert ops.db.execute("SELECT COUNT(*) FROM pm_work_start_children").fetchone()[0] == 1
+    assert mock.channels().count("claude:start-session") == 1
+    assert (
+        ops.db.execute(
+            "SELECT COUNT(*) FROM work_attempts WHERE workspace_id=? AND work_item_id=?", (wid, wi_id)
+        ).fetchone()[0]
+        == 1
+    )
+
+
+async def test_unsettled_latest_attempt_blocks_new_start_for_parent_child_and_unproven_outcome(
+    start_ready, mock, monkeypatch
+):
+    w = start_ready
+    ops = w["d"].ops
+    wi_id = w["target"]["work_item_id"]
+
+    env1 = await _start_envelope(w, key="settle-check-1")
+    op1, _ = ops.create(STARTER_OWNER, **env1)
+
+    # 1. Parent in needs_attention is NOT terminal (can be resumed) -> refused with PM_WORK_START_IN_PROGRESS.
+    ops.db.execute("UPDATE work_items SET version=version+1 WHERE work_item_id=?", (wi_id,))
+    await ops._execute(op1["operation_id"])
+    ops.db.execute("UPDATE work_items SET version=1 WHERE work_item_id=?", (wi_id,))
+    paused_parent = ops.get(op1["operation_id"])
+    assert paused_parent["status"] == "needs_attention"
+
+    env_retry = await _start_envelope(w, key="settle-check-while-paused")
+    with pytest.raises(OperationError) as exc_paused:
+        ops.create(STARTER_OWNER, **env_retry)
+    assert exc_paused.value.code == "PM_WORK_START_IN_PROGRESS"
+    assert exc_paused.value.status == 409
+    assert op1["operation_id"] in exc_paused.value.message
+
+    # Resume parent and advance until handoff child hits a lost ACK on claude:start-session (uncertain)
+    # and subsequent read-backs (workspace:get-state) also time out while BAT is unreachable.
+    ops.resume(STARTER_OWNER, op1["operation_id"])
+    client = w["d"].fleet.client("h1")
+    invoke = client.invoke
+
+    async def lose_start_and_readback(name, *args, **kwargs):
+        if name == "claude:start-session":
+            raise InvokeTimeout("Simulated lost ACK on claude:start-session")
+        return await invoke(name, *args, **kwargs)
+
+    monkeypatch.setattr(client, "invoke", lose_start_and_readback)
+    for _ in range(4):
+        ops.db.execute(
+            "UPDATE operations SET next_run_at=0 WHERE operation_id=? AND status IN ('waiting_external','waiting_checks')",
+            (op1["operation_id"],),
+        )
+        await settle_operations(ops)
+        cur = ops.get(op1["operation_id"])
+        if cur["result"] and cur["result"].get("stage") == "start_unknown":
+            break
+
+    cur = ops.get(op1["operation_id"])
+    handoff_id = cur["result"]["children"]["handoff"]
+    assert handoff_id is not None
+    assert ops.get(handoff_id)["status"] == "uncertain"
+
+    # 2. Cancel parent while handoff child is still 'uncertain' (actively reading back):
+    # parent is now 'cancelled', child is 'uncertain' (not in TERMINAL), so new start is refused with PM_WORK_START_IN_PROGRESS.
+    ops.cancel(STARTER_OWNER, op1["operation_id"])
+    assert ops.get(op1["operation_id"])["status"] == "cancelled"
+    assert ops.get(handoff_id)["status"] == "uncertain"
+    with pytest.raises(OperationError) as exc_child_running:
+        ops.create(STARTER_OWNER, **(await _start_envelope(w, key="settle-check-child-uncertain")))
+    assert exc_child_running.value.code == "PM_WORK_START_IN_PROGRESS"
+    assert op1["operation_id"] in exc_child_running.value.message
+
+    # 3. Exhaust the uncertain child's read-back budget so it enters 'needs_attention' (UNCERTAIN_UNRESOLVED),
+    # then cancel the child so it enters terminal 'cancelled' with its external step still unproven (_uncertain == True).
+    for _ in range(5):
+        ops.db.execute("UPDATE operations SET next_run_at=0 WHERE operation_id=?", (handoff_id,))
+        await settle_operations(ops)
+        if ops.get(handoff_id)["status"] == "needs_attention":
+            break
+    assert ops.get(handoff_id)["status"] == "needs_attention"
+    assert ops.get(handoff_id)["error_code"] == "UNCERTAIN_UNRESOLVED"
+
+    # Even while child is in needs_attention with an unproven step, starting again is refused with PM_WORK_START_OUTCOME_UNPROVEN.
+    with pytest.raises(OperationError) as exc_unproven_na:
+        ops.create(STARTER_OWNER, **(await _start_envelope(w, key="settle-check-unproven-na")))
+    assert exc_unproven_na.value.code == "PM_WORK_START_OUTCOME_UNPROVEN"
+    assert handoff_id in exc_unproven_na.value.message
+
+    # Cancel the needs_attention child -> it transitions to terminal 'cancelled' while its step remains unproven.
+    ops.cancel(STARTER_OWNER, handoff_id)
+    assert ops.get(handoff_id)["status"] == "cancelled"
+    assert pm_work_start._uncertain(ops, ops.get(handoff_id)) is True
+
+    with pytest.raises(OperationError) as exc_unproven:
+        ops.create(STARTER_OWNER, **(await _start_envelope(w, key="settle-check-unproven")))
+    assert exc_unproven.value.code == "PM_WORK_START_OUTCOME_UNPROVEN"
+    assert exc_unproven.value.status == 409
+    assert handoff_id in exc_unproven.value.message
+    assert "may have started a session" in exc_unproven.value.message
+    assert "BAT" in exc_unproven.value.message
+
 
 
 # ---------------------------------------------------------------------------

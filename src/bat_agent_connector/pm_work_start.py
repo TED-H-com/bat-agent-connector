@@ -26,6 +26,7 @@ from . import (
 from . import pm_release_baselines as snapshots
 from . import pm_work_package_format as fmt
 from .api_auth import Principal
+from .operations import TERMINAL as OP_TERMINAL
 from .operations import ActionDef, NeedsAttention, OperationError, OperationService, Wait
 
 ACTION = "work.start"
@@ -38,7 +39,7 @@ REQUIRED_SCOPES = frozenset({"observe", "manage", "start"})
 SLOTS = ("bind", "package", "handoff")
 SLOT_ORDINAL = {"bind": 0, "package": 1, "handoff": 2}
 LINK = "work_start_parent"
-TERMINAL = frozenset({"succeeded", "failed", "cancelled", "needs_attention"})
+CHILD_STOPPED = frozenset({"succeeded", "failed", "cancelled", "needs_attention"})
 PRECONDITIONS = frozenset({
     "expected_work_item_fingerprint",
     "expected_work_version",
@@ -49,6 +50,7 @@ PRECONDITIONS = frozenset({
     "repository_id",
     "binding_digest",
     "expected_source_sha",
+    "expected_latest_attempt_id",
 })
 PARAMS_REQUIRED = frozenset({"instruction", "agent", "delivery", "code_target"})
 PARAMS_OPTIONAL = frozenset({"model", "requirement_ids"})
@@ -198,8 +200,20 @@ def require_work_controller(db, workspace_id: str, work_item_id: str, candidate:
         )
 
 
-def require_no_active_attempt(db, workspace_id: str, work_item_id: str) -> None:
-    """Reject a second concurrent work.start when the Work's latest attempt is not terminal."""
+def _uncertain_db(db, operation_id: str) -> bool:
+    return (
+        db.execute(
+            "SELECT 1 FROM operation_steps s LEFT JOIN pm_lifecycle_steps l "
+            "ON l.operation_id=s.operation_id AND l.name=s.name WHERE s.operation_id=? "
+            "AND s.status IN ('started','uncertain') AND (l.kind IS NULL OR l.kind='external') LIMIT 1",
+            (operation_id,),
+        ).fetchone()
+        is not None
+    )
+
+
+def require_latest_attempt_settled(db, workspace_id: str, work_item_id: str) -> None:
+    """Verify that every part of the Work's latest attempt has settled and no external step is unproven."""
     if not installed(db):
         return
     row = db.execute(
@@ -210,11 +224,79 @@ def require_no_active_attempt(db, workspace_id: str, work_item_id: str) -> None:
     if row is None:
         return
     op_id = row["start_operation_id"] or row["origin_id"]
-    op_row = db.execute("SELECT status FROM operations WHERE operation_id=?", (op_id,)).fetchone()
-    if op_row is None or op_row["status"] not in TERMINAL:
+    parent_row = db.execute("SELECT status FROM operations WHERE operation_id=?", (op_id,)).fetchone()
+    child_rows = db.execute(
+        """SELECT c.slot, c.operation_id, o.status
+        FROM pm_work_start_children c
+        JOIN operations o ON o.operation_id = c.operation_id
+        WHERE c.parent_id = ?
+        ORDER BY c.ordinal ASC""",
+        (op_id,),
+    ).fetchall()
+    for c in child_rows:
+        if c["status"] in CHILD_STOPPED and _uncertain_db(db, c["operation_id"]):
+            raise _bad(
+                "PM_WORK_START_OUTCOME_UNPROVEN",
+                f"Earlier handoff child {c['operation_id']} (from start {op_id}) has an unproven external step and "
+                "may have started a session; check the Work's sessions on BAT before starting again",
+                409,
+            )
+    if parent_row is None or parent_row["status"] not in OP_TERMINAL:
         raise _bad(
             "PM_WORK_START_IN_PROGRESS",
-            f"Work item already has an active start in progress ({op_id}); follow or settle that operation first",
+            f"Work item already has an active start in progress ({op_id}); follow, resume, or cancel that operation first",
+            409,
+        )
+    for c in child_rows:
+        if c["status"] not in OP_TERMINAL:
+            raise _bad(
+                "PM_WORK_START_IN_PROGRESS",
+                f"Work start {op_id} still has unsettled child operation {c['operation_id']} ({c['status']}); "
+                "wait for it to settle first",
+                409,
+            )
+        if _uncertain_db(db, c["operation_id"]):
+            raise _bad(
+                "PM_WORK_START_OUTCOME_UNPROVEN",
+                f"Earlier handoff child {c['operation_id']} (from start {op_id}) has an unproven external step and "
+                "may have started a session; check the Work's sessions on BAT before starting again",
+                409,
+            )
+
+
+require_no_active_attempt = require_latest_attempt_settled
+
+
+def require_expected_latest_attempt(
+    db, workspace_id: str, work_item_id: str, expected_attempt_id: str | None
+) -> None:
+    """Enforce optimistic concurrency on the Work's attempt chain."""
+    if not installed(db):
+        if expected_attempt_id is not None:
+            raise _bad(
+                "PM_WORK_ATTEMPT_CHANGED",
+                "Work item has no recorded attempts (latest_attempt_id=null); preview again before starting",
+                409,
+            )
+        return
+    row = db.execute(
+        """SELECT attempt_id, start_operation_id, origin_id FROM work_attempts
+        WHERE workspace_id=? AND work_item_id=? ORDER BY sequence DESC LIMIT 1""",
+        (workspace_id, work_item_id),
+    ).fetchone()
+    actual_attempt_id = row["attempt_id"] if row is not None else None
+    if expected_attempt_id != actual_attempt_id:
+        if row is not None:
+            op_id = row["start_operation_id"] or row["origin_id"]
+            raise _bad(
+                "PM_WORK_ATTEMPT_CHANGED",
+                f"Work item latest attempt is now {actual_attempt_id} (start operation {op_id}); "
+                f"follow {op_id} or preview again before starting",
+                409,
+            )
+        raise _bad(
+            "PM_WORK_ATTEMPT_CHANGED",
+            "Work item has no recorded attempts (latest_attempt_id=null); preview again before starting",
             409,
         )
 
@@ -247,7 +329,9 @@ def admit_operation(db, operation_id: str, action: str, target: dict, binding: d
     if not isinstance(controller, dict):
         raise _bad("PM_WORK_START_CONTEXT_INVALID", "Work start controller authority is missing", 409)
     require_work_controller(db, wid, work_item_id, controller)
-    require_no_active_attempt(db, wid, work_item_id)
+    if "expected_latest_attempt_id" in intent:
+        require_expected_latest_attempt(db, wid, work_item_id, intent["expected_latest_attempt_id"])
+    require_latest_attempt_settled(db, wid, work_item_id)
     predecessor = latest_attempt_id(db, wid, work_item_id)
     created_at = time.time() if now is None else now
     attempt_id = "att_" + operation_id[3:]
@@ -583,7 +667,7 @@ def _resolve_requirement_ids(current_plan: dict, binding: dict | None, raw_ids) 
 
 def _validate_preconditions_shape(pre: dict) -> None:
     if not isinstance(pre, dict) or set(pre) != PRECONDITIONS:
-        raise _bad("PRECONDITION_REQUIRED", "work.start requires all nine preview preconditions", 422)
+        raise _bad("PRECONDITION_REQUIRED", "work.start requires all ten preview preconditions", 422)
     if (
         not isinstance(pre["expected_work_item_fingerprint"], str)
         or not pm_plans.DIGEST.fullmatch(pre["expected_work_item_fingerprint"])
@@ -613,6 +697,13 @@ def _validate_preconditions_shape(pre: dict) -> None:
         or not repository_sync.DIGEST.fullmatch(pre["binding_digest"])
         or not isinstance(pre["expected_source_sha"], str)
         or not repository_sync.SHA.fullmatch(pre["expected_source_sha"])
+        or (
+            pre["expected_latest_attempt_id"] is not None
+            and (
+                not isinstance(pre["expected_latest_attempt_id"], str)
+                or not ATTEMPT_ID.fullmatch(pre["expected_latest_attempt_id"])
+            )
+        )
     ):
         raise _bad("PRECONDITION_REQUIRED", "Supply valid preview preconditions for work.start", 422)
 
@@ -626,7 +717,7 @@ def _check_admission(ops, principal: Principal, target: dict, params: dict, pre:
     workspace = _member(ops, principal, wid, write=True)
     controller = controller_authority.binding(ops.db, principal, pm_workspace_id=wid)
     require_work_controller(ops.db, wid, wi_id, controller)
-    require_no_active_attempt(ops.db, wid, wi_id)
+    require_latest_attempt_settled(ops.db, wid, wi_id)
     if (
         not isinstance(params, dict)
         or not PARAMS_REQUIRED <= set(params)
@@ -683,6 +774,7 @@ def _check_admission(ops, principal: Principal, target: dict, params: dict, pre:
     latest_package_id = pm_work_packages._latest(ops.db, wid, wi_id)
     if pre["expected_previous_package_id"] != latest_package_id:
         raise _bad("PM_PACKAGE_VERSION_CONFLICT", "Read the latest work package before starting", 409)
+    require_expected_latest_attempt(ops.db, wid, wi_id, pre["expected_latest_attempt_id"])
 
     requirement_ids, bind_needed = _resolve_requirement_ids(current_plan, binding, params.get("requirement_ids"))
     if bind_needed:
@@ -763,6 +855,7 @@ def _check_admission(ops, principal: Principal, target: dict, params: dict, pre:
         "expected_work_item_fingerprint": work_items.fingerprint(work),
         "expected_project_version": project["version"],
         "expected_previous_package_id": latest_package_id,
+        "expected_latest_attempt_id": pre["expected_latest_attempt_id"],
         "code_source": code_source,
         "code_config_digest": repository_sync.digest(config),
         "delivery": delivery_goal,
@@ -1056,15 +1149,7 @@ def _children(ops, parent: dict) -> dict[str, dict]:
 
 
 def _uncertain(ops, child: dict) -> bool:
-    return (
-        ops.db.execute(
-            "SELECT 1 FROM operation_steps s LEFT JOIN pm_lifecycle_steps l "
-            "ON l.operation_id=s.operation_id AND l.name=s.name WHERE s.operation_id=? "
-            "AND s.status IN ('started','uncertain') AND (l.kind IS NULL OR l.kind='external') LIMIT 1",
-            (child["operation_id"],),
-        ).fetchone()
-        is not None
-    )
+    return _uncertain_db(ops.db, child["operation_id"])
 
 
 def _child_session(child: dict | None) -> dict | None:
@@ -1097,7 +1182,7 @@ def _check_readiness_for_intent(
     principal: Principal,
     intent: dict,
     work: dict,
-     current_plan: dict,
+    current_plan: dict,
     created_package_id: str | None = None,
 ) -> None:
     wid = intent["workspace_id"]
@@ -1125,7 +1210,7 @@ def _check_readiness_for_intent(
 def _guard(ops, parent: dict, *, allow_cancelled_parent: bool = False) -> Principal:
     if parent["action"] != ACTION:
         raise _bad("PM_WORK_START_STOPPED", "The original work.start has stopped", 409)
-    if not allow_cancelled_parent and (parent["cancel_requested"] or parent["status"] in TERMINAL):
+    if not allow_cancelled_parent and (parent["cancel_requested"] or parent["status"] in OP_TERMINAL):
         raise _bad("PM_WORK_START_STOPPED", "The original work.start has stopped new child admission", 409)
     intent = _intent(parent)
     wid = parent["target"]["workspace_id"]
@@ -1413,7 +1498,7 @@ async def _run(ctx):
                 raise NeedsAttention(exc.code, _failure_message(exc.code, exc.message)) from exc
             children = _children(ctx.service, parent)
             bind_child = children["bind"]
-        if bind_child["status"] not in TERMINAL:
+        if bind_child["status"] not in CHILD_STOPPED:
             _save_progress(ctx, _build_state(parent, intent, children, stage="preparing"))
             raise Wait("waiting_external", "Waiting for work binding child operation", delay_s=1.0)
         if bind_child["status"] != "succeeded":
@@ -1457,7 +1542,7 @@ async def _run(ctx):
                 raise NeedsAttention(exc.code, _failure_message(exc.code, exc.message)) from exc
             children = _children(ctx.service, parent)
             pkg_child = children["package"]
-        if pkg_child["status"] not in TERMINAL:
+        if pkg_child["status"] not in CHILD_STOPPED:
             _save_progress(
                 ctx,
                 _build_state(parent, intent, children, stage="preparing", binding_id=binding_id),
@@ -1521,7 +1606,7 @@ async def _run(ctx):
 
     session = _child_session(handoff_child)
     is_uncertain = handoff_child["status"] == "uncertain" or _uncertain(ctx.service, handoff_child)
-    if handoff_child["status"] not in TERMINAL:
+    if handoff_child["status"] not in CHILD_STOPPED:
         stage = "start_unknown" if is_uncertain else "starting"
         _save_progress(
             ctx,
@@ -1765,6 +1850,7 @@ async def preview(
             "repository_id": source["repository_id"],
             "binding_digest": source["binding_digest"],
             "expected_source_sha": source["source_sha"],
+            "expected_latest_attempt_id": latest_attempt_id(ops.db, workspace_id, work_item_id),
         }
         return {
             "workspace_id": workspace_id,
