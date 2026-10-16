@@ -33616,7 +33616,6 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 		previewSerial++;
 		attemptsSerial++;
 		loading = false;
-		checking = false;
 		prepared = null;
 		attempts = [];
 		latestAttempt = null;
