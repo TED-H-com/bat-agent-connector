@@ -20,7 +20,7 @@ _EXECUTION = ContextVar("pm_source_execution", default=None)
 # Other derived writes must first implement fixed lineage and original recovery.
 DERIVED_ACTIONS = frozenset({"artifact.capture.managed", "artifact.accept", "github.pr.publish", "pm.execution.verify",
     "session.send", "session.answer", "session.interrupt", "session.read", "session.position",
-    "session.labels.set", "session.record_verification", "work_item.update", "work_item.pin",
+    "session.labels.set", "session.record_verification", "work.start", "work_item.update", "work_item.pin",
     "work_item.order", "work_item.approve", "work_item.continue"})
 _REF_KEYS = {"operation_id": "operation", "execution_operation_id": "operation", "source_operation_id": "operation",
     "start_operation_id": "operation", "capture_operation_id": "operation", "work_item_id": "work_item",
@@ -257,6 +257,10 @@ def _visible_roots(db, principal, original_ids):
                 return False
             if not bundle_visible(db, principal, operation):
                 return False
+        elif operation["action"] == "work.start":
+            from .pm_work_start import source_visible as work_start_visible
+            if not work_start_visible(db, principal, operation):
+                return False
         elif not source_visible(db, principal, operation):
             return False
     return True
@@ -371,6 +375,8 @@ def require_new_effect(ops, operation_id):
     op = ops._row(operation_id)
     from .pm_work_batches import require_child
     require_child(ops, op)
+    from .pm_work_start import require_child as require_work_start_child
+    require_work_start_child(ops, op)
     from .pm_maintenance_repairs import require_new_effect as require_repair_effect
     require_repair_effect(ops, op)
     require_admitted_sources(ops, op)
@@ -409,6 +415,8 @@ def _require_frame(ops, operation_id):
     require_conversation_child(ops.db, operation_id)
     from .pm_work_batches import require_child
     require_child(ops, ops._row(operation_id))
+    from .pm_work_start import require_child as require_work_start_child
+    require_work_start_child(ops, ops._row(operation_id))
     from .pm_maintenance_repairs import require_child as require_repair_child
     require_repair_child(ops, ops._row(operation_id))
     from .pm_delivery_lineage import require_admitted_sources

@@ -100,6 +100,7 @@ test("save and literal preview use immutable refs; clearing a selected drop unlo
   expect(state.calls.find(c=>c.command==="native_files_save").args).toEqual({reference:ref});
   expect(state.calls.find(c=>c.command==="native_files_preview").args).toEqual({reference:ref});
   await page.getByRole("button",{name:"Enable file drop",exact:true}).click();
+  await expect.poll(() => state.calls.filter(c => c.command === "native_files_drop_target" && c.args.enabled).length).toBe(1);
   const draftId=state.calls.filter(c=>c.command==="native_files_drop_target"&&c.args.enabled).at(-1).args.draftId;
   expect(Object.keys(state.calls.filter(c=>c.command==="native_files_drop_target").at(-1).args).sort()).toEqual(["draftId","enabled"]);
   state.receipts.push({transfer_id:"file_"+"f".repeat(32),direction:"upload",draft_id:draftId,display_name:"dropped.txt",size_bytes:5,digest,

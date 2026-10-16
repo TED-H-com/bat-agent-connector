@@ -59,6 +59,7 @@ test('preparation uses current source CAS and an explicit past reporting period'
   const f=reviewFixture();await mount(page,f);await openAction(page,'prepare');const editor=action(page,'prepare');
   await editor.getByLabel('Report title',{exact:true}).fill('Next fixed report');await editor.getByLabel('Period start',{exact:true}).fill('2026-10-01T09:00');await editor.getByLabel('Period end',{exact:true}).fill('2026-10-08T09:00');
   await editor.getByRole('button',{name:'Prepare report',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
   expect(f.state.writes[0].body.preconditions).toEqual({expected_plan_version:4,expected_review_revision:1,expected_policy_id:pid,expected_policy_version:3,expected_baseline_id:bid,expected_lifecycle_revision:2});
   expect(f.state.writes[0].body.params).toMatchObject({title:'Next fixed report'});expect(f.state.writes[0].body.params).not.toHaveProperty('previous_review_id');
   await expect(page.getByRole('heading',{name:'Next fixed report',exact:true})).toBeVisible();expect(f.state.reviews.at(-1).review.status).toBe('prepared');
@@ -70,6 +71,7 @@ test('candidate requires original evidence and keeps ordinary fields and proposa
   await expect(editor.locator('button[type=submit]')).toBeDisabled();
   await editor.getByText('Original report sources',{exact:true}).click();await editor.getByLabel('Adopted maintenance policy',{exact:true}).check();await expect(editor).toContainText(pid);
   await editor.locator('button[type=submit]').click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
   expect(f.state.writes[0].body.params.source_refs).toEqual(['pmrs_'+'1'.repeat(24)]);expect(f.state.writes[0].body.params.options).toEqual([]);
   await expect(page.locator('[data-review-discussion]')).toContainText('has not changed the accepted scope');expect(f.state.reviews[0].review.status).toBe('prepared');
 });
@@ -84,11 +86,14 @@ test('only owner with a selected saved note and acknowledgment can complete then
   await editor.getByText('Follow-up assignments',{exact:true}).click();await editor.getByRole('button',{name:'Add follow-up',exact:true}).click();
   await editor.getByLabel('Follow-up',{exact:true}).fill('Inspect the missing evidence');await editor.getByLabel('Responsible person',{exact:true}).selectOption('owner');
   await editor.getByLabel('Expected effect',{exact:true}).fill('Make uncertainty visible');await editor.getByLabel('Verification method',{exact:true}).fill('Attach a fixed source');
-  await editor.locator('button[type=submit]').click();expect(f.state.writes[0].body.params.acknowledged_note_ids).toEqual([f.state.reviews[0].events[0].event_id]);
+  await editor.locator('button[type=submit]').click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
+  expect(f.state.writes[0].body.params.acknowledged_note_ids).toEqual([f.state.reviews[0].events[0].event_id]);
   expect(f.state.writes[0].body.params.discussion_acknowledged).toBe(true);expect(f.state.reviews[0].review.status).toBe('completed');
   await expect(page.locator('[data-review-discussion]').getByRole('heading',{name:'Discussion outcome',exact:true})).toBeVisible();
   await reason(page,'follow_up.record');const follow=action(page,'follow_up.record');await follow.getByLabel('Reported status',{exact:true}).selectOption('reported_done');
   await follow.getByLabel('Reported result',{exact:true}).fill('Evidence collected, quality not yet assessed');await follow.locator('button[type=submit]').click();
+  await expect.poll(() => f.state.writes.length).toBe(2);
   expect(f.state.writes[1].body.params.status).toBe('reported_done');await expect(page.locator('[data-review-discussion]')).toContainText('Reported progress is not verified quality');
 });
 
@@ -100,7 +105,9 @@ test('contributor may record notes but cannot complete the owner discussion',asy
 test('lost original note receipt survives reload and lifecycle change without new intent',async({page})=>{
   const f=reviewFixture();await mount(page,f);f.state.lost=true;await saveNote(page);await expect(action(page,'note')).toContainText('Reply unavailable');
   const original=structuredClone(f.state.writes[0]);f.state.lifecycle++;f.state.epoch++;f.state.stage='paused';await page.reload();await boot(page);await openAction(page,'note');
-  await action(page,'note').getByRole('button',{name:'Check original request',exact:true}).click();expect(f.state.writes.at(-1)).toEqual(original);expect(f.state.ops.size).toBe(1);
+  await action(page,'note').getByRole('button',{name:'Check original request',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(2);
+  expect(f.state.writes.at(-1)).toEqual(original);expect(f.state.ops.size).toBe(1);
 });
 
 test('source withdrawal clears report and selector facts while preserving disabled original recovery',async({page})=>{
@@ -108,6 +115,7 @@ test('source withdrawal clears report and selector facts while preserving disabl
   f.state.failRead=true;await page.evaluate(()=>(window as any).refreshReviews());await expect(page.locator('[data-review-report]')).toHaveCount(0);
   await expect(action(page,'note').locator('button[type=submit]')).toBeDisabled();
   f.state.failRead=false;await page.evaluate(()=>(window as any).refreshReviews());await openAction(page,'note');await action(page,'note').getByRole('button',{name:'Check original request',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(2);
   expect(f.state.writes.at(-1)).toEqual(original);
 });
 
@@ -116,6 +124,7 @@ test('a dirty draft keeps focus and text on refresh and explicitly rebases only 
   f.state.reviews[0].review.version=7;await page.evaluate(()=>(window as any).refreshReviews());await expect(content).toHaveValue('An unfinished thought');
   await expect(action(page,'note').locator('button[type=submit]')).toBeDisabled();await page.getByRole('button',{name:'Update baseline',exact:true}).click();
   await openAction(page,'note');await expect(action(page,'note').getByLabel('Discussion note',{exact:true})).toHaveValue('An unfinished thought');await action(page,'note').locator('button[type=submit]').click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
   expect(f.state.writes[0].body.preconditions).toEqual({expected_version:7});
 });
 
@@ -146,7 +155,9 @@ test('public source collection draft survives reload and records dated attribute
   await editor.getByLabel('Source checked at',{exact:true}).fill('2026-10-08T09:00');await editor.getByLabel('Attributed source claim',{exact:true}).fill('The author reports changed compatibility.');
   await page.reload();await boot(page);await openAction(page,'candidate.record');editor=action(page,'candidate.record');
   await editor.getByText('Attributed public sources (optional)',{exact:true}).click();await expect(editor.getByLabel('Public source URL',{exact:true})).toHaveValue('https://example.org/release');
-  await editor.locator('button[type=submit]').click();expect(f.state.writes[0].body.params.public_sources[0]).toEqual({url:'https://example.org/release',title:'Upstream release notes',checked_at:1791464400,claim:'The author reports changed compatibility.'});
+  await editor.locator('button[type=submit]').click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
+  expect(f.state.writes[0].body.params.public_sources[0]).toEqual({url:'https://example.org/release',title:'Upstream release notes',checked_at:1791464400,claim:'The author reports changed compatibility.'});
   await expect(page.locator('[data-review-discussion]')).toContainText('The author reports changed compatibility.');
 });
 
@@ -172,7 +183,9 @@ test('wrong-scope data clears facts and mismatched receipt cannot replace origin
   const f=reviewFixture();await mount(page,f);f.state.mismatch=true;await saveNote(page);await expect(action(page,'note')).toContainText('receipt');const original=structuredClone(f.state.writes[0]);
   f.state.wrongScope=true;await page.evaluate(()=>(window as any).refreshReviews());await expect(page.locator('[data-review-report]')).toHaveCount(0);
   f.state.wrongScope=false;f.state.mismatch=false;await page.evaluate(()=>(window as any).refreshReviews());await openAction(page,'note');
-  await action(page,'note').getByRole('button',{name:'Check original request',exact:true}).click();expect(f.state.writes.at(-1)).toEqual(original);expect(f.state.ops.size).toBe(1);
+  await action(page,'note').getByRole('button',{name:'Check original request',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(2);
+  expect(f.state.writes.at(-1)).toEqual(original);expect(f.state.ops.size).toBe(1);
 });
 
 test('invalid report period remains editable and weekly capacity is explained',async({page})=>{

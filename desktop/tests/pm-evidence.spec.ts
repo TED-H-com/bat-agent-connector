@@ -181,6 +181,7 @@ for(const native of [false,true])test.describe(native?'native evidence':'web evi
     await bind.getByLabel('Plan version for this work',{exact:true}).selectOption(rid);
     await bind.getByLabel('Visitors find the first useful action',{exact:true}).check();
     await bind.getByRole('button',{name:'Track this work',exact:true}).click();await openWork(page);
+    await expect.poll(() => f.state.writes.length).toBe(2);
     expect(f.state.writes.map(row=>row.body.action)).toEqual(['pm.project.bind','pm.work.bind']);
     expect(f.state.writes[1].body.params).toEqual({rationale:'Track first visit results',plan_revision_id:rid,requirement_ids:['first-action']});
     expect(f.state.writes[1].body.preconditions).toEqual({expected_work_version:3,expected_binding_id:null});

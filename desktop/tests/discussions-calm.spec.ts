@@ -284,6 +284,7 @@ test('a pending input request opens Inputs and recovers its original key', async
   await page.reload(); await expect(page.locator('[data-discussion-tab=inputs]')).toBeVisible();
   await expect(form.getByRole('button', {name: 'Check original request', exact: true})).toBeEnabled();
   await form.getByRole('button', {name: 'Check original request', exact: true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(2);
   expect(f.state.writes).toHaveLength(2); expect(f.state.writes[1]).toEqual(f.state.writes[0]);
   expect(f.state.inputs.filter(row => row.value === 'Keep the original input')).toHaveLength(1);
 });

@@ -2,6 +2,26 @@
 
 ## Next release (unreleased)
 
+- The Windows fixture-helper test injects a deterministic clock into its deadline and
+  retry helpers, making transient read recovery independent of runner speed and slow
+  .NET exception unwinds.
+
+- Add the `work.start` compound action, read-only `pm_work_start_preview` and
+  immutable `work_attempts` reads (`pm_work_attempts_list`, `pm_work_attempt_get`)
+  to start a bound Work item in its own managed BAT worktree and session from a
+  reviewed published commit and adopted PM plan. The preview returns all ten
+  preconditions, including `expected_latest_attempt_id`. Existing `pm.work.bind`,
+  `pm.work_package.create` (with deterministic `work_start_thin_v1` composition
+  or package reuse) and `repository.continue` run as durable children under the
+  same controller and original-key recovery rules; definite child failures end
+  `work.start` as `failed`, and cancelling `work.start` also stops its unfinished
+  children. Concurrent or stale starts refuse before any host write with
+  `PM_WORK_ATTEMPT_CHANGED` (follow the named attempt/operation or preview again),
+  `PM_WORK_START_IN_PROGRESS` (follow the named start operation, or cancel and
+  preview again), or `PM_WORK_START_OUTCOME_UNPROVEN` (check the Work's sessions
+  on BAT before starting again), alongside unready requirement and foreign
+  controller checks.
+
 - Conversation adoption advances as each original child operation finishes,
   removing the fixed one-second pause between completed steps. Child failures
   still stop the adoption; recovery keeps the original requests and receipts.
@@ -124,9 +144,11 @@
 - The Windows installed-fixture self-test gives its UIA probe compile and run a 60-second
   budget, prints which phase is running, and reports the timeout or exit code when it fails.
 
-- The Windows fixture-helper test injects a deterministic clock into its deadline and
-  retry helpers, making transient read recovery independent of runner speed and slow
-  .NET exception unwinds.
+- The UX-A07 feature-map test waits for destination view containers and heading updates
+  before recording classic headings, preventing stale headings captured during route transitions.
+
+- The UX-A05 deep-link test waits for PM views to settle before each scroll, departure and
+  return step, so it no longer scrolls while a view is still reading.
 
 - Unsigned macOS desktop packaging logs `bundle_dmg.sh` with `--verbose` and retries the same
   build once after detaching only this job's leftover `/Volumes` images.

@@ -45,7 +45,9 @@ test('changed original native identity never silently replaces a saved draft or 
   f.state.lost=true;await editor(page).getByRole('button',{name:'Check current activity',exact:true}).click();await expect(editor(page)).toContainText('Original reply was lost');
   f.card.execution.manual_observation_sources=[];await page.reload();await openDetail(page);
   await expect(editor(page).locator('select')).toBeDisabled();await expect(editor(page).locator('select option:checked')).toHaveText('Previously selected source is unavailable');
-  await editor(page).getByRole('button',{name:'Check original request',exact:true}).click();expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);
+  await editor(page).getByRole('button',{name:'Check original request',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(2);
+  expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);
 });
 
 for(const reason of ['manual_native_identity_unavailable','manual_multiple_inputs_unsupported','manual_native_turn_active'])test(`${reason} stays unavailable without a manual completion claim`,async({page})=>{

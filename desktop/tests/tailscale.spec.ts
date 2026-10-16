@@ -46,7 +46,7 @@ test('explicit opening preserves ID, process receipt and focus return only rerea
  await expect(panel(page).getByText('Tailscale is running. See Fleet for each host’s connection status.')).toBeVisible();expect(await calls(page,'open')).toHaveLength(1);
 });
 test('lost reply reload reads original receipt without another opening',async({page})=>{
- await setup(page,{lose:true,recover:'started'});await open(page);const original=(await calls(page,'open'))[0];await page.reload();
+ await setup(page,{lose:true,recover:'started'});await open(page);await expect.poll(()=>calls(page,'open')).toHaveLength(1);const original=(await calls(page,'open'))[0];await page.reload();
  await expect(panel(page).getByRole('button',{name:'Prepare another opening'})).toBeVisible();expect(await calls(page,'open')).toHaveLength(0);expect(await calls(page,'receipt')).toContainEqual({action:'receipt',request_id:original.request_id});
 });
 test('unknown original receipt never offers replacement opening',async({page})=>{
@@ -54,12 +54,12 @@ test('unknown original receipt never offers replacement opening',async({page})=>
  await expect(panel(page).getByRole('button',{name:'Open Tailscale',exact:true})).toBeDisabled();await expect(panel(page).getByRole('button',{name:'Prepare another opening'})).toHaveCount(0);expect(await calls(page,'open')).toHaveLength(1);
 });
 test('missing receipt retries only original key after explicit click',async({page})=>{
- await setup(page,{lose:true});await open(page);const original=(await calls(page,'open'))[0];
+ await setup(page,{lose:true});await open(page);await expect.poll(()=>calls(page,'open')).toHaveLength(1);const original=(await calls(page,'open'))[0];
  await page.evaluate(()=>{const e=(window as any).__tailscale;e.receipt=null;e.status.latest=null;});await refresh(page);
- await panel(page).getByRole('button',{name:'Check or retry original request'}).click();expect(await calls(page,'open')).toEqual([original,original]);
+ await panel(page).getByRole('button',{name:'Check or retry original request'}).click();await expect.poll(()=>calls(page,'open')).toHaveLength(2);expect(await calls(page,'open')).toEqual([original,original]);
 });
 test('definite failure requires explicit new choice and never automatically opens',async({page})=>{
- await setup(page,{phase:'not_started'});await open(page);await panel(page).getByRole('button',{name:'Prepare another opening'}).click();expect(await calls(page,'open')).toHaveLength(1);await open(page);const requests=await calls(page,'open');expect(requests[0].request_id).not.toEqual(requests[1].request_id);
+ await setup(page,{phase:'not_started'});await open(page);await panel(page).getByRole('button',{name:'Prepare another opening'}).click();expect(await calls(page,'open')).toHaveLength(1);await open(page);await expect.poll(()=>calls(page,'open')).toHaveLength(2);const requests=await calls(page,'open');expect(requests[0].request_id).not.toEqual(requests[1].request_id);
 });
 for(const option of ['wrongReceipt','wrongScope','storageFailure'])test(`refuse ${option} without accepting another result`,async({page})=>{
  await setup(page,{[option]:true});await open(page);await expect(panel(page).getByText('The latest status or opening result could not be confirmed. Refresh to check; the original request is kept.')).toBeVisible();

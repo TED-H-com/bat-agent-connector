@@ -137,6 +137,7 @@ const ACTIONS = {
   'task.mark_stage': 'action_task_mark_stage',
   'task.request_ted': 'action_task_request_ted',
   'task.submit': 'action_task_submit',
+  'work.start': 'action_work_start',
   'work_item.approve': 'action_work_item_approve',
   'work_item.continue': 'action_work_item_continue',
   'work_item.order': 'action_work_item_order',
