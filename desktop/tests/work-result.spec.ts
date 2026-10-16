@@ -2239,7 +2239,87 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     }));
     expect(active3.isSummary).toBe(true);
   });
+
+  test('31. Part B: 18. Failed diff does not ask BAT again on re-render or re-open without Try again', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workResultFixture();
+    activeFixture = f;
+    const attId = 'att_' + '1'.repeat(32);
+    const commit = 'abcdef1234567890abcdef1234567890abcdef12';
+    const file404 = 'src/file404.ts';
+    const file502 = 'src/file502.ts';
+    const key404 = `${commit}:${file404}`;
+    const key502 = `${commit}:${file502}`;
+
+    f.state.changesResponse = buildChangesResponse({
+      attempt_id: attId,
+      live_head_commit: commit,
+      summary: {
+        commits: [commit],
+        files: [
+          {path: file404, status: 'M', additions: 1, deletions: 0, commits_touched: [commit]},
+          {path: file502, status: 'M', additions: 2, deletions: 0, commits_touched: [commit]},
+        ],
+      },
+    });
+
+    f.state.diffStatusByFile.set(key404, {status: 404});
+    f.state.diffStatusByFile.set(key502, {status: 502});
+
+    await installBodyCompletedCounter(page);
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const resultSection = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+    f.state.expectedChanges = 1;
+    await resultSection.locator('.pm-work-result-read-changes').click();
+
+    const diff404 = resultSection.locator('.pm-work-result-diff-details').first();
+    const diff502 = resultSection.locator('.pm-work-result-diff-details').nth(1);
+
+    // 1. Open 404 diff and 502 diff
+    f.state.expectedDiff = 2;
+    await diff404.locator('summary').click();
+    await diff502.locator('summary').click();
+
+    await expect(diff404.locator('.pm-work-result-diff-notice')).toBeVisible();
+    await expect(diff502.locator('.pm-work-result-retry')).toBeVisible();
+    expect(f.state.diffCallsByFile.get(key404)).toBe(1);
+    expect(f.state.diffCallsByFile.get(key502)).toBe(1);
+
+    // 2. Emit event refresh to re-render the panel
+    const changedEnv = buildResultEnvelope({
+      attempt_id: attId,
+      state: 'process-ended',
+      stage: 'completed',
+    });
+    const beforeResultBodies = await countCompletedBodies(page, '/result');
+    f.emitResultRecorded(attId, changedEnv);
+    await syncCompletedBodies(page, '/result', beforeResultBodies + 1);
+
+    // Diff call count must NOT change after re-render
+    expect(f.state.diffCallsByFile.get(key404)).toBe(1);
+    expect(f.state.diffCallsByFile.get(key502)).toBe(1);
+
+    // 3. Re-opening a failed diff without clicking Try again must NOT ask BAT again
+    await diff502.locator('summary').click(); // close
+    await diff502.locator('summary').click(); // re-open
+    expect(f.state.diffCallsByFile.get(key502)).toBe(1);
+
+    // 4. Click "Try again" on the 502 diff; only then does /diff get called again
+    f.state.diffStatusByFile.delete(key502);
+    f.state.diffResponses.set(key502, buildDiffResponse({commit, path: file502, diff: 'DIFF_RESOLVED'}));
+    f.state.expectedDiff = 3;
+    await diff502.locator('.pm-work-result-retry').click();
+    await expect(diff502.locator('.pm-work-result-diff-pre')).toContainText('DIFF_RESOLVED');
+    expect(f.state.diffCallsByFile.get(key502)).toBe(2);
+  });
 });
+
 
 
 
