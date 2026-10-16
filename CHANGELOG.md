@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Choosing a file does not show Retry while that first upload runs. Retry appears
+  after the upload fails, and pressing it keeps the button until the retry finishes.
+
 - Sending a message, uploading or paging attachments, and starting or recording a
   checkpoint keep keyboard focus on the control that is working. The control looks
   unavailable until that work finishes, and pressing it again does nothing. A

@@ -403,6 +403,8 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
   const snapshot = () => JSON.stringify({text: text.value, attachments: refs(), fields: saved.fields});
   const ready = () => pendingSelections === 0 && saved.attachments.every(a => a.ref);
   const attachmentKeys = new WeakMap();
+  // Set only by a Retry press, so a file's first upload does not show that button.
+  const retrying = new WeakSet();
   let attachmentSerial = 0, catalogBusy = false;
   const attachmentKey = a => {
     let key = attachmentKeys.get(a);
@@ -428,7 +430,11 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
       a.ref && roles ? h("select", {"aria-label": t("attachment_role"), "data-attachment-control": "role", onchange: e => {guard(); a.ref.role = e.target.value; persist();}},
         ...["input", "result"].map(role => h("option", {value: role, selected: (a.ref.role || "input") === role}, t(`attachment_${role}`)))) : null,
       a.ref && native ? native.actions(a.ref) : null,
-      !a.ref && files.has(a) ? h("button", {class: "secondary", "data-attachment-control": "retry", "aria-disabled": a.busy ? "true" : null, onclick: () => upload(a)}, t("retry")) : null,
+      !a.ref && files.has(a) && (!a.busy || retrying.has(a)) ? h("button", {class: "secondary", "data-attachment-control": "retry", "aria-disabled": a.busy ? "true" : null, onclick: () => {
+        if (a.busy) return;
+        retrying.add(a);
+        upload(a);
+      }}, t("retry")) : null,
       h("button", {class: "secondary", "data-attachment-control": "remove", "aria-disabled": a.busy ? "true" : null, onclick: () => {
         guard();
         if (a.busy) return;
@@ -515,6 +521,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
       a.error = e.message;
     } finally {
       delete a.busy;
+      retrying.delete(a);
       if (connection.epoch === state.epoch && connection.generation === generation && box.isConnected) {persist(); render();}
     }
   };
