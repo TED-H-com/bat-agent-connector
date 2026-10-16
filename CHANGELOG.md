@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- An open rename on a new discussion keeps its draft, caret and focus while a background refresh rereads the project lifecycle. Save still commits that local title once.
+
 - PM forms keep keyboard focus on the submit button while an operation is in flight
   or being checked automatically, instead of dropping focus to the page. Pressing
   Enter from a field moves focus to the submit button before fields are locked,

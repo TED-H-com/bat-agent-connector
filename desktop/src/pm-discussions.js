@@ -66,7 +66,7 @@ export function discussionTitle({t, field, form, value, local = false}) {
   finish();
   updateState();
   if (!local && (form.locked() || form.hasDraft() && field.value !== current)) {edit.hidden = false; display.hidden = true;}
-  return {box: h('div', {class: 'pd-title'}, display, edit), finish, updateState, update(next) {
+  return {box: h('div', {class: 'pd-title'}, display, edit), finish, updateState, editing: () => !edit.hidden, update(next) {
     current = next; title.textContent = next; title.title = next; updateState();
     if (restoreFocus && !pencil.disabled) {
       if (document.activeElement === document.body || edit.contains(document.activeElement)) pencil.focus();
