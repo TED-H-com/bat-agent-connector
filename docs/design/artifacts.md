@@ -329,7 +329,11 @@ session ID，附件草稿旁亦可明填這兩個欄位及一個遠端相對檔�
 scope 與 capability 限制 UI 可用按鈕，中央仍重新查核當下 authority／來源。
 
 檢閱區顯示檔名、bytes、SHA-256、host/session、來源 root／repository、HEAD 和到期時間；
-使用者勾選已檢閱並按保存才提交既有 `artifact.capture`。完整 preview、固定 envelope、
+使用者勾選已檢閱並按保存才提交既有 `artifact.capture`。預覽、保存或狀態讀取進行中時，
+預覽、保存、加入附件與「擷取另一個檔案」維持可聚焦並標示忙碌，再按一次不會另送請求；
+按鈕在該工作結束後才依範圍、輸入、意圖、過期、拒絕或進行中的擷取停用。保存結束而按鈕
+關閉，或按下擷取另一個檔案之後，焦點移到下一個可用控制項。畫面已換走的晚到回覆不移動焦點。
+完整 preview、固定 envelope、
 operation key、接受後 operation ID 保存在既有 endpoint/server/principal namespace。
 回覆遺失保留原 key 重試；已接受的意圖不因 preview 過期換新內容。重載以原 operation
 readback 恢復；切換帳號／backend 不沿用別人的草稿或 key。損壞的 preview 不造成整頁失敗，

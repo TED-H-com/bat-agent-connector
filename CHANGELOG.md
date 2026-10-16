@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Capture a remote file: Tab still reaches Preview, Save, Attach and Capture
+  another file while a preview, save or status read is in progress, and the
+  pressed key stays on that button. The button looks unavailable until the
+  work finishes, and a second press is ignored. When Save closes, or Capture
+  another file starts over, focus moves to the next available control.
+
 - Settings → Agents: Tab reaches Check again while the first check runs, and
   pressing it keeps keyboard focus on the button. The button looks unavailable
   until the check finishes, and a second press is ignored.
