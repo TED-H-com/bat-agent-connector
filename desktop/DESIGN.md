@@ -608,8 +608,10 @@ on larger viewports. Its entire header is hidden; the wide table retains its hea
 
 `pm-work-inspector.js` supplies both views (and the future Schedule caller) with
 ordered work sections: Requirements served; Status & ownership; Start work (when the
-`features.pm_workspaces.work_start` capability is available); Latest result;
-Blocker & next step; Delivery; Details. When the card is startable, the inspector
+`features.pm_workspaces.work_start` capability is available); Result (when
+`features.pm_workspaces.work_attempt_results` is available, replacing static result evidence
+with the latest attempt's live result envelope using 0 BAT calls); Blocker & next step;
+Delivery; Details. When the card is startable, the inspector
 header offers a Start work action alongside Discuss that scrolls and focuses the instruction
 field. The Start work panel previews readiness facts, candidate code targets, and requirement
 selection for cards needing plan rebinding with workspace owner permission; durable submissions
@@ -1248,7 +1250,10 @@ its original mapping identity stays in Details. Projects and Resources Work item
 share a creation disclosure, starting closed behind New project or New work item.
 Cancel sits after Add and Review, before the draft note; it closes the form and
 returns focus without discarding the draft. A pending original request stays open
-for receipt recovery. A verified project creation opens its project page for Quick
+for receipt recovery. While Add is sending, it stays in the tab order and keeps
+keyboard focus; it looks unavailable, and a second press does not send another
+request. Enter in a field moves focus to Add before those fields lock. A failed
+or refused request moves focus to Edit request. A verified project creation opens its project page for Quick
 project dispatch. A verified work-item creation refreshes the same list, closes the
 form and returns focus to New work item. Source withdrawal
 hides the form and action together. Project header chips center beside touch-sized

@@ -91,6 +91,9 @@ export function createRecordForm({h, t, api, caps, guard, namespace, kind, proje
   const run = async () => {
     if (busy || damaged || !allowed || !permitted()) return;
     if (!saved.intent && !form.reportValidity()) return;
+    // Implicit submission leaves focus in the field. Move it before that field locks,
+    // or disabling the field drops keyboard focus to the document body.
+    if ([...fields.values()].some(input => input === document.activeElement)) create.focus();
     busy = true; update(); status.replaceChildren();
     let firstAttempt = false;
     try {
@@ -112,6 +115,8 @@ export function createRecordForm({h, t, api, caps, guard, namespace, kind, proje
     } finally {busy = false; try {guard(); update();} catch { /* retired */ }}
   };
   const create = button({variant: 'primary', type: 'submit', label: t(project ? 'add_project' : 'add_item')});
+  // aria-disabled does not block activation. Ignore a second click while this request is in flight.
+  create.addEventListener('click', event => { if (busy) event.preventDefault(); });
   const review = button({variant: 'secondary', hidden: true, label: t('create_edit_request'), onClick: () => {
     guard(); if (busy || !(terminal(operation) || saved.intent?.initialAdmissionRefused)) return;
     try {
@@ -119,14 +124,38 @@ export function createRecordForm({h, t, api, caps, guard, namespace, kind, proje
       receipt.replaceChildren(); status.replaceChildren(); update();
     } catch (error) {status.replaceChildren(errorBox(error, {within:status}));}
   }});
-  const form = h('form', {class: 'panel', 'data-create-record': kind, onsubmit: event => {event.preventDefault(); run();}},
+  const form = h('form', {class: 'panel', 'data-create-record': kind, onsubmit: event => {
+    event.preventDefault();
+    if (busy) return;
+    run();
+  }},
     showScope ? scope : null, compact, advanced, h('div', {class: 'actions'}, create, review, unsaved), status, receipt);
   function update() {
+    const hadCreateFocus = document.activeElement === create;
     for (const input of fields.values()) input.disabled = !allowed || !permitted() || busy || !!saved.intent || damaged;
-    create.disabled = !allowed || !permitted() || busy || damaged || !!saved.intent?.initialAdmissionRefused || !!saved.intent && terminal(operation);
+    // disabled drops keyboard focus to the body. While this request is in flight the
+    // button stays focusable and looks unavailable; other gates apply once it ends.
+    const blocked = !allowed || !permitted() || damaged || !!saved.intent?.initialAdmissionRefused || !!saved.intent && terminal(operation);
+    if (busy) {
+      create.disabled = false;
+      create.setAttribute('aria-disabled', 'true');
+      status.setAttribute('aria-busy', 'true');
+    } else {
+      create.removeAttribute('aria-disabled');
+      status.removeAttribute('aria-busy');
+      create.disabled = blocked;
+    }
     create.textContent = t(saved.intent ? 'create_check_original' : project ? 'add_project' : 'add_item');
     review.hidden = !(saved.intent?.initialAdmissionRefused || saved.intent && terminal(operation) && operation.status !== 'succeeded');
+    // Shown only after the request ends, so busy does not take focus away from it.
     review.disabled = busy || !allowed || !permitted();
+    if (hadCreateFocus && (create.disabled || create.hidden)) {
+      if (!review.hidden && !review.disabled) review.focus();
+      else if (document.activeElement === document.body || document.activeElement === create) {
+        status.tabIndex = -1;
+        status.focus();
+      }
+    }
     onStateChange();
   }
   if (damaged) status.replaceChildren(h('p', {class: 'error'}, t('create_invalid_draft')));
