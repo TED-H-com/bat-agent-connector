@@ -19,6 +19,9 @@ var __exportAll = (all, no_symbols) => {
 	return target;
 };
 //#endregion
+//#region src/workbench-mode.js
+var workbenchEnabled = () => new URLSearchParams(location.search).get("workbench") === "1";
+//#endregion
 //#region src/ui/dom.js
 function place(node, method, ...children) {
 	const kept = children.flat(Infinity).filter((child) => child !== null && child !== void 0 && child !== false);
@@ -164,6 +167,102 @@ function parseDiscussRefs(query) {
 		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
 	};
 }
+//#endregion
+//#region src/workbench-strings.js
+var workbenchStrings$1 = {
+	en: {
+		wc_today: "Today",
+		wc_projects: "Projects",
+		wc_work: "Work",
+		wc_resources: "Resources",
+		wc_management: "Project management",
+		wc_views: "Work views",
+		wc_lineage: "Lineage",
+		wc_live: "Live",
+		wc_goal: "Purpose",
+		wc_observed: "Observed session",
+		wc_related: "Related records",
+		wc_lineage_help: "Recorded links for this work. A link does not imply acceptance or execution order.",
+		wc_no_relations: "No links in the available observation.",
+		wc_coverage: "Only the selected session and its recorded links are shown.",
+		wc_linked: "Linked work",
+		wc_derived: "Continued from a fixed commit",
+		wc_branched: "Branched from work",
+		wc_execution: "Execution record",
+		wc_inspecting: "Inspecting",
+		wc_open: "Open record",
+		wc_source: "Source",
+		wc_now: "Now",
+		wc_next: "Next",
+		wc_waiting: "Waiting",
+		wc_latest: "Last observed",
+		wc_queue_unknown: "Current queue position is not available. Open input receipts for recorded submissions.",
+		wc_no_live: "No current execution confirmed by this observation.",
+		wc_running: "Output is arriving. Follow the conversation or review the available results.",
+		wc_wait: "An answer or decision is needed. Open Work to read the question.",
+		wc_stale: "This observation is out of date. Current execution is unknown.",
+		wc_idle: "No output is arriving. Review the conversation and evidence; this does not confirm completion.",
+		wc_unknown: "Current execution is unknown. Read the available conversation and evidence.",
+		wc_unavailable: "This source could not be refreshed. Open Work to retry; current activity and links are unknown.",
+		wc_failed: "The reported execution failed. Review the original request and its evidence.",
+		wc_details: "Evidence and details",
+		wc_list: "Work list",
+		wc_list_help: "Choose work from the project list.",
+		wc_board: "Board",
+		wc_session: "Session",
+		wc_project: "Project",
+		wc_result: "Results",
+		wc_record: "Work record",
+		wc_candidate: "Workbench preview",
+		wc_classic: "Classic layout"
+	},
+	"zh-TW": {
+		wc_today: "今天",
+		wc_projects: "專案",
+		wc_work: "工作",
+		wc_resources: "執行資源",
+		wc_management: "專案管理",
+		wc_views: "工作視角",
+		wc_lineage: "關聯",
+		wc_live: "現場",
+		wc_goal: "目的",
+		wc_observed: "觀察中的工作階段",
+		wc_related: "關聯紀錄",
+		wc_lineage_help: "這件工作的已記錄連結。連結不代表已驗收，也不代表執行順序。",
+		wc_no_relations: "目前可讀的觀察沒有連結。",
+		wc_coverage: "僅呈現所選工作階段及其已記錄的連結。",
+		wc_linked: "連結的工作",
+		wc_derived: "從固定提交接續",
+		wc_branched: "分支來源工作",
+		wc_execution: "執行紀錄",
+		wc_inspecting: "正在檢視",
+		wc_open: "開啟紀錄",
+		wc_source: "來源",
+		wc_now: "執行中",
+		wc_next: "下一步",
+		wc_waiting: "等待",
+		wc_latest: "最近觀察",
+		wc_queue_unknown: "目前無法取得即時排隊位置。已送出的要求可在輸入回執中查看。",
+		wc_no_live: "這份觀察未確認目前有工作正在執行。",
+		wc_running: "正在收到輸出。可閱讀對話或檢視目前成果。",
+		wc_wait: "有問題或決定需要回覆。切回工作查看原問題。",
+		wc_stale: "這份觀察已過期，目前執行情況未知。",
+		wc_idle: "目前沒有輸出。可檢視對話與證據；這不代表工作已完成。",
+		wc_unknown: "目前執行情況未知。可閱讀已取得的對話與證據。",
+		wc_unavailable: "暫時無法更新這個來源。可切回工作重試；目前活動與關聯未知。",
+		wc_failed: "執行紀錄顯示失敗。請檢視原請求及其證據。",
+		wc_details: "證據與詳情",
+		wc_list: "工作清單",
+		wc_list_help: "從專案清單選擇工作。",
+		wc_board: "看板",
+		wc_session: "工作階段",
+		wc_project: "專案",
+		wc_result: "成果",
+		wc_record: "工作紀錄",
+		wc_candidate: "工作台預覽",
+		wc_classic: "原有版面"
+	}
+};
 //#endregion
 //#region src/work-paths-strings.js
 var workPathsStrings = {
@@ -1429,6 +1528,7 @@ var globalStrings = {
 		action_task_mark_stage: "Mark task stage",
 		action_task_request_ted: "Request a decision",
 		action_task_submit: "Submit task",
+		action_work_start: "Start work",
 		action_work_item_approve: "Approve work item",
 		action_work_item_continue: "Continue work item",
 		action_work_item_order: "Reorder work items",
@@ -1627,6 +1727,7 @@ var globalStrings = {
 		action_task_mark_stage: "標記任務階段",
 		action_task_request_ted: "請求決定",
 		action_task_submit: "提交任務",
+		action_work_start: "開始工作",
 		action_work_item_approve: "核准工作項目",
 		action_work_item_continue: "繼續工作項目",
 		action_work_item_order: "調整工作項目順序",
@@ -7810,6 +7911,7 @@ var createRecordStrings = {
 //#region src/i18n.js
 var STRINGS = {
 	"zh-TW": {
+		...workbenchStrings$1["zh-TW"],
 		...diagnosticsStrings["zh-TW"],
 		...pmStrings["zh-TW"],
 		...createRecordStrings["zh-TW"],
@@ -9454,6 +9556,7 @@ var STRINGS = {
 		integration_PUSH_UNPROVEN: "PR 分支在舊的 head，但組合後的 commit 已在 GitHub 上：之前的推送可能落地後被改回。不會再推一次；請看一下 PR，再取消並重新預覽。"
 	},
 	en: {
+		...workbenchStrings$1.en,
 		...diagnosticsStrings.en,
 		...pmStrings.en,
 		...createRecordStrings.en,
@@ -11847,7 +11950,7 @@ function menu({ button: trigger, items }) {
 	root.dispose = () => close(false);
 	return root;
 }
-var focusables = (root) => [...root.querySelectorAll("a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex=\"0\"]")].filter((node) => node.getClientRects().length && !node.closest("[hidden], [inert]"));
+var focusables = (root) => [...root.querySelectorAll("a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex=\"0\"]")].filter((node) => node.getClientRects().length && !node.closest("[hidden], [inert]") && getComputedStyle(node).visibility === "visible");
 function trapFocus(root, event) {
 	if (event.key !== "Tab") return;
 	const nodes = focusables(root), first = nodes[0], last = nodes.at(-1);
@@ -12105,6 +12208,566 @@ function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expan
 		controls[index].focus();
 	});
 	return root;
+}
+//#endregion
+//#region src/ui/time.js
+var MONTHS = [
+	"Jan",
+	"Feb",
+	"Mar",
+	"Apr",
+	"May",
+	"Jun",
+	"Jul",
+	"Aug",
+	"Sep",
+	"Oct",
+	"Nov",
+	"Dec"
+];
+var DAY$1 = 864e5;
+var zh = (locale) => String(locale || "en").toLowerCase().startsWith("zh");
+function calendarDate(value) {
+	if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+	const [year, month, day] = value.split("-").map(Number);
+	const date = new Date(year, month - 1, day);
+	return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? date : null;
+}
+function parse(value) {
+	if (value == null || value === "" || !(typeof value === "string" || typeof value === "number" || value instanceof Date)) return null;
+	if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !calendarDate(value)) return null;
+	const date = calendarDate(value) || (value instanceof Date ? value : new Date(value));
+	return Number.isFinite(date.getTime()) ? date : null;
+}
+function clock(date, chinese) {
+	const hour = date.getHours(), minute = String(date.getMinutes()).padStart(2, "0");
+	const period = hour < 12 ? chinese ? "上午" : "AM" : chinese ? "下午" : "PM";
+	return chinese ? `${period}${hour % 12 || 12}:${minute}` : `${hour % 12 || 12}:${minute} ${period}`;
+}
+function compactDate(value, { locale = "en", now = Date.now() } = {}) {
+	const date = parse(value);
+	if (!date) return "";
+	const year = date.getFullYear() !== new Date(now).getFullYear() ? date.getFullYear() : null;
+	return zh(locale) ? `${year == null ? "" : `${year}年`}${date.getMonth() + 1}月${date.getDate()}日` : `${MONTHS[date.getMonth()]} ${date.getDate()}${year == null ? "" : `, ${year}`}`;
+}
+function axisDate$1(value, { locale = "en", unit = "day", now = Date.now() } = {}) {
+	const date = parse(value);
+	if (!date) return "";
+	if (unit === "month") return zh(locale) ? `${date.getMonth() + 1}月` : MONTHS[date.getMonth()];
+	return compactDate(date, {
+		locale,
+		now
+	});
+}
+function compactTime(value, { locale = "en", now = Date.now() } = {}) {
+	const date = parse(value);
+	if (!date) return "";
+	const chinese = zh(locale), delta = Number(now) - date.getTime(), distance = Math.abs(delta);
+	if (distance < DAY$1) {
+		if (distance < 6e4) return chinese ? "剛剛" : "just now";
+		const minutes = Math.floor(distance / 6e4), n = minutes < 60 ? minutes : Math.floor(minutes / 60);
+		const unit = minutes < 60 ? chinese ? "分鐘" : "m" : chinese ? "小時" : "h";
+		return chinese ? `${n} ${unit}${delta < 0 ? "後" : "前"}` : delta < 0 ? `in ${n}${unit}` : `${n}${unit} ago`;
+	}
+	return `${compactDate(date, {
+		locale,
+		now
+	})}${chinese ? " " : ", "}${clock(date, chinese)}`;
+}
+function fullTime(value, { locale = "en" } = {}) {
+	const date = parse(value);
+	if (!date) return "";
+	return new Intl.DateTimeFormat(zh(locale) ? "zh-TW" : "en-US", {
+		year: "numeric",
+		month: "long",
+		day: "numeric",
+		hour: "numeric",
+		minute: "2-digit",
+		second: "2-digit",
+		timeZoneName: "long"
+	}).format(date);
+}
+//#endregion
+//#region src/ui/stamps.js
+var instant = (value, milliseconds) => typeof value === "number" ? new Date(value * (milliseconds ? 1 : 1e3)) : value;
+var timeText = (value, options = {}) => (options.dateOnly || calendarDate(value) ? compactDate : compactTime)(instant(value, options.milliseconds), {
+	locale,
+	...options
+});
+var axisDateText = (value, options = {}) => axisDate$1(value, {
+	locale,
+	...options
+});
+function timeStamp(value, options = {}) {
+	const date = instant(value, options.milliseconds), text = timeText(value, options);
+	if (!text) return options.empty ?? "—";
+	const day = calendarDate(date), parsed = day || new Date(date);
+	return h$1("time", {
+		datetime: day ? date : parsed.toISOString(),
+		title: fullTime(parsed, { locale }),
+		"data-ui-time": options.dateOnly || day ? "date" : "instant",
+		...options.attrs
+	}, text);
+}
+function timeLabel(t, key, vars) {
+	const nodes = [], tokens = {};
+	for (const [name, value] of Object.entries(vars)) if (value instanceof Node) {
+		tokens[name] = `\uFFF0${nodes.length}\uFFF1`;
+		nodes.push(value);
+	} else tokens[name] = value;
+	const fragment = document.createDocumentFragment();
+	for (const part of t(key, tokens).split(/(\uFFF0\d+\uFFF1)/)) {
+		const match = /^\uFFF0(\d+)\uFFF1$/.exec(part);
+		fragment.append(match ? nodes[Number(match[1])] : document.createTextNode(part));
+	}
+	return fragment;
+}
+function refreshTimeStamps(root = document, now = Date.now()) {
+	for (const node of root.querySelectorAll("time[data-ui-time]")) {
+		const text = (node.dataset.uiTime === "date" ? compactDate : compactTime)(node.dateTime, {
+			locale,
+			now
+		});
+		if (!text || node.textContent === text) continue;
+		const content = node.firstChild, selection = document.getSelection();
+		if (content?.nodeType !== Node.TEXT_NODE) continue;
+		const anchor = selection?.anchorNode, focus = selection?.focusNode;
+		const anchorOffset = selection?.anchorOffset, focusOffset = selection?.focusOffset;
+		const selected = anchor === content || focus === content, length = content.length;
+		content.data = text;
+		if (selected) {
+			const offset = (target, value) => target !== content ? value : value === length ? text.length : Math.min(value, text.length);
+			selection.setBaseAndExtent(anchor, offset(anchor, anchorOffset), focus, offset(focus, focusOffset));
+		}
+	}
+}
+var started = false;
+function startTimeTicker() {
+	if (started) return;
+	started = true;
+	let timer;
+	const tick = () => {
+		if (!document.hidden) {
+			refreshTimeStamps();
+			timer = setTimeout(tick, 6e4);
+		}
+	};
+	document.addEventListener("visibilitychange", () => {
+		clearTimeout(timer);
+		tick();
+	});
+	tick();
+}
+//#endregion
+//#region src/ui/view-state.js
+var states$1 = new Map();
+function viewState(namespace, workspaceId, view) {
+	const key = JSON.stringify([
+		namespace,
+		workspaceId,
+		view
+	]);
+	const value = states$1.get(key) || {};
+	states$1.delete(key);
+	states$1.set(key, value);
+	if (states$1.size > 40) states$1.delete(states$1.keys().next().value);
+	return value;
+}
+//#endregion
+//#region src/state/sessions.js
+var text$5 = (value) => typeof value === "string" ? value : "";
+function workspaceGroup(session) {
+	const host = text$5(session.host), id = text$5(session.workspace_id), name = text$5(session.workspace);
+	return {
+		key: JSON.stringify([
+			host,
+			id ? "id" : name ? "label" : "unknown",
+			id || name
+		]),
+		host,
+		id,
+		name
+	};
+}
+function groupedSessions(sessions) {
+	const groups = new Map();
+	for (const session of sessions) {
+		const group = workspaceGroup(session);
+		if (!groups.has(group.key)) groups.set(group.key, {
+			...group,
+			sessions: []
+		});
+		groups.get(group.key).sessions.push(session);
+	}
+	return [...groups.values()].sort((a, b) => a.host.localeCompare(b.host) || (a.name || a.id).localeCompare(b.name || b.id) || a.key.localeCompare(b.key));
+}
+function matchesSession(session, query) {
+	const haystack = [
+		session.title,
+		session.session_id,
+		session.host,
+		session.workspace,
+		session.workspace_id,
+		session.agent_kind,
+		session.model,
+		session.worktree_branch,
+		...Array.isArray(session.connector_metadata?.labels) ? session.connector_metadata.labels : []
+	].map(text$5).join("\n").toLocaleLowerCase();
+	return query.trim().toLocaleLowerCase().split(/\s+/).every((word) => haystack.includes(word));
+}
+function runtimeStale(session) {
+	return Boolean(session.stale || session.fields_stale || session.state?.evidence?.activity?.stale);
+}
+function sessionActivity(session) {
+	if (session.pending) return {
+		key: "pending_" + session.pending.kind,
+		tone: "stale"
+	};
+	if (session.api_access === "managed") {
+		const st = session.status || session.state?.status;
+		if (st === "failed" || st === "error") return {
+			key: "op_failed",
+			tone: "bad"
+		};
+		if ([
+			"needs_ted",
+			"needs_you",
+			"needs_attention",
+			"waiting_permission",
+			"awaiting_approval",
+			"uncertain",
+			"blocked"
+		].includes(st)) return {
+			key: "workspace_needs_you",
+			tone: "stale"
+		};
+	}
+	if (session.state?.lifecycle === "ended") return {
+		key: "obs_value_ended",
+		tone: ""
+	};
+	if (session.gone_at || ["gone", "missing"].includes(session.state?.enumeration)) return {
+		key: "sessions_not_seen",
+		tone: "stale"
+	};
+	if (runtimeStale(session)) return {
+		key: "sessions_stale",
+		tone: "stale"
+	};
+	if (session.streaming === true) return {
+		key: "obs_value_streaming",
+		tone: "info"
+	};
+	if (session.streaming === false) return {
+		key: "obs_value_not_streaming",
+		tone: ""
+	};
+	if (session.loaded === false || session.state?.loading === "not_loaded") return {
+		key: "sessions_not_loaded",
+		tone: ""
+	};
+	return {
+		key: "sessions_activity_unknown",
+		tone: ""
+	};
+}
+function sessionStatus(session) {
+	if (!session) return null;
+	const kind = session.pending?.kind;
+	if (kind === "permission" || kind === "ask_user") return "asking_you";
+	if (session.pending) return "needs_you";
+	if (session.api_access === "managed") {
+		const st = session.status || session.state?.status;
+		if (st === "failed" || st === "error") return "failed";
+		if ([
+			"needs_ted",
+			"needs_you",
+			"needs_attention",
+			"waiting_permission",
+			"awaiting_approval",
+			"uncertain",
+			"blocked"
+		].includes(st)) return "needs_you";
+	}
+	if (session.gone_at || ["gone", "missing"].includes(session.state?.enumeration) || runtimeStale(session)) return "stale";
+	if (session.state?.lifecycle !== "ended" && session.streaming === true) return "running";
+	return null;
+}
+function sessionPill(session) {
+	const status = sessionStatus(session);
+	if (status === "asking_you" || status === "needs_you") return {
+		key: "sessions_pill_waiting",
+		tone: "stale",
+		status
+	};
+	if (status === "failed") return {
+		key: "op_failed",
+		tone: "bad",
+		status
+	};
+	if (status === "stale") return {
+		key: "sessions_pill_stale",
+		tone: "stale",
+		status
+	};
+	if (status === "running") return {
+		key: "sessions_pill_running",
+		tone: "info",
+		status
+	};
+	return null;
+}
+//#endregion
+//#region src/workbench-projection.js
+function workbenchProjection(data, record = null) {
+	const session = data.session;
+	if (!session?.host || !session?.session_id) return null;
+	const source = `/sessions/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}`;
+	const href = "#/session/" + [session.host, session.session_id].map(encodeURIComponent).join("/");
+	const stale = runtimeStale(session) || Boolean(session.gone_at) || ["gone", "missing"].includes(session.state?.enumeration);
+	const pill = sessionPill(session);
+	const state = stale ? "stale" : pill?.status === "failed" ? "failed" : session.pending ? "wait" : session.state?.lifecycle !== "ended" && session.streaming === true ? "running" : session.streaming === false ? "idle" : "unknown";
+	const edges = [];
+	for (const item of data.work_items || []) {
+		if (!item.work_item_id) continue;
+		edges.push({
+			key: `item:${item.work_item_id}`,
+			type: "linked",
+			title: item.title,
+			id: item.work_item_id,
+			href: "#/item/" + encodeURIComponent(item.work_item_id),
+			source
+		});
+	}
+	if (data.started_from?.commit_sha && data.started_from?.source_host && data.started_from?.source_session_id) {
+		const from = data.started_from;
+		edges.push({
+			key: "derived:" + from.commit_sha,
+			type: "derived",
+			title: from.commit_sha.slice(0, 12),
+			id: from.commit_sha,
+			href: "#/session/" + [from.source_host, from.source_session_id].map(encodeURIComponent).join("/"),
+			source
+		});
+	}
+	for (const relation of data.relations_summary || []) {
+		if (!relation.execution_id) continue;
+		edges.push({
+			key: "execution:" + relation.execution_id,
+			type: "execution",
+			title: relation.title,
+			id: relation.execution_id,
+			href: "#/task/" + encodeURIComponent(relation.execution_id),
+			source
+		});
+	}
+	const item = record?.work_item;
+	if (record?.derived_from?.work_item_id) {
+		const from = record.derived_from;
+		edges.push({
+			key: "item-derived:" + from.work_item_id,
+			type: "branched",
+			title: from.title,
+			id: from.work_item_id,
+			href: "#/item/" + encodeURIComponent(from.work_item_id),
+			source: "/work-items/" + encodeURIComponent(item.work_item_id)
+		});
+	}
+	return {
+		id: item?.work_item_id || JSON.stringify([session.host, session.session_id]),
+		title: item?.title || session.title,
+		goal: item?.goal || item?.request || "",
+		recordState: item?.completion?.display_state || item?.state || null,
+		href: item ? "#/item/" + encodeURIComponent(item.work_item_id) : href,
+		source,
+		host: session.host,
+		runtime: session.agent_kind,
+		model: session.model,
+		observedAt: session.observed_at,
+		state,
+		pill,
+		managed: session.api_access === "managed" && session.provenance === "connector_managed",
+		edges: [...new Map(edges.map((edge) => [edge.key, edge])).values()]
+	};
+}
+//#endregion
+//#region src/workbench-views.js
+function workbenchViews({ main, head, work, results, namespace, workspace, host, sessionId, workId, t }) {
+	const memory = viewState(namespace, workspace, "workbench:" + (workId || JSON.stringify([host, sessionId])));
+	let projection = null, panel = null, signature = "", inspected = null, updateInspector = null;
+	const summary = h$1("p", {
+		class: "wc-summary",
+		"data-workbench-summary": ""
+	});
+	const goal = h$1("p", {
+		class: "wc-goal",
+		hidden: true
+	});
+	const responsibility = h$1("p", { class: "ui-meta wc-responsibility" });
+	const lineage = h$1("section", {
+		class: "wc-perspective",
+		hidden: true,
+		"data-workbench-lineage": ""
+	});
+	const live = h$1("section", {
+		class: "wc-perspective",
+		hidden: true,
+		"data-workbench-live": ""
+	});
+	const evidence = h$1("div", { class: "session-workspace wc-inspector-host" }, results);
+	const regions = {
+		work,
+		lineage,
+		live
+	};
+	let current = Object.hasOwn(regions, memory.view) ? memory.view : "work";
+	const controls = tabs({
+		label: t("wc_views"),
+		value: current,
+		options: Object.entries(regions).map(([value, region]) => ({
+			value,
+			label: t("wc_" + value),
+			panel: region
+		})),
+		onChange: select
+	});
+	controls.dataset.workbenchViews = "";
+	const bar = h$1("div", { class: "wc-view-bar" }, controls);
+	head.append(goal, responsibility, summary);
+	head.before(bar);
+	work.after(lineage, live, evidence);
+	function select(value) {
+		if (!Object.hasOwn(regions, value)) return;
+		memory.scroll ||= {};
+		memory.scroll[current] = regions[current].scrollTop;
+		panel?.close();
+		if (!results.hidden) results.close();
+		current = memory.view = value;
+		for (const [key, region] of Object.entries(regions)) region.hidden = key !== value;
+		regions[value].scrollTop = memory.scroll[value] || 0;
+	}
+	results.hidden = true;
+	select(current);
+	const edgeControl = (key) => [...lineage.querySelectorAll("[data-edge]")].find((node) => node.dataset.edge === key);
+	const activeTab = () => controls.querySelector("[aria-selected=\"true\"]");
+	function showEdge(edge, opener) {
+		panel?.close();
+		inspected = edge.key;
+		const title = h$1("span"), kind = h$1("p"), name = h$1("p"), link = h$1("a", { class: "ui-button secondary" }, t("wc_open"));
+		const source = h$1("code"), id = h$1("p", { class: "mono" });
+		panel = inspector({
+			title,
+			overlay: true,
+			returnFocus: () => edgeControl(edge.key) || (opener.isConnected ? opener : activeTab()),
+			onClose: () => {
+				panel = null;
+				inspected = null;
+				updateInspector = null;
+			}
+		});
+		panel.dataset.workbenchInspect = edge.key;
+		updateInspector = (next) => {
+			title.textContent = t("wc_inspecting") + " · " + (next.title || t("wc_" + next.type));
+			kind.textContent = t("wc_" + next.type);
+			name.textContent = next.title || next.id;
+			link.href = next.href;
+			source.textContent = next.source;
+			id.textContent = next.id;
+		};
+		updateInspector(edge);
+		panel.body.append(kind, name, link, h$1("details", {}, h$1("summary", {}, t("wc_source")), source, id));
+		main.append(panel);
+	}
+	function card() {
+		return h$1("article", { class: "wc-live-card" }, h$1("h3", {}, projection.title || t("session_untitled")), h$1("p", { class: "ui-meta" }, [
+			projection.host,
+			projection.runtime,
+			projection.model
+		].filter(Boolean).join(" · ")), h$1("p", {}, t("wc_" + projection.state)), h$1("p", { class: "ui-meta" }, t("wc_latest"), " · ", timeStamp(projection.observedAt, { empty: t("obs_unknown") })), button({
+			label: t("wc_work"),
+			size: "sm",
+			"data-live-work": "",
+			onClick: () => {
+				select("work");
+				controls.setValue("work");
+				activeTab()?.focus({ preventScroll: true });
+			}
+		}));
+	}
+	function paint() {
+		if (!projection) return;
+		goal.textContent = projection.goal;
+		goal.hidden = !projection.goal;
+		responsibility.textContent = [
+			t(projection.managed ? "managed" : "read_only"),
+			projection.runtime,
+			projection.host
+		].filter(Boolean).join(" · ");
+		summary.textContent = t("wc_" + projection.state);
+		const focused = lineage.contains(document.activeElement) ? document.activeElement?.dataset.edge : null;
+		const liveFocused = live.contains(document.activeElement) && document.activeElement?.hasAttribute("data-live-work");
+		const edges = projection.edges.slice(0, 30);
+		place(lineage, "replaceChildren", h$1("h2", {}, t("wc_related")), h$1("p", { class: "ui-meta" }, t("wc_lineage_help")), h$1("div", { class: "wc-relations" }, ...edges.map((edge) => {
+			const control = button({
+				variant: "ghost",
+				class: "wc-relation",
+				"data-edge": edge.key,
+				label: h$1("span", {}, h$1("span", { class: "ui-meta" }, t("wc_" + edge.type)), h$1("strong", {}, edge.title || t("wc_" + edge.type))),
+				onClick: () => showEdge(edge, control)
+			});
+			return control;
+		})), h$1("p", { class: "ui-meta" }, t(edges.length ? "wc_coverage" : "wc_no_relations")), projection.edges.length > 30 ? h$1("p", { class: "ui-meta" }, t("attention_loaded", { count: 30 })) : null);
+		if (focused) (edgeControl(focused) || activeTab())?.focus({ preventScroll: true });
+		place(live, "replaceChildren", h$1("h2", {}, projection.host), h$1("p", { class: "ui-meta" }, t("wc_coverage")), h$1("div", { class: "wc-live-lanes" }, ...[
+			"now",
+			"next",
+			"waiting"
+		].map((lane) => h$1("section", { class: "wc-live-lane" }, h$1("h3", {}, t("wc_" + lane)), lane === "now" && projection.state === "running" || lane === "waiting" && projection.state === "wait" ? card() : h$1("p", { class: "ui-meta" }, t(lane === "next" ? "wc_queue_unknown" : "wc_no_live"))))), !["running", "wait"].includes(projection.state) ? card() : null);
+		if (liveFocused) live.querySelector("[data-live-work]")?.focus({ preventScroll: true });
+	}
+	return {
+		update(data, record) {
+			const next = workbenchProjection(data, record), key = JSON.stringify(next);
+			if (key === signature) return;
+			signature = key;
+			projection = next;
+			if (panel) {
+				const edge = projection?.edges.find((edge) => edge.key === inspected);
+				if (!edge) panel.close();
+				else updateInspector(edge);
+			}
+			paint();
+		},
+		fail() {
+			projection = null;
+			signature = "";
+			panel?.close();
+			goal.textContent = "";
+			goal.hidden = true;
+			responsibility.textContent = "";
+			summary.textContent = t("wc_unavailable");
+			for (const region of [lineage, live]) region.replaceChildren(h$1("p", { role: "status" }, t("wc_unavailable")));
+		},
+		withdraw() {
+			projection = null;
+			signature = "";
+			panel?.close();
+			goal.textContent = "";
+			goal.hidden = true;
+			responsibility.textContent = "";
+			summary.textContent = "";
+			lineage.replaceChildren();
+			live.replaceChildren();
+			bar.hidden = true;
+		},
+		restore() {
+			bar.hidden = false;
+			select(current);
+		},
+		dispose() {
+			panel?.dispose();
+		}
+	};
 }
 //#endregion
 //#region src/global-screens.js
@@ -12966,6 +13629,7 @@ function projectViews({ h, t, namespace, workspaceId, groups, view, onSelect = (
 //#endregion
 //#region src/shell.js
 function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, errorBox }) {
+	const candidate = workbenchEnabled();
 	const aside = navigation.box, main = document.getElementById("main"), top = document.querySelector(".top");
 	const toggle = document.getElementById("workspace-menu"), crumb = document.getElementById("nav");
 	const workspaceBlock = h$1("div", { class: "shell-workspace-block" }), projectNav = h$1("div", { class: "shell-project-nav" });
@@ -12973,7 +13637,36 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		class: "shell-all-projects",
 		href: "#/projects"
 	}, t("ui_all_projects")));
-	aside.prepend(workspaceBlock, projectNav, workTitle);
+	const daily = h$1("nav", {
+		class: "wc-daily",
+		"aria-label": t("wc_candidate"),
+		hidden: !candidate
+	});
+	const contextList = h$1("section", {
+		class: "wc-context-list",
+		"aria-label": t("wc_list"),
+		hidden: true
+	});
+	const contextNodes = candidate ? [workTitle, ...aside.querySelectorAll(":scope > .workspace-nav-heading, :scope > .workspace-search, :scope > .workspace-tree-status, :scope > .workspace-binding-note, :scope > .workspace-tree-scroll")] : [];
+	aside.prepend(workspaceBlock, daily, projectNav, workTitle);
+	if (candidate) {
+		aside.after(contextList);
+		document.body.classList.add("workbench-preview");
+	}
+	function locateContext() {
+		if (!candidate) return;
+		const show = [
+			"session",
+			"item",
+			"work",
+			"sessions"
+		].includes(currentRoute);
+		contextList.hidden = !show || !media.matches;
+		const heading = contextNodes.find((node) => node.matches(".workspace-nav-heading"));
+		if (heading) heading.querySelector("strong").textContent = t("wc_work");
+		document.body.classList.toggle("wc-has-list", show);
+		for (const node of contextNodes) (media.matches ? contextList : aside).insertBefore(node, media.matches ? null : aside.querySelector(".workspace-nav-footer"));
+	}
 	let workspace = null, workspaces = [], views = [], currentView = "", currentRoute = "", disposed = false, serial = 0;
 	let renderSignature = null;
 	let menus = [], creator = null, phase = null;
@@ -13027,6 +13720,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 	}
 	function resize() {
 		if (media.matches) closeDrawer(false);
+		locateContext();
 	}
 	document.addEventListener("keydown", keydown, true);
 	media.addEventListener("change", resize);
@@ -13050,6 +13744,8 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 	}, icon("inbox"), pendingCounts[0]);
 	const right = h$1("div", { class: "shell-top-actions" }, pending, document.getElementById("live"));
 	top.append(right);
+	const layoutUrl = new URL(location.href);
+	layoutUrl.searchParams.set("workbench", candidate ? "0" : "1");
 	const tools = menu({
 		button: button({
 			variant: "ghost",
@@ -13066,7 +13762,11 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		].map(([id, key]) => ({
 			label: t(key),
 			href: "#/" + id
-		})).concat(caps()?.features?.pm_workspaces ? [{
+		})).concat([{
+			key: "workbench",
+			label: t(candidate ? "wc_classic" : "wc_candidate"),
+			href: layoutUrl.href
+		}]).concat(caps()?.features?.pm_workspaces ? [{
 			key: "create-workspace",
 			label: t("ui_new_workspace"),
 			href: "#/pm/new"
@@ -13092,26 +13792,35 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 				title: label,
 				"aria-label": `${t("ui_switch_workspace")}: ${label}`
 			}),
-			items: [...workspaces.map((row) => ({
-				label: row.name,
-				href: `#/pm/${row.workspace_id}`
-			})), ...creator && currentRoute === "pm" ? [{
-				label: t("ui_new_workspace"),
-				icon: "plus",
-				onSelect: () => {
-					closeDrawer(false);
-					if (!media.matches) toggle.focus();
-					creator?.();
-				}
-			}] : [{
-				label: t("ui_new_workspace"),
-				href: "#/pm/new"
-			}]]
+			items: [
+				...workspaces.map((row) => ({
+					label: row.name,
+					href: `#/pm/${row.workspace_id}`
+				})),
+				...creator && currentRoute === "pm" ? [{
+					label: t("ui_new_workspace"),
+					icon: "plus",
+					onSelect: () => {
+						closeDrawer(false);
+						if (!media.matches) toggle.focus();
+						creator?.();
+					}
+				}] : [{
+					label: t("ui_new_workspace"),
+					href: "#/pm/new"
+				}],
+				...candidate ? [{
+					label: t("ui_all_projects"),
+					href: "#/projects"
+				}] : []
+			]
 		});
 		menus.push(control);
 		return control;
 	}
 	function render() {
+		layoutUrl.hash = location.hash;
+		tools.querySelector("[data-menu-key=workbench]").href = layoutUrl.href;
 		const signature = JSON.stringify([
 			workspace,
 			workspaces,
@@ -13129,6 +13838,47 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		workspaceBlock.replaceChildren();
 		projectNav.replaceChildren();
 		crumb.replaceChildren();
+		if (candidate) {
+			const project = workspace ? `#/pm/${encodeURIComponent(workspace.workspace_id)}/` : "";
+			const current = currentRoute === "home" ? "today" : [
+				"session",
+				"item",
+				"work",
+				"sessions"
+			].includes(currentRoute) || currentRoute === "pm" && currentView === "board" ? "work" : currentRoute === "pm" && currentView === "agents" ? "resources" : [
+				"pm",
+				"project",
+				"projects"
+			].includes(currentRoute) ? "projects" : "";
+			daily.replaceChildren(...[
+				[
+					"today",
+					"layout-dashboard",
+					"#/home"
+				],
+				[
+					"projects",
+					"folder",
+					project ? project + "overview" : "#/projects"
+				],
+				[
+					"work",
+					"list-checks",
+					project && views.includes("board") ? project + "board" : "#/sessions"
+				],
+				[
+					"resources",
+					"cpu",
+					project && views.includes("agents") ? project + "agents" : "#/settings?section=connection"
+				]
+			].map(([id, glyph, href]) => h$1("a", {
+				class: "ui-button ghost",
+				href,
+				"data-daily": id,
+				"aria-current": id === current ? "page" : "false"
+			}, icon(glyph), t("wc_" + id))));
+			locateContext();
+		}
 		aside.classList.toggle("has-pm-context", Boolean(workspace));
 		workTitle.hidden = !workspace;
 		const createEntry = tools.querySelector("[data-menu-key=create-workspace]");
@@ -13205,7 +13955,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			worktree: "obs_worktree",
 			dispatch: "dispatch_title"
 		}[currentRoute];
-		const routeTitle = routeKey ? t(routeKey) : "";
+		const routeTitle = candidate && currentRoute === "home" ? t("wc_today") : routeKey ? t(routeKey) : "";
 		if (workspace && [
 			"session",
 			"item",
@@ -13234,7 +13984,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			onclick: openDrawer
 		}, workspace?.name || routeTitle));
 		workspaceBlock.hidden = !workspaceBlock.children.length;
-		projectNav.hidden = !projectNav.children.length;
+		projectNav.hidden = candidate || !projectNav.children.length;
 	}
 	let threadCount = null, threadMore = false;
 	function update(context) {
@@ -13351,6 +14101,8 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			top.append(document.getElementById("live"));
 			right.remove();
 			creator = null;
+			contextList.remove();
+			document.body.classList.remove("workbench-preview", "wc-has-list");
 		}
 	};
 }
@@ -13539,155 +14291,6 @@ function stackDailyBuckets(buckets, now = new Date(), bounds) {
 	};
 }
 //#endregion
-//#region src/ui/time.js
-var MONTHS = [
-	"Jan",
-	"Feb",
-	"Mar",
-	"Apr",
-	"May",
-	"Jun",
-	"Jul",
-	"Aug",
-	"Sep",
-	"Oct",
-	"Nov",
-	"Dec"
-];
-var DAY$1 = 864e5;
-var zh = (locale) => String(locale || "en").toLowerCase().startsWith("zh");
-function calendarDate(value) {
-	if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-	const [year, month, day] = value.split("-").map(Number);
-	const date = new Date(year, month - 1, day);
-	return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? date : null;
-}
-function parse(value) {
-	if (value == null || value === "" || !(typeof value === "string" || typeof value === "number" || value instanceof Date)) return null;
-	if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !calendarDate(value)) return null;
-	const date = calendarDate(value) || (value instanceof Date ? value : new Date(value));
-	return Number.isFinite(date.getTime()) ? date : null;
-}
-function clock(date, chinese) {
-	const hour = date.getHours(), minute = String(date.getMinutes()).padStart(2, "0");
-	const period = hour < 12 ? chinese ? "上午" : "AM" : chinese ? "下午" : "PM";
-	return chinese ? `${period}${hour % 12 || 12}:${minute}` : `${hour % 12 || 12}:${minute} ${period}`;
-}
-function compactDate(value, { locale = "en", now = Date.now() } = {}) {
-	const date = parse(value);
-	if (!date) return "";
-	const year = date.getFullYear() !== new Date(now).getFullYear() ? date.getFullYear() : null;
-	return zh(locale) ? `${year == null ? "" : `${year}年`}${date.getMonth() + 1}月${date.getDate()}日` : `${MONTHS[date.getMonth()]} ${date.getDate()}${year == null ? "" : `, ${year}`}`;
-}
-function axisDate$1(value, { locale = "en", unit = "day", now = Date.now() } = {}) {
-	const date = parse(value);
-	if (!date) return "";
-	if (unit === "month") return zh(locale) ? `${date.getMonth() + 1}月` : MONTHS[date.getMonth()];
-	return compactDate(date, {
-		locale,
-		now
-	});
-}
-function compactTime(value, { locale = "en", now = Date.now() } = {}) {
-	const date = parse(value);
-	if (!date) return "";
-	const chinese = zh(locale), delta = Number(now) - date.getTime(), distance = Math.abs(delta);
-	if (distance < DAY$1) {
-		if (distance < 6e4) return chinese ? "剛剛" : "just now";
-		const minutes = Math.floor(distance / 6e4), n = minutes < 60 ? minutes : Math.floor(minutes / 60);
-		const unit = minutes < 60 ? chinese ? "分鐘" : "m" : chinese ? "小時" : "h";
-		return chinese ? `${n} ${unit}${delta < 0 ? "後" : "前"}` : delta < 0 ? `in ${n}${unit}` : `${n}${unit} ago`;
-	}
-	return `${compactDate(date, {
-		locale,
-		now
-	})}${chinese ? " " : ", "}${clock(date, chinese)}`;
-}
-function fullTime(value, { locale = "en" } = {}) {
-	const date = parse(value);
-	if (!date) return "";
-	return new Intl.DateTimeFormat(zh(locale) ? "zh-TW" : "en-US", {
-		year: "numeric",
-		month: "long",
-		day: "numeric",
-		hour: "numeric",
-		minute: "2-digit",
-		second: "2-digit",
-		timeZoneName: "long"
-	}).format(date);
-}
-//#endregion
-//#region src/ui/stamps.js
-var instant = (value, milliseconds) => typeof value === "number" ? new Date(value * (milliseconds ? 1 : 1e3)) : value;
-var timeText = (value, options = {}) => (options.dateOnly || calendarDate(value) ? compactDate : compactTime)(instant(value, options.milliseconds), {
-	locale,
-	...options
-});
-var axisDateText = (value, options = {}) => axisDate$1(value, {
-	locale,
-	...options
-});
-function timeStamp(value, options = {}) {
-	const date = instant(value, options.milliseconds), text = timeText(value, options);
-	if (!text) return options.empty ?? "—";
-	const day = calendarDate(date), parsed = day || new Date(date);
-	return h$1("time", {
-		datetime: day ? date : parsed.toISOString(),
-		title: fullTime(parsed, { locale }),
-		"data-ui-time": options.dateOnly || day ? "date" : "instant",
-		...options.attrs
-	}, text);
-}
-function timeLabel(t, key, vars) {
-	const nodes = [], tokens = {};
-	for (const [name, value] of Object.entries(vars)) if (value instanceof Node) {
-		tokens[name] = `\uFFF0${nodes.length}\uFFF1`;
-		nodes.push(value);
-	} else tokens[name] = value;
-	const fragment = document.createDocumentFragment();
-	for (const part of t(key, tokens).split(/(\uFFF0\d+\uFFF1)/)) {
-		const match = /^\uFFF0(\d+)\uFFF1$/.exec(part);
-		fragment.append(match ? nodes[Number(match[1])] : document.createTextNode(part));
-	}
-	return fragment;
-}
-function refreshTimeStamps(root = document, now = Date.now()) {
-	for (const node of root.querySelectorAll("time[data-ui-time]")) {
-		const text = (node.dataset.uiTime === "date" ? compactDate : compactTime)(node.dateTime, {
-			locale,
-			now
-		});
-		if (!text || node.textContent === text) continue;
-		const content = node.firstChild, selection = document.getSelection();
-		if (content?.nodeType !== Node.TEXT_NODE) continue;
-		const anchor = selection?.anchorNode, focus = selection?.focusNode;
-		const anchorOffset = selection?.anchorOffset, focusOffset = selection?.focusOffset;
-		const selected = anchor === content || focus === content, length = content.length;
-		content.data = text;
-		if (selected) {
-			const offset = (target, value) => target !== content ? value : value === length ? text.length : Math.min(value, text.length);
-			selection.setBaseAndExtent(anchor, offset(anchor, anchorOffset), focus, offset(focus, focusOffset));
-		}
-	}
-}
-var started = false;
-function startTimeTicker() {
-	if (started) return;
-	started = true;
-	let timer;
-	const tick = () => {
-		if (!document.hidden) {
-			refreshTimeStamps();
-			timer = setTimeout(tick, 6e4);
-		}
-	};
-	document.addEventListener("visibilitychange", () => {
-		clearTimeout(timer);
-		tick();
-	});
-	tick();
-}
-//#endregion
 //#region src/label-text.js
 var SENTINEL = /^(?:undefined|null|nan|\[object object\])$/i;
 function labelSegment(value) {
@@ -13844,6 +14447,7 @@ var ACTIONS = {
 	"task.mark_stage": "action_task_mark_stage",
 	"task.request_ted": "action_task_request_ted",
 	"task.submit": "action_task_submit",
+	"work.start": "action_work_start",
 	"work_item.approve": "action_work_item_approve",
 	"work_item.continue": "action_work_item_continue",
 	"work_item.order": "action_work_item_order",
@@ -14484,21 +15088,6 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 			return selection;
 		}
 	};
-}
-//#endregion
-//#region src/ui/view-state.js
-var states$1 = new Map();
-function viewState(namespace, workspaceId, view) {
-	const key = JSON.stringify([
-		namespace,
-		workspaceId,
-		view
-	]);
-	const value = states$1.get(key) || {};
-	states$1.delete(key);
-	states$1.set(key, value);
-	if (states$1.size > 40) states$1.delete(states$1.keys().next().value);
-	return value;
 }
 //#endregion
 //#region src/pr-selector.js
@@ -21561,6 +22150,10 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			}
 		}
 	}
+	const onScroll = () => {
+		if (visible && !busy && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+	};
+	window.addEventListener("scroll", onScroll, { passive: true });
 	function setActive(value) {
 		if (visible === value) {
 			if (value && signature) {
@@ -21576,14 +22169,21 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			stale = true;
 			serial++;
 			detailSerial++;
-			preference.scroll = window.scrollY;
+			if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
 			closeRetaining();
 		} else {
 			const generation = ++scrollGeneration;
 			const read = activate();
 			if (!stale && selected && cards.length) select(selected, false, true);
+			let restoreY = 0;
 			requestAnimationFrame(() => {
-				if (generation === scrollGeneration) window.scrollTo(0, preference.scroll || 0);
+				if (generation === scrollGeneration) {
+					window.scrollTo(0, preference.scroll || 0);
+					restoreY = window.scrollY;
+				}
+			});
+			if (read?.then) read.then(() => {
+				if (generation === scrollGeneration && window.scrollY === restoreY) window.scrollTo(0, preference.scroll || 0);
 			});
 			return read;
 		}
@@ -21679,6 +22279,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			tools = value;
 		},
 		dispose: () => {
+			window.removeEventListener("scroll", onScroll);
 			Object.assign(preference, {
 				selected,
 				expanded: [...expanded],
@@ -22514,7 +23115,7 @@ var defaults = {
 };
 var record$4 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var key$1 = (value, max) => typeof value === "string" && value.length <= max && /^[a-z][a-z0-9_.-]*$/.test(value);
-var text$5 = (value, max) => typeof value === "string" && !!value.trim() && [...value].length <= max && !value.includes("\0");
+var text$4 = (value, max) => typeof value === "string" && !!value.trim() && [...value].length <= max && !value.includes("\0");
 var refs$1 = (values, allowed, min = 1) => Array.isArray(values) && values.length >= min && values.length <= 20 && new Set(values).size === values.length && values.every((value) => allowed.has(value));
 function cyclic(requirements) {
 	const graph = new Map(requirements.map((row) => [row.id, row.depends_on])), active = new Set(), done = new Set();
@@ -22754,10 +23355,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			if (p.document !== null || p.document_digest !== null) throw fail();
 		} else {
 			const d = p.document;
-			if (!/^[0-9a-f]{64}$/.test(p.document_digest) || d?.version !== 1 || !text$5(d.title, 160) || !text$5(d.summary, 8e3) || !Array.isArray(d.candidates) || !d.candidates.length || d.candidates.length > 20 || !Array.isArray(d.requirements) || d.requirements.length > 20 || !Array.isArray(d.questions) || d.questions.length > 3) throw fail();
+			if (!/^[0-9a-f]{64}$/.test(p.document_digest) || d?.version !== 1 || !text$4(d.title, 160) || !text$4(d.summary, 8e3) || !Array.isArray(d.candidates) || !d.candidates.length || d.candidates.length > 20 || !Array.isArray(d.requirements) || d.requirements.length > 20 || !Array.isArray(d.questions) || d.questions.length > 3) throw fail();
 			const keys = new Set();
 			for (const row of d.candidates) {
-				if (!record$4(row) || !key$1(row.key, 60) || keys.has(row.key) || !text$5(row.text, 4e3) || !Object.hasOwn(defaults, row.kind) || !Array.isArray(row.source_refs) || !row.source_refs.length || row.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
+				if (!record$4(row) || !key$1(row.key, 60) || keys.has(row.key) || !text$4(row.text, 4e3) || !Object.hasOwn(defaults, row.kind) || !Array.isArray(row.source_refs) || !row.source_refs.length || row.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
 				keys.add(row.key);
 			}
 			if (!validRequirements(d.requirements, new Set(d.candidates.filter((row) => row.kind !== "excluded").map((row) => row.key)))) throw fail();
@@ -22780,9 +23381,9 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		};
 	}
 	function reviewIssue(value) {
-		if (!active || !record$4(value) || !text$5(value.title, 160) || !Array.isArray(value.rows) || value.rows.some((row) => !record$4(row)) || !Array.isArray(value.requirements) || value.requirements.length > 20 || value.requirements.some((row) => !record$4(row))) return "pcp_missing";
+		if (!active || !record$4(value) || !text$4(value.title, 160) || !Array.isArray(value.rows) || value.rows.some((row) => !record$4(row)) || !Array.isArray(value.requirements) || value.requirements.length > 20 || value.requirements.some((row) => !record$4(row))) return "pcp_missing";
 		const keys = active.document?.candidates?.map((row) => row.key) || [];
-		if (value.rows.length !== keys.length || new Set(value.rows.map((row) => row.key)).size !== keys.length || value.rows.some((row) => !keys.includes(row.key) || !key$1(row.key, 60) || !text$5(row.text, 4e3) || !statuses.includes(row.status) || typeof row.include !== "boolean")) return "pcp_missing";
+		if (value.rows.length !== keys.length || new Set(value.rows.map((row) => row.key)).size !== keys.length || value.rows.some((row) => !keys.includes(row.key) || !key$1(row.key, 60) || !text$4(row.text, 4e3) || !statuses.includes(row.status) || typeof row.include !== "boolean")) return "pcp_missing";
 		const included = new Set(value.rows.filter((row) => row.include).map((row) => row.key));
 		if (!included.size) return "pcp_empty_selection";
 		if (value.requirements.some((row) => Array.isArray(row.acceptance_keys) && !row.acceptance_keys.length)) return "pcp_acceptance_missing";
@@ -32097,7 +32698,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 	const integer = (value) => Number.isSafeInteger(value) && value >= 0;
 	if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error("Invalid Kanban page size");
 	let serial = 0, detailSerial = 0, next = null, reading = false, rows = new Map(), page = null, sources = new Map(), plan = null, earlierPlans = new Map(), milestones = [], pages = 1;
-	let selected = preference.selected || null, active = !embedded, preserveSelection = false, toolItems = () => [], deliveryPages = 1, stale = true;
+	let selected = preference.selected || null, active = !embedded, preserveSelection = false, toolItems = () => [], deliveryPages = 1, stale = true, scrollGeneration = 0;
 	let failureSignature = "";
 	const observers = new Map();
 	const withdrawObservers = () => {
@@ -32234,6 +32835,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		withdrawObservers();
 		++serial;
 		++detailSerial;
+		++scrollGeneration;
 		reading = false;
 		rows.clear();
 		sources.clear();
@@ -32826,6 +33428,10 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		preference.laneScroll = list.scrollLeft;
 		updateEdges();
 	});
+	const onScroll = () => {
+		if (active && !reading && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+	};
+	window.addEventListener("scroll", onScroll, { passive: true });
 	function setActive(value) {
 		const routeId = new URLSearchParams(location.hash.split("?")[1]).get("select");
 		if (active === value) {
@@ -32837,13 +33443,23 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			stale = true;
 			serial++;
 			detailSerial++;
-			preference.scroll = window.scrollY;
+			if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
 			closeRetaining();
 		} else {
+			const generation = ++scrollGeneration;
 			const read = stale || !page ? refresh() : null;
 			if (!read && selected && rows.has(selected)) select(selected, true);
 			list.scrollLeft = preference.laneScroll || 0;
-			requestAnimationFrame(() => window.scrollTo(0, preference.scroll || 0));
+			let restoreY = 0;
+			requestAnimationFrame(() => {
+				if (generation === scrollGeneration) {
+					window.scrollTo(0, preference.scroll || 0);
+					restoreY = window.scrollY;
+				}
+			});
+			if (read?.then) read.then(() => {
+				if (generation === scrollGeneration && window.scrollY === restoreY) window.scrollTo(0, preference.scroll || 0);
+			});
 			return read;
 		}
 	}
@@ -32860,6 +33476,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			toolItems = value;
 		},
 		dispose: () => {
+			window.removeEventListener("scroll", onScroll);
 			resize.disconnect();
 			withdraw({ forgetRoute: false });
 		}
@@ -40638,11 +41255,18 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		"data-pm-work-meta": "",
 		hidden: true
 	});
+	const management = workbenchEnabled() ? h("select", {
+		"aria-label": t("wc_management"),
+		"data-workbench-management": "",
+		onchange: (event) => {
+			location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${event.target.value}`;
+		}
+	}) : null;
 	const heading = pageHeader({
 		title,
 		pill: phasePill,
 		meta: viewMeta,
-		actions: [refresh]
+		actions: [management, refresh].filter(Boolean)
 	});
 	viewMeta.hidden = true;
 	const headerMeta = h("p", {
@@ -40702,6 +41326,16 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"closed"
 		].includes(stage);
 		phasePill.textContent = phasePill.hidden ? "" : t("ui_phase_" + stage);
+		if (management) {
+			const choices = threadId ? availableProjectViews(caps()) : workbench?.views || [];
+			const signature = choices.join(",");
+			if (management.dataset.views !== signature) {
+				management.replaceChildren(...choices.map((id) => h("option", { value: id }, t("ui_" + id))));
+				management.dataset.views = signature;
+			}
+			management.value = threadId ? "discussions" : workbench?.selected() || view || "overview";
+			management.hidden = !workspace || !choices.length;
+		}
 		onContext({
 			workspace,
 			workspaces: lastList,
@@ -43336,150 +43970,6 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	return dispose;
 }
 //#endregion
-//#region src/state/sessions.js
-var text$4 = (value) => typeof value === "string" ? value : "";
-function workspaceGroup(session) {
-	const host = text$4(session.host), id = text$4(session.workspace_id), name = text$4(session.workspace);
-	return {
-		key: JSON.stringify([
-			host,
-			id ? "id" : name ? "label" : "unknown",
-			id || name
-		]),
-		host,
-		id,
-		name
-	};
-}
-function groupedSessions(sessions) {
-	const groups = new Map();
-	for (const session of sessions) {
-		const group = workspaceGroup(session);
-		if (!groups.has(group.key)) groups.set(group.key, {
-			...group,
-			sessions: []
-		});
-		groups.get(group.key).sessions.push(session);
-	}
-	return [...groups.values()].sort((a, b) => a.host.localeCompare(b.host) || (a.name || a.id).localeCompare(b.name || b.id) || a.key.localeCompare(b.key));
-}
-function matchesSession(session, query) {
-	const haystack = [
-		session.title,
-		session.session_id,
-		session.host,
-		session.workspace,
-		session.workspace_id,
-		session.agent_kind,
-		session.model,
-		session.worktree_branch,
-		...Array.isArray(session.connector_metadata?.labels) ? session.connector_metadata.labels : []
-	].map(text$4).join("\n").toLocaleLowerCase();
-	return query.trim().toLocaleLowerCase().split(/\s+/).every((word) => haystack.includes(word));
-}
-function runtimeStale(session) {
-	return Boolean(session.stale || session.fields_stale || session.state?.evidence?.activity?.stale);
-}
-function sessionActivity(session) {
-	if (session.pending) return {
-		key: "pending_" + session.pending.kind,
-		tone: "stale"
-	};
-	if (session.api_access === "managed") {
-		const st = session.status || session.state?.status;
-		if (st === "failed" || st === "error") return {
-			key: "op_failed",
-			tone: "bad"
-		};
-		if ([
-			"needs_ted",
-			"needs_you",
-			"needs_attention",
-			"waiting_permission",
-			"awaiting_approval",
-			"uncertain",
-			"blocked"
-		].includes(st)) return {
-			key: "workspace_needs_you",
-			tone: "stale"
-		};
-	}
-	if (session.state?.lifecycle === "ended") return {
-		key: "obs_value_ended",
-		tone: ""
-	};
-	if (session.gone_at || ["gone", "missing"].includes(session.state?.enumeration)) return {
-		key: "sessions_not_seen",
-		tone: "stale"
-	};
-	if (runtimeStale(session)) return {
-		key: "sessions_stale",
-		tone: "stale"
-	};
-	if (session.streaming === true) return {
-		key: "obs_value_streaming",
-		tone: "info"
-	};
-	if (session.streaming === false) return {
-		key: "obs_value_not_streaming",
-		tone: ""
-	};
-	if (session.loaded === false || session.state?.loading === "not_loaded") return {
-		key: "sessions_not_loaded",
-		tone: ""
-	};
-	return {
-		key: "sessions_activity_unknown",
-		tone: ""
-	};
-}
-function sessionStatus(session) {
-	if (!session) return null;
-	const kind = session.pending?.kind;
-	if (kind === "permission" || kind === "ask_user") return "asking_you";
-	if (session.pending) return "needs_you";
-	if (session.api_access === "managed") {
-		const st = session.status || session.state?.status;
-		if (st === "failed" || st === "error") return "failed";
-		if ([
-			"needs_ted",
-			"needs_you",
-			"needs_attention",
-			"waiting_permission",
-			"awaiting_approval",
-			"uncertain",
-			"blocked"
-		].includes(st)) return "needs_you";
-	}
-	if (session.gone_at || ["gone", "missing"].includes(session.state?.enumeration) || runtimeStale(session)) return "stale";
-	if (session.state?.lifecycle !== "ended" && session.streaming === true) return "running";
-	return null;
-}
-function sessionPill(session) {
-	const status = sessionStatus(session);
-	if (status === "asking_you" || status === "needs_you") return {
-		key: "sessions_pill_waiting",
-		tone: "stale",
-		status
-	};
-	if (status === "failed") return {
-		key: "op_failed",
-		tone: "bad",
-		status
-	};
-	if (status === "stale") return {
-		key: "sessions_pill_stale",
-		tone: "stale",
-		status
-	};
-	if (status === "running") return {
-		key: "sessions_pill_running",
-		tone: "info",
-		status
-	};
-	return null;
-}
-//#endregion
 //#region src/observed-resource-strings.js
 var observedStrings = {
 	en: {
@@ -43670,10 +44160,11 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 		"data-project-create": "",
 		hidden: true
 	}, "+");
+	const heading = h("div", { class: "workspace-nav-heading" }, h("strong", {}, t("nav_projects")), createProject);
 	const box = h("aside", {
 		class: "workspace-nav",
 		"aria-label": t("workspace_navigation")
-	}, h("div", { class: "workspace-nav-heading" }, h("strong", {}, t("nav_projects")), createProject), searchField(search, { class: "workspace-search" }), status, bindingNote, h("div", { class: "workspace-tree-scroll" }, tree, sessionTree), h("div", { class: "workspace-nav-footer" }, h("a", { href: "#/sessions" }, t("workspace_all_sessions")), h("a", { href: "#/projects" }, t("workspace_manage"))));
+	}, heading, searchField(search, { class: "workspace-search" }), status, bindingNote, h("div", { class: "workspace-tree-scroll" }, tree, sessionTree), h("div", { class: "workspace-nav-footer" }, h("a", { href: "#/sessions" }, t("workspace_all_sessions")), h("a", { href: "#/projects" }, t("workspace_manage"))));
 	const alive = () => {
 		guard();
 		if (disposed) throw new Error("Navigation disposed");
@@ -43996,7 +44487,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 			sessionsLoaded = false;
 			status.replaceChildren();
 			sessionTree.hidden = Boolean(id) && !all;
-			box.querySelector(".workspace-nav-heading").hidden = Boolean(id) && !all;
+			heading.hidden = Boolean(id) && !all;
 			render();
 			refresh().catch(() => {});
 		},
@@ -44011,8 +44502,15 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 				revealProject = decodeURIComponent(pid);
 				refresh().catch(() => {});
 			}
-			for (const node of box.querySelectorAll("a")) if (node.getAttribute("href") === hash) node.setAttribute("aria-current", "page");
-			else node.removeAttribute("aria-current");
+			for (const node of new Set([
+				...box.querySelectorAll("a"),
+				...tree.querySelectorAll("a"),
+				...sessionTree.querySelectorAll("a")
+			])) {
+				if (node.closest(".wc-daily")) continue;
+				if (node.getAttribute("href") === hash) node.setAttribute("aria-current", "page");
+				else node.removeAttribute("aria-current");
+			}
 		},
 		dispose() {
 			disposed = true;
@@ -56046,6 +56544,7 @@ function sessionPullHref(target) {
 async function viewSession(main, host, sid, context = null) {
 	const params = new URLSearchParams(location.hash.split("?")[1] || "");
 	let fromQuery = params.get("from") || "";
+	let workRecord = workbenchEnabled() ? context?.workRecord : null;
 	const connection = {
 		epoch: state.epoch,
 		namespace: state.namespace,
@@ -56349,16 +56848,22 @@ async function viewSession(main, host, sid, context = null) {
 	const results = inspector({
 		title: t("session_results"),
 		dock: true,
+		overlay: workbenchEnabled(),
 		returnFocus: () => openResults
 	});
-	const openResults = iconButton({
+	const openResults = workbenchEnabled() ? button({
+		variant: "secondary",
+		icon: "panel-right",
+		label: t("session_results"),
+		onClick: () => results.open()
+	}) : iconButton({
 		icon: "inbox",
 		label: t("session_results"),
 		onClick: () => results.open()
 	});
 	const wide = matchMedia("(min-width: 1200px)");
 	const syncWide = () => {
-		openResults.hidden = wide.matches || Boolean(withdrawn);
+		openResults.hidden = !workbenchEnabled() && wide.matches || Boolean(withdrawn);
 	};
 	syncWide();
 	wide.addEventListener("change", syncWide);
@@ -56375,6 +56880,11 @@ async function viewSession(main, host, sid, context = null) {
 			label: t("ui_more")
 		}),
 		items: [
+			...workbenchEnabled() ? [{
+				key: "interrupt",
+				label: t("interrupt"),
+				content: stop
+			}] : [],
 			{
 				key: "discuss",
 				label: t("ui_discuss"),
@@ -56410,12 +56920,16 @@ async function viewSession(main, host, sid, context = null) {
 			}
 		]
 	});
+	if (workbenchEnabled()) {
+		stop.setAttribute("role", "menuitem");
+		stop.addEventListener("click", () => overflow.close());
+	}
 	const header = pageHeader({
 		title: titleNode,
 		mark: markSlot,
 		pill: pillSlot,
 		meta,
-		actions: [stop, openResults],
+		actions: workbenchEnabled() ? [openResults] : [stop, openResults],
 		overflow
 	});
 	head.append(backSlot, header);
@@ -56449,6 +56963,18 @@ async function viewSession(main, host, sid, context = null) {
 	}, lane, results);
 	const withdrawnSlot = h("div", { class: "session-withdrawn" });
 	main.append(head, workspaceNode);
+	const perspectives = workbenchEnabled() ? workbenchViews({
+		main,
+		head,
+		work: workspaceNode,
+		results,
+		namespace: connection.namespace,
+		workspace: sessionWorkspace || host,
+		host,
+		sessionId: sid,
+		workId: workRecord?.work_item?.work_item_id,
+		t
+	}) : null;
 	const originHref = () => {
 		const view = originView(), workspaceId = sessionWorkspace;
 		return view && workspaceId ? {
@@ -56770,6 +57296,7 @@ async function viewSession(main, host, sid, context = null) {
 		rememberObservation("session", `${host}/${sid}`, data, [
 			`host:${host}`,
 			...(data.work_items || []).map((item) => `work_item:${item.work_item_id}`),
+			...workRecord ? [`work_item:${workRecord.work_item.work_item_id}`] : [],
 			...(data.relations_summary || []).flatMap((relation) => [`execution:${relation.execution_id}`, `task:${relation.execution_id}`]),
 			...data.started_from?.operation_id ? [`operation:${data.started_from.operation_id}`] : []
 		]);
@@ -56777,7 +57304,7 @@ async function viewSession(main, host, sid, context = null) {
 			queue.checked = Boolean(row.streaming);
 			queueKnown = true;
 		}
-		titleNode.textContent = row.title || t("session_untitled");
+		titleNode.textContent = workRecord?.work_item?.title || row.title || t("session_untitled");
 		markSlot.replaceChildren(agentMark(row.agent_kind));
 		const headerPill = sessionPill(row);
 		const pillTone = headerPill?.tone === "stale" ? "warn" : headerPill?.tone || "neutral";
@@ -56899,6 +57426,7 @@ async function viewSession(main, host, sid, context = null) {
 				href: "#/settings?section=agents"
 			}, t("paths_mcp")));
 		} else readonly.textContent = t("session_readonly_unknown");
+		perspectives?.update(data, workRecord);
 		renderPending();
 		updateControls();
 	};
@@ -56911,6 +57439,17 @@ async function viewSession(main, host, sid, context = null) {
 		let data;
 		try {
 			data = await api("GET", path);
+			if (workRecord && current()) {
+				const id = workRecord.work_item.work_item_id;
+				const next = await api("GET", `/work-items/${encodeURIComponent(id)}`);
+				if (!current()) return;
+				const linked = next.links?.some((link) => {
+					const target = link.target?.found ? link.kind === "session" ? link.target : link.kind === "operation" ? link.target.session : null : null;
+					return target?.host === host && target?.session_id === sid;
+				});
+				if (next.work_item?.work_item_id !== id || !linked) throw new ApiError(404, "WORK_LINK_REMOVED", t("workspace_work_missing"));
+				workRecord = next;
+			}
 		} catch (error) {
 			if ([
 				403,
@@ -57016,6 +57555,7 @@ async function viewSession(main, host, sid, context = null) {
 	const withdraw = (kind, error = null) => {
 		const first = !withdrawn;
 		withdrawn = kind;
+		perspectives?.withdraw();
 		withdrawalVersion += 1;
 		clearTimeout(retryTimer);
 		retryTimer = null;
@@ -57026,7 +57566,7 @@ async function viewSession(main, host, sid, context = null) {
 		cps.clear();
 		deliveryKnown.clear();
 		state.observations?.delete(`session:${host}/${sid}`);
-		if (first && !results.hidden && !wide.matches) results.close();
+		if (first && !results.hidden && (!wide.matches || workbenchEnabled())) results.close();
 		conversation.clear();
 		pending.replaceChildren();
 		pendingIdentity = void 0;
@@ -57060,6 +57600,7 @@ async function viewSession(main, host, sid, context = null) {
 	};
 	const reinstate = () => {
 		withdrawn = "";
+		perspectives?.restore();
 		withdrawnSlot.remove();
 		if (context?.picker) context.picker.hidden = false;
 		head.after(workspaceNode);
@@ -57097,6 +57638,7 @@ async function viewSession(main, host, sid, context = null) {
 				updateControls();
 				readError?.remove();
 				const messagesFailed = messageFailure === error;
+				if (!messagesFailed) perspectives?.fail();
 				readError = sessionErrorBox(error, {
 					label: t("ui_retry"),
 					run: () => refresh().catch(() => {})
@@ -57151,6 +57693,7 @@ async function viewSession(main, host, sid, context = null) {
 	});
 	return () => {
 		disposed = true;
+		perspectives?.dispose();
 		clearTimeout(retryTimer);
 		off();
 		instructions?.dispose();
@@ -60980,7 +61523,8 @@ async function viewLinkedWorkItem(main, wid, host, sid) {
 	const offSession = await viewSession(main, selected.host, selected.session_id, {
 		project: data.project,
 		itemBox,
-		picker
+		picker,
+		workRecord: data
 	});
 	try {
 		assertView(connection);

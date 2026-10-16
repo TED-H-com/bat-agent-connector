@@ -55,6 +55,7 @@ for(const native of [false,true])test.describe(native?'native governance workspa
     await editor.getByRole('button',{name:'Save finding',exact:true}).click();await expect(editor).toContainText('Reply unavailable');
     const request=structuredClone(f.governance.state.writes[0]);await page.reload();await openPmSection(page, 'issues');
     await action(page,'record').getByRole('button',{name:'Check original request',exact:true}).click();
+    await expect.poll(() => f.governance.state.writes.length).toBe(2);
     expect(f.governance.state.writes.at(-1)).toEqual(request);expect(f.governance.state.ops.size).toBe(1);
     await expect(page.locator('[data-pm-governance-detail]')).toContainText('Verify recovery before release');
   });

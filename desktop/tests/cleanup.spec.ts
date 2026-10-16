@@ -83,6 +83,7 @@ for (const native of [false, true]) {
     await expect(page.getByRole('combobox', {name: 'Choose a scope'})).toHaveValue('task');
     await expect(page.getByRole('textbox', {name: 'Host name or original ID'})).toHaveValue(tid);
     await page.getByRole('button', {name: 'Preview cleanup', exact: true}).click();
+    await expect.poll(() => previews.length).toBe(1);
     expect(previews[0].target).toEqual({kind: 'task', task_id: tid});
     await expect(page.locator('article.cleanup-resource').getByRole('checkbox', {name: /uncommitted|Discard/i})).toHaveCount(0);
     await expect(page.locator('article.cleanup-resource input[type=checkbox]')).toHaveCount(1);

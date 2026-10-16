@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- The Windows fixture-helper test injects a deterministic clock into its deadline and
+  retry helpers, making transient read recovery independent of runner speed and slow
+  .NET exception unwinds.
+
+- Keyboard focus stays inside an inspector while its content is still loading, instead of leaving the dialog for the page.
+
 - Add the `work.start` compound action, read-only `pm_work_start_preview` and
   immutable `work_attempts` reads (`pm_work_attempts_list`, `pm_work_attempt_get`)
   to start a bound Work item in its own managed BAT worktree and session from a
@@ -17,6 +23,17 @@
   preview again), or `PM_WORK_START_OUTCOME_UNPROVEN` (check the Work's sessions
   on BAT before starting again), alongside unready requirement and foreign
   controller checks.
+
+- Conversation adoption advances as each original child operation finishes,
+  removing the fixed one-second pause between completed steps. Child failures
+  still stop the adoption; recovery keeps the original requests and receipts.
+
+- Tools → Workbench preview opens a reversible layout with Today, Projects,
+  Work and Resources, a project management selector and an optional Results
+  inspector. Work, Lineage and Live preserve the same conversation and draft,
+  reading recorded links and activity from the existing Connector sources.
+  Unknown queue state and source withdrawal remain explicit. The classic layout
+  stays the default; this is not the completed v1.3 execution or live acceptance.
 
 - Existing discussions offer Send to PM for ordinary native or BAT PM analysis,
   Save note only for a stored note, and Make a plan for an explicit proposal.
@@ -128,6 +145,12 @@
 
 - The Windows installed-fixture self-test gives its UIA probe compile and run a 60-second
   budget, prints which phase is running, and reports the timeout or exit code when it fails.
+
+- The UX-A07 feature-map test waits for destination view containers and heading updates
+  before recording classic headings, preventing stale headings captured during route transitions.
+
+- The UX-A05 deep-link test waits for PM views to settle before each scroll, departure and
+  return step, so it no longer scrolls while a view is still reading.
 
 - Unsigned macOS desktop packaging logs `bundle_dmg.sh` with `--verbose` and retries the same
   build once after detaching only this job's leftover `/Volumes` images.

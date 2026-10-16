@@ -14,7 +14,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   const integer = value => Number.isSafeInteger(value) && value >= 0;
   if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error('Invalid Kanban page size');
   let serial = 0, detailSerial = 0, next = null, reading = false, rows = new Map(), page = null, sources = new Map(), plan = null, earlierPlans = new Map(), milestones = [], pages = 1;
-  let selected = preference.selected || null, active = !embedded, preserveSelection = false, toolItems = () => [], deliveryPages = 1, stale = true;
+  let selected = preference.selected || null, active = !embedded, preserveSelection = false, toolItems = () => [], deliveryPages = 1, stale = true, scrollGeneration = 0;
   let failureSignature = '';
   const observers = new Map();
   const withdrawObservers = () => {for (const observer of observers.values()) observer.withdraw();};
@@ -68,7 +68,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   function closeRetaining() {preserveSelection = true; detail.close(); preserveSelection = false;}
   function withdraw({forgetRoute = true, keepStatus = false} = {}) {
     withdrawObservers();
-    ++serial; ++detailSerial; reading = false; rows.clear(); sources.clear(); page = null; next = null; plan = null; earlierPlans.clear(); milestones = [];
+    ++serial; ++detailSerial; ++scrollGeneration; reading = false; rows.clear(); sources.clear(); page = null; next = null; plan = null; earlierPlans.clear(); milestones = [];
     if (!keepStatus) {failureSignature = ''; status.replaceChildren();}
     if (forgetRoute) writeSelection(null);
     closeRetaining(); list.replaceChildren(); meta.replaceChildren(); boardInfo.replaceChildren(); more.hidden = true; more.disabled = false; refreshButton.disabled = false; element.removeAttribute('aria-busy');
@@ -352,11 +352,35 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   }
   const resize = new ResizeObserver(() => {updateEdges(); if (detail.element && selected) {const node = rows.get(selected)?.node; if (node) requestAnimationFrame(() => revealCard(node));}}); resize.observe(list);
   list.addEventListener('scroll', () => {preference.laneScroll = list.scrollLeft; updateEdges();});
+  const onScroll = () => {
+    if (active && !reading && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+  };
+  window.addEventListener('scroll', onScroll, {passive: true});
   function setActive(value) {
     const routeId = new URLSearchParams(location.hash.split('?')[1]).get('select');
     if (active === value) {if (value && routeId && routeId !== selected) void select(routeId); return;} active = value;
-    if (!value) {stale = true; serial++; detailSerial++; preference.scroll = window.scrollY; closeRetaining();}
-    else {const read = stale || !page ? refresh() : null; if (!read && selected && rows.has(selected)) void select(selected, true); list.scrollLeft = preference.laneScroll || 0; requestAnimationFrame(() => window.scrollTo(0, preference.scroll || 0)); return read;}
+    if (!value) {stale = true; serial++; detailSerial++; if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY; closeRetaining();}
+    else {
+      const generation = ++scrollGeneration;
+      const read = stale || !page ? refresh() : null;
+      if (!read && selected && rows.has(selected)) void select(selected, true);
+      list.scrollLeft = preference.laneScroll || 0;
+      let restoreY = 0;
+      requestAnimationFrame(() => {
+        if (generation === scrollGeneration) {
+          window.scrollTo(0, preference.scroll || 0);
+          restoreY = window.scrollY;
+        }
+      });
+      if (read?.then) {
+        void read.then(() => {
+          if (generation === scrollGeneration && window.scrollY === restoreY) {
+            window.scrollTo(0, preference.scroll || 0);
+          }
+        });
+      }
+      return read;
+    }
   }
-  return {element, box: element, meta, refresh, titleFor, withdraw, setActive, hideInspector: closeRetaining, setTools: value => {toolItems = value;}, dispose: () => {resize.disconnect(); withdraw({forgetRoute: false});}};
+  return {element, box: element, meta, refresh, titleFor, withdraw, setActive, hideInspector: closeRetaining, setTools: value => {toolItems = value;}, dispose: () => {window.removeEventListener('scroll', onScroll); resize.disconnect(); withdraw({forgetRoute: false});}};
 }

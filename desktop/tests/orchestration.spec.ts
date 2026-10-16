@@ -95,7 +95,7 @@ test('delayed host and session reads cannot replace the newer choice; editing cl
   await form.getByRole('combobox', {name: 'Host', exact: true}).selectOption('other'); await expect(form.getByRole('combobox', {name: 'Workspace', exact: true})).toBeEnabled();
   await form.getByRole('combobox', {name: 'Workspace', exact: true}).selectOption('other-ws'); state.holdDiscovery();
   await fillOrchestration(form, 'planner'); await expect(primary(form)).toBeEnabled(); await form.getByRole('textbox').fill('Changed instruction'); await expect(primary(form)).toBeDisabled();
-  await form.locator('.orch-check input').last().check(); await primary(form).click(); expect(state.posts[0].body.target).toEqual({host: 'other', workspace: 'other-ws'});
+  await form.locator('.orch-check input').last().check(); await primary(form).click(); await expect.poll(() => state.posts.length).toBe(1); expect(state.posts[0].body.target).toEqual({host: 'other', workspace: 'other-ws'});
 });
 test('storage failure prevents first mutation and new principal cannot recover another credential draft', async ({page}) => {
   const state = await orchestrationFixture(page, false); const form = await openOrchestration(page, 'relay'); await chooseTarget(form, 'relay'); await fillOrchestration(form, 'relay');
@@ -125,16 +125,16 @@ test('late first-session identity cannot enable a changed unconfirmed target', a
   const state = await orchestrationFixture(page, false, {delaySession: 'managed-exact'}); const form = await openOrchestration(page, 'relay');
   await chooseTarget(form, 'relay'); await expect.poll(() => Boolean(state.holdSelection)).toBe(true);
   await form.getByRole('combobox', {name: 'Exact managed session'}).evaluate((el: HTMLSelectElement) => {el.value = 'managed-second'; el.dispatchEvent(new Event('change', {bubbles: true}));});
-  await fillOrchestration(form, 'relay'); state.holdSelection(); await primary(form).click();
+  await fillOrchestration(form, 'relay'); state.holdSelection(); await primary(form).click(); await expect.poll(() => state.posts.length).toBe(1);
   expect(state.posts[0].body.target.session_id).toBe('managed-second');
 });
 test('generic admission errors retain the original key; proven tier refusal alone permits a new intent', async ({page}) => {
   const state = await orchestrationFixture(page, false, {refuse: 'CONFLICT'}); const form = await openOrchestration(page, 'planner');
   await chooseTarget(form, 'planner'); await fillOrchestration(form, 'planner'); await primary(form).click(); await expect(form).toContainText('Fixture refusal');
   await expect(form.getByRole('button', {name: 'Prepare another request'})).toBeHidden();
-  state.refuse = 'TIER_DISABLED'; await form.getByRole('button', {name: 'Retry original request'}).click();
+  state.refuse = 'TIER_DISABLED'; await form.getByRole('button', {name: 'Retry original request'}).click(); await expect.poll(() => state.posts.length).toBe(2);
   expect(state.posts[1]).toEqual(state.posts[0]); await expect(form.getByRole('button', {name: 'Prepare another request'})).toBeVisible();
-  state.refuse = null; await form.getByRole('button', {name: 'Prepare another request'}).click(); await fillOrchestration(form, 'planner'); await primary(form).click();
+  state.refuse = null; await form.getByRole('button', {name: 'Prepare another request'}).click(); await fillOrchestration(form, 'planner'); await primary(form).click(); await expect.poll(() => state.posts.length).toBe(3);
   expect(state.posts[2].idempotency_key).not.toBe(state.posts[0].idempotency_key);
 });
 test('combined UTF-8 request limit refuses oversized reviewed items before persisting an intent', async ({page}) => {

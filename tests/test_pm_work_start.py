@@ -2593,3 +2593,44 @@ async def test_work_attempts_list_get_visibility_and_capabilities(world, mock):
     assert next(a for a in cap_no_start["actions"] if a["action"] == "work.start")["allowed"] is False
 
 
+async def test_work_start_journal_only_admission_and_child_git_execution(start_ready):
+    from bat_agent_connector import host_git
+
+    w = start_ready
+    ops = w["d"].ops
+    runner = host_git.HostGitRunner(w["d"]._config, {"h1": "h1-bat"}, server_id="fixture-server")
+    ops.context["git_runner"] = runner
+
+    env = await _start_envelope(w, key="start-git-exec")
+    parent, created = ops.create(STARTER_OWNER, **env)
+    assert created is True
+    # The admitted work.start operation's external_refs.admission_binding has no git_execution
+    assert "git_execution" not in (parent["external_refs"].get("admission_binding") or {})
+
+    # Execute parent step 1 (admits pm.work_package.create child), execute package child,
+    # then execute parent step 2 (admits repository.continue handoff child).
+    await ops._execute(parent["operation_id"])
+    pkg_id = ops.db.execute(
+        "SELECT operation_id FROM pm_work_start_children WHERE parent_id=? AND slot='package'",
+        (parent["operation_id"],),
+    ).fetchone()[0]
+    await ops._execute(pkg_id)
+    await ops._execute(parent["operation_id"])
+
+    # work.start parent still has no git_execution
+    refreshed_parent = ops.get(parent["operation_id"])
+    assert "git_execution" not in (refreshed_parent["external_refs"].get("admission_binding") or {})
+
+    # The admitted repository.continue child does have git_execution
+    handoff_row = ops.db.execute(
+        "SELECT operation_id FROM pm_work_start_children WHERE parent_id=? AND slot='handoff'",
+        (parent["operation_id"],),
+    ).fetchone()
+    assert handoff_row is not None
+    handoff_op = ops.get(handoff_row[0])
+    assert handoff_op["action"] == "repository.continue"
+    handoff_git_exec = (handoff_op["external_refs"].get("admission_binding") or {}).get("git_execution")
+    assert handoff_git_exec is not None
+    assert handoff_git_exec == {"h1": runner.execution_binding("h1")}
+
+

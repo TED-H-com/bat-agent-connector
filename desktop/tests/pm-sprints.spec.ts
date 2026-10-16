@@ -80,6 +80,7 @@ test('developer changes own How while preserving another developer and does not 
   await expect(editor.getByLabel('Member login',{exact:true})).toBeDisabled();await editor.getByLabel('Password recovery',{exact:true}).check();
   await editor.getByLabel('Implementation approach for Password recovery',{exact:true}).fill('Use my own CLI and check reset expiry');
   await reason(page,name);await editor.getByRole('button',{name:'Save work selection',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
   expect(f.state.writes.map((row:any)=>row.body.action)).toEqual([name]);expect(f.state.writes[0].body.params.items).toEqual([
     {binding_id:f.bindings[0].binding_id,assignee:'owner',how:'Verify login in my own environment'},
     {binding_id:f.bindings[1].binding_id,assignee:'developer',how:'Use my own CLI and check reset expiry'}]);
@@ -95,6 +96,7 @@ test('lost start acknowledgement remains recoverable after active state and relo
   await action(page,'pm.sprint.start').getByRole('button',{name:'Start Sprint',exact:true}).click();await expect(action(page,'pm.sprint.start')).toContainText('Reply unavailable');
   await page.reload();await boot(page);
   await action(page,'pm.sprint.start').getByRole('button',{name:'Check original request',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(2);
   expect(f.state.ops.size).toBe(1);expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key);
 });
 test('unsent draft freezes on remote version change and keeps its baseline across remount',async({page})=>{
@@ -107,6 +109,7 @@ test('unsent draft freezes on remote version change and keeps its baseline acros
   await expect(action(page,'pm.sprint.cancel').getByRole('button',{name:'Cancel Sprint',exact:true})).toBeDisabled();
   await page.getByRole('button',{name:'Review updated baseline',exact:true}).click();await openAction(page,'pm.sprint.cancel');
   await action(page,'pm.sprint.cancel').getByRole('button',{name:'Cancel Sprint',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
   expect(f.state.writes[0].body.preconditions).toEqual({expected_version:9});
 });
 test('close only after elapsed period preserves unknown quality and does not claim Review',async({page})=>{
@@ -129,6 +132,7 @@ test('artifact revisions use adopted plan, ordered bindings and exact head witho
   const f=fixture();await mount(page,f);const name='pm.product_goal.revise';await openAction(page,name);
   await action(page,name).getByLabel('Product Goal',{exact:true}).fill('A clear next direction <script>literal</script>');await reason(page,name);
   await action(page,name).getByRole('button',{name:'Save Product Goal revision',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
   expect(f.state.writes[0].body.params.plan_revision_id).toBe(planId);expect(f.state.writes[0].body.preconditions.expected_revision_id).toMatch(/^pmgoal_1+$/);
   await expect(page.locator('[data-pm-sprints]')).toContainText('A returning member can sign in');
   await expect(page.locator('[data-pm-sprints] script')).toHaveCount(0);
@@ -149,6 +153,7 @@ test('Product Backlog ordering is explicit and preserves fixed Sprint work',asyn
   const f=fixture();await mount(page,f);const name='pm.backlog.revise';await openAction(page,name);
   const editor=action(page,name);await editor.getByRole('button',{name:'Earlier',exact:true}).nth(1).click();await reason(page,name);
   await editor.getByRole('button',{name:'Save Product Backlog revision',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
   expect(f.state.writes[0].body.params.binding_ids).toEqual([f.bindings[1].binding_id,f.bindings[0].binding_id]);
   expect(f.state.sprints[0].selected[0].binding_id).toBe(f.bindings[0].binding_id);
 });
@@ -156,6 +161,7 @@ test('DoD revisions keep unchanged criterion IDs and never assess quality',async
   const f=fixture();await mount(page,f);const name='pm.dod.revise';await openAction(page,name);
   await action(page,name).getByLabel('Shared quality criteria, one per line',{exact:true}).fill('Relevant tests verify the fixed change\nPassword reset expires as specified');
   await reason(page,name);await action(page,name).getByRole('button',{name:'Save DoD revision',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
   const request=f.state.writes[0].body;expect(request.params.criteria[0].id).toBe('tests');expect(request.params.criteria[1].id).toMatch(/^criterion_[0-9a-f]{32}$/);
   expect(request.preconditions.expected_revision_id).toMatch(/^pmdod_1+$/);await expect(page.locator('[data-pm-sprints]')).toContainText('DoD is unassessed');
 });
@@ -167,6 +173,7 @@ test('changed adopted plan cannot silently rebind an unsent Product Goal draft a
   await expect(action(page,name).getByLabel('Product Goal',{exact:true})).toHaveValue('Retain this product direction');
   await page.getByRole('button',{name:'Review updated baseline',exact:true}).click();await openAction(page,name);
   await action(page,name).getByRole('button',{name:'Save Product Goal revision',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
   expect(f.state.writes[0].body.params.plan_revision_id).toBe(f.state.planId);
 });
 test('product commitment history loads exact revisions without authorizing work',async({page})=>{
