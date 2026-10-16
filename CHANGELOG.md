@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- A Board that was already left no longer clears another project's selected Work when its own read fails.
+
 - PM forms keep keyboard focus on the submit button while an operation is in flight
   or being checked automatically, instead of dropping focus to the page. Pressing
   Enter from a field moves focus to the submit button before fields are locked,
