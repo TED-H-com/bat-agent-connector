@@ -53,16 +53,16 @@ async def test_http_and_rpc_native_analysis_recover_original_reply_and_native_pr
     assert shown == op
     # docs/design/v1.3-e10-parity.md, a succeeded discussion action (pm.run.analyze).
     assert loop == {
-        "operation_id": op["operation_id"],  # :238
-        "work_item_id": None,  # :225, :239
-        "attempt_id": None,  # :240
-        "state": {"operation_status": "succeeded", "updated_at": op["updated_at"]},  # :241-243
-        "next_allowed_actions": [],  # :266-267, terminal omits cancel
-        "blocked_actions": [],  # :266-267
-        "links": None,  # :246
-        "dashboard_hash": f"#/pm/{target['workspace_id']}/discussions/{target['thread_id']}",  # :247, :259
-        "result_read": None,  # :248
-        "completeness": {"status": "complete", "reason": None},  # :232, :292
+        "operation_id": op["operation_id"],  # :225, :240
+        "work_item_id": None,  # :221, :226, :241
+        "attempt_id": None,  # :227, :242
+        "state": {"operation_status": "succeeded", "updated_at": op["updated_at"]},  # :228, :243-245
+        "next_allowed_actions": [],  # :229, :269 terminal omits cancel
+        "blocked_actions": [],  # :230, :269
+        "links": None,  # :231, :248
+        "dashboard_hash": f"#/pm/{target['workspace_id']}/discussions/{target['thread_id']}",  # :232, :249, :261
+        "result_read": None,  # :233, :250
+        "completeness": {"status": "complete", "reason": None},  # :234, :294
     }
     path = f"/api/v1/pm/workspaces/{target['workspace_id']}/threads/{target['thread_id']}"
     status, thread = await http(port, "GET", path, tok=auth)
