@@ -62,6 +62,32 @@ async function browserPreview(bytes) {
   return {text};
 }
 
+// Tab or a click elsewhere is the person's focus. Hiding the pressed control
+// moves focus to the body; only that case is handed to the next control.
+export function retainFocus(button) {
+  if (!(button instanceof HTMLElement) || document.activeElement !== button) return () => {};
+  let moved = false;
+  const onKeyDown = event => {
+    if (['Tab', 'Escape', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) moved = true;
+  };
+  const onPointerDown = event => {
+    const target = event.target;
+    if (target !== button && !(target instanceof Node && button.contains(target))) moved = true;
+  };
+  document.addEventListener('keydown', onKeyDown, true);
+  document.addEventListener('pointerdown', onPointerDown, true);
+  return (successor, fallback, alive = true) => {
+    document.removeEventListener('keydown', onKeyDown, true);
+    document.removeEventListener('pointerdown', onPointerDown, true);
+    if (!alive || moved) return;
+    const usable = node => Boolean(node && node.isConnected && !node.closest('[hidden]') && !node.disabled);
+    const target = usable(button) ? button : usable(successor) ? successor : fallback;
+    if (!target || !target.isConnected) return;
+    if (target === fallback) fallback.tabIndex = -1;
+    if (document.activeElement !== target) target.focus();
+  };
+}
+
 export function artifactContent({h, t, api, guard, getArtifact, canRead, validArtifact, readBrowser}) {
   const status = h('p', {class: 'muted', role: 'status'}), transfers = h('div'), preview = h('div', {class: 'file-preview', hidden: true});
   const box = h('div', {class: 'artifact-content'}), receipts = new Map(), controller = new AbortController();
@@ -123,7 +149,9 @@ export function artifactContent({h, t, api, guard, getArtifact, canRead, validAr
     return row;
   }
   async function perform(action) {
-    if (busy) return;
+    const button = action === 'preview' ? peek : save;
+    if (busy || button.getAttribute('aria-disabled') === 'true') return;
+    const settle = retainFocus(button);
     busy = true; update(); status.textContent = t('ar_content_reading');
     try {
       const row = await fresh(), ref = reference(row);
@@ -157,7 +185,7 @@ export function artifactContent({h, t, api, guard, getArtifact, canRead, validAr
         link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
         status.textContent = t('ar_content_downloaded');
       }
-    } catch (error) {fail(error);} finally {busy = false; update();}
+    } catch (error) {fail(error);} finally {busy = false; update(); settle(null, status, !disposed);}
   }
   const peek = h('button', {class: 'secondary', onclick: () => perform('preview')}, t('files_preview'));
   const save = h('button', {class: 'secondary', onclick: () => perform('save')}, t(nativeDesktop ? 'files_save' : 'ar_content_download'));
@@ -167,7 +195,12 @@ export function artifactContent({h, t, api, guard, getArtifact, canRead, validAr
     const next = getArtifact(), changed = !same(current, next);
     if (changed) {current = next; close(); receipts.clear(); renderTransfers(); clearTimeout(timer); status.textContent = '';}
     box.hidden = !next;
-    peek.disabled = save.disabled = busy || !next || !canRead() || nativeDesktop && !nativeFileSupport;
+    const blocked = !next || !canRead() || nativeDesktop && !nativeFileSupport;
+    for (const button of [peek, save]) {
+      if (busy) {button.disabled = false; button.setAttribute('aria-disabled', 'true');}
+      else {button.removeAttribute('aria-disabled'); button.disabled = blocked;}
+    }
+    if (busy) status.setAttribute('aria-busy', 'true'); else status.removeAttribute('aria-busy');
     if (next && nativeDesktop && !nativeFileSupport) status.textContent = t('ar_content_native_unavailable');
     if (changed && next && nativeDesktop && nativeFileSupport) queueMicrotask(() => refresh().catch(fail));
   }

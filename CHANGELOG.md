@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Artifact review keeps keyboard focus on the button you pressed while a
+  preview, save, review, source reload, catalog page, or file read is in
+  progress. The button looks unavailable and a second press is ignored. When
+  that button closes, focus moves to Check original operations, Capture
+  another file, Record another review, the execution list, or the review text.
+
 - Settings → Agents: Tab reaches Check again while the first check runs, and
   pressing it keeps keyboard focus on the button. The button looks unavailable
   until the check finishes, and a second press is ignored.

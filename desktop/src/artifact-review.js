@@ -1,6 +1,6 @@
 import {actionLabel} from './global-labels.js';
 import {disclosure, pageHeader} from './ui/components.js';
-import {artifactContent} from "./artifact-content.js";
+import {artifactContent, retainFocus} from "./artifact-content.js";
 // Managed capture and exact-revision review are separate central operations.
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const ordered = value => record(value) ? Object.fromEntries(Object.keys(value).sort().map(k => [k, ordered(value[k])])) : Array.isArray(value) ? value.map(ordered) : value;
@@ -82,6 +82,11 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
   receipt.value = saved.reviewText;
   const reviewed = h('input', {type: 'checkbox', onchange: () => update()});
   const currentView = () => {try {guard(); return !disposed;} catch {return false;}};
+  const inert = button => button.getAttribute('aria-disabled') === 'true';
+  function gate(button, flight, blocked) {
+    if (flight) {button.disabled = false; button.setAttribute('aria-disabled', 'true');}
+    else {button.removeAttribute('aria-disabled'); button.disabled = Boolean(blocked);}
+  }
   const persist = (required = false) => {guard(); try {localStorage.setItem(storageKey, JSON.stringify(saved)); return true;}
     catch {if (required) throw new Error(t('ar_storage')); return false;} };
   const showError = error => {if (currentView()) notice.replaceChildren(errorBox(error, {within:notice}));};
@@ -152,36 +157,46 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
   }
   async function submit(kind) {
     if (busy || refreshing || readFailed || !saved[kind]?.request) return;
-    guard(); busy = true; update();
-    let finish; submission = new Promise(resolve => {finish = resolve;});
+    const button = kind === 'capture' ? capture : accept;
+    const settle = retainFocus(button);
     try {
-      persist(true); const intent = saved[kind];
-      const result = intent.operation_id ? await api('GET', `/operations/${intent.operation_id}`)
-        : await api('POST', '/operations?wait=3', intent.request, intent.key);
-      guard(); await adopt(kind, result.operation); notice.replaceChildren();
-    } catch (error) {
-      if (!currentView()) return;
-      const safe = kind === 'capture' ? ['PREVIEW_EXPIRED', 'PREVIEW_TOKEN_INVALID', 'PREVIEW_MISMATCH', 'INVALID_PARAMS']
-        : ['INVALID_PARAMS', 'ARTIFACT_REVISION_MISMATCH', 'ARTIFACT_LINEAGE_UNPROVEN'];
-      if (!saved[kind].operation_id && error.status >= 400 && error.status < 500 && safe.includes(error.code)) saved[kind].refused = error.code;
-      persist(); showError(error);
-      if (kind === 'capture' && error.status === 403) notice.append(h('p', {class: 'muted'}, t('ar_original_credential')));
-    } finally {busy = false; finish(); submission = null; if (currentView()) render();}
+      guard(); busy = true; update();
+      let finish; submission = new Promise(resolve => {finish = resolve;});
+      try {
+        persist(true); const intent = saved[kind];
+        const result = intent.operation_id ? await api('GET', `/operations/${intent.operation_id}`)
+          : await api('POST', '/operations?wait=3', intent.request, intent.key);
+        guard(); await adopt(kind, result.operation); notice.replaceChildren();
+      } catch (error) {
+        if (!currentView()) return;
+        const safe = kind === 'capture' ? ['PREVIEW_EXPIRED', 'PREVIEW_TOKEN_INVALID', 'PREVIEW_MISMATCH', 'INVALID_PARAMS']
+          : ['INVALID_PARAMS', 'ARTIFACT_REVISION_MISMATCH', 'ARTIFACT_LINEAGE_UNPROVEN'];
+        if (!saved[kind].operation_id && error.status >= 400 && error.status < 500 && safe.includes(error.code)) saved[kind].refused = error.code;
+        persist(); showError(error);
+        if (kind === 'capture' && error.status === 403) notice.append(h('p', {class: 'muted'}, t('ar_original_credential')));
+      } finally {busy = false; finish(); submission = null; if (currentView()) render();}
+    } finally {
+      const successor = saved[kind]?.operation_id ? check : saved[kind]?.refused ? (kind === 'capture' ? reset : newReview) : null;
+      settle(successor, notice, currentView());
+    }
   }
   const preview = h('button', {class: 'secondary', onclick: async () => {
-    if (busy || frozen() || !source || !scope('observe') || !supported() || !safePath(path.value) || !selectorValid(saved.selector)) return;
-    guard(); const ticket = ++revision, fixed = structuredClone(input()); busy = true; saved.preview = null; reviewed.checked = false; update();
+    if (inert(preview) || busy || frozen() || !source || !scope('observe') || !supported() || !safePath(path.value) || !selectorValid(saved.selector)) return;
+    const settle = retainFocus(preview);
     try {
-      const {selector, ...fields} = fixed;
-      const {preview: doc} = await api('POST', '/artifact-managed-capture-previews', {...fields, ...selector}); guard();
-      if (ticket !== revision) return;
-      if (!validPreview(doc, fixed)) throw new Error(t('capture_invalid_preview'));
-      saved.preview = doc; readFailed = false; persist(); notice.replaceChildren();
-    } catch (error) {if (ticket === revision) showError(error);}
-    finally {busy = false; if (currentView()) render();}
+      guard(); const ticket = ++revision, fixed = structuredClone(input()); busy = true; saved.preview = null; reviewed.checked = false; update();
+      try {
+        const {selector, ...fields} = fixed;
+        const {preview: doc} = await api('POST', '/artifact-managed-capture-previews', {...fields, ...selector}); guard();
+        if (ticket !== revision) return;
+        if (!validPreview(doc, fixed)) throw new Error(t('capture_invalid_preview'));
+        saved.preview = doc; readFailed = false; persist(); notice.replaceChildren();
+      } catch (error) {if (ticket === revision) showError(error);}
+      finally {busy = false; if (currentView()) render();}
+    } finally {settle(null, notice, currentView());}
   }}, t('capture_preview'));
   const capture = h('button', {class: 'primary', onclick: () => {
-    if (busy || refreshing || readFailed || !mayCapture() || saved.capture?.operation_id || saved.capture?.refused) return;
+    if (inert(capture) || busy || refreshing || readFailed || !mayCapture() || saved.capture?.operation_id || saved.capture?.refused) return;
     guard(); if (!saved.capture) {
       const doc = saved.preview;
       if (!doc || !reviewed.checked || doc.expires_at * 1000 <= Date.now() || !validPreview(doc, input())) return;
@@ -192,36 +207,53 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
     submit('capture');
   }}, t('capture_save'));
   const accept = h('button', {class: 'primary', onclick: () => {
-    if (busy || refreshing || readFailed || !artifact || !mayAccept() || saved.accept?.operation_id || saved.accept?.refused || !receipt.value.trim() || [...receipt.value].length > 2000) return;
+    if (inert(accept) || busy || refreshing || readFailed || !artifact || !mayAccept() || saved.accept?.operation_id || saved.accept?.refused || !receipt.value.trim() || [...receipt.value].length > 2000) return;
     guard(); if (!saved.accept) saved.accept = {key: crypto.randomUUID(), actor: caps().actor,
       request: {action: 'artifact.accept', target: {artifact_id: artifact.artifact_id, revision: artifact.revision},
         params: {digest: artifact.digest, source_fingerprint: artifact.source.fingerprint, receipt: receipt.value}, preconditions: {}},
       expected: {capture_operation_id: artifact.source.operation_id, source_commit: artifact.source.evidence.head_sha, lineage: artifact.source.source.lineage}};
     submit('accept');
   }}, t('ar_accept'));
-  const check = h('button', {class: 'secondary', onclick: () => refresh(true).catch(showError)}, t('ar_check'));
+  const check = h('button', {class: 'secondary', onclick: () => {
+    if (inert(check)) return;
+    const settle = retainFocus(check);
+    refresh(true).catch(showError).finally(() => settle(null, notice, currentView()));
+  }}, t('ar_check'));
   const reload = h('button', {class: 'secondary', onclick: async () => {
-    if (busy || refreshing || frozen()) return;
+    if (inert(reload) || busy || refreshing || frozen()) return;
+    const settle = retainFocus(reload);
     busy = true; update();
     try {await loadSource(); guard(); readFailed = false; notice.replaceChildren();}
     catch (error) {showError(error);}
-    finally {busy = false; if (currentView()) render();}
+    finally {busy = false; const alive = currentView(); if (alive) render(); settle(null, notice, alive);}
   }}, t('ar_refresh_sources'));
   const reset = h('button', {class: 'secondary', onclick: async () => {
-    guard(); if (busy || refreshing || readFailed || active('capture') || active('accept')) return;
-    saved = {relative_path: path.value, selector: null, reviewText: ''}; artifact = source = null;
-    candidates.clear(); pages.clear();
-    operations.capture = operations.accept = null; reviewed.checked = false; receipt.value = ''; revision++;
-    persist(); notice.replaceChildren(); renderChoice(); busy = true; render();
-    try {await loadSource();}
-    catch (error) {showError(error);}
-    finally {busy = false; if (currentView()) render();}
+    if (inert(reset)) return;
+    const settle = retainFocus(reset);
+    try {
+      guard(); if (busy || refreshing || readFailed || active('capture') || active('accept')) return;
+      saved = {relative_path: path.value, selector: null, reviewText: ''}; artifact = source = null;
+      candidates.clear(); pages.clear();
+      operations.capture = operations.accept = null; reviewed.checked = false; receipt.value = ''; revision++;
+      persist(); notice.replaceChildren(); renderChoice(); busy = true; render();
+      try {await loadSource();}
+      catch (error) {showError(error);}
+      finally {busy = false; if (currentView()) render();}
+    } finally {settle(choice, notice, currentView());}
   }}, t('capture_new'));
   const newReview = h('button', {class: 'secondary', onclick: () => {
-    guard(); if (busy || refreshing || readFailed || active('accept')) return;
-    saved.accept = null; operations.accept = null; persist(); render();
+    if (inert(newReview)) return;
+    const settle = retainFocus(newReview);
+    try {
+      guard(); if (busy || refreshing || readFailed || active('accept')) return;
+      saved.accept = null; operations.accept = null; persist(); render();
+    } finally {settle(receipt, notice, currentView());}
   }}, t('ar_new_review'));
-  const moreExecutions = h('button', {class: 'secondary', onclick: () => loadExecutions(true).catch(showError)}, t('ar_more_executions'));
+  const moreExecutions = h('button', {class: 'secondary', onclick: () => {
+    if (inert(moreExecutions)) return;
+    const settle = retainFocus(moreExecutions);
+    loadExecutions(true).catch(showError).finally(() => settle(null, notice, currentView()));
+  }}, t('ar_more_executions'));
   const content = artifactContent({h, t, api, guard, getArtifact: () => artifact, canRead: () => scope('observe') && !readFailed, validArtifact, readBrowser});
   const reviewPanel = h('section', {class: 'panel', 'data-artifact-accept': ''}, h('h2', {}, t('ar_review_title')), reviewFacts,
     content.box, h('p', {class: 'muted'}, t('ar_accept_help')), h('label', {}, t('ar_receipt'), receipt),
@@ -230,34 +262,41 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
     h('div', {class: 'capture-fields'}, h('label', {}, t('ar_execution'), choice), h('label', {}, t('capture_path'), path)), custom,
     h('div', {class: 'actions'}, reload, moreExecutions, preview), evidence,
     h('label', {class: 'capture-choice'}, reviewed, t('capture_review')), h('div', {class: 'actions'}, capture, reset));
-  const moreArtifacts = h('button', {class: 'secondary', hidden: true, onclick: () => loadCatalog(true).catch(e => catalogNotice.replaceChildren(errorBox(e, {within:catalogNotice})))}, t('more'));
+  const moreArtifacts = h('button', {class: 'secondary', hidden: true, onclick: () => {
+    if (inert(moreArtifacts)) return;
+    const settle = retainFocus(moreArtifacts);
+    loadCatalog(true).catch(e => catalogNotice.replaceChildren(errorBox(e, {within:catalogNotice}))).finally(() => settle(null, notice, currentView()));
+  }}, t('more'));
   const catalogPanel = h('section', {class: 'panel'}, h('h2', {}, t('ar_catalog')), catalog, catalogNotice, h('div', {class: 'actions'}, moreArtifacts));
   container.append(pageHeader({title: t('ar_title')}), disclosure({label: t('global_details'), body: h('p', {}, t('ar_help'))}), capturePanel, reviewPanel,
     h('div', {class: 'actions'}, check), outcome, notice, catalogPanel);
 
   function update() {
     content.update();
-    const fixed = busy || frozen();
+    const fixed = busy || frozen(), flight = busy || Boolean(refreshing);
     for (const field of [path, choice, customType, customId]) field.disabled = fixed;
     customTask.disabled = fixed || customType.value !== 'command';
-    preview.disabled = busy || frozen() || !source || !scope('observe') || !supported() || !safePath(path.value) || !selectorValid(saved.selector);
+    gate(preview, busy, frozen() || !source || !scope('observe') || !supported() || !safePath(path.value) || !selectorValid(saved.selector));
     reviewed.disabled = busy || Boolean(saved.capture) || !saved.preview || saved.preview.expires_at * 1000 <= Date.now();
     reviewed.closest('label').hidden = Boolean(saved.capture) || !saved.preview;
     capture.hidden = Boolean(saved.capture?.operation_id || saved.capture?.refused);
     capture.textContent = saved.capture ? t('capture_check') : t('capture_save');
-    capture.disabled = busy || Boolean(refreshing) || readFailed || !mayCapture() || !source || Boolean(saved.capture && !saved.capture.request) ||
-      (!saved.capture && (!saved.preview || !reviewed.checked || saved.preview.expires_at * 1000 <= Date.now()));
+    gate(capture, flight, readFailed || !mayCapture() || !source || Boolean(saved.capture && !saved.capture.request) ||
+      (!saved.capture && (!saved.preview || !reviewed.checked || saved.preview.expires_at * 1000 <= Date.now())));
     receipt.disabled = busy || Boolean(saved.accept) || !artifact;
     accept.hidden = Boolean(saved.accept?.operation_id || saved.accept?.refused);
     accept.textContent = saved.accept ? t('ar_check_accept') : t('ar_accept');
-    accept.disabled = busy || Boolean(refreshing) || readFailed || !artifact || !mayAccept() || !receipt.value.trim() || [...receipt.value].length > 2000 || Boolean(saved.accept && !saved.accept.request);
+    gate(accept, flight, readFailed || !artifact || !mayAccept() || !receipt.value.trim() || [...receipt.value].length > 2000 || Boolean(saved.accept && !saved.accept.request));
     check.hidden = !saved.capture?.operation_id && !saved.accept?.operation_id && context.kind !== 'artifact';
-    check.disabled = busy || Boolean(refreshing);
-    reset.hidden = !saved.capture; reset.disabled = busy || Boolean(refreshing) || readFailed || Boolean(active('capture') || active('accept'));
-    newReview.hidden = !saved.accept; newReview.disabled = busy || Boolean(refreshing) || readFailed || Boolean(active('accept'));
-    moreExecutions.disabled = busy || frozen();
-    reload.disabled = busy || frozen();
+    gate(check, flight, false);
+    reset.hidden = !saved.capture; gate(reset, flight, readFailed || Boolean(active('capture') || active('accept')));
+    newReview.hidden = !saved.accept; gate(newReview, flight, readFailed || Boolean(active('accept')));
+    gate(moreExecutions, busy, frozen());
+    gate(reload, busy, frozen());
     moreExecutions.hidden = ![...pages.values()].some(value => value !== null);
+    gate(moreArtifacts, Boolean(catalogReading), false);
+    if (flight) notice.setAttribute('aria-busy', 'true'); else notice.removeAttribute('aria-busy');
+    if (catalogReading) catalogPanel.setAttribute('aria-busy', 'true'); else catalogPanel.removeAttribute('aria-busy');
   }
   function render() {
     if (!currentView()) return;
@@ -368,10 +407,11 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
         `${row.display_name || row.artifact_id} · r${row.revision}`), h('code', {}, row.digest))));
       moreArtifacts.hidden = !catalogCursor; catalogNotice.replaceChildren();
       if (!rows.size) catalog.append(h('p', {class: 'muted'}, t('ar_no_artifacts')));
-    })(); moreArtifacts.disabled = true;
+    })();
+    if (currentView()) update();
     try {await catalogReading;}
     catch (error) {if (currentView()) catalogNotice.replaceChildren(errorBox(error, {within:catalogNotice})); throw error;}
-    finally {catalogReading = null; moreArtifacts.disabled = false;}
+    finally {catalogReading = null; if (currentView()) update();}
   }
   async function refresh(fresh = false) {
     if (submission) {await submission; guard();}
