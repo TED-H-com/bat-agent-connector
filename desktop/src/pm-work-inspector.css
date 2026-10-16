@@ -26,7 +26,11 @@
 .pm-work-start-checks li { margin: var(--space-1) 0; }
 .pm-work-start-checks p { margin: var(--space-1) 0 0 var(--space-3); }
 .pm-work-start-reqs { display: flex; flex-direction: column; gap: var(--space-1); margin: var(--space-2) 0; }
-.pm-work-start-req { display: flex; align-items: center; gap: var(--space-2); }
+.pm-shell label.pm-work-start-req,
+.pm-work-start-panel label.pm-work-start-req,
+.pm-work-start-req { display: flex; flex-direction: row; align-items: center; gap: var(--space-2); }
+.pm-work-start-req input[type="checkbox"] { margin: 0; flex-shrink: 0; }
+.pm-work-start-req-text { flex: 1; min-width: 0; }
 .pm-work-start-links { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin: var(--space-2) 0; }
 .pm-work-start-options { margin-top: var(--space-2); display: flex; flex-direction: column; gap: var(--space-2); }
 .pm-work-start-panel :is(.pm-work-start-attempts, .pm-work-start-bind, .pm-work-start-candidates, .pm-work-start-facts-box, .pm-work-start-checks-box, .pm-work-start-status, [role="status"]):empty { display: none; }

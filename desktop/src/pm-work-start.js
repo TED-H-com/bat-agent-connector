@@ -109,19 +109,6 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     return writer(card);
   };
 
-  function getSavedIntentReqs(workId) {
-    try {
-      const storageKey = `batc.pm.${namespace}.work-start.work.start.${JSON.stringify({workspace_id: workspaceId, work_item_id: workId})}`;
-      const raw = localStorage.getItem(storageKey);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (parsed?.intent?.request?.params?.requirement_ids) {
-        return parsed.intent.request.params.requirement_ids;
-      }
-    } catch {}
-    return null;
-  }
-
   async function fetchAttempts(workId, ticket) {
     let after = '';
     let pages = 0;
@@ -213,13 +200,15 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         case 'cancelled':
           statusWord = t('wst_status_cancelled');
           break;
-        default:
-          statusWord = t('ui_status_unknown');
+        default: {
+          const statusText = attempt.status ? operationStatusLabel(attempt.status) : '';
+          statusWord = attempt.stage ? (statusText ? `${attempt.stage} — ${statusText}` : attempt.stage) : t('ui_status_unknown');
           break;
+        }
       }
     }
 
-    if (attempt.status === 'start_failed' || attempt.stage === 'start_failed') {
+    if (attempt.stage === 'start_failed') {
       if (attempt.error_code) {
         const panelKey = 'wst_error_' + attempt.error_code;
         const globalKey = 'error_code_' + attempt.error_code;
@@ -399,13 +388,28 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         return;
       }
       const curRevision = curPlan.revision_id;
+      function getLockedIntentReqs() {
+        if (!editorInstance?.locked()) return null;
+        try {
+          const rev = JSON.parse(reviewInput.value || '');
+          if (Array.isArray(rev?.requirement_ids)) {
+            return rev.requirement_ids;
+          }
+        } catch {}
+        return null;
+      }
+
       if (!initial && curRevision === renderedPlanRevision) {
         if (editorInstance?.locked()) {
-          const intentReqs = getSavedIntentReqs(card.work_item_id);
+          const intentReqs = getLockedIntentReqs();
           if (intentReqs) {
             const set = new Set(intentReqs);
             for (const cb of checkboxes) {
               cb.checked = set.has(cb.value);
+              cb.disabled = true;
+            }
+          } else {
+            for (const cb of checkboxes) {
               cb.disabled = true;
             }
           }
@@ -429,8 +433,10 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
           checkedIds = new Set(restored);
         } else {
           checkedIds = new Set((card.binding?.requirement_ids || []).filter(id => planReqIds.has(id)));
-          requirementsInput.value = JSON.stringify([...checkedIds]);
-          requirementsInput.dataset.pmDefault = JSON.stringify([...checkedIds]);
+          if (!editorInstance?.locked()) {
+            requirementsInput.value = JSON.stringify([...checkedIds]);
+            requirementsInput.dataset.pmDefault = JSON.stringify([...checkedIds]);
+          }
         }
       } else {
         const prevChecked = checkboxes.filter(cb => cb.checked).map(cb => cb.value);
@@ -445,7 +451,12 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
 
       renderedPlanRevision = curRevision;
       checkboxes = [];
-      const reqWarning = h('p', {class: 'error', hidden: checkedIds.size > 0}, t('wst_requirements_required'));
+
+      const isLocked = editorInstance?.locked();
+      const intentReqs = isLocked ? getLockedIntentReqs() : null;
+      const lockedSet = intentReqs ? new Set(intentReqs) : null;
+      const hasSelected = lockedSet ? lockedSet.size > 0 : checkedIds.size > 0;
+      const reqWarning = h('p', {class: 'error', hidden: hasSelected}, t('wst_requirements_required'));
 
       const updateSelectedReqs = () => {
         const selected = checkboxes.filter(cb => cb.checked).map(cb => cb.value);
@@ -459,10 +470,6 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         onFingerprintChanged();
       };
 
-      const isLocked = editorInstance?.locked();
-      const intentReqs = isLocked ? getSavedIntentReqs(card.work_item_id) : null;
-      const lockedSet = intentReqs ? new Set(intentReqs) : null;
-
       const list = h('div', {class: 'pm-work-start-reqs'},
         h('h4', {}, t('wst_requirements_to_bind')),
         ...planReqs.map(req => {
@@ -471,7 +478,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
           if (isLocked) cb.disabled = true;
           cb.addEventListener('change', updateSelectedReqs);
           checkboxes.push(cb);
-          return h('label', {class: 'pm-work-start-req'}, cb, req.text || req.id);
+          return h('label', {class: 'pm-work-start-req'}, cb, h('span', {class: 'pm-work-start-req-text'}, req.text || req.id));
         }),
         reqWarning,
       );
@@ -514,6 +521,32 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         disabledNotice.hidden = true;
       }
     };
+
+    function renderCandidateSelector(candidates, selectedKey, includePlaceholder = false) {
+      const options = candidates.map((c, i) => {
+        return h('option', {value: String(i)}, `${c.repository} · ${c.host} · ${c.workspace_id}`);
+      });
+      if (includePlaceholder) {
+        options.unshift(h('option', {value: ''}, t('wst_choose_candidate')));
+      }
+      const select = h('select', {
+        'aria-label': t('wst_choose_candidate'),
+        'data-work-start-candidate': '',
+      }, ...options);
+
+      if (selectedKey) {
+        const idx = candidates.findIndex(c => `${c.repository}:${c.host}:${c.workspace_id}` === selectedKey);
+        if (idx >= 0) select.value = String(idx);
+      }
+
+      select.addEventListener('change', () => {
+        if (select.value === '') return;
+        const idx = Number(select.value);
+        chosenCandidate = candidates[idx];
+        void inspectReadiness();
+      });
+      return h('label', {}, t('wst_choose_candidate'), select);
+    }
 
     async function inspectReadiness() {
       if (checking || loading || !writer(card)) return;
@@ -570,24 +603,8 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
             candidatesBox.replaceChildren(h('p', {class: 'muted', 'data-work-start-no-candidates': ''}, t('wst_no_candidates')));
             candidatesBox.hidden = false;
           } else {
-            const select = h('select', {
-              'aria-label': t('wst_choose_candidate'),
-              'data-work-start-candidate': '',
-            }, h('option', {value: ''}, t('wst_choose_candidate')),
-            ...candidates.map((c, i) => h('option', {value: String(i)}, `${c.repository} · ${c.host} · ${c.workspace_id}`)));
-
-            if (chosenCandidate) {
-              const idx = candidates.findIndex(c => c.repository === chosenCandidate.repository && c.host === chosenCandidate.host && c.workspace_id === chosenCandidate.workspace_id);
-              if (idx >= 0) select.value = String(idx);
-            }
-
-            select.addEventListener('change', () => {
-              if (select.value === '') return;
-              const idx = Number(select.value);
-              chosenCandidate = candidates[idx];
-              void inspectReadiness();
-            });
-            candidatesBox.replaceChildren(h('label', {}, t('wst_choose_candidate'), select));
+            const chosenKey = chosenCandidate ? `${chosenCandidate.repository}:${chosenCandidate.host}:${chosenCandidate.workspace_id}` : null;
+            candidatesBox.replaceChildren(renderCandidateSelector(candidates, chosenKey, true));
             candidatesBox.hidden = false;
           }
           return;
@@ -595,19 +612,8 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
 
         // Code target present - validate preview
         if (availableCandidates && availableCandidates.length > 1) {
-          const select = h('select', {
-            'aria-label': t('wst_choose_candidate'),
-            'data-work-start-candidate': '',
-          }, ...availableCandidates.map((c, i) => h('option', {value: String(i)}, `${c.repository} · ${c.host} · ${c.workspace_id}`)));
-          const chosenIdx = availableCandidates.findIndex(c => c.repository === data.code_target.repository && c.host === data.code_target.host && c.workspace_id === data.code_target.workspace_id);
-          if (chosenIdx >= 0) select.value = String(chosenIdx);
-          select.addEventListener('change', () => {
-            if (select.value === '') return;
-            const idx = Number(select.value);
-            chosenCandidate = availableCandidates[idx];
-            void inspectReadiness();
-          });
-          candidatesBox.replaceChildren(h('label', {}, t('wst_choose_candidate'), select));
+          const chosenKey = data.code_target ? `${data.code_target.repository}:${data.code_target.host}:${data.code_target.workspace_id}` : null;
+          candidatesBox.replaceChildren(renderCandidateSelector(availableCandidates, chosenKey, false));
           candidatesBox.hidden = false;
         } else {
           candidatesBox.replaceChildren();
@@ -666,14 +672,23 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         factsBox.hidden = false;
 
         // Render readiness checks
+        const plan = getPlan();
         const checks = (data.readiness.checks || []).map(check => {
           const [kind, ...suffix] = check.check.split(':');
           const key = 'wp_check_' + kind;
           const label = t(key);
           const help = t(key + '_help');
           const passed = check.status === 'passed';
+          let suffixText = suffix.join(':');
+          if (suffix.length > 0) {
+            const reqId = suffix.join(':');
+            const planReq = plan?.document?.requirements?.find(r => r.id === reqId);
+            if (planReq?.text) {
+              suffixText = planReq.text;
+            }
+          }
           return h('li', {'data-readiness-check': check.check},
-            h('strong', {}, label === key ? check.check : label + (suffix.length ? ' · ' + suffix.join(':') : '')),
+            h('strong', {}, label === key ? check.check : label + (suffix.length ? ' · ' + suffixText : '')),
             ' — ',
             t(passed ? 'wp_passed' : 'wp_attention'),
             !passed && help !== key + '_help' ? h('p', {class: 'muted'}, help) : !passed && check.detail ? h('p', {class: 'muted'}, check.detail) : null,
@@ -732,7 +747,20 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       errorStatusBox,
     );
 
-    const editorInstance = form({
+    let editorInstance;
+    const canSubmit = () => {
+      if (!writer(card) || !startable(card) || checking || loading) return false;
+      if (!prepared || !reviewInput.value) return false;
+      try {
+        if (!equal(JSON.parse(reviewInput.value), prepared.fixed)) return false;
+      } catch {
+        return false;
+      }
+      if (currentFingerprint() !== prepared.fixed.fingerprint) return false;
+      return prepared.readinessStatus === 'ready';
+    };
+
+    editorInstance = form({
       namespace: `${namespace}.work-start`,
       action: 'work.start',
       target: {workspace_id: workspaceId, work_item_id: card.work_item_id},
@@ -775,6 +803,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         }
       },
       permitted: () => writer(card),
+      canSend: () => Boolean(editorInstance?.locked()) || canSubmit(),
       recoverPermitted: () => writer(card),
       errorBox: panelErrorBox,
       label: 'wst_start',
@@ -806,18 +835,6 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       extra,
     });
 
-    const canSubmit = () => {
-      if (!writer(card) || !startable(card) || checking || loading) return false;
-      if (!prepared || !reviewInput.value) return false;
-      try {
-        if (!equal(JSON.parse(reviewInput.value), prepared.fixed)) return false;
-      } catch {
-        return false;
-      }
-      if (currentFingerprint() !== prepared.fixed.fingerprint) return false;
-      return prepared.readinessStatus === 'ready';
-    };
-
     const origUpdate = editorInstance.update;
     editorInstance.update = () => {
       origUpdate();
@@ -830,6 +847,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     };
 
     buildOrUpdateBindBox(true);
+    editorInstance.update();
 
     editorInstance.currentFingerprint = currentFingerprint;
     editorInstance.inspectReadiness = inspectReadiness;
