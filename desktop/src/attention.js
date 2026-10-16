@@ -90,7 +90,10 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
       refresh(state, state.pages + 1).finally(() => {
         state.pressed = false;
         syncBusy();
-        if (release() && (more.hidden || more.disabled)) (firstAdded(state, previous) || refreshButton).focus();
+        const keep = release();
+        try { guard(); }
+        catch { return; }
+        if (keep && (more.hidden || more.disabled)) (firstAdded(state, previous) || refreshButton).focus();
       }).catch(() => {});
     };
     sections.push(state);

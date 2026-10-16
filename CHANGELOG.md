@@ -8,7 +8,8 @@
   operation, or to Prepare another published version if the start was refused.
   Prepare another returns to the repository. Review new evidence returns to
   Read repair evidence. On Home, Load more on the last page moves to the first
-  new row.
+  new row. Leaving the page while that request is still running does not move
+  focus on the next screen.
 
 - Settings → Agents: Tab reaches Check again while the first check runs, and
   pressing it keeps keyboard focus on the button. The button looks unavailable

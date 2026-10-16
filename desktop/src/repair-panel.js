@@ -51,7 +51,8 @@ export function repairPanel({h, t, api, caps, guard, namespace, source, errorBox
     finally {
       reading = false;
       if (alive()) update();
-      if (alive() && release() && (reload.hidden || reload.disabled)) moveFrom(reload);
+      const keep = release();
+      if (alive() && keep && (reload.hidden || reload.disabled)) moveFrom(reload);
     }
   }},t('repair_read'));
   const create = h('button',{class:'secondary',type:'button',disabled:true,onclick:async()=>{
@@ -62,8 +63,9 @@ export function repairPanel({h, t, api, caps, guard, namespace, source, errorBox
     catch(error) {if(alive()) status.replaceChildren(errorBox(error, {within:status}));}
     finally {
       busy=false;
-      if(alive()) update();
-      if (alive() && release() && (create.hidden || create.disabled)) moveFrom(create);
+      if (alive()) update();
+      const keep = release();
+      if (alive() && keep && (create.hidden || create.disabled)) moveFrom(create);
     }
   }},t('repair_create'));
   const next = h('button',{class:'secondary',type:'button',hidden:true,onclick:()=>{
