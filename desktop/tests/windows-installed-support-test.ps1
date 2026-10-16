@@ -19,9 +19,8 @@ Wait-FixtureUntil {
     param($Deadline)
     if ($null -eq $pollProbe.deadline) {
         $pollProbe.deadline = $Deadline
-        # Advance by 1 ms on the first probe pass to model the sub-millisecond execution time
-        # between setting the deadline and the first poll, ensuring the initial request budget
-        # reflects floor(deadline - now) <= 2 s.
+        # A real first poll always starts after the deadline is computed, so less than 3 s
+        # remains and the first timeout is at most 2 s.
         & $clock.Advance 1
     }
     Assert-Fixture ($pollProbe.deadline -eq $Deadline) 'Read retries replaced the original deadline'
@@ -47,6 +46,7 @@ Write-Host 'Passed helper: typed timeout retries within one original deadline'
 $slowClock = New-FakeClock
 $slowProbe = @{calls=0; deadline=$null}
 $slowDiagnostics = New-Diagnostics
+$slowTimeouts = [Collections.Generic.List[int]]::new()
 Wait-FixtureUntil {
     param($Deadline)
     if ($null -eq $slowProbe.deadline) { $slowProbe.deadline = $Deadline }
@@ -54,8 +54,9 @@ Wait-FixtureUntil {
     $count = Get-FixturePollCount 'http://127.0.0.1:1' $Deadline $slowDiagnostics {
         param($Url, $Timeout)
         $slowProbe.calls++
+        Assert-Fixture ($Timeout -gt 0) 'Request timeout was not positive'
+        $slowTimeouts.Add($Timeout)
         & $slowClock.Advance 850
-        Assert-Fixture ($Timeout -gt 0 -and $Timeout -le 3) 'Request exceeded original readiness budget'
         if ($slowProbe.calls -eq 1) { throw [Threading.Tasks.TaskCanceledException]::new('synthetic timeout') }
         if ($slowProbe.calls -eq 2) { throw [TimeoutException]::new('synthetic wrapped timeout') }
         return [pscustomobject]@{requests=@([pscustomobject]@{method='GET'; path='/api/v1/events'}); violations=@()}
@@ -63,18 +64,22 @@ Wait-FixtureUntil {
     return $count -gt 0
 } 'Slow runner probe did not recover within budget' 3 -Now $slowClock.Now -Sleep $slowClock.Sleep
 Assert-Fixture ($slowProbe.calls -eq 3 -and $slowDiagnostics.transient_failures -eq 2) 'Slow runner did not complete 3 reads'
+Assert-Fixture (($slowTimeouts -join ',') -eq '3,2,1') "Expected timeout sequence 3,2,1 but observed $($slowTimeouts -join ',')"
 Write-Host 'Passed helper: slow runner recovers within 3 s budget under floor rule (850 ms/read)'
 
 $floorExhausted = $false
 $floorClock = New-FakeClock
 $floorProbe = @{calls=0}
 $floorDiagnostics = New-Diagnostics
+$floorTimeouts = [Collections.Generic.List[int]]::new()
 try {
     Wait-FixtureUntil {
         param($Deadline)
         $count = Get-FixturePollCount 'http://127.0.0.1:1' $Deadline $floorDiagnostics {
             param($Url, $Timeout)
             $floorProbe.calls++
+            Assert-Fixture ($Timeout -gt 0) 'Request timeout was not positive'
+            $floorTimeouts.Add($Timeout)
             & $floorClock.Advance 900
             if ($floorProbe.calls -le 2) { throw [TimeoutException]::new('synthetic wrapped timeout') }
             return [pscustomobject]@{requests=@([pscustomobject]@{method='GET'; path='/api/v1/events'}); violations=@()}
@@ -85,6 +90,7 @@ try {
     $floorExhausted = $_.Exception.Message -ceq 'Probe with 900 ms per read exhausted budget under floor rule'
 }
 Assert-Fixture ($floorExhausted -and $floorProbe.calls -eq 2 -and $floorDiagnostics.transient_failures -eq 2) 'Floor rule did not exhaust 900 ms reads after 2 attempts'
+Assert-Fixture (($floorTimeouts -join ',') -eq '3,1') "Expected timeout sequence 3,1 but observed $($floorTimeouts -join ',')"
 Write-Host 'Passed helper: 900 ms/read documented as impossible under floor rule (3rd read denied at <1 s budget)'
 
 $expired = Get-FixturePollCount 'http://127.0.0.1:1' ((& $clock.Now).AddSeconds(-1)) $diagnostics { throw 'Expired request was sent' } -Now $clock.Now
@@ -131,11 +137,12 @@ $view = @{state=@{}}
 $history = [ordered]@{attempt_count=0; attempts=[Collections.Generic.List[object]]::new()}
 $viewPoll = @{deadline=$null}
 $ready = '{"webContent":true,"authenticated":true,"setup":true,"configurationLoaded":true,"saveEnabled":true,"bounded":true}'
+$uiaClock = New-FakeClock
 Wait-FixtureUntil {
     param($Deadline)
     if ($null -eq $viewPoll.deadline) { $viewPoll.deadline = $Deadline }
     Assert-Fixture ($viewPoll.deadline -eq $Deadline) 'UIA retry replaced original deadline'
-    Assert-Fixture ((Get-FixtureViewTimeout $Deadline) -le 3000) 'UIA attempt escaped remaining budget'
+    Assert-Fixture ((Get-FixtureViewTimeout $Deadline -Now $uiaClock.Now) -le 3000) 'UIA attempt escaped remaining budget'
     $attempt = New-FixtureViewAttempt $history
     if ($history.attempt_count -le 2) {
         $attempt.exit_code = 3
@@ -147,17 +154,18 @@ Wait-FixtureUntil {
     $attempt.exit_code = 0
     Set-FixtureViewDiagnostics $attempt "started`nquery_completed`ncompleted`n"
     return Test-FixtureViewResult $attempt $ready $view
-} 'Transient UIA read did not recover' 3
+} 'Transient UIA read did not recover' 3 -Now $uiaClock.Now -Sleep $uiaClock.Sleep
 Assert-Fixture ($history.attempt_count -eq 3 -and $history.attempts.Count -eq 3) 'UIA attempts were lost'
 Assert-Fixture ($history.attempts[0].phases.failed -and $history.attempts[0].exit_code -eq 3 -and
     $history.attempts[0].error_type -ceq 'System.Runtime.InteropServices.COMException' -and
     $history.attempts[0].error_hresult -ceq '0x80010108' -and $history.attempts[2].phases.completed) 'UIA attempt diagnostics changed'
-Assert-Fixture ((Get-FixtureViewTimeout ([DateTime]::UtcNow.AddSeconds(30))) -eq 8000) 'UIA per-probe deadline changed'
-Assert-Fixture ((Get-FixtureViewTimeout ([DateTime]::UtcNow.AddSeconds(-1))) -eq 0) 'UIA expired deadline still has budget'
+Assert-Fixture ((Get-FixtureViewTimeout ((& $uiaClock.Now).AddSeconds(30)) -Now $uiaClock.Now) -eq 8000) 'UIA per-probe deadline changed'
+Assert-Fixture ((Get-FixtureViewTimeout ((& $uiaClock.Now).AddSeconds(-1)) -Now $uiaClock.Now) -eq 0) 'UIA expired deadline still has budget'
 Write-Host 'Passed helper: transient UIA reads recover within the same deadline with per-attempt evidence'
 
 $exhausted = $false
 $retryBudget = @{deadline=$null; calls=0}
+$exhaustClock = New-FakeClock
 try {
     Wait-FixtureUntil {
         param($Deadline)
@@ -167,14 +175,15 @@ try {
         $attempt = New-FixtureViewAttempt $history
         $attempt.exit_code = 3
         Test-FixtureViewResult $attempt $ready $view
-    } 'Synthetic UIA budget exhausted' 1
+    } 'Synthetic UIA budget exhausted' 1 -Now $exhaustClock.Now -Sleep $exhaustClock.Sleep
 } catch { $exhausted = $_.Exception.Message -ceq 'Synthetic UIA budget exhausted' }
-Assert-Fixture ($exhausted -and $retryBudget.calls -ge 1 -and [DateTime]::UtcNow -ge $retryBudget.deadline) 'Repeated UIA failures escaped the original wait budget'
+Assert-Fixture ($exhausted -and $retryBudget.calls -ge 1 -and (& $exhaustClock.Now) -ge $retryBudget.deadline) 'Repeated UIA failures escaped the original wait budget'
 Write-Host 'Passed helper: repeated transient UIA reads exhaust the original wait'
 
 foreach ($kind in @('fatal', 'unknown_exit', 'timeout', 'invalid_json')) {
     $calls = @{count=0}
     $caught = $false
+    $fatalClock = New-FakeClock
     try {
         Wait-FixtureUntil {
             $calls.count++
@@ -182,7 +191,7 @@ foreach ($kind in @('fatal', 'unknown_exit', 'timeout', 'invalid_json')) {
             $attempt.exit_code = if ($kind -eq 'fatal') { 2 } elseif ($kind -eq 'unknown_exit') { 9 } elseif ($kind -eq 'timeout') { 3 } else { 0 }
             $attempt.phases.timed_out = $kind -eq 'timeout'
             Test-FixtureViewResult $attempt 'invalid JSON' $view
-        } 'Unexpected wait exhaustion' 3
+        } 'Unexpected wait exhaustion' 3 -Now $fatalClock.Now -Sleep $fatalClock.Sleep
     } catch { $caught = $true }
     Assert-Fixture ($caught -and $calls.count -eq 1 -and $view.state.Count -eq 0) "$kind UIA failure was retried or retained stale evidence"
 }
