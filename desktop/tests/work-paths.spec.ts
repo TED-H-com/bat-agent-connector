@@ -131,6 +131,10 @@ for (const locale of ['en', 'zh-TW'] as const) for (const width of [1440, 390]) 
     await page.keyboard.press('Enter');
     await expect.poll(() => s.reads('/pm/installation-capabilities')).toBe(readsBefore + 1);
     await expect(check).toBeFocused();
+    await page.keyboard.press('Enter');
+    await check.click({force: true});
+    expect(s.reads('/pm/installation-capabilities')).toBe(readsBefore + 1);
+    await expect(check).toBeFocused();
     release();
     await expect(page.locator('[data-pm-eligibility]')).toHaveText(copy.agents_ready);
     await expect(check).toBeFocused();
