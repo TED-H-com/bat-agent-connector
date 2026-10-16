@@ -17,3 +17,16 @@
 @media (min-width: 1200px) {
   .pm-work-layout:has(> .pm-work-inspector) { grid-template-columns: minmax(0, 1fr) 400px; gap: var(--space-4); }
 }
+
+.pm-work-start-panel { display: flex; flex-direction: column; gap: var(--space-3); }
+.pm-work-start-fields { display: flex; flex-direction: column; gap: var(--space-3); }
+.pm-work-start-instruction { width: 100%; box-sizing: border-box; min-height: 80px; resize: vertical; }
+.pm-work-start-facts { margin: var(--space-2) 0; }
+.pm-work-start-checks { list-style: none; padding-left: 0; margin: var(--space-2) 0; }
+.pm-work-start-checks li { margin: var(--space-1) 0; }
+.pm-work-start-checks p { margin: var(--space-1) 0 0 var(--space-3); }
+.pm-work-start-reqs { display: flex; flex-direction: column; gap: var(--space-1); margin: var(--space-2) 0; }
+.pm-work-start-req { display: flex; align-items: center; gap: var(--space-2); }
+.pm-work-start-links { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin: var(--space-2) 0; }
+.pm-work-start-options { margin-top: var(--space-2); display: flex; flex-direction: column; gap: var(--space-2); }
+
