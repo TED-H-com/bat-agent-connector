@@ -14,8 +14,20 @@ import time
 import uuid
 from typing import Any
 
-from . import lifecycle, orchestrate, pm_source_lineage, registry
+from . import (
+    checkpoints,
+    controller_authority,
+    lifecycle,
+    orchestrate,
+    pm_source_lineage,
+    pm_work_start,
+    registry,
+    service,
+)
 from .errors import BatError, ConnectionLost, InvokeTimeout
+from .fleet import Fleet
+from .inventory import COLLECT_PASS_BUDGET_S
+from .operations import OperationError
 from .redact import redact_secrets
 from .service import DIGEST_TEXT_MAX_CHARS, TURN_SLICE_MAX_ITEMS  # noqa: F401
 from .summarize import clip, is_tool, iso_local, summarize_message, ts_to_ms
@@ -35,6 +47,8 @@ TOOL_ACTIVITY_MAX_CHARS = 500
 BRANCH_DIFF_MAX_COMMITS = 30
 BRANCH_DIFF_MAX_FILES = 80
 CHANGESET_TOTAL_BUDGET_S = 25.0
+COLLECT_MAX_PER_PASS = 8
+MEMO_RECHECK_S = 900.0
 
 BOUNDARIES = frozenset({"turn_done", "process_ended", "agent_error"})
 
@@ -678,6 +692,10 @@ def _decode_row(row) -> dict[str, Any]:
     }
 
 
+def new_result_id() -> str:
+    return f"res_{uuid.uuid4().hex}"
+
+
 def record_receipt(
     journal_or_ops,
     *,
@@ -685,13 +703,16 @@ def record_receipt(
     attempt_id: str | None,
     source_key: str,
     source_generation: str,
-    source_position: str | dict,
+    source_position: str | dict | None = None,
+    turn_marker: str | None = None,
+    last_message_id: str | None = None,
     digest: str,
     document: dict[str, Any],
     observed_at: float,
     operation_id: str,
     collected_at: float | None = None,
     result_id: str | None = None,
+    decoder_version: str | None = None,
     work_item_id: str | None = None,
     start_operation_id: str | None = None,
     package_id: str | None = None,
@@ -704,14 +725,23 @@ def record_receipt(
     if not installed(db):
         schema(journal)
 
-    pos_dict = parse_source_position(source_position)
+    if source_position is not None:
+        pos_dict = parse_source_position(source_position)
+    else:
+        pos_dict = {
+            "turn_marker": str(turn_marker or ""),
+            "last_message_id": str(last_message_id or ""),
+        }
     pos_json = format_source_position(pos_dict["turn_marker"], pos_dict["last_message_id"])
 
-    rid = result_id or str(document.get("result_id") or "") or f"res_{uuid.uuid4().hex}"
+    rid = result_id or str(document.get("result_id") or "") or new_result_id()
     doc_in = copy.deepcopy(document)
     doc_in["result_id"] = rid
     doc_in.setdefault("schema_version", RESULT_DOC_SCHEMA)
-    doc_in.setdefault("decoder_version", DECODER_VERSION)
+    if decoder_version is not None:
+        doc_in["decoder_version"] = str(decoder_version)
+    else:
+        doc_in.setdefault("decoder_version", DECODER_VERSION)
     if isinstance(doc_in.get("fixed_result_commit"), dict):
         doc_in["fixed_result_commit"]["source_id"] = rid
     if isinstance(doc_in.get("head_observation"), dict) and isinstance(
@@ -722,7 +752,7 @@ def record_receipt(
         doc_in["changes_summary"]["cached_from_result_id"] = rid
 
     bounded_doc, doc_json = _bound_document(doc_in)
-    decoder_version = str(bounded_doc.get("decoder_version") or DECODER_VERSION)
+    resolved_decoder_version = str(bounded_doc.get("decoder_version") or DECODER_VERSION)
 
     with journal.tx():
         now = time.time() if collected_at is None else float(collected_at)
@@ -771,7 +801,7 @@ def record_receipt(
                 if isinstance(other_doc, dict)
                 else DECODER_VERSION
             )
-            if other_ver == decoder_version and other["digest"] not in conflicting_digests:
+            if other_ver == resolved_decoder_version and other["digest"] not in conflicting_digests:
                 conflicting_digests.append(other["digest"])
 
         if attempt_id:
@@ -794,7 +824,7 @@ def record_receipt(
                 "source_generation": source_generation,
                 "source_position": pos_dict,
                 "digest": digest,
-                "decoder_version": decoder_version,
+                "decoder_version": resolved_decoder_version,
                 "boundary": bounded_doc.get("boundary"),
                 "head_commit": head_obs.get("head_commit"),
             }
@@ -1234,4 +1264,377 @@ async def collect_changes_summary(
         "reasons": deduped_reasons,
         "cached_from_result_id": result_id,
     }
+
+
+# --------------------------------------------------------------------------- Section 2: AttemptResultCollector
+class AttemptResultCollector:
+    """Server-side collector that fixes session_results receipts at turn boundaries under actor ``connector``."""
+
+    def __init__(
+        self,
+        ops,
+        *,
+        fleet: Fleet | None = None,
+        pass_budget_s: float = COLLECT_PASS_BUDGET_S,
+        max_per_pass: int = COLLECT_MAX_PER_PASS,
+        memo_recheck_s: float = MEMO_RECHECK_S,
+        changeset_budget_s: float = CHANGESET_TOTAL_BUDGET_S,
+        decoder_version: str = DECODER_VERSION,
+    ) -> None:
+        self.ops = ops
+        self._fleet = fleet
+        self.pass_budget_s = float(pass_budget_s)
+        self.max_per_pass = int(max_per_pass)
+        self.memo_recheck_s = float(memo_recheck_s)
+        self.changeset_budget_s = float(changeset_budget_s)
+        self.decoder_version = str(decoder_version)
+        self._host_locks: dict[str, asyncio.Lock] = {}
+        self._memo: dict[str, dict[str, Any]] = {}
+        self._last_checked_at: dict[str, float] = {}
+        self.last_digest_bytes: bytes | None = None
+        self.digest_bytes_by_attempt: dict[str, bytes] = {}
+
+    @property
+    def fleet(self) -> Fleet:
+        """Always use a read-only Fleet whose client core refuses every write channel."""
+        if self._fleet is not None:
+            return self._fleet
+        f = checkpoints._read_fleet(self.ops)
+        if not f.read_only:
+            self._fleet = Fleet(f.config, read_only=True, idle_timeout=0, actor=ACTOR)
+            return self._fleet
+        return f
+
+    async def after_refresh(self, host: str, result: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        if isinstance(result, dict) and not result.get("reachable", True):
+            return []
+        return await self.collect_host(host)
+
+    def _has_agent_error_event(self, host: str, session_id: str) -> bool:
+        """Inspect already-open clients' recent_events without opening a connection or subscribing."""
+        candidates = []
+        ro_client = self.fleet._clients.get(host)
+        if ro_client is not None:
+            candidates.append(ro_client)
+        ops_fleet = self.ops.context.get("fleet") if hasattr(self.ops, "context") else None
+        if isinstance(ops_fleet, Fleet):
+            rw_client = ops_fleet._clients.get(host)
+            if rw_client is not None and rw_client is not ro_client:
+                candidates.append(rw_client)
+        for client in candidates:
+            for ev in list(getattr(client, "recent_events", ())):
+                if isinstance(ev, dict) and ev.get("channel") == "agent:error" and ev.get("sessionId") == session_id:
+                    return True
+        return False
+
+    def _observed_session_row(self, host: str, session_id: str) -> dict[str, Any] | None:
+        if not pm_source_lineage._table(self.ops.db, "sessions_observed"):
+            return None
+        row = self.ops.db.execute(
+            "SELECT body, digest, sort_key, gone_at FROM sessions_observed WHERE host=? AND session_id=?",
+            (host, session_id),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def _eligible_candidates(self, host: str) -> list[dict[str, Any]]:
+        if not pm_work_start.installed(self.ops.db):
+            return []
+        rows = self.ops.db.execute(
+            """SELECT sequence, attempt_id, workspace_id, work_item_id, origin_kind, origin_id, start_operation_id
+               FROM work_attempts
+               ORDER BY sequence ASC"""
+        ).fetchall()
+        now_mono = time.monotonic()
+        candidates: list[dict[str, Any]] = []
+        for row in rows:
+            start_op_id = row["start_operation_id"] or row["origin_id"]
+            if not start_op_id:
+                continue
+            try:
+                parent = pm_work_start._op(self.ops.db, start_op_id)
+                children = pm_work_start._children(self.ops, parent)
+            except OperationError:
+                continue
+            handoff = children.get("handoff")
+            if handoff is None or handoff.get("status") != "succeeded":
+                continue
+            if pm_work_start._uncertain(self.ops, handoff):
+                continue
+            session_ref = pm_work_start._child_session(handoff)
+            res = handoff.get("result") if isinstance(handoff.get("result"), dict) else {}
+            cand_host = res.get("host")
+            cand_sid = res.get("session_id")
+            cand_wt = res.get("worktree_path")
+            cand_mid = res.get("message_id")
+            if (
+                not isinstance(cand_host, str)
+                or cand_host != host
+                or not isinstance(cand_sid, str)
+                or not cand_sid.strip()
+                or not isinstance(cand_wt, str)
+                or not cand_wt.strip()
+                or not isinstance(cand_mid, str)
+                or not cand_mid.strip()
+            ):
+                continue
+            if session_ref != {"host": cand_host, "session_id": cand_sid}:
+                continue
+
+            # 0.2 Registry check: require start_operation_id == handoff operation id and matching controller
+            reg = registry.get(cand_host, cand_sid)
+            if not isinstance(reg, dict):
+                continue
+            if reg.get("start_operation_id") != handoff["operation_id"]:
+                continue
+            handoff_ctrl = controller_authority.operation_binding(handoff)
+            if handoff_ctrl is not None and not controller_authority.same_controller(
+                reg.get("controller_authority"), handoff_ctrl
+            ):
+                continue
+
+            obs_row = self._observed_session_row(cand_host, cand_sid)
+            obs_tuple = (
+                (obs_row["digest"], obs_row["sort_key"], obs_row["gone_at"])
+                if obs_row is not None
+                else None
+            )
+            attempt_id = str(row["attempt_id"])
+            workspace_id = str(row["workspace_id"])
+            has_receipt = (
+                installed(self.ops.db)
+                and self.ops.db.execute(
+                    "SELECT 1 FROM session_results WHERE workspace_id=? AND attempt_id=? LIMIT 1",
+                    (workspace_id, attempt_id),
+                ).fetchone()
+                is not None
+            )
+            memo_entry = self._memo.get(attempt_id)
+            if (
+                has_receipt
+                and obs_tuple is not None
+                and memo_entry is not None
+                and memo_entry.get("obs_tuple") == obs_tuple
+                and (now_mono - float(memo_entry.get("checked_at", 0.0))) < self.memo_recheck_s
+            ):
+                continue
+
+            base_sha = str(res.get("source_sha") or (handoff.get("params") or {}).get("source_sha") or "")
+            candidates.append(
+                {
+                    "sequence": int(row["sequence"]),
+                    "attempt_id": attempt_id,
+                    "workspace_id": workspace_id,
+                    "work_item_id": str(row["work_item_id"]),
+                    "start_operation_id": str(start_op_id),
+                    "handoff_operation_id": str(handoff["operation_id"]),
+                    "host": cand_host,
+                    "session_id": cand_sid,
+                    "worktree_path": cand_wt,
+                    "turn_marker": cand_mid,
+                    "base_sha": base_sha,
+                    "registry_entry": reg,
+                    "obs_row": obs_row,
+                    "obs_tuple": obs_tuple,
+                }
+            )
+
+        candidates.sort(key=lambda c: (self._last_checked_at.get(c["attempt_id"], 0.0), c["sequence"]))
+        return candidates[: max(0, self.max_per_pass)]
+
+    async def _collect_candidate(self, cand: dict[str, Any], *, budget_s: float) -> dict[str, Any] | None:
+        attempt_id = cand["attempt_id"]
+        workspace_id = cand["workspace_id"]
+        host = cand["host"]
+        session_id = cand["session_id"]
+        worktree_path = cand["worktree_path"]
+        turn_marker = cand["turn_marker"]
+        base_sha = cand["base_sha"]
+        obs_row = cand["obs_row"]
+        obs_tuple = cand["obs_tuple"]
+
+        self._last_checked_at[attempt_id] = time.monotonic()
+
+        # Re-verify registry ownership right before reading
+        current_reg = registry.get(host, session_id)
+        if not isinstance(current_reg, dict) or current_reg.get("start_operation_id") != cand["handoff_operation_id"]:
+            return None
+
+        read_res = await service.session_read(
+            self.fleet,
+            host,
+            session_id,
+            after=turn_marker,
+            include_tools=True,
+            turn_slice=True,
+        )
+        observed_at = time.time()
+        turn_slice = read_res.pop("_turn_slice", None) or {"items": [], "complete": True, "reason": None}
+
+        # 0.1 If user echo is not visible, write no receipt
+        if read_res.get("turn_attribution") != "correlated":
+            return None
+
+        # Boundary rule (§2.2 and r3): never write mid-turn
+        if bool(read_res.get("streaming")):
+            return None
+
+        obs_body: dict[str, Any] = {}
+        if obs_row is not None and obs_row.get("body"):
+            try:
+                parsed_body = json.loads(obs_row["body"])
+                if isinstance(parsed_body, dict):
+                    obs_body = parsed_body
+            except (TypeError, ValueError):
+                obs_body = {}
+        runtime_status = obs_body.get("runtime_status") or read_res.get("runtime_status")
+        gone_at = obs_row.get("gone_at") if obs_row is not None else None
+        has_process_ended = (runtime_status in {"exited", "stopped"}) or (gone_at is not None)
+        has_agent_error = self._has_agent_error_event(host, session_id)
+        turn_done_ready = (read_res.get("turn_done") is True) and (read_res.get("pending") is None)
+
+        if has_agent_error:
+            boundary = "agent_error"
+        elif has_process_ended:
+            boundary = "process_ended"
+        elif turn_done_ready:
+            boundary = "turn_done"
+        else:
+            return None
+
+        slice_items = list(turn_slice.get("items") or [])
+        last_message_id = ""
+        for item in reversed(slice_items):
+            if isinstance(item, dict) and item.get("id"):
+                last_message_id = str(item["id"])
+                break
+        if not last_message_id:
+            last_message_id = str(turn_marker)
+
+        source_key = f"bat:{host}:{session_id}"
+        source_generation = source_generation_from_registry(host, session_id, current_reg)
+        source_position = format_source_position(turn_marker, last_message_id)
+        digest_bytes = canonical_digest_bytes(
+            source_key=source_key,
+            source_generation=source_generation,
+            turn_marker=turn_marker,
+            last_message_id=last_message_id,
+            turn_slice_items=slice_items,
+            decoder_version=self.decoder_version,
+        )
+        self.last_digest_bytes = digest_bytes
+        self.digest_bytes_by_attempt[attempt_id] = digest_bytes
+        digest = "sha256:" + hashlib.sha256(digest_bytes).hexdigest()
+
+        # Skip when the latest receipt already has this position and digest
+        latest = self.ops.db.execute(
+            """SELECT source_position, digest FROM session_results
+               WHERE workspace_id=? AND attempt_id=?
+               ORDER BY sequence DESC LIMIT 1""",
+            (workspace_id, attempt_id),
+        ).fetchone()
+        if latest is not None and latest["source_position"] == source_position and latest["digest"] == digest:
+            if obs_tuple is not None:
+                self._memo[attempt_id] = {"obs_tuple": obs_tuple, "checked_at": time.monotonic()}
+            return None
+
+        rid = new_result_id()
+        client = self.fleet.client(host)
+        head_obs = await collect_head_observation(
+            client,
+            worktree_path,
+            base_sha=base_sha,
+            result_id=rid,
+            observed_at=observed_at,
+        )
+        changes_sum = await collect_changes_summary(
+            client,
+            worktree_path,
+            base_sha=base_sha,
+            result_id=rid,
+            budget_s=min(self.changeset_budget_s, max(0.001, budget_s)),
+        )
+
+        extra_reasons: list[str] = []
+        if read_res.get("truncated_by_size"):
+            extra_reasons.append("transcript_truncated_by_size")
+        if (read_res.get("archived_total") or 0) > 0 and read_res.get("next_offset") is not None:
+            extra_reasons.append("archived_messages_omitted")
+        if head_obs.get("worktree_unreachable"):
+            extra_reasons.append("worktree_unreachable")
+
+        doc = build_result_document(
+            result_id=rid,
+            turn_marker=turn_marker,
+            last_message_id=last_message_id,
+            slice_items=slice_items,
+            slice_complete=bool(turn_slice.get("complete", True)),
+            slice_reason=turn_slice.get("reason"),
+            turn_started=bool(read_res.get("turn_started", True)),
+            turn_done=bool(read_res.get("turn_done", False)),
+            turn_phase=str(read_res.get("turn_phase") or "terminal"),
+            turn_attribution=str(read_res.get("turn_attribution") or "correlated"),
+            boundary=boundary,
+            meta=read_res.get("meta") if isinstance(read_res.get("meta"), dict) else {},
+            agent_kind=read_res.get("agent_kind"),
+            head_observation=head_obs,
+            changes_summary=changes_sum,
+            transcript_window={
+                "offset": read_res.get("offset", 0),
+                "next_offset": read_res.get("next_offset"),
+                "live_items": read_res.get("live_items"),
+                "archived_total": read_res.get("archived_total"),
+                "truncated_by_size": bool(read_res.get("truncated_by_size", False)),
+            },
+            extra_reasons=extra_reasons,
+            decoder_version=self.decoder_version,
+        )
+
+        stored, inserted = record_receipt(
+            self.ops.journal,
+            workspace_id=workspace_id,
+            attempt_id=attempt_id,
+            source_key=source_key,
+            source_generation=source_generation,
+            turn_marker=turn_marker,
+            last_message_id=last_message_id,
+            digest=digest,
+            document=doc,
+            observed_at=observed_at,
+            operation_id=cand["handoff_operation_id"],
+            result_id=rid,
+            decoder_version=self.decoder_version,
+            work_item_id=cand["work_item_id"],
+            start_operation_id=cand["start_operation_id"],
+            session={"host": host, "session_id": session_id},
+        )
+        if obs_tuple is not None:
+            self._memo[attempt_id] = {"obs_tuple": obs_tuple, "checked_at": time.monotonic()}
+        return stored if inserted else None
+
+    async def collect_host(self, host: str) -> list[dict[str, Any]]:
+        """Collect turn-boundary receipts for up to ``max_per_pass`` managed attempts on ``host``."""
+        lock = self._host_locks.setdefault(host, asyncio.Lock())
+        async with lock:
+            if not installed(self.ops.db):
+                install(self.ops)
+            candidates = self._eligible_candidates(host)
+            if not candidates:
+                return []
+            started = time.monotonic()
+            collected: list[dict[str, Any]] = []
+            for cand in candidates:
+                rem = self.pass_budget_s - (time.monotonic() - started)
+                if rem <= 0:
+                    break
+                try:
+                    row = await asyncio.wait_for(
+                        self._collect_candidate(cand, budget_s=rem),
+                        timeout=rem,
+                    )
+                    if row is not None:
+                        collected.append(row)
+                except (BatError, ConnectionLost, InvokeTimeout, asyncio.TimeoutError):
+                    continue
+            return collected
+
 

@@ -161,6 +161,7 @@ class TaskDaemon:
         self._endpoint = DEFAULT_URL
 
     _lazy_attributes = {"journal", "fleet", "adapter", "coordinator", "ops", "api", "inventory",
+                        "collector", "result_collector",
                         "goose", "jev", "router", "_admin_token", "admin_token_path", "pusher",
                         "minimal_router", "minimal_review_gate", "default_task_path", "_submit_lock",
                         "verification_timeout_s", "verification_timeout_default_s",
@@ -257,6 +258,12 @@ class TaskDaemon:
         self.fleet.confinement_journal = self.journal
         self.inventory.fleet.confinement_runner = self.fleet.confinement_runner
         self.inventory.fleet.confinement_journal = self.journal
+        from .pm_attempt_results import AttemptResultCollector
+        self.result_collector = AttemptResultCollector(self.ops)
+        self.collector = self.result_collector
+        self.inventory.after_refresh.append(self.result_collector.after_refresh)
+        self.ops.context["result_collector"] = self.result_collector
+        self.ops.context["collector"] = self.result_collector
         from .usage_collector import UsageCollector
         self.usage_collector = UsageCollector(self.journal, config.usage)
         self.ops.context["usage_collector"] = self.usage_collector
