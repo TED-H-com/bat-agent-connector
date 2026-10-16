@@ -13671,10 +13671,12 @@ function diagnosticsDialog({ h, t, load, save, onClose }) {
 		content = "";
 		summary.replaceChildren();
 		pre.textContent = "";
+		const focused = document.activeElement, losing = focused === saved || focused === copy;
 		saved.disabled = copy.disabled = true;
 		saved.removeAttribute("aria-disabled");
 		status.removeAttribute("aria-busy");
 		status.textContent = t("diag_withdrawn");
+		if (losing || document.activeElement === document.body) closing.focus({ preventScroll: true });
 	};
 	const current = serial;
 	load().then((bundle) => {
@@ -53380,19 +53382,8 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 			"data-bat-action": "settings"
 		}, t("nav_settings"))));
 		content.replaceChildren(...lines);
-		if (flying) {
-			if (!message.textContent) message.textContent = "⁠";
-			message.setAttribute("aria-busy", "true");
-		} else {
-			message.removeAttribute("aria-busy");
-			if (message.textContent === "⁠") message.textContent = "";
-		}
-		const parked = message.textContent === "⁠";
-		message.style.position = parked ? "absolute" : "";
-		message.style.width = parked ? "1px" : "";
-		message.style.height = parked ? "1px" : "";
-		message.style.overflow = parked ? "hidden" : "";
-		message.style.clipPath = parked ? "inset(50%)" : "";
+		if (flying) message.setAttribute("aria-busy", "true");
+		else message.removeAttribute("aria-busy");
 		if (key) placeFocus(key);
 		displaced = null;
 	};
