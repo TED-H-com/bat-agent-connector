@@ -1,7 +1,8 @@
 """Field rules and public exits for the E10 operation loop projection.
 
 Parity tests that compare HTTP and MCP stay on the public routes. Field-rule
-tests call ``attach`` directly. Exit tests use the HTTP app and the RPC door.
+tests call ``attach`` directly. Exit tests use the HTTP app, the RPC door, and
+the principal MCP server.
 """
 from __future__ import annotations
 
@@ -9,6 +10,9 @@ import asyncio
 import json
 import time
 import uuid
+
+import pytest
+from mcp.server.mcpserver.exceptions import ToolError
 
 from bat_agent_connector import (
     controller_authority,
@@ -19,18 +23,20 @@ from bat_agent_connector import (
     pm_workspace,
 )
 from bat_agent_connector.api_auth import Principal
+from bat_agent_connector.mcp_server import build_server
 from bat_agent_connector.operations import OperationService
 from bat_agent_connector.pm_delivery_lineage import ACTIONS as DELIVERY_ACTIONS
 from bat_agent_connector.pm_operation_loop import LOOP_ACTIONS, attach
 from bat_agent_connector.task_journal import Journal
 from tests.operation_helpers import settle_operations
+from tests.test_api_v1 import MANUAL, http, token
 from tests.test_api_v1 import daemon as daemon_fixture
-from tests.test_api_v1 import http, token
 from tests.test_api_v1 import served as served_fixture
 from tests.test_pm_plan_operations import OWNER as PACKAGE_OWNER
 from tests.test_pm_work_packages import create as create_package
 from tests.test_pm_work_packages import member as add_member
 from tests.test_pm_work_packages import ready as ready_fixture
+from tests.test_pm_work_start import STARTER_OWNER, _advance_start, _start_envelope
 from tests.test_pm_worktree import pm as pm_fixture
 from tests.test_repository_sync import world as world_fixture
 
@@ -930,3 +936,381 @@ async def test_package_cancel_and_resume_match_http(ready):
     finally:
         server.close()
         await server.wait_closed()
+
+
+def unpack(result):
+    if isinstance(result, tuple):
+        content, structured = result
+        return structured if structured is not None else json.loads(content[0].text)
+    if getattr(result, "structuredContent", None) is not None:
+        return result.structuredContent
+    content = result.content if hasattr(result, "content") else result
+    return json.loads(content[0].text)
+
+
+def _operation_count(db):
+    return db.execute("SELECT COUNT(*) FROM operations").fetchone()[0]
+
+
+def _attempt_count(db):
+    return db.execute("SELECT COUNT(*) FROM work_attempts").fetchone()[0]
+
+
+def _attempts_for(db, operation_id):
+    return db.execute(
+        "SELECT COUNT(*) FROM work_attempts WHERE start_operation_id=?", (operation_id,)).fetchone()[0]
+
+
+def _has_key(value, key):
+    if isinstance(value, dict):
+        return key in value or any(_has_key(item, key) for item in value.values())
+    if isinstance(value, list):
+        return any(_has_key(item, key) for item in value)
+    return False
+
+
+def _scrub_loop(operation):
+    """One placeholder for the operation id, then the two facts that are not that id.
+
+    ``state.updated_at`` is this row's own timestamp. A ``work.start`` attempt id is
+    ``att_`` plus the operation id's hex, so replacing the operation id leaves it.
+    """
+    loop = operation["loop"]
+    assert loop["operation_id"] == operation["operation_id"]
+    assert loop["state"]["updated_at"] == operation["updated_at"]
+    scrubbed = json.loads(json.dumps(loop).replace(operation["operation_id"], "op_PLACEHOLDER"))
+    assert scrubbed["operation_id"] == "op_PLACEHOLDER"
+    scrubbed["state"].pop("updated_at")
+    scrubbed.pop("attempt_id")
+    return scrubbed
+
+
+async def _submit(port, tok, body, key):
+    return await http(port, "POST", "/api/v1/operations", tok=tok, body=body, headers={"Idempotency-Key": key})
+
+
+async def _mcp_submit(server, body, key):
+    return unpack(await server.call_tool(
+        "operation_submit", {**body, "idempotency_key": key, "wait_s": 0, "confirm": True}))
+
+
+async def _same_operation(server, port, tok, operation_id):
+    """HTTP and MCP reads of one operation, then its cancel and its resume refusal."""
+    status, body = await http(port, "GET", "/api/v1/operations/" + operation_id, tok=tok)
+    assert status == 200, body
+    via_mcp = unpack(await server.call_tool("operation_get", {"operation_id": operation_id}))
+    assert body["operation"]["loop"] == via_mcp["operation"]["loop"]
+    status, cancelled = await http(port, "POST", f"/api/v1/operations/{operation_id}/cancel", tok=tok)
+    assert status == 200, cancelled
+    via_cancel = unpack(await server.call_tool(
+        "operation_cancel", {"operation_id": operation_id, "confirm": True}))
+    assert cancelled["operation"]["loop"] == via_cancel["operation"]["loop"]
+    status, resumed = await http(port, "POST", f"/api/v1/operations/{operation_id}/resume", tok=tok)
+    assert status == 409 and resumed["error"]["code"] == "NOT_RESUMABLE" and "operation" not in resumed
+    with pytest.raises(ToolError, match="NOT_RESUMABLE"):
+        await server.call_tool("operation_resume", {"operation_id": operation_id, "confirm": True})
+    return body["operation"]["loop"]
+
+
+def _hide_source(db, kind, identity):
+    db.execute(
+        "INSERT INTO pm_source_lineage VALUES(?, ?, 'op_missing_loop', 'op_missing_loop')",
+        (kind, identity),
+    )
+
+
+async def _refuse(server, port, tok, body, key, code, status_code, *, admission_refused, db):
+    before = _operation_count(db)
+    status, refused = await _submit(port, tok, body, key)
+    assert status == status_code, refused
+    assert refused["error"]["code"] == code and "operation" not in refused
+    if admission_refused:
+        assert refused["error"]["admission_refused"] is True
+    else:
+        assert "admission_refused" not in refused["error"]
+    with pytest.raises(ToolError, match=code):
+        await server.call_tool("operation_submit", {
+            **body, "idempotency_key": key + "-mcp", "wait_s": 0, "confirm": True})
+    assert _operation_count(db) == before
+
+
+@pytest.fixture
+async def loop_start(ready):
+    from tests.test_pm_package_handoff import dispatch_runner
+
+    dispatch_runner(ready)
+    pm_work_start.install(ready["d"].ops)
+    return ready
+
+
+async def test_http_and_mcp_share_one_loop_and_the_same_refusals(served, mock, monkeypatch):
+    daemon, port = served
+    actor = "loop-parity"
+    tok = token(daemon, actor, "observe", "manage", "start", "operate")
+    monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
+    monkeypatch.setenv("BATC_API_TOKEN", tok)
+    server, fleet = build_server(daemon.fleet.config, principal_only=True)
+    try:
+        status, http_cap = await http(port, "GET", "/api/v1/capabilities", tok=tok)
+        assert status == 200, http_cap
+        assert http_cap["features"]["pm_workspaces"]["operation_loop"] == {"version": 1}
+        mcp_cap = unpack(await server.call_tool("capabilities_get", {}))
+        assert mcp_cap["features"]["pm_workspaces"]["operation_loop"] == {"version": 1}
+
+        mock.handlers["git:log"] = lambda _payload: [{"hash": "a" * 40}]
+        status, started = await _submit(
+            port, tok, {"action": "session.start", "target": {"host": "h1", "workspace": "ws-1"}}, "loop-session")
+        assert status == 202, started
+        await settle_operations(daemon.ops)
+        status, started_read = await http(
+            port, "GET", "/api/v1/operations/" + started["operation"]["operation_id"], tok=tok)
+        assert status == 200 and started_read["operation"]["status"] == "succeeded", started_read
+        sid = started_read["operation"]["result"]["session_id"]
+        await daemon.inventory.refresh_host("h1")
+
+        http_body = {"action": "session.send", "target": {"host": "h1", "session_id": sid},
+                     "params": {"text": "Discuss the current goal"}}
+        mcp_body = {"action": "session.send", "target": {"host": "h1", "session_id": sid},
+                    "params": {"text": "Discuss the current goal over MCP"}}
+        status, http_created = await _submit(port, tok, http_body, "loop-http-send")
+        assert status == 202 and http_created["created"] is True, http_created
+        mcp_created = await _mcp_submit(server, mcp_body, "loop-mcp-send")
+        assert mcp_created["created"] is True
+        http_id = http_created["operation"]["operation_id"]
+        mcp_id = mcp_created["operation"]["operation_id"]
+        assert http_id != mcp_id
+        assert http_created["operation"]["loop"]["attempt_id"] is None
+        assert _scrub_loop(http_created["operation"]) == _scrub_loop(mcp_created["operation"])
+        created_rows = _operation_count(daemon.ops.db)
+        await settle_operations(daemon.ops)
+        assert daemon.ops.get(http_id)["status"] == "succeeded"
+        assert daemon.ops.get(mcp_id)["status"] == "succeeded"
+
+        status, replayed = await _submit(port, tok, http_body, "loop-http-send")
+        assert status == 200 and replayed["created"] is False
+        assert replayed["operation"]["operation_id"] == http_id
+        assert replayed["operation"]["loop"]["operation_id"] == http_id
+        mcp_replay = await _mcp_submit(server, mcp_body, "loop-mcp-send")
+        assert mcp_replay["created"] is False
+        assert mcp_replay["operation"]["operation_id"] == mcp_id
+        assert mcp_replay["operation"]["loop"]["operation_id"] == mcp_id
+        assert _operation_count(daemon.ops.db) == created_rows
+
+        kept = await _same_operation(server, port, tok, http_id)
+        await _same_operation(server, port, tok, mcp_id)
+        assert kept["dashboard_hash"] == f"#/session/h1/{sid}"
+
+        # A successful resume leaves needs_attention, so each transport resumes its own row.
+        http_attention = {"action": "session.send", "target": {"host": "h1", "session_id": sid},
+                          "params": {"text": "Resume this send on HTTP"}}
+        mcp_attention = {"action": "session.send", "target": {"host": "h1", "session_id": sid},
+                         "params": {"text": "Resume this send on MCP"}}
+        status, http_hold = await _submit(port, tok, http_attention, "loop-http-hold")
+        assert status == 202, http_hold
+        mcp_hold = await _mcp_submit(server, mcp_attention, "loop-mcp-hold")
+        http_hold_id = http_hold["operation"]["operation_id"]
+        mcp_hold_id = mcp_hold["operation"]["operation_id"]
+        daemon.ops.db.execute(
+            "UPDATE operations SET status='needs_attention' WHERE operation_id IN (?, ?)",
+            (http_hold_id, mcp_hold_id))
+        status, http_held = await http(port, "GET", "/api/v1/operations/" + http_hold_id, tok=tok)
+        assert status == 200, http_held
+        mcp_held = unpack(await server.call_tool("operation_get", {"operation_id": http_hold_id}))
+        assert http_held["operation"]["loop"] == mcp_held["operation"]["loop"]
+        assert any(row.get("endpoint") == "resume" for row in http_held["operation"]["loop"]["next_allowed_actions"])
+        status, http_resumed = await http(port, "POST", f"/api/v1/operations/{http_hold_id}/resume", tok=tok)
+        assert status == 200 and http_resumed["operation"]["status"] == "running", http_resumed
+        mcp_resumed = unpack(await server.call_tool(
+            "operation_resume", {"operation_id": mcp_hold_id, "confirm": True}))
+        assert mcp_resumed["operation"]["status"] == "running"
+        assert _scrub_loop(http_resumed["operation"]) == _scrub_loop(mcp_resumed["operation"])
+
+        _hide_source(daemon.ops.db, "session", f"h1/{sid}")
+        status, hidden = await http(port, "GET", "/api/v1/operations/" + http_id, tok=tok)
+        assert status == 404, hidden
+        assert hidden["error"] == {
+            "code": "NOT_FOUND", "message": "Original resource sources are unavailable"}
+        assert "loop" not in hidden and "operation" not in hidden
+        assert http_id not in json.dumps(hidden) and sid not in json.dumps(hidden)
+        with pytest.raises(ToolError, match="NOT_FOUND") as refused:
+            await server.call_tool("operation_get", {"operation_id": http_id})
+        mcp_text = str(refused.value)
+        assert "Original resource sources are unavailable" in mcp_text
+        assert "loop" not in mcp_text and http_id not in mcp_text and sid not in mcp_text
+        assert sid in json.dumps(kept)
+
+        status, workspace = await _submit(
+            port, tok, {"action": "pm.workspace.create", "params": {"name": "A useful product"}}, "loop-parity-ws")
+        assert status == 202, workspace
+        await settle_operations(daemon.ops)
+        created = daemon.ops.get(workspace["operation"]["operation_id"])
+        assert created["status"] == "succeeded", created
+        wid = created["result"]["workspace"]["workspace_id"]
+        version = created["result"]["workspace"]["version"]
+        thread = {"action": "pm.thread.create", "target": {"workspace_id": wid}, "params": {"title": "Hidden"},
+                  "preconditions": {"expected_version": version}}
+        narrow = token(daemon, actor, "observe")
+        monkeypatch.setenv("BATC_API_TOKEN", narrow)
+        await _refuse(server, port, narrow, thread, "loop-no-manage", "FORBIDDEN", 403,
+                      admission_refused=True, db=daemon.ops.db)
+        outsider = token(daemon, "loop-parity-outsider", "observe", "manage")
+        monkeypatch.setenv("BATC_API_TOKEN", outsider)
+        await _refuse(server, port, outsider, thread, "loop-non-member", "NOT_FOUND", 404,
+                      admission_refused=True, db=daemon.ops.db)
+        manual = {"action": "session.send", "target": {"host": "h1", "session_id": MANUAL},
+                  "params": {"text": "Leave the manual session alone"}}
+        monkeypatch.setenv("BATC_API_TOKEN", tok)
+        await _refuse(server, port, tok, manual, "loop-manual", "MANUAL_READ_ONLY", 403,
+                      admission_refused=False, db=daemon.ops.db)
+        before = _operation_count(daemon.ops.db)
+        changed = {**http_body, "params": {"text": "Different words for the same key"}}
+        status, conflict = await _submit(port, tok, changed, "loop-http-send")
+        assert status == 409 and conflict["error"]["code"] == "IDEMPOTENCY_CONFLICT"
+        assert "operation" not in conflict and "admission_refused" not in conflict["error"]
+        with pytest.raises(ToolError, match="IDEMPOTENCY_CONFLICT"):
+            await _mcp_submit(server, {**mcp_body, "params": {"text": "Different MCP words"}}, "loop-mcp-send")
+        assert _operation_count(daemon.ops.db) == before
+    finally:
+        await fleet.close()
+
+
+async def test_work_start_loop_matches_across_http_and_mcp(loop_start, monkeypatch):
+    w = loop_start
+    daemon, ops, port = w["d"], w["d"].ops, w["port"]
+    wid, work_id = w["workspace_id"], w["target"]["work_item_id"]
+    tok = token(daemon, STARTER_OWNER.actor, *sorted(STARTER_OWNER.scopes))
+    monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
+    monkeypatch.setenv("BATC_API_TOKEN", tok)
+    server, fleet = build_server(daemon.fleet.config, principal_only=True)
+    try:
+        http_env = await _start_envelope(w, key="loop-http-start")
+        http_body = {key: http_env[key] for key in ("action", "target", "params", "preconditions")}
+        status, http_created = await _submit(port, tok, http_body, http_env["idempotency_key"])
+        assert status == 202 and http_created["created"] is True, http_created
+        http_id = http_created["operation"]["operation_id"]
+        http_attempt = ops.db.execute(
+            "SELECT attempt_id FROM work_attempts WHERE start_operation_id=?", (http_id,)).fetchone()["attempt_id"]
+        assert http_created["operation"]["loop"]["attempt_id"] == http_attempt
+        status, http_cancelled = await http(port, "POST", f"/api/v1/operations/{http_id}/cancel", tok=tok)
+        assert status == 200 and http_cancelled["operation"]["status"] == "cancelled", http_cancelled
+
+        mcp_env = await _start_envelope(w, key="loop-mcp-start")
+        mcp_created = await _mcp_submit(server, {
+            key: mcp_env[key] for key in ("action", "target", "params", "preconditions")}, mcp_env["idempotency_key"])
+        assert mcp_created["created"] is True
+        mcp_id = mcp_created["operation"]["operation_id"]
+        mcp_attempt = ops.db.execute(
+            "SELECT attempt_id FROM work_attempts WHERE start_operation_id=?", (mcp_id,)).fetchone()["attempt_id"]
+        assert mcp_created["operation"]["loop"]["attempt_id"] == mcp_attempt
+        assert http_id != mcp_id
+        assert _scrub_loop(http_created["operation"]) == _scrub_loop(mcp_created["operation"])
+        mcp_cancelled = unpack(await server.call_tool(
+            "operation_cancel", {"operation_id": mcp_id, "confirm": True}))
+        assert mcp_cancelled["operation"]["status"] == "cancelled"
+        await settle_operations(ops)
+        assert ops.get(http_id)["status"] == "cancelled" and ops.get(mcp_id)["status"] == "cancelled"
+
+        kept = await _same_operation(server, port, tok, http_id)
+        await _same_operation(server, port, tok, mcp_id)
+        assert kept["work_item_id"] == work_id and work_id in kept["dashboard_hash"]
+        rows_after_start = _operation_count(ops.db)
+        status, replayed = await _submit(port, tok, http_body, http_env["idempotency_key"])
+        assert status == 200 and replayed["created"] is False
+        assert replayed["operation"]["loop"]["operation_id"] == http_id
+        mcp_replay = await _mcp_submit(server, {
+            key: mcp_env[key] for key in ("action", "target", "params", "preconditions")}, mcp_env["idempotency_key"])
+        assert mcp_replay["created"] is False and mcp_replay["operation"]["loop"]["operation_id"] == mcp_id
+        assert _operation_count(ops.db) == rows_after_start
+        assert _attempts_for(ops.db, http_id) == 1 and _attempts_for(ops.db, mcp_id) == 1
+
+        for path in (
+            f"/api/v1/pm/workspaces/{wid}/work/{work_id}/start-preview",
+            f"/api/v1/pm/workspaces/{wid}/work-attempts/{http_attempt}",
+            f"/api/v1/pm/workspaces/{wid}/work-attempts/{http_attempt}/result",
+        ):
+            method = "POST" if path.endswith("start-preview") else "GET"
+            body = {"instruction": "Previewed via HTTP."} if method == "POST" else None
+            status, document = await http(port, method, path, tok=tok, body=body)
+            assert status == 200, (path, document)
+            assert not _has_key(document, "loop")
+
+        live_env = await _start_envelope(w, key="loop-live-start")
+        status, live = await _submit(port, tok, {
+            key: live_env[key] for key in ("action", "target", "params", "preconditions")}, live_env["idempotency_key"])
+        assert status == 202 and live["created"] is True, live
+        assert ops.get(live["operation"]["operation_id"])["status"] == "accepted"
+        before_ops, before_attempts = _operation_count(ops.db), _attempt_count(ops.db)
+        for key_name in ("loop-blocked-http", "loop-blocked-mcp"):
+            blocked = await _start_envelope(w, key=key_name)
+            body = {key: blocked[key] for key in ("action", "target", "params", "preconditions")}
+            if key_name.endswith("http"):
+                status, refused = await _submit(port, tok, body, blocked["idempotency_key"])
+                assert status == 409 and refused["error"]["code"] == "PM_WORK_START_IN_PROGRESS", refused
+                assert refused["error"]["admission_refused"] is True and "operation" not in refused
+            else:
+                with pytest.raises(ToolError, match="PM_WORK_START_IN_PROGRESS"):
+                    await _mcp_submit(server, body, blocked["idempotency_key"])
+        assert _operation_count(ops.db) == before_ops and _attempt_count(ops.db) == before_attempts
+
+        _hide_source(ops.db, "work_item", work_id)
+        status, hidden = await http(port, "GET", "/api/v1/operations/" + http_id, tok=tok)
+        assert status == 404, hidden
+        assert hidden["error"] == {
+            "code": "NOT_FOUND", "message": "Original resource sources are unavailable"}
+        assert "loop" not in hidden and "operation" not in hidden
+        assert http_id not in json.dumps(hidden) and work_id not in json.dumps(hidden)
+        with pytest.raises(ToolError, match="NOT_FOUND") as refused:
+            await server.call_tool("operation_get", {"operation_id": http_id})
+        mcp_text = str(refused.value)
+        assert "Original resource sources are unavailable" in mcp_text
+        assert "loop" not in mcp_text and http_id not in mcp_text and work_id not in mcp_text
+        assert kept["work_item_id"] == work_id
+    finally:
+        await fleet.close()
+
+
+async def test_child_session_withdrawn_from_another_row_stays_readable(loop_start, monkeypatch):
+    """A proven package child copies the managed session from the handoff, not from its own fields."""
+    w = loop_start
+    daemon, ops, port = w["d"], w["d"].ops, w["port"]
+    tok = token(daemon, STARTER_OWNER.actor, *sorted(STARTER_OWNER.scopes))
+    monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
+    monkeypatch.setenv("BATC_API_TOKEN", tok)
+    server, fleet = build_server(daemon.fleet.config, principal_only=True)
+    try:
+        env = await _start_envelope(w, key="loop-child-session")
+        body = {key: env[key] for key in ("action", "target", "params", "preconditions")}
+        status, created = await _submit(port, tok, body, env["idempotency_key"])
+        assert status == 202 and created["created"] is True, created
+        parent_id = created["operation"]["operation_id"]
+        done = await _advance_start(ops, parent_id)
+        assert done["status"] == "succeeded", done
+        child_id = done["result"]["children"]["package"]
+        host, sid = done["result"]["session"]["host"], done["result"]["session"]["session_id"]
+        assert isinstance(child_id, str) and child_id != parent_id
+        assert sid not in json.dumps(ops.get(child_id))
+
+        status, before = await http(port, "GET", "/api/v1/operations/" + child_id, tok=tok)
+        assert status == 200, before
+        before_mcp = unpack(await server.call_tool("operation_get", {"operation_id": child_id}))
+        assert before["operation"]["loop"] == before_mcp["operation"]["loop"]
+        kept = before["operation"]["loop"]
+        assert kept["links"]["session_hash"] == f"#/session/{host}/{sid}"
+        assert sid in json.dumps(kept)
+
+        _hide_source(ops.db, "session", f"{host}/{sid}")
+        status, hidden = await http(port, "GET", "/api/v1/operations/" + child_id, tok=tok)
+        assert status == 200, hidden
+        hidden_mcp = unpack(await server.call_tool("operation_get", {"operation_id": child_id}))
+        assert hidden["operation"]["loop"] == hidden_mcp["operation"]["loop"]
+        http_text, mcp_text = json.dumps(hidden), json.dumps(hidden_mcp)
+        session_hash = f"#/session/{host}/{sid}"
+        assert sid not in http_text and sid not in mcp_text
+        assert session_hash not in http_text and session_hash not in mcp_text
+        withdrawn = {"status": "unavailable", "reason": "source_withdrawn"}
+        assert hidden["operation"]["loop"]["completeness"] == withdrawn
+        assert hidden["operation"]["loop"]["links"]["session_hash"] is None
+        assert sid in json.dumps(kept)
+        assert ops.get(child_id)["status"] == "succeeded"
+    finally:
+        await fleet.close()

@@ -1233,6 +1233,7 @@ class ApiV1:
                                                     "work_batches": pm_work_batches.capabilities(self.daemon.ops),
                                                     "work_start": pm_work_start.capabilities(self.daemon.ops),
                                                     "work_attempt_results": pm_attempt_result_reads.capabilities(self.daemon.ops),
+                                                    "operation_loop": {"version": 1},
                                                     "workload": pm_workload.capabilities(),
                                                     "work_package_prepare": "pm.work_package.create" in self.daemon.ops.actions,
                                                     "issue_mapping": all(action in self.daemon.ops.actions for action in ("pm.issue.publish", "pm.issue.cancel")),
