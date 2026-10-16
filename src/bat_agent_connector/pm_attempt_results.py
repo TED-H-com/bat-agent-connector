@@ -6,6 +6,7 @@ under actor ``connector``. Read endpoints never write to SQLite or emit api_even
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import hashlib
 import json
@@ -13,7 +14,8 @@ import time
 import uuid
 from typing import Any
 
-from . import lifecycle, pm_source_lineage, registry
+from . import lifecycle, orchestrate, pm_source_lineage, registry
+from .errors import BatError, ConnectionLost, InvokeTimeout
 from .redact import redact_secrets
 from .service import DIGEST_TEXT_MAX_CHARS, TURN_SLICE_MAX_ITEMS  # noqa: F401
 from .summarize import clip, is_tool, iso_local, summarize_message, ts_to_ms
@@ -32,6 +34,7 @@ TOOL_ACTIVITY_MAX_ITEMS = 50
 TOOL_ACTIVITY_MAX_CHARS = 500
 BRANCH_DIFF_MAX_COMMITS = 30
 BRANCH_DIFF_MAX_FILES = 80
+CHANGESET_TOTAL_BUDGET_S = 25.0
 
 BOUNDARIES = frozenset({"turn_done", "process_ended", "agent_error"})
 
@@ -849,3 +852,386 @@ def receipts(db, workspace_id: str, attempt_id: str, limit: int = 20) -> dict[st
         "results": summary_list,
         "has_more": has_more,
     }
+
+
+# --------------------------------------------------------------------------- Section 3: Boundary head & changes summary
+def _unknown_uncommitted() -> dict[str, Any]:
+    return {
+        "count": "unknown",
+        "files": "unknown",
+        "evidence": "unproven",
+        "reason": "bat_empty_status_not_clean_proof",
+    }
+
+
+async def collect_uncommitted(client: Any, worktree_path: str | None) -> dict[str, Any]:
+    """Read uncommitted worktree status from ``worktree_path`` only (never ``meta.cwd``).
+
+    BAT ``git:status`` returns ``[]`` both when clean and when git fails, so an empty
+    list or error is never treated as proof of a clean working tree.
+    """
+    if not isinstance(worktree_path, str) or not worktree_path.strip():
+        return _unknown_uncommitted()
+    wt = worktree_path.strip()
+    try:
+        st = await client.invoke("git:status", {"cwd": wt})
+    except (BatError, ConnectionLost, InvokeTimeout, asyncio.TimeoutError):
+        return _unknown_uncommitted()
+    if not isinstance(st, list) or not st:
+        return _unknown_uncommitted()
+    files: list[dict[str, Any]] = []
+    for entry in st:
+        if isinstance(entry, dict):
+            item = dict(entry)
+            path_val = str(item.get("file") or item.get("path") or "").strip()
+            if path_val:
+                item.setdefault("file", path_val)
+                item.setdefault("path", path_val)
+            item.setdefault("diff_available", False)
+            item.setdefault("unavailable_reason", "uncommitted_diff_not_supported_by_bat")
+            files.append(item)
+        elif isinstance(entry, str) and entry.strip():
+            path_val = entry.strip()
+            files.append(
+                {
+                    "file": path_val,
+                    "path": path_val,
+                    "status": "?",
+                    "diff_available": False,
+                    "unavailable_reason": "uncommitted_diff_not_supported_by_bat",
+                }
+            )
+    if not files:
+        return _unknown_uncommitted()
+    return {
+        "count": len(files),
+        "files": files,
+        "evidence": "bat_git_status_nonempty",
+        "reason": None,
+    }
+
+
+async def collect_head_observation(
+    client: Any,
+    worktree_path: str | None,
+    *,
+    base_sha: str | None,
+    result_id: str | None = None,
+    observed_at: float | None = None,
+) -> dict[str, Any]:
+    """Observe the worktree HEAD (`git:log count 1`) and uncommitted changes at a turn boundary."""
+    uncommitted = await collect_uncommitted(client, worktree_path)
+    head_sha: str | None = None
+    if isinstance(worktree_path, str) and worktree_path.strip():
+        try:
+            log = await client.invoke("git:log", {"cwd": worktree_path.strip(), "count": 1})
+            if isinstance(log, list) and log and isinstance(log[0], dict):
+                h = log[0].get("hash")
+                if isinstance(h, str) and h.strip():
+                    head_sha = h.strip()
+        except (BatError, ConnectionLost, InvokeTimeout, asyncio.TimeoutError):
+            head_sha = None
+
+    fixed_result_commit: dict[str, Any] | None = None
+    if head_sha:
+        fixed_result_commit = {
+            "commit_sha": head_sha,
+            "source_kind": "turn_end_observation",
+            "source_id": result_id,
+            "recorded_by": ACTOR,
+            "uncommitted": uncommitted["count"],
+        }
+        if observed_at is not None:
+            fixed_result_commit["recorded_at"] = float(observed_at)
+
+    return {
+        "base_commit": str(base_sha or "unknown"),
+        "head_commit": head_sha or "unknown",
+        "observed_at": float(observed_at) if observed_at is not None else None,
+        "uncommitted": uncommitted,
+        "fixed_result_commit": fixed_result_commit,
+        "worktree_unreachable": head_sha is None,
+    }
+
+
+def _incomplete_changes(
+    base_sha: str | None,
+    head_sha: str | None,
+    reason: str,
+    *,
+    result_id: str | None = None,
+    commits: list[str] | None = None,
+    files: list[dict[str, Any]] | None = None,
+    unavailable: list[str] | None = None,
+    reasons: list[str] | None = None,
+) -> dict[str, Any]:
+    deduped = _dedup_reasons(reasons or ([reason] if reason else []))
+    c_list = list(commits or [])
+    f_list = list(files or [])
+    return {
+        "aggregation": "per_commit",
+        "base_commit": str(base_sha or "unknown"),
+        "head_commit": str(head_sha or "unknown"),
+        "commits": c_list,
+        "commit_count": len(c_list),
+        "files": f_list,
+        "file_count": len(f_list),
+        "additions": "unknown",
+        "deletions": "unknown",
+        "unavailable": list(unavailable or []),
+        "complete": False,
+        "reason": deduped[0] if deduped else reason,
+        "reasons": deduped,
+        "cached_from_result_id": result_id,
+    }
+
+
+async def collect_changes_summary(
+    client: Any,
+    worktree_path: str | None,
+    *,
+    base_sha: str | None,
+    result_id: str | None = None,
+    budget_s: float = CHANGESET_TOTAL_BUDGET_S,
+) -> dict[str, Any]:
+    """Walk ``(base_sha..head]`` oldest-first on ``worktree_path`` and compute per-commit file stats.
+
+    Modelled on ``lifecycle._branch_diff`` without changing that function (whose base is the main checkout).
+    Stores no raw diff text; when a file's diff is empty or raises ``BatError``, lists the path in
+    ``unavailable`` with ``additions: "unknown", deletions: "unknown"`` (never ``0``).
+    """
+    if not isinstance(worktree_path, str) or not worktree_path.strip() or not isinstance(base_sha, str) or not base_sha.strip():
+        return _incomplete_changes(base_sha, "unknown", "worktree_unreachable", result_id=result_id)
+
+    wt = worktree_path.strip()
+    frozen_base = base_sha.strip()
+    started = time.monotonic()
+
+    def remaining() -> float:
+        return float(budget_s) - (time.monotonic() - started)
+
+    rem = remaining()
+    if rem <= 0:
+        return _incomplete_changes(frozen_base, "unknown", "changeset_time_budget_exceeded", result_id=result_id)
+    try:
+        wl = await asyncio.wait_for(
+            client.invoke("git:log", {"cwd": wt, "count": BRANCH_DIFF_MAX_COMMITS + 1}),
+            timeout=rem,
+        )
+    except (asyncio.TimeoutError, InvokeTimeout):
+        return _incomplete_changes(frozen_base, "unknown", "changeset_time_budget_exceeded", result_id=result_id)
+    except (BatError, ConnectionLost):
+        return _incomplete_changes(frozen_base, "unknown", "worktree_unreachable", result_id=result_id)
+
+    if not isinstance(wl, list) or not wl:
+        return _incomplete_changes(frozen_base, "unknown", "worktree_unreachable", result_id=result_id)
+
+    head_sha = str((wl[0] or {}).get("hash") if isinstance(wl[0], dict) else "").strip() or "unknown"
+    ahead_hashes: list[str] = []
+    found_base = False
+    for entry in wl:
+        if not isinstance(entry, dict):
+            continue
+        h = str(entry.get("hash") or "").strip()
+        if not h:
+            continue
+        if h == frozen_base:
+            found_base = True
+            break
+        ahead_hashes.append(h)
+
+    if not found_base:
+        reason = (
+            "commit_limit_exceeded"
+            if len(ahead_hashes) > BRANCH_DIFF_MAX_COMMITS
+            else "base_commit_not_ancestor"
+        )
+        return _incomplete_changes(frozen_base, head_sha, reason, result_id=result_id)
+
+    chronological = list(reversed(ahead_hashes))
+    if not chronological:
+        return {
+            "aggregation": "per_commit",
+            "base_commit": frozen_base,
+            "head_commit": head_sha,
+            "commits": [],
+            "commit_count": 0,
+            "files": [],
+            "file_count": 0,
+            "additions": 0,
+            "deletions": 0,
+            "unavailable": [],
+            "complete": True,
+            "reason": None,
+            "reasons": [],
+            "cached_from_result_id": result_id,
+        }
+
+    commit_files_list: list[tuple[str, list[dict[str, str]]]] = []
+    for h in chronological:
+        rem = remaining()
+        if rem <= 0:
+            return _incomplete_changes(
+                frozen_base,
+                head_sha,
+                "changeset_time_budget_exceeded",
+                result_id=result_id,
+                commits=chronological,
+            )
+        try:
+            raw_files = await asyncio.wait_for(
+                client.invoke("git:diff-files", {"cwd": wt, "commitHash": h}),
+                timeout=rem,
+            )
+        except (asyncio.TimeoutError, InvokeTimeout):
+            return _incomplete_changes(
+                frozen_base,
+                head_sha,
+                "changeset_time_budget_exceeded",
+                result_id=result_id,
+                commits=chronological,
+            )
+        except (BatError, ConnectionLost):
+            return _incomplete_changes(
+                frozen_base,
+                head_sha,
+                "worktree_unreachable",
+                result_id=result_id,
+                commits=chronological,
+            )
+
+        parsed_files: list[dict[str, str]] = []
+        for fe in raw_files or []:
+            if not isinstance(fe, dict):
+                continue
+            path = str(fe.get("file") or fe.get("path") or "").strip()
+            if not path:
+                continue
+            status = str(fe.get("status") or "M")
+            parsed_files.append({"path": path, "status": status})
+        commit_files_list.append((h, parsed_files))
+
+    per_file: dict[str, dict[str, Any]] = {}
+    unavailable_paths: list[str] = []
+    reasons: list[str] = []
+    diff_calls = 0
+    budget_exceeded = False
+    file_limit_exceeded = False
+
+    def _mark_unavailable(p: str) -> None:
+        per_file[p]["unavailable"] = True
+        if p not in unavailable_paths:
+            unavailable_paths.append(p)
+
+    for h, parsed_files in commit_files_list:
+        for fe in parsed_files:
+            path = fe["path"]
+            status = fe["status"]
+            entry = per_file.setdefault(
+                path,
+                {
+                    "path": path,
+                    "status": status,
+                    "additions": 0,
+                    "deletions": 0,
+                    "commits_touched": [],
+                    "unavailable": False,
+                },
+            )
+            entry["status"] = status
+            if h not in entry["commits_touched"]:
+                entry["commits_touched"].append(h)
+
+            if budget_exceeded or remaining() <= 0:
+                budget_exceeded = True
+                _mark_unavailable(path)
+                if "changeset_time_budget_exceeded" not in reasons:
+                    reasons.append("changeset_time_budget_exceeded")
+                continue
+
+            diff_calls += 1
+            if diff_calls > BRANCH_DIFF_MAX_FILES:
+                file_limit_exceeded = True
+                _mark_unavailable(path)
+                continue
+
+            rem = remaining()
+            try:
+                d = await asyncio.wait_for(
+                    client.invoke("git:diff", {"cwd": wt, "commitHash": h, "filePath": path}),
+                    timeout=rem,
+                )
+            except (asyncio.TimeoutError, InvokeTimeout):
+                budget_exceeded = True
+                _mark_unavailable(path)
+                if "changeset_time_budget_exceeded" not in reasons:
+                    reasons.append("changeset_time_budget_exceeded")
+                continue
+            except (BatError, ConnectionLost):
+                d = ""
+
+            if not isinstance(d, str) or not d.strip():
+                _mark_unavailable(path)
+                if "diff_exceeded_pipe_limit" not in reasons:
+                    reasons.append("diff_exceeded_pipe_limit")
+                continue
+
+            st = orchestrate.diff_stats(d)
+            if not entry["unavailable"]:
+                entry["additions"] += int(st["additions"])
+                entry["deletions"] += int(st["deletions"])
+
+    files_out: list[dict[str, Any]] = []
+    for path, entry in per_file.items():
+        if entry["unavailable"]:
+            files_out.append(
+                {
+                    "path": path,
+                    "status": entry["status"],
+                    "additions": "unknown",
+                    "deletions": "unknown",
+                    "commits_touched": list(entry["commits_touched"]),
+                }
+            )
+        else:
+            files_out.append(
+                {
+                    "path": path,
+                    "status": entry["status"],
+                    "additions": entry["additions"],
+                    "deletions": entry["deletions"],
+                    "commits_touched": list(entry["commits_touched"]),
+                }
+            )
+
+    deduped_reasons = _dedup_reasons(reasons)
+    complete = (
+        not unavailable_paths
+        and not budget_exceeded
+        and not file_limit_exceeded
+        and not deduped_reasons
+    )
+    if complete:
+        total_add: int | str = sum(int(f["additions"]) for f in files_out)
+        total_del: int | str = sum(int(f["deletions"]) for f in files_out)
+    else:
+        total_add = "unknown"
+        total_del = "unknown"
+
+    return {
+        "aggregation": "per_commit",
+        "base_commit": frozen_base,
+        "head_commit": head_sha,
+        "commits": chronological,
+        "commit_count": len(chronological),
+        "files": files_out,
+        "file_count": len(files_out),
+        "additions": total_add,
+        "deletions": total_del,
+        "unavailable": unavailable_paths,
+        "complete": complete,
+        "reason": deduped_reasons[0] if deduped_reasons else None,
+        "reasons": deduped_reasons,
+        "cached_from_result_id": result_id,
+    }
+
