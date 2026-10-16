@@ -173,7 +173,7 @@ test('busy focus: Read keeps the keyboard while the overview is held',async({pag
  await page.waitForFunction(()=>typeof (window as any).__sessionBat.releaseOverview==='function');
  await expect(read).toBeFocused();
  await expect(read).toHaveAttribute('aria-disabled','true');
- await expect(bat(page).getByRole('status')).toHaveAttribute('aria-busy','true');
+ await expect(bat(page).locator('[role="status"]')).toHaveAttribute('aria-busy','true');
  const held=(await calls(page,'overview')).length;
  expect(held).toBe(before+1);
  await page.keyboard.press('Enter');
