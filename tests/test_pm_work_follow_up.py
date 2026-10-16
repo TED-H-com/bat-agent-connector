@@ -255,6 +255,14 @@ async def test_follow_up_fifo_order(start_ready, mock, monkeypatch):
         assert queued["input_receipt"]["cancellable"] is True
         assert queued["input_receipt"]["labels"]["state"]["zh-TW"] == "排隊中"
         assert queued["input_receipt"]["labels"]["state"]["en"] == "Queued"
+        assert "labels" not in queued
+        assert "cancellable" not in queued
+        assert "text_excerpt" not in queued
+        assert "next_allowed_actions" not in queued
+        receipt_only = queued.get("result") if isinstance(queued.get("result"), dict) else {}
+        assert "labels" not in receipt_only
+        assert "cancellable" not in receipt_only
+        assert "text_excerpt" not in receipt_only
         assert _frames(mock, f"batc-{op_id}") == []
     assert len(_frames(mock)) == len(before)
 

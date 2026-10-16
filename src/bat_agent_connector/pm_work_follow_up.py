@@ -1661,18 +1661,17 @@ def build_input_receipt(
 
 
 def enrich_operation(db, op: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Attach live-synthesized P5 Input Receipt fields to an `operations` dict without mutating `op['status']`."""
+    """Attach the Input Receipt at ``operation.input_receipt`` only.
+
+    The receipt is not merged into ``result`` and is not copied onto the
+    operation. Those fields keep the operation's own values.
+    """
     if op is None or not is_work_follow_up(op):
         return op
     receipt = build_input_receipt(db, op)
     if receipt is None:
         return op
     op["input_receipt"] = receipt
-    prev_result = op.get("result") if isinstance(op.get("result"), dict) else {}
-    op["result"] = {**prev_result, **receipt}
-    for k, v in receipt.items():
-        if k != "status":
-            op[k] = v
     return op
 
 
