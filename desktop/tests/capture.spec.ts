@@ -40,9 +40,16 @@ async function fixture(page: Page, native: boolean, options: any = {}) {
       state.operationReads++;
       if (state.delayRead) {state.delayRead = false; await new Promise(resolve => {state.holdRead = resolve;});}
       if (state.holdOperationRead) {
-        if (!state.operationReadGate) state.operationReadGate = new Promise(resolve => {state.releaseOperationRead = resolve;});
+        if (!state.operationReadGate || state.operationReadReleased) {
+          state.operationReadReleased = false;
+          state.operationReadEpoch = (state.operationReadEpoch || 0) + 1;
+          state.operationReadGate = new Promise(resolve => {
+            state.releaseOperationRead = () => {state.operationReadReleased = true; resolve();};
+          });
+        }
         await state.operationReadGate;
       }
+      if (state.operationNote) operation.status_reason = state.operationNote;
       if (state.failRead) return {status: 503, data: {error: {code: 'READ_FAILED', message: 'Capture read failed'}}};
       return {status: 200, data: {operation}};
     }
@@ -415,20 +422,51 @@ test('new capture moves focus to the host when the source is no longer valid', a
   expect(state.writes).toHaveLength(1);
   expect(state.errors).toEqual([]);
 });
-test('tab from the review checkbox reaches save while the capture is in flight', async ({page}) => {
+test('shift+tab during a save returns to check and leaves preview disabled', async ({page}) => {
   const {state, box} = await reviewed(page, {holdOperation: true});
   try {
-    const checkbox = box.getByRole('checkbox', {name: 'I reviewed this file and its source evidence', exact: true});
     await saveButton(box).focus();
     await page.keyboard.press('Enter');
     await expect.poll(() => typeof state.releaseOperation).toBe('function');
-    await expect(checkbox).toBeVisible();
-    await checkbox.focus();
-    await page.keyboard.press('Tab');
     const apply = checkButton(box);
+    const preview = previewButton(box);
+    await expect(apply).toBeFocused();
+    await expect(apply).toHaveAttribute('aria-disabled', 'true');
+    await expect.poll(() => preview.evaluate(node => (node as HTMLButtonElement).disabled)).toBe(true);
+    await expect(preview).not.toHaveAttribute('aria-disabled', 'true');
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Tab');
     await expect(apply).toBeFocused();
     await expect(apply).toHaveAttribute('aria-disabled', 'true');
     expect(state.writes).toHaveLength(1);
+    expect(state.errors).toEqual([]);
+  } finally {release(state);}
+});
+test('a running capture poll leaves capture another file disabled', async ({page}) => {
+  await page.clock.install();
+  const {state, box} = await reviewed(page, {status: 'running'});
+  await saveButton(box).click();
+  await expect(box.getByRole('link', {name: op, exact: true})).toBeVisible();
+  const busyState = () => box.evaluate(root => {
+    const button = [...root.querySelectorAll('button')].find(item => item.textContent === 'Capture another file');
+    const notice = root.querySelector('[role="status"]');
+    return {disabled: Boolean(button && (button as HTMLButtonElement).disabled),
+      ariaDisabled: button ? button.getAttribute('aria-disabled') : null,
+      ariaBusy: notice ? notice.getAttribute('aria-busy') : null};
+  });
+  state.holdOperationRead = true;
+  try {
+    await page.clock.fastForward(1000);
+    await expect.poll(() => state.operationReadEpoch).toBe(1);
+    await expect.poll(busyState).toEqual({disabled: true, ariaDisabled: null, ariaBusy: null});
+    state.operationNote = 'still-running';
+    state.releaseOperationRead();
+    await expect(box).toContainText('still-running');
+    await page.clock.fastForward(1000);
+    await expect.poll(() => state.operationReadEpoch).toBe(2);
+    await expect.poll(busyState).toEqual({disabled: true, ariaDisabled: null, ariaBusy: null});
+    expect(state.writes).toHaveLength(1);
+    expect(state.errors).toEqual([]);
   } finally {release(state);}
 });
 test('observe-only capture preview remains read-only', async ({page}) => {
