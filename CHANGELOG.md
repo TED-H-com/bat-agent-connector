@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Keyboard focus stays inside an inspector while its content is still loading, instead of leaving the dialog for the page.
+
 - Conversation adoption advances as each original child operation finishes,
   removing the fixed one-second pause between completed steps. Child failures
   still stop the adoption; recovery keeps the original requests and receipts.

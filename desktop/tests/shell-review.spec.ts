@@ -64,6 +64,39 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 1280, 1000, 390
     expect(f.base.base.state.writes).toHaveLength(0); await context.close();
   });
 }
+for (const locale of ['en', 'zh-TW']) for (const width of [1000, 390]) {
+  test(`Discussion overlay focus stays inside inspector while loading ${locale} ${width}`, async ({browser, baseURL}) => {
+    const context = await browser.newContext({locale, baseURL, viewport: {width, height: 900}}), page = await context.newPage(), f = shellReviewFixture();
+    let releaseEvidence!: () => void;
+    f.state.holdEvidence = new Promise<void>(resolve => { releaseEvidence = resolve; });
+    await mountConversation(page, false, f.dispatch); await page.goto(pmRoute);
+    await openPmPanel(page, 'ui_workspace_settings');
+    const panel = page.locator('main > .ui-inspector');
+    await expect(panel.locator('[data-pm-source-pending]')).toHaveCount(1);
+    await expect(panel.locator('[data-pm-source-loading]')).toBeVisible();
+    const first = panel.locator(width < 800 ? '.ui-inspector-back' : ':scope > header > .ui-icon-button');
+    await first.focus();
+    await page.keyboard.press('Shift+Tab');
+    expect(await panel.evaluate(node => node.contains(document.activeElement))).toBe(true);
+    expect(await page.evaluate(() => getComputedStyle(document.activeElement!).visibility)).toBe('visible');
+    expect(await page.evaluate(() => document.activeElement !== document.body)).toBe(true);
+    await page.keyboard.press('Tab');
+    await expect(first).toBeFocused();
+    expect(await page.evaluate(() => document.activeElement !== document.body && getComputedStyle(document.activeElement!).visibility === 'visible')).toBe(true);
+    releaseEvidence();
+    await expect(panel.getByRole('heading', {name: locale === 'en' ? 'No projects yet' : '尚無專案', exact: true})).toBeVisible();
+    await expect(panel.locator('[data-pm-source-pending]')).toHaveCount(0);
+    const last = panel.getByRole('combobox', {name: locale === 'en' ? 'Connector project' : 'Connector 專案', exact: true});
+    await page.keyboard.press('Shift+Tab');
+    await expect(last).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(first).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    expect(f.base.base.state.writes).toHaveLength(0);
+    await context.close();
+  });
+}
 for (const locale of ['en', 'zh-TW']) {
   for (const width of [1440, 1280, 1000, 390]) test(`Lifecycle uses phase and identifies admitted work ${locale} ${width}`, async ({browser, baseURL}) => {
     const context = await browser.newContext({locale, baseURL, viewport: {width, height: 900}}), page = await context.newPage(), f = shellReviewFixture(); f.state.stage = null;
