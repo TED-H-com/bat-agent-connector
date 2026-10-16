@@ -8,7 +8,6 @@ patched clock, never ``sleep``.
 from __future__ import annotations
 
 import asyncio
-import inspect
 import json
 from contextlib import asynccontextmanager
 
@@ -32,8 +31,6 @@ from bat_agent_connector.operations import (
     STATES as OP_STATES,
 )
 from bat_agent_connector.operations import (
-    Cancelled,
-    OpContext,
     Wait,
 )
 from bat_agent_connector.task_daemon import TaskDaemon
@@ -355,6 +352,7 @@ async def test_queued_input_never_sent_before_boundary(start_ready, mock):
     pending = {"toolUseId": "question-1", "questions": [{"question": "Continue?"}]}
 
     await _refresh(w, mock, att, att["turn_marker"], streaming=True)
+    before = len(mock.invokes)
     streaming_id = await _queue(w, mock, att, "while streaming", "p5-never-stream")  # gitleaks:allow (test idempotency key)
     ops.wake(streaming_id)
     await settle_operations(ops)
@@ -362,11 +360,13 @@ async def test_queued_input_never_sent_before_boundary(start_ready, mock):
     assert _frames(mock, f"batc-{streaming_id}") == []
     refused, body = await _post(w, att, "now while streaming", key="p5-now-stream", schedule="now")  # gitleaks:allow (test idempotency key)
     assert refused == 409 and body["error"]["code"] == "PM_WORK_SESSION_BUSY", body
+    assert len(mock.invokes) == before
 
     # Auto inventory reads pending only while streaming. A streaming pass records
     # the question; the idle pass keeps that fact and clears the streaming flag.
     await _refresh(w, mock, att, att["turn_marker"], streaming=True, pending=pending)
     await _refresh(w, mock, att, att["turn_marker"], streaming=False, pending=pending)
+    before = len(mock.invokes)
     gate_id = await _queue(w, mock, att, "while a question is open", "p5-never-gate")  # gitleaks:allow (test idempotency key)
     ops.wake(gate_id)
     await settle_operations(ops)
@@ -374,10 +374,12 @@ async def test_queued_input_never_sent_before_boundary(start_ready, mock):
     assert _frames(mock, f"batc-{gate_id}") == []
     refused, body = await _post(w, att, "now while waiting", key="p5-now-gate", schedule="now")  # gitleaks:allow (test idempotency key)
     assert refused == 409 and body["error"]["code"] == "PM_WORK_SESSION_WAITING_INPUT", body
+    assert len(mock.invokes) == before
 
     await _refresh(w, mock, att, att["turn_marker"], streaming=True, pending=None)
     _set_turn_messages(mock, att["session_id"], att["turn_marker"], streaming=False, include_echo=False)
     await w["d"].inventory._refresh_scheduled(att["host"])
+    before = len(mock.invokes)
     missing_id = await _queue(w, mock, att, "before any boundary", "p5-never-boundary")  # gitleaks:allow (test idempotency key)
     ops.wake(missing_id)
     await settle_operations(ops)
@@ -385,6 +387,7 @@ async def test_queued_input_never_sent_before_boundary(start_ready, mock):
     assert _frames(mock, f"batc-{missing_id}") == []
     refused, body = await _post(w, att, "now before boundary", key="p5-now-boundary", schedule="now")  # gitleaks:allow (test idempotency key)
     assert refused == 409 and body["error"]["code"] == "PM_WORK_SESSION_BUSY", body
+    assert len(mock.invokes) == before
 
 
 # --------------------------------------------------------------------------- 4
@@ -454,28 +457,38 @@ async def test_pre_fence_disconnect_and_busy_wait_use_zero_uncertain_tries_and_s
     assert legacy["steps"][-1]["status"] == "failed"
     monkeypatch.setattr(service, "session_send", original_send)
 
-    calls = {"n": 0}
-    original_check = OpContext.check_cancel
-
-    def cancel_on_second(self):
-        calls["n"] += 1
-        if calls["n"] >= 2:
-            raise Cancelled("cancel before the frame")
-        return original_check(self)
-
-    monkeypatch.setattr(OpContext, "check_cancel", cancel_on_second)
     await _refresh(w, mock, att, f"batc-{live_id}", streaming=False)
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def hold_meta(_self, frame, timeout, on_transport, original):
+        # session_send reads metadata before before_invoke. The fence is already
+        # false, and the send frame has not been built.
+        if frame.get("channel") == "claude:get-session-meta" and not started.is_set():
+            started.set()
+            await release.wait()
+        return await original(_self, frame, timeout, on_transport=on_transport)
+
+    original_roundtrip = _patch_roundtrip(monkeypatch, hold_meta)
     cancel_status, cancel_body = await _post(
         w, att, "cancel before send", key="p5-pre-fence-cancel",  # gitleaks:allow (test idempotency key)
     )
     assert cancel_status == 202, cancel_body
     cancelled_id = cancel_body["operation"]["operation_id"]
+    await ops.run_due()
+    await asyncio.wait_for(started.wait(), 10)
+    status, body = await http(
+        w["port"], "POST", f"/api/v1/operations/{cancelled_id}/cancel", tok=w["owner_token"],
+    )
+    assert status == 200, body
+    release.set()
     await _settle(ops, cancelled_id)
     cancelled = await _get_op(w, cancelled_id)
     assert cancelled["status"] == "failed", cancelled
     assert cancelled["error_code"] == "CANCELLED"
     assert cancelled["input_receipt"]["state"] == "cancelled"
     assert _frames(mock, f"batc-{cancelled_id}") == []
+    _restore_roundtrip(original_roundtrip)
 
 
 # --------------------------------------------------------------------------- 5
@@ -488,8 +501,10 @@ async def test_cancel_while_waiting(start_ready, mock):
     await _refresh(w, mock, att, att["turn_marker"], streaming=True)
     first = await _queue(w, mock, att, "cancel me", "p5-cancel-wait-1")  # gitleaks:allow (test idempotency key)
     second = await _queue(w, mock, att, "send me later", "p5-cancel-wait-2")  # gitleaks:allow (test idempotency key)
+    before = len(mock.invokes)
     status, body = await http(w["port"], "POST", f"/api/v1/operations/{first}/cancel", tok=w["owner_token"])
     assert status == 200, body
+    assert len(mock.invokes) == before
     cancelled = await _get_op(w, first)
     assert cancelled["status"] == "cancelled"
     assert cancelled["input_receipt"]["state"] == "cancelled"
@@ -910,38 +925,51 @@ def _assert_refused(ops, mock, status, body, *, code, http_status, before_ops, b
     assert _row_counts(ops) == (before_ops, before_inputs)
     assert len(mock.invokes) == before_invokes
 
+
 async def test_manual_and_foreign_sessions_not_targetable(start_ready, mock):
     w = start_ready
+    ops = w["d"].ops
     att = await _start_managed_attempt(w, mock, key="p5-manual")  # gitleaks:allow (test idempotency key)
+    before_ops, before_inputs = _row_counts(ops)
+    before_invokes = len(mock.invokes)
     status, body = await _post(
         w, att, "mixed",
         key="p5-mixed",  # gitleaks:allow (test idempotency key)
         target={"workspace_id": att["workspace_id"], "work_item_id": att["work_item_id"], "host": att["host"]},
         params={"text": "mixed target"},
     )
-    assert status == 422 and body["error"]["code"] == "INVALID_TARGET", body
-    assert body["error"]["admission_refused"] is True
+    _assert_refused(
+        ops, mock, status, body, code="INVALID_TARGET", http_status=422,
+        before_ops=before_ops, before_inputs=before_inputs, before_invokes=before_invokes,
+    )
 
     saved = dict(registry.get(att["host"], att["session_id"]))
     registry.update(att["host"], att["session_id"], start_operation_id="op_foreign_not_this_attempt")
     status, body = await _post(w, att, "foreign", key="p5-foreign")  # gitleaks:allow (test idempotency key)
-    assert status == 409 and body["error"]["code"] == "PM_WORK_SESSION_NOT_MANAGED", body
+    _assert_refused(
+        ops, mock, status, body, code="PM_WORK_SESSION_NOT_MANAGED", http_status=409,
+        before_ops=before_ops, before_inputs=before_inputs, before_invokes=before_invokes,
+    )
     registry.update(
         att["host"], att["session_id"],
         start_operation_id=saved.get("start_operation_id"), provenance="manual_bat",
     )
     status, body = await _post(w, att, "manual", key="p5-manual-send")  # gitleaks:allow (test idempotency key)
-    assert status in {403, 409}, body
-    assert body["error"]["code"] in {"PM_WORK_SESSION_NOT_MANAGED", "READ_ONLY", "UNKNOWN_READ_ONLY", body["error"]["code"]}
-    assert body["error"]["code"] in {"PM_WORK_SESSION_NOT_MANAGED", "READ_ONLY", "UNKNOWN_READ_ONLY"} or body["error"]["code"].endswith("READ_ONLY")
-    path = registry.registry_path()
-    with registry._locked(path):
-        items = [row for row in registry._read(path) if not (
-            row.get("host") == att["host"] and row.get("session_id") == att["session_id"])]
-        registry._write(path, items)
+    _assert_refused(
+        ops, mock, status, body, code="PM_WORK_SESSION_NOT_MANAGED", http_status=409,
+        before_ops=before_ops, before_inputs=before_inputs, before_invokes=before_invokes,
+    )
+    # No public registry delete exists (registry._write is private). Clearing creation
+    # evidence is the public update that makes classify return UNKNOWN_READ_ONLY.
+    registry.update(
+        att["host"], att["session_id"],
+        start_operation_id=saved.get("start_operation_id"), created_at=None,
+    )
     status, body = await _post(w, att, "unknown session", key="p5-unknown-session")  # gitleaks:allow (test idempotency key)
-    assert status in {403, 409}, body
-    assert body["error"]["code"] in {"PM_WORK_SESSION_NOT_MANAGED", "READ_ONLY", "UNKNOWN_READ_ONLY"} or str(body["error"]["code"]).endswith("READ_ONLY")
+    _assert_refused(
+        ops, mock, status, body, code="UNKNOWN_READ_ONLY", http_status=403,
+        before_ops=before_ops, before_inputs=before_inputs, before_invokes=before_invokes,
+    )
 
 
 # --------------------------------------------------------------------------- 11
@@ -956,15 +984,12 @@ async def test_existing_callers_preserve_exact_retry_settings_and_errors(start_r
     _set_turn_messages(mock, sid, att["turn_marker"], streaming=False)
 
     # Busy retries must not wait on the real backoff, but the replacement still
-    # has to yield. A sleep that returns without awaiting starves the operation
+    # has to yield. A pause that returns without awaiting starves the operation
     # worker, so the legacy send stays accepted until the settle timeout.
-    original_sleep = client_mod.asyncio.sleep
+    async def no_pause(_delay_s):
+        await asyncio.sleep(0)
 
-    async def no_sleep(*_args, **_kwargs):
-        await original_sleep(0)
-
-    monkeypatch.setattr(client_mod.asyncio, "sleep", no_sleep)
-    monkeypatch.setattr(client_mod.random, "uniform", lambda *_args, **_kwargs: 0.0)
+    monkeypatch.setattr(client_mod, "_retry_pause", no_pause)
 
     def busy(_params):
         raise Exception("Remote server is busy")
@@ -1054,16 +1079,16 @@ async def test_existing_callers_preserve_exact_retry_settings_and_errors(start_r
     assert instructions["per_message_cancel"] is False
     assert instructions["interrupt_scope"] == "session"
     assert instructions["queue_receipt_semantics"] == "queued_at_submission_not_current_position"
-    assert {item["action"] for item in []} == set()
-    from bat_agent_connector import checkpoints, task_actions, task_bat
-
-    checkpoint_source = inspect.getsource(checkpoints.start_in_worktree)
-    task_source = inspect.getsource(task_bat.BatTaskAdapter.send)
-    task_action_source = inspect.getsource(task_actions.send)
-    assert "retry_on_disconnect=False" in checkpoint_source
-    assert "BAT did not accept the first instruction" in checkpoint_source
-    assert "retry_on_disconnect=False" in task_source
-    assert 'OperationError("NOT_ACCEPTED", "BAT did not accept the task send", 409)' in task_action_source
+    rows = instructions["instructions"]
+    assert {item["text_excerpt"] for item in rows} == {
+        "legacy busy once", "legacy rejected", "relay was not sent",
+    }
+    for item in rows:
+        assert set(item) == _INSTRUCTION_KEYS
+        assert item["queue_position"] is None
+        assert item["live_queue_status"] == "unavailable"
+        assert item["per_message_cancel"] is False
+        assert "state" not in item and "labels" not in item and "schedule" not in item
 
 
 # --------------------------------------------------------------------------- 12
@@ -1183,7 +1208,6 @@ async def test_work_follow_up_visibility(start_ready, mock):
     assert pm_work_follow_up.missing_row_event_visible(ops.db, outsider, real_missing_row) is False
 
 
-
 async def _instructions(w, att, *, limit=None, cursor=None, tok=None):
     query = []
     if limit is not None:
@@ -1297,6 +1321,7 @@ async def test_withdrawn_source_hides_follow_up_list_and_receipt(start_ready, mo
     assert status == 404, ledger
     assert ledger["error"]["code"] == "NOT_FOUND"
     assert "withdrawn source excerpt" not in json.dumps(ledger)
+
 
 # --------------------------------------------------------------------------- 14
 
@@ -1444,6 +1469,7 @@ async def test_setup_admission_refusal_preserves_admission_refused(start_ready, 
     assert status == 422, body
     assert body["error"]["admission_refused"] is True
     assert body["error"]["code"] == "INVALID_PARAMS"
+
 
 # --------------------------------------------------------------------------- admission order
 
