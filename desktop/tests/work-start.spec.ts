@@ -158,6 +158,7 @@ test.describe('Work Start UI (v1.3 P3)', () => {
 
     // After 503, button changes to "Check original request"
     await expect(submitBtn).toHaveText('Check original request');
+    await expect.poll(() => f.state.writes.length).toBe(1);
     expect(f.state.writes).toHaveLength(1);
     const originalKey = f.state.writes[0].idempotency_key;
     const originalBody = structuredClone(f.state.writes[0].body);
@@ -168,6 +169,7 @@ test.describe('Work Start UI (v1.3 P3)', () => {
 
     expect(f.state.writes[1].idempotency_key).toBe(originalKey);
     expect(f.state.writes[1].body).toEqual(originalBody);
+    expect(f.state.writes).toHaveLength(2);
   });
 
   test('3. Stale preview disables Start until checked again', async ({page}) => {
@@ -222,6 +224,7 @@ test.describe('Work Start UI (v1.3 P3)', () => {
 
     const blockedCheck = inspector.locator('[data-readiness-check="acceptance:membership.login"]');
     await expect(blockedCheck).toBeVisible();
+    await expect(blockedCheck).toContainText('Members can sign in');
     await expect(blockedCheck).toContainText('Each original acceptance condition needs a proposed method');
     await expect(blockedCheck).not.toContainText('Acceptance criteria not met');
   });
@@ -283,7 +286,7 @@ test.describe('Work Start UI (v1.3 P3)', () => {
     // Contributor sees owner required notice
     const disabledNotice = inspector.locator('[data-work-start-disabled]');
     await expect(disabledNotice).toBeVisible();
-    await expect(disabledNotice).toContainText('Workspace owner required to bind this Work to the current plan.');
+    await expect(disabledNotice).toContainText('Only a workspace owner can bind this Work to the current plan.');
     await expect(submitBtn).toBeDisabled();
 
     // Switch to owner
@@ -301,6 +304,7 @@ test.describe('Work Start UI (v1.3 P3)', () => {
 
     await expect.poll(() => f.state.writes.length).toBe(1);
     expect(f.state.writes[0].body.params.requirement_ids).toEqual(['membership.login']);
+    expect(f.state.writes).toHaveLength(1);
   });
 
   for (const refusalCode of REFUSAL_CODES) {
@@ -322,12 +326,13 @@ test.describe('Work Start UI (v1.3 P3)', () => {
       const submitBtn = inspector.locator('[data-work-section="start"] [data-pm-action="work.start"] button[type="submit"]');
       await submitBtn.click();
 
-      // Exactly one write
-      expect(f.state.writes).toHaveLength(1);
-
       // Localized error message shown
       const errorMsg = inspector.locator('[data-work-section="start"] form .error');
       await expect(errorMsg).toBeVisible();
+
+      // Exactly one write
+      await expect.poll(() => f.state.writes.length).toBe(1);
+      expect(f.state.writes).toHaveLength(1);
 
       // Assert exact localized summary for each code: panel key for shared, global key for start-only
       const isShared = [
@@ -359,6 +364,7 @@ test.describe('Work Start UI (v1.3 P3)', () => {
 
       // Start remains disabled until readiness is checked again
       await expect(submitBtn).toBeDisabled();
+      expect(f.state.writes).toHaveLength(1);
     });
   }
 
@@ -415,6 +421,103 @@ test.describe('Work Start UI (v1.3 P3)', () => {
     await expect(inspector.locator('.pm-work-start-attempt')).toContainText("Check this Work's sessions on BAT before starting again.");
     await expect(inspector.locator('[data-work-start-editor]')).toBeHidden();
     await expect(inspector.locator('[data-work-start-open]')).toHaveCount(0);
+
+    const attemptRow = inspector.locator('.pm-work-start-attempt');
+
+    async function assertExclusivelyInDetails(reasonText: string) {
+      const details = attemptRow.locator('details');
+      await expect(details).toBeVisible();
+      if (!(await details.evaluate((el: HTMLDetailsElement) => el.open))) {
+        await details.locator('summary').click();
+      }
+      await expect(details).toContainText(reasonText);
+
+      const outsideDetails = await attemptRow.evaluate((el: HTMLElement) => {
+        const clone = el.cloneNode(true) as HTMLElement;
+        clone.querySelector('details')?.remove();
+        return clone.textContent || '';
+      });
+      expect(outsideDetails).not.toContain(reasonText);
+    }
+
+    // Realistic start_failed: null error_code shows generic start-failed sentence
+    const nullReason = 'Internal failure without code';
+    f.emitAttempt({
+      attempt_id: 'att_' + '3'.repeat(32),
+      workspace_id: workspaceId,
+      work_item_id: workId(1),
+      start_operation_id: 'op_' + '3'.repeat(32),
+      stage: 'start_failed',
+      status: 'failed',
+      error_code: null,
+      status_reason: nullReason,
+      created_at: 1791705600,
+    });
+    await expect(attemptRow).toContainText(workStartStrings.en.wst_start_failed_generic);
+    await assertExclusivelyInDetails(nullReason);
+
+    // Realistic start_failed: unknown error_code shows generic start-failed sentence
+    const unknownCodeReason = 'Internal failure with unknown code';
+    f.emitAttempt({
+      attempt_id: 'att_' + '4'.repeat(32),
+      workspace_id: workspaceId,
+      work_item_id: workId(1),
+      start_operation_id: 'op_' + '4'.repeat(32),
+      stage: 'start_failed',
+      status: 'failed',
+      error_code: 'UNKNOWN_FUTURE_CODE',
+      status_reason: unknownCodeReason,
+      created_at: 1791705600,
+    });
+    await expect(attemptRow).toContainText(workStartStrings.en.wst_start_failed_generic);
+    await assertExclusivelyInDetails(unknownCodeReason);
+
+    // Realistic start_failed: PM_HANDOFF_FAILED (global message)
+    const handoffFailedReason = 'Agent connection dropped during handoff';
+    f.emitAttempt({
+      attempt_id: 'att_' + '5'.repeat(32),
+      workspace_id: workspaceId,
+      work_item_id: workId(1),
+      start_operation_id: 'op_' + '5'.repeat(32),
+      stage: 'start_failed',
+      status: 'failed',
+      error_code: 'PM_HANDOFF_FAILED',
+      status_reason: handoffFailedReason,
+      created_at: 1791705600,
+    });
+    await expect(attemptRow).toContainText(workStartStrings.en.error_code_PM_HANDOFF_FAILED);
+    await assertExclusivelyInDetails(handoffFailedReason);
+
+    // Realistic start_failed: PM_HANDOFF_TOO_LARGE (panel-local message)
+    const tooLargeReason = 'Context size exceeded prompt limit';
+    f.emitAttempt({
+      attempt_id: 'att_' + '6'.repeat(32),
+      workspace_id: workspaceId,
+      work_item_id: workId(1),
+      start_operation_id: 'op_' + '6'.repeat(32),
+      stage: 'start_failed',
+      status: 'failed',
+      error_code: 'PM_HANDOFF_TOO_LARGE',
+      status_reason: tooLargeReason,
+      created_at: 1791705600,
+    });
+    await expect(attemptRow).toContainText(workStartStrings.en.wst_error_PM_HANDOFF_TOO_LARGE);
+    await assertExclusivelyInDetails(tooLargeReason);
+
+    // Unknown stage separately: stage: 'future_stage', status: 'running'
+    f.emitAttempt({
+      attempt_id: 'att_' + '7'.repeat(32),
+      workspace_id: workspaceId,
+      work_item_id: workId(1),
+      start_operation_id: 'op_' + '7'.repeat(32),
+      stage: 'future_stage',
+      status: 'running',
+      created_at: 1791705600,
+    });
+    const futureStatus = attemptRow.locator('.pm-work-start-attempt-status');
+    await expect(futureStatus).toContainText('future_stage');
+    await expect(futureStatus).toContainText('running');
+    await expect(futureStatus).not.toContainText(workStartStrings.en.wst_start_failed_generic);
   });
 
   test('9. Observer and capability visibility', async ({page}) => {
@@ -465,13 +568,14 @@ test.describe('Work Start UI (v1.3 P3)', () => {
     await expect(submitBtn).toBeEnabled();
     await submitBtn.click();
 
-    // Exactly one write
-    expect(f.state.writes).toHaveLength(1);
-
     // Localized text displayed
     const errorMsg = inspector.locator('[data-work-section="start"] form .error');
     await expect(errorMsg).toBeVisible();
     await expect(errorMsg).toContainText(workStartStrings.en.error_code_PM_HANDOFF_FAILED);
+
+    // Exactly one write
+    await expect.poll(() => f.state.writes.length).toBe(1);
+    expect(f.state.writes).toHaveLength(1);
 
     // "New request" button appears
     const resetBtn = inspector.locator('[data-work-section="start"] form').getByRole('button', {name: 'New request'});
@@ -485,52 +589,95 @@ test.describe('Work Start UI (v1.3 P3)', () => {
     expect(f.state.writes).toHaveLength(1);
   });
 
-  test('New test: start_failed fallbacks', async ({page}) => {
+  test('Start button is disabled before first readiness check at 1440 en and 390 zh-TW', async ({browser}) => {
+    // 1440 en
+    {
+      const context = await browser.newContext({viewport: {width: 1440, height: 900}});
+      const page = await context.newPage();
+      const f = workStartFixture();
+      await mountConversation(page, false, f.dispatch);
+      await page.goto(route);
+      await page.locator('[data-pm-view="board"]').click();
+      await page.locator(`[data-pm-kanban-work="${workId(1)}"] [data-board-open]`).click();
+
+      const inspector = page.locator('[data-work-inspector]');
+      const startSection = inspector.locator('[data-work-section="start"]');
+      await expect(startSection).toBeVisible();
+
+      // Submit button is disabled before check
+      const submitBtn = startSection.locator('[data-pm-action="work.start"] button[type="submit"]');
+      await expect(submitBtn).toBeVisible();
+      await expect(submitBtn).toBeDisabled();
+
+      // Check button is ready and enabled
+      const checkBtn = startSection.locator('[data-work-start-check]');
+      await expect(checkBtn).toBeEnabled();
+
+      await context.close();
+    }
+
+    // 390 zh-TW
+    {
+      const context = await browser.newContext({locale: 'zh-TW', viewport: {width: 390, height: 844}});
+      const page = await context.newPage();
+      const f = workStartFixture();
+      await mountConversation(page, false, f.dispatch);
+      await page.goto(route);
+      await page.locator('#workspace-menu').click();
+      await page.locator('[data-pm-view="board"]').click();
+      await page.locator(`[data-pm-kanban-work="${workId(1)}"] [data-board-open]`).click();
+
+      const inspector = page.locator('[data-work-inspector]');
+      const startSection = inspector.locator('[data-work-section="start"]');
+      await expect(startSection).toBeVisible();
+
+      const submitBtn = startSection.locator('[data-pm-action="work.start"] button[type="submit"]');
+      await expect(submitBtn).toBeVisible();
+      await expect(submitBtn).toBeDisabled();
+
+      const checkBtn = startSection.locator('[data-work-start-check]');
+      await expect(checkBtn).toBeEnabled();
+
+      await context.close();
+    }
+  });
+
+  test('Requirement checkboxes are positioned to the left of text and vertically aligned', async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
     const f = workStartFixture();
-    const customReason = 'Unrecognized internal error code';
-    f.state.attempts = [{
-      attempt_id: 'att_' + '8'.repeat(32),
-      workspace_id: workspaceId,
-      work_item_id: workId(1),
-      start_operation_id: 'op_' + '8'.repeat(32),
-      stage: 'custom_unknown_stage',
-      status: 'start_failed',
-      status_reason: customReason,
-      created_at: 1791705600,
-    }];
 
     await mountConversation(page, false, f.dispatch);
     await page.goto(route);
     await page.locator('[data-pm-view="board"]').click();
 
-    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    // workId(3) has multiple requirement checkboxes
+    const card = page.locator(`[data-pm-kanban-work="${workId(3)}"]`);
     await card.locator('[data-board-open]').click();
 
     const inspector = page.locator('[data-work-inspector]');
-    const attemptRow = inspector.locator('.pm-work-start-attempt');
-    await expect(attemptRow).toBeVisible();
+    const reqLabels = inspector.locator('.pm-work-start-reqs label.pm-work-start-req');
+    await expect(reqLabels).toHaveCount(2);
 
-    // Unknown stage shows "Unknown"
-    const stageWord = attemptRow.locator('.pm-work-start-attempt-status strong');
-    await expect(stageWord).toHaveText('Unknown');
+    for (let i = 0; i < 2; i++) {
+      const label = reqLabels.nth(i);
+      const cb = label.locator('input[type="checkbox"]');
+      const textSpan = label.locator('.pm-work-start-req-text');
 
-    // Generic fallback wst_start_failed_generic shown in row
-    await expect(attemptRow).toContainText(workStartStrings.en.wst_start_failed_generic);
+      const cbBox = await cb.boundingBox();
+      const textBox = await textSpan.boundingBox();
+      expect(cbBox).not.toBeNull();
+      expect(textBox).not.toBeNull();
 
-    // Inside Details disclosure, status_reason is present
-    const details = attemptRow.locator('details');
-    await expect(details).toBeVisible();
-    await details.locator('summary').click();
-    await expect(details).toContainText(customReason);
+      if (cbBox && textBox) {
+        // Checkbox is to the left of text
+        expect(cbBox.x + cbBox.width).toBeLessThanOrEqual(textBox.x);
 
-    // status_reason is NOT shown outside Details
-    const outsideDetails = await attemptRow.evaluate((el: HTMLElement) => {
-      const clone = el.cloneNode(true) as HTMLElement;
-      clone.querySelector('details')?.remove();
-      return clone.textContent || '';
-    });
-    expect(outsideDetails).not.toContain(customReason);
+        // Checkbox vertically overlaps text: centers aligned within 4px
+        const cbCenterY = cbBox.y + cbBox.height / 2;
+        const textCenterY = textBox.y + textBox.height / 2;
+        expect(Math.abs(cbCenterY - textCenterY)).toBeLessThanOrEqual(4);
+      }
+    }
   });
 
   test('New test: whitespace-only instruction', async ({page}) => {
@@ -577,6 +724,16 @@ test.describe('Work Start UI (v1.3 P3)', () => {
     await instruction.fill('');
     await page.keyboard.type('First part');
 
+    // Make the held read return an observable attempt
+    f.state.attempts = [{
+      attempt_id: 'att_' + 'c'.repeat(32),
+      workspace_id: workspaceId,
+      work_item_id: workId(1),
+      stage: 'cancelled',
+      status: 'cancelled',
+      created_at: 1791705600,
+    }];
+
     // Hold the read
     let releaseAttempts!: () => void;
     f.state.holdAttempts = new Promise<void>(resolve => {
@@ -584,6 +741,7 @@ test.describe('Work Start UI (v1.3 P3)', () => {
     });
 
     const before = f.state.attemptsReads;
+    const beforeServed = f.state.attemptsServed;
     // Bump cursor to trigger event refresh
     f.base.state.cursor++;
     await expect.poll(() => f.state.attemptsReads).toBeGreaterThan(before);
@@ -597,6 +755,14 @@ test.describe('Work Start UI (v1.3 P3)', () => {
     // Release the read
     releaseAttempts();
     f.state.holdAttempts = null;
+
+    // Assert that the read was actually served after releasing the hold
+    await expect.poll(() => f.state.attemptsServed).toBeGreaterThan(beforeServed);
+
+    // Wait for the attempt row to show that attempt
+    const attemptRow = inspector.locator('.pm-work-start-attempt');
+    await expect(attemptRow).toBeVisible();
+    await expect(attemptRow).toContainText('Cancelled');
 
     // Assert afterwards: every typed character is present, caret is where typing left it, and focus is unchanged
     await expect(instruction).toHaveValue('First part and second part');
@@ -729,6 +895,12 @@ test.describe('Work Start UI (v1.3 P3)', () => {
     const submitBtn = inspector.locator('[data-work-section="start"] [data-pm-action="work.start"] button[type="submit"]');
     await expect(submitBtn).toHaveText('開始工作');
 
+    // Open options disclosure so all options are in the DOM
+    const optionsDisclosure = inspector.locator('.pm-work-start-panel details');
+    if (await optionsDisclosure.count() > 0) {
+      await optionsDisclosure.first().locator('summary').click();
+    }
+
     // Check for no raw keys or undefined/null
     const startSection = inspector.locator('[data-work-section="start"]');
     const textContent = await startSection.innerText();
@@ -736,6 +908,18 @@ test.describe('Work Start UI (v1.3 P3)', () => {
     expect(textContent).not.toContain('null');
     expect(textContent).not.toMatch(/wst_[a-z_]+/);
     expect(textContent).not.toMatch(/error_code_[A-Z_]+/);
+
+    // Collect all panel text and all select option texts
+    const selectOptions = await startSection.locator('select option').allInnerTexts();
+    const fullRenderedText = [textContent, ...selectOptions].join('\n');
+
+    // Assert that no string in workStartStrings.en appears anywhere in the rendered panel,
+    // with the ONLY allowed exceptions being provider names (Claude, Codex) and the accepted acronym PR.
+    const allowedEnglish = new Set(['Claude', 'Codex', 'PR']);
+    for (const [key, enVal] of Object.entries(workStartStrings.en)) {
+      if (allowedEnglish.has(enVal)) continue;
+      expect(fullRenderedText, `Found English string "${enVal}" (${key}) in zh-TW panel`).not.toContain(enVal);
+    }
 
     // Verify no horizontal overflow in start section
     const isOverflowing = await startSection.evaluate((el: HTMLElement) => el.scrollWidth > el.clientWidth + 2);

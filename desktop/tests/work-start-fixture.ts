@@ -33,6 +33,7 @@ export function workStartFixture() {
     failHandoff: false,
     holdAttempts: null as Promise<void> | null,
     attemptsReads: 0,
+    attemptsServed: 0,
     previews: [] as any[],
     writes: [] as any[],
     ops: new Map<string, any>(),
@@ -222,6 +223,7 @@ export function workStartFixture() {
       if (state.holdAttempts) {
         await state.holdAttempts;
       }
+      state.attemptsServed++;
       const wid = path.split('/').at(-2);
       return {
         status: 200,
