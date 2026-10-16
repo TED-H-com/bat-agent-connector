@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Confinement closure tests scan with a shell fixture instead of starting
+  Python for every search, so the same checks finish on a busy disk without
+  a longer time limit.
+
 - Choosing a file does not show Retry while that first upload runs. Retry appears
   after the upload fails, and pressing it keeps the button until the retry finishes.
 
