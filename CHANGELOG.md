@@ -2,15 +2,14 @@
 
 ## Next release (unreleased)
 
-- The PM Work inspector adds a Start work panel and header action to start a
-  startable Work item with `work.start`. The panel previews readiness facts
-  (`pm_work_start_preview`), explains candidate code targets or offers a selector
-  when multiple match, and displays requirement selection for cards needing plan
-  re-binding with workspace owner validation. Stale preview guards require re-checking
-  after instruction, delivery, requirement or target edits before enabling durable
-  submission. The attempts timeline renders live progress states from `work_attempts`
-  with links to the operation or session output, preserving user drafts and idempotency
-  keys across reloads and lost replies in English and zh-TW.
+- The PM Work inspector adds a Start work panel and header action to start
+  eligible Work cards. The panel previews readiness facts, explains candidate
+  code targets or offers a selector when multiple match, and displays requirement
+  selection for cards needing plan re-binding. Stale preview guards require re-checking
+  after instruction, delivery, requirement or target edits before enabling submission.
+  The attempts timeline renders live progress states with links to the operation
+  or session output, preserving user drafts and requests across reloads and lost replies
+  in English and zh-TW.
 
 - Tools → Workbench preview opens a reversible layout with Today, Projects,
   Work and Resources, a project management selector and an optional Results

@@ -1205,8 +1205,9 @@ inspectors and the mobile drawer open; ordinary Escape retains focus restoration
 
 PM panels with their own failure sentence pass that sentence as the error summary.
 The original error reaches the renderer unchanged, so its code and server message
-remain in one Details disclosure and the refresh gate retains the failure. Retry
-stays adjacent. Fixed-source mismatch failures keep the panel's mismatch sentence;
+remain in one Details disclosure and the refresh gate retains the failure.
+When an error code is shared across domains (such as lifecycle, prerequisite or permission refusals), the panel passes a panel-local summary explaining the action's specific context, while action-specific codes resolve directly from global `error_code_*` translations.
+Retry stays adjacent. Fixed-source mismatch failures keep the panel's mismatch sentence;
 other failures keep its unavailable sentence. Report reads reuse Charter's status
 element by reference in the live inspector or saved Overview, preserving its
 children and withdrawal/retry ownership without a second error in Versions.
