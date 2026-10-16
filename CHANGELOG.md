@@ -11,13 +11,6 @@
   or session output, preserving user drafts and requests across reloads and lost replies
   in English and zh-TW.
 
-- Tools → Workbench preview opens a reversible layout with Today, Projects,
-  Work and Resources, a project management selector and an optional Results
-  inspector. Work, Lineage and Live preserve the same conversation and draft,
-  reading recorded links and activity from the existing Connector sources.
-  Unknown queue state and source withdrawal remain explicit. The classic layout
-  stays the default; this is not the completed v1.3 execution or live acceptance.
-
 - Add the `work.start` compound action, read-only `pm_work_start_preview` and
   immutable `work_attempts` reads (`pm_work_attempts_list`, `pm_work_attempt_get`)
   to start a bound Work item in its own managed BAT worktree and session from a
@@ -33,6 +26,13 @@
   preview again), or `PM_WORK_START_OUTCOME_UNPROVEN` (check the Work's sessions
   on BAT before starting again), alongside unready requirement and foreign
   controller checks.
+
+- Tools → Workbench preview opens a reversible layout with Today, Projects,
+  Work and Resources, a project management selector and an optional Results
+  inspector. Work, Lineage and Live preserve the same conversation and draft,
+  reading recorded links and activity from the existing Connector sources.
+  Unknown queue state and source withdrawal remain explicit. The classic layout
+  stays the default; this is not the completed v1.3 execution or live acceptance.
 
 - Existing discussions offer Send to PM for ordinary native or BAT PM analysis,
   Save note only for a stored note, and Make a plan for an explicit proposal.
