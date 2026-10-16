@@ -43,6 +43,8 @@ def schema(journal) -> None:
         lifecycle_schema(journal)
         from .pm_work_start import schema as work_start_schema
         work_start_schema(journal)
+        from .pm_work_follow_up import schema as work_follow_up_schema
+        work_follow_up_schema(journal)
 
 
 def server_id(db) -> str:
