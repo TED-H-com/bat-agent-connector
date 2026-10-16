@@ -11,10 +11,11 @@
   or session output, preserving user drafts and requests across reloads and lost replies
   in English and zh-TW.
 
-- The PM Work inspector on the board adds a read-only Result section (Part A)
-  displaying the latest attempt's execution state, agent summary, state facets
-  (verification, review, acceptance, PR, deployment), commit statistics, and
-  recorded turns directly from Connector's database with 0 BAT calls.
+- The PM Work inspector on the board adds a read-only Result section (v1.3 E03 Part A)
+  for finished and in-progress work attempts. It presents the agent's summary alongside
+  its observed progress, separate indicators for verification, review, requirement
+  acceptance, pull requests and deployment, summary statistics for touched files and
+  commits, uncommitted change warnings, and recorded turns in English and zh-TW.
 
 - The Windows fixture-helper test injects a deterministic clock into its deadline and
   retry helpers, making transient read recovery independent of runner speed and slow
