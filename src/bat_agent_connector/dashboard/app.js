@@ -2311,6 +2311,11 @@ var pmMaintenanceRepairsStrings = {
 //#region src/pm-quality-reviews-strings.js
 var pmQualityReviewsStrings = {
 	en: {
+		pmq_verify_result_heading: "Verify this result",
+		pmq_verify_result_help: "Run the project’s configured checks against this fixed result.",
+		pmq_verify_result_effect: "A passing check adds evidence for review. Requirement acceptance still needs a separate assessment.",
+		pmq_verify_result_changed: "The current checkout differs from this fixed result. Verification cannot run for this result.",
+		pmq_verify_not_offered: "Verification is not available to you for this result right now.",
 		pmq_result_open: "Review this result",
 		pmq_discuss: "Discuss this assessment with PM",
 		pmq_discuss_title: "Review this result with PM",
@@ -2408,6 +2413,11 @@ var pmQualityReviewsStrings = {
 		pmq_reason_candidate_commit_changed: "The selected candidate differs from this original review."
 	},
 	"zh-TW": {
+		pmq_verify_result_heading: "驗證這份成果",
+		pmq_verify_result_help: "使用專案已設定的檢查，驗證這份固定成果。",
+		pmq_verify_result_effect: "檢查通過會增加可供審閱的證據，需求是否驗收仍需另行評估。",
+		pmq_verify_result_changed: "目前工作目錄已不同於這份固定成果，無法針對此成果開始驗證。",
+		pmq_verify_not_offered: "目前無法以你的權限針對這份成果開始驗證。",
 		pmq_result_open: "審閱這份成果",
 		pmq_discuss: "與 PM 討論這次評估",
 		pmq_discuss_title: "與 PM 討論成果",
@@ -16210,17 +16220,20 @@ var ACTION$1 = "pm.execution.verify";
 var sha$5 = /^[0-9a-f]{40}$/;
 var digest$9 = /^[0-9a-f]{64}$/;
 var operation$1 = /^op_[0-9a-f]{32}$/;
-function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspace, caps, form, labelled, errorBox, namespace, onSaved, onConfiguration = () => {}, onUnavailable = () => {} }) {
+function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspace, caps, form, labelled, errorBox, namespace, onSaved, onConfiguration = () => {}, onUnavailable = () => {}, fixedResult = null, allowedAction = () => true }) {
 	let sources = [], selected = "", generation = 0, ready = false, configuration = null, editor = null;
 	const navigation = `batc.pm.verifier.${namespace}.${workspaceId}`;
-	try {
+	if (fixedResult) selected = fixedResult.execution_operation_id;
+	else try {
 		const value = localStorage.getItem(navigation);
 		if (operation$1.test(value || "")) selected = value;
 	} catch {}
 	const picker = h("select", { "aria-label": t("pmq_verify_execution") }), status = h("div", { role: "status" }), factBody = h("div"), holder = h("div"), notes = h("div");
 	const facts = h("details", {}, h("summary", {}, t("pmq_details")), factBody);
 	disclosure({ element: facts });
-	const element = h("details", { "data-pm-execution-verification": "" }, h("summary", {}, t("pmq_verify_heading")), h("p", { class: "muted" }, t("pmq_verify_help")), labelled("pmq_verify_execution", picker), h("div", { class: "actions" }, iconButton({
+	const selection = labelled("pmq_verify_execution", picker);
+	selection.hidden = !!fixedResult;
+	const element = h("details", { "data-pm-execution-verification": "" }, h("summary", {}, t(fixedResult ? "pmq_verify_result_heading" : "pmq_verify_heading")), h("p", { class: "muted" }, t(fixedResult ? "pmq_verify_result_help" : "pmq_verify_help")), selection, h("div", { class: "actions" }, iconButton({
 		icon: "refresh-cw",
 		label: t("pmq_verify_refresh"),
 		type: "button",
@@ -16244,6 +16257,12 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 		}
 	};
 	const writer = () => ready && caps()?.scopes?.includes("observe") && caps()?.scopes?.includes("operate") && ["owner", "contributor"].includes(workspace()?.members?.find((row) => row.actor === caps()?.actor)?.role || workspace()?.membership?.role);
+	const target = () => ({
+		workspace_id: workspaceId,
+		execution_operation_id: selected
+	});
+	const fixedMatches = (value) => !fixedResult || value?.execution_operation_id === fixedResult.execution_operation_id && value?.candidate_commit === fixedResult.candidate_commit;
+	const canWrite = () => writer() && allowedAction(ACTION$1, target());
 	const enabled = () => caps()?.features?.pm_workspaces?.execution_verification?.version === 1;
 	const line = (key, value) => h("p", { class: "pm-source" }, h("strong", {}, t(key) + ": "), value);
 	function clear() {
@@ -16275,12 +16294,18 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 			configuration = value;
 			ready = true;
 			status.replaceChildren();
-			onConfiguration(value);
+			onConfiguration(fixedMatches(value) ? value : null);
 			factBody.append(line("pmq_execution", selected));
 			if (value.command_digest) factBody.append(line("pmq_verify_command", value.command_digest));
 			if (value.candidate_commit && value.tree_hash) factBody.append(line("pmq_candidate", value.candidate_commit), line("pmq_verify_tree", value.tree_hash));
-			else notes.append(h("p", { class: "muted" }, t("pmq_verify_no_candidate")));
-			if (!value.available) notes.append(h("p", { class: "muted" }, t("pmq_verify_unconfigured")));
+			if (fixedResult) {
+				notes.append(line("pmq_candidate", h("span", { title: fixedResult.candidate_commit }, fixedResult.candidate_commit.slice(0, 12))));
+				const reason = !value.available ? "pmq_verify_unconfigured" : !value.candidate_commit || !value.tree_hash ? "pmq_verify_no_candidate" : !fixedMatches(value) ? "pmq_verify_result_changed" : !canWrite() ? "pmq_verify_not_offered" : null;
+				if (reason) notes.append(h("p", { class: "muted" }, t(reason)));
+			} else {
+				if (!value.candidate_commit || !value.tree_hash) notes.append(h("p", { class: "muted" }, t("pmq_verify_no_candidate")));
+				if (!value.available) notes.append(h("p", { class: "muted" }, t("pmq_verify_unconfigured")));
+			}
 			const fields = Object.fromEntries([
 				"candidate_commit",
 				"tree_hash",
@@ -16291,7 +16316,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 				value: value[key] || ""
 			})]));
 			const matches = () => configuration && Object.entries(fields).every(([key, field]) => field.value === configuration[key]);
-			const admissible = () => writer() && configuration?.available && sha$5.test(configuration.candidate_commit) && sha$5.test(configuration.tree_hash) && matches();
+			const admissible = () => canWrite() && fixedMatches(configuration) && configuration?.available && sha$5.test(configuration.candidate_commit) && sha$5.test(configuration.tree_hash) && matches();
 			const rebase = button({
 				variant: "secondary",
 				label: t("pmq_verify_use_config"),
@@ -16307,10 +16332,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 				api,
 				requiredScope: "operate",
 				action: ACTION$1,
-				target: {
-					workspace_id: workspaceId,
-					execution_operation_id: selected
-				},
+				target: target(),
 				fields,
 				params: (values) => {
 					if (!admissible()) throw Error(t("pmq_verify_changed"));
@@ -16327,9 +16349,9 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 				onSaved,
 				onStateChange: () => {
 					rebase.hidden = matches();
-					rebase.disabled = !writer() || !!editor?.locked();
+					rebase.disabled = !canWrite() || !!editor?.locked();
 				},
-				extra: h("div", {}, h("p", { class: "muted" }, t("pmq_verify_effect")), h("div", { class: "actions" }, rebase))
+				extra: h("div", {}, h("p", { class: "muted" }, t(fixedResult ? "pmq_verify_result_effect" : "pmq_verify_effect")), h("div", { class: "actions" }, rebase))
 			});
 			holder.replaceChildren(editor.box);
 			editor.update();
@@ -16348,13 +16370,17 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 	async function setSources(rows) {
 		generation++;
 		clear();
-		sources = rows;
-		picker.replaceChildren(h("option", { value: "" }, t("pmq_choose")), ...rows.map((row) => h("option", { value: row.operation_id }, optionLabel(row))));
-		if (selected && !sources.some((row) => row.operation_id === selected)) selected = "";
+		sources = fixedResult ? rows.filter((row) => row.operation_id === fixedResult.execution_operation_id) : rows;
+		picker.replaceChildren(h("option", { value: "" }, t("pmq_choose")), ...sources.map((row) => h("option", { value: row.operation_id }, optionLabel(row))));
+		if (fixedResult) selected = sources.length ? fixedResult.execution_operation_id : "";
+		else if (selected && !sources.some((row) => row.operation_id === selected)) selected = "";
 		picker.value = selected;
 		element.hidden = !enabled();
-		if (enabled() && selected) await load();
+		if (enabled() && selected && (!fixedResult || element.open)) await load();
 	}
+	element.addEventListener("toggle", () => {
+		if (fixedResult && element.open && enabled() && !ready) load();
+	});
 	picker.addEventListener("change", () => {
 		selected = picker.value;
 		try {
@@ -17094,7 +17120,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			history.value = selected;
 			buildCreate();
 			renderReview();
-			if (!fixedResult) await verifier.setSources(operations.filter((op) => packages.some((pkg) => children(pkg).some((child) => child.operation_id === op.operation_id))));
+			await verifier.setSources(model.operations.filter((op) => packages.some((pkg) => children(pkg).some((child) => child.operation_id === op.operation_id))));
 			if (!valid(ticket)) return;
 			status.replaceChildren(...filtered ? [text("pmq_filtered")] : []);
 			if (previous && selectable(current()) && same$10(previous, reference(current()))) emit(previous);
@@ -17128,7 +17154,9 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		labelled,
 		errorBox,
 		namespace,
-		onSaved: () => refresh(),
+		fixedResult,
+		allowedAction,
+		onSaved: refreshAfterSave,
 		onUnavailable: failure,
 		onConfiguration: (value) => {
 			if (model) {
@@ -17141,7 +17169,6 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 	element.insertBefore(verifier.element, draft.parentElement);
 	if (fixedResult) {
 		workChoice.closest("label").hidden = true;
-		verifier.element.hidden = true;
 		element.classList.remove("panel");
 		element.querySelector("h2").textContent = t("pmq_result_open");
 	}
@@ -17177,7 +17204,7 @@ function createWorkQuality({ h, t, api, alive, workspaceId, caps, form, errorBox
 	});
 	const element = h("section", { "data-work-quality": "" }, open, status, body);
 	const getCaps = () => typeof caps === "function" ? caps() : caps;
-	const offered = (action, target) => Boolean(envelope?.next_allowed_actions?.some((row) => row.kind === "action" && row.action === action && row.target?.workspace_id === workspaceId && (action === "pm.quality.review.create" ? row.target.work_item_id === target.work_item_id : action === "pm.quality.review.record" && row.target.review_id === target.review_id)));
+	const offered = (action, target) => Boolean(envelope?.next_allowed_actions?.some((row) => row.kind === "action" && row.action === action && row.target?.workspace_id === workspaceId && (action === "pm.quality.review.create" ? row.target.work_item_id === target.work_item_id : action === "pm.execution.verify" ? row.target.execution_operation_id === target.execution_operation_id : action === "pm.quality.review.record" && row.target.review_id === target.review_id)));
 	function dispose() {
 		serial++;
 		editor?.withdraw();
@@ -17267,7 +17294,7 @@ function createWorkQuality({ h, t, api, alive, workspaceId, caps, form, errorBox
 		}
 		const signature = JSON.stringify([
 			value.verification,
-			value.next_allowed_actions?.filter((row) => row.action?.startsWith("pm.quality.")),
+			value.next_allowed_actions?.filter((row) => row.action?.startsWith("pm.quality.") || row.action === "pm.execution.verify"),
 			getCaps()?.actor,
 			getCaps()?.scopes
 		]);

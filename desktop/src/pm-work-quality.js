@@ -23,6 +23,7 @@ export function createWorkQuality({h, t, api, alive, workspaceId, caps, form, er
   const offered = (action, target) => Boolean(envelope?.next_allowed_actions?.some(row => row.kind === 'action'
     && row.action === action && row.target?.workspace_id === workspaceId
     && (action === 'pm.quality.review.create' ? row.target.work_item_id === target.work_item_id
+      : action === 'pm.execution.verify' ? row.target.execution_operation_id === target.execution_operation_id
       : action === 'pm.quality.review.record' && row.target.review_id === target.review_id)));
   function dispose() {
     serial++; editor?.withdraw(); editor = null; workspace = null; context = envelope = null;
@@ -62,7 +63,7 @@ export function createWorkQuality({h, t, api, alive, workspaceId, caps, form, er
     const next = workQualityContext(value, workspaceId, attempt);
     if (!form || getCaps()?.features?.pm_workspaces?.quality_reviews?.version !== 1 || !next) {dispose(); return null;}
     if (JSON.stringify(next) !== JSON.stringify(context)) {dispose(); context = next;}
-    const signature = JSON.stringify([value.verification, value.next_allowed_actions?.filter(row => row.action?.startsWith('pm.quality.')),
+    const signature = JSON.stringify([value.verification, value.next_allowed_actions?.filter(row => row.action?.startsWith('pm.quality.') || row.action === 'pm.execution.verify'),
       getCaps()?.actor, getCaps()?.scopes]);
     const sourcesChanged = signature !== sourceSignature; sourceSignature = signature;
     envelope = value;

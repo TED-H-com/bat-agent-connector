@@ -231,7 +231,7 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
       ready=true;options(history,model.reviews.map(row=>[row.review_id,`${row.context.native_result.candidate_commit.slice(0,12)} · ${row.context.reviewer_actor} · ${row.review_id}`]));
       if(selected&&!model.reviews.some(row=>row.review_id===selected))selected='';
       if(fixedResult&&!selected&&model.reviews.length===1)selected=model.reviews[0].review_id;
-      history.value=selected;buildCreate();renderReview();if(!fixedResult)await verifier.setSources(operations.filter(op=>packages.some(pkg=>children(pkg).some(child=>child.operation_id===op.operation_id))));if(!valid(ticket))return;status.replaceChildren(...(filtered?[text('pmq_filtered')]:[]));
+      history.value=selected;buildCreate();renderReview();await verifier.setSources(model.operations.filter(op=>packages.some(pkg=>children(pkg).some(child=>child.operation_id===op.operation_id))));if(!valid(ticket))return;status.replaceChildren(...(filtered?[text('pmq_filtered')]:[]));
       if(previous&&selectable(current())&&same(previous,reference(current())))emit(previous);update();
     }catch(err){if(valid(ticket))failure(err);}
   }
@@ -239,9 +239,9 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
     workId=/^wi_[0-9a-f]{20}$/.test(id||'')?id:null;selected='';try{const saved=JSON.parse(localStorage.getItem(navigation));if(saved.workId===workId)selected=saved.review_id||'';}catch{}
     void refresh();}
   workChoice.addEventListener('change',()=>setWork(workChoice.value));
-  verifier=workspaceExecutionVerification({h,t,api:request,alive,workspaceId,workspace,caps,form,labelled,errorBox,namespace,onSaved:()=>refresh(),onUnavailable:failure,onConfiguration:value=>{if(model){model.configuration=value?.available&&digest.test(value.command_digest)?value:null;matrixKey='';create?.sync();}}});
+  verifier=workspaceExecutionVerification({h,t,api:request,alive,workspaceId,workspace,caps,form,labelled,errorBox,namespace,fixedResult,allowedAction,onSaved:refreshAfterSave,onUnavailable:failure,onConfiguration:value=>{if(model){model.configuration=value?.available&&digest.test(value.command_digest)?value:null;matrixKey='';create?.sync();}}});
   element.insertBefore(verifier.element,draft.parentElement);
-  if(fixedResult){workChoice.closest('label').hidden=true;verifier.element.hidden=true;
+  if(fixedResult){workChoice.closest('label').hidden=true;
     element.classList.remove('panel');element.querySelector('h2').textContent=t('pmq_result_open');}
   return {element,setWork,refresh,withdraw,selection:()=>ready&&chosen?clone(chosen):null};
 }

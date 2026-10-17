@@ -40,6 +40,24 @@ selection button: selecting a reference without an evidence consumer would have
 no effect. Requirement adoption, dependencies and milestones continue to follow
 their original evidence policy; a review or passing CI alone does not complete them.
 
+## Verifying the selected Result
+
+The Result review reuses the existing configured verifier with its original
+execution fixed, without an execution picker. Opening the verifier reads its
+current configuration; rendering or opening the review does not run a command.
+A new verification needs the Result's exact offered `pm.execution.verify` target,
+current writer membership and observe/operate scopes. The configured clean commit
+must equal this Result's fixed commit. A changed checkout cannot silently retarget
+this Result or adopt another candidate. The backend retains its final controller,
+source, command, clean tree and process exclusion checks.
+
+Explicit submission uses the existing durable form and original operation key.
+Unknown replies retain that key even if a later configuration has changed; no
+replacement process is requested. Source withdrawal retires the editor and late
+configuration replies. Successful verification refreshes the same Result and
+makes its original receipt available for an explicit review policy/conclusion.
+Passing verification alone never accepts a requirement or creates a review.
+
 ## Discussing one saved assessment
 
 A Result review may open an ordinary PM discussion with a `quality_assessment`

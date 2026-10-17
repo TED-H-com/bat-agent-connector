@@ -22,6 +22,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from bat_agent_connector import pm_discussions, pm_native_runtime, pm_plans, pm_runs, pr_publication
 from bat_agent_connector.errors import InvokeTimeout
+from bat_agent_connector.task_verifier import ObservedVerifier, VerificationSettings
 from tests import test_pm_conversation_proposals as conversation
 from tests import test_pm_native_operations as native
 from tests.test_api_v1 import http, token
@@ -123,6 +124,11 @@ async def test_fixed_result_review_records_insufficient_evidence_from_ui(start_r
 
 
 @pytest.mark.parametrize(("locale", "width"), [("en", 1440), ("zh-TW", 390)])
+async def test_fixed_result_runs_configured_verifier_from_ui(start_ready, mock, tmp_path, locale, width):
+    await work_loop(start_ready, mock, tmp_path, locale, width, verify_result=True)
+
+
+@pytest.mark.parametrize(("locale", "width"), [("en", 1440), ("zh-TW", 390)])
 async def test_queued_writer_withdrawal_keeps_history_without_dispatch(start_ready, mock, tmp_path, locale, width):
     await work_loop(start_ready, mock, tmp_path, locale, width, withdraw_writer=True)
 
@@ -181,7 +187,7 @@ async def discussion_loop(start_ready, mock, tmp_path, monkeypatch, locale, widt
 
 
 async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_token=None, monkeypatch=None,
-                    withdraw_writer=False, lost_reply=None, review_result=False):
+                    withdraw_writer=False, lost_reply=None, review_result=False, verify_result=False):
     ops = w["d"].ops
     # The handoff test runner decodes a single protocol. This journey also runs
     # checkpoint and publication shell scripts, so execute every actual script.
@@ -199,8 +205,15 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
         f"/api/v1/work-items/{w['target']['work_item_id']}", tok=w["owner_token"])
     assert status == 200, original_work
     project_id = original_work["work_item"]["project_id"]
+    verification_marker = tmp_path / "verifier-count"
+    if verify_result:
+        script = ("from pathlib import Path; "
+                  "assert Path('retry-test.txt').read_text() == 'retry after failure\\n'; "
+                  "p=Path(" + repr(str(verification_marker)) + "); p.write_text(p.read_text()+'x' if p.exists() else 'x')")
+        w["d"].adapter.verifier = ObservedVerifier(VerificationSettings(
+            commands={project_id: (sys.executable, "-c", script)}, artifact_dir=str(tmp_path / "verifier-logs")))
     adoptions_before = ops.db.execute("SELECT count(*) FROM pm_plan_adoptions").fetchone()[0]
-    entry = "review-result" if review_result else "lost-start-reply" if lost_reply else "withdraw-writer" if withdraw_writer else mode
+    entry = "verify-result" if verify_result else "review-result" if review_result else "lost-start-reply" if lost_reply else "withdraw-writer" if withdraw_writer else mode
     shots = ROOT / "desktop/test-results/work-loop" / f"{entry}-{locale}-{width}"
     shutil.rmtree(shots, ignore_errors=True)
     shots.mkdir(parents=True, exist_ok=True)
@@ -317,7 +330,7 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 "mode": mode, "thread": thread_target(w)["thread_id"], "peer_agent": bool(peer_token),
                 "create_work": create_work, "project": project_id, "withdraw_writer": withdraw_writer,
                 "lost_start_reply": lost_reply is not None, "review_result": review_result,
-                "reviewer_actor": STARTER_OWNER.actor})
+                "reviewer_actor": STARTER_OWNER.actor, "verify_result": verify_result})
             if create_work:
                 created = await receive("created")
                 await wait_status(created["operation_id"], "succeeded")
@@ -452,7 +465,24 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             final = await _result(w, att)
             assert final["changes"]["fixed_result_commit"]["commit_sha"] == candidate, final
             await send({"candidate": candidate, "attempt": att["attempt_id"]})
-            quality = None
+            quality = verification = None
+            if verify_result:
+                verified = await receive("result-verified")
+                await wait_status(verified["operation_id"], "succeeded")
+                verify_op = ops.get(verified["operation_id"])
+                assert verify_op["action"] == "pm.execution.verify"
+                assert verify_op["target"] == {"workspace_id": w["workspace_id"],
+                    "execution_operation_id": result["children"]["handoff"]}
+                assert verify_op["params"]["candidate_commit"] == candidate
+                verification = verify_op["result"]
+                assert verification["status"] == "passed", verification
+                assert verification["semantic_acceptance"] == "not_evaluated"
+                assert verification_marker.read_text() == "x"
+                projected = await _result(w, att)
+                assert projected["changes"]["fixed_result_commit"]["commit_sha"] == candidate
+                assert projected["verification"]["status"] == "verified"
+                assert projected["verification"]["quality_reviews"]["current"] is None
+                await send({"result_verified": True})
             if review_result:
                 created_review = await receive("review-created")
                 await wait_status(created_review["operation_id"], "succeeded")
@@ -546,6 +576,8 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 assert ops.db.execute("SELECT count(*) FROM work_attempts WHERE work_item_id=?",
                     (original_work["work_item"]["work_item_id"],)).fetchone()[0] == 0
             assert snapshot(w["human"]) == before
+            if verify_result:
+                assert verification_marker.read_text() == "x"
             assert (mock.metas[MANUAL], mock.states[MANUAL]) == manual
             starts = [f for f in mock.invokes if f["channel"] == "claude:start-session"]
             sends = [f for f in mock.invokes if f["channel"] == "claude:send-message"]
@@ -560,7 +592,7 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             user_ops = [ops.get(oid) for oid in done["operations"]]
             initial = ["pm.message.append", "pm.conversation.propose", "work.adopt_and_start"] if mode == "adopt" else ["work.start"]
             review_actions = ["pm.quality.review.create", "pm.quality.review.record", "pm.thread.create", "pm.message.append", "pm.run.analyze"] if review_result else []
-            assert [op["action"] for op in user_ops] == [*(["work_item.create"] if create_work else []), *initial, "session.send", *review_actions, "github.pr.publish"]
+            assert [op["action"] for op in user_ops] == [*(["work_item.create"] if create_work else []), *initial, "session.send", *(["pm.execution.verify"] if verify_result else []), *review_actions, "github.pr.publish"]
             assert all(op["actor"] == STARTER_OWNER.actor and op["status"] == "succeeded" for op in user_ops)
             assert len({op["idempotency_key"] for op in user_ops}) == len(user_ops)
             created = {r[0] for r in ops.db.execute("SELECT operation_id FROM operations")} - seed_ids
@@ -574,7 +606,7 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 "source_sha": git(ROOT, "rev-parse", "HEAD"),
                 "source_dirty": bool(git(ROOT, "status", "--porcelain")),
                 "python": sys.version, "browser": done["browser"],
-                "entry": entry, "recovery": recovery, "quality_review": quality, "created_work_in_ui": created_work, "same_attempt": att["attempt_id"],
+                "entry": entry, "recovery": recovery, "quality_review": quality, "verification": verification, "created_work_in_ui": created_work, "same_attempt": att["attempt_id"],
                 "discussion_return": done["discussion_return"], "browser_operations": len(user_ops), "bat_starts": len(starts),
                 "bat_sends": len(sends), "github_posts": 1, "manual_unchanged": True, "mcp_peer": peer,
                 "candidate": candidate, "browser_closed_during_dispatch": True}, indent=2) + "\n")

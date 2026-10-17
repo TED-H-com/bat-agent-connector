@@ -247,6 +247,21 @@ try {
   await expect(review.getByLabel(zh ? '候選提交' : 'Candidate commit', {exact: true})).toBeDisabled();
   assert.equal(requests.length, expectedOperations - 1, 'Opening the fixed Result review must not create an operation');
   await shot('03-result-review');
+  if (f.verify_result) {
+    step = 'verify-fixed-result';
+    const verifier=page.locator('[data-work-quality] [data-pm-execution-verification]');
+    await verifier.locator(':scope > summary').click();
+    const form=verifier.locator('[data-pm-action="pm.execution.verify"]');
+    await expect(form.locator('button[type=submit]')).toBeEnabled();
+    await shot('03-before-verification');
+    const verified=await clickOperation('pm.execution.verify',form.locator('button[type=submit]'));
+    send({stage:'result-verified',operation_id:verified.operation_id});
+    assert.equal((await receive()).result_verified,true);
+    await expect(verifier).toContainText(fixed.candidate);
+    await expect(page.locator('[data-work-quality]')).not.toContainText(zh?'需求驗收: 已接受':'Requirement acceptance: Accepted');
+    await expect(page.locator('[data-work-result] [data-check=verification]')).toHaveText(zh?'已驗證':'Verified');
+    await shot('03-verified-result');
+  }
   if (f.review_result) {
     step = 'appoint-review';
     const quality = page.locator('[data-work-quality]');
@@ -366,8 +381,8 @@ try {
     await expect(page.locator('[data-work-publish-pr]')).toContainText('21');
   }
   assert.deepEqual(errors, []);
-  assert.equal(requests.length, expectedOperations + (f.review_result ? 5 : 0));
-  assert.equal(new Set(requests.map(r => r.key)).size, expectedOperations + (f.review_result ? 5 : 0));
+  assert.equal(requests.length, expectedOperations + (f.review_result ? 5 : 0) + (f.verify_result ? 1 : 0));
+  assert.equal(new Set(requests.map(r => r.key)).size, expectedOperations + (f.review_result ? 5 : 0) + (f.verify_result ? 1 : 0));
   assert.ok(requests.every(r => r.key));
   const follow = requests.find(row => row.body.action === 'session.send');
   assert.deepEqual(follow.body.target, {workspace_id: f.workspace, work_item_id: f.work});

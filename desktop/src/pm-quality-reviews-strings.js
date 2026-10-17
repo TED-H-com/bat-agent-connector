@@ -1,5 +1,5 @@
 export const pmQualityReviewsStrings={
-  en:{
+  en:{pmq_verify_result_heading:'Verify this result',pmq_verify_result_help:'Run the project’s configured checks against this fixed result.',pmq_verify_result_effect:'A passing check adds evidence for review. Requirement acceptance still needs a separate assessment.',pmq_verify_result_changed:'The current checkout differs from this fixed result. Verification cannot run for this result.',pmq_verify_not_offered:'Verification is not available to you for this result right now.',
     pmq_result_open:'Review this result',
     pmq_discuss:'Discuss this assessment with PM',pmq_discuss_title:'Review this result with PM',
     pmq_result_help:'These conclusions belong to this fixed result. Project acceptance still follows its original evidence policy.',
@@ -27,7 +27,7 @@ export const pmQualityReviewsStrings={
     pmq_reason_work_binding_changed:'The current work binding differs from this original review.',pmq_reason_binding_id_changed:'The selected work binding differs from this original review.',pmq_reason_scope_revision_changed:'The scope revision differs from this original review.',
     pmq_reason_dod_revision_id_changed:'The selected DoD differs from this original review.',pmq_reason_candidate_commit_changed:'The selected candidate differs from this original review.'
   },
-  'zh-TW':{
+  'zh-TW':{pmq_verify_result_heading:'驗證這份成果',pmq_verify_result_help:'使用專案已設定的檢查，驗證這份固定成果。',pmq_verify_result_effect:'檢查通過會增加可供審閱的證據，需求是否驗收仍需另行評估。',pmq_verify_result_changed:'目前工作目錄已不同於這份固定成果，無法針對此成果開始驗證。',pmq_verify_not_offered:'目前無法以你的權限針對這份成果開始驗證。',
     pmq_result_open:'審閱這份成果',
     pmq_discuss:'與 PM 討論這次評估',pmq_discuss_title:'與 PM 討論成果',
     pmq_result_help:'這些結論屬於這份固定成果；專案驗收仍依原本的證據政策判定。',
