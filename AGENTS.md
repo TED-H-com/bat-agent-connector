@@ -76,3 +76,12 @@ confirmation to an already authorized UI action.
   `~/agent-work/tmp/pytest/` and remove that directory when the run finishes.
 - Stop and remove task-owned test databases and containers after the task; do not leave
   them running or remove another task's resources.
+
+## October 17 EC-1.1 and Connector updates
+
+Apply the [EC-1.1 decision](docs/product/experience-convergence.md) and its
+[delta](docs/product/experience-convergence-delta.md) within existing E/UX/R/V/K work.
+Do not reimplement the merged Work loop. Separate real BAT/model and physical-mobile
+acceptance from fixtures. The owner additionally requested Connector automatic updates;
+use the [update contract](docs/design/connector-updates.md). This supersedes the prior
+Connector auto-update scope exclusion, while preserving desktop signing/lifecycle gates.

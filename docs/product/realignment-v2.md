@@ -1,6 +1,6 @@
 # Better Agent Dashboard：共用產品與 Tauri 介面方向
 
-2026-10-16：owner 的 [EC-1.0 體驗收斂決議](experience-convergence.md)統一既有
+2026-10-17：owner 的 [EC-1.1 體驗收斂決議](experience-convergence.md)統一既有
 v1.3／Work-Centric 的 UI 與交付順序；保留本頁核心架構及 PM 生命週期要求。
 日常開工與差額見 [v1.3 handoff](v1.3-agent-handoff.md)，不另立 v1.4。
 

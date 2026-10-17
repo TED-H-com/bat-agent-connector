@@ -391,3 +391,9 @@ MCP 位址是 `http://127.0.0.1:8765/mcp`，不是 Dashboard 網址。Durable �
 來源資訊的開發目錄會顯示「未知」。桌面安裝包另顯示桌面程式版本與 commit；
 打包時記錄兩者。本機原生建置若未設定 `BATC_BUILD_COMMIT`，commit 顯示「未知」。
 瀏覽器使用提供網頁的 Connector 版本資訊，不把開發目錄的 HEAD 寫入網頁產物。
+
+## Linux Connector 自動更新
+
+Connector 0.2.7 加入可選的使用者更新排程，定期取得已發布版本。
+參閱[啟用、狀態與回退](connector-updates.md#發布與使用邊界)。更新供下一次啟動使用；
+桌面內附 runtime 仍遵循既有生命週期。

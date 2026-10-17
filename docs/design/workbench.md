@@ -1,6 +1,6 @@
 # Workbench presentation and selection
 
-The owner's October 16 [EC-1.0 decision](../product/experience-convergence.md)
+The owner's October 17 [EC-1.1 decision](../product/experience-convergence.md)
 extends this presentation foundation. Its first delivery connects the existing
 start, server-owned follow-up queue, fixed Result and PR actions in the shared
 UI. Preserve one selection, draft namespace and event reader across perspectives;
@@ -176,3 +176,26 @@ Lineage and live queue sources; assessment decisions at all entrances; unbound
 work states, source withdrawal across every new projection; the complete visual,
 200-work/stream load and installed/live acceptance matrix. V0–V4 and all 48 cases
 remain open at the scope defined by the owner's package.
+
+## EC-1.1 mobile and continuity increment
+
+The [adopted delta](../product/experience-convergence-delta.md) adds full-screen list →
+Work/discussion → on-demand sheet navigation on the shared frontend. Workspace settings
+and the selected Work's details have separate entries. Global Today/Projects/Work/Resources
+remain separate from the selected Work's Work/Lineage/Live views.
+
+Back closes the nearest sheet before returning to the original list, restoring query,
+selection and scroll. Reflow and touch landscape preserve the same composer, draft and
+single send handler. Visual viewport/safe-area handling distinguishes zoom from keyboard
+changes; IME, voice input and multiline paste cannot trigger accidental send. The mobile
+product target is 44 CSS px. A local draft is never presented as a server-accepted input.
+Foreground/login recovery reads the original key and rechecks source/permission before
+showing actionable state; changing account/workspace cannot replay the previous draft.
+
+List summaries, selected details and incremental source refresh use existing collectors,
+IDs, scopes and events. New data keeps the reader's focus and position. Measure source
+reads, payload/minute and selection-to-content separately from model time. No per-client
+collector, mobile command layer or second completion store is introduced.
+
+These are added acceptance requirements, not implementation or physical-device evidence.
+See [K extensions](../product/workbench-ux-acceptance.md#ec-11-追加情境沿原-k-編號).
