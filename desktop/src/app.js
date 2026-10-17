@@ -19,6 +19,7 @@ import {viewState} from './ui/view-state.js';
 import {h as dom, place} from './ui/dom.js';
 import {prSelector} from "./pr-selector.js";
 import {mountPmWorkspace, pmAvailable} from "./pm-workspace.js";
+import {mountWorkFollowUp, workFollowUpAvailable} from "./pm-work-follow-up.js";
 import {workspaceNavigation} from "./workspace-nav.js";
 import {managedSetupPanel} from "./managed-setup.js";
 import {ApiError, errorPresentation} from "./error-presentation.js";
@@ -1634,6 +1635,17 @@ async function viewSession(main, host, sid, context = null) {
     sessionSection("inbox", t("session_sources"), sourcesBody),
     batSlot, permissionsSlot, labels.box, instructions?.box, observations.box, details].filter(Boolean));
   const lane = h("section", {class: "workspace-conversation"}, conversation.box, readonly, controls, status);
+  // Work-target second input stays in this lane. Tab switches hide the lane; they do not rebuild it.
+  // The legacy composer above is unchanged and is not a fallback when this capability is absent.
+  const followWorkspace = /^ws_[0-9a-f]{32}$/.test(sessionWorkspace || "") ? sessionWorkspace : "";
+  const followWorkId = workRecord?.work_item?.work_item_id || "";
+  const followUp = workbenchEnabled() && !nativeDesktop && followWorkspace && /^wi_[0-9a-f]{20}$/.test(followWorkId) && workFollowUpAvailable(state.caps)
+    ? mountWorkFollowUp({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
+      namespace: connection.namespace, workspaceId: followWorkspace, workItemId: followWorkId, errorBox,
+      canSend: () => state.online && !state.nativeBusy && state.viewReady,
+      managed: () => !withdrawn && row?.provenance === "connector_managed" && row?.api_access === "managed"})
+    : null;
+  if (followUp) lane.append(followUp.box);
   const mobileLayout = setupMobileSessionLayout({ head, composer: controls, textarea: box, t, guard: () => assertView(connection),
     infoRow: conversation.box.querySelector(".conversation-caption"), composerRow });
   if (context?.picker) main.append(context.picker);
@@ -1805,6 +1817,7 @@ async function viewSession(main, host, sid, context = null) {
   };
   const updateControls = () => {
     permissions?.update();
+    followUp?.sync();
     // In-flight send stays focusable. Permission and readiness still use disabled, once the send has finished.
     send.disabled = sending ? false : !allowed("session.send");
     if (sending) send.setAttribute("aria-disabled", "true");
@@ -2028,6 +2041,7 @@ async function viewSession(main, host, sid, context = null) {
   const withdraw = (kind, error = null) => {
     const first = !withdrawn;
     withdrawn = kind;
+    followUp?.suspend();
     perspectives?.withdraw();
     withdrawalVersion += 1;
     clearTimeout(retryTimer); retryTimer = null; retryDelay = 1000;
@@ -2047,6 +2061,7 @@ async function viewSession(main, host, sid, context = null) {
   };
   const reinstate = () => {
     withdrawn = "";
+    followUp?.restore();
     perspectives?.restore();
     withdrawnSlot.remove(); if (context?.picker) context.picker.hidden = false; head.after(workspaceNode);
     overflow.hidden = false; syncWide();
@@ -2099,17 +2114,24 @@ async function viewSession(main, host, sid, context = null) {
     if (withdrawn) return own ? reload() : Promise.resolve();
     const affected = own || ["work_item", "integration", "worktree"].includes(ev.resource_type)
       || context?.project && ["project", "operation", "task", "execution"].includes(ev.resource_type);
+    const follow = !disposed && followUp && (own || ev.resource_type === "operation" || ev.resource_type === "work_item")
+      ? followUp.refresh() : Promise.resolve();
     return (affected ? reload() : Promise.resolve()).then(() => {
       if (withdrawn || disposed) return;
       return settleRefreshes([
         ev.resource_type === "checkpoint" ? reloadCps() : Promise.resolve(),
         ev.resource_type === "operation" ? permissions?.refresh(true) : Promise.resolve(),
         (own || ev.resource_type === "operation") ? labels.refresh(true) : Promise.resolve(),
-        instructions?.box.open && (own || ev.resource_type === "operation") ? instructions.refresh() : Promise.resolve()
+        instructions?.box.open && (own || ev.resource_type === "operation") ? instructions.refresh() : Promise.resolve(),
+        follow
       ]);
     });
   });
-  return () => {disposed = true; perspectives?.dispose(); clearTimeout(retryTimer); off(); instructions?.dispose(); batHandoff?.dispose(); conversation.dispose(); mobileLayout?.dispose(); shortcut.dispose();
+  // viewReady flips after this function returns. Sync on the next turn so Send next
+  // is not left disabled by the readiness check that ran while the view was still loading.
+  const followSync = setTimeout(() => {try {assertView(connection); if (!disposed) followUp?.sync();} catch { /* the view already left */ }}, 0);
+  const offFollowOnline = onOnline(() => {try {assertView(connection); if (!disposed) followUp?.sync();} catch { /* the view already left */ }});
+  return () => {disposed = true; clearTimeout(followSync); offFollowOnline(); followUp?.dispose(); perspectives?.dispose(); clearTimeout(retryTimer); off(); instructions?.dispose(); batHandoff?.dispose(); conversation.dispose(); mobileLayout?.dispose(); shortcut.dispose();
     cps.clear(); results.dispose(); overflow.dispose(); sourcesPanel?.dispose(); wide.removeEventListener("change", syncWide);};
 }
 

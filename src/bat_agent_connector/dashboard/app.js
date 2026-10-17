@@ -8320,6 +8320,104 @@ var workResultStrings = {
 	}
 };
 //#endregion
+//#region src/pm-work-follow-up-strings.js
+var workFollowUpStrings = {
+	"zh-TW": {
+		loop_next_label: "下一步",
+		loop_next_send: "送出下一步",
+		loop_next_hint: "本輪結束後才會送出。",
+		loop_next_queued: "已排入下一輪",
+		loop_next_waiting: "本輪在等回答。這一步仍先排隊，不會中斷本輪。",
+		loop_next_readonly: "唯讀",
+		loop_next_hidden: "有些步驟因來源不可見而沒有列出。",
+		loop_next_more: "還有步驟",
+		loop_next_not_actor: "只有送出這則指令的人可以取消或重新確認。",
+		loop_next_withdrawn: "這項工作已不在這裡。",
+		loop_next_unknown: "未知",
+		loop_next_empty: "還沒有下一步。",
+		loop_next_excerpt: "只顯示這則指令的開頭。",
+		loop_next_blocked_link: "開啟未確認的指令",
+		loop_next_codex: "這個 Codex 工作階段無法排入下一步。",
+		loop_next_not_controller: "你不是這項工作的控制者。",
+		loop_next_err_unknown: "這一步無法送出。",
+		loop_next_err_PM_WORK_SESSION_NOT_MANAGED: "這個工作階段不是由你控制的受管工作階段。",
+		loop_next_err_READ_ONLY: "這個工作階段是唯讀的。",
+		loop_next_err_UNKNOWN_READ_ONLY: "這個工作階段的存取狀態還不確定，因此不會送出。",
+		loop_next_err_NOT_FOUND: "這項工作已不在這裡。",
+		loop_next_err_PM_WORK_CODEX_FOLLOW_UP_UNSUPPORTED: "這個 Codex 工作階段無法排入下一步。",
+		loop_next_err_PM_WORK_SESSION_ENDED: "這個工作階段已結束。請查看本輪結果。",
+		loop_next_err_PM_WORK_SESSION_BUSY: "本輪仍在進行，沒有改成立刻送出。",
+		loop_next_err_PM_WORK_SESSION_WAITING_INPUT: "本輪正在等回答，沒有改成立刻送出。",
+		loop_next_err_PM_WORK_ATTEMPT_CHANGED: "這項工作已有較新的嘗試。請先查看，再重新送出這一步。",
+		loop_next_err_WORK_ITEM_NOT_FOUND: "這項工作已不在這裡。",
+		loop_next_err_WORK_ITEM_ARCHIVED: "這項工作已封存。",
+		loop_next_err_PROJECT_NOT_FOUND: "這項工作所屬的專案不在這裡。",
+		loop_next_err_PROJECT_ARCHIVED: "這項工作所屬的專案已封存。",
+		loop_next_err_PM_PROJECT_BINDING_REQUIRED: "送出前要先把專案綁定到這個工作區。",
+		loop_next_err_PM_LIFECYCLE_STOPPED: "這個工作區已暫停或關閉，因此無法送出這一步。",
+		loop_next_err_PM_LIFECYCLE_EPOCH_CHANGED: "這個工作區已重新開啟。再次送出前請先查回原操作。",
+		loop_next_err_PM_WORK_START_IN_PROGRESS: "這項工作還在開始。",
+		loop_next_err_PM_WORK_START_OUTCOME_UNPROVEN: "最近一次開始的結果尚未確認。送出前請先對帳那次開始。",
+		loop_next_err_PM_WORK_NOT_STARTED: "這項工作還沒開始。",
+		loop_next_err_PM_WORK_CONTROLLER_CONFLICT: "你不是這項工作的控制者。",
+		loop_next_err_INVALID_TARGET: "目標不是這項工作，因此沒有送出。",
+		loop_next_err_INVALID_PARAMS: "請修改文字後再送出。",
+		loop_next_err_INVALID_PRECONDITIONS: "嘗試已變更。請重新送出這一步。",
+		loop_next_err_IDEMPOTENCY_CONFLICT: "請查回原請求。",
+		loop_next_err_PM_WORK_CANCEL_NOT_ALLOWED_AFTER_SEND: "指令已進入送出階段；開始送出後無法透過取消撤回指令。",
+		loop_next_err_FORBIDDEN: "你無法變更這一步。",
+		loop_next_err_UNKNOWN_HOST: "這項工作的主機不在這次安裝裡。",
+		loop_next_err_TIER_DISABLED: "這台主機不允許這項寫入。"
+	},
+	en: {
+		loop_next_label: "Next step",
+		loop_next_send: "Send next",
+		loop_next_hint: "This is sent after the current turn ends.",
+		loop_next_queued: "Queued for the next turn",
+		loop_next_waiting: "The turn is waiting for an answer. This step is still queued. It does not interrupt.",
+		loop_next_readonly: "Read-only",
+		loop_next_hidden: "Some steps are hidden because their source is not visible.",
+		loop_next_more: "More steps",
+		loop_next_not_actor: "Only the person who sent this instruction can cancel or reconcile it.",
+		loop_next_withdrawn: "This work is no longer here.",
+		loop_next_unknown: "Unknown",
+		loop_next_empty: "No next step yet.",
+		loop_next_excerpt: "Only the opening of this instruction is shown.",
+		loop_next_blocked_link: "Open the unconfirmed instruction",
+		loop_next_codex: "A next step is not available for this Codex session.",
+		loop_next_not_controller: "You are not this work's controller.",
+		loop_next_err_unknown: "This step could not be sent.",
+		loop_next_err_PM_WORK_SESSION_NOT_MANAGED: "This session is not a managed session you control.",
+		loop_next_err_READ_ONLY: "This session is read-only.",
+		loop_next_err_UNKNOWN_READ_ONLY: "This session's access is unknown, so nothing is sent.",
+		loop_next_err_NOT_FOUND: "This work is no longer here.",
+		loop_next_err_PM_WORK_CODEX_FOLLOW_UP_UNSUPPORTED: "A next step is not available for this Codex session.",
+		loop_next_err_PM_WORK_SESSION_ENDED: "This session has ended. Review the current result.",
+		loop_next_err_PM_WORK_SESSION_BUSY: "This turn is still running. Nothing was switched to send now.",
+		loop_next_err_PM_WORK_SESSION_WAITING_INPUT: "This turn is waiting for an answer. Nothing was switched to send now.",
+		loop_next_err_PM_WORK_ATTEMPT_CHANGED: "This work has a newer attempt. Review it, then send the step again.",
+		loop_next_err_WORK_ITEM_NOT_FOUND: "This work is no longer here.",
+		loop_next_err_WORK_ITEM_ARCHIVED: "This work is archived.",
+		loop_next_err_PROJECT_NOT_FOUND: "The project for this work is not here.",
+		loop_next_err_PROJECT_ARCHIVED: "The project for this work is archived.",
+		loop_next_err_PM_PROJECT_BINDING_REQUIRED: "Bind the project to this workspace before sending.",
+		loop_next_err_PM_LIFECYCLE_STOPPED: "This workspace is paused or closed, so this step cannot be sent.",
+		loop_next_err_PM_LIFECYCLE_EPOCH_CHANGED: "This workspace was reopened. Check the original operation before sending again.",
+		loop_next_err_PM_WORK_START_IN_PROGRESS: "This work is still starting.",
+		loop_next_err_PM_WORK_START_OUTCOME_UNPROVEN: "The latest start has an unconfirmed result. Reconcile that start before sending.",
+		loop_next_err_PM_WORK_NOT_STARTED: "This work has not started.",
+		loop_next_err_PM_WORK_CONTROLLER_CONFLICT: "You are not this work's controller.",
+		loop_next_err_INVALID_TARGET: "This step was not sent because the target was not the work item.",
+		loop_next_err_INVALID_PARAMS: "Change the text and send again.",
+		loop_next_err_INVALID_PRECONDITIONS: "The attempt changed. Send this step again.",
+		loop_next_err_IDEMPOTENCY_CONFLICT: "Check the original request.",
+		loop_next_err_PM_WORK_CANCEL_NOT_ALLOWED_AFTER_SEND: "This instruction has entered sending and can no longer be withdrawn by cancelling.",
+		loop_next_err_FORBIDDEN: "You cannot change this step.",
+		loop_next_err_UNKNOWN_HOST: "The host for this work is not in this installation.",
+		loop_next_err_TIER_DISABLED: "This host does not allow that write."
+	}
+};
+//#endregion
 //#region src/i18n.js
 var STRINGS = {
 	"zh-TW": {
@@ -8327,6 +8425,7 @@ var STRINGS = {
 		...diagnosticsStrings["zh-TW"],
 		...workStartStrings["zh-TW"],
 		...workResultStrings["zh-TW"],
+		...workFollowUpStrings["zh-TW"],
 		...pmStrings["zh-TW"],
 		...createRecordStrings["zh-TW"],
 		...uiStrings["zh-TW"],
@@ -9974,6 +10073,7 @@ var STRINGS = {
 		...diagnosticsStrings.en,
 		...workStartStrings.en,
 		...workResultStrings.en,
+		...workFollowUpStrings.en,
 		...pmStrings.en,
 		...createRecordStrings.en,
 		...uiStrings.en,
@@ -14900,7 +15000,7 @@ function humanizeAction(action) {
 	if (!words.length) return "";
 	return words.map((word, index) => index === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word).join(" ");
 }
-function actionLabel(action) {
+function actionLabel$1(action) {
 	const key = ACTIONS[action];
 	if (key) {
 		const label = t(key);
@@ -29144,7 +29244,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 				retain.set("operations", JSON.stringify(check.checked ? [...new Set([...chosen(), id])] : chosen().filter((value) => value !== id)));
 				retain.update();
 			});
-			retentionChoices.append(h("label", {}, check, " ", row ? `${actionLabel(row.action)} · ${operationStatusLabel(row.operation_status)}` : t("pm_lifecycle_retained_missing"), h("code", {}, id)));
+			retentionChoices.append(h("label", {}, check, " ", row ? `${actionLabel$1(row.action)} · ${operationStatusLabel(row.operation_status)}` : t("pm_lifecycle_retained_missing"), h("code", {}, id)));
 		}
 		retention.hidden = !current?.lifecycle.transition_id && !retain.locked() && !selected.length;
 	}
@@ -29156,7 +29256,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 		}));
 		if (workFiltered) work.append(h("p", { class: "muted" }, t("pm_lifecycle_filtered")));
 		for (const row of rows) {
-			const details = h("details", { "data-pm-lifecycle-operation": row.operation_id }, h("summary", {}, actionLabel(row.action), " · ", t("pm_lifecycle_" + row.disposition)), h("p", {}, row.actor, " · ", operationStatusLabel(row.operation_status)), h("a", { href: `#/op/${row.operation_id}` }, t("pm_operation")));
+			const details = h("details", { "data-pm-lifecycle-operation": row.operation_id }, h("summary", {}, actionLabel$1(row.action), " · ", t("pm_lifecycle_" + row.disposition)), h("p", {}, row.actor, " · ", operationStatusLabel(row.operation_status)), h("a", { href: `#/op/${row.operation_id}` }, t("pm_operation")));
 			for (const step of row.steps || []) details.append(h("p", { class: "muted" }, `${step.name} · ${operationStatusLabel(step.status)}`));
 			if (row.writer) details.append(h("p", { class: "muted" }, `${t("pm_lifecycle_writer")}: ${nativeRunState(t, row.writer)}`));
 			if (row.retention) details.append(h("p", {}, row.retention.reason));
@@ -36607,7 +36707,7 @@ function scheduleTree(rows, collapsed) {
 //#endregion
 //#region src/pm-schedule-labels.js
 function scheduleTitle(row) {
-	if (row.kind === "attempt" && row.refs?.operation_id) return actionLabel(row.title === row.refs.operation_id ? "" : row.title);
+	if (row.kind === "attempt" && row.refs?.operation_id) return actionLabel$1(row.title === row.refs.operation_id ? "" : row.title);
 	return String(row.title || "");
 }
 var scheduleFirstLine = (row) => scheduleTitle(row).split(/\r?\n/)[0];
@@ -42529,7 +42629,7 @@ function pmWorktreeChoice({ h, t, api, alive, input, labelled, capability, scope
 //#endregion
 //#region src/pm-workspace.js
 var same$3 = (a, b) => a === b || a && b && typeof a === "object" && typeof b === "object" && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((key) => Object.hasOwn(b, key) && same$3(a[key], b[key]));
-var retired = (error) => [
+var retired$1 = (error) => [
 	"VIEW_CHANGED",
 	"CONNECTION_CHANGED",
 	"PM_DISPOSED"
@@ -42549,7 +42649,7 @@ if (!customElements.get(formConnectionTag)) customElements.define(formConnection
 	}
 });
 var pmAvailable = (caps) => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes("observe");
-function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, savedText = "pm_saved", pendingText = "pm_pending" }) {
+function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, savedText = "pm_saved", pendingText = "pm_pending", releaseAfterAcknowledgement = false, acknowledgedText = "", onAcknowledged = () => {}, acknowledgeStatus = null, abandonIntentOn = () => false }) {
 	const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
 	let saved = {
 		version: 1,
@@ -42652,7 +42752,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				receipt.replaceChildren();
 				update();
 			} catch (error) {
-				if (!retired(error)) status.replaceChildren(errorBox(error, { within: status }));
+				if (!retired$1(error)) status.replaceChildren(errorBox(error, { within: status }));
 			}
 		}
 	}, t("pm_edit_request"));
@@ -42807,6 +42907,46 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			saved.intent.operation_id = op.operation_id;
 			persist();
 			operation = op;
+			if (releaseAfterAcknowledgement) {
+				stopTimer();
+				receiptPolling = false;
+				saved = {
+					version: 1,
+					values: {}
+				};
+				try {
+					persist();
+				} catch {}
+				for (const input of Object.values(fields)) {
+					input.value = input.dataset.pmDefault || "";
+					input.disabled = false;
+					if (readOnlyWhenUnavailable) input.readOnly = false;
+				}
+				operation = null;
+				receipt.replaceChildren();
+				let announced = null;
+				try {
+					announced = acknowledgeStatus ? acknowledgeStatus(op, h, t) : null;
+				} catch {
+					announced = null;
+				}
+				if (!announced && acknowledgedText) {
+					const key = typeof acknowledgedText === "function" ? acknowledgedText(op) : acknowledgedText;
+					if (key) announced = h("span", {
+						class: "muted",
+						"data-pm-acknowledged": ""
+					}, t(key));
+				}
+				if (announced) status.replaceChildren(announced);
+				else status.replaceChildren();
+				try {
+					onAcknowledged(op);
+				} catch {}
+				const field = Object.values(fields)[0];
+				const active = document.activeElement;
+				if (field && (active === button || active === document.body)) field.focus();
+				return;
+			}
 			receipt.replaceChildren(h("a", { href: `#/op/${op.operation_id}` }, t("pm_operation")), " · ", statusText(op.status));
 			if (op.status === "succeeded") {
 				onBeforeSaved(op.result, saved.values);
@@ -42831,12 +42971,28 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			} catch {
 				return;
 			}
-			if (!retired(error)) {
+			if (!retired$1(error)) {
 				if (firstAttempt && error.admissionRefused === true && !saved.intent?.operation_id) {
 					saved.intent.initialAdmissionRefused = true;
 					try {
 						persist();
 					} catch {}
+				}
+				let abandon = false;
+				try {
+					abandon = Boolean(saved.intent && !saved.intent.operation_id && !saved.intent.initialAdmissionRefused && abandonIntentOn(error));
+				} catch {
+					abandon = false;
+				}
+				if (abandon) {
+					saved = {
+						version: 1,
+						values: capture()
+					};
+					try {
+						persist();
+					} catch {}
+					operation = null;
 				}
 				if (!onError(error)) status.replaceChildren(errorBox(error, error.code === "VERSION_CONFLICT" ? {
 					summary: t("pm_stale"),
@@ -45238,7 +45394,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					if (value.plan?.workspace_id !== workspaceId || value.plan.revision_id !== adoptionRef[1] || typeof value.plan.document?.title !== "string" || !Number.isSafeInteger(value.plan.sequence)) throw Error(t("pm_scope_mismatch"));
 					caption.textContent = value.plan.document.title + " · " + t("pm_revision_number", { number: value.plan.sequence });
 				} catch (error) {
-					if (!item.isConnected || retired(error)) return;
+					if (!item.isConnected || retired$1(error)) return;
 					if ([403, 404].includes(error.status)) item.remove();
 					else detail.replaceChildren(errorBox(error, { within: detail }));
 				}
@@ -45263,7 +45419,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					if (context.coverage?.omitted_message_ids?.length || context.coverage?.omitted_input_ids?.length || context.coverage?.messages_truncated || context.coverage?.inputs_truncated) detail.append(h("p", { class: "muted" }, t("pm_partial")));
 					fetched = true;
 				} catch (error) {
-					if (!retired(error) && item.isConnected) detail.replaceChildren(errorBox(error, { within: detail }));
+					if (!retired$1(error) && item.isConnected) detail.replaceChildren(errorBox(error, { within: detail }));
 				} finally {
 					pending = false;
 				}
@@ -45287,7 +45443,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						more.remove();
 						renderPackages(next, true);
 					} catch (error) {
-						if (!retired(error)) {
+						if (!retired$1(error)) {
 							status.replaceChildren(errorBox(error, { within: status }));
 							more.disabled = false;
 						}
@@ -45314,7 +45470,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			historyExpanded = true;
 			renderThread(data);
 		} catch (error) {
-			if (!retired(error) && ticket === sequence) {
+			if (!retired$1(error) && ticket === sequence) {
 				loaded = false;
 				lastThreadList = null;
 				workspace = null;
@@ -45676,7 +45832,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				nativeAnalysis?.recheck();
 			}
 		} catch (error) {
-			if (!retired(error) && ticket === sequence) {
+			if (!retired$1(error) && ticket === sequence) {
 				loaded = false;
 				workspace = null;
 				threadData = null;
@@ -45974,6 +46130,552 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	return dispose;
 }
 //#endregion
+//#region src/pm-work-follow-up.js
+var WORKSPACE_ID = /^ws_[0-9a-f]{32}$/;
+var WORK_ITEM_ID = /^wi_[0-9a-f]{20}$/;
+var ATTEMPT_ID = /^att_[0-9a-f]{32}$/;
+var OPERATION_ID = /^op_[0-9a-f]{32}$/;
+var REKEY = new Set(["PM_WORK_ATTEMPT_CHANGED", "INVALID_PRECONDITIONS"]);
+var QUEUED_STATUS = new Set([
+	"accepted",
+	"queued",
+	"pending",
+	"running",
+	"waiting_external"
+]);
+function workFollowUpAvailable(caps) {
+	const feature = caps?.features?.pm_workspaces?.work_follow_up;
+	return feature?.version === 1 && feature?.available === true;
+}
+var retired = (error) => [
+	"VIEW_CHANGED",
+	"CONNECTION_CHANGED",
+	"PM_DISPOSED"
+].includes(error?.code);
+function exactTarget(target, workspaceId, workItemId) {
+	if (!target || typeof target !== "object" || Array.isArray(target)) return false;
+	return Object.keys(target).length === 2 && target.workspace_id === workspaceId && target.work_item_id === workItemId;
+}
+function receiptText(receipt, part, t) {
+	const value = receipt?.labels?.[part]?.[locale];
+	return typeof value === "string" && value.trim() ? value : t("loop_next_unknown");
+}
+function actionLabel(action, t) {
+	const value = locale === "zh-TW" ? action?.label_zh_TW : action?.label;
+	return typeof value === "string" && value.trim() ? value : "";
+}
+function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, workItemId, errorBox, canSend = () => true, managed = () => false }) {
+	if (!workFollowUpAvailable(caps()) || !WORKSPACE_ID.test(workspaceId || "") || !WORK_ITEM_ID.test(workItemId || "")) return null;
+	const titleId = `work-next-title-${workItemId}`;
+	const hintId = `work-next-hint-${workItemId}`;
+	const heading = h("h2", { id: titleId }, t("loop_next_label"));
+	const pill = h("span", { "data-follow-up-pill": "" });
+	const list = h("div", {
+		class: "work-next-list",
+		"data-follow-up-list": ""
+	});
+	const formHost = h("div", { "data-follow-up-form": "" });
+	const note = h("div", { "data-follow-up-note": "" });
+	const status = h("div", {
+		role: "status",
+		"data-follow-up-status": ""
+	});
+	const live = h("div", {
+		role: "status",
+		class: "work-next-live",
+		"data-follow-up-live": ""
+	});
+	const box = h("section", {
+		class: "ui-section-card work-next",
+		"data-work-section": "next-turn"
+	}, h("header", { class: "work-next-head" }, heading, pill), list, note, formHost, status, live);
+	let epoch = 0, serial = 0, stopped = false, suspended = false, disposed = false;
+	let attemptId = "", sendOffer = null, blockedReason = "", resultSettled = false;
+	let pageItems = [], nextCursor = null, hasMore = false, filtered = false, listSettled = false;
+	const pinned = new Map(), announced = new Set(), cancelDenied = new Set();
+	let composer = null, composing = false, composeEnded = -Infinity, focusAfter = null;
+	let composeDepth = 0, composeSession = 0;
+	let sawList = false;
+	function alive(ticket, mark) {
+		try {
+			guard();
+		} catch {
+			return false;
+		}
+		return mark === epoch && ticket === serial && !stopped && !suspended && !disposed;
+	}
+	function inputsPath(after) {
+		const query = new URLSearchParams();
+		query.set("limit", "50");
+		if (after) query.set("after", String(after));
+		if (attemptId) query.set("attempt_id", attemptId);
+		return `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${encodeURIComponent(workItemId)}/inputs?${query}`;
+	}
+	function validReceipt(row) {
+		return row && typeof row === "object" && OPERATION_ID.test(row.operation_id || "") && row.workspace_id === workspaceId && row.work_item_id === workItemId;
+	}
+	function mergedItems() {
+		const map = new Map();
+		for (const row of pageItems) if (validReceipt(row)) map.set(row.operation_id, row);
+		for (const [id, row] of pinned) if (validReceipt(row) && !map.has(id)) map.set(id, row);
+		return [...map.values()].sort((a, b) => {
+			return (Number.isInteger(a.sequence) ? a.sequence : Number.MAX_SAFE_INTEGER) - (Number.isInteger(b.sequence) ? b.sequence : Number.MAX_SAFE_INTEGER) || String(a.operation_id).localeCompare(String(b.operation_id));
+		});
+	}
+	function rememberAttempt(value) {
+		if (typeof value === "string" && ATTEMPT_ID.test(value)) attemptId = value;
+	}
+	function sentence(code) {
+		const key = `loop_next_err_${code || ""}`;
+		const text = t(key);
+		return text !== key ? text : t("loop_next_err_unknown");
+	}
+	function showError(error, host) {
+		const summary = error?.code ? sentence(error.code) : t("loop_next_err_unknown");
+		host.replaceChildren(errorBox(error, {
+			summary,
+			within: host
+		}));
+	}
+	function clearComposer() {
+		composer?.dispose();
+		composer = null;
+		formHost.replaceChildren();
+	}
+	function actorMatches(receipt) {
+		const actor = caps()?.actor;
+		return typeof actor === "string" && actor !== "" && actor === receipt?.actor;
+	}
+	function offerSend(result) {
+		if (!result || result.contract !== "pm-work-attempt-result/v1") return null;
+		if (result.workspace_id !== workspaceId || result.attempt_id !== attemptId) return null;
+		if (result.identity?.work_item_id !== workItemId) return null;
+		return (Array.isArray(result.next_allowed_actions) ? result.next_allowed_actions : []).find((row) => row?.kind === "action" && row.action === "session.send" && row.allowed !== false && exactTarget(row.target, workspaceId, workItemId) && Array.isArray(row.allowed_schedules) && row.allowed_schedules.includes("after_current")) || null;
+	}
+	function applyResult(result) {
+		resultSettled = true;
+		sendOffer = offerSend(result);
+		const blocked = Array.isArray(result?.blocked_actions) ? result.blocked_actions.find((row) => row?.action === "session.send") : null;
+		blockedReason = sendOffer ? "" : blocked?.reason || "";
+	}
+	function syncComposer() {
+		if (stopped || disposed) return;
+		const allowed = Boolean(sendOffer) && resultSettled && managed() && !suspended && caps()?.scopes?.includes("operate") && caps()?.actions?.some((row) => row.action === "session.send" && row.allowed === true);
+		const showReadOnly = !allowed && resultSettled && (blockedReason === "missing_scope" || blockedReason === "not_writer_member" || !caps()?.scopes?.includes("operate"));
+		pill.replaceChildren(...showReadOnly ? [statusPill("read_only")] : []);
+		const reason = blockedReason === "codex_uncorrelated_turn_boundary" ? t("loop_next_codex") : blockedReason === "not_controller" ? t("loop_next_not_controller") : "";
+		note.replaceChildren(...reason ? [h("p", { class: "work-next-note" }, reason)] : []);
+		if (!allowed) {
+			if (composer) clearComposer();
+			paint();
+			return;
+		}
+		if (composer) {
+			composer.update();
+			paint();
+			return;
+		}
+		const field = h("textarea", {
+			"data-follow-up-input": "",
+			rows: "4"
+		});
+		field.setAttribute("aria-labelledby", titleId);
+		field.setAttribute("aria-describedby", hintId);
+		const refreshSend = () => {
+			composer?.update();
+			setTimeout(() => composer?.update(), 50);
+		};
+		const beginTransientCompose = () => {
+			if (composeDepth > 0) {
+				composing = true;
+				composer?.update();
+				return;
+			}
+			const session = ++composeSession;
+			composing = true;
+			composer?.update();
+			setTimeout(() => {
+				if (session !== composeSession || composeDepth > 0 || !composing) return;
+				composing = false;
+				composeEnded = performance.now();
+				refreshSend();
+			}, 300);
+		};
+		const endTransientCompose = () => {
+			if (composeDepth > 0) return;
+			composeSession += 1;
+			composing = false;
+			composeEnded = performance.now();
+			refreshSend();
+		};
+		field.addEventListener("compositionstart", () => {
+			composeDepth += 1;
+			composeSession += 1;
+			composing = true;
+			composer?.update();
+		});
+		field.addEventListener("compositionend", () => {
+			composeDepth = Math.max(0, composeDepth - 1);
+			composeSession += 1;
+			composing = false;
+			composeEnded = performance.now();
+			refreshSend();
+		});
+		field.addEventListener("input", () => refreshSend());
+		const hint = h("p", {
+			class: "ui-meta",
+			id: hintId
+		}, t("loop_next_hint"));
+		composer = durableForm({
+			h,
+			t,
+			api,
+			caps,
+			guard,
+			namespace,
+			action: "session.send",
+			target: {
+				workspace_id: workspaceId,
+				work_item_id: workItemId
+			},
+			fields: { text: field },
+			params: (values) => ({
+				text: values.text.trim(),
+				schedule: "after_current"
+			}),
+			preconditions: () => attemptId ? { expected_attempt_id: attemptId } : {},
+			permitted: () => managed() && !stopped && !suspended,
+			canSend: () => !composing && performance.now() - composeEnded >= 50 && field.value.trim().length > 0 && field.value.trim().length <= 2e4 && canSend(),
+			requiredScope: "operate",
+			label: "loop_next_send",
+			releaseAfterAcknowledgement: true,
+			acknowledgeStatus: acknowledge,
+			onAcknowledged: acceptOperation,
+			onSaved: async () => {},
+			abandonIntentOn: (error) => REKEY.has(error?.code),
+			onError: handleFormError,
+			errorBox,
+			extra: h("div", { class: "pm-fields work-next-field" }, field, hint)
+		});
+		composer.box.addEventListener("keydown", (event) => {
+			if (event.isComposing || event.keyCode === 229) beginTransientCompose();
+		}, true);
+		composer.box.addEventListener("keyup", (event) => {
+			if (event.isComposing || event.keyCode === 229) endTransientCompose();
+		}, true);
+		composer.box.addEventListener("submit", (event) => {
+			if (composing || performance.now() - composeEnded < 50) {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+			}
+		}, true);
+		formHost.append(composer.box);
+		if (field.value) field.selectionStart = field.selectionEnd = field.value.length;
+		paint();
+	}
+	function acknowledge(op, builder, translate) {
+		const receipt = op?.input_receipt;
+		const known = validReceipt(receipt);
+		const state = receipt?.state;
+		const title = known ? receiptText(receipt, "state", translate) : "";
+		if (!(known ? state === "queued" || state === "accepted" || state === "waiting_external" : QUEUED_STATUS.has(op?.status)) && title) return builder("span", { "data-pm-acknowledged": "" }, title);
+		return builder("span", { "data-pm-acknowledged": "" }, translate("loop_next_queued"), title ? " · " : "", title || null);
+	}
+	function acceptOperation(op) {
+		const receipt = op?.input_receipt;
+		if (!validReceipt(receipt) || receipt.operation_id !== op?.operation_id) return;
+		pinned.set(receipt.operation_id, receipt);
+		paint();
+		refresh();
+	}
+	function handleFormError(error) {
+		if (!error?.code || error.code === "NETWORK_ERROR" || error.code === "TIMEOUT" || error.code === "CENTRAL_OFFLINE") return false;
+		const formStatus = composer?.box.querySelector("[role=status]");
+		if (formStatus) showError(error, formStatus);
+		if (REKEY.has(error.code)) refresh();
+		return true;
+	}
+	function fillFrom(action, focusField) {
+		if (!composer || composer.locked()) return false;
+		const text = typeof action?.params?.text === "string" ? action.params.text : "";
+		composer.set("text", text);
+		if (focusField) composer.fields.text.focus();
+		return true;
+	}
+	async function runEndpoint(action, receipt) {
+		const mark = epoch;
+		const id = action?.operation_id;
+		if (!OPERATION_ID.test(id || "") || !actorMatches(receipt)) return;
+		try {
+			guard();
+			await api("POST", `/operations/${encodeURIComponent(id)}/${action.endpoint}`, {});
+			if (mark !== epoch || stopped || disposed) return;
+			if (action.endpoint === "cancel" && id === receipt.operation_id) focusAfter = {
+				id: receipt.operation_id,
+				kind: "edit"
+			};
+			await refresh();
+		} catch (error) {
+			if (mark !== epoch || stopped || disposed || retired(error)) return;
+			if (error?.code === "PM_WORK_CANCEL_NOT_ALLOWED_AFTER_SEND") {
+				cancelDenied.add(receipt.operation_id);
+				showError(error, status);
+				paint();
+				return;
+			}
+			showError(error, status);
+		}
+	}
+	function mutationsAllowed() {
+		if ([
+			"not_controller",
+			"codex_uncorrelated_turn_boundary",
+			"not_writer_member",
+			"missing_scope"
+		].includes(blockedReason)) return false;
+		return managed() && !stopped && !suspended && caps()?.scopes?.includes("operate") && caps()?.actions?.some((row) => row.action === "session.send" && row.allowed === true);
+	}
+	function rowActions(receipt) {
+		if (!mutationsAllowed()) return [];
+		if (!actorMatches(receipt)) return Array.isArray(receipt.next_allowed_actions) && receipt.next_allowed_actions.length > 0 ? [h("p", { class: "ui-meta" }, t("loop_next_not_actor"))] : [];
+		const actions = Array.isArray(receipt.next_allowed_actions) ? receipt.next_allowed_actions : [];
+		const nodes = [];
+		for (const action of actions) if (action?.kind === "operation_endpoint" && action.endpoint === "cancel" && action.operation_id === receipt.operation_id && receipt.cancellable === true && !cancelDenied.has(receipt.operation_id)) {
+			const label = actionLabel(action, t);
+			if (!label) continue;
+			nodes.push(button({
+				variant: "secondary",
+				label,
+				"data-follow-up-action": "cancel",
+				onClick: () => runEndpoint(action, receipt)
+			}));
+		} else if (action?.kind === "operation_endpoint" && action.endpoint === "resume" && action.operation_id === receipt.operation_id && receipt.state === "unknown") {
+			const label = actionLabel(action, t);
+			if (!label) continue;
+			nodes.push(button({
+				variant: "secondary",
+				label,
+				"data-follow-up-action": "resume",
+				onClick: () => runEndpoint(action, receipt)
+			}));
+		} else if (action?.kind === "action" && action.action === "session.send" && exactTarget(action.target, workspaceId, workItemId) && (receipt.state === "failed" || receipt.state === "cancelled")) {
+			const label = actionLabel(action, t);
+			if (!label) continue;
+			const kind = receipt.state === "cancelled" ? "edit" : "retry";
+			nodes.push(button({
+				variant: "secondary",
+				label,
+				"data-follow-up-action": kind,
+				onClick: () => {
+					fillFrom(action, kind === "retry");
+				}
+			}));
+		}
+		return nodes;
+	}
+	function paint() {
+		if (stopped || disposed) return;
+		const active = document.activeElement;
+		const typing = composer && (active === composer.fields.text || composer.fields.text.contains?.(active));
+		const focusedReceipt = !typing ? active?.closest?.("[data-follow-up-receipt]")?.getAttribute("data-follow-up-receipt") : "";
+		const focusedAction = !typing ? active?.getAttribute?.("data-follow-up-action") : "";
+		const items = mergedItems();
+		const fresh = items.filter((row) => !announced.has(row.operation_id));
+		if (sawList) {
+			for (const row of fresh) announced.add(row.operation_id);
+			if (fresh.length) live.textContent = fresh.map((row) => receiptText(row, "state", t)).filter(Boolean).join(" ");
+		}
+		const rows = items.map((receipt) => h("article", {
+			class: "work-next-row",
+			"data-follow-up-receipt": receipt.operation_id,
+			"data-follow-up-state": receipt.state || ""
+		}, h("a", { href: `#/op/${encodeURIComponent(receipt.operation_id)}` }, receiptText(receipt, "state", t)), h("p", {}, receiptText(receipt, "detail", t)), typeof receipt.text_excerpt === "string" && receipt.text_excerpt ? h("p", {}, receipt.text_excerpt) : null, receipt.text_truncated === true ? h("p", { class: "ui-meta" }, t("loop_next_excerpt")) : null, receipt.status_reason === "waiting_permission_or_question_gate" ? h("p", {}, t("loop_next_waiting")) : null, typeof receipt.blocked_by_operation_id === "string" && OPERATION_ID.test(receipt.blocked_by_operation_id) ? h("a", { href: `#/op/${encodeURIComponent(receipt.blocked_by_operation_id)}` }, t("loop_next_blocked_link")) : null, ...rowActions(receipt)));
+		const tail = [];
+		if (filtered) tail.push(h("p", {
+			class: "work-next-note",
+			"data-follow-up-hidden": ""
+		}, t("loop_next_hidden")));
+		if (hasMore) tail.push(button({
+			variant: "ghost",
+			label: t("loop_next_more"),
+			"data-follow-up-more": "",
+			onClick: () => loadMore()
+		}));
+		if (!items.length && listSettled && !hasMore) tail.push(emptyState({
+			title: t("loop_next_empty"),
+			heading: "h3"
+		}));
+		list.replaceChildren(...rows, ...tail);
+		if (focusAfter) {
+			const pending = focusAfter;
+			const node = list.querySelector(`[data-follow-up-receipt="${CSS.escape(pending.id)}"] [data-follow-up-action="${pending.kind}"]`);
+			if (node) {
+				focusAfter = null;
+				node.focus();
+			}
+		} else if (focusedReceipt && !typing) {
+			const selector = focusedAction ? `[data-follow-up-receipt="${CSS.escape(focusedReceipt)}"] [data-follow-up-action="${CSS.escape(focusedAction)}"]` : `[data-follow-up-receipt="${CSS.escape(focusedReceipt)}"] a`;
+			list.querySelector(selector)?.focus();
+		}
+	}
+	function takeList(data, append) {
+		if (!data || data.workspace_id !== workspaceId || data.work_item_id !== workItemId || !Array.isArray(data.items)) return false;
+		const rows = data.items.filter(validReceipt);
+		pageItems = append ? [...pageItems, ...rows] : rows;
+		nextCursor = typeof data.next_cursor === "string" && data.next_cursor ? data.next_cursor : Number.isInteger(data.next_cursor) ? data.next_cursor : null;
+		hasMore = data.has_more === true && nextCursor != null && nextCursor !== "";
+		filtered = data.visibility_filtered === true;
+		rememberAttempt(data.latest_attempt_id);
+		listSettled = true;
+		return true;
+	}
+	async function readResult(ticket, mark) {
+		if (!attemptId) {
+			resultSettled = true;
+			sendOffer = null;
+			blockedReason = "";
+			syncComposer();
+			return;
+		}
+		const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/result`);
+		if (!alive(ticket, mark)) return;
+		applyResult(data);
+		syncComposer();
+	}
+	async function refresh() {
+		if (stopped || suspended || disposed) return;
+		const mark = epoch;
+		const ticket = ++serial;
+		const queried = attemptId;
+		try {
+			guard();
+			const data = await api("GET", inputsPath(""));
+			if (!alive(ticket, mark)) return;
+			if (!takeList(data, false)) {
+				status.replaceChildren(h("p", {}, t("loop_next_err_unknown")));
+				return;
+			}
+			paint();
+			sawList = true;
+			for (const row of mergedItems()) announced.add(row.operation_id);
+			if (!queried && attemptId) {
+				const filteredPage = await api("GET", inputsPath(""));
+				if (!alive(ticket, mark)) return;
+				if (takeList(filteredPage, false)) paint();
+			}
+			try {
+				await readResult(ticket, mark);
+			} catch (error) {
+				if (!alive(ticket, mark) || retired(error)) return;
+				if ([404, 410].includes(error?.status)) {
+					withdrawSource();
+					return;
+				}
+				resultSettled = true;
+				sendOffer = null;
+				if (error?.status === 403) blockedReason = blockedReason || "missing_scope";
+				syncComposer();
+				if (error?.status !== 403) showError(error, status);
+			}
+		} catch (error) {
+			if (!alive(ticket, mark) || retired(error)) return;
+			if ([
+				403,
+				404,
+				410
+			].includes(error?.status)) {
+				withdrawSource();
+				return;
+			}
+			showError(error, status);
+		}
+	}
+	async function loadMore() {
+		if (!hasMore || stopped || suspended || disposed || nextCursor == null) return;
+		const mark = epoch;
+		const ticket = ++serial;
+		const after = nextCursor;
+		try {
+			const data = await api("GET", inputsPath(after));
+			if (!alive(ticket, mark)) return;
+			if (!takeList(data, true)) return;
+			paint();
+		} catch (error) {
+			if (!alive(ticket, mark) || retired(error)) return;
+			if ([
+				403,
+				404,
+				410
+			].includes(error?.status)) {
+				withdrawSource();
+				return;
+			}
+			showError(error, status);
+		}
+	}
+	function withdrawSource() {
+		epoch += 1;
+		serial += 1;
+		stopped = true;
+		pageItems = [];
+		pinned.clear();
+		announced.clear();
+		sendOffer = null;
+		resultSettled = false;
+		hasMore = false;
+		filtered = false;
+		clearComposer();
+		list.replaceChildren();
+		note.replaceChildren();
+		pill.replaceChildren();
+		status.replaceChildren();
+		live.textContent = t("loop_next_withdrawn");
+		box.replaceChildren(h("p", {
+			role: "status",
+			"data-follow-up-withdrawn": ""
+		}, t("loop_next_withdrawn")));
+	}
+	function suspend() {
+		epoch += 1;
+		serial += 1;
+		suspended = true;
+		if (stopped) return;
+		pageItems = [];
+		pinned.clear();
+		list.replaceChildren();
+		note.replaceChildren();
+		status.replaceChildren();
+		clearComposer();
+		box.hidden = true;
+	}
+	function restore() {
+		if (stopped || disposed) return;
+		suspended = false;
+		box.hidden = false;
+		refresh();
+	}
+	function sync() {
+		if (stopped || disposed) return;
+		syncComposer();
+	}
+	function dispose() {
+		disposed = true;
+		epoch += 1;
+		serial += 1;
+		clearComposer();
+	}
+	refresh();
+	return {
+		box,
+		refresh,
+		suspend,
+		restore,
+		sync,
+		withdraw: withdrawSource,
+		dispose
+	};
+}
+//#endregion
 //#region src/observed-resource-strings.js
 var observedStrings = {
 	en: {
@@ -46229,7 +46931,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 		pid,
 		item.kind,
 		item.id
-	].map(encodeURIComponent).join("/")}`, item.title || item.branch || (item.action ? actionLabel(item.action) : item.id), workActivity(item), item.reading);
+	].map(encodeURIComponent).join("/")}`, item.title || item.branch || (item.action ? actionLabel$1(item.action) : item.id), workActivity(item), item.reading);
 	const render = () => {
 		if (disposed) return;
 		createProject.hidden = !catalogKnown || !caps()?.scopes?.includes("manage") || caps()?.actions?.find((row) => row.action === "project.create")?.allowed === false;
@@ -52960,7 +53662,7 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 		const needle = query.trim().toLocaleLowerCase();
 		if (!needle) return rows;
 		return rows.filter((op) => [
-			actionLabel(op.action),
+			actionLabel$1(op.action),
 			op.action,
 			op.actor,
 			operationTargetText(op),
@@ -52973,7 +53675,7 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 		{
 			key: "action",
 			label: t("global_col_action"),
-			render: (op) => actionLabel(op.action)
+			render: (op) => actionLabel$1(op.action)
 		},
 		{
 			key: "target",
@@ -53055,7 +53757,7 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 			sheet = null;
 			previous?.dispose();
 			const node = inspector({
-				title: actionLabel(op.action),
+				title: actionLabel$1(op.action),
 				returnFocus: () => focusRow(id),
 				onClose: () => {
 					if (sheet !== node) return;
@@ -53107,7 +53809,7 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 			rows: shown,
 			rowKey: "operation_id",
 			selected: memory.selected,
-			compactRow: (op) => h("div", { class: "global-op-compact" }, h("div", { class: "global-op-compact-title" }, h("strong", {}, actionLabel(op.action)), statusPill(operationStatusKey(op.status))), h("div", { class: "ui-meta" }, operationTargetText(op), op.actor ? " · " + op.actor : null, op.created_at ? [" · ", timeStamp(op.created_at)] : null)),
+			compactRow: (op) => h("div", { class: "global-op-compact" }, h("div", { class: "global-op-compact-title" }, h("strong", {}, actionLabel$1(op.action)), statusPill(operationStatusKey(op.status))), h("div", { class: "ui-meta" }, operationTargetText(op), op.actor ? " · " + op.actor : null, op.created_at ? [" · ", timeStamp(op.created_at)] : null)),
 			onSelect: (key, row) => {
 				memory.selected = key;
 				fill(row).catch(() => {});
@@ -56378,7 +57080,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 						const selector = { execution_operation_id: op.operation_id };
 						candidates.set(stable(selector), {
 							selector,
-							label: `${actionLabel(op.action)} · ${op.operation_id}`
+							label: `${actionLabel$1(op.action)} · ${op.operation_id}`
 						});
 					}
 				}
@@ -56705,7 +57407,7 @@ function deliveryPill(item) {
 	return pill;
 }
 function workName(item) {
-	return text(item?.title) || text(item?.branch) || (item?.action ? actionLabel(item.action) : "") || say("or_work");
+	return text(item?.title) || text(item?.branch) || (item?.action ? actionLabel$1(item.action) : "") || say("or_work");
 }
 function workLinks(item, repositories, caps) {
 	const links = [];
@@ -58228,7 +58930,7 @@ function opStatus(op) {
 	return h("span", { class: `status-${op.status}` }, t(started ? "start_dispatched" : "op_" + op.status));
 }
 function opRow(op, open) {
-	const title = actionLabel(op.action);
+	const title = actionLabel$1(op.action);
 	const href = `#/op/${encodeURIComponent(op.operation_id)}`;
 	const key = op.operation_id;
 	const words = operationMeta(op);
@@ -59416,6 +60118,22 @@ async function viewSession(main, host, sid, context = null) {
 		details
 	].filter(Boolean));
 	const lane = h("section", { class: "workspace-conversation" }, conversation.box, readonly, controls, status);
+	const followWorkspace = /^ws_[0-9a-f]{32}$/.test(sessionWorkspace || "") ? sessionWorkspace : "";
+	const followWorkId = workRecord?.work_item?.work_item_id || "";
+	const followUp = workbenchEnabled() && !nativeDesktop && followWorkspace && /^wi_[0-9a-f]{20}$/.test(followWorkId) && workFollowUpAvailable(state.caps) ? mountWorkFollowUp({
+		h,
+		t,
+		api,
+		caps: () => state.caps,
+		guard: () => assertView(connection),
+		namespace: connection.namespace,
+		workspaceId: followWorkspace,
+		workItemId: followWorkId,
+		errorBox,
+		canSend: () => state.online && !state.nativeBusy && state.viewReady,
+		managed: () => !withdrawn && row?.provenance === "connector_managed" && row?.api_access === "managed"
+	}) : null;
+	if (followUp) lane.append(followUp.box);
 	const mobileLayout = setupMobileSessionLayout({
 		head,
 		composer: controls,
@@ -59728,6 +60446,7 @@ async function viewSession(main, host, sid, context = null) {
 	};
 	const updateControls = () => {
 		permissions?.update();
+		followUp?.sync();
 		send.disabled = sending ? false : !allowed("session.send");
 		if (sending) send.setAttribute("aria-disabled", "true");
 		else send.removeAttribute("aria-disabled");
@@ -60026,6 +60745,7 @@ async function viewSession(main, host, sid, context = null) {
 	const withdraw = (kind, error = null) => {
 		const first = !withdrawn;
 		withdrawn = kind;
+		followUp?.suspend();
 		perspectives?.withdraw();
 		withdrawalVersion += 1;
 		clearTimeout(retryTimer);
@@ -60071,6 +60791,7 @@ async function viewSession(main, host, sid, context = null) {
 	};
 	const reinstate = () => {
 		withdrawn = "";
+		followUp?.restore();
 		perspectives?.restore();
 		withdrawnSlot.remove();
 		if (context?.picker) context.picker.hidden = false;
@@ -60143,7 +60864,7 @@ async function viewSession(main, host, sid, context = null) {
 		observations.changed(ev);
 		const own = observationAffected("session", `${host}/${sid}`, ev);
 		if (withdrawn) return own ? reload() : Promise.resolve();
-		return (own || [
+		const affected = own || [
 			"work_item",
 			"integration",
 			"worktree"
@@ -60152,18 +60873,36 @@ async function viewSession(main, host, sid, context = null) {
 			"operation",
 			"task",
 			"execution"
-		].includes(ev.resource_type) ? reload() : Promise.resolve()).then(() => {
+		].includes(ev.resource_type);
+		const follow = !disposed && followUp && (own || ev.resource_type === "operation" || ev.resource_type === "work_item") ? followUp.refresh() : Promise.resolve();
+		return (affected ? reload() : Promise.resolve()).then(() => {
 			if (withdrawn || disposed) return;
 			return settleRefreshes([
 				ev.resource_type === "checkpoint" ? reloadCps() : Promise.resolve(),
 				ev.resource_type === "operation" ? permissions?.refresh(true) : Promise.resolve(),
 				own || ev.resource_type === "operation" ? labels.refresh(true) : Promise.resolve(),
-				instructions?.box.open && (own || ev.resource_type === "operation") ? instructions.refresh() : Promise.resolve()
+				instructions?.box.open && (own || ev.resource_type === "operation") ? instructions.refresh() : Promise.resolve(),
+				follow
 			]);
 		});
 	});
+	const followSync = setTimeout(() => {
+		try {
+			assertView(connection);
+			if (!disposed) followUp?.sync();
+		} catch {}
+	}, 0);
+	const offFollowOnline = onOnline(() => {
+		try {
+			assertView(connection);
+			if (!disposed) followUp?.sync();
+		} catch {}
+	});
 	return () => {
 		disposed = true;
+		clearTimeout(followSync);
+		offFollowOnline();
+		followUp?.dispose();
 		perspectives?.dispose();
 		clearTimeout(retryTimer);
 		off();
@@ -61483,7 +62222,7 @@ async function viewOperation(main, id) {
 			}
 			freshPage();
 			fill(panel, pageHeader({
-				title: actionLabel(op.action),
+				title: actionLabel$1(op.action),
 				pill: statusPill(operationStatusKey(op.status))
 			}), h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(reasonText$1(op.error_code) || t("reason_unavailable"), "bad") : null), ...linked?.length ? [linkedItems(linked)] : [], h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("actor")), h("dd", {}, `${op.actor} (${op.entry})`), h("dt", {}, t("created")), h("dd", {}, when(epoch(op.created_at))), op.status_reason ? [h("dt", {}, t("reason")), h("dd", {}, op.status_reason)] : null, op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, h("code", {}, op.error_code))] : null, h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target))), Object.keys(refs).length && op.action !== "worktree.merge" ? [h("dt", {}, t("global_refs")), h("dd", {}, h("code", {}, JSON.stringify(refs)))] : null, op.result && op.action !== "worktree.merge" ? [h("dt", {}, t("global_result")), h("dd", {}, h("code", {}, JSON.stringify(op.result)))] : null), ...receipts || [], mergeRecovery(op), op.action === "worktree.merge" ? h("details", {}, h("summary", {}, t("sessions_details")), h("pre", { class: "pre" }, JSON.stringify({
 				refs,
@@ -62867,7 +63606,7 @@ function linkTarget(l) {
 		const [host, ...rest] = l.ref.split("/");
 		return h("span", {}, h("a", { href: `#/session/${encodeURIComponent(host)}/${encodeURIComponent(rest.join("/"))}` }, x.title || l.ref), " ", chip(x.api_access === "managed" ? t("managed") : t("read_only"), x.api_access === "managed" ? "managed" : "readonly"), x.gone ? chip(t("stale_reason_gone"), "stale") : null);
 	}
-	if (l.kind === "operation") return h("span", {}, h("a", { href: `#/op/${l.ref}` }, actionLabel(x.action)), " ", h("span", { class: `status-${x.status}` }, t("op_" + x.status)), x.session ? [" · ", h("a", { href: `#/session/${encodeURIComponent(x.session.host)}/${encodeURIComponent(x.session.session_id)}` }, t("open_new_session"))] : null);
+	if (l.kind === "operation") return h("span", {}, h("a", { href: `#/op/${l.ref}` }, actionLabel$1(x.action)), " ", h("span", { class: `status-${x.status}` }, t("op_" + x.status)), x.session ? [" · ", h("a", { href: `#/session/${encodeURIComponent(x.session.host)}/${encodeURIComponent(x.session.session_id)}` }, t("open_new_session"))] : null);
 	if (l.kind === "checkpoint") return h("span", {}, h("a", { href: `#/session/${encodeURIComponent(x.host)}/${encodeURIComponent(x.source_session_id)}` }, h("code", {}, x.commit_sha.slice(0, 12))), " ", x.branch || "", " · ", x.host);
 	if (l.kind === "task") return h("span", {}, observationLink("execution", l.ref), " ", x.project, " · ", x.state);
 	return h("a", {

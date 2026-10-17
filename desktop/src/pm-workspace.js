@@ -66,7 +66,7 @@ export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 
 
 // Save the exact request before admission. A later authorization/validation error can never
 // release an earlier ambiguous request; only its matching terminal receipt permits replacement.
-function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, savedText = 'pm_saved', pendingText = 'pm_pending'}) {
+function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, savedText = 'pm_saved', pendingText = 'pm_pending', releaseAfterAcknowledgement = false, acknowledgedText = '', onAcknowledged = () => {}, acknowledgeStatus = null, abandonIntentOn = () => false}) {
   const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
   let saved = {version: 1, values: {}}, damaged = false, busy = false, operation = null;
   const receiptDelays = action === 'pm.conversation.adopt' ? [250, 500, 1000, 1500, 2000, 3000, 3000, 3000, 3000, 3000] : [250, 500, 1000, 1500, 2000, 3000];
@@ -246,6 +246,34 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
       if (!allowed()) {status.replaceChildren(h('p', {class: 'muted'}, t('pm_action_unavailable'))); return;}
       const op = data.operation;
       saved.intent.operation_id = op.operation_id; persist(); operation = op;
+      // Opt-in only. Existing forms keep the intent locked until a succeeded receipt.
+      // A verified operation id is the central acknowledgement: this draft is not a queue.
+      if (releaseAfterAcknowledgement) {
+        stopTimer();
+        receiptPolling = false;
+        saved = {version: 1, values: {}};
+        try {persist();} catch { /* the id is already stored; do not send this key again */ }
+        for (const input of Object.values(fields)) {
+          input.value = input.dataset.pmDefault || '';
+          input.disabled = false;
+          if (readOnlyWhenUnavailable) input.readOnly = false;
+        }
+        operation = null;
+        receipt.replaceChildren();
+        let announced = null;
+        try {announced = acknowledgeStatus ? acknowledgeStatus(op, h, t) : null;} catch {announced = null;}
+        if (!announced && acknowledgedText) {
+          const key = typeof acknowledgedText === 'function' ? acknowledgedText(op) : acknowledgedText;
+          if (key) announced = h('span', {class: 'muted', 'data-pm-acknowledged': ''}, t(key));
+        }
+        if (announced) status.replaceChildren(announced);
+        else status.replaceChildren();
+        try {onAcknowledged(op);} catch { /* the caller reports its own read */ }
+        const field = Object.values(fields)[0];
+        const active = document.activeElement;
+        if (field && (active === button || active === document.body)) field.focus();
+        return;
+      }
       receipt.replaceChildren(h('a', {href: `#/op/${op.operation_id}`}, t('pm_operation')), ' · ', statusText(op.status));
       if (op.status === 'succeeded') {
         onBeforeSaved(op.result, saved.values);
@@ -265,6 +293,16 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
         if (firstAttempt && error.admissionRefused === true && !saved.intent?.operation_id) {
           saved.intent.initialAdmissionRefused = true;
           try {persist();} catch { /* keep the frozen original in memory */ }
+        }
+        // A refused attempt id must not be replayed on the original key. Keep the typed text.
+        let abandon = false;
+        try {
+          abandon = Boolean(saved.intent && !saved.intent.operation_id && !saved.intent.initialAdmissionRefused && abandonIntentOn(error));
+        } catch {abandon = false;}
+        if (abandon) {
+          saved = {version: 1, values: capture()};
+          try {persist();} catch { /* keep the draft in memory */ }
+          operation = null;
         }
         const handled = onError(error);
         if (!handled) status.replaceChildren(errorBox(error, error.code === 'VERSION_CONFLICT' ? {summary: t('pm_stale'), within: status} : {within: status}));
@@ -308,6 +346,9 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     set: (name, value) => {if (!busy && !saved.intent && !damaged) {fields[name].value = value; changed();}},
     values: () => capture()};
 }
+
+// Test fixtures rewrite the declaration above to an export. This alias stays a second export.
+export {durableForm as pmDurableForm};
 
 export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, canSend = () => true, onOnline = () => () => {}, onContext = () => {}, openCreate = false}) {
   if (!pmAvailable(caps())) {main.append(h('p', {}, t('pm_unavailable'))); return;}

@@ -27,6 +27,7 @@ import {instructionReceiptStrings} from './instruction-receipts-strings.js';
 import {createRecordStrings} from './create-record-strings.js';
 import {workStartStrings} from './pm-work-start-strings.js';
 import {workResultStrings} from './pm-work-result-strings.js';
+import {workFollowUpStrings} from './pm-work-follow-up-strings.js';
 // Display labels only. Logic and CSS never key on these strings (machine enums come from /api/v1).
 export const STRINGS = {
   "zh-TW": {
@@ -34,6 +35,7 @@ export const STRINGS = {
     ...diagnosticsStrings["zh-TW"],
     ...workStartStrings["zh-TW"],
     ...workResultStrings["zh-TW"],
+    ...workFollowUpStrings["zh-TW"],
     ...pmStrings["zh-TW"],
     ...createRecordStrings["zh-TW"],
     ...uiStrings["zh-TW"],
@@ -1059,6 +1061,7 @@ export const STRINGS = {
     ...diagnosticsStrings.en,
     ...workStartStrings.en,
     ...workResultStrings.en,
+    ...workFollowUpStrings.en,
     ...pmStrings.en,
     ...createRecordStrings.en,
     ...uiStrings.en,
