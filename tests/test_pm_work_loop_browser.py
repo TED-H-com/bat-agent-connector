@@ -20,7 +20,7 @@ from urllib.parse import unquote
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
-from bat_agent_connector import pm_native_runtime, pr_publication
+from bat_agent_connector import pm_discussions, pm_native_runtime, pr_publication
 from bat_agent_connector.errors import InvokeTimeout
 from tests import test_pm_conversation_proposals as conversation
 from tests import test_pm_native_operations as native
@@ -445,6 +445,25 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 projected = await _result(w, att)
                 assert projected["verification"]["quality_reviews"]["current"]["review_id"] == quality["review_id"]
                 await send({"review_recorded": True})
+                discussed = await receive("review-discussed")
+                for key in ("thread_operation_id", "message_operation_id"):
+                    await wait_status(discussed[key], "succeeded")
+                thread_op = ops.get(discussed["thread_operation_id"])
+                assessment_ref = {"kind": "quality_assessment", "id": recorded_op["operation_id"],
+                    "review_id": quality["review_id"], "document_digest": recorded_op["result"]["document_digest"]}
+                assert thread_op["action"] == "pm.thread.create"
+                assert thread_op["params"]["context"] == [assessment_ref, {"kind": "work_item", "id": w["target"]["work_item_id"]}]
+                thread_id = thread_op["result"]["thread_id"]
+                context = pm_discussions.context(ops, STARTER_OWNER, w["workspace_id"], thread_id, max_chars=32000)
+                original = context["bound_context"][0]["summary"]
+                assert original["assessment"]["operation_id"] == recorded_op["operation_id"]
+                assert original["assessment"]["document"]["acceptance"] == "unassessed"
+                assert original["context"]["native_result"]["candidate_commit"] == candidate
+                assert original["current_applicability"] == "not_evaluated"
+                note_op = ops.get(discussed["message_operation_id"])
+                assert note_op["action"] == "pm.message.append" and note_op["target"]["thread_id"] == thread_id
+                quality.update(discussion_thread_id=thread_id, assessment_operation_id=recorded_op["operation_id"])
+                await send({"review_discussed": True})
             published = await receive("published")
             publication = ops.get(published["operation_id"])
             await wait_status(publication["operation_id"], "succeeded")
@@ -482,7 +501,7 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             assert len([r for r in w["gh"].requests if r[:2] == ("POST", "/repos/o/r/pulls")]) == 1
             user_ops = [ops.get(oid) for oid in done["operations"]]
             initial = ["pm.message.append", "pm.conversation.propose", "work.adopt_and_start"] if mode == "adopt" else ["work.start"]
-            review_actions = ["pm.quality.review.create", "pm.quality.review.record"] if review_result else []
+            review_actions = ["pm.quality.review.create", "pm.quality.review.record", "pm.thread.create", "pm.message.append"] if review_result else []
             assert [op["action"] for op in user_ops] == [*(["work_item.create"] if create_work else []), *initial, "session.send", *review_actions, "github.pr.publish"]
             assert all(op["actor"] == STARTER_OWNER.actor and op["status"] == "succeeded" for op in user_ops)
             assert len({op["idempotency_key"] for op in user_ops}) == len(user_ops)

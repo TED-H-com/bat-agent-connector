@@ -20,6 +20,7 @@ const refs = [
   {kind: 'issue_mapping', id: 'pmim_' + hex},
   {kind: 'meeting', id: 'pmmeet_' + hex},
   {kind: 'lifecycle_transition', id: 'pmlt_' + hex},
+  {kind: 'quality_assessment', id: 'op_' + hex, review_id: 'pmqr_' + hex, document_digest: hex.repeat(2)},
 ];
 const empty = {refs: [], title: '', from: '', report: ''};
 const queryOf = (href: string) => new URL(href, 'http://x').hash.split('?')[1];

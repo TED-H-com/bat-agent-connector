@@ -9,6 +9,7 @@ const contextFields = {
   requirement: {id: /^[a-z][a-z0-9_.-]{0,79}$/, revision_id: /^pmrev_[0-9a-f]{32}$/},
   milestone: {id: /^[a-z][a-z0-9_.-]{0,79}$/, revision_id: /^pmrb_[0-9a-f]{32}$/},
   work_item: {id: /^wi_[0-9a-f]{20}$/},
+  quality_assessment: {id: /^op_[0-9a-f]{32}$/, review_id: /^pmqr_[0-9a-f]{32}$/, document_digest: /^[0-9a-f]{64}$/},
   governance: {id: /^pmgov_[0-9a-f]{32}$/},
   finding: {id: /^pmfn_[0-9a-f]{32}$/, observation_id: /^pmgh_[0-9a-f]{32}$/, document_digest: /^[0-9a-f]{64}$/},
   repair: {id: /^pmrp_[0-9a-f]{32}$/},

@@ -1,6 +1,7 @@
 import {test, expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {buildResultEnvelope} from './work-result-fixture.ts';
+import {parseDiscussRefs} from '../src/pm-discuss-link.js';
 import {qualityFixture, mountQuality, panel, editor, CREATE, RECORD, workspaceId, workId, packageId, childId, candidate} from './pm-quality-reviews-fixture.ts';
 
 function fixture() {
@@ -12,6 +13,27 @@ function fixture() {
   return f;
 }
 const refresh = (page:any) => page.evaluate(() => (window as any).qualityRefresh());
+for(const locale of ['en','zh-TW'])test(`a saved Result assessment opens PM with its exact receipt: ${locale}`,async({page})=>{
+  const f=fixture(),row=f.save(true),zh=locale==='zh-TW';
+  f.state.resultEnvelope.verification.quality_reviews.current={review_id:row.review_id,version:row.version};
+  await mountQuality(page,f,locale,true);await open(page,zh);
+  const link=panel(page).getByRole('link',{name:zh?'與 PM 討論這次評估':'Discuss this assessment with PM',exact:true});
+  await expect(link).toBeVisible();
+  const original=(await link.getAttribute('href'))!;
+  const parsed=parseDiscussRefs(original.split('?')[1]);
+  expect(parsed.refs).toEqual([{kind:'quality_assessment',id:row.assessment.operation_id,review_id:row.review_id,document_digest:row.assessment.document_digest},{kind:'work_item',id:workId}]);
+  f.assess(row);f.state.resultEnvelope.verification.quality_reviews.current.version=row.version;await refresh(page);
+  await expect(link).not.toHaveAttribute('href',original);
+  expect(parseDiscussRefs(original.split('?')[1]).refs).toEqual(parsed.refs);
+  expect(f.state.writes).toHaveLength(0);
+});
+
+for(const reason of ['older service','unsaved conclusion'])test(`${reason} has no assessment discussion link`,async({page})=>{
+  const f=fixture();f.save(reason==='older service');if(reason==='older service')f.state.discussionContexts=[];
+  await mountQuality(page,f,'en',true);await open(page);
+  await expect(panel(page).getByRole('link',{name:'Discuss this assessment with PM',exact:true})).toHaveCount(0);
+  expect(f.state.writes).toHaveLength(0);
+});
 async function open(page:any, zh=false) {
   await page.getByRole('button', {name: zh ? '審閱這份成果' : 'Review this result', exact:true}).click();
   await expect(panel(page)).toBeVisible();

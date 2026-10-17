@@ -278,6 +278,29 @@ try {
     savedReviewId=await quality.getByLabel(zh ? '已保存審查' : 'Saved review', {exact:true}).inputValue();
     assert.match(savedReviewId, /^pmqr_[0-9a-f]{32}$/);
     await shot('03-reviewed-unassessed');
+    step = 'discuss-review';
+    const reviewReturn=new URL(page.url()).hash;
+    await quality.getByRole('link', {name:zh ? '與 PM 討論這次評估' : 'Discuss this assessment with PM', exact:true}).click();
+    await expect(page.locator('.pd-context [data-discussion-context="quality_assessment"]')).toBeVisible();
+    const firstNote=page.locator('[data-pm-action="pm.thread.create"]');
+    await firstNote.locator('[data-discussion-composer]').fill(zh
+      ? '保留這份原始評估，稍後討論還缺哪些證據。'
+      : 'Keep this original assessment for a later discussion of the missing evidence.');
+    const [discussion,note]=await Promise.all([
+      clickOperation('pm.thread.create', firstNote.locator('button[type=submit]')),
+      post('pm.message.append').then(operation),
+    ]);
+    send({stage:'review-discussed',thread_operation_id:discussion.operation_id,message_operation_id:note.operation_id});
+    assert.equal((await receive()).review_discussed,true);
+    await page.reload();
+    await expect(page.locator('.pd-context [data-discussion-context="quality_assessment"]')).toBeVisible();
+    await expect(page.locator('[data-discussion-back]')).toHaveAttribute('href',reviewReturn);
+    await shot('03-discussed-assessment');
+    await page.locator('[data-discussion-back]').click();
+    await expect(page.locator('[data-follow-up-input]')).toHaveValue(draft);
+    await page.getByRole('button', {name:zh ? '成果' : 'Results',exact:true}).click();
+    await page.getByRole('button', {name:zh ? '審閱這份成果' : 'Review this result',exact:true}).click();
+    await expect(page.locator('[data-work-quality]').getByLabel(zh ? '已保存審查' : 'Saved review',{exact:true})).toHaveValue(savedReviewId);
   }
   step = 'publish';
   await page.locator('[data-work-publish-title]').fill(zh ? '修正登入重複送出' : 'Fix duplicate login submission');
@@ -322,8 +345,8 @@ try {
     await expect(page.locator('[data-work-publish-pr]')).toContainText('21');
   }
   assert.deepEqual(errors, []);
-  assert.equal(requests.length, expectedOperations + (f.review_result ? 2 : 0));
-  assert.equal(new Set(requests.map(r => r.key)).size, expectedOperations + (f.review_result ? 2 : 0));
+  assert.equal(requests.length, expectedOperations + (f.review_result ? 4 : 0));
+  assert.equal(new Set(requests.map(r => r.key)).size, expectedOperations + (f.review_result ? 4 : 0));
   assert.ok(requests.every(r => r.key));
   const follow = requests.find(row => row.body.action === 'session.send');
   assert.deepEqual(follow.body.target, {workspace_id: f.workspace, work_item_id: f.work});

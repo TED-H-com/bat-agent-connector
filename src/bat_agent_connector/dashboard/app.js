@@ -130,6 +130,11 @@ var contextFields = {
 		revision_id: /^pmrb_[0-9a-f]{32}$/
 	},
 	work_item: { id: /^wi_[0-9a-f]{20}$/ },
+	quality_assessment: {
+		id: /^op_[0-9a-f]{32}$/,
+		review_id: /^pmqr_[0-9a-f]{32}$/,
+		document_digest: /^[0-9a-f]{64}$/
+	},
 	governance: { id: /^pmgov_[0-9a-f]{32}$/ },
 	finding: {
 		id: /^pmfn_[0-9a-f]{32}$/,
@@ -2307,6 +2312,8 @@ var pmMaintenanceRepairsStrings = {
 var pmQualityReviewsStrings = {
 	en: {
 		pmq_result_open: "Review this result",
+		pmq_discuss: "Discuss this assessment with PM",
+		pmq_discuss_title: "Review this result with PM",
 		pmq_result_help: "These conclusions belong to this fixed result. Project acceptance still follows its original evidence policy.",
 		pmq_verify_heading: "Verify an original implementation",
 		pmq_verify_help: "Run the trusted project verifier for the selected original implementation. The candidate and command are its saved settings.",
@@ -2402,6 +2409,8 @@ var pmQualityReviewsStrings = {
 	},
 	"zh-TW": {
 		pmq_result_open: "審閱這份成果",
+		pmq_discuss: "與 PM 討論這次評估",
+		pmq_discuss_title: "與 PM 討論成果",
 		pmq_result_help: "這些結論屬於這份固定成果；專案驗收仍依原本的證據政策判定。",
 		pmq_verify_heading: "驗證原始實作",
 		pmq_verify_help: "為選定的原始實作執行專案的受信任驗證器。候選結果與命令來自已保存的設定。",
@@ -4444,6 +4453,7 @@ var discussionStrings = {
 		pd_kind_requirement: "Requirement",
 		pd_kind_milestone: "Milestone",
 		pd_kind_work_item: "Work",
+		pd_kind_quality_assessment: "Original assessment",
 		pd_kind_governance: "Governance record",
 		pd_kind_finding: "Finding",
 		pd_kind_repair: "Repair",
@@ -4550,6 +4560,7 @@ var discussionStrings = {
 		pd_kind_requirement: "需求",
 		pd_kind_milestone: "里程碑",
 		pd_kind_work_item: "工作",
+		pd_kind_quality_assessment: "原始評估",
 		pd_kind_governance: "治理紀錄",
 		pd_kind_finding: "發現",
 		pd_kind_repair: "修復",
@@ -16769,7 +16780,21 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			row.revocation ? h("div", {}, h("h4", {}, t("pmq_revoked")), h("p", { class: "pm-note-text" }, row.revocation.document.reason), line("pmq_by", row.revocation.actor)) : null,
 			h("details", {}, h("summary", {}, t("pmq_history_receipts")), ...row.history.map((item) => h("p", { class: "pm-source" }, `${item.version} · ${item.actor} · ${t("pmq_" + item.kind)} · `, h("a", { href: `#/op/${item.operation_id}` }, item.operation_id), h("span", {}, " · " + item.document_digest)))),
 			fixedResult ? null : use,
-			fixedResult ? text("pmq_result_help") : chosen && same$10(chosen, reference(row)) ? text("pmq_selected") : text("pmq_selection_help")
+			fixedResult ? text("pmq_result_help") : chosen && same$10(chosen, reference(row)) ? text("pmq_selected") : text("pmq_selection_help"),
+			fixedResult && row.assessment && caps()?.features?.pm_workspaces?.quality_reviews?.discussion_contexts?.includes("quality_assessment") ? h("p", {}, h("a", { href: discussHref({
+				workspaceId,
+				title: t("pmq_discuss_title"),
+				from: sessionOrigin(location.hash) || "board",
+				refs: [{
+					kind: "quality_assessment",
+					id: row.assessment.operation_id,
+					review_id: row.review_id,
+					document_digest: row.assessment.document_digest
+				}, {
+					kind: "work_item",
+					id: fixedResult.work_item_id
+				}]
+			}) }, t("pmq_discuss"))) : null
 		].filter(Boolean));
 		buildAssessment(row);
 	}
@@ -46288,6 +46313,16 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					const card = value.card;
 					if (card?.work_item_id !== ref.id || card.work?.work_item_id !== ref.id || card.binding?.workspace_id !== workspaceId || card.binding?.work_item_id !== ref.id) unavailable();
 					label = text(card.work.title);
+				} else if (ref.kind === "quality_assessment") {
+					const value = scoped(await read(`/quality-reviews/${encodeURIComponent(ref.review_id)}`), workspaceId, "workspace_id");
+					const review = scoped(value.review, ref.review_id, "review_id");
+					if (!review.history?.some((item) => item.kind === "assessment" && item.operation_id === ref.id && item.document_digest === ref.document_digest)) unavailable();
+					const work = await draftSourceRefs([{
+						kind: "work_item",
+						id: review.work_item_id
+					}], reads);
+					if (work[0].available === false) unavailable();
+					label = work[0].label;
 				} else if (ref.kind === "snapshot") {
 					const snapshot = scoped((await read(`/snapshots/${encodeURIComponent(ref.id)}`)).snapshot, ref.id, "snapshot_id");
 					label = text(snapshot.title);

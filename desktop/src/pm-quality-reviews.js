@@ -1,5 +1,7 @@
 import {iconButton, skeleton} from './ui/components.js';
 import {workspaceExecutionVerification} from './pm-execution-verification.js';
+import {discussHref} from './pm-discuss-link.js';
+import {sessionOrigin} from './session-navigation.js';
 // Fixed quality conclusions remain central; this view selects original receipts.
 const CREATE='pm.quality.review.create',RECORD='pm.quality.review.record',REVOKE='pm.quality.review.revoke';
 const sha=/^[0-9a-f]{40}$/,digest=/^[0-9a-f]{64}$/,operation=/^op_[0-9a-f]{32}$/,reviewId=/^pmqr_[0-9a-f]{32}$/;
@@ -137,7 +139,11 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
       row.revocation?h('div',{},h('h4',{},t('pmq_revoked')),h('p',{class:'pm-note-text'},row.revocation.document.reason),line('pmq_by',row.revocation.actor)):null,
       h('details',{},h('summary',{},t('pmq_history_receipts')),...row.history.map(item=>h('p',{class:'pm-source'},`${item.version} · ${item.actor} · ${t('pmq_'+item.kind)} · `,
         h('a',{href:`#/op/${item.operation_id}`},item.operation_id),h('span',{},' · '+item.document_digest)))),fixedResult?null:use,
-      fixedResult?text('pmq_result_help'):chosen&&same(chosen,reference(row))?text('pmq_selected'):text('pmq_selection_help')].filter(Boolean));
+      fixedResult?text('pmq_result_help'):chosen&&same(chosen,reference(row))?text('pmq_selected'):text('pmq_selection_help'),
+      fixedResult&&row.assessment&&caps()?.features?.pm_workspaces?.quality_reviews?.discussion_contexts?.includes('quality_assessment')
+        ?h('p',{},h('a',{href:discussHref({workspaceId,title:t('pmq_discuss_title'),from:sessionOrigin(location.hash)||'board',
+          refs:[{kind:'quality_assessment',id:row.assessment.operation_id,review_id:row.review_id,document_digest:row.assessment.document_digest},
+            {kind:'work_item',id:fixedResult.work_item_id}]})},t('pmq_discuss'))):null].filter(Boolean));
     buildAssessment(row);
   }
   function reference(row){const a=row.assessment;return a?{review_id:row.review_id,operation_id:a.operation_id,version:a.version,document_digest:a.document_digest,candidate_commit:row.context.native_result.candidate_commit}:null;}

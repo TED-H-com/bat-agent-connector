@@ -40,6 +40,31 @@ selection button: selecting a reference without an evidence consumer would have
 no effect. Requirement adoption, dependencies and milestones continue to follow
 their original evidence policy; a review or passing CI alone does not complete them.
 
+## Discussing one saved assessment
+
+A Result review may open an ordinary PM discussion with a `quality_assessment`
+context reference: the original assessment operation ID, review ID and document
+digest. Central resolves the version from that exact immutable history record and
+uses the existing original-assessment reader. A later assessment never replaces
+the selected document. The context states `immutable_original_assessment` and
+`current_applicability: not_evaluated`; historical acceptance is not a current
+dependency, milestone or delivery decision.
+
+The existing discussion source checks apply at admission, read and frozen-context
+reuse. A withdrawn original review/proof source redacts the original context and
+invalidates its previously included bytes. The usual discussion context budget
+applies without dropping individual criterion identities into a partial verdict.
+This adds no table, action, endpoint, executor or adoption policy. The quality
+capability advertises `discussion_contexts: ["quality_assessment"]`; older services
+keep their existing review and discussion entries.
+
+The capability-gated Result link opens the existing discussion draft with this
+assessment and its Work as sources. Opening performs reads only. The ordinary
+first-note flow saves a discussion and note under their original keys; it does not
+run a model. A Work-session origin survives reload and returns to the same
+Attempt, unsent next-step draft and saved review. The new source chip identifies
+the original assessment in English and Traditional Chinese.
+
 ## Original requirement acceptance selections
 
 The shared workspace handoff and selected-batch panels consume the registered

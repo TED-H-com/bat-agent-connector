@@ -422,6 +422,14 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           const card = value.card;
           if (card?.work_item_id !== ref.id || card.work?.work_item_id !== ref.id || card.binding?.workspace_id !== workspaceId || card.binding?.work_item_id !== ref.id) unavailable();
           label = text(card.work.title);
+        } else if (ref.kind === 'quality_assessment') {
+          const value = scoped(await read(`/quality-reviews/${encodeURIComponent(ref.review_id)}`), workspaceId, 'workspace_id');
+          const review = scoped(value.review, ref.review_id, 'review_id');
+          if (!review.history?.some(item => item.kind === 'assessment' && item.operation_id === ref.id
+              && item.document_digest === ref.document_digest)) unavailable();
+          const work = await draftSourceRefs([{kind:'work_item', id:review.work_item_id}], reads);
+          if (work[0].available === false) unavailable();
+          label = work[0].label;
         } else if (ref.kind === 'snapshot') {
           const snapshot = scoped((await read(`/snapshots/${encodeURIComponent(ref.id)}`)).snapshot, ref.id, 'snapshot_id');
           label = text(snapshot.title);
