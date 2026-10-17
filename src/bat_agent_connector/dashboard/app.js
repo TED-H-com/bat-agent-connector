@@ -25892,6 +25892,7 @@ var planKeys = [
 ];
 var exact = (value, keys) => record$5(value) && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 var landingPrefix = (namespace, workspaceId) => `batc.pm.${namespace}.adopt-start-landing.${workspaceId}.`;
+var landingNavigationKey = (namespace, workspaceId, id) => `batc.pm.${namespace}.adopt-start-live.${workspaceId}.${id}`;
 function checkedAdoptPreview(value, body, target, baseline) {
 	if (!record$5(value) || value.workspace_id !== target.workspace_id || value.thread_id !== target.thread_id || value.proposal_id !== body.proposal_id || typeof value.adoptable !== "boolean" || !Array.isArray(value.works) || value.works.length !== body.works.length || !exact(value.preconditions, [...planKeys, "works"]) || !Array.isArray(value.preconditions.works) || value.preconditions.works.length !== body.works.length || planKeys.some((key) => value.preconditions[key] !== baseline[key])) throw Error("loop_preview_mismatch");
 	const works = [], conditions = [];
@@ -25931,7 +25932,7 @@ function adoptStartReview({ t, api, alive, form, caps, namespace, workspaceId, t
 		thread_id: threadId
 	};
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
-	let request, disposed = false, visible = false, ticket = 0, checking = false, loading = false, prepared = null, signature = "", rendered = "", landed = null, updating = false;
+	let request, disposed = false, visible = false, ticket = 0, checking = false, loading = false, prepared = null, signature = "", rendered = "", landed = null, updating = false, followRequested = false;
 	let rows = new Map(), projects = [], projectCursor = null, projectIndex = 0, workCursor = null;
 	const nodes = new Map(), selection = h$1("input", {
 		type: "hidden",
@@ -26044,6 +26045,9 @@ function adoptStartReview({ t, api, alive, form, caps, namespace, workspaceId, t
 		class: "pm-adopt-start",
 		"data-adopt-start": ""
 	}, notice, request.box);
+	request.box.addEventListener("submit", () => {
+		followRequested = true;
+	}, { capture: true });
 	function rememberReceipt() {
 		const op = request.operation();
 		if (!op || landed === op.operation_id || !opId$6(op.operation_id)) return;
@@ -26060,6 +26064,12 @@ function adoptStartReview({ t, api, alive, form, caps, namespace, workspaceId, t
 			}));
 		} catch {
 			return;
+		}
+		if (followRequested) {
+			try {
+				sessionStorage.setItem(landingNavigationKey(namespace, workspaceId, op.operation_id), ids[0]);
+			} catch {}
+			followRequested = false;
 		}
 		if (onLanded) onLanded(ids[0], op.operation_id);
 		else location.hash = `#/pm/${encodeURIComponent(workspaceId)}/board?select=${encodeURIComponent(ids[0])}`;
@@ -37246,10 +37256,28 @@ function adoptStartLanding({ t, api, alive, namespace, workspaceId, caps, errorB
 			return false;
 		}
 	};
+	const navigationKey = (id) => landingNavigationKey(namespace, workspaceId, id);
+	const stopFollowing = (id) => {
+		try {
+			sessionStorage.removeItem(navigationKey(id));
+		} catch {}
+	};
+	const requestedWork = (id) => {
+		try {
+			return sessionStorage.getItem(navigationKey(id));
+		} catch {
+			return null;
+		}
+	};
 	const forget = (id) => {
 		try {
 			localStorage.removeItem(prefix + id);
 		} catch {}
+		stopFollowing(id);
+	};
+	const selectedWork = () => {
+		const [path, query] = location.hash.split("?"), params = new URLSearchParams(query);
+		return path === `#/pm/${encodeURIComponent(workspaceId)}/board` && params.getAll("select").length === 1 ? params.get("select") : null;
 	};
 	const fail = () => Error(t("loop_preview_mismatch"));
 	function bookmark() {
@@ -37303,7 +37331,7 @@ function adoptStartLanding({ t, api, alive, namespace, workspaceId, caps, errorB
 			}
 		}));
 		const list = h$1("div");
-		let hasUnknown = false;
+		let hasUnknown = false, firstLive = null;
 		for (const row of result?.works || []) {
 			const child = children.get(row.work_item_id), unknown = child ? child.result?.stage === "start_unknown" || child.status === "uncertain" : row.stage === "start_unknown";
 			hasUnknown = hasUnknown || unknown;
@@ -37312,17 +37340,21 @@ function adoptStartLanding({ t, api, alive, namespace, workspaceId, caps, errorB
 			if (row.start_operation_id) links.append(h$1("a", { href: `#/op/${row.start_operation_id}` }, t(unknown ? "loop_original" : "wst_view_operation")));
 			if (unknown && opId$5(row.handoff_operation_id)) links.append(h$1("a", { href: `#/op/${row.handoff_operation_id}` }, t("loop_reconcile")));
 			const session = child?.result?.session, attempt = child?.result?.attempt_id || row.attempt_id;
-			if (!unknown && child?.status === "succeeded" && typeof session?.host === "string" && typeof session?.session_id === "string" && /^att_[0-9a-f]{32}$/.test(attempt)) links.append(h$1("a", {
-				"data-adopt-live": "",
-				href: sessionHref$1({
+			if (!unknown && child?.status === "succeeded" && typeof session?.host === "string" && typeof session?.session_id === "string" && /^att_[0-9a-f]{32}$/.test(attempt)) {
+				const href = sessionHref$1({
 					host: session.host,
 					sessionId: session.session_id,
 					from: "board",
 					workspaceId,
 					workItemId: row.work_item_id,
 					attemptId: attempt
-				})
-			}, t("wst_open_live_output")));
+				});
+				links.append(h$1("a", {
+					"data-adopt-live": "",
+					href
+				}, t("wst_open_live_output")));
+				if (row.work_item_id === current.work_item_ids[0]) firstLive = href;
+			}
 			if (result.adopted && terminal$8(operation.status) && !unknown && (!child || terminal$8(child.status) && child.status !== "succeeded")) links.append(h$1("a", {
 				href: boardLink(row.work_item_id),
 				"data-adopt-start-one": ""
@@ -37360,7 +37392,11 @@ function adoptStartLanding({ t, api, alive, namespace, workspaceId, caps, errorB
 		[...body.querySelectorAll("details")].forEach((node, index) => node.open = open[index] || false);
 		element.hidden = false;
 		shown = operation.operation_id;
+		const requested = requestedWork(operation.operation_id), selected = selectedWork();
+		const follow = firstLive && operation.status === "succeeded" && result?.stage === "started" && !operation.cancel_requested && requested === current.work_item_ids[0] && selected === requested;
+		if (requested && selected !== requested) stopFollowing(operation.operation_id);
 		if (terminal$8(operation.status)) forget(operation.operation_id);
+		if (follow) location.hash = firstLive;
 	}
 	async function refresh() {
 		const hint = bookmark();
@@ -37407,6 +37443,7 @@ function adoptStartLanding({ t, api, alive, namespace, workspaceId, caps, errorB
 	}
 	function withdraw() {
 		serial++;
+		if (current) stopFollowing(current.operation_id);
 		current = null;
 		shown = null;
 		body.replaceChildren();

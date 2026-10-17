@@ -2,7 +2,7 @@ import {h} from './ui/dom.js';
 import {button, disclosure, sectionCard} from './ui/components.js';
 import {operationStatusLabel} from './global-labels.js';
 import {sessionHref} from './session-navigation.js';
-import {ADOPT_START,landingPrefix} from './pm-adopt-start.js';
+import {ADOPT_START,landingPrefix,landingNavigationKey} from './pm-adopt-start.js';
 
 const terminal = status => ['succeeded','failed','cancelled'].includes(status);
 const opId = value => typeof value === 'string' && /^op_[0-9a-f]{32}$/.test(value);
@@ -13,7 +13,12 @@ export function adoptStartLanding({t,api,alive,namespace,workspaceId,caps,errorB
   const element=sectionCard({body:[body,status]});element.dataset.adoptStartLanding='';element.hidden=true;
   let serial=0,current=null,disposed=false,busy=false,shown=null;
   const valid=own=>{try{alive();return !disposed&&serial===own;}catch{return false;}};
-  const forget=id=>{try{localStorage.removeItem(prefix+id);}catch{/* this is only a local navigation hint */}};
+  const navigationKey=id=>landingNavigationKey(namespace,workspaceId,id);
+  const stopFollowing=id=>{try{sessionStorage.removeItem(navigationKey(id));}catch{/* navigation is optional */}};
+  const requestedWork=id=>{try{return sessionStorage.getItem(navigationKey(id));}catch{return null;}};
+  const forget=id=>{try{localStorage.removeItem(prefix+id);}catch{/* this is only a local navigation hint */}stopFollowing(id);};
+  const selectedWork=()=>{const [path,query]=location.hash.split('?'),params=new URLSearchParams(query);
+    return path===`#/pm/${encodeURIComponent(workspaceId)}/board`&&params.getAll('select').length===1?params.get('select'):null;};
   const fail=()=>Error(t('loop_preview_mismatch'));
   function bookmark() {
     const selected=new URLSearchParams(location.hash.split('?')[1]).get('select');
@@ -61,7 +66,7 @@ export function adoptStartLanding({t,api,alive,namespace,workspaceId,caps,errorB
     const actions=h('div',{class:'actions'},h('a',{href:`#/op/${operation.operation_id}`},t('pm_operation')),
       h('a',{href:`#/pm/${workspaceId}/discussions/${current.thread_id}`},t('loop_return_discussion')),
       button({size:'sm',label:t('loop_close'),onClick:()=>{forget(operation.operation_id);withdraw();}}));
-    const list=h('div');let hasUnknown=false;
+    const list=h('div');let hasUnknown=false,firstLive=null;
     for(const row of result?.works||[]) {
       const child=children.get(row.work_item_id), unknown=child?child.result?.stage==='start_unknown'||child.status==='uncertain':row.stage==='start_unknown';
       hasUnknown=hasUnknown||unknown;
@@ -74,7 +79,11 @@ export function adoptStartLanding({t,api,alive,namespace,workspaceId,caps,errorB
       if(unknown&&opId(row.handoff_operation_id))links.append(h('a',{href:`#/op/${row.handoff_operation_id}`},t('loop_reconcile')));
       const session=child?.result?.session,attempt=child?.result?.attempt_id||row.attempt_id;
       if(!unknown&&child?.status==='succeeded'&&typeof session?.host==='string'&&typeof session?.session_id==='string'
-          &&/^att_[0-9a-f]{32}$/.test(attempt))links.append(h('a',{'data-adopt-live':'',href:sessionHref({host:session.host,sessionId:session.session_id,from:'board',workspaceId,workItemId:row.work_item_id,attemptId:attempt})},t('wst_open_live_output')));
+          &&/^att_[0-9a-f]{32}$/.test(attempt)){
+        const href=sessionHref({host:session.host,sessionId:session.session_id,from:'board',workspaceId,workItemId:row.work_item_id,attemptId:attempt});
+        links.append(h('a',{'data-adopt-live':'',href},t('wst_open_live_output')));
+        if(row.work_item_id===current.work_item_ids[0])firstLive=href;
+      }
       if(result.adopted&&terminal(operation.status)&&!unknown&&(!child||terminal(child.status)&&child.status!=='succeeded'))
         links.append(h('a',{href:boardLink(row.work_item_id),'data-adopt-start-one':''},t('loop_start_work')));
       const code=child?.error_code||row.error_code, reasonKey='wst_error_'+code;
@@ -94,7 +103,12 @@ export function adoptStartLanding({t,api,alive,namespace,workspaceId,caps,errorB
       ...(result?.adopted&&terminal(operation.status)&&operation.status!=='succeeded'?[h('p',{},t('loop_saved_plan'))]:[]),list,actions);
     [...body.querySelectorAll('details')].forEach((node,index)=>node.open=open[index]||false);
     element.hidden=false;shown=operation.operation_id;
+    const requested=requestedWork(operation.operation_id),selected=selectedWork();
+    const follow=firstLive&&operation.status==='succeeded'&&result?.stage==='started'&&!operation.cancel_requested
+      &&requested===current.work_item_ids[0]&&selected===requested;
+    if(requested&&selected!==requested)stopFollowing(operation.operation_id);
     if(terminal(operation.status))forget(operation.operation_id);
+    if(follow)location.hash=firstLive;
   }
   async function refresh() {
     const hint=bookmark();if(!hint){withdraw();return;}
@@ -114,6 +128,6 @@ export function adoptStartLanding({t,api,alive,namespace,workspaceId,caps,errorB
     }catch(error){if(!valid(own))return;body.replaceChildren();if([403,404].includes(error.status)){forget(hint.operation_id);withdraw();}
       else{status.replaceChildren(errorBox(error,{within:status}),button({label:t('ui_retry'),onClick:()=>void refresh()}));element.hidden=false;}}
   }
-  function withdraw(){serial++;current=null;shown=null;body.replaceChildren();status.replaceChildren();element.hidden=true;}
+  function withdraw(){serial++;if(current)stopFollowing(current.operation_id);current=null;shown=null;body.replaceChildren();status.replaceChildren();element.hidden=true;}
   return {element,refresh,withdraw,pending:()=>Boolean(current)&&!shown,dispose:()=>{disposed=true;withdraw();}};
 }

@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- After a successful Adopt and start, the submitting tab opens the first
+  selected Work's exact live Attempt automatically. Leaving that Work cancels
+  the navigation; partial, unknown or withdrawn results retain their recovery
+  view. Reading an old receipt or opening another tab does not request this move.
+
 - Adopt and start waits for a child operation's active worker instead of stopping
   with an unknown-start warning while a work package or handoff is still running.
   Unresolved effects retain the same cancellation and recovery fences. The real

@@ -63,12 +63,11 @@ try {
     await page.getByRole('button', {name: zh ? '檢查就緒' : 'Check readiness', exact: true}).click();
     const submit = page.getByRole('button', {name: zh ? '採用並開始' : 'Adopt and start', exact: true});
     await expect(submit).toBeEnabled();
+    await submit.scrollIntoViewIfNeeded();
     await shot('00-plan-review');
     const starting = post('work.adopt_and_start');
     await submit.click();
     start = await operation(await starting);
-    await expect(page).toHaveURL(new RegExp(`/board\\?select=${f.work}`));
-    await expect(page.locator('[data-adopt-start-landing]')).toBeVisible();
   } else {
     await page.goto(`${origin}/dashboard/?workbench=1#/pm/${f.workspace}/overview`);
     await page.locator('[data-workbench-management]').selectOption('board');
@@ -83,14 +82,20 @@ try {
     await submit.click();
     start = await operation(await starting);
   }
-  await expect(page.locator('[data-work-start-item]')).toBeVisible();
-  await shot('01-started');
+  if (f.mode !== 'adopt') {
+    await expect(page.locator('[data-work-start-item]')).toBeVisible();
+    await shot('01-started');
+  }
   send({stage: 'started', operation_id: start.operation_id});
   const active = await receive();
   assert.equal(active.ready, true);
   step = 'queue';
-  await page.locator('[data-work-start-item]').click();
+  if (f.mode === 'adopt') {
+    // Adoption must lead to its own live Work without another navigation click.
+    await expect(page).toHaveURL(new RegExp(`/session/.+[?&]work=${f.work}&attempt=${active.attempt}`));
+  } else await page.locator('[data-work-start-item]').click();
   await expect(page.locator('[data-follow-up-input]')).toBeVisible();
+  if (f.mode === 'adopt') await shot('01-started');
   const workUrl = page.url();
   assert.equal(new URL(workUrl).hash.includes(active.attempt), true);
   const text = zh ? '再補一個失敗後重新送出的案例。' : 'Add a retry-after-failure case.';

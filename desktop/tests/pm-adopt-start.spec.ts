@@ -45,6 +45,7 @@ test('one preview supplies the original compound request and lands on its first 
   await expect(page).toHaveURL(new RegExp('board\\?select='+work));
   const bookmarks=await page.evaluate(()=>Object.keys(localStorage).filter(key=>key.includes('adopt-start-landing')).map(key=>JSON.parse(localStorage.getItem(key)!)));
   expect(bookmarks).toEqual([{version:1,operation_id:'op_'+'8'.repeat(32),thread_id:threadId,work_item_ids:[work]}]);
+  expect(await page.evaluate(workspaceId=>sessionStorage.getItem(`batc.pm.proposal-ui.owner.adopt-start-live.${workspaceId}.op_${'8'.repeat(32)}`),workspaceId)).toBe(work);
 });
 test('changed rationale invalidates readiness and a malformed ready row cannot submit',async({page})=>{
   const {f,state}=fixture();await prepare(page,f);await choose(page);const start=page.getByRole('button',{name:'Adopt and start',exact:true});
@@ -128,6 +129,52 @@ async function landing(page:any,{locale='en',denied=false,unknown=false,status='
   },{workspaceId,threadId,work,second,id,locale});
   return {state,id,child,handoff};
 }
+
+async function followLanding(page:any,state:any,id:string,{ready=true,namespace='landing.owner'}={}) {
+  if(ready){state.parent.status='succeeded';state.parent.result.stage='started';}
+  state.parent.params.works=state.parent.params.works.slice(0,1);
+  state.parent.result.works=state.parent.result.works.slice(0,1);
+  await page.evaluate(({workspaceId,work,id,namespace})=>{
+    const key=`batc.pm.landing.owner.adopt-start-landing.${workspaceId}.${id}`;
+    const hint=JSON.parse(localStorage.getItem(key)!);hint.work_item_ids=[work];localStorage.setItem(key,JSON.stringify(hint));
+    sessionStorage.setItem(`batc.pm.${namespace}.adopt-start-live.${workspaceId}.${id}`,work);
+  },{workspaceId,work,id,namespace});
+}
+
+test('a fresh successful adoption opens its exact live Attempt once without another write',async({page})=>{
+  const {state,id}=await landing(page);await followLanding(page,state,id);
+  await page.evaluate(()=>(window as any).landingRefresh());
+  await expect(page).toHaveURL(new RegExp(`/session/host-a/session-a\\?from=board&workspace=${workspaceId}&work=${work}&attempt=att_9{32}`));
+  expect(state.writes).toEqual([]);
+  expect(await page.evaluate(()=>Object.keys(sessionStorage).filter(key=>key.includes('adopt-start-live')))).toEqual([]);
+  await page.evaluate(({workspaceId,work})=>{location.hash=`#/pm/${workspaceId}/board?select=${work}`;return (window as any).landingRefresh();},{workspaceId,work});
+  await expect(page).toHaveURL(new RegExp('board\\?select='+work));
+});
+
+test('another tab or connection navigation hint cannot open a completed adoption automatically',async({page})=>{
+  const {state,id}=await landing(page);await followLanding(page,state,id,{namespace:'other.owner'});
+  await page.evaluate(()=>(window as any).landingRefresh());
+  await expect(page).toHaveURL(new RegExp('board\\?select='+work));expect(state.writes).toEqual([]);
+});
+
+for(const stop of ['partial','unknown','withdrawn','foreign','child-mismatch'])test(`automatic live navigation retains the ${stop} recovery view`,async({page})=>{
+  const {state,id}=await landing(page,{unknown:stop==='unknown',denied:stop==='withdrawn',status:stop==='unknown'?'needs_attention':'failed'});
+  await followLanding(page,state,id,{ready:!['partial','unknown'].includes(stop)});
+  if(stop==='foreign')state.parent.actor='someone-else';
+  if(stop==='child-mismatch')state.child.target.work_item_id=second;
+  await page.evaluate(()=>(window as any).landingRefresh());
+  await expect(page).toHaveURL(new RegExp('board\\?select='+work));expect(state.writes).toEqual([]);
+});
+
+test('leaving the selected Work during a delayed receipt cannot redirect the user back',async({page})=>{
+  const {state,id}=await landing(page);await followLanding(page,state,id);
+  let release!:()=>void;state.hold=new Promise<void>(resolve=>{release=resolve;});
+  await page.evaluate(()=>{void (window as any).landingRefresh();});await expect.poll(()=>state.reads.length).toBe(1);
+  await page.evaluate(({workspaceId,second})=>{location.hash=`#/pm/${workspaceId}/board?select=${second}`;},{workspaceId,second});
+  release();await expect.poll(()=>state.reads.length).toBe(2);
+  await expect(page).toHaveURL(new RegExp('board\\?select='+second));expect(state.writes).toEqual([]);
+  expect(await page.evaluate(()=>Object.keys(sessionStorage).filter(key=>key.includes('adopt-start-live')))).toEqual([]);
+});
 
 test('landing preserves a partial plan and follows the fresh child receipt to the exact Attempt',async({page})=>{
   await landing(page);await page.evaluate(()=>(window as any).landingRefresh());const view=page.locator('[data-adopt-start-landing]');

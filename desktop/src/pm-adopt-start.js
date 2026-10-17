@@ -11,6 +11,7 @@ const workKeys = ['expected_work_item_fingerprint','expected_work_version','expe
 const planKeys = ['expected_version','expected_plan_version','expected_accepted_revision_id','expected_proposal_digest'];
 const exact = (value, keys) => record(value) && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value,key));
 export const landingPrefix = (namespace,workspaceId) => `batc.pm.${namespace}.adopt-start-landing.${workspaceId}.`;
+export const landingNavigationKey = (namespace,workspaceId,id) => `batc.pm.${namespace}.adopt-start-live.${workspaceId}.${id}`;
 
 // A read result can only complete the exact reviewed selection. Its ready rows
 // supply all execution values; the client never invents a scope or destination.
@@ -49,7 +50,7 @@ export function checkedAdoptPreview(value, body, target, baseline) {
 export function adoptStartReview({t,api,alive,form,caps,namespace,workspaceId,threadId,review,rationale,permitted,readable,reviewable=()=>true,otherLocked,errorBox,onStateChange=()=>{},onLanded}) {
   const target = {workspace_id:workspaceId,thread_id:threadId};
   const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
-  let request, disposed=false, visible=false, ticket=0, checking=false, loading=false, prepared=null, signature='', rendered='', landed=null, updating=false;
+  let request, disposed=false, visible=false, ticket=0, checking=false, loading=false, prepared=null, signature='', rendered='', landed=null, updating=false, followRequested=false;
   let rows=new Map(), projects=[], projectCursor=null, projectIndex=0, workCursor=null;
   const nodes=new Map(), selection=h('input',{type:'hidden',value:''});
   const catalog=h('div',{'data-adopt-work-list':''}), status=h('div',{role:'status'}), notice=h('p',{class:'muted'});
@@ -79,6 +80,9 @@ export function adoptStartReview({t,api,alive,form,caps,namespace,workspaceId,th
     extra:h('div',{},selection,h('h4',{},t('loop_works_heading')),h('p',{class:'muted'},t('loop_adopt_start_help')),catalog,controls,status),
     errorBox:error=>errorBox(error,{summary:t('loop_preview_mismatch')})});
   const box=h('section',{class:'pm-adopt-start','data-adopt-start':''},notice,request.box);
+  // Only this tab's explicit submission requests automatic navigation. Reading
+  // a stored receipt in another view or tab must not redirect that reader.
+  request.box.addEventListener('submit',()=>{followRequested=true;},{capture:true});
   function rememberReceipt() {
     const op=request.operation();if(!op||landed===op.operation_id||!opId(op.operation_id))return;
     // durableForm already verified actor, key, body and target. Save only IDs.
@@ -87,6 +91,7 @@ export function adoptStartReview({t,api,alive,form,caps,namespace,workspaceId,th
     landed=op.operation_id;
     try{alive();localStorage.setItem(landingPrefix(namespace,workspaceId)+op.operation_id,JSON.stringify({version:1,operation_id:op.operation_id,thread_id:threadId,work_item_ids:ids}));}
     catch{return;}
+    if(followRequested){try{sessionStorage.setItem(landingNavigationKey(namespace,workspaceId,op.operation_id),ids[0]);}catch{/* the ordinary Work link remains available */}followRequested=false;}
     if(onLanded)onLanded(ids[0],op.operation_id);
     else location.hash=`#/pm/${encodeURIComponent(workspaceId)}/board?select=${encodeURIComponent(ids[0])}`;
   }
