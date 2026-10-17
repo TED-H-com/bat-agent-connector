@@ -56,7 +56,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
         const resultCap = caps()?.features?.pm_workspaces?.work_attempt_results;
         if (resultCap?.version === 1) {
           resultPanel = workResultPanel({
-            h, t, api, alive, workspaceId, caps, errorBox,
+            h, t, api, alive, workspaceId, caps, errorBox, form, namespace,
             onVisibility: visible => {
               const attemptSection = detail.element?.body?.querySelector('[data-work-section="attempt-result"]');
               if (attemptSection) {

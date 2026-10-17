@@ -1,6 +1,7 @@
 import {button, disclosure, statusPill} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
 import {sessionHref} from './session-navigation.js';
+import {createWorkPublish, publicationDeliveryLine, publicationPrLine} from './pm-work-publish.js';
 
 const KNOWN_STATES = new Set([
   'accepted',
@@ -50,7 +51,7 @@ function normalizeForComparison(envelope) {
   return clone;
 }
 
-export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, onVisibility = () => {}}) {
+export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, onVisibility = () => {}, form = null, namespace = ''}) {
   let activeAttempt = null;
   let readSerial = 0;
   let lastEnvelope = null;
@@ -82,6 +83,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
 
   const panelElement = h('div', {class: 'pm-work-result-panel', 'data-work-result': ''});
   panelElement.hidden = true;
+  const publish = createWorkPublish({h, t, form, namespace, caps, errorBox});
 
   function updateVisibility(visible) {
     panelElement.hidden = !visible;
@@ -108,6 +110,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
     turnsOpen = false;
     detailsOpen = false;
     filesOpen = false;
+    publish.dispose();
     panelElement.replaceChildren();
     updateVisibility(false);
   }
@@ -190,6 +193,8 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
         lastStale = false;
         lastError = null;
         renderEnvelope(data, currentAttempt);
+      } else {
+        publish.recheck();
       }
     } catch (err) {
       try { alive?.(); } catch { return; }
@@ -212,6 +217,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
   }
 
   function renderInvalid() {
+    publish.dispose();
     panelElement.replaceChildren(
       h('h3', {}, t('wres_heading')),
       h('p', {class: 'pm-work-result-invalid'}, t('wres_invalid_envelope')),
@@ -281,6 +287,18 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
       if (active.classList.contains('pm-work-result-read-again')) {
         return {type: 'read-again'};
       }
+      if (active.matches?.('[data-work-publish-title], [data-work-publish-body]')) {
+        return {
+          type: 'publish-field',
+          hook: active.hasAttribute('data-work-publish-title') ? 'title' : 'body',
+          start: active.selectionStart,
+          end: active.selectionEnd,
+        };
+      }
+      if (active.matches?.('[data-work-publish-draft]')) {
+        return {type: 'publish-draft', value: active.getAttribute('data-work-publish-draft')};
+      }
+      if (active.matches?.('[data-work-publish-submit]')) return {type: 'publish-submit'};
       if (active.tagName === 'SUMMARY' && active.parentElement?.tagName === 'DETAILS') {
         const details = active.parentElement;
         if (details.dataset.workResultTurns !== undefined) return {type: 'turns'};
@@ -319,7 +337,30 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
       panelElement.querySelector('[data-work-result-details] > summary')?.focus();
     } else if (token.type === 'files') {
       panelElement.querySelector('.pm-work-result-files > summary')?.focus();
+    } else if (token.type === 'publish-field') {
+      const node = panelElement.querySelector(token.hook === 'title' ? '[data-work-publish-title]' : '[data-work-publish-body]');
+      if (node) {
+        node.focus();
+        try { node.setSelectionRange(token.start ?? 0, token.end ?? token.start ?? 0); } catch { /* the control cannot take a caret */ }
+      } else publishFocusFallback();
+    } else if (token.type === 'publish-draft') {
+      const node = elementByAttr(panelElement, 'data-work-publish-draft', token.value);
+      if (node) node.focus();
+      else publishFocusFallback();
+    } else if (token.type === 'publish-submit') {
+      const node = panelElement.querySelector('[data-work-publish-submit]');
+      if (node) node.focus();
+      else publishFocusFallback();
     }
+  }
+
+  function publishFocusFallback() {
+    const link = panelElement.querySelector('[data-work-publish-pr]');
+    const note = panelElement.querySelector('[data-work-publish-blocked-reason], [data-work-publish-gap], [data-work-publish-held]');
+    const target = link || note;
+    if (!target || target.hidden) return;
+    if (!link) target.tabIndex = -1;
+    target.focus();
   }
 
   function renderEnvelope(envelope, attempt, errorBoxNode = null) {
@@ -515,11 +556,17 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
     if (prs.length > 0) {
       const prList = h('ul', {class: 'pm-work-result-pr-list'});
       for (const pr of prs) {
-        const link = h('a', {href: `#/op/${encodeURIComponent(pr.publication_operation_id)}`},
-          `PR #${pr.pull_number} · ${pr.repository}`);
-        prList.append(h('li', {}, link));
+        const line = publicationPrLine(h, t, pr);
+        if (line) prList.append(line);
       }
-      prDd.append(prList);
+      if (prList.childElementCount) prDd.append(prList);
+      for (const pr of prs) {
+        const delivery = publicationDeliveryLine(h, t, pr, envelope, attempt);
+        if (delivery) prDd.append(delivery);
+      }
+    }
+    if (envelope.completeness?.coverage?.delivery === 'partial') {
+      prDd.append(h('p', {'data-work-publish-partial': ''}, t('wpub_pr_partial')));
     }
     dl.append(h('dt', {}, t('wres_check_pr')), prDd);
 
@@ -667,7 +714,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
       let srcText = '';
       if (srcKind === 'turn_end_observation') srcText = t('wres_source_turn_end_observation');
       else if (srcKind === 'execution_verification' || srcKind === 'session_verification') srcText = t('wres_source_verified_commit');
-      else if (srcKind === 'integration') srcText = t('wres_source_delivered_commit');
+      else if (srcKind === 'integration') srcText = t('wres_source_integration_commit');
 
       const commitP = h('p', {class: 'pm-work-result-commit'},
         h('strong', {}, `${t('wres_result_commit')}: `),
@@ -721,6 +768,9 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
       }
       sections.push(compDiv);
     }
+
+    const publishNode = publish.render(envelope);
+    if (publishNode) sections.push(publishNode);
 
     // 6. Recorded turns disclosure
     const results = envelope.results || [];

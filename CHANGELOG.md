@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- A fixed Work Result can publish one pull request only when the result lists a complete `github.pr.publish` entry. The form sends that entry's target, commit, base, and preconditions with the typed title, description, and draft choice. An incomplete entry keeps its draft and does not submit. A lost reply retries the original operation key. A newer result does not retarget that request.
+
 - Confinement closure tests scan with a shell fixture instead of starting
   Python for every search, so the same checks finish on a busy disk without
   a longer time limit.
