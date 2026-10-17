@@ -358,13 +358,14 @@ fn validate_adopt_start_preview(body: Option<&Value>) -> Result<(), String> {
         return Err(fail());
     }
     let mut seen = std::collections::HashSet::new();
+    let work_id = Regex::new(r"^wi_[0-9a-f]{20}$").unwrap();
     for work in works {
         let mut work = work.as_object().ok_or_else(fail)?.clone();
         let id = work
             .remove("work_item_id")
             .and_then(|v| v.as_str().map(str::to_owned))
             .ok_or_else(fail)?;
-        if !Regex::new(r"^wi_[0-9a-f]{20}$").unwrap().is_match(&id)
+        if !work_id.is_match(&id)
             || !seen.insert(id)
             || !work.contains_key("requirement_ids")
         {
