@@ -1,8 +1,6 @@
-"""Field rules and public exits for the E10 operation loop projection.
+"""Public exits for the E10 operation loop projection.
 
-Parity tests that compare HTTP and MCP stay on the public routes. Field-rule
-tests call ``attach`` directly. Exit tests use the HTTP app, the RPC door, and
-the principal MCP server.
+HTTP, RPC and the principal MCP server build the states and read ``loop``.
 """
 from __future__ import annotations
 
@@ -15,19 +13,15 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
 from bat_agent_connector import (
-    controller_authority,
     pm_discussions,
     pm_evidence,
-    pm_source_lineage,
     pm_work_start,
     pm_workspace,
 )
 from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.mcp_server import build_server
-from bat_agent_connector.operations import OperationService
 from bat_agent_connector.pm_delivery_lineage import ACTIONS as DELIVERY_ACTIONS
-from bat_agent_connector.pm_operation_loop import LOOP_ACTIONS, attach
-from bat_agent_connector.task_journal import Journal
+from bat_agent_connector.pm_operation_loop import LOOP_ACTIONS
 from tests.operation_helpers import settle_operations
 from tests.test_api_v1 import MANUAL, http, token
 from tests.test_api_v1 import daemon as daemon_fixture
@@ -36,9 +30,9 @@ from tests.test_operations_unification import capability_caller
 from tests.test_operations_unification import owned as task_owned_fixture
 from tests.test_pm_plan_operations import OWNER as PACKAGE_OWNER
 from tests.test_pm_work_packages import action as pkg_action
-from tests.test_pm_work_packages import create as create_package
 from tests.test_pm_work_packages import member as add_member
 from tests.test_pm_work_packages import ready as ready_fixture
+from tests.test_pm_work_packages import request as package_request
 from tests.test_pm_work_start import STARTER_OWNER, _advance_start, _start_envelope
 from tests.test_pm_worktree import pm as pm_fixture
 from tests.test_repository_sync import world as world_fixture
@@ -46,69 +40,6 @@ from tests.test_repository_sync import world as world_fixture
 daemon, served = daemon_fixture, served_fixture
 ready, pm, world = ready_fixture, pm_fixture, world_fixture
 task_owned = task_owned_fixture
-
-OWNER = Principal("loop-owner", frozenset({"observe", "manage", "start", "operate"}))
-WS = "ws_" + "ab" * 16
-WI = "wi_" + "cd" * 10
-WI_OTHER = "wi_" + "ef" * 10
-ATT = "att_" + "12" * 16
-
-
-def _service(tmp_path):
-    journal = Journal(tmp_path / "loop.db")
-    ops = OperationService(journal)
-    pm_evidence.schema(journal)
-    pm_source_lineage.schema(journal)
-    now = time.time()
-    server = pm_workspace.server_id(ops.db)
-    with journal.tx():
-        ops.db.execute(
-            "INSERT INTO pm_workspaces VALUES(?,?,?,?,1,?,?,?,?)",
-            (WS, server, "Loop", '["o/r"]', OWNER.actor, now, now, "op_ws_loop"),
-        )
-        ops.db.execute(
-            "INSERT INTO pm_workspace_members VALUES(?,?,?,?,?,?)",
-            (WS, OWNER.actor, "owner", pm_workspace.controller_for(ops.db, OWNER), now, now),
-        )
-    return ops, journal
-
-
-def _bind(ops, work_item_id, *, binding_id="pmb_loop_1", operation_id="op_bind_loop"):
-    ops.db.execute(
-        """INSERT INTO pm_work_bindings(binding_id,workspace_id,work_item_id,project_binding_id,project_id,
-           work_version,requirement_ids,rationale,actor,created_at,operation_id)
-           VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
-        (binding_id, WS, work_item_id, "pmbj_loop", "prj_" + "a1" * 10, 1, "[]", "bound",
-         OWNER.actor, time.time(), operation_id),
-    )
-
-
-def _op(ops, *, action, operation_id, target=None, result=None, refs=None, status="succeeded", updated_at=1710000000.0):
-    ops.db.execute(
-        """INSERT INTO operations(operation_id,actor,entry,idem_key,request_hash,action,target,params,preconditions,
-           status,result,external_refs,created_at,updated_at)
-           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-        (operation_id, OWNER.actor, "test", operation_id, "hash", action,
-         json.dumps(target or {}), "{}", "{}", status,
-         json.dumps(result) if result is not None else None,
-         json.dumps(refs) if refs is not None else None,
-         updated_at, updated_at),
-    )
-    return ops.get(operation_id)
-
-
-def _work_start_refs(work_item_id=WI):
-    # A planted child walks package_plan["mode"]. A missing mode is a KeyError, which the loop does not catch.
-    intent = {"workspace_id": WS, "work_item_id": work_item_id, "package_plan": {"mode": "recorded"}}
-    return {"admission_binding": {"work_start": intent, "work_start_digest": pm_work_start._digest(intent)}}
-
-
-def _attempt(ops, operation_id, *, attempt_id=ATT, work_item_id=WI):
-    ops.db.execute(
-        """INSERT INTO work_attempts(attempt_id,workspace_id,work_item_id,origin_kind,origin_id,start_operation_id,
-           predecessor_attempt_id,admission_digest,created_at) VALUES(?,?,?,?,?,?,?,?,?)""",
-        (attempt_id, WS, work_item_id, "operation", operation_id, operation_id, None, "digest", time.time()),
-    )
 
 
 async def test_allowlist_is_the_section_32_list():
@@ -122,427 +53,208 @@ async def test_allowlist_is_the_section_32_list():
     assert "repository.continue" not in LOOP_ACTIONS
 
 
-async def test_discussion_fields_and_non_loop_operation_stays_unchanged(tmp_path):
-    journal = Journal(tmp_path / "discuss.db")
-    ops = OperationService(journal)
-    pm_workspace.install(ops)
-    pm_discussions.install(ops)
-    created, _ = ops.create(OWNER, action="pm.workspace.create", params={"name": "A useful product"},
-                            idempotency_key=uuid.uuid4().hex)
-    await settle_operations(ops)
-    workspace_op = ops.get(created["operation_id"])
-    before = ops.db.total_changes
-    assert await attach(ops, OWNER, workspace_op) is workspace_op
-    assert "loop" not in workspace_op
-    assert ops.db.total_changes == before
+def test_session_send_completeness_stays_partial_for_unknown_targets():
+    """A Work id on session.send is not the registered target and is not complete."""
+    from bat_agent_connector.pm_operation_loop import _completeness
 
-    ws = workspace_op["result"]["workspace"]
-    thread_op, _ = ops.create(
-        OWNER, action="pm.thread.create", target={"workspace_id": ws["workspace_id"]},
-        params={"title": "Paid membership"}, preconditions={"expected_version": ws["version"]},
-        idempotency_key=uuid.uuid4().hex)
-    await settle_operations(ops)
-    thread_op = ops.get(thread_op["operation_id"])
-    thread_id = thread_op["result"]["thread_id"]
-    projected = await attach(ops, OWNER, thread_op)
-    loop = projected["loop"]
-    assert loop["operation_id"] == thread_op["operation_id"]
-    assert loop["work_item_id"] is None and loop["attempt_id"] is None
-    assert loop["state"] == {"operation_status": "succeeded", "updated_at": thread_op["updated_at"]}
-    assert loop["links"] is None and loop["result_read"] is None
-    assert loop["dashboard_hash"] == f"#/pm/{ws['workspace_id']}/discussions/{thread_id}"
-    assert loop["completeness"] == {"status": "complete", "reason": None}
-    assert loop["next_allowed_actions"] == [] and loop["blocked_actions"] == []
-    assert "loop" not in ops.get(thread_op["operation_id"])
-
-    message, _ = ops.create(
-        OWNER, action="pm.message.append", target={"workspace_id": ws["workspace_id"], "thread_id": thread_id},
-        params={"content": "A paid tier may be useful"},
-        preconditions={"expected_version": pm_discussions.get_thread(ops, OWNER, ws["workspace_id"], thread_id)["thread"]["version"]},
-        idempotency_key=uuid.uuid4().hex)
-    await settle_operations(ops)
-    message = ops.get(message["operation_id"])
-    message_loop = (await attach(ops, OWNER, message))["loop"]
-    assert message_loop["dashboard_hash"] == loop["dashboard_hash"]
-    assert message_loop["work_item_id"] is None
-    assert message_loop["completeness"] == {"status": "complete", "reason": None}
-    journal.close()
-
-
-async def test_package_work_id_follows_visibility(tmp_path):
-    ops, journal = _service(tmp_path)
-    _bind(ops, WI)
-    visible = _op(ops, action="pm.work_package.create", operation_id="op_pkg_visible",
-                  target={"workspace_id": WS, "work_item_id": WI})
-    hidden = _op(ops, action="pm.work_package.create", operation_id="op_pkg_hidden",
-                 target={"workspace_id": WS, "work_item_id": WI_OTHER})
-    shown = await attach(ops, OWNER, visible)
-    withheld = await attach(ops, OWNER, hidden)
-    assert shown["loop"]["work_item_id"] == WI
-    assert shown["loop"]["attempt_id"] is None
-    assert shown["loop"]["dashboard_hash"] == f"#/pm/{WS}/board?select={WI}"
-    assert shown["loop"]["completeness"] == {"status": "complete", "reason": None}
-    assert shown["loop"]["links"] is None and shown["loop"]["result_read"] is None
-    # No binding and no lineage row: E04 still accepts the Work.
-    assert withheld["loop"]["work_item_id"] == WI_OTHER
-    assert withheld["loop"]["completeness"] == {"status": "complete", "reason": None}
-    assert withheld["loop"]["dashboard_hash"] == f"#/pm/{WS}/board?select={WI_OTHER}"
-    assert withheld["loop"]["operation_id"] == "op_pkg_hidden"
-
-    ops.db.execute(
-        "INSERT INTO pm_source_lineage VALUES('work_item', ?, 'op_missing_root', 'op_missing_root')", (WI,))
-    again = await attach(ops, OWNER, visible)
-    assert again["loop"]["work_item_id"] is None
-    assert again["loop"]["completeness"]["reason"] == "no_work_item"
-    assert again["loop"]["dashboard_hash"] == "#/op/op_pkg_visible"
-    journal.close()
-
-
-async def test_work_start_attempt_fields_and_missing_attempt(tmp_path):
-    ops, journal = _service(tmp_path)
-    _bind(ops, WI)
-    started = _op(ops, action="work.start", operation_id="op_start_fields",
-                  target={"workspace_id": WS, "work_item_id": WI}, refs=_work_start_refs())
-    missing = _op(ops, action="work.start", operation_id="op_start_missing",
-                  target={"workspace_id": WS, "work_item_id": WI}, refs=_work_start_refs())
-    _attempt(ops, started["operation_id"])
-    row = dict(ops.db.execute("SELECT * FROM work_attempts WHERE start_operation_id=?",
-                              (started["operation_id"],)).fetchone())
-    projected = await attach(ops, OWNER, started)
-    loop = projected["loop"]
-    assert loop["operation_id"] == started["operation_id"]
-    assert loop["work_item_id"] == WI and loop["attempt_id"] == ATT
-    assert loop["state"]["operation_status"] == "succeeded"
-    assert loop["state"]["updated_at"] == started["updated_at"]
-    assert loop["state"]["attempt_stage"] == pm_work_start._attempt_view(ops, row)["stage"]
-    assert loop["links"]["start_operation_hash"] == "#/op/op_start_fields"
-    assert loop["links"]["work_item_hash"] == f"#/pm/{WS}/board?select={WI}"
-    assert loop["links"]["execution_operation_hash"] is None and loop["links"]["session_hash"] is None
-    assert loop["result_read"]["result"]["name"] == "pm_work_attempt_result_get"
-    assert loop["result_read"]["result"]["http"].endswith("/result")
-    assert "{workspace_id}" in loop["result_read"]["changes"]["http"]
-    assert loop["result_read"]["diff"]["name"] == "pm_work_attempt_diff_get"
-    assert loop["completeness"] == {"status": "complete", "reason": None}
-    assert loop["dashboard_hash"] == f"#/pm/{WS}/board?select={WI}"
-
-    absent = (await attach(ops, OWNER, missing))["loop"]
-    assert absent["work_item_id"] is None and absent["attempt_id"] is None
-    assert "attempt_stage" not in absent["state"]
-    assert absent["result_read"] is None
-    assert absent["links"]["start_operation_hash"] == "#/op/op_start_missing"
-    assert absent["links"]["work_item_hash"] is None
-    assert absent["completeness"] == {"status": "partial", "reason": "no_attempt"}
-    assert absent["dashboard_hash"] == "#/op/op_start_missing"
-    journal.close()
-
-
-async def test_proven_child_uses_parent_attempt_and_unproven_child_has_no_loop(tmp_path):
-    ops, journal = _service(tmp_path)
-    _bind(ops, WI)
-    parent = _op(ops, action="work.start", operation_id="op_parent_start",
-                 target={"workspace_id": WS, "work_item_id": WI}, refs=_work_start_refs())
-    _attempt(ops, parent["operation_id"], attempt_id=ATT)
-    child = _op(
-        ops, action="repository.continue", operation_id="op_child_continue",
-        target={"workspace_id": WS, "work_item_id": WI_OTHER},
-        refs={"work_start_parent": {"operation_id": parent["operation_id"], "slot": "handoff"}},
+    kwargs = dict(
+        dropped=False, delivery_unlinked=False, expects_work=False, work_visible=False,
+        expects_attempt=False, attempt_present=False, attempt_unreadable=False)
+    formed = "wi_" + "ab" * 10
+    targets = (
+        None, "not-a-dict", [], {},
+        {"host": "h1", "session_id": "s1"},
+        {"host": "h1", "session_id": "s1", "work_item_id": None},
+        {"host": "h1", "session_id": "s1", "work_item_id": ""},
+        {"host": "h1", "session_id": "s1", "work_item_id": "not-a-work"},
+        {"host": "h1", "session_id": "s1", "work_item_id": formed},
+        {"host": "h1", "session_id": "s1", "work_item_id": {"bad": True}},
+        {"host": "h1", "session_id": "s1", "work_item_id": 1},
+        {"work_item_id": formed},
     )
-    ops.db.execute(
-        """INSERT INTO pm_work_start_children(parent_id,slot,ordinal,operation_id,request,request_digest,created_at)
-           VALUES(?,?,?,?,?,?,?)""",
-        (parent["operation_id"], "handoff", 2, child["operation_id"], "{}", "digest", time.time()),
-    )
-    child = ops.get(child["operation_id"])
-    loop = (await attach(ops, OWNER, child))["loop"]
-    assert loop["operation_id"] == child["operation_id"]
-    assert loop["work_item_id"] == WI and loop["attempt_id"] == ATT
-    assert loop["links"]["start_operation_hash"] == f"#/op/{parent['operation_id']}"
-    assert WI_OTHER not in json.dumps(loop)
-
-    broken = _op(
-        ops, action="pm.work_package.create", operation_id="op_broken_child",
-        target={"workspace_id": WS, "work_item_id": WI},
-        refs={"work_start_parent": {"operation_id": parent["operation_id"], "slot": "package"}},
-    )
-    assert await attach(ops, OWNER, broken) is broken
-    lone = {"operation_id": "op_not_child", "action": "repository.continue", "status": "succeeded",
-            "updated_at": 1.0, "target": {}, "external_refs": {}}
-    assert await attach(ops, OWNER, lone) is lone
-    journal.close()
+    partial = {"status": "partial", "reason": "session_target"}
+    for target in targets:
+        got = _completeness({"action": "session.send", "target": target}, **kwargs)
+        assert got == partial, target
+        assert got["status"] != "complete"
+    withdrawn = _completeness(
+        {"action": "session.send", "target": {"work_item_id": formed}}, **{**kwargs, "dropped": True})
+    assert withdrawn == {"status": "unavailable", "reason": "source_withdrawn"}
 
 
-async def test_session_hash_requires_a_readable_session(tmp_path):
-    ops, journal = _service(tmp_path)
-    readable = _op(ops, action="session.send", operation_id="op_send_read",
-                   target={"host": "h1", "session_id": "s1"})
-    unread = _op(ops, action="session.send", operation_id="op_send_unread",
-                 target={"host": "h1", "session_id": "s2"})
-    now = time.time()
-    ops.db.execute(
-        """INSERT INTO sessions_observed(host,session_id,body,digest,provenance,api_access,attention,sort_key,
-           first_seen_at,last_seen_at,missing_count) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
-        ("h1", "s1", "{}", "digest", "connector_managed", "managed", 0, 0, now, now, 0),
-    )
-    shown = (await attach(ops, OWNER, readable))["loop"]
-    hidden = (await attach(ops, OWNER, unread))["loop"]
-    assert shown["dashboard_hash"] == "#/session/h1/s1"
-    assert shown["work_item_id"] is None and shown["links"] is None
-    assert shown["completeness"] == {"status": "partial", "reason": "session_target"}
-    assert hidden["dashboard_hash"] == "#/op/op_send_unread"
-    assert "s2" not in json.dumps(hidden)
-    assert hidden["completeness"]["reason"] == "session_target"
+def test_malformed_work_id_cannot_become_complete():
+    """A non-id is not a visible Work, so the loop stays partial."""
+    from bat_agent_connector.pm_operation_loop import _completeness, _work_id
 
-    ops.db.execute(
-        "INSERT INTO pm_source_lineage VALUES('session', 'h1/s1', 'op_missing_session', 'op_missing_session')")
-    withdrawn = (await attach(ops, OWNER, readable))["loop"]
-    assert withdrawn["dashboard_hash"] == "#/op/op_send_read"
-    assert "s1" not in json.dumps(withdrawn)
-    assert withdrawn["completeness"] == {"status": "unavailable", "reason": "source_withdrawn"}
-    journal.close()
+    assert _work_id("not-a-work") is False
+    assert _work_id("") is False
+    assert _work_id(None) is False
+    assert _work_id({"bad": True}) is False
+    assert _work_id(1) is False
+    got = _completeness(
+        {"action": "work.start", "target": {"work_item_id": "not-a-work"}},
+        dropped=False, delivery_unlinked=False, expects_work=True, work_visible=False,
+        expects_attempt=True, attempt_present=True, attempt_unreadable=False)
+    assert got == {"status": "partial", "reason": "no_work_item"}
+    assert got["status"] != "complete"
 
 
-async def test_delivery_work_id_is_exactly_one_visible_lineage_row(tmp_path):
-    ops, journal = _service(tmp_path)
-    _bind(ops, WI, binding_id="pmb_del_1", operation_id="op_bind_del_1")
-    _bind(ops, WI_OTHER, binding_id="pmb_del_2", operation_id="op_bind_del_2")
+def _open_mcp(daemon, monkeypatch, port, tok):
+    monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
+    monkeypatch.setenv("BATC_API_TOKEN", tok)
+    return build_server(daemon.fleet.config, principal_only=True)
 
-    def lineage(operation_id, original_id, work_ids):
-        # The original has to stay visible. A work_item root that is work.start
-        # uses that action's source check, which is membership of its workspace.
-        _op(ops, action="work.start", operation_id=original_id,
-            target={"workspace_id": WS, "work_item_id": WI}, refs=_work_start_refs())
+
+async def _loops(server, port, tok, operation_id):
+    status, body = await http(port, "GET", "/api/v1/operations/" + operation_id, tok=tok)
+    assert status == 200, body
+    via_mcp = unpack(await server.call_tool("operation_get", {"operation_id": operation_id}))
+    assert body["operation"]["loop"] == via_mcp["operation"]["loop"]
+    return body["operation"]["loop"]
+
+
+def _endpoint_rows(rows):
+    return [row for row in rows if row.get("kind") == "operation_endpoint"]
+
+
+def _steering_blocks(rows):
+    return [row for row in rows if row.get("action") in {"cancel", "resume", "work.start"}]
+
+
+async def test_discussion_hash_matches_across_http_and_mcp(served, monkeypatch):
+    """A discussion names its thread. A workspace operation is not on the allowlist."""
+    daemon, port = served
+    actor = Principal("loop-discuss", frozenset({"observe", "manage"}))
+    tok = token(daemon, actor.actor, "observe", "manage")
+    server, fleet = _open_mcp(daemon, monkeypatch, port, tok)
+    try:
+        status, workspace = await _submit(
+            port, tok, {"action": "pm.workspace.create", "params": {"name": "A useful product"}},
+            "loop-hash-workspace")
+        assert status == 202 and workspace["created"] is True, workspace
+        assert "loop" not in workspace["operation"]
+        await settle_operations(daemon.ops)
+        stored = daemon.ops.get(workspace["operation"]["operation_id"])
+        assert stored["status"] == "succeeded" and "loop" not in stored
+        wid = stored["result"]["workspace"]["workspace_id"]
+        version = stored["result"]["workspace"]["version"]
+        status, created = await _submit(port, tok, {
+            "action": "pm.thread.create", "target": {"workspace_id": wid},
+            "params": {"title": "Paid membership"}, "preconditions": {"expected_version": version},
+        }, "loop-hash-thread")
+        assert status == 202 and created["created"] is True, created
+        await settle_operations(daemon.ops)
+        thread = daemon.ops.get(created["operation"]["operation_id"])
+        assert thread["status"] == "succeeded", thread
+        thread_id = thread["result"]["thread_id"]
+        loop = await _loops(server, port, tok, thread["operation_id"])
+        assert loop["dashboard_hash"] == f"#/pm/{wid}/discussions/{thread_id}"
+        assert loop["work_item_id"] is None and loop["attempt_id"] is None
+        assert loop["links"] is None and loop["result_read"] is None
+        assert loop["completeness"] == {"status": "complete", "reason": None}
+        assert loop["next_allowed_actions"] == [] and loop["blocked_actions"] == []
+
+        current = pm_discussions.get_thread(daemon.ops, actor, wid, thread_id)["thread"]["version"]
+        status, message = await _submit(port, tok, {
+            "action": "pm.message.append", "target": {"workspace_id": wid, "thread_id": thread_id},
+            "params": {"content": "A paid tier may be useful"},
+            "preconditions": {"expected_version": current},
+        }, "loop-hash-message")
+        assert status == 202 and message["operation"]["loop"]["dashboard_hash"] == loop["dashboard_hash"]
+        await settle_operations(daemon.ops)
+        message_loop = await _loops(server, port, tok, message["operation"]["operation_id"])
+        assert message_loop["dashboard_hash"] == loop["dashboard_hash"]
+        assert message_loop["work_item_id"] is None
+        assert message_loop["completeness"] == {"status": "complete", "reason": None}
+    finally:
+        await fleet.close()
+
+
+async def test_package_loop_names_its_work(ready, monkeypatch):
+    """A package operation carries the Work it names, on HTTP and MCP."""
+    w = ready
+    daemon, port = w["d"], w["port"]
+    tok = token(daemon, PACKAGE_OWNER.actor, *sorted(PACKAGE_OWNER.scopes))
+    server, fleet = _open_mcp(daemon, monkeypatch, port, tok)
+    try:
+        env = package_request(w)
+        body = {key: env[key] for key in ("action", "target", "params", "preconditions")}
+        status, created = await _submit(port, tok, body, env["idempotency_key"])
+        assert status == 202 and created["created"] is True, created
+        work_id = w["target"]["work_item_id"]
+        loop = await _loops(server, port, tok, created["operation"]["operation_id"])
+        assert loop == created["operation"]["loop"]
+        assert loop["work_item_id"] == work_id and loop["attempt_id"] is None
+        assert loop["dashboard_hash"] == f"#/pm/{w['workspace_id']}/board?select={work_id}"
+        assert loop["links"] is None and loop["result_read"] is None
+        assert loop["completeness"] == {"status": "complete", "reason": None}
+    finally:
+        await fleet.close()
+
+
+async def test_work_start_actions_match_the_result_envelope(loop_start, monkeypatch):
+    """An accepted work.start copies this principal's Result steering rows."""
+    w = loop_start
+    daemon, ops, port = w["d"], w["d"].ops, w["port"]
+    wid, work_id = w["workspace_id"], w["target"]["work_item_id"]
+    tok = token(daemon, STARTER_OWNER.actor, *sorted(STARTER_OWNER.scopes))
+    server, fleet = _open_mcp(daemon, monkeypatch, port, tok)
+    try:
+        env = await _start_envelope(w, key="loop-result-copy")
+        body = {key: env[key] for key in ("action", "target", "params", "preconditions")}
+        status, created = await _submit(port, tok, body, env["idempotency_key"])
+        assert status == 202 and created["created"] is True, created
+        operation_id = created["operation"]["operation_id"]
+        assert ops.get(operation_id)["status"] == "accepted"
+        attempt_id = ops.db.execute(
+            "SELECT attempt_id FROM work_attempts WHERE start_operation_id=?",
+            (operation_id,)).fetchone()["attempt_id"]
+        loop = await _loops(server, port, tok, operation_id)
+        assert loop["attempt_id"] == attempt_id and loop["work_item_id"] == work_id
+        assert loop["links"]["start_operation_hash"] == f"#/op/{operation_id}"
+        assert loop["links"]["work_item_hash"] == f"#/pm/{wid}/board?select={work_id}"
+        assert loop["result_read"]["result"]["name"] == "pm_work_attempt_result_get"
+        assert loop["result_read"]["result"]["http"].endswith("/result")
+        assert isinstance(loop["state"].get("attempt_stage"), str)
+        assert loop["completeness"] == {"status": "complete", "reason": None}
+        status, envelope = await http(
+            port, "GET", f"/api/v1/pm/workspaces/{wid}/work-attempts/{attempt_id}/result", tok=tok)
+        assert status == 200, envelope
+        assert loop["next_allowed_actions"] == _endpoint_rows(envelope["next_allowed_actions"])
+        assert loop["blocked_actions"] == _steering_blocks(envelope["blocked_actions"])
+        assert any(row.get("endpoint") == "cancel" for row in loop["next_allowed_actions"])
+    finally:
+        await fleet.close()
+
+
+async def test_disagreeing_child_stores_have_no_loop(loop_start, monkeypatch):
+    """HTTP and MCP stay 200 when the child stores disagree, and neither adds loop."""
+    w = loop_start
+    daemon, ops, port = w["d"], w["d"].ops, w["port"]
+    tok = token(daemon, STARTER_OWNER.actor, *sorted(STARTER_OWNER.scopes))
+    server, fleet = _open_mcp(daemon, monkeypatch, port, tok)
+    try:
+        env = await _start_envelope(w, key="loop-disagree-parent")
+        body = {key: env[key] for key in ("action", "target", "params", "preconditions")}
+        status, parent = await _submit(port, tok, body, env["idempotency_key"])
+        assert status == 202 and parent["created"] is True, parent
+        package = package_request(w)
+        package_body = {key: package[key] for key in ("action", "target", "params", "preconditions")}
+        status, created = await _submit(port, tok, package_body, package["idempotency_key"])
+        assert status == 202 and "loop" in created["operation"], created
+        package_id = created["operation"]["operation_id"]
+        assert (await _loops(server, port, tok, package_id))["work_item_id"] == w["target"]["work_item_id"]
         ops.db.execute(
-            "INSERT INTO pm_source_lineage VALUES('operation', ?, ?, ?)",
-            (operation_id, original_id, operation_id),
-        )
-        for work_id in work_ids:
-            ops.db.execute(
-                "INSERT INTO pm_source_lineage VALUES('work_item', ?, ?, ?)",
-                (work_id, original_id, operation_id),
-            )
-
-    lineage("op_del_one", "op_root_one", [WI])
-    lineage("op_del_two", "op_root_two", [WI, WI_OTHER])
-    lineage("op_del_none", "op_root_none", [])
-    lineage("op_publish", "op_root_publish", [WI])
-    one = _op(ops, action="integration.apply", operation_id="op_del_one", target={})
-    two = _op(ops, action="github.pr.merge", operation_id="op_del_two", target={})
-    none = _op(ops, action="deployment.start", operation_id="op_del_none", target={})
-    publish = _op(ops, action="github.pr.publish", operation_id="op_publish",
-                  target={"workspace_id": WS, "repository": "o/r", "host": "h1", "source_operation_id": "op_src"})
-    repair = _op(ops, action="pm.maintenance.repair", operation_id="op_repair", target={"workspace_id": WS})
-
-    one_loop = (await attach(ops, OWNER, one))["loop"]
-    assert one_loop["work_item_id"] == WI
-    assert one_loop["attempt_id"] is None
-    assert one_loop["completeness"] == {"status": "complete", "reason": None}
-    assert one_loop["dashboard_hash"] == f"#/pm/{WS}/board?select={WI}"
-    two_loop = (await attach(ops, OWNER, two))["loop"]
-    assert two_loop["work_item_id"] is None
-    assert two_loop["completeness"] == {"status": "partial", "reason": "delivery_unlinked"}
-    none_loop = (await attach(ops, OWNER, none))["loop"]
-    assert none_loop["work_item_id"] is None
-    assert none_loop["completeness"]["reason"] == "delivery_unlinked"
-    publish_loop = (await attach(ops, OWNER, publish))["loop"]
-    repair_loop = (await attach(ops, OWNER, repair))["loop"]
-    assert publish_loop["work_item_id"] is None and repair_loop["work_item_id"] is None
-    assert publish_loop["completeness"] == {"status": "complete", "reason": None}
-    assert repair_loop["completeness"] == {"status": "complete", "reason": None}
-    assert publish_loop["dashboard_hash"] == "#/op/op_publish"
-    journal.close()
-
-
-def _member(ops, actor, role):
-    ops.db.execute(
-        "INSERT INTO pm_workspace_members VALUES(?,?,?,?,?,?)",
-        (WS, actor, role, pm_workspace.controller_for(ops.db, Principal(actor, frozenset())), time.time(), time.time()),
-    )
-
-
-def _child_row(ops, parent_id, slot, operation_id, ordinal):
-    ops.db.execute(
-        """INSERT INTO pm_work_start_children(parent_id,slot,ordinal,operation_id,request,request_digest,created_at)
-           VALUES(?,?,?,?,?,?,?)""",
-        (parent_id, slot, ordinal, operation_id, "{}", "digest", time.time()),
-    )
-
-
-async def test_child_rule_requires_equal_links_and_a_visible_parent(tmp_path):
-    ops, journal = _service(tmp_path)
-    _bind(ops, WI)
-    _bind(ops, WI_OTHER, binding_id="pmb_child_other", operation_id="op_bind_child_other")
-    parent = _op(ops, action="work.start", operation_id="op_child_parent",
-                 target={"workspace_id": WS, "work_item_id": WI}, refs=_work_start_refs())
-    _attempt(ops, parent["operation_id"], attempt_id=ATT)
-    other = _op(ops, action="session.send", operation_id="op_not_start", target={"host": "h1", "session_id": "s1"})
-
-    def linked(operation_id, action, parent_id, slot, ordinal, *, target, refs_slot=None):
-        op = _op(ops, action=action, operation_id=operation_id, target=target,
-                 refs={"work_start_parent": {"operation_id": parent_id, "slot": refs_slot or slot}})
-        _child_row(ops, parent_id, slot, operation_id, ordinal)
-        return ops.get(op["operation_id"])
-
-    proven = linked("op_pkg_child", "pm.work_package.create", parent["operation_id"], "package", 1,
-                    target={"workspace_id": WS, "work_item_id": WI_OTHER})
-    loop = (await attach(ops, OWNER, proven))["loop"]
-    assert loop["operation_id"] == "op_pkg_child"
-    assert loop["work_item_id"] == WI and loop["attempt_id"] == ATT
-    assert loop["links"]["start_operation_hash"] == "#/op/op_child_parent"
-    assert WI_OTHER not in json.dumps(loop)
-    assert "PM_WORK_START_CHILD_CHANGED" not in json.dumps(loop)
-
-    no_attempt_parent = _op(ops, action="work.start", operation_id="op_child_no_attempt",
-                            target={"workspace_id": WS, "work_item_id": WI}, refs=_work_start_refs())
-    no_attempt = linked("op_pkg_no_attempt", "pm.work_package.create", no_attempt_parent["operation_id"], "handoff", 1,
-                        target={"workspace_id": WS, "work_item_id": WI_OTHER})
-    waiting = (await attach(ops, OWNER, no_attempt))["loop"]
-    assert waiting["work_item_id"] is None and waiting["attempt_id"] is None
-    assert waiting["completeness"] == {"status": "partial", "reason": "no_attempt"}
-    assert WI_OTHER not in json.dumps(waiting)
-
-    unequal = linked("op_pkg_unequal", "pm.work_package.create", parent["operation_id"], "bind", 2,
-                     target={"workspace_id": WS, "work_item_id": WI}, refs_slot="package")
-    assert await attach(ops, OWNER, unequal) is unequal
-    table_only = _op(ops, action="pm.work_package.create", operation_id="op_pkg_table_only",
-                     target={"workspace_id": WS, "work_item_id": WI})
-    _child_row(ops, parent["operation_id"], "preview", table_only["operation_id"], 3)
-    table_only = ops.get(table_only["operation_id"])
-    assert await attach(ops, OWNER, table_only) is table_only
-    missing_parent = linked("op_child_missing_parent", "repository.continue", "op_absent_parent", "handoff", 1,
-                            target={})
-    assert await attach(ops, OWNER, missing_parent) is missing_parent
-    wrong_action = linked("op_child_wrong_action", "repository.continue", other["operation_id"], "package", 1,
-                          target={})
-    assert await attach(ops, OWNER, wrong_action) is wrong_action
-
-    _member(ops, "loop-reader", "reader")
-    _member(ops, "loop-blind", "contributor")
-    reader = Principal("loop-reader", frozenset({"observe"}))
-    blind = Principal("loop-blind", frozenset({"manage"}))
-    outsider = Principal("loop-outsider", frozenset({"observe", "manage"}))
-    assert (await attach(ops, reader, proven))["loop"]["work_item_id"] == WI
-    assert await attach(ops, blind, proven) is proven
-    assert await attach(ops, outsider, proven) is proven
-    journal.close()
-
-
-async def test_completeness_uses_the_first_matching_reason(tmp_path):
-    ops, journal = _service(tmp_path)
-    _bind(ops, WI)
-    pm_discussions.install(ops)
-
-    hidden_attempt = _op(ops, action="work.start", operation_id="op_start_hidden_work",
-                         target={"workspace_id": WS, "work_item_id": WI}, refs=_work_start_refs())
-    _attempt(ops, hidden_attempt["operation_id"], attempt_id="att_" + "34" * 16, work_item_id=WI_OTHER)
-    ops.db.execute(
-        "INSERT INTO pm_source_lineage VALUES('work_item', ?, 'op_missing_attempt_work', 'op_missing_attempt_work')",
-        (WI_OTHER,))
-    hidden_loop = (await attach(ops, OWNER, hidden_attempt))["loop"]
-    assert hidden_loop["work_item_id"] is None
-    assert hidden_loop["completeness"] == {"status": "partial", "reason": "no_work_item"}
-
-    no_work = _op(ops, action="work.start", operation_id="op_start_no_work",
-                  target={"workspace_id": WS, "work_item_id": WI_OTHER}, refs=_work_start_refs(WI_OTHER))
-    assert (await attach(ops, OWNER, no_work))["loop"]["completeness"] == {
-        "status": "partial", "reason": "no_work_item"}
-    malformed = _op(ops, action="pm.work_package.create", operation_id="op_pkg_malformed",
-                    target={"workspace_id": WS, "work_item_id": "wi_nope"})
-    absent_key = _op(ops, action="pm.work_package.create", operation_id="op_pkg_absent",
-                     target={"workspace_id": WS})
-    assert (await attach(ops, OWNER, malformed))["loop"]["completeness"]["reason"] == "no_work_item"
-    assert (await attach(ops, OWNER, absent_key))["loop"]["completeness"]["reason"] == "no_work_item"
-
-    _member(ops, "loop-reader", "reader")
-    reader = Principal("loop-reader", frozenset({"observe"}))
-    outsider = Principal("loop-outsider", frozenset({"observe", "manage"}))
-    package = _op(ops, action="pm.work_package.create", operation_id="op_pkg_member",
-                  target={"workspace_id": WS, "work_item_id": WI})
-    assert (await attach(ops, reader, package))["loop"]["work_item_id"] == WI
-    outsider_loop = (await attach(ops, outsider, package))["loop"]
-    assert outsider_loop["work_item_id"] is None
-    assert outsider_loop["completeness"]["reason"] == "no_work_item"
-
-    thread_id = "pmt_" + "ab" * 16
-    missing_thread = _op(ops, action="pm.message.append", operation_id="op_msg_missing",
-                         target={"workspace_id": WS, "thread_id": thread_id})
-    missing_loop = (await attach(ops, OWNER, missing_thread))["loop"]
-    assert missing_loop["dashboard_hash"] == "#/op/op_msg_missing"
-    assert thread_id not in json.dumps(missing_loop)
-    assert missing_loop["completeness"] == {"status": "complete", "reason": None}
-    pending = _op(ops, action="pm.thread.create", operation_id="op_thread_pending",
-                  target={"workspace_id": WS})
-    bad_thread = _op(ops, action="pm.message.append", operation_id="op_msg_bad_thread",
-                     target={"workspace_id": WS, "thread_id": "thread-1"})
-    assert (await attach(ops, OWNER, pending))["loop"]["completeness"] == {"status": "complete", "reason": None}
-    assert (await attach(ops, OWNER, bad_thread))["loop"]["completeness"]["reason"] is None
-    assert (await attach(ops, OWNER, bad_thread))["loop"]["dashboard_hash"] == "#/op/op_msg_bad_thread"
-
-    with_work = _op(ops, action="session.send", operation_id="op_send_work",
-                    target={"host": "h1", "session_id": "s4", "work_item_id": WI})
-    assert (await attach(ops, OWNER, with_work))["loop"]["completeness"] == {"status": "complete", "reason": None}
-
-    visible_exec = _op(ops, action="session.send", operation_id="op_exec_visible",
-                       target={"host": "h1", "session_id": "s9"})
-    shown = _op(ops, action="work.start", operation_id="op_start_exec",
-                target={"workspace_id": WS, "work_item_id": WI}, refs=_work_start_refs(),
-                result={"execution_operation_id": visible_exec["operation_id"], "stage": "started"})
-    _attempt(ops, shown["operation_id"], attempt_id="att_" + "56" * 16)
-    shown_loop = (await attach(ops, OWNER, shown))["loop"]
-    assert shown_loop["links"]["execution_operation_hash"] == "#/op/op_exec_visible"
-    assert shown_loop["completeness"] == {"status": "complete", "reason": None}
-    withheld = _op(ops, action="work.start", operation_id="op_start_exec_hidden",
-                   target={"workspace_id": WS, "work_item_id": WI}, refs=_work_start_refs(),
-                   result={"execution_operation_id": "op_exec_missing", "stage": "started"})
-    _attempt(ops, withheld["operation_id"], attempt_id="att_" + "78" * 16)
-    withheld_loop = (await attach(ops, OWNER, withheld))["loop"]
-    assert withheld_loop["links"]["execution_operation_hash"] is None
-    assert "op_exec_missing" not in json.dumps(withheld_loop)
-    assert withheld_loop["completeness"] == {"status": "unavailable", "reason": "source_withdrawn"}
-
-    sessioned = _op(ops, action="work.start", operation_id="op_start_session",
-                    target={"workspace_id": WS, "work_item_id": WI}, refs=_work_start_refs(),
-                    result={"session": {"host": "h1", "session_id": "s3"}, "stage": "started"})
-    _attempt(ops, sessioned["operation_id"], attempt_id="att_" + "9a" * 16)
-    assert (await attach(ops, OWNER, sessioned))["loop"]["links"]["session_hash"] == "#/session/h1/s3"
-    ops.db.execute(
-        "INSERT INTO pm_source_lineage VALUES('session', 'h1/s3', 'op_missing_link', 'op_missing_link')")
-    withdrawn_session = (await attach(ops, OWNER, sessioned))["loop"]
-    assert withdrawn_session["links"]["session_hash"] is None
-    assert "s3" not in json.dumps(withdrawn_session["links"])
-    assert withdrawn_session["completeness"]["reason"] == "source_withdrawn"
-
-    original = _op(ops, action="work.start", operation_id="op_del_root_recorded",
-                   target={"workspace_id": WS, "work_item_id": WI}, refs=_work_start_refs())
-    delivery = _op(ops, action="integration.apply", operation_id="op_del_recorded",
-                   target={"workspace_id": "ws_" + "ff" * 16})
-    ops.db.execute("INSERT INTO pm_source_lineage VALUES('operation', ?, ?, ?)",
-                   (delivery["operation_id"], original["operation_id"], delivery["operation_id"]))
-    ops.db.execute("INSERT INTO pm_source_lineage VALUES('work_item', ?, ?, ?)",
-                   (WI, original["operation_id"], delivery["operation_id"]))
-    recorded = (await attach(ops, OWNER, delivery))["loop"]
-    assert recorded["work_item_id"] is None and WI not in json.dumps(recorded)
-    assert recorded["completeness"] == {"status": "partial", "reason": "delivery_unlinked"}
-    journal.close()
-
-
-async def test_missing_child_stores_fall_through_to_the_allowlist(tmp_path):
-    journal = Journal(tmp_path / "bare.db")
-    ops = OperationService(journal)
-    send = _op(ops, action="session.send", operation_id="op_bare_send",
-               target={"host": "h1", "session_id": "s1"})
-    loop = (await attach(ops, OWNER, send))["loop"]
-    assert loop["operation_id"] == "op_bare_send"
-    assert loop["work_item_id"] is None and loop["attempt_id"] is None
-    assert loop["dashboard_hash"] == "#/op/op_bare_send"
-    assert loop["completeness"] == {"status": "partial", "reason": "session_target"}
-    linked = _op(
-        ops, action="session.send", operation_id="op_bare_linked", target={"host": "h1", "session_id": "s1"},
-        refs={"work_start_parent": {"operation_id": "op_none", "slot": "handoff"}})
-    assert await attach(ops, OWNER, linked) is linked
-    plain = {"operation_id": "op_bare_continue", "action": "repository.continue", "status": "succeeded",
-             "updated_at": 1.0, "target": {}, "external_refs": {}}
-    assert await attach(ops, OWNER, plain) is plain
-    journal.close()
+            "INSERT INTO pm_work_start_children VALUES(?,?,?,?,?,?,?)",
+            (parent["operation"]["operation_id"], "package", 1, package_id, "{}", "digest", time.time()))
+        status, after = await http(port, "GET", "/api/v1/operations/" + package_id, tok=tok)
+        assert status == 200 and "loop" not in after["operation"], after
+        assert "PM_WORK_START_CHILD_CHANGED" not in json.dumps(after)
+        via_mcp = unpack(await server.call_tool("operation_get", {"operation_id": package_id}))
+        assert "loop" not in via_mcp["operation"]
+        assert "PM_WORK_START_CHILD_CHANGED" not in json.dumps(via_mcp)
+    finally:
+        await fleet.close()
 
 
 def _loop_of(operation):
@@ -665,165 +377,35 @@ async def test_single_operation_exits_attach_loop_and_lists_do_not(served):
     assert status == 400 and "operation" not in rpc_refused and isinstance(rpc_refused["error"], str)
 
 
-# The §3.2 rows, identified from the refusal the endpoint returned. This is not a
-# principal-by-action outcome matrix: the HTTP call supplies the code.
-_ACTOR_ONLY = frozenset({
-    "Only the original requester controls this proposal",
-    "Only the original requester may control native analysis",
-    "Only the original requester may control this adoption",
-    "relay child controls retain the original actor",
-})
-_SCOPE_ONLY = frozenset({
-    "PM operation controls require manage scope",
-    "Package reads need observe; creation also needs manage",
-    "Native PM analysis requires observe, manage and start scopes",
-    "Plan operations require manage scope",
-    "Plan adoption requires observe, manage and start scopes",
-    "Publication requires observe, manage and integrate authority",
-    "dispatch linked work needs manage",
-    "Starting work requires observe, manage and start scopes",
-    "resuming merge-and-deploy needs both merge and deploy scopes",
-})
 _MEMBERSHIP = "Workspace membership does not permit this action"
 
 
-def _spec_reason(code, message, operation, principal, ops):
-    """§3.2 reason for this refusal, or None when the table says to omit the verb."""
-    if code == "CONTROLLER_MISMATCH":
-        return "not_controller"
-    if code != "FORBIDDEN":
-        return None
-    if message in _ACTOR_ONLY:
-        return "not_controller"
-    if message == _MEMBERSHIP:
-        if _owner_gate(ops, operation) or _member_role(ops, principal, operation) != "reader":
-            return None
-        return "not_writer_member"
-    if message in _SCOPE_ONLY:
-        return "missing_scope"
-    return None
-
-
-def _owner_gate(ops, operation) -> bool:
-    action = operation.get("action")
-    params = operation.get("params") if isinstance(operation.get("params"), dict) else {}
-    target = operation.get("target") if isinstance(operation.get("target"), dict) else {}
-    if action in {"pm.plan.adopt", "pm.conversation.adopt"}:
-        return True
-    if action not in pm_discussions.ACTIONS:
-        return False
-    decide = pm_discussions._decision(action, params)
-    superseded = params.get("supersedes_input_id")
-    if action == "pm.input.record" and isinstance(superseded, str):
-        old = ops.db.execute(
-            "SELECT confirmed_by FROM pm_inputs WHERE thread_id=? AND input_id=?",
-            (target.get("thread_id"), superseded)).fetchone()
-        decide = decide or bool(old and old[0])
-    return bool(decide)
-
-
-def _member_role(ops, principal, operation):
-    target = operation.get("target") if isinstance(operation.get("target"), dict) else {}
-    workspace_id = target.get("workspace_id")
-    if not isinstance(workspace_id, str):
-        return None
-    row = ops.db.execute(
-        "SELECT role FROM pm_workspace_members WHERE workspace_id=? AND actor=?",
-        (workspace_id, principal.actor)).fetchone()
-    if row is not None:
-        return row["role"]
-    if principal.admin:
-        return "owner"
-    return None
-
-
-def _insert_operation(ops, *, actor, action, status, target=None, params=None, refs=None):
-    operation_id = "op_" + uuid.uuid4().hex
-    now = time.time()
+def _hold(ops, operation_id):
     ops.db.execute(
-        """INSERT INTO operations(operation_id,actor,entry,idem_key,request_hash,action,target,params,preconditions,
-           status,external_refs,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-        (operation_id, actor, "test", operation_id, "hash", action, json.dumps(target or {}),
-         json.dumps(params or {}), "{}", status, json.dumps(refs) if refs is not None else None, now, now))
+        "UPDATE operations SET status='needs_attention' WHERE operation_id=?", (operation_id,))
     return operation_id
 
 
-async def _agree(daemon, port, tok, principal, operation_id, verb):
-    """Read ``loop`` as this principal, then call the real HTTP verb as the same principal."""
-    status, body = await http(port, "GET", "/api/v1/operations/" + operation_id, tok=tok)
-    assert status == 200, body
-    operation = body["operation"]
-    loop = operation["loop"]
-    offered = [row for row in loop["next_allowed_actions"]
-               if row.get("kind") == "operation_endpoint" and row.get("endpoint") == verb]
-    blocked = [row for row in loop["blocked_actions"] if row.get("action") == verb]
-    assert not offered or not blocked
-    status, result = await http(port, "POST", f"/api/v1/operations/{operation_id}/{verb}", tok=tok)
-    where = (operation["action"], verb, principal.actor, result)
-    if offered:
-        assert status < 400, where
-        return
-    assert status >= 400, where
-    reason = _spec_reason(result["error"]["code"], result["error"]["message"], operation, principal, daemon.ops)
+def _controller(verb):
+    return f"{verb} requires the original resource controller"
+
+
+def _actor_scope(verb, action):
+    return f"{verb} needs the operation's own actor or its {action} scope"
+
+
+async def _expect(port, tok, operation_id, verb, reason, message):
+    """The case names the §3.2 outcome. The endpoint's own refusal is the other half."""
+    offered, blocked, status, result = await _http_verb(port, tok, operation_id, verb)
     if reason is None:
-        assert blocked == [], where
+        assert blocked == [] and offered and status < 400, (verb, offered, blocked, status, result)
+        return
+    assert offered == [] and status >= 400, (verb, offered, status, result)
+    assert result["error"]["message"] == message, result
+    if reason == "omit":
+        assert blocked == [], (blocked, result)
     else:
-        assert blocked == [{"action": verb, "reason": reason}], where
-
-
-def _plant_attempt(ops, operation_id, workspace_id, work_item_id):
-    attempt_id = "att_" + uuid.uuid4().hex
-    ops.db.execute(
-        """INSERT INTO work_attempts(attempt_id,workspace_id,work_item_id,origin_kind,origin_id,start_operation_id,
-           predecessor_attempt_id,admission_digest,created_at) VALUES(?,?,?,?,?,?,?,?,?)""",
-        (attempt_id, workspace_id, work_item_id, "operation", operation_id, operation_id, None, "digest", time.time()))
-    return attempt_id
-
-
-def _endpoint_rows(rows):
-    return [row for row in rows if row.get("kind") == "operation_endpoint"]
-
-
-def _steering_blocks(rows):
-    return [row for row in rows if row.get("action") in {"cancel", "resume", "work.start"}]
-
-
-async def test_work_start_steering_copies_the_result_envelope(served):
-    daemon, port = served
-    ops = daemon.ops
-    principal = Principal("loop-start", frozenset({"observe", "manage", "start"}))
-    created, _ = ops.create(principal, action="pm.workspace.create", params={"name": "A useful product"},
-                            idempotency_key=uuid.uuid4().hex)
-    await settle_operations(ops)
-    workspace = ops.get(created["operation_id"])["result"]["workspace"]
-    wid = workspace["workspace_id"]
-    work_id = "wi_" + "ab" * 10
-    controller = controller_authority.binding(ops.db, principal, pm_workspace_id=wid)
-    intent = {"workspace_id": wid, "work_item_id": work_id, "package_plan": {}, "controller": controller}
-    refs = {"admission_binding": {"work_start": intent, "work_start_digest": pm_work_start._digest(intent)}}
-    tok = token(daemon, principal.actor, "observe", "manage", "start")
-    target = {"workspace_id": wid, "work_item_id": work_id}
-
-    async def compare(status_name, *, attempt):
-        operation_id = _insert_operation(
-            ops, actor=principal.actor, action="work.start", status=status_name, target=target, refs=refs)
-        attempt_id = _plant_attempt(ops, operation_id, wid, work_id) if attempt else None
-        status, body = await http(port, "GET", "/api/v1/operations/" + operation_id, tok=tok)
-        assert status == 200, body
-        loop = body["operation"]["loop"]
-        if attempt_id is None:
-            assert loop["next_allowed_actions"] == [] and loop["blocked_actions"] == []
-            return
-        status, envelope = await http(
-            port, "GET", f"/api/v1/pm/workspaces/{wid}/work-attempts/{attempt_id}/result", tok=tok)
-        assert status == 200, envelope
-        assert loop["next_allowed_actions"] == _endpoint_rows(envelope["next_allowed_actions"])
-        assert loop["blocked_actions"] == _steering_blocks(envelope["blocked_actions"])
-        assert loop["next_allowed_actions"] or loop["blocked_actions"]
-
-    for status_name in ("accepted", "needs_attention", "uncertain"):
-        await compare(status_name, attempt=True)
-    await compare("accepted", attempt=False)
+        assert blocked == [{"action": verb, "reason": reason}], (blocked, result)
 
 
 async def _workspace(ops, principal):
@@ -842,6 +424,57 @@ async def _add_member(ops, principal, workspace_id, actor, role):
     await settle_operations(ops)
     done = ops.get(created["operation_id"])
     assert done["status"] == "succeeded", done
+
+
+async def _check_verbs(port, ops, tokens, make, rows):
+    for principal, cancel_reason, resume_reason, cancel_message, resume_message in rows:
+        await _expect(port, tokens[principal], make(), "cancel", cancel_reason, cancel_message)
+        await _expect(
+            port, tokens[principal], _hold(ops, make()), "resume", resume_reason, resume_message)
+
+
+async def test_session_send_work_target_stays_partial_on_the_public_read(served, mock, monkeypatch):
+    """HTTP and MCP keep session.send partial after a Work id is stored on the target."""
+    daemon, port = served
+    actor = "loop-send-partial"
+    tok = token(daemon, actor, "observe", "manage", "start", "operate")
+    server, fleet = _open_mcp(daemon, monkeypatch, port, tok)
+    try:
+        mock.handlers["git:log"] = lambda _payload: [{"hash": "a" * 40}]
+        status, started = await _submit(
+            port, tok, {"action": "session.start", "target": {"host": "h1", "workspace": "ws-1"}},
+            "loop-send-partial-start")
+        assert status == 202, started
+        await settle_operations(daemon.ops)
+        started = daemon.ops.get(started["operation"]["operation_id"])
+        assert started["status"] == "succeeded", started
+        session_id = started["result"]["session_id"]
+        await daemon.inventory.refresh_host("h1")
+        status, created = await _submit(
+            port, tok,
+            {"action": "session.send", "target": {"host": "h1", "session_id": session_id},
+             "params": {"text": "Discuss the current goal"}},
+            "loop-send-partial")
+        assert status == 202 and created["created"] is True, created
+        operation_id = created["operation"]["operation_id"]
+        partial = {"status": "partial", "reason": "session_target"}
+        assert created["operation"]["loop"]["completeness"] == partial
+        assert created["operation"]["loop"]["work_item_id"] is None
+
+        stored = json.loads(daemon.ops.db.execute(
+            "SELECT target FROM operations WHERE operation_id=?", (operation_id,)).fetchone()[0])
+        assert set(stored) == {"host", "session_id"}
+        formed = "wi_" + "cd" * 10
+        for stuffed in ("not-a-work", formed, {"bad": True}, 1, ""):
+            daemon.ops.db.execute(
+                "UPDATE operations SET target=? WHERE operation_id=?",
+                (json.dumps({**stored, "work_item_id": stuffed}), operation_id))
+            loop = await _loops(server, port, tok, operation_id)
+            assert loop["completeness"] == partial, stuffed
+            assert loop["work_item_id"] is None
+            assert loop["completeness"]["status"] != "complete"
+    finally:
+        await fleet.close()
 
 
 async def test_discussion_session_and_delivery_cancel_and_resume_match_http(served, mock):
@@ -873,6 +506,7 @@ async def test_discussion_session_and_delivery_cancel_and_resume_match_http(serv
     started = ops.get(started["operation_id"])
     assert started["status"] == "succeeded", started
     session_id = started["result"]["session_id"]
+    await daemon.inventory.refresh_host("h1")
     tokens = {
         actor: token(daemon, actor.actor, "observe", "manage", "start", "operate", "merge", "deploy"),
         writer: token(daemon, writer.actor, *sorted(writer.scopes)),
@@ -894,32 +528,48 @@ async def test_discussion_session_and_delivery_cancel_and_resume_match_http(serv
             params={"text": "Discuss the current goal"}, idempotency_key=uuid.uuid4().hex)
         return created["operation_id"]
 
-    def delivery(status):
-        return _insert_operation(
-            ops, actor=actor.actor, action="delivery.merge_and_deploy", status=status,
-            target={"repository": "o/r", "recipe": "prod"})
-
-    def attention(make):
-        operation_id = make()
-        ops.db.execute("UPDATE operations SET status='needs_attention' WHERE operation_id=?", (operation_id,))
+    def delivery():
+        operation_id = "op_" + uuid.uuid4().hex
+        now = time.time()
+        ops.db.execute(
+            """INSERT INTO operations(operation_id,actor,entry,idem_key,request_hash,action,target,params,
+               preconditions,status,external_refs,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (operation_id, actor.actor, "test", operation_id, "hash", "delivery.merge_and_deploy",
+             json.dumps({"repository": "o/r", "recipe": "prod"}), "{}", "{}", "accepted", None, now, now))
         return operation_id
 
-    cases = (
-        ("pm.message.append", message, lambda: attention(message)),
-        ("session.send", send, lambda: attention(send)),
-        ("delivery.merge_and_deploy", lambda: delivery("accepted"), lambda: delivery("needs_attention")),
-    )
-    for _action, cancel_make, resume_make in cases:
-        for principal in (actor, writer, reader, narrow, other):
-            await _agree(daemon, port, tokens[principal], principal, cancel_make(), "cancel")
-            await _agree(daemon, port, tokens[principal], principal, resume_make(), "resume")
+    manage = "PM operation controls require manage scope"
+    message_rows = [
+        (actor, None, None, None, None),
+        (writer, None, None, None, None),
+        (reader, "not_writer_member", "not_writer_member", _MEMBERSHIP, _MEMBERSHIP),
+        (narrow, "missing_scope", "missing_scope", manage, manage),
+        (other, None, None, None, None),
+    ]
+    session_rows = [
+        (actor, None, None, None, None),
+        (writer, "not_controller", "not_controller", _controller("cancel"), _controller("resume")),
+        (reader, "not_controller", "not_controller", _controller("cancel"), _controller("resume")),
+        (narrow, None, None, None, None),
+        (other, "not_controller", "not_controller", _controller("cancel"), _controller("resume")),
+    ]
+    action = "delivery.merge_and_deploy"
+    delivery_rows = [
+        (actor, None, None, None, None),
+        (writer, None, None, None, None),
+        (reader, "omit", "omit", _actor_scope("cancel", action), _actor_scope("resume", action)),
+        (narrow, None, "missing_scope", None,
+         "resuming merge-and-deploy needs both merge and deploy scopes"),
+        (other, None, None, None, None),
+    ]
+    await _check_verbs(port, ops, tokens, message, message_rows)
+    await _check_verbs(port, ops, tokens, send, session_rows)
+    await _check_verbs(port, ops, tokens, delivery, delivery_rows)
 
 
 async def test_package_cancel_and_resume_match_http(ready):
     w = ready
-    daemon = w["d"]
-    ops = daemon.ops
-    source = await create_package(w)
+    daemon, ops, port = w["d"], w["d"].ops, w["port"]
     await add_member(w, "pkg-writer", "contributor")
     await add_member(w, "pkg-reader", "reader")
     await add_member(w, "pkg-other", "contributor")
@@ -934,18 +584,21 @@ async def test_package_cancel_and_resume_match_http(ready):
         narrow: token(daemon, narrow.actor, "observe"),
         other: token(daemon, other.actor, "observe", "manage"),
     }
-    server = await asyncio.start_server(daemon._handle, "127.0.0.1", 0)
-    port = server.sockets[0].getsockname()[1]
-    try:
-        for principal in (PACKAGE_OWNER, writer, reader, narrow, other):
-            for status, verb in (("accepted", "cancel"), ("needs_attention", "resume")):
-                operation_id = _insert_operation(
-                    ops, actor=source["actor"], action=source["action"], status=status, target=source["target"],
-                    params=source["params"], refs=source["external_refs"])
-                await _agree(daemon, port, tokens[principal], principal, operation_id, verb)
-    finally:
-        server.close()
-        await server.wait_closed()
+
+    def package():
+        created, fresh = ops.create(PACKAGE_OWNER, **package_request(w))
+        assert fresh is True and ops.get(created["operation_id"])["status"] == "accepted"
+        return created["operation_id"]
+
+    scope = "Package reads need observe; creation also needs manage"
+    rows = [
+        (PACKAGE_OWNER, None, None, None, None),
+        (writer, None, None, None, None),
+        (reader, "not_writer_member", "not_writer_member", _MEMBERSHIP, _MEMBERSHIP),
+        (narrow, "missing_scope", "missing_scope", scope, scope),
+        (other, None, None, None, None),
+    ]
+    await _check_verbs(port, ops, tokens, package, rows)
 
 
 def unpack(result):
@@ -1322,6 +975,57 @@ async def test_child_session_withdrawn_from_another_row_stays_readable(loop_star
         assert hidden["operation"]["loop"]["links"]["session_hash"] is None
         assert sid in json.dumps(kept)
         assert ops.get(child_id)["status"] == "succeeded"
+    finally:
+        await fleet.close()
+
+
+async def test_hidden_handoff_child_omits_the_view_and_stays_readable(loop_start, monkeypatch):
+    """Hiding the handoff is case 2 on the package child and case 1 on the parent."""
+    w = loop_start
+    daemon, ops, port = w["d"], w["d"].ops, w["port"]
+    tok = token(daemon, STARTER_OWNER.actor, *sorted(STARTER_OWNER.scopes))
+    server, fleet = _open_mcp(daemon, monkeypatch, port, tok)
+    try:
+        env = await _start_envelope(w, key="loop-hidden-handoff")
+        body = {key: env[key] for key in ("action", "target", "params", "preconditions")}
+        status, created = await _submit(port, tok, body, env["idempotency_key"])
+        assert status == 202 and created["created"] is True, created
+        parent_id = created["operation"]["operation_id"]
+        done = await _advance_start(ops, parent_id)
+        assert done["status"] == "succeeded", done
+        child_id = done["result"]["children"]["package"]
+        handoff_id = done["result"]["execution_operation_id"]
+        assert isinstance(child_id, str) and isinstance(handoff_id, str)
+        assert handoff_id == done["result"]["children"]["handoff"]
+        assert handoff_id not in json.dumps(ops.get(child_id))
+
+        before = await _loops(server, port, tok, child_id)
+        work_id = before["work_item_id"]
+        assert isinstance(work_id, str)
+        assert isinstance(before["state"].get("attempt_stage"), str)
+        assert before["links"]["session_hash"] and before["links"]["execution_operation_hash"]
+
+        _hide_source(ops.db, "operation", handoff_id)
+        status, hidden = await http(port, "GET", "/api/v1/operations/" + child_id, tok=tok)
+        assert status == 200, hidden
+        hidden_mcp = unpack(await server.call_tool("operation_get", {"operation_id": child_id}))
+        assert hidden["operation"]["loop"] == hidden_mcp["operation"]["loop"]
+        loop = hidden["operation"]["loop"]
+        assert loop["completeness"] == {"status": "unavailable", "reason": "source_withdrawn"}
+        assert "attempt_stage" not in loop["state"]
+        assert loop["links"]["session_hash"] is None
+        assert loop["links"]["execution_operation_hash"] is None
+        assert loop["work_item_id"] == work_id
+        assert loop["result_read"]["result"]["name"] == "pm_work_attempt_result_get"
+
+        status, parent_hidden = await http(port, "GET", "/api/v1/operations/" + parent_id, tok=tok)
+        assert status == 404, parent_hidden
+        assert parent_hidden["error"] == {
+            "code": "NOT_FOUND", "message": "Original resource sources are unavailable"}
+        assert "loop" not in parent_hidden
+        with pytest.raises(ToolError, match="NOT_FOUND") as refused:
+            await server.call_tool("operation_get", {"operation_id": parent_id})
+        assert "Original resource sources are unavailable" in str(refused.value)
     finally:
         await fleet.close()
 
