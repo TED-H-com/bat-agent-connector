@@ -14,7 +14,7 @@ expand requirements, inspect delivery evidence and browse sessions. The demo als
 the v1.3 workflow preview, which simulates the proposed start, follow-up and decision flow.
 Neither example connects to a BAT host or model.
 The real Start work panel is on `main` and needs a configured BAT host and a bound repository.
-Merged main at `0daf283c` (#276, October 17, 2026) supports creating Work, adopting and starting a reviewed plan, sending a second instruction to the same Work, reading fixed Results and diffs, running configured verification, publishing a PR from the same Result, and opening a PM discussion with two existing assessments. Work profiles, readiness and API/MCP parity are included. Integration checks use the real Connector and disk Git with mock BAT/providers; installation and live BAT/model acceptance remain separate.
+Merged main at `f31e7964` (#276–278, October 17, 2026) supports creating Work, adopting and starting a reviewed plan, sending a second instruction to the same Work, reading fixed Results and diffs, running configured verification, publishing a PR from the same Result, and opening a PM discussion with two existing assessments. Work profiles, readiness and API/MCP parity are included. Integration checks use the real Connector and disk Git with mock BAT/providers; installation and live BAT/model acceptance remain separate.
 
 ![Overview: live project progress, blockers and pending decisions.](site/images/overview-en.png)
 
@@ -23,7 +23,7 @@ Merged main at `0daf283c` (#276, October 17, 2026) supports creating Work, adopt
 The **Web and Tauri desktop apps share one interface and one Python backend**. You keep using [Better Agent Terminal (BAT)](https://github.com/tony1223/better-agent-terminal) for your own coding. Windows Fleet manages local connections and startup. Connector keeps project history, permissions and operations consistent across the Dashboard, CLI and MCP.
 
 > **Development preview.** The screenshots come from merged `main` at `265026d4` (October 16, 2026, through #205).
-> Nothing shown here is installed or live-tested.
+> The gallery uses synthetic data; release, installation and live acceptance have separate evidence.
 > The [progress report](docs/product/progress-2026-10-17.md) separates branch, merged, installed and live-tested status.
 > Match a successful package to its exact source; screenshots and CI do not establish native or live acceptance.
 
@@ -73,7 +73,7 @@ Policy-bounded delivery and maintenance remain available through the project's s
 
 ## Install and connect
 
-Use the [desktop workflow on main](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain). Choose a successful platform job, match its source commit and validation records, then download that run's artifact. GitHub may require sign-in, and artifacts expire. These are validation packages, not a stable signed update channel.
+Download the [published preview](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.6-preview.20261017): Connector **0.2.6** and desktop **0.1.2**, pinned to `f31e7964`. It includes Python packages, Windows/Linux/macOS desktop packages, a source manifest and SHA-256 checksums. These are unsigned or ad-hoc-signed development packages. For later candidates, use the [desktop workflow on main](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) and match a successful platform job to its source; Actions artifacts can expire.
 
 | Entry | Package / local features | Boundary |
 | --- | --- | --- |
@@ -123,7 +123,7 @@ flowchart TB
 | Status | Scope |
 | --- | --- |
 | Merged baseline | Desktop/central foundation; PM discussions and plan adoption; engineering packages and bounded dispatch; verification, requirement acceptance and dependency evidence; policy-bounded maintenance repairs; BAT proposals/Follow-up; AHP read-only observation. #132 adds central Overview, discussion context and renames, register, Schedule, Dependencies and daily resource buckets. #134 adds adopted goals, recent decisions and the guided close of a resolved issue. |
-| Merged workspace | Merged main at `0daf283c` (#276, October 17, 2026) supports creating Work, adopting and starting a reviewed plan, sending a second instruction to the same Work, reading fixed Results and diffs, running configured verification, publishing a PR from the same Result, and opening a PM discussion with two existing assessments. Work profiles, readiness and API/MCP parity are included. Integration checks use the real Connector and disk Git with mock BAT/providers; installation and live BAT/model acceptance remain separate. |
+| Merged workspace | Merged main at `f31e7964` (#276–278, October 17, 2026) supports creating Work, adopting and starting a reviewed plan, sending a second instruction to the same Work, reading fixed Results and diffs, running configured verification, publishing a PR from the same Result, and opening a PM discussion with two existing assessments. Work profiles, readiness and API/MCP parity are included. Integration checks use the real Connector and disk Git with mock BAT/providers; installation and live BAT/model acceptance remain separate. |
 | Remaining PM v1.2 | General native coding adapter, AHP create-own/write support, remaining document views and presentations, wider CLI support, remote usage collection and delivery-efficiency attribution. |
 
 Local Codex/Claude usage collection exists; the redesign's Agents view adds sourced daily trends and reported quota windows.

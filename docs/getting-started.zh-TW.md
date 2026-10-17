@@ -4,7 +4,7 @@
 
 ## 選擇相符的候選安裝包
 
-這版原始碼包含打包本機中央與桌面引導設定。開啟 [`main` 的 desktop workflow](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain)，選擇目前公開歷史的成功 run，核對 artifact 的來源 commit、平台 job 與安裝 fixture 紀錄。若該 commit 還在建置，請等平台 job 成功。歷史 PR artifact 與早期 release 資產不作為目前下載來源。
+先下載[已發布預覽版](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.6-preview.20261017)，固定來源為 `f31e7964`：Connector 0.2.6、desktop 0.1.2，附來源清單及 SHA-256 校驗碼。後續候選可從 [`main` 的 desktop workflow](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) 選擇成功的平台 job，並核對精確來源與安裝 fixture 紀錄。
 
 | 平台 | Artifact | 格式 |
 | --- | --- | --- |
