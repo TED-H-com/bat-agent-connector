@@ -30,8 +30,8 @@ PERSON = api_auth.Principal("artifact-person", frozenset({"observe", "manage", "
 
 
 @pytest.fixture
-def human(tmp_path):
-    return checkpoint_human.__wrapped__(tmp_path)
+def human(tmp_path, checkpoint_repo_seed):
+    return checkpoint_human.__wrapped__(tmp_path, checkpoint_repo_seed)
 
 
 @pytest.fixture
