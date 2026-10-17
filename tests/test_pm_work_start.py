@@ -2346,6 +2346,321 @@ async def test_unsettled_latest_attempt_blocks_new_start_for_parent_child_and_un
     assert "BAT" in exc_unproven.value.message
 
 
+class _ProcessStopped(BaseException):
+    """The connector process died. step() must not record this as a BAT outcome."""
+
+
+def _handoff_id(ops, parent_id):
+    row = ops.db.execute(
+        "SELECT operation_id FROM pm_work_start_children WHERE parent_id=? AND slot='handoff'",
+        (parent_id,),
+    ).fetchone()
+    return row["operation_id"] if row else None
+
+
+def _release_parent_waits(ops, parent_id):
+    ids = [parent_id]
+    ids.extend(
+        row["operation_id"]
+        for row in ops.db.execute(
+            "SELECT operation_id FROM pm_work_start_children WHERE parent_id=?", (parent_id,)
+        )
+    )
+    placeholders = ",".join("?" * len(ids))
+    ops.db.execute(
+        f"UPDATE operations SET next_run_at=0 WHERE operation_id IN ({placeholders}) "  # noqa: S608
+        "AND status IN ('waiting_external','waiting_checks')",
+        ids,
+    )
+
+
+def _session_start_row(ops, handoff_id):
+    return ops.db.execute(
+        "SELECT status, error FROM operation_steps WHERE operation_id=? AND name='session.start'",
+        (handoff_id,),
+    ).fetchone()
+
+
+async def _until_session_start(ops, parent_id, status):
+    for _ in range(12):
+        _release_parent_waits(ops, parent_id)
+        await settle_operations(ops)
+        handoff_id = _handoff_id(ops, parent_id)
+        row = _session_start_row(ops, handoff_id) if handoff_id else None
+        if row is not None and row["status"] == status:
+            return handoff_id
+    raise AssertionError(f"session.start did not become {status}")
+
+
+def _install_prereserve_fault(monkeypatch, ops, fault):
+    """Fail the session.start git:getRoot that runs after the step intent and before reserve."""
+    from bat_agent_connector.errors import ConnectionLost
+
+    client = ops.context["fleet"].client("h1")
+    original = client.invoke
+    fired = {"done": False}
+
+    async def invoke(channel, params=None, **kwargs):
+        if channel == "git:getRoot" and not fired["done"]:
+            open_start = ops.db.execute(
+                "SELECT 1 FROM operation_steps WHERE name='session.start' AND status='started' LIMIT 1"
+            ).fetchone()
+            if open_start is not None:
+                fired["done"] = True
+                if fault == "drop":
+                    raise ConnectionLost("git:getRoot dropped before reservation")
+                raise _ProcessStopped("stopped after session.start intent and before reservation")
+        return await original(channel, params, **kwargs)
+
+    monkeypatch.setattr(client, "invoke", invoke)
+    return fired
+
+
+async def _drive_until_process_stops(ops, parent_id):
+    """Run until the handoff dies, and do not schedule that still-running row again."""
+    stopped = False
+    for _ in range(40):
+        if not stopped:
+            await ops.run_due()
+        running = [task for task in ops._active.values() if not task.done()]
+        if not running:
+            if stopped:
+                return _handoff_id(ops, parent_id)
+            _release_parent_waits(ops, parent_id)
+            continue
+        done, _pending = await asyncio.wait(running, return_when=asyncio.FIRST_COMPLETED)
+        for task in done:
+            if task.cancelled():
+                continue
+            exc = task.exception()
+            if isinstance(exc, _ProcessStopped):
+                stopped = True
+            elif exc is not None:
+                raise exc
+    raise AssertionError("connector did not stop before the published reservation")
+
+
+def _restart_service(ops):
+    restarted = OperationService(ops.journal, actions=list(ops.actions.values()))
+    restarted.context.update(ops.context)
+    pm_work_start.install(restarted)
+    return restarted
+
+
+def _rerun_problems(ops, parent_id, handoff_id, frames):
+    done = ops.get(parent_id)
+    handoff = ops.get(handoff_id)
+    step = _session_start_row(ops, handoff_id)
+    problems = []
+    if done["status"] != "succeeded":
+        problems.append(f"parent {done['status']} {done.get('error_code')}")
+    if handoff["status"] != "succeeded":
+        problems.append(f"handoff {handoff['status']} {handoff.get('error_code')} step {step['status']}")
+    if frames != 1:
+        problems.append(f"start frames {frames}")
+    if step["status"] != "succeeded":
+        problems.append(f"session.start {step['status']} {step['error']}")
+    return problems
+
+
+async def _refuse_reason(w, ops, key):
+    try:
+        second, fresh = ops.create(STARTER_OWNER, **(await _start_envelope(w, key=key)))
+    except OperationError as exc:
+        return f"new work.start refused {exc.code}"
+    if not fresh or second["action"] != "work.start":
+        return "new work.start was not admitted"
+    return None
+
+
+async def test_unreserved_published_start_drop_reruns_once_and_allows_another_work_start(start_ready, mock, monkeypatch):
+    """A dropped git:getRoot before reservation sends no frame; the read-back sends one."""
+    from bat_agent_connector import registry
+    from tests.operation_helpers import stop_workers
+
+    w = start_ready
+    ops = w["d"].ops
+    try:
+        _install_prereserve_fault(monkeypatch, ops, "drop")
+        env = await _start_envelope(w, key="start-unreserved-drop")
+        parent, _fresh = ops.create(STARTER_OWNER, **env)
+        handoff_id = await _until_session_start(ops, parent["operation_id"], "uncertain")
+        handoff = ops.get(handoff_id)
+        sid = handoff["external_refs"]["session_id"]
+        assert registry.get("h1", sid) is None
+        assert "repository_reservation" not in (handoff["external_refs"] or {})
+        assert mock.channels().count("claude:start-session") == 0
+        assert ops.get(parent["operation_id"])["status"] == "waiting_external"
+
+        ops.db.execute("UPDATE operations SET next_run_at=0 WHERE operation_id=?", (handoff_id,))
+        await _advance_start(ops, parent["operation_id"])
+        problems = _rerun_problems(
+            ops, parent["operation_id"], handoff_id, mock.channels().count("claude:start-session")
+        )
+        refused = await _refuse_reason(w, ops, "start-after-unreserved-drop")
+        if refused:
+            problems.append(refused)
+        assert not problems, "; ".join(problems)
+        assert registry.get("h1", sid)["start_sent"] is True
+    finally:
+        await stop_workers(ops)
+
+
+async def test_unreserved_published_start_process_stop_reruns_on_recovery(start_ready, mock, monkeypatch):
+    """A process death after the start intent and before reserve leaves a runnable unsent step."""
+    from bat_agent_connector import registry
+    from tests.operation_helpers import stop_workers
+
+    w = start_ready
+    ops = w["d"].ops
+    restarted = None
+    try:
+        _install_prereserve_fault(monkeypatch, ops, "stop")
+        env = await _start_envelope(w, key="start-unreserved-stop")
+        parent, _fresh = ops.create(STARTER_OWNER, **env)
+        handoff_id = await _drive_until_process_stops(ops, parent["operation_id"])
+        handoff = ops.get(handoff_id)
+        step = _session_start_row(ops, handoff_id)
+        sid = handoff["external_refs"]["session_id"]
+        assert step["status"] == "started", step
+        assert handoff["status"] == "running", handoff
+        assert registry.get("h1", sid) is None
+        assert "repository_reservation" not in (handoff["external_refs"] or {})
+        assert mock.channels().count("claude:start-session") == 0
+        assert ops.get(parent["operation_id"])["status"] == "waiting_external"
+        await stop_workers(ops)
+
+        restarted = _restart_service(ops)
+        await _advance_start(restarted, parent["operation_id"])
+        problems = _rerun_problems(
+            restarted, parent["operation_id"], handoff_id, mock.channels().count("claude:start-session")
+        )
+        refused = await _refuse_reason(w, restarted, "start-after-unreserved-stop")
+        if refused:
+            problems.append(refused)
+        assert not problems, "; ".join(problems)
+        assert registry.get("h1", sid)["start_sent"] is True
+    finally:
+        if restarted is not None:
+            await stop_workers(restarted)
+        await stop_workers(ops)
+
+
+async def test_replaced_unsent_reservation_keeps_unproven_start_locked(start_ready, mock, monkeypatch):
+    """A second crash between reserve and its receipt must not settle the first start."""
+    from bat_agent_connector import registry
+    from bat_agent_connector.operations import OpContext
+    from tests.operation_helpers import stop_workers
+
+    w = start_ready
+    original = w["d"].ops
+    services = [original]
+    set_refs = OpContext.set_refs
+    reservations = []
+
+    def crash_at_reservation_receipt(ctx, **refs):
+        if "repository_reservation" not in refs:
+            return set_refs(ctx, **refs)
+        reservations.append(refs["repository_reservation"])
+        if len(reservations) == 1:
+            set_refs(ctx, **refs)
+            raise _ProcessStopped("first reservation receipt is durable; no start frame sent")
+        if len(reservations) == 2:
+            raise _ProcessStopped("replacement reservation is durable; receipt write not reached")
+        return set_refs(ctx, **refs)
+
+    monkeypatch.setattr(OpContext, "set_refs", crash_at_reservation_receipt)
+    try:
+        parent, _fresh = original.create(
+            STARTER_OWNER, **(await _start_envelope(w, key="start-replaced-unsent-reservation"))
+        )
+        parent_id = parent["operation_id"]
+        handoff_id = await _drive_until_process_stops(original, parent_id)
+        first = original.get(handoff_id)
+        sid = first["external_refs"]["session_id"]
+        receipt = first["external_refs"]["repository_reservation"]
+        entry = registry.get("h1", sid)
+        assert len(reservations) == 1 and receipt == reservations[0]
+        assert entry["created_at"] == receipt["created_at"] and entry["start_sent"] is False
+        assert _session_start_row(original, handoff_id)["status"] == "started"
+        assert mock.channels().count("claude:start-session") == 0
+        await stop_workers(original)
+
+        first_recovery = _restart_service(original)
+        services.append(first_recovery)
+        assert await _drive_until_process_stops(first_recovery, parent_id) == handoff_id
+        replaced = registry.get("h1", sid)
+        assert len(reservations) == 2
+        assert replaced["created_at"] == reservations[1]["created_at"] != receipt["created_at"]
+        assert replaced["start_sent"] is False
+        assert first_recovery.get(handoff_id)["external_refs"]["repository_reservation"] == receipt
+        assert _session_start_row(first_recovery, handoff_id)["status"] == "started"
+        assert mock.channels().count("claude:start-session") == 0
+        await stop_workers(first_recovery)
+
+        monkeypatch.setattr(OpContext, "set_refs", set_refs)
+        second_recovery = _restart_service(first_recovery)
+        services.append(second_recovery)
+        await _advance_start(second_recovery, parent_id)
+        handoff = second_recovery.get(handoff_id)
+        step = _session_start_row(second_recovery, handoff_id)
+        parent_after = second_recovery.get(parent_id)
+        assert handoff["status"] == "needs_attention", handoff
+        assert handoff["error_code"] == "REPOSITORY_START_UNPROVEN"
+        # A reconciliation refusal preserves the original open step. It must
+        # not settle it as failed and release the Work's unproven-start lock.
+        assert step["status"] == "started" and step["error"] is None, dict(step)
+        assert parent_after["status"] == "needs_attention", parent_after
+        assert parent_after["error_code"] == "REPOSITORY_START_UNPROVEN"
+        assert _handoff_id(second_recovery, parent_id) == handoff_id
+        assert handoff["idempotency_key"] == first["idempotency_key"]
+        assert handoff["external_refs"]["repository_reservation"] == receipt
+        assert registry.get("h1", sid) == replaced
+        assert mock.channels().count("claude:start-session") == 0
+        assert mock.channels().count("claude:send-message") == 0
+        assert await _refuse_reason(w, second_recovery, "start-after-replaced-reservation") == (
+            "new work.start refused PM_WORK_START_OUTCOME_UNPROVEN"
+        )
+    finally:
+        for service in reversed(services):
+            await stop_workers(service)
+
+
+async def test_unreserved_published_start_cancel_before_reservation_is_proven_failure(start_ready, mock, monkeypatch):
+    """Cancel reaches the step only after read-back proves the start frame never left."""
+    from bat_agent_connector import registry
+    from tests.operation_helpers import stop_workers
+
+    w = start_ready
+    ops = w["d"].ops
+    try:
+        _install_prereserve_fault(monkeypatch, ops, "drop")
+        parent, _fresh = ops.create(STARTER_OWNER, **(await _start_envelope(w, key="start-unreserved-cancel")))
+        handoff_id = await _until_session_start(ops, parent["operation_id"], "uncertain")
+        assert mock.channels().count("claude:start-session") == 0
+        ops.cancel(STARTER_OWNER, handoff_id)
+        await _advance_start(ops, parent["operation_id"])
+        handoff = ops.get(handoff_id)
+        step = _session_start_row(ops, handoff_id)
+        parent_done = ops.get(parent["operation_id"])
+        err = json.loads(step["error"] or "{}")
+        problems = []
+        if handoff["status"] != "cancelled":
+            problems.append(f"handoff {handoff['status']} {handoff.get('error_code')}")
+        if step["status"] != "failed" or err.get("code") != "CANCELLED":
+            problems.append(f"session.start {step['status']} {step['error']}")
+        if mock.channels().count("claude:start-session") != 0:
+            problems.append(f"start frames {mock.channels().count('claude:start-session')}")
+        if parent_done["status"] not in {"failed", "cancelled"}:
+            problems.append(f"parent {parent_done['status']} {parent_done.get('error_code')}")
+        refused = await _refuse_reason(w, ops, "start-after-unreserved-cancel")
+        if refused:
+            problems.append(refused)
+        assert not problems, "; ".join(problems)
+        assert registry.get("h1", handoff["external_refs"]["session_id"]) is None
+    finally:
+        await stop_workers(ops)
+
 
 # ---------------------------------------------------------------------------
 # Step 5 tests: STARTS_SESSION, visibility, events, lineage, and child guards
@@ -2964,5 +3279,119 @@ async def test_work_start_journal_only_admission_and_child_git_execution(start_r
     handoff_git_exec = (handoff_op["external_refs"].get("admission_binding") or {}).get("git_execution")
     assert handoff_git_exec is not None
     assert handoff_git_exec == {"h1": runner.execution_binding("h1")}
+
+
+def _operation_counts(ops) -> dict[str, int]:
+    def count(sql: str) -> int:
+        return ops.db.execute(sql).fetchone()[0]
+
+    return {
+        "packages": count("SELECT COUNT(*) FROM pm_work_packages"),
+        "attempts": count("SELECT COUNT(*) FROM work_attempts"),
+        "starts": count("SELECT COUNT(*) FROM operations WHERE action='work.start'"),
+        "handoffs": count("SELECT COUNT(*) FROM operations WHERE action='repository.continue'"),
+        "children": count("SELECT COUNT(*) FROM pm_work_start_children"),
+    }
+
+
+async def test_execution_location_change_pauses_handoff_and_resume_starts_once(start_ready, mock):
+    """Drift pauses the original handoff; restoring the location resumes that same start."""
+    from bat_agent_connector import host_git
+
+    w = start_ready
+    ops = w["d"].ops
+    parent_id, package_operation = await _hold_before_handoff(w)
+    # HostGitRunner only speaks SSH. This fixture's published repository is local, so the
+    # location fence stays on the real runner and the disk scripts stay on the fixture runner.
+    scripts = w["runner"]
+    runner = host_git.HostGitRunner(w["d"]._config, {"h1": "h1-bat"}, server_id="fixture-server")
+    runner._ssh.run = scripts.run
+    ops.context["git_runner"] = runner
+    host = w["d"]._config.host("h1")
+    assert host.git == "ssh"
+
+    await ops._execute(parent_id)
+    admitted = ops.get(parent_id)
+    assert admitted["status"] == "waiting_external", admitted
+    handoff_id = admitted["result"]["children"]["handoff"]
+    assert handoff_id and admitted["result"]["children"]["package"] == package_operation
+    handoff = ops.get(handoff_id)
+    assert handoff["status"] == "accepted"
+    assert handoff["action"] == "repository.continue"
+    assert handoff["idempotency_key"] == f"work-start:{parent_id}:handoff"
+    frozen = handoff["external_refs"]["admission_binding"]["git_execution"]["h1"]
+    assert frozen == runner.execution_binding("h1")
+    assert frozen["transport"] == "ssh"
+    attempt_id = "att_" + parent_id[3:]
+    before = _operation_counts(ops)
+    child_rows = ops.db.execute(
+        "SELECT slot, operation_id FROM pm_work_start_children WHERE parent_id=? ORDER BY ordinal",
+        (parent_id,),
+    ).fetchall()
+    assert [(row["slot"], row["operation_id"]) for row in child_rows] == [
+        ("package", package_operation),
+        ("handoff", handoff_id),
+    ]
+
+    host.git = "local"
+    try:
+        frames = len(mock.invokes)
+        await ops._execute(handoff_id)
+        paused_child = ops.get(handoff_id)
+        assert paused_child["status"] == "needs_attention", paused_child
+        assert paused_child["error_code"] == "GIT_EXECUTION_LOCATION_CHANGED"
+        assert paused_child["idempotency_key"] == handoff["idempotency_key"]
+        assert ops.db.execute(
+            "SELECT COUNT(*) FROM operation_steps WHERE operation_id=?", (handoff_id,)
+        ).fetchone()[0] == 0
+        assert scripts.phases == []
+        assert len(mock.invokes) == frames
+        await ops._execute(parent_id)
+        paused = ops.get(parent_id)
+        assert paused["status"] == "needs_attention", paused
+        assert paused["error_code"] == "GIT_EXECUTION_LOCATION_CHANGED"
+        assert paused["result"]["stage"] == "starting"
+        assert paused["result"]["children"] == {
+            "bind": None, "package": package_operation, "handoff": handoff_id,
+        }
+        assert paused["idempotency_key"] == admitted["idempotency_key"]
+        assert _operation_counts(ops) == before
+    finally:
+        host.git = "ssh"
+
+    ops.resume(STARTER_OWNER, parent_id)
+    done = await _advance_start(ops, parent_id)
+    assert done["status"] == "succeeded", done
+    assert done["operation_id"] == parent_id
+    assert done["idempotency_key"] == admitted["idempotency_key"]
+    assert done["result"]["stage"] == "started"
+    assert done["result"]["attempt_id"] == attempt_id
+    assert done["result"]["children"]["package"] == package_operation
+    assert done["result"]["children"]["handoff"] == handoff_id
+    assert done["result"]["session"]["host"] == "h1"
+    finished = ops.get(handoff_id)
+    assert finished["status"] == "succeeded"
+    assert finished["idempotency_key"] == f"work-start:{parent_id}:handoff"
+    assert _operation_counts(ops) == before
+    step_names = [
+        row[0] for row in ops.db.execute(
+            "SELECT name FROM operation_steps WHERE operation_id=? ORDER BY seq", (handoff_id,)
+        )
+    ]
+    assert step_names.count("source.resolve") == step_names.count("repository.fetch") == 1
+    assert len(step_names) == len(set(step_names))
+    assert scripts.phases.count("fetch") == scripts.phases.count("prepare") == 1
+    assert mock.channels().count("claude:start-session") == mock.channels().count("claude:send-message") == 1
+    replay, created = ops.create(
+        STARTER_OWNER,
+        action="work.start",
+        target=admitted["target"],
+        params=admitted["params"],
+        preconditions=admitted["preconditions"],
+        idempotency_key=admitted["idempotency_key"],
+    )
+    assert created is False
+    assert replay["operation_id"] == parent_id
+    assert _operation_counts(ops) == before
 
 

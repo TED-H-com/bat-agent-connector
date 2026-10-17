@@ -58,9 +58,33 @@ var projectViews$2 = new Set([
 	"agents",
 	"board"
 ]);
-function sessionHref$1({ host, sessionId, from = "" }) {
-	const query = projectViews$2.has(from) ? "?" + new URLSearchParams({ from }) : "";
-	return `#/session/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}${query}`;
+function workSessionContext(params) {
+	const fields = {
+		workspaceId: "workspace",
+		workItemId: "work",
+		attemptId: "attempt"
+	};
+	const patterns = {
+		workspaceId: /^ws_[0-9a-f]{32}$/,
+		workItemId: /^wi_[0-9a-f]{20}$/,
+		attemptId: /^att_[0-9a-f]{32}$/
+	};
+	const context = {};
+	for (const [key, name] of Object.entries(fields)) {
+		if (params.getAll(name).length !== 1 || !patterns[key].test(params.get(name))) return null;
+		context[key] = params.get(name);
+	}
+	return context;
+}
+function sessionHref$1({ host, sessionId, from = "", workspaceId, workItemId, attemptId }) {
+	const query = new URLSearchParams(projectViews$2.has(from) ? { from } : {});
+	const context = new URLSearchParams({
+		workspace: workspaceId || "",
+		work: workItemId || "",
+		attempt: attemptId || ""
+	});
+	if (workSessionContext(context)) for (const [key, value] of context) query.set(key, value);
+	return `#/session/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}${query.size ? "?" + query : ""}`;
 }
 function sessionOrigin(value) {
 	if (typeof value !== "string" || value.length > 4096) return "";
@@ -70,13 +94,25 @@ function sessionOrigin(value) {
 		const host = decodeURIComponent(match[1]), sessionId = decodeURIComponent(match[2]);
 		if (!host || !sessionId || /[\u0000-\u001f\u007f]/.test(host + sessionId)) return "";
 		const query = new URLSearchParams(match[3] || "");
-		if ([...query.keys()].some((key) => key !== "from") || query.getAll("from").length > 1) return "";
+		if ([...query.keys()].some((key) => ![
+			"from",
+			"workspace",
+			"work",
+			"attempt"
+		].includes(key)) || query.getAll("from").length > 1) return "";
 		const from = query.get("from") || "";
 		if (from && !projectViews$2.has(from)) return "";
+		const context = workSessionContext(query);
+		if ([
+			"workspace",
+			"work",
+			"attempt"
+		].some((key) => query.has(key)) && !context) return "";
 		return sessionHref$1({
 			host,
 			sessionId,
-			from
+			from,
+			...context
 		});
 	} catch {
 		return "";
@@ -8155,6 +8191,7 @@ var workResultStrings = {
 		wres_source_turn_end_observation: "回合結束時觀察到",
 		wres_source_verified_commit: "已驗證的 commit",
 		wres_source_delivered_commit: "已交付的 commit",
+		wres_source_integration_commit: "整合紀錄記下的 commit",
 		wres_uncommitted_changes: "未提交的修改：{n}",
 		wres_uncommitted_unknown: "未知：BAT 無法證明工作樹沒有未提交的修改。",
 		wres_status_unavailable: "不可用",
@@ -8196,7 +8233,26 @@ var workResultStrings = {
 		wres_usage_context_tokens: "上下文詞元",
 		wres_usage_context_window: "上下文視窗",
 		wres_usage_num_turns: "回合數",
-		wres_exit_code_not_exposed: "結束碼：BAT 不提供"
+		wres_exit_code_not_exposed: "結束碼：BAT 不提供",
+		wres_current_changes: "目前修改",
+		wres_read_current_changes: "讀取目前修改",
+		wres_read_again: "重新讀取",
+		wres_out_of_date: "可能已過期",
+		wres_freshness_live: "剛剛自 BAT 讀取",
+		wres_freshness_cached_receipt: "無法讀取 BAT。顯示最後記錄的回合。",
+		wres_freshness_unavailable: "無法提供",
+		wres_head: "最新 commit",
+		wres_show_diff: "顯示差異 · {sha}",
+		wres_show_diff_label: "顯示差異",
+		wres_diff_region_label: "{path} 於 {sha} 的差異",
+		wres_diff_truncated: "僅顯示此差異的前 256 KiB。",
+		wres_diff_loading: "載入差異中…",
+		wres_diff_not_found: "此 commit 或檔案已不在本嘗試的範圍內。請重新讀取目前修改。",
+		wres_uncommitted_no_diff: "BAT 不提供未提交檔案的差異。",
+		wres_reason_uncommitted_diff_not_supported_by_bat: "BAT 不提供未提交檔案的差異。",
+		wres_reason_changeset_file_limit_exceeded: "變更檔案數超出上限。",
+		error_code_PM_DIFF_NOT_FOUND: "此 commit 或檔案已不在本嘗試的範圍內。請重新讀取目前修改。",
+		error_code_PM_DIFF_UNAVAILABLE: "無法自 BAT 讀取工作樹差異。"
 	},
 	en: {
 		wres_heading: "Result",
@@ -8277,6 +8333,7 @@ var workResultStrings = {
 		wres_source_turn_end_observation: "seen at the end of a turn",
 		wres_source_verified_commit: "the verified commit",
 		wres_source_delivered_commit: "the delivered commit",
+		wres_source_integration_commit: "recorded by integration",
 		wres_uncommitted_changes: "Uncommitted changes: {n}",
 		wres_uncommitted_unknown: "Unknown: BAT cannot prove the working tree has no uncommitted changes.",
 		wres_status_unavailable: "Unavailable",
@@ -8318,7 +8375,246 @@ var workResultStrings = {
 		wres_usage_context_tokens: "Context tokens",
 		wres_usage_context_window: "Context window",
 		wres_usage_num_turns: "Turns",
-		wres_exit_code_not_exposed: "Exit code: not exposed by BAT"
+		wres_exit_code_not_exposed: "Exit code: not exposed by BAT",
+		wres_current_changes: "Current changes",
+		wres_read_current_changes: "Read current changes",
+		wres_read_again: "Read again",
+		wres_out_of_date: "May be out of date",
+		wres_freshness_live: "Read from BAT just now",
+		wres_freshness_cached_receipt: "BAT could not be read. Showing the last recorded turn.",
+		wres_freshness_unavailable: "Not available",
+		wres_head: "Head",
+		wres_show_diff: "Show diff · {sha}",
+		wres_show_diff_label: "Show diff",
+		wres_diff_region_label: "Diff for {path} at {sha}",
+		wres_diff_truncated: "Showing the first 256 KiB of this diff.",
+		wres_diff_loading: "Loading diff…",
+		wres_diff_not_found: "This commit or file is no longer in this attempt's range. Read current changes again.",
+		wres_uncommitted_no_diff: "BAT does not show diffs of uncommitted files.",
+		wres_reason_uncommitted_diff_not_supported_by_bat: "BAT does not show diffs of uncommitted files.",
+		wres_reason_changeset_file_limit_exceeded: "Changeset exceeded file limit.",
+		error_code_PM_DIFF_NOT_FOUND: "This commit or file is no longer in this attempt's range. Read current changes again.",
+		error_code_PM_DIFF_UNAVAILABLE: "Worktree diff could not be read from BAT."
+	}
+};
+//#endregion
+//#region src/pm-work-follow-up-strings.js
+var workFollowUpStrings = {
+	"zh-TW": {
+		loop_next_label: "下一步",
+		loop_next_send: "送出下一步",
+		loop_next_hint: "本輪結束後才會送出。",
+		loop_next_queued: "已排入下一輪",
+		loop_next_accepted: "已接受。排隊狀態尚未確認。",
+		loop_next_waiting: "本輪在等回答。這一步仍先排隊，不會中斷本輪。",
+		loop_next_readonly: "唯讀",
+		loop_next_hidden: "有些步驟因來源不可見而沒有列出。",
+		loop_next_more: "還有步驟",
+		loop_next_not_actor: "只有送出這則指令的人可以取消或重新確認。",
+		loop_next_withdrawn: "這項工作已不在這裡。",
+		loop_next_unknown: "未知",
+		loop_next_empty: "還沒有下一步。",
+		loop_next_excerpt: "只顯示這則指令的開頭。",
+		loop_next_blocked_link: "開啟未確認的指令",
+		loop_next_codex: "這個 Codex 工作階段無法排入下一步。",
+		loop_next_not_controller: "你不是這項工作的控制者。",
+		loop_next_err_unknown: "這一步無法送出。",
+		loop_next_err_PM_WORK_SESSION_NOT_MANAGED: "這個工作階段不是由你控制的受管工作階段。",
+		loop_next_err_READ_ONLY: "這個工作階段是唯讀的。",
+		loop_next_err_UNKNOWN_READ_ONLY: "這個工作階段的存取狀態還不確定，因此不會送出。",
+		loop_next_err_NOT_FOUND: "這項工作已不在這裡。",
+		loop_next_err_PM_WORK_CODEX_FOLLOW_UP_UNSUPPORTED: "這個 Codex 工作階段無法排入下一步。",
+		loop_next_err_PM_WORK_SESSION_ENDED: "這個工作階段已結束。請查看本輪結果。",
+		loop_next_err_PM_WORK_SESSION_BUSY: "本輪仍在進行，沒有改成立刻送出。",
+		loop_next_err_PM_WORK_SESSION_WAITING_INPUT: "本輪正在等回答，沒有改成立刻送出。",
+		loop_next_err_PM_WORK_ATTEMPT_CHANGED: "這項工作已有較新的嘗試。原請求維持不變。",
+		loop_next_err_WORK_ITEM_NOT_FOUND: "這項工作已不在這裡。",
+		loop_next_err_WORK_ITEM_ARCHIVED: "這項工作已封存。",
+		loop_next_err_PROJECT_NOT_FOUND: "這項工作所屬的專案不在這裡。",
+		loop_next_err_PROJECT_ARCHIVED: "這項工作所屬的專案已封存。",
+		loop_next_err_PM_PROJECT_BINDING_REQUIRED: "送出前要先把專案綁定到這個工作區。",
+		loop_next_err_PM_LIFECYCLE_STOPPED: "這個工作區已暫停或關閉，因此無法送出這一步。",
+		loop_next_err_PM_LIFECYCLE_EPOCH_CHANGED: "這個工作區已重新開啟。再次送出前請先查回原操作。",
+		loop_next_err_PM_WORK_START_IN_PROGRESS: "這項工作還在開始。",
+		loop_next_err_PM_WORK_START_OUTCOME_UNPROVEN: "最近一次開始的結果尚未確認。送出前請先對帳那次開始。",
+		loop_next_err_PM_WORK_NOT_STARTED: "這項工作還沒開始。",
+		loop_next_err_PM_WORK_CONTROLLER_CONFLICT: "你不是這項工作的控制者。",
+		loop_next_err_INVALID_TARGET: "目標不是這項工作，因此沒有送出。",
+		loop_next_err_INVALID_PARAMS: "請修改文字後再送出。",
+		loop_next_err_INVALID_PRECONDITIONS: "前置條件已變更。原請求維持不變。",
+		loop_next_err_IDEMPOTENCY_CONFLICT: "請查回原請求。",
+		loop_next_err_PM_WORK_CANCEL_NOT_ALLOWED_AFTER_SEND: "指令已進入送出階段；開始送出後無法透過取消撤回指令。",
+		loop_next_err_FORBIDDEN: "你無法變更這一步。",
+		loop_next_err_UNKNOWN_HOST: "這項工作的主機不在這次安裝裡。",
+		loop_next_err_TIER_DISABLED: "這台主機不允許這項寫入。"
+	},
+	en: {
+		loop_next_label: "Next step",
+		loop_next_send: "Send next",
+		loop_next_hint: "This is sent after the current turn ends.",
+		loop_next_queued: "Queued for the next turn",
+		loop_next_accepted: "Accepted. Queue status is unconfirmed.",
+		loop_next_waiting: "The turn is waiting for an answer. This step is still queued. It does not interrupt.",
+		loop_next_readonly: "Read-only",
+		loop_next_hidden: "Some steps are hidden because their source is not visible.",
+		loop_next_more: "More steps",
+		loop_next_not_actor: "Only the person who sent this instruction can cancel or reconcile it.",
+		loop_next_withdrawn: "This work is no longer here.",
+		loop_next_unknown: "Unknown",
+		loop_next_empty: "No next step yet.",
+		loop_next_excerpt: "Only the opening of this instruction is shown.",
+		loop_next_blocked_link: "Open the unconfirmed instruction",
+		loop_next_codex: "A next step is not available for this Codex session.",
+		loop_next_not_controller: "You are not this work's controller.",
+		loop_next_err_unknown: "This step could not be sent.",
+		loop_next_err_PM_WORK_SESSION_NOT_MANAGED: "This session is not a managed session you control.",
+		loop_next_err_READ_ONLY: "This session is read-only.",
+		loop_next_err_UNKNOWN_READ_ONLY: "This session's access is unknown, so nothing is sent.",
+		loop_next_err_NOT_FOUND: "This work is no longer here.",
+		loop_next_err_PM_WORK_CODEX_FOLLOW_UP_UNSUPPORTED: "A next step is not available for this Codex session.",
+		loop_next_err_PM_WORK_SESSION_ENDED: "This session has ended. Review the current result.",
+		loop_next_err_PM_WORK_SESSION_BUSY: "This turn is still running. Nothing was switched to send now.",
+		loop_next_err_PM_WORK_SESSION_WAITING_INPUT: "This turn is waiting for an answer. Nothing was switched to send now.",
+		loop_next_err_PM_WORK_ATTEMPT_CHANGED: "This work has a newer attempt. The original request stays in place.",
+		loop_next_err_WORK_ITEM_NOT_FOUND: "This work is no longer here.",
+		loop_next_err_WORK_ITEM_ARCHIVED: "This work is archived.",
+		loop_next_err_PROJECT_NOT_FOUND: "The project for this work is not here.",
+		loop_next_err_PROJECT_ARCHIVED: "The project for this work is archived.",
+		loop_next_err_PM_PROJECT_BINDING_REQUIRED: "Bind the project to this workspace before sending.",
+		loop_next_err_PM_LIFECYCLE_STOPPED: "This workspace is paused or closed, so this step cannot be sent.",
+		loop_next_err_PM_LIFECYCLE_EPOCH_CHANGED: "This workspace was reopened. Check the original operation before sending again.",
+		loop_next_err_PM_WORK_START_IN_PROGRESS: "This work is still starting.",
+		loop_next_err_PM_WORK_START_OUTCOME_UNPROVEN: "The latest start has an unconfirmed result. Reconcile that start before sending.",
+		loop_next_err_PM_WORK_NOT_STARTED: "This work has not started.",
+		loop_next_err_PM_WORK_CONTROLLER_CONFLICT: "You are not this work's controller.",
+		loop_next_err_INVALID_TARGET: "This step was not sent because the target was not the work item.",
+		loop_next_err_INVALID_PARAMS: "Change the text and send again.",
+		loop_next_err_INVALID_PRECONDITIONS: "The preconditions changed. The original request stays in place.",
+		loop_next_err_IDEMPOTENCY_CONFLICT: "Check the original request.",
+		loop_next_err_PM_WORK_CANCEL_NOT_ALLOWED_AFTER_SEND: "This instruction has entered sending and can no longer be withdrawn by cancelling.",
+		loop_next_err_FORBIDDEN: "You cannot change this step.",
+		loop_next_err_UNKNOWN_HOST: "The host for this work is not in this installation.",
+		loop_next_err_TIER_DISABLED: "This host does not allow that write."
+	}
+};
+//#endregion
+//#region src/pm-work-publish-strings.js
+var workPublishStrings = {
+	"zh-TW": {
+		wpub_public: "這裡輸入的標題與說明會公開出現在 GitHub。",
+		wpub_title: "標題",
+		wpub_body: "說明",
+		wpub_base: "目標分支",
+		wpub_base_sha: "基底 commit",
+		wpub_base_from_start: "兩者都來自這次嘗試的開始。發布時會確認這個分支仍指向這個 commit。",
+		wpub_draft_group: "是否為草稿",
+		wpub_draft_help: "選擇先保留為草稿，或開放審閱。",
+		wpub_draft_yes: "建立為草稿 PR",
+		wpub_draft_yes_help: "先保留為草稿。",
+		wpub_draft_no: "開放審閱",
+		wpub_draft_no_help: "GitHub 會把它顯示為可審閱。合併與部署是另外的事。",
+		wpub_commit: "固定 commit",
+		wpub_commit_from_result: "這份成果提供的 commit。",
+		wpub_commit_from_receipt: "來自最新一筆成果回執。",
+		wpub_commit_missing: "這份成果沒有固定 commit，這裡不能發布 PR。",
+		wpub_gap_preconditions: "這份成果沒有帶上發布所需的目標分支與基底 commit。不會送出。草稿留在這台裝置。",
+		wpub_gap_target: "這份成果的發布目標不完整。不會送出。",
+		wpub_no_submit: "這個畫面不會送出。",
+		wpub_title_required: "請輸入標題。",
+		wpub_draft_required: "請選擇是否建立為草稿。",
+		wpub_title_bounds: "標題含有換行，或超過 256 位元組。請縮短。",
+		wpub_body_bounds: "說明超過 32000 位元組。",
+		wpub_success: "已發布 PR。合併、部署與驗收是分開的步驟。",
+		wpub_pending: "這次發布仍在原操作上。請查回該操作，不要另開一筆。",
+		wpub_uncertain: "結果還不明。正在回查原操作，不要再發布一次。",
+		wpub_needs_attention: "這次發布需要處理。請打開原操作，不要另開一筆發布。",
+		wpub_created_target_changed: "已經建立 PR，但觀察到的 head 或 base 與當時不同。請打開原操作，核對保存的身分。合併與部署是另外的事。",
+		wpub_base_moved: "開始之後目標分支移動了。這個畫面不能另選基底。請打開原操作。",
+		wpub_source_changed: "來源已變更，需要再核對。儲存庫或當時記下的基底已不符。這個畫面不能把 PR 指到別處。請打開原操作。",
+		wpub_admitted_note: "這裡的「已受理」是指操作已受理，不是需求已驗收。",
+		wpub_delivery_link: "合併與部署在這次執行的成果與 GitHub。",
+		wpub_pr_unverified: "保存的回執沒有顯示發布時的 head 與 base 相符。",
+		wpub_pr_partial: "這次讀取沒有包含全部交付紀錄。",
+		wpub_pr_not_accepted: "這次發布沒有驗收需求。",
+		wpub_result_held: "有較新的成果。這筆請求仍對準原來的 commit，不會改指到較新的成果。",
+		wpub_blocked_not_controller: "只有原本這次嘗試的控制者可以發布。你可以閱讀這份成果。這個畫面不會對工作階段送訊息。",
+		wpub_blocked_not_writer: "發布需要能在這個工作區寫入的成員。這個畫面不能變更成員資格。",
+		wpub_blocked_scope: "你需要這項工作的檢視、管理與整合權限，才能發布。",
+		wpub_blocked_reconcile: "這份成果還有一筆未結束的操作。請等待。不要發布，也不要清掉它的鎖。",
+		wpub_blocked_pr_exists: "這個 commit 已經有記錄到的 PR。請打開該操作。不要再發布一筆。",
+		wpub_blocked_lifecycle: "這個工作區已停止新工作。不要發布。重新開啟在別的地方。",
+		wpub_blocked_github: "Connector 還沒有可供發布的 GitHub 設定。",
+		wpub_blocked_github_managed: "請到連線設定補上 GitHub，然後重新讀取這份成果。",
+		wpub_blocked_github_plain: "這個畫面不能補上 GitHub 設定。",
+		wpub_blocked_source: "這次發布所需的原始來源事實不完整。這個畫面無法補上。",
+		wpub_source_moved: "候選 commit 已不再是目前的尖端。請打開原操作。不要另打一個 commit。",
+		wpub_history_changed: "記下的起點已不再是候選 commit 的祖先。請打開原操作。",
+		wpub_base_not_ancestor: "記下的基底 commit 不是候選 commit 的祖先。請打開原操作。",
+		wpub_empty_change: "基底 commit 與候選 commit 相同，沒有可發布的變更。",
+		wpub_pin_changed: "主機上釘住的候選 commit 已對不上。請打開原操作，不要另開一筆發布。",
+		wpub_receipt_exists: "主機上已經有建立回執。不要再發布。",
+		wpub_branch_exists: "產生出來的分支在遠端已經有 head。請打開原操作。這個畫面不會覆蓋它。",
+		wpub_branch_refused: "主機拒絕建立新分支。請打開原操作。",
+		wpub_change_limit: "變更超過 200 個 commit 或 500 個檔案。請打開原操作。",
+		wpub_authority: "這次發布的憑證已失效。請到連線設定，然後查回原操作。"
+	},
+	en: {
+		wpub_public: "The title and description you type here are published on GitHub.",
+		wpub_title: "Title",
+		wpub_body: "Description",
+		wpub_base: "Base branch",
+		wpub_base_sha: "Base commit",
+		wpub_base_from_start: "Both come from the start of this attempt. Publishing checks that this branch still points at this commit.",
+		wpub_draft_group: "Draft",
+		wpub_draft_help: "Choose whether this pull request is ready for review.",
+		wpub_draft_yes: "Draft pull request",
+		wpub_draft_yes_help: "Keep this as a draft.",
+		wpub_draft_no: "Ready for review",
+		wpub_draft_no_help: "GitHub will show it as ready for review. Merging and deploying are separate.",
+		wpub_commit: "Fixed commit",
+		wpub_commit_from_result: "The Result supplied this commit.",
+		wpub_commit_from_receipt: "From the latest result receipt.",
+		wpub_commit_missing: "This result did not include a fixed commit, so this pull request cannot be published here.",
+		wpub_gap_preconditions: "This result does not include the base branch and base commit this publish requires. Nothing is submitted. Your draft stays on this device.",
+		wpub_gap_target: "This result's publish target is incomplete. Nothing is submitted.",
+		wpub_no_submit: "Nothing is submitted from this screen.",
+		wpub_title_required: "Enter a title.",
+		wpub_draft_required: "Choose whether this is a draft.",
+		wpub_title_bounds: "The title has a line break or is longer than 256 bytes. Shorten it.",
+		wpub_body_bounds: "The description is longer than 32000 bytes.",
+		wpub_success: "Pull request published. Merge, deploy, and acceptance are separate steps.",
+		wpub_pending: "This publish is still on the original operation. Check that operation. Do not start another.",
+		wpub_uncertain: "The outcome is unknown. The original operation is being read back. Do not publish again.",
+		wpub_needs_attention: "This publish needs attention. Open the original operation. Do not start another publish.",
+		wpub_created_target_changed: "A pull request was created, but the observed head or base differed. Open the original operation and review its saved identity. Merge and deploy are separate.",
+		wpub_base_moved: "The base branch moved after the start. This screen cannot choose another base. Open the original operation.",
+		wpub_source_changed: "The source changed and needs review. The repository or the recorded base no longer matches. This screen cannot point the pull request elsewhere. Open the original operation.",
+		wpub_admitted_note: "\"Accepted\" here means the operation was admitted. The requirement is not accepted.",
+		wpub_delivery_link: "Merge and deploy are on the Delivery view for this execution.",
+		wpub_pr_unverified: "The saved receipt does not show that the published head and base matched.",
+		wpub_pr_partial: "This read did not include every delivery record.",
+		wpub_pr_not_accepted: "Publication did not assess the requirement.",
+		wpub_result_held: "A newer result arrived. This request stays on the original commit. It is not pointed at the newer result.",
+		wpub_blocked_not_controller: "Only the original attempt controller can publish. You can read this result. This screen does not message the session.",
+		wpub_blocked_not_writer: "Publishing needs a member who can write in this workspace. This screen cannot change membership.",
+		wpub_blocked_scope: "You need permission to view, manage, and integrate this work before publishing.",
+		wpub_blocked_reconcile: "An earlier operation for this result is still open. Wait for it. Do not publish, and do not clear its lock.",
+		wpub_blocked_pr_exists: "A pull request for this commit is already recorded. Open that operation. Do not publish another.",
+		wpub_blocked_lifecycle: "This workspace has stopped new work. Do not publish. Reopening is elsewhere.",
+		wpub_blocked_github: "Connector has no GitHub configuration for publishing.",
+		wpub_blocked_github_managed: "Set the GitHub connection, then read this result again.",
+		wpub_blocked_github_plain: "This screen cannot add a GitHub configuration.",
+		wpub_blocked_source: "The facts this publish needs from the original source are incomplete. This screen cannot fill them in.",
+		wpub_source_moved: "The candidate commit is no longer the live tip. Open the original operation. Do not type another commit.",
+		wpub_history_changed: "The recorded start is no longer an ancestor of the candidate. Open the original operation.",
+		wpub_base_not_ancestor: "The recorded base commit is not an ancestor of the candidate. Open the original operation.",
+		wpub_empty_change: "The base commit and the candidate are the same, so there is nothing to publish.",
+		wpub_pin_changed: "The pinned candidate on the host no longer matches. Open the original operation. Do not start another publish.",
+		wpub_receipt_exists: "A local creation receipt is already on the host. Do not publish again.",
+		wpub_branch_exists: "The generated branch already has a remote head. Open the original operation. This screen does not replace it.",
+		wpub_branch_refused: "The host refused to create the new branch. Open the original operation.",
+		wpub_change_limit: "The change is over 200 commits or 500 files. Open the original operation.",
+		wpub_authority: "The credential for this publish is no longer valid. Open the connection settings, then check the original operation."
 	}
 };
 //#endregion
@@ -8329,6 +8625,8 @@ var STRINGS = {
 		...diagnosticsStrings["zh-TW"],
 		...workStartStrings["zh-TW"],
 		...workResultStrings["zh-TW"],
+		...workFollowUpStrings["zh-TW"],
+		...workPublishStrings["zh-TW"],
 		...pmStrings["zh-TW"],
 		...createRecordStrings["zh-TW"],
 		...uiStrings["zh-TW"],
@@ -8435,6 +8733,8 @@ var STRINGS = {
 		error_code_TIMEOUT: "連線逾時，請查回原請求。",
 		error_code_CENTRAL_OFFLINE: "Connector 離線，請恢復連線後再試。",
 		error_code_UNAUTHORIZED: "請先提供有效的 API 權杖。",
+		error_code_PM_DIFF_NOT_FOUND: "此 commit 或檔案已不在本嘗試的範圍內。請重新讀取目前修改。",
+		error_code_PM_DIFF_UNAVAILABLE: "無法自 BAT 讀取工作樹差異。",
 		connection_scope_observe: "檢視",
 		connection_scope_operate: "操作",
 		connection_scope_manage: "管理",
@@ -9976,6 +10276,8 @@ var STRINGS = {
 		...diagnosticsStrings.en,
 		...workStartStrings.en,
 		...workResultStrings.en,
+		...workFollowUpStrings.en,
+		...workPublishStrings.en,
 		...pmStrings.en,
 		...createRecordStrings.en,
 		...uiStrings.en,
@@ -10082,6 +10384,8 @@ var STRINGS = {
 		error_code_TIMEOUT: "The connection timed out. Check the original request.",
 		error_code_CENTRAL_OFFLINE: "Reconnect to Connector before trying again.",
 		error_code_UNAUTHORIZED: "Provide a valid API token first.",
+		error_code_PM_DIFF_NOT_FOUND: "This commit or file is no longer in this attempt's range. Read current changes again.",
+		error_code_PM_DIFF_UNAVAILABLE: "Worktree diff could not be read from BAT.",
 		connection_scope_observe: "View",
 		connection_scope_operate: "Operate",
 		connection_scope_manage: "Manage",
@@ -12793,9 +13097,9 @@ function viewState(namespace, workspaceId, view) {
 }
 //#endregion
 //#region src/state/sessions.js
-var text$5 = (value) => typeof value === "string" ? value : "";
+var text$6 = (value) => typeof value === "string" ? value : "";
 function workspaceGroup(session) {
-	const host = text$5(session.host), id = text$5(session.workspace_id), name = text$5(session.workspace);
+	const host = text$6(session.host), id = text$6(session.workspace_id), name = text$6(session.workspace);
 	return {
 		key: JSON.stringify([
 			host,
@@ -12830,7 +13134,7 @@ function matchesSession(session, query) {
 		session.model,
 		session.worktree_branch,
 		...Array.isArray(session.connector_metadata?.labels) ? session.connector_metadata.labels : []
-	].map(text$5).join("\n").toLocaleLowerCase();
+	].map(text$6).join("\n").toLocaleLowerCase();
 	return query.trim().toLocaleLowerCase().split(/\s+/).every((word) => haystack.includes(word));
 }
 function runtimeStale(session) {
@@ -13553,7 +13857,7 @@ var action = (value) => typeof value === "string" && /^(?:session|checkpoint|int
 var protocols = ["bat-remote/v2", "bat-remote/legacy-v1"];
 var contractVersion = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
 var bool = (value) => typeof value === "boolean" ? value : null;
-var operationId$3 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
+var operationId$4 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
 var time = (value) => {
 	if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value < 253402300800) return new Date(value * 1e3).toISOString();
 	return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
@@ -13599,7 +13903,7 @@ function failedCall({ at, method, path, status, code: errorCode, admissionRefuse
 		status: Number.isInteger(status) && status >= 100 && status <= 599 ? status : null,
 		code: code(errorCode) || (status >= 100 ? "HTTP_ERROR" : "NETWORK_ERROR"),
 		admission_refused: admissionRefused === true,
-		operation_id: operationId$3(operation?.operation_id)
+		operation_id: operationId$4(operation?.operation_id)
 	};
 }
 function errorRing(limit = 50) {
@@ -13685,7 +13989,7 @@ function scrubDiagnostics(text) {
 		} catch {}
 		if (/^\/v1(?:\/(?:[a-z-]+|:[a-z_]+))*$/.test(value) && value.split("/").filter(Boolean).every((x) => x.startsWith(":") || routeWords.has(x)) || safeLogs.has(value) || time(value) || contractVersion(value) || protocols.includes(value)) return value;
 		value = value.replace(/(?:authorization\s*:\s*(?:basic|bearer)\s+\S+|bearer\s+\S+|batc_[\w-]+|gh[pousr]_[\w-]+|github_pat_[\w-]+|sk-[\w-]+|(?:token|secret|password|passwd|api[_-]?key|fp)\s*[=:]\s*\S+)/gi, "[redacted]").replace(/SHA256:[^\s"',;]+/gi, "[redacted]").replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"<>]+/gi, "[redacted]").replace(/\b[\w.+-]+@[\w.-]+\b/gi, "[redacted]").replace(/\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|dev|app|internal|local|lan|corp|example|invalid)\b(?::\d+)?(?:[/?#]\S*)?/gi, "[redacted]").replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[redacted]").replace(/(?:\b(?:[a-f0-9]{1,4}:){2,}[a-f0-9:]+\b|\[?[a-f0-9]*::[a-f0-9:]*\]?)/gi, "[redacted]").replace(/(?:[a-z]:[\\/]|\\\\|~(?:[\w.-]+)?[\\/]|\/)[^\r\n]*/gi, "[redacted]");
-		return code(value) || reason(value) || version$2(value) || commit(value) || operationId$3(value) || action(value) || /^host-[1-9]\d*$/.test(value) || ["batc.diagnostics.v1", "zh-TW"].includes(value) ? value : "[redacted]";
+		return code(value) || reason(value) || version$2(value) || commit(value) || operationId$4(value) || action(value) || /^host-[1-9]\d*$/.test(value) || ["batc.diagnostics.v1", "zh-TW"].includes(value) ? value : "[redacted]";
 	}));
 }
 function sessionFacts(session) {
@@ -13784,7 +14088,7 @@ function buildDiagnostics(input) {
 			].map((key) => [key, sessions ? sessions.filter((s) => s[key] === null).length : null]))
 		},
 		operations: Array.isArray(input.operations) ? input.operations.filter((op) => ["failed", "uncertain"].includes(op.status)).slice(0, 50).map((op) => ({
-			id: operationId$3(op.operation_id),
+			id: operationId$4(op.operation_id),
 			action: action(op.action),
 			status: op.status,
 			error_code: code(op.error_code ?? op.error?.code),
@@ -13834,7 +14138,7 @@ function diagnosticsDialog({ h, t, load, save, onClose }) {
 		class: "muted",
 		role: "status"
 	}, t("diag_loading"));
-	let content = "", filename = "", serial = 0;
+	let content = "", filename = "", serial = 0, saving = false;
 	const close = () => {
 		serial++;
 		dialog.close();
@@ -13847,15 +14151,24 @@ function diagnosticsDialog({ h, t, load, save, onClose }) {
 		label: t("diag_save"),
 		disabled: true,
 		onClick: async () => {
+			if (saving || !dialog.isConnected) return;
 			const current = serial;
-			saved.disabled = true;
+			saving = true;
+			saved.disabled = false;
+			saved.setAttribute("aria-disabled", "true");
+			status.setAttribute("aria-busy", "true");
 			try {
 				const result = await save(content, filename);
-				if (current === serial && result) status.textContent = t(result === true ? "diag_download_started" : "diag_saved");
+				if (current === serial && dialog.isConnected && result) status.textContent = t(result === true ? "diag_download_started" : "diag_saved");
 			} catch {
-				if (current === serial) status.textContent = t("diag_save_failed");
+				if (current === serial && dialog.isConnected) status.textContent = t("diag_save_failed");
 			} finally {
-				if (current === serial) saved.disabled = false;
+				if (current !== serial || !dialog.isConnected) return;
+				saving = false;
+				saved.removeAttribute("aria-disabled");
+				status.removeAttribute("aria-busy");
+				saved.disabled = !content || new TextEncoder().encode(content).length > 262144;
+				if (!saved.disabled && (document.activeElement === document.body || document.activeElement === dialog)) saved.focus();
 			}
 		}
 	});
@@ -13895,7 +14208,8 @@ function diagnosticsDialog({ h, t, load, save, onClose }) {
 			saved,
 			copy,
 			closing
-		].filter((node) => !node.disabled && !node.hidden), first = nodes[0], last = nodes.at(-1);
+		].filter((node) => !node.hidden && (!node.disabled || node.getAttribute("aria-disabled") === "true")), first = nodes[0], last = nodes.at(-1);
+		if (!first || !last) return;
 		if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
 			event.preventDefault();
 			last.focus();
@@ -13913,8 +14227,12 @@ function diagnosticsDialog({ h, t, load, save, onClose }) {
 		content = "";
 		summary.replaceChildren();
 		pre.textContent = "";
+		const focused = document.activeElement, losing = focused === saved || focused === copy;
 		saved.disabled = copy.disabled = true;
+		saved.removeAttribute("aria-disabled");
+		status.removeAttribute("aria-busy");
 		status.textContent = t("diag_withdrawn");
+		if (losing || document.activeElement === document.body) closing.focus({ preventScroll: true });
 	};
 	const current = serial;
 	load().then((bundle) => {
@@ -14903,7 +15221,7 @@ function humanizeAction(action) {
 	if (!words.length) return "";
 	return words.map((word, index) => index === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word).join(" ");
 }
-function actionLabel(action) {
+function actionLabel$1(action) {
 	const key = ACTIONS[action];
 	if (key) {
 		const label = t(key);
@@ -15015,6 +15333,1668 @@ function reasonText$1(code) {
 	const token = labelSegment(code);
 	if (!token) return "";
 	return reasonLabel(t, token);
+}
+//#endregion
+//#region src/work-session-context.js
+async function readWorkSessionContext({ api, guard, workspaceId, workItemId, attemptId, host, sessionId, missingMessage }) {
+	const [record, data] = await Promise.all([api("GET", `/work-items/${encodeURIComponent(workItemId)}`), api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}`)]);
+	guard();
+	const attempt = data?.attempt;
+	const linked = record?.links?.some((link) => {
+		const target = link.target?.found ? link.kind === "session" ? link.target : link.kind === "operation" ? link.target.session : null : null;
+		return target?.host === host && target?.session_id === sessionId;
+	});
+	if (record?.work_item?.work_item_id !== workItemId || !linked || data?.workspace_id !== workspaceId || attempt?.workspace_id !== workspaceId || attempt?.work_item_id !== workItemId || attempt?.attempt_id !== attemptId || attempt?.session?.host !== host || attempt?.session?.session_id !== sessionId) throw new ApiError(404, "WORK_CONTEXT_MISMATCH", missingMessage);
+	return {
+		record,
+		attempt
+	};
+}
+//#endregion
+//#region src/pm-work-publish.js
+var ACTION$2 = "github.pr.publish";
+var SHA40 = /^[0-9a-f]{40}$/;
+var OP_ID = /^op_[0-9a-f]{32}$/;
+var TARGET_KEYS = [
+	"workspace_id",
+	"repository",
+	"host",
+	"source_operation_id"
+];
+var PARAM_NAMES = [
+	"candidate_sha",
+	"base_ref",
+	"public_title",
+	"public_body",
+	"draft"
+];
+var BLOCKED_KEYS = {
+	not_controller: "wpub_blocked_not_controller",
+	not_writer_member: "wpub_blocked_not_writer",
+	missing_scope: "wpub_blocked_scope",
+	WAIT_ORIGINAL_OPERATION_RECONCILE: "wpub_blocked_reconcile",
+	pull_request_exists: "wpub_blocked_pr_exists",
+	lifecycle_stopped: "wpub_blocked_lifecycle",
+	github_not_configured: "wpub_blocked_github",
+	publication_source_incomplete: "wpub_blocked_source"
+};
+var HOST_CODES = {
+	PR_SOURCE_MOVED: "wpub_source_moved",
+	PR_BASE_MOVED: "wpub_base_moved",
+	PR_SOURCE_HISTORY_CHANGED: "wpub_history_changed",
+	PR_BASE_NOT_ANCESTOR: "wpub_base_not_ancestor",
+	PR_EMPTY_CHANGE: "wpub_empty_change",
+	PR_PIN_CHANGED: "wpub_pin_changed",
+	PR_RECEIPT_EXISTS: "wpub_receipt_exists",
+	PR_BRANCH_EXISTS: "wpub_branch_exists",
+	PR_BRANCH_CREATE_REFUSED: "wpub_branch_refused",
+	PR_CHANGE_LIMIT: "wpub_change_limit",
+	PR_CREATE_REFUSED: "pm_terminal",
+	PR_PATH_UNREADABLE: "pm_terminal",
+	PR_PUBLISHED_HEAD_CHANGED: "pm_terminal",
+	PR_RECEIPT_UNAVAILABLE: "pm_terminal",
+	PR_PROVIDER_TARGET_CHANGED: "wpub_source_changed",
+	PR_CREATED_TARGET_CHANGED: "wpub_created_target_changed",
+	PR_FOREIGN_CONTROLLER: "wpub_blocked_not_controller",
+	INTERNAL: "error_generic",
+	PR_AUTHORITY_UNAVAILABLE: "wpub_authority"
+};
+var SETUP_CODES = new Set([
+	"GITHUB_NOT_CONFIGURED",
+	"REPO_NOT_CONFIGURED",
+	"INTEGRATION_DISABLED",
+	"UNKNOWN_HOST",
+	"TIER_DISABLED",
+	"NO_MANAGED_ROOT",
+	"GIT_RUNNER_UNAVAILABLE"
+]);
+var QUIET_CODES = new Set([
+	"TIMEOUT",
+	"NETWORK_ERROR",
+	"CENTRAL_OFFLINE",
+	"CONNECTION_CHANGED"
+]);
+var radioSerial = 0;
+var text$5 = (value) => typeof value === "string" && value.length > 0;
+var sha$6 = (value) => typeof value === "string" && SHA40.test(value);
+var bytes = (value) => new TextEncoder().encode(value).length;
+function exactTarget$1(target) {
+	if (!target || typeof target !== "object" || Array.isArray(target)) return null;
+	if (Object.keys(target).length !== TARGET_KEYS.length) return null;
+	if (!TARGET_KEYS.every((key) => Object.hasOwn(target, key) && text$5(target[key]))) return null;
+	if (!/^ws_[0-9a-f]{32}$/.test(target.workspace_id) || !OP_ID.test(target.source_operation_id)) return null;
+	return {
+		workspace_id: target.workspace_id,
+		repository: target.repository,
+		host: target.host,
+		source_operation_id: target.source_operation_id
+	};
+}
+function exactPreconditions(value) {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+	const keys = Object.keys(value).sort();
+	if (keys.length !== 2 || keys[0] !== "expected_base_sha" || keys[1] !== "repository_id") return null;
+	const id = value.repository_id;
+	if (typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0) return null;
+	if (!sha$6(value.expected_base_sha)) return null;
+	return {
+		repository_id: id,
+		expected_base_sha: value.expected_base_sha
+	};
+}
+function actionRows(list) {
+	if (!Array.isArray(list)) return [];
+	return list.filter((row) => row && row.action === ACTION$2);
+}
+function paramsReady(entry) {
+	return Array.isArray(entry?.required_params) && PARAM_NAMES.every((name) => entry.required_params.includes(name)) && entry.required_params.every((name) => PARAM_NAMES.includes(name));
+}
+function classifyPublicationEntry(envelope) {
+	const blocked = actionRows(envelope?.blocked_actions);
+	const allowed = actionRows(envelope?.next_allowed_actions);
+	if (blocked.length) {
+		const reasons = blocked.map((row) => typeof row.reason === "string" ? row.reason : "");
+		return {
+			mode: "blocked",
+			gap: "",
+			reason: new Set(reasons).size === 1 ? reasons[0] : "",
+			entry: null
+		};
+	}
+	if (!allowed.length) return {
+		mode: "absent",
+		gap: "",
+		reason: "",
+		entry: null
+	};
+	if (allowed.length > 1) return {
+		mode: "incomplete",
+		gap: "target",
+		reason: "",
+		entry: null
+	};
+	const row = allowed[0];
+	if (row.allowed === false || row.kind != null && row.kind !== "action") return {
+		mode: "incomplete",
+		gap: "target",
+		reason: "",
+		entry: null
+	};
+	const target = exactTarget$1(row.target);
+	const prefilled = row.prefilled_params && typeof row.prefilled_params === "object" && !Array.isArray(row.prefilled_params) ? row.prefilled_params : {};
+	const candidate = sha$6(prefilled.candidate_sha) ? prefilled.candidate_sha : "";
+	const baseRef = text$5(prefilled.base_ref) ? prefilled.base_ref : "";
+	const preconditions = exactPreconditions(row.preconditions);
+	const scopes = Array.isArray(row.required_scopes) ? row.required_scopes.filter((item) => typeof item === "string") : [];
+	if (!target || envelope?.workspace_id && target.workspace_id !== envelope.workspace_id || envelope?.identity?.execution_operation_id && target.source_operation_id !== envelope.identity.execution_operation_id) return {
+		mode: "incomplete",
+		gap: "target",
+		reason: "",
+		entry: null
+	};
+	const entry = {
+		target,
+		candidate,
+		baseRef,
+		preconditions,
+		scopes
+	};
+	if (!candidate) return {
+		mode: "incomplete",
+		gap: "commit",
+		reason: "",
+		entry
+	};
+	if (!baseRef || !preconditions || !paramsReady(row)) return {
+		mode: "incomplete",
+		gap: "preconditions",
+		reason: "",
+		entry
+	};
+	return {
+		mode: "ready",
+		gap: "",
+		reason: "",
+		entry
+	};
+}
+function identityOf(entry) {
+	if (!entry?.target) return "";
+	return JSON.stringify({
+		target: entry.target,
+		candidate_sha: entry.candidate || ""
+	});
+}
+function readCaps(caps) {
+	return typeof caps === "function" ? caps() : caps;
+}
+function catalogAllows(caps, entry) {
+	const current = readCaps(caps);
+	const scopes = Array.isArray(current?.scopes) ? current.scopes : [];
+	if (!(entry?.scopes?.length ? entry.scopes : [
+		"observe",
+		"manage",
+		"integrate"
+	]).every((scope) => scopes.includes(scope))) return false;
+	if (!scopes.includes("integrate")) return false;
+	return Boolean(current?.actions?.some((row) => row.action === ACTION$2 && row.allowed === true));
+}
+function receiptSha(envelope) {
+	const rows = envelope?.delivery?.pull_requests;
+	if (!Array.isArray(rows) || !rows.length) return "";
+	const last = rows[rows.length - 1];
+	return sha$6(last?.candidate_sha) ? last.candidate_sha : "";
+}
+function sourceSentence(t, envelope, candidate) {
+	const fixed = envelope?.changes?.fixed_result_commit;
+	if (fixed?.commit_sha === candidate) {
+		if (fixed.source_kind === "turn_end_observation") return t("wres_source_turn_end_observation");
+		if (fixed.source_kind === "execution_verification" || fixed.source_kind === "session_verification") return t("wres_source_verified_commit");
+		if (fixed.source_kind === "integration") return t("wres_source_integration_commit");
+	}
+	const receipt = receiptSha(envelope);
+	if (receipt && receipt === candidate && receipt !== fixed?.commit_sha) return t("wpub_commit_from_receipt");
+	return t("wpub_commit_from_result");
+}
+function operationId$3(value) {
+	return typeof value === "string" && OP_ID.test(value) ? value : "";
+}
+function publicationPrLine(h, t, pr) {
+	if (!pr || typeof pr !== "object") return null;
+	const opId = operationId$3(pr.publication_operation_id);
+	const number = Number.isSafeInteger(pr.pull_number) ? pr.pull_number : null;
+	const repo = text$5(pr.repository) ? pr.repository : "";
+	const label = number != null && repo ? `PR #${number} · ${repo}` : "";
+	const item = h("li", {});
+	if (opId) {
+		item.append(h("a", {
+			href: `#/op/${encodeURIComponent(opId)}`,
+			"data-work-publish-pr": opId
+		}, label || t("pm_operation")));
+		if (pr.target_verified !== true) item.append(" ", h("span", { "data-work-publish-unverified": "" }, t("wpub_pr_unverified")));
+	} else if (label) item.append(h("span", {}, label));
+	else return null;
+	if (pr.requirement_acceptance === "not_evaluated_by_publication") item.append(" ", h("span", { "data-work-publish-not-accepted": "" }, t("wpub_pr_not_accepted")));
+	return item;
+}
+function publicationDeliveryLine(h, t, pr, envelope, attempt) {
+	if (!operationId$3(pr?.publication_operation_id)) return null;
+	const host = text$5(attempt?.session?.host) ? attempt.session.host : text$5(attempt?.native_session?.host) ? attempt.native_session.host : "";
+	const source = text$5(pr.child_operation_id) ? pr.child_operation_id : text$5(envelope?.identity?.execution_operation_id) ? envelope.identity.execution_operation_id : "";
+	const repo = text$5(pr.repository) ? pr.repository : "";
+	if (!host || !source || !repo) return null;
+	return h("p", { "data-work-publish-delivery": "" }, h("a", { href: `#/delivery/${encodeURIComponent(host)}/execution/${encodeURIComponent(source)}/${encodeURIComponent(repo)}` }, t("nav_delivery")), " ", t("wpub_delivery_link"));
+}
+function gapSentence(t, gap) {
+	if (gap === "commit") return t("wpub_commit_missing");
+	if (gap === "preconditions") return t("wpub_gap_preconditions");
+	return t("wpub_gap_target");
+}
+function createWorkPublish({ h, t, form, namespace, caps, errorBox }) {
+	let editor = null;
+	let root = null;
+	let mode = "absent";
+	let bound = null;
+	let pinned = null;
+	let identity = "";
+	let heldNode = null;
+	let gapNode = null;
+	let radios = null;
+	let facts = null;
+	let shownEnvelope = null;
+	const displayEntry = () => editor?.locked() ? pinned || bound : bound;
+	function dispose() {
+		dropEditor();
+		root = null;
+	}
+	function dropEditor() {
+		editor?.dispose();
+		editor = null;
+		identity = "";
+		bound = null;
+		pinned = null;
+		mode = "absent";
+		radios = null;
+		facts = null;
+		heldNode = null;
+		gapNode = null;
+	}
+	function sync() {
+		editor?.update();
+	}
+	function recheck() {
+		sync();
+		if (editor?.locked()) editor.recheck();
+	}
+	function sentenceFor(error) {
+		const code = error?.code || "";
+		const status = editor?.operation()?.status || "";
+		if (status === "uncertain" || code === "UNCERTAIN") return t("wpub_uncertain");
+		if (code === "PR_CREATED_TARGET_CHANGED") return t("wpub_created_target_changed");
+		if (status === "needs_attention" || code === "UNCERTAIN_UNRESOLVED") return t("wpub_needs_attention");
+		if (HOST_CODES[code]) return t(HOST_CODES[code]);
+		if (SETUP_CODES.has(code)) return t(readCaps(caps)?.managed_installation ? "wpub_blocked_github_managed" : "wpub_blocked_github_plain");
+		if (!code || QUIET_CODES.has(code)) return "";
+		if (status === "failed" || status === "cancelled" || error?.admissionRefused === true || error?.status) return t("error_generic");
+		return "";
+	}
+	function paintFacts() {
+		if (!facts) return;
+		const entry = displayEntry();
+		const candidate = entry?.candidate || "";
+		facts.commit.hidden = !candidate;
+		if (candidate) {
+			facts.commitSha.textContent = candidate.slice(0, 12);
+			facts.commitSha.title = candidate;
+			facts.commitSha.setAttribute("aria-label", `${t("wpub_commit")} ${candidate}`);
+			facts.commitSource.textContent = sourceSentence(t, shownEnvelope, candidate);
+			facts.detailCommit.textContent = candidate;
+		}
+		const showBase = Boolean(entry?.baseRef && entry?.preconditions);
+		facts.base.hidden = !showBase;
+		facts.baseSha.hidden = !showBase;
+		facts.origin.hidden = !showBase;
+		if (showBase) {
+			facts.baseValue.textContent = entry.baseRef;
+			const full = entry.preconditions.expected_base_sha;
+			facts.baseShaValue.textContent = full.slice(0, 12);
+			facts.baseShaValue.title = full;
+			facts.baseShaValue.setAttribute("aria-label", `${t("wpub_base_sha")} ${full}`);
+			facts.detailBase.textContent = full;
+		}
+	}
+	function applyChrome() {
+		if (!editor) return;
+		const submit = editor.box.querySelector("button[type=\"submit\"]");
+		const reset = editor.box.querySelector(".actions > button[type=\"button\"]");
+		if (submit) submit.setAttribute("data-work-publish-submit", "");
+		if (reset) reset.setAttribute("data-work-publish-new-request", "");
+		const locked = Boolean(editor.locked());
+		if (submit && !locked && mode !== "ready") submit.hidden = true;
+		const code = editor.operation()?.error_code || editor.operation()?.error?.code;
+		if (reset && code === "PR_RECEIPT_EXISTS") reset.hidden = true;
+		if (radios) {
+			radios.yes.disabled = locked;
+			radios.no.disabled = locked;
+			const value = radios.mirror.value;
+			radios.yes.checked = value === "true";
+			radios.no.checked = value === "false";
+		}
+		if (gapNode) gapNode.hidden = mode === "ready" || locked;
+		const statusBox = editor.box.querySelector(":scope > [role=\"status\"]");
+		const op = editor.operation();
+		if (statusBox) {
+			let note = statusBox.querySelector("[data-work-publish-admitted]");
+			if (op?.status === "accepted") {
+				if (!note) statusBox.append(h("p", { "data-work-publish-admitted": "" }, t("wpub_admitted_note")));
+			} else if (note) note.remove();
+		}
+		if (locked) pinned = pinned || bound;
+		else pinned = null;
+		paintFacts();
+	}
+	function noteHeld(decision) {
+		if (!heldNode) return;
+		const next = identityOf(decision.entry);
+		const current = displayEntry();
+		const baseMoved = Boolean(decision.entry && current && (decision.entry.baseRef !== current.baseRef || decision.entry.preconditions?.expected_base_sha !== current.preconditions?.expected_base_sha || decision.entry.preconditions?.repository_id !== current.preconditions?.repository_id || decision.entry.target?.repository !== current.target?.repository));
+		heldNode.hidden = Boolean(next && next === identity && !baseMoved);
+	}
+	function chooseDraft(value) {
+		if (!radios || editor?.locked()) return;
+		radios.mirror.value = value;
+		radios.mirror.dispatchEvent(new Event("input", { bubbles: true }));
+		radios.mirror.dispatchEvent(new Event("change", { bubbles: true }));
+	}
+	function mountEditor(decision, envelope) {
+		const entry = decision.entry;
+		bound = entry;
+		mode = decision.mode;
+		shownEnvelope = envelope;
+		identity = identityOf(entry);
+		const candidateKey = entry.candidate || "no-commit";
+		const groupId = `wpub-draft-${++radioSerial}`;
+		const titleInput = h("input", {
+			type: "text",
+			"data-work-publish-title": "",
+			"aria-label": t("wpub_title")
+		});
+		const bodyInput = h("textarea", {
+			"data-work-publish-body": "",
+			"aria-label": t("wpub_body")
+		});
+		const mirror = h("input", {
+			type: "hidden",
+			"data-work-publish-draft-value": ""
+		});
+		titleInput.dataset.pmDefault = "";
+		bodyInput.dataset.pmDefault = "";
+		mirror.dataset.pmDefault = "";
+		const yes = h("input", {
+			type: "radio",
+			name: `work-publish-draft-${radioSerial}`,
+			value: "true",
+			"data-work-publish-draft": "true"
+		});
+		const no = h("input", {
+			type: "radio",
+			name: `work-publish-draft-${radioSerial}`,
+			value: "false",
+			"data-work-publish-draft": "false"
+		});
+		yes.addEventListener("change", () => {
+			if (yes.checked) chooseDraft("true");
+		});
+		no.addEventListener("change", () => {
+			if (no.checked) chooseDraft("false");
+		});
+		radios = {
+			yes,
+			no,
+			mirror,
+			titleInput,
+			bodyInput
+		};
+		const commitSha = h("span", {
+			class: "mono",
+			"data-work-publish-commit": ""
+		}, "");
+		const commitSource = h("span", { "data-work-publish-commit-source": "" }, "");
+		const baseValue = h("span", { "data-work-publish-base": "" }, "");
+		const baseShaValue = h("span", {
+			class: "mono",
+			"data-work-publish-base-sha": ""
+		}, "");
+		const detailCommit = h("span", { class: "mono" }, "");
+		const detailBase = h("span", { class: "mono" }, "");
+		facts = {
+			commit: h("p", { class: "pm-work-publish-fact" }, h("strong", {}, `${t("wpub_commit")}: `), commitSha, " · ", commitSource),
+			commitSha,
+			commitSource,
+			base: h("p", { class: "pm-work-publish-fact" }, h("strong", {}, `${t("wpub_base")}: `), baseValue),
+			baseValue,
+			baseSha: h("p", { class: "pm-work-publish-fact" }, h("strong", {}, `${t("wpub_base_sha")}: `), baseShaValue),
+			baseShaValue,
+			origin: h("p", { class: "muted pm-work-publish-fact" }, t("wpub_base_from_start")),
+			detailCommit,
+			detailBase
+		};
+		heldNode = h("p", {
+			"data-work-publish-held": "",
+			hidden: true
+		}, t("wpub_result_held"));
+		gapNode = h("p", { "data-work-publish-gap": decision.gap || "none" }, gapSentence(t, decision.gap));
+		const extra = h("div", { class: "pm-work-publish-fields" }, h("p", { class: "pm-work-publish-public" }, t("wpub_public")), facts.commit, facts.base, facts.baseSha, facts.origin, h("details", { "data-work-publish-sha-details": "" }, h("summary", {}, t("wres_details")), h("p", {}, t("wpub_commit"), " ", detailCommit), h("p", {}, t("wpub_base_sha"), " ", detailBase)), h("label", {}, t("wpub_title"), titleInput), h("label", {}, t("wpub_body"), bodyInput), h("div", {
+			role: "radiogroup",
+			"aria-labelledby": groupId,
+			class: "pm-work-publish-draft"
+		}, h("p", { id: groupId }, t("wpub_draft_group")), h("p", { class: "muted" }, t("wpub_draft_help")), h("label", { class: "pm-work-publish-choice" }, yes, h("span", {}, t("wpub_draft_yes"), " ", h("span", { class: "muted" }, t("wpub_draft_yes_help")))), h("label", { class: "pm-work-publish-choice" }, no, h("span", {}, t("wpub_draft_no"), " ", h("span", { class: "muted" }, t("wpub_draft_no_help"))))), gapNode);
+		editor = form({
+			namespace: `${namespace}.work-publish.${candidateKey}`,
+			action: ACTION$2,
+			target: {
+				workspace_id: entry.target.workspace_id,
+				repository: entry.target.repository,
+				host: entry.target.host,
+				source_operation_id: entry.target.source_operation_id
+			},
+			requiredScope: "integrate",
+			savedText: "wpub_success",
+			pendingText: "wpub_pending",
+			label: "action_github_pr_publish",
+			fields: {
+				public_title: titleInput,
+				public_body: bodyInput,
+				draft: mirror
+			},
+			params: (values) => {
+				const current = bound;
+				const title = values.public_title ?? "";
+				const body = values.public_body ?? "";
+				if (!current || mode !== "ready" || !current.candidate || !current.baseRef || !current.preconditions) throw Error(t("wpub_gap_target"));
+				if (title.trim() === "") {
+					titleInput.focus();
+					throw Error(t("wpub_title_required"));
+				}
+				if (title.includes("\n") || title.includes("\r") || bytes(title) > 256) {
+					titleInput.focus();
+					throw Error(t("wpub_title_bounds"));
+				}
+				if (bytes(body) > 32e3) {
+					bodyInput.focus();
+					throw Error(t("wpub_body_bounds"));
+				}
+				if (values.draft !== "true" && values.draft !== "false") {
+					yes.focus();
+					throw Error(t("wpub_draft_required"));
+				}
+				pinned = {
+					target: current.target,
+					candidate: current.candidate,
+					baseRef: current.baseRef,
+					preconditions: current.preconditions,
+					scopes: current.scopes
+				};
+				return {
+					candidate_sha: current.candidate,
+					base_ref: current.baseRef,
+					public_title: title,
+					public_body: body,
+					draft: values.draft === "true"
+				};
+			},
+			preconditions: () => {
+				const current = editor?.locked() ? pinned || bound : bound;
+				if (!current?.preconditions) return {};
+				return {
+					repository_id: current.preconditions.repository_id,
+					expected_base_sha: current.preconditions.expected_base_sha
+				};
+			},
+			permitted: () => mode === "incomplete" || mode === "ready" && catalogAllows(caps, bound),
+			recoverPermitted: () => true,
+			onSaved: () => {
+				if (!radios) return;
+				radios.yes.checked = false;
+				radios.no.checked = false;
+				radios.mirror.value = "";
+			},
+			onError: (error) => {
+				const operation = editor?.operation();
+				error = {
+					...error,
+					code: error?.code || operation?.error_code,
+					message: error?.message || operation?.status_reason
+				};
+				const sentence = sentenceFor(error);
+				if (!sentence) return false;
+				const statusBox = editor?.box.querySelector(":scope > [role=\"status\"]");
+				if (!statusBox) return false;
+				statusBox.hidden = false;
+				const presented = errorBox ? errorBox(error, {
+					summary: sentence,
+					within: statusBox
+				}) : h("p", {}, sentence);
+				statusBox.replaceChildren(presented);
+				if (error?.code === "PR_AUTHORITY_UNAVAILABLE" || SETUP_CODES.has(error?.code) && readCaps(caps)?.managed_installation) statusBox.append(h("p", {}, h("a", { href: "#/settings?section=connection" }, t("paths_setup"))));
+				return true;
+			},
+			extra
+		});
+		const originalUpdate = editor.update;
+		editor.update = () => {
+			originalUpdate();
+			applyChrome();
+		};
+		editor.box.addEventListener("submit", (event) => {
+			if (!editor.locked() && mode !== "ready") {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+			}
+		}, true);
+		editor.box.addEventListener("click", (event) => {
+			const reset = editor.box.querySelector("[data-work-publish-new-request]");
+			if (!reset || event.target !== reset && !reset.contains(event.target)) return;
+			if ((editor.operation()?.error_code || editor.operation()?.error?.code) === "PR_RECEIPT_EXISTS") {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+			}
+		}, true);
+		editor.box.classList.add("pm-work-publish-form");
+		editor.update();
+		root = h("section", {
+			class: "pm-work-publish",
+			"data-work-publish": ""
+		}, h("h4", {}, t("action_github_pr_publish")), heldNode, editor.box);
+		paintFacts();
+		return root;
+	}
+	function staticSection(decision, envelope) {
+		dropEditor();
+		mode = decision.mode;
+		shownEnvelope = envelope;
+		if (decision.mode === "absent") {
+			root = null;
+			return null;
+		}
+		if (decision.mode === "blocked") {
+			const known = BLOCKED_KEYS[decision.reason];
+			const copy = known ? t(known) : t("wres_unknown");
+			const next = decision.reason === "github_not_configured" ? readCaps(caps)?.managed_installation ? h("p", {}, h("a", { href: "#/settings?section=connection" }, t("paths_setup")), " ", t("wpub_blocked_github_managed")) : h("p", {}, t("wpub_blocked_github_plain")) : null;
+			root = h("section", {
+				class: "pm-work-publish",
+				"data-work-publish": "",
+				"data-work-publish-blocked": decision.reason || "unknown"
+			}, h("h4", {}, t("action_github_pr_publish")), h("p", { "data-work-publish-blocked-reason": "" }, copy), next, decision.reason && !known ? h("details", {}, h("summary", {}, t("wres_details")), h("p", {}, decision.reason)) : null);
+			return root;
+		}
+		const entry = decision.entry;
+		if (!form || !entry?.target) {
+			root = h("section", {
+				class: "pm-work-publish",
+				"data-work-publish": ""
+			}, h("h4", {}, t("action_github_pr_publish")), h("p", { "data-work-publish-gap": decision.gap || "target" }, decision.mode === "ready" ? t("wpub_no_submit") : gapSentence(t, decision.gap || "target")));
+			return root;
+		}
+		return mountEditor(decision, envelope);
+	}
+	function render(envelope) {
+		const decision = classifyPublicationEntry(envelope);
+		if (decision.mode === "blocked" && [
+			"not_controller",
+			"not_writer_member",
+			"missing_scope"
+		].includes(decision.reason)) return staticSection(decision, envelope);
+		if (editor?.locked() && root) {
+			noteHeld(decision);
+			return root;
+		}
+		shownEnvelope = envelope;
+		if (decision.mode === "absent") return staticSection(decision, envelope);
+		if (decision.mode === "blocked") return staticSection(decision, envelope);
+		if (!form || !decision.entry?.target) return staticSection(decision, envelope);
+		const nextIdentity = identityOf(decision.entry);
+		if (editor && root && identity === nextIdentity) {
+			if (!editor.locked()) {
+				bound = decision.entry;
+				mode = decision.mode;
+				if (gapNode) {
+					gapNode.setAttribute("data-work-publish-gap", decision.gap || "none");
+					gapNode.textContent = gapSentence(t, decision.gap);
+				}
+				applyChrome();
+			}
+			return root;
+		}
+		dropEditor();
+		return mountEditor(decision, envelope);
+	}
+	return {
+		render,
+		dispose,
+		recheck,
+		sync,
+		element: () => root
+	};
+}
+//#endregion
+//#region src/pm-work-result.js
+var KNOWN_STATES = new Set([
+	"accepted",
+	"starting",
+	"active",
+	"waiting",
+	"turn-ended",
+	"process-ended",
+	"failed",
+	"unknown"
+]);
+var KNOWN_REASONS = new Set([
+	"bat_unreachable",
+	"observation_stale",
+	"session_not_found",
+	"transcript_truncated_by_size",
+	"archived_messages_omitted",
+	"parse_error",
+	"session_not_started_yet",
+	"start_outcome_uncertain",
+	"handoff_outcome_uncertain",
+	"unloaded_history_session",
+	"turn_marker_not_visible",
+	"turn_boundary_not_collected",
+	"session_not_managed_by_attempt",
+	"turn_slice_bounded",
+	"result_document_bounded",
+	"worktree_unreachable",
+	"bat_empty_status_not_clean_proof",
+	"diff_exceeded_pipe_limit",
+	"commit_limit_exceeded",
+	"changeset_time_budget_exceeded",
+	"base_commit_not_ancestor",
+	"source_digest_conflict"
+]);
+function normalizeForComparison(envelope) {
+	if (!envelope || typeof envelope !== "object") return null;
+	const clone = JSON.parse(JSON.stringify(envelope));
+	delete clone.cursor;
+	delete clone.events_read;
+	delete clone.wait;
+	if (clone.collection) delete clone.collection.checked_at;
+	return clone;
+}
+function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisibility = () => {}, form = null, namespace = "" }) {
+	let activeAttempt = null;
+	let readSerial = 0;
+	let lastEnvelope = null;
+	let lastNormalized = null;
+	let lastStale = false;
+	let turnsOpen = false;
+	let detailsOpen = false;
+	let filesOpen = false;
+	let currentChanges = null;
+	let currentChangesError = null;
+	let changesBusy = false;
+	let isOutOfDate = false;
+	let changesSerial = 0;
+	let diffGeneration = 0;
+	const diffKeySerials = new Map();
+	const diffCache = new Map();
+	const diffErrors = new Map();
+	const diffLoading = new Set();
+	const openDiffs = new Set();
+	const getCaps = () => typeof caps === "function" ? caps() : caps;
+	const canChanges = () => Boolean(getCaps()?.features?.pm_workspaces?.work_attempt_results?.routes?.changes);
+	const canDiff = () => Boolean(getCaps()?.features?.pm_workspaces?.work_attempt_results?.routes?.diff);
+	const panelElement = h("div", {
+		class: "pm-work-result-panel",
+		"data-work-result": ""
+	});
+	panelElement.hidden = true;
+	const publish = createWorkPublish({
+		h,
+		t,
+		form,
+		namespace,
+		caps,
+		errorBox
+	});
+	function updateVisibility(visible) {
+		panelElement.hidden = !visible;
+		onVisibility(visible);
+	}
+	function withdraw() {
+		readSerial++;
+		changesSerial++;
+		diffGeneration++;
+		diffKeySerials.clear();
+		lastEnvelope = null;
+		lastNormalized = null;
+		lastStale = false;
+		currentChanges = null;
+		currentChangesError = null;
+		changesBusy = false;
+		isOutOfDate = false;
+		diffCache.clear();
+		diffErrors.clear();
+		diffLoading.clear();
+		openDiffs.clear();
+		turnsOpen = false;
+		detailsOpen = false;
+		filesOpen = false;
+		publish.dispose();
+		panelElement.replaceChildren();
+		updateVisibility(false);
+	}
+	function dispose() {
+		activeAttempt = null;
+		withdraw();
+	}
+	async function setAttempt(attempt) {
+		if (!attempt || !attempt.attempt_id) {
+			activeAttempt = null;
+			withdraw();
+			return;
+		}
+		if (!Boolean(attempt.session?.session_id || attempt.native_session?.session_id || attempt.session_id)) {
+			activeAttempt = attempt;
+			withdraw();
+			return;
+		}
+		if (activeAttempt?.attempt_id !== attempt.attempt_id) withdraw();
+		activeAttempt = attempt;
+		await readResult();
+	}
+	async function refresh() {
+		if (!activeAttempt) return;
+		if (!Boolean(activeAttempt.session?.session_id || activeAttempt.native_session?.session_id || activeAttempt.session_id)) return;
+		await readResult();
+	}
+	async function readResult() {
+		if (!activeAttempt) return;
+		const ticket = ++readSerial;
+		const attemptId = activeAttempt.attempt_id;
+		const currentAttempt = activeAttempt;
+		try {
+			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/result`);
+			try {
+				alive?.();
+			} catch {
+				return;
+			}
+			if (ticket !== readSerial || activeAttempt?.attempt_id !== attemptId) return;
+			if (!(data && typeof data === "object" && data.contract === "pm-work-attempt-result/v1" && data.workspace_id === workspaceId && data.attempt_id === attemptId && data.execution && KNOWN_STATES.has(data.execution.state))) {
+				lastEnvelope = null;
+				lastNormalized = null;
+				lastStale = false;
+				renderInvalid();
+				return;
+			}
+			const normalized = normalizeForComparison(data);
+			const isUnchanged = lastNormalized && JSON.stringify(lastNormalized) === JSON.stringify(normalized);
+			if (!isUnchanged || lastStale) {
+				if (!isUnchanged && currentChanges) isOutOfDate = true;
+				lastEnvelope = data;
+				lastNormalized = normalized;
+				lastStale = false;
+				renderEnvelope(data, currentAttempt);
+			} else publish.recheck();
+		} catch (err) {
+			try {
+				alive?.();
+			} catch {
+				return;
+			}
+			if (ticket !== readSerial || activeAttempt?.attempt_id !== attemptId) return;
+			const status = err?.status;
+			if (status === 401 || status === 403 || status === 404) {
+				withdraw();
+				return;
+			}
+			lastStale = true;
+			renderError(err, currentAttempt);
+		}
+	}
+	function renderInvalid() {
+		publish.dispose();
+		panelElement.replaceChildren(h("h3", {}, t("wres_heading")), h("p", { class: "pm-work-result-invalid" }, t("wres_invalid_envelope")));
+		updateVisibility(true);
+	}
+	function renderError(err, attempt) {
+		const heading = h("h3", {}, t("wres_heading"));
+		const retryBtn = button({
+			label: t("wres_try_again"),
+			class: "ui-button secondary ui-sm pm-work-result-retry",
+			onClick: () => {
+				readResult();
+			}
+		});
+		retryBtn.setAttribute("data-work-result-retry", "result");
+		const errorContainer = h("div", { class: "pm-work-result-error-box" }, errorBox ? errorBox(err, { within: panelElement }) : h("div", { class: "error" }, err?.message || String(err)), retryBtn);
+		if (lastEnvelope) renderEnvelope(lastEnvelope, attempt, errorContainer);
+		else {
+			panelElement.replaceChildren(heading, errorContainer);
+			updateVisibility(true);
+		}
+	}
+	function formatCount(val) {
+		if (val === "unknown" || val == null) return t("wres_unknown");
+		return String(val);
+	}
+	function elementByAttr(root, name, value) {
+		if (!root || value == null) return null;
+		for (const node of root.querySelectorAll(`[${name}]`)) if (node.getAttribute(name) === value) return node;
+		return null;
+	}
+	function saveFocus() {
+		const active = document.activeElement;
+		if (active && panelElement.contains(active)) {
+			if (active.dataset?.workResultFocus) return {
+				type: "attr",
+				value: active.dataset.workResultFocus
+			};
+			if (active.dataset?.workResultDiffSummary) return {
+				type: "diff-summary",
+				key: active.dataset.workResultDiffSummary
+			};
+			if (active.dataset?.workResultDiffRegion) return {
+				type: "diff-region",
+				key: active.dataset.workResultDiffRegion
+			};
+			if (active.getAttribute("data-work-result-retry") === "result") return { type: "retry-result" };
+			if (active.getAttribute("data-work-result-retry") === "changes") return { type: "retry-changes" };
+			if (active.getAttribute("data-work-result-retry-diff")) return {
+				type: "retry-diff",
+				key: active.getAttribute("data-work-result-retry-diff")
+			};
+			if (active.classList.contains("pm-work-result-read-changes")) return { type: "read-changes" };
+			if (active.classList.contains("pm-work-result-read-again")) return { type: "read-again" };
+			if (active.matches?.("[data-work-publish-title], [data-work-publish-body]")) return {
+				type: "publish-field",
+				hook: active.hasAttribute("data-work-publish-title") ? "title" : "body",
+				start: active.selectionStart,
+				end: active.selectionEnd
+			};
+			if (active.matches?.("[data-work-publish-draft]")) return {
+				type: "publish-draft",
+				value: active.getAttribute("data-work-publish-draft")
+			};
+			if (active.matches?.("[data-work-publish-submit]")) return { type: "publish-submit" };
+			if (active.tagName === "SUMMARY" && active.parentElement?.tagName === "DETAILS") {
+				const details = active.parentElement;
+				if (details.dataset.workResultTurns !== void 0) return { type: "turns" };
+				if (details.dataset.workResultDetails !== void 0) return { type: "details" };
+				if (details.classList.contains("pm-work-result-files")) return { type: "files" };
+			}
+		}
+		return null;
+	}
+	function restoreFocus(token) {
+		if (!token) return;
+		if (token.type === "attr") elementByAttr(panelElement, "data-work-result-focus", token.value)?.focus();
+		else if (token.type === "diff-summary") elementByAttr(panelElement, "data-work-result-diff-summary", token.key)?.focus();
+		else if (token.type === "diff-region") elementByAttr(panelElement, "data-work-result-diff-region", token.key)?.focus();
+		else if (token.type === "read-changes") (panelElement.querySelector(".pm-work-result-read-changes") || panelElement.querySelector("[data-work-result-retry=\"changes\"]"))?.focus();
+		else if (token.type === "read-again") (panelElement.querySelector(".pm-work-result-read-again") || panelElement.querySelector(".pm-work-result-read-changes") || panelElement.querySelector("[data-work-result-retry=\"changes\"]"))?.focus();
+		else if (token.type === "retry-changes") (panelElement.querySelector("[data-work-result-retry=\"changes\"]") || panelElement.querySelector(".pm-work-result-read-changes"))?.focus();
+		else if (token.type === "retry-diff") (elementByAttr(panelElement, "data-work-result-retry-diff", token.key) || elementByAttr(panelElement, "data-work-result-diff-summary", token.key))?.focus();
+		else if (token.type === "retry-result") elementByAttr(panelElement, "data-work-result-retry", "result")?.focus();
+		else if (token.type === "turns") panelElement.querySelector("[data-work-result-turns] > summary")?.focus();
+		else if (token.type === "details") panelElement.querySelector("[data-work-result-details] > summary")?.focus();
+		else if (token.type === "files") panelElement.querySelector(".pm-work-result-files > summary")?.focus();
+		else if (token.type === "publish-field") {
+			const node = panelElement.querySelector(token.hook === "title" ? "[data-work-publish-title]" : "[data-work-publish-body]");
+			if (node) {
+				node.focus();
+				try {
+					node.setSelectionRange(token.start ?? 0, token.end ?? token.start ?? 0);
+				} catch {}
+			} else publishFocusFallback();
+		} else if (token.type === "publish-draft") {
+			const node = elementByAttr(panelElement, "data-work-publish-draft", token.value);
+			if (node) node.focus();
+			else publishFocusFallback();
+		} else if (token.type === "publish-submit") {
+			const node = panelElement.querySelector("[data-work-publish-submit]");
+			if (node) node.focus();
+			else publishFocusFallback();
+		}
+	}
+	function publishFocusFallback() {
+		const link = panelElement.querySelector("[data-work-publish-pr]");
+		const note = panelElement.querySelector("[data-work-publish-blocked-reason], [data-work-publish-gap], [data-work-publish-held]");
+		const target = link || note;
+		if (!target || target.hidden) return;
+		if (!link) target.tabIndex = -1;
+		target.focus();
+	}
+	function renderEnvelope(envelope, attempt, errorBoxNode = null) {
+		const focusToken = saveFocus();
+		const existingTurns = panelElement.querySelector("[data-work-result-turns]");
+		if (existingTurns) turnsOpen = existingTurns.open;
+		const existingDetails = panelElement.querySelector("[data-work-result-details]");
+		if (existingDetails) detailsOpen = existingDetails.open;
+		const existingFiles = panelElement.querySelector(".pm-work-result-files");
+		if (existingFiles) filesOpen = existingFiles.open;
+		for (const dt of panelElement.querySelectorAll(".pm-work-result-diff-details[open]")) {
+			const sum = dt.querySelector("[data-work-result-diff-summary]");
+			if (sum?.dataset.workResultDiffSummary) openDiffs.add(sum.dataset.workResultDiffSummary);
+		}
+		for (const dt of panelElement.querySelectorAll(".pm-work-result-diff-details:not([open])")) {
+			const sum = dt.querySelector("[data-work-result-diff-summary]");
+			if (sum?.dataset.workResultDiffSummary) openDiffs.delete(sum.dataset.workResultDiffSummary);
+		}
+		const sections = [];
+		const panelReasons = new Set();
+		const unlistedFacets = [];
+		const unlistedFileStatuses = [];
+		const heading = h("h3", {}, t("wres_heading"));
+		sections.push(heading);
+		if (errorBoxNode) {
+			const stalePill = h("span", {
+				class: "ui-pill tone-warn",
+				"data-status": "stale"
+			}, t("ui_status_stale"));
+			sections.push(h("div", { class: "pm-work-result-stale-banner" }, stalePill, errorBoxNode));
+		}
+		const exec = envelope.execution || {};
+		const stateKey = `wres_state_${exec.state?.replace(/-/g, "_")}`;
+		const stateLabel = t(stateKey) !== stateKey ? t(stateKey) : t("wres_unknown");
+		const stateP = h("p", { class: "pm-work-result-state" });
+		stateP.append(h("strong", {}, stateLabel));
+		if (exec.observed_at) stateP.append(" · ", timeStamp(exec.observed_at));
+		sections.push(stateP);
+		if (exec.state_reason) {
+			const reason = exec.state_reason;
+			panelReasons.add(reason);
+			if (reason === "agent_error") sections.push(h("p", { class: "muted pm-work-result-reason" }, t("wres_agent_error")));
+			else if (KNOWN_REASONS.has(reason)) {
+				const textKey = `wres_reason_${reason}`;
+				if (t(textKey) !== textKey) sections.push(h("p", { class: "muted pm-work-result-reason" }, t(textKey)));
+			} else if (exec.state === "failed") {
+				const wstKey = `wst_error_${reason}`;
+				const errKey = `error_code_${reason}`;
+				let failText = "";
+				if (t(wstKey) !== wstKey) failText = t(wstKey);
+				else if (t(errKey) !== errKey) failText = t(errKey);
+				if (failText) sections.push(h("p", { class: "muted pm-work-result-reason" }, failText));
+			}
+		} else if (exec.state === "waiting" && exec.pending != null) sections.push(h("p", { class: "muted pm-work-result-reason" }, t("wres_waiting_pending")));
+		if (exec.attention) {
+			let attnText = t("wres_status_needs_attention");
+			if (exec.attention.message) attnText += ` ${exec.attention.message}`;
+			sections.push(h("p", { class: "muted pm-work-result-attention" }, attnText));
+		}
+		const linkItems = [];
+		const sess = attempt?.session || attempt?.native_session;
+		if (sess?.session_id && sess?.host) {
+			const liveHref = sessionHref$1({
+				host: sess.host,
+				sessionId: sess.session_id,
+				from: "board",
+				workspaceId,
+				workItemId: envelope.identity?.work_item_id,
+				attemptId: attempt.attempt_id
+			});
+			linkItems.push(h("a", {
+				href: liveHref,
+				"data-work-result-focus": "live-output"
+			}, t("wres_open_live_output")));
+		}
+		const opHash = envelope.links?.start_operation_hash || (envelope.identity?.start_operation_id ? `#/op/${envelope.identity.start_operation_id}` : null);
+		if (opHash) linkItems.push(h("a", {
+			href: opHash,
+			"data-work-result-focus": "operation"
+		}, t("wres_view_operation")));
+		if (linkItems.length > 0) {
+			const linksContainer = h("div", { class: "pm-work-result-links" });
+			for (let i = 0; i < linkItems.length; i++) {
+				if (i > 0) linksContainer.append(" · ");
+				linksContainer.append(linkItems[i]);
+			}
+			sections.push(linksContainer);
+		}
+		const summaryHeader = h("div", { class: "pm-work-result-summary-header" });
+		summaryHeader.append(h("h4", {}, t("wres_agent_summary_label")));
+		if (exec.state_facets?.self_reported === "claimed_done") {
+			const pill = h("span", {
+				class: "ui-pill tone-neutral",
+				"data-work-result-pill": "claimed_done"
+			}, t("wres_pill_claimed_done"));
+			summaryHeader.append(" ", pill);
+		}
+		sections.push(summaryHeader);
+		const summaryText = envelope.conversation?.latest_assistant_summary?.text;
+		if (summaryText && typeof summaryText === "string") {
+			const summaryBox = h("div", {
+				role: "region",
+				tabindex: "0",
+				"aria-label": t("wres_agent_summary_label"),
+				class: "pm-work-result-summary-box",
+				"data-work-result-focus": "summary-box"
+			});
+			summaryBox.textContent = summaryText;
+			sections.push(summaryBox);
+		} else sections.push(h("p", { class: "muted pm-work-result-empty-summary" }, t("wres_no_recorded_turn")));
+		const dl = h("dl", { class: "pm-work-result-checks" });
+		const verifStatus = exec.state_facets?.verification || envelope.verification?.status;
+		let verifText = t("wres_unknown");
+		if (verifStatus && [
+			"unverified",
+			"running",
+			"verified",
+			"failed",
+			"stale",
+			"unknown"
+		].includes(verifStatus)) verifText = t(`wres_verification_${verifStatus}`);
+		else if (verifStatus) unlistedFacets.push(`verification: ${verifStatus}`);
+		dl.append(h("dt", {}, t("wres_check_verification")), h("dd", { "data-check": "verification" }, verifText));
+		const reviewDecision = exec.state_facets?.review_decision || envelope.verification?.quality_reviews?.current?.decision;
+		let reviewText = t("wres_unknown");
+		if (typeof reviewDecision === "string") {
+			if (reviewDecision === "unassessed") reviewText = t("wres_review_unassessed");
+			else if (reviewDecision === "revocation") reviewText = t("wres_review_revocation");
+			else unlistedFacets.push(`review_decision: ${reviewDecision}`);
+		} else if (reviewDecision && typeof reviewDecision === "object") {
+			if (reviewDecision.kind === "unassessed") reviewText = t("wres_review_unassessed");
+			else if (reviewDecision.kind === "revocation") reviewText = t("wres_review_revocation");
+			else if (reviewDecision.kind === "assessment" || reviewDecision.acceptance) {
+				if (reviewDecision.acceptance === "accepted") reviewText = t("wres_review_accepted");
+				else if (reviewDecision.acceptance === "rejected") reviewText = t("wres_review_rejected");
+				else if (reviewDecision.acceptance === "unassessed") reviewText = t("wres_review_unassessed");
+				else if (reviewDecision.acceptance) unlistedFacets.push(`review_acceptance: ${reviewDecision.acceptance}`);
+			} else if (reviewDecision.kind) unlistedFacets.push(`review_kind: ${reviewDecision.kind}`);
+		}
+		dl.append(h("dt", {}, t("wres_check_review")), h("dd", { "data-check": "review" }, reviewText));
+		const acceptStatus = (exec.state_facets?.acceptance)?.status;
+		let acceptText = t("wres_unknown");
+		if (acceptStatus === "passed") acceptText = t("wres_acceptance_passed");
+		else if (acceptStatus === "blocked") acceptText = t("wres_acceptance_blocked");
+		else if (acceptStatus === "unassessed") acceptText = t("wres_acceptance_unassessed");
+		else if (acceptStatus) unlistedFacets.push(`acceptance_status: ${acceptStatus}`);
+		dl.append(h("dt", {}, t("wres_check_acceptance")), h("dd", { "data-check": "acceptance" }, acceptText));
+		const mergeStatus = exec.state_facets?.merge;
+		let mergeText = t("wres_unknown");
+		if ([
+			"not_started",
+			"not_merged",
+			"pr_open",
+			"pr_closed_unmerged",
+			"merge_pending",
+			"merged"
+		].includes(mergeStatus)) mergeText = t(`wres_merge_${mergeStatus}`);
+		else if (mergeStatus) unlistedFacets.push(`merge: ${mergeStatus}`);
+		const prDd = h("dd", { "data-check": "pr" });
+		prDd.append(h("span", { class: "pm-work-result-pr-status" }, mergeText));
+		const prs = envelope.delivery?.pull_requests || [];
+		if (prs.length > 0) {
+			const prList = h("ul", { class: "pm-work-result-pr-list" });
+			for (const pr of prs) {
+				const line = publicationPrLine(h, t, pr);
+				if (line) prList.append(line);
+			}
+			if (prList.childElementCount) prDd.append(prList);
+			for (const pr of prs) {
+				const delivery = publicationDeliveryLine(h, t, pr, envelope, attempt);
+				if (delivery) prDd.append(delivery);
+			}
+		}
+		if (envelope.completeness?.coverage?.delivery === "partial") prDd.append(h("p", { "data-work-publish-partial": "" }, t("wpub_pr_partial")));
+		dl.append(h("dt", {}, t("wres_check_pr")), prDd);
+		const deployObj = exec.state_facets?.deployment;
+		const deployState = deployObj?.state;
+		const deployVerified = deployObj?.verified === true;
+		let deployText = t("wres_unknown");
+		if ([
+			"not_deployed",
+			"pending",
+			"running",
+			"failed",
+			"needs_attention",
+			"cancelled"
+		].includes(deployState)) deployText = t(`wres_deploy_${deployState}`);
+		else if (deployState === "succeeded") deployText = deployVerified ? t("wres_deploy_succeeded_verified") : t("wres_deploy_succeeded");
+		else if (deployState) unlistedFacets.push(`deployment_state: ${deployState}`);
+		dl.append(h("dt", {}, t("wres_check_deployment")), h("dd", { "data-check": "deployment" }, deployText));
+		const goal = envelope.delivery?.delivery_goal;
+		let goalText = t("wres_unknown");
+		if (goal === "pull_request") goalText = t("wres_goal_pr");
+		else if (goal === "reviewable_changes") goalText = t("wres_goal_reviewable_changes");
+		else if (goal && goal !== "unknown") unlistedFacets.push(`delivery_goal: ${goal}`);
+		dl.append(h("dt", {}, t("wres_check_delivery_goal")), h("dd", { "data-check": "delivery-goal" }, goalText));
+		sections.push(dl);
+		const changesBox = h("div", { class: "pm-work-result-changes" });
+		const ch = envelope.changes || {};
+		const summary = ch.summary || {};
+		const isComplete = summary.complete === true && (!summary.unavailable || summary.unavailable.length === 0);
+		const filesCountNum = Number.isSafeInteger(summary.file_count) ? summary.file_count : Array.isArray(summary.files) ? summary.files.length : null;
+		const commitsCountNum = Number.isSafeInteger(summary.commit_count) ? summary.commit_count : Array.isArray(summary.commits) ? summary.commits.length : null;
+		if (isComplete) {
+			let summaryKey = "wres_changes_summary";
+			if (filesCountNum === 1 && commitsCountNum === 1) summaryKey = "wres_changes_summary_one";
+			else if (filesCountNum === 1) summaryKey = "wres_changes_summary_one_file";
+			else if (commitsCountNum === 1) summaryKey = "wres_changes_summary_one_commit";
+			const summaryText = t(summaryKey, {
+				files: formatCount(filesCountNum),
+				commits: formatCount(commitsCountNum),
+				additions: formatCount(summary.additions),
+				deletions: formatCount(summary.deletions)
+			});
+			changesBox.append(h("p", { class: "pm-work-result-changes-summary" }, summaryText, " · ", t("wres_as_of_last_turn")));
+		} else {
+			const partlyText = h("p", { class: "pm-work-result-changes-summary" }, t("wres_changes_partly_read"), " · ", t("wres_as_of_last_turn"));
+			changesBox.append(partlyText);
+			const changeReasons = [];
+			if (summary.reason && !panelReasons.has(summary.reason)) {
+				changeReasons.push(summary.reason);
+				panelReasons.add(summary.reason);
+			}
+			if (Array.isArray(summary.reasons)) {
+				for (const r of summary.reasons) if (!changeReasons.includes(r) && !panelReasons.has(r)) {
+					changeReasons.push(r);
+					panelReasons.add(r);
+				}
+			}
+			if (changeReasons.length > 0) {
+				const reasonsList = h("ul", { class: "pm-work-result-changes-reasons" });
+				for (const code of changeReasons) {
+					const key = `wres_reason_${code}`;
+					let text = t(key);
+					if (!text || text === key) text = t("wres_reason_generic_limit");
+					reasonsList.append(h("li", {}, text));
+				}
+				changesBox.append(reasonsList);
+			}
+		}
+		if (canChanges()) changesBox.append(renderCurrentChangesBlock());
+		const files = summary.files || [];
+		if (files.length > 0) {
+			const renderFileRow = (f) => {
+				let statusLabel = t("wres_unknown");
+				if (f.status === "M" || f.status === "modified") statusLabel = t("wres_file_modified");
+				else if (f.status === "A" || f.status === "added") statusLabel = t("wres_file_added");
+				else if (f.status === "D" || f.status === "deleted") statusLabel = t("wres_file_deleted");
+				else if (typeof f.status === "string" && (f.status.startsWith("R") || f.status === "renamed")) statusLabel = t("wres_file_renamed");
+				else if (f.status) unlistedFileStatuses.push(`${f.path}: ${f.status}`);
+				const adds = f.additions === "unknown" || f.additions == null ? "?" : `+${f.additions}`;
+				const dels = f.deletions === "unknown" || f.deletions == null ? "?" : `−${f.deletions}`;
+				return h("li", { class: "pm-work-result-file-row" }, h("span", { class: "pm-work-result-file-path mono" }, f.path), " ", h("span", { class: "pm-work-result-file-status muted" }, statusLabel), " ", h("span", { class: "pm-work-result-file-diff mono" }, `${adds} ${dels}`));
+			};
+			const fileList = h("ul", { class: "pm-work-result-file-list" }, ...files.slice(0, 20).map(renderFileRow));
+			changesBox.append(fileList);
+			if (files.length > 20) {
+				const remainingFiles = files.slice(20);
+				const remainingList = h("ul", { class: "pm-work-result-file-list" }, ...remainingFiles.map(renderFileRow));
+				const filesDisclosure = disclosure({
+					label: remainingFiles.length === 1 ? t("wres_show_all_files_one") : t("wres_show_all_files", { n: files.length }),
+					body: remainingList,
+					open: filesOpen
+				});
+				filesDisclosure.classList.add("pm-work-result-files");
+				changesBox.append(filesDisclosure);
+			}
+		}
+		if (ch.base_commit) changesBox.append(h("p", { class: "pm-work-result-base-commit" }, h("strong", {}, `${t("wres_base_commit")}: `), h("span", { class: "mono" }, ch.base_commit.slice(0, 12))));
+		const fixedCommit = ch.fixed_result_commit;
+		if (fixedCommit && fixedCommit.commit_sha) {
+			const srcKind = fixedCommit.source_kind;
+			let srcText = "";
+			if (srcKind === "turn_end_observation") srcText = t("wres_source_turn_end_observation");
+			else if (srcKind === "execution_verification" || srcKind === "session_verification") srcText = t("wres_source_verified_commit");
+			else if (srcKind === "integration") srcText = t("wres_source_integration_commit");
+			const commitP = h("p", { class: "pm-work-result-commit" }, h("strong", {}, `${t("wres_result_commit")}: `), h("span", { class: "mono" }, fixedCommit.commit_sha.slice(0, 12)));
+			if (srcText) commitP.append(" · ", srcText);
+			changesBox.append(commitP);
+		}
+		const uncommitted = ch.uncommitted || {};
+		if (uncommitted.count === "unknown") changesBox.append(h("p", { class: "muted pm-work-result-uncommitted" }, t("wres_uncommitted_unknown")));
+		else if (Number.isSafeInteger(uncommitted.count) && uncommitted.count > 0) changesBox.append(h("p", { class: "pm-work-result-uncommitted" }, t("wres_uncommitted_changes", { n: uncommitted.count })));
+		sections.push(changesBox);
+		const completeness = envelope.completeness;
+		const completenessStatus = completeness?.status;
+		if (completenessStatus && completenessStatus !== "complete") {
+			const compDiv = h("div", { class: "pm-work-result-completeness" });
+			if (completenessStatus === "partial") compDiv.append(statusPill("partial"));
+			else compDiv.append(h("span", {
+				class: "ui-pill tone-bad",
+				"data-status": "unavailable"
+			}, t("wres_status_unavailable")));
+			const reasons = (completeness.reasons || []).filter((code) => {
+				if (panelReasons.has(code)) return false;
+				panelReasons.add(code);
+				return true;
+			});
+			if (reasons.length > 0) {
+				const reasonList = h("ul", { class: "pm-work-result-completeness-reasons" });
+				for (const code of reasons) {
+					const key = `wres_reason_${code}`;
+					let text = t(key);
+					if (!text || text === key) text = t("wres_reason_generic_limit");
+					reasonList.append(h("li", {}, text));
+				}
+				compDiv.append(reasonList);
+			}
+			sections.push(compDiv);
+		}
+		const publishNode = publish.render(envelope);
+		if (publishNode) sections.push(publishNode);
+		const results = envelope.results || [];
+		if (results.length > 0) {
+			const turnsBody = h("div", { class: "pm-work-result-turns-body" });
+			if (envelope.results_has_more) turnsBody.append(h("p", { class: "muted pm-work-result-more-turns" }, t("wres_showing_latest_20")));
+			const turnsList = h("ul", { class: "pm-work-result-turns-list" });
+			for (let i = 0; i < results.length; i++) {
+				const turn = results[i];
+				const row = h("li", { class: "pm-work-result-turn-row" });
+				if (turn.observed_at) row.append(timeStamp(turn.observed_at), " ");
+				const sha = turn.head_commit ? turn.head_commit.slice(0, 12) : "—";
+				row.append(h("span", { class: "mono" }, sha));
+				if (i === 0) row.append(" ", h("span", {
+					class: "ui-pill tone-neutral ui-xs",
+					"data-work-result-pill": "latest_turn"
+				}, t("wres_latest_turn")));
+				turnsList.append(row);
+			}
+			turnsBody.append(turnsList);
+			const turnsDisclosure = disclosure({
+				label: results.length === 1 ? t("wres_recorded_turns_count_one") : t("wres_recorded_turns_count", { n: results.length }),
+				body: turnsBody,
+				open: turnsOpen
+			});
+			turnsDisclosure.dataset.workResultTurns = "";
+			sections.push(turnsDisclosure);
+		}
+		const detailsBody = h("div", { class: "pm-work-result-details-body" });
+		const addDetailRow = (label, value) => {
+			if (value === void 0) return;
+			detailsBody.append(h("p", {}, h("strong", {}, `${label}: `), h("span", { class: "mono" }, String(value == null ? "—" : value))));
+		};
+		addDetailRow(t("wres_attempt_id"), envelope.attempt_id);
+		addDetailRow(t("wres_result_id"), envelope.sources?.result_id);
+		addDetailRow(t("wres_start_operation_id"), envelope.identity?.start_operation_id);
+		addDetailRow(t("wres_execution_operation_id"), envelope.identity?.execution_operation_id);
+		addDetailRow(t("wres_source_key"), envelope.sources?.source_key);
+		addDetailRow(t("wres_digest"), envelope.sources?.digest ? envelope.sources.digest.slice(0, 16) : null);
+		addDetailRow(t("wres_collection_outcome"), envelope.collection?.outcome);
+		addDetailRow(t("wres_raw_state"), exec.state);
+		addDetailRow(t("wres_raw_stage"), exec.stage);
+		if (exec.state_reason) addDetailRow(t("wres_raw_reasons"), exec.state_reason);
+		if (unlistedFacets.length > 0) addDetailRow(t("wres_unlisted_facets"), unlistedFacets.join(", "));
+		if (unlistedFileStatuses.length > 0) addDetailRow(t("wres_unlisted_file_statuses"), unlistedFileStatuses.join(", "));
+		const unlistedReasons = (completeness?.reasons || []).filter((r) => !KNOWN_REASONS.has(r));
+		if (unlistedReasons.length > 0) addDetailRow(t("wres_unlisted_completeness_reasons"), unlistedReasons.join(", "));
+		const usage = envelope.usage || {};
+		const formatUsageVal = (val) => val == null || val === "unknown" ? t("ui_status_unknown") : String(val);
+		addDetailRow(t("wres_usage_context_tokens"), formatUsageVal(usage.context_tokens));
+		addDetailRow(t("wres_usage_context_window"), formatUsageVal(usage.context_window));
+		addDetailRow(t("wres_usage_num_turns"), formatUsageVal(usage.num_turns));
+		detailsBody.append(h("p", { class: "muted" }, t("wres_exit_code_not_exposed")));
+		const detailsDisclosure = disclosure({
+			label: t("wres_details"),
+			body: detailsBody,
+			open: detailsOpen
+		});
+		detailsDisclosure.dataset.workResultDetails = "";
+		sections.push(detailsDisclosure);
+		panelElement.replaceChildren(...sections);
+		updateVisibility(true);
+		restoreFocus(focusToken);
+	}
+	function sortCommitsOldestFirst(commitsTouched, allCommits) {
+		if (!Array.isArray(commitsTouched)) return [];
+		if (!Array.isArray(allCommits) || allCommits.length === 0) return [...commitsTouched];
+		const order = new Map();
+		allCommits.forEach((sha, idx) => order.set(sha, idx));
+		const originalIndex = new Map();
+		commitsTouched.forEach((sha, idx) => originalIndex.set(sha, idx));
+		return [...commitsTouched].sort((a, b) => {
+			const hasA = order.has(a);
+			const hasB = order.has(b);
+			if (hasA && hasB) return order.get(a) - order.get(b);
+			if (hasA) return -1;
+			if (hasB) return 1;
+			return originalIndex.get(a) - originalIndex.get(b);
+		});
+	}
+	function renderDiffContent(container, commit, path, key, summaryNode) {
+		container.replaceChildren();
+		if (diffLoading.has(key)) {
+			container.append(h("p", { class: "muted pm-work-result-diff-loading" }, t("wres_diff_loading")));
+			return;
+		}
+		const err = diffErrors.get(key);
+		if (err) {
+			if (err.status === 404 || err.code === "PM_DIFF_NOT_FOUND") container.append(h("p", { class: "muted pm-work-result-diff-notice" }, t("error_code_PM_DIFF_NOT_FOUND")));
+			else {
+				const errBoxNode = errorBox ? errorBox(err, { within: container }) : h("div", { class: "error" }, err?.message || String(err));
+				const retryBtn = button({
+					label: t("wres_try_again"),
+					class: "ui-button secondary ui-sm pm-work-result-retry",
+					onClick: () => {
+						diffErrors.delete(key);
+						loadDiff(commit, path, key, container, summaryNode);
+					}
+				});
+				retryBtn.setAttribute("data-work-result-retry-diff", key);
+				container.append(h("div", { class: "pm-work-result-error-box" }, errBoxNode, retryBtn));
+			}
+			return;
+		}
+		const data = diffCache.get(key);
+		if (!data) return;
+		const stats = data.stats || {};
+		const adds = stats.additions === "unknown" || stats.additions == null ? "?" : `+${stats.additions}`;
+		const dels = stats.deletions === "unknown" || stats.deletions == null ? "?" : `−${stats.deletions}`;
+		container.append(h("p", { class: "pm-work-result-diff-stats mono" }, `${adds} ${dels}`));
+		if (data.truncated === true) {
+			const noticeP = h("p", { class: "muted pm-work-result-diff-notice" });
+			const rawText = t("wres_diff_truncated");
+			if (rawText.includes("256 KiB")) {
+				const [before, after] = rawText.split("256 KiB");
+				noticeP.append(before, h("span", { class: "mono" }, "256 KiB"), after);
+			} else noticeP.textContent = rawText;
+			container.append(noticeP);
+		}
+		if (data.available === false) {
+			let reasonText = "";
+			if (data.reason === "diff_exceeded_pipe_limit") reasonText = t("wres_reason_diff_exceeded_pipe_limit");
+			else if (data.reason && t(`wres_reason_${data.reason}`) !== `wres_reason_${data.reason}`) reasonText = t(`wres_reason_${data.reason}`);
+			else if (data.reason && t(`error_code_${data.reason}`) !== `error_code_${data.reason}`) reasonText = t(`error_code_${data.reason}`);
+			else reasonText = t("wres_reason_generic_limit");
+			container.append(h("p", { class: "muted pm-work-result-diff-notice" }, reasonText));
+		} else if (typeof data.diff === "string") {
+			const pre = h("pre", {
+				class: "pm-work-result-diff-pre mono",
+				tabindex: "0",
+				role: "region",
+				"aria-label": t("wres_diff_region_label", {
+					path,
+					sha: commit.slice(0, 12)
+				}),
+				"data-work-result-diff-region": key
+			});
+			pre.textContent = data.diff;
+			container.append(pre);
+		}
+	}
+	async function loadDiff(commit, path, key, container, summaryNode) {
+		if (diffLoading.has(key)) return;
+		diffLoading.add(key);
+		diffErrors.delete(key);
+		const generation = diffGeneration;
+		const keyTicket = (diffKeySerials.get(key) || 0) + 1;
+		diffKeySerials.set(key, keyTicket);
+		const attemptId = activeAttempt?.attempt_id;
+		const activeAtStart = document.activeElement;
+		const startedFromRetry = Boolean(activeAtStart && activeAtStart.getAttribute("data-work-result-retry-diff") === key);
+		if (Boolean(activeAtStart && (container.contains(activeAtStart) || activeAtStart === summaryNode))) summaryNode.focus();
+		renderDiffContent(container, commit, path, key, summaryNode);
+		try {
+			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/diff?commit=${encodeURIComponent(commit)}&path=${encodeURIComponent(path)}`);
+			try {
+				alive?.();
+			} catch {
+				return;
+			}
+			if (generation !== diffGeneration || diffKeySerials.get(key) !== keyTicket || activeAttempt?.attempt_id !== attemptId) return;
+			diffCache.set(key, data);
+		} catch (err) {
+			try {
+				alive?.();
+			} catch {
+				return;
+			}
+			if (generation !== diffGeneration || diffKeySerials.get(key) !== keyTicket || activeAttempt?.attempt_id !== attemptId) return;
+			diffErrors.set(key, err);
+		} finally {
+			if (generation === diffGeneration && diffKeySerials.get(key) === keyTicket) {
+				diffLoading.delete(key);
+				if (activeAttempt?.attempt_id === attemptId && panelElement.contains(container)) {
+					renderDiffContent(container, commit, path, key, summaryNode);
+					const activeNow = document.activeElement;
+					if (Boolean(activeNow && (activeNow === summaryNode && summaryNode.isConnected || panelElement.contains(activeNow) && activeNow.getAttribute("data-work-result-diff-summary") === key)) && startedFromRetry && diffErrors.has(key)) elementByAttr(container, "data-work-result-retry-diff", key)?.focus();
+				}
+			}
+		}
+	}
+	async function readCurrentChanges(isReadAgain = false) {
+		if (changesBusy) return;
+		changesBusy = true;
+		const ticket = ++changesSerial;
+		const attemptId = activeAttempt?.attempt_id;
+		if (isReadAgain) {
+			diffGeneration++;
+			diffKeySerials.clear();
+			diffCache.clear();
+			diffErrors.clear();
+			diffLoading.clear();
+			openDiffs.clear();
+			for (const dt of panelElement.querySelectorAll(".pm-work-result-diff-details[open]")) dt.open = false;
+		}
+		currentChangesError = null;
+		if (lastEnvelope && activeAttempt) renderEnvelope(lastEnvelope, activeAttempt);
+		try {
+			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/changes`);
+			try {
+				alive?.();
+			} catch {
+				return;
+			}
+			if (ticket !== changesSerial || activeAttempt?.attempt_id !== attemptId) return;
+			currentChanges = data;
+			isOutOfDate = false;
+			currentChangesError = null;
+		} catch (err) {
+			try {
+				alive?.();
+			} catch {
+				return;
+			}
+			if (ticket !== changesSerial || activeAttempt?.attempt_id !== attemptId) return;
+			currentChangesError = err;
+		} finally {
+			if (ticket === changesSerial) changesBusy = false;
+			if (ticket === changesSerial && activeAttempt?.attempt_id === attemptId && lastEnvelope) renderEnvelope(lastEnvelope, activeAttempt);
+		}
+	}
+	function renderCurrentChangesBlock() {
+		const block = h("div", {
+			class: "pm-work-result-current-changes",
+			"data-work-result-current-changes": ""
+		});
+		if (changesBusy) block.setAttribute("aria-busy", "true");
+		if (currentChangesError) {
+			const errBoxNode = errorBox ? errorBox(currentChangesError, { within: block }) : h("div", { class: "error" }, currentChangesError?.message || String(currentChangesError));
+			const retryBtn = button({
+				label: t("wres_try_again"),
+				class: "ui-button secondary ui-sm pm-work-result-retry",
+				onClick: () => {
+					readCurrentChanges(false);
+				}
+			});
+			retryBtn.setAttribute("data-work-result-retry", "changes");
+			if (changesBusy) retryBtn.setAttribute("aria-disabled", "true");
+			block.append(h("div", { class: "pm-work-result-error-box" }, errBoxNode, retryBtn));
+			return block;
+		}
+		if (isOutOfDate) {
+			const outPill = h("span", {
+				class: "ui-pill tone-warn",
+				"data-status": "out-of-date"
+			}, t("wres_out_of_date"));
+			const readAgainBtn = button({
+				label: t("wres_read_again"),
+				class: "ui-button secondary ui-sm pm-work-result-read-again",
+				onClick: () => {
+					readCurrentChanges(true);
+				}
+			});
+			if (changesBusy) readAgainBtn.setAttribute("aria-disabled", "true");
+			block.append(h("div", { class: "pm-work-result-out-of-date-banner" }, outPill, " ", readAgainBtn));
+		} else {
+			const readBtn = button({
+				label: t("wres_read_current_changes"),
+				class: "ui-button secondary ui-sm pm-work-result-read-changes",
+				onClick: () => {
+					readCurrentChanges(false);
+				}
+			});
+			if (changesBusy) readBtn.setAttribute("aria-disabled", "true");
+			block.append(readBtn);
+		}
+		if (!currentChanges) return block;
+		const headSha = currentChanges.live_head_commit;
+		const headP = h("p", { class: "pm-work-result-head" });
+		headP.append(h("strong", {}, `${t("wres_head")}: `));
+		if (headSha && headSha !== "unknown") headP.append(h("span", { class: "mono" }, headSha.slice(0, 12)));
+		else headP.append(t("wres_unknown"));
+		block.append(headP);
+		const freshness = currentChanges.head_freshness;
+		let freshnessKey = "wres_freshness_unavailable";
+		if (freshness === "live") freshnessKey = "wres_freshness_live";
+		else if (freshness === "cached_receipt") freshnessKey = "wres_freshness_cached_receipt";
+		block.append(h("p", { class: "muted pm-work-result-freshness" }, t(freshnessKey)));
+		const curSummary = currentChanges.summary || {};
+		const isCurComplete = curSummary.complete === true && (!curSummary.unavailable || curSummary.unavailable.length === 0);
+		const curFilesCountNum = Number.isSafeInteger(curSummary.file_count) ? curSummary.file_count : Array.isArray(curSummary.files) ? curSummary.files.length : null;
+		const curCommitsCountNum = Number.isSafeInteger(curSummary.commit_count) ? curSummary.commit_count : Array.isArray(curSummary.commits) ? curSummary.commits.length : null;
+		let curSummaryKey = "wres_changes_summary";
+		if (curFilesCountNum === 1 && curCommitsCountNum === 1) curSummaryKey = "wres_changes_summary_one";
+		else if (curFilesCountNum === 1) curSummaryKey = "wres_changes_summary_one_file";
+		else if (curCommitsCountNum === 1) curSummaryKey = "wres_changes_summary_one_commit";
+		const curSummaryText = t(curSummaryKey, {
+			files: formatCount(curFilesCountNum),
+			commits: formatCount(curCommitsCountNum),
+			additions: formatCount(curSummary.additions),
+			deletions: formatCount(curSummary.deletions)
+		});
+		if (isCurComplete) block.append(h("p", { class: "pm-work-result-changes-summary" }, curSummaryText));
+		else block.append(h("p", { class: "pm-work-result-changes-summary" }, t("wres_changes_partly_read")));
+		const blockReasons = new Set();
+		if (!isCurComplete) {
+			const curChangeReasons = [];
+			if (curSummary.reason) {
+				curChangeReasons.push(curSummary.reason);
+				blockReasons.add(curSummary.reason);
+			}
+			if (Array.isArray(curSummary.reasons)) {
+				for (const r of curSummary.reasons) if (!curChangeReasons.includes(r) && !blockReasons.has(r)) {
+					curChangeReasons.push(r);
+					blockReasons.add(r);
+				}
+			}
+			if (curChangeReasons.length > 0) {
+				const reasonsList = h("ul", { class: "pm-work-result-changes-reasons" });
+				for (const code of curChangeReasons) {
+					const key = `wres_reason_${code}`;
+					let text = t(key);
+					if (!text || text === key) text = t("wres_reason_generic_limit");
+					reasonsList.append(h("li", {}, text));
+				}
+				block.append(reasonsList);
+			}
+		}
+		const curCompleteness = currentChanges.completeness;
+		const curCompStatus = curCompleteness?.status;
+		if (curCompStatus && curCompStatus !== "complete") {
+			const compDiv = h("div", { class: "pm-work-result-completeness" });
+			if (curCompStatus === "partial") compDiv.append(statusPill("partial"));
+			else compDiv.append(h("span", {
+				class: "ui-pill tone-bad",
+				"data-status": "unavailable"
+			}, t("wres_status_unavailable")));
+			const compReasons = (curCompleteness.reasons || []).filter((code) => {
+				if (blockReasons.has(code)) return false;
+				blockReasons.add(code);
+				return true;
+			});
+			if (compReasons.length > 0) {
+				const reasonList = h("ul", { class: "pm-work-result-completeness-reasons" });
+				for (const code of compReasons) {
+					const key = `wres_reason_${code}`;
+					let text = t(key);
+					if (!text || text === key) text = t("wres_reason_generic_limit");
+					reasonList.append(h("li", {}, text));
+				}
+				compDiv.append(reasonList);
+			}
+			block.append(compDiv);
+		}
+		const curFiles = curSummary.files || [];
+		if (curFiles.length > 0) {
+			const curFileList = h("ul", { class: "pm-work-result-file-list" });
+			for (const f of curFiles) {
+				let statusLabel = t("wres_unknown");
+				if (f.status === "M" || f.status === "modified") statusLabel = t("wres_file_modified");
+				else if (f.status === "A" || f.status === "added") statusLabel = t("wres_file_added");
+				else if (f.status === "D" || f.status === "deleted") statusLabel = t("wres_file_deleted");
+				else if (typeof f.status === "string" && (f.status.startsWith("R") || f.status === "renamed")) statusLabel = t("wres_file_renamed");
+				const adds = f.additions === "unknown" || f.additions == null ? "?" : `+${f.additions}`;
+				const dels = f.deletions === "unknown" || f.deletions == null ? "?" : `−${f.deletions}`;
+				const row = h("li", { class: "pm-work-result-file-row" }, h("span", { class: "pm-work-result-file-path mono" }, f.path), " ", h("span", { class: "pm-work-result-file-status muted" }, statusLabel), " ", h("span", { class: "pm-work-result-file-diff mono" }, `${adds} ${dels}`));
+				if (canDiff()) {
+					const commits = sortCommitsOldestFirst(f.commits_touched, curSummary.commits);
+					for (const commit of commits) {
+						const key = `${commit}:${f.path}`;
+						const isOpen = openDiffs.has(key);
+						const sha12 = commit.slice(0, 12);
+						const summaryNode = h("summary", {
+							"data-work-result-diff-summary": key,
+							tabindex: "0"
+						}, t("wres_show_diff_label"), " · ", h("span", { class: "mono" }, sha12));
+						const bodyContainer = h("div", { class: "pm-work-result-diff-body" });
+						renderDiffContent(bodyContainer, commit, f.path, key, summaryNode);
+						const diffDetails = disclosure({ element: h("details", {
+							class: "pm-work-result-diff-details",
+							open: isOpen
+						}, summaryNode, bodyContainer) });
+						diffDetails.addEventListener("toggle", () => {
+							if (diffDetails.open) {
+								openDiffs.add(key);
+								if (!diffCache.has(key) && !diffLoading.has(key) && !diffErrors.has(key)) loadDiff(commit, f.path, key, bodyContainer, summaryNode);
+							} else openDiffs.delete(key);
+						});
+						row.append(diffDetails);
+					}
+				}
+				curFileList.append(row);
+			}
+			block.append(curFileList);
+		}
+		const curUncommitted = currentChanges.uncommitted || {};
+		const uncommittedBox = h("div", { class: "pm-work-result-uncommitted-box" });
+		if (curUncommitted.count === "unknown") uncommittedBox.append(h("p", { class: "muted pm-work-result-uncommitted" }, t("wres_uncommitted_unknown")));
+		else if (Number.isSafeInteger(curUncommitted.count) && curUncommitted.count > 0) {
+			uncommittedBox.append(h("p", { class: "pm-work-result-uncommitted" }, t("wres_uncommitted_changes", { n: curUncommitted.count })));
+			if (Array.isArray(curUncommitted.files) && curUncommitted.files.length > 0) {
+				const uncommittedList = h("ul", { class: "pm-work-result-file-list pm-work-result-uncommitted-list" });
+				for (const uf of curUncommitted.files) {
+					const p = typeof uf === "string" ? uf : uf?.path;
+					const s = typeof uf === "object" && uf?.status ? uf.status : null;
+					const li = h("li", { class: "pm-work-result-file-row" }, h("span", { class: "pm-work-result-file-path mono" }, p));
+					if (s) {
+						let statusLabel = s;
+						if (s === "M" || s === "modified") statusLabel = t("wres_file_modified");
+						else if (s === "A" || s === "added") statusLabel = t("wres_file_added");
+						else if (s === "D" || s === "deleted") statusLabel = t("wres_file_deleted");
+						li.append(" ", h("span", { class: "pm-work-result-file-status muted" }, statusLabel));
+					}
+					uncommittedList.append(li);
+				}
+				uncommittedBox.append(uncommittedList);
+			}
+		}
+		uncommittedBox.append(h("p", { class: "muted pm-work-result-uncommitted-no-diff" }, t("wres_uncommitted_no_diff")));
+		block.append(uncommittedBox);
+		return block;
+	}
+	return {
+		element: panelElement,
+		sync: () => publish.sync(),
+		setAttempt,
+		refresh,
+		withdraw,
+		dispose
+	};
 }
 //#endregion
 //#region src/pm-quality-projections.js
@@ -15529,7 +17509,8 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 //#endregion
 //#region src/pr-selector.js
 function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
-	let page = 1, serial = 0, cached = [], scope = "", nextPage = null, busy = false, stale = false, error = "";
+	let page = 1, serial = 0, cached = [], scope = "", nextPage = null, busy = false, listStale = false, error = "";
+	let pressedKey = null;
 	const alive = () => {
 		try {
 			guard();
@@ -15555,21 +17536,102 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	const refresh = iconButton({
 		icon: "refresh-cw",
 		label: t("delivery_refresh_prs"),
-		onClick: () => loadList()
+		onClick: () => activate({ kind: "refresh" }, 1)
 	});
 	const list = h("div", {
 		class: "pr-list",
 		"aria-live": "polite"
 	});
 	const container = h("div", { class: "pr-selector" }, h("div", { class: "filters" }, searchField(search), filter, refresh), list);
+	const shownEnabled = (node) => node && !node.disabled && !node.hidden && node.getClientRects().length > 0;
+	const keyOf = (node) => {
+		if (!node || node.nodeType !== 1) return null;
+		const pageKey = node.getAttribute("data-pr-page");
+		if (pageKey) return {
+			attr: "data-pr-page",
+			value: pageKey
+		};
+		const number = node.getAttribute("data-pr-number");
+		if (number) return {
+			attr: "data-pr-number",
+			value: number
+		};
+		return null;
+	};
+	const sameKey = (node, key) => Boolean(key) && (key.kind === "refresh" ? node === refresh : node.getAttribute(key.attr) === key.value);
+	const isPressed = (node) => pressedKey ? sameKey(node, pressedKey) : false;
+	function arm(button, blocked) {
+		if (busy && (isPressed(button) || !blocked)) {
+			button.disabled = false;
+			button.setAttribute("aria-disabled", "true");
+		} else {
+			button.removeAttribute("aria-disabled");
+			button.disabled = Boolean(blocked);
+		}
+	}
+	function fallback(from) {
+		const controls = [...container.querySelectorAll("button, input, select")];
+		const index = from ? controls.indexOf(from) : -1;
+		const nextControl = controls.slice(index + 1).find(shownEnabled);
+		if (nextControl) {
+			nextControl.focus({ preventScroll: true });
+			return;
+		}
+		list.tabIndex = -1;
+		list.focus({ preventScroll: true });
+	}
+	function successor(key) {
+		const buttons = [...list.querySelectorAll("button")];
+		const previous = buttons.find((node) => node.getAttribute("data-pr-page") === "previous");
+		const next = buttons.find((node) => node.getAttribute("data-pr-page") === "next");
+		if (key?.attr === "data-pr-page" && key.value === "next") {
+			if (shownEnabled(previous)) {
+				previous.focus({ preventScroll: true });
+				return;
+			}
+			fallback(next || previous);
+			return;
+		}
+		if (key?.attr === "data-pr-page" && key.value === "previous") {
+			if (shownEnabled(next)) {
+				next.focus({ preventScroll: true });
+				return;
+			}
+			const first = buttons.find((node) => node.hasAttribute("data-pr-number") && shownEnabled(node));
+			if (first) {
+				first.focus({ preventScroll: true });
+				return;
+			}
+			if (shownEnabled(refresh)) {
+				refresh.focus({ preventScroll: true });
+				return;
+			}
+			fallback(previous || next);
+			return;
+		}
+		fallback(refresh);
+	}
+	function restoreFocus(key) {
+		if (!key) return;
+		const match = [...list.querySelectorAll("button")].find((node) => sameKey(node, key));
+		if (match && shownEnabled(match)) {
+			match.focus({ preventScroll: true });
+			return;
+		}
+		const active = document.activeElement;
+		if (active && active !== document.body && active.isConnected) return;
+		successor(key);
+	}
 	function render() {
 		if (!alive()) return;
+		const active = document.activeElement;
+		const key = list.contains(active) ? keyOf(active) : null;
 		list.replaceChildren();
-		refresh.disabled = busy;
+		arm(refresh, false);
 		if (busy) list.append(skeleton(2));
 		if (error) list.append(h("p", { class: "note warn" }, error));
 		if (scope) list.append(h("p", { class: "muted" }, `${scope} · ${t("delivery_pr_page", { page })}`));
-		if (stale && cached.length) list.append(h("p", { class: "note warn" }, t("delivery_pr_stale")));
+		if (listStale && cached.length) list.append(h("p", { class: "note warn" }, t("delivery_pr_stale")));
 		const query = search.value.trim().toLocaleLowerCase();
 		const rows = cached.filter((pr) => pr.title.toLocaleLowerCase().includes(query) || String(pr.number).includes(query));
 		if (!rows.length && !busy) list.append(emptyState({
@@ -15581,35 +17643,57 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 			const select = h("button", {
 				type: "button",
 				class: "secondary",
-				disabled: busy || stale,
+				"data-pr-number": String(pr.number),
 				onclick: () => {
-					if (!alive() || busy || stale || revision !== serial || loaded !== scope) return;
+					if (!alive() || busy || listStale || revision !== serial || loaded !== scope) return;
 					repoInput.value = loaded;
 					numInput.value = String(pr.number);
 					onSelect();
 				}
 			}, `#${pr.number} ${pr.title}`);
+			arm(select, listStale);
 			list.append(h("div", { class: "row" }, select, h("span", { class: "muted" }, t("pr_state_" + pr.state), pr.draft ? ` · ${t("pr_draft")}` : "")));
 		}
-		if (scope) list.append(h("div", { class: "actions" }, h("button", {
-			type: "button",
-			class: "secondary",
-			disabled: busy || stale || page <= 1,
-			onclick: () => loadList(page - 1)
-		}, t("pagination_prev")), h("button", {
-			type: "button",
-			class: "secondary",
-			disabled: busy || stale || !nextPage,
-			onclick: () => loadList(nextPage)
-		}, t("pagination_next"))));
+		if (scope) {
+			const previous = h("button", {
+				type: "button",
+				class: "secondary",
+				"data-pr-page": "previous",
+				onclick: () => activate({
+					attr: "data-pr-page",
+					value: "previous"
+				}, page - 1)
+			}, t("pagination_prev"));
+			const next = h("button", {
+				type: "button",
+				class: "secondary",
+				"data-pr-page": "next",
+				onclick: () => activate({
+					attr: "data-pr-page",
+					value: "next"
+				}, nextPage)
+			}, t("pagination_next"));
+			arm(previous, listStale || page <= 1);
+			arm(next, listStale || !nextPage);
+			list.append(h("div", { class: "actions" }, previous, next));
+		}
+		restoreFocus(key);
+		if ([refresh, ...list.querySelectorAll("button")].some((button) => button.getAttribute("aria-disabled") === "true")) list.setAttribute("aria-busy", "true");
+		else list.removeAttribute("aria-busy");
 	}
-	async function loadList(wanted = 1) {
+	function activate(press, wanted) {
+		if (busy) return;
+		loadList(wanted, press);
+	}
+	async function loadList(wanted = 1, press = null) {
 		if (!alive()) return;
 		const mine = ++serial, repository = repoInput.value.trim(), selectedState = filter.value;
-		stale = true;
+		pressedKey = press;
 		error = "";
 		if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) {
 			busy = false;
+			listStale = true;
+			pressedKey = null;
 			error = t("delivery_choose_repository");
 			render();
 			return;
@@ -15629,13 +17713,15 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 			scope = result.loaded_scope;
 			cached = result.pulls;
 			nextPage = result.has_more && wanted < 1e3 && result.next_page === wanted + 1 ? result.next_page : null;
-			stale = false;
+			listStale = false;
 		} catch (failure) {
 			if (!alive() || mine !== serial) return;
 			error = failure.message || String(failure);
+			listStale = true;
 		} finally {
 			if (alive() && mine === serial) {
 				busy = false;
+				pressedKey = null;
 				render();
 			}
 		}
@@ -15643,7 +17729,8 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	repoInput.addEventListener("input", () => {
 		serial++;
 		busy = false;
-		stale = true;
+		listStale = true;
+		pressedKey = null;
 		render();
 	});
 	return {
@@ -15721,12 +17808,15 @@ var discussionDom = (create, keyPrefix) => (tag, attrs, ...children) => {
 		key
 	}) : node;
 };
-function discussionTitle({ t, field, form, value, local = false }) {
+function discussionTitle({ t, field, form, value, local = false, resume = false, onEditing = () => {} }) {
 	let current = value, restoreFocus = false;
 	const title = h$1("h2", {
 		"data-discussion-title": "",
 		title: value
 	}, value);
+	const remember = () => {
+		if (!edit.hidden) onEditing(true, field.selectionStart ?? 0, field.selectionEnd ?? field.selectionStart ?? 0);
+	};
 	const pencil = iconButton({
 		icon: "pencil",
 		label: t("pd_rename"),
@@ -15738,6 +17828,7 @@ function discussionTitle({ t, field, form, value, local = false }) {
 			display.hidden = true;
 			field.focus();
 			field.select();
+			remember();
 		}
 	});
 	const display = h$1("div", { class: "pd-title-display" }, title, pencil);
@@ -15776,19 +17867,30 @@ function discussionTitle({ t, field, form, value, local = false }) {
 			cancel.click();
 		}
 	});
-	function finish({ focus = false } = {}) {
+	for (const eventName of [
+		"input",
+		"keyup",
+		"mouseup",
+		"select"
+	]) field.addEventListener(eventName, remember);
+	function finish({ focus = false, notify = true } = {}) {
 		restoreFocus = focus && (edit.contains(document.activeElement) || document.activeElement === document.body);
 		edit.hidden = true;
 		display.hidden = false;
+		if (notify) onEditing(false, 0, 0);
 	}
 	function updateState() {
 		pencil.disabled = field.disabled || field.readOnly;
 		cancel.disabled = form.locked();
 		if (local) edit.querySelector("button[type=submit]").disabled = field.disabled;
 	}
-	finish();
+	finish({ notify: false });
 	updateState();
 	if (!local && (form.locked() || form.hasDraft() && field.value !== current)) {
+		edit.hidden = false;
+		display.hidden = true;
+	}
+	if (local && resume) {
 		edit.hidden = false;
 		display.hidden = true;
 	}
@@ -15796,6 +17898,15 @@ function discussionTitle({ t, field, form, value, local = false }) {
 		box: h$1("div", { class: "pd-title" }, display, edit),
 		finish,
 		updateState,
+		editing: () => !edit.hidden,
+		focus(start, end) {
+			if (edit.hidden) return;
+			field.focus();
+			if (!Number.isInteger(start)) return;
+			const point = Math.max(0, Math.min(start, field.value.length));
+			const stop = Number.isInteger(end) ? Math.max(point, Math.min(end, field.value.length)) : point;
+			field.setSelectionRange(point, stop);
+		},
 		update(next) {
 			current = next;
 			title.textContent = next;
@@ -17442,6 +19553,21 @@ function savedFilter(value) {
 		value: ""
 	};
 }
+//#endregion
+//#region src/pm-retired.js
+var retiredView = (error) => [
+	"VIEW_CHANGED",
+	"CONNECTION_CHANGED",
+	"PM_DISPOSED"
+].includes(error.code);
+var viewLeft = (alive) => {
+	try {
+		alive();
+		return false;
+	} catch (error) {
+		return retiredView(error);
+	}
+};
 var init_tslib_es6 = __esmMin((() => {}));
 async function invoke(cmd, args = {}, options) {
 	return window.__TAURI_INTERNALS__.invoke(cmd, args, options);
@@ -17940,6 +20066,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 					alive();
 					if (ticket === serial) render(data);
 				} catch (error) {
+					if (retiredView(error) || viewLeft(alive)) return;
 					if (ticket === serial) unavailable(error);
 				}
 			}
@@ -17996,6 +20123,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 			}
 			create.update();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -26689,6 +28817,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 				if (selection) focused.setSelectionRange(...selection);
 			}
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -29147,7 +31276,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 				retain.set("operations", JSON.stringify(check.checked ? [...new Set([...chosen(), id])] : chosen().filter((value) => value !== id)));
 				retain.update();
 			});
-			retentionChoices.append(h("label", {}, check, " ", row ? `${actionLabel(row.action)} · ${operationStatusLabel(row.operation_status)}` : t("pm_lifecycle_retained_missing"), h("code", {}, id)));
+			retentionChoices.append(h("label", {}, check, " ", row ? `${actionLabel$1(row.action)} · ${operationStatusLabel(row.operation_status)}` : t("pm_lifecycle_retained_missing"), h("code", {}, id)));
 		}
 		retention.hidden = !current?.lifecycle.transition_id && !retain.locked() && !selected.length;
 	}
@@ -29159,7 +31288,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 		}));
 		if (workFiltered) work.append(h("p", { class: "muted" }, t("pm_lifecycle_filtered")));
 		for (const row of rows) {
-			const details = h("details", { "data-pm-lifecycle-operation": row.operation_id }, h("summary", {}, actionLabel(row.action), " · ", t("pm_lifecycle_" + row.disposition)), h("p", {}, row.actor, " · ", operationStatusLabel(row.operation_status)), h("a", { href: `#/op/${row.operation_id}` }, t("pm_operation")));
+			const details = h("details", { "data-pm-lifecycle-operation": row.operation_id }, h("summary", {}, actionLabel$1(row.action), " · ", t("pm_lifecycle_" + row.disposition)), h("p", {}, row.actor, " · ", operationStatusLabel(row.operation_status)), h("a", { href: `#/op/${row.operation_id}` }, t("pm_operation")));
 			for (const step of row.steps || []) details.append(h("p", { class: "muted" }, `${step.name} · ${operationStatusLabel(step.status)}`));
 			if (row.writer) details.append(h("p", { class: "muted" }, `${t("pm_lifecycle_writer")}: ${nativeRunState(t, row.writer)}`));
 			if (row.retention) details.append(h("p", {}, row.retention.reason));
@@ -29196,6 +31325,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 			renderWork();
 			notify();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -29283,6 +31413,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 			render();
 			if (history.open) await loadHistory();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -29312,6 +31443,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 						if (original.transition?.transition_id !== row.transition_id) throw Error(t("pm_scope_mismatch"));
 						detail.append(h("pre", { class: "pm-brief-proof" }, JSON.stringify(original.transition, null, 2)));
 					} catch (error) {
+						if (retiredView(error) || viewLeft(alive)) return;
 						if (ticket === serial) unavailable(error);
 					}
 				});
@@ -29326,6 +31458,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 			}, t("pm_lifecycle_more_history")));
 			if (page.visibility_filtered) historyBody.append(h("p", { class: "muted" }, t("pm_lifecycle_filtered")));
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		} finally {
 			if (historyRequest === ticket) historyRequest = null;
@@ -30040,6 +32173,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 			render(row);
 			status.replaceChildren();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error);
 		}
 	}
@@ -30055,6 +32189,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 			next = data.next_cursor;
 			navigation();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error.message === t("pm_fa_mismatch") ? Error(t("pm_fa_read_failed")) : error);
 		} finally {
 			if (ticket === serial) {
@@ -30079,6 +32214,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 			if (selected) await read(selected);
 			else if (rows.length) detail.append(note("pm_fa_select"));
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error.message === t("pm_fa_mismatch") ? Error(t("pm_fa_read_failed")) : error);
 		}
 	}
@@ -30308,6 +32444,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 			body.append(warning, rebase, request.box);
 			request.update();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error);
 		}
 	}
@@ -30321,6 +32458,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 			next = data.next_cursor;
 			await readThread();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error);
 		}
 	}
@@ -30344,6 +32482,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 				await readThreads();
 			}
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error);
 		}
 	}
@@ -30730,6 +32869,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			renderNavigation();
 			editor.update();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		} finally {
 			if (ticket === serial) {
@@ -30771,6 +32911,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			sourceStatus.replaceChildren(snapshot && !snapshot.baseline?.document ? note("pm_fu_accepted_required") : note("pm_fu_source_help"));
 			editor.update();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial && sourceTicket === sourceSerial) unavailable(error);
 		}
 	}
@@ -30929,6 +33070,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			renderSourceChoices();
 			return true;
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return false;
 			if (ticket === serial) unavailable(error);
 			return false;
 		}
@@ -31028,6 +33170,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			editor.update();
 			if (prepareOpen) await loadSources();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -32148,6 +34291,7 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 				if (selection) focused.setSelectionRange(...selection);
 			}
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -33363,12 +35507,19 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 				href: sessionHref$1({
 					host: attempt.session.host,
 					sessionId: attempt.session.session_id,
-					from: "board"
+					from: "board",
+					workspaceId,
+					workItemId: activeWorkId,
+					attemptId: attempt.attempt_id
 				}),
 				"data-work-start-session": ""
 			}, t("wst_open_live_output"));
 			const workLink = h("a", {
-				href: `#/item/${encodeURIComponent(activeCard.work_item_id)}`,
+				href: `#/item/${encodeURIComponent(activeCard.work_item_id)}/${encodeURIComponent(attempt.session.host)}/${encodeURIComponent(attempt.session.session_id)}?${new URLSearchParams({
+					workspace: workspaceId,
+					work: activeWorkId,
+					attempt: attempt.attempt_id
+				})}`,
 				"data-work-start-item": ""
 			}, t("wst_open_work"));
 			if (links.childNodes.length > 0) links.append(" · ");
@@ -33995,538 +36146,6 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 	};
 }
 //#endregion
-//#region src/pm-work-result.js
-var KNOWN_STATES = new Set([
-	"accepted",
-	"starting",
-	"active",
-	"waiting",
-	"turn-ended",
-	"process-ended",
-	"failed",
-	"unknown"
-]);
-var KNOWN_REASONS = new Set([
-	"bat_unreachable",
-	"observation_stale",
-	"session_not_found",
-	"transcript_truncated_by_size",
-	"archived_messages_omitted",
-	"parse_error",
-	"session_not_started_yet",
-	"start_outcome_uncertain",
-	"handoff_outcome_uncertain",
-	"unloaded_history_session",
-	"turn_marker_not_visible",
-	"turn_boundary_not_collected",
-	"session_not_managed_by_attempt",
-	"turn_slice_bounded",
-	"result_document_bounded",
-	"worktree_unreachable",
-	"bat_empty_status_not_clean_proof",
-	"diff_exceeded_pipe_limit",
-	"commit_limit_exceeded",
-	"changeset_time_budget_exceeded",
-	"base_commit_not_ancestor",
-	"source_digest_conflict"
-]);
-function normalizeForComparison(envelope) {
-	if (!envelope || typeof envelope !== "object") return null;
-	const clone = JSON.parse(JSON.stringify(envelope));
-	delete clone.cursor;
-	delete clone.events_read;
-	delete clone.wait;
-	if (clone.collection) delete clone.collection.checked_at;
-	return clone;
-}
-function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisibility = () => {} }) {
-	let activeAttempt = null;
-	let readSerial = 0;
-	let lastEnvelope = null;
-	let lastNormalized = null;
-	let lastStale = false;
-	let turnsOpen = false;
-	let detailsOpen = false;
-	let filesOpen = false;
-	const panelElement = h("div", {
-		class: "pm-work-result-panel",
-		"data-work-result": ""
-	});
-	panelElement.hidden = true;
-	function updateVisibility(visible) {
-		panelElement.hidden = !visible;
-		onVisibility(visible);
-	}
-	function withdraw() {
-		readSerial++;
-		lastEnvelope = null;
-		lastNormalized = null;
-		lastStale = false;
-		turnsOpen = false;
-		detailsOpen = false;
-		filesOpen = false;
-		panelElement.replaceChildren();
-		updateVisibility(false);
-	}
-	function dispose() {
-		activeAttempt = null;
-		withdraw();
-	}
-	async function setAttempt(attempt) {
-		if (!attempt || !attempt.attempt_id) {
-			activeAttempt = null;
-			withdraw();
-			return;
-		}
-		if (!Boolean(attempt.session?.session_id || attempt.native_session?.session_id || attempt.session_id)) {
-			activeAttempt = attempt;
-			withdraw();
-			return;
-		}
-		if (activeAttempt?.attempt_id !== attempt.attempt_id) withdraw();
-		activeAttempt = attempt;
-		await readResult();
-	}
-	async function refresh() {
-		if (!activeAttempt) return;
-		if (!Boolean(activeAttempt.session?.session_id || activeAttempt.native_session?.session_id || activeAttempt.session_id)) return;
-		await readResult();
-	}
-	async function readResult() {
-		if (!activeAttempt) return;
-		const ticket = ++readSerial;
-		const attemptId = activeAttempt.attempt_id;
-		const currentAttempt = activeAttempt;
-		try {
-			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/result`);
-			try {
-				alive?.();
-			} catch {
-				return;
-			}
-			if (ticket !== readSerial || activeAttempt?.attempt_id !== attemptId) return;
-			if (!(data && typeof data === "object" && data.contract === "pm-work-attempt-result/v1" && data.workspace_id === workspaceId && data.attempt_id === attemptId && data.execution && KNOWN_STATES.has(data.execution.state))) {
-				lastEnvelope = null;
-				lastNormalized = null;
-				lastStale = false;
-				renderInvalid();
-				return;
-			}
-			const normalized = normalizeForComparison(data);
-			if (!(lastNormalized && JSON.stringify(lastNormalized) === JSON.stringify(normalized)) || lastStale) {
-				lastEnvelope = data;
-				lastNormalized = normalized;
-				lastStale = false;
-				renderEnvelope(data, currentAttempt);
-			}
-		} catch (err) {
-			try {
-				alive?.();
-			} catch {
-				return;
-			}
-			if (ticket !== readSerial || activeAttempt?.attempt_id !== attemptId) return;
-			const status = err?.status;
-			if (status === 401 || status === 403 || status === 404) {
-				withdraw();
-				return;
-			}
-			lastStale = true;
-			renderError(err, currentAttempt);
-		}
-	}
-	function renderInvalid() {
-		panelElement.replaceChildren(h("h3", {}, t("wres_heading")), h("p", { class: "pm-work-result-invalid" }, t("wres_invalid_envelope")));
-		updateVisibility(true);
-	}
-	function renderError(err, attempt) {
-		const heading = h("h3", {}, t("wres_heading"));
-		const retryBtn = button({
-			label: t("wres_try_again"),
-			class: "ui-button secondary ui-sm pm-work-result-retry",
-			onClick: () => {
-				readResult();
-			}
-		});
-		const errorContainer = h("div", { class: "pm-work-result-error-box" }, errorBox ? errorBox(err, { within: panelElement }) : h("div", { class: "error" }, err?.message || String(err)), retryBtn);
-		if (lastEnvelope) renderEnvelope(lastEnvelope, attempt, errorContainer);
-		else {
-			panelElement.replaceChildren(heading, errorContainer);
-			updateVisibility(true);
-		}
-	}
-	function formatCount(val) {
-		if (val === "unknown" || val == null) return t("wres_unknown");
-		return String(val);
-	}
-	function saveFocus() {
-		const active = document.activeElement;
-		if (active && panelElement.contains(active)) {
-			if (active.dataset?.workResultFocus) return {
-				type: "attr",
-				value: active.dataset.workResultFocus
-			};
-			if (active.tagName === "SUMMARY" && active.parentElement?.tagName === "DETAILS") {
-				const details = active.parentElement;
-				if (details.dataset.workResultTurns !== void 0) return { type: "turns" };
-				if (details.dataset.workResultDetails !== void 0) return { type: "details" };
-				if (details.classList.contains("pm-work-result-files")) return { type: "files" };
-			}
-		}
-		return null;
-	}
-	function restoreFocus(token) {
-		if (!token) return;
-		requestAnimationFrame(() => {
-			if (token.type === "attr") panelElement.querySelector(`[data-work-result-focus="${token.value}"]`)?.focus();
-			else if (token.type === "turns") panelElement.querySelector("[data-work-result-turns] > summary")?.focus();
-			else if (token.type === "details") panelElement.querySelector("[data-work-result-details] > summary")?.focus();
-			else if (token.type === "files") panelElement.querySelector(".pm-work-result-files > summary")?.focus();
-		});
-	}
-	function renderEnvelope(envelope, attempt, errorBoxNode = null) {
-		const focusToken = saveFocus();
-		const existingTurns = panelElement.querySelector("[data-work-result-turns]");
-		if (existingTurns) turnsOpen = existingTurns.open;
-		const existingDetails = panelElement.querySelector("[data-work-result-details]");
-		if (existingDetails) detailsOpen = existingDetails.open;
-		const existingFiles = panelElement.querySelector(".pm-work-result-files");
-		if (existingFiles) filesOpen = existingFiles.open;
-		const sections = [];
-		const unlistedFacets = [];
-		const unlistedFileStatuses = [];
-		const heading = h("h3", {}, t("wres_heading"));
-		sections.push(heading);
-		if (errorBoxNode) {
-			const stalePill = h("span", {
-				class: "ui-pill tone-warn",
-				"data-status": "stale"
-			}, t("ui_status_stale"));
-			sections.push(h("div", { class: "pm-work-result-stale-banner" }, stalePill, errorBoxNode));
-		}
-		const exec = envelope.execution || {};
-		const stateKey = `wres_state_${exec.state?.replace(/-/g, "_")}`;
-		const stateLabel = t(stateKey) !== stateKey ? t(stateKey) : t("wres_unknown");
-		const stateP = h("p", { class: "pm-work-result-state" });
-		stateP.append(h("strong", {}, stateLabel));
-		if (exec.observed_at) stateP.append(" · ", timeStamp(exec.observed_at));
-		sections.push(stateP);
-		if (exec.state_reason) {
-			const reason = exec.state_reason;
-			if (reason === "agent_error") sections.push(h("p", { class: "muted pm-work-result-reason" }, t("wres_agent_error")));
-			else if (KNOWN_REASONS.has(reason)) {
-				const textKey = `wres_reason_${reason}`;
-				if (t(textKey) !== textKey) sections.push(h("p", { class: "muted pm-work-result-reason" }, t(textKey)));
-			} else if (exec.state === "failed") {
-				const wstKey = `wst_error_${reason}`;
-				const errKey = `error_code_${reason}`;
-				let failText = "";
-				if (t(wstKey) !== wstKey) failText = t(wstKey);
-				else if (t(errKey) !== errKey) failText = t(errKey);
-				if (failText) sections.push(h("p", { class: "muted pm-work-result-reason" }, failText));
-			}
-		} else if (exec.state === "waiting" && exec.pending != null) sections.push(h("p", { class: "muted pm-work-result-reason" }, t("wres_waiting_pending")));
-		if (exec.attention) {
-			let attnText = t("wres_status_needs_attention");
-			if (exec.attention.message) attnText += ` ${exec.attention.message}`;
-			sections.push(h("p", { class: "muted pm-work-result-attention" }, attnText));
-		}
-		const linkItems = [];
-		const sess = attempt?.session || attempt?.native_session;
-		if (sess?.session_id && sess?.host) {
-			const liveHref = sessionHref$1({
-				host: sess.host,
-				sessionId: sess.session_id,
-				from: "board"
-			});
-			linkItems.push(h("a", {
-				href: liveHref,
-				"data-work-result-focus": "live-output"
-			}, t("wres_open_live_output")));
-		}
-		const opHash = envelope.links?.start_operation_hash || (envelope.identity?.start_operation_id ? `#/op/${envelope.identity.start_operation_id}` : null);
-		if (opHash) linkItems.push(h("a", {
-			href: opHash,
-			"data-work-result-focus": "operation"
-		}, t("wres_view_operation")));
-		if (linkItems.length > 0) sections.push(h("div", { class: "pm-work-result-links" }, ...linkItems));
-		const summaryHeader = h("div", { class: "pm-work-result-summary-header" });
-		summaryHeader.append(h("h4", {}, t("wres_agent_summary_label")));
-		if (exec.state_facets?.self_reported === "claimed_done") {
-			const pill = h("span", {
-				class: "ui-pill tone-neutral",
-				"data-work-result-pill": "claimed_done"
-			}, t("wres_pill_claimed_done"));
-			summaryHeader.append(" ", pill);
-		}
-		sections.push(summaryHeader);
-		const summaryText = envelope.conversation?.latest_assistant_summary?.text;
-		if (summaryText && typeof summaryText === "string") {
-			const summaryBox = h("div", {
-				role: "region",
-				tabindex: "0",
-				"aria-label": t("wres_agent_summary_label"),
-				class: "pm-work-result-summary-box",
-				"data-work-result-focus": "summary-box"
-			});
-			summaryBox.textContent = summaryText;
-			sections.push(summaryBox);
-		} else sections.push(h("p", { class: "muted pm-work-result-empty-summary" }, t("wres_no_recorded_turn")));
-		const dl = h("dl", { class: "pm-work-result-checks" });
-		const verifStatus = exec.state_facets?.verification || envelope.verification?.status;
-		let verifText = t("wres_unknown");
-		if (verifStatus && [
-			"unverified",
-			"running",
-			"verified",
-			"failed",
-			"stale",
-			"unknown"
-		].includes(verifStatus)) verifText = t(`wres_verification_${verifStatus}`);
-		else if (verifStatus) unlistedFacets.push(`verification: ${verifStatus}`);
-		dl.append(h("dt", {}, t("wres_check_verification")), h("dd", { "data-check": "verification" }, verifText));
-		const reviewDecision = exec.state_facets?.review_decision || envelope.verification?.quality_reviews?.current?.decision;
-		let reviewText = t("wres_unknown");
-		if (typeof reviewDecision === "string") {
-			if (reviewDecision === "unassessed") reviewText = t("wres_review_unassessed");
-			else if (reviewDecision === "revocation") reviewText = t("wres_review_revocation");
-			else unlistedFacets.push(`review_decision: ${reviewDecision}`);
-		} else if (reviewDecision && typeof reviewDecision === "object") {
-			if (reviewDecision.kind === "unassessed") reviewText = t("wres_review_unassessed");
-			else if (reviewDecision.kind === "revocation") reviewText = t("wres_review_revocation");
-			else if (reviewDecision.kind === "assessment" || reviewDecision.acceptance) {
-				if (reviewDecision.acceptance === "accepted") reviewText = t("wres_review_accepted");
-				else if (reviewDecision.acceptance === "rejected") reviewText = t("wres_review_rejected");
-				else if (reviewDecision.acceptance === "unassessed") reviewText = t("wres_review_unassessed");
-				else if (reviewDecision.acceptance) unlistedFacets.push(`review_acceptance: ${reviewDecision.acceptance}`);
-			} else if (reviewDecision.kind) unlistedFacets.push(`review_kind: ${reviewDecision.kind}`);
-		}
-		dl.append(h("dt", {}, t("wres_check_review")), h("dd", { "data-check": "review" }, reviewText));
-		const acceptStatus = (exec.state_facets?.acceptance)?.status;
-		let acceptText = t("wres_unknown");
-		if (acceptStatus === "passed") acceptText = t("wres_acceptance_passed");
-		else if (acceptStatus === "blocked") acceptText = t("wres_acceptance_blocked");
-		else if (acceptStatus === "unassessed") acceptText = t("wres_acceptance_unassessed");
-		else if (acceptStatus) unlistedFacets.push(`acceptance_status: ${acceptStatus}`);
-		dl.append(h("dt", {}, t("wres_check_acceptance")), h("dd", { "data-check": "acceptance" }, acceptText));
-		const mergeStatus = exec.state_facets?.merge;
-		let mergeText = t("wres_unknown");
-		if ([
-			"not_started",
-			"not_merged",
-			"pr_open",
-			"pr_closed_unmerged",
-			"merge_pending",
-			"merged"
-		].includes(mergeStatus)) mergeText = t(`wres_merge_${mergeStatus}`);
-		else if (mergeStatus) unlistedFacets.push(`merge: ${mergeStatus}`);
-		const prDd = h("dd", { "data-check": "pr" });
-		prDd.append(h("span", { class: "pm-work-result-pr-status" }, mergeText));
-		const prs = envelope.delivery?.pull_requests || [];
-		if (prs.length > 0) {
-			const prList = h("ul", { class: "pm-work-result-pr-list" });
-			for (const pr of prs) {
-				const link = h("a", { href: `#/op/${encodeURIComponent(pr.publication_operation_id)}` }, `PR #${pr.pull_number} · ${pr.repository}`);
-				prList.append(h("li", {}, link));
-			}
-			prDd.append(prList);
-		}
-		dl.append(h("dt", {}, t("wres_check_pr")), prDd);
-		const deployObj = exec.state_facets?.deployment;
-		const deployState = deployObj?.state;
-		const deployVerified = deployObj?.verified === true;
-		let deployText = t("wres_unknown");
-		if ([
-			"not_deployed",
-			"pending",
-			"running",
-			"failed",
-			"needs_attention",
-			"cancelled"
-		].includes(deployState)) deployText = t(`wres_deploy_${deployState}`);
-		else if (deployState === "succeeded") deployText = deployVerified ? t("wres_deploy_succeeded_verified") : t("wres_deploy_succeeded");
-		else if (deployState) unlistedFacets.push(`deployment_state: ${deployState}`);
-		dl.append(h("dt", {}, t("wres_check_deployment")), h("dd", { "data-check": "deployment" }, deployText));
-		const goal = envelope.delivery?.delivery_goal;
-		let goalText = t("wres_unknown");
-		if (goal === "pull_request") goalText = t("wres_goal_pr");
-		else if (goal === "reviewable_changes") goalText = t("wres_goal_reviewable_changes");
-		else if (goal && goal !== "unknown") unlistedFacets.push(`delivery_goal: ${goal}`);
-		dl.append(h("dt", {}, t("wres_check_delivery_goal")), h("dd", { "data-check": "delivery-goal" }, goalText));
-		sections.push(dl);
-		const changesBox = h("div", { class: "pm-work-result-changes" });
-		const ch = envelope.changes || {};
-		const summary = ch.summary || {};
-		const isComplete = summary.complete === true && (!summary.unavailable || summary.unavailable.length === 0);
-		const filesCountNum = Number.isSafeInteger(summary.file_count) ? summary.file_count : Array.isArray(summary.files) ? summary.files.length : null;
-		const commitsCountNum = Number.isSafeInteger(summary.commit_count) ? summary.commit_count : Array.isArray(summary.commits) ? summary.commits.length : null;
-		if (isComplete) {
-			let summaryKey = "wres_changes_summary";
-			if (filesCountNum === 1 && commitsCountNum === 1) summaryKey = "wres_changes_summary_one";
-			else if (filesCountNum === 1) summaryKey = "wres_changes_summary_one_file";
-			else if (commitsCountNum === 1) summaryKey = "wres_changes_summary_one_commit";
-			const summaryText = t(summaryKey, {
-				files: formatCount(filesCountNum),
-				commits: formatCount(commitsCountNum),
-				additions: formatCount(summary.additions),
-				deletions: formatCount(summary.deletions)
-			});
-			changesBox.append(h("p", { class: "pm-work-result-changes-summary" }, summaryText, " · ", t("wres_as_of_last_turn")));
-		} else {
-			const partlyText = h("p", { class: "pm-work-result-changes-summary" }, t("wres_changes_partly_read"), " · ", t("wres_as_of_last_turn"));
-			changesBox.append(partlyText);
-			const changeReasons = [];
-			if (summary.reason) changeReasons.push(summary.reason);
-			if (Array.isArray(summary.reasons)) {
-				for (const r of summary.reasons) if (!changeReasons.includes(r)) changeReasons.push(r);
-			}
-			if (changeReasons.length > 0) {
-				const reasonsList = h("ul", { class: "pm-work-result-changes-reasons" });
-				for (const code of changeReasons) {
-					const key = `wres_reason_${code}`;
-					let text = t(key);
-					if (!text || text === key) text = t("wres_reason_generic_limit");
-					reasonsList.append(h("li", {}, text));
-				}
-				changesBox.append(reasonsList);
-			}
-		}
-		const files = summary.files || [];
-		if (files.length > 0) {
-			const renderFileRow = (f) => {
-				let statusLabel = t("wres_unknown");
-				if (f.status === "M" || f.status === "modified") statusLabel = t("wres_file_modified");
-				else if (f.status === "A" || f.status === "added") statusLabel = t("wres_file_added");
-				else if (f.status === "D" || f.status === "deleted") statusLabel = t("wres_file_deleted");
-				else if (typeof f.status === "string" && (f.status.startsWith("R") || f.status === "renamed")) statusLabel = t("wres_file_renamed");
-				else if (f.status) unlistedFileStatuses.push(`${f.path}: ${f.status}`);
-				const adds = f.additions === "unknown" || f.additions == null ? "?" : `+${f.additions}`;
-				const dels = f.deletions === "unknown" || f.deletions == null ? "?" : `−${f.deletions}`;
-				return h("li", { class: "pm-work-result-file-row" }, h("span", { class: "pm-work-result-file-path mono" }, f.path), " ", h("span", { class: "pm-work-result-file-status muted" }, statusLabel), " ", h("span", { class: "pm-work-result-file-diff mono" }, `${adds} ${dels}`));
-			};
-			const fileList = h("ul", { class: "pm-work-result-file-list" }, ...files.slice(0, 20).map(renderFileRow));
-			changesBox.append(fileList);
-			if (files.length > 20) {
-				const remainingFiles = files.slice(20);
-				const remainingList = h("ul", { class: "pm-work-result-file-list" }, ...remainingFiles.map(renderFileRow));
-				const filesDisclosure = disclosure({
-					label: remainingFiles.length === 1 ? t("wres_show_all_files_one") : t("wres_show_all_files", { n: files.length }),
-					body: remainingList,
-					open: filesOpen
-				});
-				filesDisclosure.classList.add("pm-work-result-files");
-				changesBox.append(filesDisclosure);
-			}
-		}
-		if (ch.base_commit) changesBox.append(h("p", { class: "pm-work-result-base-commit" }, h("strong", {}, `${t("wres_base_commit")}: `), h("span", { class: "mono" }, ch.base_commit.slice(0, 12))));
-		const fixedCommit = ch.fixed_result_commit;
-		if (fixedCommit && fixedCommit.commit_sha) {
-			const srcKind = fixedCommit.source_kind;
-			let srcText = "";
-			if (srcKind === "turn_end_observation") srcText = t("wres_source_turn_end_observation");
-			else if (srcKind === "execution_verification" || srcKind === "session_verification") srcText = t("wres_source_verified_commit");
-			else if (srcKind === "integration") srcText = t("wres_source_delivered_commit");
-			const commitP = h("p", { class: "pm-work-result-commit" }, h("strong", {}, `${t("wres_result_commit")}: `), h("span", { class: "mono" }, fixedCommit.commit_sha.slice(0, 12)));
-			if (srcText) commitP.append(" · ", srcText);
-			changesBox.append(commitP);
-		}
-		const uncommitted = ch.uncommitted || {};
-		if (uncommitted.count === "unknown") changesBox.append(h("p", { class: "muted pm-work-result-uncommitted" }, t("wres_uncommitted_unknown")));
-		else if (Number.isSafeInteger(uncommitted.count) && uncommitted.count > 0) changesBox.append(h("p", { class: "pm-work-result-uncommitted" }, t("wres_uncommitted_changes", { n: uncommitted.count })));
-		sections.push(changesBox);
-		const completeness = envelope.completeness;
-		const completenessStatus = completeness?.status;
-		if (completenessStatus && completenessStatus !== "complete") {
-			const compDiv = h("div", { class: "pm-work-result-completeness" });
-			if (completenessStatus === "partial") compDiv.append(statusPill("partial"));
-			else compDiv.append(h("span", {
-				class: "ui-pill tone-bad",
-				"data-status": "unavailable"
-			}, t("wres_status_unavailable")));
-			const reasons = completeness.reasons || [];
-			if (reasons.length > 0) {
-				const reasonList = h("ul", { class: "pm-work-result-completeness-reasons" });
-				for (const code of reasons) {
-					const key = `wres_reason_${code}`;
-					let text = t(key);
-					if (!text || text === key) text = t("wres_reason_generic_limit");
-					reasonList.append(h("li", {}, text));
-				}
-				compDiv.append(reasonList);
-			}
-			sections.push(compDiv);
-		}
-		const results = envelope.results || [];
-		if (results.length > 0) {
-			const turnsBody = h("div", { class: "pm-work-result-turns-body" });
-			if (envelope.results_has_more) turnsBody.append(h("p", { class: "muted pm-work-result-more-turns" }, t("wres_showing_latest_20")));
-			const turnsList = h("ul", { class: "pm-work-result-turns-list" });
-			for (let i = 0; i < results.length; i++) {
-				const turn = results[i];
-				const row = h("li", { class: "pm-work-result-turn-row" });
-				if (turn.observed_at) row.append(timeStamp(turn.observed_at), " ");
-				const sha = turn.head_commit ? turn.head_commit.slice(0, 12) : "—";
-				row.append(h("span", { class: "mono" }, sha));
-				if (i === 0) row.append(" ", h("span", {
-					class: "ui-pill tone-neutral ui-xs",
-					"data-work-result-pill": "latest_turn"
-				}, t("wres_latest_turn")));
-				turnsList.append(row);
-			}
-			turnsBody.append(turnsList);
-			const turnsDisclosure = disclosure({
-				label: results.length === 1 ? t("wres_recorded_turns_count_one") : t("wres_recorded_turns_count", { n: results.length }),
-				body: turnsBody,
-				open: turnsOpen
-			});
-			turnsDisclosure.dataset.workResultTurns = "";
-			sections.push(turnsDisclosure);
-		}
-		const detailsBody = h("div", { class: "pm-work-result-details-body" });
-		const addDetailRow = (label, value) => {
-			if (value === void 0) return;
-			detailsBody.append(h("p", {}, h("strong", {}, `${label}: `), h("span", { class: "mono" }, String(value == null ? "—" : value))));
-		};
-		addDetailRow(t("wres_attempt_id"), envelope.attempt_id);
-		addDetailRow(t("wres_result_id"), envelope.sources?.result_id);
-		addDetailRow(t("wres_start_operation_id"), envelope.identity?.start_operation_id);
-		addDetailRow(t("wres_execution_operation_id"), envelope.identity?.execution_operation_id);
-		addDetailRow(t("wres_source_key"), envelope.sources?.source_key);
-		addDetailRow(t("wres_digest"), envelope.sources?.digest ? envelope.sources.digest.slice(0, 16) : null);
-		addDetailRow(t("wres_collection_outcome"), envelope.collection?.outcome);
-		addDetailRow(t("wres_raw_state"), exec.state);
-		addDetailRow(t("wres_raw_stage"), exec.stage);
-		if (exec.state_reason) addDetailRow(t("wres_raw_reasons"), exec.state_reason);
-		if (unlistedFacets.length > 0) addDetailRow(t("wres_unlisted_facets"), unlistedFacets.join(", "));
-		if (unlistedFileStatuses.length > 0) addDetailRow(t("wres_unlisted_file_statuses"), unlistedFileStatuses.join(", "));
-		const unlistedReasons = (completeness?.reasons || []).filter((r) => !KNOWN_REASONS.has(r));
-		if (unlistedReasons.length > 0) addDetailRow(t("wres_unlisted_completeness_reasons"), unlistedReasons.join(", "));
-		const usage = envelope.usage || {};
-		const formatUsageVal = (val) => val == null || val === "unknown" ? t("ui_status_unknown") : String(val);
-		addDetailRow(t("wres_usage_context_tokens"), formatUsageVal(usage.context_tokens));
-		addDetailRow(t("wres_usage_context_window"), formatUsageVal(usage.context_window));
-		addDetailRow(t("wres_usage_num_turns"), formatUsageVal(usage.num_turns));
-		detailsBody.append(h("p", { class: "muted" }, t("wres_exit_code_not_exposed")));
-		const detailsDisclosure = disclosure({
-			label: t("wres_details"),
-			body: detailsBody,
-			open: detailsOpen
-		});
-		detailsDisclosure.dataset.workResultDetails = "";
-		sections.push(detailsDisclosure);
-		panelElement.replaceChildren(...sections);
-		updateVisibility(true);
-		restoreFocus(focusToken);
-	}
-	return {
-		element: panelElement,
-		setAttempt,
-		refresh,
-		withdraw,
-		dispose
-	};
-}
-//#endregion
 //#region src/pm-kanban.js
 function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false, workspaceSettled = () => Promise.resolve() }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, preference = viewState(namespace, workspaceId, "board");
@@ -34575,6 +36194,8 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 					workspaceId,
 					caps,
 					errorBox,
+					form,
+					namespace,
 					onVisibility: (visible) => {
 						const attemptSection = detail.element?.body?.querySelector("[data-work-section=\"attempt-result\"]");
 						if (attemptSection) attemptSection.hidden = !visible;
@@ -34722,7 +36343,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 	}
 	function writeSelection(id) {
 		const [path, query] = location.hash.split("?");
-		if (!path.endsWith("/board")) return;
+		if (path !== `#/pm/${encodeURIComponent(workspaceId)}/board`) return;
 		const params = new URLSearchParams(query);
 		if (id) params.set("select", id);
 		else params.delete("select");
@@ -35190,6 +36811,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			renderMetrics();
 			showDetail(data.card);
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (generation === serial && ticket === detailSerial) {
 				observers.get(id)?.withdraw();
 				if (error.message === t("pm_kanban_scope_error")) {
@@ -35201,6 +36823,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 					alive();
 					if (generation !== serial || ticket !== detailSerial) return;
 				} catch (parentError) {
+					if (retiredView(parentError) || viewLeft(alive)) return;
 					if (generation === serial && ticket === detailSerial) unavailable(parentError);
 					return;
 				}
@@ -35300,6 +36923,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 				cards: [...combined.values()]
 			});
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		} finally {
 			if (ticket === serial) {
@@ -36374,6 +37998,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 				if (selection) focused.setSelectionRange(...selection);
 			}
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -36610,7 +38235,7 @@ function scheduleTree(rows, collapsed) {
 //#endregion
 //#region src/pm-schedule-labels.js
 function scheduleTitle(row) {
-	if (row.kind === "attempt" && row.refs?.operation_id) return actionLabel(row.title === row.refs.operation_id ? "" : row.title);
+	if (row.kind === "attempt" && row.refs?.operation_id) return actionLabel$1(row.title === row.refs.operation_id ? "" : row.title);
 	return String(row.title || "");
 }
 var scheduleFirstLine = (row) => scheduleTitle(row).split(/\r?\n/)[0];
@@ -37704,6 +39329,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 						const doc = value.revision.document;
 						content.replaceChildren(h("p", {}, doc.rationale || t(doc.milestones?.some((row) => row.actual?.quality) ? "pm_roadmap_quality_fixed" : "pm_roadmap_quality_unknown")), h("pre", { class: "pm-brief-proof" }, JSON.stringify(value.revision, null, 2)));
 					} catch (error) {
+						if (retiredView(error) || viewLeft(alive)) return;
 						content.replaceChildren(errorBox(error, { within: content }));
 						fetched = false;
 					}
@@ -37865,6 +39491,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 				if (history.open) loadHistory();
 			}
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) {
 				current = null;
 				signature = "";
@@ -38421,6 +40048,7 @@ function reviewCandidateToIdea({ h, t, api, alive, workspaceId, caps, can, form,
 			body.append(thread.thread.mode !== "idea" ? h("p", { class: "muted" }, t("pmrv_idea_only")) : "", request.box, warning, rebase, h("a", { href: `#/pm/${workspaceId}/${selected}` }, t("pmrv_idea_open")));
 			sync();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (n === ticket && !dead) {
 				thread = null;
 				body.replaceChildren();
@@ -38447,6 +40075,7 @@ function reviewCandidateToIdea({ h, t, api, alive, workspaceId, caps, can, form,
 			if (!rows.some((row) => row.mode === "idea") && !selected) status.replaceChildren(emptyState({ title: t("pmrv_idea_empty") }));
 			if (selected && !more) await choose();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (n === ticket && !dead) {
 				thread = null;
 				request?.update();
@@ -42337,6 +43966,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 				}));
 			}
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === generation) {
 				rows.replaceChildren();
 				active = null;
@@ -42382,6 +44012,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 			selected = choose.value;
 			await loadProject();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === generation) {
 				rows.replaceChildren();
 				active = null;
@@ -42448,6 +44079,7 @@ function pmWorktreeChoice({ h, t, api, alive, input, labelled, capability, scope
 				}));
 				renderProof();
 			} catch (error) {
+				if (retiredView(error) || viewLeft(alive)) return;
 				if (ticket === sequence) proof.replaceChildren(errorBox(error, { within: proof }));
 			} finally {
 				if (ticket === sequence) {
@@ -42532,11 +44164,6 @@ function pmWorktreeChoice({ h, t, api, alive, input, labelled, capability, scope
 //#endregion
 //#region src/pm-workspace.js
 var same$3 = (a, b) => a === b || a && b && typeof a === "object" && typeof b === "object" && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((key) => Object.hasOwn(b, key) && same$3(a[key], b[key]));
-var retired = (error) => [
-	"VIEW_CHANGED",
-	"CONNECTION_CHANGED",
-	"PM_DISPOSED"
-].includes(error.code);
 var receiptSubscribers = new Map();
 var formConnectionTag = "batc-pm-form-connection";
 if (!customElements.get(formConnectionTag)) customElements.define(formConnectionTag, class extends HTMLElement {
@@ -42552,7 +44179,7 @@ if (!customElements.get(formConnectionTag)) customElements.define(formConnection
 	}
 });
 var pmAvailable = (caps) => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes("observe");
-function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, savedText = "pm_saved", pendingText = "pm_pending" }) {
+function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, keepEditable = () => false, savedText = "pm_saved", pendingText = "pm_pending", releaseAfterAcknowledgement = false, acknowledgedText = "", onAcknowledged = () => {}, acknowledgeStatus = null }) {
 	const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
 	let saved = {
 		version: 1,
@@ -42577,7 +44204,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		2e3,
 		3e3
 	];
-	let receiptTimer = null, receiptAttempt = 0, receiptPolling = true, disposed = false, stagedHere = false, initialChecking = false;
+	let receiptTimer = null, receiptAttempt = 0, receiptPolling = true, disposed = false, stagedHere = false, initialChecking = false, focusRelease = false;
 	const stopTimer = () => {
 		clearTimeout(receiptTimer);
 		receiptTimer = null;
@@ -42655,7 +44282,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				receipt.replaceChildren();
 				update();
 			} catch (error) {
-				if (!retired(error)) status.replaceChildren(errorBox(error, { within: status }));
+				if (!retiredView(error)) status.replaceChildren(errorBox(error, { within: status }));
 			}
 		}
 	}, t("pm_edit_request"));
@@ -42708,9 +44335,10 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		const autoChecking = initialChecking && (busy || receiptTimer !== null);
 		const inFlight = busy || autoChecking;
 		const frozen = busy || damaged || Boolean(saved.intent), locked = frozen || !allowed();
-		for (const input of Object.values(fields)) {
-			input.disabled = locked && (!readOnlyWhenUnavailable || frozen);
-			if (readOnlyWhenUnavailable) input.readOnly = locked;
+		for (const [name, input] of Object.entries(fields)) {
+			const preserve = !frozen && !damaged && keepEditable(name);
+			input.disabled = !preserve && locked && (!readOnlyWhenUnavailable || frozen);
+			if (readOnlyWhenUnavailable) input.readOnly = locked && !preserve;
 		}
 		const hadFocus = document.activeElement === button;
 		const hadResetFocus = document.activeElement === reset;
@@ -42810,6 +44438,44 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			saved.intent.operation_id = op.operation_id;
 			persist();
 			operation = op;
+			if (releaseAfterAcknowledgement) {
+				stopTimer();
+				receiptPolling = false;
+				saved = {
+					version: 1,
+					values: {}
+				};
+				try {
+					persist();
+				} catch {}
+				for (const input of Object.values(fields)) {
+					input.value = input.dataset.pmDefault || "";
+					input.disabled = false;
+					if (readOnlyWhenUnavailable) input.readOnly = false;
+				}
+				operation = null;
+				receipt.replaceChildren();
+				let announced = null;
+				try {
+					announced = acknowledgeStatus ? acknowledgeStatus(op, h, t) : null;
+				} catch {
+					announced = null;
+				}
+				if (!announced && acknowledgedText) {
+					const key = typeof acknowledgedText === "function" ? acknowledgedText(op) : acknowledgedText;
+					if (key) announced = h("span", {
+						class: "muted",
+						"data-pm-acknowledged": ""
+					}, t(key));
+				}
+				if (announced) status.replaceChildren(announced);
+				else status.replaceChildren();
+				focusRelease = document.activeElement === button || document.activeElement === document.body;
+				try {
+					onAcknowledged(op);
+				} catch {}
+				return;
+			}
 			receipt.replaceChildren(h("a", { href: `#/op/${op.operation_id}` }, t("pm_operation")), " · ", statusText(op.status));
 			if (op.status === "succeeded") {
 				onBeforeSaved(op.result, saved.values);
@@ -42834,7 +44500,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			} catch {
 				return;
 			}
-			if (!retired(error)) {
+			if (!retiredView(error)) {
 				if (firstAttempt && error.admissionRefused === true && !saved.intent?.operation_id) {
 					saved.intent.initialAdmissionRefused = true;
 					try {
@@ -42849,6 +44515,11 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		} finally {
 			busy = false;
 			update();
+			if (focusRelease) {
+				focusRelease = false;
+				const field = Object.values(fields)[0];
+				if (field && !field.disabled) field.focus();
+			}
 		}
 	}
 	if (damaged) status.append(h("p", { class: "error" }, t("pm_damaged")));
@@ -42971,6 +44642,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	}
 	const launch = parseDiscussRefs(location.hash.split("?")[1] || "");
 	const uiState = viewState(namespace, workspaceId, "discussions");
+	const titleSession = viewState(namespace, workspaceId, "discussion-title." + (threadId || "list"));
 	const handoffKey = `batc.pm.${namespace}.discussion-send.${workspaceId}`;
 	const originKey = `batc.pm.${namespace}.discussion-origin.${workspaceId}.`;
 	let sendHandoff = null, firstMessagePending = false;
@@ -43222,7 +44894,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		},
 		extra: h("div", { class: "pm-fields" }, labelled("pm_workspace_name", name), h("details", {}, h("summary", {}, t("pm_repositories_optional")), labelled("pm_repositories", repositories), h("p", { class: "muted" }, t("pm_repository_help"))))
 	});
-	const title = h("span", {}, t("pm_title"));
+	const title = h("span", {}, t(threadId ? "ui_discussions" : "pm_title"));
 	const refresh = iconButton({
 		icon: "refresh-cw",
 		label: t("pm_refresh"),
@@ -43244,6 +44916,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const management = workbenchEnabled() ? h("select", {
 		"aria-label": t("wc_management"),
 		"data-workbench-management": "",
+		hidden: true,
 		onchange: (event) => {
 			location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${event.target.value}`;
 		}
@@ -44368,6 +46041,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			}
 		});
 		workbench.apply();
+		const openedView = workbench.selected();
+		if (openedView) title.textContent = t("ui_" + openedView);
 		brief?.setActive?.(workbench.selected() === "overview");
 		if (scheduleTools) scheduleTools.hidden = workbench.selected() !== "schedule";
 		shownView = workbench.selected();
@@ -45241,7 +46916,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					if (value.plan?.workspace_id !== workspaceId || value.plan.revision_id !== adoptionRef[1] || typeof value.plan.document?.title !== "string" || !Number.isSafeInteger(value.plan.sequence)) throw Error(t("pm_scope_mismatch"));
 					caption.textContent = value.plan.document.title + " · " + t("pm_revision_number", { number: value.plan.sequence });
 				} catch (error) {
-					if (!item.isConnected || retired(error)) return;
+					if (!item.isConnected || retiredView(error)) return;
 					if ([403, 404].includes(error.status)) item.remove();
 					else detail.replaceChildren(errorBox(error, { within: detail }));
 				}
@@ -45266,7 +46941,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					if (context.coverage?.omitted_message_ids?.length || context.coverage?.omitted_input_ids?.length || context.coverage?.messages_truncated || context.coverage?.inputs_truncated) detail.append(h("p", { class: "muted" }, t("pm_partial")));
 					fetched = true;
 				} catch (error) {
-					if (!retired(error) && item.isConnected) detail.replaceChildren(errorBox(error, { within: detail }));
+					if (!retiredView(error) && item.isConnected) detail.replaceChildren(errorBox(error, { within: detail }));
 				} finally {
 					pending = false;
 				}
@@ -45290,7 +46965,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						more.remove();
 						renderPackages(next, true);
 					} catch (error) {
-						if (!retired(error)) {
+						if (!retiredView(error)) {
 							status.replaceChildren(errorBox(error, { within: status }));
 							more.disabled = false;
 						}
@@ -45317,7 +46992,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			historyExpanded = true;
 			renderThread(data);
 		} catch (error) {
-			if (!retired(error) && ticket === sequence) {
+			if (!retiredView(error) && ticket === sequence) {
 				loaded = false;
 				lastThreadList = null;
 				workspace = null;
@@ -45532,6 +47207,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						recoverPermitted: () => permitted(false),
 						label: threadId === "new" ? "pd_send" : "pm_create_thread",
 						onStateChange: () => titleDraft?.updateState(),
+						keepEditable: (name) => name === "title" && Boolean(titleDraft?.editing()),
 						onBeforeSaved: (result, values) => {
 							if (values.content.trim()) localStorage.setItem(handoffKey, JSON.stringify({
 								threadId: result.thread_id,
@@ -45543,6 +47219,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 							});
 						},
 						onSaved: (result) => {
+							if (threadId === "new") titleSession.open = false;
 							alive();
 							location.replace(`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(result.thread_id)}`);
 						},
@@ -45553,8 +47230,17 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						field: name,
 						form: create,
 						value: name.value,
-						local: true
+						local: true,
+						resume: titleSession.open === true,
+						onEditing: (open, start, end) => {
+							titleSession.open = open;
+							if (open) {
+								titleSession.caret = start;
+								titleSession.caretEnd = end;
+							}
+						}
 					}) : null;
+					if (titleDraft) titleView = titleDraft;
 					if (threadId === "new" && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis)) {
 						workspaceCaps = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`);
 						alive();
@@ -45679,7 +47365,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				nativeAnalysis?.recheck();
 			}
 		} catch (error) {
-			if (!retired(error) && ticket === sequence) {
+			if (!retiredView(error) && ticket === sequence) {
 				loaded = false;
 				workspace = null;
 				threadData = null;
@@ -45735,7 +47421,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const initialTranscript = content.querySelector(".pd-transcript");
 	if (initialTranscript && threadState.scroll) initialTranscript.scrollTop = threadState.scroll;
 	if (threadId === "new") setTimeout(() => {
-		if (!disposed) content.querySelector("[data-discussion-composer]")?.focus();
+		if (disposed) return;
+		if (titleView?.editing()) titleView.focus(titleSession.caret, titleSession.caretEnd);
+		else content.querySelector("[data-discussion-composer]")?.focus();
 	}, 0);
 	proposalReview?.recheck();
 	nativeAnalysis?.recheck();
@@ -45975,6 +47663,581 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		return true;
 	};
 	return dispose;
+}
+//#endregion
+//#region src/pm-work-follow-up.js
+var WORKSPACE_ID = /^ws_[0-9a-f]{32}$/;
+var WORK_ITEM_ID = /^wi_[0-9a-f]{20}$/;
+var ATTEMPT_ID = /^att_[0-9a-f]{32}$/;
+var OPERATION_ID = /^op_[0-9a-f]{32}$/;
+var REKEY = new Set(["PM_WORK_ATTEMPT_CHANGED", "INVALID_PRECONDITIONS"]);
+var QUEUED_RECEIPT = new Set(["queued", "waiting_external"]);
+function workFollowUpAvailable(caps) {
+	const feature = caps?.features?.pm_workspaces?.work_follow_up;
+	return feature?.version === 1 && feature?.available === true;
+}
+var retired = (error) => [
+	"VIEW_CHANGED",
+	"CONNECTION_CHANGED",
+	"PM_DISPOSED"
+].includes(error?.code);
+function exactTarget(target, workspaceId, workItemId) {
+	if (!target || typeof target !== "object" || Array.isArray(target)) return false;
+	return Object.keys(target).length === 2 && target.workspace_id === workspaceId && target.work_item_id === workItemId;
+}
+function receiptText(receipt, part, t) {
+	const value = receipt?.labels?.[part]?.[locale];
+	return typeof value === "string" && value.trim() ? value : t("loop_next_unknown");
+}
+function actionLabel(action, t) {
+	const value = locale === "zh-TW" ? action?.label_zh_TW : action?.label;
+	return typeof value === "string" && value.trim() ? value : "";
+}
+function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, workItemId, selectedAttemptId = "", errorBox, canSend = () => true, managed = () => false, onField = () => {} }) {
+	if (!workFollowUpAvailable(caps()) || !WORKSPACE_ID.test(workspaceId || "") || !WORK_ITEM_ID.test(workItemId || "")) return null;
+	const titleId = `work-next-title-${workItemId}`;
+	const hintId = `work-next-hint-${workItemId}`;
+	const heading = h("h2", { id: titleId }, t("loop_next_label"));
+	const pill = h("span", { "data-follow-up-pill": "" });
+	const list = h("div", {
+		class: "work-next-list",
+		"data-follow-up-list": ""
+	});
+	const formHost = h("div", { "data-follow-up-form": "" });
+	const note = h("div", { "data-follow-up-note": "" });
+	const status = h("div", {
+		role: "status",
+		"data-follow-up-status": ""
+	});
+	const live = h("div", {
+		role: "status",
+		class: "work-next-live",
+		"data-follow-up-live": ""
+	});
+	const box = h("section", {
+		class: "ui-section-card work-next",
+		"data-work-section": "next-turn"
+	}, h("header", { class: "work-next-head" }, heading, pill), list, note, formHost, status, live);
+	let epoch = 0, serial = 0, stopped = false, suspended = false, disposed = false;
+	let attemptId = ATTEMPT_ID.test(selectedAttemptId) ? selectedAttemptId : "", sendOffer = null, blockedReason = "", resultSettled = false;
+	let reading = false, admissionReady = false;
+	let pageItems = [], nextCursor = null, hasMore = false, filtered = false, listSettled = false;
+	const pinned = new Map(), announced = new Set(), cancelDenied = new Set();
+	let composer = null, composing = false, composeEnded = -Infinity, focusAfter = null;
+	let sawList = false;
+	function alive(ticket, mark) {
+		try {
+			guard();
+		} catch {
+			return false;
+		}
+		return mark === epoch && ticket === serial && !stopped && !suspended && !disposed;
+	}
+	const inputsPath = (after) => `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${encodeURIComponent(workItemId)}/inputs?${new URLSearchParams({
+		limit: "50",
+		...after ? { after: String(after) } : {},
+		...attemptId ? { attempt_id: attemptId } : {}
+	})}`;
+	function validReceipt(row) {
+		return row && typeof row === "object" && OPERATION_ID.test(row.operation_id || "") && row.workspace_id === workspaceId && row.work_item_id === workItemId;
+	}
+	function mergedItems() {
+		const map = new Map();
+		for (const row of pageItems) if (validReceipt(row)) map.set(row.operation_id, row);
+		for (const [id, row] of pinned) if (validReceipt(row) && !map.has(id)) map.set(id, row);
+		return [...map.values()].sort((a, b) => {
+			return (Number.isInteger(a.sequence) ? a.sequence : Number.MAX_SAFE_INTEGER) - (Number.isInteger(b.sequence) ? b.sequence : Number.MAX_SAFE_INTEGER) || String(a.operation_id).localeCompare(String(b.operation_id));
+		});
+	}
+	function rememberAttempt(value) {
+		if (!selectedAttemptId && typeof value === "string" && ATTEMPT_ID.test(value)) attemptId = value;
+	}
+	function sentence(code) {
+		const key = `loop_next_err_${code || ""}`;
+		const text = t(key);
+		return text !== key ? text : t("loop_next_err_unknown");
+	}
+	function showError(error, host) {
+		const summary = error?.code ? sentence(error.code) : t("loop_next_err_unknown");
+		host.replaceChildren(errorBox(error, {
+			summary,
+			within: host
+		}));
+	}
+	function clearComposer() {
+		composer?.dispose();
+		composer = null;
+		formHost.replaceChildren();
+		try {
+			onField(null, null);
+		} catch {}
+	}
+	function composerAllowed() {
+		return !reading && admissionReady && Boolean(sendOffer) && resultSettled && managed() && !suspended && caps()?.scopes?.includes("operate") && caps()?.actions?.some((row) => row.action === "session.send" && row.allowed === true);
+	}
+	function dropUnconfirmedPins() {
+		const visible = new Set(pageItems.map((row) => row.operation_id));
+		for (const id of [...pinned.keys()]) if (!visible.has(id)) pinned.delete(id);
+	}
+	function actorMatches(receipt) {
+		const actor = caps()?.actor;
+		return typeof actor === "string" && actor !== "" && actor === receipt?.actor;
+	}
+	function offerSend(result) {
+		if (!result || result.contract !== "pm-work-attempt-result/v1") return null;
+		if (result.workspace_id !== workspaceId || result.attempt_id !== attemptId) return null;
+		if (result.identity?.work_item_id !== workItemId) return null;
+		return (Array.isArray(result.next_allowed_actions) ? result.next_allowed_actions : []).find((row) => row?.kind === "action" && row.action === "session.send" && row.allowed !== false && exactTarget(row.target, workspaceId, workItemId) && Array.isArray(row.allowed_schedules) && row.allowed_schedules.includes("after_current")) || null;
+	}
+	function applyResult(result) {
+		if (!result || result.contract !== "pm-work-attempt-result/v1") return false;
+		if (result.workspace_id !== workspaceId || result.identity?.work_item_id !== workItemId) return false;
+		if (attemptId && result.attempt_id !== attemptId) return false;
+		resultSettled = true;
+		sendOffer = offerSend(result);
+		const blocked = Array.isArray(result.blocked_actions) ? result.blocked_actions.find((row) => row?.action === "session.send") : null;
+		blockedReason = sendOffer ? "" : blocked?.reason || "";
+		return true;
+	}
+	function syncComposer() {
+		if (stopped || disposed) return;
+		const allowed = composerAllowed();
+		const showReadOnly = !reading && !allowed && resultSettled && admissionReady && (blockedReason === "missing_scope" || blockedReason === "not_writer_member" || !caps()?.scopes?.includes("operate"));
+		pill.replaceChildren(...showReadOnly ? [statusPill("read_only")] : []);
+		const reason = blockedReason === "codex_uncorrelated_turn_boundary" ? t("loop_next_codex") : blockedReason === "not_controller" ? t("loop_next_not_controller") : "";
+		note.replaceChildren(...reason ? [h("p", { class: "work-next-note" }, reason)] : []);
+		if (!allowed) {
+			if (reading && composer) {
+				composer.update();
+				paint();
+				return;
+			}
+			if (composer) clearComposer();
+			paint();
+			return;
+		}
+		if (composer) {
+			composer.update();
+			paint();
+			return;
+		}
+		const field = h("textarea", {
+			id: `work-next-input-${workItemId}`,
+			"data-follow-up-input": "",
+			rows: "4"
+		});
+		field.setAttribute("aria-labelledby", titleId);
+		field.setAttribute("aria-describedby", hintId);
+		field.addEventListener("compositionstart", () => {
+			composing = true;
+		});
+		field.addEventListener("compositionend", () => {
+			composing = false;
+			composeEnded = performance.now();
+		});
+		field.addEventListener("input", () => composer?.update());
+		const hint = h("p", {
+			class: "ui-meta",
+			id: hintId
+		}, t("loop_next_hint"));
+		composer = durableForm({
+			h,
+			t,
+			api,
+			caps,
+			guard,
+			namespace,
+			action: "session.send",
+			target: {
+				workspace_id: workspaceId,
+				work_item_id: workItemId
+			},
+			fields: { text: field },
+			params: (values) => ({
+				text: values.text.trim(),
+				schedule: "after_current"
+			}),
+			preconditions: () => attemptId ? { expected_attempt_id: attemptId } : {},
+			permitted: () => managed() && !stopped && !suspended,
+			canSend: () => !reading && admissionReady && field.value.trim().length > 0 && field.value.trim().length <= 2e4 && canSend(),
+			requiredScope: "operate",
+			label: "loop_next_send",
+			releaseAfterAcknowledgement: true,
+			acknowledgeStatus: acknowledge,
+			onAcknowledged: acceptOperation,
+			onSaved: async () => {},
+			onError: handleFormError,
+			errorBox,
+			extra: h("div", { class: "pm-fields work-next-field" }, field, hint)
+		});
+		composer.box.addEventListener("submit", (event) => {
+			if (composing || performance.now() - composeEnded < 50) {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+			}
+		}, true);
+		formHost.append(composer.box);
+		if (field.value) field.selectionStart = field.selectionEnd = field.value.length;
+		try {
+			onField(field, composer.box.querySelector("button[type=submit]"));
+		} catch {}
+		paint();
+	}
+	function correlatedReceipt(op) {
+		const receipt = op?.input_receipt;
+		if (!validReceipt(receipt) || receipt.operation_id !== op?.operation_id) return null;
+		return receipt;
+	}
+	function acknowledge(op, builder, translate) {
+		const receipt = correlatedReceipt(op);
+		if (receipt) {
+			const title = receiptText(receipt, "state", translate);
+			if (QUEUED_RECEIPT.has(receipt.state)) return builder("span", {
+				"data-pm-acknowledged": "",
+				"data-follow-up-ack": "queued"
+			}, translate("loop_next_queued"), title ? " · " : "", title || null);
+			return builder("span", {
+				"data-pm-acknowledged": "",
+				"data-follow-up-ack": receipt.state === "accepted" ? "accepted" : receipt.state || "unknown"
+			}, title);
+		}
+		const accepted = op?.status === "accepted" || op?.status === "succeeded";
+		const id = OPERATION_ID.test(op?.operation_id || "") ? op.operation_id : "";
+		return builder("span", {
+			"data-pm-acknowledged": "",
+			"data-follow-up-ack": accepted ? "accepted" : "unknown"
+		}, translate(accepted ? "loop_next_accepted" : "loop_next_unknown"), id ? " " : null, id ? builder("a", { href: `#/op/${encodeURIComponent(id)}` }, id) : null);
+	}
+	function acceptOperation(op) {
+		const receipt = op?.input_receipt;
+		if (!validReceipt(receipt) || receipt.operation_id !== op?.operation_id) return;
+		pinned.set(receipt.operation_id, receipt);
+		paint();
+		refresh();
+	}
+	function handleFormError(error) {
+		if (!error?.code || error.code === "NETWORK_ERROR" || error.code === "TIMEOUT" || error.code === "CENTRAL_OFFLINE") return false;
+		const formStatus = composer?.box.querySelector("[role=status]");
+		if (formStatus) showError(error, formStatus);
+		if (REKEY.has(error.code)) refresh();
+		return true;
+	}
+	function fillFrom(action, focusField) {
+		if (!composer || composer.locked()) return false;
+		const text = typeof action?.params?.text === "string" ? action.params.text : "";
+		composer.set("text", text);
+		if (focusField) composer.fields.text.focus();
+		return true;
+	}
+	async function runEndpoint(action, receipt) {
+		const mark = epoch;
+		const id = action?.operation_id;
+		if (!OPERATION_ID.test(id || "") || !actorMatches(receipt) || !["cancel", "resume"].includes(action?.endpoint)) return;
+		const endpoint = action.endpoint === "cancel" ? "cancel" : "resume";
+		try {
+			guard();
+			await api("POST", `/operations/${encodeURIComponent(id)}/${endpoint}`, {});
+			if (mark !== epoch || stopped || disposed) return;
+			if (action.endpoint === "cancel" && id === receipt.operation_id) focusAfter = {
+				id: receipt.operation_id,
+				kind: "edit"
+			};
+			await refresh();
+		} catch (error) {
+			if (mark !== epoch || stopped || disposed || retired(error)) return;
+			if (error?.code === "PM_WORK_CANCEL_NOT_ALLOWED_AFTER_SEND") {
+				cancelDenied.add(receipt.operation_id);
+				showError(error, status);
+				paint();
+				return;
+			}
+			showError(error, status);
+		}
+	}
+	function mutationsAllowed() {
+		if (reading || !admissionReady || !sendOffer) return false;
+		if ([
+			"not_controller",
+			"codex_uncorrelated_turn_boundary",
+			"not_writer_member",
+			"missing_scope"
+		].includes(blockedReason)) return false;
+		return managed() && !stopped && !suspended && caps()?.scopes?.includes("operate") && caps()?.actions?.some((row) => row.action === "session.send" && row.allowed === true);
+	}
+	function rowActions(receipt) {
+		if (!mutationsAllowed()) return [];
+		if (!actorMatches(receipt)) return Array.isArray(receipt.next_allowed_actions) && receipt.next_allowed_actions.length > 0 ? [h("p", { class: "ui-meta" }, t("loop_next_not_actor"))] : [];
+		const actions = Array.isArray(receipt.next_allowed_actions) ? receipt.next_allowed_actions : [];
+		const nodes = [];
+		for (const action of actions) if (action?.kind === "operation_endpoint" && action.endpoint === "cancel" && action.operation_id === receipt.operation_id && receipt.cancellable === true && !cancelDenied.has(receipt.operation_id)) {
+			const label = actionLabel(action, t);
+			if (!label) continue;
+			nodes.push(button({
+				variant: "secondary",
+				label,
+				"data-follow-up-action": "cancel",
+				onClick: () => runEndpoint(action, receipt)
+			}));
+		} else if (action?.kind === "operation_endpoint" && action.endpoint === "resume" && action.operation_id === receipt.operation_id && receipt.state === "unknown") {
+			const label = actionLabel(action, t);
+			if (!label) continue;
+			nodes.push(button({
+				variant: "secondary",
+				label,
+				"data-follow-up-action": "resume",
+				onClick: () => runEndpoint(action, receipt)
+			}));
+		} else if (action?.kind === "action" && action.action === "session.send" && exactTarget(action.target, workspaceId, workItemId) && (receipt.state === "failed" || receipt.state === "cancelled")) {
+			const label = actionLabel(action, t);
+			if (!label) continue;
+			const kind = receipt.state === "cancelled" ? "edit" : "retry";
+			nodes.push(button({
+				variant: "secondary",
+				label,
+				"data-follow-up-action": kind,
+				onClick: () => {
+					fillFrom(action, kind === "retry");
+				}
+			}));
+		}
+		return nodes;
+	}
+	function paint() {
+		if (stopped || disposed) return;
+		const active = document.activeElement;
+		const typing = composer && (active === composer.fields.text || composer.fields.text.contains?.(active));
+		const focusedReceipt = !typing ? active?.closest?.("[data-follow-up-receipt]")?.getAttribute("data-follow-up-receipt") : "";
+		const focusedAction = !typing ? active?.getAttribute?.("data-follow-up-action") : "";
+		const items = mergedItems();
+		const fresh = items.filter((row) => !announced.has(row.operation_id));
+		if (sawList) {
+			for (const row of fresh) announced.add(row.operation_id);
+			if (fresh.length) live.textContent = fresh.map((row) => receiptText(row, "state", t)).filter(Boolean).join(" ");
+		}
+		const rows = items.map((receipt) => h("article", {
+			class: "work-next-row",
+			"data-follow-up-receipt": receipt.operation_id,
+			"data-follow-up-state": receipt.state || ""
+		}, h("a", { href: `#/op/${encodeURIComponent(receipt.operation_id)}` }, receiptText(receipt, "state", t)), h("p", {}, receiptText(receipt, "detail", t)), typeof receipt.text_excerpt === "string" && receipt.text_excerpt ? h("p", {}, receipt.text_excerpt) : null, receipt.text_truncated === true ? h("p", { class: "ui-meta" }, t("loop_next_excerpt")) : null, receipt.status_reason === "waiting_permission_or_question_gate" ? h("p", {}, t("loop_next_waiting")) : null, typeof receipt.blocked_by_operation_id === "string" && OPERATION_ID.test(receipt.blocked_by_operation_id) ? h("a", { href: `#/op/${encodeURIComponent(receipt.blocked_by_operation_id)}` }, t("loop_next_blocked_link")) : null, ...rowActions(receipt)));
+		const tail = [];
+		if (filtered) tail.push(h("p", {
+			class: "work-next-note",
+			"data-follow-up-hidden": ""
+		}, t("loop_next_hidden")));
+		if (hasMore) tail.push(button({
+			variant: "ghost",
+			label: t("loop_next_more"),
+			"data-follow-up-more": "",
+			onClick: () => loadMore()
+		}));
+		if (!items.length && listSettled && !hasMore) tail.push(emptyState({
+			title: t("loop_next_empty"),
+			heading: "h3"
+		}));
+		list.replaceChildren(...rows, ...tail);
+		if (focusAfter) {
+			const pending = focusAfter;
+			const node = list.querySelector(`[data-follow-up-receipt="${CSS.escape(pending.id)}"] [data-follow-up-action="${pending.kind}"]`);
+			if (node) {
+				focusAfter = null;
+				node.focus();
+			}
+		} else if (focusedReceipt && !typing) {
+			const selector = focusedAction ? `[data-follow-up-receipt="${CSS.escape(focusedReceipt)}"] [data-follow-up-action="${CSS.escape(focusedAction)}"]` : `[data-follow-up-receipt="${CSS.escape(focusedReceipt)}"] a`;
+			list.querySelector(selector)?.focus();
+		}
+	}
+	function takeList(data, append) {
+		if (!data || data.workspace_id !== workspaceId || data.work_item_id !== workItemId || !Array.isArray(data.items) || selectedAttemptId && data.attempt_id !== selectedAttemptId) return false;
+		const rows = data.items.filter(validReceipt);
+		pageItems = append ? [...pageItems, ...rows] : rows;
+		nextCursor = typeof data.next_cursor === "string" && data.next_cursor ? data.next_cursor : Number.isInteger(data.next_cursor) ? data.next_cursor : null;
+		hasMore = data.has_more === true && nextCursor != null && nextCursor !== "";
+		filtered = data.visibility_filtered === true;
+		rememberAttempt(data.latest_attempt_id);
+		listSettled = true;
+		dropUnconfirmedPins();
+		return true;
+	}
+	function denyAdmission(message) {
+		reading = false;
+		admissionReady = false;
+		sendOffer = null;
+		dropUnconfirmedPins();
+		if (message) status.replaceChildren(h("p", {}, message));
+		syncComposer();
+	}
+	async function readResult(ticket, mark) {
+		if (!alive(ticket, mark)) return;
+		if (!attemptId) {
+			resultSettled = true;
+			sendOffer = null;
+			blockedReason = "";
+			reading = false;
+			admissionReady = true;
+			syncComposer();
+			return;
+		}
+		let data;
+		try {
+			data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/result`);
+		} catch (error) {
+			if (!alive(ticket, mark) || retired(error)) return;
+			if ([
+				403,
+				404,
+				410
+			].includes(error?.status)) {
+				withdrawSource();
+				return;
+			}
+			throw error;
+		}
+		if (!alive(ticket, mark)) return;
+		if (!applyResult(data)) {
+			denyAdmission(t("loop_next_err_unknown"));
+			return;
+		}
+		reading = false;
+		admissionReady = true;
+		syncComposer();
+	}
+	async function refresh() {
+		if (stopped || suspended || disposed) return;
+		const mark = epoch;
+		const ticket = ++serial;
+		reading = true;
+		admissionReady = false;
+		sendOffer = null;
+		syncComposer();
+		const queried = attemptId;
+		try {
+			guard();
+			const data = await api("GET", inputsPath(""));
+			if (!alive(ticket, mark)) return;
+			if (!takeList(data, false)) {
+				denyAdmission(t("loop_next_err_unknown"));
+				return;
+			}
+			paint();
+			sawList = true;
+			for (const row of mergedItems()) announced.add(row.operation_id);
+			if (!queried && attemptId) {
+				const filteredPage = await api("GET", inputsPath(""));
+				if (!alive(ticket, mark)) return;
+				if (!takeList(filteredPage, false)) {
+					denyAdmission(t("loop_next_err_unknown"));
+					return;
+				}
+				paint();
+			}
+			await readResult(ticket, mark);
+		} catch (error) {
+			if (!alive(ticket, mark) || retired(error)) return;
+			if ([
+				403,
+				404,
+				410
+			].includes(error?.status)) {
+				withdrawSource();
+				return;
+			}
+			denyAdmission();
+			showError(error, status);
+		}
+	}
+	async function loadMore() {
+		if (!hasMore || stopped || suspended || disposed || nextCursor == null) return;
+		const mark = epoch;
+		const ticket = ++serial;
+		const after = nextCursor;
+		try {
+			const data = await api("GET", inputsPath(after));
+			if (!alive(ticket, mark)) return;
+			if (!takeList(data, true)) {
+				status.replaceChildren(h("p", {}, t("loop_next_err_unknown")));
+				return;
+			}
+			paint();
+		} catch (error) {
+			if (!alive(ticket, mark) || retired(error)) return;
+			if ([
+				403,
+				404,
+				410
+			].includes(error?.status)) {
+				withdrawSource();
+				return;
+			}
+			showError(error, status);
+		}
+	}
+	function withdrawSource() {
+		epoch += 1;
+		serial += 1;
+		stopped = true;
+		reading = false;
+		admissionReady = false;
+		pageItems = [];
+		pinned.clear();
+		announced.clear();
+		sendOffer = null;
+		resultSettled = false;
+		hasMore = false;
+		filtered = false;
+		clearComposer();
+		list.replaceChildren();
+		note.replaceChildren();
+		pill.replaceChildren();
+		status.replaceChildren();
+		live.textContent = t("loop_next_withdrawn");
+		box.replaceChildren(h("p", {
+			role: "status",
+			"data-follow-up-withdrawn": ""
+		}, t("loop_next_withdrawn")));
+	}
+	function suspend() {
+		epoch += 1;
+		serial += 1;
+		suspended = true;
+		reading = false;
+		admissionReady = false;
+		sendOffer = null;
+		if (stopped) return;
+		pageItems = [];
+		pinned.clear();
+		list.replaceChildren();
+		note.replaceChildren();
+		status.replaceChildren();
+		clearComposer();
+		box.hidden = true;
+	}
+	function restore() {
+		if (stopped || disposed) return;
+		suspended = false;
+		box.hidden = false;
+		refresh();
+	}
+	function sync() {
+		if (stopped || disposed) return;
+		syncComposer();
+	}
+	function dispose() {
+		disposed = true;
+		epoch += 1;
+		serial += 1;
+		clearComposer();
+	}
+	refresh();
+	return {
+		box,
+		refresh,
+		suspend,
+		restore,
+		sync,
+		withdraw: withdrawSource,
+		dispose
+	};
 }
 //#endregion
 //#region src/observed-resource-strings.js
@@ -46232,7 +48495,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 		pid,
 		item.kind,
 		item.id
-	].map(encodeURIComponent).join("/")}`, item.title || item.branch || (item.action ? actionLabel(item.action) : item.id), workActivity(item), item.reading);
+	].map(encodeURIComponent).join("/")}`, item.title || item.branch || (item.action ? actionLabel$1(item.action) : item.id), workActivity(item), item.reading);
 	const render = () => {
 		if (disposed) return;
 		createProject.hidden = !catalogKnown || !caps()?.scopes?.includes("manage") || caps()?.actions?.find((row) => row.action === "project.create")?.allowed === false;
@@ -47590,10 +49853,13 @@ function setupMobileSessionLayout({ head, composer, textarea, t, guard, infoRow 
 	composerToggle.type = "button";
 	composerToggle.className = "mini workspace-composer-toggle";
 	composerToggle.setAttribute("aria-controls", "workspace-message-input");
+	let boundArea = textarea || null;
+	let boundComposer = composer;
+	let boundRow = composerRow || null;
 	const renderComposerToggle = () => {
 		if (!alive()) return;
-		const hasDraft = (textarea?.value || "").trim().length > 0;
-		composer.classList.toggle("workspace-composer-collapsed", isComposerCollapsed);
+		const hasDraft = (boundArea?.value || "").trim().length > 0;
+		boundComposer?.classList.toggle("workspace-composer-collapsed", isComposerCollapsed && Boolean(boundArea));
 		composerToggle.setAttribute("aria-expanded", String(!isComposerCollapsed));
 		const baseText = t(isComposerCollapsed ? "mobile_compose_open" : "mobile_compose_close");
 		const draftSuffix = hasDraft ? ` · ${t("mobile_draft_indicator")}` : "";
@@ -47608,17 +49874,27 @@ function setupMobileSessionLayout({ head, composer, textarea, t, guard, infoRow 
 			localStorage.setItem(KEY_MOBILE_COMPOSER_COLLAPSED, String(isComposerCollapsed));
 		} catch {}
 		renderComposerToggle();
-		if (!isComposerCollapsed) textarea?.focus({ preventScroll: true });
+		if (!isComposerCollapsed) boundArea?.focus({ preventScroll: true });
 		else composerToggle.focus({ preventScroll: true });
 	});
 	const onTextareaInput = () => {
 		renderComposerToggle();
 	};
-	textarea?.addEventListener("input", onTextareaInput);
-	textarea?.addEventListener("change", onTextareaInput);
-	if (composerRow) {
-		if (!composerRow.contains(composerToggle)) composerRow.append(composerToggle);
-	} else if (!composer.contains(composerToggle)) composer.prepend(composerToggle);
+	const unbindArea = (node) => {
+		node?.removeEventListener("input", onTextareaInput);
+		node?.removeEventListener("change", onTextareaInput);
+		node?.removeEventListener("focusin", onFocusIn);
+		node?.removeEventListener("focusout", onFocusOut);
+	};
+	const bindArea = (node) => {
+		node?.addEventListener("input", onTextareaInput);
+		node?.addEventListener("change", onTextareaInput);
+		node?.addEventListener("focusin", onFocusIn);
+		node?.addEventListener("focusout", onFocusOut);
+	};
+	if (boundRow) {
+		if (!boundRow.contains(composerToggle)) boundRow.append(composerToggle);
+	} else if (!boundComposer.contains(composerToggle)) boundComposer.prepend(composerToggle);
 	const updateViewport = () => {
 		if (!alive()) return;
 		const isMob = isMobileLayout();
@@ -47645,8 +49921,7 @@ function setupMobileSessionLayout({ head, composer, textarea, t, guard, infoRow 
 	window.visualViewport?.addEventListener("resize", updateViewport);
 	window.visualViewport?.addEventListener("scroll", updateViewport);
 	window.addEventListener("resize", updateViewport);
-	textarea?.addEventListener("focusin", onFocusIn);
-	textarea?.addEventListener("focusout", onFocusOut);
+	bindArea(boundArea);
 	updateInfo();
 	renderComposerToggle();
 	updateViewport();
@@ -47655,18 +49930,37 @@ function setupMobileSessionLayout({ head, composer, textarea, t, guard, infoRow 
 		composerToggle,
 		updateInfo,
 		updateDraft: renderComposerToggle,
+		retarget({ textarea: nextArea = null, composer: nextComposer = null, composerRow: nextRow = null, controlsId = "" } = {}) {
+			if (!alive()) return;
+			unbindArea(boundArea);
+			boundComposer?.classList.remove("workspace-composer-collapsed");
+			boundArea = nextArea;
+			if (nextComposer) boundComposer = nextComposer;
+			boundRow = nextRow;
+			if (controlsId) composerToggle.setAttribute("aria-controls", controlsId);
+			bindArea(boundArea);
+			composerToggle.remove();
+			if (boundRow) boundRow.append(composerToggle);
+			else if (boundArea && boundComposer && !boundComposer.contains(composerToggle)) boundComposer.prepend(composerToggle);
+			renderComposerToggle();
+		},
+		detachComposer() {
+			if (!alive()) return;
+			unbindArea(boundArea);
+			boundArea = null;
+			boundComposer?.classList.remove("workspace-composer-collapsed");
+			composerToggle.remove();
+		},
 		dispose() {
 			isDisposed = true;
 			window.visualViewport?.removeEventListener("resize", updateViewport);
 			window.visualViewport?.removeEventListener("scroll", updateViewport);
 			window.removeEventListener("resize", updateViewport);
-			textarea?.removeEventListener("input", onTextareaInput);
-			textarea?.removeEventListener("change", onTextareaInput);
-			textarea?.removeEventListener("focusin", onFocusIn);
-			textarea?.removeEventListener("focusout", onFocusOut);
+			unbindArea(boundArea);
 			infoToggle.remove();
 			composerToggle.remove();
 			head.classList.remove("workspace-info-collapsed");
+			boundComposer?.classList.remove("workspace-composer-collapsed");
 			composer.classList.remove("workspace-composer-collapsed");
 			document.body.classList.remove("mobile-keyboard");
 			document.documentElement.style.removeProperty("--workspace-visible-height");
@@ -47808,9 +50102,27 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			pages: 1,
 			size: null,
 			busy: false,
+			pressed: false,
 			readFailed: false
 		};
-		more.onclick = () => refresh(state, state.pages + 1).catch(() => {});
+		more.onclick = () => {
+			if (state.busy || state.pressed) return;
+			state.pressed = true;
+			syncBusy();
+			const previous = new Set([...state.list.querySelectorAll("[data-inbox-key]")].map((node) => node.dataset.inboxKey));
+			const release = ownFocus(more);
+			refresh(state, state.pages + 1).finally(() => {
+				state.pressed = false;
+				syncBusy();
+				const keep = release();
+				try {
+					guard();
+				} catch {
+					return;
+				}
+				if (keep && (more.hidden || more.disabled)) (firstAdded(state, previous) || refreshButton).focus();
+			}).catch(() => {});
+		};
 		sections.push(state);
 		return section;
 	};
@@ -47843,14 +50155,58 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 		cursor: "next_before",
 		param: "before"
 	})] : [add("unread", "/work-items?unread=true&limit=50", "work_items", workItemRow)];
+	let refreshPressed = false;
 	const refreshButton = iconButton({
 		icon: "refresh-cw",
 		label: t("global_refresh"),
-		onClick: () => refresh().catch(() => {})
+		onClick: () => {
+			if (refreshPressed || sections.some((section) => section.busy || section.pressed)) return;
+			refreshPressed = true;
+			syncBusy();
+			refresh().finally(() => {
+				refreshPressed = false;
+				syncBusy();
+			}).catch(() => {});
+		}
 	});
-	const syncBusy = () => {
-		refreshButton.disabled = sections.some((section) => section.busy);
-	};
+	function sectionFlight(section) {
+		return section.busy || section.pressed;
+	}
+	function syncBusy() {
+		if (refreshPressed || sections.some(sectionFlight)) refreshButton.setAttribute("aria-disabled", "true");
+		else refreshButton.removeAttribute("aria-disabled");
+		refreshButton.disabled = false;
+		for (const section of sections) if (sectionFlight(section)) {
+			section.more.disabled = false;
+			section.more.setAttribute("aria-disabled", "true");
+			section.status.setAttribute("aria-busy", "true");
+		} else {
+			section.more.disabled = false;
+			section.more.removeAttribute("aria-disabled");
+			section.status.removeAttribute("aria-busy");
+		}
+	}
+	function ownFocus(button) {
+		let owned = document.activeElement === button;
+		const onFocus = (event) => {
+			const target = event.target;
+			if (target === button) {
+				owned = true;
+				return;
+			}
+			if ((target === document.body || target === document.documentElement) && (button.hidden || button.disabled || !button.isConnected)) return;
+			owned = false;
+		};
+		document.addEventListener("focusin", onFocus, true);
+		return () => {
+			document.removeEventListener("focusin", onFocus, true);
+			const active = document.activeElement;
+			return owned && (active === button || active === document.body || active == null);
+		};
+	}
+	function firstAdded(section, previous) {
+		return [...section.list.querySelectorAll("[data-inbox-key]")].filter((node) => !previous.has(node.dataset.inboxKey))[0]?.querySelector("a, button") || null;
+	}
 	column.append(pageAlert, empty, ...groups, notes);
 	main.append(pageHeader({
 		title: t("nav_home"),
@@ -47871,7 +50227,6 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 	const load = async (section, wanted) => {
 		guard();
 		section.busy = true;
-		section.more.disabled = true;
 		syncBusy();
 		if (section.size === null) section.status.replaceChildren(skeleton(3));
 		const focusKey = section.list.contains(document.activeElement) ? document.activeElement.closest("[data-inbox-key]")?.dataset.inboxKey : null;
@@ -47934,7 +50289,6 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			throw error;
 		} finally {
 			section.busy = false;
-			section.more.disabled = false;
 			syncBusy();
 		}
 	};
@@ -48005,6 +50359,44 @@ function validLabels(v) {
 	return Array.isArray(v) && v.length <= 8 && new Set(v).size === v.length && v.every((x) => typeof x === "string" && x === x.trim() && [...x].length >= 1 && [...x].length <= 40 && !/[\p{C}\u2028\u2029]/u.test(x));
 }
 var metadata = (v) => object$6(v) && version$1(v.version) && validLabels(v.labels);
+function markControl$2(el, blocked, flight, own = false) {
+	if (!el.hidden && flight && (own || !blocked)) {
+		el.disabled = false;
+		el.setAttribute("aria-disabled", "true");
+	} else {
+		el.disabled = Boolean(blocked || flight);
+		el.removeAttribute("aria-disabled");
+	}
+}
+function markRegion$2(region, controls) {
+	if (controls.some((el) => !el.hidden && el.getAttribute("aria-disabled") === "true")) region.setAttribute("aria-busy", "true");
+	else region.removeAttribute("aria-busy");
+}
+function controlShown$2(el) {
+	return Boolean(el?.isConnected && !el.disabled && !el.closest("[hidden]"));
+}
+function moveFocus$2(from, candidate, root, region) {
+	if (controlShown$2(candidate)) {
+		candidate.focus();
+		return;
+	}
+	const controls = [...root.querySelectorAll("button, a[href], input, select, textarea")];
+	const start = Math.max(controls.indexOf(from), 0);
+	const next = [...controls.slice(start + 1), ...controls.slice(0, start)].find((el) => controlShown$2(el) && el.getAttribute("aria-disabled") !== "true");
+	if (next) {
+		next.focus();
+		return;
+	}
+	region.tabIndex = -1;
+	region.focus();
+}
+function settleFocus$2(before, buttons, candidate, root, region) {
+	if (!root?.isConnected || !buttons.includes(before)) return;
+	const active = document.activeElement;
+	if (active !== before && active !== document.body && active !== document.documentElement) return;
+	if (!before.disabled && !before.closest("[hidden]")) return;
+	moveFocus$2(before, candidate, root, region);
+}
 function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorBox, opStatus }) {
 	const path = `/sessions/${encodeURIComponent(target.host)}/${encodeURIComponent(target.session_id)}`;
 	const valid = (request) => request?.action === "session.labels.set" && equal$8(request.target, target) && object$6(request.params) && Object.keys(request.params).length === 1 && validLabels(request.params.labels) && object$6(request.preconditions) && Object.keys(request.preconditions).length === 1 && version$1(request.preconditions.expected_version);
@@ -48150,7 +50542,10 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 	}, t("labels_save"));
 	const check = h("button", {
 		class: "secondary",
-		onclick: () => refresh(true).catch(error)
+		onclick: () => {
+			if (!live() || busy || refreshing) return;
+			refresh(true).catch(error);
+		}
 	}, t("permissions_check"));
 	const renew = h("button", {
 		class: "secondary",
@@ -48215,6 +50610,7 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 	}, stateLine, tags, fold);
 	function update() {
 		if (!live()) return;
+		const before = document.activeElement;
 		const fixed = Boolean(saved.intent);
 		const showEdit = readable && permitted() && !damaged || fixed || damaged || readable && Object.hasOwn(saved, "text");
 		const chips = current?.labels.length ? current.labels.map((v) => h("span", { class: "chip" }, v)) : [];
@@ -48229,14 +50625,26 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 		fold.hidden = !showEdit && !why;
 		editorMount.hidden = !showEdit;
 		if (showEdit && fold.open) mountEditor();
-		input.disabled = fixed || busy || Boolean(refreshing) || !readable || !permitted() || damaged;
+		input.disabled = fixed || busy || !readable || !permitted() || damaged;
+		const flight = busy || Boolean(refreshing);
 		apply.hidden = Boolean(saved.intent?.operation_id || saved.intent?.refused);
-		apply.disabled = busy || Boolean(refreshing) || !readable || !permitted() || damaged || Boolean(fixed && !saved.intent.request) || !validLabels(parsed());
 		apply.textContent = t(fixed ? "permissions_retry" : "labels_save");
+		markControl$2(apply, !readable || !permitted() || damaged || Boolean(fixed && !saved.intent.request) || !validLabels(parsed()), flight, busy);
 		check.textContent = t(fixed ? "permissions_check" : "labels_refresh");
-		check.disabled = busy || Boolean(refreshing);
+		markControl$2(check, false, flight, false);
 		renew.hidden = fixed ? !terminal() && !saved.intent.refused : !damaged && !(current && saved.base_version !== void 0 && saved.base_version !== current.version);
-		renew.disabled = busy || Boolean(refreshing) || !readable || !permitted();
+		markControl$2(renew, !readable || !permitted(), flight, false);
+		markRegion$2(message, [
+			apply,
+			check,
+			renew
+		]);
+		const candidate = before === apply ? saved.intent?.operation_id ? check : saved.intent?.refused ? renew : null : before === renew ? input : null;
+		settleFocus$2(before, [
+			apply,
+			check,
+			renew
+		], candidate, box, message);
 		restriction.textContent = !permitted() ? t("labels_scope") : !readable ? t("labels_unreadable") : saved.base_version !== void 0 && saved.base_version !== current.version ? t("labels_changed") : "";
 		result.replaceChildren();
 		if (fixed) {
@@ -48279,8 +50687,13 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 		try {
 			await refreshing;
 		} catch (e) {
+			const typing = document.activeElement === input && !input.disabled;
 			readable = false;
 			error(e);
+			if (typing && input.disabled && live()) {
+				message.tabIndex = -1;
+				message.focus();
+			}
 			throw e;
 		} finally {
 			refreshing = null;
@@ -48852,26 +51265,44 @@ function composerShortcut({ h, t, input, button, storageKey, guard }) {
 		composing = false;
 		ended = performance.now();
 	};
+	let currentInput = input, currentButton = button;
 	const keydown = (event) => {
+		if (!currentButton) return;
 		if (event.key !== "Enter" || event.shiftKey || event.altKey || event.repeat || event.isComposing || composing || event.keyCode === 229 || performance.now() - ended < 50) return;
-		if (!(mode === "modified" ? event.ctrlKey || event.metaKey : mode === "enter" && !event.ctrlKey && !event.metaKey) || button.disabled || button.hidden) return;
+		if (!(mode === "modified" ? event.ctrlKey || event.metaKey : mode === "enter" && !event.ctrlKey && !event.metaKey) || currentButton.disabled || currentButton.hidden) return;
 		try {
 			guard();
 		} catch {
 			return;
 		}
 		event.preventDefault();
-		button.click();
+		currentButton.click();
 	};
-	input.addEventListener("compositionstart", start);
-	input.addEventListener("compositionend", end);
-	input.addEventListener("keydown", keydown);
+	const listen = (node) => {
+		if (!node) return;
+		node.addEventListener("compositionstart", start);
+		node.addEventListener("compositionend", end);
+		node.addEventListener("keydown", keydown);
+	};
+	const unlisten = (node) => {
+		if (!node) return;
+		node.removeEventListener("compositionstart", start);
+		node.removeEventListener("compositionend", end);
+		node.removeEventListener("keydown", keydown);
+	};
+	listen(currentInput);
 	return {
 		box: h("div", { class: "actions composer-shortcut" }, h("label", { class: "muted" }, t("composer_shortcut"), " ", select), h("span", { class: "muted" }, t("composer_newline")), status),
+		rebind(nextInput, nextButton) {
+			unlisten(currentInput);
+			currentInput = nextInput || null;
+			currentButton = nextButton || null;
+			listen(currentInput);
+		},
 		dispose() {
-			input.removeEventListener("compositionstart", start);
-			input.removeEventListener("compositionend", end);
-			input.removeEventListener("keydown", keydown);
+			unlisten(currentInput);
+			currentInput = null;
+			currentButton = null;
 		}
 	};
 }
@@ -49111,7 +51542,7 @@ function modelChoice({ h, t, api, caps, guard, host, agent, model, submit = null
 	};
 }
 function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onEvents, errorBox }) {
-	let doc = null, draft = null, intent = null, busy = false, serial = 0, loadedHost = "";
+	let doc = null, draft = null, intent = null, busy = false, serial = 0, loadedHost = "", refreshing = false, pressed = null;
 	let drafts = {};
 	try {
 		drafts = JSON.parse(localStorage.getItem(storageKey) || "{}");
@@ -49175,7 +51606,18 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 		label: t("models_refresh"),
 		class: "secondary",
 		type: "button",
-		onclick: () => load(true)
+		onclick: () => {
+			if (busy || refreshing) return;
+			refreshing = true;
+			pressed = refresh;
+			Promise.resolve(load(true)).finally(() => {
+				refreshing = false;
+				const button = pressed;
+				pressed = null;
+				update();
+				settle(button);
+			});
+		}
 	});
 	const reset = h("button", {
 		class: "secondary",
@@ -49217,8 +51659,10 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 		class: "primary",
 		type: "button",
 		onclick: async () => {
-			if (busy || !draft || !doc || doc.host !== host.value) return;
+			if (busy || refreshing) return;
+			if (!draft || !doc || doc.host !== host.value) return;
 			busy = true;
+			pressed = save;
 			try {
 				guard();
 				intent ||= {
@@ -49256,7 +51700,10 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 				} catch {}
 			} finally {
 				busy = false;
+				const button = pressed;
+				pressed = null;
 				update();
+				settle(button);
 			}
 		}
 	}, t("save"));
@@ -49264,16 +51711,55 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 		class: "panel model-preferences",
 		"data-model-preferences": ""
 	}, h("summary", {}, t("models_title")), h("p", { class: "muted" }, t("models_personal", { actor: caps()?.actor || "" })), h("div", { class: "capture-fields" }, h("label", {}, t("models_host"), host), h("label", {}, t("models_catalog_agent"), catalogAgent)), h("div", { class: "actions" }, refresh), status, statusDetails, evidence, form, rows, h("div", { class: "actions" }, save, reset, discard), h("h2", {}, t("models_usage")), usage);
+	function shownEnabled(node) {
+		return node && !node.disabled && !node.hidden && node.getClientRects().length > 0;
+	}
+	function arm(button, blocked) {
+		if ((busy || refreshing) && (button === pressed || !blocked)) {
+			button.disabled = false;
+			button.setAttribute("aria-disabled", "true");
+		} else {
+			button.removeAttribute("aria-disabled");
+			button.disabled = Boolean(blocked);
+		}
+	}
+	function settle(button) {
+		try {
+			guard();
+		} catch {
+			return;
+		}
+		if (!box.isConnected || !button) return;
+		const active = document.activeElement;
+		if (active !== button && active !== document.body) return;
+		if (!button.hidden && !button.disabled) return;
+		if (button === save) {
+			status.tabIndex = -1;
+			status.focus({ preventScroll: true });
+			return;
+		}
+		const group = button.closest(".actions") || button.parentElement;
+		const controls = group ? [...group.querySelectorAll("button, input, select, a")] : [];
+		const next = controls.slice(controls.indexOf(button) + 1).find(shownEnabled);
+		if (next) {
+			next.focus({ preventScroll: true });
+			return;
+		}
+		status.tabIndex = -1;
+		status.focus({ preventScroll: true });
+	}
 	function update() {
 		const locked = busy || Boolean(intent), coherent = doc?.host === host.value;
 		for (const input of Object.values(inputs)) input.disabled = locked || !draft || !coherent;
 		host.disabled = locked;
 		catalogAgent.disabled = busy;
-		save.disabled = busy || !draft || !coherent || !caps()?.actions?.some((action) => action.action === "preferences.models.update" && action.allowed);
 		save.textContent = t(intent ? "permissions_retry" : "save");
+		arm(save, !draft || !coherent || !caps()?.actions?.some((action) => action.action === "preferences.models.update" && action.allowed));
 		reset.disabled = discard.disabled = locked || !draft || !coherent;
-		refresh.disabled = busy || !host.value;
+		arm(refresh, !host.value);
 		for (const input of rows.querySelectorAll("input,button")) input.disabled = locked || !coherent || input.dataset.boundary === "true";
+		if ([refresh, save].some((button) => button.getAttribute("aria-disabled") === "true")) status.setAttribute("aria-busy", "true");
+		else status.removeAttribute("aria-busy");
 	}
 	function renderRows() {
 		const focused = document.activeElement?.dataset.modelControl;
@@ -49431,7 +51917,7 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 		const raw = JSON.parse(localStorage.getItem(storageKey));
 		if (raw && typeof raw.host === "string" && typeof raw.workspace === "string" && raw.drafts && typeof raw.drafts === "object" && !Array.isArray(raw.drafts)) saved = raw;
 	} catch {}
-	let doc = null, draft = null, busy = false, discovery = 0, serial = 0, discoveredHost = "", discoveryReady = false;
+	let doc = null, draft = null, busy = false, discovery = 0, serial = 0, discoveredHost = "", discoveryReady = false, refreshing = false, pressed = null;
 	const host = h("select", { "aria-label": t("host") }, h("option", { value: "" }, t("start_choose_host")), ...(caps()?.hosts || []).map((value) => h("option", { value: value.host }, value.host)));
 	if (![...host.options].some((option) => option.value === saved.host)) saved.host = "";
 	host.value = saved.host;
@@ -49458,7 +51944,18 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 		label: t("skills_refresh"),
 		class: "secondary",
 		type: "button",
-		onclick: () => discover(true)
+		onclick: () => {
+			if (busy || refreshing) return;
+			refreshing = true;
+			pressed = refresh;
+			discover(true).finally(() => {
+				refreshing = false;
+				const button = pressed;
+				pressed = null;
+				update();
+				settle(button);
+			});
+		}
 	});
 	const discard = h("button", {
 		class: "secondary",
@@ -49485,9 +51982,11 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 		class: "primary",
 		type: "button",
 		onclick: async () => {
-			if (busy || !draft || !coherent()) return;
+			if (busy || refreshing) return;
+			if (!draft || !coherent()) return;
 			if (!draft.intent && (doc.catalog.stale || doc.catalog.status !== "available")) return;
 			busy = true;
+			pressed = save;
 			try {
 				guard();
 				draft.intent ||= {
@@ -49542,7 +52041,10 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 				} catch {}
 			} finally {
 				busy = false;
+				const button = pressed;
+				pressed = null;
 				update();
+				settle(button);
 			}
 		}
 	}, t("skills_save"));
@@ -49550,15 +52052,54 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 		class: "panel project-skills",
 		"data-project-skills": ""
 	}, h("summary", {}, t("skills_title")), h("p", { class: "note" }, t("skills_not_applied")), h("div", { class: "capture-fields" }, h("label", {}, t("host"), host), h("label", {}, t("start_workspace"), workspace)), h("div", { class: "actions" }, refresh), status, statusDetails, source, list, h("div", { class: "actions" }, save, discard));
+	function shownEnabled(node) {
+		return node && !node.disabled && !node.hidden && node.getClientRects().length > 0;
+	}
+	function arm(button, blocked) {
+		if ((busy || refreshing) && (button === pressed || !blocked)) {
+			button.disabled = false;
+			button.setAttribute("aria-disabled", "true");
+		} else {
+			button.removeAttribute("aria-disabled");
+			button.disabled = Boolean(blocked);
+		}
+	}
+	function settle(button) {
+		try {
+			guard();
+		} catch {
+			return;
+		}
+		if (!box.isConnected || !button) return;
+		const active = document.activeElement;
+		if (active !== button && active !== document.body) return;
+		if (!button.hidden && !button.disabled) return;
+		if (button === save) {
+			status.tabIndex = -1;
+			status.focus({ preventScroll: true });
+			return;
+		}
+		const group = button.closest(".actions") || button.parentElement;
+		const controls = group ? [...group.querySelectorAll("button, input, select, a")] : [];
+		const next = controls.slice(controls.indexOf(button) + 1).find(shownEnabled);
+		if (next) {
+			next.focus({ preventScroll: true });
+			return;
+		}
+		status.tabIndex = -1;
+		status.focus({ preventScroll: true });
+	}
 	function update() {
 		const locked = busy || Boolean(draft?.intent), valid = coherent();
 		host.disabled = locked;
 		workspace.disabled = locked || !discoveryReady;
-		refresh.disabled = busy || !saved.host;
 		save.textContent = t(draft?.intent ? "permissions_retry" : "skills_save");
-		save.disabled = busy || !valid || !draft || !draft.intent && (doc.catalog.status !== "available" || doc.catalog.stale) || !caps()?.actions?.some((action) => action.action === "project.skills.update" && action.allowed);
+		arm(refresh, !saved.host);
+		arm(save, !valid || !draft || !draft.intent && (doc.catalog.status !== "available" || doc.catalog.stale) || !caps()?.actions?.some((action) => action.action === "project.skills.update" && action.allowed));
 		discard.disabled = locked || !valid || !draft;
 		for (const control of list.querySelectorAll("input,button")) control.disabled = locked || !valid || control.dataset.unavailable === "true";
+		if ([refresh, save].some((button) => button.getAttribute("aria-disabled") === "true")) status.setAttribute("aria-busy", "true");
+		else status.removeAttribute("aria-busy");
 	}
 	function render() {
 		if (!coherent() || !draft) {
@@ -49717,7 +52258,7 @@ var itemHref = (item) => `#/item/${encodeURIComponent(item.work_item_id)}`;
 var artifactHref = (artifact) => `#/artifact-review/artifact/${encodeURIComponent(artifact.artifact_id)}/${artifact.revision}`;
 var date = (value) => timeStamp(value);
 function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents, errorBox }) {
-	let doc = null, serial = 0, children = [], refreshing = null;
+	let doc = null, serial = 0, children = [], refreshing = null, pressed = null;
 	const warning = h("div", { "data-child-warning": "" }), status = h("p", {
 		class: "muted",
 		role: "status"
@@ -49727,13 +52268,21 @@ function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents
 		label: t("results_refresh"),
 		class: "mini",
 		type: "button",
-		onclick: () => load()
+		onclick: () => {
+			if (refreshing) return;
+			pressed = refresh;
+			load();
+		}
 	});
 	const more = h("button", {
 		class: "secondary",
 		type: "button",
 		hidden: true,
-		onclick: () => load(doc?.children_next_cursor)
+		onclick: () => {
+			if (refreshing) return;
+			pressed = more;
+			load(doc?.children_next_cursor);
+		}
 	}, t("results_more"));
 	const box = h("section", {
 		class: "result-sources panel",
@@ -49774,13 +52323,22 @@ function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents
 		return own ? content : h("details", { "data-result-child": item.work_item_id }, h("summary", {}, item.title), h("p", {}, h("a", { href: itemHref(item) }, t("results_open_child"))), content);
 	}
 	function render() {
-		const focused = document.activeElement?.getAttribute("href"), opens = new Set([...body.querySelectorAll("details[open][data-result-child]")].map((node) => node.dataset.resultChild));
+		const active = document.activeElement;
+		const focused = active?.getAttribute?.("href");
+		const focusedChild = [...body.querySelectorAll("details[data-result-child]")].find((child) => [...child.children].some((node) => node.tagName === "SUMMARY" && node === active));
+		const focusedChildId = focusedChild ? focusedChild.getAttribute("data-result-child") : "";
+		const opens = new Set([...body.querySelectorAll("details[open][data-result-child]")].map((node) => node.dataset.resultChild));
 		const unfinished = children.filter((child) => !child.archived && !child.completion.approved);
 		warning.replaceChildren(...unfinished.length ? [h("p", { class: "note warn" }, t("results_unfinished", { count: unfinished.length }), " ", ...unfinished.flatMap((child, index) => [index ? " · " : "", h("a", { href: itemHref(child) }, child.title)]))] : []);
 		if (doc.children_next_cursor) warning.append(h("p", { class: "muted" }, t("results_children_partial")));
 		body.replaceChildren(h("p", { class: "muted" }, t("results_independent")), ...[doc.parent && ["results_parent", doc.parent], doc.derived_from && ["derived_from", doc.derived_from]].filter(Boolean).map(([label, item]) => h("p", {}, t(label), ": ", h("a", { href: itemHref(item) }, item.title))), renderSource(doc.item, true), ...children.map((child) => renderSource(child)));
 		for (const node of body.querySelectorAll("details[data-result-child]")) node.open = opens.has(node.dataset.resultChild);
 		if (focused) [...body.querySelectorAll("a")].find((node) => node.getAttribute("href") === focused)?.focus({ preventScroll: true });
+		if (focusedChildId) {
+			const match = [...body.querySelectorAll("details")].find((node) => node.getAttribute("data-result-child") === focusedChildId);
+			const summary = match && [...match.children].find((node) => node.tagName === "SUMMARY");
+			if (summary) summary.focus({ preventScroll: true });
+		}
 		status.replaceChildren(timeLabel(t, "models_source", {
 			source: doc.source,
 			time: date(doc.read_at)
@@ -49788,23 +52346,85 @@ function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents
 		statusDetails.replaceChildren();
 		more.hidden = !doc.children_next_cursor;
 	}
+	function shownEnabled(node) {
+		return node && !node.disabled && !node.hidden && node.getClientRects().length > 0;
+	}
+	function arm() {
+		const flight = Boolean(refreshing);
+		for (const button of [refresh, more]) if (flight && (button === pressed || !button.hidden)) {
+			button.disabled = false;
+			button.setAttribute("aria-disabled", "true");
+		} else {
+			button.removeAttribute("aria-disabled");
+			button.disabled = false;
+		}
+		if ([refresh, more].some((button) => button.getAttribute("aria-disabled") === "true")) status.setAttribute("aria-busy", "true");
+		else status.removeAttribute("aria-busy");
+	}
+	function settle(button, result) {
+		try {
+			guard();
+		} catch {
+			return;
+		}
+		if (!box.isConnected || !button) return;
+		const active = document.activeElement;
+		if (active !== button && active !== document.body) return;
+		if (!button.hidden && !button.disabled) return;
+		if (button === more && more.hidden) {
+			const match = result.addedId ? [...body.querySelectorAll("details")].find((node) => node.getAttribute("data-result-child") === result.addedId) : null;
+			const summary = match && [...match.children].find((node) => node.tagName === "SUMMARY");
+			if (summary) {
+				summary.focus({ preventScroll: true });
+				return;
+			}
+			refresh.focus({ preventScroll: true });
+			return;
+		}
+		const group = button.parentElement;
+		const controls = group ? [...group.querySelectorAll("button, input, select, a")] : [];
+		const next = controls.slice(controls.indexOf(button) + 1).find(shownEnabled);
+		if (next) {
+			next.focus({ preventScroll: true });
+			return;
+		}
+		status.tabIndex = -1;
+		status.focus({ preventScroll: true });
+	}
 	function load(after = "") {
 		if (refreshing) return refreshing.then(() => load(after));
-		refreshing = loadNow(after).finally(() => {
-			refreshing = null;
+		let resolve;
+		const done = new Promise((finish) => {
+			resolve = finish;
 		});
-		return refreshing;
+		const result = {
+			current: false,
+			addedId: null
+		};
+		refreshing = done;
+		arm();
+		loadNow(after, result).finally(() => {
+			const button = pressed;
+			pressed = null;
+			refreshing = null;
+			arm();
+			if (result.current && box.isConnected) settle(button, result);
+			resolve();
+		});
+		return done;
 	}
-	async function loadNow(after) {
+	async function loadNow(after, result) {
 		const request = ++serial;
-		refresh.disabled = more.disabled = true;
 		try {
 			const next = await api("GET", `/work-items/${encodeURIComponent(workItemId)}/result-sources?limit=50${after ? `&after=${encodeURIComponent(after)}` : ""}`);
 			guard();
 			if (request !== serial) return;
 			if (next.version !== 1 || next.item?.work_item_id !== workItemId || !Array.isArray(next.children)) throw Error(t("results_invalid"));
+			const previous = new Set(children.map((child) => child.work_item_id));
 			doc = next;
 			children = after ? [...new Map([...children, ...next.children].map((child) => [child.work_item_id, child])).values()] : next.children;
+			result.addedId = next.children.find((child) => !previous.has(child.work_item_id))?.work_item_id || null;
+			result.current = true;
 			render();
 		} catch (error) {
 			try {
@@ -49814,10 +52434,9 @@ function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents
 					const presentation = errorPresentation(error, t);
 					status.textContent = `${t("models_not_refreshed")} ${presentation.summary}`;
 					statusDetails.replaceChildren(errorDetails(presentation) || "");
+					result.current = true;
 				}
 			} catch {}
-		} finally {
-			refresh.disabled = more.disabled = false;
 		}
 	}
 	const off = onEvents((event) => [
@@ -49957,7 +52576,7 @@ function repairIntent({ api, guard, actor, allowed, storage, storageKey, newKey 
 //#endregion
 //#region src/repair-panel.js
 function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opStatus }) {
-	let controller, document, busy = false, disposed = false, serial = 0, initialized = false;
+	let controller, document, busy = false, reading = false, disposed = false, serial = 0, initialized = false;
 	const alive = () => {
 		try {
 			guard();
@@ -49970,10 +52589,72 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 	const status = h("div", { role: "status" }), evidence = h("div"), outcome = h("div");
 	const project = h("select", { "aria-label": t("repair_project") }, h("option", { value: "" }, t("repair_choose_project")));
 	const allowed = () => ["observe", "manage"].every((scope) => caps()?.scopes?.includes(scope)) && caps()?.actions?.some((action) => action.action === "repair.create" && action.allowed === true);
+	function ownFocus(button) {
+		const page = globalThis.document;
+		let owned = page.activeElement === button;
+		const onFocus = (event) => {
+			const target = event.target;
+			if (target === button) {
+				owned = true;
+				return;
+			}
+			if ((target === page.body || target === page.documentElement) && (button.hidden || button.disabled || !button.isConnected)) return;
+			owned = false;
+		};
+		page.addEventListener("focusin", onFocus, true);
+		return () => {
+			page.removeEventListener("focusin", onFocus, true);
+			const active = page.activeElement;
+			return owned && (active === button || active === page.body || active == null);
+		};
+	}
+	function shown(node) {
+		return node && node.isConnected && !node.hidden && !node.disabled && !node.parentElement?.closest("[hidden]");
+	}
+	function moveFrom(button, candidate) {
+		if (shown(candidate)) {
+			candidate.focus();
+			return;
+		}
+		const controls = [...(button.closest(".actions") || button.parentElement).querySelectorAll("button, a[href], input, select, textarea")];
+		const index = Math.max(0, controls.indexOf(button));
+		const nextControl = [...controls.slice(index + 1), ...controls.slice(0, index)].find((node) => shown(node) && node.getAttribute("aria-disabled") !== "true");
+		if (nextControl) {
+			nextControl.focus();
+			return;
+		}
+		status.tabIndex = -1;
+		status.focus();
+	}
+	function block(button, staticReason, flight, pressed) {
+		if (pressed || !staticReason && flight) {
+			button.disabled = false;
+			button.setAttribute("aria-disabled", "true");
+		} else if (staticReason) {
+			button.disabled = true;
+			button.removeAttribute("aria-disabled");
+		} else {
+			button.disabled = false;
+			button.removeAttribute("aria-disabled");
+		}
+	}
 	const reload = h("button", {
 		class: "secondary",
 		type: "button",
-		onclick: () => read()
+		onclick: async () => {
+			if (!alive() || reading || busy) return;
+			reading = true;
+			const release = ownFocus(reload);
+			update();
+			try {
+				await read();
+			} finally {
+				reading = false;
+				if (alive()) update();
+				const keep = release();
+				if (alive() && keep && (reload.hidden || reload.disabled)) moveFrom(reload);
+			}
+		}
 	}, t("repair_read"));
 	const create = h("button", {
 		class: "secondary",
@@ -49981,6 +52662,7 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 		disabled: true,
 		onclick: async () => {
 			if (!alive() || busy || !allowed()) return;
+			const release = ownFocus(create);
 			busy = true;
 			update();
 			try {
@@ -49990,6 +52672,8 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 			} finally {
 				busy = false;
 				if (alive()) update();
+				const keep = release();
+				if (alive() && keep && (create.hidden || create.disabled)) moveFrom(create);
 			}
 		}
 	}, t("repair_create"));
@@ -50003,14 +52687,18 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 				"failed",
 				"cancelled"
 			].includes(controller.snapshot().operation?.status)) return;
+			const release = ownFocus(next);
 			try {
 				localStorage.removeItem(key);
 				initializeController();
 				outcome.replaceChildren();
 				read();
 			} catch (error) {
+				release();
 				if (alive()) status.replaceChildren(errorBox(error, { within: status }));
+				return;
 			}
+			if (release() && (next.hidden || next.disabled)) moveFrom(next, reload);
 		}
 	}, t("repair_review_new"));
 	const box = h("details", {
@@ -50033,14 +52721,16 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 	function update() {
 		const snapshot = controller?.snapshot(), fixed = !!snapshot?.intent;
 		project.disabled = busy || fixed;
-		reload.disabled = busy || !project.value;
-		create.disabled = busy || !allowed() || !document && !fixed;
+		block(reload, !project.value, busy, reading);
+		block(create, !allowed() || !document && !fixed, false, busy);
 		create.textContent = t(fixed ? "repair_recover" : "repair_create");
 		next.hidden = ![
 			"succeeded",
 			"failed",
 			"cancelled"
 		].includes(snapshot?.operation?.status);
+		if ([create, reload].some((button) => button.getAttribute("aria-disabled") === "true")) status.setAttribute("aria-busy", "true");
+		else status.removeAttribute("aria-busy");
 	}
 	function links(record) {
 		if (!record) return;
@@ -52002,7 +54692,7 @@ function mountTailscale(main, { h, t, presentation } = {}) {
 	});
 	panel.append(h("h2", {}, t("tailscale_title")), content, message);
 	main.append(panel);
-	let disposed = false, busy = false, pending = false, readable = false, snapshot, intent, receipt, damaged = false;
+	let disposed = false, busy = false, pending = false, readable = false, snapshot, intent, receipt, damaged = false, pressed = null;
 	const alive = () => !disposed && panel.isConnected;
 	const hex = (value, size) => typeof value === "string" && new RegExp(`^[0-9a-f]{${size}}$`).test(value);
 	const validReceipt = (value) => value && hex(value.request_id, 32) && [
@@ -52019,52 +54709,93 @@ function mountTailscale(main, { h, t, presentation } = {}) {
 		if (intent) localStorage.setItem(key(), JSON.stringify({ request_id: intent }));
 		else localStorage.removeItem(key());
 	};
+	const placeFocus = (key) => {
+		if (!alive() || !key) return;
+		const nodes = [...content.querySelectorAll("[data-tailscale-action]")];
+		const find = (name) => nodes.find((node) => node.getAttribute("data-tailscale-action") === name);
+		const usable = (node) => node && !node.disabled && !node.closest("[hidden]");
+		const current = find(key);
+		if (usable(current)) {
+			current.focus({ preventScroll: true });
+			return;
+		}
+		const named = key === "open" || key === "retry" ? usable(find("new")) ? find("new") : find("refresh") : key === "new" ? usable(find("open")) ? find("open") : find("refresh") : null;
+		if (usable(named)) {
+			named.focus({ preventScroll: true });
+			return;
+		}
+		const group = [...content.querySelectorAll(".actions button")].filter(usable);
+		if (group.length) {
+			group[0].focus({ preventScroll: true });
+			return;
+		}
+		const any = nodes.filter(usable);
+		if (any.length) {
+			any[0].focus({ preventScroll: true });
+			return;
+		}
+		message.tabIndex = -1;
+		message.focus({ preventScroll: true });
+	};
 	const render = () => {
 		if (!alive()) return;
+		const active = document.activeElement;
+		const key = active instanceof Element && content.contains(active) ? active.getAttribute("data-tailscale-action") : null;
 		const native = nativeDesktop && snapshot?.supported === true;
 		const state = !nativeDesktop ? "browser" : snapshot?.supported === false ? "unsupported" : !readable ? "unknown" : snapshot.installation !== "available" ? snapshot.installation : snapshot.login;
 		const unknown = intent && (!receipt || receipt.phase === "uncertain");
+		let flying = false;
+		const gate = (name, staticBlocked) => {
+			const blocked = Boolean(staticBlocked) && pressed !== name;
+			const soft = busy && !blocked;
+			if (soft) flying = true;
+			return {
+				disabled: blocked || null,
+				"aria-disabled": soft ? "true" : null
+			};
+		};
+		const action = (name, label, staticBlocked, onclick) => h("button", {
+			type: "button",
+			class: "secondary",
+			"data-tailscale-action": name,
+			...gate(name, staticBlocked),
+			onclick
+		}, label);
 		content.replaceChildren(...[
 			h("p", {}, t("tailscale_" + state)),
 			native ? h("p", { class: "muted" }, t("tailscale_help")) : null,
 			intent ? h("p", { class: "muted" }, t("tailscale_" + (receipt?.phase || "uncertain"))) : null,
-			intent ? h("details", {}, h("summary", {}, t("tailscale_request")), h("code", {}, intent)) : null,
+			intent ? h("details", {}, h("summary", { "data-tailscale-action": "request" }, t("tailscale_request")), h("code", {}, intent)) : null,
 			damaged ? h("p", { class: "error" }, t("tailscale_damaged")) : null,
-			nativeDesktop ? h("div", { class: "actions" }, h("button", {
-				class: "secondary",
-				disabled: busy || !native || !readable || !snapshot.can_open || damaged || !!intent,
-				onclick: () => run(async () => {
-					intent = crypto.randomUUID().replaceAll("-", "");
-					receipt = null;
+			nativeDesktop ? h("div", { class: "actions" }, action("open", t("tailscale_open"), !native || !readable || !snapshot.can_open || damaged || !!intent, () => run("open", async () => {
+				intent = crypto.randomUUID().replaceAll("-", "");
+				receipt = null;
+				save();
+				await open();
+			})), unknown && !receipt && !damaged ? action("retry", t("tailscale_retry"), !readable || !snapshot?.can_open, () => run("retry", open)) : null, receipt && receipt.phase !== "uncertain" ? action("new", t("tailscale_new"), false, () => run("new", async () => {
+				const previous = intent;
+				intent = null;
+				try {
 					save();
-					await open();
-				})
-			}, t("tailscale_open")), unknown && !receipt && !damaged ? h("button", {
-				class: "secondary",
-				disabled: busy || !readable || !snapshot?.can_open,
-				onclick: () => run(open)
-			}, t("tailscale_retry")) : null, receipt && receipt.phase !== "uncertain" ? h("button", {
-				class: "secondary",
-				disabled: busy,
-				onclick: () => run(async () => {
-					const previous = intent;
-					intent = null;
-					try {
-						save();
-					} catch (error) {
-						intent = previous;
-						throw error;
-					}
-					receipt = null;
-				})
-			}, t("tailscale_new")) : null, iconButton({
+				} catch (error) {
+					intent = previous;
+					throw error;
+				}
+				receipt = null;
+			})) : null, iconButton({
 				icon: "refresh-cw",
 				label: t("tailscale_refresh"),
-				class: "secondary",
-				disabled: busy,
-				onclick: refresh
+				"data-tailscale-action": "refresh",
+				...gate("refresh", false),
+				onclick: () => {
+					if (busy || !alive()) return;
+					refresh();
+				}
 			})) : null
 		].filter(Boolean));
+		if (flying) message.setAttribute("aria-busy", "true");
+		else message.removeAttribute("aria-busy");
+		if (key) placeFocus(key);
 	};
 	const read = async () => {
 		const value = await tailscaleControl({ action: "status" });
@@ -52122,9 +54853,10 @@ function mountTailscale(main, { h, t, presentation } = {}) {
 		accept(value, scope, id);
 		pending = true;
 	};
-	const run = async (action) => {
+	const run = async (name, action) => {
 		if (!alive() || busy) return;
 		busy = true;
+		pressed = name;
 		message.textContent = "";
 		render();
 		try {
@@ -52136,6 +54868,8 @@ function mountTailscale(main, { h, t, presentation } = {}) {
 			}
 		} finally {
 			busy = false;
+			pressed = null;
+			if (!alive()) return;
 			render();
 			if (pending && alive()) {
 				pending = false;
@@ -52148,7 +54882,7 @@ function mountTailscale(main, { h, t, presentation } = {}) {
 			pending = true;
 			return;
 		}
-		return run(read);
+		return run("refresh", read);
 	};
 	const returned = () => {
 		if (document.visibilityState === "visible" && alive()) refresh();
@@ -52180,7 +54914,7 @@ async function mountUpdates(main, { h, t }) {
 	});
 	panel.append(h("h2", {}, t("update_title")), content, message);
 	main.append(panel);
-	let disposed = false, busy = false, readable = false, value;
+	let disposed = false, busy = false, readable = false, value, pressed = null;
 	const active = () => !disposed && panel.isConnected;
 	const phases = new Set([
 		"idle",
@@ -52194,51 +54928,80 @@ async function mountUpdates(main, { h, t }) {
 		"stopping_fleet",
 		"installation_unknown"
 	]);
-	const render = () => {
-		if (!active()) return;
-		if (!value) {
-			content.replaceChildren(h("button", {
-				class: "secondary",
-				disabled: busy,
-				onclick: () => request({ action: "status" })
-			}, t("update_read")));
+	const placeFocus = (key) => {
+		if (!active() || !key) return;
+		const nodes = [...content.querySelectorAll("[data-update-action]")];
+		const find = (name) => nodes.find((node) => node.getAttribute("data-update-action") === name);
+		const usable = (node) => node && !node.disabled && !node.closest("[hidden]");
+		const current = find(key);
+		if (usable(current)) {
+			current.focus({ preventScroll: true });
 			return;
 		}
-		const blocked = busy || !readable || !value.available || [
-			"checking",
-			"downloading",
-			"stopping_fleet",
-			"installation_unknown"
-		].includes(value.phase);
-		const candidate = value.candidate;
-		content.replaceChildren(h("p", {}, t("update_current", { version: value.current_version })), h("p", { class: "muted" }, !value.available ? t(value.code === "UPDATE_PLATFORM_UNSUPPORTED" ? "update_platform" : "update_unsigned") : t("update_phase_" + value.phase)), ...candidate ? [h("dl", { class: "kv" }, h("dt", {}, t("update_candidate")), h("dd", {}, candidate.version), h("dt", {}, t("pub_sha")), h("dd", { class: "mono" }, candidate.source_sha))] : [], ...value.installation ? [h("p", {}, t("update_requested", { version: value.installation.to_version }))] : [], ...value.available ? [h("p", { class: "muted" }, t("update_help")), h("div", { class: "actions" }, h("button", {
-			class: candidate ? "secondary" : "primary",
-			disabled: blocked,
-			onclick: () => request({ action: "check" })
-		}, t("update_check")), ...candidate ? [h("button", {
-			class: "primary",
-			disabled: blocked || value.phase === "verified",
-			onclick: () => request({
+		const named = key === "download" ? usable(find("install")) ? find("install") : find("read") : find("read");
+		if (usable(named)) {
+			named.focus({ preventScroll: true });
+			return;
+		}
+		const group = [...content.querySelectorAll(".actions button")].filter(usable);
+		if (group.length) {
+			group[0].focus({ preventScroll: true });
+			return;
+		}
+		const any = nodes.filter(usable);
+		if (any.length) {
+			any[0].focus({ preventScroll: true });
+			return;
+		}
+		message.tabIndex = -1;
+		message.focus({ preventScroll: true });
+	};
+	const render = () => {
+		if (!active()) return;
+		const focused = document.activeElement;
+		const key = focused instanceof Element && content.contains(focused) ? focused.getAttribute("data-update-action") : null;
+		let flying = false;
+		const gate = (name, staticBlocked) => {
+			const blocked = Boolean(staticBlocked) && pressed !== name;
+			const soft = busy && !blocked;
+			if (soft) flying = true;
+			return {
+				disabled: blocked || null,
+				"aria-disabled": soft ? "true" : null
+			};
+		};
+		const action = (name, label, className, staticBlocked, onclick) => h("button", {
+			type: "button",
+			class: className,
+			"data-update-action": name,
+			...gate(name, staticBlocked),
+			onclick
+		}, label);
+		if (!value) content.replaceChildren(action("read", t("update_read"), "secondary", false, () => request({ action: "status" })));
+		else {
+			const staticActions = !readable || !value.available || [
+				"checking",
+				"downloading",
+				"stopping_fleet",
+				"installation_unknown"
+			].includes(value.phase);
+			const candidate = value.candidate;
+			content.replaceChildren(h("p", {}, t("update_current", { version: value.current_version })), h("p", { class: "muted" }, !value.available ? t(value.code === "UPDATE_PLATFORM_UNSUPPORTED" ? "update_platform" : "update_unsigned") : t("update_phase_" + value.phase)), ...candidate ? [h("dl", { class: "kv" }, h("dt", {}, t("update_candidate")), h("dd", {}, candidate.version), h("dt", {}, t("pub_sha")), h("dd", { class: "mono" }, candidate.source_sha))] : [], ...value.installation ? [h("p", {}, t("update_requested", { version: value.installation.to_version }))] : [], ...value.available ? [h("p", { class: "muted" }, t("update_help")), h("div", { class: "actions" }, action("check", t("update_check"), candidate ? "secondary" : "primary", staticActions, () => request({ action: "check" })), ...candidate ? [action("download", t("update_download"), "primary", staticActions || value.phase === "verified", () => request({
 				action: "download",
 				candidate_id: candidate.candidate_id
-			})
-		}, t("update_download")), h("button", {
-			class: value.phase === "verified" ? "primary" : "secondary",
-			disabled: blocked || value.phase !== "verified",
-			onclick: () => request({
+			})), action("install", t("update_install"), value.phase === "verified" ? "primary" : "secondary", staticActions || value.phase !== "verified", () => request({
 				action: "install",
 				candidate_id: candidate.candidate_id
-			})
-		}, t("update_install"))] : [], h("button", {
-			class: "secondary",
-			disabled: busy,
-			onclick: () => request({ action: "status" })
-		}, t("update_read")))] : []);
+			}))] : [], action("read", t("update_read"), "secondary", false, () => request({ action: "status" })))] : []);
+		}
+		if (flying) message.setAttribute("aria-busy", "true");
+		else message.removeAttribute("aria-busy");
+		if (key) placeFocus(key);
 	};
 	const request = async (input) => {
 		if (busy || !active()) return;
 		busy = true;
-		readable = false;
+		pressed = input.action === "status" ? "read" : input.action;
 		message.textContent = "";
 		render();
 		try {
@@ -52253,9 +55016,14 @@ async function mountUpdates(main, { h, t }) {
 			readable = true;
 			if (next.code && next.available && !next.installation) message.textContent = `${t("update_problem")} ${next.code}`;
 		} catch {
-			if (active()) message.textContent = t(input.action === "install" ? "update_unknown" : "update_read_failed");
+			if (active()) {
+				readable = false;
+				message.textContent = t(input.action === "install" ? "update_unknown" : "update_read_failed");
+			}
 		} finally {
 			busy = false;
+			pressed = null;
+			if (!active()) return;
 			render();
 		}
 	};
@@ -52696,6 +55464,44 @@ var terminal$6 = (op) => [
 	"failed",
 	"cancelled"
 ].includes(op?.status);
+function markControl$1(el, blocked, flight, own = false) {
+	if (!el.hidden && flight && (own || !blocked)) {
+		el.disabled = false;
+		el.setAttribute("aria-disabled", "true");
+	} else {
+		el.disabled = Boolean(blocked || flight);
+		el.removeAttribute("aria-disabled");
+	}
+}
+function markRegion$1(region, controls) {
+	if (controls.some((el) => !el.hidden && el.getAttribute("aria-disabled") === "true")) region.setAttribute("aria-busy", "true");
+	else region.removeAttribute("aria-busy");
+}
+function controlShown$1(el) {
+	return Boolean(el?.isConnected && !el.disabled && !el.closest("[hidden]"));
+}
+function moveFocus$1(from, candidate, root, region) {
+	if (controlShown$1(candidate)) {
+		candidate.focus();
+		return;
+	}
+	const controls = [...root.querySelectorAll("button, a[href], input, select, textarea")];
+	const start = Math.max(controls.indexOf(from), 0);
+	const next = [...controls.slice(start + 1), ...controls.slice(0, start)].find((el) => controlShown$1(el) && el.getAttribute("aria-disabled") !== "true");
+	if (next) {
+		next.focus();
+		return;
+	}
+	region.tabIndex = -1;
+	region.focus();
+}
+function settleFocus$1(before, buttons, candidate, root, region) {
+	if (!root?.isConnected || !buttons.includes(before)) return;
+	const active = document.activeElement;
+	if (active !== before && active !== document.body && active !== document.documentElement) return;
+	if (!before.disabled && !before.closest("[hidden]")) return;
+	moveFocus$1(before, candidate, root, region);
+}
 function valid(request, id) {
 	return ["task.pause", "task.resume"].includes(request?.action) && equal$5(request.target, { task_id: id }) && object$4(request.params) && (request.action === "task.pause" ? typeof request.params.abort_current === "boolean" && Object.keys(request.params).length === 1 : Object.keys(request.params).length === 0) && object$4(request.preconditions) && Object.keys(request.preconditions).length === 1 && version(request.preconditions.control_version);
 }
@@ -52704,7 +55510,7 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 	try {
 		raw = JSON.parse(localStorage.getItem(storageKey));
 	} catch {}
-	let saved = { abort: raw?.abort === true }, operation = null, submission = null, refreshing = null, busy = false, readFailed = false;
+	let saved = { abort: raw?.abort === true }, operation = null, submission = null, refreshing = null, busy = false, checking = false, readFailed = false;
 	if (raw?.intent) {
 		const proven = valid(raw.intent.request, taskId) && typeof raw.intent.key === "string" && raw.intent.key.length > 0 && raw.intent.key.length <= 200;
 		saved.intent = {
@@ -52767,7 +55573,7 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 		variant: "secondary",
 		label: t("task_pause"),
 		onClick: async () => {
-			if (!live() || busy || refreshing || readFailed || !writable() || saved.intent?.operation_id || saved.intent && (!saved.intent.request || saved.intent.refused)) return;
+			if (!live() || busy || refreshing || checking || readFailed || !writable() || saved.intent?.operation_id || saved.intent && (!saved.intent.request || saved.intent.refused)) return;
 			const previous = saved;
 			if (!saved.intent) saved = {
 				...saved,
@@ -52827,13 +55633,30 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 	const check = button({
 		variant: "secondary",
 		label: t("permissions_check"),
-		onClick: () => (onSettled ? onSettled() : refresh(true)).catch(showError)
+		onClick: () => {
+			if (!live() || busy || refreshing || checking) return;
+			checking = true;
+			update();
+			let run;
+			try {
+				run = onSettled ? onSettled() : refresh(true);
+			} catch (error) {
+				checking = false;
+				if (live()) update();
+				showError(error);
+				return;
+			}
+			Promise.resolve(run).then(() => {}, showError).finally(() => {
+				checking = false;
+				if (live()) update();
+			});
+		}
 	});
 	const another = button({
 		variant: "secondary",
 		label: t("task_control_new"),
 		onClick: () => {
-			if (!live() || busy || refreshing || readFailed || !writable() || !(terminal$6(operation) || saved.intent?.refused)) return;
+			if (!live() || busy || refreshing || checking || readFailed || !writable() || !(terminal$6(operation) || saved.intent?.refused)) return;
 			const previous = saved;
 			saved = { abort: false };
 			try {
@@ -52870,19 +55693,32 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 	});
 	box.dataset.taskControls = "";
 	function update() {
+		const before = document.activeElement;
 		const fixed = Boolean(saved.intent);
 		const canOperate = permitted();
+		const flight = busy || Boolean(refreshing) || checking;
 		box.hidden = !(caps()?.scopes || []).includes("operate");
 		help.hidden = !canOperate;
 		abortLabel.hidden = !canOperate || action() !== "task.pause";
 		abort.disabled = fixed || busy;
 		apply.hidden = !canOperate || Boolean(saved.intent?.operation_id || saved.intent?.refused);
-		apply.disabled = busy || Boolean(refreshing) || readFailed || !writable() || Boolean(fixed && !saved.intent.request);
 		apply.textContent = t(fixed ? "permissions_retry" : action() === "task.pause" ? "task_pause" : "task_resume");
+		markControl$1(apply, readFailed || !writable() || Boolean(fixed && !saved.intent.request), flight, busy);
 		check.hidden = !saved.intent?.operation_id;
-		check.disabled = busy || Boolean(refreshing);
+		markControl$1(check, false, flight, checking);
 		another.hidden = !canOperate || !(terminal$6(operation) || saved.intent?.refused);
-		another.disabled = busy || Boolean(refreshing) || readFailed || !writable();
+		markControl$1(another, readFailed || !writable(), flight, false);
+		markRegion$1(message, [
+			apply,
+			check,
+			another
+		]);
+		const candidate = before === apply ? saved.intent?.operation_id ? check : saved.intent?.refused ? another : null : before === another ? apply : null;
+		settleFocus$1(before, [
+			apply,
+			check,
+			another
+		], candidate, box, message);
 		restriction.textContent = writable() ? "" : observedText(t, !canOperate ? "or_readonly_task" : ["done", "failed"].includes(task()?.state) ? "or_work_ended" : "or_controls_unavailable");
 		result.replaceChildren();
 		if (fixed) {
@@ -52963,7 +55799,7 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 		const needle = query.trim().toLocaleLowerCase();
 		if (!needle) return rows;
 		return rows.filter((op) => [
-			actionLabel(op.action),
+			actionLabel$1(op.action),
 			op.action,
 			op.actor,
 			operationTargetText(op),
@@ -52976,7 +55812,7 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 		{
 			key: "action",
 			label: t("global_col_action"),
-			render: (op) => actionLabel(op.action)
+			render: (op) => actionLabel$1(op.action)
 		},
 		{
 			key: "target",
@@ -53058,7 +55894,7 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 			sheet = null;
 			previous?.dispose();
 			const node = inspector({
-				title: actionLabel(op.action),
+				title: actionLabel$1(op.action),
 				returnFocus: () => focusRow(id),
 				onClose: () => {
 					if (sheet !== node) return;
@@ -53110,7 +55946,7 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 			rows: shown,
 			rowKey: "operation_id",
 			selected: memory.selected,
-			compactRow: (op) => h("div", { class: "global-op-compact" }, h("div", { class: "global-op-compact-title" }, h("strong", {}, actionLabel(op.action)), statusPill(operationStatusKey(op.status))), h("div", { class: "ui-meta" }, operationTargetText(op), op.actor ? " · " + op.actor : null, op.created_at ? [" · ", timeStamp(op.created_at)] : null)),
+			compactRow: (op) => h("div", { class: "global-op-compact" }, h("div", { class: "global-op-compact-title" }, h("strong", {}, actionLabel$1(op.action)), statusPill(operationStatusKey(op.status))), h("div", { class: "ui-meta" }, operationTargetText(op), op.actor ? " · " + op.actor : null, op.created_at ? [" · ", timeStamp(op.created_at)] : null)),
 			onSelect: (key, row) => {
 				memory.selected = key;
 				fill(row).catch(() => {});
@@ -53776,6 +56612,44 @@ var fields = [
 	"prompt"
 ];
 var admissionRefusals$1 = new Set(["TIER_DISABLED", "START_WORKTREE_REQUIRED"]);
+function markControl(el, blocked, flight, own = false) {
+	if (!el.hidden && flight && (own || !blocked)) {
+		el.disabled = false;
+		el.setAttribute("aria-disabled", "true");
+	} else {
+		el.disabled = Boolean(blocked || flight);
+		el.removeAttribute("aria-disabled");
+	}
+}
+function markRegion(region, controls) {
+	if (controls.some((el) => !el.hidden && el.getAttribute("aria-disabled") === "true")) region.setAttribute("aria-busy", "true");
+	else region.removeAttribute("aria-busy");
+}
+function controlShown(el) {
+	return Boolean(el?.isConnected && !el.disabled && !el.closest("[hidden]"));
+}
+function moveFocus(from, candidate, root, region) {
+	if (controlShown(candidate)) {
+		candidate.focus();
+		return;
+	}
+	const controls = [...root.querySelectorAll("button, a[href], input, select, textarea")];
+	const start = Math.max(controls.indexOf(from), 0);
+	const next = [...controls.slice(start + 1), ...controls.slice(0, start)].find((el) => controlShown(el) && el.getAttribute("aria-disabled") !== "true");
+	if (next) {
+		next.focus();
+		return;
+	}
+	region.tabIndex = -1;
+	region.focus();
+}
+function settleFocus(before, buttons, candidate, root, region) {
+	if (!root?.isConnected || !buttons.includes(before)) return;
+	const active = document.activeElement;
+	if (active !== before && active !== document.body && active !== document.documentElement) return;
+	if (!before.disabled && !before.closest("[hidden]")) return;
+	moveFocus(before, candidate, root, region);
+}
 function validRequest$2(r) {
 	return r?.action === "session.start" && object$2(r.target) && Object.keys(r.target).length === 2 && text$3(r.target.host, 256) && text$3(r.target.workspace, 256) && object$2(r.params) && Object.keys(r.params).every((k) => [
 		"agent",
@@ -53815,7 +56689,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 		saved.workspace = "";
 	}
 	let operation = null, busy = false, submission = null, refreshing = null, readFailed = false;
-	let workspaces = [], discovery = 0, discovering = false, discoveredHost = "";
+	let workspaces = [], discovery = 0, discovering = false, discoveredHost = "", ownedDiscovery = 0;
 	const current = () => {
 		try {
 			guard();
@@ -53917,7 +56791,12 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 	}
 	const reload = h("button", {
 		class: "secondary",
-		onclick: discover
+		onclick: () => {
+			if (discovering) return;
+			const ticket = discovery;
+			discover();
+			if (discovery !== ticket) ownedDiscovery = discovery;
+		}
 	}, t("start_reload_workspaces"));
 	const accept = (candidate) => {
 		guard();
@@ -53976,6 +56855,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 				update();
 				return;
 			}
+			if (Object.values(inputs).includes(document.activeElement)) apply.focus();
 			busy = true;
 			update();
 			const intent = saved.intent;
@@ -54008,7 +56888,10 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 	}, t("start_apply"));
 	const check = h("button", {
 		class: "secondary",
-		onclick: () => refresh(true).catch(() => {})
+		onclick: () => {
+			if (!current() || busy || refreshing) return;
+			refresh(true).catch(() => {});
+		}
 	}, t("permissions_check"));
 	const another = h("button", {
 		class: "secondary",
@@ -54073,19 +56956,33 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 		"data-session-start": ""
 	}, h("div", { class: "panel" }, h("div", { class: "capture-fields" }, label("host", host), label("start_workspace", workspace)), h("div", { class: "actions" }, reload), discoveryStatus, h("p", { class: "muted" }, t("start_isolation"))), h("div", { class: "panel" }, h("div", { class: "capture-fields" }, label("start_agent", agent), label("start_model", model), label("start_title", title)), models.box, label("start_prompt", prompt), shortcut.box, h("p", { class: "muted" }, t("start_prompt_help"))), h("div", { class: "actions" }, apply, check, another), result, status);
 	function update() {
+		const before = document.activeElement;
 		const fixed = Boolean(saved.intent);
 		for (const el of Object.values(inputs)) el.disabled = busy || fixed;
 		models.update();
 		workspace.disabled ||= discovering || !saved.host;
 		reload.hidden = fixed;
-		reload.disabled = discovering || !observe() || !saved.host;
+		markControl(reload, !observe() || !saved.host, discovering, discovering && ownedDiscovery === discovery);
 		apply.hidden = Boolean(saved.intent?.operation_id || saved.intent?.refused);
 		apply.textContent = t(fixed ? "permissions_retry" : "start_apply");
-		apply.disabled = busy || readFailed || !ready() || !allowed() || (fixed ? !saved.intent.request || !saved.intent.key : !hostAllowed() || discoveredHost !== saved.host || !workspaces.some((w) => w.workspace_id === saved.workspace) || !validRequest$2(request()));
+		markControl(apply, readFailed || !ready() || !allowed() || (fixed ? !saved.intent.request || !saved.intent.key : !hostAllowed() || discoveredHost !== saved.host || !workspaces.some((w) => w.workspace_id === saved.workspace) || !validRequest$2(request())), busy, busy);
 		check.hidden = !saved.intent?.operation_id;
-		check.disabled = busy || Boolean(refreshing);
+		markControl(check, false, busy || Boolean(refreshing), busy);
 		another.hidden = !(terminal$3(operation) || saved.intent?.refused);
-		another.disabled = busy || Boolean(refreshing) || readFailed;
+		markControl(another, readFailed, busy || Boolean(refreshing), false);
+		markRegion(status, [
+			apply,
+			check,
+			another
+		]);
+		markRegion(discoveryStatus, [reload]);
+		const candidate = before === apply ? saved.intent?.operation_id ? check : saved.intent?.refused ? another : null : before === another ? host : null;
+		settleFocus(before, [
+			apply,
+			check,
+			another,
+			reload
+		], candidate, box, before === reload ? discoveryStatus : status);
 		result.replaceChildren();
 		if (!allowed()) result.append(h("p", { class: "muted" }, t("start_unavailable")));
 		if (!fixed) return;
@@ -54159,7 +57056,7 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 		class: "muted",
 		role: "status"
 	}), copyFallback = h("div");
-	let disposed = false, busy = false, expanded = false, readable = false, overview, chosen = "", intent, receipt, restoredPreview = false, damaged = false;
+	let disposed = false, busy = false, expanded = false, readable = false, overview, chosen = "", intent, receipt, restoredPreview = false, damaged = false, pressed = null, displaced = null;
 	const alive = () => {
 		if (disposed) return false;
 		try {
@@ -54205,9 +57102,51 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 		].includes(value.state) || value.summary && !summaryMatches(value.summary, intent)) throw new Error(t("bat_wrong_receipt"));
 		receipt = value;
 	};
-	const run = async (fn) => {
+	const onFocusOut = (event) => {
+		const from = event.target;
+		if (!(from instanceof Element) || !box.contains(from)) return;
+		const next = event.relatedTarget;
+		if (next instanceof Node && box.contains(next)) return;
+		const lost = from.getAttribute("data-bat-action");
+		if (!lost) return;
+		displaced = lost;
+		queueMicrotask(() => {
+			if (displaced === lost) displaced = null;
+		});
+	};
+	document.addEventListener("focusout", onFocusOut, true);
+	const placeFocus = (key) => {
+		if (!alive() || !key) return;
+		const nodes = [...content.querySelectorAll("[data-bat-action]")];
+		const find = (name) => nodes.find((node) => node.getAttribute("data-bat-action") === name);
+		const usable = (node) => node && !node.disabled && !node.closest("[hidden]");
+		const current = find(key);
+		if (usable(current)) {
+			current.focus({ preventScroll: true });
+			return;
+		}
+		const named = key === "review" || key === "review-again" ? find("launch") : key === "launch" || key === "retry" ? usable(find("new")) ? find("new") : find("read") : key === "cancel" || key === "new" ? find("profile") : null;
+		if (usable(named)) {
+			named.focus({ preventScroll: true });
+			return;
+		}
+		const group = [...content.querySelectorAll(".actions button, .actions a")].filter(usable);
+		if (group.length) {
+			group[0].focus({ preventScroll: true });
+			return;
+		}
+		const any = nodes.filter(usable);
+		if (any.length) {
+			any[0].focus({ preventScroll: true });
+			return;
+		}
+		message.tabIndex = -1;
+		message.focus({ preventScroll: true });
+	};
+	const run = async (name, fn) => {
 		if (!alive() || busy) return;
 		busy = true;
+		pressed = name;
 		message.textContent = "";
 		render();
 		try {
@@ -54216,6 +57155,7 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 			if (alive()) message.textContent = `${t("bat_problem")} ${String(error)}`;
 		} finally {
 			busy = false;
+			pressed = null;
 			if (alive()) render();
 		}
 	};
@@ -54231,16 +57171,22 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 		}
 	};
 	const read = async () => {
-		readable = false;
-		const available = await fleetAvailability();
-		if (!alive()) return;
-		if (!available.configured || !available.platform_supported || !available.native_controls) throw new Error(t("bat_missing"));
-		const value = await fleetControl({ action: "overview" });
-		if (!alive()) return;
-		if (value?.control_version !== 1 || !binding(value.configuration?.binding) || !Array.isArray(value.profiles) || value.profiles.length > 1001 || value.profiles.some((p) => !profile(p.id) || typeof p.label !== "string" || !(p.connection === null || typeof p.connection === "string")) || new Set(value.profiles.map((p) => p.id)).size !== value.profiles.length || !Array.isArray(value.selection?.connections)) throw new Error(t("bat_missing"));
-		overview = value;
-		readable = value.configuration.valid === true && !value.pending_migration;
-		await readReceipt();
+		let committed = false;
+		try {
+			const available = await fleetAvailability();
+			if (!alive()) return;
+			if (!available.configured || !available.platform_supported || !available.native_controls) throw new Error(t("bat_missing"));
+			const value = await fleetControl({ action: "overview" });
+			if (!alive()) return;
+			if (value?.control_version !== 1 || !binding(value.configuration?.binding) || !Array.isArray(value.profiles) || value.profiles.length > 1001 || value.profiles.some((p) => !profile(p.id) || typeof p.label !== "string" || !(p.connection === null || typeof p.connection === "string")) || new Set(value.profiles.map((p) => p.id)).size !== value.profiles.length || !Array.isArray(value.selection?.connections)) throw new Error(t("bat_missing"));
+			overview = value;
+			readable = value.configuration.valid === true && !value.pending_migration;
+			committed = true;
+			await readReceipt();
+		} catch (error) {
+			if (!committed && alive()) readable = false;
+			throw error;
+		}
 	};
 	const copy = async (field) => {
 		if (!alive()) return;
@@ -54259,7 +57205,7 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 			input.select();
 		}
 	};
-	const review = () => run(async () => {
+	const reviewBody = async () => {
 		if (!readable || intent && (!restoredPreview || intent.attempted) || damaged || !profile(chosen)) return;
 		const previous = intent?.preview_id, selected = intent?.profile_id || chosen;
 		const value = await fleetControl({
@@ -54284,8 +57230,8 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 			action: "discard",
 			preview_id: previous
 		});
-	});
-	const launch = () => run(async () => {
+	};
+	const launchBody = async () => {
 		if (!intent || damaged || restoredPreview || intent.summary.already_running || receipt) return;
 		const next = {
 			...intent,
@@ -54299,8 +57245,8 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 			preview_id: intent.preview_id
 		});
 		if (alive()) acceptReceipt(value);
-	});
-	const reset = () => run(async () => {
+	};
+	const resetBody = async () => {
 		if (!intent || intent.attempted && !terminal()) return;
 		localStorage.removeItem(storageKey);
 		const old = intent.preview_id;
@@ -54311,19 +57257,36 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 			action: "discard",
 			preview_id: old
 		});
-	});
+	};
 	const render = () => {
 		if (!alive()) return;
-		const button = (key, fn, disabled = false) => h("button", {
-			class: "secondary",
-			disabled: busy || disabled,
-			onclick: fn
-		}, t(key));
+		const active = document.activeElement;
+		let key = active instanceof Element && content.contains(active) ? active.getAttribute("data-bat-action") : null;
+		if (!key && (active === document.body || !active) && displaced) key = displaced;
+		displaced = null;
 		content.hidden = !expanded;
-		if (!expanded) return;
+		if (!expanded) {
+			message.removeAttribute("aria-busy");
+			return;
+		}
+		let flying = false;
+		const button = (label, action, fn, staticDisabled = false) => {
+			const blocked = Boolean(staticDisabled) && pressed !== action;
+			const soft = busy && !blocked;
+			if (soft) flying = true;
+			return h("button", {
+				type: "button",
+				class: "secondary",
+				"data-bat-action": action,
+				disabled: blocked || null,
+				"aria-disabled": soft ? "true" : null,
+				onclick: fn
+			}, t(label));
+		};
 		const fixed = !!intent || damaged;
 		const picker = h("select", {
 			"aria-label": t("bat_profile"),
+			"data-bat-action": "profile",
 			disabled: busy || fixed || !readable,
 			onchange: (e) => {
 				chosen = e.target.value;
@@ -54342,28 +57305,36 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 			if (intent.summary.bat_may_open_local_window) lines.push(h("p", { class: "muted" }, t("fleet_local_anchor")));
 		}
 		if (damaged) lines.push(h("p", { class: "error" }, t("bat_saved_invalid")));
-		const buttons = [button("bat_read", () => run(read))];
-		if (!fixed) buttons.unshift(button("bat_review", review, !readable || !chosen));
-		if (restoredPreview) buttons.unshift(button("bat_review_again", review, !readable));
-		if (intent && !restoredPreview && !receipt && !intent.summary.already_running) buttons.unshift(button(intent.attempted ? "bat_retry" : "bat_launch", launch, !readable));
-		if (intent && (!intent.attempted || terminal())) buttons.push(button(intent.attempted ? "bat_new" : "cancel", reset));
-		lines.push(h("div", { class: "actions" }, ...buttons), h("p", { class: "muted" }, t("bat_preferences"), " ", h("a", { href: "#/settings" }, t("nav_settings"))));
+		const buttons = [button("bat_read", "read", () => run("read", read))];
+		if (!fixed) buttons.unshift(button("bat_review", "review", () => run("review", reviewBody), !readable || !chosen));
+		if (restoredPreview) buttons.unshift(button("bat_review_again", "review-again", () => run("review-again", reviewBody), !readable));
+		if (intent && !restoredPreview && !receipt && !intent.summary.already_running) buttons.unshift(button(intent.attempted ? "bat_retry" : "bat_launch", intent.attempted ? "retry" : "launch", () => run(intent.attempted ? "retry" : "launch", launchBody), !readable));
+		if (intent && (!intent.attempted || terminal())) buttons.push(button(intent.attempted ? "bat_new" : "cancel", intent.attempted ? "new" : "cancel", () => run(intent.attempted ? "new" : "cancel", resetBody)));
+		lines.push(h("div", { class: "actions" }, ...buttons), h("p", { class: "muted" }, t("bat_preferences"), " ", h("a", {
+			href: "#/settings",
+			"data-bat-action": "settings"
+		}, t("nav_settings"))));
 		content.replaceChildren(...lines);
+		if (flying) message.setAttribute("aria-busy", "true");
+		else message.removeAttribute("aria-busy");
+		if (key) placeFocus(key);
+		displaced = null;
 	};
 	box.append(content, copyFallback, message);
 	render();
-	if (nativeDesktop && expanded) queueMicrotask(() => run(read));
+	if (nativeDesktop && expanded) queueMicrotask(() => run("read", read));
 	return {
 		box,
 		update: render,
 		dispose: () => {
 			disposed = true;
+			document.removeEventListener("focusout", onFocusOut, true);
 		},
 		copyTitle: () => copy("title"),
 		copyId: () => copy("id"),
 		open: () => {
 			expanded = true;
-			run(read);
+			run("read", read);
 		}
 	};
 }
@@ -55120,6 +58091,58 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 			...repairSeed ? { expected_work_item_fingerprint: repairSeed.expected_work_item_fingerprint } : {}
 		} : null
 	});
+	function ownFocus(button) {
+		let owned = document.activeElement === button;
+		const onFocus = (event) => {
+			const target = event.target;
+			if (target === button) {
+				owned = true;
+				return;
+			}
+			if ((target === document.body || target === document.documentElement) && (button.hidden || button.disabled || !button.isConnected)) return;
+			owned = false;
+		};
+		document.addEventListener("focusin", onFocus, true);
+		return () => {
+			document.removeEventListener("focusin", onFocus, true);
+			const active = document.activeElement;
+			return owned && (active === button || active === document.body || active == null);
+		};
+	}
+	function shown(node) {
+		return node && node.isConnected && !node.hidden && !node.disabled && !node.parentElement?.closest("[hidden]");
+	}
+	function moveFrom(button, candidate) {
+		if (shown(candidate)) {
+			candidate.focus();
+			return;
+		}
+		const controls = [...(button.closest(".actions") || button.parentElement).querySelectorAll("button, a[href], input, select, textarea")];
+		const index = Math.max(0, controls.indexOf(button));
+		const next = [...controls.slice(index + 1), ...controls.slice(0, index)].find((node) => shown(node) && node.getAttribute("aria-disabled") !== "true");
+		if (next) {
+			next.focus();
+			return;
+		}
+		status.tabIndex = -1;
+		status.focus();
+	}
+	function block(button, staticReason, flight, pressed) {
+		if (pressed || !staticReason && flight) {
+			button.disabled = false;
+			button.setAttribute("aria-disabled", "true");
+		} else if (staticReason) {
+			button.disabled = true;
+			button.removeAttribute("aria-disabled");
+		} else {
+			button.disabled = false;
+			button.removeAttribute("aria-disabled");
+		}
+	}
+	const fieldFocused = () => {
+		const active = document.activeElement;
+		return active === binding || Object.values(inputs).includes(active) || Boolean(attachmentBox?.contains(active));
+	};
 	const inspect = h("button", {
 		class: "secondary",
 		onclick: async () => {
@@ -55127,6 +58150,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 			const expected = ++sequence, input = selected(), projectVersion = projectDoc?.version;
 			preview = null;
 			reading = true;
+			const release = ownFocus(inspect);
 			update();
 			status.replaceChildren();
 			try {
@@ -55146,6 +58170,8 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 					reading = false;
 					update();
 				}
+				const keep = release();
+				if (expected === sequence && current() && keep && (inspect.hidden || inspect.disabled)) moveFrom(inspect);
 			}
 		}
 	}, t("pub_preview"));
@@ -55181,7 +58207,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 	const apply = h("button", {
 		class: "primary",
 		onclick: async () => {
-			if (!current() || busy || readFailed || !ready() || !allowed() || saved.intent?.operation_id || saved.intent?.refused) return;
+			if (!current() || busy || reading || readFailed || !ready() || !allowed() || saved.intent?.operation_id || saved.intent?.refused) return;
 			if (!saved.intent) {
 				if (!projectReady() || !preview || !validPreview$1(preview, selected()) || !bound() || !hostAllowed() || attachments && !attachments.ready() || !validRequest(request())) return;
 				saved.intent = {
@@ -55198,6 +58224,8 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 				update();
 				return;
 			}
+			if (fieldFocused()) apply.focus();
+			const release = ownFocus(apply);
 			busy = true;
 			update();
 			const intent = saved.intent;
@@ -55225,17 +58253,23 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 				await submission;
 			} finally {
 				submission = null;
+				const keep = release();
+				if (current() && keep && (apply.hidden || apply.disabled)) moveFrom(apply, saved.intent?.operation_id ? check : saved.intent?.refused && !repairSeed ? another : null);
 			}
 		}
 	}, t("pub_apply"));
 	const check = h("button", {
 		class: "secondary",
-		onclick: () => refresh(true).catch(() => {})
+		onclick: () => {
+			if (!current() || busy || refreshing) return;
+			refresh(true).catch(() => {});
+		}
 	}, t("permissions_check"));
 	const another = h("button", {
 		class: "secondary",
 		onclick: () => {
 			if (repairSeed || !current() || busy || refreshing || readFailed || attachments && !attachments.ready() || !(terminal$1(operation) || saved.intent?.refused)) return;
+			const release = ownFocus(another);
 			const previous = saved;
 			saved = {
 				target: saved.target,
@@ -55250,6 +58284,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 			} catch (e) {
 				saved = previous;
 				showError(e);
+				release();
 				return;
 			}
 			operation = preview = null;
@@ -55257,6 +58292,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 			attachments?.reset();
 			fill();
 			update();
+			if (release() && (another.hidden || another.disabled)) moveFrom(another, binding);
 		}
 	}, t("pub_new"));
 	function change(field, value) {
@@ -55315,15 +58351,22 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 		branchHelp.textContent = t(saved.source_ref && !validBranch ? "pub_branch_invalid" : "pub_branch_help");
 		sourceRef.setAttribute("aria-invalid", String(Boolean(saved.source_ref && !validBranch)));
 		inspect.hidden = fixed;
-		inspect.disabled = reading || !observe() || !ready() || !projectReady() || !bound() || !validBranch;
+		block(inspect, !observe() || !ready() || !projectReady() || !bound() || !validBranch, false, reading);
 		inspect.textContent = t(reading ? "pub_loading" : "pub_preview");
 		apply.hidden = Boolean(saved.intent?.operation_id || saved.intent?.refused);
 		apply.textContent = t(fixed ? "permissions_retry" : "pub_apply");
-		apply.disabled = busy || readFailed || !ready() || !allowed() || (fixed ? !saved.intent.request || !saved.intent.key : reading || !projectReady() || !preview || !validPreview$1(preview, selected()) || !bound() || !hostAllowed() || attachments && !attachments.ready() || !validRequest(request()));
+		block(apply, readFailed || !ready() || !allowed() || (fixed ? !saved.intent.request || !saved.intent.key : !projectReady() || !preview || !validPreview$1(preview, selected()) || !bound() || !hostAllowed() || Boolean(attachments && !attachments.ready()) || !validRequest(request())), !fixed && reading, busy);
 		check.hidden = !saved.intent?.operation_id;
-		check.disabled = busy || Boolean(refreshing);
+		block(check, false, busy || Boolean(refreshing), false);
 		another.hidden = Boolean(repairSeed) || !(terminal$1(operation) || saved.intent?.refused);
-		another.disabled = busy || Boolean(refreshing) || readFailed || Boolean(attachments && !attachments.ready());
+		block(another, readFailed || Boolean(attachments && !attachments.ready()), busy || Boolean(refreshing), false);
+		if ([
+			inspect,
+			apply,
+			check,
+			another
+		].some((button) => button.getAttribute("aria-disabled") === "true")) status.setAttribute("aria-busy", "true");
+		else status.removeAttribute("aria-busy");
 		facts.replaceChildren();
 		const original = saved.intent?.request;
 		if (preview || original) {
@@ -56381,7 +59424,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 						const selector = { execution_operation_id: op.operation_id };
 						candidates.set(stable(selector), {
 							selector,
-							label: `${actionLabel(op.action)} · ${op.operation_id}`
+							label: `${actionLabel$1(op.action)} · ${op.operation_id}`
 						});
 					}
 				}
@@ -56708,7 +59751,7 @@ function deliveryPill(item) {
 	return pill;
 }
 function workName(item) {
-	return text(item?.title) || text(item?.branch) || (item?.action ? actionLabel(item.action) : "") || say("or_work");
+	return text(item?.title) || text(item?.branch) || (item?.action ? actionLabel$1(item.action) : "") || say("or_work");
 }
 function workLinks(item, repositories, caps) {
 	const links = [];
@@ -58231,7 +61274,7 @@ function opStatus(op) {
 	return h("span", { class: `status-${op.status}` }, t(started ? "start_dispatched" : "op_" + op.status));
 }
 function opRow(op, open) {
-	const title = actionLabel(op.action);
+	const title = actionLabel$1(op.action);
 	const href = `#/op/${encodeURIComponent(op.operation_id)}`;
 	const key = op.operation_id;
 	const words = operationMeta(op);
@@ -59010,6 +62053,30 @@ async function viewSession(main, host, sid, context = null) {
 		generation
 	};
 	const path = `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(sid)}`;
+	const requestedWork = workSessionContext(params);
+	const workContextReadable = workFollowUpAvailable(state.caps) || state.caps?.features?.pm_workspaces?.work_start?.version === 1;
+	const workContext = !nativeDesktop && workbenchEnabled() && workContextReadable && requestedWork ? requestedWork : null;
+	let selectedAttempt = null;
+	if (workContext) try {
+		const selected = await readWorkSessionContext({
+			api,
+			guard: () => assertView(connection),
+			...workContext,
+			host,
+			sessionId: sid,
+			missingMessage: t("workspace_work_missing")
+		});
+		workRecord = selected.record;
+		selectedAttempt = selected.attempt;
+	} catch (error) {
+		try {
+			assertView(connection);
+		} catch {
+			return;
+		}
+		if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error, { within: main }));
+		return;
+	}
 	const projectViews = new Set([
 		"overview",
 		"discussions",
@@ -59021,7 +62088,7 @@ async function viewSession(main, host, sid, context = null) {
 		"board"
 	]);
 	const storedOrigin = history.state?.batcSessionOrigin;
-	const sessionWorkspace = lastWorkspace(connection.namespace) || (storedOrigin?.namespace === connection.namespace && storedOrigin.host === host && storedOrigin.sessionId === sid ? storedOrigin.workspaceId : "");
+	const sessionWorkspace = workContext?.workspaceId || lastWorkspace(connection.namespace) || (storedOrigin?.namespace === connection.namespace && storedOrigin.host === host && storedOrigin.sessionId === sid ? storedOrigin.workspaceId : "");
 	if (!projectViews.has(fromQuery) && projectViews.has(sessionFromMemory)) {
 		fromQuery = sessionFromMemory;
 		params.set("from", fromQuery);
@@ -59095,7 +62162,7 @@ async function viewSession(main, host, sid, context = null) {
 		} catch {}
 	};
 	const queue = h("input", { type: "checkbox" });
-	let row, pendingIdentity, sending = false, readReady = false, refreshInFlight = null, readError = null, queueKnown = false;
+	let row, pendingIdentity, sending = false, readReady = false, refreshInFlight = null, readError = null, queueKnown = false, workSendOwned = false;
 	let withdrawn = "", withdrawalVersion = 0, retryTimer = null, retryDelay = 1e3, retryAt = 0, disposed = false, observationRequest = 0;
 	const allowed = (action) => !withdrawn && readReady && row?.api_access === "managed" && may("operate") && state.caps?.hosts?.find((item) => item.host === host)?.writes !== false && state.caps?.actions?.find((item) => item.action === action)?.allowed !== false;
 	const identity = (pend) => pend ? JSON.stringify({
@@ -59143,7 +62210,7 @@ async function viewSession(main, host, sid, context = null) {
 		class: "primary",
 		disabled: true,
 		onclick: async () => {
-			if (sending) return;
+			if (workSendOwned || sending) return;
 			if (!box.value.trim() || !allowed("session.send")) return;
 			const submitted = box.value;
 			sending = true;
@@ -59405,7 +62472,38 @@ async function viewSession(main, host, sid, context = null) {
 		overflow
 	});
 	head.append(backSlot, header);
+	const resultSourceAvailable = () => !disposed && !withdrawn && readReady && row?.provenance === "connector_managed" && row?.api_access === "managed";
+	const resultForm = (options) => durableForm({
+		h,
+		t,
+		api,
+		caps: () => state.caps,
+		namespace: connection.namespace,
+		...options,
+		guard: () => {
+			assertView(connection);
+			if (disposed || withdrawn) throw new ApiError(410, "VIEW_CHANGED", "View retired");
+		},
+		permitted: () => resultSourceAvailable() && options.permitted(),
+		recoverPermitted: () => resultSourceAvailable() && (options.recoverPermitted || options.permitted)(),
+		canSend: () => state.online && !state.nativeBusy && state.viewReady
+	});
+	const fixedResult = workContext ? workResultPanel({
+		h,
+		t,
+		api,
+		workspaceId: workContext.workspaceId,
+		caps: () => state.caps,
+		errorBox,
+		form: resultForm,
+		namespace: connection.namespace,
+		alive: () => {
+			assertView(connection);
+			if (disposed || withdrawn) throw new ApiError(410, "VIEW_CHANGED", "View retired");
+		}
+	}) : null;
 	results.body.append(...[
+		fixedResult?.element,
 		context?.itemBox,
 		changesSection,
 		sessionSection("list-checks", t("checkpoints"), cps.box, cps.action),
@@ -59419,7 +62517,41 @@ async function viewSession(main, host, sid, context = null) {
 		details
 	].filter(Boolean));
 	const lane = h("section", { class: "workspace-conversation" }, conversation.box, readonly, controls, status);
-	const mobileLayout = setupMobileSessionLayout({
+	const followWorkspace = workContext?.workspaceId || "";
+	const followWorkId = workRecord?.work_item?.work_item_id || "";
+	let mobileLayout = null;
+	const followUp = workbenchEnabled() && !nativeDesktop && followWorkspace && /^wi_[0-9a-f]{20}$/.test(followWorkId) && workFollowUpAvailable(state.caps) ? mountWorkFollowUp({
+		h,
+		t,
+		api,
+		caps: () => state.caps,
+		guard: () => assertView(connection),
+		namespace: connection.namespace,
+		workspaceId: followWorkspace,
+		workItemId: followWorkId,
+		selectedAttemptId: selectedAttempt.attempt_id,
+		errorBox,
+		canSend: () => state.online && !state.nativeBusy && state.viewReady,
+		managed: () => !withdrawn && row?.provenance === "connector_managed" && row?.api_access === "managed",
+		onField: (field, button) => {
+			shortcut.rebind(field, button);
+			if (!mobileLayout) return;
+			if (field && button) mobileLayout.retarget({
+				textarea: field,
+				composer: followUp.box,
+				composerRow: field.closest("form")?.querySelector(".actions") || null,
+				controlsId: field.id
+			});
+			else mobileLayout.detachComposer();
+		}
+	}) : null;
+	workSendOwned = workFollowUpAvailable(state.caps) && Boolean(workRecord || [
+		"workspace",
+		"work",
+		"attempt"
+	].some((key) => params.has(key)));
+	if (followUp) lane.append(followUp.box);
+	mobileLayout = setupMobileSessionLayout({
 		head,
 		composer: controls,
 		textarea: box,
@@ -59428,6 +62560,11 @@ async function viewSession(main, host, sid, context = null) {
 		infoRow: conversation.box.querySelector(".conversation-caption"),
 		composerRow
 	});
+	if (followUp) {
+		composer.hidden = true;
+		shortcut.rebind(null, null);
+		mobileLayout.detachComposer();
+	}
 	if (context?.picker) main.append(context.picker);
 	const workspaceNode = h("div", {
 		class: "workspace-session session-workspace",
@@ -59731,6 +62868,8 @@ async function viewSession(main, host, sid, context = null) {
 	};
 	const updateControls = () => {
 		permissions?.update();
+		followUp?.sync();
+		fixedResult?.sync();
 		send.disabled = sending ? false : !allowed("session.send");
 		if (sending) send.setAttribute("aria-disabled", "true");
 		else send.removeAttribute("aria-disabled");
@@ -59743,9 +62882,10 @@ async function viewSession(main, host, sid, context = null) {
 			else if (state.caps?.hosts?.find((item) => item.host === host)?.writes === false) reason = t("session_send_host");
 			else if (state.caps?.actions?.find((item) => item.action === "session.send")?.allowed === false) reason = t("session_send_denied");
 		}
-		sendReason.hidden = !reason;
+		sendReason.hidden = workSendOwned || !reason;
 		sendReason.textContent = reason;
 		for (const control of pending.querySelectorAll("[data-answer-action]")) control.disabled = !row?.pending?.toolUseId || !allowed("session.answer");
+		if (workSendOwned) controls.hidden = row?.api_access !== "managed" || pending.childElementCount === 0;
 	};
 	let lastReading = null;
 	const readingDetail = h("p", {
@@ -59877,7 +63017,7 @@ async function viewSession(main, host, sid, context = null) {
 		}
 		if (capture) capture.hidden = !manualSource;
 		syncChanges();
-		composer.hidden = !managed;
+		composer.hidden = workSendOwned ? true : !managed;
 		controls.hidden = !managed;
 		readonly.hidden = managed;
 		if (row.provenance === "manual") {
@@ -59913,7 +63053,7 @@ async function viewSession(main, host, sid, context = null) {
 		let data;
 		try {
 			data = await api("GET", path);
-			if (workRecord && current()) {
+			if (workRecord && !workContext && current()) {
 				const id = workRecord.work_item.work_item_id;
 				const next = await api("GET", `/work-items/${encodeURIComponent(id)}`);
 				if (!current()) return;
@@ -59923,6 +63063,19 @@ async function viewSession(main, host, sid, context = null) {
 				});
 				if (next.work_item?.work_item_id !== id || !linked) throw new ApiError(404, "WORK_LINK_REMOVED", t("workspace_work_missing"));
 				workRecord = next;
+			}
+			if (workContext && current()) {
+				const selected = await readWorkSessionContext({
+					api,
+					guard: () => assertView(connection),
+					...workContext,
+					host,
+					sessionId: sid,
+					missingMessage: t("workspace_work_missing")
+				});
+				if (!current()) return;
+				workRecord = selected.record;
+				selectedAttempt = selected.attempt;
 			}
 		} catch (error) {
 			if ([
@@ -59937,6 +63090,8 @@ async function viewSession(main, host, sid, context = null) {
 		}
 		if (!current()) return;
 		applyObservation(data);
+		if (fixedResult) await fixedResult.setAttempt(selectedAttempt);
+		if (!current()) return;
 		let work = [], repositories = [];
 		if (context?.project) {
 			const project = await api("GET", `/projects/${encodeURIComponent(context.project.project_id)}`);
@@ -60029,6 +63184,8 @@ async function viewSession(main, host, sid, context = null) {
 	const withdraw = (kind, error = null) => {
 		const first = !withdrawn;
 		withdrawn = kind;
+		followUp?.suspend();
+		fixedResult?.withdraw();
 		perspectives?.withdraw();
 		withdrawalVersion += 1;
 		clearTimeout(retryTimer);
@@ -60074,6 +63231,7 @@ async function viewSession(main, host, sid, context = null) {
 	};
 	const reinstate = () => {
 		withdrawn = "";
+		followUp?.restore();
 		perspectives?.restore();
 		withdrawnSlot.remove();
 		if (context?.picker) context.picker.hidden = false;
@@ -60146,7 +63304,7 @@ async function viewSession(main, host, sid, context = null) {
 		observations.changed(ev);
 		const own = observationAffected("session", `${host}/${sid}`, ev);
 		if (withdrawn) return own ? reload() : Promise.resolve();
-		return (own || [
+		const affected = own || [
 			"work_item",
 			"integration",
 			"worktree"
@@ -60155,18 +63313,43 @@ async function viewSession(main, host, sid, context = null) {
 			"operation",
 			"task",
 			"execution"
-		].includes(ev.resource_type) ? reload() : Promise.resolve()).then(() => {
+		].includes(ev.resource_type);
+		const follow = !disposed && followUp && (own || ev.resource_type === "operation" || ev.resource_type === "work_item") ? followUp.refresh() : Promise.resolve();
+		return (affected ? reload() : Promise.resolve()).then(() => {
 			if (withdrawn || disposed) return;
 			return settleRefreshes([
 				ev.resource_type === "checkpoint" ? reloadCps() : Promise.resolve(),
 				ev.resource_type === "operation" ? permissions?.refresh(true) : Promise.resolve(),
 				own || ev.resource_type === "operation" ? labels.refresh(true) : Promise.resolve(),
-				instructions?.box.open && (own || ev.resource_type === "operation") ? instructions.refresh() : Promise.resolve()
+				instructions?.box.open && (own || ev.resource_type === "operation") ? instructions.refresh() : Promise.resolve(),
+				follow
 			]);
 		});
 	});
+	const followSync = setTimeout(() => {
+		try {
+			assertView(connection);
+			if (!disposed) {
+				followUp?.sync();
+				fixedResult?.sync();
+			}
+		} catch {}
+	}, 0);
+	const offFollowOnline = onOnline(() => {
+		try {
+			assertView(connection);
+			if (!disposed) {
+				followUp?.sync();
+				fixedResult?.sync();
+			}
+		} catch {}
+	});
 	return () => {
 		disposed = true;
+		clearTimeout(followSync);
+		offFollowOnline();
+		followUp?.dispose();
+		fixedResult?.dispose();
 		perspectives?.dispose();
 		clearTimeout(retryTimer);
 		off();
@@ -61486,7 +64669,7 @@ async function viewOperation(main, id) {
 			}
 			freshPage();
 			fill(panel, pageHeader({
-				title: actionLabel(op.action),
+				title: actionLabel$1(op.action),
 				pill: statusPill(operationStatusKey(op.status))
 			}), h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(reasonText$1(op.error_code) || t("reason_unavailable"), "bad") : null), ...linked?.length ? [linkedItems(linked)] : [], h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("actor")), h("dd", {}, `${op.actor} (${op.entry})`), h("dt", {}, t("created")), h("dd", {}, when(epoch(op.created_at))), op.status_reason ? [h("dt", {}, t("reason")), h("dd", {}, op.status_reason)] : null, op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, h("code", {}, op.error_code))] : null, h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target))), Object.keys(refs).length && op.action !== "worktree.merge" ? [h("dt", {}, t("global_refs")), h("dd", {}, h("code", {}, JSON.stringify(refs)))] : null, op.result && op.action !== "worktree.merge" ? [h("dt", {}, t("global_result")), h("dd", {}, h("code", {}, JSON.stringify(op.result)))] : null), ...receipts || [], mergeRecovery(op), op.action === "worktree.merge" ? h("details", {}, h("summary", {}, t("sessions_details")), h("pre", { class: "pre" }, JSON.stringify({
 				refs,
@@ -62870,7 +66053,7 @@ function linkTarget(l) {
 		const [host, ...rest] = l.ref.split("/");
 		return h("span", {}, h("a", { href: `#/session/${encodeURIComponent(host)}/${encodeURIComponent(rest.join("/"))}` }, x.title || l.ref), " ", chip(x.api_access === "managed" ? t("managed") : t("read_only"), x.api_access === "managed" ? "managed" : "readonly"), x.gone ? chip(t("stale_reason_gone"), "stale") : null);
 	}
-	if (l.kind === "operation") return h("span", {}, h("a", { href: `#/op/${l.ref}` }, actionLabel(x.action)), " ", h("span", { class: `status-${x.status}` }, t("op_" + x.status)), x.session ? [" · ", h("a", { href: `#/session/${encodeURIComponent(x.session.host)}/${encodeURIComponent(x.session.session_id)}` }, t("open_new_session"))] : null);
+	if (l.kind === "operation") return h("span", {}, h("a", { href: `#/op/${l.ref}` }, actionLabel$1(x.action)), " ", h("span", { class: `status-${x.status}` }, t("op_" + x.status)), x.session ? [" · ", h("a", { href: `#/session/${encodeURIComponent(x.session.host)}/${encodeURIComponent(x.session.session_id)}` }, t("open_new_session"))] : null);
 	if (l.kind === "checkpoint") return h("span", {}, h("a", { href: `#/session/${encodeURIComponent(x.host)}/${encodeURIComponent(x.source_session_id)}` }, h("code", {}, x.commit_sha.slice(0, 12))), " ", x.branch || "", " · ", x.host);
 	if (l.kind === "task") return h("span", {}, observationLink("execution", l.ref), " ", x.project, " · ", x.state);
 	return h("a", {

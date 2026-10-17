@@ -109,16 +109,59 @@ export function repositoryStartPanel({h, t, api, caps, guard, ready, errorBox, o
       ...(repairSeed ? {work_item_id: repairSeed.work_item_id} : {})},
     preconditions: preview ? {...preview.preconditions, ...(project ? {expected_project_version: previewProjectVersion} : {}),
       ...(repairSeed ? {expected_work_item_fingerprint: repairSeed.expected_work_item_fingerprint} : {})} : null});
+  // aria-disabled stays focusable. Own the focus only until the person moves it, or the
+  // browser parks it on body because this button was hidden or disabled.
+  function ownFocus(button) {
+    let owned = document.activeElement === button;
+    const onFocus = event => {
+      const target = event.target;
+      if (target === button) {owned = true; return;}
+      if ((target === document.body || target === document.documentElement) && (button.hidden || button.disabled || !button.isConnected)) return;
+      owned = false;
+    };
+    document.addEventListener('focusin', onFocus, true);
+    return () => {
+      document.removeEventListener('focusin', onFocus, true);
+      const active = document.activeElement;
+      return owned && (active === button || active === document.body || active == null);
+    };
+  }
+  function shown(node) {
+    return node && node.isConnected && !node.hidden && !node.disabled && !node.parentElement?.closest('[hidden]');
+  }
+  function moveFrom(button, candidate) {
+    if (shown(candidate)) {candidate.focus(); return;}
+    const group = button.closest('.actions') || button.parentElement;
+    const controls = [...group.querySelectorAll('button, a[href], input, select, textarea')];
+    const index = Math.max(0, controls.indexOf(button));
+    const next = [...controls.slice(index + 1), ...controls.slice(0, index)].find(node => shown(node) && node.getAttribute('aria-disabled') !== 'true');
+    if (next) {next.focus(); return;}
+    status.tabIndex = -1; status.focus();
+  }
+  function block(button, staticReason, flight, pressed) {
+    if (pressed || (!staticReason && flight)) {button.disabled = false; button.setAttribute('aria-disabled', 'true');}
+    else if (staticReason) {button.disabled = true; button.removeAttribute('aria-disabled');}
+    else {button.disabled = false; button.removeAttribute('aria-disabled');}
+  }
+  const fieldFocused = () => {
+    const active = document.activeElement;
+    return active === binding || Object.values(inputs).includes(active) || Boolean(attachmentBox?.contains(active));
+  };
   const inspect = h('button', {class: 'secondary', onclick: async () => {
     if (!current() || saved.intent || reading || !observe() || !ready() || !projectReady() || !bound() || !ref(selected().source_ref)) return;
-    const expected = ++sequence, input = selected(), projectVersion = projectDoc?.version; preview = null; reading = true; update(); status.replaceChildren();
+    const expected = ++sequence, input = selected(), projectVersion = projectDoc?.version; preview = null; reading = true;
+    const release = ownFocus(inspect); update(); status.replaceChildren();
     try {
       const doc = await api('POST', '/repository-previews', {...input.target, source_ref: input.source_ref}); guard();
       if (expected !== sequence || saved.intent || !equal(input, selected())) return;
       if (!validPreview(doc.preview, input)) throw new Error(t('pub_invalid_preview'));
       preview = doc.preview; previewProjectVersion = projectVersion;
     } catch (e) {if (expected === sequence) showError(e);}
-    finally {if (expected === sequence && current()) {reading = false; update();}}
+    finally {
+      if (expected === sequence && current()) {reading = false; update();}
+      const keep = release();
+      if (expected === sequence && current() && keep && (inspect.hidden || inspect.disabled)) moveFrom(inspect);
+    }
   }}, t('pub_preview'));
   function accept(candidate) {
     guard(); const intent = saved.intent;
@@ -141,7 +184,7 @@ export function repositoryStartPanel({h, t, api, caps, guard, ready, errorBox, o
     operation = candidate; intent.operation_id = candidate.operation_id; readFailed = false; persist(); status.replaceChildren(); update();
   }
   const apply = h('button', {class: 'primary', onclick: async () => {
-    if (!current() || busy || readFailed || !ready() || !allowed() || saved.intent?.operation_id || saved.intent?.refused) return;
+    if (!current() || busy || reading || readFailed || !ready() || !allowed() || saved.intent?.operation_id || saved.intent?.refused) return;
     if (!saved.intent) {
       if (!projectReady() || !preview || !validPreview(preview, selected()) || !bound() || !hostAllowed() ||
           attachments && !attachments.ready() || !validRequest(request())) return;
@@ -149,20 +192,31 @@ export function repositoryStartPanel({h, t, api, caps, guard, ready, errorBox, o
     }
     if (!saved.intent.request || !saved.intent.key) return;
     try {persist();} catch (e) {showError(e); update(); return;}
+    if (fieldFocused()) apply.focus();
+    const release = ownFocus(apply);
     busy = true; update(); const intent = saved.intent;
     submission = (async () => {
       try {const doc = await api('POST', '/operations?wait=3', intent.request, intent.key); guard(); accept(doc.operation);}
       catch (e) {if (current()) {if (e.status >= 400 && e.status < 500 && noAdmission.has(e.code)) {intent.refused = e.code; try {persist();} catch { /* fixed request remains */ }} showError(e);}}
       finally {busy = false; if (current()) update();}
     })();
-    try {await submission;} finally {submission = null;}
+    try {await submission;} finally {
+      submission = null;
+      const keep = release();
+      if (current() && keep && (apply.hidden || apply.disabled)) moveFrom(apply, saved.intent?.operation_id ? check : saved.intent?.refused && !repairSeed ? another : null);
+    }
   }}, t('pub_apply'));
-  const check = h('button', {class: 'secondary', onclick: () => refresh(true).catch(() => {})}, t('permissions_check'));
+  const check = h('button', {class: 'secondary', onclick: () => {
+    if (!current() || busy || refreshing) return;
+    refresh(true).catch(() => {});
+  }}, t('permissions_check'));
   const another = h('button', {class: 'secondary', onclick: () => {
     if (repairSeed || !current() || busy || refreshing || readFailed || attachments && !attachments.ready() || !(terminal(operation) || saved.intent?.refused)) return;
+    const release = ownFocus(another);
     const previous = saved; saved = {target: saved.target, source_ref: saved.source_ref, agent: saved.agent, prompt: '', title: '', model: saved.model};
-    try {persist();} catch (e) {saved = previous; showError(e); return;}
+    try {persist();} catch (e) {saved = previous; showError(e); release(); return;}
     operation = preview = null; status.replaceChildren(); attachments?.reset(); fill(); update();
+    if (release() && (another.hidden || another.disabled)) moveFrom(another, binding);
   }}, t('pub_new'));
   function change(field, value) {
     if (!current() || saved.intent || busy || repairSeed && field === 'prompt') {fill(); return;}
@@ -198,14 +252,19 @@ export function repositoryStartPanel({h, t, api, caps, guard, ready, errorBox, o
     branchHelp.hidden = fixed || Boolean(project && !(saved.source_ref && !validBranch));
     branchHelp.textContent = t(saved.source_ref && !validBranch ? 'pub_branch_invalid' : 'pub_branch_help');
     sourceRef.setAttribute('aria-invalid', String(Boolean(saved.source_ref && !validBranch)));
-    inspect.hidden = fixed; inspect.disabled = reading || !observe() || !ready() || !projectReady() || !bound() || !validBranch;
+    inspect.hidden = fixed;
+    block(inspect, !observe() || !ready() || !projectReady() || !bound() || !validBranch, false, reading);
     inspect.textContent = t(reading ? 'pub_loading' : 'pub_preview');
     apply.hidden = Boolean(saved.intent?.operation_id || saved.intent?.refused); apply.textContent = t(fixed ? 'permissions_retry' : 'pub_apply');
-    apply.disabled = busy || readFailed || !ready() || !allowed() || (fixed ? !saved.intent.request || !saved.intent.key :
-      reading || !projectReady() || !preview || !validPreview(preview, selected()) || !bound() || !hostAllowed() ||
-      attachments && !attachments.ready() || !validRequest(request()));
-    check.hidden = !saved.intent?.operation_id; check.disabled = busy || Boolean(refreshing);
-    another.hidden = Boolean(repairSeed) || !(terminal(operation) || saved.intent?.refused); another.disabled = busy || Boolean(refreshing) || readFailed || Boolean(attachments && !attachments.ready());
+    block(apply, readFailed || !ready() || !allowed() || (fixed ? !saved.intent.request || !saved.intent.key :
+      !projectReady() || !preview || !validPreview(preview, selected()) || !bound() || !hostAllowed() ||
+      Boolean(attachments && !attachments.ready()) || !validRequest(request())), !fixed && reading, busy);
+    check.hidden = !saved.intent?.operation_id;
+    block(check, false, busy || Boolean(refreshing), false);
+    another.hidden = Boolean(repairSeed) || !(terminal(operation) || saved.intent?.refused);
+    block(another, readFailed || Boolean(attachments && !attachments.ready()), busy || Boolean(refreshing), false);
+    if ([inspect, apply, check, another].some(button => button.getAttribute('aria-disabled') === 'true')) status.setAttribute('aria-busy', 'true');
+    else status.removeAttribute('aria-busy');
     facts.replaceChildren(); const original = saved.intent?.request;
     if (preview || original) {
       const r = original || request();

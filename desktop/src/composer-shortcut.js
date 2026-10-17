@@ -12,20 +12,35 @@ export function composerShortcut({h, t, input, button, storageKey, guard}) {
     catch (error) {select.value = mode; status.textContent = t('composer_shortcut_storage_failed');}
   });
   const start = () => {composing = true;}, end = () => {composing = false; ended = performance.now();};
+  let currentInput = input, currentButton = button;
   const keydown = event => {
+    if (!currentButton) return;
     if (event.key !== 'Enter' || event.shiftKey || event.altKey || event.repeat || event.isComposing || composing
         || event.keyCode === 229 || performance.now() - ended < 50) return;
     const matches = mode === 'modified' ? event.ctrlKey || event.metaKey : mode === 'enter' && !event.ctrlKey && !event.metaKey;
-    if (!matches || button.disabled || button.hidden) return;
+    if (!matches || currentButton.disabled || currentButton.hidden) return;
     try {guard();} catch {return;}
-    event.preventDefault(); button.click();
+    event.preventDefault(); currentButton.click();
   };
-  input.addEventListener('compositionstart', start); input.addEventListener('compositionend', end);
-  input.addEventListener('keydown', keydown);
+  const listen = node => {
+    if (!node) return;
+    node.addEventListener('compositionstart', start);
+    node.addEventListener('compositionend', end);
+    node.addEventListener('keydown', keydown);
+  };
+  const unlisten = node => {
+    if (!node) return;
+    node.removeEventListener('compositionstart', start);
+    node.removeEventListener('compositionend', end);
+    node.removeEventListener('keydown', keydown);
+  };
+  listen(currentInput);
   const box = h('div', {class: 'actions composer-shortcut'}, h('label', {class: 'muted'}, t('composer_shortcut'), ' ', select),
     h('span', {class: 'muted'}, t('composer_newline')), status);
-  return {box, dispose() {
-    input.removeEventListener('compositionstart', start); input.removeEventListener('compositionend', end);
-    input.removeEventListener('keydown', keydown);
-  }};
+  return {box, rebind(nextInput, nextButton) {
+    unlisten(currentInput);
+    currentInput = nextInput || null;
+    currentButton = nextButton || null;
+    listen(currentInput);
+  }, dispose() {unlisten(currentInput); currentInput = null; currentButton = null;}};
 }

@@ -9,7 +9,7 @@ const same = (a, b) => a.skill_id === b.skill_id && a.digest === b.digest;
 export function projectSkillsPanel({h, t, api, caps, guard, submit, projectId, storageKey, onEvents, errorBox}) {
   let saved = {host: '', workspace: '', drafts: {}};
   try {const raw = JSON.parse(localStorage.getItem(storageKey)); if (raw && typeof raw.host === 'string' && typeof raw.workspace === 'string' && raw.drafts && typeof raw.drafts === 'object' && !Array.isArray(raw.drafts)) saved = raw;} catch { /* empty draft */ }
-  let doc = null, draft = null, busy = false, discovery = 0, serial = 0, discoveredHost = '', discoveryReady = false;
+  let doc = null, draft = null, busy = false, discovery = 0, serial = 0, discoveredHost = '', discoveryReady = false, refreshing = false, pressed = null;
   const host = h('select', {'aria-label': t('host')}, h('option', {value: ''}, t('start_choose_host')),
     ...(caps()?.hosts || []).map(value => h('option', {value: value.host}, value.host)));
   if (![...host.options].some(option => option.value === saved.host)) saved.host = '';
@@ -24,7 +24,11 @@ export function projectSkillsPanel({h, t, api, caps, guard, submit, projectId, s
   const clearError = () => {statusDetails.replaceChildren();};
   const persist = () => {guard(); localStorage.setItem(storageKey, JSON.stringify(saved));};
   const coherent = () => doc && doc.host === saved.host && doc.workspace_id === saved.workspace;
-  const refresh = iconButton({icon:'refresh-cw', label:t('skills_refresh'), ...{class: 'secondary', type: 'button', onclick: () => discover(true)}});
+  const refresh = iconButton({icon:'refresh-cw', label:t('skills_refresh'), ...{class: 'secondary', type: 'button', onclick: () => {
+    if (busy || refreshing) return;
+    refreshing = true; pressed = refresh;
+    discover(true).finally(() => {refreshing = false; const button = pressed; pressed = null; update(); settle(button);});
+  }}});
   const discard = h('button', {class: 'secondary', type: 'button', onclick: () => {
     if (busy || draft?.intent || !coherent()) return;
     try {guard(); const next = {...saved, drafts: {...saved.drafts}}; delete next.drafts[key(saved.host, saved.workspace)];
@@ -32,9 +36,10 @@ export function projectSkillsPanel({h, t, api, caps, guard, submit, projectId, s
     } catch (error) {showError(error);}
   }}, t('skills_reload'));
   const save = h('button', {class: 'primary', type: 'button', onclick: async () => {
-    if (busy || !draft || !coherent()) return;
+    if (busy || refreshing) return;
+    if (!draft || !coherent()) return;
     if (!draft.intent && (doc.catalog.stale || doc.catalog.status !== 'available')) return;
-    busy = true;
+    busy = true; pressed = save;
     try {
       guard(); draft.intent ||= {selected: structuredClone(draft.selected), revision: draft.revision, digest: draft.digest}; persist(); update();
       const intent = draft.intent;
@@ -53,20 +58,50 @@ export function projectSkillsPanel({h, t, api, caps, guard, submit, projectId, s
     } catch (error) {
       try {guard(); if (error.status === 409 && ['VERSION_CONFLICT', 'SKILL_CATALOG_CHANGED', 'SKILL_SOURCE_CHANGED'].includes(error.code)) {draft.intent = null; persist();}
         showError(error);} catch { /* retired */ }
-    } finally {busy = false; update();}
+    } finally {busy = false; const button = pressed; pressed = null; update(); settle(button);}
   }}, t('skills_save'));
   const box = h('details', {class: 'panel project-skills', 'data-project-skills': ''}, h('summary', {}, t('skills_title')),
     h('p', {class: 'note'}, t('skills_not_applied')), h('div', {class: 'capture-fields'},
       h('label', {}, t('host'), host), h('label', {}, t('start_workspace'), workspace)),
     h('div', {class: 'actions'}, refresh), status, statusDetails, source, list, h('div', {class: 'actions'}, save, discard));
+  function shownEnabled(node) {
+    return node && !node.disabled && !node.hidden && node.getClientRects().length > 0;
+  }
+  function arm(button, blocked) {
+    const inFlight = busy || refreshing;
+    if (inFlight && (button === pressed || !blocked)) {
+      button.disabled = false;
+      button.setAttribute('aria-disabled', 'true');
+    } else {
+      button.removeAttribute('aria-disabled');
+      button.disabled = Boolean(blocked);
+    }
+  }
+  function settle(button) {
+    try {guard();} catch {return;}
+    if (!box.isConnected || !button) return;
+    const active = document.activeElement;
+    if (active !== button && active !== document.body) return;
+    if (!button.hidden && !button.disabled) return;
+    if (button === save) {status.tabIndex = -1; status.focus({preventScroll: true}); return;}
+    const group = button.closest('.actions') || button.parentElement;
+    const controls = group ? [...group.querySelectorAll('button, input, select, a')] : [];
+    const next = controls.slice(controls.indexOf(button) + 1).find(shownEnabled);
+    if (next) {next.focus({preventScroll: true}); return;}
+    status.tabIndex = -1;
+    status.focus({preventScroll: true});
+  }
   function update() {
     const locked = busy || Boolean(draft?.intent), valid = coherent();
-    host.disabled = locked; workspace.disabled = locked || !discoveryReady; refresh.disabled = busy || !saved.host;
+    host.disabled = locked; workspace.disabled = locked || !discoveryReady;
     save.textContent = t(draft?.intent ? 'permissions_retry' : 'skills_save');
-    save.disabled = busy || !valid || !draft || (!draft.intent && (doc.catalog.status !== 'available' || doc.catalog.stale)) ||
-      !caps()?.actions?.some(action => action.action === 'project.skills.update' && action.allowed);
+    arm(refresh, !saved.host);
+    arm(save, !valid || !draft || (!draft.intent && (doc.catalog.status !== 'available' || doc.catalog.stale)) ||
+      !caps()?.actions?.some(action => action.action === 'project.skills.update' && action.allowed));
     discard.disabled = locked || !valid || !draft;
     for (const control of list.querySelectorAll('input,button')) control.disabled = locked || !valid || control.dataset.unavailable === 'true';
+    if ([refresh, save].some(button => button.getAttribute('aria-disabled') === 'true')) status.setAttribute('aria-busy', 'true');
+    else status.removeAttribute('aria-busy');
   }
   function render() {
     if (!coherent() || !draft) {list.replaceChildren(); update(); return;}

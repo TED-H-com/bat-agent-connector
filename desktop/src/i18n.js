@@ -27,6 +27,8 @@ import {instructionReceiptStrings} from './instruction-receipts-strings.js';
 import {createRecordStrings} from './create-record-strings.js';
 import {workStartStrings} from './pm-work-start-strings.js';
 import {workResultStrings} from './pm-work-result-strings.js';
+import {workFollowUpStrings} from './pm-work-follow-up-strings.js';
+import {workPublishStrings} from './pm-work-publish-strings.js';
 // Display labels only. Logic and CSS never key on these strings (machine enums come from /api/v1).
 export const STRINGS = {
   "zh-TW": {
@@ -34,6 +36,8 @@ export const STRINGS = {
     ...diagnosticsStrings["zh-TW"],
     ...workStartStrings["zh-TW"],
     ...workResultStrings["zh-TW"],
+    ...workFollowUpStrings["zh-TW"],
+    ...workPublishStrings["zh-TW"],
     ...pmStrings["zh-TW"],
     ...createRecordStrings["zh-TW"],
     ...uiStrings["zh-TW"],
@@ -125,6 +129,8 @@ export const STRINGS = {
     error_code_TIMEOUT: "連線逾時，請查回原請求。",
     error_code_CENTRAL_OFFLINE: "Connector 離線，請恢復連線後再試。",
     error_code_UNAUTHORIZED: "請先提供有效的 API 權杖。",
+    error_code_PM_DIFF_NOT_FOUND: "此 commit 或檔案已不在本嘗試的範圍內。請重新讀取目前修改。",
+    error_code_PM_DIFF_UNAVAILABLE: "無法自 BAT 讀取工作樹差異。",
     connection_scope_observe: "檢視",
     connection_scope_operate: "操作",
     connection_scope_manage: "管理",
@@ -1059,6 +1065,8 @@ export const STRINGS = {
     ...diagnosticsStrings.en,
     ...workStartStrings.en,
     ...workResultStrings.en,
+    ...workFollowUpStrings.en,
+    ...workPublishStrings.en,
     ...pmStrings.en,
     ...createRecordStrings.en,
     ...uiStrings.en,
@@ -1150,6 +1158,8 @@ export const STRINGS = {
     error_code_TIMEOUT: "The connection timed out. Check the original request.",
     error_code_CENTRAL_OFFLINE: "Reconnect to Connector before trying again.",
     error_code_UNAUTHORIZED: "Provide a valid API token first.",
+    error_code_PM_DIFF_NOT_FOUND: "This commit or file is no longer in this attempt's range. Read current changes again.",
+    error_code_PM_DIFF_UNAVAILABLE: "Worktree diff could not be read from BAT.",
     connection_scope_observe: "View",
     connection_scope_operate: "Operate",
     connection_scope_manage: "Manage",

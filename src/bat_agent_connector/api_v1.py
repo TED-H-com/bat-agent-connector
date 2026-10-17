@@ -28,6 +28,7 @@ from . import (
     dashboard_sync,
     deployment,
     integration,
+    pm_operation_loop,
     pr_delivery,
     repository_sync,
     resource_policy,
@@ -1171,7 +1172,13 @@ class ApiV1:
             worktree_merge_operations,
         )
         gh_cfg = self.daemon.ops.context["github_config"]
-        from . import pm_attempt_result_reads, pm_work_follow_up, pm_work_profiles, pm_work_start, pr_publication
+        from . import (
+            pm_attempt_result_reads,
+            pm_work_follow_up,
+            pm_work_profiles,
+            pm_work_start,
+            pr_publication,
+        )
         actions = [{"action": a.name, "scope": a.scope, "summary": a.summary, "allowed": principal.allows(a.scope)
                                and a.name not in {pm_execution_runtime.ACTION, pm_maintenance_repair_runtime.ACTION}
                                and (a.name != "delivery.merge_and_deploy" or principal.allows("deploy"))
@@ -1253,6 +1260,7 @@ class ApiV1:
                                                     "work_start": pm_work_start.capabilities(self.daemon.ops),
                                                     "work_profiles": pm_work_profiles.capabilities(self.daemon.ops),
                                                     "work_attempt_results": pm_attempt_result_reads.capabilities(self.daemon.ops),
+                                                    "operation_loop": {"version": 1},
                                                     "work_follow_up": pm_work_follow_up.capabilities(self.daemon.ops),
                                                     "workload": pm_workload.capabilities(),
                                                     "work_package_prepare": "pm.work_package.create" in self.daemon.ops.actions,
@@ -1514,8 +1522,10 @@ class ApiV1:
                 and ("workspace_id" in target or "work_item_id" in target)
             )
             if (not str(action or "").startswith("pm.")
-                    and action not in {"setup.host", "setup.repository", "setup.verification", "work.start"}
-                    and not is_work_send):
+                    and action not in {
+                        "setup.host", "setup.repository", "setup.verification", "work.start",
+                        "github.pr.publish",
+                    } and not is_work_send):
                 raise
             # A source-hidden replay is still the original admitted operation.
             # Only proven absence in this actor/key namespace permits a fresh UI key.
@@ -1530,12 +1540,15 @@ class ApiV1:
             op = self.daemon.ops.get(op["operation_id"], principal=principal)
         from . import pm_work_follow_up
         op = pm_work_follow_up.enrich_operation(self.daemon.ops.db, op)
+        op = await pm_operation_loop.attach(self.daemon.ops, principal, op)
         return (202 if created else 200), {"operation": op, "created": created}
 
     async def operation(self, op, principal, **_):
         from . import pm_work_follow_up
-        return 200, {"operation": pm_work_follow_up.enrich_operation(
-            self.daemon.ops.db, self.daemon.ops.get(op, principal=principal)),
+        operation = await pm_operation_loop.attach(
+            self.daemon.ops, principal, pm_work_follow_up.enrich_operation(
+                self.daemon.ops.db, self.daemon.ops.get(op, principal=principal)))
+        return 200, {"operation": operation,
                      "work_items": work_items.work_items_for(self.daemon.journal.db, "operation", op),
                      "cleanup_receipts": cleanup.receipts(self.daemon.ops, op)}
 
@@ -1543,7 +1556,8 @@ class ApiV1:
         from . import pm_work_follow_up
         result = self.daemon.ops.cancel(principal, op)
         await self.daemon.artifact_store.reap_best_effort(op)
-        return 200, {"operation": pm_work_follow_up.enrich_operation(self.daemon.ops.db, result)}
+        result = pm_work_follow_up.enrich_operation(self.daemon.ops.db, result)
+        return 200, {"operation": await pm_operation_loop.attach(self.daemon.ops, principal, result)}
 
     async def create_artifact(self, principal, query, body, headers, **_):
         envelope = {"action": "artifact.upload", "target": body.get("target", {}),
@@ -1565,8 +1579,9 @@ class ApiV1:
 
     async def resume_operation(self, principal, op, **_):
         from . import pm_work_follow_up
-        return 200, {"operation": pm_work_follow_up.enrich_operation(
-            self.daemon.ops.db, self.daemon.ops.resume(principal, op))}
+        resumed = self.daemon.ops.resume(principal, op)
+        resumed = pm_work_follow_up.enrich_operation(self.daemon.ops.db, resumed)
+        return 200, {"operation": await pm_operation_loop.attach(self.daemon.ops, principal, resumed)}
 
     async def events(self, query, principal, **_):
         return 200, dashboard_sync.event_page(

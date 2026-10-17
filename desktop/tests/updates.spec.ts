@@ -12,6 +12,11 @@ async function setup(page: any, options: any = {}) {
       if (command !== "desktop_update") throw new Error("unexpected command");
       const input = structuredClone(args.input);
       env.calls.push(input);
+      if (env.holdAction === input.action) {
+        env.held = (env.held || 0) + 1;
+        if (env.held === 1) await new Promise<void>(resolve => {env.release = resolve;});
+      }
+      if (env.failAction === input.action) throw new Error("fixture failed");
       if (input.action === "status" && env.failReads) throw new Error("fixture unavailable");
       if (input.action === "check") Object.assign(env.status, {phase: "available", candidate});
       if (input.action === "download") {
@@ -64,6 +69,61 @@ test("lost installation response only reads the original attempt", async ({page}
   await expect(panel.getByText("The original installation request is saved; its outcome is not confirmed.")).toBeVisible();
   await expect(panel.getByRole("button", {name: "Install and restart"})).toBeDisabled();
   expect(await page.evaluate(() => (window as any).__updates.calls.filter((x: any) => x.action === "install"))).toEqual([{action: "install", candidate_id: "opaque-native-candidate"}]);
+});
+
+test("busy focus: Check keeps the keyboard while the check is held", async ({page}) => {
+  await setup(page);
+  const panel = page.getByRole("region", {name: "Desktop updates"});
+  const check = panel.getByRole("button", {name: "Check for updates", exact: true});
+  const message = panel.getByRole("status");
+  await expect(check).toBeEnabled();
+  const before = await page.evaluate(() => (window as any).__updates.calls.filter((call: any) => call.action === "check").length);
+  await page.evaluate(() => {(window as any).__updates.holdAction = "check"; (window as any).__updates.held = 0;});
+  await check.focus();
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => typeof (window as any).__updates.release === "function");
+  await expect(check).toBeFocused();
+  await expect(check).toHaveAttribute("aria-disabled", "true");
+  await expect(message).toHaveAttribute("aria-busy", "true");
+  const held = await page.evaluate(() => (window as any).__updates.calls.filter((call: any) => call.action === "check").length);
+  expect(held).toBe(before + 1);
+  await page.keyboard.press("Enter");
+  await page.evaluate(() => {const env = (window as any).__updates; env.holdAction = ""; env.release();});
+  await expect(check).toBeEnabled();
+  await expect(check).toBeFocused();
+  expect(await page.evaluate(() => (window as any).__updates.calls.filter((call: any) => call.action === "check").length)).toBe(held);
+});
+
+test("busy focus: Check stays disabled after a failed update read", async ({page}) => {
+  await setup(page);
+  const panel = page.getByRole("region", {name: "Desktop updates"});
+  const check = panel.getByRole("button", {name: "Check for updates", exact: true});
+  await expect(check).toBeEnabled();
+  await page.evaluate(() => {(window as any).__updates.failAction = "check";});
+  await check.click();
+  await expect(panel.getByText("Update status is unavailable. Read the status again.")).toBeVisible();
+  await expect(check).toBeDisabled();
+  await page.evaluate(() => {const env = (window as any).__updates; env.failAction = ""; env.holdAction = "status"; env.held = 0;});
+  const read = panel.getByRole("button", {name: "Read update status", exact: true});
+  await read.focus();
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => typeof (window as any).__updates.release === "function");
+  await expect(check).toBeDisabled();
+  await expect(check).not.toHaveAttribute("aria-disabled");
+});
+
+test("busy focus: Download moves to Install", async ({page}) => {
+  await setup(page);
+  const panel = page.getByRole("region", {name: "Desktop updates"});
+  await panel.getByRole("button", {name: "Check for updates", exact: true}).click();
+  const download = panel.getByRole("button", {name: "Download and verify", exact: true});
+  await expect(download).toBeEnabled();
+  await download.focus();
+  await page.keyboard.press("Enter");
+  const install = panel.getByRole("button", {name: "Install and restart", exact: true});
+  await expect(install).toBeEnabled();
+  await expect(install).toBeFocused();
+  expect(await page.evaluate(() => (window as any).__updates.calls.filter((call: any) => call.action === "download"))).toEqual([{action: "download", candidate_id: "opaque-native-candidate"}]);
 });
 
 for (const locale of ["en-US", "zh-TW"]) for (const width of [390, 768, 1440]) {

@@ -21,22 +21,25 @@ from . import (
     checkpoints,
     controller_authority,
     dashboard_sync,
+    delivery,
     orchestrate,
     pm_attempt_results,
     pm_delivery_lineage,
     pm_execution_verification,
+    pm_lifecycle_gates,
     pm_quality_reviews,
     pm_source_lineage,
     pm_work_start,
     pm_workspace,
     pr_publication,
     registry,
+    repository_sync,
     verification,
     work_item_results,
 )
 from .api_auth import Principal
 from .errors import BatError, ConnectionLost, InvokeTimeout, ResourceReadOnly
-from .operations import OperationError
+from .operations import TERMINAL, OperationError
 from .pm_attempt_results import (
     BRANCH_DIFF_MAX_COMMITS,
     BRANCH_DIFF_MAX_FILES,
@@ -898,6 +901,104 @@ def _action_scopes(ops, action_name: str, extra: frozenset[str] = frozenset()) -
     return sorted({READ_SCOPE, ops.actions[action_name].scope} | extra)
 
 
+def _publication_pair(ctx: dict[str, Any]) -> tuple[dict[str, Any], str] | None:
+    """The exact repository id, start base and branch admission will require."""
+    code = ctx.get("code_source") if isinstance(ctx.get("code_source"), dict) else {}
+    repository = code.get("repository")
+    repository_id = code.get("repository_id")
+    base_sha = ctx.get("base_sha")
+    if not isinstance(repository, str) or not repository:
+        return None
+    if type(repository_id) is not int or repository_id <= 0:
+        return None
+    if not isinstance(base_sha, str) or SHA40.fullmatch(base_sha) is None:
+        return None
+    try:
+        base_ref = repository_sync.check_ref(code.get("source_ref"))
+    except OperationError:
+        return None
+    return {"repository_id": repository_id, "expected_base_sha": base_sha}, base_ref
+
+
+def _publication_open(ops, execution_op_id: str) -> bool:
+    rows = ops.db.execute(
+        """SELECT status FROM operations
+           WHERE action=? AND json_extract(target, '$.source_operation_id')=?""",
+        (pr_publication.ACTION, execution_op_id),
+    ).fetchall()
+    return any(row["status"] not in TERMINAL for row in rows)
+
+
+def _verified_publication_for_commit(ops, execution_op_id: str, candidate_sha: str | None) -> bool:
+    # Scan the child's receipts. A 50-row page is not proof none exist, and a
+    # row that fails verification is not proof a pull request exists.
+    if not isinstance(candidate_sha, str) or SHA40.fullmatch(candidate_sha) is None:
+        return False
+    if not _has_table(ops.db, "pr_creation_receipts"):
+        return False
+    rows = ops.db.execute(
+        "SELECT operation_id FROM pr_creation_receipts WHERE child_operation_id=?",
+        (execution_op_id,),
+    ).fetchall()
+    for row in rows:
+        try:
+            document = pr_publication._raw_receipt(ops, row["operation_id"])
+        except (OperationError, ValueError, TypeError, json.JSONDecodeError):
+            continue
+        if (isinstance(document, dict) and document.get("target_verified") is True
+                and document.get("candidate_sha") == candidate_sha):
+            return True
+    return False
+
+
+def _publication_lifecycle_block(ops, workspace_id: str) -> str | None:
+    # Same predicate as a new admission: investment against the current epoch.
+    # Passing that epoch refuses only a stopped workspace, and this read does not insert.
+    binding = {"pm_lineage": {"workspace_id": workspace_id}}
+    target = {"workspace_id": workspace_id}
+    wid = pm_lifecycle_gates.lineage(pr_publication.ACTION, target, binding)
+    if not wid or not pm_lifecycle_gates.installed(ops.db):
+        return None
+    if pm_lifecycle_gates.kind(pr_publication.ACTION, binding) != "investment":
+        return None
+    current = pm_lifecycle_gates.head(ops.db, wid)
+    try:
+        pm_lifecycle_gates._require(current, current["execution_epoch"])
+    except OperationError as exc:
+        if exc.code == "PM_LIFECYCLE_STOPPED":
+            return "lifecycle_stopped"
+    return None
+
+
+def _publication_github_block(ops) -> str | None:
+    try:
+        delivery._gh(ops)
+    except OperationError as exc:
+        if exc.code == "GITHUB_NOT_CONFIGURED":
+            return "github_not_configured"
+    return None
+
+
+def _publication_block_reason(ops, ctx: dict[str, Any], candidate_sha: str | None) -> str | None:
+    if _publication_pair(ctx) is None:
+        return "publication_source_incomplete"
+    execution_op_id = ctx["execution_op_id"]
+    if isinstance(execution_op_id, str) and _publication_open(ops, execution_op_id):
+        return "WAIT_ORIGINAL_OPERATION_RECONCILE"
+    # Admission requires this head. An open publish stays reconcile above; do not
+    # invent a commit or read the provider to fill one in.
+    if not isinstance(candidate_sha, str) or SHA40.fullmatch(candidate_sha) is None:
+        return "publication_source_incomplete"
+    if isinstance(execution_op_id, str) and _verified_publication_for_commit(
+        ops, execution_op_id, candidate_sha
+    ):
+        return "pull_request_exists"
+    stopped = _publication_lifecycle_block(ops, ctx["workspace_id"])
+    if stopped:
+        return stopped
+    return _publication_github_block(ops)
+
+
 def _compute_actions(
     ops,
     principal: Principal,
@@ -986,6 +1087,9 @@ def _compute_actions(
     if stage == "start_unknown" or op_status == "uncertain":
         if pm_work_start.ACTION in ops.actions:
             blocked.append({"action": pm_work_start.ACTION, "reason": "WAIT_ORIGINAL_OPERATION_RECONCILE"})
+        # Publish stays blocked with the same reason, including before a session exists.
+        if delivery_goal == "pull_request" and pr_publication.ACTION in ops.actions:
+            blocked.append({"action": pr_publication.ACTION, "reason": "WAIT_ORIGINAL_OPERATION_RECONCILE"})
         return allowed, blocked, is_controller
 
     if op_status == "needs_attention":
@@ -1093,39 +1197,49 @@ def _compute_actions(
 
         if execution_state in {"turn-ended", "process-ended"}:
             if delivery_goal == "pull_request" and execution_op_id and pr_publication.ACTION in ops.actions:
-                repository = (ctx["code_source"] or {}).get("repository")
-                prefilled: dict[str, Any] = {}
-                if isinstance(candidate_sha, str) and SHA40.fullmatch(candidate_sha):
-                    prefilled["candidate_sha"] = candidate_sha
-                consider(
-                    {
-                        "kind": "action",
+                reason = _publication_block_reason(ops, ctx, candidate_sha)
+                pair = None if reason else _publication_pair(ctx)
+                if reason or pair is None:
+                    blocked.append({
                         "action": pr_publication.ACTION,
-                        "target": {
-                            "workspace_id": workspace_id,
-                            "repository": repository,
-                            "host": sess_host,
-                            "source_operation_id": execution_op_id,
+                        "reason": reason or "publication_source_incomplete",
+                    })
+                else:
+                    preconditions, base_ref = pair
+                    repository = (ctx["code_source"] or {}).get("repository")
+                    prefilled: dict[str, Any] = {"base_ref": base_ref}
+                    if isinstance(candidate_sha, str) and SHA40.fullmatch(candidate_sha):
+                        prefilled["candidate_sha"] = candidate_sha
+                    consider(
+                        {
+                            "kind": "action",
+                            "action": pr_publication.ACTION,
+                            "target": {
+                                "workspace_id": workspace_id,
+                                "repository": repository,
+                                "host": sess_host,
+                                "source_operation_id": execution_op_id,
+                            },
+                            "required_scopes": _action_scopes(
+                                ops,
+                                pr_publication.ACTION,
+                                pr_publication.REQUIRED,
+                            ),
+                            "required_params": [
+                                "candidate_sha",
+                                "base_ref",
+                                "public_title",
+                                "public_body",
+                                "draft",
+                            ],
+                            "optional_params": ["quality_ref"],
+                            "prefilled_params": prefilled,
+                            "preconditions": preconditions,
                         },
-                        "required_scopes": _action_scopes(
-                            ops,
-                            pr_publication.ACTION,
-                            pr_publication.REQUIRED,
-                        ),
-                        "required_params": [
-                            "candidate_sha",
-                            "base_ref",
-                            "public_title",
-                            "public_body",
-                            "draft",
-                        ],
-                        "optional_params": ["quality_ref"],
-                        "prefilled_params": prefilled,
-                    },
-                    action_name=pr_publication.ACTION,
-                    requires_controller=True,
-                    requires_writer=True,
-                )
+                        action_name=pr_publication.ACTION,
+                        requires_controller=True,
+                        requires_writer=True,
+                    )
             if has_receipt or execution_op_id:
                 if "pm.quality.review.create" in ops.actions:
                     consider(
@@ -1440,7 +1554,7 @@ async def _read_result(
         {
             "code": view.get("error_code"),
             "message": view.get("status_reason"),
-            "resumable": True,
+            "resumable": False,
         }
         if op_status == "needs_attention"
         else None
@@ -1616,6 +1730,13 @@ async def _read_result(
         has_receipt=latest_row is not None,
         current_review_id=current_review_id,
     )
+    # Same proof and authorization as the public resume endpoint. An unknown
+    # child returns before resume is considered, so this stays false.
+    if attention is not None:
+        attention["resumable"] = any(
+            item.get("kind") == "operation_endpoint" and item.get("endpoint") == "resume"
+            for item in next_allowed_actions
+        )
 
     # Identity & Sources
     reg_entry = registry.get(sess_host, sess_id) if (sess_host and sess_id) else None

@@ -4,7 +4,7 @@ description: Use this when you need to check on, read, wait for, or (only when e
 version: 0.2.6
 license: MIT
 metadata:
-  workflow_version: "2026-10-13.2"
+  workflow_version: "2026-10-16.2"
   api_version: "1"
   contract_version: "2026-10-08"
 ---
@@ -875,8 +875,19 @@ journal. Then submit `work.start` through `operation_submit` with target
 one `pm.work.bind`, one deterministic `work_start_thin_v1` `pm.work_package.create`
 (or reuses the matching ready latest package) and one `repository.continue` child
 under the same controller. A definite child failure ends `work.start` as `failed` so a
-new reviewed start can reuse the prepared package when the basis is unchanged; a
-`needs_attention` child or pre-child guard pause puts the parent in `needs_attention`.
+new reviewed start can reuse the prepared package when the basis is unchanged. A
+pre-child stop on `PM_LIFECYCLE_STOPPED`, `PM_LIFECYCLE_EPOCH_CHANGED`,
+`PM_PACKAGE_SCOPE_CHANGED`, `WORK_ITEM_CHANGED`, `PROJECT_CHANGED`,
+`PM_WORK_BINDING_CHANGED`, `PM_PACKAGE_VERSION_CONFLICT`, `WORK_ITEM_ARCHIVED` or
+`PROJECT_ARCHIVED` also ends that start `failed` with stage `start_failed`. Resume
+cannot pass those codes; after the cause is gone, submit a new reviewed start. A
+repairable pre-child pause, such as a withdrawn credential
+(`PM_WORK_START_AUTHORITY_UNAVAILABLE`) or a lowered workspace role (`FORBIDDEN`),
+still leaves the parent in `needs_attention`. A `needs_attention` child, including a
+changed host execution location, and an uncertain child do the same. A start already
+waiting in `needs_attention` is not rewritten; resume or cancel that original
+operation. Resuming one of those nine codes then ends it `failed` with stage
+`start_failed`.
 Cancelling `work.start` also cancels its unfinished children while preserving read-back
 of any possibly sent step and leaving already-started sessions under original authority.
 On `PM_WORK_ATTEMPT_CHANGED` (409), follow the named latest attempt and start operation
@@ -939,7 +950,50 @@ the last turn-end receipt, call `pm_work_attempt_changes_get(workspace_id, attem
 to read a single file's unified diff in a specific commit within `(base_commit..head_commit]`,
 call `pm_work_attempt_diff_get(workspace_id, attempt_id, commit, path)`.
 
-When `features.pm_workspaces.work_follow_up` is advertised, a second instruction to a
+Read `loop` on a single operation only when `capabilities_get` shows
+`features.pm_workspaces.operation_loop` with `"version": 1`. Use
+`bat-agent-connector-mcp --principal-only` and this agent's own `BATC_API_TOKEN`.
+If that key is missing, or the version is not 1, do not read `loop`, and do not
+treat a missing `loop` as a failure. Stop the same way when another tool or
+capability you need is absent.
+
+1. Read the adopted scope with `pm_plan_accepted_get` and `pm_plan_head_get`.
+   There is no new route for that read.
+2. When the version is 1, read `loop.next_allowed_actions` before cancel or
+   resume. Do not send a verb the list omits. An action outside the allowlist
+   has no `loop` key; that absence is normal.
+3. A lost reply or a bounded wait uses the same idempotency key and reads the
+   original operation. Keep today's wait in seconds. Do not switch to a new key.
+4. When `loop.attempt_id` or `loop.result_read` is present, use the three Result
+   tools above. Do not nest that envelope inside `loop`.
+5. A delivery read does not decide requirement acceptance. The field stays
+   `not_evaluated_by_delivery`. Do not add another acceptance judgment.
+6. When `features.pm_workspaces.work_follow_up` has version 1 and available true,
+   send a Work target with `operation_submit` as described below. The immutable
+   admitted input links its Work and Attempt in `loop`; a Work-shaped target
+   alone is not proof. Direct `{host, session_id}` sends remain `partial` with
+   reason `session_target`. Keep the queue receipt in `operation.input_receipt`.
+   Do not call the legacy Fleet `session_send` for this loop or derive a new Work.
+7. `loop.dashboard_hash` and `loop.links` are hashes. Resolve a hash against the
+   client's own Dashboard base with standard URL resolution. With no base, keep
+   the hash and treat the absolute URL as unavailable. Do not guess a localhost
+   origin, put a token in the query, or use `batc://`.
+8. Send `work.adopt_and_start` only after a `work_adopt_and_start` capability is
+   advertised. Read readiness only after a `work_profiles` capability is
+   advertised. `pm_profiles_get` and Settings → Agents are not a coding profile.
+9. `work_status(task_id)` is a recipe task, not a PM Work item.
+10. Publishing a PR, merging, deploying and maintenance are separate registered
+    actions on the same operation journal. When merge has succeeded and deploy
+    has failed, follow the deployment_retry rule later in this skill: it starts
+    `deployment.start` on the saved identity and does not merge again.
+11. On `UNCERTAIN_UNRESOLVED` or `PM_WORK_START_OUTCOME_UNPROVEN`, read and
+    reconcile the original operation. Do not start again. Manual, unknown and
+    foreign sessions stay read-only. `MANUAL_READ_ONLY` and `UNKNOWN_READ_ONLY`
+    are terminal refusals.
+12. Before replacing a fleet copy of this skill, compare its `workflow_version`
+    and the sha256 of this canonical file. If the fleet copy is newer, do not
+    overwrite it with an older canonical.
+When `features.pm_workspaces.work_follow_up` has version 1 and available true, a second instruction to a
 started Work uses the existing `operation_submit` tool. Do not call `session_send`
 for that path, and do not invent a follow-up alias. Submit
 `action="session.send"` with `target={"workspace_id", "work_item_id"}` and

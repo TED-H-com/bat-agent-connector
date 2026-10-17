@@ -40,12 +40,13 @@ export const discussionDom = (create, keyPrefix) => (tag, attrs, ...children) =>
   return tag === 'details' ? disclosure({element: node, key}) : node;
 };
 
-export function discussionTitle({t, field, form, value, local = false}) {
+export function discussionTitle({t, field, form, value, local = false, resume = false, onEditing = () => {}}) {
   let current = value, restoreFocus = false;
   const title = h('h2', {'data-discussion-title': '', title: value}, value);
+  const remember = () => {if (!edit.hidden) onEditing(true, field.selectionStart ?? 0, field.selectionEnd ?? field.selectionStart ?? 0);};
   const pencil = iconButton({icon: 'pencil', label: t('pd_rename'), disabled: field.disabled, 'data-discussion-rename': '', onClick: () => {
     if (!form.hasDraft()) field.value = current;
-    edit.hidden = false; display.hidden = true; field.focus(); field.select();
+    edit.hidden = false; display.hidden = true; field.focus(); field.select(); remember();
   }});
   const display = h('div', {class: 'pd-title-display'}, title, pencil);
   const cancel = button({label: t('pd_cancel'), onClick: () => {
@@ -58,15 +59,29 @@ export function discussionTitle({t, field, form, value, local = false}) {
   }}, field, h('div', {class: 'actions'}, button({type: 'submit', variant: 'primary', label: t('pd_save')}))) : form.box;
   edit.classList.add('pd-title-edit'); edit.querySelector('.actions').append(cancel);
   edit.addEventListener('keydown', event => {if (event.key === 'Escape' && !event.isComposing && event.keyCode !== 229) {event.preventDefault(); event.stopPropagation(); cancel.click();}});
-  function finish({focus = false} = {}) {restoreFocus = focus && (edit.contains(document.activeElement) || document.activeElement === document.body); edit.hidden = true; display.hidden = false;}
+  for (const eventName of ['input', 'keyup', 'mouseup', 'select']) field.addEventListener(eventName, remember);
+  function finish({focus = false, notify = true} = {}) {
+    restoreFocus = focus && (edit.contains(document.activeElement) || document.activeElement === document.body);
+    edit.hidden = true; display.hidden = false;
+    if (notify) onEditing(false, 0, 0);
+  }
   function updateState() {
     pencil.disabled = field.disabled || field.readOnly; cancel.disabled = form.locked();
     if (local) edit.querySelector('button[type=submit]').disabled = field.disabled;
   }
-  finish();
+  // Construction always closes first. A rebuilt page must not treat that as Cancel.
+  finish({notify: false});
   updateState();
   if (!local && (form.locked() || form.hasDraft() && field.value !== current)) {edit.hidden = false; display.hidden = true;}
-  return {box: h('div', {class: 'pd-title'}, display, edit), finish, updateState, update(next) {
+  if (local && resume) {edit.hidden = false; display.hidden = true;}
+  return {box: h('div', {class: 'pd-title'}, display, edit), finish, updateState, editing: () => !edit.hidden, focus(start, end) {
+    if (edit.hidden) return;
+    field.focus();
+    if (!Number.isInteger(start)) return;
+    const point = Math.max(0, Math.min(start, field.value.length));
+    const stop = Number.isInteger(end) ? Math.max(point, Math.min(end, field.value.length)) : point;
+    field.setSelectionRange(point, stop);
+  }, update(next) {
     current = next; title.textContent = next; title.title = next; updateState();
     if (restoreFocus && !pencil.disabled) {
       if (document.activeElement === document.body || edit.contains(document.activeElement)) pencil.focus();

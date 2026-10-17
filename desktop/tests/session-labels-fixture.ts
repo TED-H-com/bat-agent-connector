@@ -26,10 +26,14 @@ export async function labelsFixture(page:Page,native:boolean,options:any={}) {
   }
   state.reads.push(input.path);
   if(path==='/operations/'+opId){
+   if(state.delayRead)await new Promise(resolve=>{state.holdRead=resolve;});
    if(state.failOp)return {status:503,data:{error:{code:'READ_FAILED',message:'Receipt read failed'}}};
    return {status:200,data:{operation:{...state.operation,status:state.status}}};
   }
-  if(path==='/sessions/demo/manual-full-session'&&state.failMetadata)return {status:503,data:{error:{code:'READ_FAILED',message:'Metadata read failed'}}};
+  if(path==='/sessions/demo/manual-full-session'){
+   if(state.delaySession)await new Promise(resolve=>{state.holdSession=resolve;});
+   if(state.failMetadata)return {status:503,data:{error:{code:'READ_FAILED',message:'Metadata read failed'}}};
+  }
   if(path==='/events')state.after=Number(url.searchParams.get('after'));
   const events=state.events.filter((e:any)=>e.seq>state.after),cursor=events.at(-1)?.seq||state.after;
   if(path==='/events'&&events.length)state.delivered=true;

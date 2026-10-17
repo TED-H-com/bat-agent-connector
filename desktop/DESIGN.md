@@ -28,6 +28,12 @@ or being checked automatically via `aria-disabled="true"` and an `aria-busy="tru
 preventing focus ejection to `<body>`. Submitting from a field shifts focus to the submit
 button before locking fields, duplicate submissions while busy or during automatic checks
 are ignored, and terminal failures or admission refusals move focus to the reset button.
+The Work next-step field is the exception that opts into releasing after a central
+operation id: the receipt stays in the list, the field clears, and focus returns to
+that field so the next instruction can be written. Every other durable form still
+locks until the operation succeeds. A local draft is not a queue. On a work route
+where that follow-up is offered, it is the only instruction composer. An attempt or
+precondition error that was not refused before admission keeps the original request.
 
 Keep existing drafts, stable IDs, operation keys, receipt recovery and read-only
 manual resources. A source withdrawal removes its facts, counts and inspector;
@@ -278,7 +284,7 @@ extra fields (including display metadata) are rejected.
 
 ## Global screens
 
-Pending, Operations, Delivery, Settings, Projects, cleanup, artifact review and the signed-out card share one page header (`.ui-page-header`): header actions centre on the title row, with 16px before the next control. A meta line under the title does not move the actions. Below 800px icon actions stay right-aligned beside the title, including alongside a text action; text actions use a wrapping row below the title and metadata. Titles clamp to two lines with the complete title in the tooltip and accessible name; they wrap at words and use pretty text wrapping. Actions retain their intrinsic width so labels stay on one line. Marks beside the title stay on the title line as well; the title shrinks and wraps inside that line instead of letting the marks wrap underneath it. Pending is an inbox hosted like Operations: the groups and the Details disclosure stay in one column, and the inspector is the column on the right at 1200px and up (the same sheet below that). The Needs you / Active operations / Unread switch is the shared segmented control and keeps focus on the checked option after the view rebuilds. Each group is one surface list: a title and count, hairline rows, and one secondary action. The row selects; the inspector is what opens the next page, and its first action is that row’s Answer, Review or Open link. When the session read already includes the pending question, that question is the first paragraph. A manual or read-only session shows Open and the Read-only pill, never Answer or Review. The row title is not underlined until hover or focus. The status pill sits beside the meta, not at the far edge. A chevron opens the inspector only when that is different from the row action. Needs attention (unknown outcomes, not failures) offers a quiet View all link in the group header. “N shown · Load more” appears only while another page exists. A group hides only after a fresh, successful, empty load. A failed read keeps earlier rows, shows no count, and stays marked Not updated · Retry. When every group fails in the same refresh, one alert and one Retry sit at the top instead of a bar on each group. An error does not turn the Pending badge into zero. Each tab has its own empty state and at most one link: Approvals only when there is something to approve and the inbox is empty, otherwise inside that empty state. Explanations sit once in a Details disclosure after the groups and name only the tabs that are offered. Operations is a dense table (action, target, status, actor, created, duration). Duration is the elapsed time for an active operation and `updated_at − created_at` once it is terminal, written as seconds, minutes, hours and minutes, or days and hours, with a zero remainder omitted. The shared segmented filter and the shared search field stay. Selecting a row opens an inspector whose first text is the localized status and whose first action is Open operation. The meta line is only the target. Actor, Created, Duration and Attempts sit above Details, and a server reason is a Reason row inside Details. Refresh stays disabled while a load is in progress. In the browser, the settings sub-nav (Connection, Desktop, Models, Fleet, Updates, About) shows only the selected section, remembers that section for the namespace, and stacks under 800px. Native settings keep mounted sections visible together and use links with `aria-current`, not tabs. Forms stay within 640px. Connection shows the endpoint, a live state pill, the live last-event time, access as Access · actor · scopes, and a secondary Disconnect. In the browser, the Tailscale note is one muted line inside that card, with no controls and no local calls. Fleet without configuration uses the shared empty state. About shows the product name, the version when one is known, and the setup guide. The signed-out screen is one centred card: the product mark, one sentence, the connect form with the setup guide on the connect row, and the same Tailscale note in the card footer. A rejected token says Token not accepted / 權杖無效 in an alert, with no raw status code. Sidebar names keep the row width minus a 16px mark: circle-alert for Needs you and Asking you, circle-x for Failed, an info dot for Running, and no mark for neutral states. The mark follows the work entry’s own status before the session’s activity. A numeric unread count sits after the name when the entry has one. The status word stays in the tooltip and accessible name. The Pending count badge stays. At 800px and below, row actions, row chevrons and View all keep a 44px hit area. Composed metadata uses `label-text.js`, so a missing target does not leave a separator. Short status words come from the shared vocabulary; precise wording and raw codes stay in Details. Registered operation names have an English and Traditional Chinese label; an unknown name is humanised rather than called Operation.
+Pending, Operations, Delivery, Settings, Projects, cleanup, artifact review and the signed-out card share one page header (`.ui-page-header`): header actions centre on the title row, with 16px before the next control. A meta line under the title does not move the actions. Below 800px icon actions stay right-aligned beside the title, including alongside a text action; text actions use a wrapping row below the title and metadata. Titles clamp to two lines with the complete title in the tooltip and accessible name; they wrap at words and use pretty text wrapping. Actions retain their intrinsic width so labels stay on one line. Marks beside the title stay on the title line as well; the title shrinks and wraps inside that line instead of letting the marks wrap underneath it. Pending is an inbox hosted like Operations: the groups and the Details disclosure stay in one column, and the inspector is the column on the right at 1200px and up (the same sheet below that). The Needs you / Active operations / Unread switch is the shared segmented control and keeps focus on the checked option after the view rebuilds. Each group is one surface list: a title and count, hairline rows, and one secondary action. The row selects; the inspector is what opens the next page, and its first action is that row’s Answer, Review or Open link. When the session read already includes the pending question, that question is the first paragraph. A manual or read-only session shows Open and the Read-only pill, never Answer or Review. The row title is not underlined until hover or focus. The status pill sits beside the meta, not at the far edge. A chevron opens the inspector only when that is different from the row action. Needs attention (unknown outcomes, not failures) offers a quiet View all link in the group header. “N shown · Load more” appears only while another page exists. A group hides only after a fresh, successful, empty load. A failed read keeps earlier rows, shows no count, and stays marked Not updated · Retry. When every group fails in the same refresh, one alert and one Retry sit at the top instead of a bar on each group. An error does not turn the Pending badge into zero. Each tab has its own empty state and at most one link: Approvals only when there is something to approve and the inbox is empty, otherwise inside that empty state. Explanations sit once in a Details disclosure after the groups and name only the tabs that are offered. Operations is a dense table (action, target, status, actor, created, duration). Duration is the elapsed time for an active operation and `updated_at − created_at` once it is terminal, written as seconds, minutes, hours and minutes, or days and hours, with a zero remainder omitted. The shared segmented filter and the shared search field stay. Selecting a row opens an inspector whose first text is the localized status and whose first action is Open operation. The meta line is only the target. Actor, Created, Duration and Attempts sit above Details, and a server reason is a Reason row inside Details. Refresh stays focusable while a load is in progress: it looks unavailable and ignores a second press, so keyboard focus remains on it. Load more does the same while its section reads the next page, and on the last page focus moves to the first new row. In the browser, the settings sub-nav (Connection, Desktop, Models, Fleet, Updates, About) shows only the selected section, remembers that section for the namespace, and stacks under 800px. Native settings keep mounted sections visible together and use links with `aria-current`, not tabs. Forms stay within 640px. Connection shows the endpoint, a live state pill, the live last-event time, access as Access · actor · scopes, and a secondary Disconnect. In the browser, the Tailscale note is one muted line inside that card, with no controls and no local calls. Fleet without configuration uses the shared empty state. About shows the product name, the version when one is known, and the setup guide. The signed-out screen is one centred card: the product mark, one sentence, the connect form with the setup guide on the connect row, and the same Tailscale note in the card footer. A rejected token says Token not accepted / 權杖無效 in an alert, with no raw status code. Sidebar names keep the row width minus a 16px mark: circle-alert for Needs you and Asking you, circle-x for Failed, an info dot for Running, and no mark for neutral states. The mark follows the work entry’s own status before the session’s activity. A numeric unread count sits after the name when the entry has one. The status word stays in the tooltip and accessible name. The Pending count badge stays. At 800px and below, row actions, row chevrons and View all keep a 44px hit area. Composed metadata uses `label-text.js`, so a missing target does not leave a separator. Short status words come from the shared vocabulary; precise wording and raw codes stay in Details. Registered operation names have an English and Traditional Chinese label; an unknown name is humanised rather than called Operation.
 
 ## Shared actions and links
 
@@ -506,6 +512,14 @@ Before a central thread exists, it mounts only the local discussion draft and
 list, deferring meetings, follow-ups, evidence and specification tools until Send.
 Its title can be renamed locally once the initial permission read completes; title
 controls follow the durable create form's gates and lock with its original intent.
+An already open rename stays editable through a background lifecycle withdrawal:
+the draft, caret and focus remain, and Save still commits the local title. A closed
+rename stays gated, and an admitted intent still locks the field.
+An access reset clears the page immediately, including while that field is focused.
+The open rename is remembered only as a UI preference and reopens on the rebuilt
+draft with the same text, caret and focus. Save still commits the local title.
+Cancel, a completed Save, or sending the discussion closes that remembered rename.
+The next new discussion opens with the rename closed and the composer focused.
 The draft title survives reload and becomes the central thread-create title.
 Governance context chips in an unsent draft read the current record title from
 central. A 403/404 removes the source label and ID and disables sending while
@@ -602,7 +616,13 @@ on larger viewports. Its entire header is hidden; the wide table retains its hea
 ordered work sections: Requirements served; Status & ownership; Start work (when the
 `features.pm_workspaces.work_start` capability is available); Result (when
 `features.pm_workspaces.work_attempt_results` is available, replacing static result evidence
-with the latest attempt's live result envelope using 0 BAT calls); Blocker & next step;
+with the latest attempt's live result envelope using 0 BAT calls, and providing on-demand
+"Read current changes" and per-file diff disclosures loaded once on first open with out-of-date
+event detection). When that result lists one complete `github.pr.publish` entry, the same
+inspector shows the offered commit and base, then the title, description, and draft choice, and
+submits only that entry through the existing operation form. An incomplete or missing entry does
+not submit. Opened pull requests link to the recorded operation when that id is present; the
+screen does not invent a GitHub URL. Blocker & next step;
 Delivery; Details. When the card is startable, the inspector
 header offers a Start work action alongside Discuss that scrolls and focuses the instruction
 field. The Start work panel previews readiness facts, candidate code targets, and requirement
@@ -622,6 +642,14 @@ details start collapsed. Unknown and Not assessed summaries retain their evidenc
 Auxiliary source failures clear only their own facts and offer Retry; plan and work
 catalogue withdrawal clears the view. Inspector actions retain their nodes across live
 age updates, and closing returns to the current selection.
+
+A Work Result diff reply moves focus only while it is still on that diff's summary.
+A read started from the summary stays there whatever the outcome. A read started from
+that diff's Try again focuses the new Try again only when it fails again and focus is
+still on the summary. File paths are matched by attribute value, so a quote or
+backslash cannot throw during the render or the focus restore. The result read's Try
+again has `data-work-result-retry="result"` and is restored by that attribute.
+
 Milestone destinations apply once for the current route. Live refresh retains the
 reader's search and restores group-heading focus by central milestone identity.
 Unchanged delivery reads retain row nodes, position and focus regardless of response
@@ -641,7 +669,12 @@ on narrow screens. Explicit destinations cancel queued scroll restoration; revis
 a view restores its own scroll. Board and Requirements record their scroll position before
 a view switch hides them or on route departure (including during in-flight reads). The restore
 waits until the workspace header has settled. A hidden view, or a view retired before its mount
-finished, never moves the window. Unassigned
+finished, never moves the window. A read from the overview brief, lifecycle, meetings,
+follow-up, sprints, governance, roadmap, evidence, a review candidate, or a worktree preview
+that fails or finishes after that project view was left does not mark the next view's update
+as failed or pause its actions. Closing the view withdraws an open plan proposal before that
+update. The board refresh is unchanged until its own fix. An error in the project view that
+is still open, including a source outage or a lost network, still stops that update. Unassigned
 work remains selectable before plan adoption. Preferences are bounded by connection/principal and workspace; fetched
 facts are reauthorized, never stored in the preference map.
 
@@ -1008,6 +1041,8 @@ remains recoverable. Closing, refreshing or withdrawing the Board invalidates pe
 observation reads and clears receipts with rows and counts. Drafts and original keys
 survive remounting; a changed native identity requires an explicit new selection.
 
+Adopt and start, the next instruction on a started work, and saved work profiles in the Start work panel are specified in `docs/design/v1.3-e03-loop-ui.md`. Those controls are not on this screen yet.
+
 ## Session workspace
 
 Opened from Work or a project tree. The page header shows the session title and agent
@@ -1295,10 +1330,14 @@ About retains its existing Settings frame and adds one build line and Export
 diagnostics. Error Details reuse the same entry point. The modal uses shared
 surface/type/spacing/overlay tokens, a compact source summary including stale host data, a wrapping,
 scrollable JSON preview and Save / Copy / Close. Native `<dialog>` makes the
-background inert; Tab wraps, Escape closes, and focus returns to the trigger.
+background inert; Tab wraps, including Save while a save is in progress. Save
+keeps keyboard focus until the write finishes, and a second press is ignored.
+Escape closes, and focus returns to the trigger.
 English and zh-TW share behavior. Only loaded session reads and an operation page
 are counted; unavailable sources remain unknown. Withdrawal clears preview facts
-and disables export actions together. See [the diagnostics contract](../docs/design/diagnostics.md).
+and disables export actions together. If Save or Copy had focus, or focus had
+already left the controls, it moves to Close. A preview over 256 KiB, and withdrawal,
+leave Save disabled outside that write. See [the diagnostics contract](../docs/design/diagnostics.md).
 
 Diagnostics export stays inside error Details as a ghost action. Error renderers
 pass their destination via `within` (or `insideDetails: true` when constructing a

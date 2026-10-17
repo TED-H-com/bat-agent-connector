@@ -36,6 +36,7 @@ export async function startFixture(page: Page, native: boolean, options: any = {
         count: 1, has_more: Boolean(state.truncated), errors: state.discoveryError ? {[host!]: {code: 'OFFLINE'}} : {}}};
     }
     if (path === '/operations/'+startOperationId) {
+      if (state.delayRead) await new Promise(resolve => {state.holdRead = resolve;});
       if (state.failRead) return {status: 503, data: {error: {code: 'READ_FAILED', message: 'Start read failed'}}};
       return {status: 200, data: {operation: {...state.operation, status: state.status}}};
     }

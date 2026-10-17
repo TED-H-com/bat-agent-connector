@@ -46,3 +46,91 @@ for (const native of [false, true]) test(`explicit result lineage, partial child
   await original.locator('summary').click(); await expect(original.locator('.pre')).toHaveText(parent.request);
   expect(f.data.writes).toEqual([]); expect(errors).toEqual([]);
 });
+
+function resultDocument(url: URL, parent: any, child: any, accepted: any) {
+  const summary = (item: any) => ({...item, links: [], result_artifacts: [], links_truncated: false, artifacts_truncated: false});
+  const after = url.searchParams.has('after');
+  return {version: 1, source: 'central_journal', read_at: 1791580000, item: summary(parent),
+    parent: {...accepted, title: 'Ancestor'}, derived_from: null, children_next_cursor: after ? null : 'next-child',
+    children: after ? [summary(accepted)] : [summary(child)]};
+}
+
+async function openResultSources(page: import('@playwright/test').Page, options: {operationEvents?: boolean} = {}) {
+  const f = attentionFixture(), [parent, child, accepted] = f.data.items;
+  let sourceGets = 0, holding = false, release = () => {};
+  let gate = Promise.resolve();
+  const dispatch = async (input: any) => {
+    const url = new URL(input.path, 'http://fixture'), path = url.pathname;
+    if (path.endsWith('/result-sources')) {
+      sourceGets++;
+      if (holding) await gate;
+      return {status: 200, data: resultDocument(url, parent, child, accepted)};
+    }
+    if (path === '/events' && options.operationEvents) {
+      const result = await f.dispatch(input);
+      for (const event of result.data.events || []) event.resource_type = 'operation';
+      return result;
+    }
+    const result = await f.dispatch(input);
+    if (path === '/capabilities') result.data.features.work_item_results = {version: 1};
+    if (path === '/bootstrap') result.data.capabilities.features.work_item_results = {version: 1};
+    return result;
+  };
+  await mountAttention(page, false, f, dispatch);
+  await page.goto('/dashboard/#/item/' + parent.work_item_id);
+  const panel = page.locator('[data-result-sources]');
+  await expect(panel).toContainText('1 loaded child work items have not been accepted');
+  await panel.getByText('Own and child result sources', {exact: true}).click();
+  const refresh = panel.getByRole('button', {name: 'Refresh result sources', exact: true});
+  const more = panel.getByRole('button', {name: 'Load more child work', exact: true});
+  const status = panel.locator('[role="status"]');
+  return {panel, refresh, more, status, parent, gets: () => sourceGets, hold() {holding = true; gate = new Promise(resolve => {release = resolve;});}, release() {holding = false; release();}, bumpOperation() {f.data.cursor = 1;}};
+}
+
+async function refreshBusy(refresh: import('@playwright/test').Locator, status: import('@playwright/test').Locator) {
+  return refresh.evaluate((button, statusSelector) => {
+    const panel = button.closest('[data-result-sources]');
+    const region = panel?.querySelector(statusSelector);
+    const active = document.activeElement;
+    return {focused: active === button, active: active?.getAttribute?.('aria-label') || active?.tagName || '',
+      ariaDisabled: button.getAttribute('aria-disabled'), disabled: button.disabled, ariaBusy: region?.getAttribute('aria-busy') ?? null};
+  }, '[role="status"]');
+}
+
+test('result sources refresh keeps focus and ignores a second press', async ({page}) => {
+  const ui = await openResultSources(page);
+  const before = ui.gets();
+  ui.hold();
+  await ui.refresh.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => ui.gets()).toBe(before + 1);
+  expect(await refreshBusy(ui.refresh, ui.status)).toEqual({focused: true, active: 'Refresh result sources', ariaDisabled: 'true', disabled: false, ariaBusy: 'true'});
+  await page.keyboard.press('Enter');
+  await ui.refresh.evaluate(button => button.click());
+  ui.release();
+  await expect(ui.status).not.toHaveAttribute('aria-busy', 'true');
+  expect(ui.gets()).toBe(before + 1);
+  await expect(ui.refresh).toBeFocused();
+});
+
+test('an operation event keeps focus on result sources refresh', async ({page}) => {
+  const ui = await openResultSources(page, {operationEvents: true});
+  const before = ui.gets();
+  await ui.refresh.focus();
+  ui.hold();
+  ui.bumpOperation();
+  await expect.poll(() => ui.gets()).toBe(before + 1);
+  expect(await refreshBusy(ui.refresh, ui.status)).toEqual({focused: true, active: 'Refresh result sources', ariaDisabled: 'true', disabled: false, ariaBusy: 'true'});
+  ui.release();
+  await expect(ui.status).not.toHaveAttribute('aria-busy', 'true');
+  await expect(ui.refresh).toBeFocused();
+});
+
+test('result sources more on the last page focuses the first new child', async ({page}) => {
+  const ui = await openResultSources(page);
+  await expect(ui.more).toBeVisible();
+  await ui.more.focus();
+  await page.keyboard.press('Enter');
+  const summary = ui.panel.locator('[data-result-child] summary', {hasText: 'Accepted work'});
+  await expect(summary).toBeFocused();
+});

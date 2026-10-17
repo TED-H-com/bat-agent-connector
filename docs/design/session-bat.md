@@ -38,7 +38,11 @@ never authorizes a replacement for those requests. Unknown/prepared receipts
 remain frozen; there is no automatic new preview, relaunch or selection change.
 A new choice requires an explicit action after a definite terminal outcome, or
 cancelling a preview which has never been submitted. Storage failure prevents the
-launch. A stale view/account switch cannot issue a follow-up effect.
+launch. A stale view/account switch cannot issue a follow-up effect. Keyboard focus stays
+on the pressed handoff action while its read, review, or launch runs. Review
+moves focus to the launch button; a finished launch or retry moves to the next
+choice, or to Read when that choice is hidden; cancel and a new choice return
+to the profile selector.
 
 Validation uses temporary profile-index/configuration fixtures, injected process
 observations and browser/native IPC doubles. It does not claim installed BAT

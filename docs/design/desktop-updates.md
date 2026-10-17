@@ -79,7 +79,9 @@ valid download, changed bytes, missing/mismatched signed version, cached recover
 receipt after reopen, and partial receipt refusal. The release verifier rejects altered
 bytes, wrong keys and ambiguous signed versions. No fixture invokes an installer.
 Shared UI tests cover both languages at 390/768/1440, disabled unsigned builds, explicit
-actions and lost-reply recovery. Native final-effect tickets have separate queue/quit tests.
+actions and lost-reply recovery. Keyboard focus stays on the pressed update action
+while it runs, moves to Install after a verified download, and returns to Read
+status when the pressed action ends unavailable. Native final-effect tickets have separate queue/quit tests.
 
 The NSIS/WebView fixture installs the exact built package on a disposable Windows runner,
 checks digest/version readback, close/single-instance/relaunch and uninstall, and uploads

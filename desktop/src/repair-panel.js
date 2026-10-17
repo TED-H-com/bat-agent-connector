@@ -2,24 +2,78 @@ import {repairIntent, repairRequest, validateRepairRecord} from './repair-intent
 
 // Read fixed central evidence, then create/reuse an ordinary work item. Launch is separate.
 export function repairPanel({h, t, api, caps, guard, namespace, source, errorBox, opStatus}) {
-  let controller, document, busy = false, disposed = false, serial = 0, initialized = false;
+  let controller, document, busy = false, reading = false, disposed = false, serial = 0, initialized = false;
   const alive = () => {try {guard(); return !disposed;} catch {return false;}};
   const key = `batc.repair.${namespace}.${JSON.stringify(source)}`;
   const status = h('div', {role:'status'}), evidence = h('div'), outcome = h('div');
   const project = h('select', {'aria-label':t('repair_project')}, h('option',{value:''},t('repair_choose_project')));
   const allowed = () => ['observe', 'manage'].every(scope => caps()?.scopes?.includes(scope)) && caps()?.actions?.some(action => action.action === 'repair.create' && action.allowed === true);
-  const reload = h('button',{class:'secondary',type:'button',onclick:()=>read()},t('repair_read'));
+  function ownFocus(button) {
+    // `document` in this panel is the repair evidence, not the page.
+    const page = globalThis.document;
+    let owned = page.activeElement === button;
+    const onFocus = event => {
+      const target = event.target;
+      if (target === button) {owned = true; return;}
+      if ((target === page.body || target === page.documentElement) && (button.hidden || button.disabled || !button.isConnected)) return;
+      owned = false;
+    };
+    page.addEventListener('focusin', onFocus, true);
+    return () => {
+      page.removeEventListener('focusin', onFocus, true);
+      const active = page.activeElement;
+      return owned && (active === button || active === page.body || active == null);
+    };
+  }
+  function shown(node) {
+    return node && node.isConnected && !node.hidden && !node.disabled && !node.parentElement?.closest('[hidden]');
+  }
+  function moveFrom(button, candidate) {
+    if (shown(candidate)) {candidate.focus(); return;}
+    const group = button.closest('.actions') || button.parentElement;
+    const controls = [...group.querySelectorAll('button, a[href], input, select, textarea')];
+    const index = Math.max(0, controls.indexOf(button));
+    const nextControl = [...controls.slice(index + 1), ...controls.slice(0, index)].find(node => shown(node) && node.getAttribute('aria-disabled') !== 'true');
+    if (nextControl) {nextControl.focus(); return;}
+    status.tabIndex = -1; status.focus();
+  }
+  function block(button, staticReason, flight, pressed) {
+    if (pressed || (!staticReason && flight)) {button.disabled = false; button.setAttribute('aria-disabled', 'true');}
+    else if (staticReason) {button.disabled = true; button.removeAttribute('aria-disabled');}
+    else {button.disabled = false; button.removeAttribute('aria-disabled');}
+  }
+  const reload = h('button',{class:'secondary',type:'button',onclick:async()=>{
+    if (!alive() || reading || busy) return;
+    reading = true;
+    const release = ownFocus(reload);
+    update();
+    try {await read();}
+    finally {
+      reading = false;
+      if (alive()) update();
+      const keep = release();
+      if (alive() && keep && (reload.hidden || reload.disabled)) moveFrom(reload);
+    }
+  }},t('repair_read'));
   const create = h('button',{class:'secondary',type:'button',disabled:true,onclick:async()=>{
     if (!alive() || busy || !allowed()) return;
+    const release = ownFocus(create);
     busy = true; update();
     try {show(await (controller.snapshot().intent ? controller.check() : controller.create(document)));}
     catch(error) {if(alive()) status.replaceChildren(errorBox(error, {within:status}));}
-    finally {busy=false;if(alive()) update();}
+    finally {
+      busy=false;
+      if (alive()) update();
+      const keep = release();
+      if (alive() && keep && (create.hidden || create.disabled)) moveFrom(create);
+    }
   }},t('repair_create'));
   const next = h('button',{class:'secondary',type:'button',hidden:true,onclick:()=>{
     if (!alive() || busy || !['succeeded','failed','cancelled'].includes(controller.snapshot().operation?.status)) return;
+    const release = ownFocus(next);
     try {localStorage.removeItem(key); initializeController(); outcome.replaceChildren(); read();}
-    catch(error) {if(alive()) status.replaceChildren(errorBox(error, {within:status}));}
+    catch(error) {release(); if(alive()) status.replaceChildren(errorBox(error, {within:status})); return;}
+    if (release() && (next.hidden || next.disabled)) moveFrom(next, reload);
   }},t('repair_review_new'));
   const box = h('details',{class:'panel', 'data-repair-panel':''}, h('summary',{},t('repair_title')),
     h('p',{class:'muted'},t('repair_help')),h('label',{},t('repair_project'),project),
@@ -30,10 +84,13 @@ export function repairPanel({h, t, api, caps, guard, namespace, source, errorBox
   }
   function update() {
     const snapshot=controller?.snapshot(), fixed=!!snapshot?.intent;
-    project.disabled=busy||fixed;reload.disabled=busy||!project.value;
-    create.disabled=busy||!allowed()||(!document&&!fixed);
+    project.disabled=busy||fixed;
+    block(reload, !project.value, busy, reading);
+    block(create, !allowed()||(!document&&!fixed), false, busy);
     create.textContent=t(fixed?'repair_recover':'repair_create');
     next.hidden=!['succeeded','failed','cancelled'].includes(snapshot?.operation?.status);
+    if ([create, reload].some(button => button.getAttribute('aria-disabled') === 'true')) status.setAttribute('aria-busy', 'true');
+    else status.removeAttribute('aria-busy');
   }
   function links(record) {
     if (!record) return;

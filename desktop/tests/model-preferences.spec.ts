@@ -67,3 +67,96 @@ for (const native of [false, true]) {
     expect(f.data.writes).toEqual([]);
   });
 }
+
+function holdGate() {
+  let holding = false, finish = () => {};
+  let gate = Promise.resolve();
+  return {async wait() {if (holding) await gate;}, hold() {holding = true; gate = new Promise(resolve => {finish = resolve;});}, release() {holding = false; const done = finish; finish = () => {}; done();}};
+}
+async function openModels(page: import('@playwright/test').Page, options: {hosts?: {host: string, writes?: boolean, orchestrate?: boolean}[]} = {}) {
+  const hosts = options.hosts ?? [{host: 'demo', writes: true, orchestrate: true}];
+  const base = conversationFixture();
+  const readHold = holdGate(), postHold = holdGate();
+  let refreshReads = 0, posts = 0;
+  const prefs = {initial_agent: 'claude', initial_model: 'unavailable-original', last_agent: 'codex', last_model: 'actual:last', hidden: ['claude:model-b'], order: ['claude:model-b', 'claude:model-a']};
+  const dispatch = async (input: any) => {
+    const url = new URL(input.path, 'http://fixture'), path = url.pathname;
+    if (input.method !== 'GET') {
+      if (path === '/operations') {posts++; await postHold.wait();}
+      return {status: 200, data: {operation: {operation_id: 'op_'+'a'.repeat(32), status: 'succeeded'}}};
+    }
+    if (path.endsWith('/preferences')) {
+      if (url.searchParams.get('refresh') === '1') {refreshReads++; await readHold.wait();}
+      const agent = url.searchParams.get('agent') || 'claude';
+      return {status: 200, data: {version: 1, host: path.split('/')[2], model_preferences: {...prefs, revision: 2},
+        model_catalog: {agent, status: 'available', source: 'bat_host', observed_at: 1791580000, stale: false,
+          models: ['model-a', 'model-b'].map(id => ({id, agent, label: id, available: true}))},
+        unknown_models: [{agent: 'claude', id: 'unavailable-original'}], usage: {source: 'bat_host', status: 'available', observed_at: 1791580000, providers: []}}};
+    }
+    const result = await base.dispatch(input);
+    const extend = (caps: any) => ({...caps, hosts, scopes: ['observe', 'start'],
+      actions: [{action: 'preferences.models.update', allowed: true}, {action: 'session.start', allowed: true}], features: {...caps.features, host_preferences: {version: 1}}});
+    if (path === '/capabilities') result.data = extend(result.data);
+    if (path === '/bootstrap') result.data.capabilities = extend(result.data.capabilities);
+    return result;
+  };
+  await mountConversation(page, false, dispatch);
+  await page.goto('/dashboard/#/settings');
+  await page.getByRole('tab', {name: /^(Models|模型)$/}).click();
+  const panel = page.locator('[data-model-preferences]');
+  await panel.locator('summary').click();
+  if (hosts.length) await expect(panel.getByRole('textbox', {name: 'Initial model ID', exact: true})).toHaveValue('unavailable-original');
+  const refresh = panel.getByRole('button', {name: 'Refresh catalog and usage', exact: true});
+  const save = panel.locator('button.primary');
+  const status = panel.locator('[role="status"]');
+  return {panel, refresh, save, status, refreshReads: () => refreshReads, posts: () => posts, readHold, postHold};
+}
+async function pressedState(button: import('@playwright/test').Locator, rootSelector: string) {
+  return button.evaluate((node, selector) => {
+    const region = node.closest(selector)?.querySelector('[role="status"]');
+    return {focused: document.activeElement === node, ariaDisabled: node.getAttribute('aria-disabled'),
+      disabled: (node as HTMLButtonElement).disabled, ariaBusy: region?.getAttribute('aria-busy') ?? null};
+  }, rootSelector);
+}
+
+test('model save keeps focus and ignores a second press while saving', async ({page}) => {
+  const ui = await openModels(page);
+  await expect(ui.save).toHaveText('Save');
+  await expect(ui.save).toBeEnabled();
+  const before = ui.posts();
+  ui.postHold.hold();
+  try {
+    await ui.save.focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => ui.posts()).toBe(before + 1);
+    expect(await pressedState(ui.save, '[data-model-preferences]')).toEqual({focused: true, ariaDisabled: 'true', disabled: false, ariaBusy: 'true'});
+    await page.keyboard.press('Enter');
+    ui.postHold.release();
+    await expect(ui.status).not.toHaveAttribute('aria-busy', 'true');
+    expect(ui.posts()).toBe(before + 1);
+    if (await ui.save.evaluate(node => (node as HTMLButtonElement).disabled || (node as HTMLButtonElement).hidden)) await expect(ui.status).toBeFocused();
+    else await expect(ui.save).toBeFocused();
+  } finally {ui.postHold.release();}
+});
+
+test('model refresh stays disabled without aria-disabled when no host is chosen', async ({page}) => {
+  const ui = await openModels(page, {hosts: []});
+  expect(await ui.refresh.evaluate(node => ({disabled: (node as HTMLButtonElement).disabled, ariaDisabled: node.getAttribute('aria-disabled')}))).toEqual({disabled: true, ariaDisabled: null});
+});
+
+test('model refresh keeps focus and ignores a second read while reloading', async ({page}) => {
+  const ui = await openModels(page);
+  const before = ui.refreshReads();
+  ui.readHold.hold();
+  try {
+    await ui.refresh.focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => ui.refreshReads()).toBe(before + 1);
+    expect(await pressedState(ui.refresh, '[data-model-preferences]')).toEqual({focused: true, ariaDisabled: 'true', disabled: false, ariaBusy: 'true'});
+    await page.keyboard.press('Enter');
+    ui.readHold.release();
+    await expect(ui.status).not.toHaveAttribute('aria-busy', 'true');
+    expect(ui.refreshReads()).toBe(before + 1);
+    await expect(ui.refresh).toBeFocused();
+  } finally {ui.readHold.release();}
+});

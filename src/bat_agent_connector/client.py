@@ -132,6 +132,43 @@ def event_session_id(ev: dict) -> str | None:
     return None
 
 
+# Ids the wire may carry. PROTOCOL §5 documents none of these on agent:error;
+# they are kept only when that event's params actually include them.
+_AGENT_ERROR_ID_KEYS = ("clientMessageId", "messageId", "turnId")
+
+
+def _agent_error_record(host: str, obj: dict) -> dict:
+    """Record an agent:error without inventing a turn id.
+
+    The stored event is channel, sessionId, receive time, and the registry
+    generation observed at that moment. clientMessageId, messageId, and turnId
+    are copied only when the params contain a non-empty string. A missing
+    session or generation is left missing so a later reader cannot treat the
+    event as attributed.
+    """
+    record: dict[str, Any] = {
+        "channel": "agent:error",
+        "sessionId": event_session_id(obj),
+        "at": time.time(),
+    }
+    params = obj.get("params") if isinstance(obj.get("params"), dict) else {}
+    for key in _AGENT_ERROR_ID_KEYS:
+        value = params.get(key)
+        if isinstance(value, str) and value:
+            record[key] = value
+    session_id = record["sessionId"]
+    if isinstance(session_id, str) and session_id:
+        from . import registry as registry_mod
+
+        entry = registry_mod.get(host, session_id)
+        if isinstance(entry, dict):
+            inc = entry.get("controller_incarnation")
+            created_at = entry.get("created_at")
+            if inc is not None and created_at is not None and str(inc) and str(created_at):
+                record["source_generation"] = f"{inc}:{created_at}"
+    return record
+
+
 async def _retry_pause(delay_s: float) -> None:
     """Pause between this client's own retries. Tests replace only this function."""
     await asyncio.sleep(delay_s)
@@ -294,11 +331,12 @@ class BatClient:
                 if t == "event":
                     self.events_seen += 1
                     ch = obj.get("channel")
-                    if ch in (
+                    if ch == "agent:error":
+                        self.recent_events.append(_agent_error_record(self.host.name, obj))
+                    elif ch in (
                         "agent:turn-end",
                         "agent:ask-user",
                         "agent:permission-request",
-                        "agent:error",
                         "agent:result",
                     ):
                         self.recent_events.append(
