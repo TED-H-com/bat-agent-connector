@@ -145,7 +145,7 @@ export function workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input
             if(value.workspace_id!==workspaceId||value.revision.revision_id!==entry.revision_id)throw Error(t('pm_scope_mismatch'));
             const doc=value.revision.document;content.replaceChildren(h('p',{},doc.rationale||t(doc.milestones?.some(row=>row.actual?.quality)?'pm_roadmap_quality_fixed':'pm_roadmap_quality_unknown')),
               h('pre',{class:'pm-brief-proof'},JSON.stringify(value.revision,null,2)));
-          }catch(error){content.replaceChildren(errorBox(error, {within:content}));fetched=false;}
+          }catch(error){if(retiredView(error))return;content.replaceChildren(errorBox(error, {within:content}));fetched=false;}
         });historyBody.append(detail);
       }
       if(page.next_cursor!==null&&page.next_cursor!==undefined){

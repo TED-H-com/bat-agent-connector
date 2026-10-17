@@ -2,8 +2,11 @@
 
 ## Next release (unreleased)
 
-- Leaving a project view while it is still loading does not mark the next
-  view's update as failed or pause actions.
+- A read from the overview brief, lifecycle, meetings, follow-up, sprints,
+  governance, roadmap, evidence, a review candidate, or a worktree preview
+  that finishes after that project view was left does not mark the next
+  view's update as failed or pause actions. Closing the view withdraws an
+  open plan proposal before that update. The board refresh is unchanged.
 
 - Capture a remote file: the button you pressed keeps keyboard focus and
   ignores a second press until that preview or save finishes. A button that

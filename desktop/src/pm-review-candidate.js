@@ -50,7 +50,7 @@ export function reviewCandidateToIdea({h,t,api,alive,workspaceId,caps,can,form,l
         extra:h('div',{class:'pm-fields'},labelled('pmrv_idea_topic',slot),version)});
       body.append(thread.thread.mode!=='idea'?h('p',{class:'muted'},t('pmrv_idea_only')):'',request.box,warning,rebase,
         h('a',{href:`#/pm/${workspaceId}/${selected}`},t('pmrv_idea_open')));sync();
-    }catch(error){if(n===ticket&&!dead){thread=null;body.replaceChildren();status.replaceChildren(errorBox(error, {within:status}));}}
+    }catch(error){if(retiredView(error))return;if(n===ticket&&!dead){thread=null;body.replaceChildren();status.replaceChildren(errorBox(error, {within:status}));}}
     finally{reading=false;update();}
   }
   async function load(more=false){

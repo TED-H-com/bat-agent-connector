@@ -2,6 +2,7 @@ import {disclosure, emptyState, statusPill} from './ui/components.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
 // Work stays in the Connector; this view preserves explicit PM associations and saved evidence.
 import {fixedQualityPicker} from './pm-quality-projections.js';
+import {retiredView} from './pm-retired.js';
 const flatten = rows => (rows || []).flatMap(row => [row, ...flatten(row.children)]);
 // Retain only explicit selection IDs across a same-principal access revalidation.
 // The catalog, associations and evidence are always read again before displaying them.
@@ -238,7 +239,7 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
         rows.append(...flatten(data.work_items).map(workRow));
         if (!data.work_items?.length) rows.append(emptyState({title:t('pm_evidence_no_work_title'),text:h('span',{class:'muted'},t('pm_evidence_no_work'))}));
       }
-    } catch (error) {if (ticket === generation) {
+    } catch (error) {if (retiredView(error)) return; if (ticket === generation) {
       rows.replaceChildren(); active = null;
       status.replaceChildren(emptyState({title:t('pm_evidence_unavailable'),text:h('span',{class:'muted'},t('pm_evidence_unavailable_help'))}),errorBox(error, {within:status}));
     }}
@@ -265,7 +266,7 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
       choose.value = projects.some(project => project.project_id === selected) ? selected : '';
       selected = choose.value;
       await loadProject();
-    } catch (error) {if (ticket === generation) {
+    } catch (error) {if (retiredView(error)) return; if (ticket === generation) {
       rows.replaceChildren(); active = null; projects = []; bindings = []; workBindings = [];
       choose.replaceChildren(h('option', {value: ''}, t('pm_evidence_choose')));
       projectField.hidden = true;

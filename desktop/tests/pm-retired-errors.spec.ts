@@ -3,21 +3,31 @@ import {workspaceFixture} from './workspace-fixture.ts';
 import {mountAttention} from './attention-fixture.ts';
 import {intake, workspaceId as followWorkspaceId} from './pm-follow-up-fixture.ts';
 import {reviewFixture} from './pm-maintenance-review-fixture.ts';
-import {openThreadTab} from './pm-navigation.ts';
+import {openPmPanel, openReportTask, openThreadTab} from './pm-navigation.ts';
 
 // A PM read can finish after its view was left. These tests hold that read, leave for
 // another project, and release it while the new view's event refresh is still open.
+// The polling title is painted only after that batch is acknowledged and actions are
+// writable again. A missing error node is not that proof: evidence can discard the
+// node or parent it to a status that is no longer on the page.
 // Quality projections (pm-quality-projections.js:41), plan diff (pm-plan-diff.js:56,
-// :81, :169), plan revision paging (pm-plans.js:158) and the workspace draft persist
-// (pm-workspace.js:94) are not covered: each catch already refuses a disconnected node,
-// or the draft write is synchronous with the same turn that removes the field.
-// Evidence (pm-evidence.js:268) does call the shared error box for a retired read, but
-// only after the next view's event batch has committed. Holding that batch open until
-// the catch runs never observes the rejection, so the case cannot fail the open refresh.
+// :81, :169), plan revision paging (pm-plans.js:158), evidence detail toggles, and the
+// other catches that already check isConnected are not covered. Replacing the page
+// runs before the next batch, so a disconnected node cannot report into it. The
+// workspace draft persist (pm-workspace.js:94) is synchronous with the turn that
+// removes the field. The board refresh is owned by a separate change and is not here.
+// Plan proposals pass without the retired-view predicate: leaving the workspace
+// withdraws that module's ticket before the next batch. Those two cases lock that
+// existing withdrawal.
 
 const sourceId = followWorkspaceId;
 const destId = 'ws_' + '2'.repeat(32);
 const threadId = 'pmt_' + '3'.repeat(32);
+const ideaThreadId = 'pmt_' + '6'.repeat(32);
+const projectId = 'prj_' + 'a'.repeat(32);
+const snapshotId = 'pmsnap_' + '2'.repeat(32);
+const transitionId = 'pmlt_' + 'a'.repeat(32);
+const revisionId = 'pmrr_' + 'c'.repeat(32);
 const checkpoint = (cursor: number) => ({cursor, token: `retired-${cursor}`});
 
 const pausedTitle = /Source refresh failed|資料更新失敗/;
@@ -90,7 +100,9 @@ interface Hold {
   release: () => void;
 }
 
-function createFixture(locale: 'en' | 'zh-TW', features: Record<string, unknown>, review = false) {
+interface FixtureExtras {catalog?: boolean, briefHistory?: boolean, phaseHistory?: boolean, roadmapHistory?: boolean}
+
+function createFixture(locale: 'en' | 'zh-TW', features: Record<string, unknown>, review = false, extras: FixtureExtras = {}) {
   const ws = workspaceFixture(locale);
   const reviewState = review ? reviewFixture() : null;
   if (reviewState) {
@@ -116,6 +128,7 @@ function createFixture(locale: 'en' | 'zh-TW', features: Record<string, unknown>
   const reads: string[] = [];
   let serial = 0;
   let failBrief = false;
+  let failEvidence = false;
   let eventCursor = 0;
   let eventWorkspace = destId;
   const slots: {path: string, method: string, promise: Promise<void>, release: () => void, started: boolean, token: string | null, armed: boolean}[] = [];
@@ -140,7 +153,12 @@ function createFixture(locale: 'en' | 'zh-TW', features: Record<string, unknown>
     if (rest === '/capabilities') return {workspace_id: id, worktrees: [{repository: 'example/library', host: 'fixture-host', workspace_id: 'fixture-workspace', available: true}]};
     if (rest === '/lifecycle') return lifecycleDocument(id);
     if (rest === '/snapshots/latest') return {workspace_id: id, snapshot: null};
-    if (rest === '/snapshots') return {workspace_id: id, snapshots: [], next_cursor: null};
+    if (rest === '/snapshots') return {workspace_id: id, snapshots: extras.briefHistory && id === sourceId
+      ? [{snapshot_id: snapshotId, workspace_id: id, title: 'Earlier report', as_of: 1791705600, sequence: 1}] : [], next_cursor: null};
+    if (rest === '/lifecycle/transitions' && extras.phaseHistory && id === sourceId) return {
+      workspace_id: id, transitions: [{transition_id: transitionId, reason: 'Moved to planning', actor: 'owner'}], next_cursor: null};
+    if (rest === '/roadmap/revisions' && extras.roadmapHistory && id === sourceId) return {
+      workspace_id: id, revisions: [{revision_id: revisionId, kind: 'baseline', created_at: 1791705600, sequence: 1}], next_cursor: null};
     if (rest === '/follow-ups') {
       const row = intakeFor(id);
       const {document: _document, ...metadata} = row;
@@ -192,12 +210,15 @@ function createFixture(locale: 'en' | 'zh-TW', features: Record<string, unknown>
         sync: {checkpoint: checkpoint(ready ? eventCursor : after)},
       }});
     }
-    if (path === '/projects') return finish({status: 200, data: {projects: []}});
+    if (path === '/projects') return finish({status: 200, data: {projects: extras.catalog ? [{project_id: projectId, name: 'Library', version: 1}] : []}});
     if (path === '/sessions') return finish({status: 200, data: {sessions: [], next_cursor: null}});
     if (path === '/hosts') return finish({status: 200, data: {hosts: []}});
     if (path === '/operations') return finish({status: 200, data: {operations: [], next_before: null}});
     if (failBrief && path === `/pm/workspaces/${sourceId}/snapshots/latest`) {
       return finish({status: 503, data: {error: {code: 'UNAVAILABLE', message: 'Brief refresh failed'}}});
+    }
+    if (failEvidence && path === `/pm/workspaces/${sourceId}/work`) {
+      return finish({status: 503, data: {error: {code: 'UNAVAILABLE', message: 'Evidence refresh failed'}}});
     }
     const owned = path.startsWith(`/pm/workspaces/${sourceId}`) ? sourceId : path.startsWith(`/pm/workspaces/${destId}`) ? destId : null;
     if (owned && reviewState && owned === sourceId) {
@@ -209,7 +230,7 @@ function createFixture(locale: 'en' | 'zh-TW', features: Record<string, unknown>
     return finish({status: 200, data: {}});
   };
 
-  return {ws, caps, dispatch, hold, reads, reviewState, failBrief: () => {failBrief = true;}, emit: (id = destId) => {eventWorkspace = id; eventCursor += 1;}};
+  return {ws, caps, dispatch, hold, reads, reviewState, failBrief: () => {failBrief = true;}, failEvidence: () => {failEvidence = true;}, emit: (id = destId) => {eventWorkspace = id; eventCursor += 1;}};
 }
 
 async function connectionPhase(page: Page, fixture: {reads: string[]}) {
@@ -268,8 +289,14 @@ const openDetails = (section: string) => async (page: Page) => {
 // The first route starts event polling only after it returns, so a read held
 // during that mount cannot overlap the next view's refresh. Settle, then hold.
 const clickRefresh = async (page: Page) => {await page.locator('[data-pm-refresh]').click();};
+// Requirements is already the open route. Its project-view button is hidden in the
+// workbench sidebar, so the header overflow is the control that opens Evidence.
+const openEvidence = async (page: Page) => {
+  await page.locator('[data-pm-view-tools="requirements"]').click();
+  await page.locator('[data-menu-key="ui_evidence"]').click();
+};
 
-const families: {name: string, features: Record<string, unknown>, hash: string, path: string, method?: string, prepare?: (page: Page) => Promise<void>, start?: (page: Page) => Promise<void>, review?: boolean}[] = [
+const families: {name: string, features: Record<string, unknown>, hash: string, path: string, method?: string, prepare?: (page: Page) => Promise<void>, start?: (page: Page) => Promise<void>, review?: boolean, extras?: FixtureExtras, holdAlso?: string[]}[] = [
   {name: 'brief', features: {brief_snapshots: true}, hash: `#/pm/${sourceId}/overview`, path: `/pm/workspaces/${sourceId}/snapshots/latest`, start: clickRefresh},
   {name: 'lifecycle', features: {lifecycle: {version: 1, gated_actions: [], record_actions: []}}, hash: `#/pm/${sourceId}/discussions`, path: `/pm/workspaces/${sourceId}/lifecycle`, start: clickRefresh},
   {name: 'meetings', features: {meetings: true}, hash: `#/pm/${sourceId}/discussions`, path: `/pm/workspaces/${sourceId}/meetings`, start: openDetails('ui_meetings')},
@@ -281,6 +308,8 @@ const families: {name: string, features: Record<string, unknown>, hash: string, 
   {name: 'sprints', features: {sprints: true}, hash: `#/pm/${sourceId}/schedule`, path: `/pm/workspaces/${sourceId}/sprint-artifacts`, start: openDetails('ui_sprints')},
   {name: 'governance', features: {governance: true}, hash: `#/pm/${sourceId}/issues`, path: `/pm/workspaces/${sourceId}/governance`, start: clickRefresh},
   {name: 'roadmap', features: {roadmap: true}, hash: `#/pm/${sourceId}/schedule`, path: `/pm/workspaces/${sourceId}/roadmap`, start: clickRefresh},
+  // Dispose increments this module's ticket before the next batch, so the late read
+  // never calls the error box. This does not exercise the retired-view predicate.
   {name: 'plan proposals', features: {conversation_proposals: {version: 1}}, hash: `#/pm/${sourceId}/discussions/${threadId}`, path: `/pm/workspaces/${sourceId}/conversation-proposals`, start: clickRefresh},
   {name: 'review candidate', features: {maintenance_review: {version: 1, planning_candidate_source: {version: 1}}, maintenance_checks: {version: 1, weekly_review_execution: true}}, hash: `#/pm/${sourceId}/issues`, path: `/pm/workspaces/${sourceId}/threads`, review: true,
     prepare: async page => {await openDetails('ui_maintenance_review')(page); await expect(page.locator('[data-review-candidate-import]')).toBeAttached();},
@@ -294,17 +323,72 @@ const families: {name: string, features: Record<string, unknown>, hash: string, 
       await page.getByRole('combobox', {name: /Save in a PM worktree|保存到 PM 工作目錄/}).selectOption(JSON.stringify(target));
     },
     start: async page => {await page.getByRole('button', {name: /Preview published revision|預覽已發布版本/}).click();}},
+  {name: 'evidence project', features: {work_evidence: true}, hash: `#/pm/${sourceId}/requirements`, path: `/projects/${projectId}`, extras: {catalog: true},
+    prepare: async page => {
+      await openEvidence(page);
+      await expect(page.getByRole('combobox', {name: /Connector project|Connector 專案/})).toContainText('Library');
+    },
+    start: async page => {await page.getByRole('combobox', {name: /Connector project|Connector 專案/}).selectOption(projectId);}},
+  {name: 'evidence refresh', features: {work_evidence: true}, hash: `#/pm/${sourceId}/requirements`, path: `/pm/workspaces/${sourceId}/work`,
+    prepare: async page => {
+      await openEvidence(page);
+      await expect(page.locator('[data-pm-evidence]')).toContainText(/No projects yet|尚無專案/);
+    },
+    start: clickRefresh},
+  {name: 'brief history', features: {brief_snapshots: true}, hash: `#/pm/${sourceId}/overview`, path: `/pm/workspaces/${sourceId}/snapshots/${snapshotId}`, extras: {briefHistory: true},
+    prepare: async page => {
+      await openReportTask(page, 'versions');
+      await expect(page.getByRole('button', {name: /Earlier report/})).toBeVisible();
+    },
+    start: async page => {await page.getByRole('button', {name: /Earlier report/}).click();}},
+  {name: 'lifecycle history', features: {lifecycle: {version: 1, gated_actions: [], record_actions: []}}, hash: `#/pm/${sourceId}/overview`, path: `/pm/workspaces/${sourceId}/lifecycle/transitions/${transitionId}`, extras: {phaseHistory: true},
+    prepare: async page => {
+      await openPmPanel(page, 'ui_change_phase');
+      await page.locator('[data-pm-lifecycle-history] > summary').click();
+      await expect(page.locator('[data-pm-lifecycle-history] details > summary')).toContainText('Moved to planning');
+    },
+    start: async page => {await page.locator('[data-pm-lifecycle-history] details > summary').click();}},
+  // A sibling source page can retire this serial when it finishes first, which
+  // hides the snapshots read. Hold the other three so this read still owns the
+  // serial when it finishes in the next batch.
+  {name: 'follow-up prepare', features: {follow_up_prepare: true}, hash: `#/pm/${sourceId}/issues`, path: `/pm/workspaces/${sourceId}/snapshots`,
+    holdAlso: [`/pm/workspaces/${sourceId}/threads`, `/pm/workspaces/${sourceId}/governance`, `/pm/workspaces/${sourceId}/meetings`],
+    prepare: async page => {
+      await openDetails('ui_follow_up')(page);
+      await expect(page.locator('[data-pm-follow-up]')).toContainText(/Preparation 1|第 1 份討論準備/);
+    },
+    start: async page => {await page.locator('[data-pm-follow-up-prepare]').click();}},
+  {name: 'follow-up thread', features: {follow_up_prepare: true, follow_up_analysis: true}, hash: `#/pm/${sourceId}/issues`, path: `/pm/workspaces/${sourceId}/threads/${threadId}`,
+    prepare: async page => {
+      await openDetails('ui_follow_up')(page);
+      await expect(page.locator('[data-pm-follow-up-analyze]')).toBeVisible();
+    },
+    start: async page => {await page.locator('[data-pm-follow-up-analyze] > summary').click();}},
+  {name: 'review destination', features: {maintenance_review: {version: 1, planning_candidate_source: {version: 1}}, maintenance_checks: {version: 1, weekly_review_execution: true}}, hash: `#/pm/${sourceId}/issues`, path: `/pm/workspaces/${sourceId}/threads/${ideaThreadId}`, review: true,
+    prepare: async page => {
+      await openDetails('ui_maintenance_review')(page);
+      await page.locator('[data-review-candidate-import] > summary').click();
+      await expect(page.getByRole('combobox', {name: /Choose an existing Idea discussion|選擇既有構想討論/})).toContainText('Possible recovery improvements');
+    },
+    start: async page => {await page.getByRole('combobox', {name: /Choose an existing Idea discussion|選擇既有構想討論/}).selectOption(ideaThreadId);}},
+  {name: 'roadmap revision', features: {roadmap: true}, hash: `#/pm/${sourceId}/schedule`, path: `/pm/workspaces/${sourceId}/roadmap/revisions/${revisionId}`, extras: {roadmapHistory: true},
+    prepare: async page => {
+      await page.locator('[data-pm-roadmap-history] > summary').click();
+      await expect(page.locator('[data-pm-roadmap-history] details > summary')).toContainText(/Scheduling baseline|里程碑基準/);
+    },
+    start: async page => {await page.locator('[data-pm-roadmap-history] details > summary').click();}},
 ];
 
 test.describe('a left PM view does not fail the next view refresh', () => {
   for (const locale of ['en', 'zh-TW'] as const) {
     for (const family of families) {
       test(`${family.name} late read does not fail the next view (${locale})`, async ({page}) => {
-        const fixture = createFixture(locale, family.features, family.review);
+        const fixture = createFixture(locale, family.features, family.review, family.extras);
         await openSource(page, locale, fixture, family.hash);
         await expect.poll(() => connectionPhase(page, fixture)).toBe('settled');
         if (family.prepare) await family.prepare(page);
         const held = fixture.hold(family.path, family.method);
+        for (const path of family.holdAlso || []) fixture.hold(path);
         if (family.start) await family.start(page);
         await expect.poll(() => held.started()).toBe(true);
         await leaveForDest(page, fixture);
@@ -327,6 +411,27 @@ test.describe('a left PM view does not fail the next view refresh', () => {
         return seen.value;
       }).toBe('paused');
       await expect(page.locator('[data-api-error]')).not.toHaveCount(0);
+      expect(await savedSync(page)).toEqual(checkpoint(0));
+      expect(errors).toEqual([]);
+    });
+
+    test(`a real evidence refresh error still stops the refresh (${locale})`, async ({page}) => {
+      const fixture = createFixture(locale, {work_evidence: true});
+      const errors = await openSource(page, locale, fixture, `#/pm/${sourceId}/requirements`);
+      await expect.poll(() => connectionPhase(page, fixture)).toBe('settled');
+      await openEvidence(page);
+      await expect(page.locator('[data-pm-evidence]')).toContainText(/No projects yet|尚無專案/);
+      fixture.failEvidence();
+      fixture.emit(sourceId);
+      const seen = {value: 'pending'};
+      await expect.poll(async () => {
+        const title = await page.locator('#live').getAttribute('title') || '';
+        if (pausedTitle.test(title)) seen.value = 'paused';
+        else if (waitingTitle.test(title)) seen.value = 'waiting';
+        else if (pollingTitle.test(title)) seen.value = 'polling';
+        return seen.value;
+      }).toBe('paused');
+      await expect(page.locator('[data-pm-evidence]')).toContainText(locale === 'zh-TW' ? '無法取得專案' : 'Projects unavailable');
       expect(await savedSync(page)).toEqual(checkpoint(0));
       expect(errors).toEqual([]);
     });

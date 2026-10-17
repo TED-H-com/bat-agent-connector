@@ -78,7 +78,7 @@ export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespac
         permitted:eligible,recoverPermitted:authorized,label:'pm_fa_analyze',onStateChange:sync,onSaved,
         extra:h('div',{class:'pm-fields'},labelled('pm_fa_purpose',purpose),runtime.box,h('details',{},h('summary',{},t('pm_fa_model_optional')),labelled('pm_native_model',model)),version)});
       body.append(warning,rebase,request.box);request.update();
-    }catch(error){if(ticket===serial)fail(error);}
+    }catch(error){if(retiredView(error))return;if(ticket===serial)fail(error);}
   }
   async function readThreads(after=null){
     const ticket=serial;
@@ -87,7 +87,7 @@ export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespac
       if(!Array.isArray(data.threads)||data.next_cursor!=null&&(!/^pmt_[0-9a-f]{32}$/.test(data.next_cursor)||data.next_cursor===after)
         ||data.threads.some(row=>row.workspace_id!==workspaceId||!/^pmt_[0-9a-f]{32}$/.test(row.thread_id)))throw Error(t('pm_fa_mismatch'));
       rows.push(...data.threads.filter(row=>['idea','planning'].includes(row.mode)&&!rows.some(old=>old.thread_id===row.thread_id)));next=data.next_cursor;await readThread();
-    }catch(error){if(ticket===serial)fail(error);}
+    }catch(error){if(retiredView(error))return;if(ticket===serial)fail(error);}
   }
   async function prepare(){
     if(!intake||retired)return;const ticket=++serial;status.replaceChildren(note('pm_fa_loading_thread'));

@@ -176,7 +176,7 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
     if(reading||after==null)return;const ticket=serial;reading=true;more.disabled=true;
     try{const data=metadataPage(await api('GET',`${endpoint}/follow-ups?after=${after}&limit=${pageSize}`),after);if(!current(ticket))return;
       for(const row of data.intakes)if(!metadata.some(value=>value.intake_id===row.intake_id))metadata.push(row);next=data.next_cursor;head=data.head_version;renderNavigation();editor.update();
-    }catch(error){if(ticket===serial)unavailable(error);}finally{if(ticket===serial){reading=false;more.disabled=false;}}
+    }catch(error){if(retiredView(error))return;if(ticket===serial)unavailable(error);}finally{if(ticket===serial){reading=false;more.disabled=false;}}
   }
   choose.addEventListener('change',()=>{selected=choose.value;void refresh();});
   async function readSelections() {
@@ -194,7 +194,7 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
         if(saved.thread_id!==threadChoice.value){saved.thread_id=threadChoice.value;delete saved.expected_thread_version;if(thread)saved.expected_thread_version=thread.version;editor.set('_baseline',JSON.stringify(saved));}
       }
       sourceStatus.replaceChildren(snapshot&&!snapshot.baseline?.document?note('pm_fu_accepted_required'):note('pm_fu_source_help'));editor.update();
-    }catch(error){if(ticket===serial&&sourceTicket===sourceSerial)unavailable(error);}
+    }catch(error){if(retiredView(error))return;if(ticket===serial&&sourceTicket===sourceSerial)unavailable(error);}
   }
   snapshotChoice.addEventListener('change',()=>void readSelections());threadChoice.addEventListener('change',()=>void readSelections());
   function selectedGovernance() {
@@ -261,7 +261,7 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
       if(!Array.isArray(records)||data.next_cursor!=null&&(kind==='threads'?typeof data.next_cursor!=='string'||after!=null&&data.next_cursor<=after:!number(data.next_cursor)||data.next_cursor<=(after??-1)))throw Error(t('pm_fu_scope_error'));
       if(records.some(row=>(kind==='governance'?row.record?.workspace_id:row.workspace_id)!==workspaceId))throw Error(t('pm_fu_scope_error'));
       sourcePages[kind]={records:[...(after!=null?sourcePages[kind]?.records||[]:[]),...records],next:data.next_cursor};renderSourceChoices();return true;
-    }catch(error){if(ticket===serial)unavailable(error);return false;}
+    }catch(error){if(retiredView(error))return false;if(ticket===serial)unavailable(error);return false;}
   }
   async function loadSources() {
     const ticket=serial;sourceStatus.replaceChildren(note('pm_fu_loading'));

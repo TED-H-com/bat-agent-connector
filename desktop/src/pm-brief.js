@@ -133,7 +133,7 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
     for (const entry of page.snapshots || []) history.append(h('button', {type:'button',class:'secondary',onclick:async()=>{
       selectedSnapshotId=entry.snapshot_id;const ticket=++serial;snapshot=null;signature='';view.replaceChildren();exports?.update();
       try {const data=await api('GET',`${endpoint}/snapshots/${entry.snapshot_id}`);alive();if(ticket===serial)render(data);}
-      catch(error){if(ticket===serial)unavailable(error);}
+      catch(error){if(retiredView(error))return;if(ticket===serial)unavailable(error);}
     }}, entry.title || t('pm_brief_title'), ' · ', stamp(entry.as_of)));
     if (page.next_cursor !== null && page.next_cursor !== undefined) {
       const more=h('button',{type:'button',class:'secondary',onclick:async()=>{

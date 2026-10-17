@@ -113,13 +113,13 @@ export function followUpAssessments({h,t,api,alive,workspaceId,caps,errorBox,onA
     try{const data=check(await api('GET',`${endpoint}/${encodeURIComponent(id)}`));if(!current(ticket))return;
       const row=valid(data.assessment);if(row.assessment_id!==id)throw Error(t('pm_fa_mismatch'));
       render(row);status.replaceChildren();
-    }catch(error){if(ticket===serial)fail(error);}
+    }catch(error){if(retiredView(error))return;if(ticket===serial)fail(error);}
   }
   async function loadMore() {
     if(reading||next==null||!intake)return;const ticket=serial,after=next;reading=true;more.disabled=true;
     try{const data=page(await api('GET',path(after)),after);if(!current(ticket))return;
       rows.push(...data.assessments.filter(row=>!rows.some(old=>old.assessment_id===row.assessment_id)));next=data.next_cursor;navigation();
-    }catch(error){if(ticket===serial)fail(error.message===t('pm_fa_mismatch')?Error(t('pm_fa_read_failed')):error);}finally{if(ticket===serial){reading=false;more.disabled=false;}}
+    }catch(error){if(retiredView(error))return;if(ticket===serial)fail(error.message===t('pm_fa_mismatch')?Error(t('pm_fa_read_failed')):error);}finally{if(ticket===serial){reading=false;more.disabled=false;}}
   }
   async function load(row) {
     clear();intake=row;selected=selections.get(row.intake_id)||'';const ticket=serial;status.replaceChildren(note('pm_fa_loading'));
