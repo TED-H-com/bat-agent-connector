@@ -1238,10 +1238,15 @@ async def test_state_facets_next_actions_and_links_invariants(start_ready, mock,
         "required_scopes": ["integrate", "manage", "observe"],
         "required_params": ["candidate_sha", "base_ref", "public_title", "public_body", "draft"],
         "optional_params": ["quality_ref"],
-        "prefilled_params": {"candidate_sha": c2},
+        "prefilled_params": {"base_ref": "main", "candidate_sha": c2},
+        "preconditions": {
+            "repository_id": w["gh"].repository_id,
+            "expected_base_sha": att["base_sha"],
+        },
     }
     assert "public_title" not in pr_act["prefilled_params"]
     assert "public_body" not in pr_act["prefilled_params"]
+    assert "draft" not in pr_act["prefilled_params"]
 
     # Caller missing 'integrate' and 'operate' scopes gets those actions in blocked_actions with 'missing_scope'.
     no_integ_tok = token(d, STARTER_OWNER.actor, "observe", "manage", "start")
@@ -2293,4 +2298,396 @@ async def test_changes_connection_lost_during_diff_reports_bat_unreachable_and_s
     assert "bat_unreachable" not in ch_ok["completeness"]["reasons"]
     by_path_ok = {f["path"]: f for f in ch_ok["summary"]["files"]}
     assert by_path_ok["src/second.py"]["additions"] == 1
+
+
+def _publish_rows(payload: dict) -> tuple[list[dict], list[dict]]:
+    allowed = [a for a in payload["next_allowed_actions"] if a.get("action") == pr_publication.ACTION]
+    blocked = [b for b in payload["blocked_actions"] if b.get("action") == pr_publication.ACTION]
+    return allowed, blocked
+
+
+async def _result(w, att) -> dict:
+    status, body = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{att['workspace_id']}/work-attempts/{att['attempt_id']}/result",
+        tok=w["owner_token"],
+    )
+    assert status == 200, body
+    return body
+
+
+async def _turn_ended(w, mock, *, key: str) -> dict:
+    att = await _start_managed_attempt(w, mock, key=key)
+    _seed_worktree_commits(mock, att["worktree_path"], att["base_sha"])
+    _set_turn_messages(mock, att["session_id"], att["turn_marker"], streaming=False)
+    await w["d"].inventory._refresh_scheduled("h1")
+    return att
+
+
+def _enable_integrate(w) -> None:
+    import copy
+
+    from bat_agent_connector.config import parse_config
+
+    raw = copy.deepcopy(w["raw"])
+    raw["github"]["repos"][0]["integrate"] = {
+        "hosts": ["h1"],
+        "remote_url": str(w["remote"]),
+        "workspace": "ws-1",
+    }
+    w["d"].ops.context["github_config"] = parse_config(raw).github
+
+
+def _arm_publication(w, monkeypatch):
+    """Point publication at the fixture remote and FakeGitHub, then run its host scripts."""
+    from urllib.parse import unquote
+
+    from tests.test_checkpoints import git
+    from tests.test_integration import RaceRunner
+
+    _enable_integrate(w)
+    runner = RaceRunner()
+    w["runner"] = runner
+    w["d"].ops.context["git_runner"] = runner
+    client = w["d"].ops.context["github"]
+    original_read = client.bounded_get
+    w["posts"] = []
+
+    async def read(path, **kwargs):
+        if "/git/ref/heads/" in path:
+            ref = unquote(path.split("/git/ref/heads/", 1)[1])
+            sha = git(w["remote"], "rev-parse", "refs/heads/" + ref)
+            return {"status": 200, "payload": {"ref": "refs/heads/" + ref, "object": {"sha": sha}}, "metadata": {}}
+        return await original_read(path, **kwargs)
+
+    async def create_pull(repository, **body):
+        w["posts"].append({"repository": repository, **body})
+        head = git(w["remote"], "rev-parse", "refs/heads/" + body["head"])
+        base = git(w["remote"], "rev-parse", "refs/heads/" + body["base"])
+        return 201, {
+            "id": 800 + len(w["posts"]),
+            "node_id": "PR_fixture_" + str(len(w["posts"])),
+            "number": 20 + len(w["posts"]),
+            "head": {"ref": body["head"], "sha": head, "repo": {"id": w["gh"].repository_id}},
+            "base": {"ref": body["base"], "sha": base, "repo": {"id": w["gh"].repository_id}},
+        }
+
+    monkeypatch.setattr(client, "bounded_get", read)
+    monkeypatch.setattr(client, "create_pull", create_pull)
+    return w
+
+
+def _publish_request(entry: dict, *, title: str, body: str, draft: bool, key: str) -> dict:
+    return {
+        "action": entry["action"],
+        "target": dict(entry["target"]),
+        "params": {
+            **entry["prefilled_params"],
+            "public_title": title,
+            "public_body": body,
+            "draft": draft,
+        },
+        "preconditions": dict(entry["preconditions"]),
+        "idempotency_key": key,
+    }
+
+
+async def _settle_publish(ops, operation_id: str) -> dict:
+    for _ in range(8):
+        ops.db.execute(
+            "UPDATE operations SET next_run_at=0 WHERE operation_id=? AND status='waiting_external'",
+            (operation_id,),
+        )
+        await settle_operations(ops)
+        current = ops.get(operation_id)
+        if current["status"] in {"succeeded", "failed", "cancelled", "needs_attention", "uncertain"}:
+            return current
+    return ops.get(operation_id)
+
+
+async def test_publish_entry_carries_repository_and_start_base(start_ready, mock):
+    from bat_agent_connector import repository_sync
+
+    w = start_ready
+    att = await _turn_ended(w, mock, key="e04-publish-pair")  # gitleaks:allow (test idempotency key)
+    body = await _result(w, att)
+    _assert_action_registry_invariants(w["d"].ops, body)
+    allowed, blocked = _publish_rows(body)
+    assert blocked == []
+    assert len(allowed) == 1
+    entry = allowed[0]
+    view = pm_work_start.get_attempt(w["d"].ops, STARTER_OWNER, att["workspace_id"], att["attempt_id"])["attempt"]
+    code = view["code_source"]
+    assert entry["preconditions"] == {
+        "repository_id": code["repository_id"],
+        "expected_base_sha": code["source_sha"],
+    }
+    assert type(entry["preconditions"]["repository_id"]) is int
+    assert entry["preconditions"]["repository_id"] > 0
+    assert entry["preconditions"]["expected_base_sha"] == att["base_sha"]
+    assert entry["prefilled_params"]["base_ref"] == repository_sync.check_ref(code["source_ref"])
+    assert entry["prefilled_params"]["candidate_sha"]
+    assert set(entry["prefilled_params"]) == {"base_ref", "candidate_sha"}
+    for typed in ("public_title", "public_body", "draft"):
+        assert typed not in entry["prefilled_params"]
+
+
+async def test_publish_entry_blocked_when_source_is_incomplete(start_ready, mock, monkeypatch):
+    import copy
+
+    w = start_ready
+    att = await _turn_ended(w, mock, key="e04-publish-incomplete")  # gitleaks:allow (test idempotency key)
+    original = pm_work_start.get_attempt
+
+    def wrap(mutate):
+        def get_attempt(ops_arg, principal_arg, wid_arg, aid_arg):
+            env = original(ops_arg, principal_arg, wid_arg, aid_arg)
+            attempt = copy.deepcopy(env["attempt"])
+            mutate(attempt)
+            return {**env, "attempt": attempt}
+
+        return get_attempt
+
+    def drop_repository(attempt):
+        attempt["code_source"].pop("repository")
+
+    def reject_repository_id(attempt):
+        attempt["code_source"]["repository_id"] = True
+
+    def reject_source_ref(attempt):
+        attempt["code_source"]["source_ref"] = "main"
+
+    def drop_base_sha(attempt):
+        attempt["code_source"].pop("source_sha", None)
+        handoff = attempt.get("execution_operation") or {}
+        if isinstance(handoff.get("result"), dict):
+            handoff["result"].pop("source_sha", None)
+        if isinstance(handoff.get("params"), dict):
+            handoff["params"].pop("source_sha", None)
+
+    try:
+        for mutate in (drop_repository, reject_repository_id, reject_source_ref, drop_base_sha):
+            monkeypatch.setattr(pm_work_start, "get_attempt", wrap(mutate))
+            body = await _result(w, att)
+            _assert_action_registry_invariants(w["d"].ops, body)
+            allowed, blocked = _publish_rows(body)
+            assert allowed == []
+            assert blocked == [{"action": pr_publication.ACTION, "reason": "publication_source_incomplete"}]
+    finally:
+        monkeypatch.setattr(pm_work_start, "get_attempt", original)
+
+
+async def test_publish_entry_blocked_while_publication_is_open(start_ready, mock, monkeypatch):
+    import uuid
+
+    w = start_ready
+    ops = w["d"].ops
+    att = await _turn_ended(w, mock, key="e04-publish-open")  # gitleaks:allow (test idempotency key)
+    _enable_integrate(w)
+    body = await _result(w, att)
+    entry = _publish_rows(body)[0][0]
+    held = {"run_due": ops.run_due, "kick": ops.kick}
+
+    async def hold():
+        return None
+
+    monkeypatch.setattr(ops, "run_due", hold)
+    monkeypatch.setattr(ops, "kick", lambda: None)
+    try:
+        request = _publish_request(
+            entry,
+            title="Publish the selected commit",
+            body="Public text for this commit.",
+            draft=False,
+            key=uuid.uuid4().hex,
+        )
+        status, payload = await http(w["port"], "POST", "/api/v1/operations", tok=w["owner_token"], body=request)
+        assert status == 202 and payload["created"] is True, payload
+        assert payload["operation"]["status"] not in {"succeeded", "failed", "cancelled"}
+        blocked_body = await _result(w, att)
+        allowed, blocked = _publish_rows(blocked_body)
+        assert allowed == []
+        assert blocked == [{"action": pr_publication.ACTION, "reason": "WAIT_ORIGINAL_OPERATION_RECONCILE"}]
+        cancelled, cancel_body = await http(
+            w["port"],
+            "POST",
+            f"/api/v1/operations/{payload['operation']['operation_id']}/cancel",
+            tok=w["owner_token"],
+        )
+        assert cancelled == 200, cancel_body
+        assert cancel_body["operation"]["status"] == "cancelled"
+    finally:
+        monkeypatch.setattr(ops, "run_due", held["run_due"])
+        monkeypatch.setattr(ops, "kick", held["kick"])
+    restored = await _result(w, att)
+    allowed, blocked = _publish_rows(restored)
+    assert blocked == []
+    assert allowed[0]["prefilled_params"]["candidate_sha"] == entry["prefilled_params"]["candidate_sha"]
+
+
+async def test_publish_entry_blocked_when_lifecycle_stopped(start_ready, mock):
+    from tests.test_pm_lifecycle import decide
+
+    w = start_ready
+    att = await _turn_ended(w, mock, key="e04-publish-stopped")  # gitleaks:allow (test idempotency key)
+    before = await _result(w, att)
+    assert _publish_rows(before)[0]
+    await decide(w["d"].ops, att["workspace_id"], who=STARTER_OWNER)
+    body = await _result(w, att)
+    _assert_action_registry_invariants(w["d"].ops, body)
+    allowed, blocked = _publish_rows(body)
+    assert allowed == []
+    assert blocked == [{"action": pr_publication.ACTION, "reason": "lifecycle_stopped"}]
+
+
+async def test_publish_entry_blocked_when_github_is_not_configured(start_ready, mock):
+    w = start_ready
+    ops = w["d"].ops
+    att = await _turn_ended(w, mock, key="e04-publish-no-github")  # gitleaks:allow (test idempotency key)
+    saved = ops.context.get("github")
+    ops.context["github"] = None
+    try:
+        body = await _result(w, att)
+    finally:
+        ops.context["github"] = saved
+    _assert_action_registry_invariants(w["d"].ops, body)
+    allowed, blocked = _publish_rows(body)
+    assert allowed == []
+    assert blocked == [{"action": pr_publication.ACTION, "reason": "github_not_configured"}]
+
+
+async def test_publish_entry_blocked_while_original_start_is_uncertain(start_ready, mock, monkeypatch):
+    w = start_ready
+    d = w["d"]
+    ops = d.ops
+    base_work = work_items._get_item(ops.db, w["target"]["work_item_id"])
+    wid = w["workspace_id"]
+
+    lost = (
+        await pkg_action(
+            w,
+            "work_item.create",
+            {"project_id": base_work["project_id"]},
+            {"title": "Lost publish handoff", "goal": "Goal", "acceptance": "Acceptance"},
+        )
+    )["work_item_id"]
+    client = d.fleet.client("h1")
+    original_invoke = client.invoke
+    lost_once = False
+
+    async def lose_send_ack(name, *args, **kwargs):
+        nonlocal lost_once
+        value = await original_invoke(name, *args, **kwargs)
+        if name == "claude:send-message" and not lost_once:
+            lost_once = True
+            raise InvokeTimeout("Simulated lost ACK on claude:send-message")
+        return value
+
+    monkeypatch.setattr(client, "invoke", lose_send_ack)
+    env = await _start_envelope(w, work_item_id=lost, key="e04-publish-unk")  # gitleaks:allow (test idempotency key)
+    op, _ = ops.create(STARTER_OWNER, **env)
+    for _ in range(4):
+        ops.wake(op["operation_id"])
+        await settle_operations(ops)
+        if (ops.get(op["operation_id"]).get("result") or {}).get("stage") == "start_unknown":
+            break
+    monkeypatch.setattr(client, "invoke", original_invoke)
+    unknown = await _result(w, {"workspace_id": wid, "attempt_id": op["result"]["attempt_id"]})
+    _assert_action_registry_invariants(ops, unknown)
+    assert unknown["delivery"]["delivery_goal"] == "pull_request"
+    assert unknown["execution"]["stage"] == "start_unknown"
+    allowed, blocked = _publish_rows(unknown)
+    assert allowed == []
+    assert {"action": pr_publication.ACTION, "reason": "WAIT_ORIGINAL_OPERATION_RECONCILE"} in blocked
+    assert {"action": "work.start", "reason": "WAIT_ORIGINAL_OPERATION_RECONCILE"} in unknown["blocked_actions"]
+
+    parent_item = (
+        await pkg_action(
+            w,
+            "work_item.create",
+            {"project_id": base_work["project_id"]},
+            {"title": "Uncertain publish parent", "goal": "Goal", "acceptance": "Acceptance"},
+        )
+    )["work_item_id"]
+    original_admit = pm_work_start._admit_child
+
+    def admit_child_raises_uncertain(*_args, **_kwargs):
+        raise Uncertain("prepare", "Simulated uncertain parent work.start step")
+
+    monkeypatch.setattr(pm_work_start, "_admit_child", admit_child_raises_uncertain)
+    env_parent = await _start_envelope(w, work_item_id=parent_item, key="e04-publish-punc")  # gitleaks:allow (test idempotency key)
+    parent, _ = ops.create(STARTER_OWNER, **env_parent)
+    ops.wake(parent["operation_id"])
+    await settle_operations(ops)
+    monkeypatch.setattr(pm_work_start, "_admit_child", original_admit)
+    assert ops.get(parent["operation_id"])["status"] == "uncertain"
+    uncertain = await _result(w, {"workspace_id": wid, "attempt_id": parent["result"]["attempt_id"]})
+    _assert_action_registry_invariants(ops, uncertain)
+    assert uncertain["execution"]["operation_status"] == "uncertain"
+    assert uncertain["delivery"]["delivery_goal"] == "pull_request"
+    allowed, blocked = _publish_rows(uncertain)
+    assert allowed == []
+    assert {"action": pr_publication.ACTION, "reason": "WAIT_ORIGINAL_OPERATION_RECONCILE"} in blocked
+
+
+async def test_publish_entry_offers_later_candidate_after_existing_pull_request(start_ready, mock, monkeypatch):
+    import uuid
+
+    from tests.test_checkpoints import git
+    from tests.test_integration import commit
+
+    w = start_ready
+    att = await _start_managed_attempt(w, mock, key="e04-publish-later")  # gitleaks:allow (test idempotency key)
+    worktree = att["worktree_path"]
+    git(worktree, "config", "user.name", "fixture")
+    git(worktree, "config", "user.email", "fixture@example.invalid")
+    first = commit(worktree, "implementation.txt", "first selected change\n", "Implement the first change")
+    _set_turn_messages(
+        mock,
+        att["session_id"],
+        att["turn_marker"],
+        streaming=False,
+        assistant_id="m-asst-first",
+        assistant_text="The first change is ready.",
+    )
+    await w["d"].inventory._refresh_scheduled("h1")
+    _arm_publication(w, monkeypatch)
+    offered = await _result(w, att)
+    entry = _publish_rows(offered)[0][0]
+    assert entry["prefilled_params"]["candidate_sha"] == first
+    request = _publish_request(
+        entry,
+        title="Publish the first change",
+        body="Public text for the first change.",
+        draft=True,
+        key=uuid.uuid4().hex,
+    )
+    status, payload = await http(w["port"], "POST", "/api/v1/operations", tok=w["owner_token"], body=request)
+    assert status == 202 and payload["created"] is True, payload
+    done = await _settle_publish(w["d"].ops, payload["operation"]["operation_id"])
+    assert done["status"] == "succeeded", done
+    blocked_body = await _result(w, att)
+    allowed, blocked = _publish_rows(blocked_body)
+    assert allowed == []
+    assert blocked == [{"action": pr_publication.ACTION, "reason": "pull_request_exists"}]
+
+    second = commit(worktree, "follow-up.txt", "second selected change\n", "Implement the next change")
+    _set_turn_messages(
+        mock,
+        att["session_id"],
+        att["turn_marker"],
+        streaming=False,
+        assistant_id="m-asst-second",
+        assistant_text="The next change is ready.",
+        last_data_at=1_790_001_009_000,
+    )
+    mock.metas[att["session_id"]]["model"] = "claude-sonnet-4-6"
+    await w["d"].inventory._refresh_scheduled("h1")
+    again = await _result(w, att)
+    _assert_action_registry_invariants(w["d"].ops, again)
+    allowed, blocked = _publish_rows(again)
+    assert blocked == []
+    assert allowed[0]["prefilled_params"]["candidate_sha"] == second
+    assert allowed[0]["prefilled_params"]["candidate_sha"] != first
 
