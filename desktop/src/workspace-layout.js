@@ -298,12 +298,15 @@ export function setupMobileSessionLayout({ head, composer, textarea, t, guard, i
   composerToggle.type = "button";
   composerToggle.className = "mini workspace-composer-toggle";
   composerToggle.setAttribute("aria-controls", "workspace-message-input");
+  let boundArea = textarea || null;
+  let boundComposer = composer;
+  let boundRow = composerRow || null;
 
   const renderComposerToggle = () => {
     if (!alive()) return;
-    const text = textarea?.value || "";
+    const text = boundArea?.value || "";
     const hasDraft = text.trim().length > 0;
-    composer.classList.toggle("workspace-composer-collapsed", isComposerCollapsed);
+    boundComposer?.classList.toggle("workspace-composer-collapsed", isComposerCollapsed && Boolean(boundArea));
     composerToggle.setAttribute("aria-expanded", String(!isComposerCollapsed));
 
     const baseText = t(isComposerCollapsed ? "mobile_compose_open" : "mobile_compose_close");
@@ -323,7 +326,7 @@ export function setupMobileSessionLayout({ head, composer, textarea, t, guard, i
     }
     renderComposerToggle();
     if (!isComposerCollapsed) {
-      textarea?.focus({ preventScroll: true });
+      boundArea?.focus({ preventScroll: true });
     } else {
       composerToggle.focus({preventScroll: true});
     }
@@ -332,13 +335,22 @@ export function setupMobileSessionLayout({ head, composer, textarea, t, guard, i
   const onTextareaInput = () => {
     renderComposerToggle();
   };
+  const unbindArea = node => {
+    node?.removeEventListener("input", onTextareaInput);
+    node?.removeEventListener("change", onTextareaInput);
+    node?.removeEventListener("focusin", onFocusIn);
+    node?.removeEventListener("focusout", onFocusOut);
+  };
+  const bindArea = node => {
+    node?.addEventListener("input", onTextareaInput);
+    node?.addEventListener("change", onTextareaInput);
+    node?.addEventListener("focusin", onFocusIn);
+    node?.addEventListener("focusout", onFocusOut);
+  };
 
-  textarea?.addEventListener("input", onTextareaInput);
-  textarea?.addEventListener("change", onTextareaInput);
-
-  if (composerRow) {
-    if (!composerRow.contains(composerToggle)) composerRow.append(composerToggle);
-  } else if (!composer.contains(composerToggle)) composer.prepend(composerToggle);
+  if (boundRow) {
+    if (!boundRow.contains(composerToggle)) boundRow.append(composerToggle);
+  } else if (!boundComposer.contains(composerToggle)) boundComposer.prepend(composerToggle);
 
   // 3. visualViewport keyboard adaptation (ignoring pinch-zoom)
   const updateViewport = () => {
@@ -379,8 +391,7 @@ export function setupMobileSessionLayout({ head, composer, textarea, t, guard, i
   window.visualViewport?.addEventListener("resize", updateViewport);
   window.visualViewport?.addEventListener("scroll", updateViewport);
   window.addEventListener("resize", updateViewport);
-  textarea?.addEventListener("focusin", onFocusIn);
-  textarea?.addEventListener("focusout", onFocusOut);
+  bindArea(boundArea);
 
   // Initial renders
   updateInfo();
@@ -392,18 +403,37 @@ export function setupMobileSessionLayout({ head, composer, textarea, t, guard, i
     composerToggle,
     updateInfo,
     updateDraft: renderComposerToggle,
+    retarget({textarea: nextArea = null, composer: nextComposer = null, composerRow: nextRow = null, controlsId = ""} = {}) {
+      if (!alive()) return;
+      unbindArea(boundArea);
+      boundComposer?.classList.remove("workspace-composer-collapsed");
+      boundArea = nextArea;
+      if (nextComposer) boundComposer = nextComposer;
+      boundRow = nextRow;
+      if (controlsId) composerToggle.setAttribute("aria-controls", controlsId);
+      bindArea(boundArea);
+      composerToggle.remove();
+      if (boundRow) boundRow.append(composerToggle);
+      else if (boundArea && boundComposer && !boundComposer.contains(composerToggle)) boundComposer.prepend(composerToggle);
+      renderComposerToggle();
+    },
+    detachComposer() {
+      if (!alive()) return;
+      unbindArea(boundArea);
+      boundArea = null;
+      boundComposer?.classList.remove("workspace-composer-collapsed");
+      composerToggle.remove();
+    },
     dispose() {
       isDisposed = true;
       window.visualViewport?.removeEventListener("resize", updateViewport);
       window.visualViewport?.removeEventListener("scroll", updateViewport);
       window.removeEventListener("resize", updateViewport);
-      textarea?.removeEventListener("input", onTextareaInput);
-      textarea?.removeEventListener("change", onTextareaInput);
-      textarea?.removeEventListener("focusin", onFocusIn);
-      textarea?.removeEventListener("focusout", onFocusOut);
+      unbindArea(boundArea);
       infoToggle.remove();
       composerToggle.remove();
       head.classList.remove("workspace-info-collapsed");
+      boundComposer?.classList.remove("workspace-composer-collapsed");
       composer.classList.remove("workspace-composer-collapsed");
       document.body.classList.remove("mobile-keyboard");
       document.documentElement.style.removeProperty("--workspace-visible-height");

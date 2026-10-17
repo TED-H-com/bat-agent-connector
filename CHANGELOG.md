@@ -2,6 +2,15 @@
 
 ## Next release (unreleased)
 
+- Work: when the service offers a follow-up for the open work item, that Work
+  view has one composer for the next instruction. It queues the instruction for
+  after the current turn. The service's receipt stays on screen, and another
+  instruction can be written once that receipt exists. The status text comes from
+  the service. A lost or ambiguous reply keeps the original request. Questions and
+  permission prompts stay available. Manual, unknown, and Codex sessions do not
+  gain this control. Without the service capability, the existing session composer
+  is unchanged.
+
 - Design note: v1.3 E05 maps the BAT loop (new work, live output, the fixed
   Result, the next turn, busy, and recovery of the original operation) onto the
   pieces already merged or still in review. See
