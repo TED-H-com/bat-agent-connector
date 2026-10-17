@@ -2324,7 +2324,7 @@ async def test_minimal_review_large_diff_and_pending_restart_escalate_without_je
 async def test_bat_candidate_review_diff_includes_both_sides_of_rename(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()
-    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run(["git", "init", "--template=", "-q", str(repo)], check=True)
     old = repo / "README.md"
     old.write_text("one line\n")
     subprocess.run(["git", "-C", str(repo), "add", "README.md"], check=True)
@@ -3605,7 +3605,7 @@ def test_observed_verifier_ssh_command_keeps_remote_script_quoted():
 async def test_observed_verification_artifact_bound_to_clean_commit(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
-    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run(["git", "init", "--template=", "-q", str(repo)], check=True)
     (repo / "code.txt").write_text("candidate")
     subprocess.run(["git", "-C", str(repo), "add", "code.txt"], check=True)
     subprocess.run(["git", "-C", str(repo), "-c", "user.name=Test",
@@ -3630,7 +3630,7 @@ async def test_observed_verification_artifact_bound_to_clean_commit(tmp_path):
 def _committed_repo(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
-    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run(["git", "init", "--template=", "-q", str(repo)], check=True)
     (repo / "code.txt").write_text("candidate")
     subprocess.run(["git", "-C", str(repo), "add", "code.txt"], check=True)
     subprocess.run(["git", "-C", str(repo), "-c", "user.name=Test",
@@ -3796,7 +3796,7 @@ async def test_external_cleanup_retains_unmerged_commit_and_recovers_after_resta
         tmp_path, fleet_factory, monkeypatch):
     root = tmp_path / "Operator's repo"
     root.mkdir()
-    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(["git", "init", "--template=", "-q", str(root)], check=True)
     (root / "code.txt").write_text("base")
     subprocess.run(["git", "-C", str(root), "add", "code.txt"], check=True)
     commit = ["git", "-C", str(root), "-c", "user.name=Test",

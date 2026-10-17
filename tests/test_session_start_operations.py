@@ -306,7 +306,7 @@ async def test_real_temporary_git_fixes_commit_and_preserves_source(daemon, mock
     from tests.test_checkpoints import git, snapshot
     repo = tmp_path / 'source'
     repo.mkdir()
-    subprocess.run(['git', 'init', '-q', '-b', 'main', str(repo)], check=True)
+    subprocess.run(['git', 'init', '--template=', '-q', '-b', 'main', str(repo)], check=True)
     git(repo, 'config', 'user.email', 'fixture@example.invalid')
     git(repo, 'config', 'user.name', 'Fixture')
     (repo / 'file.txt').write_text('original bytes\n')

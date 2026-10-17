@@ -9,6 +9,7 @@ import asyncio
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -27,7 +28,7 @@ from bat_agent_connector.channels import GUARDED_CHANNELS, ORCHESTRATE_CHANNELS,
 from bat_agent_connector.errors import ResourceReadOnly
 from bat_agent_connector.operations import OperationError
 from bat_agent_connector.task_daemon import TaskDaemon
-from tests.conftest import make_config
+from tests.conftest import build_checkpoint_repo, make_config
 from tests.operation_helpers import settle_operations
 
 MANUAL = "sess-claude-0001"
@@ -81,17 +82,17 @@ def bat_git_status(p):
 
 
 @pytest.fixture
-def human(tmp_path):
+def human(tmp_path, checkpoint_repo_seed):
+    return make_human(tmp_path, checkpoint_repo_seed)
+
+
+def make_human(tmp_path, seed=None):
     repo = tmp_path / "human" / "app"
-    repo.mkdir(parents=True)
-    git(repo, "init", "-q", "-b", "main")
-    git(repo, "config", "user.email", "dev@example.invalid")
-    git(repo, "config", "user.name", "dev")
-    git(repo, "remote", "add", "origin", ORIGIN)
-    for i in (1, 2):
-        (repo / "notes.txt").write_text(f"v{i}\n")
-        git(repo, "add", "notes.txt")
-        git(repo, "commit", "-q", "-m", f"step {i}")
+    if seed is None:
+        return build_checkpoint_repo(repo)
+    # A full copy preserves config, refs and reflogs without sharing mutable files
+    # or alternates with other tests (which may delete or corrupt their own repo).
+    shutil.copytree(seed, repo)
     return repo
 
 
@@ -307,7 +308,7 @@ async def test_continue_refusals_happen_before_anything_is_recorded(daemon, mock
 async def test_continue_never_adopts_a_folder_it_did_not_create(daemon, mock, human, tmp_path):
     cp = await make_checkpoint(daemon)
     clone = checkpoints.clone_path(str(tmp_path / "managed"), "h1", str(human))
-    subprocess.run(["git", "init", "-q", clone], check=True)  # someone else's repo at the clone path
+    subprocess.run(["git", "init", "--template=", "-q", clone], check=True)  # someone else's repo at the clone path
     op = await run(daemon, "checkpoint.continue", {"checkpoint_id": cp["checkpoint_id"]}, {"instructions": "x"})
     assert op["status"] == "failed" and op["error_code"] == "GIT_FAILED"
     assert "not a connector clone" in op["status_reason"]

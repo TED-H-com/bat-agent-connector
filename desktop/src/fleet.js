@@ -9,21 +9,53 @@ export async function mountFleet(main, {h, t}) {
   panel.append(h("h2", {}, t("fleet_title")), h("p", {class: "muted"}, t("fleet_help")), content, message);
   main.append(panel);
   let nativeCleanup, bootstrapCleanup;
-  let disposed = false, busy = false, readable = false, timer, snapshot, draft, binding;
+  let disposed = false, busy = false, readable = false, timer, snapshot, draft, binding, pressed = null;
   const alive = () => !disposed && panel.isConnected;
   const key = () => `batc.desktop.fleet.selection.${binding}`;
   const save = () => { try { if (draft) sessionStorage.setItem(key(), JSON.stringify(draft)); else sessionStorage.removeItem(key()); } catch { /* Keep the mounted draft when storage is unavailable. */ } };
   const same = (a, b) => a.length === b.length && [...a].sort().every((x, i) => x === [...b].sort()[i]);
   const changed = () => draft && (draft.revision !== snapshot.selection.revision || draft.epoch !== snapshot.monitor.epoch);
-  const editable = () => readable && !busy && snapshot?.configuration.valid && (snapshot.monitor.state === "stopped" || snapshot.monitor.controllable);
+  // Static reasons stay disabled. Only an in-flight read blocks a control with aria-disabled, so it stays focusable.
+  const canEdit = () => readable && snapshot?.configuration.valid && (snapshot.monitor.state === "stopped" || snapshot.monitor.controllable);
+  const gate = (blocked, action) => busy && action && pressed === action ? {"aria-disabled": "true"} : blocked ? {disabled: true} : busy ? {"aria-disabled": "true"} : {};
+  const focusKeys = ["data-fleet-action", "data-fleet-name"];
+  const focusKey = node => {
+    for (let current = node; current && current !== panel; current = current.parentElement) {
+      for (const attr of focusKeys) if (current.hasAttribute?.(attr)) return [attr, current.getAttribute(attr)];
+    }
+    return null;
+  };
+  const controlByKey = key => {
+    if (!key) return null;
+    for (const node of content.querySelectorAll("button, input, select")) if (node.getAttribute(key[0]) === key[1]) return node;
+    return null;
+  };
+  // Forward within the same action row. A removed or disabled control continues at the status text.
+  const groups = [["apply", "refresh", "use-current"], ["start", "quit"]];
+  const successor = key => {
+    if (key?.[0] === "data-fleet-action") {
+      const group = groups.find(items => items.includes(key[1]));
+      if (group) for (const candidate of group.slice(group.indexOf(key[1]) + 1)) {
+        const node = controlByKey(["data-fleet-action", candidate]);
+        if (node && !node.disabled && node.getAttribute("aria-disabled") !== "true") return node;
+      }
+    }
+    message.tabIndex = -1;
+    return message;
+  };
   const render = () => {
     if (!alive() || !snapshot) return;
     const names = draft?.connections || snapshot.selection.connections;
     const ready = new Map([...(snapshot.readiness.hosts || []), snapshot.readiness.connector].filter(Boolean).map(row => [row.name, row]));
-    const focus = document.activeElement?.dataset?.fleetName;
+    const previous = panel.contains(document.activeElement) ? focusKey(document.activeElement) : null;
     const rows = snapshot.configuration.connections.map(entry => {
-      const input = h("input", {type: "checkbox", checked: names.includes(entry.name), disabled: !editable() || !!changed(),
-        "data-fleet-name": entry.name, onchange: () => {
+      const checked = names.includes(entry.name);
+      const blocked = !canEdit() || !!changed();
+      const input = h("input", {type: "checkbox", checked, ...gate(blocked), "data-fleet-name": entry.name,
+        onkeydown: event => { if (busy && event.key === " ") event.preventDefault(); },
+        onclick: event => { if (busy) event.preventDefault(); },
+        onchange: () => {
+          if (busy || blocked) { input.checked = checked; return; }
           if (!draft) draft = {revision: snapshot.selection.revision, epoch: snapshot.monitor.epoch, connections: [...snapshot.selection.connections]};
           draft.connections = input.checked ? [...new Set([...draft.connections, entry.name])] : draft.connections.filter(x => x !== entry.name);
           if (same(draft.connections, snapshot.selection.connections)) draft = null;
@@ -42,17 +74,30 @@ export async function mountFleet(main, {h, t}) {
       h("p", {class: "muted"}, t(snapshot.selection.applied_revision === snapshot.selection.revision ? "fleet_applied" : "fleet_waiting")),
       changed() ? h("p", {class: "error"}, t("fleet_changed")) : h("span"),
       h("div", {class: "actions"},
-        h("button", {class: "primary", disabled: !editable() || !draft || !!changed(), onclick: () => mutate({action: "set_connections",
-          connections: [...draft.connections], expected_selection_revision: draft.revision, expected_monitor_epoch: draft.epoch,
-          expected_configuration_binding: binding})}, t("fleet_apply")),
-        iconButton({icon:'refresh-cw', label:t('fleet_refresh'), ...{class: "secondary", disabled: busy, onclick: () => read(true)}}),
-        h("button", {class: "secondary", disabled: !readable || busy || !draft, onclick: () => {draft = null; save(); message.textContent = ""; render();}}, t("fleet_use_current"))),
+        h("button", {class: "primary", ...gate(!canEdit() || !draft || !!changed(), "apply"), "data-fleet-action": "apply", onclick: () => {
+          if (busy || !canEdit() || !draft || changed()) return;
+          mutate({action: "set_connections", connections: [...draft.connections], expected_selection_revision: draft.revision,
+            expected_monitor_epoch: draft.epoch, expected_configuration_binding: binding}, "apply");
+        }}, t("fleet_apply")),
+        iconButton({icon: "refresh-cw", label: t("fleet_refresh"), ...gate(false, "refresh"), "data-fleet-action": "refresh", onclick: () => { if (busy) return; read(true); }}),
+        h("button", {class: "secondary", ...gate(!readable || !draft, "use-current"), "data-fleet-action": "use-current", onclick: () => {
+          if (busy || !readable || !draft) return;
+          draft = null; save(); message.textContent = ""; render();
+        }}, t("fleet_use_current"))),
       h("div", {class: "actions"},
-        h("button", {class: "secondary", disabled: !editable() || !!draft || snapshot.monitor.state !== "stopped",
-          onclick: () => mutate({action: "ensure_monitor", expected_configuration_binding: binding})}, t("fleet_start")),
-        h("button", {class: "danger", disabled: !editable() || !!draft || !snapshot.monitor.controllable,
-          onclick: () => mutate({action: "quit_owned", expected_configuration_binding: binding, expected_monitor_epoch: snapshot.monitor.epoch})}, t("fleet_quit")))].filter(Boolean));
-    if (focus) [...content.querySelectorAll("input")].find(input => input.dataset.fleetName === focus)?.focus();
+        h("button", {class: "secondary", ...gate(!canEdit() || !!draft || snapshot.monitor.state !== "stopped", "start"), "data-fleet-action": "start", onclick: () => {
+          if (busy || !canEdit() || draft || snapshot.monitor.state !== "stopped") return;
+          mutate({action: "ensure_monitor", expected_configuration_binding: binding}, "start");
+        }}, t("fleet_start")),
+        h("button", {class: "danger", ...gate(!canEdit() || !!draft || !snapshot.monitor.controllable, "quit"), "data-fleet-action": "quit", onclick: () => {
+          if (busy || !canEdit() || draft || !snapshot.monitor.controllable) return;
+          mutate({action: "quit_owned", expected_configuration_binding: binding, expected_monitor_epoch: snapshot.monitor.epoch}, "quit");
+        }}, t("fleet_quit")))].filter(Boolean));
+    if ([...content.querySelectorAll("button")].some(node => node.getAttribute("aria-disabled") === "true")) message.setAttribute("aria-busy", "true");
+    else message.removeAttribute("aria-busy");
+    const again = controlByKey(previous);
+    if (again && !again.disabled) again.focus();
+    else if (previous) successor(previous).focus();
   };
   const accept = value => {
     if (!value?.configuration?.connections || !value?.monitor || !value?.selection || !value?.readiness) throw new Error(t("fleet_unavailable"));
@@ -69,6 +114,7 @@ export async function mountFleet(main, {h, t}) {
   };
   const read = async (explicit = false) => {
     if (!alive() || busy) return;
+    if (explicit) pressed = "refresh";
     busy = true; render();
     try {
       const value = await fleetRequest({action: "status"});
@@ -76,10 +122,11 @@ export async function mountFleet(main, {h, t}) {
       accept(value); if (explicit) message.textContent = "";
     } catch (error) {
       if (alive()) { readable = false; message.textContent = `${t("fleet_read_failed")} ${String(error)}`; }
-    } finally {busy = false; render();}
+    } finally {busy = false; pressed = null; render();}
   };
-  const mutate = async input => {
-    if (!editable() || !alive()) return;
+  const mutate = async (input, action) => {
+    if (busy || !alive() || !canEdit()) return;
+    pressed = action;
     busy = true; readable = false; message.textContent = t("fleet_working"); render();
     try {
       const result = await fleetRequest(input);
@@ -88,7 +135,7 @@ export async function mountFleet(main, {h, t}) {
       message.textContent = t(input.action === "quit_owned" ? "fleet_quit_requested" : "fleet_saved");
     } catch (error) {
       if (alive()) message.textContent = `${t("fleet_unknown")} ${String(error)}`;
-    } finally {busy = false; render();}
+    } finally {busy = false; pressed = null; render();}
   };
   try {
     const availability = await fleetAvailability();
