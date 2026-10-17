@@ -4,7 +4,7 @@
 用合成的唯讀專案資料操作正式共用介面：搜尋工作、展開需求、查看交付證據與工作階段。
 展示內另有 v1.3 工作流程預覽，可模擬開始工作、追加修改與驗收決策；兩者都不連線到 BAT 或模型。
 主線上已有真正的「開始工作」面板，它需要已設定的 BAT 主機與已綁定的儲存庫。
-已合併主線 `0daf283c`（#276，2026 年 10 月 17 日）支援建立 Work、採用並開始已審閱計畫、對同一工作追加第二句、讀取固定成果與差異、執行已設定驗證、從同一成果發布 PR，以及選兩份既有評估帶入 PM 討論。工作設定檔、readiness 與 API／MCP 對等也已納入。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；安裝與真實 BAT／模型驗收仍須另有證據。
+已合併主線 `f31e7964`（#276–278，2026 年 10 月 17 日）支援建立 Work、採用並開始已審閱計畫、對同一工作追加第二句、讀取固定成果與差異、執行已設定驗證、從同一成果發布 PR，以及選兩份既有評估帶入 PM 討論。工作設定檔、readiness 與 API／MCP 對等也已納入。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；安裝與真實 BAT／模型驗收仍須另有證據。
 
 **看懂專案、找到問題，與 PM 完成一次決策。**
 
@@ -21,7 +21,7 @@ Better Agent Dashboard 把專案狀況、PM 討論與決策放在同一個工作
 **Web 與 Tauri 桌面版共用介面及 Python 後端。** 你照常在 [Better Agent Terminal（BAT）](https://github.com/tony1223/better-agent-terminal) 開發；Windows Fleet 管理本機連線與啟動，Connector 則讓 Dashboard、CLI、MCP 使用同一份專案歷史、權限和操作紀錄。
 
 > **開發預覽。** 截圖來自已合併的 `main` `265026d4`（2026 年 10 月 16 日，包含 #205）。
-> 這裡呈現的內容都尚未安裝或實機驗收。
+> 圖庫使用合成資料；發布、安裝與實機驗收分別記錄。
 > [進度報告](docs/product/progress-2026-10-17.md)分開列出分支、合併、安裝與實機驗收狀態。
 > 下載時請核對套件的精確來源；截圖與 CI 不能代替原生或實機驗收。
 
@@ -71,7 +71,7 @@ Better Agent Dashboard 把專案狀況、PM 討論與決策放在同一個工作
 
 ## 安裝與連線
 
-從 [main 的 desktop workflow](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) 選成功的平台 job，核對來源 commit 與驗證紀錄後，下載該 run 的 artifact。GitHub 可能要求登入，artifact 也會到期；這些是驗證套件，尚非穩定的簽章更新通道。
+下載[已發布預覽版](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.6-preview.20261017)：Connector **0.2.6**、desktop **0.1.2**，固定來源為 `f31e7964`。包含 Python 套件、Windows／Linux／macOS 桌面包、來源清單與 SHA-256 校驗碼；套件為未簽章或 ad-hoc 簽章的開發預覽。後續候選仍可從 [`main` 的 desktop workflow](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) 取得，須核對成功的平台 job 與精確來源；Actions artifacts 可能到期。
 
 | 入口 | 套件／本機能力 | 界線 |
 | --- | --- | --- |
@@ -119,7 +119,7 @@ flowchart TB
 | 狀態 | 範圍 |
 | --- | --- |
 | 已合併主線 | 桌面／中央底座；PM 討論及計畫採用；工程包及有界派工；驗證、需求接受與依賴證據；政策內維護修復；BAT 提案／Follow-up；AHP 唯讀觀察。#132 補上中央總覽、討論來源與改名、登記表、時程、技術相依及每日資源桶；#134 補上採用後目標、近期決策及問題解決回報引導。 |
-| 已合併工作台 | 已合併主線 `0daf283c`（#276，2026 年 10 月 17 日）支援建立 Work、採用並開始已審閱計畫、對同一工作追加第二句、讀取固定成果與差異、執行已設定驗證、從同一成果發布 PR，以及選兩份既有評估帶入 PM 討論。工作設定檔、readiness 與 API／MCP 對等也已納入。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；安裝與真實 BAT／模型驗收仍須另有證據。 |
+| 已合併工作台 | 已合併主線 `f31e7964`（#276–278，2026 年 10 月 17 日）支援建立 Work、採用並開始已審閱計畫、對同一工作追加第二句、讀取固定成果與差異、執行已設定驗證、從同一成果發布 PR，以及選兩份既有評估帶入 PM 討論。工作設定檔、readiness 與 API／MCP 對等也已納入。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；安裝與真實 BAT／模型驗收仍須另有證據。 |
 | PM v1.2 剩餘工作 | 一般原生 coding adapter、AHP 自建／寫入、其餘文件視圖與簡報、更多 CLI 支援、遠端用量收集與交付效率歸因。 |
 
 已有 Codex／Claude 本機用量收集；這輪 Agent 資源改版補上有來源的每日趨勢與回報配額窗。

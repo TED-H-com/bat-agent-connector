@@ -4,7 +4,7 @@
 
 ## Choose the matching candidate package
 
-This source version includes a bundled local central and guided desktop setup. Open the [desktop workflow on `main`](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) and choose a successful run from the current public history. Match the artifact’s source commit, platform job and installed-fixture records. If that commit is still building, wait for its platform job to succeed. Historical PR artifacts and earlier release assets are not the current download source.
+Start with the [published preview](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.6-preview.20261017), pinned to `f31e7964`: Connector 0.2.6 and desktop 0.1.2, with a source manifest and SHA-256 checksums. For later candidates, select a successful platform job from the [main desktop workflow](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) and match its exact source and installation-fixture records.
 
 | Platform | Artifact | Package |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ This source version includes a bundled local central and guided desktop setup. O
 | Mac Intel | `desktop-macOS-x64-validation` | `.dmg` |
 | Linux | `desktop-Linux-unsigned` | `.deb` |
 
-GitHub artifacts may require sign-in and expire. Windows validation packages are unsigned; Mac bundles use ad-hoc signing. Formal signing, Mac notarization, production update channels and a Linux persistent native credential vault are outside this delivery. No new stable release is claimed here.
+The artifact names above identify later CI candidates. For this published preview, use the matching platform asset on the release page. GitHub Actions artifacts may require sign-in and expire. Windows validation packages are unsigned; Mac bundles use ad-hoc signing. Formal signing, Mac notarization, production update channels and a Linux persistent native credential vault are outside this delivery. No new stable release is claimed here.
 
 ## First launch: your local Connector
 
