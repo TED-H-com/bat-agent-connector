@@ -668,6 +668,10 @@ class OperationService:
     def _may_steer(self, principal: Principal, op: dict, verb: str) -> None:
         from .pm_access import require_visible
         require_visible(self.db, principal, op)
+        from .pm_source_lineage import require_document
+        # Saved receipts can name sources beyond the operation's admission roots.
+        # Refuse before changing state or children if the public reply would be hidden.
+        require_document(self.db, principal, op)
         self._authorize_controller(principal, op, verb)
         from .pm_work_adopt_and_start import authorize_child as authorize_adopt_start_child
         authorize_adopt_start_child(self, principal, op, verb)
