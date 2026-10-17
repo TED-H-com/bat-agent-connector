@@ -2966,3 +2966,117 @@ async def test_work_start_journal_only_admission_and_child_git_execution(start_r
     assert handoff_git_exec == {"h1": runner.execution_binding("h1")}
 
 
+def _operation_counts(ops) -> dict[str, int]:
+    def count(sql: str) -> int:
+        return ops.db.execute(sql).fetchone()[0]
+
+    return {
+        "packages": count("SELECT COUNT(*) FROM pm_work_packages"),
+        "attempts": count("SELECT COUNT(*) FROM work_attempts"),
+        "starts": count("SELECT COUNT(*) FROM operations WHERE action='work.start'"),
+        "handoffs": count("SELECT COUNT(*) FROM operations WHERE action='repository.continue'"),
+        "children": count("SELECT COUNT(*) FROM pm_work_start_children"),
+    }
+
+
+async def test_execution_location_change_pauses_handoff_and_resume_starts_once(start_ready, mock):
+    """Drift pauses the original handoff; restoring the location resumes that same start."""
+    from bat_agent_connector import host_git
+
+    w = start_ready
+    ops = w["d"].ops
+    parent_id, package_operation = await _hold_before_handoff(w)
+    # HostGitRunner only speaks SSH. This fixture's published repository is local, so the
+    # location fence stays on the real runner and the disk scripts stay on the fixture runner.
+    scripts = w["runner"]
+    runner = host_git.HostGitRunner(w["d"]._config, {"h1": "h1-bat"}, server_id="fixture-server")
+    runner._ssh.run = scripts.run
+    ops.context["git_runner"] = runner
+    host = w["d"]._config.host("h1")
+    assert host.git == "ssh"
+
+    await ops._execute(parent_id)
+    admitted = ops.get(parent_id)
+    assert admitted["status"] == "waiting_external", admitted
+    handoff_id = admitted["result"]["children"]["handoff"]
+    assert handoff_id and admitted["result"]["children"]["package"] == package_operation
+    handoff = ops.get(handoff_id)
+    assert handoff["status"] == "accepted"
+    assert handoff["action"] == "repository.continue"
+    assert handoff["idempotency_key"] == f"work-start:{parent_id}:handoff"
+    frozen = handoff["external_refs"]["admission_binding"]["git_execution"]["h1"]
+    assert frozen == runner.execution_binding("h1")
+    assert frozen["transport"] == "ssh"
+    attempt_id = "att_" + parent_id[3:]
+    before = _operation_counts(ops)
+    child_rows = ops.db.execute(
+        "SELECT slot, operation_id FROM pm_work_start_children WHERE parent_id=? ORDER BY ordinal",
+        (parent_id,),
+    ).fetchall()
+    assert [(row["slot"], row["operation_id"]) for row in child_rows] == [
+        ("package", package_operation),
+        ("handoff", handoff_id),
+    ]
+
+    host.git = "local"
+    try:
+        frames = len(mock.invokes)
+        await ops._execute(handoff_id)
+        paused_child = ops.get(handoff_id)
+        assert paused_child["status"] == "needs_attention", paused_child
+        assert paused_child["error_code"] == "GIT_EXECUTION_LOCATION_CHANGED"
+        assert paused_child["idempotency_key"] == handoff["idempotency_key"]
+        assert ops.db.execute(
+            "SELECT COUNT(*) FROM operation_steps WHERE operation_id=?", (handoff_id,)
+        ).fetchone()[0] == 0
+        assert scripts.phases == []
+        assert len(mock.invokes) == frames
+        await ops._execute(parent_id)
+        paused = ops.get(parent_id)
+        assert paused["status"] == "needs_attention", paused
+        assert paused["error_code"] == "GIT_EXECUTION_LOCATION_CHANGED"
+        assert paused["result"]["stage"] == "starting"
+        assert paused["result"]["children"] == {
+            "bind": None, "package": package_operation, "handoff": handoff_id,
+        }
+        assert paused["idempotency_key"] == admitted["idempotency_key"]
+        assert _operation_counts(ops) == before
+    finally:
+        host.git = "ssh"
+
+    ops.resume(STARTER_OWNER, parent_id)
+    done = await _advance_start(ops, parent_id)
+    assert done["status"] == "succeeded", done
+    assert done["operation_id"] == parent_id
+    assert done["idempotency_key"] == admitted["idempotency_key"]
+    assert done["result"]["stage"] == "started"
+    assert done["result"]["attempt_id"] == attempt_id
+    assert done["result"]["children"]["package"] == package_operation
+    assert done["result"]["children"]["handoff"] == handoff_id
+    assert done["result"]["session"]["host"] == "h1"
+    finished = ops.get(handoff_id)
+    assert finished["status"] == "succeeded"
+    assert finished["idempotency_key"] == f"work-start:{parent_id}:handoff"
+    assert _operation_counts(ops) == before
+    step_names = [
+        row[0] for row in ops.db.execute(
+            "SELECT name FROM operation_steps WHERE operation_id=? ORDER BY seq", (handoff_id,)
+        )
+    ]
+    assert step_names.count("source.resolve") == step_names.count("repository.fetch") == 1
+    assert len(step_names) == len(set(step_names))
+    assert scripts.phases.count("fetch") == scripts.phases.count("prepare") == 1
+    assert mock.channels().count("claude:start-session") == mock.channels().count("claude:send-message") == 1
+    replay, created = ops.create(
+        STARTER_OWNER,
+        action="work.start",
+        target=admitted["target"],
+        params=admitted["params"],
+        preconditions=admitted["preconditions"],
+        idempotency_key=admitted["idempotency_key"],
+    )
+    assert created is False
+    assert replay["operation_id"] == parent_id
+    assert _operation_counts(ops) == before
+
+
