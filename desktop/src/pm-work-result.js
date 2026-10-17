@@ -412,7 +412,8 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
     const linkItems = [];
     const sess = attempt?.session || attempt?.native_session;
     if (sess?.session_id && sess?.host) {
-      const liveHref = sessionHref({host: sess.host, sessionId: sess.session_id, from: 'board'});
+      const liveHref = sessionHref({host: sess.host, sessionId: sess.session_id, from: 'board', workspaceId,
+        workItemId: envelope.identity?.work_item_id, attemptId: attempt.attempt_id});
       linkItems.push(h('a', {href: liveHref, 'data-work-result-focus': 'live-output'}, t('wres_open_live_output')));
     }
     const opHash = envelope.links?.start_operation_hash || (envelope.identity?.start_operation_id ? `#/op/${envelope.identity.start_operation_id}` : null);

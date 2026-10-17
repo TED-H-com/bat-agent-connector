@@ -1291,7 +1291,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/installation-capabilities|pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context(?:-bundle)?)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/resources|/overview|/schedule|/register(?:/(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision)\.[A-Za-z0-9._-]{1,180})?|/dependencies(?:/(?:revisions|impact))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/maintenance-checks(?:/(?:current|pmck_[0-9a-f]{32}))?|/maintenance-reviews(?:/(?:current|pmrevw_[0-9a-f]{32}(?:/events)?))?|/maintenance-schedule|/ahp-adapters|/ahp-observations(?:/(?:current|pmah_[0-9a-f]{32}))?|/github-observations(?:/(?:current|pmgh_[0-9a-f]{32}))?|/maintenance-repairs(?:/(?:current|pmrp_[0-9a-f]{32}))?|/executions/op_[0-9a-f]{32}/verification-config|/execution-verifications/op_[0-9a-f]{32}|/pr-publications/op_[0-9a-f]{32}|/quality-reviews(?:/pmqr_[0-9a-f]{32})?|/work-batches(?:/pmbt_[0-9a-f]{32})?|/maintenance-findings/current|/spec-materializations(?:/pmsp_[0-9a-f]{32})?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/conversation-proposals(?:/pmcp_[0-9a-f]{32})?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/(?:capture|deliveries|quality|attempts|inputs))?|/work-attempts/att_[0-9a-f]{32}/(?:result|changes|diff)|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+            r"pm/installation-capabilities|pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context(?:-bundle)?)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/resources|/overview|/schedule|/register(?:/(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision)\.[A-Za-z0-9._-]{1,180})?|/dependencies(?:/(?:revisions|impact))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/maintenance-checks(?:/(?:current|pmck_[0-9a-f]{32}))?|/maintenance-reviews(?:/(?:current|pmrevw_[0-9a-f]{32}(?:/events)?))?|/maintenance-schedule|/ahp-adapters|/ahp-observations(?:/(?:current|pmah_[0-9a-f]{32}))?|/github-observations(?:/(?:current|pmgh_[0-9a-f]{32}))?|/maintenance-repairs(?:/(?:current|pmrp_[0-9a-f]{32}))?|/executions/op_[0-9a-f]{32}/verification-config|/execution-verifications/op_[0-9a-f]{32}|/pr-publications/op_[0-9a-f]{32}|/quality-reviews(?:/pmqr_[0-9a-f]{32})?|/work-batches(?:/pmbt_[0-9a-f]{32})?|/maintenance-findings/current|/spec-materializations(?:/pmsp_[0-9a-f]{32})?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/conversation-proposals(?:/pmcp_[0-9a-f]{32})?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/(?:capture|deliveries|quality|attempts|inputs))?|/work-attempts/att_[0-9a-f]{32}(?:/(?:result|changes|diff))?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -2501,6 +2501,7 @@ mod tests {
         let wi = "wi_bbbbbbbbbbbbbbbbbbbb";
         let att = "att_cccccccccccccccccccccccccccccccc";
         let attempts = format!("/pm/workspaces/{ws}/work/{wi}/attempts");
+        let attempt = format!("/pm/workspaces/{ws}/work-attempts/{att}");
         let result = format!("/pm/workspaces/{ws}/work-attempts/{att}/result");
         let changes = format!("/pm/workspaces/{ws}/work-attempts/{att}/changes");
         let diff = format!("/pm/workspaces/{ws}/work-attempts/{att}/diff");
@@ -2511,6 +2512,7 @@ mod tests {
             format!("{attempts}?limit=100"),
             format!("{attempts}?after=0&limit=1"),
             format!("{attempts}?after=0100&limit=000000100"),
+            attempt.clone(),
             result.clone(),
             format!("{result}?cursor=0&wait_ms=0"),
             format!("{result}?cursor=1&wait_ms=10000"),
@@ -2565,7 +2567,9 @@ mod tests {
             format!("{result}?wait_ms=10001"),
             format!("{result}?cursor=-1"),
             format!("{result}?wait_ms=0000000000"),
-            format!("/pm/workspaces/{ws}/work-attempts/{att}"),
+            format!("{attempt}?limit=1"),
+            format!("{attempt}?wait_ms=0"),
+            format!("{attempt}/extra"),
             format!("/pm/workspaces/{ws}/work-attempts/{att}/result-sources"),
             format!("{changes}/extra"),
             format!("{changes}?max_commits=0"),

@@ -14,6 +14,8 @@ const QUEUED_LABELS = {
 };
 
 export function followUpFixture(locale = 'en', options: Record<string, any> = {}) {
+  const WS = options.workspaceId || 'ws_' + 'a'.repeat(32);
+  const WI = options.workItemId || 'wi_' + String(1).padStart(20, '0');
   const base = workspaceFixture(locale);
   base.data.linkedItem = true;
   base.data.session.agent_kind = options.agent || 'claude';
@@ -39,6 +41,10 @@ export function followUpFixture(locale = 'en', options: Record<string, any> = {}
     latest: options.latest === undefined ? ATTEMPT : options.latest,
     result: options.result || 'offer',
     resultStatus: options.resultStatus || 200,
+    attemptStatus: 200,
+    holdAttempt: null as Promise<void> | null,
+    attemptStarted: false,
+    attempt: {attempt_id: ATTEMPT, workspace_id: WS, work_item_id: WI, session: {host: 'demo', session_id: 'search-results'}},
     inputsStatus: 200,
     malformed: false,
     failPost: null as null | {status: number, code: string, admission_refused?: boolean},
@@ -78,15 +84,15 @@ export function followUpFixture(locale = 'en', options: Record<string, any> = {}
       ],
     };
   };
-  const listBody = (rows: any[]) => ({
+  const listBody = (rows: any[], selected: string | null) => ({
     workspace_id: WS, work_item_id: WI,
-    attempt_id: follow.latest || null,
+    attempt_id: selected || follow.latest || null,
     latest_attempt_id: follow.latest || null,
     items: rows, next_cursor: follow.cursor, has_more: follow.hasMore === true && Boolean(follow.cursor),
     visibility_filtered: follow.filtered === true,
   });
-  const resultBody = () => {
-    const head = {contract: 'pm-work-attempt-result/v1', workspace_id: WS, attempt_id: follow.latest || ATTEMPT, identity: {work_item_id: WI}};
+  const resultBody = (selected: string) => {
+    const head = {contract: 'pm-work-attempt-result/v1', workspace_id: WS, attempt_id: selected, identity: {work_item_id: WI}, execution: {state: 'active'}};
     if (follow.result === 'bad') return {contract: 'other'};
     if (follow.result === 'codex') return {...head, next_allowed_actions: [], blocked_actions: [{action: 'session.send', reason: 'codex_uncorrelated_turn_boundary'}]};
     if (follow.result === 'not_controller') return {...head, next_allowed_actions: [], blocked_actions: [{action: 'session.send', reason: 'not_controller'}]};
@@ -116,7 +122,7 @@ export function followUpFixture(locale = 'en', options: Record<string, any> = {}
       const body = status !== 200 ? {error: {code: 'NOT_FOUND', message: 'gone'}}
         : after && follow.pages.has(after) ? follow.pages.get(after)
         : follow.malformed ? {workspace_id: 'not-this-workspace'}
-        : listBody(follow.items.map(row => ({...row})));
+        : listBody(follow.items.map(row => ({...row})), url.searchParams.get('attempt_id'));
       if (url.searchParams.has('attempt_id') && follow.holdFiltered && !follow.holdConsumed) {
         follow.holdConsumed = true;
         await new Promise<void>(resolve => { follow.releaseHold = () => { follow.lateReturned = true; resolve(); }; });
@@ -124,9 +130,15 @@ export function followUpFixture(locale = 'en', options: Record<string, any> = {}
       await pause('inputs');
       return {status, data: body};
     }
+    if (input.method === 'GET' && path === `/pm/workspaces/${WS}/work-attempts/${ATTEMPT}`) {
+      const response = {status: follow.attemptStatus, data: follow.attemptStatus === 200 ? {workspace_id: WS, attempt: follow.attempt} : {error: {code: 'NOT_FOUND', message: 'gone'}}};
+      follow.attemptStarted = true;
+      if (follow.holdAttempt) await follow.holdAttempt;
+      return response;
+    }
     if (input.method === 'GET' && path.startsWith(`/pm/workspaces/${WS}/work-attempts/`) && path.endsWith('/result')) {
       const status = follow.resultStatus;
-      const data = status === 200 ? resultBody() : {error: {code: status === 403 ? 'FORBIDDEN' : 'NOT_FOUND', message: 'no'}};
+      const data = status === 200 ? resultBody(path.split('/').at(-2)!) : {error: {code: status === 403 ? 'FORBIDDEN' : 'NOT_FOUND', message: 'no'}};
       await pause('result');
       return {status, data};
     }
@@ -197,7 +209,7 @@ export async function openWork(page: Page, f: ReturnType<typeof followUpFixture>
   await page.addInitScript(value => Object.defineProperty(navigator, 'language', {value}), lang);
   await page.goto(`/dashboard/?workbench=1#/pm/${WS}/discussions`);
   await expect(page.locator('[data-workspace-id]')).toHaveAttribute('data-workspace-id', WS, {timeout: 20000});
-  await page.evaluate(id => { location.hash = '#/item/' + id; }, WI);
+  await page.evaluate(({work, workspace, attempt}) => { location.hash = '#/item/' + work + '?'+ new URLSearchParams({workspace, work, attempt}); }, {work: WI, workspace: WS, attempt: ATTEMPT});
   if (section) await expect(page.locator('[data-work-section="next-turn"]')).toBeVisible({timeout: 20000});
   else await expect(page.locator('.conversation .msg, [data-session-readonly], [data-session-withdrawn]').first()).toBeVisible({timeout: 20000});
 }
