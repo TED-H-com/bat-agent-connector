@@ -102,6 +102,47 @@ async def complete(w, op):
     pytest.fail("Original review did not settle")
 
 
+async def test_second_owner_cancel_of_a_review_is_not_controller(proposal_world, monkeypatch):
+    """The original review owner is the only actor, so another owner is not_controller."""
+    from dataclasses import replace
+
+    from bat_agent_connector import pm_workspace
+    from bat_agent_connector.operations import Wait
+    from tests.test_api_v1 import http, token
+
+    w, ops = proposal_world, proposal_world["d"].ops
+
+    async def hold_review(_ctx):
+        raise Wait("waiting_external", "hold the review", delay_s=30)
+
+    monkeypatch.setitem(
+        ops.actions, "pm.conversation.adopt",
+        replace(ops.actions["pm.conversation.adopt"], run=hold_review))
+    proposal = await proposed(w)
+    request = adoption_request(w, proposal)
+    op = ops.create(OWNER, **request)[0]
+    current = pm_workspace.get_workspace(ops.db, OWNER, w["workspace_id"])
+    added, _ = ops.create(
+        OWNER, action="pm.workspace.member.set", target={"workspace_id": w["workspace_id"]},
+        params={"actor": "loop-review-owner", "role": "owner"},
+        preconditions={"expected_version": current["version"]}, idempotency_key=uuid.uuid4().hex)
+    await settle_operations(ops)
+    assert ops.get(added["operation_id"])["status"] == "succeeded"
+    assert ops.get(op["operation_id"])["status"] == "waiting_external"
+    tok = token(w["d"], "loop-review-owner", "observe", "manage", "start")
+    status, body = await http(w["port"], "GET", "/api/v1/operations/" + op["operation_id"], tok=tok)
+    assert status == 200, body
+    blocked = [row for row in body["operation"]["loop"]["blocked_actions"] if row.get("action") == "cancel"]
+    offered = [row for row in body["operation"]["loop"]["next_allowed_actions"]
+               if row.get("endpoint") == "cancel"]
+    status, result = await http(
+        w["port"], "POST", f"/api/v1/operations/{op['operation_id']}/cancel", tok=tok)
+    assert offered == []
+    assert blocked == [{"action": "cancel", "reason": "not_controller"}], (blocked, result)
+    assert status >= 400
+    assert result["error"]["message"] == "Only the original owner controls this review"
+
+
 @pytest.mark.parametrize('adapter', [None, pm_native_journal.ADAPTER])
 async def test_conversation_one_review_adopts_actual_requirements_without_referral(proposal_world, adapter):
     w, ops = proposal_world, proposal_world["d"].ops

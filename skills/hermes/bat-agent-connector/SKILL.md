@@ -4,14 +4,14 @@ description: Use this when you need to check on, read, wait for, or (only when e
 version: 0.2.6
 license: MIT
 metadata:
-  workflow_version: "2026-10-13.2"
+  workflow_version: "2026-10-16.1"
   api_version: "1"
   contract_version: "2026-10-08"
   generated_by: "scripts/generate_agent_skills.py"
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "97bcdf060e8cb62af96c00ec3c6d088c3383b643b3761aea3e07dd04868df404"
+  canonical_sha256: "48af70c4932c59e96b471dbbf8a31055262ad41c052e3606a4ba63d3a0f6c0ae"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -961,6 +961,51 @@ When you need live worktree `HEAD` and uncommitted status or commits added after
 the last turn-end receipt, call `pm_work_attempt_changes_get(workspace_id, attempt_id, max_commits?, max_files?)`;
 to read a single file's unified diff in a specific commit within `(base_commit..head_commit]`,
 call `pm_work_attempt_diff_get(workspace_id, attempt_id, commit, path)`.
+
+Read `loop` on a single operation only when `capabilities_get` shows
+`features.pm_workspaces.operation_loop` with `"version": 1`. Use
+`bat-agent-connector-mcp --principal-only` and this agent's own `BATC_API_TOKEN`.
+If that key is missing, or the version is not 1, do not read `loop`, and do not
+treat a missing `loop` as a failure. Stop the same way when another tool or
+capability you need is absent.
+
+1. Read the adopted scope with `pm_plan_accepted_get` and `pm_plan_head_get`.
+   There is no new route for that read.
+2. When the version is 1, read `loop.next_allowed_actions` before cancel or
+   resume. Do not send a verb the list omits. An action outside the allowlist
+   has no `loop` key; that absence is normal.
+3. A lost reply or a bounded wait uses the same idempotency key and reads the
+   original operation. Keep today's wait in seconds. Do not switch to a new key.
+4. When `loop.attempt_id` or `loop.result_read` is present, use the three Result
+   tools above. Do not nest that envelope inside `loop`.
+5. A delivery read does not decide requirement acceptance. The field stays
+   `not_evaluated_by_delivery`. Do not add another acceptance judgment.
+6. The registered `session.send` target is only `{host, session_id}`. P5's Work
+   target is a draft and is not in this build. Do not put a Work id in the
+   target, and do not start sending one because some other capability appeared.
+   `loop.work_item_id` stays null; that is not a failure. Completeness stays
+   `partial` with reason `session_target`, including when a stored target
+   carries a Work id or a malformed value. Do not call the legacy Fleet
+   `session_send`. This loop has no busy queue and does not derive.
+7. `loop.dashboard_hash` and `loop.links` are hashes. Resolve a hash against the
+   client's own Dashboard base with standard URL resolution. With no base, keep
+   the hash and treat the absolute URL as unavailable. Do not guess a localhost
+   origin, put a token in the query, or use `batc://`.
+8. Send `work.adopt_and_start` only after a `work_adopt_and_start` capability is
+   advertised. Read readiness only after a `work_profiles` capability is
+   advertised. `pm_profiles_get` and Settings → Agents are not a coding profile.
+9. `work_status(task_id)` is a recipe task, not a PM Work item.
+10. Publishing a PR, merging, deploying and maintenance are separate registered
+    actions on the same operation journal. When merge has succeeded and deploy
+    has failed, follow the deployment_retry rule later in this skill: it starts
+    `deployment.start` on the saved identity and does not merge again.
+11. On `UNCERTAIN_UNRESOLVED` or `PM_WORK_START_OUTCOME_UNPROVEN`, read and
+    reconcile the original operation. Do not start again. Manual, unknown and
+    foreign sessions stay read-only. `MANUAL_READ_ONLY` and `UNKNOWN_READ_ONLY`
+    are terminal refusals.
+12. Before replacing a fleet copy of this skill, compare its `workflow_version`
+    and the sha256 of this canonical file. If the fleet copy is newer, do not
+    overwrite it with an older canonical.
 
 ## Concept
 

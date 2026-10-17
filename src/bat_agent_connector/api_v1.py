@@ -28,6 +28,7 @@ from . import (
     dashboard_sync,
     deployment,
     integration,
+    pm_operation_loop,
     pr_delivery,
     repository_sync,
     resource_policy,
@@ -1249,6 +1250,7 @@ class ApiV1:
                                                     "work_start": pm_work_start.capabilities(self.daemon.ops),
                                                     "work_profiles": pm_work_profiles.capabilities(self.daemon.ops),
                                                     "work_attempt_results": pm_attempt_result_reads.capabilities(self.daemon.ops),
+                                                    "operation_loop": {"version": 1},
                                                     "workload": pm_workload.capabilities(),
                                                     "work_package_prepare": "pm.work_package.create" in self.daemon.ops.actions,
                                                     "issue_mapping": all(action in self.daemon.ops.actions for action in ("pm.issue.publish", "pm.issue.cancel")),
@@ -1515,17 +1517,20 @@ class ApiV1:
             # Waiting is not a read grant: membership or original source access
             # may have changed. Outside the admission catch: never mark this unsent.
             op = self.daemon.ops.get(op["operation_id"], principal=principal)
+        op = await pm_operation_loop.attach(self.daemon.ops, principal, op)
         return (202 if created else 200), {"operation": op, "created": created}
 
     async def operation(self, op, principal, **_):
-        return 200, {"operation": self.daemon.ops.get(op, principal=principal),
+        operation = await pm_operation_loop.attach(
+            self.daemon.ops, principal, self.daemon.ops.get(op, principal=principal))
+        return 200, {"operation": operation,
                      "work_items": work_items.work_items_for(self.daemon.journal.db, "operation", op),
                      "cleanup_receipts": cleanup.receipts(self.daemon.ops, op)}
 
     async def cancel_operation(self, principal, op, **_):
         result = self.daemon.ops.cancel(principal, op)
         await self.daemon.artifact_store.reap_best_effort(op)
-        return 200, {"operation": result}
+        return 200, {"operation": await pm_operation_loop.attach(self.daemon.ops, principal, result)}
 
     async def create_artifact(self, principal, query, body, headers, **_):
         envelope = {"action": "artifact.upload", "target": body.get("target", {}),
@@ -1546,7 +1551,8 @@ class ApiV1:
         return 200, {"artifact": artifacts.get(self.daemon.journal.db, aid, int(revision), principal=principal)}
 
     async def resume_operation(self, principal, op, **_):
-        return 200, {"operation": self.daemon.ops.resume(principal, op)}
+        resumed = self.daemon.ops.resume(principal, op)
+        return 200, {"operation": await pm_operation_loop.attach(self.daemon.ops, principal, resumed)}
 
     async def events(self, query, principal, **_):
         return 200, dashboard_sync.event_page(

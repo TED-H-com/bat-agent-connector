@@ -85,6 +85,17 @@
 
 - A Board that was already left no longer clears another project's selected Work when its own read fails.
 
+- Creating an operation, reading that one operation, cancelling it, and
+  resuming it can include a loop. The loop covers the actions on this work
+  loop and a child operation that a work start has recorded. It names that
+  operation, the Work and attempt when those sources are still visible, a
+  dashboard hash, and whether this caller may cancel or resume. HTTP and MCP
+  return the same loop. Capabilities advertise operation_loop version 1, and
+  the agent skill teaches when to read it and when a missing loop is expected.
+  A `session.send` loop stays partial with reason `session_target`. This build
+  registers only `{host, session_id}` for that action and does not treat a
+  Work id on the target as complete.
+
 - Fleet: keyboard focus stays on the control you are using while a status
   refresh or your own action runs. The control looks unavailable until that
   work finishes, a second press is ignored, and a background refresh stays quiet.
