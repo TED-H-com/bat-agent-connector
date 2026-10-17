@@ -919,10 +919,13 @@ capability you need is absent.
    tools above. Do not nest that envelope inside `loop`.
 5. A delivery read does not decide requirement acceptance. The field stays
    `not_evaluated_by_delivery`. Do not add another acceptance judgment.
-6. Keep a `session.send` target as `{host, session_id}` until a capability that
-   accepts a Work target is advertised. Until then `loop.work_item_id` may be
-   null and the completeness reason may be `session_target`. Do not call the
-   legacy Fleet `session_send`. This loop has no busy queue and does not derive.
+6. The registered `session.send` target is only `{host, session_id}`. P5's Work
+   target is a draft and is not in this build. Do not put a Work id in the
+   target, and do not start sending one because some other capability appeared.
+   `loop.work_item_id` stays null; that is not a failure. Completeness stays
+   `partial` with reason `session_target`, including when a stored target
+   carries a Work id or a malformed value. Do not call the legacy Fleet
+   `session_send`. This loop has no busy queue and does not derive.
 7. `loop.dashboard_hash` and `loop.links` are hashes. Resolve a hash against the
    client's own Dashboard base with standard URL resolution. With no base, keep
    the hash and treat the absolute URL as unavailable. Do not guess a localhost
@@ -939,6 +942,9 @@ capability you need is absent.
     reconcile the original operation. Do not start again. Manual, unknown and
     foreign sessions stay read-only. `MANUAL_READ_ONLY` and `UNKNOWN_READ_ONLY`
     are terminal refusals.
+12. Before replacing a fleet copy of this skill, compare its `workflow_version`
+    and the sha256 of this canonical file. If the fleet copy is newer, do not
+    overwrite it with an older canonical.
 
 ## Concept
 

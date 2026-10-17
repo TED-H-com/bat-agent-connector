@@ -2,12 +2,16 @@
 
 ## Next release (unreleased)
 
-- A single operation read can include a loop for the actions on this work
-  loop and for a proven work.start child. It names that operation, the Work
-  and attempt when those sources are still visible, a dashboard hash, and
-  whether this caller may cancel or resume. HTTP and MCP return the same
-  loop. Capabilities advertise operation_loop version 1, and the agent skill
-  teaches when to read it and when a missing loop is expected.
+- Creating an operation, reading that one operation, cancelling it, and
+  resuming it can include a loop. The loop covers the actions on this work
+  loop and a child operation that a work start has recorded. It names that
+  operation, the Work and attempt when those sources are still visible, a
+  dashboard hash, and whether this caller may cancel or resume. HTTP and MCP
+  return the same loop. Capabilities advertise operation_loop version 1, and
+  the agent skill teaches when to read it and when a missing loop is expected.
+  A `session.send` loop stays partial with reason `session_target`. This build
+  registers only `{host, session_id}` for that action and does not treat a
+  Work id on the target as complete.
 
 - Capture a remote file: the button you pressed keeps keyboard focus and
   ignores a second press until that preview or save finishes. A button that
