@@ -239,7 +239,7 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
     workId=/^wi_[0-9a-f]{20}$/.test(id||'')?id:null;selected='';try{const saved=JSON.parse(localStorage.getItem(navigation));if(saved.workId===workId)selected=saved.review_id||'';}catch{}
     void refresh();}
   workChoice.addEventListener('change',()=>setWork(workChoice.value));
-  verifier=workspaceExecutionVerification({h,t,api:request,alive,workspaceId,workspace,caps,form,labelled,errorBox,namespace,fixedResult,allowedAction,onSaved:refreshAfterSave,onUnavailable:failure,onConfiguration:value=>{if(model){model.configuration=value?.available&&digest.test(value.command_digest)?value:null;matrixKey='';create?.sync();}}});
+  verifier=workspaceExecutionVerification({h,t,api:request,alive,workspaceId,workspace,caps,form,labelled,errorBox,namespace,fixedResult,allowedAction,onSaved:async()=>{await onSaved();await refresh();},onUnavailable:failure,onConfiguration:value=>{if(model){model.configuration=value?.available&&digest.test(value.command_digest)?value:null;matrixKey='';create?.sync();}}});
   element.insertBefore(verifier.element,draft.parentElement);
   if(fixedResult){workChoice.closest('label').hidden=true;
     element.classList.remove('panel');element.querySelector('h2').textContent=t('pmq_result_open');}

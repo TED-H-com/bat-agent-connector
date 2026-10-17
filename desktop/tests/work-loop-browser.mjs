@@ -259,7 +259,9 @@ try {
     assert.equal((await receive()).result_verified,true);
     await expect(verifier).toContainText(fixed.candidate);
     await expect(page.locator('[data-work-quality]')).not.toContainText(zh?'需求驗收: 已接受':'Requirement acceptance: Accepted');
-    await expect(page.locator('[data-work-result] [data-check=verification]')).toHaveText(zh?'已驗證':'Verified');
+    const conclusion=page.locator('[data-work-result] [data-check=verification]');
+    await expect(conclusion).toHaveText(zh?'已驗證':'Verified');
+    await expect(conclusion).toBeFocused();await expect(conclusion).toBeInViewport();
     await shot('03-verified-result');
   }
   if (f.review_result) {

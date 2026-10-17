@@ -199,7 +199,10 @@ BATC_WORK_LOOP_BROWSER=1 pytest-disktmp uv run --python 3.13 --extra dev pytest 
 
 需先安裝 `desktop` npm 依賴及 Playwright Chromium。一般 Python suite 會略過
 這組需瀏覽器的測試；desktop CI 明確啟用並執行，產物在
-`desktop/test-results/work-loop/`，隨既有 `desktop-shared-ui-fixtures` artifact 保存。
+`desktop/test-results/work-loop/`，分別隨 `desktop-work-loop-work` 與
+`desktop-work-loop-evidence` artifacts 保存。CI 依 `fixed_result` 名稱選取成果
+審閱／驗證組，其餘屬工作組；兩組互斥且合起來覆蓋整個檔案。每組沿用三分鐘
+腳本上限，單項等待、持久化與故障注入均不變。
 
 此回歸涵蓋 K03–09、K12 與 K15 的部分 I 路徑，以及 UX-A13
 自動銜接的 I 證據。它使用已設定的專案及 repository／PM 綁定；直接開始路徑

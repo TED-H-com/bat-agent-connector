@@ -35,6 +35,10 @@ test(`verify the fixed Result without selecting an internal execution: ${locale}
   expect(f.state.writes[0].body).toEqual({action:VERIFY,target:{workspace_id:workspaceId,execution_operation_id:childId},
     params:{candidate_commit:candidate,tree_hash:f.state.config.tree_hash,command_digest:f.state.config.command_digest},
     preconditions:{handoff_contract_digest:f.state.config.handoff_contract_digest}});
+  const conclusion=page.locator('[data-work-result] [data-check=verification]');
+  await expect(conclusion).toHaveText(zh?'已驗證':'Verified');
+  await expect(conclusion).toBeFocused();await expect(conclusion).toBeInViewport();
+  await page.screenshot({path:info.outputPath('verified-conclusion.png'),fullPage:true});
   await panel(page).locator('[data-quality-create]>summary').click();
   await expect(editor(page).getByLabel(zh?'指定驗證':'Required verification',{exact:true}).first()
     .locator(`option[value="${f.state.verifyRecords[0].operation_id}"]`)).toHaveCount(1);
@@ -87,4 +91,19 @@ test('an unknown fixed Result verification retains its original request after a 
   await editor(page,VERIFY).getByRole('button',{name:'Check original request',exact:true}).click();
   await expect.poll(()=>f.state.writes.length).toBe(2);expect(f.state.writes[1]).toEqual(original);
   expect(f.state.verifyRecords).toHaveLength(1);
+});
+
+
+test('a delayed verification result preserves focus moved to another draft',async({page})=>{
+  const f=fixture();await mountQuality(page,f,'en',true);await open(page);await verifier(page).locator('summary').first().click();
+  await expect(editor(page,VERIFY).locator('button[type=submit]')).toBeEnabled();
+  let release!:()=>void;f.state.gate=new Promise<void>(resolve=>{release=resolve;});
+  const reads=f.state.reads.filter((p:string)=>p.includes('/work-packages')).length;
+  await editor(page,VERIFY).locator('button[type=submit]').click();
+  await expect.poll(()=>f.state.reads.filter((p:string)=>p.includes('/work-packages')).length).toBeGreaterThan(reads);
+  await page.evaluate(()=>{const field=document.createElement('textarea');field.setAttribute('aria-label','Next draft');document.body.append(field);field.focus();});
+  const field=page.getByLabel('Next draft',{exact:true});await field.fill('Keep editing here');
+  release();f.state.gate=null;await expect(editor(page,VERIFY).locator('button[type=submit]')).toBeEnabled();
+  await expect(field).toBeFocused();await expect(field).toHaveValue('Keep editing here');
+  expect(f.state.writes).toHaveLength(1);
 });

@@ -24,6 +24,19 @@ export function workspaceExecutionVerification({h,t,api,alive,workspaceId,worksp
   const line=(key,value)=>h('p',{class:'pm-source'},h('strong',{},t(key)+': '),value);
   function clear(){ready=false;configuration=null;editor?.dispose();editor=null;factBody.replaceChildren();notes.replaceChildren();holder.replaceChildren();onConfiguration(null);}
   function withdraw(){generation++;clear();sources=[];picker.replaceChildren();status.replaceChildren();}
+  async function refreshAfterSave(){
+    const doc=element.ownerDocument,owner=doc.activeElement,source=selected;
+    let restore=element.contains(owner);
+    const moved=event=>{if(event.target!==owner)restore=false;};
+    doc.addEventListener('focusin',moved);
+    try{
+      await onSaved();alive();
+      if(restore&&ready&&selected===source&&fixedMatches(configuration)&&element.isConnected&&!element.closest('[hidden]')){
+        const conclusion=element.closest('[data-work-result]')?.querySelector('[data-check="verification"]');
+        if(conclusion){conclusion.tabIndex=-1;conclusion.focus();}
+      }
+    }finally{doc.removeEventListener('focusin',moved);}
+  }
   async function load(){
     const ticket=++generation;clear();if(!selected||!sources.some(row=>row.operation_id===selected))return;
     status.replaceChildren(skeleton(2));
@@ -49,7 +62,7 @@ export function workspaceExecutionVerification({h,t,api,alive,workspaceId,worksp
       const rebase=button({variant:'secondary',label:t('pmq_verify_use_config'),onClick:()=>{if(editor&&!editor.locked()&&configuration){for(const key of Object.keys(fields))editor.set(key,configuration[key]||'');editor.update();}}});
       editor=form({namespace:`${namespace}.verification`,api,requiredScope:'operate',action:ACTION,target:target(),fields,
         params:values=>{if(!admissible())throw Error(t('pmq_verify_changed'));return {candidate_commit:values.candidate_commit,tree_hash:values.tree_hash,command_digest:values.command_digest};},
-        preconditions:()=>({handoff_contract_digest:fields.handoff_contract_digest.value}),permitted:admissible,recoverPermitted:writer,label:'pmq_verify_run',onSaved,
+        preconditions:()=>({handoff_contract_digest:fields.handoff_contract_digest.value}),permitted:admissible,recoverPermitted:writer,label:'pmq_verify_run',onSaved:fixedResult?refreshAfterSave:onSaved,
         onStateChange:()=>{rebase.hidden=matches();rebase.disabled=!canWrite()||!!editor?.locked();},extra:h('div',{},h('p',{class:'muted'},t(fixedResult?'pmq_verify_result_effect':'pmq_verify_effect')),h('div',{class:'actions'},rebase))});
       holder.replaceChildren(editor.box);editor.update();
     }catch(err){if(valid(ticket)){clear();status.replaceChildren(errorBox(err, {within:status}));if([401,403,404].includes(err.status))onUnavailable(err);}}

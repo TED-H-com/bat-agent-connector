@@ -57,6 +57,9 @@ replacement process is requested. Source withdrawal retires the editor and late
 configuration replies. Successful verification refreshes the same Result and
 makes its original receipt available for an explicit review policy/conclusion.
 Passing verification alone never accepts a requirement or creates a review.
+After explicit verification, focus moves to the refreshed verification conclusion
+so it stays visible. A newer user focus, changed source or retired view prevents
+that move.
 
 ## Discussing one saved assessment
 

@@ -129,7 +129,7 @@ jobs:
   central-ui:
     runs-on: ubuntu-24.04
     # Five minutes for setup and a shared ten-minute script budget below.
-    # PM walkthrough (2m) and Work loop (3m) have separate script budgets.
+    # PM walkthrough retains its separate two-minute script budget.
     timeout-minutes: 20
     env:
       TZ: UTC
@@ -198,16 +198,6 @@ jobs:
         env:
           BATC_WALKTHROUGH_SHOTS: test-results/walkthrough
         run: npm run test:walkthrough
-      - name: Work start, closed-client queue, Result and PR through actual central
-        working-directory: .
-        timeout-minutes: 3
-        env:
-          BATC_WORK_LOOP_BROWSER: "1"
-        run: |
-          mkdir -p "$HOME/agent-work/tmp/pytest"
-          loop_temp=$(mktemp -d "$HOME/agent-work/tmp/pytest/work-loop-XXXXXX")
-          trap 'rm -rf -- "$loop_temp"' EXIT
-          uv run --extra dev pytest -q tests/test_pm_work_loop_browser.py --basetemp="$loop_temp/bt"
       - name: Preserve shared UI fixture evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -216,6 +206,56 @@ jobs:
           path: |
             desktop/test-results/
             desktop/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  work-loop:
+    name: work-loop (${{ matrix.part }})
+    runs-on: ubuntu-24.04
+    # Five minutes for setup; each partition retains the three-minute script cap.
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - part: work
+            selection: not fixed_result
+          - part: evidence
+            selection: fixed_result
+    env:
+      TZ: UTC
+      BATC_WORK_LOOP_BROWSER: "1"
+      WORK_LOOP_SELECTION: ${{ matrix.selection }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24.21.0"
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.13"
+      - run: uv sync --locked --extra dev
+      - run: npm ci
+        working-directory: desktop
+      - run: npx playwright install --with-deps chromium
+        working-directory: desktop
+      - name: Work loop through actual central
+        timeout-minutes: 3
+        run: |
+          mkdir -p "$HOME/agent-work/tmp/pytest"
+          loop_temp=$(mktemp -d "$HOME/agent-work/tmp/pytest/work-loop-XXXXXX")
+          trap 'rm -rf -- "$loop_temp"' EXIT
+          uv run --extra dev pytest -q tests/test_pm_work_loop_browser.py -k "$WORK_LOOP_SELECTION" --basetemp="$loop_temp/bt"
+      - name: Preserve Work loop evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: desktop-work-loop-${{ matrix.part }}
+          path: desktop/test-results/work-loop/
           if-no-files-found: ignore
           retention-days: 7
 

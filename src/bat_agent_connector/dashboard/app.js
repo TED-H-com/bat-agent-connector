@@ -16282,6 +16282,27 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 		picker.replaceChildren();
 		status.replaceChildren();
 	}
+	async function refreshAfterSave() {
+		const doc = element.ownerDocument, owner = doc.activeElement, source = selected;
+		let restore = element.contains(owner);
+		const moved = (event) => {
+			if (event.target !== owner) restore = false;
+		};
+		doc.addEventListener("focusin", moved);
+		try {
+			await onSaved();
+			alive();
+			if (restore && ready && selected === source && fixedMatches(configuration) && element.isConnected && !element.closest("[hidden]")) {
+				const conclusion = element.closest("[data-work-result]")?.querySelector("[data-check=\"verification\"]");
+				if (conclusion) {
+					conclusion.tabIndex = -1;
+					conclusion.focus();
+				}
+			}
+		} finally {
+			doc.removeEventListener("focusin", moved);
+		}
+	}
 	async function load() {
 		const ticket = ++generation;
 		clear();
@@ -16346,7 +16367,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 				permitted: admissible,
 				recoverPermitted: writer,
 				label: "pmq_verify_run",
-				onSaved,
+				onSaved: fixedResult ? refreshAfterSave : onSaved,
 				onStateChange: () => {
 					rebase.hidden = matches();
 					rebase.disabled = !canWrite() || !!editor?.locked();
@@ -17156,7 +17177,10 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		namespace,
 		fixedResult,
 		allowedAction,
-		onSaved: refreshAfterSave,
+		onSaved: async () => {
+			await onSaved();
+			await refresh();
+		},
 		onUnavailable: failure,
 		onConfiguration: (value) => {
 			if (model) {
