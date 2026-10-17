@@ -433,8 +433,8 @@ async def _check_verbs(port, ops, tokens, make, rows):
             port, tokens[principal], _hold(ops, make()), "resume", resume_reason, resume_message)
 
 
-async def test_session_send_work_target_stays_partial_on_the_public_read(served, mock, monkeypatch):
-    """HTTP and MCP keep session.send partial after a Work id is stored on the target."""
+async def test_session_send_without_admitted_work_binding_cannot_claim_work_authority(served, mock, monkeypatch):
+    """Legacy sends stay partial; forged Work targets fail closed at every public exit."""
     daemon, port = served
     actor = "loop-send-partial"
     tok = token(daemon, actor, "observe", "manage", "start", "operate")
@@ -461,6 +461,8 @@ async def test_session_send_work_target_stays_partial_on_the_public_read(served,
         assert created["operation"]["loop"]["completeness"] == partial
         assert created["operation"]["loop"]["work_item_id"] is None
 
+        await settle_operations(daemon.ops)
+        assert (await _loops(server, port, tok, operation_id))["completeness"] == partial
         stored = json.loads(daemon.ops.db.execute(
             "SELECT target FROM operations WHERE operation_id=?", (operation_id,)).fetchone()[0])
         assert set(stored) == {"host", "session_id"}
@@ -469,10 +471,15 @@ async def test_session_send_work_target_stays_partial_on_the_public_read(served,
             daemon.ops.db.execute(
                 "UPDATE operations SET target=? WHERE operation_id=?",
                 (json.dumps({**stored, "work_item_id": stuffed}), operation_id))
-            loop = await _loops(server, port, tok, operation_id)
-            assert loop["completeness"] == partial, stuffed
-            assert loop["work_item_id"] is None
-            assert loop["completeness"]["status"] != "complete"
+            status, hidden = await http(port, "GET", "/api/v1/operations/" + operation_id, tok=tok)
+            assert status == 404 and hidden["error"]["code"] == "NOT_FOUND", stuffed
+            assert "operation" not in hidden and "loop" not in hidden
+            status, rpc_hidden = await http(port, "POST", "/rpc", tok=tok,
+                body={"method": "op_get", "params": {"operation_id": operation_id}})
+            assert status == 400 and rpc_hidden["error"] == "NOT_FOUND", stuffed
+            assert "operation" not in rpc_hidden and "loop" not in rpc_hidden
+            with pytest.raises(ToolError, match="NOT_FOUND"):
+                await server.call_tool("operation_get", {"operation_id": operation_id})
     finally:
         await fleet.close()
 
