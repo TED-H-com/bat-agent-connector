@@ -13,8 +13,8 @@ from pathlib import Path
 from bat_agent_connector import api_auth, artifacts, platform_files
 from tests.mockbat import TOKEN, MockBat
 from tests.test_artifact_capture import daemon as daemon_fixture
-from tests.test_artifact_capture import human as human_fixture
 from tests.test_checkpoints import MANUAL, bat_writes, snapshot
+from tests.test_checkpoints import make_human as human_fixture
 
 
 async def main():
@@ -26,7 +26,7 @@ async def main():
         os.environ.pop("BATC_DEVICE_ID", None)
         mock = MockBat()
         await mock.start()
-        human = human_fixture.__wrapped__(root)
+        human = human_fixture(root)
         contents = bytes([0, 255, 128, 13, 10, 60, 38, 34, 195, 169])
         source = human / "notes.txt"
         source.write_bytes(contents)

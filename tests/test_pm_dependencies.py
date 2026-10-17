@@ -355,7 +355,7 @@ async def peer_repository(w, mock):
     ops = w["d"].ops
     human, remote = w["human"].parent / "peer", w["human"].parent / "peer.git"
     human.mkdir()
-    git(human, "init", "-q", "-b", "main")
+    git(human, "init", "--template=", "-q", "-b", "main")
     git(human, "config", "user.name", "fixture")
     git(human, "config", "user.email", "fixture@example.invalid")
     (human / "package.json").write_text(json.dumps({"name": "shared-widget", "version": "1.2.0", "dependencies": {"leaf-library": "^2"}}))

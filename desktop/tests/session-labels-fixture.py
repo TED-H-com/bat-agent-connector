@@ -37,7 +37,7 @@ async def main():
         os.environ.pop("BATC_DEVICE_ID", None)
         source = root / "manual"
         source.mkdir()
-        git(source, "init", "-b", "main")
+        git(source, "init", "--template=", "-b", "main")
         git(source, "config", "user.name", "Synthetic Fixture")
         git(source, "config", "user.email", "fixture@example.invalid")
         (source / "code.txt").write_bytes(b"original commit\n")
