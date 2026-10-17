@@ -244,7 +244,7 @@ def test_merge_first_parent_diff_excludes_changes_only_on_main(tmp_path):
             "-C", str(repo), *args,
         ], text=True, stderr=subprocess.DEVNULL).strip()
 
-    git("init", "--initial-branch=main")
+    git("init", "--template=", "--initial-branch=main")
     (repo / "README.md").write_text("Base\n")
     git("add", ".")
     git("commit", "-m", "Base")

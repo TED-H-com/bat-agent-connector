@@ -22,7 +22,7 @@ CLEANER = api_auth.Principal(START.actor, frozenset({"observe", "cleanup"}))
 async def refused_start(daemon, mock, tmp_path, monkeypatch):
     repo = tmp_path / "managed-source"
     repo.mkdir()
-    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+    subprocess.run(["git", "init", "--template=", "-q", "-b", "main", str(repo)], check=True)
     git(repo, "config", "user.email", "fixture@example.invalid")
     git(repo, "config", "user.name", "Fixture")
     git(repo, "config", "batc.managed-clone", "true")

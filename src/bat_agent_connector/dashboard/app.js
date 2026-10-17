@@ -8072,12 +8072,261 @@ var workStartStrings = {
 	}
 };
 //#endregion
+//#region src/pm-work-result-strings.js
+var workResultStrings = {
+	"zh-TW": {
+		wres_heading: "成果",
+		wres_invalid_envelope: "無法讀取這份成果。",
+		wres_state_accepted: "已受理",
+		wres_state_starting: "啟動中",
+		wres_state_active: "執行中",
+		wres_state_waiting: "等待回答或權限",
+		wres_state_turn_ended: "本輪已結束",
+		wres_state_process_ended: "工作階段已結束",
+		wres_state_failed: "失敗",
+		wres_state_unknown: "未知",
+		wres_reason_handoff_outcome_uncertain: "開始可能已開啟工作階段，再次開始前請先查看 BAT。",
+		wres_reason_bat_unreachable: "無法連到 BAT。",
+		wres_reason_observation_stale: "最後一次觀察已過時。",
+		wres_reason_unloaded_history_session: "BAT 尚未載入這個工作階段。",
+		wres_reason_turn_boundary_not_collected: "尚未記錄這一輪的結束。",
+		wres_reason_turn_marker_not_visible: "尚未記錄這一輪的結束。",
+		wres_reason_session_not_managed_by_attempt: "這個工作階段不是此次開始所管理的，只能檢視。",
+		wres_agent_error: "代理回報了錯誤。",
+		wres_waiting_pending: "請在即時輸出中回答。",
+		wres_status_needs_attention: "需要處理：請開啟操作以繼續或取消。",
+		wres_open_live_output: "開啟即時輸出",
+		wres_view_operation: "查看操作",
+		wres_try_again: "再試一次",
+		wres_agent_summary_label: "代理自述（未經驗證）",
+		wres_no_recorded_turn: "尚未記錄已結束的回合。",
+		wres_pill_claimed_done: "代理表示已完成",
+		wres_check_verification: "驗證",
+		wres_verification_unverified: "未驗證",
+		wres_verification_running: "驗證中",
+		wres_verification_verified: "已驗證",
+		wres_verification_failed: "驗證失敗",
+		wres_verification_stale: "驗證的是較舊的 commit",
+		wres_check_review: "審閱",
+		wres_review_unassessed: "尚未審閱",
+		wres_review_accepted: "審閱已接受",
+		wres_review_rejected: "審閱未接受",
+		wres_review_revocation: "審閱已撤回",
+		wres_check_acceptance: "需求驗收",
+		wres_acceptance_passed: "已驗收",
+		wres_acceptance_blocked: "未通過驗收",
+		wres_acceptance_unassessed: "尚未驗收",
+		wres_check_pr: "PR",
+		wres_merge_not_started: "尚未建立 PR",
+		wres_merge_pr_open: "PR 已開啟",
+		wres_merge_pr_closed_unmerged: "已關閉，未合併",
+		wres_merge_merge_pending: "合併中",
+		wres_merge_merged: "已合併",
+		wres_check_deployment: "部署",
+		wres_deploy_not_deployed: "尚未部署",
+		wres_deploy_pending: "等待部署",
+		wres_deploy_running: "部署中",
+		wres_deploy_succeeded: "已部署",
+		wres_deploy_and_verified: "並已驗證",
+		wres_deploy_succeeded_verified: "已部署並已驗證",
+		wres_deploy_failed: "部署失敗",
+		wres_deploy_needs_attention: "部署需要處理",
+		wres_deploy_cancelled: "部署已取消",
+		wres_check_delivery_goal: "交付目標",
+		wres_goal_pr: "PR",
+		wres_goal_reviewable_changes: "可審閱修改",
+		wres_unknown: "未知",
+		wres_changes_summary: "{commits} 個 commit 共修改 {files} 個檔案，+{additions} −{deletions}",
+		wres_changes_summary_one: "{commits} 個 commit 共修改 {files} 個檔案，+{additions} −{deletions}",
+		wres_changes_summary_one_file: "{commits} 個 commit 共修改 {files} 個檔案，+{additions} −{deletions}",
+		wres_changes_summary_one_commit: "{commits} 個 commit 共修改 {files} 個檔案，+{additions} −{deletions}",
+		wres_changes_partly_read: "修改只讀取到一部分",
+		wres_as_of_last_turn: "以最後記錄的回合為準",
+		wres_file_added: "新增",
+		wres_file_modified: "修改",
+		wres_file_deleted: "刪除",
+		wres_file_renamed: "重新命名",
+		wres_show_all_files: "顯示全部 {n} 個檔案",
+		wres_show_all_files_one: "顯示 1 個檔案",
+		wres_base_commit: "基準",
+		wres_result_commit: "成果 commit",
+		wres_source_turn_end_observation: "回合結束時觀察到",
+		wres_source_verified_commit: "已驗證的 commit",
+		wres_source_delivered_commit: "已交付的 commit",
+		wres_uncommitted_changes: "未提交的修改：{n}",
+		wres_uncommitted_unknown: "未知：BAT 無法證明工作樹沒有未提交的修改。",
+		wres_status_unavailable: "不可用",
+		wres_reason_session_not_found: "找不到工作階段。",
+		wres_reason_transcript_truncated_by_size: "對話記錄因大小限制已截斷。",
+		wres_reason_archived_messages_omitted: "已略過封存的訊息。",
+		wres_reason_parse_error: "解析工作階段資料失敗。",
+		wres_reason_session_not_started_yet: "工作階段尚未開始。",
+		wres_reason_start_outcome_uncertain: "啟動結果尚未確定。",
+		wres_reason_turn_slice_bounded: "回合切片受到筆數上限限制。",
+		wres_reason_result_document_bounded: "成果文件受到大小上限限制。",
+		wres_reason_worktree_unreachable: "無法存取工作樹。",
+		wres_reason_bat_empty_status_not_clean_proof: "BAT 無法證明工作樹沒有未提交的修改。",
+		wres_reason_diff_exceeded_pipe_limit: "差異超出管道緩衝區上限。",
+		wres_reason_commit_limit_exceeded: "commit 數量超出上限。",
+		wres_reason_changeset_time_budget_exceeded: "收集變更摘要超時。",
+		wres_reason_base_commit_not_ancestor: "基準 commit 不是 head 的祖先。",
+		wres_reason_source_digest_conflict: "同一回合位置觀察到不同的內容。",
+		wres_reason_generic_limit: "另有其他限制",
+		wres_recorded_turns_count: "已記錄的回合（{n}）",
+		wres_recorded_turns_count_one: "已記錄的回合（1）",
+		wres_latest_turn: "最新",
+		wres_showing_latest_20: "僅顯示最新 20 筆。",
+		wres_details: "詳細資料",
+		wres_attempt_id: "嘗試代號",
+		wres_result_id: "成果代號",
+		wres_start_operation_id: "啟動操作",
+		wres_execution_operation_id: "執行操作",
+		wres_source_key: "來源鍵",
+		wres_digest: "摘要雜湊",
+		wres_collection_outcome: "收集結果",
+		wres_raw_state: "原始狀態",
+		wres_raw_stage: "原始階段",
+		wres_raw_reasons: "原因",
+		wres_unlisted_completeness_reasons: "未列出的完整度原因",
+		wres_unlisted_facets: "未列出的狀態",
+		wres_unlisted_file_statuses: "未列出的檔案狀態",
+		wres_usage: "用量",
+		wres_usage_context_tokens: "上下文詞元",
+		wres_usage_context_window: "上下文視窗",
+		wres_usage_num_turns: "回合數",
+		wres_exit_code_not_exposed: "結束碼：BAT 不提供"
+	},
+	en: {
+		wres_heading: "Result",
+		wres_invalid_envelope: "This result could not be read.",
+		wres_state_accepted: "Accepted",
+		wres_state_starting: "Starting",
+		wres_state_active: "Working",
+		wres_state_waiting: "Waiting for an answer or permission",
+		wres_state_turn_ended: "Turn ended",
+		wres_state_process_ended: "Session ended",
+		wres_state_failed: "Failed",
+		wres_state_unknown: "Unknown",
+		wres_reason_handoff_outcome_uncertain: "The start may have opened a session; check BAT before starting again.",
+		wres_reason_bat_unreachable: "BAT is not reachable.",
+		wres_reason_observation_stale: "The last observation is out of date.",
+		wres_reason_unloaded_history_session: "BAT has not loaded this session.",
+		wres_reason_turn_boundary_not_collected: "The end of this turn has not been recorded yet.",
+		wres_reason_turn_marker_not_visible: "The end of this turn has not been recorded yet.",
+		wres_reason_session_not_managed_by_attempt: "This session is not managed by this attempt; it is shown read-only.",
+		wres_agent_error: "The agent reported an error.",
+		wres_waiting_pending: "Answer it in the live output.",
+		wres_status_needs_attention: "Needs attention: open the operation to resume or cancel it.",
+		wres_open_live_output: "Open live output",
+		wres_view_operation: "View operation",
+		wres_try_again: "Try again",
+		wres_agent_summary_label: "The agent's summary (not verified)",
+		wres_no_recorded_turn: "No turn has been recorded yet.",
+		wres_pill_claimed_done: "The agent says it is done",
+		wres_check_verification: "Verification",
+		wres_verification_unverified: "Not verified",
+		wres_verification_running: "Verifying",
+		wres_verification_verified: "Verified",
+		wres_verification_failed: "Verification failed",
+		wres_verification_stale: "Verified an older commit",
+		wres_check_review: "Review",
+		wres_review_unassessed: "Not reviewed",
+		wres_review_accepted: "Accepted in review",
+		wres_review_rejected: "Rejected in review",
+		wres_review_revocation: "Review withdrawn",
+		wres_check_acceptance: "Requirement acceptance",
+		wres_acceptance_passed: "Accepted",
+		wres_acceptance_blocked: "Not accepted",
+		wres_acceptance_unassessed: "Not assessed",
+		wres_check_pr: "Pull request",
+		wres_merge_not_started: "No pull request",
+		wres_merge_pr_open: "Pull request open",
+		wres_merge_pr_closed_unmerged: "Closed without merging",
+		wres_merge_merge_pending: "Merging",
+		wres_merge_merged: "Merged",
+		wres_check_deployment: "Deployment",
+		wres_deploy_not_deployed: "Not deployed",
+		wres_deploy_pending: "Waiting to deploy",
+		wres_deploy_running: "Deploying",
+		wres_deploy_succeeded: "Deployed",
+		wres_deploy_and_verified: "and verified",
+		wres_deploy_succeeded_verified: "Deployed and verified",
+		wres_deploy_failed: "Deployment failed",
+		wres_deploy_needs_attention: "Deployment needs attention",
+		wres_deploy_cancelled: "Deployment cancelled",
+		wres_check_delivery_goal: "Delivery goal",
+		wres_goal_pr: "Pull request",
+		wres_goal_reviewable_changes: "Reviewable changes",
+		wres_unknown: "Unknown",
+		wres_changes_summary: "{files} files changed in {commits} commits, +{additions} −{deletions}",
+		wres_changes_summary_one: "1 file changed in 1 commit, +{additions} −{deletions}",
+		wres_changes_summary_one_file: "1 file changed in {commits} commits, +{additions} −{deletions}",
+		wres_changes_summary_one_commit: "{files} files changed in 1 commit, +{additions} −{deletions}",
+		wres_changes_partly_read: "Changes were only partly read",
+		wres_as_of_last_turn: "As of the last recorded turn",
+		wres_file_added: "added",
+		wres_file_modified: "modified",
+		wres_file_deleted: "deleted",
+		wres_file_renamed: "renamed",
+		wres_show_all_files: "Show all {n} files",
+		wres_show_all_files_one: "Show 1 file",
+		wres_base_commit: "Base",
+		wres_result_commit: "Result commit",
+		wres_source_turn_end_observation: "seen at the end of a turn",
+		wres_source_verified_commit: "the verified commit",
+		wres_source_delivered_commit: "the delivered commit",
+		wres_uncommitted_changes: "Uncommitted changes: {n}",
+		wres_uncommitted_unknown: "Unknown: BAT cannot prove the working tree has no uncommitted changes.",
+		wres_status_unavailable: "Unavailable",
+		wres_reason_session_not_found: "The session was not found.",
+		wres_reason_transcript_truncated_by_size: "The transcript was truncated due to size limits.",
+		wres_reason_archived_messages_omitted: "Archived messages were omitted.",
+		wres_reason_parse_error: "Failed to parse session data.",
+		wres_reason_session_not_started_yet: "The session has not started yet.",
+		wres_reason_start_outcome_uncertain: "The start outcome is uncertain.",
+		wres_reason_turn_slice_bounded: "The turn slice was bounded by item limits.",
+		wres_reason_result_document_bounded: "The result document was bounded by size limits.",
+		wres_reason_worktree_unreachable: "The worktree is not reachable.",
+		wres_reason_bat_empty_status_not_clean_proof: "BAT cannot prove the working tree has no uncommitted changes.",
+		wres_reason_diff_exceeded_pipe_limit: "The diff exceeded the pipe buffer limit.",
+		wres_reason_commit_limit_exceeded: "The commit count exceeded the limit.",
+		wres_reason_changeset_time_budget_exceeded: "Changeset collection timed out.",
+		wres_reason_base_commit_not_ancestor: "The base commit is not an ancestor of head.",
+		wres_reason_source_digest_conflict: "Different content was observed for the same turn position.",
+		wres_reason_generic_limit: "Another limit applies",
+		wres_recorded_turns_count: "Recorded turns ({n})",
+		wres_recorded_turns_count_one: "Recorded turn (1)",
+		wres_latest_turn: "latest",
+		wres_showing_latest_20: "Showing the latest 20.",
+		wres_details: "Details",
+		wres_attempt_id: "Attempt",
+		wres_result_id: "Result ID",
+		wres_start_operation_id: "Start operation",
+		wres_execution_operation_id: "Execution operation",
+		wres_source_key: "Source key",
+		wres_digest: "Digest",
+		wres_collection_outcome: "Collection outcome",
+		wres_raw_state: "Raw state",
+		wres_raw_stage: "Raw stage",
+		wres_raw_reasons: "Reasons",
+		wres_unlisted_completeness_reasons: "Unlisted completeness reasons",
+		wres_unlisted_facets: "Unlisted state facets",
+		wres_unlisted_file_statuses: "Unlisted file statuses",
+		wres_usage: "Usage",
+		wres_usage_context_tokens: "Context tokens",
+		wres_usage_context_window: "Context window",
+		wres_usage_num_turns: "Turns",
+		wres_exit_code_not_exposed: "Exit code: not exposed by BAT"
+	}
+};
+//#endregion
 //#region src/i18n.js
 var STRINGS = {
 	"zh-TW": {
 		...workbenchStrings$1["zh-TW"],
 		...diagnosticsStrings["zh-TW"],
 		...workStartStrings["zh-TW"],
+		...workResultStrings["zh-TW"],
 		...pmStrings["zh-TW"],
 		...createRecordStrings["zh-TW"],
 		...uiStrings["zh-TW"],
@@ -9724,6 +9973,7 @@ var STRINGS = {
 		...workbenchStrings$1.en,
 		...diagnosticsStrings.en,
 		...workStartStrings.en,
+		...workResultStrings.en,
 		...pmStrings.en,
 		...createRecordStrings.en,
 		...uiStrings.en,
@@ -15242,6 +15492,7 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 		details.dataset.workSection = "details";
 		const keys = new Set([...sections, details].map((node) => node.dataset.workSection));
 		if (panel.body.querySelector("[data-work-section=\"start\"]")) keys.add("start");
+		if (panel.body.querySelector("[data-work-section=\"attempt-result\"]")) keys.add("attempt-result");
 		for (const node of panel.body.querySelectorAll("[data-work-section]")) if (!keys.has(node.dataset.workSection)) node.remove();
 		for (const node of [...sections, details]) {
 			const previous = panel.body.querySelector(`[data-work-section="${node.dataset.workSection}"]`);
@@ -15251,6 +15502,9 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 				else previous.replaceChildren(...node.childNodes);
 			}
 		}
+		const attemptResult = panel.body.querySelector("[data-work-section=\"attempt-result\"]");
+		const staticResult = panel.body.querySelector("[data-work-section=\"result\"]");
+		if (staticResult) staticResult.hidden = Boolean(attemptResult && !attemptResult.hidden);
 	}
 	return {
 		show,
@@ -15261,6 +15515,11 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 		},
 		get selection() {
 			return selection;
+		},
+		setAttemptResultVisible(visible) {
+			if (!panel) return;
+			const res = panel.body.querySelector("[data-work-section=\"result\"]");
+			if (res) res.hidden = Boolean(visible);
 		}
 	};
 }
@@ -17513,7 +17772,8 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		const submit = create.box.querySelector("button[type=submit]"), recovering = create.locked();
 		create.box.hidden = !recovering && (!head || !canCreate());
 		submit.hidden = !recovering && !create.canSubmit();
-		pending.hidden = create.box.hidden || submit.hidden || !submit.disabled;
+		const unavailable = submit.disabled || submit.getAttribute("aria-disabled") === "true";
+		pending.hidden = create.box.hidden || submit.hidden || !unavailable;
 		pending.textContent = t(create.checking() ? "pd_report_pending" : "pd_report_unavailable");
 		if (!pending.hidden) submit.setAttribute("aria-describedby", pending.id);
 		else submit.removeAttribute("aria-describedby");
@@ -21634,7 +21894,7 @@ function requirementReviews(plan, requirement, reviews) {
 	if (!ids.length || ids.some((id) => !id) || !plan.document_digest || !plan.adoption?.scope_revision) return [];
 	return reviews.filter((row) => row.qualified === true && row.applicable === true && row.assessment?.document?.qualified === true && row.context?.plan_ref?.revision_id === plan.revision_id && row.context.plan_ref.document_digest === plan.document_digest && row.context.plan_ref.scope_revision === plan.adoption?.scope_revision && ids.every((id) => row.assessment.document.criteria?.some((result) => result.criterion?.kind === "acceptance" && result.criterion.requirement_id === requirement.id && result.criterion.input_id === id && result.status === "accepted")));
 }
-function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, errorBox }) {
+function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, errorBox, workspaceSettled = () => Promise.resolve() }) {
 	const preference = viewState(namespace, workspaceId, "requirements"), endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	let serial = 0, detailSerial = 0, active = false, visible = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [], sources = new Map(), earlierPlans = new Map();
 	let pendingFocus = null, pendingNavigation = null, currentRequirement = null, currentMilestone = null, scrollGeneration = 0;
@@ -21802,6 +22062,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			alive();
 			if (ticket !== serial) return;
 		} catch {
+			++scrollGeneration;
 			return;
 		}
 		errorBox(error);
@@ -22325,6 +22586,9 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			}
 		}
 	}
+	function rememberScroll() {
+		if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+	}
 	const onScroll = () => {
 		if (visible && !busy && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
 	};
@@ -22344,7 +22608,8 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			stale = true;
 			serial++;
 			detailSerial++;
-			if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+			++scrollGeneration;
+			rememberScroll();
 			closeRetaining();
 		} else {
 			const generation = ++scrollGeneration;
@@ -22357,7 +22622,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 					restoreY = window.scrollY;
 				}
 			});
-			if (read?.then) read.then(() => {
+			Promise.all([read, workspaceSettled()]).then(() => {
 				if (generation === scrollGeneration && window.scrollY === restoreY) window.scrollTo(0, preference.scroll || 0);
 			});
 			return read;
@@ -22448,12 +22713,14 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		focusRequirement,
 		labelFor,
 		setActive,
+		rememberScroll,
 		hideInspector: closeRetaining,
 		activate,
 		setTools: (value) => {
 			tools = value;
 		},
 		dispose: () => {
+			rememberScroll();
 			window.removeEventListener("scroll", onScroll);
 			Object.assign(preference, {
 				selected,
@@ -32881,7 +33148,7 @@ var PRECONDITION_KEYS = [
 	"expected_source_sha",
 	"expected_latest_attempt_id"
 ];
-function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permitted, form, errorBox, plan: getPlan, onStartableChange = () => {} }) {
+function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permitted, form, errorBox, plan: getPlan, onStartableChange = () => {}, onLatestAttempt = () => {} }) {
 	const panelErrorBox = (err, opts = {}) => {
 		const code = err?.code || "";
 		const panelKey = `wst_error_${code}`;
@@ -33603,8 +33870,12 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			latestAttempt = attempts.length > 0 ? attempts[attempts.length - 1] : null;
 			const editor = editors.get(workId);
 			if (editor?.locked()) editor.recheck();
+			onLatestAttempt(latestAttempt);
 		} catch (err) {
-			if (validAttempts(ticket, workId)) statusView.replaceChildren(panelErrorBox(err, { within: statusView }));
+			if (validAttempts(ticket, workId)) {
+				statusView.replaceChildren(panelErrorBox(err, { within: statusView }));
+				onLatestAttempt(null);
+			}
 		}
 	}
 	function updateUI() {
@@ -33635,6 +33906,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 		attemptsView.replaceChildren();
 		editorView.replaceChildren();
 		statusView.replaceChildren();
+		onLatestAttempt(null);
 		updateUI();
 	}
 	async function setWork(card) {
@@ -33659,6 +33931,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			partialAttempts = false;
 			attemptsView.replaceChildren();
 			statusView.replaceChildren();
+			onLatestAttempt(null);
 		}
 		const ticket = ++workSerial;
 		updateUI();
@@ -33676,18 +33949,8 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 				}
 			}
 			if (!validWork(ticket, card.work_item_id)) return;
-			const editor = getEditor(card);
-			editor?.checkPlanChange();
-			const attemptsTicket = ++attemptsSerial;
-			const attemptsData = await fetchAttempts(card.work_item_id, attemptsTicket);
-			if (!validAttempts(attemptsTicket, card.work_item_id)) return;
-			if (attemptsData) {
-				attempts = attemptsData.attempts;
-				visibilityFiltered = attemptsData.visibilityFiltered;
-				partialAttempts = attemptsData.partial;
-				latestAttempt = attempts.length > 0 ? attempts[attempts.length - 1] : null;
-			}
-			if (editor?.locked()) editor.recheck();
+			getEditor(card)?.checkPlanChange();
+			await refreshAttempts();
 		} catch (err) {
 			if (validWork(ticket, card.work_item_id)) statusView.replaceChildren(panelErrorBox(err, { within: statusView }));
 		} finally {
@@ -33729,8 +33992,540 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 	};
 }
 //#endregion
+//#region src/pm-work-result.js
+var KNOWN_STATES = new Set([
+	"accepted",
+	"starting",
+	"active",
+	"waiting",
+	"turn-ended",
+	"process-ended",
+	"failed",
+	"unknown"
+]);
+var KNOWN_REASONS = new Set([
+	"bat_unreachable",
+	"observation_stale",
+	"session_not_found",
+	"transcript_truncated_by_size",
+	"archived_messages_omitted",
+	"parse_error",
+	"session_not_started_yet",
+	"start_outcome_uncertain",
+	"handoff_outcome_uncertain",
+	"unloaded_history_session",
+	"turn_marker_not_visible",
+	"turn_boundary_not_collected",
+	"session_not_managed_by_attempt",
+	"turn_slice_bounded",
+	"result_document_bounded",
+	"worktree_unreachable",
+	"bat_empty_status_not_clean_proof",
+	"diff_exceeded_pipe_limit",
+	"commit_limit_exceeded",
+	"changeset_time_budget_exceeded",
+	"base_commit_not_ancestor",
+	"source_digest_conflict"
+]);
+function normalizeForComparison(envelope) {
+	if (!envelope || typeof envelope !== "object") return null;
+	const clone = JSON.parse(JSON.stringify(envelope));
+	delete clone.cursor;
+	delete clone.events_read;
+	delete clone.wait;
+	if (clone.collection) delete clone.collection.checked_at;
+	return clone;
+}
+function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisibility = () => {} }) {
+	let activeAttempt = null;
+	let readSerial = 0;
+	let lastEnvelope = null;
+	let lastNormalized = null;
+	let lastStale = false;
+	let turnsOpen = false;
+	let detailsOpen = false;
+	let filesOpen = false;
+	const panelElement = h("div", {
+		class: "pm-work-result-panel",
+		"data-work-result": ""
+	});
+	panelElement.hidden = true;
+	function updateVisibility(visible) {
+		panelElement.hidden = !visible;
+		onVisibility(visible);
+	}
+	function withdraw() {
+		readSerial++;
+		lastEnvelope = null;
+		lastNormalized = null;
+		lastStale = false;
+		turnsOpen = false;
+		detailsOpen = false;
+		filesOpen = false;
+		panelElement.replaceChildren();
+		updateVisibility(false);
+	}
+	function dispose() {
+		activeAttempt = null;
+		withdraw();
+	}
+	async function setAttempt(attempt) {
+		if (!attempt || !attempt.attempt_id) {
+			activeAttempt = null;
+			withdraw();
+			return;
+		}
+		if (!Boolean(attempt.session?.session_id || attempt.native_session?.session_id || attempt.session_id)) {
+			activeAttempt = attempt;
+			withdraw();
+			return;
+		}
+		if (activeAttempt?.attempt_id !== attempt.attempt_id) withdraw();
+		activeAttempt = attempt;
+		await readResult();
+	}
+	async function refresh() {
+		if (!activeAttempt) return;
+		if (!Boolean(activeAttempt.session?.session_id || activeAttempt.native_session?.session_id || activeAttempt.session_id)) return;
+		await readResult();
+	}
+	async function readResult() {
+		if (!activeAttempt) return;
+		const ticket = ++readSerial;
+		const attemptId = activeAttempt.attempt_id;
+		const currentAttempt = activeAttempt;
+		try {
+			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/result`);
+			try {
+				alive?.();
+			} catch {
+				return;
+			}
+			if (ticket !== readSerial || activeAttempt?.attempt_id !== attemptId) return;
+			if (!(data && typeof data === "object" && data.contract === "pm-work-attempt-result/v1" && data.workspace_id === workspaceId && data.attempt_id === attemptId && data.execution && KNOWN_STATES.has(data.execution.state))) {
+				lastEnvelope = null;
+				lastNormalized = null;
+				lastStale = false;
+				renderInvalid();
+				return;
+			}
+			const normalized = normalizeForComparison(data);
+			if (!(lastNormalized && JSON.stringify(lastNormalized) === JSON.stringify(normalized)) || lastStale) {
+				lastEnvelope = data;
+				lastNormalized = normalized;
+				lastStale = false;
+				renderEnvelope(data, currentAttempt);
+			}
+		} catch (err) {
+			try {
+				alive?.();
+			} catch {
+				return;
+			}
+			if (ticket !== readSerial || activeAttempt?.attempt_id !== attemptId) return;
+			const status = err?.status;
+			if (status === 401 || status === 403 || status === 404) {
+				withdraw();
+				return;
+			}
+			lastStale = true;
+			renderError(err, currentAttempt);
+		}
+	}
+	function renderInvalid() {
+		panelElement.replaceChildren(h("h3", {}, t("wres_heading")), h("p", { class: "pm-work-result-invalid" }, t("wres_invalid_envelope")));
+		updateVisibility(true);
+	}
+	function renderError(err, attempt) {
+		const heading = h("h3", {}, t("wres_heading"));
+		const retryBtn = button({
+			label: t("wres_try_again"),
+			class: "ui-button secondary ui-sm pm-work-result-retry",
+			onClick: () => {
+				readResult();
+			}
+		});
+		const errorContainer = h("div", { class: "pm-work-result-error-box" }, errorBox ? errorBox(err, { within: panelElement }) : h("div", { class: "error" }, err?.message || String(err)), retryBtn);
+		if (lastEnvelope) renderEnvelope(lastEnvelope, attempt, errorContainer);
+		else {
+			panelElement.replaceChildren(heading, errorContainer);
+			updateVisibility(true);
+		}
+	}
+	function formatCount(val) {
+		if (val === "unknown" || val == null) return t("wres_unknown");
+		return String(val);
+	}
+	function saveFocus() {
+		const active = document.activeElement;
+		if (active && panelElement.contains(active)) {
+			if (active.dataset?.workResultFocus) return {
+				type: "attr",
+				value: active.dataset.workResultFocus
+			};
+			if (active.tagName === "SUMMARY" && active.parentElement?.tagName === "DETAILS") {
+				const details = active.parentElement;
+				if (details.dataset.workResultTurns !== void 0) return { type: "turns" };
+				if (details.dataset.workResultDetails !== void 0) return { type: "details" };
+				if (details.classList.contains("pm-work-result-files")) return { type: "files" };
+			}
+		}
+		return null;
+	}
+	function restoreFocus(token) {
+		if (!token) return;
+		requestAnimationFrame(() => {
+			if (token.type === "attr") panelElement.querySelector(`[data-work-result-focus="${token.value}"]`)?.focus();
+			else if (token.type === "turns") panelElement.querySelector("[data-work-result-turns] > summary")?.focus();
+			else if (token.type === "details") panelElement.querySelector("[data-work-result-details] > summary")?.focus();
+			else if (token.type === "files") panelElement.querySelector(".pm-work-result-files > summary")?.focus();
+		});
+	}
+	function renderEnvelope(envelope, attempt, errorBoxNode = null) {
+		const focusToken = saveFocus();
+		const existingTurns = panelElement.querySelector("[data-work-result-turns]");
+		if (existingTurns) turnsOpen = existingTurns.open;
+		const existingDetails = panelElement.querySelector("[data-work-result-details]");
+		if (existingDetails) detailsOpen = existingDetails.open;
+		const existingFiles = panelElement.querySelector(".pm-work-result-files");
+		if (existingFiles) filesOpen = existingFiles.open;
+		const sections = [];
+		const unlistedFacets = [];
+		const unlistedFileStatuses = [];
+		const heading = h("h3", {}, t("wres_heading"));
+		sections.push(heading);
+		if (errorBoxNode) {
+			const stalePill = h("span", {
+				class: "ui-pill tone-warn",
+				"data-status": "stale"
+			}, t("ui_status_stale"));
+			sections.push(h("div", { class: "pm-work-result-stale-banner" }, stalePill, errorBoxNode));
+		}
+		const exec = envelope.execution || {};
+		const stateKey = `wres_state_${exec.state?.replace(/-/g, "_")}`;
+		const stateLabel = t(stateKey) !== stateKey ? t(stateKey) : t("wres_unknown");
+		const stateP = h("p", { class: "pm-work-result-state" });
+		stateP.append(h("strong", {}, stateLabel));
+		if (exec.observed_at) stateP.append(" · ", timeStamp(exec.observed_at));
+		sections.push(stateP);
+		if (exec.state_reason) {
+			const reason = exec.state_reason;
+			if (reason === "agent_error") sections.push(h("p", { class: "muted pm-work-result-reason" }, t("wres_agent_error")));
+			else if (KNOWN_REASONS.has(reason)) {
+				const textKey = `wres_reason_${reason}`;
+				if (t(textKey) !== textKey) sections.push(h("p", { class: "muted pm-work-result-reason" }, t(textKey)));
+			} else if (exec.state === "failed") {
+				const wstKey = `wst_error_${reason}`;
+				const errKey = `error_code_${reason}`;
+				let failText = "";
+				if (t(wstKey) !== wstKey) failText = t(wstKey);
+				else if (t(errKey) !== errKey) failText = t(errKey);
+				if (failText) sections.push(h("p", { class: "muted pm-work-result-reason" }, failText));
+			}
+		} else if (exec.state === "waiting" && exec.pending != null) sections.push(h("p", { class: "muted pm-work-result-reason" }, t("wres_waiting_pending")));
+		if (exec.attention) {
+			let attnText = t("wres_status_needs_attention");
+			if (exec.attention.message) attnText += ` ${exec.attention.message}`;
+			sections.push(h("p", { class: "muted pm-work-result-attention" }, attnText));
+		}
+		const linkItems = [];
+		const sess = attempt?.session || attempt?.native_session;
+		if (sess?.session_id && sess?.host) {
+			const liveHref = sessionHref$1({
+				host: sess.host,
+				sessionId: sess.session_id,
+				from: "board"
+			});
+			linkItems.push(h("a", {
+				href: liveHref,
+				"data-work-result-focus": "live-output"
+			}, t("wres_open_live_output")));
+		}
+		const opHash = envelope.links?.start_operation_hash || (envelope.identity?.start_operation_id ? `#/op/${envelope.identity.start_operation_id}` : null);
+		if (opHash) linkItems.push(h("a", {
+			href: opHash,
+			"data-work-result-focus": "operation"
+		}, t("wres_view_operation")));
+		if (linkItems.length > 0) sections.push(h("div", { class: "pm-work-result-links" }, ...linkItems));
+		const summaryHeader = h("div", { class: "pm-work-result-summary-header" });
+		summaryHeader.append(h("h4", {}, t("wres_agent_summary_label")));
+		if (exec.state_facets?.self_reported === "claimed_done") {
+			const pill = h("span", {
+				class: "ui-pill tone-neutral",
+				"data-work-result-pill": "claimed_done"
+			}, t("wres_pill_claimed_done"));
+			summaryHeader.append(" ", pill);
+		}
+		sections.push(summaryHeader);
+		const summaryText = envelope.conversation?.latest_assistant_summary?.text;
+		if (summaryText && typeof summaryText === "string") {
+			const summaryBox = h("div", {
+				role: "region",
+				tabindex: "0",
+				"aria-label": t("wres_agent_summary_label"),
+				class: "pm-work-result-summary-box",
+				"data-work-result-focus": "summary-box"
+			});
+			summaryBox.textContent = summaryText;
+			sections.push(summaryBox);
+		} else sections.push(h("p", { class: "muted pm-work-result-empty-summary" }, t("wres_no_recorded_turn")));
+		const dl = h("dl", { class: "pm-work-result-checks" });
+		const verifStatus = exec.state_facets?.verification || envelope.verification?.status;
+		let verifText = t("wres_unknown");
+		if (verifStatus && [
+			"unverified",
+			"running",
+			"verified",
+			"failed",
+			"stale",
+			"unknown"
+		].includes(verifStatus)) verifText = t(`wres_verification_${verifStatus}`);
+		else if (verifStatus) unlistedFacets.push(`verification: ${verifStatus}`);
+		dl.append(h("dt", {}, t("wres_check_verification")), h("dd", { "data-check": "verification" }, verifText));
+		const reviewDecision = exec.state_facets?.review_decision || envelope.verification?.quality_reviews?.current?.decision;
+		let reviewText = t("wres_unknown");
+		if (typeof reviewDecision === "string") {
+			if (reviewDecision === "unassessed") reviewText = t("wres_review_unassessed");
+			else if (reviewDecision === "revocation") reviewText = t("wres_review_revocation");
+			else unlistedFacets.push(`review_decision: ${reviewDecision}`);
+		} else if (reviewDecision && typeof reviewDecision === "object") {
+			if (reviewDecision.kind === "unassessed") reviewText = t("wres_review_unassessed");
+			else if (reviewDecision.kind === "revocation") reviewText = t("wres_review_revocation");
+			else if (reviewDecision.kind === "assessment" || reviewDecision.acceptance) {
+				if (reviewDecision.acceptance === "accepted") reviewText = t("wres_review_accepted");
+				else if (reviewDecision.acceptance === "rejected") reviewText = t("wres_review_rejected");
+				else if (reviewDecision.acceptance === "unassessed") reviewText = t("wres_review_unassessed");
+				else if (reviewDecision.acceptance) unlistedFacets.push(`review_acceptance: ${reviewDecision.acceptance}`);
+			} else if (reviewDecision.kind) unlistedFacets.push(`review_kind: ${reviewDecision.kind}`);
+		}
+		dl.append(h("dt", {}, t("wres_check_review")), h("dd", { "data-check": "review" }, reviewText));
+		const acceptStatus = (exec.state_facets?.acceptance)?.status;
+		let acceptText = t("wres_unknown");
+		if (acceptStatus === "passed") acceptText = t("wres_acceptance_passed");
+		else if (acceptStatus === "blocked") acceptText = t("wres_acceptance_blocked");
+		else if (acceptStatus === "unassessed") acceptText = t("wres_acceptance_unassessed");
+		else if (acceptStatus) unlistedFacets.push(`acceptance_status: ${acceptStatus}`);
+		dl.append(h("dt", {}, t("wres_check_acceptance")), h("dd", { "data-check": "acceptance" }, acceptText));
+		const mergeStatus = exec.state_facets?.merge;
+		let mergeText = t("wres_unknown");
+		if ([
+			"not_started",
+			"not_merged",
+			"pr_open",
+			"pr_closed_unmerged",
+			"merge_pending",
+			"merged"
+		].includes(mergeStatus)) mergeText = t(`wres_merge_${mergeStatus}`);
+		else if (mergeStatus) unlistedFacets.push(`merge: ${mergeStatus}`);
+		const prDd = h("dd", { "data-check": "pr" });
+		prDd.append(h("span", { class: "pm-work-result-pr-status" }, mergeText));
+		const prs = envelope.delivery?.pull_requests || [];
+		if (prs.length > 0) {
+			const prList = h("ul", { class: "pm-work-result-pr-list" });
+			for (const pr of prs) {
+				const link = h("a", { href: `#/op/${encodeURIComponent(pr.publication_operation_id)}` }, `PR #${pr.pull_number} · ${pr.repository}`);
+				prList.append(h("li", {}, link));
+			}
+			prDd.append(prList);
+		}
+		dl.append(h("dt", {}, t("wres_check_pr")), prDd);
+		const deployObj = exec.state_facets?.deployment;
+		const deployState = deployObj?.state;
+		const deployVerified = deployObj?.verified === true;
+		let deployText = t("wres_unknown");
+		if ([
+			"not_deployed",
+			"pending",
+			"running",
+			"failed",
+			"needs_attention",
+			"cancelled"
+		].includes(deployState)) deployText = t(`wres_deploy_${deployState}`);
+		else if (deployState === "succeeded") deployText = deployVerified ? t("wres_deploy_succeeded_verified") : t("wres_deploy_succeeded");
+		else if (deployState) unlistedFacets.push(`deployment_state: ${deployState}`);
+		dl.append(h("dt", {}, t("wres_check_deployment")), h("dd", { "data-check": "deployment" }, deployText));
+		const goal = envelope.delivery?.delivery_goal;
+		let goalText = t("wres_unknown");
+		if (goal === "pull_request") goalText = t("wres_goal_pr");
+		else if (goal === "reviewable_changes") goalText = t("wres_goal_reviewable_changes");
+		else if (goal && goal !== "unknown") unlistedFacets.push(`delivery_goal: ${goal}`);
+		dl.append(h("dt", {}, t("wres_check_delivery_goal")), h("dd", { "data-check": "delivery-goal" }, goalText));
+		sections.push(dl);
+		const changesBox = h("div", { class: "pm-work-result-changes" });
+		const ch = envelope.changes || {};
+		const summary = ch.summary || {};
+		const isComplete = summary.complete === true && (!summary.unavailable || summary.unavailable.length === 0);
+		const filesCountNum = Number.isSafeInteger(summary.file_count) ? summary.file_count : Array.isArray(summary.files) ? summary.files.length : null;
+		const commitsCountNum = Number.isSafeInteger(summary.commit_count) ? summary.commit_count : Array.isArray(summary.commits) ? summary.commits.length : null;
+		if (isComplete) {
+			let summaryKey = "wres_changes_summary";
+			if (filesCountNum === 1 && commitsCountNum === 1) summaryKey = "wres_changes_summary_one";
+			else if (filesCountNum === 1) summaryKey = "wres_changes_summary_one_file";
+			else if (commitsCountNum === 1) summaryKey = "wres_changes_summary_one_commit";
+			const summaryText = t(summaryKey, {
+				files: formatCount(filesCountNum),
+				commits: formatCount(commitsCountNum),
+				additions: formatCount(summary.additions),
+				deletions: formatCount(summary.deletions)
+			});
+			changesBox.append(h("p", { class: "pm-work-result-changes-summary" }, summaryText, " · ", t("wres_as_of_last_turn")));
+		} else {
+			const partlyText = h("p", { class: "pm-work-result-changes-summary" }, t("wres_changes_partly_read"), " · ", t("wres_as_of_last_turn"));
+			changesBox.append(partlyText);
+			const changeReasons = [];
+			if (summary.reason) changeReasons.push(summary.reason);
+			if (Array.isArray(summary.reasons)) {
+				for (const r of summary.reasons) if (!changeReasons.includes(r)) changeReasons.push(r);
+			}
+			if (changeReasons.length > 0) {
+				const reasonsList = h("ul", { class: "pm-work-result-changes-reasons" });
+				for (const code of changeReasons) {
+					const key = `wres_reason_${code}`;
+					let text = t(key);
+					if (!text || text === key) text = t("wres_reason_generic_limit");
+					reasonsList.append(h("li", {}, text));
+				}
+				changesBox.append(reasonsList);
+			}
+		}
+		const files = summary.files || [];
+		if (files.length > 0) {
+			const renderFileRow = (f) => {
+				let statusLabel = t("wres_unknown");
+				if (f.status === "M" || f.status === "modified") statusLabel = t("wres_file_modified");
+				else if (f.status === "A" || f.status === "added") statusLabel = t("wres_file_added");
+				else if (f.status === "D" || f.status === "deleted") statusLabel = t("wres_file_deleted");
+				else if (typeof f.status === "string" && (f.status.startsWith("R") || f.status === "renamed")) statusLabel = t("wres_file_renamed");
+				else if (f.status) unlistedFileStatuses.push(`${f.path}: ${f.status}`);
+				const adds = f.additions === "unknown" || f.additions == null ? "?" : `+${f.additions}`;
+				const dels = f.deletions === "unknown" || f.deletions == null ? "?" : `−${f.deletions}`;
+				return h("li", { class: "pm-work-result-file-row" }, h("span", { class: "pm-work-result-file-path mono" }, f.path), " ", h("span", { class: "pm-work-result-file-status muted" }, statusLabel), " ", h("span", { class: "pm-work-result-file-diff mono" }, `${adds} ${dels}`));
+			};
+			const fileList = h("ul", { class: "pm-work-result-file-list" }, ...files.slice(0, 20).map(renderFileRow));
+			changesBox.append(fileList);
+			if (files.length > 20) {
+				const remainingFiles = files.slice(20);
+				const remainingList = h("ul", { class: "pm-work-result-file-list" }, ...remainingFiles.map(renderFileRow));
+				const filesDisclosure = disclosure({
+					label: remainingFiles.length === 1 ? t("wres_show_all_files_one") : t("wres_show_all_files", { n: files.length }),
+					body: remainingList,
+					open: filesOpen
+				});
+				filesDisclosure.classList.add("pm-work-result-files");
+				changesBox.append(filesDisclosure);
+			}
+		}
+		if (ch.base_commit) changesBox.append(h("p", { class: "pm-work-result-base-commit" }, h("strong", {}, `${t("wres_base_commit")}: `), h("span", { class: "mono" }, ch.base_commit.slice(0, 12))));
+		const fixedCommit = ch.fixed_result_commit;
+		if (fixedCommit && fixedCommit.commit_sha) {
+			const srcKind = fixedCommit.source_kind;
+			let srcText = "";
+			if (srcKind === "turn_end_observation") srcText = t("wres_source_turn_end_observation");
+			else if (srcKind === "execution_verification" || srcKind === "session_verification") srcText = t("wres_source_verified_commit");
+			else if (srcKind === "integration") srcText = t("wres_source_delivered_commit");
+			const commitP = h("p", { class: "pm-work-result-commit" }, h("strong", {}, `${t("wres_result_commit")}: `), h("span", { class: "mono" }, fixedCommit.commit_sha.slice(0, 12)));
+			if (srcText) commitP.append(" · ", srcText);
+			changesBox.append(commitP);
+		}
+		const uncommitted = ch.uncommitted || {};
+		if (uncommitted.count === "unknown") changesBox.append(h("p", { class: "muted pm-work-result-uncommitted" }, t("wres_uncommitted_unknown")));
+		else if (Number.isSafeInteger(uncommitted.count) && uncommitted.count > 0) changesBox.append(h("p", { class: "pm-work-result-uncommitted" }, t("wres_uncommitted_changes", { n: uncommitted.count })));
+		sections.push(changesBox);
+		const completeness = envelope.completeness;
+		const completenessStatus = completeness?.status;
+		if (completenessStatus && completenessStatus !== "complete") {
+			const compDiv = h("div", { class: "pm-work-result-completeness" });
+			if (completenessStatus === "partial") compDiv.append(statusPill("partial"));
+			else compDiv.append(h("span", {
+				class: "ui-pill tone-bad",
+				"data-status": "unavailable"
+			}, t("wres_status_unavailable")));
+			const reasons = completeness.reasons || [];
+			if (reasons.length > 0) {
+				const reasonList = h("ul", { class: "pm-work-result-completeness-reasons" });
+				for (const code of reasons) {
+					const key = `wres_reason_${code}`;
+					let text = t(key);
+					if (!text || text === key) text = t("wres_reason_generic_limit");
+					reasonList.append(h("li", {}, text));
+				}
+				compDiv.append(reasonList);
+			}
+			sections.push(compDiv);
+		}
+		const results = envelope.results || [];
+		if (results.length > 0) {
+			const turnsBody = h("div", { class: "pm-work-result-turns-body" });
+			if (envelope.results_has_more) turnsBody.append(h("p", { class: "muted pm-work-result-more-turns" }, t("wres_showing_latest_20")));
+			const turnsList = h("ul", { class: "pm-work-result-turns-list" });
+			for (let i = 0; i < results.length; i++) {
+				const turn = results[i];
+				const row = h("li", { class: "pm-work-result-turn-row" });
+				if (turn.observed_at) row.append(timeStamp(turn.observed_at), " ");
+				const sha = turn.head_commit ? turn.head_commit.slice(0, 12) : "—";
+				row.append(h("span", { class: "mono" }, sha));
+				if (i === 0) row.append(" ", h("span", {
+					class: "ui-pill tone-neutral ui-xs",
+					"data-work-result-pill": "latest_turn"
+				}, t("wres_latest_turn")));
+				turnsList.append(row);
+			}
+			turnsBody.append(turnsList);
+			const turnsDisclosure = disclosure({
+				label: results.length === 1 ? t("wres_recorded_turns_count_one") : t("wres_recorded_turns_count", { n: results.length }),
+				body: turnsBody,
+				open: turnsOpen
+			});
+			turnsDisclosure.dataset.workResultTurns = "";
+			sections.push(turnsDisclosure);
+		}
+		const detailsBody = h("div", { class: "pm-work-result-details-body" });
+		const addDetailRow = (label, value) => {
+			if (value === void 0) return;
+			detailsBody.append(h("p", {}, h("strong", {}, `${label}: `), h("span", { class: "mono" }, String(value == null ? "—" : value))));
+		};
+		addDetailRow(t("wres_attempt_id"), envelope.attempt_id);
+		addDetailRow(t("wres_result_id"), envelope.sources?.result_id);
+		addDetailRow(t("wres_start_operation_id"), envelope.identity?.start_operation_id);
+		addDetailRow(t("wres_execution_operation_id"), envelope.identity?.execution_operation_id);
+		addDetailRow(t("wres_source_key"), envelope.sources?.source_key);
+		addDetailRow(t("wres_digest"), envelope.sources?.digest ? envelope.sources.digest.slice(0, 16) : null);
+		addDetailRow(t("wres_collection_outcome"), envelope.collection?.outcome);
+		addDetailRow(t("wres_raw_state"), exec.state);
+		addDetailRow(t("wres_raw_stage"), exec.stage);
+		if (exec.state_reason) addDetailRow(t("wres_raw_reasons"), exec.state_reason);
+		if (unlistedFacets.length > 0) addDetailRow(t("wres_unlisted_facets"), unlistedFacets.join(", "));
+		if (unlistedFileStatuses.length > 0) addDetailRow(t("wres_unlisted_file_statuses"), unlistedFileStatuses.join(", "));
+		const unlistedReasons = (completeness?.reasons || []).filter((r) => !KNOWN_REASONS.has(r));
+		if (unlistedReasons.length > 0) addDetailRow(t("wres_unlisted_completeness_reasons"), unlistedReasons.join(", "));
+		const usage = envelope.usage || {};
+		const formatUsageVal = (val) => val == null || val === "unknown" ? t("ui_status_unknown") : String(val);
+		addDetailRow(t("wres_usage_context_tokens"), formatUsageVal(usage.context_tokens));
+		addDetailRow(t("wres_usage_context_window"), formatUsageVal(usage.context_window));
+		addDetailRow(t("wres_usage_num_turns"), formatUsageVal(usage.num_turns));
+		detailsBody.append(h("p", { class: "muted" }, t("wres_exit_code_not_exposed")));
+		const detailsDisclosure = disclosure({
+			label: t("wres_details"),
+			body: detailsBody,
+			open: detailsOpen
+		});
+		detailsDisclosure.dataset.workResultDetails = "";
+		sections.push(detailsDisclosure);
+		panelElement.replaceChildren(...sections);
+		updateVisibility(true);
+		restoreFocus(focusToken);
+	}
+	return {
+		element: panelElement,
+		setAttempt,
+		refresh,
+		withdraw,
+		dispose
+	};
+}
+//#endregion
 //#region src/pm-kanban.js
-function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false }) {
+function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false, workspaceSettled = () => Promise.resolve() }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, preference = viewState(namespace, workspaceId, "board");
 	const integer = (value) => Number.isSafeInteger(value) && value >= 0;
 	if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error("Invalid Kanban page size");
@@ -33742,6 +34537,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		for (const observer of observers.values()) observer.withdraw();
 	};
 	let startPanel = null;
+	let resultPanel = null;
 	const updateHeaderButton = (startable) => {
 		if (!detail.element) return;
 		const actionRow = detail.element.querySelector("[data-work-actions]");
@@ -33767,20 +34563,39 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 	const ensureStartPanel = () => {
 		if (!startPanel && form) {
 			const cap = caps()?.features?.pm_workspaces?.work_start;
-			if (cap?.version === 1 && cap.available === true && cap.action === "work.start") startPanel = workStartPanel({
-				h: h$1,
-				t,
-				api,
-				alive,
-				namespace,
-				workspaceId,
-				caps,
-				permitted,
-				form,
-				errorBox,
-				plan: () => plan,
-				onStartableChange: updateHeaderButton
-			});
+			if (cap?.version === 1 && cap.available === true && cap.action === "work.start") {
+				if ((caps()?.features?.pm_workspaces?.work_attempt_results)?.version === 1) resultPanel = workResultPanel({
+					h: h$1,
+					t,
+					api,
+					alive,
+					workspaceId,
+					caps,
+					errorBox,
+					onVisibility: (visible) => {
+						const attemptSection = detail.element?.body?.querySelector("[data-work-section=\"attempt-result\"]");
+						if (attemptSection) attemptSection.hidden = !visible;
+						detail.setAttemptResultVisible?.(visible);
+					}
+				});
+				startPanel = workStartPanel({
+					h: h$1,
+					t,
+					api,
+					alive,
+					namespace,
+					workspaceId,
+					caps,
+					permitted,
+					form,
+					errorBox,
+					plan: () => plan,
+					onStartableChange: updateHeaderButton,
+					onLatestAttempt: (attempt) => {
+						resultPanel?.setAttempt(attempt);
+					}
+				});
+			}
 		}
 		return startPanel;
 	};
@@ -33862,6 +34677,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		onClose: () => {
 			withdrawObservers();
 			startPanel?.withdraw();
+			resultPanel?.withdraw();
 			updateHeaderButton(false);
 			detailSerial++;
 			if (!preserveSelection) {
@@ -34282,6 +35098,18 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 				else detail.element.body.append(startSection);
 			}
 			if (!startSection.contains(panel.element)) startSection.replaceChildren(panel.element);
+			if (resultPanel) {
+				let attemptResultSection = detail.element.body.querySelector("[data-work-section=\"attempt-result\"]");
+				if (!attemptResultSection) {
+					attemptResultSection = h$1("section", { "data-work-section": "attempt-result" });
+					attemptResultSection.hidden = true;
+					if (startSection && startSection.nextSibling) detail.element.body.insertBefore(attemptResultSection, startSection.nextSibling);
+					else detail.element.body.append(attemptResultSection);
+				}
+				if (!attemptResultSection.contains(resultPanel.element)) attemptResultSection.replaceChildren(resultPanel.element);
+				attemptResultSection.hidden = resultPanel.element.hidden;
+				detail.setAttemptResultVisible?.(!attemptResultSection.hidden);
+			}
 			panel.setWork(card);
 			updateHeaderButton(panel.startable());
 		}
@@ -34527,6 +35355,9 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		preference.laneScroll = list.scrollLeft;
 		updateEdges();
 	});
+	function rememberScroll() {
+		if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+	}
 	const onScroll = () => {
 		if (active && !reading && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
 	};
@@ -34542,7 +35373,8 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			stale = true;
 			serial++;
 			detailSerial++;
-			if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+			++scrollGeneration;
+			rememberScroll();
 			closeRetaining();
 		} else {
 			const generation = ++scrollGeneration;
@@ -34556,7 +35388,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 					restoreY = window.scrollY;
 				}
 			});
-			if (read?.then) read.then(() => {
+			Promise.all([read, workspaceSettled()]).then(() => {
 				if (generation === scrollGeneration && window.scrollY === restoreY) window.scrollTo(0, preference.scroll || 0);
 			});
 			return read;
@@ -34570,14 +35402,18 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		titleFor,
 		withdraw,
 		setActive,
+		rememberScroll,
 		hideInspector: closeRetaining,
 		setTools: (value) => {
 			toolItems = value;
 		},
 		dispose: () => {
+			rememberScroll();
 			window.removeEventListener("scroll", onScroll);
 			startPanel?.dispose();
 			startPanel = null;
+			resultPanel?.dispose();
+			resultPanel = null;
 			resize.disconnect();
 			withdraw({ forgetRoute: false });
 		}
@@ -41820,14 +42656,20 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			}
 		}
 	}, t("pm_edit_request"));
+	const isFieldFocused = () => Object.values(fields).some((f) => f === document.activeElement || f.contains?.(document.activeElement));
 	const button = h("button", {
 		type: "submit",
 		class: "ui-button primary"
 	}, t(label));
+	button.addEventListener("click", (event) => {
+		if (busy || initialChecking && (busy || receiptTimer !== null)) event.preventDefault();
+	});
 	const form = h("form", {
 		"data-pm-action": action,
 		onsubmit: (event) => {
 			event.preventDefault();
+			if (busy || initialChecking && (busy || receiptTimer !== null)) return;
+			if (isFieldFocused()) button.focus();
 			run();
 		}
 	}, extra, h("div", { class: "actions" }, button, reset), status, receipt);
@@ -41853,24 +42695,46 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		}, receiptDelays[receiptAttempt++]);
 	}
 	function update() {
-		if (disposed || !form.isConnected) return;
+		if (disposed || !form.isConnected) {
+			button.removeAttribute("aria-disabled");
+			status.removeAttribute("aria-busy");
+			return;
+		}
 		pollReceipt();
 		if (!busy && receiptTimer === null) initialChecking = false;
 		const autoChecking = initialChecking && (busy || receiptTimer !== null);
+		const inFlight = busy || autoChecking;
 		const frozen = busy || damaged || Boolean(saved.intent), locked = frozen || !allowed();
 		for (const input of Object.values(fields)) {
 			input.disabled = locked && (!readOnlyWhenUnavailable || frozen);
 			if (readOnlyWhenUnavailable) input.readOnly = locked;
 		}
-		button.disabled = busy || autoChecking || damaged || !allowed() || !sendReady() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
-		button.hidden = terminal() || Boolean(saved.intent?.initialAdmissionRefused);
+		const hadFocus = document.activeElement === button;
+		const hadResetFocus = document.activeElement === reset;
+		if (inFlight) {
+			button.setAttribute("aria-disabled", "true");
+			button.disabled = false;
+		} else {
+			button.removeAttribute("aria-disabled");
+			button.disabled = damaged || !allowed() || !sendReady() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
+		}
+		if (busy) status.setAttribute("aria-busy", "true");
+		else status.removeAttribute("aria-busy");
+		button.hidden = !inFlight && (terminal() || Boolean(saved.intent?.initialAdmissionRefused));
 		button.textContent = t(saved.intent && !autoChecking ? "pm_check_original" : label);
-		reset.hidden = !terminal() && !saved.intent?.initialAdmissionRefused;
+		reset.hidden = inFlight || !terminal() && !saved.intent?.initialAdmissionRefused;
 		reset.disabled = busy || !allowed();
+		if (hadFocus && (button.hidden || button.disabled)) {
+			if (!reset.hidden && !reset.disabled) reset.focus();
+			else if (document.activeElement === document.body || document.activeElement === button) {
+				status.tabIndex = -1;
+				status.focus();
+			}
+		} else if (hadResetFocus && reset.hidden && !button.hidden && !button.disabled) button.focus();
 		onStateChange();
 	}
 	async function run(automatic = false) {
-		if (disposed || busy || damaged || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
+		if (disposed || busy || damaged || !automatic && initialChecking && (busy || receiptTimer !== null) || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
 		if (!allowed() || !sendReady()) {
 			if (!automatic) {
 				status.replaceChildren(h("p", { class: "muted" }, t("pm_action_unavailable")));
@@ -41878,6 +42742,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			}
 			return;
 		}
+		if (!automatic && isFieldFocused()) button.focus();
 		stopTimer();
 		if (!automatic) {
 			receiptAttempt = 0;
@@ -42083,7 +42948,24 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		return;
 	}
 	if (workspaceId && threadId) rememberProjectView(namespace, workspaceId, "discussions");
-	let disposed = false, workspace = null, threadData = null, loaded = false, initialReadComplete = false, refreshing = false, sequence = 0, threadPages = 1, lifecycle = null;
+	let disposed = false, workspace = null, threadData = null, loaded = false, initialReadComplete = false, refreshing = true, sequence = 0, threadPages = 1, lifecycle = null;
+	let headerReads = 0, initialHeaderSettled = false, settleResolvers = [];
+	function resolveSettleWaiters() {
+		if (headerReads === 0) {
+			initialHeaderSettled = true;
+			const resolvers = settleResolvers;
+			settleResolvers = [];
+			for (const resolve of resolvers) resolve();
+		}
+	}
+	function settleReadComplete() {
+		if (headerReads > 0) headerReads--;
+		if (headerReads === 0) resolveSettleWaiters();
+	}
+	function workspaceSettled() {
+		if (disposed || initialHeaderSettled && headerReads === 0) return Promise.resolve();
+		return new Promise((resolve) => settleResolvers.push(resolve));
+	}
 	const launch = parseDiscussRefs(location.hash.split("?")[1] || "");
 	const uiState = viewState(namespace, workspaceId, "discussions");
 	const handoffKey = `batc.pm.${namespace}.discussion-send.${workspaceId}`;
@@ -42682,7 +43564,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		caps,
 		permitted,
 		form,
-		embedded: true
+		embedded: true,
+		workspaceSettled
 	}) : null;
 	if (kanban) body.insertBefore(kanban.element, content);
 	const sprints = workspaceId && !threadId && caps()?.features?.pm_workspaces?.sprints ? workspaceSprints({
@@ -42970,7 +43853,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		namespace,
 		workspaceId,
 		caps,
-		errorBox
+		errorBox,
+		workspaceSettled
 	}) : null;
 	if (traceability) body.insertBefore(traceability.element, content);
 	const resources = workspaceId && !threadId && caps()?.features?.pm_resources ? workspaceResources({
@@ -43451,6 +44335,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			beforeSelect: (id, previous) => {
 				maskStaleView(id);
 				if (previous === "overview") brief?.setActive?.(false);
+				if (previous === "board") kanban?.rememberScroll?.();
+				if (previous === "requirements") traceability?.rememberScroll?.();
 			},
 			onSelect: (id) => {
 				if (shownView === "issues" && id !== "issues") register?.rememberScroll();
@@ -44417,6 +45303,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		refreshing = true;
 		earlier.disabled = true;
 		refresh.disabled = true;
+		headerReads++;
 		try {
 			alive();
 			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}?before_message=${historyCursor}`);
@@ -44451,6 +45338,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				refresh.disabled = false;
 				earlier.disabled = !loaded;
 			}
+			settleReadComplete();
 		}
 	}
 	function filterThreads() {
@@ -44513,6 +45401,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			qualityReviews?.withdraw();
 			qualitySelections.clear();
 		}
+		headerReads++;
 		try {
 			alive();
 			const list = event ? { workspaces: lastList } : await api("GET", "/pm/workspaces");
@@ -44833,6 +45722,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				refreshing = false;
 				refresh.disabled = false;
 			}
+			settleReadComplete();
 		}
 	}
 	await load();
@@ -44873,6 +45763,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	let authorityTool = null;
 	async function refreshAuthority() {
 		const ticket = ++sequence;
+		headerReads++;
 		try {
 			const detail = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}`);
 			alive();
@@ -44925,6 +45816,12 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			updateForms();
 			status.replaceChildren(errorBox(error, { within: status }));
 			throw error;
+		} finally {
+			if (ticket === sequence) {
+				refreshing = false;
+				refresh.disabled = false;
+			}
+			settleReadComplete();
 		}
 	}
 	let contextSequence = 0;
@@ -45033,6 +45930,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		return settleRefreshes(reads).then(refreshNames);
 	});
 	const dispose = () => {
+		if (workbench?.selected() === "board") kanban?.rememberScroll?.();
+		if (workbench?.selected() === "requirements") traceability?.rememberScroll?.();
 		uiState.listScroll = workspaceList.scrollTop;
 		threadState.scroll = content.querySelector(".pd-transcript")?.scrollTop || 0;
 		disposed = true;
@@ -45060,6 +45959,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		ahp?.dispose();
 		for (const control of viewToolMenus.values()) control.dispose();
 		for (const value of forms) value.dispose();
+		refreshing = false;
+		initialHeaderSettled = true;
+		headerReads = 0;
+		resolveSettleWaiters();
 	};
 	dispose.navigate = (nextWorkspace, nextThread, nextView) => {
 		if (disposed || nextWorkspace !== workspaceId || (nextThread || null) !== (threadId || null) || !workbench) return false;
@@ -49572,6 +50475,7 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 	const run = async () => {
 		if (busy || damaged || !allowed || !permitted()) return;
 		if (!saved.intent && !form.reportValidity()) return;
+		if ([...fields.values()].some((input) => input === document.activeElement)) create.focus();
 		busy = true;
 		update();
 		status.replaceChildren();
@@ -49621,6 +50525,9 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 		type: "submit",
 		label: t(project ? "add_project" : "add_item")
 	});
+	create.addEventListener("click", (event) => {
+		if (busy) event.preventDefault();
+	});
 	const review = button({
 		variant: "secondary",
 		hidden: true,
@@ -49649,15 +50556,33 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 		"data-create-record": kind,
 		onsubmit: (event) => {
 			event.preventDefault();
+			if (busy) return;
 			run();
 		}
 	}, showScope ? scope : null, compact, advanced, h("div", { class: "actions" }, create, review, unsaved), status, receipt);
 	function update() {
+		const hadCreateFocus = document.activeElement === create;
 		for (const input of fields.values()) input.disabled = !allowed || !permitted() || busy || !!saved.intent || damaged;
-		create.disabled = !allowed || !permitted() || busy || damaged || !!saved.intent?.initialAdmissionRefused || !!saved.intent && terminal$7(operation);
+		const blocked = !allowed || !permitted() || damaged || !!saved.intent?.initialAdmissionRefused || !!saved.intent && terminal$7(operation);
+		if (busy) {
+			create.disabled = false;
+			create.setAttribute("aria-disabled", "true");
+			status.setAttribute("aria-busy", "true");
+		} else {
+			create.removeAttribute("aria-disabled");
+			status.removeAttribute("aria-busy");
+			create.disabled = blocked;
+		}
 		create.textContent = t(saved.intent ? "create_check_original" : project ? "add_project" : "add_item");
 		review.hidden = !(saved.intent?.initialAdmissionRefused || saved.intent && terminal$7(operation) && operation.status !== "succeeded");
 		review.disabled = busy || !allowed || !permitted();
+		if (hadCreateFocus && (create.disabled || create.hidden)) {
+			if (!review.hidden && !review.disabled) review.focus();
+			else if (document.activeElement === document.body || document.activeElement === create) {
+				status.tabIndex = -1;
+				status.focus();
+			}
+		}
 		onStateChange();
 	}
 	if (damaged) status.replaceChildren(h("p", { class: "error" }, t("create_invalid_draft")));
@@ -50113,7 +51038,7 @@ async function mountFleetDesktop(main, { h, t }) {
 	panel.append(h("h2", {}, t("fleet_desktop_title")), h("p", { class: "muted" }, t("fleet_independent")), content, message);
 	if (!main.isConnected) return () => {};
 	main.append(panel);
-	let disposed = false, busy = false, readable = false, snapshot, draft, binding, choicePreview, launch, migration, timer;
+	let disposed = false, busy = false, readable = false, snapshot, draft, binding, choicePreview, launch, migration, timer, pressed = null;
 	let backend = "rust", autostart = false;
 	const alive = () => !disposed && panel.isConnected;
 	const key = () => `batc.desktop.fleet.controls.${binding}`;
@@ -50158,7 +51083,7 @@ async function mountFleetDesktop(main, { h, t }) {
 			}));
 		} catch {}
 	};
-	const enabled = () => readable && !busy && snapshot?.configuration.valid && !snapshot.pending_migration && (snapshot.monitor.state === "stopped" || snapshot.monitor.controllable);
+	const canEnable = () => readable && snapshot?.configuration.valid && !snapshot.pending_migration && (snapshot.monitor.state === "stopped" || snapshot.monitor.controllable);
 	const stale = () => draft && (draft.revision !== snapshot.selection.revision || draft.epoch !== snapshot.monitor.epoch);
 	const discardPreview = () => {
 		if (choicePreview) fleetControl({
@@ -50168,7 +51093,7 @@ async function mountFleetDesktop(main, { h, t }) {
 		choicePreview = null;
 	};
 	const edit = (field, value) => {
-		if (!enabled() || stale()) return;
+		if (busy || !canEnable() || stale()) return;
 		discardPreview();
 		draft ||= {
 			...choices(snapshot.selection),
@@ -50227,18 +51152,20 @@ async function mountFleetDesktop(main, { h, t }) {
 			save();
 		}
 	};
-	const run = async (fn) => {
+	const run = async (fn, quiet = false, action = null) => {
 		if (!alive() || busy) return;
+		if (action) pressed = action;
 		busy = true;
-		message.textContent = t("fleet_working");
+		if (!quiet) message.textContent = t("fleet_working");
 		render();
 		try {
 			await fn();
-			if (alive()) message.textContent = "";
+			if (alive() && !quiet) message.textContent = "";
 		} catch (error) {
 			if (alive()) message.textContent = `${t("fleet_unknown")} ${String(error)}`;
 		} finally {
 			busy = false;
+			pressed = null;
 			if (alive()) {
 				save();
 				render();
@@ -50281,7 +51208,7 @@ async function mountFleetDesktop(main, { h, t }) {
 			if (!validId(value.preview_id) || !equivalent(value.summary?.choices, draft)) throw new Error(t("fleet_unknown"));
 			choicePreview = value;
 		}
-	});
+	}, false, "choices");
 	const launchApply = () => run(async () => {
 		launch.attempted = true;
 		save();
@@ -50290,23 +51217,96 @@ async function mountFleetDesktop(main, { h, t }) {
 			preview_id: launch.preview_id
 		});
 		if (alive()) acceptLaunch(value);
-	});
+	}, false, "launch");
 	const label = (id) => id === "default" ? t("fleet_local_bat") : snapshot.profiles.find((row) => row.id === id)?.label || snapshot.configuration.connections.find((row) => row.name === id)?.label || id;
+	const gate = (blocked, action) => busy && action && pressed === action ? { "aria-disabled": "true" } : blocked ? { disabled: true } : busy ? { "aria-disabled": "true" } : {};
+	const focusKeys = [
+		"data-fleet-action",
+		"data-fleet-choice",
+		"data-fleet-login",
+		"data-fleet-autostart",
+		"data-fleet-backend"
+	];
+	const focusKey = (node) => {
+		for (let current = node; current && current !== panel; current = current.parentElement) for (const attr of focusKeys) if (current.hasAttribute?.(attr)) return [attr, current.getAttribute(attr)];
+		return null;
+	};
+	const controlByKey = (key) => {
+		if (!key) return null;
+		for (const node of content.querySelectorAll("button, input, select")) if (node.getAttribute(key[0]) === key[1]) return node;
+		return null;
+	};
+	const groups = [
+		["start", "quit"],
+		[
+			"choices",
+			"use-current",
+			"refresh"
+		],
+		[
+			"review-launch",
+			"launch",
+			"refresh-launch",
+			"new-launch",
+			"cancel-launch"
+		],
+		[
+			"review-migration",
+			"apply-migration",
+			"continue-migration",
+			"refresh-migration",
+			"retry-migration",
+			"new-migration",
+			"cancel-migration",
+			"restore-migration"
+		]
+	];
+	const successor = (key) => {
+		if (key?.[0] === "data-fleet-action") {
+			const group = groups.find((items) => items.includes(key[1]));
+			if (group) for (const candidate of group.slice(group.indexOf(key[1]) + 1)) {
+				const node = controlByKey(["data-fleet-action", candidate]);
+				if (node && !node.disabled && node.getAttribute("aria-disabled") !== "true") return node;
+			}
+		}
+		message.tabIndex = -1;
+		return message;
+	};
 	const render = () => {
 		if (!alive() || !snapshot) return;
-		const focus = document.activeElement?.dataset?.fleetChoice;
+		const previous = panel.contains(document.activeElement) ? focusKey(document.activeElement) : null;
 		const selected = draft || snapshot.selection, ready = new Map([...snapshot.readiness.hosts, snapshot.readiness.connector].filter(Boolean).map((row) => [row.name, row]));
-		const checkbox = (field, id, text) => h("label", { class: "fleet-choice" }, h("input", {
-			type: "checkbox",
-			checked: field === "dashboard" ? selected.dashboard : selected[field].includes(id),
-			"data-fleet-choice": field + ":" + id,
-			disabled: !enabled() || !!stale(),
-			onchange: (e) => edit(field, field === "dashboard" ? e.target.checked : e.target.checked ? [...selected[field], id] : selected[field].filter((v) => v !== id))
-		}), " ", text);
-		const button = (text, fn, disabled = false, primary = false) => h("button", {
+		const checkbox = (field, id, text) => {
+			const checked = field === "dashboard" ? selected.dashboard : selected[field].includes(id);
+			const blocked = !canEnable() || !!stale();
+			return h("label", { class: "fleet-choice" }, h("input", {
+				type: "checkbox",
+				checked,
+				...gate(blocked),
+				"data-fleet-choice": field + ":" + id,
+				onkeydown: (event) => {
+					if (busy && event.key === " ") event.preventDefault();
+				},
+				onclick: (event) => {
+					if (busy) event.preventDefault();
+				},
+				onchange: (event) => {
+					if (busy || blocked) {
+						event.target.checked = checked;
+						return;
+					}
+					edit(field, field === "dashboard" ? event.target.checked : event.target.checked ? [...selected[field], id] : selected[field].filter((value) => value !== id));
+				}
+			}), " ", text);
+		};
+		const button = (action, text, fn, blocked = false, primary = false) => h("button", {
 			class: primary ? "primary" : "secondary",
-			disabled: busy || disabled,
-			onclick: fn
+			...gate(blocked, action),
+			"data-fleet-action": action,
+			onclick: () => {
+				if (busy || blocked) return;
+				fn();
+			}
 		}, t(text));
 		const fields = [
 			h("p", { "data-fleet-current-backend": true }, t("delivery_fleet_current_backend", { backend: t(["rust", "powershell"].includes(snapshot.backend) ? "fleet_backend_" + snapshot.backend : "obs_unknown") })),
@@ -50314,20 +51314,20 @@ async function mountFleetDesktop(main, { h, t }) {
 			h("p", {}, t("fleet_monitor_" + snapshot.monitor.state), " · ", t("fleet_" + snapshot.readiness.state)),
 			snapshot.monitor.state === "running" && !snapshot.monitor.controllable ? h("p", { class: "note" }, t("fleet_other_owner")) : null,
 			snapshot.login_launch ? h("p", { class: "note" }, t("fleet_login_" + snapshot.login_launch.state), snapshot.login_launch.code ? ` (${snapshot.login_launch.code})` : null) : null,
-			h("div", { class: "actions" }, button("fleet_start", () => run(async () => {
+			h("div", { class: "actions" }, button("start", "fleet_start", () => run(async () => {
 				await fleetRequest({
 					action: "ensure_monitor",
 					expected_configuration_binding: binding
 				});
 				await read();
-			}), !enabled() || !!draft || snapshot.monitor.state !== "stopped"), button("fleet_quit", () => run(async () => {
+			}, false, "start"), !canEnable() || !!draft || snapshot.monitor.state !== "stopped"), button("quit", "fleet_quit", () => run(async () => {
 				await fleetRequest({
 					action: "quit_owned",
 					expected_configuration_binding: binding,
 					expected_monitor_epoch: snapshot.monitor.epoch
 				});
 				await read();
-			}), !enabled() || !!draft || !snapshot.monitor.controllable)),
+			}, false, "quit"), !canEnable() || !!draft || !snapshot.monitor.controllable)),
 			h("h3", {}, t("fleet_connections")),
 			h("div", { class: "fleet-options" }, ...snapshot.configuration.connections.map((row) => h("div", { class: "row" }, h("div", { class: "grow" }, checkbox("connections", row.name, row.label)), h("span", { class: "chip" }, t("fleet_" + (ready.get(row.name)?.level || "unavailable")))))),
 			h("h3", {}, t("fleet_windows_title")),
@@ -50335,29 +51335,31 @@ async function mountFleetDesktop(main, { h, t }) {
 			h("p", { class: "muted" }, t("fleet_selection_help")),
 			stale() ? h("p", { class: "error" }, t("fleet_changed")) : null,
 			choicePreview ? h("p", { class: "note" }, t("fleet_prerequisites", { names: choicePreview.summary.added_connections.map(label).join(", ") || t("fleet_none") })) : null,
-			h("div", { class: "actions" }, button(choicePreview ? "fleet_save_choices" : "fleet_review_choices", () => choicePreview ? run(async () => {
+			h("div", { class: "actions" }, button("choices", choicePreview ? "fleet_save_choices" : "fleet_review_choices", () => choicePreview ? run(async () => {
 				await fleetControl({
 					action: "apply_choices",
 					preview_id: choicePreview.preview_id
 				});
 				await read();
-			}) : reviewChoices(), !enabled() || !draft || !!stale(), true), button("fleet_use_current", () => {
+			}, false, "choices") : reviewChoices(), !canEnable() || !draft || !!stale(), true), button("use-current", "fleet_use_current", () => {
+				if (busy) return;
 				draft = null;
 				discardPreview();
 				save();
 				render();
-			}, !draft), button("fleet_refresh", () => run(read))),
+			}, !draft), button("refresh", "fleet_refresh", () => run(read, false, "refresh"))),
 			h("h3", {}, t("fleet_launch_title")),
 			h("p", { class: "muted" }, t("fleet_launch_help")),
 			launch ? h("p", { class: "note" }, launch.receipt ? t("fleet_launch_" + (launch.receipt.state === "prepared" ? "uncertain" : launch.receipt.state || "uncertain")) : t(launch.attempted ? "fleet_launch_uncertain" : "fleet_launch_review")) : null,
 			launch?.summary?.bat_may_open_local_window ? h("p", { class: "muted" }, t("fleet_local_anchor")) : null,
-			h("div", { class: "actions" }, button("fleet_review_launch", () => run(async () => {
+			h("div", { class: "actions" }, button("review-launch", "fleet_review_launch", () => run(async () => {
 				const value = await fleetControl({ action: "preview_launch" });
 				if (alive()) {
 					if (!validId(value.preview_id) || !validSummary(value.summary, value.preview_id)) throw new Error(t("fleet_unknown"));
 					launch = value;
 				}
-			}), !enabled() || !!draft || !!launch?.attempted), launch && !launch.receipt && launch.summary ? button(launch.attempted ? "fleet_retry_launch" : "fleet_launch_apply", launchApply, !enabled() || !!draft || snapshot.login_launch?.state === "waiting") : null, launch ? button("fleet_refresh", () => run(read)) : null, knownLaunch() ? button("fleet_new_launch", () => {
+			}, false, "review-launch"), !canEnable() || !!draft || !!launch?.attempted), launch && !launch.receipt && launch.summary ? button("launch", launch.attempted ? "fleet_retry_launch" : "fleet_launch_apply", launchApply, !canEnable() || !!draft || snapshot.login_launch?.state === "waiting") : null, launch ? button("refresh-launch", "fleet_refresh", () => run(read, false, "refresh-launch")) : null, knownLaunch() ? button("new-launch", "fleet_new_launch", () => {
+				if (busy) return;
 				fleetControl({
 					action: "discard",
 					preview_id: launch.preview_id
@@ -50365,7 +51367,8 @@ async function mountFleetDesktop(main, { h, t }) {
 				launch = null;
 				save();
 				render();
-			}) : null, launch && !launch.attempted ? button("cancel", () => {
+			}) : null, launch && !launch.attempted ? button("cancel-launch", "cancel", () => {
+				if (busy) return;
 				fleetControl({
 					action: "discard",
 					preview_id: launch.preview_id
@@ -50378,25 +51381,43 @@ async function mountFleetDesktop(main, { h, t }) {
 			h("label", { class: "fleet-choice" }, h("input", {
 				type: "checkbox",
 				checked: snapshot.login.show_picker,
-				disabled: !enabled(),
+				...gate(!canEnable()),
 				"data-fleet-login": "picker",
-				onchange: (e) => run(async () => {
-					const value = await fleetControl({
-						action: "save_login",
-						expected_revision: snapshot.login.revision,
-						show_picker: e.target.checked
+				onkeydown: (event) => {
+					if (busy && event.key === " ") event.preventDefault();
+				},
+				onclick: (event) => {
+					if (busy) event.preventDefault();
+				},
+				onchange: (event) => {
+					if (busy || !canEnable()) {
+						event.target.checked = snapshot.login.show_picker;
+						return;
+					}
+					const show = event.target.checked;
+					run(async () => {
+						const value = await fleetControl({
+							action: "save_login",
+							expected_revision: snapshot.login.revision,
+							show_picker: show
+						});
+						if (alive()) snapshot.login = value;
 					});
-					if (alive()) snapshot.login = value;
-				})
+				}
 			}), " ", t("fleet_login_picker")),
 			h("h3", {}, t("fleet_backend_title")),
 			h("p", { class: "muted" }, t("fleet_backend_help")),
 			h("div", { class: "actions" }, h("select", {
 				value: backend,
-				disabled: busy || !!migration,
+				"data-fleet-backend": "choice",
 				"aria-label": t("fleet_backend_title"),
-				onchange: (e) => {
-					backend = e.target.value;
+				...gate(!!migration),
+				onchange: (event) => {
+					if (busy || migration) {
+						event.target.value = backend;
+						return;
+					}
+					backend = event.target.value;
 				}
 			}, h("option", {
 				value: "rust",
@@ -50407,11 +51428,21 @@ async function mountFleetDesktop(main, { h, t }) {
 			}, t("fleet_backend_powershell"))), h("label", { class: "fleet-choice" }, h("input", {
 				type: "checkbox",
 				checked: autostart,
-				disabled: busy || !!migration,
-				onchange: (e) => {
-					autostart = e.target.checked;
+				...gate(!!migration),
+				"data-fleet-autostart": "enabled",
+				onkeydown: (event) => {
+					if (busy && event.key === " ") event.preventDefault();
 				},
-				"data-fleet-autostart": "enabled"
+				onclick: (event) => {
+					if (busy) event.preventDefault();
+				},
+				onchange: (event) => {
+					if (busy || migration) {
+						event.target.checked = autostart;
+						return;
+					}
+					autostart = event.target.checked;
+				}
 			}), " ", t("fleet_autostart"))),
 			migration ? h("p", { class: "note" }, migration.receipt ? t("fleet_migration_" + migration.receipt.phase) : t(migration.accepted ? "fleet_migration_unknown" : "fleet_migration_review", {
 				from: t("fleet_backend_" + migration.from),
@@ -50419,7 +51450,7 @@ async function mountFleetDesktop(main, { h, t }) {
 				before: t(migration.autostart_before ? "fleet_enabled" : "fleet_disabled"),
 				after: t(migration.autostart ? "fleet_enabled" : "fleet_disabled")
 			})) : null,
-			h("div", { class: "actions" }, button("fleet_review_migration", () => run(async () => {
+			h("div", { class: "actions" }, button("review-migration", "fleet_review_migration", () => run(async () => {
 				const value = await fleetControl({
 					action: "preview_migration",
 					backend,
@@ -50429,7 +51460,7 @@ async function mountFleetDesktop(main, { h, t }) {
 					if (!validId(value.preview_id) || typeof value.fingerprint !== "string") throw new Error(t("fleet_unknown"));
 					migration = value;
 				}
-			}), !enabled() || !!migration), migration && !migration.accepted ? button("fleet_apply_migration", () => run(async () => {
+			}, false, "review-migration"), !canEnable() || !!migration), migration && !migration.accepted ? button("apply-migration", "fleet_apply_migration", () => run(async () => {
 				migration.accepted = true;
 				save();
 				const value = await fleetControl({
@@ -50439,14 +51470,14 @@ async function mountFleetDesktop(main, { h, t }) {
 				});
 				if (alive()) acceptMigration(value);
 				await read();
-			}), !readable) : null, migration?.accepted && migration.receipt && migration.receipt.phase !== "complete" ? button("fleet_continue_migration", () => run(async () => {
+			}, false, "apply-migration"), !readable) : null, migration?.accepted && migration.receipt && migration.receipt.phase !== "complete" ? button("continue-migration", "fleet_continue_migration", () => run(async () => {
 				const value = await fleetControl({
 					action: "advance_migration",
 					migration_id: migration.preview_id
 				});
 				if (alive()) acceptMigration(value);
 				await read();
-			}), !readable) : null, migration?.accepted ? button("fleet_refresh", () => run(read)) : null, migration?.accepted && !migration.receipt ? button("fleet_retry_migration", () => run(async () => {
+			}, false, "continue-migration"), !readable) : null, migration?.accepted ? button("refresh-migration", "fleet_refresh", () => run(read, false, "refresh-migration")) : null, migration?.accepted && !migration.receipt ? button("retry-migration", "fleet_retry_migration", () => run(async () => {
 				const value = await fleetControl(migration.restore_source ? {
 					action: "restore_migration",
 					source_id: migration.restore_source,
@@ -50458,7 +51489,8 @@ async function mountFleetDesktop(main, { h, t }) {
 				});
 				if (alive()) acceptMigration(value);
 				await read();
-			}), !migration.restore_source && !migration.fingerprint) : null, migration?.receipt?.phase === "complete" ? button("fleet_new_migration", () => {
+			}, false, "retry-migration"), !migration.restore_source && !migration.fingerprint) : null, migration?.receipt?.phase === "complete" ? button("new-migration", "fleet_new_migration", () => {
+				if (busy) return;
 				fleetControl({
 					action: "discard",
 					preview_id: migration.preview_id
@@ -50466,7 +51498,8 @@ async function mountFleetDesktop(main, { h, t }) {
 				migration = null;
 				save();
 				render();
-			}) : null, migration && !migration.accepted ? button("cancel", () => {
+			}) : null, migration && !migration.accepted ? button("cancel-migration", "cancel", () => {
+				if (busy) return;
 				fleetControl({
 					action: "discard",
 					preview_id: migration.preview_id
@@ -50474,7 +51507,7 @@ async function mountFleetDesktop(main, { h, t }) {
 				migration = null;
 				save();
 				render();
-			}) : null, migration?.receipt?.phase === "complete" ? button("fleet_restore_migration", () => run(async () => {
+			}) : null, migration?.receipt?.phase === "complete" ? button("restore-migration", "fleet_restore_migration", () => run(async () => {
 				const source = migration.preview_id;
 				const restoreId = crypto.randomUUID().replaceAll("-", "");
 				migration = {
@@ -50490,15 +51523,19 @@ async function mountFleetDesktop(main, { h, t }) {
 				});
 				if (alive()) acceptMigration(value);
 				await read();
-			}), !readable) : null)
+			}, false, "restore-migration"), !readable) : null)
 		];
 		content.replaceChildren(...fields.filter(Boolean));
-		if (focus) [...content.querySelectorAll("input")].find((input) => input.dataset.fleetChoice === focus)?.focus();
+		if ([...content.querySelectorAll("button")].some((node) => node.getAttribute("aria-disabled") === "true")) message.setAttribute("aria-busy", "true");
+		else message.removeAttribute("aria-busy");
+		const again = controlByKey(previous);
+		if (again && !again.disabled) again.focus();
+		else if (previous) successor(previous).focus();
 	};
 	await run(read);
 	const poll = async () => {
 		if (!alive()) return;
-		if (!busy) await run(read);
+		if (!busy) await run(read, true);
 		if (alive()) timer = setTimeout(poll, 5e3);
 	};
 	timer = setTimeout(poll, 5e3);
@@ -50684,7 +51721,7 @@ async function mountFleet(main, { h, t }) {
 	panel.append(h("h2", {}, t("fleet_title")), h("p", { class: "muted" }, t("fleet_help")), content, message);
 	main.append(panel);
 	let nativeCleanup, bootstrapCleanup;
-	let disposed = false, busy = false, readable = false, timer, snapshot, draft, binding;
+	let disposed = false, busy = false, readable = false, timer, snapshot, draft, binding, pressed = null;
 	const alive = () => !disposed && panel.isConnected;
 	const key = () => `batc.desktop.fleet.selection.${binding}`;
 	const save = () => {
@@ -50695,19 +51732,58 @@ async function mountFleet(main, { h, t }) {
 	};
 	const same = (a, b) => a.length === b.length && [...a].sort().every((x, i) => x === [...b].sort()[i]);
 	const changed = () => draft && (draft.revision !== snapshot.selection.revision || draft.epoch !== snapshot.monitor.epoch);
-	const editable = () => readable && !busy && snapshot?.configuration.valid && (snapshot.monitor.state === "stopped" || snapshot.monitor.controllable);
+	const canEdit = () => readable && snapshot?.configuration.valid && (snapshot.monitor.state === "stopped" || snapshot.monitor.controllable);
+	const gate = (blocked, action) => busy && action && pressed === action ? { "aria-disabled": "true" } : blocked ? { disabled: true } : busy ? { "aria-disabled": "true" } : {};
+	const focusKeys = ["data-fleet-action", "data-fleet-name"];
+	const focusKey = (node) => {
+		for (let current = node; current && current !== panel; current = current.parentElement) for (const attr of focusKeys) if (current.hasAttribute?.(attr)) return [attr, current.getAttribute(attr)];
+		return null;
+	};
+	const controlByKey = (key) => {
+		if (!key) return null;
+		for (const node of content.querySelectorAll("button, input, select")) if (node.getAttribute(key[0]) === key[1]) return node;
+		return null;
+	};
+	const groups = [[
+		"apply",
+		"refresh",
+		"use-current"
+	], ["start", "quit"]];
+	const successor = (key) => {
+		if (key?.[0] === "data-fleet-action") {
+			const group = groups.find((items) => items.includes(key[1]));
+			if (group) for (const candidate of group.slice(group.indexOf(key[1]) + 1)) {
+				const node = controlByKey(["data-fleet-action", candidate]);
+				if (node && !node.disabled && node.getAttribute("aria-disabled") !== "true") return node;
+			}
+		}
+		message.tabIndex = -1;
+		return message;
+	};
 	const render = () => {
 		if (!alive() || !snapshot) return;
 		const names = draft?.connections || snapshot.selection.connections;
 		const ready = new Map([...snapshot.readiness.hosts || [], snapshot.readiness.connector].filter(Boolean).map((row) => [row.name, row]));
-		const focus = document.activeElement?.dataset?.fleetName;
+		const previous = panel.contains(document.activeElement) ? focusKey(document.activeElement) : null;
 		const rows = snapshot.configuration.connections.map((entry) => {
+			const checked = names.includes(entry.name);
+			const blocked = !canEdit() || !!changed();
 			const input = h("input", {
 				type: "checkbox",
-				checked: names.includes(entry.name),
-				disabled: !editable() || !!changed(),
+				checked,
+				...gate(blocked),
 				"data-fleet-name": entry.name,
+				onkeydown: (event) => {
+					if (busy && event.key === " ") event.preventDefault();
+				},
+				onclick: (event) => {
+					if (busy) event.preventDefault();
+				},
 				onchange: () => {
+					if (busy || blocked) {
+						input.checked = checked;
+						return;
+					}
 					if (!draft) draft = {
 						revision: snapshot.selection.revision,
 						epoch: snapshot.monitor.epoch,
@@ -50731,24 +51807,33 @@ async function mountFleet(main, { h, t }) {
 			changed() ? h("p", { class: "error" }, t("fleet_changed")) : h("span"),
 			h("div", { class: "actions" }, h("button", {
 				class: "primary",
-				disabled: !editable() || !draft || !!changed(),
-				onclick: () => mutate({
-					action: "set_connections",
-					connections: [...draft.connections],
-					expected_selection_revision: draft.revision,
-					expected_monitor_epoch: draft.epoch,
-					expected_configuration_binding: binding
-				})
+				...gate(!canEdit() || !draft || !!changed(), "apply"),
+				"data-fleet-action": "apply",
+				onclick: () => {
+					if (busy || !canEdit() || !draft || changed()) return;
+					mutate({
+						action: "set_connections",
+						connections: [...draft.connections],
+						expected_selection_revision: draft.revision,
+						expected_monitor_epoch: draft.epoch,
+						expected_configuration_binding: binding
+					}, "apply");
+				}
 			}, t("fleet_apply")), iconButton({
 				icon: "refresh-cw",
 				label: t("fleet_refresh"),
-				class: "secondary",
-				disabled: busy,
-				onclick: () => read(true)
+				...gate(false, "refresh"),
+				"data-fleet-action": "refresh",
+				onclick: () => {
+					if (busy) return;
+					read(true);
+				}
 			}), h("button", {
 				class: "secondary",
-				disabled: !readable || busy || !draft,
+				...gate(!readable || !draft, "use-current"),
+				"data-fleet-action": "use-current",
 				onclick: () => {
+					if (busy || !readable || !draft) return;
 					draft = null;
 					save();
 					message.textContent = "";
@@ -50757,22 +51842,34 @@ async function mountFleet(main, { h, t }) {
 			}, t("fleet_use_current"))),
 			h("div", { class: "actions" }, h("button", {
 				class: "secondary",
-				disabled: !editable() || !!draft || snapshot.monitor.state !== "stopped",
-				onclick: () => mutate({
-					action: "ensure_monitor",
-					expected_configuration_binding: binding
-				})
+				...gate(!canEdit() || !!draft || snapshot.monitor.state !== "stopped", "start"),
+				"data-fleet-action": "start",
+				onclick: () => {
+					if (busy || !canEdit() || draft || snapshot.monitor.state !== "stopped") return;
+					mutate({
+						action: "ensure_monitor",
+						expected_configuration_binding: binding
+					}, "start");
+				}
 			}, t("fleet_start")), h("button", {
 				class: "danger",
-				disabled: !editable() || !!draft || !snapshot.monitor.controllable,
-				onclick: () => mutate({
-					action: "quit_owned",
-					expected_configuration_binding: binding,
-					expected_monitor_epoch: snapshot.monitor.epoch
-				})
+				...gate(!canEdit() || !!draft || !snapshot.monitor.controllable, "quit"),
+				"data-fleet-action": "quit",
+				onclick: () => {
+					if (busy || !canEdit() || draft || !snapshot.monitor.controllable) return;
+					mutate({
+						action: "quit_owned",
+						expected_configuration_binding: binding,
+						expected_monitor_epoch: snapshot.monitor.epoch
+					}, "quit");
+				}
 			}, t("fleet_quit")))
 		].filter(Boolean));
-		if (focus) [...content.querySelectorAll("input")].find((input) => input.dataset.fleetName === focus)?.focus();
+		if ([...content.querySelectorAll("button")].some((node) => node.getAttribute("aria-disabled") === "true")) message.setAttribute("aria-busy", "true");
+		else message.removeAttribute("aria-busy");
+		const again = controlByKey(previous);
+		if (again && !again.disabled) again.focus();
+		else if (previous) successor(previous).focus();
 	};
 	const accept = (value) => {
 		if (!value?.configuration?.connections || !value?.monitor || !value?.selection || !value?.readiness) throw new Error(t("fleet_unavailable"));
@@ -50793,6 +51890,7 @@ async function mountFleet(main, { h, t }) {
 	};
 	const read = async (explicit = false) => {
 		if (!alive() || busy) return;
+		if (explicit) pressed = "refresh";
 		busy = true;
 		render();
 		try {
@@ -50807,11 +51905,13 @@ async function mountFleet(main, { h, t }) {
 			}
 		} finally {
 			busy = false;
+			pressed = null;
 			render();
 		}
 	};
-	const mutate = async (input) => {
-		if (!editable() || !alive()) return;
+	const mutate = async (input, action) => {
+		if (busy || !alive() || !canEdit()) return;
+		pressed = action;
 		busy = true;
 		readable = false;
 		message.textContent = t("fleet_working");
@@ -50825,6 +51925,7 @@ async function mountFleet(main, { h, t }) {
 			if (alive()) message.textContent = `${t("fleet_unknown")} ${String(error)}`;
 		} finally {
 			busy = false;
+			pressed = null;
 			render();
 		}
 	};
@@ -51206,7 +52307,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 		saved = JSON.parse(localStorage.getItem(storageKey));
 	} catch {}
 	saved = restore$2(saved, source);
-	let busy = false, revision = 0, disposed = false, refreshing = null;
+	let busy = false, revision = 0, disposed = false, refreshing = null, pressed = null;
 	const host = h("select", { "aria-label": t("capture_host") }, h("option", { value: "" }, t("capture_host")), ...(caps()?.hosts || []).map((item) => h("option", { value: item.host }, item.host)));
 	const session = h("input", {
 		"aria-label": t("capture_session"),
@@ -51220,7 +52321,10 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 	host.value = saved.input.host || "";
 	session.value = saved.input.session_id || "";
 	path.value = saved.input.relative_path || "";
-	const notice = h("div", { role: "status" }), evidence = h("div", { "data-capture-evidence": "" });
+	const notice = h("div", {
+		role: "status",
+		"data-capture-notice": ""
+	}), evidence = h("div", { "data-capture-evidence": "" });
 	const reviewed = h("input", {
 		type: "checkbox",
 		onchange: () => update()
@@ -51262,11 +52366,13 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 	};
 	const preview = h("button", {
 		class: "secondary",
+		"data-capture-preview": "",
 		onclick: async () => {
 			const input = current();
 			guard();
 			if (busy || saved.intent || !mayPreview() || !validInput(input)) return;
-			const ticket = ++revision;
+			const ticket = ++revision, owned = owns(preview);
+			pressed = preview;
 			busy = true;
 			saved.preview = null;
 			reviewed.checked = false;
@@ -51289,7 +52395,9 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 				if (ticket === revision) showError(error);
 			} finally {
 				busy = false;
+				pressed = null;
 				render();
+				if (ticket === revision) placeFocus(preview, owned);
 			}
 		}
 	}, t("capture_preview"));
@@ -51318,6 +52426,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 	};
 	const apply = h("button", {
 		class: "secondary",
+		"data-capture-apply": "",
 		onclick: async () => {
 			guard();
 			if (busy || !mayCapture() || settled() && (saved.operation.status !== "succeeded" || saved.result) || saved.refused) return;
@@ -51336,6 +52445,8 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 				};
 				persist();
 			}
+			const owned = owns(apply);
+			pressed = apply;
 			busy = true;
 			update();
 			try {
@@ -51356,31 +52467,36 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 				showError(error);
 			} finally {
 				busy = false;
+				pressed = null;
 				render();
+				placeFocus(apply, owned);
 			}
 		}
 	}, t("capture_save"));
 	const reset = h("button", {
 		class: "secondary",
+		"data-capture-new": "",
 		onclick: () => {
 			guard();
 			if (busy || refreshing || active()) return;
+			const owned = owns(reset);
 			saved = { input: current() };
 			reviewed.checked = false;
 			revision++;
 			persist();
 			notice.replaceChildren();
 			render();
+			placeFocus(reset, owned);
 		}
 	}, t("capture_new"));
 	const attach = onAttach ? h("button", {
 		class: "secondary",
+		"data-capture-attach": "",
 		onclick: () => {
 			guard();
-			if (saved.result) {
-				onAttach({ ...saved.result }, (saved.preview?.relative_path || saved.input.relative_path).split("/").at(-1));
-				notice.textContent = t("capture_attached");
-			}
+			if (busy || !saved.result) return;
+			onAttach({ ...saved.result }, (saved.preview?.relative_path || saved.input.relative_path).split("/").at(-1));
+			notice.textContent = t("capture_attached");
 		}
 	}, t("capture_attach")) : null;
 	const box = h("details", {
@@ -51388,25 +52504,79 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 		"data-capture": "",
 		hidden: !supported()
 	}, h("summary", {}, t("capture_title")), h("p", { class: "muted" }, t("capture_help")), h("div", { class: "capture-fields" }, h("label", {}, t("capture_host"), host), h("label", {}, t("capture_session"), session), h("label", {}, t("capture_path"), path)), h("div", { class: "actions" }, preview), evidence, review, h("div", { class: "actions" }, apply, attach, reset), notice);
+	function lock(node, inflight, blocked) {
+		if (node === pressed && inflight) {
+			node.disabled = false;
+			node.setAttribute("aria-disabled", "true");
+			return;
+		}
+		if (blocked) {
+			node.removeAttribute("aria-disabled");
+			node.disabled = true;
+			return;
+		}
+		if (inflight) {
+			node.disabled = false;
+			node.setAttribute("aria-disabled", "true");
+			return;
+		}
+		node.removeAttribute("aria-disabled");
+		node.disabled = false;
+	}
+	function shown(node) {
+		return Boolean(node && node.isConnected && !node.disabled && !node.closest("[hidden]"));
+	}
+	function owns(button) {
+		const active = document.activeElement;
+		return active === button || active === document.body;
+	}
+	function successor(button) {
+		let next = null;
+		if (button === apply) {
+			if (saved.operation?.status === "succeeded" && saved.result) next = shown(attach) ? attach : reset;
+			else if (["failed", "cancelled"].includes(saved.operation?.status) || saved.refused) next = reset;
+		} else if (button === reset) next = shown(preview) ? preview : host;
+		else next = host;
+		if (!shown(next)) {
+			notice.tabIndex = -1;
+			return notice;
+		}
+		return next;
+	}
+	function placeFocus(button, owned) {
+		if (!owned || !currentView() || !box.isConnected) return;
+		const active = document.activeElement;
+		if (active !== button && active !== document.body) return;
+		if (shown(button)) return;
+		const next = successor(button);
+		if (next !== active) next.focus();
+	}
 	function update() {
-		const frozen = busy || Boolean(saved.intent);
+		const frozen = busy || Boolean(saved.intent), reading = Boolean(refreshing);
 		for (const field of [
 			host,
 			session,
 			path
 		]) field.disabled = frozen;
-		preview.disabled = busy || Boolean(saved.intent) || !mayPreview() || !validInput(current());
+		lock(preview, busy, Boolean(saved.intent) || !mayPreview() || !validInput(current()));
 		review.hidden = !saved.preview || Boolean(saved.intent);
 		reviewed.disabled = expired();
 		apply.hidden = settled() && (saved.operation.status !== "succeeded" || saved.result);
 		apply.textContent = saved.intent ? t("capture_check") : t("capture_save");
-		apply.disabled = busy || !mayCapture() || Boolean(saved.refused) || !saved.intent && (expired() || !reviewed.checked);
+		lock(apply, busy, !mayCapture() || Boolean(saved.refused) || !saved.intent && (expired() || !reviewed.checked));
 		reset.hidden = !saved.intent;
-		reset.disabled = busy || Boolean(refreshing) || active();
+		lock(reset, busy || reading, active());
 		if (attach) {
 			attach.hidden = !saved.result;
-			attach.disabled = busy;
+			lock(attach, busy, false);
 		}
+		if ([
+			preview,
+			apply,
+			reset,
+			attach
+		].some((node) => node && node.getAttribute("aria-disabled") === "true")) notice.setAttribute("aria-busy", "true");
+		else notice.removeAttribute("aria-busy");
 		const expiry = evidence.querySelector("[data-capture-expiry]");
 		if (expiry) expiry.textContent = saved.intent ? t("capture_fixed") : expired() ? t("capture_expired") : t("capture_single_file");
 	}
@@ -51469,10 +52639,12 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 			guard();
 			if (saved.intent?.operation_id === id) await accept(operation);
 		})();
+		if (currentView()) update();
 		try {
 			await refreshing;
 		} finally {
 			refreshing = null;
+			if (currentView()) update();
 		}
 	};
 	const off = onEvents((event) => {
@@ -54350,6 +55522,38 @@ async function browserPreview(bytes) {
 	if (text.includes("\0")) throw new Error("PREVIEW_UNSUPPORTED");
 	return { text };
 }
+function retainFocus(button) {
+	if (!(button instanceof HTMLElement) || document.activeElement !== button) return () => {};
+	let moved = false;
+	const onKeyDown = (event) => {
+		if ([
+			"Tab",
+			"Escape",
+			"ArrowUp",
+			"ArrowDown",
+			"ArrowLeft",
+			"ArrowRight"
+		].includes(event.key)) moved = true;
+	};
+	const onPointerDown = (event) => {
+		const target = event.target;
+		if (target !== button && !(target instanceof Node && button.contains(target))) moved = true;
+	};
+	document.addEventListener("keydown", onKeyDown, true);
+	document.addEventListener("pointerdown", onPointerDown, true);
+	return (successor, fallback, alive = true) => {
+		document.removeEventListener("keydown", onKeyDown, true);
+		document.removeEventListener("pointerdown", onPointerDown, true);
+		if (!alive || moved) return;
+		const active = document.activeElement;
+		if (active !== button && active !== document.body && active !== null) return;
+		const usable = (node) => Boolean(node && node.isConnected && !node.closest("[hidden]") && !node.disabled);
+		const target = usable(button) ? button : usable(successor) ? successor : fallback;
+		if (!target || !target.isConnected) return;
+		if (target === fallback) fallback.tabIndex = -1;
+		if (document.activeElement !== target) target.focus();
+	};
+}
 function artifactContent({ h, t, api, guard, getArtifact, canRead, validArtifact, readBrowser }) {
 	const status = h("p", {
 		class: "muted",
@@ -54359,7 +55563,7 @@ function artifactContent({ h, t, api, guard, getArtifact, canRead, validArtifact
 		hidden: true
 	});
 	const box = h("div", { class: "artifact-content" }), receipts = new Map(), controller = new AbortController();
-	let current = null, busy = false, disposed = false, timer, readingStatus = null;
+	let current = null, busy = false, disposed = false, timer, readingStatus = null, pressed = null;
 	const live = (expected) => {
 		guard();
 		if (disposed || !canRead() || expected && !same(expected, getArtifact())) throw new Error(t("ar_content_changed"));
@@ -54448,7 +55652,10 @@ function artifactContent({ h, t, api, guard, getArtifact, canRead, validArtifact
 		return row;
 	}
 	async function perform(action) {
-		if (busy) return;
+		const button = action === "preview" ? peek : save;
+		if (busy || button.disabled || button.getAttribute("aria-disabled") === "true") return;
+		const settle = retainFocus(button);
+		pressed = button;
 		busy = true;
 		update();
 		status.textContent = t("ar_content_reading");
@@ -54502,7 +55709,9 @@ function artifactContent({ h, t, api, guard, getArtifact, canRead, validArtifact
 			fail(error);
 		} finally {
 			busy = false;
+			pressed = null;
 			update();
+			settle(null, status, !disposed);
 		}
 	}
 	const peek = h("button", {
@@ -54526,7 +55735,16 @@ function artifactContent({ h, t, api, guard, getArtifact, canRead, validArtifact
 			status.textContent = "";
 		}
 		box.hidden = !next;
-		peek.disabled = save.disabled = busy || !next || !canRead() || nativeDesktop && !nativeFileSupport;
+		const blocked = !next || !canRead() || nativeDesktop && !nativeFileSupport;
+		for (const button of [peek, save]) if (button === pressed || busy && !blocked) {
+			button.disabled = false;
+			button.setAttribute("aria-disabled", "true");
+		} else {
+			button.removeAttribute("aria-disabled");
+			button.disabled = blocked;
+		}
+		if ([peek, save].some((button) => button.getAttribute("aria-disabled") === "true" && !button.closest("[hidden]"))) status.setAttribute("aria-busy", "true");
+		else status.removeAttribute("aria-busy");
 		if (next && nativeDesktop && !nativeFileSupport) status.textContent = t("ar_content_native_unavailable");
 		if (changed && next && nativeDesktop && nativeFileSupport) queueMicrotask(() => refresh().catch(fail));
 	}
@@ -54622,7 +55840,8 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		raw = JSON.parse(localStorage.getItem(storageKey));
 	} catch {}
 	let saved = restore(raw), source = null, artifact = null, busy = false, readFailed = false, disposed = false;
-	let refreshing = null, submission = null, revision = 0, catalogCursor = null, catalogReading = null, catalogPages = 0;
+	let refreshing = null, submission = null, revision = 0, catalogCursor = null, catalogReading = null, catalogPages = 0, executionReads = 0;
+	const pressed = new Set();
 	let catalogRows = new Map();
 	const operations = {
 		capture: null,
@@ -54667,6 +55886,16 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 			return false;
 		}
 	};
+	const inert = (button) => button.getAttribute("aria-disabled") === "true";
+	function gate(button, flight, blocked) {
+		if (pressed.has(button) || flight && !blocked) {
+			button.disabled = false;
+			button.setAttribute("aria-disabled", "true");
+		} else {
+			button.removeAttribute("aria-disabled");
+			button.disabled = Boolean(blocked);
+		}
+	}
 	const persist = (required = false) => {
 		guard();
 		try {
@@ -54775,78 +56004,95 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	}
 	async function submit(kind) {
 		if (busy || refreshing || readFailed || !saved[kind]?.request) return;
-		guard();
-		busy = true;
-		update();
-		let finish;
-		submission = new Promise((resolve) => {
-			finish = resolve;
-		});
+		const button = kind === "capture" ? capture : accept;
+		const settle = retainFocus(button);
+		pressed.add(button);
 		try {
-			persist(true);
-			const intent = saved[kind];
-			const result = intent.operation_id ? await api("GET", `/operations/${intent.operation_id}`) : await api("POST", "/operations?wait=3", intent.request, intent.key);
 			guard();
-			await adopt(kind, result.operation);
-			notice.replaceChildren();
-		} catch (error) {
-			if (!currentView()) return;
-			const safe = kind === "capture" ? [
-				"PREVIEW_EXPIRED",
-				"PREVIEW_TOKEN_INVALID",
-				"PREVIEW_MISMATCH",
-				"INVALID_PARAMS"
-			] : [
-				"INVALID_PARAMS",
-				"ARTIFACT_REVISION_MISMATCH",
-				"ARTIFACT_LINEAGE_UNPROVEN"
-			];
-			if (!saved[kind].operation_id && error.status >= 400 && error.status < 500 && safe.includes(error.code)) saved[kind].refused = error.code;
-			persist();
-			showError(error);
-			if (kind === "capture" && error.status === 403) notice.append(h("p", { class: "muted" }, t("ar_original_credential")));
+			busy = true;
+			update();
+			let finish;
+			submission = new Promise((resolve) => {
+				finish = resolve;
+			});
+			try {
+				persist(true);
+				const intent = saved[kind];
+				const result = intent.operation_id ? await api("GET", `/operations/${intent.operation_id}`) : await api("POST", "/operations?wait=3", intent.request, intent.key);
+				guard();
+				await adopt(kind, result.operation);
+				notice.replaceChildren();
+			} catch (error) {
+				if (!currentView()) return;
+				const safe = kind === "capture" ? [
+					"PREVIEW_EXPIRED",
+					"PREVIEW_TOKEN_INVALID",
+					"PREVIEW_MISMATCH",
+					"INVALID_PARAMS"
+				] : [
+					"INVALID_PARAMS",
+					"ARTIFACT_REVISION_MISMATCH",
+					"ARTIFACT_LINEAGE_UNPROVEN"
+				];
+				if (!saved[kind].operation_id && error.status >= 400 && error.status < 500 && safe.includes(error.code)) saved[kind].refused = error.code;
+				persist();
+				showError(error);
+				if (kind === "capture" && error.status === 403) notice.append(h("p", { class: "muted" }, t("ar_original_credential")));
+			} finally {
+				busy = false;
+				pressed.delete(button);
+				finish();
+				submission = null;
+				if (currentView()) render();
+			}
 		} finally {
-			busy = false;
-			finish();
-			submission = null;
-			if (currentView()) render();
+			pressed.delete(button);
+			settle(saved[kind]?.operation_id ? check : saved[kind]?.refused ? kind === "capture" ? reset : newReview : null, notice, currentView());
 		}
 	}
 	const preview = h("button", {
 		class: "secondary",
 		onclick: async () => {
-			if (busy || frozen() || !source || !scope("observe") || !supported() || !safePath(path.value) || !selectorValid(saved.selector)) return;
-			guard();
-			const ticket = ++revision, fixed = structuredClone(input());
-			busy = true;
-			saved.preview = null;
-			reviewed.checked = false;
-			update();
+			if (inert(preview) || busy || frozen() || !source || !scope("observe") || !supported() || !safePath(path.value) || !selectorValid(saved.selector)) return;
+			const settle = retainFocus(preview);
+			pressed.add(preview);
 			try {
-				const { selector, ...fields } = fixed;
-				const { preview: doc } = await api("POST", "/artifact-managed-capture-previews", {
-					...fields,
-					...selector
-				});
 				guard();
-				if (ticket !== revision) return;
-				if (!validPreview(doc, fixed)) throw new Error(t("capture_invalid_preview"));
-				saved.preview = doc;
-				readFailed = false;
-				persist();
-				notice.replaceChildren();
-			} catch (error) {
-				if (ticket === revision) showError(error);
+				const ticket = ++revision, fixed = structuredClone(input());
+				busy = true;
+				saved.preview = null;
+				reviewed.checked = false;
+				update();
+				try {
+					const { selector, ...fields } = fixed;
+					const { preview: doc } = await api("POST", "/artifact-managed-capture-previews", {
+						...fields,
+						...selector
+					});
+					guard();
+					if (ticket !== revision) return;
+					if (!validPreview(doc, fixed)) throw new Error(t("capture_invalid_preview"));
+					saved.preview = doc;
+					readFailed = false;
+					persist();
+					notice.replaceChildren();
+				} catch (error) {
+					if (ticket === revision) showError(error);
+				} finally {
+					busy = false;
+					pressed.delete(preview);
+					if (currentView()) render();
+				}
 			} finally {
-				busy = false;
-				if (currentView()) render();
+				pressed.delete(preview);
+				settle(null, notice, currentView());
 			}
 		}
 	}, t("capture_preview"));
 	const capture = h("button", {
 		class: "primary",
 		onclick: () => {
-			if (busy || refreshing || readFailed || !mayCapture() || saved.capture?.operation_id || saved.capture?.refused) return;
+			if (inert(capture) || busy || refreshing || readFailed || !mayCapture() || saved.capture?.operation_id || saved.capture?.refused) return;
 			guard();
 			if (!saved.capture) {
 				const doc = saved.preview;
@@ -54874,7 +56120,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	const accept = h("button", {
 		class: "primary",
 		onclick: () => {
-			if (busy || refreshing || readFailed || !artifact || !mayAccept() || saved.accept?.operation_id || saved.accept?.refused || !receipt.value.trim() || [...receipt.value].length > 2e3) return;
+			if (inert(accept) || busy || refreshing || readFailed || !artifact || !mayAccept() || saved.accept?.operation_id || saved.accept?.refused || !receipt.value.trim() || [...receipt.value].length > 2e3) return;
 			guard();
 			if (!saved.accept) saved.accept = {
 				key: crypto.randomUUID(),
@@ -54903,12 +56149,23 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	}, t("ar_accept"));
 	const check = h("button", {
 		class: "secondary",
-		onclick: () => refresh(true).catch(showError)
+		onclick: () => {
+			if (inert(check)) return;
+			const settle = retainFocus(check);
+			pressed.add(check);
+			refresh(true).catch(showError).finally(() => {
+				pressed.delete(check);
+				if (currentView()) update();
+				settle(null, notice, currentView());
+			});
+		}
 	}, t("ar_check"));
 	const reload = h("button", {
 		class: "secondary",
 		onclick: async () => {
-			if (busy || refreshing || frozen()) return;
+			if (inert(reload) || busy || refreshing || frozen()) return;
+			const settle = retainFocus(reload);
+			pressed.add(reload);
 			busy = true;
 			update();
 			try {
@@ -54920,56 +56177,83 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 				showError(error);
 			} finally {
 				busy = false;
-				if (currentView()) render();
+				pressed.delete(reload);
+				const alive = currentView();
+				if (alive) render();
+				settle(null, notice, alive);
 			}
 		}
 	}, t("ar_refresh_sources"));
 	const reset = h("button", {
 		class: "secondary",
 		onclick: async () => {
-			guard();
-			if (busy || refreshing || readFailed || active("capture") || active("accept")) return;
-			saved = {
-				relative_path: path.value,
-				selector: null,
-				reviewText: ""
-			};
-			artifact = source = null;
-			candidates.clear();
-			pages.clear();
-			operations.capture = operations.accept = null;
-			reviewed.checked = false;
-			receipt.value = "";
-			revision++;
-			persist();
-			notice.replaceChildren();
-			renderChoice();
-			busy = true;
-			render();
+			if (inert(reset)) return;
+			const settle = retainFocus(reset);
+			pressed.add(reset);
 			try {
-				await loadSource();
-			} catch (error) {
-				showError(error);
+				guard();
+				if (busy || refreshing || readFailed || active("capture") || active("accept")) return;
+				saved = {
+					relative_path: path.value,
+					selector: null,
+					reviewText: ""
+				};
+				artifact = source = null;
+				candidates.clear();
+				pages.clear();
+				operations.capture = operations.accept = null;
+				reviewed.checked = false;
+				receipt.value = "";
+				revision++;
+				persist();
+				notice.replaceChildren();
+				renderChoice();
+				busy = true;
+				render();
+				try {
+					await loadSource();
+				} catch (error) {
+					showError(error);
+				} finally {
+					busy = false;
+					pressed.delete(reset);
+					if (currentView()) render();
+				}
 			} finally {
-				busy = false;
-				if (currentView()) render();
+				pressed.delete(reset);
+				settle(choice, notice, currentView());
 			}
 		}
 	}, t("capture_new"));
 	const newReview = h("button", {
 		class: "secondary",
 		onclick: () => {
-			guard();
-			if (busy || refreshing || readFailed || active("accept")) return;
-			saved.accept = null;
-			operations.accept = null;
-			persist();
-			render();
+			if (inert(newReview)) return;
+			const settle = retainFocus(newReview);
+			try {
+				guard();
+				if (busy || refreshing || readFailed || active("accept")) return;
+				saved.accept = null;
+				operations.accept = null;
+				persist();
+				render();
+			} finally {
+				settle(receipt, notice, currentView());
+			}
 		}
 	}, t("ar_new_review"));
 	const moreExecutions = h("button", {
 		class: "secondary",
-		onclick: () => loadExecutions(true).catch(showError)
+		onclick: () => {
+			if (inert(moreExecutions)) return;
+			const settle = retainFocus(moreExecutions);
+			pressed.add(moreExecutions);
+			loadExecutions(true).catch(showError).finally(() => {
+				pressed.delete(moreExecutions);
+				if (currentView()) update();
+				settle(null, notice, currentView());
+			});
+		}
 	}, t("ar_more_executions"));
 	const content = artifactContent({
 		h,
@@ -54992,7 +56276,16 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	const moreArtifacts = h("button", {
 		class: "secondary",
 		hidden: true,
-		onclick: () => loadCatalog(true).catch((e) => catalogNotice.replaceChildren(errorBox(e, { within: catalogNotice })))
+		onclick: () => {
+			if (inert(moreArtifacts)) return;
+			const settle = retainFocus(moreArtifacts);
+			pressed.add(moreArtifacts);
+			loadCatalog(true).catch((e) => catalogNotice.replaceChildren(errorBox(e, { within: catalogNotice }))).finally(() => {
+				pressed.delete(moreArtifacts);
+				if (currentView()) update();
+				settle(null, notice, currentView());
+			});
+		}
 	}, t("more"));
 	const catalogPanel = h("section", { class: "panel" }, h("h2", {}, t("ar_catalog")), catalog, catalogNotice, h("div", { class: "actions" }, moreArtifacts));
 	container.append(pageHeader({ title: t("ar_title") }), disclosure({
@@ -55001,7 +56294,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	}), capturePanel, reviewPanel, h("div", { class: "actions" }, check), outcome, notice, catalogPanel);
 	function update() {
 		content.update();
-		const fixed = busy || frozen();
+		const fixed = busy || frozen(), flight = busy || Boolean(refreshing);
 		for (const field of [
 			path,
 			choice,
@@ -55009,25 +56302,32 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 			customId
 		]) field.disabled = fixed;
 		customTask.disabled = fixed || customType.value !== "command";
-		preview.disabled = busy || frozen() || !source || !scope("observe") || !supported() || !safePath(path.value) || !selectorValid(saved.selector);
+		gate(preview, busy, frozen() || !source || !scope("observe") || !supported() || !safePath(path.value) || !selectorValid(saved.selector));
 		reviewed.disabled = busy || Boolean(saved.capture) || !saved.preview || saved.preview.expires_at * 1e3 <= Date.now();
 		reviewed.closest("label").hidden = Boolean(saved.capture) || !saved.preview;
 		capture.hidden = Boolean(saved.capture?.operation_id || saved.capture?.refused);
 		capture.textContent = saved.capture ? t("capture_check") : t("capture_save");
-		capture.disabled = busy || Boolean(refreshing) || readFailed || !mayCapture() || !source || Boolean(saved.capture && !saved.capture.request) || !saved.capture && (!saved.preview || !reviewed.checked || saved.preview.expires_at * 1e3 <= Date.now());
+		gate(capture, flight, readFailed || !mayCapture() || !source || Boolean(saved.capture && !saved.capture.request) || !saved.capture && (!saved.preview || !reviewed.checked || saved.preview.expires_at * 1e3 <= Date.now()));
 		receipt.disabled = busy || Boolean(saved.accept) || !artifact;
 		accept.hidden = Boolean(saved.accept?.operation_id || saved.accept?.refused);
 		accept.textContent = saved.accept ? t("ar_check_accept") : t("ar_accept");
-		accept.disabled = busy || Boolean(refreshing) || readFailed || !artifact || !mayAccept() || !receipt.value.trim() || [...receipt.value].length > 2e3 || Boolean(saved.accept && !saved.accept.request);
+		gate(accept, flight, readFailed || !artifact || !mayAccept() || !receipt.value.trim() || [...receipt.value].length > 2e3 || Boolean(saved.accept && !saved.accept.request));
 		check.hidden = !saved.capture?.operation_id && !saved.accept?.operation_id && context.kind !== "artifact";
-		check.disabled = busy || Boolean(refreshing);
+		gate(check, flight, false);
 		reset.hidden = !saved.capture;
-		reset.disabled = busy || Boolean(refreshing) || readFailed || Boolean(active("capture") || active("accept"));
+		gate(reset, flight, readFailed || Boolean(active("capture") || active("accept")));
 		newReview.hidden = !saved.accept;
-		newReview.disabled = busy || Boolean(refreshing) || readFailed || Boolean(active("accept"));
-		moreExecutions.disabled = busy || frozen();
-		reload.disabled = busy || frozen();
+		gate(newReview, flight, readFailed || Boolean(active("accept")));
+		gate(moreExecutions, busy || executionReads > 0, frozen());
+		gate(reload, busy, frozen());
 		moreExecutions.hidden = ![...pages.values()].some((value) => value !== null);
+		gate(moreArtifacts, Boolean(catalogReading), false);
+		const shownBusy = (button) => button.getAttribute("aria-disabled") === "true" && !button.closest("[hidden]");
+		const panelBusy = (panel) => [...panel.querySelectorAll("button")].some(shownBusy);
+		if (panelBusy(capturePanel) || panelBusy(reviewPanel) || shownBusy(check)) notice.setAttribute("aria-busy", "true");
+		else notice.removeAttribute("aria-busy");
+		if (shownBusy(moreArtifacts)) catalogPanel.setAttribute("aria-busy", "true");
+		else catalogPanel.removeAttribute("aria-busy");
 	}
 	function render() {
 		if (!currentView()) return;
@@ -55057,31 +56357,37 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	}
 	async function loadExecutions(more = false) {
 		if (!source || frozen()) return;
-		const results = await Promise.all(executions.map(async (action) => {
-			if (more && pages.get(action) === null) return;
-			const before = more ? pages.get(action) : null;
-			return {
-				action,
-				data: await api("GET", `/operations?status=succeeded&action=${action}&limit=50${before ? `&before=${before}` : ""}`)
-			};
-		}));
-		guard();
-		if (frozen()) return;
-		for (const result of results.filter(Boolean)) {
-			pages.set(result.action, result.data.next_before ?? null);
-			for (const op of result.data.operations || []) {
-				const bound = sourceFromOperation(op);
-				if (managedCaptureExecution(op) && bound?.host === source.host && bound.session_id === source.session_id) {
-					const selector = { execution_operation_id: op.operation_id };
-					candidates.set(stable(selector), {
-						selector,
-						label: `${actionLabel(op.action)} · ${op.operation_id}`
-					});
+		executionReads++;
+		try {
+			if (currentView()) update();
+			const results = await Promise.all(executions.map(async (action) => {
+				if (more && pages.get(action) === null) return;
+				const before = more ? pages.get(action) : null;
+				return {
+					action,
+					data: await api("GET", `/operations?status=succeeded&action=${action}&limit=50${before ? `&before=${before}` : ""}`)
+				};
+			}));
+			guard();
+			if (frozen()) return;
+			for (const result of results.filter(Boolean)) {
+				pages.set(result.action, result.data.next_before ?? null);
+				for (const op of result.data.operations || []) {
+					const bound = sourceFromOperation(op);
+					if (managedCaptureExecution(op) && bound?.host === source.host && bound.session_id === source.session_id) {
+						const selector = { execution_operation_id: op.operation_id };
+						candidates.set(stable(selector), {
+							selector,
+							label: `${actionLabel(op.action)} · ${op.operation_id}`
+						});
+					}
 				}
 			}
+			renderChoice();
+		} finally {
+			executionReads--;
+			if (currentView()) update();
 		}
-		renderChoice();
-		update();
 	}
 	async function loadSource() {
 		let task, data, bound;
@@ -55178,7 +56484,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 			catalogNotice.replaceChildren();
 			if (!rows.size) catalog.append(h("p", { class: "muted" }, t("ar_no_artifacts")));
 		})();
-		moreArtifacts.disabled = true;
+		if (currentView()) update();
 		try {
 			await catalogReading;
 		} catch (error) {
@@ -55186,7 +56492,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 			throw error;
 		} finally {
 			catalogReading = null;
-			moreArtifacts.disabled = false;
+			if (currentView()) update();
 		}
 	}
 	async function refresh(fresh = false) {
@@ -56116,15 +57422,35 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		fields: saved.fields
 	});
 	const ready = () => pendingSelections === 0 && saved.attachments.every((a) => a.ref);
+	const attachmentKeys = new WeakMap();
+	const retrying = new WeakSet();
+	let attachmentSerial = 0, catalogBusy = false;
+	const attachmentKey = (a) => {
+		let key = attachmentKeys.get(a);
+		if (!key) attachmentKeys.set(a, key = "a" + ++attachmentSerial);
+		return key;
+	};
+	const syncStatusBusy = () => {
+		if (catalogBusy || saved.attachments.some((item) => item.busy)) status.setAttribute("aria-busy", "true");
+		else status.removeAttribute("aria-busy");
+	};
 	const render = () => {
 		changed();
 		promptHint.hidden = roles || Boolean(text.value.trim()) || !saved.attachments.some((a) => a.ref);
-		return fill(rows, ...saved.attachments.filter((a) => !nativeFiles || !a.native_handle || a.ref || !native?.has(a.native_handle)).map((a) => h("div", { class: "row attachment-row" }, previews.has(a) ? h("img", {
+		const active = document.activeElement;
+		const focusKey = active?.closest?.("[data-attachment]")?.getAttribute("data-attachment") || "";
+		const focusControl = active?.getAttribute?.("data-attachment-control") || "";
+		const visible = saved.attachments.filter((a) => !nativeFiles || !a.native_handle || a.ref || !native?.has(a.native_handle));
+		fill(rows, ...visible.map((a) => h("div", {
+			class: "row attachment-row",
+			"data-attachment": attachmentKey(a)
+		}, previews.has(a) ? h("img", {
 			class: "attachment-thumb",
 			src: previews.get(a),
 			alt: a.name || t("attachments")
 		}) : null, h("div", { class: "grow" }, a.name, a.ref ? h("div", { class: "muted" }, `${a.ref.artifact_id} · r${a.ref.revision} · ${a.ref.digest.slice(0, 12)}`) : h("div", { class: "muted" }, a.error || (a.native_handle ? t("files_unavailable") : files.has(a) ? t("uploading") : t("choose_again")))), a.ref && roles ? h("select", {
 			"aria-label": t("attachment_role"),
+			"data-attachment-control": "role",
 			onchange: (e) => {
 				guard();
 				a.ref.role = e.target.value;
@@ -56133,14 +57459,22 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		}, ...["input", "result"].map((role) => h("option", {
 			value: role,
 			selected: (a.ref.role || "input") === role
-		}, t(`attachment_${role}`)))) : null, a.ref && native ? native.actions(a.ref) : null, !a.ref && files.has(a) && !a.busy ? h("button", {
+		}, t(`attachment_${role}`)))) : null, a.ref && native ? native.actions(a.ref) : null, !a.ref && files.has(a) && (!a.busy || retrying.has(a)) ? h("button", {
 			class: "secondary",
-			onclick: () => upload(a)
+			"data-attachment-control": "retry",
+			"aria-disabled": a.busy ? "true" : null,
+			onclick: () => {
+				if (a.busy) return;
+				retrying.add(a);
+				upload(a);
+			}
 		}, t("retry")) : null, h("button", {
 			class: "secondary",
-			disabled: a.busy,
+			"data-attachment-control": "remove",
+			"aria-disabled": a.busy ? "true" : null,
 			onclick: () => {
 				guard();
+				if (a.busy) return;
 				if (a.native_handle) {
 					saved.native_ignored ||= [];
 					saved.native_ignored.push(a.native_handle);
@@ -56152,6 +57486,15 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 				render();
 			}
 		}, t("remove")))));
+		syncStatusBusy();
+		if (!focusKey) return;
+		const row = rows.querySelector(`[data-attachment="${CSS.escape(focusKey)}"]`);
+		const same = focusControl && row?.querySelector(`[data-attachment-control="${CSS.escape(focusControl)}"]`);
+		if (same) {
+			same.focus();
+			return;
+		}
+		if (focusControl === "retry" && row) (row.querySelector("[data-attachment-control=\"role\"]") || row.querySelector("[data-attachment-control=\"remove\"]"))?.focus();
 	};
 	if (nativeFiles) {
 		if (!Array.isArray(saved.native_ignored)) saved.native_ignored = [];
@@ -56290,6 +57633,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 			a.error = e.message;
 		} finally {
 			delete a.busy;
+			retrying.delete(a);
 			if (connection.epoch === state.epoch && connection.generation === generation && box.isConnected) {
 				persist();
 				render();
@@ -56449,13 +57793,24 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		class: "secondary",
 		hidden: true,
 		onclick: async () => {
-			more.disabled = true;
+			if (catalogBusy) return;
+			catalogBusy = true;
+			more.setAttribute("aria-disabled", "true");
+			syncStatusBusy();
 			try {
 				await loadCatalog(catalogCursor);
 			} catch (e) {
 				if (box.isConnected) fill(status, errorBox(e, { within: status }));
 			} finally {
-				more.disabled = false;
+				catalogBusy = false;
+				if (!box.isConnected || connection.epoch !== state.epoch || connection.generation !== generation) return;
+				more.removeAttribute("aria-disabled");
+				syncStatusBusy();
+				const active = document.activeElement;
+				if ((more.hidden || more.disabled) && (active === more || active === document.body)) {
+					status.tabIndex = -1;
+					status.focus();
+				}
 			}
 		}
 	}, t("more"));
@@ -57785,10 +59140,13 @@ async function viewSession(main, host, sid, context = null) {
 		class: "primary",
 		disabled: true,
 		onclick: async () => {
-			if (!box.value.trim() || send.disabled) return;
+			if (sending) return;
+			if (!box.value.trim() || !allowed("session.send")) return;
 			const submitted = box.value;
 			sending = true;
-			send.disabled = true;
+			send.disabled = false;
+			send.setAttribute("aria-disabled", "true");
+			status.setAttribute("aria-busy", "true");
 			try {
 				assertView(connection);
 				queue.onchange();
@@ -57813,8 +59171,18 @@ async function viewSession(main, host, sid, context = null) {
 			} catch (e) {
 				status.replaceChildren(sessionErrorBox(e, sendRecovery(e), { within: status }));
 			} finally {
+				const active = document.activeElement;
+				const owned = active === send || active === document.body;
 				sending = false;
-				send.disabled = !allowed("session.send");
+				if (send.isConnected) {
+					send.removeAttribute("aria-disabled");
+					status.removeAttribute("aria-busy");
+					send.disabled = !allowed("session.send");
+					if (owned && (send.disabled || send.hidden)) {
+						status.tabIndex = -1;
+						status.focus();
+					}
+				}
 			}
 		}
 	}, t("send"));
@@ -58360,7 +59728,9 @@ async function viewSession(main, host, sid, context = null) {
 	};
 	const updateControls = () => {
 		permissions?.update();
-		send.disabled = !allowed("session.send") || sending;
+		send.disabled = sending ? false : !allowed("session.send");
+		if (sending) send.setAttribute("aria-disabled", "true");
+		else send.removeAttribute("aria-disabled");
 		stop.disabled = !allowed("session.interrupt");
 		stop.hidden = withdrawn || row?.api_access !== "managed";
 		let reason = "";
@@ -58813,7 +60183,10 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 	const can = (state.caps?.features?.checkpoints || []).includes(host) && actionAllowed(state.caps, "checkpoint.create");
 	const mayStart = (state.caps?.scopes || []).includes("start") && actionAllowed(state.caps, "checkpoint.continue");
 	const list = h("div", {});
-	const status = h("div", { class: "muted" });
+	const status = h("div", {
+		class: "muted",
+		"data-checkpoint-status": ""
+	});
 	const rows = new Map();
 	let preview = null;
 	let ticket = 0;
@@ -58824,13 +60197,16 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 		const out = h("div", { class: "muted session-checkpoint-result" });
 		const draft = attachmentDraft(`continue.${cp.checkpoint_id}`, instr, cp.artifacts || []);
 		draft.bindFields({ agent });
-		let expectedHead = null;
+		let expectedHead = null, starting = false;
 		const go = h("button", {
 			class: "primary",
 			onclick: async () => {
 				const instructions = instr.value.trim() ? instr.value : draft.refs().length ? t("dispatch_inspect_images") : "";
-				if (!instructions) return;
-				go.disabled = true;
+				if (!instructions || starting) return;
+				starting = true;
+				go.disabled = false;
+				go.setAttribute("aria-disabled", "true");
+				out.setAttribute("aria-busy", "true");
 				try {
 					if (!draft.ready() && !draft.pending()) throw new Error(t("attachments_not_ready"));
 					if (state.caps?.artifacts && !expectedHead && !draft.pending()) throw new Error(t("source_unavailable"));
@@ -58850,8 +60226,14 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 						label: t("ui_retry"),
 						run: () => go.click()
 					}, { within: out }));
+				} finally {
+					starting = false;
+					if (go.isConnected) {
+						go.removeAttribute("aria-disabled");
+						out.removeAttribute("aria-busy");
+						go.disabled = false;
+					}
 				}
-				go.disabled = false;
 			}
 		}, t("start_agent_work"));
 		const limits = disclosure({
@@ -58909,7 +60291,8 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 		placeholder: t("checkpoint_note_placeholder"),
 		hidden: true
 	});
-	let previewFailed = false;
+	let previewFailed = false, recording = false;
+	let applyCreateAvailability = () => {};
 	const loadPreview = async (mine = ticket) => {
 		if (!can) return;
 		try {
@@ -58921,14 +60304,15 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 			pick.replaceChildren(...preview.commits.map((c) => h("option", { value: c.hash }, `${c.hash.slice(0, 10)} · ${c.message}`)));
 			if (preview.commits.some((c) => c.hash === selectedCommit)) pick.value = selectedCommit;
 			pick.hidden = note.hidden = false;
-			create.disabled = false;
-			if (previewFailed) status.replaceChildren();
+			const failedBefore = previewFailed;
 			previewFailed = false;
+			applyCreateAvailability();
+			if (failedBefore) status.replaceChildren();
 			if (preview.dirty) status.replaceChildren(h("span", { class: "error" }, t("dirty_warning", { n: preview.dirty })));
 		} catch (error) {
 			if (mine !== ticket) return;
 			previewFailed = true;
-			create.disabled = true;
+			applyCreateAvailability();
 			status.replaceChildren(sessionErrorBox(error, {
 				label: t("ui_retry"),
 				run: () => loadPreview().catch(() => {})
@@ -58940,7 +60324,10 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 		hidden: !can,
 		disabled: !can,
 		onclick: async () => {
-			create.disabled = true;
+			if (recording) return;
+			recording = true;
+			applyCreateAvailability();
+			status.setAttribute("aria-busy", "true");
 			try {
 				const params = {
 					last_n: 20,
@@ -58962,10 +60349,30 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 					label: t("ui_retry"),
 					run: () => load().catch(() => {})
 				}, { within: status }));
+			} finally {
+				const active = document.activeElement;
+				const owned = active === create || active === document.body;
+				recording = false;
+				status.removeAttribute("aria-busy");
+				if (create.isConnected) {
+					applyCreateAvailability();
+					if (owned && (create.disabled || create.hidden)) {
+						status.tabIndex = -1;
+						status.focus();
+					}
+				}
 			}
-			create.disabled = !can || previewFailed;
 		}
 	}, t("checkpoint_record"));
+	applyCreateAvailability = () => {
+		if (recording) {
+			create.disabled = false;
+			create.setAttribute("aria-disabled", "true");
+			return;
+		}
+		create.removeAttribute("aria-disabled");
+		create.disabled = !can || previewFailed;
+	};
 	const recordForm = h("div", {
 		class: "session-checkpoint-record",
 		hidden: true,
@@ -59839,22 +61246,33 @@ function repairControl(op) {
 		"RESOLUTION_INCOMPLETE",
 		"RESOLUTION_INVALID"
 	].includes(op.error_code);
-	const out = h("div", {});
+	const out = h("div", { "data-handoff-status": "" });
 	let handoff = null;
 	let repair = null;
 	if (conflict && (state.caps?.scopes || []).includes("start")) {
 		const agent = h("select", { "aria-label": t("agent") }, h("option", { value: "claude" }, "Claude"), h("option", { value: "codex" }, "Codex"));
+		let starting = false;
 		const go = h("button", {
 			class: "secondary",
 			onclick: async () => {
-				go.disabled = true;
+				if (starting) return;
+				starting = true;
+				go.disabled = false;
+				go.setAttribute("aria-disabled", "true");
+				out.setAttribute("aria-busy", "true");
 				try {
 					const o = await submit("integration.handoff", { operation_id: op.operation_id }, { agent: agent.value }, {}, `handoff.${op.operation_id}`);
 					out.append(h("p", {}, opStatus(o), " ", t("handoff_started"), " ", h("a", { href: `#/op/${o.operation_id}` }, o.operation_id)));
 				} catch (e) {
 					out.append(errorBox(e, { within: out }));
+				} finally {
+					starting = false;
+					if (go.isConnected) {
+						go.removeAttribute("aria-disabled");
+						out.removeAttribute("aria-busy");
+						go.disabled = false;
+					}
 				}
-				go.disabled = false;
 			}
 		}, t("start_agent_work"));
 		const d = drawer(confinementNote(op.target?.host || op.external_refs?.host, agent), h("div", { class: "actions" }, agent, go));
@@ -61791,16 +63209,19 @@ function continueFrom(w, checkpointId, notice, children = []) {
 		w.steps.length ? `${t("steps_title")}:\n${w.steps.map((s) => `- [${s.done ? "x" : " "}] ${s.text}`).join("\n")}` : ""
 	].filter(Boolean).join("\n\n"));
 	const agent = h("select", { "aria-label": t("agent") }, h("option", { value: "claude" }, "Claude"), h("option", { value: "codex" }, "Codex"));
-	const out = h("div", {});
+	const out = h("div", { "data-work-start-status": "" });
 	const draft = attachmentDraft(`continue.${checkpointId}.${w.work_item_id}`, instr, (w.attachments || []).filter((x) => x.role === "input"));
 	draft.bindFields({ agent });
-	let expectedHead = null;
+	let expectedHead = null, starting = false;
 	const go = h("button", {
 		class: "primary",
 		onclick: async () => {
 			const instructions = instr.value.trim() ? instr.value : draft.refs().length ? t("dispatch_inspect_images") : "";
-			if (!instructions) return;
-			go.disabled = true;
+			if (!instructions || starting) return;
+			starting = true;
+			go.disabled = false;
+			go.setAttribute("aria-disabled", "true");
+			out.setAttribute("aria-busy", "true");
 			let op;
 			try {
 				if (!draft.ready() && !draft.pending()) throw new Error(t("attachments_not_ready"));
@@ -61818,11 +63239,25 @@ function continueFrom(w, checkpointId, notice, children = []) {
 				} : {}, `continue.${checkpointId}`);
 			} catch (e) {
 				fill(out, errorBox(e, { within: out }));
-				go.disabled = false;
+				if (go.isConnected) {
+					go.removeAttribute("aria-disabled");
+					out.removeAttribute("aria-busy");
+					go.disabled = false;
+				}
+				starting = false;
 				return;
 			}
 			assertView(connection);
-			fill(out, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id));
+			const link = h("a", { href: `#/op/${op.operation_id}` }, op.operation_id);
+			fill(out, opStatus(op), " ", link);
+			const active = document.activeElement;
+			const owned = active === go || active === document.body;
+			if (go.isConnected) {
+				go.removeAttribute("aria-disabled");
+				out.removeAttribute("aria-busy");
+				go.disabled = true;
+				if (owned) link.focus();
+			}
 			if (TERMINAL.includes(op.status) && op.status !== "succeeded") return;
 			if (!state.caps?.artifacts) {
 				if (await change(notice, "work_item.link", { work_item_id: w.work_item_id }, {

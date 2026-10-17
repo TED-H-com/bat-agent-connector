@@ -12,8 +12,8 @@ import {DEMO_NOW} from '../desktop/tests/demo/project.ts';
 import {mountConversation} from '../desktop/tests/conversation-fixture.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-// Merged main through #181. Documentation-only commits may recapture this tree.
-const source = 'd66f032d342562322479c5087c6982d662d11a01';
+// Merged main through #205. Documentation-only commits may recapture this tree.
+const source = '265026d4c1fc2bc04a9aaa727d566c1a2906b256';
 const output = path.join(root, 'site/images');
 const review = process.env.CAPTURE_REVIEW_DIR;
 const fixtureClock = new Date(DEMO_NOW).toISOString();
@@ -119,7 +119,7 @@ async function prepare(page, scenario, locale) {
     await page.locator('[data-discussion-composer]').fill(zh
       ? '請整理這個阻礙，保留尚未確認的預算。'
       : 'Review this blocker and keep the budget uncertainty explicit.');
-    await page.getByRole('button', {name: zh ? '傳送' : 'Send', exact: true}).click();
+    await page.getByRole('button', {name: zh ? '只存筆記' : 'Save note only', exact: true}).click();
     await expect(page.locator('.pm-notes')).toContainText(zh ? '請整理這個阻礙' : 'Review this blocker');
     await page.locator('[data-discussion-ask]').click();
     await expect(page.locator('[data-proposal-review]')).toBeVisible();
@@ -141,9 +141,9 @@ async function prepare(page, scenario, locale) {
     await openView('issues');
     await expect(page.locator('[data-reg-table] [data-row-key]')).toHaveCount(3);
     await page.locator('[data-reg-more]').click();
-    await expect(page.locator('[data-reg-table] [data-row-key]')).toHaveCount(9);
+    await expect(page.locator('[data-reg-table] [data-row-key]')).toHaveCount(12);
     await expect(page.locator('[data-reg-table]')).toContainText('lodash');
-    composition = 'Both demo register pages loaded: nine risks, issues, action, proposed change and decision records, including structured finding names; open items remain open.';
+    composition = 'Both demo register pages loaded: twelve records, including named maintenance findings, risks, issues, an action, proposed changes and an adopted decision. Open records remain open.';
   } else if (scenario === 'schedule') {
     await openView('schedule');
     await expect(page.locator('.schedule-chart [data-schedule-row]').first()).toBeVisible();
