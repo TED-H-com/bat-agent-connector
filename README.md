@@ -2,7 +2,7 @@
 
 **Understand the project. Discuss the problem. Decide with the PM.**
 
-**English** · [繁體中文](README.zh-TW.md) · [Website](https://ted-h-com.github.io/bat-agent-connector/) · [Install and start](docs/getting-started.md) · [Progress](docs/product/progress-2026-10-16.md)
+**English** · [繁體中文](README.zh-TW.md) · [Website](https://ted-h-com.github.io/bat-agent-connector/) · [Install and start](docs/getting-started.md) · [Progress](docs/product/progress-2026-10-17.md)
 
 Better Agent Dashboard keeps project state, PM discussions and decisions in one workspace.
 Start with the live Overview, open a problem's original record, and discuss it with the PM without rebuilding the context.
@@ -14,8 +14,7 @@ expand requirements, inspect delivery evidence and browse sessions. The demo als
 the v1.3 workflow preview, which simulates the proposed start, follow-up and decision flow.
 Neither example connects to a BAT host or model.
 The real Start work panel is on `main` and needs a configured BAT host and a bound repository.
-Merged `main` can start a bound Work item with `work.start` and that panel, read the attempt's fixed Result, and show a read-only Result section in the Board's Work inspector (E03 part A).
-Not merged: a second instruction to the same Work (P5), adopt-and-start in one step (P6), reading current changes and per-commit diffs on request (E03 part B), work profiles and readiness (E01), MCP/API loop parity (E10), and the closed loop end to end; no real BAT start, follow-up or Result has been observed, and nothing here is installed or live-tested.
+Merged main at `0daf283c` (#276, October 17, 2026) supports creating Work, adopting and starting a reviewed plan, sending a second instruction to the same Work, reading fixed Results and diffs, running configured verification, publishing a PR from the same Result, and opening a PM discussion with two existing assessments. Work profiles, readiness and API/MCP parity are included. Integration checks use the real Connector and disk Git with mock BAT/providers; installation and live BAT/model acceptance remain separate.
 
 ![Overview: live project progress, blockers and pending decisions.](site/images/overview-en.png)
 
@@ -25,7 +24,7 @@ The **Web and Tauri desktop apps share one interface and one Python backend**. Y
 
 > **Development preview.** The screenshots come from merged `main` at `265026d4` (October 16, 2026, through #205).
 > Nothing shown here is installed or live-tested.
-> The [progress report](docs/product/progress-2026-10-16.md) separates branch, merged, installed and live-tested status.
+> The [progress report](docs/product/progress-2026-10-17.md) separates branch, merged, installed and live-tested status.
 > Match a successful package to its exact source; screenshots and CI do not establish native or live acceptance.
 
 ## What it helps you answer
@@ -46,7 +45,7 @@ The **Web and Tauri desktop apps share one interface and one Python backend**. Y
 | What happened in that session? | **Session** keeps the conversation and results together. Authorized managed controls are available; manual BAT sessions remain read-only. |
 
 These are views of the same project, with secondary tools available on demand.
-The [current scope](#current-scope-and-limits) distinguishes the merged workspace from the full PM v1.2 backlog. The [progress report](docs/product/progress-2026-10-16.md) lists work still in review.
+The [current scope](#current-scope-and-limits) distinguishes the merged workspace from the full PM v1.2 backlog. The [progress report](docs/product/progress-2026-10-17.md) lists work still in review.
 
 ## Try one small project
 
@@ -124,13 +123,13 @@ flowchart TB
 | Status | Scope |
 | --- | --- |
 | Merged baseline | Desktop/central foundation; PM discussions and plan adoption; engineering packages and bounded dispatch; verification, requirement acceptance and dependency evidence; policy-bounded maintenance repairs; BAT proposals/Follow-up; AHP read-only observation. #132 adds central Overview, discussion context and renames, register, Schedule, Dependencies and daily resource buckets. #134 adds adopted goals, recent decisions and the guided close of a resolved issue. |
-| Merged workspace | Overview with saved reports; Discussions with Discussion info (Context, Inputs, Plan, Meeting); Requirements and its inspector; Issues & changes with Governance and Follow-ups; Schedule; Dependencies with Release baselines and Maintenance policy; Agents; Board; Session; first-run BAT setup from one Connection URL. Merged into `main` through #205 on October 16, 2026. On main so far, v1.3 can start a bound Work item (`work.start` and the Start work panel, which needs a configured BAT host and a bound repository), read that attempt's fixed Result, and show a read-only Result section in the Board's Work inspector (E03 part A). Not merged: a second instruction to the same Work (P5), adopt-and-start in one step (P6), reading current changes and per-commit diffs on request (E03 part B), work profiles and readiness (E01), MCP/API loop parity (E10), and the closed loop end to end. No real BAT start, follow-up or Result has been observed. Not installed or live-tested. [Everything merged after `d66f032d`](docs/product/progress-2026-10-16.md). |
+| Merged workspace | Merged main at `0daf283c` (#276, October 17, 2026) supports creating Work, adopting and starting a reviewed plan, sending a second instruction to the same Work, reading fixed Results and diffs, running configured verification, publishing a PR from the same Result, and opening a PM discussion with two existing assessments. Work profiles, readiness and API/MCP parity are included. Integration checks use the real Connector and disk Git with mock BAT/providers; installation and live BAT/model acceptance remain separate. |
 | Remaining PM v1.2 | General native coding adapter, AHP create-own/write support, remaining document views and presentations, wider CLI support, remote usage collection and delivery-efficiency attribution. |
 
 Local Codex/Claude usage collection exists; the redesign's Agents view adds sourced daily trends and reported quota windows.
 Remote collection and delivery-efficiency attribution remain planned.
 Missing usage stays unknown; observed tokens, API price estimates and subscription quota are different measures.
-No usage-driven model policy is active. [Progress and priorities](docs/product/progress-2026-10-16.md).
+No usage-driven model policy is active. [Progress and priorities](docs/product/progress-2026-10-17.md).
 
 Formal signing, Mac notarization, production update channels and Linux persistent native credential storage are outside the agreed delivery. Real-environment acceptance belongs to the owner and has not been claimed as passed. The full [PM v1.2 plan](docs/product/pm-v1.2-plan.md) remains the scope; M4 is one milestone.
 
@@ -147,7 +146,7 @@ A lost reply does not prove an action failed. Recover the original operation and
 | Need | Start here |
 | --- | --- |
 | Use the product | [First use](docs/getting-started.md) · [Windows Fleet](docs/windows.md) |
-| Understand progress | [Progress report](docs/product/progress-2026-10-16.md) · [PM status](docs/product/pm-v1.2-status.md) · [Implementation history](docs/product/implementation-status.md) |
+| Understand progress | [Progress report](docs/product/progress-2026-10-17.md) · [PM status](docs/product/pm-v1.2-status.md) · [Implementation history](docs/product/implementation-status.md) |
 | Continue development | [Documentation handoff](docs/handoff/2026-10-14-docs-ux-v2.md) · [Adopted plan](docs/product/pm-v1.2-plan.md) · [Architecture decisions](docs/product/realignment-v2.md) |
 | Integrate an agent | [Agent skills](docs/agent-skills.md) · [API](docs/design/api-v1.md) · [Protocol](docs/PROTOCOL.md) |
 | Follow results | [Artifacts](docs/design/artifacts.md) · [Delivery](docs/design/delivery.md) · [Cleanup](docs/design/cleanup.md) |

@@ -1,12 +1,9 @@
 # PM v1.2 開發狀態
 
-目前固定來源為已合併主線 `265026d4c1fc2bc04a9aaa727d566c1a2906b256`（#205）。
-負責人已採用 v1.3 closed-loop 修訂計畫，文件為 `docs/product/v1.3-closed-loop-plan.md` 與 `docs/product/v1.3-agent-handoff.md`，由 #182 追蹤。
-已合併的閉環部分是開始一項工作（`work.start` 與其「開始工作」面板）、該嘗試的固定成果讀取，以及看板工作詳情中的唯讀成果區（E03 part A）。尚未合併：對同一工作的第二次指示（P5）、一步採用並開始（P6）、依要求讀取目前變更與逐 commit 差異（E03 part B）、工作 profile 與 readiness（E01）、MCP／API 迴圈對等（E10），以及端到端閉環。尚未觀察到真實的 BAT 開始、追加或成果；沒有安裝或實機驗收。
-「看懂狀況 → 找到問題 → 與 PM 討論 → 審閱並採用」保留同一個專案脈絡。
-Python Connector／Task Service 是唯一中央權威，Web／Tauri 共用 `desktop/src`。
-本輪狀態文件沒有安裝或實機驗收證據。
-[10 月 16 日進度報告](progress-2026-10-16.md)列出 PR、審閱中的工作及檢查界線。
+已合併主線 `0daf283c`（#276，2026 年 10 月 17 日）支援建立 Work、採用並開始已審閱計畫、對同一工作追加第二句、讀取固定成果與差異、執行已設定驗證、從同一成果發布 PR，以及選兩份既有評估帶入 PM 討論。工作設定檔、readiness 與 API／MCP 對等也已納入。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；安裝與真實 BAT／模型驗收仍須另有證據。
+
+完整範圍仍依 [PM v1.2](pm-v1.2-plan.md)、[v1.3](v1.3-closed-loop-plan.md) 與 [EC-1.0](experience-convergence.md)。Python Connector／Task Service 是唯一中央權威，Web／Tauri 共用 `desktop/src`。
+[10 月 17 日進度報告](progress-2026-10-17.md)列出主線整合、檢查及仍欠的交付證據。
 
 ## M4 已合併主線（#116）
 
@@ -21,8 +18,8 @@ Roadmap 與 Brief 使用同一份固定的需求與完成定義評估。遺失�
 
 | 層級 | 狀態 |
 | --- | --- |
-| 分支（branch） | `ux/docs-v13-refresh` 僅更新公開狀態文件與網站；由整合者發布。 |
-| 主線（merged） | `265026d4`：截至 #205。自 `d66f032d` 起再合併 24 項 PR。 |
+| 分支（branch） | #277 的 Fleet probe 測試與 #278 的操作來源檢查仍在獨立審查；本頁以 #276 為固定產品來源。 |
+| 主線（merged） | `0daf283c`：#276 已整合相依候選至 #275；原提交與檢查紀錄保留。 |
 | 安裝／原生（installed/native） | CI 產出未簽章桌面套件；針對 `fb0863cf` 靜態核對 Linux 套件二進位檔與隨附 Connector 記錄該 commit，但未實際安裝，無安裝驗收。 |
 | 實機（live-tested） | 本輪沒有實際 BAT／provider／模型／部署回執，綠燈 CI 不是實機驗收。 |
 
