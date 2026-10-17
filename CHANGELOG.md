@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Opening a project names that view in the header while the workspace is still
+  loading, in English and Traditional Chinese. The view menu stays hidden until
+  the workspace loads, so an empty menu is not in the keyboard order. If the
+  workspace cannot be loaded, the header still uses the project-discussions
+  title and the menu stays hidden.
+
 - A new discussion's open rename keeps its text, caret and focus when a background
   refresh or an access change rebuilds the page. Save still sets the title once.
   Sending that discussion closes the rename, so the next new discussion opens on
