@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Work live links retain the selected workspace, Work, and Attempt. The Dashboard
+  verifies that selection against public Work and Attempt reads before offering
+  the next instruction, and shows its fixed Result in the existing results panel.
+  A remembered workspace or newer Attempt never silently changes the send target.
+
 - Work: when the service offers a follow-up for the open work item, that Work
   view has one composer for the next instruction. It queues the instruction for
   after the current turn. The service's receipt stays on screen, and another

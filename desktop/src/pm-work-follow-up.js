@@ -33,7 +33,7 @@ function actionLabel(action, t) {
   return typeof value === 'string' && value.trim() ? value : '';
 }
 
-export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceId, workItemId, errorBox, canSend = () => true, managed = () => false, onField = () => {}}) {
+export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceId, workItemId, selectedAttemptId = '', errorBox, canSend = () => true, managed = () => false, onField = () => {}}) {
   if (!workFollowUpAvailable(caps()) || !WORKSPACE_ID.test(workspaceId || '') || !WORK_ITEM_ID.test(workItemId || '')) return null;
   const titleId = `work-next-title-${workItemId}`;
   const hintId = `work-next-hint-${workItemId}`;
@@ -48,7 +48,7 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
     h('header', {class: 'work-next-head'}, heading, pill), list, note, formHost, status, live);
 
   let epoch = 0, serial = 0, stopped = false, suspended = false, disposed = false;
-  let attemptId = '', sendOffer = null, blockedReason = '', resultSettled = false;
+  let attemptId = ATTEMPT_ID.test(selectedAttemptId) ? selectedAttemptId : '', sendOffer = null, blockedReason = '', resultSettled = false;
   let reading = false, admissionReady = false;
   let pageItems = [], nextCursor = null, hasMore = false, filtered = false, listSettled = false;
   const pinned = new Map(), announced = new Set(), cancelDenied = new Set();
@@ -80,7 +80,7 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
     });
   }
   function rememberAttempt(value) {
-    if (typeof value === 'string' && ATTEMPT_ID.test(value)) attemptId = value;
+    if (!selectedAttemptId && typeof value === 'string' && ATTEMPT_ID.test(value)) attemptId = value;
   }
   function sentence(code) {
     const key = `loop_next_err_${code || ''}`;
@@ -326,7 +326,8 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
     }
   }
   function takeList(data, append) {
-    if (!data || data.workspace_id !== workspaceId || data.work_item_id !== workItemId || !Array.isArray(data.items)) return false;
+    if (!data || data.workspace_id !== workspaceId || data.work_item_id !== workItemId || !Array.isArray(data.items)
+      || selectedAttemptId && data.attempt_id !== selectedAttemptId) return false;
     const rows = data.items.filter(validReceipt);
     pageItems = append ? [...pageItems, ...rows] : rows;
     nextCursor = typeof data.next_cursor === 'string' && data.next_cursor ? data.next_cursor : Number.isInteger(data.next_cursor) ? data.next_cursor : null;

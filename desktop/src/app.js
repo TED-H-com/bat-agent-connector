@@ -13,7 +13,9 @@ import {actionLabel, formatTime, operationMeta, operationStatusKey, operationSta
 import {firstRunCard, inboxRow, settingsFrame, setupGuide} from './global-screens.js';
 import {joinLabel} from './label-text.js';
 import {discussHref, isContextRef} from './pm-discuss-link.js';
-import {sessionHref} from './session-navigation.js';
+import {sessionHref, workSessionContext} from './session-navigation.js';
+import {readWorkSessionContext} from './work-session-context.js';
+import {workResultPanel} from './pm-work-result.js';
 import {checkDelivery, prGroups, prPills} from './pm-work-inspector.js';
 import {viewState} from './ui/view-state.js';
 import {h as dom, place} from './ui/dom.js';
@@ -1462,9 +1464,23 @@ async function viewSession(main, host, sid, context = null) {
   let workRecord = workbenchEnabled() ? context?.workRecord : null;
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   const path = `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(sid)}`;
+  const requestedWork = workSessionContext(params);
+  const workContextReadable = workFollowUpAvailable(state.caps) || state.caps?.features?.pm_workspaces?.work_start?.version === 1;
+  const workContext = !nativeDesktop && workbenchEnabled() && workContextReadable && requestedWork ? requestedWork : null;
+  let selectedAttempt = null;
+  if (workContext) {
+    try {
+      const selected = await readWorkSessionContext({api, guard: () => assertView(connection), ...workContext, host, sessionId: sid, missingMessage: t('workspace_work_missing')});
+      workRecord = selected.record; selectedAttempt = selected.attempt;
+    } catch (error) {
+      try {assertView(connection);} catch {return;}
+      if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error, {within: main}));
+      return;
+    }
+  }
   const projectViews = new Set(["overview", "discussions", "requirements", "schedule", "dependencies", "issues", "agents", "board"]);
   const storedOrigin = history.state?.batcSessionOrigin;
-  const sessionWorkspace = lastWorkspace(connection.namespace) || (storedOrigin?.namespace === connection.namespace
+  const sessionWorkspace = workContext?.workspaceId || lastWorkspace(connection.namespace) || (storedOrigin?.namespace === connection.namespace
     && storedOrigin.host === host && storedOrigin.sessionId === sid ? storedOrigin.workspaceId : "");
   if (!projectViews.has(fromQuery) && projectViews.has(sessionFromMemory)) {
     fromQuery = sessionFromMemory; params.set("from", fromQuery);
@@ -1628,7 +1644,12 @@ async function viewSession(main, host, sid, context = null) {
   if (workbenchEnabled()) {stop.setAttribute('role', 'menuitem'); stop.addEventListener('click', () => overflow.close());}
   const header = pageHeader({title: titleNode, mark: markSlot, pill: pillSlot, meta, actions: workbenchEnabled() ? [openResults] : [stop, openResults], overflow});
   head.append(backSlot, header);
-  results.body.append(...[context?.itemBox,
+  const fixedResult = workContext ? workResultPanel({h, t, api, workspaceId: workContext.workspaceId,
+    caps: () => state.caps, errorBox, alive: () => {
+      assertView(connection);
+      if (disposed || withdrawn) throw new ApiError(410, 'VIEW_CHANGED', 'View retired');
+    }}) : null;
+  results.body.append(...[fixedResult?.element, context?.itemBox,
     changesSection,
     sessionSection("list-checks", t("checkpoints"), cps.box, cps.action),
     sessionSection("check", t("session_delivery"), result),
@@ -1638,12 +1659,12 @@ async function viewSession(main, host, sid, context = null) {
   // Work-target second input stays in this lane. Tab switches hide the lane; they do not rebuild it.
   // With the capability, this lane has one instruction composer. The legacy field stays for its draft
   // and is not a send path. Without the capability, that field remains the composer.
-  const followWorkspace = /^ws_[0-9a-f]{32}$/.test(sessionWorkspace || "") ? sessionWorkspace : "";
+  const followWorkspace = workContext?.workspaceId || "";
   const followWorkId = workRecord?.work_item?.work_item_id || "";
   let mobileLayout = null;
   const followUp = workbenchEnabled() && !nativeDesktop && followWorkspace && /^wi_[0-9a-f]{20}$/.test(followWorkId) && workFollowUpAvailable(state.caps)
     ? mountWorkFollowUp({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
-      namespace: connection.namespace, workspaceId: followWorkspace, workItemId: followWorkId, errorBox,
+      namespace: connection.namespace, workspaceId: followWorkspace, workItemId: followWorkId, selectedAttemptId: selectedAttempt.attempt_id, errorBox,
       canSend: () => state.online && !state.nativeBusy && state.viewReady,
       managed: () => !withdrawn && row?.provenance === "connector_managed" && row?.api_access === "managed",
       onField: (field, button) => {
@@ -1653,7 +1674,10 @@ async function viewSession(main, host, sid, context = null) {
         else mobileLayout.detachComposer();
       }})
     : null;
-  if (followUp) {workSendOwned = true; lane.append(followUp.box);}
+  // A linked Work with follow-up support never falls back to raw session.send
+  // when its explicit selection is missing, malformed, or unavailable on native.
+  workSendOwned = workFollowUpAvailable(state.caps) && Boolean(workRecord || ['workspace', 'work', 'attempt'].some(key => params.has(key)));
+  if (followUp) lane.append(followUp.box);
   mobileLayout = setupMobileSessionLayout({ head, composer: controls, textarea: box, t, guard: () => assertView(connection),
     infoRow: conversation.box.querySelector(".conversation-caption"), composerRow });
   if (followUp) {composer.hidden = true; shortcut.rebind(null, null); mobileLayout.detachComposer();}
@@ -1955,7 +1979,7 @@ async function viewSession(main, host, sid, context = null) {
     let data;
     try {
       data = await api("GET", path);
-      if (workRecord && current()) {
+      if (workRecord && !workContext && current()) {
         const id = workRecord.work_item.work_item_id;
         const next = await api("GET", `/work-items/${encodeURIComponent(id)}`);
         if (!current()) return;
@@ -1965,6 +1989,11 @@ async function viewSession(main, host, sid, context = null) {
         });
         if (next.work_item?.work_item_id !== id || !linked) throw new ApiError(404, 'WORK_LINK_REMOVED', t('workspace_work_missing'));
         workRecord = next;
+      }
+      if (workContext && current()) {
+        const selected = await readWorkSessionContext({api, guard: () => assertView(connection), ...workContext, host, sessionId: sid, missingMessage: t('workspace_work_missing')});
+        if (!current()) return;
+        workRecord = selected.record; selectedAttempt = selected.attempt;
       }
     }
     catch (error) {
@@ -1976,6 +2005,8 @@ async function viewSession(main, host, sid, context = null) {
     }
     if (!current()) return;
     applyObservation(data);
+    if (fixedResult) await fixedResult.setAttempt(selectedAttempt);
+    if (!current()) return;
     let work = [], repositories = [];
     if (context?.project) {
       const project = await api("GET", `/projects/${encodeURIComponent(context.project.project_id)}`); assertView(connection);
@@ -2053,6 +2084,7 @@ async function viewSession(main, host, sid, context = null) {
     const first = !withdrawn;
     withdrawn = kind;
     followUp?.suspend();
+    fixedResult?.withdraw();
     perspectives?.withdraw();
     withdrawalVersion += 1;
     clearTimeout(retryTimer); retryTimer = null; retryDelay = 1000;
@@ -2142,7 +2174,7 @@ async function viewSession(main, host, sid, context = null) {
   // is not left disabled by the readiness check that ran while the view was still loading.
   const followSync = setTimeout(() => {try {assertView(connection); if (!disposed) followUp?.sync();} catch { /* the view already left */ }}, 0);
   const offFollowOnline = onOnline(() => {try {assertView(connection); if (!disposed) followUp?.sync();} catch { /* the view already left */ }});
-  return () => {disposed = true; clearTimeout(followSync); offFollowOnline(); followUp?.dispose(); perspectives?.dispose(); clearTimeout(retryTimer); off(); instructions?.dispose(); batHandoff?.dispose(); conversation.dispose(); mobileLayout?.dispose(); shortcut.dispose();
+  return () => {disposed = true; clearTimeout(followSync); offFollowOnline(); followUp?.dispose(); fixedResult?.dispose(); perspectives?.dispose(); clearTimeout(retryTimer); off(); instructions?.dispose(); batHandoff?.dispose(); conversation.dispose(); mobileLayout?.dispose(); shortcut.dispose();
     cps.clear(); results.dispose(); overflow.dispose(); sourcesPanel?.dispose(); wide.removeEventListener("change", syncWide);};
 }
 
