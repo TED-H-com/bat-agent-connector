@@ -48445,9 +48445,27 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			pages: 1,
 			size: null,
 			busy: false,
+			pressed: false,
 			readFailed: false
 		};
-		more.onclick = () => refresh(state, state.pages + 1).catch(() => {});
+		more.onclick = () => {
+			if (state.busy || state.pressed) return;
+			state.pressed = true;
+			syncBusy();
+			const previous = new Set([...state.list.querySelectorAll("[data-inbox-key]")].map((node) => node.dataset.inboxKey));
+			const release = ownFocus(more);
+			refresh(state, state.pages + 1).finally(() => {
+				state.pressed = false;
+				syncBusy();
+				const keep = release();
+				try {
+					guard();
+				} catch {
+					return;
+				}
+				if (keep && (more.hidden || more.disabled)) (firstAdded(state, previous) || refreshButton).focus();
+			}).catch(() => {});
+		};
 		sections.push(state);
 		return section;
 	};
@@ -48480,14 +48498,58 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 		cursor: "next_before",
 		param: "before"
 	})] : [add("unread", "/work-items?unread=true&limit=50", "work_items", workItemRow)];
+	let refreshPressed = false;
 	const refreshButton = iconButton({
 		icon: "refresh-cw",
 		label: t("global_refresh"),
-		onClick: () => refresh().catch(() => {})
+		onClick: () => {
+			if (refreshPressed || sections.some((section) => section.busy || section.pressed)) return;
+			refreshPressed = true;
+			syncBusy();
+			refresh().finally(() => {
+				refreshPressed = false;
+				syncBusy();
+			}).catch(() => {});
+		}
 	});
-	const syncBusy = () => {
-		refreshButton.disabled = sections.some((section) => section.busy);
-	};
+	function sectionFlight(section) {
+		return section.busy || section.pressed;
+	}
+	function syncBusy() {
+		if (refreshPressed || sections.some(sectionFlight)) refreshButton.setAttribute("aria-disabled", "true");
+		else refreshButton.removeAttribute("aria-disabled");
+		refreshButton.disabled = false;
+		for (const section of sections) if (sectionFlight(section)) {
+			section.more.disabled = false;
+			section.more.setAttribute("aria-disabled", "true");
+			section.status.setAttribute("aria-busy", "true");
+		} else {
+			section.more.disabled = false;
+			section.more.removeAttribute("aria-disabled");
+			section.status.removeAttribute("aria-busy");
+		}
+	}
+	function ownFocus(button) {
+		let owned = document.activeElement === button;
+		const onFocus = (event) => {
+			const target = event.target;
+			if (target === button) {
+				owned = true;
+				return;
+			}
+			if ((target === document.body || target === document.documentElement) && (button.hidden || button.disabled || !button.isConnected)) return;
+			owned = false;
+		};
+		document.addEventListener("focusin", onFocus, true);
+		return () => {
+			document.removeEventListener("focusin", onFocus, true);
+			const active = document.activeElement;
+			return owned && (active === button || active === document.body || active == null);
+		};
+	}
+	function firstAdded(section, previous) {
+		return [...section.list.querySelectorAll("[data-inbox-key]")].filter((node) => !previous.has(node.dataset.inboxKey))[0]?.querySelector("a, button") || null;
+	}
 	column.append(pageAlert, empty, ...groups, notes);
 	main.append(pageHeader({
 		title: t("nav_home"),
@@ -48508,7 +48570,6 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 	const load = async (section, wanted) => {
 		guard();
 		section.busy = true;
-		section.more.disabled = true;
 		syncBusy();
 		if (section.size === null) section.status.replaceChildren(skeleton(3));
 		const focusKey = section.list.contains(document.activeElement) ? document.activeElement.closest("[data-inbox-key]")?.dataset.inboxKey : null;
@@ -48571,7 +48632,6 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			throw error;
 		} finally {
 			section.busy = false;
-			section.more.disabled = false;
 			syncBusy();
 		}
 	};
@@ -50841,7 +50901,7 @@ function repairIntent({ api, guard, actor, allowed, storage, storageKey, newKey 
 //#endregion
 //#region src/repair-panel.js
 function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opStatus }) {
-	let controller, document, busy = false, disposed = false, serial = 0, initialized = false;
+	let controller, document, busy = false, reading = false, disposed = false, serial = 0, initialized = false;
 	const alive = () => {
 		try {
 			guard();
@@ -50854,10 +50914,72 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 	const status = h("div", { role: "status" }), evidence = h("div"), outcome = h("div");
 	const project = h("select", { "aria-label": t("repair_project") }, h("option", { value: "" }, t("repair_choose_project")));
 	const allowed = () => ["observe", "manage"].every((scope) => caps()?.scopes?.includes(scope)) && caps()?.actions?.some((action) => action.action === "repair.create" && action.allowed === true);
+	function ownFocus(button) {
+		const page = globalThis.document;
+		let owned = page.activeElement === button;
+		const onFocus = (event) => {
+			const target = event.target;
+			if (target === button) {
+				owned = true;
+				return;
+			}
+			if ((target === page.body || target === page.documentElement) && (button.hidden || button.disabled || !button.isConnected)) return;
+			owned = false;
+		};
+		page.addEventListener("focusin", onFocus, true);
+		return () => {
+			page.removeEventListener("focusin", onFocus, true);
+			const active = page.activeElement;
+			return owned && (active === button || active === page.body || active == null);
+		};
+	}
+	function shown(node) {
+		return node && node.isConnected && !node.hidden && !node.disabled && !node.parentElement?.closest("[hidden]");
+	}
+	function moveFrom(button, candidate) {
+		if (shown(candidate)) {
+			candidate.focus();
+			return;
+		}
+		const controls = [...(button.closest(".actions") || button.parentElement).querySelectorAll("button, a[href], input, select, textarea")];
+		const index = Math.max(0, controls.indexOf(button));
+		const nextControl = [...controls.slice(index + 1), ...controls.slice(0, index)].find((node) => shown(node) && node.getAttribute("aria-disabled") !== "true");
+		if (nextControl) {
+			nextControl.focus();
+			return;
+		}
+		status.tabIndex = -1;
+		status.focus();
+	}
+	function block(button, staticReason, flight, pressed) {
+		if (pressed || !staticReason && flight) {
+			button.disabled = false;
+			button.setAttribute("aria-disabled", "true");
+		} else if (staticReason) {
+			button.disabled = true;
+			button.removeAttribute("aria-disabled");
+		} else {
+			button.disabled = false;
+			button.removeAttribute("aria-disabled");
+		}
+	}
 	const reload = h("button", {
 		class: "secondary",
 		type: "button",
-		onclick: () => read()
+		onclick: async () => {
+			if (!alive() || reading || busy) return;
+			reading = true;
+			const release = ownFocus(reload);
+			update();
+			try {
+				await read();
+			} finally {
+				reading = false;
+				if (alive()) update();
+				const keep = release();
+				if (alive() && keep && (reload.hidden || reload.disabled)) moveFrom(reload);
+			}
+		}
 	}, t("repair_read"));
 	const create = h("button", {
 		class: "secondary",
@@ -50865,6 +50987,7 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 		disabled: true,
 		onclick: async () => {
 			if (!alive() || busy || !allowed()) return;
+			const release = ownFocus(create);
 			busy = true;
 			update();
 			try {
@@ -50874,6 +50997,8 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 			} finally {
 				busy = false;
 				if (alive()) update();
+				const keep = release();
+				if (alive() && keep && (create.hidden || create.disabled)) moveFrom(create);
 			}
 		}
 	}, t("repair_create"));
@@ -50887,14 +51012,18 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 				"failed",
 				"cancelled"
 			].includes(controller.snapshot().operation?.status)) return;
+			const release = ownFocus(next);
 			try {
 				localStorage.removeItem(key);
 				initializeController();
 				outcome.replaceChildren();
 				read();
 			} catch (error) {
+				release();
 				if (alive()) status.replaceChildren(errorBox(error, { within: status }));
+				return;
 			}
+			if (release() && (next.hidden || next.disabled)) moveFrom(next, reload);
 		}
 	}, t("repair_review_new"));
 	const box = h("details", {
@@ -50917,14 +51046,16 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 	function update() {
 		const snapshot = controller?.snapshot(), fixed = !!snapshot?.intent;
 		project.disabled = busy || fixed;
-		reload.disabled = busy || !project.value;
-		create.disabled = busy || !allowed() || !document && !fixed;
+		block(reload, !project.value, busy, reading);
+		block(create, !allowed() || !document && !fixed, false, busy);
 		create.textContent = t(fixed ? "repair_recover" : "repair_create");
 		next.hidden = ![
 			"succeeded",
 			"failed",
 			"cancelled"
 		].includes(snapshot?.operation?.status);
+		if ([create, reload].some((button) => button.getAttribute("aria-disabled") === "true")) status.setAttribute("aria-busy", "true");
+		else status.removeAttribute("aria-busy");
 	}
 	function links(record) {
 		if (!record) return;
@@ -56285,6 +56416,58 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 			...repairSeed ? { expected_work_item_fingerprint: repairSeed.expected_work_item_fingerprint } : {}
 		} : null
 	});
+	function ownFocus(button) {
+		let owned = document.activeElement === button;
+		const onFocus = (event) => {
+			const target = event.target;
+			if (target === button) {
+				owned = true;
+				return;
+			}
+			if ((target === document.body || target === document.documentElement) && (button.hidden || button.disabled || !button.isConnected)) return;
+			owned = false;
+		};
+		document.addEventListener("focusin", onFocus, true);
+		return () => {
+			document.removeEventListener("focusin", onFocus, true);
+			const active = document.activeElement;
+			return owned && (active === button || active === document.body || active == null);
+		};
+	}
+	function shown(node) {
+		return node && node.isConnected && !node.hidden && !node.disabled && !node.parentElement?.closest("[hidden]");
+	}
+	function moveFrom(button, candidate) {
+		if (shown(candidate)) {
+			candidate.focus();
+			return;
+		}
+		const controls = [...(button.closest(".actions") || button.parentElement).querySelectorAll("button, a[href], input, select, textarea")];
+		const index = Math.max(0, controls.indexOf(button));
+		const next = [...controls.slice(index + 1), ...controls.slice(0, index)].find((node) => shown(node) && node.getAttribute("aria-disabled") !== "true");
+		if (next) {
+			next.focus();
+			return;
+		}
+		status.tabIndex = -1;
+		status.focus();
+	}
+	function block(button, staticReason, flight, pressed) {
+		if (pressed || !staticReason && flight) {
+			button.disabled = false;
+			button.setAttribute("aria-disabled", "true");
+		} else if (staticReason) {
+			button.disabled = true;
+			button.removeAttribute("aria-disabled");
+		} else {
+			button.disabled = false;
+			button.removeAttribute("aria-disabled");
+		}
+	}
+	const fieldFocused = () => {
+		const active = document.activeElement;
+		return active === binding || Object.values(inputs).includes(active) || Boolean(attachmentBox?.contains(active));
+	};
 	const inspect = h("button", {
 		class: "secondary",
 		onclick: async () => {
@@ -56292,6 +56475,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 			const expected = ++sequence, input = selected(), projectVersion = projectDoc?.version;
 			preview = null;
 			reading = true;
+			const release = ownFocus(inspect);
 			update();
 			status.replaceChildren();
 			try {
@@ -56311,6 +56495,8 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 					reading = false;
 					update();
 				}
+				const keep = release();
+				if (expected === sequence && current() && keep && (inspect.hidden || inspect.disabled)) moveFrom(inspect);
 			}
 		}
 	}, t("pub_preview"));
@@ -56346,7 +56532,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 	const apply = h("button", {
 		class: "primary",
 		onclick: async () => {
-			if (!current() || busy || readFailed || !ready() || !allowed() || saved.intent?.operation_id || saved.intent?.refused) return;
+			if (!current() || busy || reading || readFailed || !ready() || !allowed() || saved.intent?.operation_id || saved.intent?.refused) return;
 			if (!saved.intent) {
 				if (!projectReady() || !preview || !validPreview$1(preview, selected()) || !bound() || !hostAllowed() || attachments && !attachments.ready() || !validRequest(request())) return;
 				saved.intent = {
@@ -56363,6 +56549,8 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 				update();
 				return;
 			}
+			if (fieldFocused()) apply.focus();
+			const release = ownFocus(apply);
 			busy = true;
 			update();
 			const intent = saved.intent;
@@ -56390,17 +56578,23 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 				await submission;
 			} finally {
 				submission = null;
+				const keep = release();
+				if (current() && keep && (apply.hidden || apply.disabled)) moveFrom(apply, saved.intent?.operation_id ? check : saved.intent?.refused && !repairSeed ? another : null);
 			}
 		}
 	}, t("pub_apply"));
 	const check = h("button", {
 		class: "secondary",
-		onclick: () => refresh(true).catch(() => {})
+		onclick: () => {
+			if (!current() || busy || refreshing) return;
+			refresh(true).catch(() => {});
+		}
 	}, t("permissions_check"));
 	const another = h("button", {
 		class: "secondary",
 		onclick: () => {
 			if (repairSeed || !current() || busy || refreshing || readFailed || attachments && !attachments.ready() || !(terminal$1(operation) || saved.intent?.refused)) return;
+			const release = ownFocus(another);
 			const previous = saved;
 			saved = {
 				target: saved.target,
@@ -56415,6 +56609,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 			} catch (e) {
 				saved = previous;
 				showError(e);
+				release();
 				return;
 			}
 			operation = preview = null;
@@ -56422,6 +56617,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 			attachments?.reset();
 			fill();
 			update();
+			if (release() && (another.hidden || another.disabled)) moveFrom(another, binding);
 		}
 	}, t("pub_new"));
 	function change(field, value) {
@@ -56480,15 +56676,22 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 		branchHelp.textContent = t(saved.source_ref && !validBranch ? "pub_branch_invalid" : "pub_branch_help");
 		sourceRef.setAttribute("aria-invalid", String(Boolean(saved.source_ref && !validBranch)));
 		inspect.hidden = fixed;
-		inspect.disabled = reading || !observe() || !ready() || !projectReady() || !bound() || !validBranch;
+		block(inspect, !observe() || !ready() || !projectReady() || !bound() || !validBranch, false, reading);
 		inspect.textContent = t(reading ? "pub_loading" : "pub_preview");
 		apply.hidden = Boolean(saved.intent?.operation_id || saved.intent?.refused);
 		apply.textContent = t(fixed ? "permissions_retry" : "pub_apply");
-		apply.disabled = busy || readFailed || !ready() || !allowed() || (fixed ? !saved.intent.request || !saved.intent.key : reading || !projectReady() || !preview || !validPreview$1(preview, selected()) || !bound() || !hostAllowed() || attachments && !attachments.ready() || !validRequest(request()));
+		block(apply, readFailed || !ready() || !allowed() || (fixed ? !saved.intent.request || !saved.intent.key : !projectReady() || !preview || !validPreview$1(preview, selected()) || !bound() || !hostAllowed() || Boolean(attachments && !attachments.ready()) || !validRequest(request())), !fixed && reading, busy);
 		check.hidden = !saved.intent?.operation_id;
-		check.disabled = busy || Boolean(refreshing);
+		block(check, false, busy || Boolean(refreshing), false);
 		another.hidden = Boolean(repairSeed) || !(terminal$1(operation) || saved.intent?.refused);
-		another.disabled = busy || Boolean(refreshing) || readFailed || Boolean(attachments && !attachments.ready());
+		block(another, readFailed || Boolean(attachments && !attachments.ready()), busy || Boolean(refreshing), false);
+		if ([
+			inspect,
+			apply,
+			check,
+			another
+		].some((button) => button.getAttribute("aria-disabled") === "true")) status.setAttribute("aria-busy", "true");
+		else status.removeAttribute("aria-busy");
 		facts.replaceChildren();
 		const original = saved.intent?.request;
 		if (preview || original) {

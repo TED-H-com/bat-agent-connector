@@ -2,6 +2,15 @@
 
 ## Next release (unreleased)
 
+- Published branch start, managed repair and Home keep keyboard focus on the
+  button you press while that request runs. The button looks unavailable, and a
+  second press is ignored. When Start finishes, focus moves to Check original
+  operation, or to Prepare another published version if the start was refused.
+  Prepare another returns to the repository. Review new evidence returns to
+  Read repair evidence. On Home, Load more on the last page moves to the first
+  new row. Leaving the page while that request is still running does not move
+  focus on the next screen.
+
 - Result sources, the pull request list, project skills and model preferences keep
   the keyboard on Refresh, More, Previous, Next or Save while that action runs.
   The control looks unavailable and a second press does nothing. When More,

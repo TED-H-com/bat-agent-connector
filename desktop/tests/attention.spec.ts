@@ -189,3 +189,84 @@ for(const width of [390,768,1440])test(`Pending badge follows its breakpoint and
   await expect(page.locator('#main')).not.toContainText('Review delivery');
   await expect(badge).toBeHidden();await expect(badge).toHaveText('');expect(f.data.writes).toEqual([]);
 });
+
+const inboxPaths = ['/sessions', '/work-items', '/operations', '/hosts'];
+const sectionReads = (fixture: ReturnType<typeof attentionFixture>, path: string) =>
+  fixture.data.reads.filter(item => item.split('?')[0] === path).length;
+async function mountHeldInbox(page: any, fixture: ReturnType<typeof attentionFixture>) {
+  const waiting: Array<() => void> = [];
+  let hold = false;
+  await mountAttention(page, false, fixture, async input => {
+    const path = new URL(input.path, 'http://fixture').pathname;
+    if (hold && input.method === 'GET' && inboxPaths.includes(path)) await new Promise<void>(resolve => waiting.push(resolve));
+    return fixture.dispatch(input);
+  });
+  return {waiting, holdReads(value: boolean) {hold = value;}, release() {hold = false; waiting.splice(0).forEach(resolve => resolve());}};
+}
+const refreshButton = (page: any) => page.locator('#main > .ui-page-header').getByRole('button', {name: 'Refresh', exact: true});
+const groupStatus = (page: any, name: string) => page.getByRole('region', {name}).locator(':scope > [role="status"]');
+test('busy focus: Refresh keeps focus while section reads are held', async ({page}) => {
+  const fixture = attentionFixture(), held = await mountHeldInbox(page, fixture);
+  await page.goto('/dashboard/');
+  await expect(page.getByRole('region', {name: 'Reviews'})).toContainText('Review delivery');
+  const before = Object.fromEntries(inboxPaths.map(path => [path, sectionReads(fixture, path)]));
+  const refresh = refreshButton(page);
+  await refresh.focus();
+  held.holdReads(true);
+  await refresh.press('Enter');
+  await expect.poll(() => held.waiting.length).toBe(4);
+  await expect(refresh).toBeFocused();
+  await expect(refresh).toHaveAttribute('aria-disabled', 'true');
+  for (const name of ['Questions', 'Reviews', 'Needs attention', 'Hosts']) {
+    await expect(groupStatus(page, name)).toHaveAttribute('aria-busy', 'true');
+  }
+  await refresh.press('Enter', {force: true});
+  expect(held.waiting.length).toBe(4);
+  held.release();
+  await expect(refresh).not.toHaveAttribute('aria-disabled');
+  await expect(refresh).toBeFocused();
+  await expect(page.getByRole('region', {name: 'Reviews'})).toContainText('Review delivery');
+  for (const path of inboxPaths) expect(sectionReads(fixture, path)).toBe(before[path] + 1);
+});
+test('busy focus: an event keeps focus on Refresh', async ({page}) => {
+  const fixture = attentionFixture(), held = await mountHeldInbox(page, fixture);
+  await page.goto('/dashboard/');
+  const refresh = refreshButton(page);
+  await expect(page.getByRole('region', {name: 'Reviews'})).toContainText('Review delivery');
+  await refresh.focus();
+  held.holdReads(true);
+  fixture.data.cursor++;
+  await expect.poll(() => held.waiting.length).toBe(4);
+  await expect(refresh).toBeFocused();
+  await expect(refresh).toHaveAttribute('aria-disabled', 'true');
+  held.release();
+  await expect(refresh).not.toHaveAttribute('aria-disabled');
+  await expect(refresh).toBeFocused();
+});
+test('busy focus: Load more on the last page moves focus to the first new row', async ({page}) => {
+  const fixture = attentionFixture();
+  fixture.data.pageSize = 2;
+  let hold = false, release = () => {};
+  let held = 0;
+  await mountAttention(page, false, fixture, async input => {
+    const url = new URL(input.path, 'http://fixture');
+    if (hold && input.method === 'GET' && url.pathname === '/work-items' && url.searchParams.has('unread')) {
+      held += 1;
+      await new Promise<void>(resolve => {release = resolve;});
+    }
+    return fixture.dispatch(input);
+  });
+  await page.goto('/dashboard/');
+  await page.getByRole('radio', {name: 'Unread work updates', exact: true}).click();
+  const updates = page.getByRole('region', {name: 'Unread work updates'});
+  await expect(updates).toContainText('2 shown');
+  const more = updates.getByRole('button', {name: 'Load more', exact: true});
+  await more.focus();
+  hold = true;
+  await more.press('Enter');
+  await expect.poll(() => held).toBe(1);
+  await expect(more).toBeFocused();
+  await expect(more).toHaveAttribute('aria-disabled', 'true');
+  hold = false; release();
+  await expect(updates.getByRole('link', {name: 'Accepted work', exact: true})).toBeFocused();
+});
