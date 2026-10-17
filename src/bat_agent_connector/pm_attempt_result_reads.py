@@ -978,6 +978,10 @@ def _publication_block_reason(ops, ctx: dict[str, Any], candidate_sha: str | Non
     execution_op_id = ctx["execution_op_id"]
     if isinstance(execution_op_id, str) and _publication_open(ops, execution_op_id):
         return "WAIT_ORIGINAL_OPERATION_RECONCILE"
+    # Admission requires this head. An open publish stays reconcile above; do not
+    # invent a commit or read the provider to fill one in.
+    if not isinstance(candidate_sha, str) or SHA40.fullmatch(candidate_sha) is None:
+        return "publication_source_incomplete"
     if isinstance(execution_op_id, str) and _verified_publication_for_commit(
         ops, execution_op_id, candidate_sha
     ):
@@ -1526,7 +1530,7 @@ async def _read_result(
         {
             "code": view.get("error_code"),
             "message": view.get("status_reason"),
-            "resumable": True,
+            "resumable": False,
         }
         if op_status == "needs_attention"
         else None
@@ -1702,6 +1706,13 @@ async def _read_result(
         has_receipt=latest_row is not None,
         current_review_id=current_review_id,
     )
+    # Same proof and authorization as the public resume endpoint. An unknown
+    # child returns before resume is considered, so this stays false.
+    if attention is not None:
+        attention["resumable"] = any(
+            item.get("kind") == "operation_endpoint" and item.get("endpoint") == "resume"
+            for item in next_allowed_actions
+        )
 
     # Identity & Sources
     reg_entry = registry.get(sess_host, sess_id) if (sess_host and sess_id) else None

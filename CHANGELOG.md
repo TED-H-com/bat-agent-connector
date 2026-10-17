@@ -10,6 +10,13 @@
   a new request. Publishing still needs the base branch unchanged since the
   work started. This release does not add a way to read the live base.
 
+- A needs-attention result says it can be resumed only when this caller is
+  actually offered resume. An unknown child outcome keeps the stop reason and
+  does not claim the attempt is resumable. Cancel stays available to the
+  person who started it. Publish also stays withheld when the recorded head
+  commit is not one the publish action can accept. The commit recorded at the
+  start remains the base. The turn-end commit remains the head.
+
 - Choosing a file does not show Retry while that first upload runs. Retry appears
   after the upload fails, and pressing it keeps the button until the retry finishes.
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
 from pathlib import Path
 
 import pytest
@@ -2691,3 +2692,215 @@ async def test_publish_entry_offers_later_candidate_after_existing_pull_request(
     assert allowed[0]["prefilled_params"]["candidate_sha"] == second
     assert allowed[0]["prefilled_params"]["candidate_sha"] != first
 
+
+def _operation_endpoints(payload: dict) -> list[str]:
+    return [
+        item["endpoint"]
+        for item in payload["next_allowed_actions"]
+        if item.get("kind") == "operation_endpoint"
+    ]
+
+
+async def test_unproven_child_needs_attention_is_not_resumable(start_ready, mock, monkeypatch):
+    """A stopped child whose send is still unproven must not be offered as resumable."""
+    w = start_ready
+    ops = w["d"].ops
+    base_work = work_items._get_item(ops.db, w["target"]["work_item_id"])
+    wi_id = (
+        await pkg_action(
+            w,
+            "work_item.create",
+            {"project_id": base_work["project_id"]},
+            {"title": "Unproven handoff attention", "goal": "Goal", "acceptance": "Acceptance"},
+        )
+    )["work_item_id"]
+    client = w["d"].fleet.client("h1")
+    invoke, lost = client.invoke, False
+
+    async def lose_start_and_readback(name, *args, **kwargs):
+        nonlocal lost
+        if name == "claude:start-session" and not lost:
+            await invoke(name, *args, **kwargs)
+            lost = True
+            raise InvokeTimeout("Simulated lost ACK on claude:start-session")
+        if lost and name == "claude:get-session-meta":
+            raise InvokeTimeout("Simulated read-back timeout on claude:get-session-meta")
+        return await invoke(name, *args, **kwargs)
+
+    monkeypatch.setattr(client, "invoke", lose_start_and_readback)
+    env = await _start_envelope(w, work_item_id=wi_id, key="e04-unproven-attn")  # gitleaks:allow (test idempotency key)
+    parent, _ = ops.create(STARTER_OWNER, **env)
+    parent_id = parent["operation_id"]
+    handoff_id = None
+    for _ in range(12):
+        ops.db.execute(
+            """UPDATE operations SET next_run_at=0
+               WHERE operation_id=? AND status IN ('waiting_external', 'waiting_checks', 'uncertain')""",
+            (parent_id,),
+        )
+        if handoff_id is not None:
+            ops.db.execute(
+                """UPDATE operations SET next_run_at=0
+                   WHERE operation_id=? AND status IN ('waiting_external', 'waiting_checks', 'uncertain')""",
+                (handoff_id,),
+            )
+        await settle_operations(ops)
+        current = ops.get(parent_id)
+        children = (current.get("result") or {}).get("children") or {}
+        if children.get("handoff"):
+            handoff_id = children["handoff"]
+        if current["status"] == "needs_attention" and (current.get("result") or {}).get("stage") == "start_unknown":
+            break
+
+    parent_row = ops.get(parent_id)
+    assert parent_row["status"] == "needs_attention", parent_row
+    assert parent_row["result"]["stage"] == "start_unknown"
+    assert handoff_id is not None
+    assert parent_row["result"]["children"]["handoff"] == handoff_id
+    child = ops.get(handoff_id)
+    assert child["status"] == "needs_attention"
+    assert child["error_code"] == "UNCERTAIN_UNRESOLVED"
+    assert pm_work_start._uncertain(ops, child) is True
+    keys_before = [
+        row["operation_id"]
+        for row in ops.db.execute("SELECT operation_id FROM operations ORDER BY rowid").fetchall()
+    ]
+
+    body = await _result(w, {"workspace_id": w["workspace_id"], "attempt_id": parent_row["result"]["attempt_id"]})
+    _assert_action_registry_invariants(ops, body)
+    execution = body["execution"]
+    assert execution["operation_status"] == "needs_attention"
+    assert execution["stage"] == "start_unknown"
+    assert execution["state"] == "unknown"
+    assert execution["state_reason"] == "handoff_outcome_uncertain"
+    assert "start_outcome_uncertain" in body["completeness"]["reasons"]
+    assert execution["attention"]["code"] == "UNCERTAIN_UNRESOLVED"
+    assert execution["attention"]["message"]
+    assert execution["attention"]["resumable"] is False
+    assert _operation_endpoints(body) == ["cancel"]
+    assert {"action": "work.start", "reason": "WAIT_ORIGINAL_OPERATION_RECONCILE"} in body["blocked_actions"]
+    assert {"action": pr_publication.ACTION, "reason": "WAIT_ORIGINAL_OPERATION_RECONCILE"} in body["blocked_actions"]
+    assert body["identity"]["start_operation_id"] == parent_id
+    assert body["identity"]["execution_operation_id"] == handoff_id
+    keys_after = [
+        row["operation_id"]
+        for row in ops.db.execute("SELECT operation_id FROM operations ORDER BY rowid").fetchall()
+    ]
+    assert keys_after == keys_before
+    assert ops.get(parent_id)["status"] == "needs_attention"
+    assert ops.get(handoff_id)["status"] == "needs_attention"
+    assert pm_work_start._uncertain(ops, ops.get(handoff_id)) is True
+
+
+async def test_repairable_attention_follows_resume_authorization(start_ready, mock, monkeypatch):
+    """A proven stop is resumable for the writer who started it, and not for anyone else."""
+    from bat_agent_connector.api_auth import Principal
+
+    w = start_ready
+    d = w["d"]
+    ops = d.ops
+    wid = w["workspace_id"]
+    base_work = work_items._get_item(ops.db, w["target"]["work_item_id"])
+    wi_id = (
+        await pkg_action(
+            w,
+            "work_item.create",
+            {"project_id": base_work["project_id"]},
+            {"title": "Repairable attention item", "goal": "Goal", "acceptance": "Acceptance"},
+        )
+    )["work_item_id"]
+    env = await _start_envelope(w, work_item_id=wi_id, key="e04-repair-attn")  # gitleaks:allow (test idempotency key)
+    orig_kick = ops.kick
+    monkeypatch.setattr(ops, "kick", lambda: None)
+    op, _ = ops.create(STARTER_OWNER, **env)
+    backup_owner = Principal("repair-owner", frozenset({"observe", "manage", "start"}))
+
+    async def set_role(actor, role, who=PLAN_OWNER):
+        current = pm_workspace.get_workspace(ops.db, who, wid)
+        changed, _ = ops.create(
+            who, action="pm.workspace.member.set", target={"workspace_id": wid},
+            params={"actor": actor, "role": role},
+            preconditions={"expected_version": current["version"]}, idempotency_key=uuid.uuid4().hex,
+        )
+        await ops._execute(changed["operation_id"])
+        done = ops.get(changed["operation_id"])
+        assert done["status"] == "succeeded", done
+
+    # Version drift is an immutable stop (#216). A temporarily lowered role can
+    # actually be repaired without replacing the adopted plan or start intent.
+    await set_role(backup_owner.actor, "owner")
+    await set_role(STARTER_OWNER.actor, "reader", backup_owner)
+    monkeypatch.setattr(ops, "kick", orig_kick)
+    paused = await _advance_start_public(ops, op["operation_id"], rounds=2)
+    assert paused["status"] == "needs_attention"
+    assert paused["error_code"] == "FORBIDDEN"
+    await set_role(STARTER_OWNER.actor, "owner", backup_owner)
+    aid = paused["result"]["attempt_id"]
+    path = f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result"
+
+    _, owner_body = await http(w["port"], "GET", path, tok=token(d, STARTER_OWNER.actor, "observe"))
+    _assert_action_registry_invariants(ops, owner_body)
+    assert owner_body["execution"]["state"] == "accepted"
+    assert owner_body["execution"]["stage"] != "start_unknown"
+    assert owner_body["execution"]["attention"]["code"] == "FORBIDDEN"
+    assert owner_body["execution"]["attention"]["resumable"] is True
+    assert _operation_endpoints(owner_body) == ["cancel", "resume"]
+
+    ws_cur = pm_workspace.get_workspace(ops.db, PLAN_OWNER, wid)
+    await pkg_action(
+        w,
+        "pm.workspace.member.set",
+        {"workspace_id": wid},
+        {"actor": "colleague", "role": "contributor"},
+        {"expected_version": ws_cur["version"]},
+    )
+    _, colleague_body = await http(
+        w["port"],
+        "GET",
+        path,
+        tok=token(d, "colleague", "observe", "manage", "operate", "integrate"),
+    )
+    _assert_action_registry_invariants(ops, colleague_body)
+    assert colleague_body["execution"]["attention"]["code"] == "FORBIDDEN"
+    assert colleague_body["execution"]["attention"]["message"] == owner_body["execution"]["attention"]["message"]
+    assert colleague_body["execution"]["attention"]["resumable"] is False
+    assert _operation_endpoints(colleague_body) == []
+
+    ws_cur = pm_workspace.get_workspace(ops.db, PLAN_OWNER, wid)
+    await pkg_action(
+        w,
+        "pm.workspace.member.set",
+        {"workspace_id": wid},
+        {"actor": "reader-user", "role": "reader"},
+        {"expected_version": ws_cur["version"]},
+    )
+    _, reader_body = await http(
+        w["port"],
+        "GET",
+        path,
+        tok=token(d, "reader-user", "observe", "manage", "operate", "integrate"),
+    )
+    _assert_action_registry_invariants(ops, reader_body)
+    assert reader_body["execution"]["attention"]["code"] == "FORBIDDEN"
+    assert reader_body["execution"]["attention"]["resumable"] is False
+    assert _operation_endpoints(reader_body) == []
+    assert ops.get(op["operation_id"])["status"] == "needs_attention"
+
+
+async def test_publish_stays_gated_without_a_publishable_head(start_ready, mock):
+    """The registered action cannot accept an entry whose head commit is not 40 hex."""
+    w = start_ready
+    att = await _start_managed_attempt(w, mock, key="e04-publish-no-head")  # gitleaks:allow (test idempotency key)
+    mock.git_logs[att["worktree_path"]] = [
+        {"hash": "not-a-publishable-head", "author": "dev", "date": "2026-10-15", "message": "unusable"},
+    ]
+    _set_turn_messages(mock, att["session_id"], att["turn_marker"], streaming=False)
+    await w["d"].inventory._refresh_scheduled("h1")
+    body = await _result(w, att)
+    _assert_action_registry_invariants(w["d"].ops, body)
+    assert body["execution"]["state"] in {"turn-ended", "process-ended"}
+    assert body["changes"]["base_commit"] == att["base_sha"]
+    allowed, blocked = _publish_rows(body)
+    assert allowed == []
+    assert blocked == [{"action": pr_publication.ACTION, "reason": "publication_source_incomplete"}]
+    assert body["changes"]["fixed_result_commit"]["commit_sha"] == "not-a-publishable-head"
