@@ -65158,7 +65158,7 @@ async function viewSession(main, host, sid, context = null) {
 					session_id: sid
 				},
 				session: () => row,
-				ready: () => readReady
+				ready: () => readReady && state.viewReady && state.online && !state.nativeBusy
 			});
 			permissionsSlot.append(permissions.box);
 		}
@@ -65481,24 +65481,18 @@ async function viewSession(main, host, sid, context = null) {
 			]);
 		});
 	});
-	const followSync = setTimeout(() => {
+	const syncReady = () => {
 		try {
 			assertView(connection);
 			if (!disposed) {
+				permissions?.update();
 				followUp?.sync();
 				fixedResult?.sync();
 			}
 		} catch {}
-	}, 0);
-	const offFollowOnline = onOnline(() => {
-		try {
-			assertView(connection);
-			if (!disposed) {
-				followUp?.sync();
-				fixedResult?.sync();
-			}
-		} catch {}
-	});
+	};
+	const followSync = setTimeout(syncReady, 0);
+	const offFollowOnline = onOnline(syncReady);
 	return () => {
 		disposed = true;
 		clearTimeout(followSync);

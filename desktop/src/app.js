@@ -1982,7 +1982,8 @@ async function viewSession(main, host, sid, context = null) {
     if (managed && row.provenance === "connector_managed" && !permissions) {
       permissions = permissionsPanel({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
         errorBox, opStatus, storageKey: `batc.permissions.${connection.namespace}.${JSON.stringify([host, sid])}`,
-        target: {host, session_id: sid}, session: () => row, ready: () => readReady});
+        target: {host, session_id: sid}, session: () => row,
+        ready: () => readReady && state.viewReady && state.online && !state.nativeBusy});
       permissionsSlot.append(permissions.box);
     }
     const manualSource = row.provenance === "manual" && state.caps?.artifacts?.capture?.manual_single_file;
@@ -2203,10 +2204,11 @@ async function viewSession(main, host, sid, context = null) {
       ]);
     });
   });
-  // viewReady flips after this function returns. Sync on the next turn so Send next
-  // is not left disabled by the readiness check that ran while the view was still loading.
-  const followSync = setTimeout(() => {try {assertView(connection); if (!disposed) {followUp?.sync(); fixedResult?.sync();}} catch { /* the view already left */ }}, 0);
-  const offFollowOnline = onOnline(() => {try {assertView(connection); if (!disposed) {followUp?.sync(); fixedResult?.sync();}} catch { /* the view already left */ }});
+  // viewReady flips after this function returns. Permissions and Work actions
+  // become available only after the router finishes the complete initial read.
+  const syncReady = () => {try {assertView(connection); if (!disposed) {permissions?.update(); followUp?.sync(); fixedResult?.sync();}} catch { /* the view already left */ }};
+  const followSync = setTimeout(syncReady, 0);
+  const offFollowOnline = onOnline(syncReady);
   return () => {disposed = true; clearTimeout(followSync); offFollowOnline(); followUp?.dispose(); fixedResult?.dispose(); perspectives?.dispose(); clearTimeout(retryTimer); off(); instructions?.dispose(); batHandoff?.dispose(); conversation.dispose(); mobileLayout?.dispose(); shortcut.dispose();
     cps.clear(); results.dispose(); overflow.dispose(); sourcesPanel?.dispose(); wide.removeEventListener("change", syncWide);};
 }
