@@ -23,7 +23,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from bat_agent_connector import pm_native_runtime, pr_publication
 from tests import test_pm_conversation_proposals as conversation
 from tests import test_pm_native_operations as native
-from tests.test_api_v1 import token
+from tests.test_api_v1 import http, token
 from tests.test_checkpoints import MANUAL, LocalRunner, bat_writes, git, snapshot
 from tests.test_integration import commit
 from tests.test_pm_loop_parity import _open_mcp, unpack
@@ -122,6 +122,12 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
     manual = copy.deepcopy((mock.metas[MANUAL], mock.states[MANUAL]))
     before = snapshot(w["human"])
     seed_ids = {r[0] for r in ops.db.execute("SELECT operation_id FROM operations")}
+    create_work = mode == "adopt"
+    created_work = None
+    status, original_work = await http(w["port"], "GET",
+        f"/api/v1/work-items/{w['target']['work_item_id']}", tok=w["owner_token"])
+    assert status == 200, original_work
+    project_id = original_work["work_item"]["project_id"]
     adoptions_before = ops.db.execute("SELECT count(*) FROM pm_plan_adoptions").fetchone()[0]
     shots = ROOT / "desktop/test-results/work-loop" / f"{mode}-{locale}-{width}"
     shutil.rmtree(shots, ignore_errors=True)
@@ -236,7 +242,23 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
 
             await send({"port": w["port"], "token": w["owner_token"], "workspace": w["workspace_id"],
                 "work": w["target"]["work_item_id"], "locale": locale, "width": width, "shots": str(shots),
-                "mode": mode, "thread": thread_target(w)["thread_id"], "peer_agent": bool(peer_token)})
+                "mode": mode, "thread": thread_target(w)["thread_id"], "peer_agent": bool(peer_token),
+                "create_work": create_work, "project": project_id})
+            if create_work:
+                created = await receive("created")
+                await wait_status(created["operation_id"], "succeeded")
+                creation = ops.get(created["operation_id"])
+                assert creation["action"] == "work_item.create"
+                assert creation["actor"] == STARTER_OWNER.actor
+                assert creation["target"] == {"project_id": project_id}
+                work_id = created["work_item_id"]
+                assert creation["result"]["work_item_id"] == work_id != w["target"]["work_item_id"]
+                assert ops.db.execute("SELECT count(*) FROM pm_work_bindings WHERE work_item_id=?", (work_id,)).fetchone()[0] == 0
+                assert ops.db.execute("SELECT count(*) FROM work_attempts WHERE work_item_id=?", (work_id,)).fetchone()[0] == 0
+                assert bat_writes(mock) == []
+                w = {**w, "target": {"workspace_id": w["workspace_id"], "work_item_id": work_id}}
+                created_work = {"work_item_id": work_id, "operation_id": creation["operation_id"], "unbound_before_adoption": True}
+                await send({"verified": True})
             started = await receive("started")
             start = ops.get(started["operation_id"])
             if mode == "adopt":
@@ -246,6 +268,7 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 assert parent["result"]["summary"]["started_count"] == 1
                 start = ops.get(parent["result"]["works"][0]["start_operation_id"])
             assert start["action"] == "work.start" and start["status"] == "succeeded", start
+            assert start["target"] == w["target"]
             result = start["result"]
             execution = ops.get(result["children"]["handoff"])["result"]
             sid, wt, marker = execution["session_id"], execution["worktree_path"], execution["message_id"]
@@ -300,6 +323,9 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 await send(peer)
             done = await receive("done")
             assert await asyncio.wait_for(child.wait(), 10) == 0, (shots / "browser.log").read_text()
+            if create_work:
+                assert ops.db.execute("SELECT count(*) FROM work_attempts WHERE work_item_id=?",
+                    (original_work["work_item"]["work_item_id"],)).fetchone()[0] == 0
             assert snapshot(w["human"]) == before
             assert (mock.metas[MANUAL], mock.states[MANUAL]) == manual
             starts = [f for f in mock.invokes if f["channel"] == "claude:start-session"]
@@ -314,7 +340,7 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             assert len([r for r in w["gh"].requests if r[:2] == ("POST", "/repos/o/r/pulls")]) == 1
             user_ops = [ops.get(oid) for oid in done["operations"]]
             initial = ["pm.message.append", "pm.conversation.propose", "work.adopt_and_start"] if mode == "adopt" else ["work.start"]
-            assert [op["action"] for op in user_ops] == [*initial, "session.send", "github.pr.publish"]
+            assert [op["action"] for op in user_ops] == [*(["work_item.create"] if create_work else []), *initial, "session.send", "github.pr.publish"]
             assert all(op["actor"] == STARTER_OWNER.actor and op["status"] == "succeeded" for op in user_ops)
             assert len({op["idempotency_key"] for op in user_ops}) == len(user_ops)
             created = {r[0] for r in ops.db.execute("SELECT operation_id FROM operations")} - seed_ids
@@ -328,7 +354,7 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 "source_sha": git(ROOT, "rev-parse", "HEAD"),
                 "source_dirty": bool(git(ROOT, "status", "--porcelain")),
                 "python": sys.version, "browser": done["browser"],
-                "entry": mode, "same_attempt": att["attempt_id"], "browser_operations": len(user_ops), "bat_starts": len(starts),
+                "entry": mode, "created_work_in_ui": created_work, "same_attempt": att["attempt_id"], "browser_operations": len(user_ops), "bat_starts": len(starts),
                 "bat_sends": len(sends), "github_posts": 1, "manual_unchanged": True, "mcp_peer": peer,
                 "candidate": candidate, "browser_closed_during_dispatch": True}, indent=2) + "\n")
     finally:

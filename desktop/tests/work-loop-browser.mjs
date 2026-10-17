@@ -52,6 +52,25 @@ const shot = name => page.screenshot({path: resolve(f.shots, name + '.png'), ani
 try {
   await launch();
   let start;
+  if (f.create_work) {
+    step = 'create-work';
+    await page.goto(`${origin}/dashboard/?workbench=1#/project/${f.project}`);
+    await page.locator('[data-project-work-create]').click();
+    const form = page.locator('[data-create-record="work_item"]');
+    const title = zh ? '修正登入重複送出' : 'Fix duplicate login submission';
+    await form.getByLabel(zh ? '新工作項目' : 'New work item', {exact: true}).fill(title);
+    const created = await clickOperation('work_item.create', form.locator('button[type="submit"]'));
+    const link = page.locator('[data-project-items]').getByRole('link', {name: title, exact: true});
+    await expect(link).toBeVisible();
+    const match = (await link.getAttribute('href')).match(/^#\/item\/(wi_[0-9a-f]{20})$/);
+    assert.ok(match, 'The created Work must have its own visible canonical link');
+    assert.notEqual(match[1], f.work);
+    f.work = match[1];
+    await shot('00-work-created');
+    send({stage: 'created', operation_id: created.operation_id, work_item_id: f.work});
+    assert.equal((await receive()).verified, true);
+    step = 'adopt';
+  }
   if (f.mode === 'adopt') {
     await page.goto(`${origin}/dashboard/?workbench=1#/pm/${f.workspace}/discussions/${f.thread}`);
     const composer = page.locator('[data-discussion-composer]');
@@ -131,7 +150,7 @@ try {
     assert.equal(page.url(), workUrl);
   }
   await expect(page.locator('[data-follow-up-input]')).toHaveValue(draft);
-  const expectedOperations = f.mode === 'adopt' ? 5 : 3;
+  const expectedOperations = (f.mode === 'adopt' ? 5 : 3) + (f.create_work ? 1 : 0);
   assert.equal(requests.length, expectedOperations - 1, 'Changing views must not dispatch work');
   await page.getByRole('button', {name: zh ? '成果' : 'Results', exact: true}).click();
   await expect(page.locator('[data-work-result]')).toContainText('Added the retry-after-failure case.');

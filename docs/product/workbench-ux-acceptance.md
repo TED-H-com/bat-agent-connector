@@ -127,8 +127,12 @@ BAT 回合與 GitHub 由可控來源提供，Git 使用磁碟上的隔離 reposi
 Work／Attempt、已送指令與固定 commit，切換 Work／Lineage／Live 保留草稿，
 再從成果發布 draft PR 並重新載入。所有三筆使用者寫入均由 UI 發起。
 
-另一條英文 1440px／繁中 390px 路徑從既有專案討論開始：只存筆記、整理計畫、
-審閱提案、選取既有 Work 及需求，再採用並開始，接上相同的第二句與發布流程。
+另一條英文 1440px／繁中 390px 路徑先在正式專案畫面建立一件新 Work，
+從畫面產生的連結取得它的身分，再進入討論：只存筆記、整理計畫、審閱提案，
+選取剛建立的 Work 及需求，採用並開始後接上相同的第二句與發布流程。
+建立操作本身不得產生 Attempt、計畫綁定或 BAT 寫入；這些由後續既有 P6／
+work.start 負責。原先 fixture 的另一件 Work 不得意外開始。建立、討論與
+採用皆由 UI 送出，六筆使用者操作各有獨立且穩定的 key，不手填內部 ID。
 採用成功後必須自動開啟該次 Work／Attempt，測試不再點選另一個現場連結。
 五筆使用者操作都由 UI 發起；核對只新增一次採用及一個啟動嘗試。PM 回覆由
 FakeRuntime 提供，使用真正的提案、審閱、採用與操作 endpoint；不呼叫真實 CLI。
@@ -158,7 +162,8 @@ BATC_WORK_LOOP_BROWSER=1 pytest-disktmp uv run --python 3.13 --extra dev pytest 
 `desktop/test-results/work-loop/`，隨既有 `desktop-shared-ui-fixtures` artifact 保存。
 
 此回歸涵蓋 K03、K05、K07、K08、K09、K12 與 K15 的部分 I 路徑，以及 UX-A13
-自動銜接的 I 證據。它使用已設定的專案、綁定及 Work，不涵蓋全新專案設定、
+自動銜接的 I 證據。它使用已設定的專案及 repository／PM 綁定；直接開始路徑
+使用既有 Work，採用路徑由 UI 建立本次 Work。仍不涵蓋全新專案設定、
 真實 Idea／PM 回覆、P6 故障恢復、Hermes 產品端整合、兩份成果的 PM 影響評估、
 原生安裝、真實模型／BAT／GitHub 或 R0／R1／L 驗收。
 
