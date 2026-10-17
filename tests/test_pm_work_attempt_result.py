@@ -1288,6 +1288,8 @@ async def test_state_facets_next_actions_and_links_invariants(start_ready, mock,
     assert res_other["identity"]["caller_is_controller"] is False
     assert {"action": "session.send", "reason": "not_controller"} in res_other["blocked_actions"]
     assert {"action": "github.pr.publish", "reason": "not_controller"} in res_other["blocked_actions"]
+    assert all(a.get("action") != "pm.quality.review.create" for a in res_other["next_allowed_actions"])
+    assert {"action": "pm.quality.review.create", "reason": "not_workspace_owner"} in res_other["blocked_actions"]
 
     # Reader member sees neither 'scopes' nor 'admin' in identity, and writer actions are blocked with 'not_writer_member'.
     ws_cur2 = pm_workspace.get_workspace(ops.db, PLAN_OWNER, wid)
@@ -1331,7 +1333,7 @@ async def test_state_facets_next_actions_and_links_invariants(start_ready, mock,
                     "acceptance": "accepted",
                     "dod": "satisfied",
                     "updated_at": 600.0,
-                    "context": {"execution_operation_id": att["handoff_operation_id"]},
+                    "context": {"execution_operation_id": att["handoff_operation_id"], "reviewer_actor": STARTER_OWNER.actor},
                 }
             ],
             "next_cursor": None,
@@ -1347,6 +1349,23 @@ async def test_state_facets_next_actions_and_links_invariants(start_ready, mock,
     _assert_action_registry_invariants(ops, res_with_rev)
     qr_rec_act = next(a for a in res_with_rev["next_allowed_actions"] if a.get("action") == "pm.quality.review.record")
     assert qr_rec_act["target"] == {"workspace_id": wid, "review_id": "qrev_cur_1"}
+
+    _, res_other_with_rev = await http(
+        w["port"], "GET", f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result", tok=colleague_tok,
+    )
+    assert all(a.get("action") != "pm.quality.review.record" for a in res_other_with_rev["next_allowed_actions"])
+    assert {"action": "pm.quality.review.record", "reason": "not_original_reviewer"} in res_other_with_rev["blocked_actions"]
+
+    # Owning the workspace permits policy creation, not another reviewer's conclusion.
+    ws_before_promotion = pm_workspace.get_workspace(ops.db, PLAN_OWNER, wid)
+    await pkg_action(w, "pm.workspace.member.set", {"workspace_id": wid},
+        {"actor": "colleague", "role": "owner"}, {"expected_version": ws_before_promotion["version"]})
+    _, res_other_owner = await http(
+        w["port"], "GET", f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result", tok=colleague_tok,
+    )
+    assert any(a.get("action") == "pm.quality.review.create" for a in res_other_owner["next_allowed_actions"])
+    assert all(a.get("action") != "pm.quality.review.record" for a in res_other_owner["next_allowed_actions"])
+    assert {"action": "pm.quality.review.record", "reason": "not_original_reviewer"} in res_other_owner["blocked_actions"]
 
     _, res_reader_with_rev = await http(
         w["port"],

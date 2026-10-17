@@ -889,9 +889,9 @@ def _is_attempt_controller(
         return False
 
 
-def _is_writer_member(ops, principal: Principal, workspace_id: str) -> bool:
+def _is_writer_member(ops, principal: Principal, workspace_id: str, *, decide: bool = False) -> bool:
     try:
-        pm_workspace.require_member(ops.db, principal, workspace_id, write=True)
+        pm_workspace.require_member(ops.db, principal, workspace_id, write=True, decide=decide)
         return True
     except OperationError:
         return False
@@ -1009,6 +1009,7 @@ def _compute_actions(
     candidate_sha: str | None,
     has_receipt: bool,
     current_review_id: str | None = None,
+    current_reviewer_actor: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], bool]:
     workspace_id = ctx["workspace_id"]
     work_item_id = ctx["work_item_id"]
@@ -1034,6 +1035,8 @@ def _compute_actions(
         requires_controller: bool = True,
         requires_original_actor: bool = False,
         requires_writer: bool = False,
+        requires_owner: bool = False,
+        requires_reviewer: bool = False,
         reconcile_blocked: bool = False,
     ) -> None:
         is_registered_action = action_name in ops.actions
@@ -1059,6 +1062,14 @@ def _compute_actions(
         if not all(principal.allows(s) for s in req_scopes):
             if is_registered_action:
                 blocked.append({"action": action_name, "reason": "missing_scope"})
+            return
+        # Quality policy belongs to the workspace owner, while conclusions
+        # belong to the appointed reviewer, even when another reader is owner.
+        if requires_owner and not _is_writer_member(ops, principal, workspace_id, decide=True):
+            blocked.append({"action": action_name, "reason": "not_workspace_owner"})
+            return
+        if requires_reviewer and principal.actor != current_reviewer_actor:
+            blocked.append({"action": action_name, "reason": "not_original_reviewer"})
             return
         allowed.append(entry)
 
@@ -1255,6 +1266,7 @@ def _compute_actions(
                         action_name="pm.quality.review.create",
                         requires_controller=False,
                         requires_writer=True,
+                        requires_owner=True,
                     )
                 if current_review_id is not None and "pm.quality.review.record" in ops.actions:
                     consider(
@@ -1270,6 +1282,7 @@ def _compute_actions(
                         action_name="pm.quality.review.record",
                         requires_controller=False,
                         requires_writer=True,
+                        requires_reviewer=True,
                     )
 
     return allowed, blocked, is_controller
@@ -1720,6 +1733,9 @@ async def _read_result(
     )
     current_review_obj = verification_block["quality_reviews"]["current"]
     current_review_id = current_review_obj.get("review_id") if isinstance(current_review_obj, dict) else None
+    current_review = next((row for row in verification_block["quality_reviews"]["reviews"]
+                           if isinstance(row, dict) and row.get("review_id") == current_review_id), None)
+    current_reviewer_actor = (current_review.get("context") or {}).get("reviewer_actor") if current_review else None
     next_allowed_actions, blocked_actions, is_controller = _compute_actions(
         ops,
         principal,
@@ -1729,6 +1745,7 @@ async def _read_result(
         candidate_sha=cand_sha_for_pr,
         has_receipt=latest_row is not None,
         current_review_id=current_review_id,
+        current_reviewer_actor=current_reviewer_actor,
     )
     # Same proof and authorization as the public resume endpoint. An unknown
     # child returns before resume is considered, so this stays false.
