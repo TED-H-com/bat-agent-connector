@@ -1485,7 +1485,10 @@ class ApiV1:
                 preconditions=body.get("preconditions"), idempotency_key=key, entry="http")
         except OperationError as error:
             if (not str(body.get("action", "")).startswith("pm.")
-                    and body.get("action") not in {"setup.host", "setup.repository", "setup.verification", "work.start"}):
+                    and body.get("action") not in {
+                        "setup.host", "setup.repository", "setup.verification", "work.start",
+                        "github.pr.publish",
+                    }):
                 raise
             # A source-hidden replay is still the original admitted operation.
             # Only proven absence in this actor/key namespace permits a fresh UI key.
