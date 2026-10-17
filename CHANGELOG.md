@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Design note: v1.3 E05 maps the BAT loop (new work, live output, the fixed
+  Result, the next turn, busy, and recovery of the original operation) onto the
+  pieces already merged or still in review. See
+  `docs/design/v1.3-e05-bat-loop.md`. No behavior change.
+
 - Design spec for publishing a Work Result as a pull request
   (`docs/design/v1.3-e03-publish-pr.md`). The Dashboard still cannot publish:
   `github.pr.publish` remains a label until that spec is implemented. The spec
