@@ -184,6 +184,7 @@ function queryValue(pathname, key) {
   if (key === 'host') return 'fixture';
   if (key === 'workspace_id' || key === 'workspace') return ID.ws;
   if (key === 'work_item_id') return ID.wi;
+  if (key === 'attempt_id') return ID.att;
   if (key === 'project_id') return ID.prj;
   if (key === 'operation_id' || key === 'execution_id' || key === 'source_id') return ID.op;
   if (key === 'source_kind') return 'execution';

@@ -60,13 +60,11 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
     try {guard();} catch {return false;}
     return mark === epoch && ticket === serial && !stopped && !suspended && !disposed;
   }
-  function inputsPath(after) {
-    const query = new URLSearchParams();
-    query.set('limit', '50');
-    if (after) query.set('after', String(after));
-    if (attemptId) query.set('attempt_id', attemptId);
-    return `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${encodeURIComponent(workItemId)}/inputs?${query}`;
-  }
+  const inputsPath = after => `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${encodeURIComponent(workItemId)}/inputs?${new URLSearchParams({
+    limit: '50',
+    ...(after ? {after: String(after)} : {}),
+    ...(attemptId ? {attempt_id: attemptId} : {}),
+  })}`;
   function validReceipt(row) {
     return row && typeof row === 'object' && OPERATION_ID.test(row.operation_id || '')
       && row.workspace_id === workspaceId && row.work_item_id === workItemId;
@@ -235,10 +233,11 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
   async function runEndpoint(action, receipt) {
     const mark = epoch;
     const id = action?.operation_id;
-    if (!OPERATION_ID.test(id || '') || !actorMatches(receipt)) return;
+    if (!OPERATION_ID.test(id || '') || !actorMatches(receipt) || !['cancel', 'resume'].includes(action?.endpoint)) return;
+    const endpoint = action.endpoint === 'cancel' ? 'cancel' : 'resume';
     try {
       guard();
-      await api('POST', `/operations/${encodeURIComponent(id)}/${action.endpoint}`, {});
+      await api('POST', `/operations/${encodeURIComponent(id)}/${endpoint}`, {});
       if (mark !== epoch || stopped || disposed) return;
       if (action.endpoint === 'cancel' && id === receipt.operation_id) focusAfter = {id: receipt.operation_id, kind: 'edit'};
       await refresh();
