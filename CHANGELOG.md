@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Confinement closure tests scan with a shell fixture instead of starting
+  Python for every search, so the same checks finish on a busy disk without
+  a longer time limit.
+
 - A Board that was already left no longer clears another project's selected Work when its own read fails.
 
 - Fleet: keyboard focus stays on the control you are using while a status
