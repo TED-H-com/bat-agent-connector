@@ -119,10 +119,29 @@ fn validate_start_preview(body: Option<&Value>) -> Result<(), String> {
     if doc.keys().any(|key| {
         !matches!(
             key.as_str(),
-            "code_target" | "delivery" | "requirement_ids" | "instruction"
+            "code_target"
+                | "delivery"
+                | "requirement_ids"
+                | "instruction"
+                | "profile_id"
+                | "profile_revision"
         )
     }) {
         return Err("Invalid typed start preview request".into());
+    }
+    match (doc.get("profile_id"), doc.get("profile_revision")) {
+        (None, None) => (),
+        (Some(id), Some(revision)) => {
+            if !id
+                .as_str()
+                .is_some_and(|id| Regex::new(r"^wpf_[0-9a-f]{32}$").unwrap().is_match(id))
+                || !revision.as_i64().is_some_and(|n| n > 0)
+                || doc.get("code_target").is_none()
+            {
+                return Err("Invalid typed start profile pin".into());
+            }
+        }
+        _ => return Err("Supply both profile identity and revision".into()),
     }
     if let Some(delivery) = doc.get("delivery") {
         if !matches!(
@@ -358,16 +377,14 @@ fn validate_adopt_start_preview(body: Option<&Value>) -> Result<(), String> {
         return Err(fail());
     }
     let mut seen = std::collections::HashSet::new();
+    let work_id = Regex::new(r"^wi_[0-9a-f]{20}$").unwrap();
     for work in works {
         let mut work = work.as_object().ok_or_else(fail)?.clone();
         let id = work
             .remove("work_item_id")
             .and_then(|v| v.as_str().map(str::to_owned))
             .ok_or_else(fail)?;
-        if !Regex::new(r"^wi_[0-9a-f]{20}$").unwrap().is_match(&id)
-            || !seen.insert(id)
-            || !work.contains_key("requirement_ids")
-        {
+        if !work_id.is_match(&id) || !seen.insert(id) || !work.contains_key("requirement_ids") {
             return Err(fail());
         }
         if work
@@ -1443,7 +1460,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/installation-capabilities|pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context(?:-bundle)?)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/resources|/overview|/schedule|/register(?:/(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision)\.[A-Za-z0-9._-]{1,180})?|/dependencies(?:/(?:revisions|impact))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/maintenance-checks(?:/(?:current|pmck_[0-9a-f]{32}))?|/maintenance-reviews(?:/(?:current|pmrevw_[0-9a-f]{32}(?:/events)?))?|/maintenance-schedule|/ahp-adapters|/ahp-observations(?:/(?:current|pmah_[0-9a-f]{32}))?|/github-observations(?:/(?:current|pmgh_[0-9a-f]{32}))?|/maintenance-repairs(?:/(?:current|pmrp_[0-9a-f]{32}))?|/executions/op_[0-9a-f]{32}/verification-config|/execution-verifications/op_[0-9a-f]{32}|/pr-publications/op_[0-9a-f]{32}|/quality-reviews(?:/pmqr_[0-9a-f]{32})?|/work-batches(?:/pmbt_[0-9a-f]{32})?|/maintenance-findings/current|/spec-materializations(?:/pmsp_[0-9a-f]{32})?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/conversation-proposals(?:/pmcp_[0-9a-f]{32})?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/(?:capture|deliveries|quality|attempts|inputs))?|/work-attempts/att_[0-9a-f]{32}(?:/(?:result|changes|diff))?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+            r"pm/installation-capabilities|pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context(?:-bundle)?)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/resources|/overview|/schedule|/register(?:/(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision)\.[A-Za-z0-9._-]{1,180})?|/dependencies(?:/(?:revisions|impact))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/maintenance-checks(?:/(?:current|pmck_[0-9a-f]{32}))?|/maintenance-reviews(?:/(?:current|pmrevw_[0-9a-f]{32}(?:/events)?))?|/maintenance-schedule|/ahp-adapters|/ahp-observations(?:/(?:current|pmah_[0-9a-f]{32}))?|/github-observations(?:/(?:current|pmgh_[0-9a-f]{32}))?|/maintenance-repairs(?:/(?:current|pmrp_[0-9a-f]{32}))?|/executions/op_[0-9a-f]{32}/verification-config|/execution-verifications/op_[0-9a-f]{32}|/pr-publications/op_[0-9a-f]{32}|/quality-reviews(?:/pmqr_[0-9a-f]{32})?|/work-batches(?:/pmbt_[0-9a-f]{32})?|/maintenance-findings/current|/spec-materializations(?:/pmsp_[0-9a-f]{32})?|/work-profiles(?:/wpf_[0-9a-f]{32}(?:/readiness)?)?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/conversation-proposals(?:/pmcp_[0-9a-f]{32})?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/(?:capture|deliveries|quality|attempts|inputs))?|/work-attempts/att_[0-9a-f]{32}(?:/(?:result|changes|diff))?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1580,6 +1597,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             return Err("Control characters in central query are refused".into());
         }
         if pm {
+            let profile_list = path.ends_with("/work-profiles");
             let thread_list = path.ends_with("/threads");
             let run_list = path.ends_with("/runs");
             let plan_list = path.ends_with("/plans");
@@ -1700,6 +1718,18 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                         && !value.contains("..")
                         && !value.starts_with('/')
                         && !value.ends_with('/')
+                }
+                "limit" if profile_list => {
+                    !value.is_empty()
+                        && value.len() <= 3
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<u16>().is_ok_and(|n| (1..=100).contains(&n))
+                }
+                "cursor" if profile_list => {
+                    !value.is_empty()
+                        && value.len() <= 19
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<i64>().is_ok_and(|n| n >= 0)
                 }
                 "limit" if schedule => {
                     !value.is_empty()
@@ -2650,6 +2680,52 @@ mod tests {
             "/repositories/owner/repo/pulls?page=1&page=2",
         ] {
             assert!(validate_request(&get(path)).is_err(), "{path}");
+        }
+    }
+
+    #[test]
+    fn work_profiles_use_read_only_routes_and_exact_start_pins() {
+        let root = "/pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work-profiles";
+        let profile = "wpf_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        for path in [
+            root.to_string(),
+            format!("{root}?limit=100&cursor=0"),
+            format!("{root}/{profile}"),
+            format!("{root}/{profile}/readiness"),
+        ] {
+            assert!(validate_request(&get(&path)).is_ok(), "{path}");
+            assert!(validate_request(&request("POST", &path)).is_err(), "{path}");
+        }
+        for path in [
+            format!("{root}?cursor=-1"),
+            format!("{root}?limit=101"),
+            format!("{root}?cursor=9223372036854775808"),
+            format!("{root}?cursor=1&cursor=2"),
+            format!("{root}?after=0"),
+            format!("{root}/{profile}?limit=1"),
+            format!("{root}/{profile}/readiness?probe=true"),
+            format!("{root}/wpf_invalid/readiness"),
+        ] {
+            assert!(validate_request(&get(&path)).is_err(), "{path}");
+        }
+        let body = serde_json::json!({"profile_id":profile,"profile_revision":1,
+            "code_target":{"repository":"example/library","host":"fixture","workspace_id":"ws-1"}});
+        assert!(validate_start_preview(Some(&body)).is_ok());
+        for field in ["profile_id", "profile_revision", "code_target"] {
+            let mut invalid = body.clone();
+            invalid.as_object_mut().unwrap().remove(field);
+            assert!(validate_start_preview(Some(&invalid)).is_err(), "{field}");
+        }
+        for revision in [
+            serde_json::json!(0),
+            serde_json::json!(-1),
+            serde_json::json!(true),
+            serde_json::json!(1.5),
+            serde_json::json!("1"),
+        ] {
+            let mut invalid = body.clone();
+            invalid["profile_revision"] = revision;
+            assert!(validate_start_preview(Some(&invalid)).is_err());
         }
     }
 

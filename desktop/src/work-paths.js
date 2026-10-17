@@ -19,6 +19,16 @@ export function internalFrom(value) {
   if (/[\\\s\u0000-\u001f\u007f]/u.test(decoded) || decoded.includes('://') || decoded.includes('//') || decoded.slice(1).includes('#')) return null;
   const path = decoded.split('?')[0];
   if (path.split('/').some(part => part === '.' || part === '..')) return null;
+  if(/^#\/pm\/ws_[a-f0-9]{32}\/board$/.test(path))return /^#\/pm\/ws_[a-f0-9]{32}\/board(?:\?select=wi_[a-f0-9]{20})?$/.test(decoded)?value:null;
+  if(/^#\/(?:published|dispatch\/[^/?]+(?:\/[^/?]+)?)$/.test(path))return decoded===path?value:null;
   if (!/^#\/(?:pm\/ws_[a-f0-9]{32}\/discussions(?:\/(?:new|[a-zA-Z0-9_-]+))?|sessions|session\/[^/?]+\/[^/?]+)$/.test(path)) return null;
   return value;
+}
+
+export function connectionReturn(value) {
+  const href=internalFrom(value);if(!href)return null;
+  const path=decodeURIComponent(href).split('?')[0];
+  const label=path.endsWith('/board')?'wpf_return_work':path==='#/published'?'wpf_return_published'
+    :path.startsWith('#/dispatch/')?'wpf_return_dispatch':/^#\/sessions?(?:\/|$)/.test(path)?'wpf_return_session':'agents_back';
+  return {href,label};
 }

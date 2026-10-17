@@ -2782,6 +2782,11 @@ body.pm-mode #main { padding: 0; }
 }
 
 .pm-work-publish { display: flex; flex-direction: column; gap: var(--space-3); max-width: 640px; min-width: 0; }
+.pm-work-profile-states { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: var(--space-2) 0; font-size: var(--fs-small); }
+.pm-work-profile-states dt, .pm-work-profile-states dd { margin: 0; overflow-wrap: anywhere; }
+.pm-work-profile-announcement { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+[data-work-profile-picker] { min-width: 0; }
+[data-work-profile-picker] select { width: 100%; min-width: 0; max-width: 100%; }
 .pm-work-publish h4 { margin: 0; }
 .pm-work-publish-fields { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
 .pm-work-publish-fact { margin: 0; overflow-wrap: anywhere; }
@@ -2805,7 +2810,6 @@ body.pm-mode #main { padding: 0; }
   .pm-work-publish input[type="text"],
   .pm-work-publish textarea { font-size: var(--fs-input-mobile); }
 }
-
 /* Session workspace. Scoped so other views keep their own layout. */
 .session-workspace { min-width: 0; }
 main.session-view { display: flex; flex-direction: column; height: calc(100dvh - 48px); overflow: auto; }

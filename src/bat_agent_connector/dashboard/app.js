@@ -304,6 +304,88 @@ var adoptStartStrings = {
 	}
 };
 //#endregion
+//#region src/pm-work-profile-strings.js
+var workProfileStrings = {
+	en: {
+		wpf_label: "Saved profile",
+		wpf_none: "No saved profile",
+		wpf_default: "Default",
+		wpf_more: "More profiles",
+		wpf_locked: "These values come from the saved profile.",
+		wpf_unverified: "A saved setting is not a ready check.",
+		wpf_coding: "Coding route",
+		wpf_pm: "PM analysis",
+		wpf_pm_preflight: "PM preflight is available.",
+		wpf_pm_unverified: "PM preflight is not available.",
+		wpf_withdrawn: "This profile is no longer available.",
+		wpf_changed: "This profile changed. Check readiness again.",
+		wpf_mismatch: "This start does not match the saved profile.",
+		wpf_invalid: "The profile response could not be verified. Check again.",
+		wpf_discovered: "Discovered",
+		wpf_signed_in_or_available: "Signed in or available",
+		wpf_can_observe: "Can observe",
+		wpf_can_start_own: "Can start owned work",
+		wpf_can_continue_own: "Can continue owned work",
+		wpf_last_verified_execution: "Last verified execution",
+		wpf_ready: "Ready",
+		wpf_missing: "Setup still missing",
+		wpf_unknown: "Not verified yet",
+		wpf_unavailable: "Unavailable",
+		wpf_setup_repository: "Set up repository binding",
+		wpf_setup_host: "Set up host",
+		wpf_git_changed: "The Git execution location changed. This check does not suggest another location.",
+		wpf_local_git: "Local Git is not available. Use an SSH host already configured on the Linux BAT.",
+		wpf_observation_only: "This check uses the last observation and does not contact the host.",
+		wpf_action_unavailable: "This action is not available on this connection.",
+		wpf_return_work: "Back to work",
+		wpf_return_published: "Back to published",
+		wpf_return_dispatch: "Back to dispatch",
+		wpf_return_session: "Back to session",
+		wst_error_PM_WORK_PROFILE_WITHDRAWN: "This profile is no longer available.",
+		wst_error_PM_WORK_PROFILE_CHANGED: "This profile changed. Check readiness again.",
+		wst_error_PM_WORK_PROFILE_TARGET_MISMATCH: "This start does not match the saved profile."
+	},
+	"zh-TW": {
+		wpf_label: "已存設定檔",
+		wpf_none: "不使用設定檔",
+		wpf_default: "預設",
+		wpf_more: "還有設定檔",
+		wpf_locked: "這些值來自已存設定檔。",
+		wpf_unverified: "已設定不等於就緒。",
+		wpf_coding: "寫程式路線",
+		wpf_pm: "PM 分析",
+		wpf_pm_preflight: "PM 可以進行預檢。",
+		wpf_pm_unverified: "PM 尚無法進行預檢。",
+		wpf_withdrawn: "這份設定檔已經不在。",
+		wpf_changed: "這份設定檔已變更。請再檢查就緒。",
+		wpf_mismatch: "這次啟動與已存設定檔不一致。",
+		wpf_invalid: "無法確認設定檔回覆，請重新檢查。",
+		wpf_discovered: "已發現",
+		wpf_signed_in_or_available: "已登入或可用",
+		wpf_can_observe: "可觀察",
+		wpf_can_start_own: "可建立自己的工作",
+		wpf_can_continue_own: "可在自己的工作上繼續",
+		wpf_last_verified_execution: "上次實際執行驗證",
+		wpf_ready: "已就緒",
+		wpf_missing: "還缺設定",
+		wpf_unknown: "尚未驗證",
+		wpf_unavailable: "不可用",
+		wpf_setup_repository: "前往儲存庫綁定",
+		wpf_setup_host: "前往主機設定",
+		wpf_git_changed: "Git 執行位置已變更。這次檢查不建議改換執行位置。",
+		wpf_local_git: "本機 Git 不可用。請改用 Linux BAT 上已經設定好的 SSH 主機。",
+		wpf_observation_only: "這次檢查使用上次觀察結果，不會連絡主機。",
+		wpf_action_unavailable: "這次連線沒有這個動作。",
+		wpf_return_work: "返回工作",
+		wpf_return_published: "返回已發布",
+		wpf_return_dispatch: "返回派工",
+		wpf_return_session: "返回工作階段",
+		wst_error_PM_WORK_PROFILE_WITHDRAWN: "這份設定檔已經不在。",
+		wst_error_PM_WORK_PROFILE_CHANGED: "這份設定檔已變更。請再檢查就緒。",
+		wst_error_PM_WORK_PROFILE_TARGET_MISMATCH: "這次啟動與已存設定檔不一致。"
+	}
+};
+//#endregion
 //#region src/workbench-strings.js
 var workbenchStrings$1 = {
 	en: {
@@ -8726,6 +8808,7 @@ var STRINGS = {
 		...workbenchStrings$1["zh-TW"],
 		...diagnosticsStrings["zh-TW"],
 		...workStartStrings["zh-TW"],
+		...workProfileStrings["zh-TW"],
 		...workResultStrings["zh-TW"],
 		...workFollowUpStrings["zh-TW"],
 		...workPublishStrings["zh-TW"],
@@ -10378,6 +10461,7 @@ var STRINGS = {
 		...workbenchStrings$1.en,
 		...diagnosticsStrings.en,
 		...workStartStrings.en,
+		...workProfileStrings.en,
 		...workResultStrings.en,
 		...workFollowUpStrings.en,
 		...workPublishStrings.en,
@@ -13186,17 +13270,17 @@ function startTimeTicker() {
 }
 //#endregion
 //#region src/ui/view-state.js
-var states$1 = new Map();
+var states$2 = new Map();
 function viewState(namespace, workspaceId, view) {
 	const key = JSON.stringify([
 		namespace,
 		workspaceId,
 		view
 	]);
-	const value = states$1.get(key) || {};
-	states$1.delete(key);
-	states$1.set(key, value);
-	if (states$1.size > 40) states$1.delete(states$1.keys().next().value);
+	const value = states$2.get(key) || {};
+	states$2.delete(key);
+	states$2.set(key, value);
+	if (states$2.size > 40) states$2.delete(states$2.keys().next().value);
 	return value;
 }
 //#endregion
@@ -13790,8 +13874,19 @@ function internalFrom(value) {
 	if (/[\\\s\u0000-\u001f\u007f]/u.test(decoded) || decoded.includes("://") || decoded.includes("//") || decoded.slice(1).includes("#")) return null;
 	const path = decoded.split("?")[0];
 	if (path.split("/").some((part) => part === "." || part === "..")) return null;
+	if (/^#\/pm\/ws_[a-f0-9]{32}\/board$/.test(path)) return /^#\/pm\/ws_[a-f0-9]{32}\/board(?:\?select=wi_[a-f0-9]{20})?$/.test(decoded) ? value : null;
+	if (/^#\/(?:published|dispatch\/[^/?]+(?:\/[^/?]+)?)$/.test(path)) return decoded === path ? value : null;
 	if (!/^#\/(?:pm\/ws_[a-f0-9]{32}\/discussions(?:\/(?:new|[a-zA-Z0-9_-]+))?|sessions|session\/[^/?]+\/[^/?]+)$/.test(path)) return null;
 	return value;
+}
+function connectionReturn(value) {
+	const href = internalFrom(value);
+	if (!href) return null;
+	const path = decodeURIComponent(href).split("?")[0];
+	return {
+		href,
+		label: path.endsWith("/board") ? "wpf_return_work" : path === "#/published" ? "wpf_return_published" : path.startsWith("#/dispatch/") ? "wpf_return_dispatch" : /^#\/sessions?(?:\/|$)/.test(path) ? "wpf_return_session" : "agents_back"
+	};
 }
 //#endregion
 //#region src/settings-agents.js
@@ -35883,6 +35978,273 @@ function kanbanObservation({ h, t, api, alive, workspaceId, workId, caps, permit
 	};
 }
 //#endregion
+//#region src/pm-work-profile-picker.js
+var identity = (value) => typeof value === "string" && /^wpf_[0-9a-f]{32}$/.test(value);
+var states$1 = [
+	"discovered",
+	"signed_in_or_available",
+	"can_observe",
+	"can_start_own",
+	"can_continue_own",
+	"last_verified_execution"
+];
+var values = [
+	"ready",
+	"missing",
+	"unknown",
+	"unavailable"
+];
+function checkedWorkProfile(row) {
+	if (!row || !identity(row.profile_id) || !Number.isSafeInteger(row.revision) || row.revision < 1 || !/^[0-9a-f]{64}$/.test(row.digest) || !["claude", "codex"].includes(row.agent) || row.model !== null && (typeof row.model !== "string" || !row.model.trim()) || ![
+		null,
+		"pull_request",
+		"reviewable_changes"
+	].includes(row.delivery_goal) || [
+		"repository",
+		"host",
+		"workspace_id"
+	].some((key) => typeof row[key] !== "string" || !row[key])) return null;
+	return Object.fromEntries([
+		"profile_id",
+		"revision",
+		"digest",
+		"agent",
+		"model",
+		"delivery_goal",
+		"repository",
+		"host",
+		"workspace_id"
+	].map((key) => [key, row[key]]));
+}
+function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps, field, request, active, onChange, errorBox }) {
+	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-profiles`;
+	const select = h$1("select", { "aria-label": t("wpf_label") }), facts = h$1("div", {
+		"data-work-profile-readiness": "",
+		tabindex: -1
+	});
+	const status = h$1("div", { role: "status" }), announcement = h$1("span", {
+		role: "status",
+		class: "pm-work-profile-announcement"
+	}), more = button({
+		label: t("wpf_more"),
+		hidden: true,
+		onClick: () => void load(true)
+	});
+	const box = h$1("section", { "data-work-profile-picker": "" }, h$1("label", {}, t("wpf_label"), select), more, status, announcement, facts);
+	const returnKey = `batc.pm.${namespace}.profile-return.${workspaceId}.${workId}`;
+	let serial = 0, loading = false, disposed = false, rows = new Map(), cursor = null, verified = null;
+	const available = () => caps()?.features?.pm_workspaces?.work_profiles?.version === 1 && caps()?.features?.pm_workspaces?.work_profiles?.available === true && caps()?.scopes?.includes("observe");
+	const selected = () => {
+		try {
+			return checkedWorkProfile(JSON.parse(field.value || "null"));
+		} catch {
+			return null;
+		}
+	};
+	const valid = (ticket) => {
+		try {
+			alive();
+			return !disposed && active() && ticket === serial;
+		} catch {
+			return false;
+		}
+	};
+	const label = (row) => [
+		row.agent,
+		row.repository,
+		row.host,
+		row.workspace_id,
+		row.is_default ? t("wpf_default") : null,
+		row.model,
+		row.delivery_goal ? t("wst_delivery_" + (row.delivery_goal === "pull_request" ? "pr" : "changes")) : null
+	].filter(Boolean).join(" · ");
+	function options() {
+		const value = selected();
+		select.replaceChildren(h$1("option", { value: "" }, t("wpf_none")), ...[...rows.values()].map((row) => h$1("option", { value: row.profile_id }, label(row))));
+		if (value && !rows.has(value.profile_id)) select.append(h$1("option", { value: value.profile_id }, label(value)));
+		select.value = value?.profile_id || "";
+		update();
+	}
+	function update() {
+		const row = selected();
+		select.value = row?.profile_id || "";
+		if (!row) {
+			facts.replaceChildren();
+			announcement.textContent = "";
+			verified = null;
+		}
+		box.hidden = !available();
+		select.disabled = loading || Boolean(request()?.locked()) || !available();
+		more.hidden = cursor === null;
+		more.disabled = loading || Boolean(request()?.locked());
+	}
+	function forget(message) {
+		const current = selected();
+		if (current) rows.delete(current.profile_id);
+		verified = null;
+		facts.replaceChildren();
+		announcement.textContent = "";
+		if (!request()?.locked()) {
+			request()?.set("profile", "");
+			onChange(null, false);
+		}
+		status.replaceChildren(h$1("p", { class: "muted" }, t(message)));
+		options();
+	}
+	function display(data, row) {
+		const list = h$1("dl", { class: "pm-work-profile-states" });
+		for (const name of states$1) {
+			const state = data.states[name], value = h$1("dd", {}, t("wpf_" + state.value));
+			list.append(h$1("dt", {}, t("wpf_" + name)), value);
+			const op = state.evidence_ref?.operation_id;
+			if (name === "last_verified_execution" && /^op_[0-9a-f]{32}$/.test(op)) value.append(" · ", h$1("a", { href: `#/op/${op}` }, t("pm_operation")));
+		}
+		const gap = data.smallest_gap, details = [];
+		if (gap) {
+			const action = gap.fix?.action;
+			if (["setup.host", "setup.repository"].includes(action) && gap.fix.route === "POST /api/v1/operations" && gap.fix.ui_hash === "#/settings?section=connection") {
+				const from = internalFrom(location.hash);
+				details.push(h$1("a", {
+					href: gap.fix.ui_hash + (from ? "&from=" + encodeURIComponent(from) : ""),
+					onclick: () => {
+						try {
+							sessionStorage.setItem(returnKey, row.profile_id);
+						} catch {}
+					}
+				}, t(action === "setup.host" ? "wpf_setup_host" : "wpf_setup_repository")));
+			} else {
+				const key = gap.reason === "git_execution_location_changed" ? "wpf_git_changed" : gap.reason?.startsWith("local_git_") ? "wpf_local_git" : ["host_unreachable", "host_not_refreshed"].includes(gap.reason) ? "wpf_observation_only" : gap.reason === "action_unavailable" ? "wpf_action_unavailable" : "wpf_unverified";
+				details.push(h$1("p", { class: "muted" }, t(key)));
+			}
+			if (typeof gap.last_success_at === "number" && Number.isFinite(gap.last_success_at) && gap.last_success_at > 0) details.push(timeStamp(gap.last_success_at));
+		}
+		facts.replaceChildren(h$1("h4", {}, t("wpf_coding")), h$1("p", { class: "muted" }, t("wpf_locked")), list, ...data.states.can_start_own.value !== "ready" ? [h$1("p", { class: "muted" }, t("wpf_unverified"))] : [], ...details, h$1("h4", {}, t("wpf_pm")), h$1("p", {}, t(data.pm_analysis?.pm_ready === true ? "wpf_pm_preflight" : "wpf_pm_unverified")));
+		const gapName = states$1.find((name) => data.states[name].value !== "ready");
+		announcement.textContent = gapName ? `${t("wpf_" + gapName)}: ${t("wpf_" + data.states[gapName].value)}. ${t("wpf_unverified")}` : "";
+		verified = {
+			profile_id: row.profile_id,
+			revision: row.revision,
+			digest: row.digest
+		};
+		request()?.update();
+	}
+	async function read(row, ticket) {
+		const data = await api("GET", `${base}/${row.profile_id}/readiness`);
+		if (!valid(ticket)) return;
+		if (data.contract !== "work-profile-readiness/v1" || data.workspace_id !== workspaceId || data.profile_id !== row.profile_id || data.revision !== row.revision || data.digest !== row.digest || data.calls_bat !== false || states$1.some((name) => !values.includes(data.states?.[name]?.value))) throw Error(t("wpf_invalid"));
+		display(data, row);
+	}
+	select.addEventListener("change", async () => {
+		if (request()?.locked()) {
+			select.value = selected()?.profile_id || "";
+			return;
+		}
+		const ticket = ++serial, row = select.value ? checkedWorkProfile(rows.get(select.value)) : null;
+		verified = null;
+		facts.replaceChildren();
+		status.replaceChildren();
+		announcement.textContent = "";
+		request().set("profile", row ? JSON.stringify(row) : "");
+		onChange(row, true);
+		if (row) try {
+			await read(row, ticket);
+		} catch (error) {
+			if (valid(ticket)) handle(error);
+		}
+	});
+	function handle(error) {
+		verified = null;
+		facts.replaceChildren();
+		announcement.textContent = "";
+		if ([403, 404].includes(error.status) || error.code === "PM_WORK_PROFILE_WITHDRAWN") forget("wpf_withdrawn");
+		else status.replaceChildren(errorBox(error, { within: status }));
+	}
+	async function load(append = false) {
+		const ticket = ++serial;
+		verified = null;
+		facts.replaceChildren();
+		announcement.textContent = "";
+		if (!available() || !active()) {
+			if (!available() && selected()) forget("wpf_withdrawn");
+			update();
+			return;
+		}
+		loading = true;
+		update();
+		status.replaceChildren();
+		try {
+			const data = await api("GET", `${base}?limit=50${append && cursor !== null ? "&cursor=" + cursor : ""}`);
+			if (!valid(ticket)) return;
+			if (!Array.isArray(data.profiles) || data.profiles.some((row) => !checkedWorkProfile(row)) || data.next_cursor !== null && (!Number.isSafeInteger(data.next_cursor) || data.next_cursor < 0)) throw Error(t("wpf_invalid"));
+			if (!append) rows.clear();
+			for (const row of data.profiles) rows.set(row.profile_id, row);
+			cursor = data.next_cursor;
+			options();
+			const old = selected();
+			if (old) {
+				let row = rows.get(old.profile_id);
+				if (!row) {
+					row = await api("GET", `${base}/${old.profile_id}`);
+					if (!valid(ticket)) return;
+					if (!checkedWorkProfile(row) || row.profile_id !== old.profile_id) throw Error(t("wpf_invalid"));
+					rows.set(row.profile_id, row);
+					options();
+				}
+				const checked = checkedWorkProfile(row);
+				if (JSON.stringify(old) !== JSON.stringify(checked)) {
+					status.replaceChildren(h$1("p", { class: "muted" }, t("wpf_changed")));
+					if (!request()?.locked()) {
+						request().set("profile", JSON.stringify(checked));
+						onChange(checked, false);
+					}
+				}
+				await read(checked, ticket);
+			}
+		} catch (error) {
+			if (valid(ticket)) handle(error);
+		} finally {
+			if (ticket === serial) {
+				loading = false;
+				update();
+			}
+		}
+	}
+	options();
+	return {
+		box,
+		selected,
+		update,
+		load,
+		verified: () => {
+			const row = selected();
+			return !row || Boolean(verified && verified.profile_id === row.profile_id && verified.revision === row.revision && verified.digest === row.digest);
+		},
+		withdraw() {
+			serial++;
+			loading = false;
+			verified = null;
+			rows.clear();
+			facts.replaceChildren();
+			status.replaceChildren();
+			announcement.textContent = "";
+			box.hidden = true;
+		},
+		dispose() {
+			disposed = true;
+			serial++;
+			facts.replaceChildren();
+		},
+		focusOnReturn() {
+			try {
+				if (verified && sessionStorage.getItem(returnKey) === verified.profile_id && facts.isConnected) {
+					sessionStorage.removeItem(returnKey);
+					facts.focus();
+				}
+			} catch {}
+		}
+	};
+}
+//#endregion
 //#region src/pm-work-start.js
 var equal$9 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 var PRECONDITION_KEYS = [
@@ -36144,6 +36506,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 		const workId = card.work_item_id;
 		if (editors.has(workId)) return editors.get(workId);
 		let checking = false;
+		let checkingTicket = 0;
 		let availableCandidates = null;
 		let renderedPlanRevision = null;
 		let checkboxes = [];
@@ -36213,14 +36576,35 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 		const reviewInput = h("input", { type: "hidden" });
 		reviewInput.dataset.pmDefault = "";
 		reviewInput.value = "";
+		const profileInput = h("input", {
+			type: "hidden",
+			value: ""
+		});
+		let editorInstance, profiles, profileWasLocked = false;
+		const selectedProfile = () => profiles?.selected();
+		const selectedTarget = () => {
+			const profile = selectedProfile();
+			return profile ? {
+				repository: profile.repository,
+				host: profile.host,
+				workspace_id: profile.workspace_id
+			} : chosenCandidate;
+		};
 		const currentFingerprint = () => {
 			const reqs = isBindNeeded(activeCard) ? JSON.parse(requirementsInput.value || "[]") : null;
-			const targetChoice = chosenCandidate ? `${chosenCandidate.repository}:${chosenCandidate.host}:${chosenCandidate.workspace_id}` : null;
+			const target = selectedTarget(), profile = selectedProfile();
+			const targetChoice = target ? `${target.repository}:${target.host}:${target.workspace_id}` : null;
 			return JSON.stringify({
 				instruction: instruction.value,
 				delivery: delivery.value,
 				requirement_ids: reqs,
-				target_choice: targetChoice
+				target_choice: targetChoice,
+				...profile ? {
+					profile_id: profile.profile_id,
+					profile_revision: profile.revision,
+					agent: agent.value,
+					model: model.value
+				} : {}
 			});
 		};
 		const onFingerprintChanged = () => {
@@ -36386,6 +36770,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 				return;
 			}
 			const ticket = ++previewSerial;
+			checkingTicket = ticket;
 			const workId = card.work_item_id;
 			checking = true;
 			factsBox.replaceChildren();
@@ -36408,13 +36793,29 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 					if (!reqs.length) throw Error(t("wst_requirements_required"));
 					body.requirement_ids = reqs;
 				}
-				if (chosenCandidate) body.code_target = chosenCandidate;
+				const profile = selectedProfile();
+				if (selectedTarget()) body.code_target = selectedTarget();
+				if (profile) {
+					body.profile_id = profile.profile_id;
+					body.profile_revision = profile.revision;
+				}
+				const fingerprint = currentFingerprint();
 				const data = await api("POST", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${encodeURIComponent(card.work_item_id)}/start-preview`, body);
 				if (!validPreview(ticket, workId)) return;
+				if (fingerprint !== currentFingerprint()) {
+					prepared = null;
+					staleNotice.hidden = false;
+					return;
+				}
 				if (data.workspace_id !== workspaceId || data.work_item_id !== card.work_item_id) throw Error(t("wst_invalid_preview"));
 				if (!data.code_target) {
 					prepared = null;
 					if (!editorInstance.locked()) editorInstance.set("review", "");
+					if (profile) {
+						candidatesBox.replaceChildren();
+						candidatesBox.hidden = true;
+						throw Error(t("wpf_mismatch"));
+					}
 					const candidates = data.candidates || [];
 					availableCandidates = candidates;
 					if (candidates.length === 0) {
@@ -36430,7 +36831,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 					}
 					return;
 				}
-				if (availableCandidates && availableCandidates.length > 1) {
+				if (!profile && availableCandidates && availableCandidates.length > 1) {
 					const chosenKey = data.code_target ? `${data.code_target.repository}:${data.code_target.host}:${data.code_target.workspace_id}` : null;
 					candidatesBox.replaceChildren(renderCandidateSelector(availableCandidates, chosenKey, false));
 					candidatesBox.hidden = false;
@@ -36440,13 +36841,25 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 				}
 				const source = data.source;
 				if (!source || !/^[0-9a-f]{40}$/.test(source.source_sha || "") || !Number.isSafeInteger(source.repository_id) || source.repository_id <= 0 || !/^[0-9a-f]{64}$/.test(source.binding_digest || "")) throw Error(t("wst_invalid_preview"));
-				if (Object.keys(data.preconditions || {}).length !== 10 || !PRECONDITION_KEYS.every((k) => k in (data.preconditions || {}))) throw Error(t("wst_invalid_preview"));
+				const pKeys = Object.keys(data.preconditions || {});
+				const expectedKeys = profile ? [
+					...PRECONDITION_KEYS,
+					"expected_profile_revision",
+					"expected_profile_digest"
+				] : PRECONDITION_KEYS;
+				if (pKeys.length !== expectedKeys.length || !expectedKeys.every((k) => k in (data.preconditions || {}))) throw Error(t("wst_invalid_preview"));
+				if (profile && (data.preconditions.expected_profile_revision !== profile.revision || data.preconditions.expected_profile_digest !== profile.digest || [
+					"repository",
+					"host",
+					"workspace_id"
+				].some((key) => data.code_target[key] !== profile[key]))) throw Error(t("wpf_mismatch"));
 				if (!["ready", "blocked"].includes(data.readiness?.status)) throw Error(t("wst_invalid_preview"));
 				const fixed = {
 					fingerprint: currentFingerprint(),
 					code_target: data.code_target,
 					requirement_ids: data.binding?.bind_needed ? body.requirement_ids : null,
-					preconditions: data.preconditions
+					preconditions: data.preconditions,
+					...profile ? { profile_id: profile.profile_id } : {}
 				};
 				prepared = {
 					fixed,
@@ -36492,7 +36905,10 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 				checksBox.replaceChildren();
 				checksBox.hidden = true;
 				if (!editorInstance.locked()) editorInstance.set("review", "");
-				if ([
+				if (err.code?.startsWith("PM_WORK_PROFILE_")) {
+					await profiles.load();
+					if (!validPreview(ticket, workId)) return;
+				} else if ([
 					401,
 					403,
 					404
@@ -36500,7 +36916,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 				errorStatusBox.replaceChildren(panelErrorBox(err, { within: errorStatusBox }));
 				errorStatusBox.hidden = false;
 			} finally {
-				checking = false;
+				if (checkingTicket === ticket) checking = false;
 				if (validPreview(ticket, workId)) {
 					readinessButton.disabled = false;
 					readinessButton.textContent = t("wst_check_readiness");
@@ -36513,10 +36929,42 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			label: t("wst_options"),
 			body: h("div", { class: "pm-work-start-options" }, h("label", {}, t("wst_model"), model))
 		});
-		const extra = h("div", { class: "pm-work-start-fields" }, bindBox, h("label", {}, t("wst_instruction"), instruction), h("p", { class: "muted" }, t("wst_instruction_help")), h("label", {}, t("wst_agent"), agent), h("label", {}, t("wst_delivery"), delivery), optionsDisclosure, candidatesBox, staleNotice, h("div", { class: "pm-work-start-readiness-action" }, readinessButton), factsBox, checksBox, disabledNotice, errorStatusBox);
-		let editorInstance;
+		profiles = workProfilePicker({
+			t,
+			api,
+			alive,
+			namespace,
+			workspaceId,
+			workId,
+			caps,
+			field: profileInput,
+			request: () => editorInstance,
+			active: () => activeWorkId === workId && Boolean(activeCard),
+			errorBox: panelErrorBox,
+			onChange: (profile, inspect) => {
+				previewSerial++;
+				prepared = null;
+				checking = false;
+				chosenCandidate = null;
+				availableCandidates = null;
+				factsBox.replaceChildren();
+				checksBox.replaceChildren();
+				candidatesBox.replaceChildren();
+				candidatesBox.hidden = true;
+				if (!editorInstance.locked()) editorInstance.set("review", "");
+				if (profile) {
+					editorInstance.set("agent", profile.agent);
+					editorInstance.set("model", profile.model || "");
+					if (profile.delivery_goal) editorInstance.set("delivery", profile.delivery_goal);
+				}
+				editorInstance.update();
+				if (inspect && !loading) inspectReadiness();
+			}
+		});
+		const extra = h("div", { class: "pm-work-start-fields" }, profiles.box, bindBox, h("label", {}, t("wst_instruction"), instruction), h("p", { class: "muted" }, t("wst_instruction_help")), h("label", {}, t("wst_agent"), agent), h("label", {}, t("wst_delivery"), delivery), optionsDisclosure, candidatesBox, staleNotice, h("div", { class: "pm-work-start-readiness-action" }, readinessButton), factsBox, checksBox, disabledNotice, errorStatusBox);
 		const canSubmit = () => {
 			if (!writer(card) || !startable(card) || checking || loading) return false;
+			if (!profiles.verified()) return false;
 			if (!prepared || !reviewInput.value) return false;
 			try {
 				if (!equal$9(JSON.parse(reviewInput.value), prepared.fixed)) return false;
@@ -36525,6 +36973,18 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			}
 			if (currentFingerprint() !== prepared.fixed.fingerprint) return false;
 			return prepared.readinessStatus === "ready";
+		};
+		const updateProfileControls = () => {
+			if (!editorInstance) return;
+			const locked = editorInstance.locked(), released = profileWasLocked && !locked;
+			profileWasLocked = locked;
+			profiles.update();
+			if (selectedProfile()) {
+				agent.disabled = true;
+				model.disabled = true;
+				if (selectedProfile().delivery_goal) delivery.disabled = true;
+			}
+			if (released && selectedProfile()) profiles.load();
 		};
 		editorInstance = form({
 			namespace: `${namespace}.work-start`,
@@ -36543,7 +37003,8 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 				delivery,
 				model,
 				requirements: requirementsInput,
-				review: reviewInput
+				review: reviewInput,
+				profile: profileInput
 			},
 			params: (values) => {
 				if (!canSubmit()) throw Error(t("wst_not_ready_to_start"));
@@ -36555,6 +37016,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 					code_target: rev.code_target
 				};
 				if (rev.requirement_ids) p.requirement_ids = rev.requirement_ids;
+				if (rev.profile_id) p.profile_id = rev.profile_id;
 				if (values.model?.trim()) p.model = values.model.trim();
 				return p;
 			},
@@ -36571,6 +37033,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			errorBox: panelErrorBox,
 			label: "wst_start",
 			onStateChange: () => {
+				updateProfileControls();
 				updateUI();
 			},
 			onSaved: async (result) => {
@@ -36580,6 +37043,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			},
 			onError: (error) => {
 				prepared = null;
+				if (error?.code?.startsWith("PM_WORK_PROFILE_")) profiles.load();
 				if (!editorInstance?.locked()) editorInstance?.set("review", "");
 				refreshAttempts();
 				updateUI();
@@ -36598,6 +37062,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 		const origUpdate = editorInstance.update;
 		editorInstance.update = () => {
 			origUpdate();
+			updateProfileControls();
 			readinessButton.disabled = checking || loading || !writer(card) || editorInstance.locked();
 			updateDisabledNotice();
 			const submitBtn = editorInstance.box.querySelector("button[type=\"submit\"]");
@@ -36610,6 +37075,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 		editorInstance.checkPlanChange = () => buildOrUpdateBindBox(false);
 		editorInstance.checking = () => checking;
 		editorInstance.instructionNode = instruction;
+		editorInstance.profiles = profiles;
 		editors.set(workId, editorInstance);
 		return editorInstance;
 	}
@@ -36647,6 +37113,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 		onStartableChange(startable());
 	}
 	function withdraw() {
+		for (const editor of editors.values()) editor.profiles?.withdraw();
 		workSerial++;
 		previewSerial++;
 		attemptsSerial++;
@@ -36705,15 +37172,20 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 				}
 			}
 			if (!validWork(ticket, card.work_item_id)) return;
-			getEditor(card)?.checkPlanChange();
+			const editor = getEditor(card);
+			editor?.checkPlanChange();
+			await editor?.profiles?.load();
+			if (!validWork(ticket, card.work_item_id)) return;
 			await refreshAttempts();
 		} catch (err) {
 			if (validWork(ticket, card.work_item_id)) statusView.replaceChildren(panelErrorBox(err, { within: statusView }));
 		} finally {
 			if (!sameWork) loading = false;
 			if (validWork(ticket, card.work_item_id)) {
-				editors.get(card.work_item_id)?.update();
+				const editor = editors.get(card.work_item_id);
+				editor?.update();
 				updateUI();
+				editor?.profiles?.focusOnReturn();
 			}
 		}
 	}
@@ -36723,7 +37195,10 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 	}
 	function dispose() {
 		withdraw();
-		for (const ed of editors.values()) ed.dispose();
+		for (const ed of editors.values()) {
+			ed.profiles?.dispose();
+			ed.dispose();
+		}
 		editors.clear();
 	}
 	function focus() {
@@ -65650,6 +66125,11 @@ function openSettings(main, { exclusive = false, refreshButton } = {}) {
 		if (frame.root.isConnected) frame.panel("about").querySelector("[data-build-line]").textContent = buildLine(clientIdentity(diagnosticsClient()), t);
 	}).catch(() => {});
 	main.append(frame.root);
+	const back = connectionReturn(params.get("from"));
+	if (back) frame.panel("connection").append(h("a", {
+		href: back.href,
+		"data-connection-return": ""
+	}, t(back.label)));
 	const connection = {
 		epoch: state.epoch,
 		namespace: state.namespace,

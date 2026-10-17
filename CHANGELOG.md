@@ -2,6 +2,13 @@
 
 ## Next release (unreleased)
 
+- The shared Start work panel can select a saved execution profile without
+  selecting the default automatically. It pins the agent, model and execution
+  location, reviews the current profile revision before starting, and separates
+  stored readiness observations from PM preflight. Setup links return to the
+  same Work and instruction draft. Changed or withdrawn profiles invalidate the
+  review; unresolved starts retain their original request and key.
+
 - Owners can preview one reviewed proposal and start up to ten existing Works
   with `work.adopt_and_start` through the central API/MCP operation service.
   Adoption and individual starts keep separate durable receipts: a refusal
@@ -39,9 +46,13 @@
   commit delivered. It adds no merge, deploy, or session controls on the Result.
   A backend Result entry, which this spec does not add, still has to land first.
 
-- Document the closed-loop screens for adopting and starting selected work, queuing the next instruction on a busy work, and choosing a saved profile in the Start work panel. The screens are specified only; they are not in the Dashboard yet. English and zh-TW copy is in the spec.
+- Document the closed-loop screens for adopting and starting selected work,
+  queuing the next instruction on a busy work, and choosing a saved profile.
+  English and zh-TW copy and implementation differences are recorded in the spec.
 
-- Correct that closed-loop screen spec. A refused adopt-and-start can start a new request once the server marks the refusal, a chosen profile pins the Start work panel, and each selected work's start fields come from the preview. The screens are still specified only.
+- Correct that closed-loop screen spec. A refused adopt-and-start can start a
+  new request once the server marks the refusal, a chosen profile pins the Start
+  work panel, and each selected work's start fields come from the preview.
 
 - Opening a project names that view in the header while the workspace is still
   loading, in English and Traditional Chinese. The view menu stays hidden until

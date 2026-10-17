@@ -1,7 +1,7 @@
 import {workbenchEnabled} from './workbench-mode.js';
 import {workbenchViews} from './workbench-views.js';
 import {settingsAgents} from './settings-agents.js';
-import {actionAllowed, mayStartSession, checkpointReason, dispatchExplanation} from './work-paths.js';
+import {actionAllowed, mayStartSession, checkpointReason, dispatchExplanation, connectionReturn} from './work-paths.js';
 import {buildDiagnostics, clientIdentity, buildLine, errorRing, sessionFacts} from './diagnostics.js';
 import {diagnosticsDialog} from './diagnostics-dialog.js';
 import {dashboardShell} from './shell.js';
@@ -3192,6 +3192,8 @@ function openSettings(main, {exclusive = false, refreshButton} = {}) {
     if(frame.root.isConnected)frame.panel('about').querySelector('[data-build-line]').textContent=buildLine(clientIdentity(diagnosticsClient()),t);
   }).catch(()=>{});
   main.append(frame.root);
+  const back=connectionReturn(params.get('from'));
+  if(back)frame.panel('connection').append(h('a',{href:back.href,'data-connection-return':''},t(back.label)));
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   const agents = settingsAgents({h, t, api, caps: () => state.caps, guard: () => assertView(connection), from: params.get("from")});
   frame.panel("agents").append(agents.root);

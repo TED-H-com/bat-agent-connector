@@ -4,8 +4,10 @@
 
 BAT 工作循環整合在草稿 #251（`integration/bat-work-loop`）；P6 後端在
 草稿 #252（`ux/p6-impl`，以前述整合分支為基底）。採用並開始的共用
-Web／Tauri 畫面由 `ux/e03-adopt-start-ui` 接續，實作與恢復邊界見
-[E03 核對](../design/v1.3-e03-loop-ui.md)。這些分支不改變下文的已合併結論。
+Web／Tauri 畫面在草稿 #253（`ux/e03-adopt-start-ui`）。
+`ux/e01-profile-ui` 接續開始面板的已存設定檔、就緒讀取與返回原工作，
+實作與恢復邊界見 [E03 核對](../design/v1.3-e03-loop-ui.md)。
+這些分支不改變下文的已合併結論。
 
 針對性後端、瀏覽器及 Rust 檢查已有通過紀錄；完整後端檢查曾中斷，
 整合 CI 的 relay 測試修正正在重新驗證，不能宣稱全綠。尚未安裝、

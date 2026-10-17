@@ -13,6 +13,9 @@ test('shared frontend central routes are on the desktop bridge allow-list', () =
     'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work/wi_bbbbbbbbbbbbbbbbbbbb/inputs?limit=50&attempt_id=att_cccccccccccccccccccccccccccccccc pm-work-follow-up.js',
     'POST /operations/op_dddddddddddddddddddddddddddddddd/cancel pm-work-follow-up.js',
     'POST /operations/op_dddddddddddddddddddddddddddddddd/resume pm-work-follow-up.js',
+    'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work-profiles?limit=50 pm-work-profile-picker.js',
+    'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work-profiles/wpf_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa pm-work-profile-picker.js',
+    'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work-profiles/wpf_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/readiness pm-work-profile-picker.js',
   ]) {
     assert.ok(discovered.includes(needle), `discovery missed ${needle}`);
   }

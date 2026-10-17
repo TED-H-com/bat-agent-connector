@@ -2,6 +2,7 @@ import {button, disclosure, statusPill} from './ui/components.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
 import {sessionHref} from './session-navigation.js';
 import {operationStatusLabel} from './global-labels.js';
+import {workProfilePicker} from './pm-work-profile-picker.js';
 
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -311,6 +312,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     }
 
     let checking = false;
+    let checkingTicket = 0;
     let availableCandidates = null;
     let renderedPlanRevision = null;
     let checkboxes = [];
@@ -367,14 +369,24 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     reviewInput.dataset.pmDefault = '';
     reviewInput.value = '';
 
+    const profileInput = h('input', {type:'hidden',value:''});
+    let editorInstance, profiles, profileWasLocked = false;
+    const selectedProfile = () => profiles?.selected();
+    const selectedTarget = () => {
+      const profile=selectedProfile();
+      return profile?{repository:profile.repository,host:profile.host,workspace_id:profile.workspace_id}:chosenCandidate;
+    };
+
     const currentFingerprint = () => {
       const reqs = isBindNeeded(activeCard) ? JSON.parse(requirementsInput.value || '[]') : null;
-      const targetChoice = chosenCandidate ? `${chosenCandidate.repository}:${chosenCandidate.host}:${chosenCandidate.workspace_id}` : null;
+      const target=selectedTarget(),profile=selectedProfile();
+      const targetChoice = target ? `${target.repository}:${target.host}:${target.workspace_id}` : null;
       return JSON.stringify({
         instruction: instruction.value,
         delivery: delivery.value,
         requirement_ids: reqs,
         target_choice: targetChoice,
+        ...(profile?{profile_id:profile.profile_id,profile_revision:profile.revision,agent:agent.value,model:model.value}:{}),
       });
     };
 
@@ -579,6 +591,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         return;
       }
       const ticket = ++previewSerial;
+      checkingTicket = ticket;
       const workId = card.work_item_id;
       checking = true;
       factsBox.replaceChildren();
@@ -604,12 +617,16 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
           }
           body.requirement_ids = reqs;
         }
-        if (chosenCandidate) {
-          body.code_target = chosenCandidate;
+        const profile=selectedProfile();
+        if (selectedTarget()) {
+          body.code_target = selectedTarget();
         }
+        if(profile){body.profile_id=profile.profile_id;body.profile_revision=profile.revision;}
+        const fingerprint=currentFingerprint();
 
         const data = await api('POST', `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${encodeURIComponent(card.work_item_id)}/start-preview`, body);
         if (!validPreview(ticket, workId)) return;
+        if(fingerprint!==currentFingerprint()){prepared=null;staleNotice.hidden=false;return;}
 
         if (data.workspace_id !== workspaceId || data.work_item_id !== card.work_item_id) {
           throw Error(t('wst_invalid_preview'));
@@ -619,6 +636,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         if (!data.code_target) {
           prepared = null;
           if (!editorInstance.locked()) editorInstance.set('review', '');
+          if(profile){candidatesBox.replaceChildren();candidatesBox.hidden=true;throw Error(t('wpf_mismatch'));}
           const candidates = data.candidates || [];
           availableCandidates = candidates;
           if (candidates.length === 0) {
@@ -633,7 +651,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         }
 
         // Code target present - validate preview
-        if (availableCandidates && availableCandidates.length > 1) {
+        if (!profile && availableCandidates && availableCandidates.length > 1) {
           const chosenKey = data.code_target ? `${data.code_target.repository}:${data.code_target.host}:${data.code_target.workspace_id}` : null;
           candidatesBox.replaceChildren(renderCandidateSelector(availableCandidates, chosenKey, false));
           candidatesBox.hidden = false;
@@ -649,9 +667,12 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         }
 
         const pKeys = Object.keys(data.preconditions || {});
-        if (pKeys.length !== 10 || !PRECONDITION_KEYS.every(k => k in (data.preconditions || {}))) {
+        const expectedKeys=profile?[...PRECONDITION_KEYS,'expected_profile_revision','expected_profile_digest']:PRECONDITION_KEYS;
+        if (pKeys.length !== expectedKeys.length || !expectedKeys.every(k => k in (data.preconditions || {}))) {
           throw Error(t('wst_invalid_preview'));
         }
+        if(profile&&(data.preconditions.expected_profile_revision!==profile.revision||data.preconditions.expected_profile_digest!==profile.digest
+          ||['repository','host','workspace_id'].some(key=>data.code_target[key]!==profile[key])))throw Error(t('wpf_mismatch'));
 
         if (!['ready', 'blocked'].includes(data.readiness?.status)) {
           throw Error(t('wst_invalid_preview'));
@@ -664,6 +685,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
           code_target: data.code_target,
           requirement_ids: data.binding?.bind_needed ? body.requirement_ids : null,
           preconditions: data.preconditions,
+          ...(profile?{profile_id:profile.profile_id}:{}),
         };
         prepared = {
           fixed,
@@ -730,13 +752,16 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         if (!editorInstance.locked()) {
           editorInstance.set('review', '');
         }
-        if ([401, 403, 404].includes(err.status)) {
+        if (err.code?.startsWith('PM_WORK_PROFILE_')) {
+          await profiles.load();
+          if (!validPreview(ticket, workId)) return;
+        } else if ([401, 403, 404].includes(err.status)) {
           withdraw();
         }
         errorStatusBox.replaceChildren(panelErrorBox(err, {within: errorStatusBox}));
         errorStatusBox.hidden = false;
       } finally {
-        checking = false;
+        if (checkingTicket === ticket) checking = false;
         if (validPreview(ticket, workId)) {
           readinessButton.disabled = false;
           readinessButton.textContent = t('wst_check_readiness');
@@ -753,7 +778,17 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       ),
     });
 
+    profiles=workProfilePicker({t,api,alive,namespace,workspaceId,workId,caps,field:profileInput,request:()=>editorInstance,
+      active:()=>activeWorkId===workId&&Boolean(activeCard),errorBox:panelErrorBox,
+      onChange:(profile,inspect)=>{
+        previewSerial++;prepared=null;checking=false;chosenCandidate=null;availableCandidates=null;
+        factsBox.replaceChildren();checksBox.replaceChildren();candidatesBox.replaceChildren();candidatesBox.hidden=true;
+        if(!editorInstance.locked())editorInstance.set('review','');
+        if(profile){editorInstance.set('agent',profile.agent);editorInstance.set('model',profile.model||'');if(profile.delivery_goal)editorInstance.set('delivery',profile.delivery_goal);}
+        editorInstance.update();if(inspect&&!loading)void inspectReadiness();
+      }});
     const extra = h('div', {class: 'pm-work-start-fields'},
+      profiles.box,
       bindBox,
       h('label', {}, t('wst_instruction'), instruction),
       h('p', {class: 'muted'}, t('wst_instruction_help')),
@@ -769,9 +804,9 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       errorStatusBox,
     );
 
-    let editorInstance;
     const canSubmit = () => {
       if (!writer(card) || !startable(card) || checking || loading) return false;
+      if (!profiles.verified()) return false;
       if (!prepared || !reviewInput.value) return false;
       try {
         if (!equal(JSON.parse(reviewInput.value), prepared.fixed)) return false;
@@ -780,6 +815,21 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       }
       if (currentFingerprint() !== prepared.fixed.fingerprint) return false;
       return prepared.readinessStatus === 'ready';
+    };
+
+    const updateProfileControls = () => {
+      if (!editorInstance) return;
+      const locked = editorInstance.locked(), released = profileWasLocked && !locked;
+      profileWasLocked = locked;
+      profiles.update();
+      if (selectedProfile()) {
+        agent.disabled = true;
+        model.disabled = true;
+        if (selectedProfile().delivery_goal) delivery.disabled = true;
+      }
+      // The original request keeps its original revision. Once the durable
+      // form explicitly releases it, refresh the selection before a new review.
+      if (released && selectedProfile()) void profiles.load();
     };
 
     editorInstance = form({
@@ -797,6 +847,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         model,
         requirements: requirementsInput,
         review: reviewInput,
+        profile: profileInput,
       },
       params: values => {
         if (!canSubmit()) {
@@ -812,6 +863,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         if (rev.requirement_ids) {
           p.requirement_ids = rev.requirement_ids;
         }
+        if(rev.profile_id)p.profile_id=rev.profile_id;
         if (values.model?.trim()) {
           p.model = values.model.trim();
         }
@@ -830,6 +882,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       errorBox: panelErrorBox,
       label: 'wst_start',
       onStateChange: () => {
+        updateProfileControls();
         updateUI();
       },
       onSaved: async result => {
@@ -839,6 +892,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       },
       onError: error => {
         prepared = null;
+        if(error?.code?.startsWith('PM_WORK_PROFILE_'))void profiles.load();
         if (!editorInstance?.locked()) {
           editorInstance?.set('review', '');
         }
@@ -860,6 +914,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     const origUpdate = editorInstance.update;
     editorInstance.update = () => {
       origUpdate();
+      updateProfileControls();
       readinessButton.disabled = checking || loading || !writer(card) || editorInstance.locked();
       updateDisabledNotice();
       const submitBtn = editorInstance.box.querySelector('button[type="submit"]');
@@ -876,6 +931,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     editorInstance.checkPlanChange = () => buildOrUpdateBindBox(false);
     editorInstance.checking = () => checking;
     editorInstance.instructionNode = instruction;
+    editorInstance.profiles = profiles;
 
     editors.set(workId, editorInstance);
     return editorInstance;
@@ -926,6 +982,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
   }
 
   function withdraw() {
+    for(const editor of editors.values())editor.profiles?.withdraw();
     workSerial++;
     previewSerial++;
     attemptsSerial++;
@@ -996,6 +1053,9 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       const editor = getEditor(card);
       editor?.checkPlanChange();
 
+      await editor?.profiles?.load();
+      if (!validWork(ticket, card.work_item_id)) return;
+
       await refreshAttempts();
     } catch (err) {
       if (validWork(ticket, card.work_item_id)) {
@@ -1009,6 +1069,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         const editor = editors.get(card.work_item_id);
         editor?.update();
         updateUI();
+        editor?.profiles?.focusOnReturn();
       }
     }
   }
@@ -1021,6 +1082,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
   function dispose() {
     withdraw();
     for (const ed of editors.values()) {
+      ed.profiles?.dispose();
       ed.dispose();
     }
     editors.clear();

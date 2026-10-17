@@ -1,4 +1,5 @@
 import {adoptStartStrings} from './pm-adopt-start-strings.js';
+import {workProfileStrings} from './pm-work-profile-strings.js';
 import {workbenchStrings} from './workbench-strings.js';
 import {workPathsStrings} from './work-paths-strings.js';
 import {diagnosticsStrings} from './diagnostics-strings.js';
@@ -36,6 +37,7 @@ export const STRINGS = {
     ...workbenchStrings["zh-TW"],
     ...diagnosticsStrings["zh-TW"],
     ...workStartStrings["zh-TW"],
+    ...workProfileStrings["zh-TW"],
     ...workResultStrings["zh-TW"],
     ...workFollowUpStrings["zh-TW"],
     ...workPublishStrings["zh-TW"],
@@ -1066,6 +1068,7 @@ export const STRINGS = {
     ...workbenchStrings.en,
     ...diagnosticsStrings.en,
     ...workStartStrings.en,
+    ...workProfileStrings.en,
     ...workResultStrings.en,
     ...workFollowUpStrings.en,
     ...workPublishStrings.en,
