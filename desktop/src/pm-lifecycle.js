@@ -1,4 +1,5 @@
 import {nativeRunState} from './pm-native-analysis.js';
+import {retiredView, viewLeft} from './pm-retired.js';
 import {actionLabel, operationStatusLabel} from './global-labels.js';
 import {emptyState, skeleton} from './ui/components.js';
 import {phaseVocabulary} from './ui/ui-strings.js';
@@ -142,7 +143,7 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
       const page=await api('GET',`${endpoint}/inflight?transition_id=${current.lifecycle.transition_id}&after=${after}&limit=20`);alive();if(ticket!==serial)return;
       verifyRows(page,after);const ids=new Set(rows.map(row=>row.operation_id));if(page.inflight.some(row=>ids.has(row.operation_id)))throw Error(t('pm_scope_mismatch'));
       rows.push(...page.inflight);cursor=page.next_cursor;workFiltered||=Boolean(page.visibility_filtered);renderWork();notify();
-    }catch(error){if(ticket===serial)unavailable(error);}
+    }catch(error){if(retiredView(error)||viewLeft(alive))return;if(ticket===serial)unavailable(error);}
   }
   function render(){
     const state=current.lifecycle,stopped=['paused','closed'].includes(state.stage);
@@ -180,7 +181,7 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
         verifyRows(page,0);rows=page.inflight;cursor=page.next_cursor;workFiltered=Boolean(page.visibility_filtered);
       }
       ready=true;status.replaceChildren();render();if(history.open)await loadHistory();
-    }catch(error){if(ticket===serial)unavailable(error);}
+    }catch(error){if(retiredView(error)||viewLeft(alive))return;if(ticket===serial)unavailable(error);}
   }
   async function loadHistory(after=0){
     if(!current||historyRequest===serial)return;const ticket=serial;historyRequest=ticket;
@@ -198,13 +199,13 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
           try{const original=checkScope(await api('GET',`${endpoint}/transitions/${row.transition_id}`));alive();if(ticket!==serial||!detail.isConnected)return;
             if(original.transition?.transition_id!==row.transition_id)throw Error(t('pm_scope_mismatch'));
             detail.append(h('pre',{class:'pm-brief-proof'},JSON.stringify(original.transition,null,2)));
-          }catch(error){if(ticket===serial)unavailable(error);}
+          }catch(error){if(retiredView(error)||viewLeft(alive))return;if(ticket===serial)unavailable(error);}
         });historyBody.append(detail);
       }
       historyLoaded=true;historyCursor=page.next_cursor;
       if(historyCursor!==null)historyBody.append(h('button',{type:'button',class:'secondary',onclick:()=>void loadHistory(historyCursor)},t('pm_lifecycle_more_history')));
       if(page.visibility_filtered)historyBody.append(h('p',{class:'muted'},t('pm_lifecycle_filtered')));
-    }catch(error){if(ticket===serial)unavailable(error);}
+    }catch(error){if(retiredView(error)||viewLeft(alive))return;if(ticket===serial)unavailable(error);}
     finally{if(historyRequest===ticket)historyRequest=null;}
   }
   history.addEventListener('toggle',()=>{if(history.open&&!historyLoaded)void loadHistory();});

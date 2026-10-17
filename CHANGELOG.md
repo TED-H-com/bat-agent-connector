@@ -4,6 +4,41 @@
 
 - A Board that was already left no longer clears another project's selected Work when its own read fails.
 
+- A read from the overview brief, lifecycle, meetings, follow-up, sprints,
+  governance, roadmap, evidence, a review candidate, or a worktree preview
+  that fails or finishes after that project view was left does not mark the
+  next view's update as failed or pause actions. Closing the view withdraws
+  an open plan proposal before that update. The board refresh is unchanged.
+  An error while that project view is still open, including a source outage
+  or a lost network, still stops its update.
+
+- Fleet: keyboard focus stays on the control you are using while a status
+  refresh or your own action runs. The control looks unavailable until that
+  work finishes, a second press is ignored, and a background refresh stays quiet.
+
+- Choosing a file does not show Retry while that first upload runs. Retry appears
+  after the upload fails, and pressing it keeps the button until the retry finishes.
+
+- Sending a message, uploading or paging attachments, and starting or recording a
+  checkpoint keep keyboard focus on the control that is working. The control looks
+  unavailable until that work finishes, and pressing it again does nothing. A
+  finished upload moves focus to that file's role or Remove. Starting agent work
+  from a work item moves focus to the new operation.
+
+- Artifact review keeps keyboard focus on the button you pressed while a
+  preview, save, review, execution page, source reload, catalog page, or file
+  read is in progress. That button looks unavailable and a second press is
+  ignored. A button that cannot be used stays unavailable, including during a
+  poll or a save. When the pressed button closes, focus moves to Check
+  original operations, Capture another file, Record another review, the
+  execution list, or the review text, and only while focus is still on that
+  button.
+
+- Capture a remote file: the button you pressed keeps keyboard focus and
+  ignores a second press until that preview or save finishes. A button that
+  cannot be used stays unavailable. When Save closes, or Capture another file
+  starts over, focus moves to the next available control.
+
 - The hidden Board and Requirements scroll checks wait for the read the test held, so a second read of the same address cannot make that wait miss.
 
 - Projects and work items: Tab reaches Add while a creation request is sending,

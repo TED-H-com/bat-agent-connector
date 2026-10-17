@@ -52,7 +52,7 @@ export function attentionFixture() {
 }
 
 export async function mountAttention(page: Page, native: boolean, fixture: ReturnType<typeof attentionFixture>,
-  dispatch = fixture.dispatch) {
+  dispatch: (input: any) => Promise<any> = fixture.dispatch) {
   if (native) {
     await page.exposeFunction('attentionConnector', dispatch);
     await page.addInitScript(c => Object.assign(window, {isTauri: true, __TAURI_INTERNALS__: {
@@ -72,6 +72,9 @@ export async function mountAttention(page: Page, native: boolean, fixture: Retur
       body: req.postData() ? req.postDataJSON() : null, idempotency_key: req.headers()['idempotency-key']});
     // A held read can name itself with a response header. Playwright drops the JSON
     // content type when headers are replaced, so put it back with the marker.
+
+    // A rejected fixture read is a real failed fetch. The dashboard then reports NETWORK_ERROR.
+    if (result?.abort) {await route.abort('failed'); return;}
     const fulfill: {status: number, json: unknown, headers?: Record<string, string>} = {status: result.status, json: result.data};
     if (result.headers) fulfill.headers = {'content-type': 'application/json', ...result.headers};
     await route.fulfill(fulfill);

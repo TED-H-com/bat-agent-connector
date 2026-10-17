@@ -641,7 +641,12 @@ on narrow screens. Explicit destinations cancel queued scroll restoration; revis
 a view restores its own scroll. Board and Requirements record their scroll position before
 a view switch hides them or on route departure (including during in-flight reads). The restore
 waits until the workspace header has settled. A hidden view, or a view retired before its mount
-finished, never moves the window. Unassigned
+finished, never moves the window. A read from the overview brief, lifecycle, meetings,
+follow-up, sprints, governance, roadmap, evidence, a review candidate, or a worktree preview
+that fails or finishes after that project view was left does not mark the next view's update
+as failed or pause its actions. Closing the view withdraws an open plan proposal before that
+update. The board refresh is unchanged until its own fix. An error in the project view that
+is still open, including a source outage or a lost network, still stops that update. Unassigned
 work remains selectable before plan adoption. Preferences are bounded by connection/principal and workspace; fetched
 facts are reauthorized, never stored in the preference map.
 
@@ -1023,7 +1028,12 @@ out-of-sync observations, and managed failure or attention states. Unloaded tabs
 stay quiet and say Not open in BAT / BAT 中未開啟 in Details; loaded tabs with no
 reported activity say BAT did not report activity / BAT 未回報活動狀態 there.
 A manual or unconfirmed session has one Read-only line and no send, answer, or
-interrupt control. Details label Session ID / 工作階段 ID and Workspace / 工作區
+interrupt control. Capture a remote file, on that session or beside an attachment
+draft, keeps the pressed button focusable while its preview or save is in
+progress. That button looks unavailable and a second press does nothing. A
+button that cannot be used stays unavailable. When Save closes, or Capture
+another file starts over, focus moves to the next available control. A reply
+that arrives after the panel is gone does not move focus. Details label Session ID / 工作階段 ID and Workspace / 工作區
 and show each observed time once, formatted with the shared time stamp.
 On mobile, the Session title and metadata use the full header width, with actions
 on the next row. Wider fonts must not turn the title into a tall narrow column

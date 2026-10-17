@@ -17439,6 +17439,21 @@ function savedFilter(value) {
 		value: ""
 	};
 }
+//#endregion
+//#region src/pm-retired.js
+var retiredView = (error) => [
+	"VIEW_CHANGED",
+	"CONNECTION_CHANGED",
+	"PM_DISPOSED"
+].includes(error.code);
+var viewLeft = (alive) => {
+	try {
+		alive();
+		return false;
+	} catch (error) {
+		return retiredView(error);
+	}
+};
 var init_tslib_es6 = __esmMin((() => {}));
 async function invoke(cmd, args = {}, options) {
 	return window.__TAURI_INTERNALS__.invoke(cmd, args, options);
@@ -17937,6 +17952,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 					alive();
 					if (ticket === serial) render(data);
 				} catch (error) {
+					if (retiredView(error) || viewLeft(alive)) return;
 					if (ticket === serial) unavailable(error);
 				}
 			}
@@ -17993,6 +18009,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 			}
 			create.update();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -26686,6 +26703,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 				if (selection) focused.setSelectionRange(...selection);
 			}
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -29193,6 +29211,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 			renderWork();
 			notify();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -29280,6 +29299,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 			render();
 			if (history.open) await loadHistory();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -29309,6 +29329,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 						if (original.transition?.transition_id !== row.transition_id) throw Error(t("pm_scope_mismatch"));
 						detail.append(h("pre", { class: "pm-brief-proof" }, JSON.stringify(original.transition, null, 2)));
 					} catch (error) {
+						if (retiredView(error) || viewLeft(alive)) return;
 						if (ticket === serial) unavailable(error);
 					}
 				});
@@ -29323,6 +29344,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 			}, t("pm_lifecycle_more_history")));
 			if (page.visibility_filtered) historyBody.append(h("p", { class: "muted" }, t("pm_lifecycle_filtered")));
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		} finally {
 			if (historyRequest === ticket) historyRequest = null;
@@ -30037,6 +30059,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 			render(row);
 			status.replaceChildren();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error);
 		}
 	}
@@ -30052,6 +30075,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 			next = data.next_cursor;
 			navigation();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error.message === t("pm_fa_mismatch") ? Error(t("pm_fa_read_failed")) : error);
 		} finally {
 			if (ticket === serial) {
@@ -30076,6 +30100,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 			if (selected) await read(selected);
 			else if (rows.length) detail.append(note("pm_fa_select"));
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error.message === t("pm_fa_mismatch") ? Error(t("pm_fa_read_failed")) : error);
 		}
 	}
@@ -30305,6 +30330,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 			body.append(warning, rebase, request.box);
 			request.update();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error);
 		}
 	}
@@ -30318,6 +30344,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 			next = data.next_cursor;
 			await readThread();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error);
 		}
 	}
@@ -30341,6 +30368,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 				await readThreads();
 			}
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error);
 		}
 	}
@@ -30727,6 +30755,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			renderNavigation();
 			editor.update();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		} finally {
 			if (ticket === serial) {
@@ -30768,6 +30797,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			sourceStatus.replaceChildren(snapshot && !snapshot.baseline?.document ? note("pm_fu_accepted_required") : note("pm_fu_source_help"));
 			editor.update();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial && sourceTicket === sourceSerial) unavailable(error);
 		}
 	}
@@ -30926,6 +30956,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			renderSourceChoices();
 			return true;
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return false;
 			if (ticket === serial) unavailable(error);
 			return false;
 		}
@@ -31025,6 +31056,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			editor.update();
 			if (prepareOpen) await loadSources();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -32145,6 +32177,7 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 				if (selection) focused.setSelectionRange(...selection);
 			}
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -36379,6 +36412,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 				if (selection) focused.setSelectionRange(...selection);
 			}
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -37709,6 +37743,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 						const doc = value.revision.document;
 						content.replaceChildren(h("p", {}, doc.rationale || t(doc.milestones?.some((row) => row.actual?.quality) ? "pm_roadmap_quality_fixed" : "pm_roadmap_quality_unknown")), h("pre", { class: "pm-brief-proof" }, JSON.stringify(value.revision, null, 2)));
 					} catch (error) {
+						if (retiredView(error) || viewLeft(alive)) return;
 						content.replaceChildren(errorBox(error, { within: content }));
 						fetched = false;
 					}
@@ -37870,6 +37905,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 				if (history.open) loadHistory();
 			}
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) {
 				current = null;
 				signature = "";
@@ -38426,6 +38462,7 @@ function reviewCandidateToIdea({ h, t, api, alive, workspaceId, caps, can, form,
 			body.append(thread.thread.mode !== "idea" ? h("p", { class: "muted" }, t("pmrv_idea_only")) : "", request.box, warning, rebase, h("a", { href: `#/pm/${workspaceId}/${selected}` }, t("pmrv_idea_open")));
 			sync();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (n === ticket && !dead) {
 				thread = null;
 				body.replaceChildren();
@@ -38452,6 +38489,7 @@ function reviewCandidateToIdea({ h, t, api, alive, workspaceId, caps, can, form,
 			if (!rows.some((row) => row.mode === "idea") && !selected) status.replaceChildren(emptyState({ title: t("pmrv_idea_empty") }));
 			if (selected && !more) await choose();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (n === ticket && !dead) {
 				thread = null;
 				request?.update();
@@ -42342,6 +42380,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 				}));
 			}
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === generation) {
 				rows.replaceChildren();
 				active = null;
@@ -42387,6 +42426,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 			selected = choose.value;
 			await loadProject();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === generation) {
 				rows.replaceChildren();
 				active = null;
@@ -42453,6 +42493,7 @@ function pmWorktreeChoice({ h, t, api, alive, input, labelled, capability, scope
 				}));
 				renderProof();
 			} catch (error) {
+				if (retiredView(error) || viewLeft(alive)) return;
 				if (ticket === sequence) proof.replaceChildren(errorBox(error, { within: proof }));
 			} finally {
 				if (ticket === sequence) {
@@ -42537,11 +42578,6 @@ function pmWorktreeChoice({ h, t, api, alive, input, labelled, capability, scope
 //#endregion
 //#region src/pm-workspace.js
 var same$3 = (a, b) => a === b || a && b && typeof a === "object" && typeof b === "object" && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((key) => Object.hasOwn(b, key) && same$3(a[key], b[key]));
-var retired = (error) => [
-	"VIEW_CHANGED",
-	"CONNECTION_CHANGED",
-	"PM_DISPOSED"
-].includes(error.code);
 var receiptSubscribers = new Map();
 var formConnectionTag = "batc-pm-form-connection";
 if (!customElements.get(formConnectionTag)) customElements.define(formConnectionTag, class extends HTMLElement {
@@ -42660,7 +42696,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				receipt.replaceChildren();
 				update();
 			} catch (error) {
-				if (!retired(error)) status.replaceChildren(errorBox(error, { within: status }));
+				if (!retiredView(error)) status.replaceChildren(errorBox(error, { within: status }));
 			}
 		}
 	}, t("pm_edit_request"));
@@ -42839,7 +42875,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			} catch {
 				return;
 			}
-			if (!retired(error)) {
+			if (!retiredView(error)) {
 				if (firstAttempt && error.admissionRefused === true && !saved.intent?.operation_id) {
 					saved.intent.initialAdmissionRefused = true;
 					try {
@@ -45246,7 +45282,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					if (value.plan?.workspace_id !== workspaceId || value.plan.revision_id !== adoptionRef[1] || typeof value.plan.document?.title !== "string" || !Number.isSafeInteger(value.plan.sequence)) throw Error(t("pm_scope_mismatch"));
 					caption.textContent = value.plan.document.title + " · " + t("pm_revision_number", { number: value.plan.sequence });
 				} catch (error) {
-					if (!item.isConnected || retired(error)) return;
+					if (!item.isConnected || retiredView(error)) return;
 					if ([403, 404].includes(error.status)) item.remove();
 					else detail.replaceChildren(errorBox(error, { within: detail }));
 				}
@@ -45271,7 +45307,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					if (context.coverage?.omitted_message_ids?.length || context.coverage?.omitted_input_ids?.length || context.coverage?.messages_truncated || context.coverage?.inputs_truncated) detail.append(h("p", { class: "muted" }, t("pm_partial")));
 					fetched = true;
 				} catch (error) {
-					if (!retired(error) && item.isConnected) detail.replaceChildren(errorBox(error, { within: detail }));
+					if (!retiredView(error) && item.isConnected) detail.replaceChildren(errorBox(error, { within: detail }));
 				} finally {
 					pending = false;
 				}
@@ -45295,7 +45331,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						more.remove();
 						renderPackages(next, true);
 					} catch (error) {
-						if (!retired(error)) {
+						if (!retiredView(error)) {
 							status.replaceChildren(errorBox(error, { within: status }));
 							more.disabled = false;
 						}
@@ -45322,7 +45358,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			historyExpanded = true;
 			renderThread(data);
 		} catch (error) {
-			if (!retired(error) && ticket === sequence) {
+			if (!retiredView(error) && ticket === sequence) {
 				loaded = false;
 				lastThreadList = null;
 				workspace = null;
@@ -45684,7 +45720,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				nativeAnalysis?.recheck();
 			}
 		} catch (error) {
-			if (!retired(error) && ticket === sequence) {
+			if (!retiredView(error) && ticket === sequence) {
 				loaded = false;
 				workspace = null;
 				threadData = null;
@@ -51046,7 +51082,7 @@ async function mountFleetDesktop(main, { h, t }) {
 	panel.append(h("h2", {}, t("fleet_desktop_title")), h("p", { class: "muted" }, t("fleet_independent")), content, message);
 	if (!main.isConnected) return () => {};
 	main.append(panel);
-	let disposed = false, busy = false, readable = false, snapshot, draft, binding, choicePreview, launch, migration, timer;
+	let disposed = false, busy = false, readable = false, snapshot, draft, binding, choicePreview, launch, migration, timer, pressed = null;
 	let backend = "rust", autostart = false;
 	const alive = () => !disposed && panel.isConnected;
 	const key = () => `batc.desktop.fleet.controls.${binding}`;
@@ -51091,7 +51127,7 @@ async function mountFleetDesktop(main, { h, t }) {
 			}));
 		} catch {}
 	};
-	const enabled = () => readable && !busy && snapshot?.configuration.valid && !snapshot.pending_migration && (snapshot.monitor.state === "stopped" || snapshot.monitor.controllable);
+	const canEnable = () => readable && snapshot?.configuration.valid && !snapshot.pending_migration && (snapshot.monitor.state === "stopped" || snapshot.monitor.controllable);
 	const stale = () => draft && (draft.revision !== snapshot.selection.revision || draft.epoch !== snapshot.monitor.epoch);
 	const discardPreview = () => {
 		if (choicePreview) fleetControl({
@@ -51101,7 +51137,7 @@ async function mountFleetDesktop(main, { h, t }) {
 		choicePreview = null;
 	};
 	const edit = (field, value) => {
-		if (!enabled() || stale()) return;
+		if (busy || !canEnable() || stale()) return;
 		discardPreview();
 		draft ||= {
 			...choices(snapshot.selection),
@@ -51160,18 +51196,20 @@ async function mountFleetDesktop(main, { h, t }) {
 			save();
 		}
 	};
-	const run = async (fn) => {
+	const run = async (fn, quiet = false, action = null) => {
 		if (!alive() || busy) return;
+		if (action) pressed = action;
 		busy = true;
-		message.textContent = t("fleet_working");
+		if (!quiet) message.textContent = t("fleet_working");
 		render();
 		try {
 			await fn();
-			if (alive()) message.textContent = "";
+			if (alive() && !quiet) message.textContent = "";
 		} catch (error) {
 			if (alive()) message.textContent = `${t("fleet_unknown")} ${String(error)}`;
 		} finally {
 			busy = false;
+			pressed = null;
 			if (alive()) {
 				save();
 				render();
@@ -51214,7 +51252,7 @@ async function mountFleetDesktop(main, { h, t }) {
 			if (!validId(value.preview_id) || !equivalent(value.summary?.choices, draft)) throw new Error(t("fleet_unknown"));
 			choicePreview = value;
 		}
-	});
+	}, false, "choices");
 	const launchApply = () => run(async () => {
 		launch.attempted = true;
 		save();
@@ -51223,23 +51261,96 @@ async function mountFleetDesktop(main, { h, t }) {
 			preview_id: launch.preview_id
 		});
 		if (alive()) acceptLaunch(value);
-	});
+	}, false, "launch");
 	const label = (id) => id === "default" ? t("fleet_local_bat") : snapshot.profiles.find((row) => row.id === id)?.label || snapshot.configuration.connections.find((row) => row.name === id)?.label || id;
+	const gate = (blocked, action) => busy && action && pressed === action ? { "aria-disabled": "true" } : blocked ? { disabled: true } : busy ? { "aria-disabled": "true" } : {};
+	const focusKeys = [
+		"data-fleet-action",
+		"data-fleet-choice",
+		"data-fleet-login",
+		"data-fleet-autostart",
+		"data-fleet-backend"
+	];
+	const focusKey = (node) => {
+		for (let current = node; current && current !== panel; current = current.parentElement) for (const attr of focusKeys) if (current.hasAttribute?.(attr)) return [attr, current.getAttribute(attr)];
+		return null;
+	};
+	const controlByKey = (key) => {
+		if (!key) return null;
+		for (const node of content.querySelectorAll("button, input, select")) if (node.getAttribute(key[0]) === key[1]) return node;
+		return null;
+	};
+	const groups = [
+		["start", "quit"],
+		[
+			"choices",
+			"use-current",
+			"refresh"
+		],
+		[
+			"review-launch",
+			"launch",
+			"refresh-launch",
+			"new-launch",
+			"cancel-launch"
+		],
+		[
+			"review-migration",
+			"apply-migration",
+			"continue-migration",
+			"refresh-migration",
+			"retry-migration",
+			"new-migration",
+			"cancel-migration",
+			"restore-migration"
+		]
+	];
+	const successor = (key) => {
+		if (key?.[0] === "data-fleet-action") {
+			const group = groups.find((items) => items.includes(key[1]));
+			if (group) for (const candidate of group.slice(group.indexOf(key[1]) + 1)) {
+				const node = controlByKey(["data-fleet-action", candidate]);
+				if (node && !node.disabled && node.getAttribute("aria-disabled") !== "true") return node;
+			}
+		}
+		message.tabIndex = -1;
+		return message;
+	};
 	const render = () => {
 		if (!alive() || !snapshot) return;
-		const focus = document.activeElement?.dataset?.fleetChoice;
+		const previous = panel.contains(document.activeElement) ? focusKey(document.activeElement) : null;
 		const selected = draft || snapshot.selection, ready = new Map([...snapshot.readiness.hosts, snapshot.readiness.connector].filter(Boolean).map((row) => [row.name, row]));
-		const checkbox = (field, id, text) => h("label", { class: "fleet-choice" }, h("input", {
-			type: "checkbox",
-			checked: field === "dashboard" ? selected.dashboard : selected[field].includes(id),
-			"data-fleet-choice": field + ":" + id,
-			disabled: !enabled() || !!stale(),
-			onchange: (e) => edit(field, field === "dashboard" ? e.target.checked : e.target.checked ? [...selected[field], id] : selected[field].filter((v) => v !== id))
-		}), " ", text);
-		const button = (text, fn, disabled = false, primary = false) => h("button", {
+		const checkbox = (field, id, text) => {
+			const checked = field === "dashboard" ? selected.dashboard : selected[field].includes(id);
+			const blocked = !canEnable() || !!stale();
+			return h("label", { class: "fleet-choice" }, h("input", {
+				type: "checkbox",
+				checked,
+				...gate(blocked),
+				"data-fleet-choice": field + ":" + id,
+				onkeydown: (event) => {
+					if (busy && event.key === " ") event.preventDefault();
+				},
+				onclick: (event) => {
+					if (busy) event.preventDefault();
+				},
+				onchange: (event) => {
+					if (busy || blocked) {
+						event.target.checked = checked;
+						return;
+					}
+					edit(field, field === "dashboard" ? event.target.checked : event.target.checked ? [...selected[field], id] : selected[field].filter((value) => value !== id));
+				}
+			}), " ", text);
+		};
+		const button = (action, text, fn, blocked = false, primary = false) => h("button", {
 			class: primary ? "primary" : "secondary",
-			disabled: busy || disabled,
-			onclick: fn
+			...gate(blocked, action),
+			"data-fleet-action": action,
+			onclick: () => {
+				if (busy || blocked) return;
+				fn();
+			}
 		}, t(text));
 		const fields = [
 			h("p", { "data-fleet-current-backend": true }, t("delivery_fleet_current_backend", { backend: t(["rust", "powershell"].includes(snapshot.backend) ? "fleet_backend_" + snapshot.backend : "obs_unknown") })),
@@ -51247,20 +51358,20 @@ async function mountFleetDesktop(main, { h, t }) {
 			h("p", {}, t("fleet_monitor_" + snapshot.monitor.state), " · ", t("fleet_" + snapshot.readiness.state)),
 			snapshot.monitor.state === "running" && !snapshot.monitor.controllable ? h("p", { class: "note" }, t("fleet_other_owner")) : null,
 			snapshot.login_launch ? h("p", { class: "note" }, t("fleet_login_" + snapshot.login_launch.state), snapshot.login_launch.code ? ` (${snapshot.login_launch.code})` : null) : null,
-			h("div", { class: "actions" }, button("fleet_start", () => run(async () => {
+			h("div", { class: "actions" }, button("start", "fleet_start", () => run(async () => {
 				await fleetRequest({
 					action: "ensure_monitor",
 					expected_configuration_binding: binding
 				});
 				await read();
-			}), !enabled() || !!draft || snapshot.monitor.state !== "stopped"), button("fleet_quit", () => run(async () => {
+			}, false, "start"), !canEnable() || !!draft || snapshot.monitor.state !== "stopped"), button("quit", "fleet_quit", () => run(async () => {
 				await fleetRequest({
 					action: "quit_owned",
 					expected_configuration_binding: binding,
 					expected_monitor_epoch: snapshot.monitor.epoch
 				});
 				await read();
-			}), !enabled() || !!draft || !snapshot.monitor.controllable)),
+			}, false, "quit"), !canEnable() || !!draft || !snapshot.monitor.controllable)),
 			h("h3", {}, t("fleet_connections")),
 			h("div", { class: "fleet-options" }, ...snapshot.configuration.connections.map((row) => h("div", { class: "row" }, h("div", { class: "grow" }, checkbox("connections", row.name, row.label)), h("span", { class: "chip" }, t("fleet_" + (ready.get(row.name)?.level || "unavailable")))))),
 			h("h3", {}, t("fleet_windows_title")),
@@ -51268,29 +51379,31 @@ async function mountFleetDesktop(main, { h, t }) {
 			h("p", { class: "muted" }, t("fleet_selection_help")),
 			stale() ? h("p", { class: "error" }, t("fleet_changed")) : null,
 			choicePreview ? h("p", { class: "note" }, t("fleet_prerequisites", { names: choicePreview.summary.added_connections.map(label).join(", ") || t("fleet_none") })) : null,
-			h("div", { class: "actions" }, button(choicePreview ? "fleet_save_choices" : "fleet_review_choices", () => choicePreview ? run(async () => {
+			h("div", { class: "actions" }, button("choices", choicePreview ? "fleet_save_choices" : "fleet_review_choices", () => choicePreview ? run(async () => {
 				await fleetControl({
 					action: "apply_choices",
 					preview_id: choicePreview.preview_id
 				});
 				await read();
-			}) : reviewChoices(), !enabled() || !draft || !!stale(), true), button("fleet_use_current", () => {
+			}, false, "choices") : reviewChoices(), !canEnable() || !draft || !!stale(), true), button("use-current", "fleet_use_current", () => {
+				if (busy) return;
 				draft = null;
 				discardPreview();
 				save();
 				render();
-			}, !draft), button("fleet_refresh", () => run(read))),
+			}, !draft), button("refresh", "fleet_refresh", () => run(read, false, "refresh"))),
 			h("h3", {}, t("fleet_launch_title")),
 			h("p", { class: "muted" }, t("fleet_launch_help")),
 			launch ? h("p", { class: "note" }, launch.receipt ? t("fleet_launch_" + (launch.receipt.state === "prepared" ? "uncertain" : launch.receipt.state || "uncertain")) : t(launch.attempted ? "fleet_launch_uncertain" : "fleet_launch_review")) : null,
 			launch?.summary?.bat_may_open_local_window ? h("p", { class: "muted" }, t("fleet_local_anchor")) : null,
-			h("div", { class: "actions" }, button("fleet_review_launch", () => run(async () => {
+			h("div", { class: "actions" }, button("review-launch", "fleet_review_launch", () => run(async () => {
 				const value = await fleetControl({ action: "preview_launch" });
 				if (alive()) {
 					if (!validId(value.preview_id) || !validSummary(value.summary, value.preview_id)) throw new Error(t("fleet_unknown"));
 					launch = value;
 				}
-			}), !enabled() || !!draft || !!launch?.attempted), launch && !launch.receipt && launch.summary ? button(launch.attempted ? "fleet_retry_launch" : "fleet_launch_apply", launchApply, !enabled() || !!draft || snapshot.login_launch?.state === "waiting") : null, launch ? button("fleet_refresh", () => run(read)) : null, knownLaunch() ? button("fleet_new_launch", () => {
+			}, false, "review-launch"), !canEnable() || !!draft || !!launch?.attempted), launch && !launch.receipt && launch.summary ? button("launch", launch.attempted ? "fleet_retry_launch" : "fleet_launch_apply", launchApply, !canEnable() || !!draft || snapshot.login_launch?.state === "waiting") : null, launch ? button("refresh-launch", "fleet_refresh", () => run(read, false, "refresh-launch")) : null, knownLaunch() ? button("new-launch", "fleet_new_launch", () => {
+				if (busy) return;
 				fleetControl({
 					action: "discard",
 					preview_id: launch.preview_id
@@ -51298,7 +51411,8 @@ async function mountFleetDesktop(main, { h, t }) {
 				launch = null;
 				save();
 				render();
-			}) : null, launch && !launch.attempted ? button("cancel", () => {
+			}) : null, launch && !launch.attempted ? button("cancel-launch", "cancel", () => {
+				if (busy) return;
 				fleetControl({
 					action: "discard",
 					preview_id: launch.preview_id
@@ -51311,25 +51425,43 @@ async function mountFleetDesktop(main, { h, t }) {
 			h("label", { class: "fleet-choice" }, h("input", {
 				type: "checkbox",
 				checked: snapshot.login.show_picker,
-				disabled: !enabled(),
+				...gate(!canEnable()),
 				"data-fleet-login": "picker",
-				onchange: (e) => run(async () => {
-					const value = await fleetControl({
-						action: "save_login",
-						expected_revision: snapshot.login.revision,
-						show_picker: e.target.checked
+				onkeydown: (event) => {
+					if (busy && event.key === " ") event.preventDefault();
+				},
+				onclick: (event) => {
+					if (busy) event.preventDefault();
+				},
+				onchange: (event) => {
+					if (busy || !canEnable()) {
+						event.target.checked = snapshot.login.show_picker;
+						return;
+					}
+					const show = event.target.checked;
+					run(async () => {
+						const value = await fleetControl({
+							action: "save_login",
+							expected_revision: snapshot.login.revision,
+							show_picker: show
+						});
+						if (alive()) snapshot.login = value;
 					});
-					if (alive()) snapshot.login = value;
-				})
+				}
 			}), " ", t("fleet_login_picker")),
 			h("h3", {}, t("fleet_backend_title")),
 			h("p", { class: "muted" }, t("fleet_backend_help")),
 			h("div", { class: "actions" }, h("select", {
 				value: backend,
-				disabled: busy || !!migration,
+				"data-fleet-backend": "choice",
 				"aria-label": t("fleet_backend_title"),
-				onchange: (e) => {
-					backend = e.target.value;
+				...gate(!!migration),
+				onchange: (event) => {
+					if (busy || migration) {
+						event.target.value = backend;
+						return;
+					}
+					backend = event.target.value;
 				}
 			}, h("option", {
 				value: "rust",
@@ -51340,11 +51472,21 @@ async function mountFleetDesktop(main, { h, t }) {
 			}, t("fleet_backend_powershell"))), h("label", { class: "fleet-choice" }, h("input", {
 				type: "checkbox",
 				checked: autostart,
-				disabled: busy || !!migration,
-				onchange: (e) => {
-					autostart = e.target.checked;
+				...gate(!!migration),
+				"data-fleet-autostart": "enabled",
+				onkeydown: (event) => {
+					if (busy && event.key === " ") event.preventDefault();
 				},
-				"data-fleet-autostart": "enabled"
+				onclick: (event) => {
+					if (busy) event.preventDefault();
+				},
+				onchange: (event) => {
+					if (busy || migration) {
+						event.target.checked = autostart;
+						return;
+					}
+					autostart = event.target.checked;
+				}
 			}), " ", t("fleet_autostart"))),
 			migration ? h("p", { class: "note" }, migration.receipt ? t("fleet_migration_" + migration.receipt.phase) : t(migration.accepted ? "fleet_migration_unknown" : "fleet_migration_review", {
 				from: t("fleet_backend_" + migration.from),
@@ -51352,7 +51494,7 @@ async function mountFleetDesktop(main, { h, t }) {
 				before: t(migration.autostart_before ? "fleet_enabled" : "fleet_disabled"),
 				after: t(migration.autostart ? "fleet_enabled" : "fleet_disabled")
 			})) : null,
-			h("div", { class: "actions" }, button("fleet_review_migration", () => run(async () => {
+			h("div", { class: "actions" }, button("review-migration", "fleet_review_migration", () => run(async () => {
 				const value = await fleetControl({
 					action: "preview_migration",
 					backend,
@@ -51362,7 +51504,7 @@ async function mountFleetDesktop(main, { h, t }) {
 					if (!validId(value.preview_id) || typeof value.fingerprint !== "string") throw new Error(t("fleet_unknown"));
 					migration = value;
 				}
-			}), !enabled() || !!migration), migration && !migration.accepted ? button("fleet_apply_migration", () => run(async () => {
+			}, false, "review-migration"), !canEnable() || !!migration), migration && !migration.accepted ? button("apply-migration", "fleet_apply_migration", () => run(async () => {
 				migration.accepted = true;
 				save();
 				const value = await fleetControl({
@@ -51372,14 +51514,14 @@ async function mountFleetDesktop(main, { h, t }) {
 				});
 				if (alive()) acceptMigration(value);
 				await read();
-			}), !readable) : null, migration?.accepted && migration.receipt && migration.receipt.phase !== "complete" ? button("fleet_continue_migration", () => run(async () => {
+			}, false, "apply-migration"), !readable) : null, migration?.accepted && migration.receipt && migration.receipt.phase !== "complete" ? button("continue-migration", "fleet_continue_migration", () => run(async () => {
 				const value = await fleetControl({
 					action: "advance_migration",
 					migration_id: migration.preview_id
 				});
 				if (alive()) acceptMigration(value);
 				await read();
-			}), !readable) : null, migration?.accepted ? button("fleet_refresh", () => run(read)) : null, migration?.accepted && !migration.receipt ? button("fleet_retry_migration", () => run(async () => {
+			}, false, "continue-migration"), !readable) : null, migration?.accepted ? button("refresh-migration", "fleet_refresh", () => run(read, false, "refresh-migration")) : null, migration?.accepted && !migration.receipt ? button("retry-migration", "fleet_retry_migration", () => run(async () => {
 				const value = await fleetControl(migration.restore_source ? {
 					action: "restore_migration",
 					source_id: migration.restore_source,
@@ -51391,7 +51533,8 @@ async function mountFleetDesktop(main, { h, t }) {
 				});
 				if (alive()) acceptMigration(value);
 				await read();
-			}), !migration.restore_source && !migration.fingerprint) : null, migration?.receipt?.phase === "complete" ? button("fleet_new_migration", () => {
+			}, false, "retry-migration"), !migration.restore_source && !migration.fingerprint) : null, migration?.receipt?.phase === "complete" ? button("new-migration", "fleet_new_migration", () => {
+				if (busy) return;
 				fleetControl({
 					action: "discard",
 					preview_id: migration.preview_id
@@ -51399,7 +51542,8 @@ async function mountFleetDesktop(main, { h, t }) {
 				migration = null;
 				save();
 				render();
-			}) : null, migration && !migration.accepted ? button("cancel", () => {
+			}) : null, migration && !migration.accepted ? button("cancel-migration", "cancel", () => {
+				if (busy) return;
 				fleetControl({
 					action: "discard",
 					preview_id: migration.preview_id
@@ -51407,7 +51551,7 @@ async function mountFleetDesktop(main, { h, t }) {
 				migration = null;
 				save();
 				render();
-			}) : null, migration?.receipt?.phase === "complete" ? button("fleet_restore_migration", () => run(async () => {
+			}) : null, migration?.receipt?.phase === "complete" ? button("restore-migration", "fleet_restore_migration", () => run(async () => {
 				const source = migration.preview_id;
 				const restoreId = crypto.randomUUID().replaceAll("-", "");
 				migration = {
@@ -51423,15 +51567,19 @@ async function mountFleetDesktop(main, { h, t }) {
 				});
 				if (alive()) acceptMigration(value);
 				await read();
-			}), !readable) : null)
+			}, false, "restore-migration"), !readable) : null)
 		];
 		content.replaceChildren(...fields.filter(Boolean));
-		if (focus) [...content.querySelectorAll("input")].find((input) => input.dataset.fleetChoice === focus)?.focus();
+		if ([...content.querySelectorAll("button")].some((node) => node.getAttribute("aria-disabled") === "true")) message.setAttribute("aria-busy", "true");
+		else message.removeAttribute("aria-busy");
+		const again = controlByKey(previous);
+		if (again && !again.disabled) again.focus();
+		else if (previous) successor(previous).focus();
 	};
 	await run(read);
 	const poll = async () => {
 		if (!alive()) return;
-		if (!busy) await run(read);
+		if (!busy) await run(read, true);
 		if (alive()) timer = setTimeout(poll, 5e3);
 	};
 	timer = setTimeout(poll, 5e3);
@@ -51617,7 +51765,7 @@ async function mountFleet(main, { h, t }) {
 	panel.append(h("h2", {}, t("fleet_title")), h("p", { class: "muted" }, t("fleet_help")), content, message);
 	main.append(panel);
 	let nativeCleanup, bootstrapCleanup;
-	let disposed = false, busy = false, readable = false, timer, snapshot, draft, binding;
+	let disposed = false, busy = false, readable = false, timer, snapshot, draft, binding, pressed = null;
 	const alive = () => !disposed && panel.isConnected;
 	const key = () => `batc.desktop.fleet.selection.${binding}`;
 	const save = () => {
@@ -51628,19 +51776,58 @@ async function mountFleet(main, { h, t }) {
 	};
 	const same = (a, b) => a.length === b.length && [...a].sort().every((x, i) => x === [...b].sort()[i]);
 	const changed = () => draft && (draft.revision !== snapshot.selection.revision || draft.epoch !== snapshot.monitor.epoch);
-	const editable = () => readable && !busy && snapshot?.configuration.valid && (snapshot.monitor.state === "stopped" || snapshot.monitor.controllable);
+	const canEdit = () => readable && snapshot?.configuration.valid && (snapshot.monitor.state === "stopped" || snapshot.monitor.controllable);
+	const gate = (blocked, action) => busy && action && pressed === action ? { "aria-disabled": "true" } : blocked ? { disabled: true } : busy ? { "aria-disabled": "true" } : {};
+	const focusKeys = ["data-fleet-action", "data-fleet-name"];
+	const focusKey = (node) => {
+		for (let current = node; current && current !== panel; current = current.parentElement) for (const attr of focusKeys) if (current.hasAttribute?.(attr)) return [attr, current.getAttribute(attr)];
+		return null;
+	};
+	const controlByKey = (key) => {
+		if (!key) return null;
+		for (const node of content.querySelectorAll("button, input, select")) if (node.getAttribute(key[0]) === key[1]) return node;
+		return null;
+	};
+	const groups = [[
+		"apply",
+		"refresh",
+		"use-current"
+	], ["start", "quit"]];
+	const successor = (key) => {
+		if (key?.[0] === "data-fleet-action") {
+			const group = groups.find((items) => items.includes(key[1]));
+			if (group) for (const candidate of group.slice(group.indexOf(key[1]) + 1)) {
+				const node = controlByKey(["data-fleet-action", candidate]);
+				if (node && !node.disabled && node.getAttribute("aria-disabled") !== "true") return node;
+			}
+		}
+		message.tabIndex = -1;
+		return message;
+	};
 	const render = () => {
 		if (!alive() || !snapshot) return;
 		const names = draft?.connections || snapshot.selection.connections;
 		const ready = new Map([...snapshot.readiness.hosts || [], snapshot.readiness.connector].filter(Boolean).map((row) => [row.name, row]));
-		const focus = document.activeElement?.dataset?.fleetName;
+		const previous = panel.contains(document.activeElement) ? focusKey(document.activeElement) : null;
 		const rows = snapshot.configuration.connections.map((entry) => {
+			const checked = names.includes(entry.name);
+			const blocked = !canEdit() || !!changed();
 			const input = h("input", {
 				type: "checkbox",
-				checked: names.includes(entry.name),
-				disabled: !editable() || !!changed(),
+				checked,
+				...gate(blocked),
 				"data-fleet-name": entry.name,
+				onkeydown: (event) => {
+					if (busy && event.key === " ") event.preventDefault();
+				},
+				onclick: (event) => {
+					if (busy) event.preventDefault();
+				},
 				onchange: () => {
+					if (busy || blocked) {
+						input.checked = checked;
+						return;
+					}
 					if (!draft) draft = {
 						revision: snapshot.selection.revision,
 						epoch: snapshot.monitor.epoch,
@@ -51664,24 +51851,33 @@ async function mountFleet(main, { h, t }) {
 			changed() ? h("p", { class: "error" }, t("fleet_changed")) : h("span"),
 			h("div", { class: "actions" }, h("button", {
 				class: "primary",
-				disabled: !editable() || !draft || !!changed(),
-				onclick: () => mutate({
-					action: "set_connections",
-					connections: [...draft.connections],
-					expected_selection_revision: draft.revision,
-					expected_monitor_epoch: draft.epoch,
-					expected_configuration_binding: binding
-				})
+				...gate(!canEdit() || !draft || !!changed(), "apply"),
+				"data-fleet-action": "apply",
+				onclick: () => {
+					if (busy || !canEdit() || !draft || changed()) return;
+					mutate({
+						action: "set_connections",
+						connections: [...draft.connections],
+						expected_selection_revision: draft.revision,
+						expected_monitor_epoch: draft.epoch,
+						expected_configuration_binding: binding
+					}, "apply");
+				}
 			}, t("fleet_apply")), iconButton({
 				icon: "refresh-cw",
 				label: t("fleet_refresh"),
-				class: "secondary",
-				disabled: busy,
-				onclick: () => read(true)
+				...gate(false, "refresh"),
+				"data-fleet-action": "refresh",
+				onclick: () => {
+					if (busy) return;
+					read(true);
+				}
 			}), h("button", {
 				class: "secondary",
-				disabled: !readable || busy || !draft,
+				...gate(!readable || !draft, "use-current"),
+				"data-fleet-action": "use-current",
 				onclick: () => {
+					if (busy || !readable || !draft) return;
 					draft = null;
 					save();
 					message.textContent = "";
@@ -51690,22 +51886,34 @@ async function mountFleet(main, { h, t }) {
 			}, t("fleet_use_current"))),
 			h("div", { class: "actions" }, h("button", {
 				class: "secondary",
-				disabled: !editable() || !!draft || snapshot.monitor.state !== "stopped",
-				onclick: () => mutate({
-					action: "ensure_monitor",
-					expected_configuration_binding: binding
-				})
+				...gate(!canEdit() || !!draft || snapshot.monitor.state !== "stopped", "start"),
+				"data-fleet-action": "start",
+				onclick: () => {
+					if (busy || !canEdit() || draft || snapshot.monitor.state !== "stopped") return;
+					mutate({
+						action: "ensure_monitor",
+						expected_configuration_binding: binding
+					}, "start");
+				}
 			}, t("fleet_start")), h("button", {
 				class: "danger",
-				disabled: !editable() || !!draft || !snapshot.monitor.controllable,
-				onclick: () => mutate({
-					action: "quit_owned",
-					expected_configuration_binding: binding,
-					expected_monitor_epoch: snapshot.monitor.epoch
-				})
+				...gate(!canEdit() || !!draft || !snapshot.monitor.controllable, "quit"),
+				"data-fleet-action": "quit",
+				onclick: () => {
+					if (busy || !canEdit() || draft || !snapshot.monitor.controllable) return;
+					mutate({
+						action: "quit_owned",
+						expected_configuration_binding: binding,
+						expected_monitor_epoch: snapshot.monitor.epoch
+					}, "quit");
+				}
 			}, t("fleet_quit")))
 		].filter(Boolean));
-		if (focus) [...content.querySelectorAll("input")].find((input) => input.dataset.fleetName === focus)?.focus();
+		if ([...content.querySelectorAll("button")].some((node) => node.getAttribute("aria-disabled") === "true")) message.setAttribute("aria-busy", "true");
+		else message.removeAttribute("aria-busy");
+		const again = controlByKey(previous);
+		if (again && !again.disabled) again.focus();
+		else if (previous) successor(previous).focus();
 	};
 	const accept = (value) => {
 		if (!value?.configuration?.connections || !value?.monitor || !value?.selection || !value?.readiness) throw new Error(t("fleet_unavailable"));
@@ -51726,6 +51934,7 @@ async function mountFleet(main, { h, t }) {
 	};
 	const read = async (explicit = false) => {
 		if (!alive() || busy) return;
+		if (explicit) pressed = "refresh";
 		busy = true;
 		render();
 		try {
@@ -51740,11 +51949,13 @@ async function mountFleet(main, { h, t }) {
 			}
 		} finally {
 			busy = false;
+			pressed = null;
 			render();
 		}
 	};
-	const mutate = async (input) => {
-		if (!editable() || !alive()) return;
+	const mutate = async (input, action) => {
+		if (busy || !alive() || !canEdit()) return;
+		pressed = action;
 		busy = true;
 		readable = false;
 		message.textContent = t("fleet_working");
@@ -51758,6 +51969,7 @@ async function mountFleet(main, { h, t }) {
 			if (alive()) message.textContent = `${t("fleet_unknown")} ${String(error)}`;
 		} finally {
 			busy = false;
+			pressed = null;
 			render();
 		}
 	};
@@ -52139,7 +52351,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 		saved = JSON.parse(localStorage.getItem(storageKey));
 	} catch {}
 	saved = restore$2(saved, source);
-	let busy = false, revision = 0, disposed = false, refreshing = null;
+	let busy = false, revision = 0, disposed = false, refreshing = null, pressed = null;
 	const host = h("select", { "aria-label": t("capture_host") }, h("option", { value: "" }, t("capture_host")), ...(caps()?.hosts || []).map((item) => h("option", { value: item.host }, item.host)));
 	const session = h("input", {
 		"aria-label": t("capture_session"),
@@ -52153,7 +52365,10 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 	host.value = saved.input.host || "";
 	session.value = saved.input.session_id || "";
 	path.value = saved.input.relative_path || "";
-	const notice = h("div", { role: "status" }), evidence = h("div", { "data-capture-evidence": "" });
+	const notice = h("div", {
+		role: "status",
+		"data-capture-notice": ""
+	}), evidence = h("div", { "data-capture-evidence": "" });
 	const reviewed = h("input", {
 		type: "checkbox",
 		onchange: () => update()
@@ -52195,11 +52410,13 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 	};
 	const preview = h("button", {
 		class: "secondary",
+		"data-capture-preview": "",
 		onclick: async () => {
 			const input = current();
 			guard();
 			if (busy || saved.intent || !mayPreview() || !validInput(input)) return;
-			const ticket = ++revision;
+			const ticket = ++revision, owned = owns(preview);
+			pressed = preview;
 			busy = true;
 			saved.preview = null;
 			reviewed.checked = false;
@@ -52222,7 +52439,9 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 				if (ticket === revision) showError(error);
 			} finally {
 				busy = false;
+				pressed = null;
 				render();
+				if (ticket === revision) placeFocus(preview, owned);
 			}
 		}
 	}, t("capture_preview"));
@@ -52251,6 +52470,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 	};
 	const apply = h("button", {
 		class: "secondary",
+		"data-capture-apply": "",
 		onclick: async () => {
 			guard();
 			if (busy || !mayCapture() || settled() && (saved.operation.status !== "succeeded" || saved.result) || saved.refused) return;
@@ -52269,6 +52489,8 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 				};
 				persist();
 			}
+			const owned = owns(apply);
+			pressed = apply;
 			busy = true;
 			update();
 			try {
@@ -52289,31 +52511,36 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 				showError(error);
 			} finally {
 				busy = false;
+				pressed = null;
 				render();
+				placeFocus(apply, owned);
 			}
 		}
 	}, t("capture_save"));
 	const reset = h("button", {
 		class: "secondary",
+		"data-capture-new": "",
 		onclick: () => {
 			guard();
 			if (busy || refreshing || active()) return;
+			const owned = owns(reset);
 			saved = { input: current() };
 			reviewed.checked = false;
 			revision++;
 			persist();
 			notice.replaceChildren();
 			render();
+			placeFocus(reset, owned);
 		}
 	}, t("capture_new"));
 	const attach = onAttach ? h("button", {
 		class: "secondary",
+		"data-capture-attach": "",
 		onclick: () => {
 			guard();
-			if (saved.result) {
-				onAttach({ ...saved.result }, (saved.preview?.relative_path || saved.input.relative_path).split("/").at(-1));
-				notice.textContent = t("capture_attached");
-			}
+			if (busy || !saved.result) return;
+			onAttach({ ...saved.result }, (saved.preview?.relative_path || saved.input.relative_path).split("/").at(-1));
+			notice.textContent = t("capture_attached");
 		}
 	}, t("capture_attach")) : null;
 	const box = h("details", {
@@ -52321,25 +52548,79 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 		"data-capture": "",
 		hidden: !supported()
 	}, h("summary", {}, t("capture_title")), h("p", { class: "muted" }, t("capture_help")), h("div", { class: "capture-fields" }, h("label", {}, t("capture_host"), host), h("label", {}, t("capture_session"), session), h("label", {}, t("capture_path"), path)), h("div", { class: "actions" }, preview), evidence, review, h("div", { class: "actions" }, apply, attach, reset), notice);
+	function lock(node, inflight, blocked) {
+		if (node === pressed && inflight) {
+			node.disabled = false;
+			node.setAttribute("aria-disabled", "true");
+			return;
+		}
+		if (blocked) {
+			node.removeAttribute("aria-disabled");
+			node.disabled = true;
+			return;
+		}
+		if (inflight) {
+			node.disabled = false;
+			node.setAttribute("aria-disabled", "true");
+			return;
+		}
+		node.removeAttribute("aria-disabled");
+		node.disabled = false;
+	}
+	function shown(node) {
+		return Boolean(node && node.isConnected && !node.disabled && !node.closest("[hidden]"));
+	}
+	function owns(button) {
+		const active = document.activeElement;
+		return active === button || active === document.body;
+	}
+	function successor(button) {
+		let next = null;
+		if (button === apply) {
+			if (saved.operation?.status === "succeeded" && saved.result) next = shown(attach) ? attach : reset;
+			else if (["failed", "cancelled"].includes(saved.operation?.status) || saved.refused) next = reset;
+		} else if (button === reset) next = shown(preview) ? preview : host;
+		else next = host;
+		if (!shown(next)) {
+			notice.tabIndex = -1;
+			return notice;
+		}
+		return next;
+	}
+	function placeFocus(button, owned) {
+		if (!owned || !currentView() || !box.isConnected) return;
+		const active = document.activeElement;
+		if (active !== button && active !== document.body) return;
+		if (shown(button)) return;
+		const next = successor(button);
+		if (next !== active) next.focus();
+	}
 	function update() {
-		const frozen = busy || Boolean(saved.intent);
+		const frozen = busy || Boolean(saved.intent), reading = Boolean(refreshing);
 		for (const field of [
 			host,
 			session,
 			path
 		]) field.disabled = frozen;
-		preview.disabled = busy || Boolean(saved.intent) || !mayPreview() || !validInput(current());
+		lock(preview, busy, Boolean(saved.intent) || !mayPreview() || !validInput(current()));
 		review.hidden = !saved.preview || Boolean(saved.intent);
 		reviewed.disabled = expired();
 		apply.hidden = settled() && (saved.operation.status !== "succeeded" || saved.result);
 		apply.textContent = saved.intent ? t("capture_check") : t("capture_save");
-		apply.disabled = busy || !mayCapture() || Boolean(saved.refused) || !saved.intent && (expired() || !reviewed.checked);
+		lock(apply, busy, !mayCapture() || Boolean(saved.refused) || !saved.intent && (expired() || !reviewed.checked));
 		reset.hidden = !saved.intent;
-		reset.disabled = busy || Boolean(refreshing) || active();
+		lock(reset, busy || reading, active());
 		if (attach) {
 			attach.hidden = !saved.result;
-			attach.disabled = busy;
+			lock(attach, busy, false);
 		}
+		if ([
+			preview,
+			apply,
+			reset,
+			attach
+		].some((node) => node && node.getAttribute("aria-disabled") === "true")) notice.setAttribute("aria-busy", "true");
+		else notice.removeAttribute("aria-busy");
 		const expiry = evidence.querySelector("[data-capture-expiry]");
 		if (expiry) expiry.textContent = saved.intent ? t("capture_fixed") : expired() ? t("capture_expired") : t("capture_single_file");
 	}
@@ -52402,10 +52683,12 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 			guard();
 			if (saved.intent?.operation_id === id) await accept(operation);
 		})();
+		if (currentView()) update();
 		try {
 			await refreshing;
 		} finally {
 			refreshing = null;
+			if (currentView()) update();
 		}
 	};
 	const off = onEvents((event) => {
@@ -55283,6 +55566,38 @@ async function browserPreview(bytes) {
 	if (text.includes("\0")) throw new Error("PREVIEW_UNSUPPORTED");
 	return { text };
 }
+function retainFocus(button) {
+	if (!(button instanceof HTMLElement) || document.activeElement !== button) return () => {};
+	let moved = false;
+	const onKeyDown = (event) => {
+		if ([
+			"Tab",
+			"Escape",
+			"ArrowUp",
+			"ArrowDown",
+			"ArrowLeft",
+			"ArrowRight"
+		].includes(event.key)) moved = true;
+	};
+	const onPointerDown = (event) => {
+		const target = event.target;
+		if (target !== button && !(target instanceof Node && button.contains(target))) moved = true;
+	};
+	document.addEventListener("keydown", onKeyDown, true);
+	document.addEventListener("pointerdown", onPointerDown, true);
+	return (successor, fallback, alive = true) => {
+		document.removeEventListener("keydown", onKeyDown, true);
+		document.removeEventListener("pointerdown", onPointerDown, true);
+		if (!alive || moved) return;
+		const active = document.activeElement;
+		if (active !== button && active !== document.body && active !== null) return;
+		const usable = (node) => Boolean(node && node.isConnected && !node.closest("[hidden]") && !node.disabled);
+		const target = usable(button) ? button : usable(successor) ? successor : fallback;
+		if (!target || !target.isConnected) return;
+		if (target === fallback) fallback.tabIndex = -1;
+		if (document.activeElement !== target) target.focus();
+	};
+}
 function artifactContent({ h, t, api, guard, getArtifact, canRead, validArtifact, readBrowser }) {
 	const status = h("p", {
 		class: "muted",
@@ -55292,7 +55607,7 @@ function artifactContent({ h, t, api, guard, getArtifact, canRead, validArtifact
 		hidden: true
 	});
 	const box = h("div", { class: "artifact-content" }), receipts = new Map(), controller = new AbortController();
-	let current = null, busy = false, disposed = false, timer, readingStatus = null;
+	let current = null, busy = false, disposed = false, timer, readingStatus = null, pressed = null;
 	const live = (expected) => {
 		guard();
 		if (disposed || !canRead() || expected && !same(expected, getArtifact())) throw new Error(t("ar_content_changed"));
@@ -55381,7 +55696,10 @@ function artifactContent({ h, t, api, guard, getArtifact, canRead, validArtifact
 		return row;
 	}
 	async function perform(action) {
-		if (busy) return;
+		const button = action === "preview" ? peek : save;
+		if (busy || button.disabled || button.getAttribute("aria-disabled") === "true") return;
+		const settle = retainFocus(button);
+		pressed = button;
 		busy = true;
 		update();
 		status.textContent = t("ar_content_reading");
@@ -55435,7 +55753,9 @@ function artifactContent({ h, t, api, guard, getArtifact, canRead, validArtifact
 			fail(error);
 		} finally {
 			busy = false;
+			pressed = null;
 			update();
+			settle(null, status, !disposed);
 		}
 	}
 	const peek = h("button", {
@@ -55459,7 +55779,16 @@ function artifactContent({ h, t, api, guard, getArtifact, canRead, validArtifact
 			status.textContent = "";
 		}
 		box.hidden = !next;
-		peek.disabled = save.disabled = busy || !next || !canRead() || nativeDesktop && !nativeFileSupport;
+		const blocked = !next || !canRead() || nativeDesktop && !nativeFileSupport;
+		for (const button of [peek, save]) if (button === pressed || busy && !blocked) {
+			button.disabled = false;
+			button.setAttribute("aria-disabled", "true");
+		} else {
+			button.removeAttribute("aria-disabled");
+			button.disabled = blocked;
+		}
+		if ([peek, save].some((button) => button.getAttribute("aria-disabled") === "true" && !button.closest("[hidden]"))) status.setAttribute("aria-busy", "true");
+		else status.removeAttribute("aria-busy");
 		if (next && nativeDesktop && !nativeFileSupport) status.textContent = t("ar_content_native_unavailable");
 		if (changed && next && nativeDesktop && nativeFileSupport) queueMicrotask(() => refresh().catch(fail));
 	}
@@ -55555,7 +55884,8 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		raw = JSON.parse(localStorage.getItem(storageKey));
 	} catch {}
 	let saved = restore(raw), source = null, artifact = null, busy = false, readFailed = false, disposed = false;
-	let refreshing = null, submission = null, revision = 0, catalogCursor = null, catalogReading = null, catalogPages = 0;
+	let refreshing = null, submission = null, revision = 0, catalogCursor = null, catalogReading = null, catalogPages = 0, executionReads = 0;
+	const pressed = new Set();
 	let catalogRows = new Map();
 	const operations = {
 		capture: null,
@@ -55600,6 +55930,16 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 			return false;
 		}
 	};
+	const inert = (button) => button.getAttribute("aria-disabled") === "true";
+	function gate(button, flight, blocked) {
+		if (pressed.has(button) || flight && !blocked) {
+			button.disabled = false;
+			button.setAttribute("aria-disabled", "true");
+		} else {
+			button.removeAttribute("aria-disabled");
+			button.disabled = Boolean(blocked);
+		}
+	}
 	const persist = (required = false) => {
 		guard();
 		try {
@@ -55708,78 +56048,95 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	}
 	async function submit(kind) {
 		if (busy || refreshing || readFailed || !saved[kind]?.request) return;
-		guard();
-		busy = true;
-		update();
-		let finish;
-		submission = new Promise((resolve) => {
-			finish = resolve;
-		});
+		const button = kind === "capture" ? capture : accept;
+		const settle = retainFocus(button);
+		pressed.add(button);
 		try {
-			persist(true);
-			const intent = saved[kind];
-			const result = intent.operation_id ? await api("GET", `/operations/${intent.operation_id}`) : await api("POST", "/operations?wait=3", intent.request, intent.key);
 			guard();
-			await adopt(kind, result.operation);
-			notice.replaceChildren();
-		} catch (error) {
-			if (!currentView()) return;
-			const safe = kind === "capture" ? [
-				"PREVIEW_EXPIRED",
-				"PREVIEW_TOKEN_INVALID",
-				"PREVIEW_MISMATCH",
-				"INVALID_PARAMS"
-			] : [
-				"INVALID_PARAMS",
-				"ARTIFACT_REVISION_MISMATCH",
-				"ARTIFACT_LINEAGE_UNPROVEN"
-			];
-			if (!saved[kind].operation_id && error.status >= 400 && error.status < 500 && safe.includes(error.code)) saved[kind].refused = error.code;
-			persist();
-			showError(error);
-			if (kind === "capture" && error.status === 403) notice.append(h("p", { class: "muted" }, t("ar_original_credential")));
+			busy = true;
+			update();
+			let finish;
+			submission = new Promise((resolve) => {
+				finish = resolve;
+			});
+			try {
+				persist(true);
+				const intent = saved[kind];
+				const result = intent.operation_id ? await api("GET", `/operations/${intent.operation_id}`) : await api("POST", "/operations?wait=3", intent.request, intent.key);
+				guard();
+				await adopt(kind, result.operation);
+				notice.replaceChildren();
+			} catch (error) {
+				if (!currentView()) return;
+				const safe = kind === "capture" ? [
+					"PREVIEW_EXPIRED",
+					"PREVIEW_TOKEN_INVALID",
+					"PREVIEW_MISMATCH",
+					"INVALID_PARAMS"
+				] : [
+					"INVALID_PARAMS",
+					"ARTIFACT_REVISION_MISMATCH",
+					"ARTIFACT_LINEAGE_UNPROVEN"
+				];
+				if (!saved[kind].operation_id && error.status >= 400 && error.status < 500 && safe.includes(error.code)) saved[kind].refused = error.code;
+				persist();
+				showError(error);
+				if (kind === "capture" && error.status === 403) notice.append(h("p", { class: "muted" }, t("ar_original_credential")));
+			} finally {
+				busy = false;
+				pressed.delete(button);
+				finish();
+				submission = null;
+				if (currentView()) render();
+			}
 		} finally {
-			busy = false;
-			finish();
-			submission = null;
-			if (currentView()) render();
+			pressed.delete(button);
+			settle(saved[kind]?.operation_id ? check : saved[kind]?.refused ? kind === "capture" ? reset : newReview : null, notice, currentView());
 		}
 	}
 	const preview = h("button", {
 		class: "secondary",
 		onclick: async () => {
-			if (busy || frozen() || !source || !scope("observe") || !supported() || !safePath(path.value) || !selectorValid(saved.selector)) return;
-			guard();
-			const ticket = ++revision, fixed = structuredClone(input());
-			busy = true;
-			saved.preview = null;
-			reviewed.checked = false;
-			update();
+			if (inert(preview) || busy || frozen() || !source || !scope("observe") || !supported() || !safePath(path.value) || !selectorValid(saved.selector)) return;
+			const settle = retainFocus(preview);
+			pressed.add(preview);
 			try {
-				const { selector, ...fields } = fixed;
-				const { preview: doc } = await api("POST", "/artifact-managed-capture-previews", {
-					...fields,
-					...selector
-				});
 				guard();
-				if (ticket !== revision) return;
-				if (!validPreview(doc, fixed)) throw new Error(t("capture_invalid_preview"));
-				saved.preview = doc;
-				readFailed = false;
-				persist();
-				notice.replaceChildren();
-			} catch (error) {
-				if (ticket === revision) showError(error);
+				const ticket = ++revision, fixed = structuredClone(input());
+				busy = true;
+				saved.preview = null;
+				reviewed.checked = false;
+				update();
+				try {
+					const { selector, ...fields } = fixed;
+					const { preview: doc } = await api("POST", "/artifact-managed-capture-previews", {
+						...fields,
+						...selector
+					});
+					guard();
+					if (ticket !== revision) return;
+					if (!validPreview(doc, fixed)) throw new Error(t("capture_invalid_preview"));
+					saved.preview = doc;
+					readFailed = false;
+					persist();
+					notice.replaceChildren();
+				} catch (error) {
+					if (ticket === revision) showError(error);
+				} finally {
+					busy = false;
+					pressed.delete(preview);
+					if (currentView()) render();
+				}
 			} finally {
-				busy = false;
-				if (currentView()) render();
+				pressed.delete(preview);
+				settle(null, notice, currentView());
 			}
 		}
 	}, t("capture_preview"));
 	const capture = h("button", {
 		class: "primary",
 		onclick: () => {
-			if (busy || refreshing || readFailed || !mayCapture() || saved.capture?.operation_id || saved.capture?.refused) return;
+			if (inert(capture) || busy || refreshing || readFailed || !mayCapture() || saved.capture?.operation_id || saved.capture?.refused) return;
 			guard();
 			if (!saved.capture) {
 				const doc = saved.preview;
@@ -55807,7 +56164,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	const accept = h("button", {
 		class: "primary",
 		onclick: () => {
-			if (busy || refreshing || readFailed || !artifact || !mayAccept() || saved.accept?.operation_id || saved.accept?.refused || !receipt.value.trim() || [...receipt.value].length > 2e3) return;
+			if (inert(accept) || busy || refreshing || readFailed || !artifact || !mayAccept() || saved.accept?.operation_id || saved.accept?.refused || !receipt.value.trim() || [...receipt.value].length > 2e3) return;
 			guard();
 			if (!saved.accept) saved.accept = {
 				key: crypto.randomUUID(),
@@ -55836,12 +56193,23 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	}, t("ar_accept"));
 	const check = h("button", {
 		class: "secondary",
-		onclick: () => refresh(true).catch(showError)
+		onclick: () => {
+			if (inert(check)) return;
+			const settle = retainFocus(check);
+			pressed.add(check);
+			refresh(true).catch(showError).finally(() => {
+				pressed.delete(check);
+				if (currentView()) update();
+				settle(null, notice, currentView());
+			});
+		}
 	}, t("ar_check"));
 	const reload = h("button", {
 		class: "secondary",
 		onclick: async () => {
-			if (busy || refreshing || frozen()) return;
+			if (inert(reload) || busy || refreshing || frozen()) return;
+			const settle = retainFocus(reload);
+			pressed.add(reload);
 			busy = true;
 			update();
 			try {
@@ -55853,56 +56221,83 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 				showError(error);
 			} finally {
 				busy = false;
-				if (currentView()) render();
+				pressed.delete(reload);
+				const alive = currentView();
+				if (alive) render();
+				settle(null, notice, alive);
 			}
 		}
 	}, t("ar_refresh_sources"));
 	const reset = h("button", {
 		class: "secondary",
 		onclick: async () => {
-			guard();
-			if (busy || refreshing || readFailed || active("capture") || active("accept")) return;
-			saved = {
-				relative_path: path.value,
-				selector: null,
-				reviewText: ""
-			};
-			artifact = source = null;
-			candidates.clear();
-			pages.clear();
-			operations.capture = operations.accept = null;
-			reviewed.checked = false;
-			receipt.value = "";
-			revision++;
-			persist();
-			notice.replaceChildren();
-			renderChoice();
-			busy = true;
-			render();
+			if (inert(reset)) return;
+			const settle = retainFocus(reset);
+			pressed.add(reset);
 			try {
-				await loadSource();
-			} catch (error) {
-				showError(error);
+				guard();
+				if (busy || refreshing || readFailed || active("capture") || active("accept")) return;
+				saved = {
+					relative_path: path.value,
+					selector: null,
+					reviewText: ""
+				};
+				artifact = source = null;
+				candidates.clear();
+				pages.clear();
+				operations.capture = operations.accept = null;
+				reviewed.checked = false;
+				receipt.value = "";
+				revision++;
+				persist();
+				notice.replaceChildren();
+				renderChoice();
+				busy = true;
+				render();
+				try {
+					await loadSource();
+				} catch (error) {
+					showError(error);
+				} finally {
+					busy = false;
+					pressed.delete(reset);
+					if (currentView()) render();
+				}
 			} finally {
-				busy = false;
-				if (currentView()) render();
+				pressed.delete(reset);
+				settle(choice, notice, currentView());
 			}
 		}
 	}, t("capture_new"));
 	const newReview = h("button", {
 		class: "secondary",
 		onclick: () => {
-			guard();
-			if (busy || refreshing || readFailed || active("accept")) return;
-			saved.accept = null;
-			operations.accept = null;
-			persist();
-			render();
+			if (inert(newReview)) return;
+			const settle = retainFocus(newReview);
+			try {
+				guard();
+				if (busy || refreshing || readFailed || active("accept")) return;
+				saved.accept = null;
+				operations.accept = null;
+				persist();
+				render();
+			} finally {
+				settle(receipt, notice, currentView());
+			}
 		}
 	}, t("ar_new_review"));
 	const moreExecutions = h("button", {
 		class: "secondary",
-		onclick: () => loadExecutions(true).catch(showError)
+		onclick: () => {
+			if (inert(moreExecutions)) return;
+			const settle = retainFocus(moreExecutions);
+			pressed.add(moreExecutions);
+			loadExecutions(true).catch(showError).finally(() => {
+				pressed.delete(moreExecutions);
+				if (currentView()) update();
+				settle(null, notice, currentView());
+			});
+		}
 	}, t("ar_more_executions"));
 	const content = artifactContent({
 		h,
@@ -55925,7 +56320,16 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	const moreArtifacts = h("button", {
 		class: "secondary",
 		hidden: true,
-		onclick: () => loadCatalog(true).catch((e) => catalogNotice.replaceChildren(errorBox(e, { within: catalogNotice })))
+		onclick: () => {
+			if (inert(moreArtifacts)) return;
+			const settle = retainFocus(moreArtifacts);
+			pressed.add(moreArtifacts);
+			loadCatalog(true).catch((e) => catalogNotice.replaceChildren(errorBox(e, { within: catalogNotice }))).finally(() => {
+				pressed.delete(moreArtifacts);
+				if (currentView()) update();
+				settle(null, notice, currentView());
+			});
+		}
 	}, t("more"));
 	const catalogPanel = h("section", { class: "panel" }, h("h2", {}, t("ar_catalog")), catalog, catalogNotice, h("div", { class: "actions" }, moreArtifacts));
 	container.append(pageHeader({ title: t("ar_title") }), disclosure({
@@ -55934,7 +56338,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	}), capturePanel, reviewPanel, h("div", { class: "actions" }, check), outcome, notice, catalogPanel);
 	function update() {
 		content.update();
-		const fixed = busy || frozen();
+		const fixed = busy || frozen(), flight = busy || Boolean(refreshing);
 		for (const field of [
 			path,
 			choice,
@@ -55942,25 +56346,32 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 			customId
 		]) field.disabled = fixed;
 		customTask.disabled = fixed || customType.value !== "command";
-		preview.disabled = busy || frozen() || !source || !scope("observe") || !supported() || !safePath(path.value) || !selectorValid(saved.selector);
+		gate(preview, busy, frozen() || !source || !scope("observe") || !supported() || !safePath(path.value) || !selectorValid(saved.selector));
 		reviewed.disabled = busy || Boolean(saved.capture) || !saved.preview || saved.preview.expires_at * 1e3 <= Date.now();
 		reviewed.closest("label").hidden = Boolean(saved.capture) || !saved.preview;
 		capture.hidden = Boolean(saved.capture?.operation_id || saved.capture?.refused);
 		capture.textContent = saved.capture ? t("capture_check") : t("capture_save");
-		capture.disabled = busy || Boolean(refreshing) || readFailed || !mayCapture() || !source || Boolean(saved.capture && !saved.capture.request) || !saved.capture && (!saved.preview || !reviewed.checked || saved.preview.expires_at * 1e3 <= Date.now());
+		gate(capture, flight, readFailed || !mayCapture() || !source || Boolean(saved.capture && !saved.capture.request) || !saved.capture && (!saved.preview || !reviewed.checked || saved.preview.expires_at * 1e3 <= Date.now()));
 		receipt.disabled = busy || Boolean(saved.accept) || !artifact;
 		accept.hidden = Boolean(saved.accept?.operation_id || saved.accept?.refused);
 		accept.textContent = saved.accept ? t("ar_check_accept") : t("ar_accept");
-		accept.disabled = busy || Boolean(refreshing) || readFailed || !artifact || !mayAccept() || !receipt.value.trim() || [...receipt.value].length > 2e3 || Boolean(saved.accept && !saved.accept.request);
+		gate(accept, flight, readFailed || !artifact || !mayAccept() || !receipt.value.trim() || [...receipt.value].length > 2e3 || Boolean(saved.accept && !saved.accept.request));
 		check.hidden = !saved.capture?.operation_id && !saved.accept?.operation_id && context.kind !== "artifact";
-		check.disabled = busy || Boolean(refreshing);
+		gate(check, flight, false);
 		reset.hidden = !saved.capture;
-		reset.disabled = busy || Boolean(refreshing) || readFailed || Boolean(active("capture") || active("accept"));
+		gate(reset, flight, readFailed || Boolean(active("capture") || active("accept")));
 		newReview.hidden = !saved.accept;
-		newReview.disabled = busy || Boolean(refreshing) || readFailed || Boolean(active("accept"));
-		moreExecutions.disabled = busy || frozen();
-		reload.disabled = busy || frozen();
+		gate(newReview, flight, readFailed || Boolean(active("accept")));
+		gate(moreExecutions, busy || executionReads > 0, frozen());
+		gate(reload, busy, frozen());
 		moreExecutions.hidden = ![...pages.values()].some((value) => value !== null);
+		gate(moreArtifacts, Boolean(catalogReading), false);
+		const shownBusy = (button) => button.getAttribute("aria-disabled") === "true" && !button.closest("[hidden]");
+		const panelBusy = (panel) => [...panel.querySelectorAll("button")].some(shownBusy);
+		if (panelBusy(capturePanel) || panelBusy(reviewPanel) || shownBusy(check)) notice.setAttribute("aria-busy", "true");
+		else notice.removeAttribute("aria-busy");
+		if (shownBusy(moreArtifacts)) catalogPanel.setAttribute("aria-busy", "true");
+		else catalogPanel.removeAttribute("aria-busy");
 	}
 	function render() {
 		if (!currentView()) return;
@@ -55990,31 +56401,37 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	}
 	async function loadExecutions(more = false) {
 		if (!source || frozen()) return;
-		const results = await Promise.all(executions.map(async (action) => {
-			if (more && pages.get(action) === null) return;
-			const before = more ? pages.get(action) : null;
-			return {
-				action,
-				data: await api("GET", `/operations?status=succeeded&action=${action}&limit=50${before ? `&before=${before}` : ""}`)
-			};
-		}));
-		guard();
-		if (frozen()) return;
-		for (const result of results.filter(Boolean)) {
-			pages.set(result.action, result.data.next_before ?? null);
-			for (const op of result.data.operations || []) {
-				const bound = sourceFromOperation(op);
-				if (managedCaptureExecution(op) && bound?.host === source.host && bound.session_id === source.session_id) {
-					const selector = { execution_operation_id: op.operation_id };
-					candidates.set(stable(selector), {
-						selector,
-						label: `${actionLabel(op.action)} · ${op.operation_id}`
-					});
+		executionReads++;
+		try {
+			if (currentView()) update();
+			const results = await Promise.all(executions.map(async (action) => {
+				if (more && pages.get(action) === null) return;
+				const before = more ? pages.get(action) : null;
+				return {
+					action,
+					data: await api("GET", `/operations?status=succeeded&action=${action}&limit=50${before ? `&before=${before}` : ""}`)
+				};
+			}));
+			guard();
+			if (frozen()) return;
+			for (const result of results.filter(Boolean)) {
+				pages.set(result.action, result.data.next_before ?? null);
+				for (const op of result.data.operations || []) {
+					const bound = sourceFromOperation(op);
+					if (managedCaptureExecution(op) && bound?.host === source.host && bound.session_id === source.session_id) {
+						const selector = { execution_operation_id: op.operation_id };
+						candidates.set(stable(selector), {
+							selector,
+							label: `${actionLabel(op.action)} · ${op.operation_id}`
+						});
+					}
 				}
 			}
+			renderChoice();
+		} finally {
+			executionReads--;
+			if (currentView()) update();
 		}
-		renderChoice();
-		update();
 	}
 	async function loadSource() {
 		let task, data, bound;
@@ -56111,7 +56528,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 			catalogNotice.replaceChildren();
 			if (!rows.size) catalog.append(h("p", { class: "muted" }, t("ar_no_artifacts")));
 		})();
-		moreArtifacts.disabled = true;
+		if (currentView()) update();
 		try {
 			await catalogReading;
 		} catch (error) {
@@ -56119,7 +56536,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 			throw error;
 		} finally {
 			catalogReading = null;
-			moreArtifacts.disabled = false;
+			if (currentView()) update();
 		}
 	}
 	async function refresh(fresh = false) {
@@ -57049,15 +57466,35 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		fields: saved.fields
 	});
 	const ready = () => pendingSelections === 0 && saved.attachments.every((a) => a.ref);
+	const attachmentKeys = new WeakMap();
+	const retrying = new WeakSet();
+	let attachmentSerial = 0, catalogBusy = false;
+	const attachmentKey = (a) => {
+		let key = attachmentKeys.get(a);
+		if (!key) attachmentKeys.set(a, key = "a" + ++attachmentSerial);
+		return key;
+	};
+	const syncStatusBusy = () => {
+		if (catalogBusy || saved.attachments.some((item) => item.busy)) status.setAttribute("aria-busy", "true");
+		else status.removeAttribute("aria-busy");
+	};
 	const render = () => {
 		changed();
 		promptHint.hidden = roles || Boolean(text.value.trim()) || !saved.attachments.some((a) => a.ref);
-		return fill(rows, ...saved.attachments.filter((a) => !nativeFiles || !a.native_handle || a.ref || !native?.has(a.native_handle)).map((a) => h("div", { class: "row attachment-row" }, previews.has(a) ? h("img", {
+		const active = document.activeElement;
+		const focusKey = active?.closest?.("[data-attachment]")?.getAttribute("data-attachment") || "";
+		const focusControl = active?.getAttribute?.("data-attachment-control") || "";
+		const visible = saved.attachments.filter((a) => !nativeFiles || !a.native_handle || a.ref || !native?.has(a.native_handle));
+		fill(rows, ...visible.map((a) => h("div", {
+			class: "row attachment-row",
+			"data-attachment": attachmentKey(a)
+		}, previews.has(a) ? h("img", {
 			class: "attachment-thumb",
 			src: previews.get(a),
 			alt: a.name || t("attachments")
 		}) : null, h("div", { class: "grow" }, a.name, a.ref ? h("div", { class: "muted" }, `${a.ref.artifact_id} · r${a.ref.revision} · ${a.ref.digest.slice(0, 12)}`) : h("div", { class: "muted" }, a.error || (a.native_handle ? t("files_unavailable") : files.has(a) ? t("uploading") : t("choose_again")))), a.ref && roles ? h("select", {
 			"aria-label": t("attachment_role"),
+			"data-attachment-control": "role",
 			onchange: (e) => {
 				guard();
 				a.ref.role = e.target.value;
@@ -57066,14 +57503,22 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		}, ...["input", "result"].map((role) => h("option", {
 			value: role,
 			selected: (a.ref.role || "input") === role
-		}, t(`attachment_${role}`)))) : null, a.ref && native ? native.actions(a.ref) : null, !a.ref && files.has(a) && !a.busy ? h("button", {
+		}, t(`attachment_${role}`)))) : null, a.ref && native ? native.actions(a.ref) : null, !a.ref && files.has(a) && (!a.busy || retrying.has(a)) ? h("button", {
 			class: "secondary",
-			onclick: () => upload(a)
+			"data-attachment-control": "retry",
+			"aria-disabled": a.busy ? "true" : null,
+			onclick: () => {
+				if (a.busy) return;
+				retrying.add(a);
+				upload(a);
+			}
 		}, t("retry")) : null, h("button", {
 			class: "secondary",
-			disabled: a.busy,
+			"data-attachment-control": "remove",
+			"aria-disabled": a.busy ? "true" : null,
 			onclick: () => {
 				guard();
+				if (a.busy) return;
 				if (a.native_handle) {
 					saved.native_ignored ||= [];
 					saved.native_ignored.push(a.native_handle);
@@ -57085,6 +57530,15 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 				render();
 			}
 		}, t("remove")))));
+		syncStatusBusy();
+		if (!focusKey) return;
+		const row = rows.querySelector(`[data-attachment="${CSS.escape(focusKey)}"]`);
+		const same = focusControl && row?.querySelector(`[data-attachment-control="${CSS.escape(focusControl)}"]`);
+		if (same) {
+			same.focus();
+			return;
+		}
+		if (focusControl === "retry" && row) (row.querySelector("[data-attachment-control=\"role\"]") || row.querySelector("[data-attachment-control=\"remove\"]"))?.focus();
 	};
 	if (nativeFiles) {
 		if (!Array.isArray(saved.native_ignored)) saved.native_ignored = [];
@@ -57223,6 +57677,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 			a.error = e.message;
 		} finally {
 			delete a.busy;
+			retrying.delete(a);
 			if (connection.epoch === state.epoch && connection.generation === generation && box.isConnected) {
 				persist();
 				render();
@@ -57382,13 +57837,24 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		class: "secondary",
 		hidden: true,
 		onclick: async () => {
-			more.disabled = true;
+			if (catalogBusy) return;
+			catalogBusy = true;
+			more.setAttribute("aria-disabled", "true");
+			syncStatusBusy();
 			try {
 				await loadCatalog(catalogCursor);
 			} catch (e) {
 				if (box.isConnected) fill(status, errorBox(e, { within: status }));
 			} finally {
-				more.disabled = false;
+				catalogBusy = false;
+				if (!box.isConnected || connection.epoch !== state.epoch || connection.generation !== generation) return;
+				more.removeAttribute("aria-disabled");
+				syncStatusBusy();
+				const active = document.activeElement;
+				if ((more.hidden || more.disabled) && (active === more || active === document.body)) {
+					status.tabIndex = -1;
+					status.focus();
+				}
 			}
 		}
 	}, t("more"));
@@ -58718,10 +59184,13 @@ async function viewSession(main, host, sid, context = null) {
 		class: "primary",
 		disabled: true,
 		onclick: async () => {
-			if (!box.value.trim() || send.disabled) return;
+			if (sending) return;
+			if (!box.value.trim() || !allowed("session.send")) return;
 			const submitted = box.value;
 			sending = true;
-			send.disabled = true;
+			send.disabled = false;
+			send.setAttribute("aria-disabled", "true");
+			status.setAttribute("aria-busy", "true");
 			try {
 				assertView(connection);
 				queue.onchange();
@@ -58746,8 +59215,18 @@ async function viewSession(main, host, sid, context = null) {
 			} catch (e) {
 				status.replaceChildren(sessionErrorBox(e, sendRecovery(e), { within: status }));
 			} finally {
+				const active = document.activeElement;
+				const owned = active === send || active === document.body;
 				sending = false;
-				send.disabled = !allowed("session.send");
+				if (send.isConnected) {
+					send.removeAttribute("aria-disabled");
+					status.removeAttribute("aria-busy");
+					send.disabled = !allowed("session.send");
+					if (owned && (send.disabled || send.hidden)) {
+						status.tabIndex = -1;
+						status.focus();
+					}
+				}
 			}
 		}
 	}, t("send"));
@@ -59293,7 +59772,9 @@ async function viewSession(main, host, sid, context = null) {
 	};
 	const updateControls = () => {
 		permissions?.update();
-		send.disabled = !allowed("session.send") || sending;
+		send.disabled = sending ? false : !allowed("session.send");
+		if (sending) send.setAttribute("aria-disabled", "true");
+		else send.removeAttribute("aria-disabled");
 		stop.disabled = !allowed("session.interrupt");
 		stop.hidden = withdrawn || row?.api_access !== "managed";
 		let reason = "";
@@ -59746,7 +60227,10 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 	const can = (state.caps?.features?.checkpoints || []).includes(host) && actionAllowed(state.caps, "checkpoint.create");
 	const mayStart = (state.caps?.scopes || []).includes("start") && actionAllowed(state.caps, "checkpoint.continue");
 	const list = h("div", {});
-	const status = h("div", { class: "muted" });
+	const status = h("div", {
+		class: "muted",
+		"data-checkpoint-status": ""
+	});
 	const rows = new Map();
 	let preview = null;
 	let ticket = 0;
@@ -59757,13 +60241,16 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 		const out = h("div", { class: "muted session-checkpoint-result" });
 		const draft = attachmentDraft(`continue.${cp.checkpoint_id}`, instr, cp.artifacts || []);
 		draft.bindFields({ agent });
-		let expectedHead = null;
+		let expectedHead = null, starting = false;
 		const go = h("button", {
 			class: "primary",
 			onclick: async () => {
 				const instructions = instr.value.trim() ? instr.value : draft.refs().length ? t("dispatch_inspect_images") : "";
-				if (!instructions) return;
-				go.disabled = true;
+				if (!instructions || starting) return;
+				starting = true;
+				go.disabled = false;
+				go.setAttribute("aria-disabled", "true");
+				out.setAttribute("aria-busy", "true");
 				try {
 					if (!draft.ready() && !draft.pending()) throw new Error(t("attachments_not_ready"));
 					if (state.caps?.artifacts && !expectedHead && !draft.pending()) throw new Error(t("source_unavailable"));
@@ -59783,8 +60270,14 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 						label: t("ui_retry"),
 						run: () => go.click()
 					}, { within: out }));
+				} finally {
+					starting = false;
+					if (go.isConnected) {
+						go.removeAttribute("aria-disabled");
+						out.removeAttribute("aria-busy");
+						go.disabled = false;
+					}
 				}
-				go.disabled = false;
 			}
 		}, t("start_agent_work"));
 		const limits = disclosure({
@@ -59842,7 +60335,8 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 		placeholder: t("checkpoint_note_placeholder"),
 		hidden: true
 	});
-	let previewFailed = false;
+	let previewFailed = false, recording = false;
+	let applyCreateAvailability = () => {};
 	const loadPreview = async (mine = ticket) => {
 		if (!can) return;
 		try {
@@ -59854,14 +60348,15 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 			pick.replaceChildren(...preview.commits.map((c) => h("option", { value: c.hash }, `${c.hash.slice(0, 10)} · ${c.message}`)));
 			if (preview.commits.some((c) => c.hash === selectedCommit)) pick.value = selectedCommit;
 			pick.hidden = note.hidden = false;
-			create.disabled = false;
-			if (previewFailed) status.replaceChildren();
+			const failedBefore = previewFailed;
 			previewFailed = false;
+			applyCreateAvailability();
+			if (failedBefore) status.replaceChildren();
 			if (preview.dirty) status.replaceChildren(h("span", { class: "error" }, t("dirty_warning", { n: preview.dirty })));
 		} catch (error) {
 			if (mine !== ticket) return;
 			previewFailed = true;
-			create.disabled = true;
+			applyCreateAvailability();
 			status.replaceChildren(sessionErrorBox(error, {
 				label: t("ui_retry"),
 				run: () => loadPreview().catch(() => {})
@@ -59873,7 +60368,10 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 		hidden: !can,
 		disabled: !can,
 		onclick: async () => {
-			create.disabled = true;
+			if (recording) return;
+			recording = true;
+			applyCreateAvailability();
+			status.setAttribute("aria-busy", "true");
 			try {
 				const params = {
 					last_n: 20,
@@ -59895,10 +60393,30 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 					label: t("ui_retry"),
 					run: () => load().catch(() => {})
 				}, { within: status }));
+			} finally {
+				const active = document.activeElement;
+				const owned = active === create || active === document.body;
+				recording = false;
+				status.removeAttribute("aria-busy");
+				if (create.isConnected) {
+					applyCreateAvailability();
+					if (owned && (create.disabled || create.hidden)) {
+						status.tabIndex = -1;
+						status.focus();
+					}
+				}
 			}
-			create.disabled = !can || previewFailed;
 		}
 	}, t("checkpoint_record"));
+	applyCreateAvailability = () => {
+		if (recording) {
+			create.disabled = false;
+			create.setAttribute("aria-disabled", "true");
+			return;
+		}
+		create.removeAttribute("aria-disabled");
+		create.disabled = !can || previewFailed;
+	};
 	const recordForm = h("div", {
 		class: "session-checkpoint-record",
 		hidden: true,
@@ -60772,22 +61290,33 @@ function repairControl(op) {
 		"RESOLUTION_INCOMPLETE",
 		"RESOLUTION_INVALID"
 	].includes(op.error_code);
-	const out = h("div", {});
+	const out = h("div", { "data-handoff-status": "" });
 	let handoff = null;
 	let repair = null;
 	if (conflict && (state.caps?.scopes || []).includes("start")) {
 		const agent = h("select", { "aria-label": t("agent") }, h("option", { value: "claude" }, "Claude"), h("option", { value: "codex" }, "Codex"));
+		let starting = false;
 		const go = h("button", {
 			class: "secondary",
 			onclick: async () => {
-				go.disabled = true;
+				if (starting) return;
+				starting = true;
+				go.disabled = false;
+				go.setAttribute("aria-disabled", "true");
+				out.setAttribute("aria-busy", "true");
 				try {
 					const o = await submit("integration.handoff", { operation_id: op.operation_id }, { agent: agent.value }, {}, `handoff.${op.operation_id}`);
 					out.append(h("p", {}, opStatus(o), " ", t("handoff_started"), " ", h("a", { href: `#/op/${o.operation_id}` }, o.operation_id)));
 				} catch (e) {
 					out.append(errorBox(e, { within: out }));
+				} finally {
+					starting = false;
+					if (go.isConnected) {
+						go.removeAttribute("aria-disabled");
+						out.removeAttribute("aria-busy");
+						go.disabled = false;
+					}
 				}
-				go.disabled = false;
 			}
 		}, t("start_agent_work"));
 		const d = drawer(confinementNote(op.target?.host || op.external_refs?.host, agent), h("div", { class: "actions" }, agent, go));
@@ -62724,16 +63253,19 @@ function continueFrom(w, checkpointId, notice, children = []) {
 		w.steps.length ? `${t("steps_title")}:\n${w.steps.map((s) => `- [${s.done ? "x" : " "}] ${s.text}`).join("\n")}` : ""
 	].filter(Boolean).join("\n\n"));
 	const agent = h("select", { "aria-label": t("agent") }, h("option", { value: "claude" }, "Claude"), h("option", { value: "codex" }, "Codex"));
-	const out = h("div", {});
+	const out = h("div", { "data-work-start-status": "" });
 	const draft = attachmentDraft(`continue.${checkpointId}.${w.work_item_id}`, instr, (w.attachments || []).filter((x) => x.role === "input"));
 	draft.bindFields({ agent });
-	let expectedHead = null;
+	let expectedHead = null, starting = false;
 	const go = h("button", {
 		class: "primary",
 		onclick: async () => {
 			const instructions = instr.value.trim() ? instr.value : draft.refs().length ? t("dispatch_inspect_images") : "";
-			if (!instructions) return;
-			go.disabled = true;
+			if (!instructions || starting) return;
+			starting = true;
+			go.disabled = false;
+			go.setAttribute("aria-disabled", "true");
+			out.setAttribute("aria-busy", "true");
 			let op;
 			try {
 				if (!draft.ready() && !draft.pending()) throw new Error(t("attachments_not_ready"));
@@ -62751,11 +63283,25 @@ function continueFrom(w, checkpointId, notice, children = []) {
 				} : {}, `continue.${checkpointId}`);
 			} catch (e) {
 				fill(out, errorBox(e, { within: out }));
-				go.disabled = false;
+				if (go.isConnected) {
+					go.removeAttribute("aria-disabled");
+					out.removeAttribute("aria-busy");
+					go.disabled = false;
+				}
+				starting = false;
 				return;
 			}
 			assertView(connection);
-			fill(out, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id));
+			const link = h("a", { href: `#/op/${op.operation_id}` }, op.operation_id);
+			fill(out, opStatus(op), " ", link);
+			const active = document.activeElement;
+			const owned = active === go || active === document.body;
+			if (go.isConnected) {
+				go.removeAttribute("aria-disabled");
+				out.removeAttribute("aria-busy");
+				go.disabled = true;
+				if (owned) link.focus();
+			}
 			if (TERMINAL.includes(op.status) && op.status !== "succeeded") return;
 			if (!state.caps?.artifacts) {
 				if (await change(notice, "work_item.link", { work_item_id: w.work_item_id }, {
