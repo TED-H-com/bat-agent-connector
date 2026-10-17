@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- A Board that was already left no longer clears another project's selected Work when its own read fails.
+
 - Fleet: keyboard focus stays on the control you are using while a status
   refresh or your own action runs. The control looks unavailable until that
   work finishes, a second press is ignored, and a background refresh stays quiet.

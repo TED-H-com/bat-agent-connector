@@ -35192,9 +35192,14 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		if (data.next_cursor != null && (!data.cards.length || data.next_cursor < data.cards.at(-1).binding.sequence)) throw Error(t("pm_kanban_scope_error"));
 		return data;
 	}
+	const retiredView = (error) => [
+		"VIEW_CHANGED",
+		"CONNECTION_CHANGED",
+		"PM_DISPOSED"
+	].includes(error.code);
 	function writeSelection(id) {
 		const [path, query] = location.hash.split("?");
-		if (!path.endsWith("/board")) return;
+		if (path !== `#/pm/${encodeURIComponent(workspaceId)}/board`) return;
 		const params = new URLSearchParams(query);
 		if (id) params.set("select", id);
 		else params.delete("select");
@@ -35662,6 +35667,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			renderMetrics();
 			showDetail(data.card);
 		} catch (error) {
+			if (retiredView(error)) return;
 			if (generation === serial && ticket === detailSerial) {
 				observers.get(id)?.withdraw();
 				if (error.message === t("pm_kanban_scope_error")) {
@@ -35673,6 +35679,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 					alive();
 					if (generation !== serial || ticket !== detailSerial) return;
 				} catch (parentError) {
+					if (retiredView(parentError)) return;
 					if (generation === serial && ticket === detailSerial) unavailable(parentError);
 					return;
 				}
@@ -35772,6 +35779,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 				cards: [...combined.values()]
 			});
 		} catch (error) {
+			if (retiredView(error)) return;
 			if (ticket === serial) unavailable(error);
 		} finally {
 			if (ticket === serial) {
