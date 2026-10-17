@@ -107,6 +107,300 @@ fn validate_repository_preview(body: Option<&Value>) -> Result<(), String> {
     Ok(())
 }
 
+// Start preview creates no operation, write frame, or database row. The unique-candidate
+// path may read BAT `workspace:load` and GitHub; those reads are not writes.
+fn validate_start_preview(body: Option<&Value>) -> Result<(), String> {
+    let doc = match body {
+        None => return Err("Start preview body is required".into()),
+        Some(value) => value
+            .as_object()
+            .ok_or("Invalid typed start preview request")?,
+    };
+    if doc.keys().any(|key| {
+        !matches!(
+            key.as_str(),
+            "code_target"
+                | "delivery"
+                | "requirement_ids"
+                | "instruction"
+                | "profile_id"
+                | "profile_revision"
+        )
+    }) {
+        return Err("Invalid typed start preview request".into());
+    }
+    match (doc.get("profile_id"), doc.get("profile_revision")) {
+        (None, None) => (),
+        (Some(id), Some(revision)) => {
+            if !id
+                .as_str()
+                .is_some_and(|id| Regex::new(r"^wpf_[0-9a-f]{32}$").unwrap().is_match(id))
+                || !revision.as_i64().is_some_and(|n| n > 0)
+                || doc.get("code_target").is_none()
+            {
+                return Err("Invalid typed start profile pin".into());
+            }
+        }
+        _ => return Err("Supply both profile identity and revision".into()),
+    }
+    if let Some(delivery) = doc.get("delivery") {
+        if !matches!(
+            delivery.as_str(),
+            Some("pull_request" | "reviewable_changes")
+        ) {
+            return Err("Invalid typed start preview request".into());
+        }
+    }
+    if let Some(instruction) = doc.get("instruction") {
+        let text = instruction
+            .as_str()
+            .filter(|text| !text.trim().is_empty() && text.chars().count() <= 4000)
+            .ok_or("Invalid typed start preview request")?;
+        let collapsed: String = text
+            .chars()
+            .map(|ch| if ch.is_control() { ' ' } else { ch })
+            .collect();
+        if collapsed.trim().is_empty() {
+            return Err("Invalid typed start preview request".into());
+        }
+    }
+    if let Some(ids) = doc.get("requirement_ids") {
+        let list = ids
+            .as_array()
+            .ok_or("Invalid typed start preview request")?;
+        if !(1..=50).contains(&list.len()) {
+            return Err("Invalid typed start preview request".into());
+        }
+        let mut seen = std::collections::HashSet::new();
+        let item = Regex::new(r"^[a-z][a-z0-9_.-]{0,79}$").unwrap();
+        for id in list {
+            let text = id.as_str().ok_or("Invalid typed start preview request")?;
+            if !item.is_match(text) || !seen.insert(text.to_string()) {
+                return Err("Invalid typed start preview request".into());
+            }
+        }
+    }
+    if let Some(target) = doc.get("code_target") {
+        let fields = target
+            .as_object()
+            .ok_or("Invalid typed start preview request")?;
+        if fields.keys().any(|key| {
+            !matches!(
+                key.as_str(),
+                "repository" | "host" | "workspace_id" | "source_ref"
+            )
+        }) {
+            return Err("Invalid typed start preview request".into());
+        }
+        let logical = |value: &str| {
+            !value.trim().is_empty() && value.len() <= 256 && !value.chars().any(char::is_control)
+        };
+        if let Some(repository) = fields.get("repository") {
+            let repository = repository
+                .as_str()
+                .ok_or("Invalid typed start preview request")?;
+            if !logical(repository)
+                || !Regex::new(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+                    .unwrap()
+                    .is_match(repository)
+            {
+                return Err("Invalid repository, workspace or published branch identity".into());
+            }
+        }
+        if let Some(host) = fields.get("host") {
+            let host = host.as_str().ok_or("Invalid typed start preview request")?;
+            if !logical(host)
+                || !host
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || b"_.-".contains(&byte))
+            {
+                return Err("Invalid repository, workspace or published branch identity".into());
+            }
+        }
+        if let Some(workspace) = fields.get("workspace_id") {
+            let workspace = workspace
+                .as_str()
+                .ok_or("Invalid typed start preview request")?;
+            if !logical(workspace) {
+                return Err("Invalid repository, workspace or published branch identity".into());
+            }
+        }
+        if let Some(source_ref) = fields.get("source_ref") {
+            let source_ref = source_ref
+                .as_str()
+                .ok_or("Invalid typed start preview request")?
+                .trim();
+            let branch = source_ref.strip_prefix("refs/heads/").unwrap_or("");
+            if branch.is_empty()
+                || branch.len() > 200
+                || branch.starts_with('-')
+                || branch.ends_with(['.', '/'])
+                || branch.contains("..")
+                || branch.contains("//")
+                || branch
+                    .split('/')
+                    .any(|part| part.starts_with('.') || part.ends_with(".lock"))
+                || !branch
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || b"._/-".contains(&byte))
+            {
+                return Err("Invalid repository, workspace or published branch identity".into());
+            }
+        }
+    }
+    Ok(())
+}
+
+// Read-only compound preview. Execution still goes through typed operations;
+// this route accepts the reviewed document and a bounded selection only.
+fn validate_adopt_start_preview(body: Option<&Value>) -> Result<(), String> {
+    let fail = || "Invalid typed adopt-and-start preview request".to_string();
+    let doc = body.and_then(Value::as_object).ok_or_else(fail)?;
+    if doc.keys().any(|key| {
+        !matches!(
+            key.as_str(),
+            "proposal_id" | "review" | "rationale" | "works"
+        )
+    }) || !Regex::new(r"^pmcp_[0-9a-f]{32}$")
+        .unwrap()
+        .is_match(doc.get("proposal_id").and_then(Value::as_str).unwrap_or(""))
+    {
+        return Err(fail());
+    }
+    let text = |value: &Value, max: usize| {
+        value
+            .as_str()
+            .is_some_and(|s| !s.trim().is_empty() && s.chars().count() <= max && !s.contains('\0'))
+    };
+    if doc.get("rationale").is_some_and(|value| !text(value, 4000)) {
+        return Err(fail());
+    }
+    let review = doc
+        .get("review")
+        .and_then(Value::as_object)
+        .ok_or_else(fail)?;
+    if review.len() != 4
+        || review.keys().any(|key| {
+            !matches!(
+                key.as_str(),
+                "title" | "rows" | "requirements" | "removed_requirement_ids"
+            )
+        })
+        || !review.get("title").is_some_and(|value| text(value, 160))
+    {
+        return Err(fail());
+    }
+    let rows = review
+        .get("rows")
+        .and_then(Value::as_array)
+        .ok_or_else(fail)?;
+    let requirements = review
+        .get("requirements")
+        .and_then(Value::as_array)
+        .ok_or_else(fail)?;
+    let removed = review
+        .get("removed_requirement_ids")
+        .and_then(Value::as_array)
+        .ok_or_else(fail)?;
+    if !(1..=20).contains(&rows.len()) || requirements.len() > 20 || removed.len() > 20 {
+        return Err(fail());
+    }
+    let item = Regex::new(r"^[a-z][a-z0-9_.-]{0,79}$").unwrap();
+    let ids = |value: &Value, max: usize| {
+        value.as_array().is_some_and(|list| {
+            list.len() <= max
+                && list
+                    .iter()
+                    .all(|id| id.as_str().is_some_and(|id| item.is_match(id)))
+        })
+    };
+    for row in rows {
+        let row = row.as_object().ok_or_else(fail)?;
+        if row.len() != 4
+            || row
+                .keys()
+                .any(|key| !matches!(key.as_str(), "key" | "text" | "status" | "include"))
+            || !row.get("key").is_some_and(|value| text(value, 60))
+            || !row.get("text").is_some_and(|value| text(value, 4000))
+            || !matches!(
+                row.get("status").and_then(Value::as_str),
+                Some(
+                    "user_confirmed"
+                        | "agent_assumption"
+                        | "unresolved"
+                        | "conflicting"
+                        | "not_applicable"
+                )
+            )
+            || !row.get("include").is_some_and(Value::is_boolean)
+        {
+            return Err(fail());
+        }
+    }
+    for requirement in requirements {
+        let row = requirement.as_object().ok_or_else(fail)?;
+        if row.len() != 5
+            || row.keys().any(|key| {
+                !matches!(
+                    key.as_str(),
+                    "id" | "source_key" | "acceptance_keys" | "priority" | "depends_on"
+                )
+            })
+            || !row
+                .get("id")
+                .and_then(Value::as_str)
+                .is_some_and(|value| item.is_match(value))
+            || !row.get("source_key").is_some_and(|value| text(value, 60))
+            || !row
+                .get("acceptance_keys")
+                .is_some_and(|value| ids(value, 20))
+            || !row.get("depends_on").is_some_and(|value| ids(value, 20))
+            || !matches!(
+                row.get("priority").and_then(Value::as_str),
+                Some("must" | "should" | "could" | "unresolved")
+            )
+        {
+            return Err(fail());
+        }
+    }
+    if removed
+        .iter()
+        .any(|value| !value.as_str().is_some_and(|id| item.is_match(id)))
+    {
+        return Err(fail());
+    }
+    let works = doc
+        .get("works")
+        .and_then(Value::as_array)
+        .ok_or_else(fail)?;
+    if !(1..=10).contains(&works.len()) {
+        return Err(fail());
+    }
+    let mut seen = std::collections::HashSet::new();
+    let work_id = Regex::new(r"^wi_[0-9a-f]{20}$").unwrap();
+    for work in works {
+        let mut work = work.as_object().ok_or_else(fail)?.clone();
+        let id = work
+            .remove("work_item_id")
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .ok_or_else(fail)?;
+        if !work_id.is_match(&id) || !seen.insert(id) || !work.contains_key("requirement_ids") {
+            return Err(fail());
+        }
+        if work
+            .remove("agent")
+            .is_some_and(|value| !matches!(value.as_str(), Some("claude" | "codex")))
+            || work
+                .remove("model")
+                .is_some_and(|value| !value.is_null() && !text(&value, 128))
+        {
+            return Err(fail());
+        }
+        validate_start_preview(Some(&Value::Object(work)))?;
+    }
+    Ok(())
+}
+
 // Cleanup previews only describe existing central IDs. They cannot carry headers,
 // host paths, commands, credential material, or an altered cleanup apply envelope.
 #[derive(Deserialize)]
@@ -1166,7 +1460,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/installation-capabilities|pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context(?:-bundle)?)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/resources|/overview|/schedule|/register(?:/(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision)\.[A-Za-z0-9._-]{1,180})?|/dependencies(?:/(?:revisions|impact))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/maintenance-checks(?:/(?:current|pmck_[0-9a-f]{32}))?|/maintenance-reviews(?:/(?:current|pmrevw_[0-9a-f]{32}(?:/events)?))?|/maintenance-schedule|/ahp-adapters|/ahp-observations(?:/(?:current|pmah_[0-9a-f]{32}))?|/github-observations(?:/(?:current|pmgh_[0-9a-f]{32}))?|/maintenance-repairs(?:/(?:current|pmrp_[0-9a-f]{32}))?|/executions/op_[0-9a-f]{32}/verification-config|/execution-verifications/op_[0-9a-f]{32}|/pr-publications/op_[0-9a-f]{32}|/quality-reviews(?:/pmqr_[0-9a-f]{32})?|/work-batches(?:/pmbt_[0-9a-f]{32})?|/maintenance-findings/current|/spec-materializations(?:/pmsp_[0-9a-f]{32})?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/conversation-proposals(?:/pmcp_[0-9a-f]{32})?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/(?:capture|deliveries|quality))?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+            r"pm/installation-capabilities|pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context(?:-bundle)?)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/resources|/overview|/schedule|/register(?:/(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision)\.[A-Za-z0-9._-]{1,180})?|/dependencies(?:/(?:revisions|impact))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/maintenance-checks(?:/(?:current|pmck_[0-9a-f]{32}))?|/maintenance-reviews(?:/(?:current|pmrevw_[0-9a-f]{32}(?:/events)?))?|/maintenance-schedule|/ahp-adapters|/ahp-observations(?:/(?:current|pmah_[0-9a-f]{32}))?|/github-observations(?:/(?:current|pmgh_[0-9a-f]{32}))?|/maintenance-repairs(?:/(?:current|pmrp_[0-9a-f]{32}))?|/executions/op_[0-9a-f]{32}/verification-config|/execution-verifications/op_[0-9a-f]{32}|/pr-publications/op_[0-9a-f]{32}|/quality-reviews(?:/pmqr_[0-9a-f]{32})?|/work-batches(?:/pmbt_[0-9a-f]{32})?|/maintenance-findings/current|/spec-materializations(?:/pmsp_[0-9a-f]{32})?|/work-profiles(?:/wpf_[0-9a-f]{32}(?:/readiness)?)?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/conversation-proposals(?:/pmcp_[0-9a-f]{32})?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/(?:capture|deliveries|quality|attempts|inputs))?|/work-attempts/att_[0-9a-f]{32}(?:/(?:result|changes|diff))?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1176,7 +1470,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             r"delivery/previews/mpv_[0-9a-f]{32}|integrations/previews/ipv_[0-9a-f]{32}|integrations/op_[0-9a-f]{32})$")).unwrap())
     } else if input.method == "POST" {
         POST.get_or_init(|| {
-            Regex::new(r"^/(?:managed/setup/secrets|repository-previews|approval-previews|artifact-capture-previews|artifact-managed-capture-previews|cleanup-previews|operations(?:/op_[0-9a-f]{32}/(?:cancel|resume))?)$")
+            Regex::new(r"^/(?:managed/setup/secrets|repository-previews|approval-previews|artifact-capture-previews|artifact-managed-capture-previews|cleanup-previews|operations(?:/op_[0-9a-f]{32}/(?:cancel|resume))?|pm/workspaces/ws_[0-9a-f]{32}/(?:work/wi_[0-9a-f]{20}/start-preview|threads/pmt_[0-9a-f]{32}/adopt-and-start-preview))$")
                 .unwrap()
         })
     } else {
@@ -1223,6 +1517,18 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             return Err("Repository preview accepts no query or operation key".into());
         }
         validate_repository_preview(input.body.as_ref())?;
+    }
+    if path.ends_with("/adopt-and-start-preview") {
+        if input.path != path || input.idempotency_key.is_some() {
+            return Err("Adopt-and-start preview accepts no query or operation key".into());
+        }
+        validate_adopt_start_preview(input.body.as_ref())?;
+    }
+    if path.ends_with("/start-preview") {
+        if input.path != path || input.idempotency_key.is_some() {
+            return Err("Start preview accepts no query or operation key".into());
+        }
+        validate_start_preview(input.body.as_ref())?;
     }
     if path == "/approval-previews" {
         if input.path != path || input.idempotency_key.is_some() {
@@ -1291,6 +1597,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             return Err("Control characters in central query are refused".into());
         }
         if pm {
+            let profile_list = path.ends_with("/work-profiles");
             let thread_list = path.ends_with("/threads");
             let run_list = path.ends_with("/runs");
             let plan_list = path.ends_with("/plans");
@@ -1382,6 +1689,11 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 .is_some_and(|id| id.starts_with("pmt_"))
                 && !path.ends_with("/context")
                 && !path.ends_with("/context-bundle");
+            let attempt_list = path.contains("/work/") && path.ends_with("/attempts");
+            let input_list = path.contains("/work/") && path.ends_with("/inputs");
+            let attempt_result = path.contains("/work-attempts/") && path.ends_with("/result");
+            let attempt_changes = path.contains("/work-attempts/") && path.ends_with("/changes");
+            let attempt_diff = path.contains("/work-attempts/") && path.ends_with("/diff");
             let valid = match key.as_ref() {
                 "dependency" if path.ends_with("/dependencies/impact") => {
                     value.len() == 41
@@ -1406,6 +1718,18 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                         && !value.contains("..")
                         && !value.starts_with('/')
                         && !value.ends_with('/')
+                }
+                "limit" if profile_list => {
+                    !value.is_empty()
+                        && value.len() <= 3
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<u16>().is_ok_and(|n| (1..=100).contains(&n))
+                }
+                "cursor" if profile_list => {
+                    !value.is_empty()
+                        && value.len() <= 19
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<i64>().is_ok_and(|n| n >= 0)
                 }
                 "limit" if schedule => {
                     !value.is_empty()
@@ -1666,6 +1990,63 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                         && value
                             .parse::<u32>()
                             .is_ok_and(|n| (2000..=64000).contains(&n))
+                }
+                "after" if attempt_list || input_list => {
+                    !value.is_empty()
+                        && value.len() <= 19
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<i64>().is_ok_and(|n| n >= 0)
+                }
+                "limit" if attempt_list || input_list => {
+                    !value.is_empty()
+                        && value.len() <= 9
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<i64>().is_ok_and(|n| (1..=100).contains(&n))
+                }
+                "attempt_id" if input_list => {
+                    value.len() == 36
+                        && value.starts_with("att_")
+                        && value[4..]
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                }
+                "cursor" if attempt_result => {
+                    !value.is_empty()
+                        && value.len() <= 19
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<i64>().is_ok_and(|n| n >= 0)
+                }
+                "wait_ms" if attempt_result => {
+                    !value.is_empty()
+                        && value.len() <= 9
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value
+                            .parse::<i64>()
+                            .is_ok_and(|n| (0..=10_000).contains(&n))
+                }
+                "max_commits" if attempt_changes => {
+                    !value.is_empty()
+                        && value.len() <= 9
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<i64>().is_ok_and(|n| (1..=30).contains(&n))
+                }
+                "max_files" if attempt_changes => {
+                    !value.is_empty()
+                        && value.len() <= 9
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<i64>().is_ok_and(|n| (1..=80).contains(&n))
+                }
+                "commit" if attempt_diff => {
+                    value.len() == 40
+                        && value
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                }
+                "path" if attempt_diff => {
+                    value.len() <= 2048
+                        && !value.trim().is_empty()
+                        && !value.starts_with('/')
+                        && !value.split('/').any(|part| part == "..")
                 }
                 _ => false,
             };
@@ -2300,6 +2681,306 @@ mod tests {
         ] {
             assert!(validate_request(&get(path)).is_err(), "{path}");
         }
+    }
+
+    #[test]
+    fn work_profiles_use_read_only_routes_and_exact_start_pins() {
+        let root = "/pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work-profiles";
+        let profile = "wpf_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        for path in [
+            root.to_string(),
+            format!("{root}?limit=100&cursor=0"),
+            format!("{root}/{profile}"),
+            format!("{root}/{profile}/readiness"),
+        ] {
+            assert!(validate_request(&get(&path)).is_ok(), "{path}");
+            assert!(validate_request(&request("POST", &path)).is_err(), "{path}");
+        }
+        for path in [
+            format!("{root}?cursor=-1"),
+            format!("{root}?limit=101"),
+            format!("{root}?cursor=9223372036854775808"),
+            format!("{root}?cursor=1&cursor=2"),
+            format!("{root}?after=0"),
+            format!("{root}/{profile}?limit=1"),
+            format!("{root}/{profile}/readiness?probe=true"),
+            format!("{root}/wpf_invalid/readiness"),
+        ] {
+            assert!(validate_request(&get(&path)).is_err(), "{path}");
+        }
+        let body = serde_json::json!({"profile_id":profile,"profile_revision":1,
+            "code_target":{"repository":"example/library","host":"fixture","workspace_id":"ws-1"}});
+        assert!(validate_start_preview(Some(&body)).is_ok());
+        for field in ["profile_id", "profile_revision", "code_target"] {
+            let mut invalid = body.clone();
+            invalid.as_object_mut().unwrap().remove(field);
+            assert!(validate_start_preview(Some(&invalid)).is_err(), "{field}");
+        }
+        for revision in [
+            serde_json::json!(0),
+            serde_json::json!(-1),
+            serde_json::json!(true),
+            serde_json::json!(1.5),
+            serde_json::json!("1"),
+        ] {
+            let mut invalid = body.clone();
+            invalid["profile_revision"] = revision;
+            assert!(validate_start_preview(Some(&invalid)).is_err());
+        }
+    }
+
+    #[test]
+    fn work_attempt_reads_and_start_preview_use_exact_routes() {
+        let ws = "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let wi = "wi_bbbbbbbbbbbbbbbbbbbb";
+        let att = "att_cccccccccccccccccccccccccccccccc";
+        let attempts = format!("/pm/workspaces/{ws}/work/{wi}/attempts");
+        let attempt = format!("/pm/workspaces/{ws}/work-attempts/{att}");
+        let result = format!("/pm/workspaces/{ws}/work-attempts/{att}/result");
+        let changes = format!("/pm/workspaces/{ws}/work-attempts/{att}/changes");
+        let diff = format!("/pm/workspaces/{ws}/work-attempts/{att}/diff");
+        let preview = format!("/pm/workspaces/{ws}/work/{wi}/start-preview");
+        let sha = "0123456789abcdef0123456789abcdef01234567";
+        for path in [
+            attempts.clone(),
+            format!("{attempts}?limit=100"),
+            format!("{attempts}?after=0&limit=1"),
+            format!("{attempts}?after=0100&limit=000000100"),
+            attempt.clone(),
+            result.clone(),
+            format!("{result}?cursor=0&wait_ms=0"),
+            format!("{result}?cursor=1&wait_ms=10000"),
+            format!("{result}?wait_ms=000000000"),
+            changes.clone(),
+            format!("{changes}?max_commits=1&max_files=1"),
+            format!("{changes}?max_commits=30&max_files=80"),
+            diff.clone(),
+            format!("{diff}?commit={sha}&path=src/main.txt"),
+            format!("{diff}?commit={sha}&path=src/./nested.txt"),
+            format!("{diff}?path=README.md"),
+        ] {
+            assert!(validate_request(&get(&path)).is_ok(), "{path}");
+            assert!(validate_request(&request("POST", &path)).is_err(), "{path}");
+        }
+        let mut keyed = get(&attempts);
+        keyed.idempotency_key = Some("unexpected".into());
+        assert!(validate_request(&keyed).is_err());
+        for path in [
+            format!("/pm/workspaces/wk_{}/work/{wi}/attempts", "a".repeat(32)),
+            format!(
+                "/pm/workspaces/{}/work/{wi}/attempts",
+                "ws_".to_string() + &"a".repeat(31)
+            ),
+            format!("/pm/workspaces/{ws}/work/wj_{}/attempts", "b".repeat(20)),
+            format!(
+                "/pm/workspaces/{ws}/work/{}/attempts",
+                "wi_".to_string() + &"b".repeat(19)
+            ),
+            format!("/pm/workspaces/{ws}/work/{wi}/attempts/extra"),
+            format!("/pm/workspaces/{ws}/work/attempts"),
+            format!("/pm/workspaces/{ws}/../work/{wi}/attempts"),
+            format!("/pm/workspaces/{ws}/work/%77i_{}/attempts", "b".repeat(20)),
+            format!("{attempts}?cursor=1"),
+            format!("{attempts}?limit=0"),
+            format!("{attempts}?limit=101"),
+            format!("{attempts}?limit=100&limit=100"),
+            format!("{attempts}?after=9223372036854775808"),
+            format!("{attempts}?after=-1"),
+            format!("{attempts}?unknown=1"),
+            format!(
+                "/pm/workspaces/{ws}/work-attempts/at_{}/result",
+                "c".repeat(32)
+            ),
+            format!(
+                "/pm/workspaces/{ws}/work-attempts/{}/result",
+                "att_".to_string() + &"c".repeat(31)
+            ),
+            format!("{result}/extra"),
+            format!("/pm/workspaces/{ws}/work-attempts/result"),
+            format!("{result}?limit=1"),
+            format!("{result}?wait_ms=10001"),
+            format!("{result}?cursor=-1"),
+            format!("{result}?wait_ms=0000000000"),
+            format!("{attempt}?limit=1"),
+            format!("{attempt}?wait_ms=0"),
+            format!("{attempt}/extra"),
+            format!("/pm/workspaces/{ws}/work-attempts/{att}/result-sources"),
+            format!("{changes}/extra"),
+            format!("{changes}?max_commits=0"),
+            format!("{changes}?max_commits=31"),
+            format!("{changes}?max_files=0"),
+            format!("{changes}?max_files=81"),
+            format!("{changes}?after=1"),
+            format!("{changes}?max_commits=30&max_commits=1"),
+            format!("{diff}/extra"),
+            format!("{diff}?commit={}", "A".repeat(40)),
+            format!("{diff}?commit={}", "a".repeat(39)),
+            format!("{diff}?commit={sha}&path=/etc/passwd"),
+            format!("{diff}?commit={sha}&path=src/../../secret"),
+            format!("{diff}?commit={sha}&path="),
+            format!("{diff}?limit=1"),
+            format!("{preview}?limit=1"),
+        ] {
+            assert!(validate_request(&get(&path)).is_err(), "{path}");
+        }
+        assert!(validate_request(&request("GET", &preview)).is_err());
+        let mut posted = request("POST", &preview);
+        for body in [
+            serde_json::json!({}),
+            serde_json::json!({"instruction": "Ship the login fix\nwith tests", "delivery": "pull_request"}),
+            serde_json::json!({"instruction": "Ship it", "delivery": "reviewable_changes", "requirement_ids": ["login"], "code_target": {"repository": "octo/repo", "host": "fixture", "workspace_id": "folder"}}),
+            serde_json::json!({"code_target": {"source_ref": "refs/heads/main"}}),
+        ] {
+            posted.body = Some(body);
+            posted.idempotency_key = None;
+            posted.path = preview.clone();
+            assert!(
+                validate_request(&posted).is_ok(),
+                "{}",
+                posted.body.as_ref().unwrap()
+            );
+        }
+        for body in [
+            serde_json::json!({"agent": "claude"}),
+            serde_json::json!({"delivery": "branch"}),
+            serde_json::json!({"delivery": 1}),
+            serde_json::json!({"instruction": ""}),
+            serde_json::json!({"instruction": "\n"}),
+            serde_json::json!({"instruction": "x".repeat(4001)}),
+            serde_json::json!({"instruction": 1}),
+            serde_json::json!({"instruction": null}),
+            serde_json::json!({"requirement_ids": []}),
+            serde_json::json!({"requirement_ids": ["Login"]}),
+            serde_json::json!({"requirement_ids": ["login", "login"]}),
+            serde_json::json!({"requirement_ids": (0..51).map(|n| format!("item-{n}")).collect::<Vec<_>>()}),
+            serde_json::json!({"code_target": {"repository": "https://github.com/octo/repo"}}),
+            serde_json::json!({"code_target": {"host": "bad/host"}}),
+            serde_json::json!({"code_target": {"workspace_id": ""}}),
+            serde_json::json!({"code_target": {"source_ref": "main"}}),
+            serde_json::json!({"code_target": {"source_ref": "refs/heads/../main"}}),
+            serde_json::json!({"code_target": {"extra": "no"}}),
+            serde_json::json!([]),
+        ] {
+            posted.body = Some(body);
+            assert!(
+                validate_request(&posted).is_err(),
+                "{}",
+                posted.body.as_ref().unwrap()
+            );
+        }
+        posted.body = None;
+        assert!(validate_request(&posted).is_err());
+        posted.body = Some(serde_json::json!({}));
+        posted.idempotency_key = Some("unexpected".into());
+        assert!(validate_request(&posted).is_err());
+        posted.idempotency_key = None;
+        posted.path = format!("{preview}?limit=1");
+        assert!(validate_request(&posted).is_err());
+    }
+
+    #[test]
+    fn adopt_and_start_preview_has_a_bounded_read_only_contract() {
+        let ws = format!("ws_{}", "a".repeat(32));
+        let thread = format!("pmt_{}", "b".repeat(32));
+        let path = format!("/pm/workspaces/{ws}/threads/{thread}/adopt-and-start-preview");
+        let body = serde_json::json!({
+            "proposal_id": format!("pmcp_{}", "c".repeat(32)),
+            "review": {"title":"Login repair", "rows":[{"key":"login","text":"Prevent duplicate login","status":"user_confirmed","include":true}],
+                "requirements":[{"id":"login","source_key":"login","acceptance_keys":["login"],"priority":"must","depends_on":[]}], "removed_requirement_ids":[]},
+            "rationale":"Adopt the reviewed repair",
+            "works":[{"work_item_id":format!("wi_{}", "d".repeat(20)),"requirement_ids":["login"]}]
+        });
+        let mut input = request("POST", &path);
+        input.body = Some(body.clone());
+        assert!(validate_request(&input).is_ok());
+        for bad_path in [
+            format!("{path}?limit=1"),
+            path.replace(&thread, "pmt_bad"),
+            format!("{path}/extra"),
+        ] {
+            input.path = bad_path;
+            assert!(validate_request(&input).is_err());
+        }
+        input.path = path.clone();
+        input.idempotency_key = Some("preview-is-not-an-operation".into());
+        assert!(validate_request(&input).is_err());
+        input.idempotency_key = None;
+        for bad in [
+            serde_json::json!({}),
+            serde_json::json!({"url":"https://example.invalid"}),
+        ] {
+            input.body = Some(bad);
+            assert!(validate_request(&input).is_err());
+        }
+        for field in ["command", "headers", "profile_id", "preconditions"] {
+            let mut changed = body.clone();
+            changed["works"][0][field] = serde_json::json!("forbidden");
+            input.body = Some(changed);
+            assert!(validate_request(&input).is_err());
+        }
+        for count in [0, 2, 11] {
+            let mut changed = body.clone();
+            changed["works"] = serde_json::json!(vec![body["works"][0].clone(); count]);
+            input.body = Some(changed);
+            assert!(validate_request(&input).is_err());
+        }
+        let mut changed = body.clone();
+        changed["review"]["rows"][0]["text"] = serde_json::json!("x".repeat(4001));
+        input.body = Some(changed);
+        assert!(validate_request(&input).is_err());
+        assert!(validate_request(&request("GET", &path)).is_err());
+    }
+
+    #[test]
+    fn work_follow_up_inputs_are_bounded_reads_only() {
+        let route = "/pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work/wi_bbbbbbbbbbbbbbbbbbbb/inputs";
+        for suffix in [
+            "",
+            "?limit=1",
+            "?limit=100&after=0",
+            "?after=9223372036854775807",
+            "?limit=50&attempt_id=att_cccccccccccccccccccccccccccccccc",
+        ] {
+            let path = format!("{route}{suffix}");
+            assert!(validate_request(&get(&path)).is_ok(), "{path}");
+            assert!(validate_request(&request("POST", &path)).is_err(), "{path}");
+        }
+        for suffix in [
+            "/extra",
+            "?limit=0",
+            "?limit=101",
+            "?limit=1&limit=2",
+            "?after=-1",
+            "?after=9223372036854775808",
+            "?cursor=1",
+            "?wait_ms=0",
+            "?after=1.5",
+            "?after=",
+            "?attempt_id=",
+            "?attempt_id=att_short",
+            "?attempt_id=att_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+            "?attempt_id=att_cccccccccccccccccccccccccccccccc&attempt_id=att_dddddddddddddddddddddddddddddddd",
+        ] {
+            let path = format!("{route}{suffix}");
+            assert!(validate_request(&get(&path)).is_err(), "{path}");
+        }
+        for path in [
+            route.replace("ws_", "wk_"),
+            route.replace("wi_", "wj_"),
+            route.replace("/inputs", "/input"),
+            route.replace("/inputs", "/inputs/"),
+            route.replace("/work/", "/work/../"),
+        ] {
+            assert!(validate_request(&get(&path)).is_err(), "{path}");
+        }
+        let mut keyed = get(route);
+        keyed.idempotency_key = Some("not-an-operation".into());
+        assert!(validate_request(&keyed).is_err());
+        let outside_inputs = format!(
+            "{}?attempt_id=att_cccccccccccccccccccccccccccccccc",
+            route.replace("/inputs", "/attempts")
+        );
+        assert!(validate_request(&get(&outside_inputs)).is_err());
     }
 
     #[test]
@@ -4111,6 +4792,75 @@ mod tests {
         bridge.disconnect();
         assert!(bridge.request(request("GET", "/hosts")).await.is_err());
         handle.join().unwrap();
+    }
+
+    #[tokio::test]
+    async fn native_work_reads_and_next_input_keep_the_exact_central_identity() {
+        let ws = "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let wi = "wi_bbbbbbbbbbbbbbbbbbbb";
+        let att = "att_cccccccccccccccccccccccccccccccc";
+        let reads = [
+            format!("/pm/workspaces/{ws}/work-attempts/{att}"),
+            format!("/pm/workspaces/{ws}/work/{wi}/inputs?attempt_id={att}&limit=50"),
+            format!("/pm/workspaces/{ws}/work-attempts/{att}/result"),
+        ];
+        let views = [
+            serde_json::json!({"workspace_id":ws,"attempt":{"attempt_id":att,"work_item_id":wi}}),
+            serde_json::json!({"workspace_id":ws,"work_item_id":wi,"attempt_id":att,"items":[]}),
+            serde_json::json!({"contract":"pm-work-attempt-result/v1","workspace_id":ws,"attempt_id":att,"identity":{"work_item_id":wi}}),
+        ];
+        let mut responses = vec![
+            json_response(CAPS),
+            bootstrap_response("fixture", "principal"),
+        ];
+        responses.extend(views.iter().map(|view| json_response(&view.to_string())));
+        responses.extend([
+            json_response(CAPS),
+            bootstrap_response("fixture", "principal"),
+            json_response(r#"{"operation":{"operation_id":"op_fixture","status":"queued"}}"#),
+        ]);
+        let (endpoint, received, handle) = server(responses);
+        let bridge = Bridge::new(
+            Ok(config(&endpoint)),
+            Zeroizing::new("fixture-token".into()),
+        );
+        bridge.connect().await.unwrap();
+        for (path, view) in reads.iter().zip(&views) {
+            assert_eq!(bridge.request(get(path)).await.unwrap().data, *view);
+        }
+        let body = serde_json::json!({"action":"session.send", "target":{"workspace_id":ws,"work_item_id":wi},
+            "params":{"text":"補上重新送出的案例","schedule":"after_current"},"preconditions":{"expected_attempt_id":att}});
+        let mut input = request("POST", "/operations");
+        input.idempotency_key = Some("original-work-input-key".into());
+        input.body = Some(body.clone());
+        assert_eq!(
+            bridge.request(input).await.unwrap().data["operation"]["status"],
+            "queued"
+        );
+        handle.join().unwrap();
+        let requests: Vec<_> = received.iter().collect();
+        assert_eq!(requests.len(), 8);
+        for (raw, path) in requests[2..5].iter().zip(&reads) {
+            assert!(raw.starts_with(&format!("GET /api/v1{path} ")));
+            assert!(!raw.to_lowercase().contains("idempotency-key:"));
+        }
+        assert!(requests[5].starts_with("GET /api/v1/capabilities "));
+        assert!(requests[6].starts_with("GET /api/v1/bootstrap "));
+        let sent = &requests[7];
+        assert!(sent.starts_with("POST /api/v1/operations "));
+        assert!(sent
+            .to_lowercase()
+            .contains("idempotency-key: original-work-input-key"));
+        assert_eq!(
+            serde_json::from_str::<Value>(sent.split_once("\r\n\r\n").unwrap().1).unwrap(),
+            body
+        );
+        assert!(requests.iter().all(|raw| raw
+            .to_lowercase()
+            .contains("authorization: bearer fixture-token")));
+        assert!(!serde_json::to_string(&bridge.status())
+            .unwrap()
+            .contains("fixture-token"));
     }
 
     #[tokio::test]

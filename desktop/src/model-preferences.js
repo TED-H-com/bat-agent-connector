@@ -78,7 +78,7 @@ export function modelChoice({h, t, api, caps, guard, host, agent, model, submit 
 }
 
 export function modelPreferencesPanel({h, t, api, caps, guard, submit, storageKey, onEvents, errorBox}) {
-  let doc = null, draft = null, intent = null, busy = false, serial = 0, loadedHost = '';
+  let doc = null, draft = null, intent = null, busy = false, serial = 0, loadedHost = '', refreshing = false, pressed = null;
   let drafts = {};
   try {drafts = JSON.parse(localStorage.getItem(storageKey) || '{}'); if (!drafts || Array.isArray(drafts) || typeof drafts !== 'object') drafts = {};} catch { /* no draft */ }
   const host = h('select', {'aria-label': t('models_host')}, h('option', {value: ''}, t('start_choose_host')),
@@ -111,7 +111,11 @@ export function modelPreferencesPanel({h, t, api, caps, guard, submit, storageKe
     agent.addEventListener('change', modified); model.addEventListener('input', modified);
     form.append(h('label', {}, t(`models_${role}_agent`), agent), h('label', {}, t(`models_${role}_model`), model));
   }
-  const refresh = iconButton({icon:'refresh-cw', label:t('models_refresh'), ...{class: 'secondary', type: 'button', onclick: () => load(true)}});
+  const refresh = iconButton({icon:'refresh-cw', label:t('models_refresh'), ...{class: 'secondary', type: 'button', onclick: () => {
+    if (busy || refreshing) return;
+    refreshing = true; pressed = refresh;
+    Promise.resolve(load(true)).finally(() => {refreshing = false; const button = pressed; pressed = null; update(); settle(button);});
+  }}});
   const reset = h('button', {class: 'secondary', type: 'button', onclick: () => {
     if (!draft || busy || intent || doc?.host !== host.value) return;
     draft.params.hidden = []; draft.params.order = [];
@@ -125,8 +129,9 @@ export function modelPreferencesPanel({h, t, api, caps, guard, submit, storageKe
     } catch (error) {showError(error);}
   }}, t('models_reload_saved'));
   const save = h('button', {class: 'primary', type: 'button', onclick: async () => {
-    if (busy || !draft || !doc || doc.host !== host.value) return;
-    busy = true;
+    if (busy || refreshing) return;
+    if (!draft || !doc || doc.host !== host.value) return;
+    busy = true; pressed = save;
     try {
       guard(); intent ||= {params: copyPreferences(draft.params), revision: draft.revision}; persist(); update();
       const op = await submit('preferences.models.update', {host: loadedHost}, intent.params,
@@ -142,22 +147,51 @@ export function modelPreferencesPanel({h, t, api, caps, guard, submit, storageKe
     } catch (error) {
       try {guard(); if (error.code === 'VERSION_CONFLICT' && error.status === 409) {intent = null; persist();}
         showError(error);} catch { /* retired */ }
-    } finally {busy = false; update();}
+    } finally {busy = false; const button = pressed; pressed = null; update(); settle(button);}
   }}, t('save'));
   const box = h('details', {class: 'panel model-preferences', 'data-model-preferences': ''}, h('summary', {}, t('models_title')),
     h('p', {class: 'muted'}, t('models_personal', {actor: caps()?.actor || ''})),
     h('div', {class: 'capture-fields'}, h('label', {}, t('models_host'), host), h('label', {}, t('models_catalog_agent'), catalogAgent)),
     h('div', {class: 'actions'}, refresh), status, statusDetails, evidence, form, rows,
     h('div', {class: 'actions'}, save, reset, discard), h('h2', {}, t('models_usage')), usage);
+  function shownEnabled(node) {
+    return node && !node.disabled && !node.hidden && node.getClientRects().length > 0;
+  }
+  function arm(button, blocked) {
+    const inFlight = busy || refreshing;
+    if (inFlight && (button === pressed || !blocked)) {
+      button.disabled = false;
+      button.setAttribute('aria-disabled', 'true');
+    } else {
+      button.removeAttribute('aria-disabled');
+      button.disabled = Boolean(blocked);
+    }
+  }
+  function settle(button) {
+    try {guard();} catch {return;}
+    if (!box.isConnected || !button) return;
+    const active = document.activeElement;
+    if (active !== button && active !== document.body) return;
+    if (!button.hidden && !button.disabled) return;
+    if (button === save) {status.tabIndex = -1; status.focus({preventScroll: true}); return;}
+    const group = button.closest('.actions') || button.parentElement;
+    const controls = group ? [...group.querySelectorAll('button, input, select, a')] : [];
+    const next = controls.slice(controls.indexOf(button) + 1).find(shownEnabled);
+    if (next) {next.focus({preventScroll: true}); return;}
+    status.tabIndex = -1;
+    status.focus({preventScroll: true});
+  }
   function update() {
     const locked = busy || Boolean(intent), coherent = doc?.host === host.value;
     for (const input of Object.values(inputs)) input.disabled = locked || !draft || !coherent;
     host.disabled = locked; catalogAgent.disabled = busy;
-    save.disabled = busy || !draft || !coherent || !caps()?.actions?.some(action => action.action === 'preferences.models.update' && action.allowed);
     save.textContent = t(intent ? 'permissions_retry' : 'save');
+    arm(save, !draft || !coherent || !caps()?.actions?.some(action => action.action === 'preferences.models.update' && action.allowed));
     reset.disabled = discard.disabled = locked || !draft || !coherent;
-    refresh.disabled = busy || !host.value;
+    arm(refresh, !host.value);
     for (const input of rows.querySelectorAll('input,button')) input.disabled = locked || !coherent || input.dataset.boundary === 'true';
+    if ([refresh, save].some(button => button.getAttribute('aria-disabled') === 'true')) status.setAttribute('aria-busy', 'true');
+    else status.removeAttribute('aria-busy');
   }
   function renderRows() {
     const focused = document.activeElement?.dataset.modelControl;

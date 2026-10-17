@@ -1,5 +1,12 @@
 export const pmQualityReviewsStrings={
-  en:{
+  en:{pmq_verify_result_heading:'Verify this result',pmq_verify_result_help:'Run the project’s configured checks against this fixed result.',pmq_verify_result_effect:'A passing check adds evidence for review. Requirement acceptance still needs a separate assessment.',pmq_verify_result_changed:'The current checkout differs from this fixed result. Verification cannot run for this result.',pmq_verify_not_offered:'Verification is not available to you for this result right now.',
+    pmq_result_open:'Review this result',
+    pmq_discuss:'Discuss this assessment with PM',pmq_discuss_title:'Review this result with PM',
+    pmq_compare_heading:'Discuss alongside another assessment',pmq_compare_help:'Choose another saved assessment to bring both original results into a new discussion.',
+    pmq_compare_work:'Other work',pmq_compare_assessment:'Original assessment',pmq_compare_open:'Discuss both assessments with PM',pmq_compare_title:'Review both results with PM',
+    pmq_compare_version:'Review {review} · assessment {version}',pmq_compare_more:'Load more assessments',pmq_compare_originals:'These are saved conclusions. They do not establish current project acceptance.',
+    pmq_compare_empty:'No other saved assessment is available for this work.',pmq_compare_partial:'More saved assessments may be available on the next page.',pmq_compare_unavailable:'The original sources could not be checked. Refresh quality sources to choose again.',
+    pmq_result_help:'These conclusions belong to this fixed result. Project acceptance still follows its original evidence policy.',
     pmq_verify_heading:'Verify an original implementation',pmq_verify_help:'Run the trusted project verifier for the selected original implementation. The candidate and command are its saved settings.',pmq_details:'Details',pmq_verify_execution:'Implementation to verify',pmq_verify_refresh:'Refresh verifier source',pmq_verify_loading:'Reading the original verifier and clean candidate…',pmq_verify_command:'Configured command digest',pmq_verify_tree:'Candidate tree',pmq_verify_no_candidate:'A clean fixed candidate is unavailable. Verification cannot start.',pmq_verify_unconfigured:'The original project has no available trusted verifier.',pmq_verify_use_config:'Use current versions',pmq_verify_changed:'The saved candidate or verifier context differs. Review the current source before starting a new verification.',pmq_verify_run:'Verify result',pmq_verify_effect:'This runs the existing configured command. An unresolved original process is recovered by its original key; it is never resent as a new process.',pmq_configured:'configured verifier',pmq_work:'Work item for review',pmq_choose_work:'Choose work with an original engineering package.',pmq_title:'Quality review',pmq_intro:'Review the original acceptance criteria and Definition of Done against a fixed engineering result.',pmq_refresh:'Refresh quality sources',
     pmq_create_heading:'Appoint a review',pmq_history:'Saved review',pmq_choose:'Choose…',pmq_none:'None',pmq_original_missing:'Original selection unavailable',
     pmq_invalid:'The response or selection does not match the original quality sources.',pmq_unavailable:'Original quality sources are unavailable. Drafts remain saved.',pmq_loading:'Reading original review sources…',pmq_history_bound:'Original history exceeds this view’s read limit.',
@@ -24,7 +31,14 @@ export const pmQualityReviewsStrings={
     pmq_reason_work_binding_changed:'The current work binding differs from this original review.',pmq_reason_binding_id_changed:'The selected work binding differs from this original review.',pmq_reason_scope_revision_changed:'The scope revision differs from this original review.',
     pmq_reason_dod_revision_id_changed:'The selected DoD differs from this original review.',pmq_reason_candidate_commit_changed:'The selected candidate differs from this original review.'
   },
-  'zh-TW':{
+  'zh-TW':{pmq_verify_result_heading:'驗證這份成果',pmq_verify_result_help:'使用專案已設定的檢查，驗證這份固定成果。',pmq_verify_result_effect:'檢查通過會增加可供審閱的證據，需求是否驗收仍需另行評估。',pmq_verify_result_changed:'目前工作目錄已不同於這份固定成果，無法針對此成果開始驗證。',pmq_verify_not_offered:'目前無法以你的權限針對這份成果開始驗證。',
+    pmq_result_open:'審閱這份成果',
+    pmq_discuss:'與 PM 討論這次評估',pmq_discuss_title:'與 PM 討論成果',
+    pmq_compare_heading:'一併討論另一份評估',pmq_compare_help:'選擇另一份已保存評估，將兩份原始成果帶入新討論。',
+    pmq_compare_work:'另一件工作',pmq_compare_assessment:'原始評估',pmq_compare_open:'與 PM 討論兩份評估',pmq_compare_title:'與 PM 討論兩份成果',
+    pmq_compare_version:'審查 {review} · 評估 {version}',pmq_compare_more:'載入更多評估',pmq_compare_originals:'這些是已保存的結論，不代表目前專案已通過驗收。',
+    pmq_compare_empty:'這件工作沒有其他可用的已保存評估。',pmq_compare_partial:'下一頁可能還有其他已保存評估。',pmq_compare_unavailable:'目前無法核對原始來源，請重新整理審查來源後再選擇。',
+    pmq_result_help:'這些結論屬於這份固定成果；專案驗收仍依原本的證據政策判定。',
     pmq_verify_heading:'驗證原始實作',pmq_verify_help:'為選定的原始實作執行專案的受信任驗證器。候選結果與命令來自已保存的設定。',pmq_details:'詳細資訊',pmq_verify_execution:'要驗證的實作',pmq_verify_refresh:'更新驗證來源',pmq_verify_loading:'正在讀取原始驗證器與乾淨候選結果…',pmq_verify_command:'已設定命令摘要',pmq_verify_tree:'候選檔案樹',pmq_verify_no_candidate:'目前沒有乾淨且固定的候選結果，無法開始驗證。',pmq_verify_unconfigured:'原始專案目前沒有可用的受信任驗證器。',pmq_verify_use_config:'使用目前版本',pmq_verify_changed:'已保存候選結果或驗證器內容不同。請先核對目前來源，再開始新的驗證。',pmq_verify_run:'驗證結果',pmq_verify_effect:'這會執行既有設定的命令。結果未明的原始程序只能使用原始請求鍵復原，不會以新程序重送。',pmq_configured:'已設定驗證器',pmq_work:'審查工作項目',pmq_choose_work:'請選擇已有原始工程套件的工作。',pmq_title:'品質審查',pmq_intro:'針對固定工程結果，核對原始驗收條件與完成定義。',pmq_refresh:'更新品質來源',
     pmq_create_heading:'指定審查',pmq_history:'已保存審查',pmq_choose:'請選擇…',pmq_none:'無',pmq_original_missing:'無法讀取原本選擇',
     pmq_invalid:'回應或選擇與原始品質來源不符。',pmq_unavailable:'無法讀取原始品質來源。草稿仍已保存。',pmq_loading:'正在讀取原始審查來源…',pmq_history_bound:'原始歷史超出此檢視的讀取限制。',

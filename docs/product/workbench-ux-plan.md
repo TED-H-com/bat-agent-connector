@@ -1,5 +1,11 @@
 > 2026-10-15 owner 交付的 v1.3 UX 實施補充。實作與缺口見[接線狀態](../design/workbench.md)。原附件參考圖僅供私人評審，未納入 repository 或公開展示。
 
+> 2026-10-16：[EC-1.0 整合決議](experience-convergence.md)已統一本文與 v1.3 的實施優先順序。
+> 四個日常入口、專案內六個管理視圖與同 Work 的三種視角保持；先把第一句、第二句、
+> 固定成果與 PR 接成正式 BAT 工作循環。UX01–UX10／V0–V4／UX-A01–48 不重新編號。
+> [開工差額](v1.3-agent-handoff.md)與[整合驗收索引](workbench-ux-acceptance.md#ec-10-整合驗收索引)
+> 回到既有追蹤，不維護另一套進度或 scheduler。
+
 # Better Agent Dashboard：以工作為中心的介面改版計畫
 ## v1.3 UX 實施補充｜Work · Lineage · Live
 

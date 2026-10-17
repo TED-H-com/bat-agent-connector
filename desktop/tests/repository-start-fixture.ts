@@ -98,6 +98,7 @@ export async function publishedFixture(page: Page, native: boolean, options: any
         external_refs: {content_url: 'https://untrusted.invalid'}}}};
     }
     if (path === '/operations/'+publishedId) {
+      if (state.delayRead) await new Promise(resolve => {state.holdRead = resolve;});
       if (state.failRead) return {status: 503, data: {error: {code: 'READ_FAILED', message: 'Published read failed'}}};
       return {status: 200, data: {operation: mismatch({...state.operation, status: state.status})}};
     }

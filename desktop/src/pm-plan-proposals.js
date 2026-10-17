@@ -5,6 +5,7 @@ import {reasonLabel, reasonLabels} from './ui/ui-strings.js';
 import {icon} from './ui/icons.js';
 import {structuredAnalysis} from './pm-structured-analysis.js';
 import {issueResolution} from './pm-issue-resolution.js';
+import {adoptStartReview} from './pm-adopt-start.js';
 // Proposal freshness has its own safe fallback; generic evidence stays Not available.
 export const proposalReasonLabel = (t, reason) => Object.hasOwn(reasonLabels, reason) ? reasonLabel(t, reason) : t('pd_stale');
 const PROPOSE='pm.conversation.propose',ADOPT='pm.conversation.adopt';
@@ -25,9 +26,10 @@ function validRequirements(values,included){
   const ids=new Set(values.map(row=>row.id));return ids.size===values.length&&values.every(row=>included.has(row.source_key)
     &&refs(row.acceptance_keys,included)&&['must','should','could','unresolved'].includes(row.priority)&&refs(row.depends_on,ids,0))&&!cyclic(values);
 }
-export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceId,threadId,thread,permitted,refresh:refreshParent,errorBox,conversation=false,backLink=()=>null,onFollowUp=()=>{},onAnswer=()=>{},onRevision=()=>{},onActivity=()=>{}}) {
+export function planProposals({h,t,api,alive,form,input,labelled,caps,namespace='',workspaceId,threadId,thread,permitted,refresh:refreshParent,errorBox,conversation=false,backLink=()=>null,onFollowUp=()=>{},onAnswer=()=>{},onRevision=()=>{},onActivity=()=>{}}) {
   const base=`/pm/workspaces/${encodeURIComponent(workspaceId)}`,endpoint=base+'/conversation-proposals',target={workspace_id:workspaceId,thread_id:threadId};
   let head=null,capability=null,rows=[],cursor=null,active=null,ticket=0,loading=false,refreshAgain=false,queuedPreferred=null,inFlight=null,ready=false,prepare,adopt,preferredId=null,latestId=null;
+  let compound=null;
   let candidateFields=[],requirementFields=[],rendered='',visible=false,conflict=false,composerNode=null,ask=null,connection=null,working=null,clock=null,adoptedId=null,reviewOpen=false,reviewButton=null,adapterInitialized=false;
   const enabled=()=>caps()?.features?.pm_workspaces?.conversation_proposals?.version===1;
   const writing=()=>visible&&enabled()&&permitted(false)&&thread()?.capabilities?.write===true&&caps()?.scopes?.includes('manage');
@@ -36,6 +38,12 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
   const fresh=()=>!conflict&&active?.adoptable===true;
   const adopted=()=>active?.adoptable_reason==='adopted';
   const original=()=>{try{return JSON.parse(adopt?.values().review||'null');}catch{return null;}};
+  const reviewedBaselineCurrent=()=>{
+    const before=original()?.preconditions;
+    return before&&before.expected_version===thread()?.thread.version
+      &&before.expected_plan_version===head?.version&&before.expected_accepted_revision_id===head?.accepted_revision_id
+      &&before.expected_proposal_digest===active?.document_digest;
+  };
   const actionButton=(attrs,label)=>button({...Object.fromEntries(Object.entries(attrs).filter(([key])=>key!=='class')),variant:attrs.class==='primary'?'primary':'secondary',label});
   const note=key=>h('p',{class:'muted'},t(key));
   const acceptedDocument=p=>p.context.accepted_plan?.document||p.context.accepted_plan;
@@ -46,11 +54,11 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
   const picker=select('pcp_saved',[['',t('pcp_choose')]]),notice=h('div',{role:'status'}),detail=h('div'),content=h('div');
   const purpose=input('pcp_purpose',{multiline:true,max:4000}),model=input('pcp_model',{max:128,required:false});
   const runtime=structuredAnalysis({h,t,labelled,action:PROPOSE,capability:()=>capability,readable:()=>visible,
-    authorized:()=>writing()&&caps()?.scopes?.includes('start')&&(!adopt?.locked()||adopt?.replaceable?.()),
+    authorized:()=>writing()&&caps()?.scopes?.includes('start')&&(!adopt?.locked()||adopt?.replaceable?.())&&!compound?.locked(),
     legacyEligible:()=>capability?.native_analysis?.authorized!==false&&capability?.native_analysis?.eligible_for_preflight===true});
   prepare=form({action:PROPOSE,target,fields:{purpose,model,adapter:runtime.field},params:values=>({purpose:values.purpose,...(values.model.trim()?{model:values.model.trim()}:{}),...runtime.params(values)}),
     preconditions:()=>({expected_version:thread().thread.version,expected_plan_version:head.version,expected_accepted_revision_id:head.accepted_revision_id}),
-    permitted:()=>writing()&&head&&caps()?.scopes?.includes('start')&&runtime.eligible()&&(!adopt?.locked()||adopt?.replaceable?.()),
+    permitted:()=>writing()&&head&&caps()?.scopes?.includes('start')&&runtime.eligible()&&(!adopt?.locked()||adopt?.replaceable?.())&&!compound?.locked(),
     recoverPermitted:()=>writing()&&caps()?.scopes?.includes('start'),label:'pcp_prepare',
     onSaved:async result=>{const id=result?.outcome?.proposal_id||result?.proposal_id;preferredId=id;if(conversation&&refreshParent)await refreshParent();else{await refreshParent?.();await refresh(id);}},
     onStateChange:()=>{if(ready){adopt?.update();updateControls();}},
@@ -67,9 +75,14 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
       const saved=JSON.parse(values.review);if(!active||saved.proposal_id!==active.proposal_id||!validReview(saved.review))throw Error(t('pcp_missing'));
       return {proposal_id:saved.proposal_id,review:saved.review,rationale:values.rationale};},
     preconditions:()=>{const saved=original();if(!saved?.preconditions)throw fail();return saved.preconditions;},
-    permitted:()=>active?.proposal_id!==adoptedId&&deciding()&&fresh()&&active?.validation.status==='format_valid'&&validReview(original()?.review)&&!prepare.locked(),
+    permitted:()=>active?.proposal_id!==adoptedId&&deciding()&&fresh()&&active?.validation.status==='format_valid'&&validReview(original()?.review)&&!prepare.locked()&&!compound?.locked(),
     recoverPermitted:()=>writing()&&permitted(true)&&caps()?.scopes?.includes('start'),label:'pcp_adopt',onError:error=>{if(!conversation||error.code!=='VERSION_CONFLICT')return false;conflict=true;updateControls();return true;},onSaved:async()=>{adoptedId=active?.proposal_id;if(conversation&&refreshParent)await refreshParent();else{await refreshParent?.();await refresh();}},
     onStateChange:()=>{if(ready)updateControls();},extra:h('div',{'data-proposal-adopt-panel':''},review,content,labelled('pcp_rationale',rationale))});
+  compound=adoptStartReview({t,api,alive,form,caps,namespace,workspaceId,threadId,
+    review:original,rationale:()=>adopt.values().rationale,permitted:deciding,reviewable:()=>!loading&&fresh()&&reviewedBaselineCurrent()&&validReview(original()?.review),
+    readable:()=>visible&&writing(),otherLocked:()=>prepare.locked()||adopt.locked()&&!adopt.replaceable(),errorBox,
+    onStateChange:()=>{if(ready){adopt.update();updateControls();}}});
+  rationale.addEventListener('input',()=>compound.update());
   const resolution = conversation ? issueResolution({h,t,api,alive,caps,workspaceId,thread,permitted,form,input,labelled,errorBox,refreshParent,onStateChange:()=>{if(ready)updateControls();}}) : null;
   const more=actionButton({type:'button',class:'secondary',hidden:true,onclick:()=>void loadMore()},t('pcp_more'));
   const reload=iconButton({icon:'refresh-cw',label:t('pcp_refresh'),onClick:()=>void refresh()});
@@ -123,7 +136,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
   function updateControls(){
     if(!ready)return;
     if(conversation){
-      const pending=prepare.locked()||adopt.locked();
+      const pending=prepare.locked()||adopt.locked()||compound?.locked();
       box.hidden=!active&&!pending&&!notice.querySelector('.error, [role=alert]');
       pendingPill.hidden=!pending||Boolean(active);
       // Keep the original recovery controls until its receipt settles, including
@@ -131,7 +144,10 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
       if(adopted()&&!adopt.locked())adopt.box.querySelector('button[type=submit]').hidden=true;
       onActivity({proposalId:fresh()?active?.proposal_id:null,pending,reviewable:fresh()||Boolean(resolution?.actionable?.()),inline:true});
       if(reviewButton){reviewButton.classList.toggle('primary',!reviewOpen);reviewButton.classList.toggle('secondary',reviewOpen);reviewButton.setAttribute('aria-expanded',String(reviewOpen));}
-    }const locked=adopt.locked()||!deciding();picker.disabled=loading||adopt.locked();reload.disabled=loading;more.disabled=loading;
+    }const locked=adopt.locked()||compound?.locked()||!deciding();picker.disabled=loading||adopt.locked()||compound?.locked();reload.disabled=loading;more.disabled=loading;
+    rationale.disabled=locked;
+    const adoptButton=adopt.box.querySelector('button[type=submit]');
+    if(!adopt.locked()){adoptButton.textContent=t(compound?.available()?'loop_adopt_later':'pcp_adopt');adoptButton.classList.toggle('primary',!compound?.available());adoptButton.classList.toggle('secondary',Boolean(compound?.available()));}
     runtime.update(prepare);
     if(composerNode){
       ask.disabled=!prepare.canSubmit();
@@ -140,7 +156,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
       discussionFeedback({t,request:prepare,node:working,eligible:runtime.eligible()});
     }
     for(const element of content.querySelectorAll('input,textarea,select,button'))element.disabled=locked;
-    if(reviewButton)reviewButton.disabled=!fresh()&&!adopt.locked();
+    if(reviewButton)reviewButton.disabled=!fresh()&&!adopt.locked()&&!compound?.locked();
     if(active&&active.validation.status==='format_valid'){
       const rawReason=content.querySelector('[data-proposal-adoptable-reason]');if(rawReason)rawReason.textContent=active.adoptable_reason||'';
       const settling=(adopt.locked()&&!adopt.replaceable()&&!conflict)||Boolean(resolution?.locked?.()&&!resolution?.replaceable?.());
@@ -152,19 +168,20 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     const value={title:title.value,rows:candidateFields.map(row=>({key:row.key,text:row.text.value,status:row.status.value,include:row.include.checked})),
       requirements:requirementFields.map(row=>({id:row.id.value,source_key:row.source.value,acceptance_keys:[...row.acceptance.selectedOptions].map(option=>option.value),priority:row.priority.value,depends_on:[...row.dependencies.selectedOptions].map(option=>option.value)}))};
     value.removed_requirement_ids=removed(active,value.requirements);
-    const saved=original();adopt.set('review',JSON.stringify({...saved,review:value}));showRemoved(value.removed_requirement_ids);adopt.update();
+    const saved=original();adopt.set('review',JSON.stringify({...saved,review:value}));showRemoved(value.removed_requirement_ids);compound?.show();adopt.update();
   }
   function showRemoved(ids){const box=content.querySelector('[data-proposal-removed]');if(!box)return;box.hidden=!ids.length;
     box.replaceChildren(h('h4',{},t('pcp_removed')),note('pcp_removed_help'),h('ul',{},...ids.map(id=>h('li',{},h('strong',{},id),' · ',acceptedDocument(active).requirements.find(row=>row.id===id).text))));}
   function renderReview(){
     const p=active;if(!p)return;const sig=p.proposal_id+':'+p.document_digest+':'+(p.adoptable_reason==='adopted'?p.adopted_revision_id:'');
-    if(rendered===sig){adopt.update();return;}rendered=sig;reviewButton=null;reviewOpen=adopt.locked();candidateFields=[];requirementFields=[];detail.replaceChildren();content.replaceChildren();
+    if(rendered===sig){compound?.show();adopt.update();return;}rendered=sig;reviewButton=null;reviewOpen=adopt.locked()||compound?.request.locked();candidateFields=[];requirementFields=[];detail.replaceChildren();content.replaceChildren();
     if(p.validation.status==='format_valid')detail.append(h('h4',{},p.document.title));
     if(conversation&&adopted()){
       const confirmation=h('div',{'data-proposal-adopted':''},statusPill('adopted'));
       if(typeof p.adopted_revision_id==='string'&&/^pmrev_[0-9a-f]{32}$/.test(p.adopted_revision_id))confirmation.append(' ',h('a',{'data-proposal-adopted-revision':'',href:`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(threadId)}?revision=${encodeURIComponent(p.adopted_revision_id)}`,onclick:event=>{event.preventDefault();onRevision(p.adopted_revision_id);}},t('pd_accepted_revision')));
       adopt.box.hidden=false;
       detail.append(h('p',{},p.document?.summary||''),confirmation, resolution.box);
+      if(compound?.request.locked()){compound.box.hidden=false;detail.append(compound.box);compound.show();}
       if(adopt.locked()){
         // Central adoption does not erase an unresolved original operation.
         // Keep only its existing recovery controls in Details, not a new review.
@@ -249,7 +266,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
       adopt.box.hidden=!reviewOpen;
       reviewButton=button({variant:reviewOpen?'secondary':'primary',label:t('pd_review'),'data-proposal-review':'',
         'aria-expanded':String(reviewOpen),onClick:()=>{
-          reviewOpen=!reviewOpen;adopt.box.hidden=!reviewOpen;updateControls();
+          reviewOpen=!reviewOpen;adopt.box.hidden=!reviewOpen;compound.box.hidden=!reviewOpen;if(reviewOpen)compound.show();updateControls();
           if(reviewOpen){
             const heading=content.querySelector('h4')||detail.querySelector('h4')||box,transcript=box.closest('.pd-transcript');
             if(transcript&&getComputedStyle(transcript).overflowY!=='visible'){
@@ -263,11 +280,12 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
           }
         }});
       detail.append(h('p',{class:'ui-meta','data-proposal-summary-reason':'',hidden:true}),h('div',{class:'actions pd-review-actions'},reviewButton,button({label:t('pd_follow_up'),onClick:onFollowUp}),
-        button({label:t('pd_again'),'data-proposal-again':'',hidden:fresh(),onClick:()=>ask?.click()})),adopt.box);
-    }else detail.append(adopt.box);
+        button({label:t('pd_again'),'data-proposal-again':'',hidden:fresh(),onClick:()=>ask?.click()})),adopt.box,compound.box);
+      compound.box.hidden=!reviewOpen;if(reviewOpen)compound.show();
+    }else {detail.append(adopt.box,compound.box);compound.show();}
     adopt.update();
   }
-  async function choose(id){const own=++ticket;active=null;rendered='';detail.replaceChildren();content.replaceChildren();candidateFields=[];requirementFields=[];resolution?.withdraw();adopt.update();if(!id)return;
+  async function choose(id){const own=++ticket;active=null;rendered='';detail.replaceChildren();content.replaceChildren();candidateFields=[];requirementFields=[];resolution?.withdraw();compound?.withdraw();adopt.update();if(!id)return;
     try{const result=checked(await api('GET',endpoint+'/'+encodeURIComponent(id)));alive();if(own!==ticket)return;if(result.proposal_id!==id)throw fail();if(active?.proposal_id!==result.proposal_id)conflict=false;active=result;renderReview();
       await resolution?.refresh(adopted() ? result.adopted_revision_id : null);alive();if(own!==ticket)return;}
     catch(error){if(own===ticket){withdraw();notice.replaceChildren(errorBox(error, {within:notice}));box.hidden=false;}}
@@ -277,7 +295,11 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     rows=append?[...rows,...value.proposals]:value.proposals;cursor=next??null;const selected=picker.value;picker.replaceChildren(h('option',{value:''},t('pcp_choose')),...rows.map(row=>h('option',{value:row.proposal_id},[row.title??t('pd_proposed'),row.adoptable_reason==='adopted'?t('ui_status_adopted'):row.validation?.status!=='format_valid'?proposalReasonLabel(t,'invalid_proposal'):t(row.adoptable===false?'pd_stale':'pcp_proposal')].join(' · '))));picker.value=selected;more.hidden=cursor===null;
     notice.replaceChildren(...(!rows.length&&!conversation?[emptyState({title:t('pcp_empty_title'),text:t('pcp_empty')})]:[]),...(cursor!==null?[note('pcp_partial')]:[]));
   }
-  async function refresh(preferred){if(!enabled()){withdraw();box.hidden=true;return;}if(preferred)queuedPreferred=preferred;if(loading){refreshAgain=true;return inFlight;}loading=true;
+  async function refresh(preferred,{background=false}={}){if(!enabled()){withdraw();box.hidden=true;return;}
+    // Replayed or unrelated PM events can reread the same proposal after the
+    // owner checked readiness. Suspend admission while reading, but preserve
+    // those exact conditions unless intent, baseline, sources or authority change.
+    if(!background)compound?.refresh();if(preferred)queuedPreferred=preferred;if(loading){refreshAgain=true;return inFlight;}loading=true;compound?.update();
     inFlight=(async()=>{do{refreshAgain=false;const nextPreferred=queuedPreferred;queuedPreferred=null;const own=++ticket;updateControls();
       try{const [list,plans]=await Promise.all([api('GET',`${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=0&limit=20`),api('GET',base+'/plans?limit=1')]);alive();if(own!==ticket)return;
         if(plans.workspace_id!==workspaceId||!record(plans.head))throw fail();head=plans.head;
@@ -288,11 +310,11 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
         if(id){const result=checked(await api('GET',endpoint+'/'+encodeURIComponent(id)));alive();if(own!==ticket)return;if(result.proposal_id!==id)throw fail();if(active?.proposal_id!==result.proposal_id)conflict=false;active=result;renderReview();
           await resolution?.refresh(adopted() ? result.adopted_revision_id : null);alive();if(own!==ticket)return;}
       }catch(error){if(own===ticket){withdraw();notice.replaceChildren(errorBox(error, {within:notice}));box.hidden=false;}}
-    }while(refreshAgain&&visible&&enabled());})().finally(()=>{loading=false;inFlight=null;prepare.update();adopt.update();updateControls();});
+    }while(refreshAgain&&visible&&enabled());})().finally(()=>{loading=false;inFlight=null;prepare.update();adopt.update();compound?.update();updateControls();});
     return inFlight;
   }
   async function loadMore(){if(cursor===null||loading)return;loading=true;const own=ticket;updateControls();try{const result=await api('GET',`${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=${cursor}&limit=20`);alive();if(own!==ticket)return;page(result,true);}catch(error){if(own===ticket){withdraw();notice.replaceChildren(errorBox(error, {within:notice}));box.hidden=false;}}finally{loading=false;updateControls();}}
-  function withdraw(){ticket++;refreshAgain=false;queuedPreferred=null;visible=false;active=head=latestId=null;rows=[];cursor=null;rendered='';candidateFields=[];requirementFields=[];picker.replaceChildren(h('option',{value:''},t('pcp_choose')));detail.replaceChildren();content.replaceChildren();notice.replaceChildren();more.hidden=true;reviewButton=null;resolution?.withdraw();prepare?.update();adopt?.update();}
+  function withdraw(){ticket++;refreshAgain=false;queuedPreferred=null;visible=false;active=head=latestId=null;rows=[];cursor=null;rendered='';candidateFields=[];requirementFields=[];picker.replaceChildren(h('option',{value:''},t('pcp_choose')));detail.replaceChildren();content.replaceChildren();notice.replaceChildren();more.hidden=true;reviewButton=null;resolution?.withdraw();compound?.withdraw();prepare?.update();adopt?.update();}
   function composer(textarea,{connectionNotice=true}={}){
     ask=actionButton({type:'button',class:'secondary','data-discussion-ask':'',onclick:()=>{
       if(adopt.replaceable())adopt.edit();
@@ -306,7 +328,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     updateControls();return composerNode;
   }
   ready=true;updateControls();
-  return {box,tools,composer,refresh,withdraw,recheck:()=>{prepare.recheck();if(['accepted','queued','pending','running','waiting_external','waiting_checks'].includes(adopt.operation()?.status))adopt.recheck();resolution?.recheck();},update(value={}){
+  return {box,tools,composer,refresh,withdraw,recheck:()=>{compound.request.recheck();prepare.recheck();if(['accepted','queued','pending','running','waiting_external','waiting_checks'].includes(adopt.operation()?.status))adopt.recheck();resolution?.recheck();},update(value={}){
     if(value.capabilities){
       capability=value.capabilities;
       if(conversation&&!adapterInitialized){
@@ -320,5 +342,5 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
       }
     }
     if(value.head)head=value.head;if(value.page){visible=true;page(value.page);}prepare.update();adopt.update();
-  },dispose(){clearInterval(clock);withdraw();resolution?.dispose();prepare.dispose();adopt.dispose();}};
+  },dispose(){clearInterval(clock);withdraw();resolution?.dispose();prepare.dispose();adopt.dispose();compound.dispose();}};
 }

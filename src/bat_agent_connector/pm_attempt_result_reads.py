@@ -21,22 +21,25 @@ from . import (
     checkpoints,
     controller_authority,
     dashboard_sync,
+    delivery,
     orchestrate,
     pm_attempt_results,
     pm_delivery_lineage,
     pm_execution_verification,
+    pm_lifecycle_gates,
     pm_quality_reviews,
     pm_source_lineage,
     pm_work_start,
     pm_workspace,
     pr_publication,
     registry,
+    repository_sync,
     verification,
     work_item_results,
 )
 from .api_auth import Principal
 from .errors import BatError, ConnectionLost, InvokeTimeout, ResourceReadOnly
-from .operations import OperationError
+from .operations import TERMINAL, OperationError
 from .pm_attempt_results import (
     BRANCH_DIFF_MAX_COMMITS,
     BRANCH_DIFF_MAX_FILES,
@@ -215,6 +218,12 @@ def _attempt_context(ops, principal: Principal, workspace_id: str, attempt_id: s
                     if isinstance(mid, str) and mid.strip():
                         turn_marker = mid
                         break
+    latest_input_operation_id = None
+    from .pm_work_follow_up import latest_sent_turn
+    sent_mid, sent_op = latest_sent_turn(ops.db, attempt_id)
+    if isinstance(sent_mid, str) and sent_mid.strip():
+        turn_marker = sent_mid
+        latest_input_operation_id = sent_op
     worktree_path = handoff_res.get("worktree_path") if isinstance(handoff_res.get("worktree_path"), str) else None
     code_source = view.get("code_source") if isinstance(view.get("code_source"), dict) else (intent.get("code_source") or {})
     base_sha = (
@@ -242,6 +251,7 @@ def _attempt_context(ops, principal: Principal, workspace_id: str, attempt_id: s
         "sess_host": sess_host,
         "sess_id": sess_id,
         "turn_marker": turn_marker,
+        "latest_input_operation_id": latest_input_operation_id,
         "worktree_path": worktree_path,
         "code_source": code_source,
         "base_sha": str(base_sha) if isinstance(base_sha, str) and base_sha else None,
@@ -879,9 +889,9 @@ def _is_attempt_controller(
         return False
 
 
-def _is_writer_member(ops, principal: Principal, workspace_id: str) -> bool:
+def _is_writer_member(ops, principal: Principal, workspace_id: str, *, decide: bool = False) -> bool:
     try:
-        pm_workspace.require_member(ops.db, principal, workspace_id, write=True)
+        pm_workspace.require_member(ops.db, principal, workspace_id, write=True, decide=decide)
         return True
     except OperationError:
         return False
@@ -889,6 +899,104 @@ def _is_writer_member(ops, principal: Principal, workspace_id: str) -> bool:
 
 def _action_scopes(ops, action_name: str, extra: frozenset[str] = frozenset()) -> list[str]:
     return sorted({READ_SCOPE, ops.actions[action_name].scope} | extra)
+
+
+def _publication_pair(ctx: dict[str, Any]) -> tuple[dict[str, Any], str] | None:
+    """The exact repository id, start base and branch admission will require."""
+    code = ctx.get("code_source") if isinstance(ctx.get("code_source"), dict) else {}
+    repository = code.get("repository")
+    repository_id = code.get("repository_id")
+    base_sha = ctx.get("base_sha")
+    if not isinstance(repository, str) or not repository:
+        return None
+    if type(repository_id) is not int or repository_id <= 0:
+        return None
+    if not isinstance(base_sha, str) or SHA40.fullmatch(base_sha) is None:
+        return None
+    try:
+        base_ref = repository_sync.check_ref(code.get("source_ref"))
+    except OperationError:
+        return None
+    return {"repository_id": repository_id, "expected_base_sha": base_sha}, base_ref
+
+
+def _publication_open(ops, execution_op_id: str) -> bool:
+    rows = ops.db.execute(
+        """SELECT status FROM operations
+           WHERE action=? AND json_extract(target, '$.source_operation_id')=?""",
+        (pr_publication.ACTION, execution_op_id),
+    ).fetchall()
+    return any(row["status"] not in TERMINAL for row in rows)
+
+
+def _verified_publication_for_commit(ops, execution_op_id: str, candidate_sha: str | None) -> bool:
+    # Scan the child's receipts. A 50-row page is not proof none exist, and a
+    # row that fails verification is not proof a pull request exists.
+    if not isinstance(candidate_sha, str) or SHA40.fullmatch(candidate_sha) is None:
+        return False
+    if not _has_table(ops.db, "pr_creation_receipts"):
+        return False
+    rows = ops.db.execute(
+        "SELECT operation_id FROM pr_creation_receipts WHERE child_operation_id=?",
+        (execution_op_id,),
+    ).fetchall()
+    for row in rows:
+        try:
+            document = pr_publication._raw_receipt(ops, row["operation_id"])
+        except (OperationError, ValueError, TypeError, json.JSONDecodeError):
+            continue
+        if (isinstance(document, dict) and document.get("target_verified") is True
+                and document.get("candidate_sha") == candidate_sha):
+            return True
+    return False
+
+
+def _publication_lifecycle_block(ops, workspace_id: str) -> str | None:
+    # Same predicate as a new admission: investment against the current epoch.
+    # Passing that epoch refuses only a stopped workspace, and this read does not insert.
+    binding = {"pm_lineage": {"workspace_id": workspace_id}}
+    target = {"workspace_id": workspace_id}
+    wid = pm_lifecycle_gates.lineage(pr_publication.ACTION, target, binding)
+    if not wid or not pm_lifecycle_gates.installed(ops.db):
+        return None
+    if pm_lifecycle_gates.kind(pr_publication.ACTION, binding) != "investment":
+        return None
+    current = pm_lifecycle_gates.head(ops.db, wid)
+    try:
+        pm_lifecycle_gates._require(current, current["execution_epoch"])
+    except OperationError as exc:
+        if exc.code == "PM_LIFECYCLE_STOPPED":
+            return "lifecycle_stopped"
+    return None
+
+
+def _publication_github_block(ops) -> str | None:
+    try:
+        delivery._gh(ops)
+    except OperationError as exc:
+        if exc.code == "GITHUB_NOT_CONFIGURED":
+            return "github_not_configured"
+    return None
+
+
+def _publication_block_reason(ops, ctx: dict[str, Any], candidate_sha: str | None) -> str | None:
+    if _publication_pair(ctx) is None:
+        return "publication_source_incomplete"
+    execution_op_id = ctx["execution_op_id"]
+    if isinstance(execution_op_id, str) and _publication_open(ops, execution_op_id):
+        return "WAIT_ORIGINAL_OPERATION_RECONCILE"
+    # Admission requires this head. An open publish stays reconcile above; do not
+    # invent a commit or read the provider to fill one in.
+    if not isinstance(candidate_sha, str) or SHA40.fullmatch(candidate_sha) is None:
+        return "publication_source_incomplete"
+    if isinstance(execution_op_id, str) and _verified_publication_for_commit(
+        ops, execution_op_id, candidate_sha
+    ):
+        return "pull_request_exists"
+    stopped = _publication_lifecycle_block(ops, ctx["workspace_id"])
+    if stopped:
+        return stopped
+    return _publication_github_block(ops)
 
 
 def _compute_actions(
@@ -901,6 +1009,7 @@ def _compute_actions(
     candidate_sha: str | None,
     has_receipt: bool,
     current_review_id: str | None = None,
+    current_reviewer_actor: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], bool]:
     workspace_id = ctx["workspace_id"]
     work_item_id = ctx["work_item_id"]
@@ -926,6 +1035,8 @@ def _compute_actions(
         requires_controller: bool = True,
         requires_original_actor: bool = False,
         requires_writer: bool = False,
+        requires_owner: bool = False,
+        requires_reviewer: bool = False,
         reconcile_blocked: bool = False,
     ) -> None:
         is_registered_action = action_name in ops.actions
@@ -951,6 +1062,14 @@ def _compute_actions(
         if not all(principal.allows(s) for s in req_scopes):
             if is_registered_action:
                 blocked.append({"action": action_name, "reason": "missing_scope"})
+            return
+        # Quality policy belongs to the workspace owner, while conclusions
+        # belong to the appointed reviewer, even when another reader is owner.
+        if requires_owner and not _is_writer_member(ops, principal, workspace_id, decide=True):
+            blocked.append({"action": action_name, "reason": "not_workspace_owner"})
+            return
+        if requires_reviewer and principal.actor != current_reviewer_actor:
+            blocked.append({"action": action_name, "reason": "not_original_reviewer"})
             return
         allowed.append(entry)
 
@@ -979,6 +1098,9 @@ def _compute_actions(
     if stage == "start_unknown" or op_status == "uncertain":
         if pm_work_start.ACTION in ops.actions:
             blocked.append({"action": pm_work_start.ACTION, "reason": "WAIT_ORIGINAL_OPERATION_RECONCILE"})
+        # Publish stays blocked with the same reason, including before a session exists.
+        if delivery_goal == "pull_request" and pr_publication.ACTION in ops.actions:
+            blocked.append({"action": pr_publication.ACTION, "reason": "WAIT_ORIGINAL_OPERATION_RECONCILE"})
         return allowed, blocked, is_controller
 
     if op_status == "needs_attention":
@@ -1001,6 +1123,29 @@ def _compute_actions(
     # 2. Session & PM actions when a session exists
     if sess_host and sess_id:
         sess_target = {"host": sess_host, "session_id": sess_id}
+        def offer_work_send(schedules: list[str]) -> None:
+            if stage != "started" or "session.send" not in ops.actions:
+                return
+            agent = (ctx.get("intent") or {}).get("agent") or (view or {}).get("agent")
+            if agent == "codex":
+                blocked.append({"action": "session.send", "reason": "codex_uncorrelated_turn_boundary"})
+                return
+            consider(
+                {
+                    "kind": "action",
+                    "action": "session.send",
+                    "target": {"workspace_id": workspace_id, "work_item_id": work_item_id},
+                    "required_scopes": _action_scopes(ops, "session.send"),
+                    "allowed_schedules": list(schedules),
+                    "default_schedule": "after_current",
+                    "requires_controller": True,
+                    "requires_writer": True,
+                },
+                action_name="session.send",
+                requires_controller=True,
+                requires_writer=True,
+            )
+
         if execution_state == "waiting":
             if "session.answer" in ops.actions:
                 consider(
@@ -1013,6 +1158,7 @@ def _compute_actions(
                     action_name="session.answer",
                     requires_controller=True,
                 )
+            offer_work_send(["after_current"])
         elif execution_state == "active":
             if "session.interrupt" in ops.actions:
                 consider(
@@ -1025,18 +1171,9 @@ def _compute_actions(
                     action_name="session.interrupt",
                     requires_controller=True,
                 )
+            offer_work_send(["after_current"])
         elif execution_state == "turn-ended":
-            if "session.send" in ops.actions:
-                consider(
-                    {
-                        "kind": "action",
-                        "action": "session.send",
-                        "target": dict(sess_target),
-                        "required_scopes": _action_scopes(ops, "session.send"),
-                    },
-                    action_name="session.send",
-                    requires_controller=True,
-                )
+            offer_work_send(["after_current", "now"])
             if execution_op_id:
                 if pm_execution_verification.ACTION in ops.actions:
                     consider(
@@ -1071,39 +1208,49 @@ def _compute_actions(
 
         if execution_state in {"turn-ended", "process-ended"}:
             if delivery_goal == "pull_request" and execution_op_id and pr_publication.ACTION in ops.actions:
-                repository = (ctx["code_source"] or {}).get("repository")
-                prefilled: dict[str, Any] = {}
-                if isinstance(candidate_sha, str) and SHA40.fullmatch(candidate_sha):
-                    prefilled["candidate_sha"] = candidate_sha
-                consider(
-                    {
-                        "kind": "action",
+                reason = _publication_block_reason(ops, ctx, candidate_sha)
+                pair = None if reason else _publication_pair(ctx)
+                if reason or pair is None:
+                    blocked.append({
                         "action": pr_publication.ACTION,
-                        "target": {
-                            "workspace_id": workspace_id,
-                            "repository": repository,
-                            "host": sess_host,
-                            "source_operation_id": execution_op_id,
+                        "reason": reason or "publication_source_incomplete",
+                    })
+                else:
+                    preconditions, base_ref = pair
+                    repository = (ctx["code_source"] or {}).get("repository")
+                    prefilled: dict[str, Any] = {"base_ref": base_ref}
+                    if isinstance(candidate_sha, str) and SHA40.fullmatch(candidate_sha):
+                        prefilled["candidate_sha"] = candidate_sha
+                    consider(
+                        {
+                            "kind": "action",
+                            "action": pr_publication.ACTION,
+                            "target": {
+                                "workspace_id": workspace_id,
+                                "repository": repository,
+                                "host": sess_host,
+                                "source_operation_id": execution_op_id,
+                            },
+                            "required_scopes": _action_scopes(
+                                ops,
+                                pr_publication.ACTION,
+                                pr_publication.REQUIRED,
+                            ),
+                            "required_params": [
+                                "candidate_sha",
+                                "base_ref",
+                                "public_title",
+                                "public_body",
+                                "draft",
+                            ],
+                            "optional_params": ["quality_ref"],
+                            "prefilled_params": prefilled,
+                            "preconditions": preconditions,
                         },
-                        "required_scopes": _action_scopes(
-                            ops,
-                            pr_publication.ACTION,
-                            pr_publication.REQUIRED,
-                        ),
-                        "required_params": [
-                            "candidate_sha",
-                            "base_ref",
-                            "public_title",
-                            "public_body",
-                            "draft",
-                        ],
-                        "optional_params": ["quality_ref"],
-                        "prefilled_params": prefilled,
-                    },
-                    action_name=pr_publication.ACTION,
-                    requires_controller=True,
-                    requires_writer=True,
-                )
+                        action_name=pr_publication.ACTION,
+                        requires_controller=True,
+                        requires_writer=True,
+                    )
             if has_receipt or execution_op_id:
                 if "pm.quality.review.create" in ops.actions:
                     consider(
@@ -1119,6 +1266,7 @@ def _compute_actions(
                         action_name="pm.quality.review.create",
                         requires_controller=False,
                         requires_writer=True,
+                        requires_owner=True,
                     )
                 if current_review_id is not None and "pm.quality.review.record" in ops.actions:
                     consider(
@@ -1134,6 +1282,7 @@ def _compute_actions(
                         action_name="pm.quality.review.record",
                         requires_controller=False,
                         requires_writer=True,
+                        requires_reviewer=True,
                     )
 
     return allowed, blocked, is_controller
@@ -1193,6 +1342,8 @@ async def _wait_for_related_event(
     }
     if ctx["execution_op_id"]:
         related_set.add(("operation", ctx["execution_op_id"]))
+    if ctx.get("latest_input_operation_id"):
+        related_set.add(("operation", ctx["latest_input_operation_id"]))
     if ctx["sess_host"] and ctx["sess_id"]:
         related_set.add(("session", f"{ctx['sess_host']}/{ctx['sess_id']}"))
     related = sorted(related_set)
@@ -1416,7 +1567,7 @@ async def _read_result(
         {
             "code": view.get("error_code"),
             "message": view.get("status_reason"),
-            "resumable": True,
+            "resumable": False,
         }
         if op_status == "needs_attention"
         else None
@@ -1582,6 +1733,9 @@ async def _read_result(
     )
     current_review_obj = verification_block["quality_reviews"]["current"]
     current_review_id = current_review_obj.get("review_id") if isinstance(current_review_obj, dict) else None
+    current_review = next((row for row in verification_block["quality_reviews"]["reviews"]
+                           if isinstance(row, dict) and row.get("review_id") == current_review_id), None)
+    current_reviewer_actor = (current_review.get("context") or {}).get("reviewer_actor") if current_review else None
     next_allowed_actions, blocked_actions, is_controller = _compute_actions(
         ops,
         principal,
@@ -1591,7 +1745,15 @@ async def _read_result(
         candidate_sha=cand_sha_for_pr,
         has_receipt=latest_row is not None,
         current_review_id=current_review_id,
+        current_reviewer_actor=current_reviewer_actor,
     )
+    # Same proof and authorization as the public resume endpoint. An unknown
+    # child returns before resume is considered, so this stays false.
+    if attention is not None:
+        attention["resumable"] = any(
+            item.get("kind") == "operation_endpoint" and item.get("endpoint") == "resume"
+            for item in next_allowed_actions
+        )
 
     # Identity & Sources
     reg_entry = registry.get(sess_host, sess_id) if (sess_host and sess_id) else None

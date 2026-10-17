@@ -29,6 +29,7 @@ from . import (
     deployment,
     integration,
     platform_files,
+    pm_operation_loop,
     pr_delivery,
     registry,
     service,
@@ -98,7 +99,9 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "pm_release_baseline_sources_list": "observe", "pm_release_baseline_releases_list": "observe",
            "pm_release_baseline_deployments_list": "observe", "pm_release_baseline_preview": "observe",
            "pm_work_packages_list": "observe", "pm_work_package_get": "observe", "pm_work_package_readiness_get": "observe",
-           "pm_work_start_preview": "observe", "pm_work_attempts_list": "observe", "pm_work_attempt_get": "observe",
+           "pm_work_profiles_list": "observe", "pm_work_profile_get": "observe", "pm_work_profile_readiness_get": "observe",
+           "pm_work_adopt_and_start_preview": "observe", "pm_work_start_preview": "observe", "pm_work_attempts_list": "observe", "pm_work_attempt_get": "observe",
+           "pm_work_inputs_list": "observe",
            "pm_work_attempt_result_get": "observe", "pm_work_attempt_changes_get": "observe", "pm_work_attempt_diff_get": "observe",
            "pm_issue_mappings_list": "observe", "pm_issue_mapping_get": "observe",
            "pm_follow_up_assessments_list": "observe", "pm_follow_up_assessment_get": "observe",
@@ -350,6 +353,18 @@ class TaskDaemon:
         if method in {"pm_execution_verification_configuration", "pm_execution_verification_get"}:
             from .pm_execution_reads import read
             return await read(self.ops, principal, method, params)
+        if method == "pm_work_adopt_and_start_preview":
+            from . import pm_work_adopt_and_start
+            params = dict(params)
+            wid = params.pop("workspace_id", None)
+            thread_id = params.pop("thread_id", None)
+            body = params.pop("body", None)
+            if body is not None:
+                if params:
+                    raise OperationError("INVALID_PARAMS", "Supply preview fields either in body or as top-level params", 422)
+            else:
+                body = params
+            return await pm_work_adopt_and_start.preview(self.ops, principal, wid, thread_id, body)
         if method == "pm_work_start_preview":
             from . import pm_work_start
             params = dict(params)
@@ -424,20 +439,31 @@ class TaskDaemon:
                 # The MCP/RPC response uses current membership and original source
                 # visibility even if the admitted operation has already completed.
                 op = self.ops.get(op["operation_id"], principal=principal)
+            from . import pm_work_follow_up
+            op = pm_work_follow_up.enrich_operation(self.ops.db, op)
+            op = await pm_operation_loop.attach(self.ops, principal, op)
             return {"operation": op, "created": created}
         if method == "op_get":
-            return {"operation": self.ops.get(str(params.get("operation_id")), principal=principal)}
+            from . import pm_work_follow_up
+            loaded = self.ops.get(str(params.get("operation_id")), principal=principal)
+            loaded = pm_work_follow_up.enrich_operation(self.ops.db, loaded)
+            return {"operation": await pm_operation_loop.attach(self.ops, principal, loaded)}
         if method == "op_list":
             statuses = params.get("statuses")
             return self.ops.list(statuses=statuses if isinstance(statuses, list) else None,
                                  actor=params.get("actor"), action=params.get("action"),
                                  limit=int(params.get("limit") or 50), principal=principal)
         if method == "op_cancel":
+            from . import pm_work_follow_up
             op = self.ops.cancel(principal, str(params.get("operation_id")))
             await self.artifact_store.reap_best_effort(op["operation_id"])
-            return {"operation": op}
+            op = pm_work_follow_up.enrich_operation(self.ops.db, op)
+            return {"operation": await pm_operation_loop.attach(self.ops, principal, op)}
         if method == "op_resume":
-            return {"operation": self.ops.resume(principal, str(params.get("operation_id")))}
+            from . import pm_work_follow_up
+            resumed = self.ops.resume(principal, str(params.get("operation_id")))
+            resumed = pm_work_follow_up.enrich_operation(self.ops.db, resumed)
+            return {"operation": await pm_operation_loop.attach(self.ops, principal, resumed)}
         if method == "api_events":
             from .pm_access import filter_events
             limit = params.get("limit")
@@ -519,7 +545,7 @@ class TaskDaemon:
         if method == "project_get":
             return session_reading.decorate(self.journal, principal,
                 work_items.project_get(self.journal.db, str(params.get("project_id")),
-                                       include_archived=bool(params.get("include_archived")), ops=self.ops))
+                    include_archived=bool(params.get("include_archived")), ops=self.ops, principal=principal))
         if method == "work_items_list":
             from .dashboard_sync import identity
             pending = params.get("pending")

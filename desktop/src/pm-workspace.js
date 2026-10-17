@@ -32,6 +32,7 @@ import {workspaceFollowUp} from './pm-follow-up.js';
 import {workspaceWorkPackages} from './pm-work-packages.js';
 import {workspaceSprints} from './pm-sprints.js';
 import {workspaceQualityReviews} from './pm-quality-reviews.js';
+import {discussionAssessments} from './pm-discussion-assessments.js';
 import {workspaceKanban} from './pm-kanban.js';
 import {workspaceMeetings} from './pm-meetings.js';
 import {workspaceSchedule} from './pm-schedule.js';
@@ -46,10 +47,10 @@ import {workspaceEvidence} from './pm-evidence.js';
 import {planRevisions} from './pm-plans.js';
 import {pmWorktreeChoice} from './pm-worktree-choice.js';
 import {nativeRunState, pmDiscussionMessage, pmDiscussionRequest, pmNativeAnalysis} from './pm-native-analysis.js';
+import {retiredView as retired} from './pm-retired.js';
 const same = (a, b) => a === b || (a && b && typeof a === 'object' && typeof b === 'object'
   && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length
   && Object.keys(a).every(key => Object.hasOwn(b, key) && same(a[key], b[key])));
-const retired = error => ['VIEW_CHANGED', 'CONNECTION_CHANGED', 'PM_DISPOSED'].includes(error.code);
 // A remounted form can recover an acknowledged ID without resending an unknown
 // POST. Notifications contain no result; the active form reads with current access.
 const receiptSubscribers = new Map();
@@ -66,11 +67,11 @@ export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 
 
 // Save the exact request before admission. A later authorization/validation error can never
 // release an earlier ambiguous request; only its matching terminal receipt permits replacement.
-function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, savedText = 'pm_saved', pendingText = 'pm_pending'}) {
+function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, keepEditable = () => false, savedText = 'pm_saved', pendingText = 'pm_pending', releaseAfterAcknowledgement = false, acknowledgedText = '', onAcknowledged = () => {}, acknowledgeStatus = null}) {
   const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
   let saved = {version: 1, values: {}}, damaged = false, busy = false, operation = null;
   const receiptDelays = action === 'pm.conversation.adopt' ? [250, 500, 1000, 1500, 2000, 3000, 3000, 3000, 3000, 3000] : [250, 500, 1000, 1500, 2000, 3000];
-  let receiptTimer = null, receiptAttempt = 0, receiptPolling = true, disposed = false, stagedHere = false, initialChecking = false;
+  let receiptTimer = null, receiptAttempt = 0, receiptPolling = true, disposed = false, stagedHere = false, initialChecking = false, focusRelease = false;
   const stopTimer = () => {clearTimeout(receiptTimer); receiptTimer = null;};
   try {
     const raw = localStorage.getItem(storage);
@@ -167,11 +168,14 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     const autoChecking = initialChecking && (busy || receiptTimer !== null);
     const inFlight = busy || autoChecking;
     const frozen = busy || damaged || Boolean(saved.intent), locked = frozen || !allowed();
-    for (const input of Object.values(fields)) {
+    for (const [name, input] of Object.entries(fields)) {
       // A restored title draft must receive Escape while initial reads gate Save.
       // An admitted intent or damaged storage still disables the field entirely.
-      input.disabled = locked && (!readOnlyWhenUnavailable || frozen);
-      if (readOnlyWhenUnavailable) input.readOnly = locked;
+      // An open local rename is not a central write. Leaving it enabled keeps
+      // the draft, caret and focus while a background gate rereads lifecycle.
+      const preserve = !frozen && !damaged && keepEditable(name);
+      input.disabled = !preserve && locked && (!readOnlyWhenUnavailable || frozen);
+      if (readOnlyWhenUnavailable) input.readOnly = locked && !preserve;
     }
     const hadFocus = document.activeElement === button;
     const hadResetFocus = document.activeElement === reset;
@@ -246,6 +250,34 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
       if (!allowed()) {status.replaceChildren(h('p', {class: 'muted'}, t('pm_action_unavailable'))); return;}
       const op = data.operation;
       saved.intent.operation_id = op.operation_id; persist(); operation = op;
+      // Opt-in only. Existing forms keep the intent locked until a succeeded receipt.
+      // A verified operation id is the central acknowledgement: this draft is not a queue.
+      if (releaseAfterAcknowledgement) {
+        stopTimer();
+        receiptPolling = false;
+        saved = {version: 1, values: {}};
+        try {persist();} catch { /* the id is already stored; do not send this key again */ }
+        for (const input of Object.values(fields)) {
+          input.value = input.dataset.pmDefault || '';
+          input.disabled = false;
+          if (readOnlyWhenUnavailable) input.readOnly = false;
+        }
+        operation = null;
+        receipt.replaceChildren();
+        let announced = null;
+        try {announced = acknowledgeStatus ? acknowledgeStatus(op, h, t) : null;} catch {announced = null;}
+        if (!announced && acknowledgedText) {
+          const key = typeof acknowledgedText === 'function' ? acknowledgedText(op) : acknowledgedText;
+          if (key) announced = h('span', {class: 'muted', 'data-pm-acknowledged': ''}, t(key));
+        }
+        if (announced) status.replaceChildren(announced);
+        else status.replaceChildren();
+        // The caller's refresh may disable this button before run() clears busy.
+        // Remember the keyboard owner now and return there after the field is enabled again.
+        focusRelease = document.activeElement === button || document.activeElement === document.body;
+        try {onAcknowledged(op);} catch { /* the caller reports its own read */ }
+        return;
+      }
       receipt.replaceChildren(h('a', {href: `#/op/${op.operation_id}`}, t('pm_operation')), ' · ', statusText(op.status));
       if (op.status === 'succeeded') {
         onBeforeSaved(op.result, saved.values);
@@ -262,6 +294,8 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
       try {guard();} catch {return;}
       if (!retired(error)) {
         // Explicit server pre-admission refusal is useful only for the first attempt.
+        // Only an explicit pre-admission refusal may be replaced. Any other error,
+        // including a changed attempt or preconditions, leaves the original key and request.
         if (firstAttempt && error.admissionRefused === true && !saved.intent?.operation_id) {
           saved.intent.initialAdmissionRefused = true;
           try {persist();} catch { /* keep the frozen original in memory */ }
@@ -269,7 +303,14 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
         const handled = onError(error);
         if (!handled) status.replaceChildren(errorBox(error, error.code === 'VERSION_CONFLICT' ? {summary: t('pm_stale'), within: status} : {within: status}));
       }
-    } finally {busy = false; update();}
+    } finally {
+      busy = false; update();
+      if (focusRelease) {
+        focusRelease = false;
+        const field = Object.values(fields)[0];
+        if (field && !field.disabled) field.focus();
+      }
+    }
   }
   if (damaged) status.append(h('p', {class: 'error'}, t('pm_damaged')));
   const connection = h(formConnectionTag, {hidden: true});
@@ -309,6 +350,9 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     values: () => capture()};
 }
 
+// Test fixtures rewrite the declaration above to an export. This alias stays a second export.
+export {durableForm as pmDurableForm};
+
 export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, canSend = () => true, onOnline = () => () => {}, onContext = () => {}, openCreate = false}) {
   if (!pmAvailable(caps())) {main.append(h('p', {}, t('pm_unavailable'))); return;}
   // Navigation preference must not wait for unrelated secondary reads to settle.
@@ -333,6 +377,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   }
   const launch = parseDiscussRefs(location.hash.split('?')[1] || '');
   const uiState = viewState(namespace, workspaceId, 'discussions');
+  const titleSession = viewState(namespace, workspaceId, 'discussion-title.' + (threadId || 'list'));
   const handoffKey = `batc.pm.${namespace}.discussion-send.${workspaceId}`;
   const originKey = `batc.pm.${namespace}.discussion-origin.${workspaceId}.`;
   let sendHandoff = null, firstMessagePending = false;
@@ -378,6 +423,14 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           const card = value.card;
           if (card?.work_item_id !== ref.id || card.work?.work_item_id !== ref.id || card.binding?.workspace_id !== workspaceId || card.binding?.work_item_id !== ref.id) unavailable();
           label = text(card.work.title);
+        } else if (ref.kind === 'quality_assessment') {
+          const value = scoped(await read(`/quality-reviews/${encodeURIComponent(ref.review_id)}`), workspaceId, 'workspace_id');
+          const review = scoped(value.review, ref.review_id, 'review_id');
+          if (!review.history?.some(item => item.kind === 'assessment' && item.operation_id === ref.id
+              && item.document_digest === ref.document_digest)) unavailable();
+          const work = await draftSourceRefs([{kind:'work_item', id:review.work_item_id}], reads);
+          if (work[0].available === false) unavailable();
+          label = work[0].label;
         } else if (ref.kind === 'snapshot') {
           const snapshot = scoped((await read(`/snapshots/${encodeURIComponent(ref.id)}`)).snapshot, ref.id, 'snapshot_id');
           label = text(snapshot.title);
@@ -458,7 +511,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     const source = parseDiscussRefs(new URLSearchParams({from: launch.from || savedOrigin.from || '', report: launch.report || savedOrigin.report || ''}));
     const origin = source.from || 'discussions';
     const session = sessionOrigin(origin);
-    return h('a', {class: 'pd-back', href: session || `#/pm/${encodeURIComponent(workspaceId)}/${origin}`, 'data-discussion-back': '', onclick: () => {
+    return h('a', {class: 'pd-back', href: session || `#/pm/${encodeURIComponent(workspaceId)}/${origin}`, 'data-discussion-back': '', ...(session ? {'data-discussion-session-return': ''} : {}), onclick: () => {
       // Restore the originating fixed report even after a discussion-draft reload.
       if (origin === 'overview' && source.report) Object.assign(viewState(namespace, workspaceId, 'overview'), {snapshotId: source.report, mode: 'saved'});
     }}, icon('chevron-left'), t('pd_back', {view: t(session ? 'ui_session' : 'ui_' + origin)}));
@@ -494,11 +547,12 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     onSaved: result => {alive(); location.hash = `#/pm/${encodeURIComponent(result.workspace.workspace_id)}`;},
     extra: h('div', {class: 'pm-fields'}, labelled('pm_workspace_name', name),
       h('details', {}, h('summary', {}, t('pm_repositories_optional')), labelled('pm_repositories', repositories), h('p', {class: 'muted'}, t('pm_repository_help'))))});
-  const title = h('span', {}, t('pm_title'));
+  const title = h('span', {}, t(threadId ? 'ui_discussions' : 'pm_title'));
   const refresh = iconButton({icon: 'refresh-cw', label: t('pm_refresh'), 'data-pm-refresh': '', onClick: () => {for (const value of forms) value.stopAutoCheck?.(); void load();}});
   const phasePill = h('span', {class: 'ui-pill tone-neutral', hidden: true});
   const viewMeta = h('p', {class: 'ui-meta', 'data-pm-work-meta': '', hidden: true});
-  const management = workbenchEnabled() ? h('select', {'aria-label': t('wc_management'), 'data-workbench-management': '', onchange: event => {
+  // Stay hidden until publishContext fills it. An empty select is still in the tab order.
+  const management = workbenchEnabled() ? h('select', {'aria-label': t('wc_management'), 'data-workbench-management': '', hidden: true, onchange: event => {
     location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${event.target.value}`;
   }}) : null;
   const heading = pageHeader({title, pill: phasePill, meta: viewMeta, actions: [management, refresh].filter(Boolean)});
@@ -545,7 +599,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   let replyRuns = [], replyPartial = false;
   let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null,
     sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = '', earlier = null, historyCursor = null, historyExpanded = false,
-    packages = null, packageSignature = '', revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, proposalReview = null, discussionHint = null;
+    packages = null, packageSignature = '', revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, proposalReview = null, discussionHint = null, assessmentSources = null;
   lifecycle = workspaceId && caps()?.features?.pm_workspaces?.lifecycle?.version === 1
     ? workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted:()=>loaded&&workspace?.membership?.role==='owner',form,input,labelled,errorBox,onChange:()=>{updateForms();publishContext();}}) : null;
   if(lifecycle&&!threadId)body.insertBefore(lifecycle.element,content);
@@ -963,7 +1017,11 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       shownView = id;
       void refreshStaleVisible();
     }});
-    workbench.apply(); brief?.setActive?.(workbench.selected() === 'overview');
+    workbench.apply();
+    // Name the opened view before the first workspace read. apply() does not run onSelect.
+    const openedView = workbench.selected();
+    if (openedView) title.textContent = t('ui_' + openedView);
+    brief?.setActive?.(workbench.selected() === 'overview');
     if (scheduleTools) scheduleTools.hidden = workbench.selected() !== 'schedule';
     shownView = workbench.selected();
     syncIssueTools(shownView);
@@ -1168,7 +1226,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           capability: () => pmCapabilities, thread: () => threadData, permitted, target, refresh: load});
       }
       if (caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1) {
-        proposalReview = planProposals({h,t,api,alive,form,input,labelled,caps,workspaceId,threadId,
+        proposalReview = planProposals({h,t,api,alive,form,input,labelled,caps,namespace,workspaceId,threadId,
           thread:()=>threadData,permitted,refresh:load,errorBox, conversation: true, backLink, onRevision: id => {
             discussionTools.open('plan');
             // Let a new mobile sheet establish its focus boundary first.
@@ -1251,7 +1309,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         disclosure({label: t('pd_details'), body: h('p', {class: 'muted'}, t('pm_unverified'))}),
         h('details', {'data-pm-add-input': ''}, h('summary', {}, t('pm_add_input')), factForm.box),
       );
-      const contextPane = h('section', {'data-discussion-tab': 'context'}, panelContext);
+      assessmentSources?.dispose();
+      assessmentSources = discussionAssessments({h,t,api,alive,workspaceId,threadId,namespace});
+      const contextPane = h('section', {'data-discussion-tab': 'context'}, panelContext, assessmentSources.element);
       for (const node of [...column.querySelectorAll(':scope > .pm-package-preparation, :scope > .pm-packages')]) contextPane.append(node);
       if (nativeAnalysis) contextPane.append(h('details', {}, h('summary', {}, t('pd_analysis')), nativeAnalysis.box));
       const meetingThread = ['sprint_planning', 'sprint_review', 'retrospective', 'maintenance_review'].includes(thread.mode);
@@ -1266,6 +1326,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       discussionTools = discussionPanel({t, namespace, workspaceId, threadId, panes: {context: contextPane,
         inputs: h('section', {'data-discussion-tab': 'inputs'}, information), plan: planPane,
         ...(meetings ? {meeting: h('section', {'data-discussion-tab': 'meeting'}, meetings.element)} : {})}, onSelect: key => {
+          if (key === 'context') void assessmentSources?.refresh();
           revisions?.setActive(key === 'plan');
           if (key === 'meeting' && initialReadComplete) void refreshSection(meetings);
           if (key === 'context' && initialReadComplete) for (const [section, details] of lazyThreadSections) if (details.open && !details.closest('[data-discussion-tab]')?.hidden) void refreshSection(section);
@@ -1298,6 +1359,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     mode.hidden = thread.title.trim().toLocaleLowerCase() === mode.textContent.toLocaleLowerCase();
     boundContext.replaceChildren(...discussionContext(t, thread.context, {limit: 1, onMore: () => discussionTools.open('context', {returnFocus: () => boundContext.querySelector('[data-discussion-more-context]')}), onOpen: () => discussionTools.open('context', {returnFocus: () => boundContext.querySelector('[data-discussion-context]')})}));
     panelContext.replaceChildren(...discussionContext(t, thread.context), ...(thread.context?.length ? [] : [emptyState({title:t('pd_no_context'),text:t('pd_no_context_help')})]));
+    assessmentSources?.update(thread.context);
     discussionHint.textContent = '';
     const transcript = notes.closest('.pd-transcript');
     const bottom = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 32, scroll = transcript.scrollTop;
@@ -1509,6 +1571,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   }
   async function load({event = false} = {}) {
     const ticket = ++sequence; refreshing = true; refresh.disabled = true;
+    assessmentSources?.withdraw();
     if (!event) {invalidateSections(); withdrawNames(); lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();
       ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();qualityReviews?.withdraw();qualitySelections.clear();}
     headerReads++;
@@ -1567,13 +1630,22 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
             params: values => ({title: values.title.trim(), ...(launch.refs.length ? {context: launch.refs} : {})}), preconditions: () => ({expected_version: workspace.version}),
             permitted: () => permitted(false) && !draftSourceUnavailable, recoverPermitted: () => permitted(false), label: threadId === 'new' ? 'pd_send' : 'pm_create_thread',
             onStateChange: () => titleDraft?.updateState(),
+            keepEditable: name => name === 'title' && Boolean(titleDraft?.editing()),
             onBeforeSaved: (result, values) => {
               if (values.content.trim()) localStorage.setItem(handoffKey, JSON.stringify({threadId: result.thread_id, content: values.content}));
               rememberOrigin(result.thread_id, {from: launch.from || 'discussions', report: launch.report});
             },
-            onSaved: result => {alive(); location.replace(`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(result.thread_id)}`);},
+            onSaved: result => {
+              // The thread now exists, so this local draft is gone. A later new
+              // discussion must not reopen the rename from that finished draft.
+              if (threadId === 'new') titleSession.open = false;
+              alive(); location.replace(`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(result.thread_id)}`);
+            },
             extra: threadId === 'new' ? text : h('div', {}, labelled('pd_title', name), text)});
-          titleDraft = threadId === 'new' ? discussionTitle({t, field: name, form: create, value: name.value, local: true}) : null;
+          titleDraft = threadId === 'new' ? discussionTitle({t, field: name, form: create, value: name.value, local: true,
+            resume: titleSession.open === true,
+            onEditing: (open, start, end) => {titleSession.open = open; if (open) {titleSession.caret = start; titleSession.caretEnd = end;}}}) : null;
+          if (titleDraft) titleView = titleDraft;
           if (threadId === 'new' && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis)) {
             workspaceCaps = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`); alive();
             if (ticket !== sequence) return;
@@ -1610,7 +1682,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (plans && revisions) revisions.update(plans, accepted, workspaceCaps);
       if (proposalReview) {
         proposalReview.update({head: plans?.head, capabilities: workspaceCaps});
-        await proposalReview.refresh();
+        await proposalReview.refresh(undefined, {background: Boolean(event)});
         alive(); if (ticket !== sequence) return;
       }
       worktreeChoice?.update();
@@ -1619,6 +1691,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       // views hidden and their first/manual refresh deferred until opened.
       for (const section of sourceSections()) section.hidden = false;
       workbench?.apply();
+      assessmentSources?.update(threadData?.thread?.context);
       for (const section of [lifecycle, evidence, brief, ahp, releaseBaselines, maintenancePolicy, maintenanceRepairs, maintenanceReview, qualityReviews, roadmap, schedule, kanban, sprints, meetings, governance, register, specifications, followUp, engineering,materialization,handoff,workBatches,issues,traceability]) {
         const lazy = lazyThreadSections.get(section);
         if (section && sectionRequired(section) && (!threadId || !lazy || lazy.open && !lazy.closest('[data-discussion-tab]')?.hidden)
@@ -1672,7 +1745,13 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   workspaceList.scrollTop = uiState.listScroll || 0;
   const initialTranscript = content.querySelector('.pd-transcript');
   if (initialTranscript && threadState.scroll) initialTranscript.scrollTop = threadState.scroll;
-  if (threadId === 'new') setTimeout(() => {if (!disposed) content.querySelector('[data-discussion-composer]')?.focus();}, 0);
+  if (threadId === 'new') setTimeout(() => {
+    if (disposed) return;
+    // An access reset rebuilds this page while rename is open. Restore that
+    // field instead of moving focus to the composer.
+    if (titleView?.editing()) titleView.focus(titleSession.caret, titleSession.caretEnd);
+    else content.querySelector('[data-discussion-composer]')?.focus();
+  }, 0);
   proposalReview?.recheck(); nativeAnalysis?.recheck();
   if (firstMessagePending) setTimeout(() => {
     if (!disposed) {firstMessagePending = false; void noteForm.submit();}
@@ -1731,6 +1810,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   let contextSequence = 0;
   async function refreshDiscussionSources() {
     const ticket = ++contextSequence, generation = sequence;
+    assessmentSources?.withdraw();
     try {
     if (threadId === 'new') {
       const refs = await draftSourceRefs(); alive();
@@ -1771,6 +1851,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const off = onEvents(event => {
     const kind = event.resource_type;
     if (!pmEvent(kind) && !liveEvent(kind)) return;
+    assessmentSources?.withdraw();
     invalidateSections();
     if (kind.startsWith('pm_plan') || kind === 'pm_workspace') withdrawNames();
     // Withdraw changed authority before coalescing: an earlier unrelated event in
@@ -1800,7 +1881,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     disposed = true; main.removeEventListener('toggle', openedSource, true); for (const placeholder of maskedSources.values()) placeholder.remove(); maskedSources.clear();
     discussionTools?.dispose(); sequence++; off(); offOnline(); createPanel?.close(); detailPanel?.close(); reportMenu?.dispose(); overflow.dispose();
     brief?.dispose?.();traceability?.dispose();kanban?.dispose();resources?.dispose();schedule?.dispose();scheduleTools?.dispose();dependencies?.dispose();register?.dispose();
-    proposalReview?.dispose();nativeAnalysis?.dispose();ahp?.dispose();
+    proposalReview?.dispose();nativeAnalysis?.dispose();ahp?.dispose();assessmentSources?.dispose();
     for (const control of viewToolMenus.values()) control.dispose();
     for (const value of forms) value.dispose();
     refreshing = false;

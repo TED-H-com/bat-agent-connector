@@ -123,8 +123,14 @@ def _canonical(value: Any) -> str:
     return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=str)
 
 
-def _workspace_key(action: str) -> bool:
-    return action.startswith("pm.") or action == "work.start"
+def _workspace_key(action: str, target: Any = None) -> bool:
+    if action.startswith("pm.") or action in {"work.start", "work.adopt_and_start"}:
+        return True
+    return (
+        action == "session.send"
+        and isinstance(target, dict)
+        and ("workspace_id" in target or "work_item_id" in target)
+    )
 
 
 def _pm_key_prefix(target: dict) -> str:
@@ -299,6 +305,23 @@ class OpContext:
             self.service._step_start(self.operation_id, name, request or {}, bookkeeping=receipt_only)
         try:
             response = await fn()
+        except Wait as exc:
+            fresh = self.service._row(self.operation_id) or {}
+            sent = (fresh.get("external_refs") or {}).get(f"{name}_sent")
+            if sent is False:
+                raise
+            if sent is True:
+                self.service._step_status(
+                    self.operation_id,
+                    name,
+                    "uncertain",
+                    error={"code": "UNCERTAIN", "message": "wait requested after transport fence"},
+                )
+                raise Uncertain(name, f"step {name!r} requested wait after transport fence") from None
+            code = _error_code(exc)
+            message = type(exc).__name__
+            self.service._step_status(self.operation_id, name, "failed", error={"code": code, "message": message})
+            raise StepFailed(code, message) from exc
         except NeedsAttention:
             self.service._step_status(self.operation_id, name, "uncertain")
             raise
@@ -349,7 +372,7 @@ class OperationService:
         # Keep the old field for readers, but never expose a storage sentinel as a client key.
         if op["idem_key"] == NO_KEY_PREFIX + op["operation_id"]:
             op["idem_key"] = None
-        elif _workspace_key(op["action"]) and op["idem_key"].startswith(_pm_key_prefix(op["target"])):
+        elif _workspace_key(op["action"], op["target"]) and op["idem_key"].startswith(_pm_key_prefix(op["target"])):
             op["idem_key"] = op["idem_key"][len(_pm_key_prefix(op["target"])):]
         op["idempotency_key"] = op["idem_key"]
         op["idempotency_enabled"] = op["idem_key"] is not None
@@ -417,10 +440,15 @@ class OperationService:
                              _canonical(result) if result is not None else None, next_run_at, attempts,
                              uncertain_tries, now, operation_id))
             if status != old:
-                self.journal.api_event("operation", operation_id, "operation." + status,
-                                       {"action": row["action"], "from": old, "to": status,
-                                        "error_code": error_code, "reason": (reason or "")[:200] or None},
+                body = {"action": row["action"], "from": old, "to": status,
+                        "error_code": error_code, "reason": (reason or "")[:200] or None}
+                from .pm_work_follow_up import transition_event_fields
+                body.update(transition_event_fields(self.db, operation_id, row["action"]))
+                self.journal.api_event("operation", operation_id, "operation." + status, body,
                                        actor=actor or row["actor"])
+        if status != old and status in {"succeeded", "failed", "cancelled"}:
+            from .pm_work_follow_up import on_transition
+            on_transition(self, operation_id, status)
         if status != old and status in TERMINAL | {"needs_attention"}:
             # A compound action may have made its parent due in the same commit.
             self.kick()
@@ -475,6 +503,8 @@ class OperationService:
                 admit_restart(self, operation_id, name)
                 from .pm_work_start import admit_restart as admit_work_start_restart
                 admit_work_start_restart(self, operation_id, name)
+                from .pm_work_adopt_and_start import admit_restart as admit_adopt_start_restart
+                admit_adopt_start_restart(self, operation_id, name)
                 from .pm_maintenance_repairs import admit_restart as admit_repair_restart
                 admit_repair_restart(self, operation_id, name, request)
             from .pm_lifecycle_gates import admit_step
@@ -511,7 +541,7 @@ class OperationService:
         if not isinstance(action, str) or not isinstance(idempotency_key, str):
             return False
         key = idempotency_key.strip()
-        if _workspace_key(action):
+        if _workspace_key(action, target):
             target = target or {}  # Match create(): omitted workspace-create target is {}.
             if not isinstance(target, dict):
                 return False
@@ -550,11 +580,11 @@ class OperationService:
         except UnicodeEncodeError:
             raise OperationError("INVALID_REQUEST", "request text must contain valid Unicode characters", 422) from None
         key = None if no_key else idempotency_key.strip()
-        if _workspace_key(action):
+        if _workspace_key(action, target):
             key = _pm_key_prefix(target) + key
         existing = self.db.execute("SELECT * FROM operations WHERE actor=? AND idem_key=?",
                                    (principal.actor, key)).fetchone()
-        if existing and not _workspace_key(action):
+        if existing and not _workspace_key(action, target):
             if existing["request_hash"] != request_hash:
                 raise OperationError("IDEMPOTENCY_CONFLICT",
                                      "this idempotency_key was already used for a different request", 409)
@@ -569,7 +599,7 @@ class OperationService:
             authorize_orchestration_child(self, principal, op, "replay")
         if op and adef.authorize_existing:
             adef.authorize_existing(self, principal, op, "replay")
-        if existing and _workspace_key(action) and existing["request_hash"] != request_hash:
+        if existing and _workspace_key(action, target) and existing["request_hash"] != request_hash:
             raise OperationError("IDEMPOTENCY_CONFLICT",
                                  "this idempotency_key was already used for a different request", 409)
         return adef, target, params, preconditions, key, request_hash, op
@@ -628,6 +658,8 @@ class OperationService:
             bind_operation(self.db, operation_id, _resolved_target or target, params, binding)
             from .pm_work_start import admit_operation as admit_work_start
             admit_work_start(self.db, operation_id, action, target, binding, now)
+            from .pm_work_follow_up import admit_operation as admit_work_follow_up
+            admit_work_follow_up(self.db, operation_id, action, target, params, preconditions, binding, now)
             self.journal.api_event("operation", operation_id, "operation.accepted",
                                    {"action": action, "target": target, "entry": entry}, actor=principal.actor)
         self.kick()
@@ -637,6 +669,8 @@ class OperationService:
         from .pm_access import require_visible
         require_visible(self.db, principal, op)
         self._authorize_controller(principal, op, verb)
+        from .pm_work_adopt_and_start import authorize_child as authorize_adopt_start_child
+        authorize_adopt_start_child(self, principal, op, verb)
         from .bulk_approval import authorize_child
         authorize_child(self, principal, op, verb)
         from .orchestration_operations import authorize_child as authorize_orchestration_child
@@ -668,7 +702,7 @@ class OperationService:
             return
         if not (action.startswith(("session.", "worktree.", "fanout.", "cleanup."))
                 or action in {"checkpoint.continue", "checkpoint.continue.revalidate",
-                              "repository.continue", "integration.handoff", "work.start"}):
+                              "repository.continue", "integration.handoff", "work.start", "work.adopt_and_start"}):
             return
         from . import controller_authority
         saved = controller_authority.operation_binding(op)
@@ -685,6 +719,8 @@ class OperationService:
         cancelled operation never hides an action that happened."""
         op = self.get(operation_id, steps=False)
         self._may_steer(principal, op, "cancel")
+        from .pm_work_follow_up import cancel as cancel_work_follow_up
+        cancel_work_follow_up(self, principal, op)
         if op["status"] in TERMINAL:
             return op
         if op["action"] == "worktree.merge":
@@ -705,6 +741,11 @@ class OperationService:
         if op["action"] in {"pm.run.prepare", "pm.plan.adopt"}:
             from .pm_run_operations import cancel
             return cancel(self, principal, op)
+        if op["action"] == "work.adopt_and_start":
+            from .pm_work_adopt_and_start import cancel_children as cancel_adopt_start
+            pending = cancel_adopt_start(self, principal, op)
+            if pending is not None:
+                return pending
         if op["action"] == "work.start":
             from .pm_work_start import cancel_children as cancel_work_start_children
             cancel_work_start_children(self, principal, op)
@@ -740,6 +781,8 @@ class OperationService:
         re-sent), and the handler's checks run afresh."""
         op = self.get(operation_id, steps=False)
         self._may_steer(principal, op, "resume")
+        from .pm_work_follow_up import resume as resume_work_follow_up
+        resume_work_follow_up(self, principal, op)
         if op["action"] == "delivery.merge_and_deploy" and not (
                 principal.allows("merge") and principal.allows("deploy")):
             raise OperationError("FORBIDDEN", "resuming merge-and-deploy needs both merge and deploy scopes", 403)
@@ -754,6 +797,9 @@ class OperationService:
         if op["action"] in {"session.relay", "fanout.plan", "fanout.start"}:
             from .orchestration_operations import resume_children
             resume_children(self, principal, op)
+        if op["action"] == "work.adopt_and_start":
+            from .pm_work_adopt_and_start import resume_children as resume_adopt_start
+            resume_adopt_start(self, principal, op)
         if op["action"] == "work.start":
             from .pm_work_start import resume_children as resume_work_start_children
             resume_work_start_children(self, principal, op)

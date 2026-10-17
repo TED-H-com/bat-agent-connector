@@ -10,7 +10,7 @@ test('every wres_ string exists in both en and zh-TW and is non-empty', () => {
   assert.deepEqual(new Set(zhKeys), new Set(enKeys), 'en and zh-TW must have identical keys');
 
   for (const key of zhKeys) {
-    assert.ok(key.startsWith('wres_'), `Key ${key} must have wres_ prefix`);
+    assert.ok(key.startsWith('wres_') || key.startsWith('error_code_'), `Key ${key} must have wres_ or error_code_ prefix`);
     const zhVal = workResultStrings['zh-TW'][key];
     const enVal = workResultStrings.en[key];
     assert.ok(typeof zhVal === 'string' && zhVal.trim().length > 0, `zh-TW value for ${key} must be non-empty`);

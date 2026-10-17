@@ -51,6 +51,11 @@ def install(ops):
 def _admit(ops, principal, target, params, pre):
     pm_native_operations._scopes(principal)
     pm_workspace.require_member(ops.db, principal, target.get("workspace_id"), decide=True)
+    return check_review(ops, principal, target, params, pre)
+
+
+def check_review(ops, principal, target, params, pre):
+    """Read the fixed proposal and review; callers separately enforce write roles."""
     if (set(target) != {"workspace_id", "thread_id"} or set(params) != {"proposal_id", "review", "rationale"}
             or set(pre) != {"expected_version", "expected_plan_version", "expected_accepted_revision_id", "expected_proposal_digest"}):
         raise proposals.error("Supply one exact proposal, whole review, rationale and original versions")
@@ -145,6 +150,15 @@ def _current_principal(ops, parent):
     return live
 
 
+def check_frozen_review(ops, workspace_id, proposal, review, frozen):
+    """Both compound levels retain the admitted proposal and owned Git binding."""
+    from . import pm_revision_git
+    if frozen != {"proposal_operation_id": proposal["operation_id"], "proposal_digest": proposal["document_digest"],
+            "review_digest": pm_runs._digest(review), "context_digest": proposal["context_digest"],
+            "git_binding_id": pm_revision_git.binding_id(pm_runs.workspace_worktree(ops.db, workspace_id))}:
+        raise proposals.error("Original owner decision changed", "PM_CONVERSATION_CHANGED", 409)
+
+
 def _guard(ops, parent):
     db = ops.db
     if parent["action"] != proposals.ADOPT or parent["cancel_requested"] or parent["status"] in TERMINAL:
@@ -155,11 +169,7 @@ def _guard(ops, parent):
     require_local(db, parent["operation_id"])
     proposal = proposals._view(db, proposals._row(db, parent["target"]["workspace_id"], parent["params"]["proposal_id"]))
     frozen = parent["external_refs"]["admission_binding"]["conversation_review"]
-    from . import pm_revision_git
-    if frozen != {"proposal_operation_id": proposal["operation_id"], "proposal_digest": proposal["document_digest"],
-            "review_digest": pm_runs._digest(parent["params"]["review"]), "context_digest": proposal["context_digest"],
-            "git_binding_id": pm_revision_git.binding_id(pm_runs.workspace_worktree(db, parent["target"]["workspace_id"]))}:
-        raise proposals.error("Original owner decision changed", "PM_CONVERSATION_CHANGED", 409)
+    check_frozen_review(ops, parent["target"]["workspace_id"], proposal, parent["params"]["review"], frozen)
     children = _children(db, parent)
     context = proposal["context"]
     thread = pm_discussions._thread(db, **parent["target"])

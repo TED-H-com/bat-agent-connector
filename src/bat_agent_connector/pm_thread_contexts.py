@@ -18,6 +18,7 @@ KINDS = {
     'requirement': (r'[a-z][a-z0-9_.-]{0,79}', {'revision_id': r'pmrev_[0-9a-f]{32}'}),
     'milestone': (r'[a-z][a-z0-9_.-]{0,79}', {'revision_id': r'pmrb_[0-9a-f]{32}'}),
     'work_item': (r'wi_[0-9a-f]{20}', {}),
+    'quality_assessment': (r'op_[0-9a-f]{32}', {'review_id': r'pmqr_[0-9a-f]{32}', 'document_digest': r'[0-9a-f]{64}'}),
     'governance': (r'pmgov_[0-9a-f]{32}', {}),
     'finding': (r'pmfn_[0-9a-f]{32}', {'observation_id': r'pmgh_[0-9a-f]{32}', 'document_digest': r'[0-9a-f]{64}'}),
     'repair': (r'pmrp_[0-9a-f]{32}', {}),
@@ -80,6 +81,7 @@ def resolve(ops, principal, wid, ref):
         pm_maintenance_repairs,
         pm_meetings,
         pm_plans,
+        pm_quality_reviews,
         pm_roadmap,
         pm_snapshots,
         work_items,
@@ -137,6 +139,21 @@ def resolve(ops, principal, wid, ref):
         record = work_items._get_item(ops.db, identity)
         label, sources = record['title'], [binding['operation_id']]
         summary = {k: record[k] for k in ('title', 'goal', 'state', 'version')}
+    elif kind == 'quality_assessment':
+        _table(ops, 'pm_quality_review_records')
+        review = pm_quality_reviews.get_review(ops, principal, wid, ref['review_id'])['review']
+        original = next((item for item in review['history'] if item['kind'] == 'assessment'
+            and item['operation_id'] == identity and item['document_digest'] == ref['document_digest']), None)
+        if original is None:
+            raise unavailable()
+        # The immutable original record supplies its version. Never substitute
+        # the current assessment, or treat a historical conclusion as acceptance.
+        summary = pm_quality_reviews.get_assessment(ops, principal, wid, ref['review_id'],
+            operation_id=identity, version=original['version'], document_digest=ref['document_digest'])
+        pm_source_lineage.require(ops.db, principal, 'work_item', review['work_item_id'])
+        label = work_items._get_item(ops.db, review['work_item_id'])['title']
+        sources = [review['operation_id'], identity]
+        primary = identity
     elif kind == 'governance':
         _table(ops, 'pm_governance_records')
         record = pm_governance.get_record(ops, principal, wid, identity)

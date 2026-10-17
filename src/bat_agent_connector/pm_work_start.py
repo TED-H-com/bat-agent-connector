@@ -53,7 +53,7 @@ PRECONDITIONS = frozenset({
     "expected_latest_attempt_id",
 })
 PARAMS_REQUIRED = frozenset({"instruction", "agent", "delivery", "code_target"})
-PARAMS_OPTIONAL = frozenset({"model", "requirement_ids"})
+PARAMS_OPTIONAL = frozenset({"model", "requirement_ids", "profile_id"})
 CODE_TARGET_KEYS = ("repository", "host", "workspace_id", "source_ref")
 DELIVERY_GOALS = frozenset({"pull_request", "reviewable_changes"})
 AGENTS = frozenset({"claude", "codex"})
@@ -665,8 +665,9 @@ def _resolve_requirement_ids(current_plan: dict, binding: dict | None, raw_ids) 
     return requirement_ids, bind_needed
 
 
-def _validate_preconditions_shape(pre: dict) -> None:
-    if not isinstance(pre, dict) or set(pre) != PRECONDITIONS:
+def _validate_preconditions_shape(pre: dict, *, pending_scope: bool = False) -> None:
+    expected = PRECONDITIONS - {"expected_scope_revision"} if pending_scope else PRECONDITIONS
+    if not isinstance(pre, dict) or set(pre) != expected:
         raise _bad("PRECONDITION_REQUIRED", "work.start requires all ten preview preconditions", 422)
     if (
         not isinstance(pre["expected_work_item_fingerprint"], str)
@@ -680,8 +681,10 @@ def _validate_preconditions_shape(pre: dict) -> None:
                 or not pm_evidence._BINDING.fullmatch(pre["expected_binding_id"])
             )
         )
-        or not isinstance(pre["expected_scope_revision"], str)
-        or not re.fullmatch(r"pmscope_[0-9a-f]{32}", pre["expected_scope_revision"])
+        or (not pending_scope and (
+            not isinstance(pre["expected_scope_revision"], str)
+            or not re.fullmatch(r"pmscope_[0-9a-f]{32}", pre["expected_scope_revision"])
+        ))
         or (
             pre["expected_previous_package_id"] is not None
             and (
@@ -708,14 +711,57 @@ def _validate_preconditions_shape(pre: dict) -> None:
         raise _bad("PRECONDITION_REQUIRED", "Supply valid preview preconditions for work.start", 422)
 
 
-def _check_admission(ops, principal: Principal, target: dict, params: dict, pre: dict) -> dict:
-    if not isinstance(target, dict) or set(target) != {"workspace_id", "work_item_id"}:
-        raise _bad("INVALID_TARGET", "Exact workspace_id and work_item_id are required", 422)
-    wid, wi_id = target["workspace_id"], target["work_item_id"]
-    if not isinstance(wi_id, str) or not work_items.WORK_ITEM_ID.fullmatch(wi_id):
-        raise _bad("INVALID_TARGET", "work_item_id must identify a Connector work item", 422)
-    workspace = _member(ops, principal, wid, write=True)
-    controller = controller_authority.binding(ops.db, principal, pm_workspace_id=wid)
+def _validate_profile_preconditions(pre: dict) -> None:
+    expected = PRECONDITIONS | {"expected_profile_revision", "expected_profile_digest"}
+    if not isinstance(pre, dict) or set(pre) != expected:
+        raise _bad("PRECONDITION_REQUIRED", "work.start requires all twelve preview preconditions", 422)
+    _validate_preconditions_shape({key: pre[key] for key in PRECONDITIONS})
+    revision = pre["expected_profile_revision"]
+    digest = pre["expected_profile_digest"]
+    if (
+        type(revision) is not int
+        or revision < 1
+        or not isinstance(digest, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", digest)
+    ):
+        raise _bad("PRECONDITION_REQUIRED", "Supply valid preview preconditions for work.start", 422)
+
+
+def check_handoff_size(ops, wid: str, instruction: str, code_source: dict, package_plan: dict) -> None:
+    """Bound the same complete handoff contract before allocating any child."""
+    # Verify bounded prompt contract length before admitting any operation or child.
+    synthetic_contract = {
+        "contract": pm_package_handoff.CONTRACT,
+        "package_ref": package_plan["package_ref"]
+        or {"workspace_id": wid, "package_id": "pmwp_" + "0" * 32, "document_digest": "0" * 64},
+        "package": package_plan["description"],
+        "code_basis": {
+            "mode": pm_package_handoff.MODE,
+            "rationale": _handoff_rationale(code_source),
+            "compatibility": "unverified",
+            "scope_change_authorized": False,
+        },
+        "execution_assignment": "this_original_operation_only",
+        "verification": "unassessed",
+        "delivery": "not_observed",
+    }
+    text = pm_package_handoff.prompt(instruction, synthetic_contract)
+    if len(checkpoints._input_instructions(ops.db, text, [])) > service.MAX_PROMPT_CHARS - 100:
+        raise _bad(
+            "PM_HANDOFF_TOO_LARGE",
+            "The complete engineering contract and instructions exceed the prompt limit",
+            413,
+        )
+
+
+def check_work_preconditions(ops, principal: Principal, wid: str, wi_id: str,
+                             params: dict, pre: dict, *, controller: dict,
+                             pending_scope: bool = False) -> dict:
+    """Shared local Work checks; a pending adoption never fabricates a scope ID.
+
+    The caller checks workspace membership. This performs no writes or network
+    calls; the real work.start still checks the adopted plan at child admission.
+    """
     require_work_controller(ops.db, wid, wi_id, controller)
     require_latest_attempt_settled(ops.db, wid, wi_id)
     if (
@@ -724,7 +770,12 @@ def _check_admission(ops, principal: Principal, target: dict, params: dict, pre:
         or set(params) - PARAMS_REQUIRED - PARAMS_OPTIONAL
     ):
         raise _bad("INVALID_PARAMS", "Supply exact work.start parameters", 422)
-    _validate_preconditions_shape(pre)
+    if pending_scope and "profile_id" in params:
+        raise _bad("INVALID_PARAMS", "Adopt-and-start requires an explicit code target", 422)
+    if "profile_id" in params:
+        _validate_profile_preconditions(pre)
+    else:
+        _validate_preconditions_shape(pre, pending_scope=pending_scope)
     instruction = pm_plans._text(params.get("instruction"), "instruction", 4000)
     if not _bind_rationale(instruction):
         raise _bad("INVALID_PARAMS", "instruction must contain non-whitespace characters", 422)
@@ -764,22 +815,18 @@ def _check_admission(ops, principal: Principal, target: dict, params: dict, pre:
     if binding is not None and binding["project_id"] != work["project_id"]:
         raise _bad("PM_WORK_BINDING_CHANGED", "The work item moved to another project; reassociate it first", 409)
 
-    current_plan = pm_plans.accepted_plan(ops, principal, wid)["plan"]
-    if current_plan is None:
-        raise _bad("PM_ADOPTED_PLAN_REQUIRED", "Starting work requires an explicitly adopted plan", 409)
-    plan_ref = pm_work_packages._plan_ref(current_plan)
-    if pre["expected_scope_revision"] != plan_ref["scope_revision"]:
-        raise _bad("PM_PACKAGE_SCOPE_CHANGED", "Prepare work against the current explicitly adopted scope", 409)
-
     latest_package_id = pm_work_packages._latest(ops.db, wid, wi_id)
     if pre["expected_previous_package_id"] != latest_package_id:
         raise _bad("PM_PACKAGE_VERSION_CONFLICT", "Read the latest work package before starting", 409)
     require_expected_latest_attempt(ops.db, wid, wi_id, pre["expected_latest_attempt_id"])
 
-    requirement_ids, bind_needed = _resolve_requirement_ids(current_plan, binding, params.get("requirement_ids"))
-    if bind_needed:
-        _member(ops, principal, wid, write=True, decide=True)
-
+    if "profile_id" in params:
+        from .pm_work_profiles import pinned_revision
+        pinned = pinned_revision(
+            ops.db, principal, wid, params.get("profile_id"), pre["expected_profile_revision"],
+            digest=pre["expected_profile_digest"], admission=True,
+        )
+        _profile_admission_target(params, code_target, delivery_goal, pinned)
     if code_target["repository"].lower() not in {r.lower() for r in project["repositories"]}:
         raise _bad("PROJECT_REPOSITORY_CHANGED", "Selected repository does not belong to this work item's project", 409)
     target_3 = {k: code_target[k] for k in ("repository", "host", "workspace_id")}
@@ -794,6 +841,40 @@ def _check_admission(ops, principal: Principal, target: dict, params: dict, pre:
         "binding_digest": pre["binding_digest"],
     }
     pm_worktree.validate_selection(ops, code_source)
+
+    return {
+        "work": work, "project": project, "binding": binding,
+        "actual_binding_id": actual_binding_id, "latest_package_id": latest_package_id,
+        "config": config, "code_source": code_source, "instruction": instruction,
+        "agent": agent, "model": model, "delivery": delivery_goal,
+    }
+
+
+def _check_admission(ops, principal: Principal, target: dict, params: dict, pre: dict) -> dict:
+    if not isinstance(target, dict) or set(target) != {"workspace_id", "work_item_id"}:
+        raise _bad("INVALID_TARGET", "Exact workspace_id and work_item_id are required", 422)
+    wid, wi_id = target["workspace_id"], target["work_item_id"]
+    if not isinstance(wi_id, str) or not work_items.WORK_ITEM_ID.fullmatch(wi_id):
+        raise _bad("INVALID_TARGET", "work_item_id must identify a Connector work item", 422)
+    workspace = _member(ops, principal, wid, write=True)
+    controller = controller_authority.binding(ops.db, principal, pm_workspace_id=wid)
+    local = check_work_preconditions(ops, principal, wid, wi_id, params, pre, controller=controller)
+    work, project, binding = local["work"], local["project"], local["binding"]
+    actual_binding_id, latest_package_id = local["actual_binding_id"], local["latest_package_id"]
+    config, code_source = local["config"], local["code_source"]
+    instruction, agent, model = local["instruction"], local["agent"], local["model"]
+    delivery_goal = local["delivery"]
+
+    current_plan = pm_plans.accepted_plan(ops, principal, wid)["plan"]
+    if current_plan is None:
+        raise _bad("PM_ADOPTED_PLAN_REQUIRED", "Starting work requires an explicitly adopted plan", 409)
+    plan_ref = pm_work_packages._plan_ref(current_plan)
+    if pre["expected_scope_revision"] != plan_ref["scope_revision"]:
+        raise _bad("PM_PACKAGE_SCOPE_CHANGED", "Prepare work against the current explicitly adopted scope", 409)
+
+    requirement_ids, bind_needed = _resolve_requirement_ids(current_plan, binding, params.get("requirement_ids"))
+    if bind_needed:
+        _member(ops, principal, wid, write=True, decide=True)
 
     req_map = {r["id"]: r for r in current_plan["document"]["requirements"]}
     selected_reqs = [req_map[rid] for rid in requirement_ids]
@@ -813,29 +894,7 @@ def _check_admission(ops, principal: Principal, target: dict, params: dict, pre:
     )
     _require_ready(selected_reqs, package_plan, readiness)
 
-    # Verify bounded prompt contract length before admitting any operation or child.
-    synthetic_contract = {
-        "contract": pm_package_handoff.CONTRACT,
-        "package_ref": package_plan["package_ref"]
-        or {"workspace_id": wid, "package_id": "pmwp_" + "0" * 32, "document_digest": "0" * 64},
-        "package": package_plan["description"],
-        "code_basis": {
-            "mode": pm_package_handoff.MODE,
-            "rationale": _handoff_rationale(code_source),
-            "compatibility": "unverified",
-            "scope_change_authorized": False,
-        },
-        "execution_assignment": "this_original_operation_only",
-        "verification": "unassessed",
-        "delivery": "not_observed",
-    }
-    text = pm_package_handoff.prompt(instruction, synthetic_contract)
-    if len(checkpoints._input_instructions(ops.db, text, [])) > service.MAX_PROMPT_CHARS - 100:
-        raise _bad(
-            "PM_HANDOFF_TOO_LARGE",
-            "The complete engineering contract and instructions exceed the prompt limit",
-            413,
-        )
+    check_handoff_size(ops, wid, instruction, code_source, package_plan)
 
     lifecycle = pm_lifecycle_gates.head(ops.db, wid)
     return {
@@ -913,7 +972,7 @@ class _Reader:
 
     def get(self, operation_id: str, **kwargs) -> dict:
         row = self.db.execute("SELECT * FROM operations WHERE operation_id=?", (operation_id,)).fetchone()
-        if row is None or row["action"].startswith("pm.") or row["action"] == ACTION:
+        if row is None or row["action"].startswith("pm.") or row["action"] in {ACTION, "work.adopt_and_start"}:
             raise _bad("NOT_FOUND", "Original source operation not found", 404)
         return OperationService._decode(row)
 
@@ -1488,6 +1547,52 @@ def _finish(ctx, state: dict) -> dict:
     return ctx.effect("work.start.finish", record, receipt_only=True)
 
 
+# A resume of this same admission can never pass these codes. Every other
+# OperationError stays needs_attention, including PM_WORK_START_STOPPED so a
+# cancel that arrives inside _guard is still recorded as cancelled.
+_UNRESUMABLE_PRE_CHILD = frozenset({
+    "PM_LIFECYCLE_STOPPED",
+    "PM_LIFECYCLE_EPOCH_CHANGED",
+    "PM_PACKAGE_SCOPE_CHANGED",
+    "WORK_ITEM_CHANGED",
+    "PROJECT_CHANGED",
+    "PM_WORK_BINDING_CHANGED",
+    "PM_PACKAGE_VERSION_CONFLICT",
+    "WORK_ITEM_ARCHIVED",
+    "PROJECT_ARCHIVED",
+})
+
+
+def _stop_before_child(
+    ctx,
+    parent: dict,
+    intent: dict,
+    children: dict[str, dict],
+    exc: OperationError,
+    *,
+    stage: str,
+    binding_id: str | None = None,
+    package_id: str | None = None,
+) -> None:
+    """Fail a pre-child stop no resume can pass; pause every other OperationError."""
+    failed = exc.code in _UNRESUMABLE_PRE_CHILD
+    _save_progress(
+        ctx,
+        _build_state(
+            parent,
+            intent,
+            children,
+            stage="start_failed" if failed else stage,
+            binding_id=binding_id,
+            package_id=package_id,
+        ),
+    )
+    message = _failure_message(exc.code, exc.message)
+    if failed:
+        raise _bad(exc.code, message, exc.status) from exc
+    raise NeedsAttention(exc.code, message) from exc
+
+
 def _raise_child_stopped(
     ctx,
     parent: dict,
@@ -1544,8 +1649,7 @@ async def _run(ctx):
                 _guard(ctx.service, parent)
                 _admit_child(ctx, "bind", _bind_request(ctx.operation_id, intent))
             except OperationError as exc:
-                _save_progress(ctx, _build_state(parent, intent, children, stage="preparing"))
-                raise NeedsAttention(exc.code, _failure_message(exc.code, exc.message)) from exc
+                _stop_before_child(ctx, parent, intent, children, exc, stage="preparing")
             children = _children(ctx.service, parent)
             bind_child = children["bind"]
         if bind_child["status"] not in CHILD_STOPPED:
@@ -1592,11 +1696,9 @@ async def _run(ctx):
                 _guard(ctx.service, _op(ctx.service.db, ctx.operation_id))
                 _admit_child(ctx, "package", _package_request(ctx.operation_id, intent, binding_id))
             except OperationError as exc:
-                _save_progress(
-                    ctx,
-                    _build_state(parent, intent, children, stage="preparing", binding_id=binding_id),
+                _stop_before_child(
+                    ctx, parent, intent, children, exc, stage="preparing", binding_id=binding_id,
                 )
-                raise NeedsAttention(exc.code, _failure_message(exc.code, exc.message)) from exc
             children = _children(ctx.service, parent)
             pkg_child = children["package"]
         if pkg_child["status"] not in CHILD_STOPPED:
@@ -1651,18 +1753,16 @@ async def _run(ctx):
             _guard(ctx.service, _op(ctx.service.db, ctx.operation_id))
             _admit_child(ctx, "handoff", _handoff_request(ctx.operation_id, intent, package_ref))
         except OperationError as exc:
-            _save_progress(
+            _stop_before_child(
                 ctx,
-                _build_state(
-                    parent,
-                    intent,
-                    children,
-                    stage="starting",
-                    binding_id=binding_id,
-                    package_id=package_id,
-                ),
+                parent,
+                intent,
+                children,
+                exc,
+                stage="starting",
+                binding_id=binding_id,
+                package_id=package_id,
             )
-            raise NeedsAttention(exc.code, _failure_message(exc.code, exc.message)) from exc
         children = _children(ctx.service, parent)
         handoff_child = children["handoff"]
 
@@ -1743,6 +1843,43 @@ def _load_preview_local(ops, principal: Principal, wid: str, wi_id: str, body: d
     return work, project, binding, current_plan, plan_ref, latest_package_id, requirement_ids, bind_needed
 
 
+def _profile_code_target(raw_target: dict, pinned: dict) -> None:
+    for key in ("repository", "host", "workspace_id"):
+        if not isinstance(raw_target.get(key), str) or not raw_target[key].strip():
+            raise _bad("INVALID_PARAMS", "code_target requires repository, host and workspace_id", 422)
+    binding = pinned["binding"]
+    if raw_target["repository"].strip().lower() != str(binding.get("repository", "")).lower():
+        raise _bad("PM_WORK_PROFILE_TARGET_MISMATCH", "code_target.repository does not match the work profile", 409)
+    if raw_target["host"].strip() != binding.get("host"):
+        raise _bad("PM_WORK_PROFILE_TARGET_MISMATCH", "code_target.host does not match the work profile", 409)
+    if raw_target["workspace_id"].strip() != binding.get("workspace_id"):
+        raise _bad("PM_WORK_PROFILE_TARGET_MISMATCH", "code_target.workspace_id does not match the work profile", 409)
+
+
+def _delivery_for_profile(body: dict, goal) -> str:
+    sent = body.get("delivery")
+    if goal is None:
+        delivery_goal = sent if sent is not None else "pull_request"
+        if not isinstance(delivery_goal, str) or delivery_goal not in DELIVERY_GOALS:
+            raise _bad("INVALID_PARAMS", "delivery must be pull_request or reviewable_changes", 422)
+        return delivery_goal
+    if sent is None:
+        raise _bad("INVALID_PARAMS", f"delivery must be {goal}", 422)
+    if sent != goal:
+        raise _bad("PM_WORK_PROFILE_TARGET_MISMATCH", "delivery does not match the work profile", 409)
+    return goal
+
+
+def _profile_admission_target(params: dict, code_target: dict, delivery_goal: str, pinned: dict) -> None:
+    if params.get("agent") != pinned["agent"]:
+        raise _bad("PM_WORK_PROFILE_TARGET_MISMATCH", "agent does not match the work profile", 409)
+    if pinned["model"] is not None and params.get("model") != pinned["model"]:
+        raise _bad("PM_WORK_PROFILE_TARGET_MISMATCH", "model does not match the work profile", 409)
+    if pinned["delivery_goal"] is not None and delivery_goal != pinned["delivery_goal"]:
+        raise _bad("PM_WORK_PROFILE_TARGET_MISMATCH", "delivery does not match the work profile", 409)
+    _profile_code_target(code_target, pinned)
+
+
 async def preview(
     ops,
     principal: Principal,
@@ -1752,11 +1889,20 @@ async def preview(
 ) -> dict:
     """Read-only start preview: resolve candidate bindings, default branch and SHA, package plan, readiness and preconditions."""
     body = {} if body is None else body
-    if not isinstance(body, dict) or set(body) - {"code_target", "delivery", "requirement_ids", "instruction"}:
+    if not isinstance(body, dict):
         raise _bad("INVALID_PARAMS", "start preview accepts code_target, delivery, requirement_ids and instruction", 422)
-    delivery_goal = body.get("delivery") if body.get("delivery") is not None else "pull_request"
-    if not isinstance(delivery_goal, str) or delivery_goal not in DELIVERY_GOALS:
-        raise _bad("INVALID_PARAMS", "delivery must be pull_request or reviewable_changes", 422)
+    allowed = {"code_target", "delivery", "requirement_ids", "instruction"}
+    if "profile_id" in body or "profile_revision" in body:
+        allowed |= {"profile_id", "profile_revision"}
+    if set(body) - allowed:
+        raise _bad("INVALID_PARAMS", "start preview accepts code_target, delivery, requirement_ids and instruction", 422)
+    if ("profile_id" in body) != ("profile_revision" in body):
+        raise _bad("INVALID_PARAMS", "profile_id and profile_revision are required together", 422)
+    profile_requested = "profile_id" in body
+    if not profile_requested:
+        delivery_goal = body.get("delivery") if body.get("delivery") is not None else "pull_request"
+        if not isinstance(delivery_goal, str) or delivery_goal not in DELIVERY_GOALS:
+            raise _bad("INVALID_PARAMS", "delivery must be pull_request or reviewable_changes", 422)
     raw_target = body.get("code_target") if body.get("code_target") is not None else {}
     if not isinstance(raw_target, dict) or set(raw_target) - set(CODE_TARGET_KEYS):
         raise _bad("INVALID_PARAMS", "code_target may only contain repository, host, workspace_id and source_ref", 422)
@@ -1772,6 +1918,7 @@ async def preview(
     else:
         instruction_override = None
 
+    profile = None
     with snapshots._snapshot(ops.db):
         (
             work,
@@ -1783,6 +1930,13 @@ async def preview(
             requirement_ids,
             bind_needed,
         ) = _load_preview_local(ops, principal, workspace_id, work_item_id, body)
+        if profile_requested:
+            from .pm_work_profiles import pinned_revision
+            profile = pinned_revision(
+                ops.db, principal, workspace_id, body.get("profile_id"), body.get("profile_revision"),
+            )
+            _profile_code_target(raw_target, profile)
+            delivery_goal = _delivery_for_profile(body, profile["delivery_goal"])
         proj_repos = {r.lower() for r in project["repositories"]}
         all_candidates = [
             b for b in repository_sync.capabilities(ops) if b["repository"].lower() in proj_repos
@@ -1912,7 +2066,10 @@ async def preview(
             "expected_source_sha": source["source_sha"],
             "expected_latest_attempt_id": latest_attempt_id(ops.db, workspace_id, work_item_id),
         }
-        return {
+        if profile is not None:
+            preconditions["expected_profile_revision"] = profile["revision"]
+            preconditions["expected_profile_digest"] = profile["digest"]
+        response = {
             "workspace_id": workspace_id,
             "work_item_id": work_item_id,
             "code_target": full_code_target,
@@ -1924,6 +2081,14 @@ async def preview(
             "preconditions": preconditions,
             "observed_at": time.time(),
         }
+        if profile is not None:
+            response["profile"] = {
+                "profile_id": profile["profile_id"],
+                "revision": profile["revision"],
+                "digest": profile["digest"],
+                "delivery_goal": profile["delivery_goal"],
+            }
+        return response
 
 
 def capabilities(ops=None) -> dict:

@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
 import subprocess
-import sys
 
 import pytest
 
@@ -38,18 +38,35 @@ def closure_fixture(tmp_path, *, bad=None, failure=None):
         (tree / bad).chmod(0o664)
     # This executable is a fixture scanner, never part of the production trust base.
     scanner = tmp_path / 'fixture-find'
-    scanner.write_text('#!' + sys.executable + '\n' +
-        'import os, subprocess, sys\n' +
-        'args=sys.argv[1:]\n' +
-        'target=args[1]\n' +
-        f'layout={str(layout)!r}\n' +
-        f'failure={failure!r}\n' +
-        "if '-maxdepth' in args and not target.startswith(layout): sys.exit(0)\n" +
-        "if failure == 'link_owner' and target.endswith('/intermediate'): print('X'); sys.exit(0)\n" +
-        "if '-maxdepth' not in args and failure == 'unreadable':\n"
-        "    print('find: fixture unreadable entry', file=sys.stderr); sys.exit(1)\n" +
-        "args=[str(os.getuid()) if arg=='0' and i and args[i-1]=='-uid' else arg for i,arg in enumerate(args)]\n" +
-        "sys.exit(subprocess.call(['/usr/bin/find', *args]))\n")
+    failure_word = shlex.quote(failure) if isinstance(failure, str) else "''"
+    # Quoted "$layout" compares a literal prefix, never a glob.
+    scanner.write_text('\n'.join((
+        '#!/bin/sh',
+        'target=$2',
+        'layout=' + shlex.quote(str(layout)),
+        'failure=' + failure_word,
+        'uid=' + shlex.quote(str(os.getuid())),
+        'has_maxdepth=0',
+        'for arg in "$@"; do',
+        '    if [ "$arg" = -maxdepth ]; then has_maxdepth=1; break; fi',
+        'done',
+        'if [ "$has_maxdepth" = 1 ] && [ "${target#"$layout"}" = "$target" ]; then exit 0; fi',
+        "if [ \"$failure\" = link_owner ] && [ \"${target%'/intermediate'}\" != \"$target\" ]; then",
+        "    printf '%s\\n' X; exit 0",
+        'fi',
+        'if [ "$has_maxdepth" = 0 ] && [ "$failure" = unreadable ]; then',
+        "    printf '%s\\n' 'find: fixture unreadable entry' >&2; exit 1",
+        'fi',
+        'prev=',
+        'reset=1',
+        'for arg in "$@"; do',
+        '    if [ "$reset" = 1 ]; then set --; reset=0; fi',
+        '    if [ "$arg" = 0 ] && [ "$prev" = -uid ]; then set -- "$@" "$uid"; else set -- "$@" "$arg"; fi',
+        '    prev=$arg',
+        'done',
+        'exec /usr/bin/find "$@"',
+        '',
+    )))
     scanner.chmod(0o755)
     command = confinement.account_script(ACCOUNT)
     command = command.replace('/usr/bin/python', str(layout / 'usr/bin/python'))

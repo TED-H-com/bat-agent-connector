@@ -63,6 +63,7 @@ FIELDS = {
     "pm_work_package_get": ("workspace_id", "package_id"),
     "pm_work_package_readiness_get": ("workspace_id", "package_id", "quality_refs"),
     "pm_work_attempts_list": ("workspace_id", "work_item_id", "after", "limit"),
+    "pm_work_inputs_list": ("workspace_id", "work_item_id", "attempt_id", "after", "limit"),
     "pm_work_attempt_get": ("workspace_id", "attempt_id"),
     "pm_conversation_proposals_list": ("workspace_id", "thread_id", "after", "limit"),
     "pm_conversation_proposal_get": ("workspace_id", "proposal_id"),
@@ -99,6 +100,9 @@ FIELDS = {
     "pm_runs_list": ("workspace_id", "thread_id", "limit", "after"),
     "pm_run_get": ("workspace_id", "run_id"),
     "pm_capabilities_get": ("workspace_id",),
+    "pm_work_profiles_list": ("workspace_id", "limit", "cursor"),
+    "pm_work_profile_get": ("workspace_id", "profile_id"),
+    "pm_work_profile_readiness_get": ("workspace_id", "profile_id"),
     "pm_plans_list": ("workspace_id", "after", "limit"),
     "pm_plan_get": ("workspace_id", "revision_id"),
     "pm_plan_accepted_get": ("workspace_id",),
@@ -288,6 +292,12 @@ def read(ops, principal, method, params):
             return pm_work_start.get_attempt(ops, principal, workspace_id, params.get("attempt_id"))
         return pm_work_start.list_attempts(ops, principal, workspace_id, params.get("work_item_id"),
                                            after=params.get("after", 0), limit=params.get("limit", 50))
+    if method == "pm_work_inputs_list":
+        from . import pm_work_follow_up
+        return pm_work_follow_up.list_inputs(
+            ops, principal, workspace_id, params.get("work_item_id"),
+            attempt_id=params.get("attempt_id"),
+            after=params.get("after", 0), limit=params.get("limit", 50))
     if method in {"pm_conversation_proposals_list", "pm_conversation_proposal_get"}:
         from . import pm_conversation_proposals
         if method == "pm_conversation_proposal_get":
@@ -399,6 +409,14 @@ def read(ops, principal, method, params):
     if method == "pm_run_get":
         from . import pm_runs
         return {"run": pm_runs.read(ops, principal, workspace_id, params.get("run_id"))}
+    if method in {"pm_work_profiles_list", "pm_work_profile_get", "pm_work_profile_readiness_get"}:
+        from . import pm_work_profiles
+        if method == "pm_work_profiles_list":
+            query = {key: params[key] for key in ("limit", "cursor") if key in params}
+            return pm_work_profiles.list_profiles(ops.db, principal, workspace_id, query)
+        if method == "pm_work_profile_get":
+            return pm_work_profiles.get_profile(ops.db, principal, workspace_id, params.get("profile_id"))
+        return pm_work_profiles.readiness(ops, principal, workspace_id, params.get("profile_id"))
     if method == "pm_capabilities_get":
         from . import (
             pm_analysis_adapters,
@@ -407,6 +425,8 @@ def read(ops, principal, method, params):
             pm_native_capabilities,
             pm_runs,
             pm_runtime,
+            pm_work_follow_up,
+            pm_work_profiles,
             pm_worktree,
         )
         workspace = pm_workspace.require_member(ops.db, principal, workspace_id)
@@ -445,6 +465,8 @@ def read(ops, principal, method, params):
                 "conversation_proposals": {"version": 1, "analysis": native, "adoption_available": adoption_reason is None,
                     "adoption_scopes": ["observe", "manage", "start"], "adoption_role": "owner"},
                 "work_attempt_results": pm_attempt_result_reads.capabilities(ops),
+                "work_profiles": pm_work_profiles.capabilities(ops),
+                "work_follow_up": pm_work_follow_up.capabilities(ops),
                 "worktrees": [entry for entry in pm_worktree.capabilities(ops)
                               if entry["repository"].lower() in repositories]}
     if method == "pm_workspaces_list":

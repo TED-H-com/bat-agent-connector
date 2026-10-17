@@ -1,5 +1,24 @@
 # Workbench presentation and selection
 
+The owner's October 16 [EC-1.0 decision](../product/experience-convergence.md)
+extends this presentation foundation. Its first delivery connects the existing
+start, server-owned follow-up queue, fixed Result and PR actions in the shared
+UI. Preserve one selection, draft namespace and event reader across perspectives;
+do not add a progress store or infer control from a session link. Empty inspectors
+take no space. Show outcome, changes, verification and delivery target before
+technical receipts. This is the implementation direction, not a claim that those
+pending contracts are available on main. Current differences and file ownership
+belong in the [existing handoff](../product/v1.3-agent-handoff.md).
+
+When the selected Work's Result is available, the shared Workbench keeps that
+Result and its review first, with existing work/session tools and history in one
+disclosure. Work record controls, checkpoint actions, delivery/source readers, permissions, labels and
+history remain the same mounted components. Opening this disclosure performs no
+write. Its open state belongs to the selected Attempt, and an active field is not
+hidden if a Result becomes available while it is being edited. If the Result is
+unavailable, the existing tools remain directly accessible. Ordinary session and
+classic-layout paths keep their existing presentation and authority.
+
 The owner's [October 15 supplement](../product/workbench-ux-plan.md) changes the
 v1.3 information architecture. Its [48 acceptance cases](../product/workbench-ux-acceptance.md)
 remain separate from E00–E11 and R0–R5. Private reference images were reviewed
@@ -31,6 +50,30 @@ Navigation and the existing context list occupy separate columns where space
 allows. The list moves into the existing keyboard-accessible mobile drawer at
 less than 1000px. No second catalog or search cache is created. The original
 workspace binding, partial-source and permission rules still select its rows.
+
+The preview project list joins an execution to its existing Work only when the
+project response supplies a caller-visible `work_identity`. This projection checks
+both recorded start-child links, the Attempt, the exact session and source visibility;
+titles, paths and ordinary user-added associations cannot establish it. It reads the
+existing journal without collecting Result/actions or creating progress records.
+HTTP and MCP/RPC return the same optional association. It grants no control.
+
+A joined Work has one row, retains its canonical title and pending decision state,
+and carries the selected Attempt's existing session link (otherwise the newest
+visible execution in this bounded project read). Old execution links still select
+the same Work. Attempts and source records remain available through their original
+views and links. Unproven, unavailable or unloaded Work associations stay separate,
+including sources with identical titles. A fresh withdrawal removes the join;
+keyboard focus stays on the still-visible Work when its link changes.
+
+Discuss from a validated Work keeps that Work first in the bounded PM context
+list and preserves the exact workspace, Work and Attempt in its return link.
+The originating session link remains visible on wide screens as well as mobile;
+the discussion list cannot restore that execution selection. Reloading the PM
+draft and returning keeps the existing next-instruction draft. The destination
+reads the public Work and Attempt again before offering any controls, even if
+another Attempt became latest in the meantime. A legacy session link does not
+acquire Work identity from the last workspace or an earlier route.
 
 ### Classic → preview location
 

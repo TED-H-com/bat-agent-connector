@@ -56,7 +56,8 @@ export async function bootProposal(page:Page,locale='en'){
   await page.evaluate(async({locale,workspaceId,threadId})=>{
     const {planProposals}=await import('/__proposal_src/pm-plan-proposals.js'),{durableForm}=await import('/__proposal_src/pm-workspace.js');
     const {pmPlanProposalStrings}=await import('/__proposal_src/pm-plan-proposal-strings.js'),{pmStrings}=await import('/__proposal_src/pm-strings.js');
-    const strings={...pmStrings[locale],...pmPlanProposalStrings[locale]},t=(key:string)=>strings[key]||key;
+    const {adoptStartStrings}=await import('/__proposal_src/pm-adopt-start-strings.js');
+    const strings={...pmStrings[locale],...pmPlanProposalStrings[locale],...adoptStartStrings[locale]},t=(key:string,vars:any={})=>(strings[key]||key).replace(/\{(\w+)\}/g,(_:string,name:string)=>vars[name]??'{'+name+'}');
     const h=(tag:string,attrs:any={},...children:any[])=>{const el=document.createElement(tag);for(const[key,value]of Object.entries(attrs||{})){if(value===null||value===undefined||value===false)continue;
       if(key.startsWith('on'))el.addEventListener(key.slice(2),value as any);else el.setAttribute(key,value===true?'':String(value));}for(const child of children.flat()){if(child!==null&&child!==undefined&&child!==false)el.append(child instanceof Node?child:document.createTextNode(String(child)));}return el;};
     const win=window as any,api=async(method:string,path:string,body:any,key:any)=>{const result=await win.proposalFixtureRequest({method,path,body,idempotency_key:key});if(result.status>=400)throw Object.assign(Error(result.data.error.message),{code:result.data.error.code,status:result.status,admissionRefused:result.data.error.admission_refused});return result.data;};
@@ -64,10 +65,10 @@ export async function bootProposal(page:Page,locale='en'){
       const field=h(multiline?'textarea':'input',{'aria-label':t(label),maxlength:max,required}) as HTMLInputElement;field.value=value;return field;},labelled=(key:string,field:any)=>h('label',{},t(key),field),alive=()=>{};
     let current=await api('GET','/fixture-state');
     const form=(options:any)=>durableForm({h,t,api,caps:()=>current.caps,guard:alive,namespace:'proposal-ui.'+current.caps.actor,errorBox,...options});
-    const proposal=planProposals({h,t,api,alive,workspaceId,threadId,caps:()=>current.caps,thread:()=>current.thread,
+    const proposal=planProposals({h,t,api,alive,namespace:'proposal-ui.'+current.caps.actor,workspaceId,threadId,caps:()=>current.caps,thread:()=>current.thread,
       permitted:(decide:boolean)=>current.caps.actor==='owner'&&(decide?current.thread.capabilities.decide:current.thread.capabilities.write),form,input,labelled,errorBox,refresh:async()=>{current=await api('GET','/fixture-state');proposal.update({head:current.head,capabilities:current.capability});}});
     document.getElementById('mount')!.replaceChildren(proposal.box);proposal.update({head:current.head,capabilities:current.capability});
-    win.proposalRefresh=async()=>{current=await api('GET','/fixture-state');proposal.update({head:current.head,capabilities:current.capability});await proposal.refresh();};
+    win.proposalRefresh=async(options={})=>{current=await api('GET','/fixture-state');proposal.update({head:current.head,capabilities:current.capability});await proposal.refresh(undefined,options);};
     win.proposalWithdraw=()=>proposal.withdraw();win.proposalDispose=()=>proposal.dispose();await proposal.refresh();
   },{locale,workspaceId,threadId});
 }

@@ -62,8 +62,13 @@ managed root、設定 digest 存在同一 operation 的固定來源 receipt，�
 4. 沿用中央 `verify.start`、`session.start`、`send` 的獨立 durable intents、claim／capacity、confinement
    與 receipt。每個未送出的 BAT frame 前重新驗證 host／workspace／設定與 ownership。回覆不明保留
    session ID／carrier／claims；沒有正向 readback 不再送 start 或 prompt。已完成 receipt 不因新政策而消失。
-   reservation 的 created_at 在 transport 前寫入 operation；registry 遺失、重建、retire 或 task 接管
-   不代表舊 start 沒送出，停止於明確 needs_attention，不重開或覆寫後繼者。
+   reservation 的 created_at 在 start frame 離開前寫入 operation。只有兩種讀回證明 frame
+   沒有送出，並可在既有的取消與 lifecycle 檢查之後重跑：registry 沒有這一列、operation 也沒有
+   reservation ref；或 registry 列的 `start_sent` 為 false，且狀態、task 與建立欄位仍屬於這次
+   operation；已有 reservation ref 時，session_id 與 created_at 也必須完全相符。恢復若在
+   替換未送出列後、更新 ref 前中斷，保留未結算的 step（started 或 uncertain）與原 Work 開工鎖，不把它結算成失敗。
+   已寫下的 ref 若列已遺失、重建、retire、被 task 接管，或列的 `start_sent` 不是
+   false，都不證明沒送出，停止於 needs_attention，不重開或覆寫後繼者。
 5. receipt-owned cleanup 投影保留原 operation／session／branch／path，沿用 reviewed cleanup 的全部
    writer、shared owner、command、content、retention／uncertain gates。不能因沒有 registry row 就取得管理權。
 

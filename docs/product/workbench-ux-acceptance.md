@@ -82,6 +82,134 @@
 | UX-A47 | 發布後按 policy 建立 maintainer 修復，再暫停或關閉 | 同 Work／Result 回 Review；停止新活動不接管外部 session；原發布結果仍查回 | I＋L |
 | UX-A48 | 至少三位未參與開發的人完成整條标准小修復循環 | 已就緒環境不用離開 Dashboard、不重貼背景、不填 ID；能解釋目標、成果、阻礙與下一步 | L，任務觀察＋提示／切換次數 |
 
+## EC-1.0 整合驗收索引
+
+[EC-1.0 §16](experience-convergence.md)的 K01–K16 是以下原驗收的組合執行入口，
+不替代或減少 A01–A40／UX-A01–48。此表是覆蓋對照，**不是通過記錄**；各層級
+仍須附同候選 SHA 的證據。K 的摘要未列出的原驗收要求仍有效。
+
+| K | 原 v1.3 驗收 | 原 UX 驗收 | 本次需特別觀察 |
+| --- | --- | --- | --- |
+| K01 | A02–03、A37 | UX-A08–10、20 | Idea reply／note 分開，零自動 coding |
+| K02 | A01、A04–05 | UX-A11–12 | 設定修復後回原草稿，能力／成本不暗換 |
+| K03 | A05–08 | UX-A12–13 | 採用後原位展開 Work，不人工補 package |
+| K04 | A06、A29–30 | UX-A14、19 | 部分成功留存，未知 ACK 查原 key |
+| K05 | A09–10、A30 | UX-A15–17、19、29 | 關 client 後 server queue 仍處理，送出一次 |
+| K06 | A12、A29、A31 | UX-A15、19、33、43 | 排隊後撤權，出隊與最後送出前重核 |
+| K07 | A27、A32、A34 | UX-A21–23 | 固定 Result 的 diff／驗證／PR，PR 非業務驗收 |
+| K08 | A30、A32 | UX-A02–04、23、28–29 | 同選取／草稿／成果，不另開 listener |
+| K09 | A11–14、A28 | UX-A32–34 | manual／foreign 零控制，derive 固定來源 |
+| K10 | A17、A19、A24–27 | UX-A24、28、35 | 可信 alias 去重，未知歸因不補成完整 |
+| K11 | A18、A20–23、A26、A38 | UX-A17、31、35 | 每條 native／AHP route 獨立列能力與證據 |
+| K12 | A15–16 | UX-A36 | MCP／UI 同 Work、動作與來源權限 |
+| K13 | A31、A33、A35 | UX-A18、22、25 | 同 Result 推進 assessment／依賴／milestone |
+| K14 | A34、A36、A40 | UX-A21–22、47 | 維護沿原交付；暫停／重開不擅自承諾 scope |
+| K15 | A04、A30、A37–39 | UX-A04、06、37–43 | 撤回、晚回應、IME、焦點與閱讀位置 |
+| K16 | A29–30、A38–40 | UX-A05、44–46、48 | 安裝／UI 回退、負載與舊連結不重播動作 |
+
+增量 A 必含 K03–09、K12、K15–16 的相關 BAT 路徑與 K01–02 的最少設定；
+K10–11 擴原生來源，K13–14 接 PM／維護。分段交付不刪除最終整體驗收。
+保留人工 BAT session，從正式 UI 開自有修復、送第二句、關 client、重連查固定成果與
+PR；Hermes 經 MCP 另開 Work，PM 能解釋兩份成果對目標的影響。這段仍需 L 證據，
+不得由 fixture、CI、merge 或靜態截圖替代。
+
+## Connector 工作循環回歸（I 證據）
+
+[`test_pm_work_loop_browser.py`](../../tests/test_pm_work_loop_browser.py) 啟動真正
+TaskDaemon HTTP、操作 worker、journal 與 Result collector；
+[`work-loop-browser.mjs`](../../desktop/tests/work-loop-browser.mjs) 透過正式共用
+工作台預覽（`?workbench=1`）操作，不攔截或假造 Connector API 回應。
+BAT 回合與 GitHub 由可控來源提供，Git 使用磁碟上的隔離 repositories。
+
+在已有採用計畫、綁定與 Work 的環境，從 Board 填入要求並開始，忙碌時送出
+第二句，等待排隊回執後完全關閉 Chromium。只有 server worker 繼續派送；
+測試不修改 operation rows、不強制 wake 或重新送出。重開瀏覽器後核對同一
+Work／Attempt、已送指令與固定 commit，切換 Work／Lineage／Live 保留草稿，
+再開啟原工作脈絡的 PM 討論、重新載入並返回，同一指令草稿與已送回執仍在。
+`ux/result-quality-review` 候選再從固定成果開啟既有審閱器，核對提交已帶入且
+不可改選，開啟本身不建立操作；實際執行結果依該候選 PR 紀錄判讀。
+往返不得建立操作或改選 Attempt，接著從同一固定成果發布 draft PR 並重新載入。
+所有三筆使用者寫入均由 UI 發起；討論往返本身不執行 PM 分析或採用決策。
+
+另一條英文 1440px／繁中 390px 路徑先在正式專案畫面建立一件新 Work，
+從畫面產生的連結取得它的身分，再進入討論：只存筆記、整理計畫、審閱提案，
+選取剛建立的 Work 及需求，採用並開始後接上相同的第二句與發布流程。
+建立操作本身不得產生 Attempt、計畫綁定或 BAT 寫入；這些由後續既有 P6／
+work.start 負責。原先 fixture 的另一件 Work 不得意外開始。建立、討論與
+採用皆由 UI 送出，六筆使用者操作各有獨立且穩定的 key，不手填內部 ID。
+採用成功後必須自動開啟該次 Work／Attempt，測試不再點選另一個現場連結。
+核對只新增一次採用及一個啟動嘗試。PM 回覆由
+FakeRuntime 提供，使用真正的提案、審閱、採用與操作 endpoint；不呼叫真實 CLI。
+
+核對一個 session start、兩個 send、一次 GitHub POST、原操作 key，以及
+人工忙碌 session／未提交 checkout 不變。磁碟上的兩次變更必須對應 Result
+與發布分支；PR 不代表需求驗收或部署。390／768／1440px 額外檢查閱讀按鈕
+不遮住下一步，並保存實際畫面、操作及版本資訊。
+
+英文採用路徑再接第二位已授權的 MCP principal：透過正式 MCP→RPC→操作服務
+建立自己的 Work、檢查就緒並開始，取得固定 Result。MCP 的操作投影、Result
+與 Dashboard 深層連結須指向相同 Work／Attempt／commit；Dashboard 開啟這份
+成果後，返回原工作仍保留草稿與 PR。兩個 controller 身分不同，MCP 送往原
+工作會被拒且不建立 operation；Dashboard 讀取第二份成果不會取得下一句或
+發布控制。此路徑總計兩個 start、三個 send，仍只有一次 GitHub POST，人工
+session 與 checkout 不變。第二位 principal 的權限是測試前置配置，不由關聯
+或閱讀成果取得；不啟動 Hermes 或任何真實模型 CLI。
+
+K06 另有英文 1440px／繁中 390px 的撤權路徑：同一 Work 在 busy 時收到下一句，
+畫面已確認排隊後完全關閉 Chromium。另一位已授權 owner 經正式 HTTP 將原
+controller 降為 reader，第一輪再結束。server 原佇列必須留下相同 operation／
+key 的 `failed`／`FORBIDDEN` 回執，不送第二句、不啟動新 session、不發布 PR。
+重連及重新載入後仍可讀原指令、失敗理由與第一輪固定 Result；下一句與舊
+session composer 均不可用，發布入口也不可用。整段僅一個 start、一個 send、
+零次 GitHub POST，人工 session／checkout 及原 main ref 保持不變。
+測試透過原權限操作撤權，不直接修改 journal、不強制 wake，也不調高等待期限。
+
+K04 的候選故障路徑在正式畫面建立 Work、整理並採用計畫，模擬 BAT 已收到
+啟動但回覆遺失，且暫時無法讀回證據。畫面保留已採用計畫與原操作連結，
+重新載入也不能改建另一件 Work。恢復來源後，由原 worker 按既有時間重讀
+啟動證據並完成原 Work start；使用者再從原畫面恢復同一採用父操作。測試核對
+這次 resume 指向原 ID、只有一個 Attempt／一次啟動／一次採用，再接上
+第二句、關閉與重連、固定成果及 PR。此測試不強制 wake、不調整 retry 時間，
+也不以重送啟動來修復未知結果；驗證結果依候選 PR 紀錄判讀。
+
+Result 審閱另有英／繁中候選路徑：從同一成果指定原審閱者與完整條件政策，
+再記錄尚無獨立證據的結論。兩筆操作都由正式 UI 送出，中央讀取確認原提交、
+原審閱版本與 `unassessed`／不合格。接著從該評估開啟討論、保存筆記，明確
+「傳送給 PM」；測試擷取送入模擬模型的固定上下文，核對原評估回執、摘要與
+成果 commit，並驗證回覆沿原 run／context digest 保存。重新整理仍只有一份回覆，
+返回同一 Work／Attempt 後保留未送出的下一句草稿、原審閱與 PR 入口。
+完整路徑共八筆使用者操作、一次模擬 PM 輸入、一次 BAT 啟動、兩次 BAT 輸入及
+一份 PR；模型回覆不會改寫原評估或已採用計畫。另有後端測試在模型送出前最後
+一道檢查撤回原驗證來源，確認零模型輸入、無回覆匯入且釋放原 writer。
+這不等於需求已驗收，也不自動推進依賴、里程碑或 PM 決策；執行結果依 PR 紀錄。
+
+固定成果驗證另有英／繁中路徑：在原成果開啟驗證並明確執行已設定的命令。
+測試使用真正 `ObservedVerifier` 與磁碟 Git，命令核對第二輪產生的檔案內容，
+並在 repository 之外留下執行次數。收據須綁定原 execution／commit，畫面更新
+為已驗證；這仍不建立品質審閱、不把需求標成已驗收。接著發布同一固定成果的
+PR，全程四筆使用者操作，驗證命令只執行一次，BAT 啟動／輸入數及人工資源
+保持原約束。來源、controller 或權限不同，以及工作目錄已變成另一 commit，
+另由介面案例確認不能啟動新的驗證；未知回覆保留原 key，不換一份請求。
+
+本地執行：
+
+```sh
+BATC_WORK_LOOP_BROWSER=1 pytest-disktmp uv run --python 3.13 --extra dev pytest -q tests/test_pm_work_loop_browser.py
+```
+
+需先安裝 `desktop` npm 依賴及 Playwright Chromium。一般 Python suite 會略過
+這組需瀏覽器的測試；desktop CI 明確啟用並執行，產物在
+`desktop/test-results/work-loop/`，分別隨 `desktop-work-loop-work` 與
+`desktop-work-loop-evidence` artifacts 保存。CI 依 `fixed_result` 名稱選取成果
+審閱／驗證組，其餘屬工作組；兩組互斥且合起來覆蓋整個檔案。每組沿用三分鐘
+腳本上限，單項等待、持久化與故障注入均不變。
+
+此回歸涵蓋 K03–09、K12 與 K15 的部分 I 路徑，以及 UX-A13
+自動銜接的 I 證據。它使用已設定的專案及 repository／PM 綁定；直接開始路徑
+使用既有 Work，採用路徑由 UI 建立本次 Work。仍不涵蓋全新專案設定、
+真實 Idea／PM 回覆、P6 的其他故障排列、Hermes 產品端整合、兩份成果的 PM 影響評估、
+原生安裝、真實模型／BAT／GitHub 或 R0／R1／L 驗收。
+
 ## 報告範本
 
 ```text

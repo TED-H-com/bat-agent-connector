@@ -13,7 +13,7 @@ export function mountTailscale(main, {h, t, presentation} = {}) {
   const panel = h('section', {class: 'panel', 'aria-label': t('tailscale_title')});
   const content = h('div'), message = h('p', {class: 'muted', role: 'status'});
   panel.append(h('h2', {}, t('tailscale_title')), content, message); main.append(panel);
-  let disposed = false, busy = false, pending = false, readable = false, snapshot, intent, receipt, damaged = false;
+  let disposed = false, busy = false, pending = false, readable = false, snapshot, intent, receipt, damaged = false, pressed = null;
   const alive = () => !disposed && panel.isConnected;
   const hex = (value, size) => typeof value === 'string' && new RegExp(`^[0-9a-f]{${size}}$`).test(value);
   const validReceipt = value => value && hex(value.request_id, 32) && ['uncertain','started','not_started'].includes(value.phase);
@@ -26,27 +26,58 @@ export function mountTailscale(main, {h, t, presentation} = {}) {
     if (intent) localStorage.setItem(key(), JSON.stringify({request_id:intent}));
     else localStorage.removeItem(key());
   };
+  const placeFocus = key => {
+    if (!alive() || !key) return;
+    const nodes = [...content.querySelectorAll('[data-tailscale-action]')];
+    const find = name => nodes.find(node => node.getAttribute('data-tailscale-action') === name);
+    const usable = node => node && !node.disabled && !node.closest('[hidden]');
+    const current = find(key);
+    if (usable(current)) { current.focus({preventScroll: true}); return; }
+    const named = key === 'open' || key === 'retry' ? (usable(find('new')) ? find('new') : find('refresh'))
+      : key === 'new' ? (usable(find('open')) ? find('open') : find('refresh')) : null;
+    if (usable(named)) { named.focus({preventScroll: true}); return; }
+    const group = [...content.querySelectorAll('.actions button')].filter(usable);
+    if (group.length) { group[0].focus({preventScroll: true}); return; }
+    const any = nodes.filter(usable);
+    if (any.length) { any[0].focus({preventScroll: true}); return; }
+    message.tabIndex = -1; message.focus({preventScroll: true});
+  };
   const render = () => {
     if (!alive()) return;
+    const active = document.activeElement;
+    const key = active instanceof Element && content.contains(active) ? active.getAttribute('data-tailscale-action') : null;
     const native = nativeDesktop && snapshot?.supported === true;
     const state = !nativeDesktop ? 'browser' : snapshot?.supported === false ? 'unsupported' : !readable ? 'unknown'
       : snapshot.installation !== 'available' ? snapshot.installation : snapshot.login;
     const unknown = intent && (!receipt || receipt.phase === 'uncertain');
+    let flying = false;
+    const gate = (name, staticBlocked) => {
+      const blocked = Boolean(staticBlocked) && pressed !== name;
+      const soft = busy && !blocked;
+      if (soft) flying = true;
+      return {disabled: blocked || null, 'aria-disabled': soft ? 'true' : null};
+    };
+    const action = (name, label, staticBlocked, onclick) => h('button', {
+      type: 'button', class: 'secondary', 'data-tailscale-action': name, ...gate(name, staticBlocked), onclick,
+    }, label);
     content.replaceChildren(...[
       h('p', {}, t('tailscale_'+state)),
       native ? h('p', {class:'muted'}, t('tailscale_help')) : null,
       intent ? h('p', {class:'muted'}, t('tailscale_'+(receipt?.phase || 'uncertain'))) : null,
-      intent ? h('details', {}, h('summary', {}, t('tailscale_request')), h('code', {}, intent)) : null,
+      intent ? h('details', {}, h('summary', {'data-tailscale-action': 'request'}, t('tailscale_request')), h('code', {}, intent)) : null,
       damaged ? h('p', {class:'error'}, t('tailscale_damaged')) : null,
       nativeDesktop ? h('div', {class:'actions'},
-        h('button', {class:'secondary', disabled:busy || !native || !readable || !snapshot.can_open || damaged || !!intent,
-          onclick:()=>run(async()=>{intent=crypto.randomUUID().replaceAll('-','');receipt=null;save();await open();})},t('tailscale_open')),
-        unknown && !receipt && !damaged ? h('button',{class:'secondary',disabled:busy || !readable || !snapshot?.can_open,onclick:()=>run(open)},t('tailscale_retry')):null,
-        receipt && receipt.phase !== 'uncertain' ? h('button',{class:'secondary',disabled:busy,onclick:()=>run(async()=>{
+        action('open', t('tailscale_open'), !native || !readable || !snapshot.can_open || damaged || !!intent,
+          () => run('open', async () => {intent=crypto.randomUUID().replaceAll('-','');receipt=null;save();await open();})),
+        unknown && !receipt && !damaged ? action('retry', t('tailscale_retry'), !readable || !snapshot?.can_open, () => run('retry', open)) : null,
+        receipt && receipt.phase !== 'uncertain' ? action('new', t('tailscale_new'), false, () => run('new', async () => {
           const previous=intent;intent=null;try{save();}catch(error){intent=previous;throw error;}receipt=null;
-        })},t('tailscale_new')):null,
-        iconButton({icon:'refresh-cw', label:t('tailscale_refresh'), ...{class:'secondary',disabled:busy,onclick:refresh}})) : null,
+        })) : null,
+        iconButton({icon:'refresh-cw', label:t('tailscale_refresh'), 'data-tailscale-action':'refresh', ...gate('refresh', false),
+          onclick: () => { if (busy || !alive()) return; refresh(); }})) : null,
     ].filter(Boolean));
+    if (flying) message.setAttribute('aria-busy', 'true'); else message.removeAttribute('aria-busy');
+    if (key) placeFocus(key);
   };
   const read = async () => {
     const value = await tailscaleControl({action:'status'});
@@ -85,14 +116,14 @@ export function mountTailscale(main, {h, t, presentation} = {}) {
     accept(value,scope,id);
     pending=true; // only diagnosis after an explicit launch; never a second launch.
   };
-  const run = async action => {
+  const run = async (name, action) => {
     if (!alive() || busy) return;
-    busy=true;message.textContent='';render();
+    busy=true;pressed=name;message.textContent='';render();
     try {await action();}
     catch {if(alive()){readable=false;message.textContent=t('tailscale_read_failed');}}
-    finally {busy=false;render();if(pending&&alive()){pending=false;refresh();}}
+    finally {busy=false;pressed=null;if(!alive())return;render();if(pending&&alive()){pending=false;refresh();}}
   };
-  const refresh = () => {if(busy){pending=true;return;}return run(read);};
+  const refresh = () => {if(busy){pending=true;return;}return run('refresh', read);};
   const returned = () => {if(document.visibilityState==='visible'&&alive())refresh();};
   render();
   if(nativeDesktop){window.addEventListener('focus',returned);document.addEventListener('visibilitychange',returned);refresh();}

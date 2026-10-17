@@ -151,6 +151,94 @@ export function buildResultEnvelope(opts: any = {}) {
   };
 }
 
+export function buildChangesResponse(opts: any = {}) {
+  const attemptId = opts.attempt_id || ('att_' + '1'.repeat(32));
+  const baseSha = opts.base_commit ?? '1234567890abcdef1234567890abcdef12345678';
+  const liveHead = opts.live_head_commit !== undefined ? opts.live_head_commit : 'abcdef1234567890abcdef1234567890abcdef12';
+  const headFreshness = opts.head_freshness ?? (liveHead !== 'unknown' ? 'live' : 'unavailable');
+
+  const defaultSummary = {
+    aggregation: 'per_commit',
+    commits: opts.commits ?? (liveHead !== 'unknown' ? [liveHead] : []),
+    commit_count: opts.commit_count ?? (opts.commits?.length || (liveHead !== 'unknown' ? 1 : 0)),
+    files: opts.files ?? (liveHead !== 'unknown' ? [
+      {
+        path: 'src/login.ts',
+        status: 'M',
+        additions: 8,
+        deletions: 1,
+        commits_touched: [liveHead],
+      },
+      {
+        path: 'src/auth.ts',
+        status: 'A',
+        additions: 2,
+        deletions: 0,
+        commits_touched: [liveHead],
+      },
+    ] : []),
+    file_count: opts.file_count ?? (opts.files?.length || (liveHead !== 'unknown' ? 2 : 0)),
+    additions: opts.additions ?? (liveHead !== 'unknown' ? 10 : 'unknown'),
+    deletions: opts.deletions ?? (liveHead !== 'unknown' ? 1 : 'unknown'),
+    unavailable: opts.unavailable ?? [],
+    complete: opts.complete ?? (liveHead !== 'unknown'),
+    reason: opts.reason ?? null,
+    reasons: opts.reasons ?? [],
+  };
+
+  const defaultUncommitted = opts.uncommitted !== undefined ? opts.uncommitted : {
+    count: 0,
+    files: [],
+    evidence: 'bat_git_status_clean',
+    reason: null,
+  };
+
+  const defaultCompleteness = opts.completeness ?? {
+    status: opts.completeness_status ?? (defaultSummary.complete ? 'complete' : 'partial'),
+    reasons: opts.completeness_reasons ?? (defaultSummary.reasons || []),
+  };
+
+  return {
+    workspace_id: workspaceId,
+    attempt_id: attemptId,
+    base_commit: baseSha,
+    live_head_commit: liveHead,
+    head_freshness: headFreshness,
+    memo_hit: false,
+    fixed_result_commit: opts.fixed_result_commit ?? {
+      commit_sha: liveHead,
+      source_kind: 'turn_end_observation',
+    },
+    uncommitted: defaultUncommitted,
+    summary: opts.summary ?? defaultSummary,
+    completeness: defaultCompleteness,
+  };
+}
+
+export function buildDiffResponse(opts: any = {}) {
+  const commit = opts.commit || 'abcdef1234567890abcdef1234567890abcdef12';
+  const path = opts.path || 'src/login.ts';
+  const available = opts.available !== undefined ? opts.available : true;
+  const reason = opts.reason ?? (available ? null : 'diff_exceeded_pipe_limit');
+  const defaultDiff = `--- a/${path}\n+++ b/${path}\n@@ -1,5 +1,12 @@\n+// Implementation\n+export function login() {}\n`;
+
+  return {
+    workspace_id: workspaceId,
+    attempt_id: opts.attempt_id || ('att_' + '1'.repeat(32)),
+    commit,
+    path,
+    status: opts.status || 'M',
+    available,
+    reason,
+    diff: available ? (opts.diff !== undefined ? opts.diff : defaultDiff) : null,
+    truncated: opts.truncated ?? false,
+    stats: opts.stats ?? {
+      additions: available ? 8 : 'unknown',
+      deletions: available ? 1 : 'unknown',
+    },
+  };
+}
+
 export function workResultFixture() {
   const sf = workStartFixture();
 
@@ -183,6 +271,22 @@ export function workResultFixture() {
     currentEnvelope: buildResultEnvelope({attempt_id: defaultAttemptId}),
     changesCount: 0,
     diffCount: 0,
+    expectedChanges: 0,
+    expectedDiff: 0,
+    changesRequests: [] as Array<{method: string; path: string; attempt_id: string}>,
+    diffRequests: [] as Array<{method: string; path: string; commit: string; filePath: string}>,
+    diffCallsByFile: new Map<string, number>(),
+    holdChanges: null as Promise<void> | null,
+    holdChangesAttemptId: null as string | null,
+    holdChangesByAttemptId: new Map<string, Promise<void>>(),
+    holdDiff: null as Promise<void> | null,
+    holdDiffKey: null as string | null,
+    holdDiffByKey: new Map<string, Promise<void>>(),
+    changesResponse: null as any,
+    changesStatus: null as number | null,
+    diffResponses: new Map<string, any>(),
+    diffStatus: null as number | null,
+    diffStatusByFile: new Map<string, {status: number; data?: any}>(),
   };
 
   const dispatch = async (input: any): Promise<any> => {
@@ -230,14 +334,49 @@ export function workResultFixture() {
       return res;
     }
 
-    // BAT calls tracking
-    if (path.includes('/changes')) {
+    // BAT calls tracking: /changes
+    const changesMatch = path.match(/\/work-attempts\/([^/]+)\/changes$/);
+    if (input.method === 'GET' && changesMatch) {
+      const attId = changesMatch[1];
+      state.changesRequests.push({method: input.method, path: input.path, attempt_id: attId});
       state.changesCount++;
-      return {status: 200, data: {changes: []}};
+      if (state.holdChangesByAttemptId.has(attId)) {
+        await state.holdChangesByAttemptId.get(attId);
+      } else if (state.holdChanges && (!state.holdChangesAttemptId || state.holdChangesAttemptId === attId)) {
+        await state.holdChanges;
+      }
+      if (state.changesStatus) {
+        const st = state.changesStatus;
+        return {status: st, data: {error: {code: st === 404 ? 'NOT_FOUND' : 'SERVER_ERROR', message: `Error ${st}`}}};
+      }
+      return {status: 200, data: state.changesResponse || buildChangesResponse({attempt_id: attId})};
     }
-    if (path.includes('/diff')) {
+
+    // BAT calls tracking: /diff
+    const diffMatch = path.match(/\/work-attempts\/([^/]+)\/diff$/);
+    if (input.method === 'GET' && diffMatch) {
+      const attId = diffMatch[1];
+      const commit = url.searchParams.get('commit') || '';
+      const filePath = url.searchParams.get('path') || '';
+      const key = `${commit}:${filePath}`;
+      state.diffRequests.push({method: input.method, path: input.path, commit, filePath});
       state.diffCount++;
-      return {status: 200, data: {diff: ''}};
+      state.diffCallsByFile.set(key, (state.diffCallsByFile.get(key) || 0) + 1);
+
+      if (state.holdDiffByKey.has(key)) {
+        await state.holdDiffByKey.get(key);
+      } else if (state.holdDiff && (!state.holdDiffKey || state.holdDiffKey === key)) {
+        await state.holdDiff;
+      }
+      if (state.diffStatusByFile.has(key)) {
+        const errResp = state.diffStatusByFile.get(key)!;
+        return {status: errResp.status, data: errResp.data || {error: {code: errResp.status === 404 ? 'PM_DIFF_NOT_FOUND' : 'PM_DIFF_UNAVAILABLE', message: `Error ${errResp.status}`}}};
+      }
+      if (state.diffStatus) {
+        const st = state.diffStatus;
+        return {status: st, data: {error: {code: st === 404 ? 'PM_DIFF_NOT_FOUND' : (st === 502 ? 'PM_DIFF_UNAVAILABLE' : 'SERVER_ERROR'), message: `Error ${st}`}}};
+      }
+      return {status: 200, data: state.diffResponses.get(key) || buildDiffResponse({attempt_id: attId, commit, path: filePath})};
     }
 
     // Result endpoint: /pm/workspaces/{ws}/work-attempts/{att}/result

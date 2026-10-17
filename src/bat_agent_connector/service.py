@@ -1043,6 +1043,9 @@ async def session_send(
     _before_frame: Callable[[], Awaitable[None]] | None = None,
     _operation_context=None,
     _controller_incarnation: str | None = None,
+    _on_transport: Callable[[], None] | None = None,
+    _on_streaming: Callable[[dict[str, Any]], None] | None = None,
+    _on_unloaded: Callable[[], None] | None = None,
 ) -> dict:
     from . import orchestration_operations
     from .operations import OpContext
@@ -1087,6 +1090,8 @@ async def session_send(
         resumed = False
         if meta is None:
             if not ensure_loaded:
+                if _on_unloaded is not None:
+                    _on_unloaded()
                 raise WriteRefused(
                     "session is not loaded on the host (pass ensure_loaded=true to client-resume it)"
                 )
@@ -1132,6 +1137,8 @@ async def session_send(
             meta = await _meta(c, sid)
         confinement.guard_loaded(host, sid, meta)
         if (meta or {}).get("isStreaming") and not queue:
+            if _on_streaming is not None:
+                _on_streaming(meta)
             raise WriteRefused(
                 "session is currently streaming a turn; pass queue=true to queue the message behind it"
             )
@@ -1172,6 +1179,8 @@ async def session_send(
         def transported():
             if relay:
                 _operation_context.relay_send_transported = True
+            if _on_transport is not None:
+                _on_transport()
         try:
             if before_invoke:
                 before_invoke()
@@ -1179,7 +1188,7 @@ async def session_send(
                 "claude:send-message", {"sessionId": sid, "prompt": text, "clientMessageId": mid},
                 retry_on_disconnect=retry_on_disconnect and agent_kind(t.get("agentPreset")) == "claude",
                 before_send=send_gate if relay else (_task_guard or before_invoke), before_frame=verify_at_frame, grant=grant,
-                **({"on_transport": transported} if relay else {}),
+                **({"on_transport": transported} if (relay or _on_transport is not None) else {}),
             )
         except BatError as e:
             audit.record(

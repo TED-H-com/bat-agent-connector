@@ -2,6 +2,185 @@
 
 ## Next release (unreleased)
 
+- A fixed Result review can open a new PM discussion draft with two explicitly
+  selected original assessments. The source picker preserves each commit and
+  assessment version, rechecks refreshed sources and leaves PM sending and
+  requirement acceptance to their existing explicit actions.
+
+- Desktop Workbench now keeps the selected Work and Attempt when opening live
+  output, reading its fixed Result or sending the next instruction. It uses the
+  existing typed central bridge and the same capability, source and controller
+  checks as Web, with queued receipts and unsent drafts preserved on reload.
+
+- Workbench project navigation shows a Work and its proven execution as one row,
+  preserving its exact Attempt, pending decisions, keyboard focus and older links.
+  Same-name or unproven sources remain separate; the association grants no control.
+
+- After a successful Adopt and start, the submitting tab opens the first
+  selected Work's exact live Attempt automatically. Leaving that Work cancels
+  the navigation; partial, unknown or withdrawn results retain their recovery
+  view. Reading an old receipt or opening another tab does not request this move.
+
+- Adopt and start waits for a child operation's active worker instead of stopping
+  with an unknown-start warning while a work package or handoff is still running.
+  Unresolved effects retain the same cancellation and recovery fences. The real
+  Connector browser journey now also covers proposal review and adoption before
+  the queued follow-up and draft PR.
+
+- Work reading controls no longer overlap the next-step heading when the
+  transcript and server queue share a short viewport. A browser integration
+  journey now exercises actual Connector start, queued follow-up, closed-client
+  dispatch, fixed Result and PR publication against controllable BAT/GitHub
+  sources, while preserving the original manual session and checkout.
+
+- The shared Start work panel can select a saved execution profile without
+  selecting the default automatically. It pins the agent, model and execution
+  location, reviews the current profile revision before starting, and separates
+  stored readiness observations from PM preflight. Setup links return to the
+  same Work and instruction draft. Changed or withdrawn profiles invalidate the
+  review; unresolved starts retain their original request and key.
+
+- Owners can preview one reviewed proposal and start up to ten existing Works
+  with `work.adopt_and_start` through the central API/MCP operation service.
+  Adoption and individual starts keep separate durable receipts: a refusal
+  preserves the adopted plan, and an unknown start is reconciled without another
+  session. The shared Web/Tauri proposal review now selects existing work,
+  checks readiness, and opens the first selected Work with the original receipt.
+  Partial adoption stays visible, and unknown starts link to their original
+  reconciliation operation. Reloading an unresolved request retains its key and
+  exposes recovery without another adoption.
+
+- Work live links retain the selected workspace, Work, and Attempt. The Dashboard
+  verifies that selection against public Work and Attempt reads before offering
+  the next instruction, and shows its fixed Result in the existing results panel.
+  A remembered workspace or newer Attempt never silently changes the send target.
+
+- Work: when the service offers a follow-up for the open work item, that Work
+  view has one composer for the next instruction. It queues the instruction for
+  after the current turn. The service's receipt stays on screen, and another
+  instruction can be written once that receipt exists. The status text comes from
+  the service. A lost or ambiguous reply keeps the original request. Questions and
+  permission prompts stay available. Manual, unknown, and Codex sessions do not
+  gain this control. Without the service capability, the existing session composer
+  is unchanged.
+
+- Design note: v1.3 E05 maps the BAT loop (new work, live output, the fixed
+  Result, the next turn, busy, and recovery of the original operation) onto the
+  pieces already merged or still in review. See
+  `docs/design/v1.3-e05-bat-loop.md`. No behavior change.
+
+- Design spec for publishing a Work Result as a pull request
+  (`docs/design/v1.3-e03-publish-pr.md`) defines the contract used by the
+  publication form described below. The spec
+  shows the start's base branch and base commit as read-only, does not offer a
+  second pull request for the same commit, and does not call an integration
+  commit delivered. It adds no merge, deploy, or session controls on the Result.
+  A backend Result entry, which this spec does not add, still has to land first.
+
+- Document the closed-loop screens for adopting and starting selected work,
+  queuing the next instruction on a busy work, and choosing a saved profile.
+  English and zh-TW copy and implementation differences are recorded in the spec.
+
+- Correct that closed-loop screen spec. A refused adopt-and-start can start a
+  new request once the server marks the refusal, a chosen profile pins the Start
+  work panel, and each selected work's start fields come from the preview.
+
+- Opening a project names that view in the header while the workspace is still
+  loading, in English and Traditional Chinese. The view menu stays hidden until
+  the workspace loads, so an empty menu is not in the keyboard order. If the
+  workspace cannot be loaded, the header still uses the project-discussions
+  title and the menu stays hidden.
+
+- A new discussion's open rename keeps its text, caret and focus when a background
+  refresh or an access change rebuilds the page. Save still sets the title once.
+  Sending that discussion closes the rename, so the next new discussion opens on
+  the composer.
+
+- Published branch start, managed repair and Home keep keyboard focus on the
+  button you press while that request runs. The button looks unavailable, and a
+  second press is ignored. When Start finishes, focus moves to Check original
+  operation, or to Prepare another published version if the start was refused.
+  Prepare another returns to the repository. Review new evidence returns to
+  Read repair evidence. On Home, Load more on the last page moves to the first
+  new row. Leaving the page while that request is still running does not move
+  focus on the next screen.
+
+- Result sources, the pull request list, project skills and model preferences keep
+  the keyboard on Refresh, More, Previous, Next or Save while that action runs.
+  The control looks unavailable and a second press does nothing. When More,
+  Previous, Next or Save cannot keep focus, it moves to the new child, the other
+  page control, or the status line.
+
+- Diagnostics withdrawal keeps the keyboard inside the dialog. If Save or Copy
+  had focus, or focus had already left the controls, it moves to Close. A save
+  that finishes afterwards does not move focus or replace the withdrawn notice.
+
+- Tailscale, Desktop updates, diagnostics Save, and Open in BAT keep the
+  keyboard on the button you pressed while that action runs. The button looks
+  unavailable, a second press does nothing, and Tab still reaches Save. Focus
+  moves on when that action ends on a different control: another Tailscale
+  opening, Install after a verified download, or the BAT launch button after
+  review.
+
+- Starting a session, saving labels, reloading workspaces, and pausing or
+  resuming an execution keep the keyboard on the pressed control while the
+  request runs. A second press is ignored. Focus then moves to Check, or to
+  the control that replaces a refused action. Typing labels is not interrupted
+  by a background refresh.
+
+- A Board read from a previous visit no longer clears the selected Work when its reply arrives late, including HTTP and network failures after returning to the same project.
+
+- A read from the overview brief, lifecycle, meetings, follow-up, sprints,
+  governance, roadmap, evidence, a review candidate, or a worktree preview
+  that fails or finishes after that project view was left does not mark the
+  next view's update as failed or pause actions. Closing the view withdraws
+  an open plan proposal before that update. The board refresh is unchanged.
+  An error while that project view is still open, including a source outage
+  or a lost network, still stops its update.
+- A fixed Work Result can publish one pull request only when the result lists a complete `github.pr.publish` entry. The form sends that entry's target, commit, base, and preconditions with the typed title, description, and draft choice. An incomplete entry keeps its draft and does not submit. A lost reply retries the original operation key. A newer result does not retarget that request.
+
+- Confinement closure tests scan with a shell fixture instead of starting
+  Python for every search, so the same checks finish on a busy disk without
+  a longer time limit.
+
+
+- Creating an operation, reading that one operation, cancelling it, and
+  resuming it can include a loop. The loop covers the actions on this work
+  loop and a child operation that a work start has recorded. It names that
+  operation, the Work and attempt when those sources are still visible, a
+  dashboard hash, and whether this caller may cancel or resume. HTTP and MCP
+  return the same loop. Capabilities advertise operation_loop version 1, and
+  the agent skill teaches when to read it and when a missing loop is expected.
+  Direct session sends stay partial with reason `session_target`. An admitted
+  Work input names its immutable Work and Attempt; a target alone is not proof.
+  Its loop uses the same authorization and sent-frame cancellation gate as the
+  operation endpoint, alongside the original input receipt.
+- A work attempt's result now includes the repository, the base commit recorded
+  at the start, and the base branch, so a client can submit publish as given.
+  Publish is withheld while a publication is still unfinished, when that same
+  commit already has a pull request, when the workspace is stopped, or when
+  GitHub is not configured. A refused publish tells the Dashboard it may start
+  a new request. Publishing still needs the base branch unchanged since the
+  work started. This release does not add a way to read the live base.
+
+- A needs-attention result says it can be resumed only when this caller is
+  actually offered resume. An unknown child outcome keeps the stop reason and
+  does not claim the attempt is resumable. Cancel stays available to the
+  person who started it. Publish also stays withheld when the recorded head
+  commit is not one the publish action can accept. The commit recorded at the
+  start remains the base. The turn-end commit remains the head.
+
+- Starting a Work now ends failed when that start stops on something resuming cannot pass, such as a paused or reopened workspace, a changed adopted plan, or an edited Work, project, association, or package. After that cause is gone, starting the same Work again is accepted. A stop that can be repaired, such as a withdrawn credential or a lowered workspace role, still waits and can be resumed.
+- A Work can start again when its handoff stopped before the session start was
+  reserved. A start that may already have been sent is left unchanged. If a
+  recovery stops between replacing an unsent reservation and recording its
+  receipt, the original start stays unresolved and blocks a second start.
+- Desktop Start work loads attempt history and the readiness preview, and Work
+  Result loads, instead of stopping on "Central route is not allowed". The
+  desktop bridge also allows the existing work-attempt changes and diff reads
+  before that result UI lands. Work input history permits the exact attempt
+  filter and bounded pagination used by the next-instruction composer.
+
 - Fleet: keyboard focus stays on the control you are using while a status
   refresh or your own action runs. The control looks unavailable until that
   work finishes, a second press is ignored, and a background refresh stays quiet.
@@ -28,6 +207,24 @@
   ignores a second press until that preview or save finishes. A button that
   cannot be used stays unavailable. When Save closes, or Capture another file
   starts over, focus moves to the next available control.
+
+- A workspace can save a work profile for one repository binding, agent and
+  delivery, and can read whether that coding route is ready without contacting
+  the host. The profile list is in sequence order and names the current default
+  on every page. A blank model is rejected, and a discovery citation has to cover
+  that workspace. Starting work can name one saved revision and then requires all
+  twelve preconditions. Starting work without a profile is unchanged.
+
+- A started Work item can take another instruction. Send `session.send` with
+  the Work as the target. The instruction waits until the current turn finishes,
+  or it goes out immediately when that session is already idle. You can read the
+  queue, cancel an instruction that has not been sent, and reconcile an
+  unconfirmed send with its original operation. A Codex session is refused.
+  Immediately before sending, both session metadata and state must confirm idle
+  with no pending input. An unloaded session is not resumed by a follow-up.
+  Agent errors affect a Result only when their session generation and all
+  supplied message or turn identifiers match that turn.
+  The dashboard composer is not part of this change.
 
 - The hidden Board and Requirements scroll checks wait for the read the test held, so a second read of the same address cannot make that wait miss.
 
@@ -63,6 +260,10 @@
   its observed progress, separate indicators for verification, review, requirement
   acceptance, pull requests and deployment, summary statistics for touched files and
   commits, uncommitted change warnings, and recorded turns in English and zh-TW.
+
+- The PM Work inspector Result section adds on-demand reading of current changes and diffs (v1.3 E03 Part B).
+  People can inspect live worktree changes with "Read current changes" and open plain-text diffs for individual
+  files in a commit with "Show diff", keeping focus and state intact and flagging stale views with "May be out of date".
 
 - The Windows fixture-helper test injects a deterministic clock into its deadline and
   retry helpers, making transient read recovery independent of runner speed and slow

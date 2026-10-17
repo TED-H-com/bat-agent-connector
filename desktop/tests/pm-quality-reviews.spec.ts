@@ -6,6 +6,32 @@ const fillCreate=async(page:any,f:any)=>{await panel(page).locator('[data-qualit
   for(const field of await form.getByLabel('Required verification',{exact:true}).all())await field.selectOption(f.state.evidence[0].evidence_id);await form.getByLabel('Reason for this review policy',{exact:true}).fill('Appoint complete original criteria and independent verification');};
 const fillAssessment=async(page:any,f:any)=>{const detail=panel(page).locator('[data-quality-assess]');if(!await detail.getAttribute('open')&&!(await detail.evaluate((node:any)=>node.open)))await detail.locator('summary').first().click();const form=editor(page,RECORD);for(const field of await form.getByLabel('Reviewer conclusion',{exact:true}).all())await field.selectOption('accepted');for(const field of await form.getByLabel('Original verification receipt',{exact:true}).all())await field.selectOption(f.state.evidence[0].evidence_id);for(const field of await form.getByLabel('Criterion rationale',{exact:true}).all())await field.fill('Reviewed behavior and fixed independent verification');await form.getByLabel('Reason for this assessment',{exact:true}).fill('Complete original acceptance and DoD reviewed');};
 
+test('original execution matches the centrally serialized package regardless of JSON key order',async({page})=>{
+  const f=qualityFixture();
+  f.state.operations[0].external_refs.admission_binding.pm_handoff.contract.package_ref={
+    document_digest:f.package_ref.document_digest,package_id:packageId,workspace_id:workspaceId};
+  await mountQuality(page,f);await panel(page).locator('[data-quality-create]>summary').click();
+  await editor(page).getByLabel('Original package',{exact:true}).selectOption(packageId);
+  await expect(editor(page).getByLabel('Original implementation operation',{exact:true}).locator(`option[value="${childId}"]`)).toHaveCount(1);
+  await panel(page).locator('[data-quality-create]>summary').click();
+  await fillCreate(page,f);
+  await editor(page).locator('button[type=submit]').click();
+  await expect.poll(()=>f.state.writes.length).toBe(1);
+  expect(f.state.writes[0].body.params.package_ref).toEqual(f.package_ref);
+  expect(f.state.writes[0].body.params.execution_operation_id).toBe(childId);
+});
+
+test('a changed package digest still excludes the execution after key-order normalization',async({page})=>{
+  const f=qualityFixture();
+  f.state.operations[0].external_refs.admission_binding.pm_handoff.contract.package_ref={
+    document_digest:'d'.repeat(64),package_id:packageId,workspace_id:workspaceId};
+  await mountQuality(page,f);await panel(page).locator('[data-quality-create]>summary').click();
+  await editor(page).getByLabel('Original package',{exact:true}).selectOption(packageId);
+  await expect(editor(page).getByLabel('Original implementation operation',{exact:true}).locator(`option[value="${childId}"]`)).toHaveCount(0);
+  await expect(editor(page).locator('button[type=submit]')).toBeDisabled();
+  expect(f.state.writes).toHaveLength(0);
+});
+
 test('owner appoints exact complete original policy through ordinary selectors',async({page})=>{
   const f=qualityFixture();await mountQuality(page,f);await fillCreate(page,f);await expect(editor(page).locator('button[type=submit]')).toBeEnabled();await editor(page).locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(1);expect(f.state.writes[0].body).toEqual({action:CREATE,target:{workspace_id:workspaceId,work_item_id:workId},params:{package_ref:f.package_ref,execution_operation_id:childId,candidate_commit:candidate,dod_revision_id:dodId,reviewer_actor:'reviewer',criteria:f.criteria.map(({criterion,condition}:any)=>({criterion,condition})),rationale:'Appoint complete original criteria and independent verification'},preconditions:{expected_previous_review_id:null}});await expect(panel(page)).toContainText('owner appointed themself');
 });

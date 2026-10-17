@@ -8,7 +8,9 @@ import {runtimeCompletion} from './pm-runtime-completion.js';
 import {firstLabel, joinLabel, labelSegment} from './label-text.js';
 import {workInspector, workStatusLabel, workStatusPill, blockedWork, blockerText, workAgents, prGroups, readWorkSources, deliveryCoverage, elapsed, readEarlierPlans} from './pm-work-inspector.js';
 import {workStartPanel} from './pm-work-start.js';
+import {adoptStartLanding} from './pm-adopt-start-landing.js';
 import {workResultPanel} from './pm-work-result.js';
+import {retiredView, viewLeft} from './pm-retired.js';
 
 // Central management columns stay separate from execution, quality and delivery.
 export function workspaceKanban({t, api, alive, namespace = '', workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false, workspaceSettled = () => Promise.resolve()}) {
@@ -56,7 +58,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
         const resultCap = caps()?.features?.pm_workspaces?.work_attempt_results;
         if (resultCap?.version === 1) {
           resultPanel = workResultPanel({
-            h, t, api, alive, workspaceId, caps, errorBox,
+            h, t, api, alive, workspaceId, caps, errorBox, form, namespace,
             onVisibility: visible => {
               const attemptSection = detail.element?.body?.querySelector('[data-work-section="attempt-result"]');
               if (attemptSection) {
@@ -78,6 +80,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     return startPanel;
   };
   ensureStartPanel();
+  const landing=adoptStartLanding({t,api,alive,namespace,workspaceId,caps,errorBox});
   const meta = h('span'), status = h('div', {role: 'status'}), list = h('div', {class: 'pm-kanban-list'}), boardInfo = h('div');
   const refreshButton = iconButton({icon: 'refresh-cw', label: t('wv_refresh'), onClick: () => void refresh()});
   const more = h('button', {type: 'button', class: 'ui-button secondary', hidden: true, onclick: () => void loadMore()}, t('pm_kanban_more'));
@@ -92,7 +95,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   const element = h('section', {class: 'pm-kanban', 'data-pm-kanban': ''},
     !embedded ? pageHeader({title: t('ui_board'), meta, actions: [refreshButton]}) : null,
     h('div', {class: 'pm-board-toolbar'}, searchField(search, {class:'pm-work-search'}), requirementFilter, agentFilter, h('label', {}, t('wv_group'), group)),
-    status, layout, h('footer', {class: 'pm-kanban-footer'}, more,
+    status, landing.element, layout, h('footer', {class: 'pm-kanban-footer'}, more,
       disclosure({label: t('pm_kanban_board_details'), body: h('div', {}, boardInfo, h('p', {}, t('pm_kanban_wip_basis')), h('p', {}, t('pm_kanban_quality')), h('p', {}, t('pm_kanban_limits')))})));
   const detail = workInspector({t, workspaceId, from: 'board', mount: layout, tools: () => toolItems(), returnFocus: () => rows.get(selected)?.node.querySelector('[data-board-open]') || viewHeading(), onClose: () => {
     withdrawObservers();
@@ -124,13 +127,14 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     return data;
   }
   function writeSelection(id) {
-    const [path, query] = location.hash.split('?'); if (!path.endsWith('/board')) return;
+    const [path, query] = location.hash.split('?');
+    if (path !== `#/pm/${encodeURIComponent(workspaceId)}/board`) return;
     const params = new URLSearchParams(query); if (id) params.set('select', id); else params.delete('select');
     history.replaceState(null, '', path + (params.size ? '?' + params : ''));
   }
   function closeRetaining() {preserveSelection = true; detail.close(); preserveSelection = false;}
   function withdraw({forgetRoute = true, keepStatus = false} = {}) {
-    withdrawObservers();
+    landing.withdraw();withdrawObservers();
     ++serial; ++detailSerial; ++scrollGeneration; reading = false; rows.clear(); sources.clear(); page = null; next = null; plan = null; earlierPlans.clear(); milestones = [];
     if (!keepStatus) {failureSignature = ''; status.replaceChildren();}
     if (forgetRoute) writeSelection(null);
@@ -303,6 +307,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     }
     page = data; const routeId = new URLSearchParams(location.hash.split('?')[1]).get('select');
     if (routeId && rows.has(routeId)) {selected = routeId; preference.selected = routeId;}
+    else if(routeId&&!landing.element.hidden){selected=null;preference.selected=null;closeRetaining();}
     next = data.next_cursor ?? null; fillFilters(); renderColumns();
     failureSignature = ''; status.replaceChildren();
     if (selected && !rows.has(selected)) {selected = null; preference.selected = null; writeSelection(null); closeRetaining(); viewHeading()?.focus();}
@@ -377,16 +382,23 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       sources.set(id, source.get(id)); current.card = data.card;
       patchCard(current.node, data.card);
       renderColumns(); renderMetrics(); showDetail(data.card);
-    } catch (error) {if (generation === serial && ticket === detailSerial) {
-      observers.get(id)?.withdraw();
-      if (error.message === t('pm_kanban_scope_error')) {unavailable(error); return;}
-      if ([403, 404].includes(error.status)) {
-        try {checkPage(await api('GET', path(0)), 0); alive(); if (generation !== serial || ticket !== detailSerial) return;}
-        catch (parentError) {if (generation === serial && ticket === detailSerial) unavailable(parentError); return;}
+    } catch (error) {
+      if (retiredView(error) || viewLeft(alive)) return;
+      if (generation === serial && ticket === detailSerial) {
+        observers.get(id)?.withdraw();
+        if (error.message === t('pm_kanban_scope_error')) {unavailable(error); return;}
+        if ([403, 404].includes(error.status)) {
+          try {checkPage(await api('GET', path(0)), 0); alive(); if (generation !== serial || ticket !== detailSerial) return;}
+          catch (parentError) {
+            if (retiredView(parentError) || viewLeft(alive)) return;
+            if (generation === serial && ticket === detailSerial) unavailable(parentError);
+            return;
+          }
+        }
+        if ([403, 404].includes(error.status)) {current.node.remove(); rows.delete(id); sources.delete(id); page = {...page, wip: null, coverage: {...page.coverage, withdrawn: true}}; renderColumns(); renderMetrics();}
+        detail.show({title: current.card.work.title, error, onRetry: () => void refresh()});
       }
-      if ([403, 404].includes(error.status)) {current.node.remove(); rows.delete(id); sources.delete(id); page = {...page, wip: null, coverage: {...page.coverage, withdrawn: true}}; renderColumns(); renderMetrics();}
-      detail.show({title: current.card.work.title, error, onRetry: () => void refresh()});
-    }}
+    }
   }
   const path = after => `${endpoint}/kanban?${new URLSearchParams({...(projectId ? {project_id: projectId} : {}), after: String(after), limit: String(pageSize)})}`;
   async function refresh() {
@@ -414,8 +426,9 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       earlierPlans = await readEarlierPlans({api, workspaceId, cards: [...combined.values()], currentId: accepted?.plan?.revision_id, valid: () => {alive(); return ticket === serial;}});
       alive(); if (ticket !== serial) return;
       plan = accepted?.plan || null; milestones = roadmap?.baseline?.document?.milestones || []; sources = read;
+      await landing.refresh();alive();if(ticket!==serial)return;
       present({...data, cards: [...combined.values()]});
-    } catch (error) {if (ticket === serial) unavailable(error);}
+    } catch (error) {if (retiredView(error) || viewLeft(alive)) return; if (ticket === serial) unavailable(error);}
     finally {if (ticket === serial) {reading = false; element.removeAttribute('aria-busy'); more.disabled = false; refreshButton.disabled = false;}}
   }
   async function loadMore() {
@@ -460,7 +473,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   function setActive(value) {
     const routeId = new URLSearchParams(location.hash.split('?')[1]).get('select');
     if (active === value) {if (value && routeId && routeId !== selected) void select(routeId); return;} active = value;
-    if (!value) {stale = true; serial++; detailSerial++; ++scrollGeneration; rememberScroll(); closeRetaining();}
+    if (!value) {landing.withdraw();stale = true; serial++; detailSerial++; ++scrollGeneration; rememberScroll(); closeRetaining();}
     else {
       const generation = ++scrollGeneration;
       const read = stale || !page ? refresh() : null;
@@ -481,5 +494,5 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       return read;
     }
   }
-  return {element, box: element, meta, refresh, titleFor, withdraw, setActive, rememberScroll, hideInspector: closeRetaining, setTools: value => {toolItems = value;}, dispose: () => {rememberScroll(); window.removeEventListener('scroll', onScroll); startPanel?.dispose(); startPanel = null; resultPanel?.dispose(); resultPanel = null; resize.disconnect(); withdraw({forgetRoute: false});}};
+  return {element, box: element, meta, refresh, titleFor, withdraw, setActive, rememberScroll, hideInspector: closeRetaining, setTools: value => {toolItems = value;}, dispose: () => {rememberScroll(); window.removeEventListener('scroll', onScroll); landing.dispose();startPanel?.dispose(); startPanel = null; resultPanel?.dispose(); resultPanel = null; resize.disconnect(); withdraw({forgetRoute: false});}};
 }

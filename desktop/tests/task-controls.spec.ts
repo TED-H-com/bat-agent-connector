@@ -154,3 +154,113 @@ for (const language of ['en-US','zh-TW']) for (const width of [390,768,1440]) te
   await mkdir('/tmp/bac-task-controls-after',{recursive:true});
   await page.screenshot({path:`/tmp/bac-task-controls-after/${language}-${width}.png`,fullPage:true}); await page.close();
 });
+
+const pauseButton = (page: any) => form(page).locator('.actions button').nth(0);
+const held = (control: any) => control.evaluate((el: HTMLButtonElement) => {
+  const status = (el.closest('[data-task-controls]') as HTMLElement).querySelector('[role="status"]');
+  return {focused: document.activeElement === el, ariaDisabled: el.getAttribute('aria-disabled'), disabled: el.disabled, busy: status?.getAttribute('aria-busy') ?? null};
+});
+const readsOf = (state: {reads: string[]}, path: string) => state.reads.filter(item => item === path).length;
+
+test('busy: Pause with Enter keeps focus while the POST is held', async ({page}) => {
+  const state = await taskFixture(page, false, {delayPost: true});
+  await open(page);
+  const pause = pauseButton(page);
+  await pause.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => Boolean(state.holdPost)).toBe(true);
+  await expect.poll(() => held(pause)).toEqual({focused: true, ariaDisabled: 'true', disabled: false, busy: 'true'});
+  await page.keyboard.press('Enter');
+  await pause.evaluate((el: HTMLButtonElement) => el.click());
+  await expect.poll(() => state.posts.length).toBe(1);
+  state.delayPost = false; state.holdPost();
+  await expect(form(page).getByRole('button', {name: 'Check original operation'})).toBeFocused();
+  expect(state.posts).toHaveLength(1);
+  await expect(form(page).locator('[role="status"]')).not.toHaveAttribute('aria-busy', 'true');
+});
+
+test('busy: a refused pause moves focus to Another', async ({page}) => {
+  const state = await taskFixture(page, false, {refuse: 'CONTROL_VERSION_CONFLICT'});
+  await open(page);
+  await pauseButton(page).focus();
+  await page.keyboard.press('Enter');
+  await expect(form(page).getByRole('button', {name: 'Prepare another control'})).toBeFocused();
+  expect(state.posts).toHaveLength(1);
+});
+
+test('busy: Check keeps focus while the task page load is held', async ({page}) => {
+  const state = await taskFixture(page, false);
+  await open(page);
+  await form(page).getByRole('button', {name: 'Pause dispatch', exact: true}).click();
+  await expect(page.getByText('Paused', {exact: true})).toBeVisible();
+  const check = form(page).getByRole('button', {name: 'Check original operation'});
+  const operations = () => readsOf(state, '/operations/'+opId);
+  const tasks = () => readsOf(state, '/tasks/'+taskId);
+  const beforeOperations = operations(), beforeTasks = tasks();
+  await check.focus();
+  state.delayTask = true;
+  await page.keyboard.press('Enter');
+  await expect.poll(() => Boolean(state.holdTask)).toBe(true);
+  await expect.poll(() => held(check)).toEqual({focused: true, ariaDisabled: 'true', disabled: false, busy: 'true'});
+  await page.keyboard.press('Enter');
+  await check.evaluate((el: HTMLButtonElement) => el.click());
+  expect(operations()).toBe(beforeOperations + 1);
+  expect(tasks()).toBe(beforeTasks + 1);
+  state.delayTask = false; state.holdTask();
+  await expect(check).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(check).toBeFocused();
+  expect(operations()).toBe(beforeOperations + 1);
+  expect(tasks()).toBe(beforeTasks + 1);
+});
+
+test('busy: an operation event load keeps focus on Check', async ({page}) => {
+  const state = await taskFixture(page, false);
+  await open(page);
+  await form(page).getByRole('button', {name: 'Pause dispatch', exact: true}).click();
+  await expect(page.getByText('Paused', {exact: true})).toBeVisible();
+  const check = form(page).getByRole('button', {name: 'Check original operation'});
+  const operations = () => readsOf(state, '/operations/'+opId);
+  const before = operations();
+  await check.focus();
+  state.delayRead = true;
+  state.events.push({seq: 1, resource_type: 'operation', resource_id: opId, kind: 'operation.updated'});
+  await expect.poll(() => Boolean(state.holdRead)).toBe(true);
+  await expect.poll(() => held(check)).toEqual({focused: true, ariaDisabled: 'true', disabled: false, busy: 'true'});
+  state.delayRead = false; state.holdRead();
+  await expect(check).toBeFocused();
+  await expect(check).not.toHaveAttribute('aria-disabled', 'true');
+  expect(operations()).toBe(before + 1);
+});
+
+test('busy: Another moves focus to Resume', async ({page}) => {
+  const state = await taskFixture(page, false);
+  await open(page);
+  await form(page).getByRole('button', {name: 'Pause dispatch', exact: true}).click();
+  await expect(page.getByText('Paused', {exact: true})).toBeVisible();
+  const another = form(page).getByRole('button', {name: 'Prepare another control'});
+  await expect(another).toBeVisible();
+  await another.focus();
+  await page.keyboard.press('Enter');
+  await expect(form(page).getByRole('button', {name: 'Resume dispatch', exact: true})).toBeFocused();
+  expect(state.posts).toHaveLength(1);
+});
+
+test('busy: Prepare another control stays disabled without aria-disabled while a failed operation read blocks it during an event load', async ({page}) => {
+  const state = await taskFixture(page, false);
+  await open(page);
+  await form(page).getByRole('button', {name: 'Pause dispatch', exact: true}).click();
+  await expect(page.getByText('Paused', {exact: true})).toBeVisible();
+  state.failRead = true;
+  await form(page).getByRole('button', {name: 'Check original operation'}).click();
+  await expect(form(page)).toContainText('Operation read failed');
+  const another = form(page).getByRole('button', {name: 'Prepare another control'});
+  await expect(another).toBeDisabled();
+  state.failRead = false;
+  state.delayRead = true;
+  state.events.push({seq: 1, resource_type: 'operation', resource_id: opId, kind: 'operation.updated'});
+  await expect.poll(() => Boolean(state.holdRead)).toBe(true);
+  await expect(another).toBeDisabled();
+  expect(await another.getAttribute('aria-disabled')).toBeNull();
+  state.delayRead = false; state.holdRead();
+  await expect(another).not.toHaveAttribute('aria-disabled', 'true');
+});

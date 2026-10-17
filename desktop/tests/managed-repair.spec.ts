@@ -24,6 +24,7 @@ async function fixture(page: any, native: boolean, options: any = {}) {
         action:'task.verify',status:'failed',target:{},params:{},preconditions:{},steps:[],events:[],external_refs:{},result:null}}};
       if (path === `/projects/${dispatchProject}/repair-evidence`) {
         state.repairReads.push(input.path);
+        if (state.delayEvidence) await new Promise(resolve => {state.holdEvidence = resolve;});
         return {status:200,data:{version:1,project_id:dispatchProject,source:state.badEvidence?{...source,host:'wrong'}:Object.fromEntries(url.searchParams),
           expected_project_version:1,evidence_digest:evidenceDigest,evidence:{status:'failed'},existing:null}};
       }
@@ -37,6 +38,7 @@ async function fixture(page: any, native: boolean, options: any = {}) {
       if (path === `/work-items/${wid}`) return {status:200,data:{work_item:item,project:state.project,path:[],links:[],children:[],derived:[],events:[]}};
       if (input.method==='POST' && input.body?.action==='repair.create') {
         state.repairPosts.push(structuredClone(input));
+        if (state.delayRepairPost) await new Promise(resolve => {state.holdRepairPost = resolve;});
         if(!state.repairOperation.idempotency_key) state.repairOperation={operation_id:repairId,actor:state.actor,idempotency_key:input.idempotency_key,
           ...structuredClone(input.body),status:'succeeded',result:{project_id:dispatchProject,work_item_id:wid,evidence_digest:evidenceDigest}};
         if(state.lostRepair) {state.lostRepair=false;return {status:503,data:{error:{code:'LOST',message:'Lost repair reply'}}};}
@@ -147,3 +149,70 @@ for(const native of [false,true]) {
     expect(state.posts).toEqual([]);expect(state.errors).toEqual([]);
   });
 }
+const repairStatus = (page: any) => repair(page).locator('.actions + [role="status"]');
+test('busy focus: Create keeps focus while the request is held and then shows recover', async ({page}) => {
+  const state = await fixture(page, false, {delayRepairPost: true});
+  await openEvidence(page);
+  const create = repair(page).getByRole('button', {name: 'Create or recover repair work', exact: true});
+  await create.focus();
+  await create.press('Enter');
+  await expect.poll(() => Boolean(state.holdRepairPost)).toBe(true);
+  await expect(create).toBeFocused();
+  await expect(create).toHaveAttribute('aria-disabled', 'true');
+  await expect(repairStatus(page)).toHaveAttribute('aria-busy', 'true');
+  await create.press('Enter', {force: true});
+  await create.click({force: true});
+  expect(state.repairPosts).toHaveLength(1);
+  state.delayRepairPost = false; state.holdRepairPost();
+  const recover = repair(page).getByRole('button', {name: 'Recover original repair request', exact: true});
+  await expect(recover).toBeEnabled();
+  await expect(recover).toBeFocused();
+  expect(state.repairPosts).toHaveLength(1);
+});
+test('busy focus: Read repair evidence keeps focus while its request is held', async ({page}) => {
+  const state = await fixture(page, false);
+  await openEvidence(page);
+  state.delayEvidence = true;
+  const read = repair(page).getByRole('button', {name: 'Read repair evidence', exact: true});
+  const before = state.repairReads.length;
+  await read.focus();
+  await read.press('Enter');
+  await expect.poll(() => Boolean(state.holdEvidence)).toBe(true);
+  await expect(read).toBeFocused();
+  await expect(read).toHaveAttribute('aria-disabled', 'true');
+  await expect(repairStatus(page)).toHaveAttribute('aria-busy', 'true');
+  await read.press('Enter', {force: true});
+  expect(state.repairReads).toHaveLength(before + 1);
+  state.delayEvidence = false; state.holdEvidence();
+  await expect(read).not.toHaveAttribute('aria-disabled');
+  await expect(read).toBeFocused();
+  expect(state.repairReads).toHaveLength(before + 1);
+});
+test('busy focus: Review new evidence moves focus to Read repair evidence', async ({page}) => {
+  await fixture(page, false);
+  await openEvidence(page);
+  await repair(page).getByRole('button', {name: 'Create or recover repair work', exact: true}).click();
+  await expect(repair(page).getByRole('link', {name: 'Open repair work'})).toBeVisible();
+  const next = repair(page).getByRole('button', {name: 'Review new evidence', exact: true});
+  await next.focus();
+  await next.press('Enter');
+  await expect(repair(page).getByRole('button', {name: 'Read repair evidence', exact: true})).toBeFocused();
+});
+test('busy focus: static block keeps Create disabled during an evidence read', async ({page}) => {
+  const state = await fixture(page, false);
+  const extend = state.extendCaps;
+  state.extendCaps = (caps: any) => {
+    const next = extend(caps);
+    return {...next, actions: next.actions.map((action: any) => action.action === 'repair.create' ? {...action, allowed: false} : action)};
+  };
+  await openEvidence(page);
+  const create = repair(page).getByRole('button', {name: 'Create or recover repair work', exact: true});
+  await expect(create).toHaveJSProperty('disabled', true);
+  await expect(create).not.toHaveAttribute('aria-disabled');
+  state.delayEvidence = true;
+  await repair(page).getByRole('button', {name: 'Read repair evidence', exact: true}).click();
+  await expect.poll(() => Boolean(state.holdEvidence)).toBe(true);
+  await expect(create).toHaveJSProperty('disabled', true);
+  await expect(create).not.toHaveAttribute('aria-disabled');
+  state.delayEvidence = false; state.holdEvidence();
+});

@@ -10,6 +10,32 @@ export function validLabels(v) {
     x === x.trim() && [...x].length >= 1 && [...x].length <= 40 && !/[\p{C}\u2028\u2029]/u.test(x));
 }
 const metadata = v => object(v) && version(v.version) && validLabels(v.labels);
+function markControl(el, blocked, flight, own = false) {
+  if (!el.hidden && flight && (own || !blocked)) {el.disabled = false; el.setAttribute('aria-disabled', 'true');}
+  else {el.disabled = Boolean(blocked || flight); el.removeAttribute('aria-disabled');}
+}
+function markRegion(region, controls) {
+  if (controls.some(el => !el.hidden && el.getAttribute('aria-disabled') === 'true')) region.setAttribute('aria-busy', 'true');
+  else region.removeAttribute('aria-busy');
+}
+function controlShown(el) {
+  return Boolean(el?.isConnected && !el.disabled && !el.closest('[hidden]'));
+}
+function moveFocus(from, candidate, root, region) {
+  if (controlShown(candidate)) {candidate.focus(); return;}
+  const controls = [...root.querySelectorAll('button, a[href], input, select, textarea')];
+  const start = Math.max(controls.indexOf(from), 0);
+  const next = [...controls.slice(start + 1), ...controls.slice(0, start)].find(el => controlShown(el) && el.getAttribute('aria-disabled') !== 'true');
+  if (next) {next.focus(); return;}
+  region.tabIndex = -1; region.focus();
+}
+function settleFocus(before, buttons, candidate, root, region) {
+  if (!root?.isConnected || !buttons.includes(before)) return;
+  const active = document.activeElement;
+  if (active !== before && active !== document.body && active !== document.documentElement) return;
+  if (!before.disabled && !before.closest('[hidden]')) return;
+  moveFocus(before, candidate, root, region);
+}
 export function sessionLabelsPanel({h,t,api,caps,guard,target,storageKey,errorBox,opStatus}) {
   const path=`/sessions/${encodeURIComponent(target.host)}/${encodeURIComponent(target.session_id)}`;
   const valid = request => request?.action === 'session.labels.set' && equal(request.target,target) &&
@@ -67,7 +93,10 @@ export function sessionLabelsPanel({h,t,api,caps,guard,target,storageKey,errorBo
     try{await submission;}finally{submission=null;}
     if(live())try{await refresh(true);}catch(e){error(e);}
   }},t('labels_save'));
-  const check=h('button',{class:'secondary',onclick:()=>refresh(true).catch(error)},t('permissions_check'));
+  const check=h('button',{class:'secondary',onclick:()=>{
+    if(!live()||busy||refreshing)return;
+    refresh(true).catch(error);
+  }},t('permissions_check'));
   const renew=h('button',{class:'secondary',onclick:()=>{
     if(!live() || busy || refreshing || !readable || !permitted() || saved.intent && !terminal() && !saved.intent.refused)return;
     const previous=saved;
@@ -95,6 +124,7 @@ export function sessionLabelsPanel({h,t,api,caps,guard,target,storageKey,errorBo
   const box=h('section',{class:'session-labels','data-session-labels':''},stateLine,tags,fold);
   function update(){
     if(!live())return;
+    const before=document.activeElement;
     const fixed=Boolean(saved.intent);
     const canSave=readable && permitted() && !damaged;
     const showEdit=canSave || fixed || damaged || (readable && Object.hasOwn(saved,'text'));
@@ -110,13 +140,18 @@ export function sessionLabelsPanel({h,t,api,caps,guard,target,storageKey,errorBo
     fold.hidden=!showEdit && !why;
     editorMount.hidden=!showEdit;
     if(showEdit && fold.open)mountEditor();
-    input.disabled=fixed||busy||Boolean(refreshing)||!readable||!permitted()||damaged;
+    input.disabled=fixed||busy||!readable||!permitted()||damaged;
+    const flight=busy||Boolean(refreshing);
     apply.hidden=Boolean(saved.intent?.operation_id||saved.intent?.refused);
-    apply.disabled=busy||Boolean(refreshing)||!readable||!permitted()||damaged||Boolean(fixed&&!saved.intent.request)||!validLabels(parsed());
     apply.textContent=t(fixed?'permissions_retry':'labels_save');
-    check.textContent=t(fixed?'permissions_check':'labels_refresh');check.disabled=busy||Boolean(refreshing);
+    markControl(apply,!readable||!permitted()||damaged||Boolean(fixed&&!saved.intent.request)||!validLabels(parsed()),flight,busy);
+    check.textContent=t(fixed?'permissions_check':'labels_refresh');
+    markControl(check,false,flight,false);
     renew.hidden=fixed?!terminal()&&!saved.intent.refused:!damaged && !(current && saved.base_version!==undefined && saved.base_version!==current.version);
-    renew.disabled=busy||Boolean(refreshing)||!readable||!permitted();
+    markControl(renew,!readable||!permitted(),flight,false);
+    markRegion(message,[apply,check,renew]);
+    const candidate=before===apply?saved.intent?.operation_id?check:saved.intent?.refused?renew:null:before===renew?input:null;
+    settleFocus(before,[apply,check,renew],candidate,box,message);
     restriction.textContent=!permitted()?t('labels_scope'):!readable?t('labels_unreadable'):saved.base_version!==undefined&&saved.base_version!==current.version?t('labels_changed'):'';
     result.replaceChildren();
     if(fixed){result.append(h('p',{},operation?opStatus(operation):t(saved.intent.refused?'labels_refused':'permissions_unknown'),' ',
@@ -141,7 +176,13 @@ export function sessionLabelsPanel({h,t,api,caps,guard,target,storageKey,errorBo
       current=data.connector_metadata;readable=true;
       if(!Object.hasOwn(saved,'text')&&!saved.intent&&!damaged)input.value=current.labels.join('\n');
     })();update();
-    try{await refreshing;}catch(e){readable=false;error(e);throw e;}finally{refreshing=null;if(live())update();}
+    try{await refreshing;}catch(e){
+      // A failed read disables the field. If it had focus, keep the keyboard on the status.
+      const typing=document.activeElement===input&&!input.disabled;
+      readable=false;error(e);
+      if(typing&&input.disabled&&live()){message.tabIndex=-1;message.focus();}
+      throw e;
+    }finally{refreshing=null;if(live())update();}
   }
   update();return {box,refresh,update};
 }

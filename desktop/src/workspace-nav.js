@@ -5,6 +5,8 @@ import {actionLabel, railPresentation} from './global-labels.js';
 import {icon} from './ui/icons.js';
 import {searchField, iconButton} from './ui/components.js';
 import {observedText} from './observed-resource-strings.js';
+import {sessionHref, workSessionContext} from './session-navigation.js';
+import {workbenchEnabled} from './workbench-mode.js';
 
 export function workspaceNavigation({h, t, api, guard, onEvents, namespace, errorBox, caps = () => null}) {
   const key = `batc.tree.${namespace}`;
@@ -65,23 +67,60 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
   };
   const workLink = (pid, item) => link(`#/work/${[pid, item.kind, item.id].map(encodeURIComponent).join('/')}`,
     item.title || item.branch || (item.action ? actionLabel(item.action) : item.id), workActivity(item), item.reading);
+  const selectedWork = () => {
+    const context = workSessionContext(new URLSearchParams(selected.split('?')[1] || ''));
+    return context?.workItemId || /^#\/item\/(wi_[0-9a-f]{20})(?:[/?]|$)/.exec(selected)?.[1] || null;
+  };
+  const selectedExecution = () => /^#\/work\/[^/]+\/execution\/(op_[0-9a-f]{32})(?:[/?]|$)/.exec(selected)?.[1];
+  const selectedRow = node => node.getAttribute('href') === selected
+    || node.dataset.workItem && node.dataset.workItem === selectedWork()
+    || (node.dataset.workOperations || '').split(',').includes(selectedExecution());
+  const workIdentity = item => {
+    const value = item.work_identity;
+    if (!workbenchEnabled() || item.kind !== 'execution' || item.id !== item.operation_id || !value
+        || typeof item.host !== 'string' || !item.host || typeof item.session_id !== 'string' || !item.session_id) return null;
+    const context = workSessionContext(new URLSearchParams({workspace: value.workspace_id,
+      work: value.work_item_id, attempt: value.attempt_id}));
+    if (!context || pmWorkspace && !globalTree && context.workspaceId !== pmWorkspace) return null;
+    return context;
+  };
   const render = () => {
     if (disposed) return;
     createProject.hidden = !catalogKnown || !caps()?.scopes?.includes('manage') || caps()?.actions?.find(row => row.action === 'project.create')?.allowed === false;
     const focus = tree.contains(document.activeElement) ? document.activeElement?.dataset.treeKey : null;
+    const focusWork = tree.contains(document.activeElement) ? document.activeElement?.dataset.workItem : null;
     const query = search.value.trim().toLocaleLowerCase();
     const matches = text => !query || String(text || '').toLocaleLowerCase().includes(query);
-    const itemNodes = items => (items || []).flatMap(item => {
-      const children = itemNodes(item.children), own = matches(item.title);
+    const itemNodes = (items, executions) => (items || []).flatMap(item => {
+      const linked = executions.get(item.work_item_id) || [];
+      const requested = workSessionContext(new URLSearchParams(selected.split('?')[1] || ''));
+      const current = linked.find(row => row.context.attemptId === requested?.attemptId || row.source.id === selectedExecution()) || linked[0];
+      const children = itemNodes(item.children, executions), own = matches(item.title)
+        || linked.some(({source}) => matches(source.title || source.branch || source.id));
       if (!own && !children.length) return [];
-      const row = link(`#/item/${encodeURIComponent(item.work_item_id)}`, item.title,
-        {key: 'wi_state_' + (item.completion?.display_state || item.state), tone: item.completion?.pending ? 'stale' : ''});
+      const href = current ? sessionHref({host: current.source.host, sessionId: current.source.session_id, ...current.context})
+        : `#/item/${encodeURIComponent(item.work_item_id)}`;
+      const itemActivity = {key: 'wi_state_' + (item.completion?.display_state || item.state), tone: item.completion?.pending ? 'stale' : ''};
+      const row = link(href, item.title, current && !item.completion?.pending ? workActivity(current.source) : itemActivity, current?.source.reading);
+      row.dataset.workItem = item.work_item_id;
+      row.dataset.workOperations = linked.map(({source}) => source.id).join(',');
+      if (selectedRow(row)) row.setAttribute('aria-current', 'page');
       return [h('li', {}, row, children.length ? h('ul', {}, ...children) : null)];
     });
     const projectNodes = items => items.flatMap(project => {
       const id = project.project_id, data = projects.get(id), children = projectNodes(project.children || []);
-      const work = (data?.work || []).filter(item => matches(item.title || item.branch || item.action || item.id));
-      const items = itemNodes(data?.work_items), own = matches(project.name);
+      const ids = new Set(), executions = new Map();
+      const collect = rows => {for (const row of rows || []) {ids.add(row.work_item_id); collect(row.children);}};
+      collect(data?.work_items);
+      const independent = (data?.work || []).filter(source => {
+        const context = workIdentity(source);
+        if (!context || !ids.has(context.workItemId)) return true;
+        const rows = executions.get(context.workItemId) || [];
+        rows.push({source, context}); executions.set(context.workItemId, rows);
+        return false;
+      });
+      const work = independent.filter(item => matches(item.title || item.branch || item.action || item.id));
+      const items = itemNodes(data?.work_items, executions), own = matches(project.name);
       if (!own && !children.length && !work.length && !items.length) return [];
       const open = expanded.has(id) || Boolean(query);
       const toggle = h('button', {class: 'workspace-tree-toggle', 'data-tree-key': id,
@@ -105,7 +144,8 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     // whether its missing results are known empty or cannot currently be read.
     if (!nodes.length && (query || !bound && catalogKnown)) tree.append(h('p', {class: 'muted workspace-tree-hint'},
       t(bound && !bindingKnown ? 'ui_work_links_unavailable' : !bound && !catalogKnown ? 'ui_work_unavailable' : query ? 'workspace_no_match' : 'no_projects')));
-    if (focus) [...tree.querySelectorAll('[data-tree-key]')].find(node => node.dataset.treeKey === focus)?.focus({preventScroll: true});
+    if (focus) ([...tree.querySelectorAll('[data-tree-key]')].find(node => node.dataset.treeKey === focus)
+      || [...tree.querySelectorAll('[data-work-item]')].find(node => focusWork && node.dataset.workItem === focusWork))?.focus({preventScroll: true});
     filterSessions();
   };
   const filterSessions = () => {
@@ -263,7 +303,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     // Selection updates do not remount the tree, search or disclosure controls.
     for (const node of new Set([...box.querySelectorAll('a'), ...tree.querySelectorAll('a'), ...sessionTree.querySelectorAll('a')])) {
       if (node.closest('.wc-daily')) continue;
-      if (node.getAttribute('href') === hash) node.setAttribute('aria-current', 'page'); else node.removeAttribute('aria-current');
+      if (selectedRow(node)) node.setAttribute('aria-current', 'page'); else node.removeAttribute('aria-current');
     }
   }, dispose() {disposed = true; off(); document.removeEventListener('keydown', escape); box.remove();}};
 }
