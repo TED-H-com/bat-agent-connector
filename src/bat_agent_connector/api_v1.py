@@ -189,7 +189,8 @@ class ApiV1:
         pm_execution_verification.install(daemon.ops)
         from . import pr_publication
         pr_publication.install(daemon.ops)
-        from . import pm_attempt_results, pm_work_start
+        from . import pm_attempt_results, pm_work_profiles, pm_work_start
+        pm_work_profiles.install(daemon.ops)
         pm_work_start.install(daemon.ops)
         pm_attempt_results.install(daemon.ops)
         from .session_observation import SessionObservation
@@ -293,6 +294,9 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-packages", self.pm_work_packages, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-packages/(?P<package_id>pmwp_[0-9a-f]{32})", self.pm_work_package, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-packages/(?P<package_id>pmwp_[0-9a-f]{32})/readiness", self.pm_work_package_readiness, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-profiles", self.pm_work_profiles, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-profiles/(?P<profile_id>wpf_[0-9a-f]{32})", self.pm_work_profile, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-profiles/(?P<profile_id>wpf_[0-9a-f]{32})/readiness", self.pm_work_profile_readiness, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/conversation-proposals", self.pm_conversation_proposals, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/conversation-proposals/(?P<proposal_id>pmcp_[0-9a-f]{32})", self.pm_conversation_proposal, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/follow-up-assessments", self.pm_follow_up_assessments, "observe"),
@@ -531,6 +535,7 @@ class ApiV1:
                       self.pm_work_batches, self.pm_work_batch, self.pm_maintenance_findings_current,
                       self.pm_spec_materializations, self.pm_spec_materialization,
                       self.pm_work_packages, self.pm_work_package, self.pm_work_package_readiness,
+                      self.pm_work_profiles, self.pm_work_profile, self.pm_work_profile_readiness,
                       self.pm_maintenance_reviews, self.pm_maintenance_review_current, self.pm_maintenance_review, self.pm_maintenance_review_events,
                       self.pm_maintenance_checks, self.pm_maintenance_check_current, self.pm_maintenance_check, self.pm_maintenance_schedule,
                       self.pm_ahp_adapters, self.pm_ahp_observations, self.pm_ahp_observation_current, self.pm_ahp_observation,
@@ -712,6 +717,8 @@ class ApiV1:
             if not isinstance(params['quality_refs'], dict):
                 raise OperationError('INVALID_PARAMS', 'Original quality selectors must be a JSON object', 422)
         integer_fields = {"limit", "max_chars", "before_message", "before_input", "journal_cursor", "history_limit"}
+        if method == "pm_work_profiles_list":
+            integer_fields.add("cursor")
         if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list", "pm_follow_up_list", "pm_follow_up_assessments_list", "pm_work_packages_list", "pm_issue_mappings_list", "pm_release_baselines_list", "pm_maintenance_policies_list", "pm_workload_snapshots_list"}:
             integer_fields.add("after")
         wide_cursor = method in {"pm_dependencies_revisions_list", "pm_conversation_proposals_list", "pm_maintenance_repairs_list", "pm_quality_reviews_list", "pm_work_quality_get", "pm_work_deliveries_list", "pm_work_batches_list", "pm_work_attempts_list", "pm_spec_materializations_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
@@ -1047,6 +1054,15 @@ class ApiV1:
     async def pm_work_package_readiness(self, principal, query, workspace_id, package_id, **_):
         return self._pm_read(principal, "pm_work_package_readiness_get", query, workspace_id=workspace_id, package_id=package_id)
 
+    async def pm_work_profiles(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_work_profiles_list", query, workspace_id=workspace_id)
+
+    async def pm_work_profile(self, principal, query, workspace_id, profile_id, **_):
+        return self._pm_read(principal, "pm_work_profile_get", query, workspace_id=workspace_id, profile_id=profile_id)
+
+    async def pm_work_profile_readiness(self, principal, query, workspace_id, profile_id, **_):
+        return self._pm_read(principal, "pm_work_profile_readiness_get", query, workspace_id=workspace_id, profile_id=profile_id)
+
     async def pm_conversation_proposals(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_conversation_proposals_list", query, workspace_id=workspace_id)
 
@@ -1151,7 +1167,7 @@ class ApiV1:
             worktree_merge_operations,
         )
         gh_cfg = self.daemon.ops.context["github_config"]
-        from . import pm_attempt_result_reads, pm_work_start, pr_publication
+        from . import pm_attempt_result_reads, pm_work_profiles, pm_work_start, pr_publication
         actions = [{"action": a.name, "scope": a.scope, "summary": a.summary, "allowed": principal.allows(a.scope)
                                and a.name not in {pm_execution_runtime.ACTION, pm_maintenance_repair_runtime.ACTION}
                                and (a.name != "delivery.merge_and_deploy" or principal.allows("deploy"))
@@ -1231,6 +1247,7 @@ class ApiV1:
                                                     "spec_materialization": pm_spec_materialization.capabilities(),
                                                     "work_batches": pm_work_batches.capabilities(self.daemon.ops),
                                                     "work_start": pm_work_start.capabilities(self.daemon.ops),
+                                                    "work_profiles": pm_work_profiles.capabilities(self.daemon.ops),
                                                     "work_attempt_results": pm_attempt_result_reads.capabilities(self.daemon.ops),
                                                     "workload": pm_workload.capabilities(),
                                                     "work_package_prepare": "pm.work_package.create" in self.daemon.ops.actions,
