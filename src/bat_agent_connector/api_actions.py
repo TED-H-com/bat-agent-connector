@@ -76,7 +76,16 @@ def check_controller_binding(ctx, target):
     return expected["controller_incarnation"]
 
 
+def _authorize_send(ops: OperationService, principal: Principal, op: dict, verb: str) -> None:
+    """Work-target sends authorize the workspace writer. Direct session sends are unchanged."""
+    from . import pm_work_follow_up
+    pm_work_follow_up.authorize_existing(ops, principal, op, verb)
+
+
 def _admit_send(ops: OperationService, principal: Principal, target: dict, params: dict, pre: dict) -> dict | None:
+    if "workspace_id" in target or "work_item_id" in target:
+        from . import pm_work_follow_up
+        return pm_work_follow_up.admit_send(ops, principal, target, params, pre)
     if target.get("task_id"):
         from .task_actions import admit_send
         return admit_send(ops, principal, target, params, pre)
@@ -106,13 +115,29 @@ async def _send(ctx: OpContext) -> dict:
     if ctx.target.get("task_id"):
         from .task_actions import send
         return await send(ctx)
+    from . import pm_work_follow_up
+    from .operations import RERUN
+    is_work = pm_work_follow_up.is_work_follow_up(ctx.op)
+    work_prep = pm_work_follow_up.prepare_send(ctx) if is_work else None
     fleet = _fleet(ctx.service)
     target, params = _bound_inputs(ctx)
     host, sid = target["host"], target["session_id"]
     text = params["text"]
-    mid = params.get("message_id") or "batc-" + ctx.operation_id
+    mid = (work_prep or {}).get("message_id") or params.get("message_id") or "batc-" + ctx.operation_id
 
     async def send() -> dict:
+        if is_work:
+            return await pm_work_follow_up.execute_send_step(
+                ctx,
+                fleet=fleet,
+                host=host,
+                sid=sid,
+                text=text,
+                mid=mid,
+                schedule=str((work_prep or {}).get("schedule") or params.get("schedule") or pm_work_follow_up.DEFAULT_SCHEDULE),
+                target=target,
+                check_controller_binding_fn=check_controller_binding,
+            )
         task_control.check_binding(ctx)
         incarnation = check_controller_binding(ctx, target)
         from .orchestration_operations import linked
@@ -130,6 +155,8 @@ async def _send(ctx: OpContext) -> dict:
             raise
 
     async def reconcile(_request: dict) -> dict | None:
+        if is_work and pm_work_follow_up.unsent(ctx):
+            return RERUN
         turn = registry.get_turn(host, sid, mid)
         if turn and "message_id" not in params:  # operation-generated IDs cannot name a different earlier prompt
             return {"host": host, "session_id": sid, "message_id": mid, "accepted": True,
@@ -151,6 +178,8 @@ async def _send(ctx: OpContext) -> dict:
     r = await ctx.step("send", send, request={"message_id": mid,
                                               "text_sha256": hashlib.sha256(text.encode()).hexdigest()},
                        reconcile=reconcile)
+    if is_work:
+        return r
     if not r.get("accepted"):
         raise NeedsAttention("NOT_ACCEPTED", "BAT did not accept the message")
     return r
@@ -375,7 +404,7 @@ ACTIONS = [
               session_permissions.run, session_permissions.admit, SESSION_TARGET,
               authorize_existing=session_permissions.authorize_existing),
     ActionDef("session.send", "operate", "Send a message to a connector-managed session",
-              _send, _admit_send),
+              _send, _admit_send, authorize_existing=_authorize_send),
     ActionDef("session.answer", "operate", "Answer a managed session's pending question or permission prompt",
               _answer, _admit_answer, SESSION_TARGET),
     ActionDef("session.interrupt", "operate", "Interrupt a managed session's running turn",

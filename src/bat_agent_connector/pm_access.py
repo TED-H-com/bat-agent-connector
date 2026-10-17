@@ -112,6 +112,10 @@ def _visible(db, principal, operation):
     if operation.get("action") == "work.start":
         from .pm_work_start import operation_visible
         return operation_visible(db, principal, operation)
+    if operation.get("action") == "session.send":
+        from . import pm_work_follow_up
+        if pm_work_follow_up.is_work_follow_up(operation):
+            return pm_work_follow_up.operation_visible(db, principal, operation)
     if not operation.get("action", "").startswith("pm."):
         return True
     from .pm_workspace import operation_visible
@@ -131,7 +135,11 @@ def event_visible(db, principal, event):
         row = db.execute("SELECT operation_id,actor,action,target,result FROM operations WHERE operation_id=?",
                          (event["resource_id"],)).fetchone()
         if row is None:
-            action = event.get("body", {}).get("action", "")
+            from . import pm_work_follow_up
+            body = event.get("body") if isinstance(event.get("body"), dict) else {}
+            action = str(body.get("action") or "")
+            if pm_work_follow_up.is_work_input_event(db, event):
+                return pm_work_follow_up.missing_row_event_visible(db, principal, event)
             return not action.startswith("pm.") and action != "work.start"
         return visible(db, principal, {**dict(row), "target": json.loads(row["target"]),
                                       "result": json.loads(row["result"]) if row["result"] else None})

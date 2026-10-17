@@ -36,6 +36,13 @@
   that workspace. Starting work can name one saved revision and then requires all
   twelve preconditions. Starting work without a profile is unchanged.
 
+- A started Work item can take another instruction. Send `session.send` with
+  the Work as the target. The instruction waits until the current turn finishes,
+  or it goes out immediately when that session is already idle. You can read the
+  queue, cancel an instruction that has not been sent, and reconcile an
+  unconfirmed send with its original operation. A Codex session is refused.
+  The dashboard composer is not part of this change.
+
 - The hidden Board and Requirements scroll checks wait for the read the test held, so a second read of the same address cannot make that wait miss.
 
 - Projects and work items: Tab reaches Add while a creation request is sending,

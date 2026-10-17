@@ -132,6 +132,11 @@ def event_session_id(ev: dict) -> str | None:
     return None
 
 
+async def _retry_pause(delay_s: float) -> None:
+    """Pause between this client's own retries. Tests replace only this function."""
+    await asyncio.sleep(delay_s)
+
+
 class BatClient:
     def __init__(
         self,
@@ -453,7 +458,7 @@ class BatClient:
                 if reply.get("type") == "invoke-error":
                     err = redact(reply.get("error"))
                     if BUSY_TEXT in err and attempt + 1 < attempts:
-                        await asyncio.sleep(0.5 * (attempt + 1))
+                        await _retry_pause(0.5 * (attempt + 1))
                         continue
                     raise InvokeError(f"{self.host.name}: {canonical}: {err}")
                 if canonical == "claude:get-session-meta" and (reply.get("type") != "invoke-result" or "result" not in reply):
@@ -465,7 +470,7 @@ class BatClient:
                 last_exc = e
                 await self.close()
                 if attempt + 1 < attempts:
-                    await asyncio.sleep(random.uniform(0.0, min(4.0, 0.5 * 2**attempt)))
+                    await _retry_pause(random.uniform(0.0, min(4.0, 0.5 * 2**attempt)))
                     continue
                 raise
         raise last_exc or ConnectionLost(f"{self.host.name}: failed")  # pragma: no cover

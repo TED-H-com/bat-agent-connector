@@ -939,6 +939,22 @@ the last turn-end receipt, call `pm_work_attempt_changes_get(workspace_id, attem
 to read a single file's unified diff in a specific commit within `(base_commit..head_commit]`,
 call `pm_work_attempt_diff_get(workspace_id, attempt_id, commit, path)`.
 
+When `features.pm_workspaces.work_follow_up` is advertised, a second instruction to a
+started Work uses the existing `operation_submit` tool. Do not call `session_send`
+for that path, and do not invent a follow-up alias. Submit
+`action="session.send"` with `target={"workspace_id", "work_item_id"}` and
+`params={"text", "schedule"}`. `schedule` is `after_current` (the default; the
+instruction waits for the current turn boundary) or `now` (only when that session
+is already idle). Optional `preconditions.expected_attempt_id` pins the latest
+attempt. The server assigns `message_id` as `batc-<operation_id>`; do not send
+`queue` or `message_id`. Read the queue with
+`pm_work_inputs_list(workspace_id, work_item_id, attempt_id?, after?, limit?)`
+or `GET /api/v1/pm/workspaces/{workspace_id}/work/{work_item_id}/inputs`.
+A Codex work session is refused with `PM_WORK_CODEX_FOLLOW_UP_UNSUPPORTED`.
+If a receipt stays `unknown`, reconcile that same operation with `operation_resume`
+or `POST /api/v1/operations/{operation_id}/resume`. Never resend it and never
+mint a new message id for it. Cancel applies only while the receipt is `queued`.
+
 ## Concept
 
 - **BAT** (Better Agent Terminal, github.com/tony1223/better-agent-terminal) runs agent sessions (Claude Code or Codex)
