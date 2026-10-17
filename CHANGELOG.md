@@ -117,6 +117,11 @@
   reserved. A start that may already have been sent is left unchanged. If a
   recovery stops between replacing an unsent reservation and recording its
   receipt, the original start stays unresolved and blocks a second start.
+- Desktop Start work loads attempt history and the readiness preview, and Work
+  Result loads, instead of stopping on "Central route is not allowed". The
+  desktop bridge also allows the existing work-attempt changes and diff reads
+  before that result UI lands. Work input history permits the exact attempt
+  filter and bounded pagination used by the next-instruction composer.
 
 - Fleet: keyboard focus stays on the control you are using while a status
   refresh or your own action runs. The control looks unavailable until that
