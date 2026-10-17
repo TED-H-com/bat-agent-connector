@@ -2,6 +2,14 @@
 
 ## Next release (unreleased)
 
+- A work attempt's result now includes the repository, the base commit recorded
+  at the start, and the base branch, so a client can submit publish as given.
+  Publish is withheld while a publication is still unfinished, when that same
+  commit already has a pull request, when the workspace is stopped, or when
+  GitHub is not configured. A refused publish tells the Dashboard it may start
+  a new request. Publishing still needs the base branch unchanged since the
+  work started. This release does not add a way to read the live base.
+
 - Choosing a file does not show Retry while that first upload runs. Retry appears
   after the upload fails, and pressing it keeps the button until the retry finishes.
 
