@@ -174,3 +174,14 @@ def test_skill_thread_actions_and_context_failures_match_the_current_workflow():
         assert re.search(rf'{code}[^\n]*{status}', text)
         assert re.search(rf'{code}[^\n]*{status}', contract)
     assert 'workflow_version: "2026-10-16.1"' in text
+    assert "pre-child guard pause puts the parent in `needs_attention`" not in text
+    for code in (
+        "PM_LIFECYCLE_STOPPED", "PM_LIFECYCLE_EPOCH_CHANGED", "PM_PACKAGE_SCOPE_CHANGED",
+        "WORK_ITEM_CHANGED", "PROJECT_CHANGED", "PM_WORK_BINDING_CHANGED",
+        "PM_PACKAGE_VERSION_CONFLICT", "WORK_ITEM_ARCHIVED", "PROJECT_ARCHIVED",
+    ):
+        assert code in text
+    assert "stage `start_failed`" in text
+    assert "PM_WORK_START_AUTHORITY_UNAVAILABLE" in text
+    assert "uncertain child" in text
+    assert "waiting in `needs_attention` is not rewritten" in text

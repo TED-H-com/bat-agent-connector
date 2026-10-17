@@ -1514,6 +1514,52 @@ def _finish(ctx, state: dict) -> dict:
     return ctx.effect("work.start.finish", record, receipt_only=True)
 
 
+# A resume of this same admission can never pass these codes. Every other
+# OperationError stays needs_attention, including PM_WORK_START_STOPPED so a
+# cancel that arrives inside _guard is still recorded as cancelled.
+_UNRESUMABLE_PRE_CHILD = frozenset({
+    "PM_LIFECYCLE_STOPPED",
+    "PM_LIFECYCLE_EPOCH_CHANGED",
+    "PM_PACKAGE_SCOPE_CHANGED",
+    "WORK_ITEM_CHANGED",
+    "PROJECT_CHANGED",
+    "PM_WORK_BINDING_CHANGED",
+    "PM_PACKAGE_VERSION_CONFLICT",
+    "WORK_ITEM_ARCHIVED",
+    "PROJECT_ARCHIVED",
+})
+
+
+def _stop_before_child(
+    ctx,
+    parent: dict,
+    intent: dict,
+    children: dict[str, dict],
+    exc: OperationError,
+    *,
+    stage: str,
+    binding_id: str | None = None,
+    package_id: str | None = None,
+) -> None:
+    """Fail a pre-child stop no resume can pass; pause every other OperationError."""
+    failed = exc.code in _UNRESUMABLE_PRE_CHILD
+    _save_progress(
+        ctx,
+        _build_state(
+            parent,
+            intent,
+            children,
+            stage="start_failed" if failed else stage,
+            binding_id=binding_id,
+            package_id=package_id,
+        ),
+    )
+    message = _failure_message(exc.code, exc.message)
+    if failed:
+        raise _bad(exc.code, message, exc.status) from exc
+    raise NeedsAttention(exc.code, message) from exc
+
+
 def _raise_child_stopped(
     ctx,
     parent: dict,
@@ -1570,8 +1616,7 @@ async def _run(ctx):
                 _guard(ctx.service, parent)
                 _admit_child(ctx, "bind", _bind_request(ctx.operation_id, intent))
             except OperationError as exc:
-                _save_progress(ctx, _build_state(parent, intent, children, stage="preparing"))
-                raise NeedsAttention(exc.code, _failure_message(exc.code, exc.message)) from exc
+                _stop_before_child(ctx, parent, intent, children, exc, stage="preparing")
             children = _children(ctx.service, parent)
             bind_child = children["bind"]
         if bind_child["status"] not in CHILD_STOPPED:
@@ -1618,11 +1663,9 @@ async def _run(ctx):
                 _guard(ctx.service, _op(ctx.service.db, ctx.operation_id))
                 _admit_child(ctx, "package", _package_request(ctx.operation_id, intent, binding_id))
             except OperationError as exc:
-                _save_progress(
-                    ctx,
-                    _build_state(parent, intent, children, stage="preparing", binding_id=binding_id),
+                _stop_before_child(
+                    ctx, parent, intent, children, exc, stage="preparing", binding_id=binding_id,
                 )
-                raise NeedsAttention(exc.code, _failure_message(exc.code, exc.message)) from exc
             children = _children(ctx.service, parent)
             pkg_child = children["package"]
         if pkg_child["status"] not in CHILD_STOPPED:
@@ -1677,18 +1720,16 @@ async def _run(ctx):
             _guard(ctx.service, _op(ctx.service.db, ctx.operation_id))
             _admit_child(ctx, "handoff", _handoff_request(ctx.operation_id, intent, package_ref))
         except OperationError as exc:
-            _save_progress(
+            _stop_before_child(
                 ctx,
-                _build_state(
-                    parent,
-                    intent,
-                    children,
-                    stage="starting",
-                    binding_id=binding_id,
-                    package_id=package_id,
-                ),
+                parent,
+                intent,
+                children,
+                exc,
+                stage="starting",
+                binding_id=binding_id,
+                package_id=package_id,
             )
-            raise NeedsAttention(exc.code, _failure_message(exc.code, exc.message)) from exc
         children = _children(ctx.service, parent)
         handoff_child = children["handoff"]
 

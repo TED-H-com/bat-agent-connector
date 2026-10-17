@@ -96,6 +96,7 @@
   A `session.send` loop stays partial with reason `session_target`. This build
   registers only `{host, session_id}` for that action and does not treat a
   Work id on the target as complete.
+- Starting a Work now ends failed when that start stops on something resuming cannot pass, such as a paused or reopened workspace, a changed adopted plan, or an edited Work, project, association, or package. After that cause is gone, starting the same Work again is accepted. A stop that can be repaired, such as a withdrawn credential or a lowered workspace role, still waits and can be resumed.
 
 - Fleet: keyboard focus stays on the control you are using while a status
   refresh or your own action runs. The control looks unavailable until that
