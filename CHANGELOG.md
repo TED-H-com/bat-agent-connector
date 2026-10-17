@@ -6,7 +6,11 @@
   with `work.adopt_and_start` through the central API/MCP operation service.
   Adoption and individual starts keep separate durable receipts: a refusal
   preserves the adopted plan, and an unknown start is reconciled without another
-  session. The proposal UI and native preview entry remain integration work.
+  session. The shared Web/Tauri proposal review now selects existing work,
+  checks readiness, and opens the first selected Work with the original receipt.
+  Partial adoption stays visible, and unknown starts link to their original
+  reconciliation operation. Reloading an unresolved request retains its key and
+  exposes recovery without another adoption.
 
 - Work live links retain the selected workspace, Work, and Attempt. The Dashboard
   verifies that selection against public Work and Attempt reads before offering

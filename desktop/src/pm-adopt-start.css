@@ -1,0 +1,10 @@
+.pm-adopt-start { margin-block: var(--space-3); }
+.pm-adopt-work { padding-block: var(--space-3); border-bottom: 1px solid var(--line); min-width: 0; }
+.pm-adopt-start .pm-adopt-choice { display: flex; align-items: flex-start; gap: var(--space-2); min-height: 44px; overflow-wrap: anywhere; }
+.pm-adopt-choice input[type=checkbox] { width: 16px; height: 16px; flex: 0 0 16px; margin-block: var(--space-1); }
+.pm-adopt-choice small { display: block; }
+.pm-adopt-work-fields { padding-inline-start: var(--space-6); display: grid; gap: var(--space-2); min-width: 0; }
+.pm-adopt-work-fields[hidden] { display: none; }
+.pm-adopt-work-fields textarea { width: 100%; box-sizing: border-box; }
+.pm-adopt-work-fields p { overflow-wrap: anywhere; }
+.pm-adopt-requirements { display: grid; gap: var(--space-1); }

@@ -204,6 +204,106 @@ function parseDiscussRefs(query) {
 	};
 }
 //#endregion
+//#region src/pm-adopt-start-strings.js
+var adoptStartStrings = {
+	en: {
+		loop_adopt_start: "Adopt and start",
+		loop_adopt_later: "Adopt, do later",
+		loop_adopt_start_help: "The plan is recorded first. Each selected work then starts as its own step.",
+		loop_works_heading: "Selected work",
+		loop_works_empty: "No work to start yet. You can still adopt this plan.",
+		loop_works_limit: "You can select up to {count} works.",
+		loop_works_more: "More work",
+		loop_works_removed: "These works are no longer available: {titles}.",
+		loop_requirement_heading: "Requirements",
+		loop_requirement_prerequisite: "This requirement has prerequisites, so this start cannot take it.",
+		loop_work_instruction: "Instruction",
+		loop_work_resolved: "Resolved for this start",
+		loop_preview: "Check readiness",
+		loop_preview_pending: "Checking readiness…",
+		loop_preview_ready: "Ready to start",
+		loop_preview_blocked: "Not ready",
+		loop_stale_preview: "Check readiness again before starting.",
+		loop_adopt_start_unavailable: "Adopt and start is not available on this connection.",
+		loop_adopt_start_denied: "Adopt and start is not allowed on this connection.",
+		loop_not_owner: "Only the workspace owner can adopt and start.",
+		loop_return_discussion: "Back to discussion",
+		loop_other_works: "Other selected work",
+		loop_preview_mismatch: "The readiness response does not match this review. Check again.",
+		loop_queued: "Queued to adopt and start",
+		loop_adopting: "Adopting plan…",
+		loop_starting: "Plan adopted; starting selected work…",
+		loop_started: "Plan adopted and selected work started",
+		loop_adoption_paused: "Plan adoption paused; no work started",
+		loop_adoption_failed: "Plan adoption failed; no work started",
+		loop_adopted_not_started: "Plan adopted; work not started",
+		loop_partially_started: "Plan adopted; work partially started",
+		loop_start_unknown: "Plan adopted; work start outcome unknown",
+		loop_cancelled_adopted: "Plan adopted; remaining work start cancelled",
+		loop_cancelled: "Adopt and start cancelled",
+		loop_not_started: "Not started",
+		loop_work_starting: "Starting…",
+		loop_work_started: "Started",
+		loop_work_unknown: "Start outcome unknown",
+		loop_start_work: "Start this work",
+		loop_original: "Open original",
+		loop_resume: "Resume",
+		loop_reconcile: "Resume reconciliation",
+		loop_cancel: "Cancel remaining work",
+		loop_cancel_unknown: "Cancel remaining work; this does not settle an unknown start.",
+		loop_close: "Close progress",
+		loop_saved_plan: "The adopted plan is kept. Continue from each work below."
+	},
+	"zh-TW": {
+		loop_adopt_start: "採用並開始",
+		loop_adopt_later: "採用，稍後做",
+		loop_adopt_start_help: "計畫先記下來。選定的工作再各自開始。",
+		loop_works_heading: "選定工作",
+		loop_works_empty: "還沒有可開始的工作。仍可先採用計畫。",
+		loop_works_limit: "最多選定 {count} 項工作。",
+		loop_works_more: "還有工作",
+		loop_works_removed: "這些工作已無法使用：{titles}。",
+		loop_requirement_heading: "需求",
+		loop_requirement_prerequisite: "這項需求有相依，這次啟動不能選它。",
+		loop_work_instruction: "指令",
+		loop_work_resolved: "這次啟動採用的值",
+		loop_preview: "檢查就緒",
+		loop_preview_pending: "正在檢查就緒…",
+		loop_preview_ready: "可以開始",
+		loop_preview_blocked: "還不能開始",
+		loop_stale_preview: "開始前請再檢查一次就緒。",
+		loop_adopt_start_unavailable: "這次連線沒有採用並開始。",
+		loop_adopt_start_denied: "這次連線不允許採用並開始。",
+		loop_not_owner: "只有工作區擁有者可以採用並開始。",
+		loop_return_discussion: "返回討論",
+		loop_other_works: "其他選定工作",
+		loop_preview_mismatch: "就緒回覆與這份審閱不一致，請重新檢查。",
+		loop_queued: "已排入採用並開始",
+		loop_adopting: "正在採用計畫…",
+		loop_starting: "計畫已採用，正在開始選定工作…",
+		loop_started: "計畫已採用，選定工作皆已開始",
+		loop_adoption_paused: "計畫採用已暫停，工作尚未開始",
+		loop_adoption_failed: "計畫採用失敗，工作尚未開始",
+		loop_adopted_not_started: "計畫已採用，工作尚未開始",
+		loop_partially_started: "計畫已採用，部分工作已開始",
+		loop_start_unknown: "計畫已採用，工作啟動結果未知",
+		loop_cancelled_adopted: "計畫已採用，其餘工作啟動已取消",
+		loop_cancelled: "採用並開始已取消",
+		loop_not_started: "尚未開始",
+		loop_work_starting: "正在開始…",
+		loop_work_started: "已開始",
+		loop_work_unknown: "啟動結果未知",
+		loop_start_work: "單獨開始",
+		loop_original: "開啟原操作",
+		loop_resume: "恢復",
+		loop_reconcile: "恢復對帳",
+		loop_cancel: "取消剩餘工作",
+		loop_cancel_unknown: "取消剩餘工作；這不會結案結果未知的啟動。",
+		loop_close: "關閉進度",
+		loop_saved_plan: "已採用的計畫會保留，請從下方各項工作繼續。"
+	}
+};
+//#endregion
 //#region src/workbench-strings.js
 var workbenchStrings$1 = {
 	en: {
@@ -8647,6 +8747,7 @@ var STRINGS = {
 		...workDeliveryStrings["zh-TW"],
 		...pmSpecMaterializationStrings["zh-TW"],
 		...pmWorkBatchesStrings["zh-TW"],
+		...adoptStartStrings["zh-TW"],
 		...pmMaintenancePolicyStrings["zh-TW"],
 		...maintenanceCheckStrings["zh-TW"],
 		...maintenanceReviewStrings["zh-TW"],
@@ -10298,6 +10399,7 @@ var STRINGS = {
 		...workDeliveryStrings.en,
 		...pmSpecMaterializationStrings.en,
 		...pmWorkBatchesStrings.en,
+		...adoptStartStrings.en,
 		...pmMaintenancePolicyStrings.en,
 		...maintenanceCheckStrings.en,
 		...maintenanceReviewStrings.en,
@@ -25669,11 +25771,457 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 	};
 }
 //#endregion
+//#region src/pm-adopt-start.js
+var ADOPT_START = "work.adopt_and_start";
+var wi = (value) => typeof value === "string" && /^wi_[0-9a-f]{20}$/.test(value);
+var opId$6 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
+var record$5 = (value) => value && typeof value === "object" && !Array.isArray(value);
+var same$10 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+var copy$1 = (value) => structuredClone(value);
+var workKeys = [
+	"expected_work_item_fingerprint",
+	"expected_work_version",
+	"expected_project_version",
+	"expected_binding_id",
+	"expected_previous_package_id",
+	"expected_latest_attempt_id",
+	"repository_id",
+	"binding_digest",
+	"expected_source_sha"
+];
+var planKeys = [
+	"expected_version",
+	"expected_plan_version",
+	"expected_accepted_revision_id",
+	"expected_proposal_digest"
+];
+var exact = (value, keys) => record$5(value) && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+var landingPrefix = (namespace, workspaceId) => `batc.pm.${namespace}.adopt-start-landing.${workspaceId}.`;
+function checkedAdoptPreview(value, body, target, baseline) {
+	if (!record$5(value) || value.workspace_id !== target.workspace_id || value.thread_id !== target.thread_id || value.proposal_id !== body.proposal_id || typeof value.adoptable !== "boolean" || !Array.isArray(value.works) || value.works.length !== body.works.length || !exact(value.preconditions, [...planKeys, "works"]) || !Array.isArray(value.preconditions.works) || value.preconditions.works.length !== body.works.length || planKeys.some((key) => value.preconditions[key] !== baseline[key])) throw Error("loop_preview_mismatch");
+	const works = [], conditions = [];
+	value.works.forEach((row, index) => {
+		const selected = body.works[index], pre = value.preconditions.works[index];
+		if (!record$5(row) || row.work_item_id !== selected.work_item_id || !same$10(row.requirement_ids, selected.requirement_ids) || typeof row.readiness?.ready !== "boolean") throw Error("loop_preview_mismatch");
+		if (!row.readiness.ready) return;
+		if (!exact(pre, ["work_item_id", ...workKeys]) || pre.work_item_id !== row.work_item_id || !["claude", "codex"].includes(row.agent) || !["pull_request", "reviewable_changes"].includes(row.delivery) || typeof row.instruction !== "string" || !row.instruction.trim() || row.instruction.length > 4e3 || selected.instruction !== void 0 && row.instruction !== selected.instruction || row.model != null && (typeof row.model !== "string" || !row.model.trim() || row.model.length > 128) || !exact(row.code_target, [
+			"repository",
+			"host",
+			"workspace_id",
+			"source_ref"
+		]) || Object.values(row.code_target).some((value) => typeof value !== "string" || !value.trim()) || !/^[0-9a-f]{64}$/.test(pre.expected_work_item_fingerprint) || !Number.isSafeInteger(pre.expected_work_version) || pre.expected_work_version < 0 || !Number.isSafeInteger(pre.expected_project_version) || pre.expected_project_version < 0 || !Number.isSafeInteger(pre.repository_id) || pre.repository_id <= 0 || !/^[0-9a-f]{64}$/.test(pre.binding_digest) || !/^[0-9a-f]{40}$/.test(pre.expected_source_sha)) throw Error("loop_preview_mismatch");
+		works.push({
+			work_item_id: row.work_item_id,
+			requirement_ids: copy$1(row.requirement_ids),
+			instruction: row.instruction,
+			agent: row.agent,
+			delivery: row.delivery,
+			code_target: copy$1(row.code_target),
+			...typeof row.model === "string" ? { model: row.model } : {}
+		});
+		conditions.push(copy$1(pre));
+	});
+	return {
+		value: copy$1(value),
+		works,
+		preconditions: {
+			...copy$1(value.preconditions),
+			works: conditions
+		}
+	};
+}
+function adoptStartReview({ t, api, alive, form, caps, namespace, workspaceId, threadId, review, rationale, permitted, readable, reviewable = () => true, otherLocked, errorBox, onStateChange = () => {}, onLanded }) {
+	const target = {
+		workspace_id: workspaceId,
+		thread_id: threadId
+	};
+	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+	let request, disposed = false, visible = false, ticket = 0, checking = false, loading = false, prepared = null, signature = "", rendered = "", landed = null, updating = false;
+	let rows = new Map(), projects = [], projectCursor = null, projectIndex = 0, workCursor = null;
+	const nodes = new Map(), selection = h$1("input", {
+		type: "hidden",
+		value: ""
+	});
+	const catalog = h$1("div", { "data-adopt-work-list": "" }), status = h$1("div", { role: "status" }), notice = h$1("p", { class: "muted" });
+	const cap = () => caps()?.features?.pm_workspaces?.work_adopt_and_start;
+	const availability = () => !permitted() ? "loop_not_owner" : cap()?.version !== 1 || cap()?.available !== true ? "loop_adopt_start_unavailable" : !caps()?.actions?.some((row) => row.action === "work.adopt_and_start" && row.allowed === true) ? "loop_adopt_start_denied" : null;
+	const max = () => Number.isSafeInteger(cap()?.max_selected_works) && cap().max_selected_works > 0 && cap().max_selected_works <= 10 ? cap().max_selected_works : 0;
+	const capable = () => !availability() && max() > 0 && caps()?.scopes?.includes("observe");
+	const draft = () => {
+		try {
+			const value = JSON.parse(request?.values().selection || "null");
+			return record$5(value) && Array.isArray(value.works) ? value : {
+				proposal_id: null,
+				works: [],
+				drafts: {}
+			};
+		} catch {
+			return {
+				proposal_id: null,
+				works: [],
+				drafts: {}
+			};
+		}
+	};
+	const selected = () => draft().proposal_id === review()?.proposal_id ? draft().works : [];
+	const body = () => ({
+		proposal_id: review()?.proposal_id,
+		review: copy$1(review()?.review),
+		rationale: rationale(),
+		works: selected().map((row) => ({
+			work_item_id: row.work_item_id,
+			requirement_ids: row.requirement_ids,
+			...row.instruction?.trim() ? { instruction: row.instruction } : {}
+		}))
+	});
+	const fingerprint = () => JSON.stringify(body());
+	const live = (own) => {
+		try {
+			alive();
+			return !disposed && visible && readable() && own === ticket;
+		} catch {
+			return false;
+		}
+	};
+	const invalidate = () => {
+		if (prepared) status.textContent = t("loop_stale_preview");
+		ticket++;
+		prepared = null;
+		signature = "";
+		checking = false;
+		for (const node of nodes.values()) node.observed.replaceChildren();
+	};
+	const save = (works) => {
+		request.set("selection", JSON.stringify({
+			...draft(),
+			proposal_id: review().proposal_id,
+			works
+		}));
+		invalidate();
+		update();
+	};
+	const changed = () => {
+		const works = selected().map((row) => {
+			const node = nodes.get(row.work_item_id);
+			return node ? {
+				...row,
+				instruction: node.instruction.value,
+				requirement_ids: [...node.requirements.querySelectorAll("input:checked")].map((input) => input.value)
+			} : row;
+		});
+		save(works);
+	};
+	const checkButton = button({
+		label: t("loop_preview"),
+		onClick: () => void preview()
+	});
+	const more = button({
+		label: t("loop_works_more"),
+		hidden: true,
+		onClick: () => void loadMore()
+	});
+	const controls = h$1("div", { class: "actions" }, checkButton, more);
+	request = form({
+		action: ADOPT_START,
+		target,
+		fields: { selection },
+		requiredScope: "start",
+		label: "loop_adopt_start",
+		params: () => {
+			if (!prepared || signature !== fingerprint()) throw Error(t("loop_stale_preview"));
+			return {
+				...body(),
+				works: copy$1(prepared.works)
+			};
+		},
+		preconditions: () => copy$1(prepared.preconditions),
+		permitted: () => visible && readable() && reviewable() && capable() && !otherLocked() && Boolean(prepared?.value.adoptable && prepared.works.length && signature === fingerprint()),
+		recoverPermitted: () => visible && readable() && capable() && !otherLocked(),
+		onSaved: () => {},
+		onBeforeSaved: () => {},
+		onStateChange: () => {
+			if (request && !updating) update();
+		},
+		extra: h$1("div", {}, selection, h$1("h4", {}, t("loop_works_heading")), h$1("p", { class: "muted" }, t("loop_adopt_start_help")), catalog, controls, status),
+		errorBox: (error) => errorBox(error, { summary: t("loop_preview_mismatch") })
+	});
+	const box = h$1("section", {
+		class: "pm-adopt-start",
+		"data-adopt-start": ""
+	}, notice, request.box);
+	function rememberReceipt() {
+		const op = request.operation();
+		if (!op || landed === op.operation_id || !opId$6(op.operation_id)) return;
+		const ids = op.params?.works?.map((row) => row.work_item_id);
+		if (!Array.isArray(ids) || !ids.length || ids.some((id) => !wi(id))) return;
+		landed = op.operation_id;
+		try {
+			alive();
+			localStorage.setItem(landingPrefix(namespace, workspaceId) + op.operation_id, JSON.stringify({
+				version: 1,
+				operation_id: op.operation_id,
+				thread_id: threadId,
+				work_item_ids: ids
+			}));
+		} catch {
+			return;
+		}
+		if (onLanded) onLanded(ids[0], op.operation_id);
+		else location.hash = `#/pm/${encodeURIComponent(workspaceId)}/board?select=${encodeURIComponent(ids[0])}`;
+	}
+	function update() {
+		if (disposed || updating) return;
+		updating = true;
+		try {
+			if (prepared && signature !== fingerprint()) invalidate();
+			const reason = availability();
+			notice.textContent = reason ? t(reason) : "";
+			notice.hidden = !reason;
+			request.box.hidden = !capable() && !request.locked();
+			const frozen = request.locked() || otherLocked() || !capable() || !readable();
+			for (const node of nodes.values()) {
+				node.choose.disabled = frozen;
+				node.instruction.disabled = frozen;
+				for (const input of node.requirements.querySelectorAll("input")) input.disabled = frozen || input.dataset.prerequisite === "true";
+			}
+			checkButton.disabled = frozen || !reviewable() || checking || loading || !selected().length || selected().some((row) => !row.requirement_ids.length);
+			more.disabled = frozen || loading;
+			more.hidden = !projectCursor && projectIndex >= projects.length;
+			request.update();
+			const submit = request.box.querySelector("button[type=submit]");
+			submit.hidden = submit.hidden || !selected().length && !request.locked();
+			if (request.operation()?.result?.adopted === true) request.box.querySelector(":scope > .actions > button[type=button]").hidden = true;
+			rememberReceipt();
+		} finally {
+			updating = false;
+		}
+		onStateChange();
+	}
+	function render() {
+		const current = review();
+		if (!current) return;
+		const required = current.review.requirements;
+		if (!nodes.size) catalog.replaceChildren();
+		for (const row of rows.values()) {
+			const chosen = selected().find((value) => value.work_item_id === row.work_item_id);
+			let node = nodes.get(row.work_item_id);
+			if (!node) {
+				const choose = h$1("input", {
+					type: "checkbox",
+					"aria-label": row.title
+				});
+				const instruction = h$1("textarea", {
+					"aria-label": t("loop_work_instruction"),
+					maxlength: 4e3,
+					rows: 2
+				});
+				const requirements = h$1("div", { class: "pm-adopt-requirements" }), observed = h$1("div", { "data-adopt-readiness": "" });
+				const fields = h$1("div", { class: "pm-adopt-work-fields" }, requirements, h$1("label", {}, t("loop_work_instruction"), instruction), observed);
+				const element = h$1("div", {
+					class: "pm-adopt-work",
+					"data-adopt-work": row.work_item_id
+				}, h$1("label", { class: "pm-adopt-choice" }, choose, h$1("span", {}, row.title, h$1("small", { class: "muted" }, row.project_name || ""))), fields);
+				node = {
+					element,
+					choose,
+					instruction,
+					requirements,
+					fields,
+					observed,
+					reqSignature: ""
+				};
+				nodes.set(row.work_item_id, node);
+				catalog.append(element);
+				choose.addEventListener("change", () => {
+					if (choose.checked && selected().length >= max()) {
+						choose.checked = false;
+						status.textContent = t("loop_works_limit", { count: max() });
+						return;
+					}
+					const works = selected().filter((value) => value.work_item_id !== row.work_item_id);
+					if (choose.checked) works.push({
+						work_item_id: row.work_item_id,
+						requirement_ids: [],
+						instruction: ""
+					});
+					save(works);
+					render();
+					if (works.length === max()) status.textContent = t("loop_works_limit", { count: max() });
+				});
+				instruction.addEventListener("input", changed);
+			}
+			node.choose.checked = Boolean(chosen);
+			node.fields.hidden = !chosen;
+			if (node.instruction !== document.activeElement) node.instruction.value = chosen?.instruction || "";
+			const next = JSON.stringify([
+				required,
+				current.review.rows,
+				chosen?.requirement_ids
+			]);
+			if (next !== node.reqSignature) {
+				node.reqSignature = next;
+				node.requirements.replaceChildren(h$1("strong", {}, t("loop_requirement_heading")), ...required.map((req) => {
+					const input = h$1("input", {
+						type: "checkbox",
+						value: req.id,
+						"data-prerequisite": String(req.depends_on.length > 0)
+					});
+					input.checked = chosen?.requirement_ids.includes(req.id) || false;
+					input.addEventListener("change", changed);
+					return h$1("div", {}, h$1("label", { class: "pm-adopt-choice" }, input, current.review.rows.find((row) => row.key === req.source_key)?.text || req.id), ...req.depends_on.length ? [h$1("p", { class: "muted" }, t("loop_requirement_prerequisite"))] : []);
+				}));
+			}
+		}
+		if (!rows.size) catalog.replaceChildren(h$1("p", { class: "muted" }, t("loop_works_empty")));
+		update();
+	}
+	async function loadMore(reset = false) {
+		if (loading || !visible || !capable() || request.locked()) return;
+		loading = true;
+		const own = ticket;
+		update();
+		try {
+			if (reset) {
+				projects = [];
+				projectCursor = 0;
+				projectIndex = 0;
+				workCursor = null;
+				rows.clear();
+				nodes.clear();
+				catalog.replaceChildren();
+			}
+			if (projectIndex >= projects.length && projectCursor !== null) {
+				const result = await api("GET", `${base}/projects?after=${projectCursor}&limit=50`);
+				if (!live(own)) return;
+				if (result.workspace_id !== workspaceId || !Array.isArray(result.bindings) || result.bindings.some((row) => row.workspace_id !== workspaceId || !/^prj_[0-9a-f]{20}$/.test(row.project_id))) throw Error(t("loop_preview_mismatch"));
+				projects.push(...result.bindings.map((row) => row.project_id));
+				projectCursor = result.next_cursor ?? null;
+			}
+			if (projectIndex < projects.length) {
+				const project = projects[projectIndex];
+				const result = await api("GET", `/work-items?project_id=${encodeURIComponent(project)}&limit=50${workCursor ? "&cursor=" + encodeURIComponent(workCursor) : ""}`);
+				if (!live(own)) return;
+				if (!Array.isArray(result.work_items) || result.work_items.some((row) => !wi(row.work_item_id) || row.project_id !== project || typeof row.title !== "string" || row.archived_at)) throw Error(t("loop_preview_mismatch"));
+				for (const row of result.work_items) rows.set(row.work_item_id, row);
+				workCursor = result.next_cursor ?? null;
+				if (!workCursor) projectIndex++;
+			}
+			render();
+		} catch (error) {
+			if (live(own)) {
+				status.replaceChildren(errorBox(error, { within: status }));
+				if ([403, 404].includes(error.status)) withdraw();
+			}
+		} finally {
+			loading = false;
+			update();
+		}
+	}
+	async function preview() {
+		if (checkButton.disabled) return;
+		invalidate();
+		checking = true;
+		const own = ticket, sent = body(), before = fingerprint(), baseline = copy$1(review().preconditions);
+		status.textContent = t("loop_preview_pending");
+		update();
+		try {
+			const value = await api("POST", `${base}/threads/${encodeURIComponent(threadId)}/adopt-and-start-preview`, sent);
+			if (!live(own) || before !== fingerprint()) return;
+			prepared = checkedAdoptPreview(value, sent, target, baseline);
+			const works = selected().map((row) => ({
+				...row,
+				instruction: prepared.value.works.find((item) => item.work_item_id === row.work_item_id)?.instruction || row.instruction
+			}));
+			request.set("selection", JSON.stringify({
+				...draft(),
+				works
+			}));
+			signature = fingerprint();
+			for (const row of prepared.value.works) {
+				const node = nodes.get(row.work_item_id);
+				if (!node) continue;
+				const ready = row.readiness.ready, pill = statusPill(ready ? "accepted" : "blocked");
+				pill.textContent = t(ready ? "loop_preview_ready" : "loop_preview_blocked");
+				const key = "wst_error_" + row.readiness.blocking_code;
+				const reason = !ready ? t(key) === key ? t("loop_preview_blocked") : t(key) : "";
+				node.observed.replaceChildren(pill, ...reason ? [h$1("p", {}, reason)] : [], ...ready ? [h$1("p", { class: "muted" }, t("loop_work_resolved"), " · ", [row.agent, row.model].filter(Boolean).join(" · "), " · ", row.code_target.repository, " · ", row.code_target.source_ref), disclosure({
+					label: t("pd_details"),
+					body: h$1("code", { class: "mono" }, JSON.stringify(row.code_target))
+				})] : []);
+			}
+			status.textContent = prepared.works.length ? t("loop_preview_ready") : t("loop_preview_blocked");
+			render();
+		} catch (error) {
+			if (live(own)) {
+				prepared = null;
+				if (error.message === "loop_preview_mismatch") error = Error(t("loop_preview_mismatch"));
+				status.replaceChildren(errorBox(error, { within: status }));
+			}
+		} finally {
+			if (own === ticket) checking = false;
+			update();
+		}
+	}
+	function withdraw() {
+		invalidate();
+		visible = false;
+		rows.clear();
+		nodes.clear();
+		catalog.replaceChildren();
+		status.replaceChildren();
+		request.update();
+	}
+	return {
+		box,
+		request,
+		locked: () => request.locked() && !request.replaceable(),
+		available: () => capable() && selected().length > 0,
+		update,
+		refresh: () => {
+			invalidate();
+			update();
+		},
+		withdraw,
+		dispose: () => {
+			disposed = true;
+			withdraw();
+			request.dispose();
+		},
+		show() {
+			visible = true;
+			const current = review();
+			if (!current) return;
+			const id = current.proposal_id;
+			if (!request.locked() && draft().proposal_id !== id) {
+				const old = draft(), drafts = { ...old.drafts };
+				if (old.proposal_id) drafts[old.proposal_id] = old.works;
+				request.set("selection", JSON.stringify({
+					proposal_id: id,
+					works: drafts[id] || [],
+					drafts
+				}));
+			}
+			const next = JSON.stringify([
+				id,
+				current.review.requirements,
+				current.review.rows
+			]);
+			if (rendered !== next) {
+				rendered = next;
+				invalidate();
+				render();
+			}
+			update();
+			if (capable() && !rows.size && !loading) loadMore(true);
+		}
+	};
+}
+//#endregion
 //#region src/pm-plan-proposals.js
 var proposalReasonLabel = (t, reason) => Object.hasOwn(reasonLabels, reason) ? reasonLabel(t, reason) : t("pd_stale");
 var PROPOSE = "pm.conversation.propose";
 var ADOPT = "pm.conversation.adopt";
-var same$8 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+var same$9 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 var copy = (value) => structuredClone(value);
 var statuses = [
 	"user_confirmed",
@@ -25716,12 +26264,13 @@ function validRequirements(values, included) {
 		"unresolved"
 	].includes(row.priority) && refs$1(row.depends_on, ids, 0)) && !cyclic(values);
 }
-function planProposals({ h, t, api, alive, form, input, labelled, caps, workspaceId, threadId, thread, permitted, refresh: refreshParent, errorBox, conversation = false, backLink = () => null, onFollowUp = () => {}, onAnswer = () => {}, onRevision = () => {}, onActivity = () => {} }) {
+function planProposals({ h, t, api, alive, form, input, labelled, caps, namespace = "", workspaceId, threadId, thread, permitted, refresh: refreshParent, errorBox, conversation = false, backLink = () => null, onFollowUp = () => {}, onAnswer = () => {}, onRevision = () => {}, onActivity = () => {} }) {
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, endpoint = base + "/conversation-proposals", target = {
 		workspace_id: workspaceId,
 		thread_id: threadId
 	};
 	let head = null, capability = null, rows = [], cursor = null, active = null, ticket = 0, loading = false, refreshAgain = false, queuedPreferred = null, inFlight = null, ready = false, prepare, adopt, preferredId = null, latestId = null;
+	let compound = null;
 	let candidateFields = [], requirementFields = [], rendered = "", visible = false, conflict = false, composerNode = null, ask = null, connection = null, working = null, clock = null, adoptedId = null, reviewOpen = false, reviewButton = null, adapterInitialized = false;
 	const enabled = () => caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1;
 	const writing = () => visible && enabled() && permitted(false) && thread()?.capabilities?.write === true && caps()?.scopes?.includes("manage");
@@ -25767,7 +26316,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		action: PROPOSE,
 		capability: () => capability,
 		readable: () => visible,
-		authorized: () => writing() && caps()?.scopes?.includes("start") && (!adopt?.locked() || adopt?.replaceable?.()),
+		authorized: () => writing() && caps()?.scopes?.includes("start") && (!adopt?.locked() || adopt?.replaceable?.()) && !compound?.locked(),
 		legacyEligible: () => capability?.native_analysis?.authorized !== false && capability?.native_analysis?.eligible_for_preflight === true
 	});
 	prepare = form({
@@ -25788,7 +26337,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			expected_plan_version: head.version,
 			expected_accepted_revision_id: head.accepted_revision_id
 		}),
-		permitted: () => writing() && head && caps()?.scopes?.includes("start") && runtime.eligible() && (!adopt?.locked() || adopt?.replaceable?.()),
+		permitted: () => writing() && head && caps()?.scopes?.includes("start") && runtime.eligible() && (!adopt?.locked() || adopt?.replaceable?.()) && !compound?.locked(),
 		recoverPermitted: () => writing() && caps()?.scopes?.includes("start"),
 		label: "pcp_prepare",
 		onSaved: async (result) => {
@@ -25840,7 +26389,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			if (!saved?.preconditions) throw fail();
 			return saved.preconditions;
 		},
-		permitted: () => active?.proposal_id !== adoptedId && deciding() && fresh() && active?.validation.status === "format_valid" && validReview(original()?.review) && !prepare.locked(),
+		permitted: () => active?.proposal_id !== adoptedId && deciding() && fresh() && active?.validation.status === "format_valid" && validReview(original()?.review) && !prepare.locked() && !compound?.locked(),
 		recoverPermitted: () => writing() && permitted(true) && caps()?.scopes?.includes("start"),
 		label: "pcp_adopt",
 		onError: (error) => {
@@ -25862,6 +26411,30 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		},
 		extra: h("div", { "data-proposal-adopt-panel": "" }, review, content, labelled("pcp_rationale", rationale))
 	});
+	compound = adoptStartReview({
+		t,
+		api,
+		alive,
+		form,
+		caps,
+		namespace,
+		workspaceId,
+		threadId,
+		review: original,
+		rationale: () => adopt.values().rationale,
+		permitted: deciding,
+		reviewable: () => fresh() && validReview(original()?.review),
+		readable: () => visible && writing(),
+		otherLocked: () => prepare.locked() || adopt.locked() && !adopt.replaceable(),
+		errorBox,
+		onStateChange: () => {
+			if (ready) {
+				adopt.update();
+				updateControls();
+			}
+		}
+	});
+	rationale.addEventListener("input", () => compound.update());
 	const resolution = conversation ? issueResolution({
 		h,
 		t,
@@ -25938,7 +26511,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 				keys.add(row.key);
 			}
 			if (!validRequirements(d.requirements, new Set(d.candidates.filter((row) => row.kind !== "excluded").map((row) => row.key)))) throw fail();
-			if (!Array.isArray(d.removed_requirement_ids) || !same$8([...d.removed_requirement_ids].sort(), removed(p, d.requirements).sort())) throw fail();
+			if (!Array.isArray(d.removed_requirement_ids) || !same$9([...d.removed_requirement_ids].sort(), removed(p, d.requirements).sort())) throw fail();
 			for (const question of d.questions) if (typeof question.question !== "string" || typeof question.why_now !== "string" || !Array.isArray(question.source_refs) || question.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
 		}
 		return p;
@@ -25964,7 +26537,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		if (!included.size) return "pcp_empty_selection";
 		if (value.requirements.some((row) => Array.isArray(row.acceptance_keys) && !row.acceptance_keys.length)) return "pcp_acceptance_missing";
 		if (value.requirements.every((row) => record$4(row) && Array.isArray(row.depends_on)) && cyclic(value.requirements)) return "pcp_cycle";
-		if (!validRequirements(value.requirements, included) || !Array.isArray(value.removed_requirement_ids) || !same$8([...value.removed_requirement_ids].sort(), removed(active, value.requirements).sort())) return "pcp_missing";
+		if (!validRequirements(value.requirements, included) || !Array.isArray(value.removed_requirement_ids) || !same$9([...value.removed_requirement_ids].sort(), removed(active, value.requirements).sort())) return "pcp_missing";
 		return null;
 	}
 	function validReview(value) {
@@ -25979,7 +26552,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 	function updateControls() {
 		if (!ready) return;
 		if (conversation) {
-			const pending = prepare.locked() || adopt.locked();
+			const pending = prepare.locked() || adopt.locked() || compound?.locked();
 			box.hidden = !active && !pending && !notice.querySelector(".error, [role=alert]");
 			pendingPill.hidden = !pending || Boolean(active);
 			if (adopted() && !adopt.locked()) adopt.box.querySelector("button[type=submit]").hidden = true;
@@ -25995,10 +26568,17 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 				reviewButton.setAttribute("aria-expanded", String(reviewOpen));
 			}
 		}
-		const locked = adopt.locked() || !deciding();
-		picker.disabled = loading || adopt.locked();
+		const locked = adopt.locked() || compound?.locked() || !deciding();
+		picker.disabled = loading || adopt.locked() || compound?.locked();
 		reload.disabled = loading;
 		more.disabled = loading;
+		rationale.disabled = locked;
+		const adoptButton = adopt.box.querySelector("button[type=submit]");
+		if (!adopt.locked()) {
+			adoptButton.textContent = t(compound?.available() ? "loop_adopt_later" : "pcp_adopt");
+			adoptButton.classList.toggle("primary", !compound?.available());
+			adoptButton.classList.toggle("secondary", Boolean(compound?.available()));
+		}
 		runtime.update(prepare);
 		if (composerNode) {
 			ask.disabled = !prepare.canSubmit();
@@ -26013,7 +26593,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			});
 		}
 		for (const element of content.querySelectorAll("input,textarea,select,button")) element.disabled = locked;
-		if (reviewButton) reviewButton.disabled = !fresh() && !adopt.locked();
+		if (reviewButton) reviewButton.disabled = !fresh() && !adopt.locked() && !compound?.locked();
 		if (active && active.validation.status === "format_valid") {
 			const rawReason = content.querySelector("[data-proposal-adoptable-reason]");
 			if (rawReason) rawReason.textContent = active.adoptable_reason || "";
@@ -26065,6 +26645,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			review: value
 		}));
 		showRemoved(value.removed_requirement_ids);
+		compound?.show();
 		adopt.update();
 	}
 	function showRemoved(ids) {
@@ -26078,12 +26659,13 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		if (!p) return;
 		const sig = p.proposal_id + ":" + p.document_digest + ":" + (p.adoptable_reason === "adopted" ? p.adopted_revision_id : "");
 		if (rendered === sig) {
+			compound?.show();
 			adopt.update();
 			return;
 		}
 		rendered = sig;
 		reviewButton = null;
-		reviewOpen = adopt.locked();
+		reviewOpen = adopt.locked() || compound?.request.locked();
 		candidateFields = [];
 		requirementFields = [];
 		detail.replaceChildren();
@@ -26101,6 +26683,11 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			}, t("pd_accepted_revision")));
 			adopt.box.hidden = false;
 			detail.append(h("p", {}, p.document?.summary || ""), confirmation, resolution.box);
+			if (compound?.request.locked()) {
+				compound.box.hidden = false;
+				detail.append(compound.box);
+				compound.show();
+			}
 			if (adopt.locked()) {
 				adopt.box.firstElementChild.hidden = true;
 				adopt.box.append(adopt.box.querySelector("button[type=submit]").closest(".actions"));
@@ -26143,7 +26730,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			adopt.set("review", JSON.stringify(saved));
 			adopt.set("rationale", retained?.rationale || "");
 		}
-		if (!same$8(saved.preconditions, {
+		if (!same$9(saved.preconditions, {
 			expected_version: p.context.thread_version,
 			expected_plan_version: p.context.plan_head.version,
 			expected_accepted_revision_id: p.context.plan_head.accepted_revision_id,
@@ -26382,6 +26969,8 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 				onClick: () => {
 					reviewOpen = !reviewOpen;
 					adopt.box.hidden = !reviewOpen;
+					compound.box.hidden = !reviewOpen;
+					if (reviewOpen) compound.show();
 					updateControls();
 					if (reviewOpen) {
 						const heading = content.querySelector("h4") || detail.querySelector("h4") || box, transcript = box.closest(".pd-transcript");
@@ -26408,8 +26997,13 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 				"data-proposal-again": "",
 				hidden: fresh(),
 				onClick: () => ask?.click()
-			})), adopt.box);
-		} else detail.append(adopt.box);
+			})), adopt.box, compound.box);
+			compound.box.hidden = !reviewOpen;
+			if (reviewOpen) compound.show();
+		} else {
+			detail.append(adopt.box, compound.box);
+			compound.show();
+		}
 		adopt.update();
 	}
 	async function choose(id) {
@@ -26421,6 +27015,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		candidateFields = [];
 		requirementFields = [];
 		resolution?.withdraw();
+		compound?.withdraw();
 		adopt.update();
 		if (!id) return;
 		try {
@@ -26463,6 +27058,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			box.hidden = true;
 			return;
 		}
+		compound?.refresh();
 		if (preferred) queuedPreferred = preferred;
 		if (loading) {
 			refreshAgain = true;
@@ -26559,6 +27155,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		more.hidden = true;
 		reviewButton = null;
 		resolution?.withdraw();
+		compound?.withdraw();
 		prepare?.update();
 		adopt?.update();
 	}
@@ -26600,6 +27197,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		refresh,
 		withdraw,
 		recheck: () => {
+			compound.request.recheck();
 			prepare.recheck();
 			if ([
 				"accepted",
@@ -26636,6 +27234,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			resolution?.dispose();
 			prepare.dispose();
 			adopt.dispose();
+			compound.dispose();
 		}
 	};
 }
@@ -27069,7 +27668,7 @@ function workspaceSpecMaterialization({ h, t, api, alive, workspaceId, workspace
 //#endregion
 //#region src/pm-requirement-quality.js
 var acceptanceProfile = "accepted_requirements_v1";
-var same$7 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+var same$8 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 var fail = () => {
 	throw Object.assign(Error("PM_REQUIREMENT_QUALITY_INVALID"), { code: "PM_REQUIREMENT_QUALITY_INVALID" });
 };
@@ -27111,7 +27710,7 @@ function assessmentReference(row) {
 var referenceKey = (row) => JSON.stringify(assessmentReference(row));
 function matchesRequirementReview(row, pkg, ids, executionId = null) {
 	if (row?.qualified !== true || row.applicable !== true || row.assessment?.document?.qualified !== true || executionId && row.context?.execution_operation_id !== executionId) return false;
-	if (!same$7(plan(row.context?.plan_ref), plan(pkg.document.context.plan_ref))) return false;
+	if (!same$8(plan(row.context?.plan_ref), plan(pkg.document.context.plan_ref))) return false;
 	const matrix = row.assessment.document.criteria;
 	return Array.isArray(matrix) && ids.every((id) => matrix.some((item) => item.criterion?.kind === "acceptance" && item.criterion.requirement_id === id && item.status === "accepted"));
 }
@@ -27131,7 +27730,7 @@ function checkRequirementMap(pkg, refs, catalog) {
 	boundedQualityMap(refs);
 	const needed = new Set(pkg.document.requirements.flatMap((row) => row.depends_on || []));
 	if (Object.keys(refs).some((id) => !needed.has(id))) fail();
-	for (const [id, ref] of Object.entries(refs)) if (!catalog.some((item) => matchesRequirementReview(item.review, pkg, [id]) && item.package.document.requirements.some((row) => row.id === id) && same$7(requirementSelection(item.review, item.package, [id]), ref))) fail();
+	for (const [id, ref] of Object.entries(refs)) if (!catalog.some((item) => matchesRequirementReview(item.review, pkg, [id]) && item.package.document.requirements.some((row) => row.id === id) && same$8(requirementSelection(item.review, item.package, [id]), ref))) fail();
 	return refs;
 }
 async function readRequirementReviews(api, workspaceId, valid) {
@@ -27178,7 +27777,7 @@ var profile = {
 	kind: "fixed_revision_verification",
 	profile: "github_reported_checks_v1"
 };
-var same$6 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+var same$7 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 var clone$1 = (value) => structuredClone(value);
 var sha$4 = /^[0-9a-f]{40}$/;
 var digest$8 = /^[0-9a-f]{64}$/;
@@ -27300,7 +27899,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 			return [];
 		}
 	};
-	const draftStale = () => ready && !same$6(JSON.parse(baseline.value), currentPre());
+	const draftStale = () => ready && !same$7(JSON.parse(baseline.value), currentPre());
 	const condition = (entry) => entry.result_condition || profile;
 	const error = () => Error(t("pmb_invalid"));
 	const choose = (key, rows) => h("select", { "aria-label": t(key) }, h("option", { value: "" }, t("pmb_choose")), ...rows.map(([value, label]) => h("option", { value }, label)));
@@ -27316,7 +27915,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 				if (!row) throw error();
 				visiting.add(key);
 				for (const edge of row.depends_on) {
-					if (!same$6(edge.condition, condition(rows.find((other) => other.key === edge.entry_key) || {}))) throw error();
+					if (!same$7(edge.condition, condition(rows.find((other) => other.key === edge.entry_key) || {}))) throw error();
 					visit(edge.entry_key);
 				}
 				visiting.delete(key);
@@ -27460,12 +28059,12 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 				if (!quality || !valid(ticket)) return false;
 				checkRequirementMap(pkg, p.pm_requirement_quality_refs, quality.rows);
 			}
-			if (condition(row).profile === "accepted_requirements_v1" && !same$6(requirementCondition(pkg, condition(row).requirements.map((item) => item.requirement_id)), condition(row))) throw error();
+			if (condition(row).profile === "accepted_requirements_v1" && !same$7(requirementCondition(pkg, condition(row).requirements.map((item) => item.requirement_id)), condition(row))) throw error();
 			if (p.pm_spec_ref) {
 				const value = await api("GET", `${base}/spec-materializations/${encodeURIComponent(p.pm_spec_ref.materialization_id)}`);
 				if (!valid(ticket)) return false;
 				if (value?.workspace_id !== workspaceId) throw error();
-				if (!same$6(fixedSpecSelection(checkSpecMaterialization(value.materialization, workspaceId, pkg, { full: true }), workspaceId), {
+				if (!same$7(fixedSpecSelection(checkSpecMaterialization(value.materialization, workspaceId, pkg, { full: true }), workspaceId), {
 					pm_spec_ref: p.pm_spec_ref,
 					artifacts: p.artifacts
 				})) throw error();
@@ -27503,7 +28102,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 					start.set("entries", JSON.stringify(values));
 					entrySignature = JSON.stringify(values);
 					const notice = entriesView.querySelector(`[data-batch-entry="${row.key}"] [data-condition-changed]`);
-					if (notice) notice.hidden = !current.depends_on.some((edge) => !same$6(edge.condition, condition(values.find((item) => item.key === edge.entry_key) || {})));
+					if (notice) notice.hidden = !current.depends_on.some((edge) => !same$7(edge.condition, condition(values.find((item) => item.key === edge.entry_key) || {})));
 					update();
 				});
 				deps.append(h("label", {}, node, h("span", {}, other.title)));
@@ -27536,7 +28135,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 			});
 			const changed = text("pmb_changed_dependency");
 			changed.dataset.conditionChanged = "";
-			changed.hidden = !row.depends_on.some((edge) => !same$6(edge.condition, condition(rows.find((other) => other.key === edge.entry_key) || {})));
+			changed.hidden = !row.depends_on.some((edge) => !same$7(edge.condition, condition(rows.find((other) => other.key === edge.entry_key) || {})));
 			const details = h("details", {}, h("summary", {}, t("pmb_fixed_handoff")), line("pmb_entry_key", row.key), line("pmb_base", row.handoff.params.source_sha), line("pmb_package", row.handoff.params.pm_package_ref.package_id), h("p", { class: "pm-note-text" }, row.handoff.params.prompt), h("p", { class: "pm-note-text" }, row.handoff.params.pm_code_basis.rationale), row.handoff.params.pm_spec_ref ? line("pmb_attachment", row.handoff.params.pm_spec_ref.materialization_id) : null);
 			entriesView.append(h("article", {
 				class: "pm-batch-entry",
@@ -27592,7 +28191,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 			try {
 				const latest = await readContext();
 				if (!valid(ticket)) throw error();
-				if (!same$6({
+				if (!same$7({
 					expected_workspace_version: latest.workspace.version,
 					expected_lifecycle_revision: latest.lifecycle.lifecycle.revision
 				}, args[2].preconditions) || latest.lifecycle.blocked_actions.includes(START$1)) {
@@ -27716,7 +28315,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 	}
 	const receiptKey = (row) => `${row.operation_id}:${row.seq}`;
 	function reviewChoices(entry) {
-		return qualityReviews.filter((row) => entry && condition(entry).profile === "accepted_requirements_v1" && same$6(row.review.context.package_ref, entry.package_ref) && matchesRequirementReview(row.review, row.package, condition(entry).requirements.map((item) => item.requirement_id), entry.operation_id));
+		return qualityReviews.filter((row) => entry && condition(entry).profile === "accepted_requirements_v1" && same$7(row.review.context.package_ref, entry.package_ref) && matchesRequirementReview(row.review, row.package, condition(entry).requirements.map((item) => item.requirement_id), entry.operation_id));
 	}
 	function validProof() {
 		if (!proofReady || !proof || !batch || proofBaseline?.batch_id !== batch.batch_id || proofBaseline.version !== batch.version) return false;
@@ -34477,7 +35076,7 @@ var sha$2 = /^[0-9a-f]{40}$/;
 var digest$6 = /^[0-9a-f]{64}$/;
 var operation = /^op_[0-9a-f]{32}$/;
 var reviewId = /^pmqr_[0-9a-f]{32}$/;
-var same$5 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+var same$6 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 var clone = (value) => structuredClone(value);
 var github = {
 	kind: "fixed_revision_verification",
@@ -34616,7 +35215,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		return model?.packages.find((row) => row.package_id === id);
 	}
 	function children(pkg) {
-		return (model?.operations || []).filter((op) => op.action === "repository.continue" && op.status === "succeeded" && op.params?.work_item_id === workId && same$5(op.external_refs?.admission_binding?.pm_handoff?.contract?.package_ref, {
+		return (model?.operations || []).filter((op) => op.action === "repository.continue" && op.status === "succeeded" && op.params?.work_item_id === workId && same$6(op.external_refs?.admission_binding?.pm_handoff?.contract?.package_ref, {
 			workspace_id: workspaceId,
 			package_id: pkg?.package_id,
 			document_digest: pkg?.document_digest
@@ -34693,9 +35292,9 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 					return [];
 				}
 			};
-			const permittedCreate = () => owner() && packageFor(pkg.value) && children(packageFor(pkg.value)).some((row) => row.operation_id === child.value) && sha$2.test(candidate.value) && reviewer.value && chosenCriteria().length > 0 && same$5(rows().map((row) => row.criterion), chosenCriteria().map((row) => row.criterion)) && rows().every((row) => {
+			const permittedCreate = () => owner() && packageFor(pkg.value) && children(packageFor(pkg.value)).some((row) => row.operation_id === child.value) && sha$2.test(candidate.value) && reviewer.value && chosenCriteria().length > 0 && same$6(rows().map((row) => row.criterion), chosenCriteria().map((row) => row.criterion)) && rows().every((row) => {
 				try {
-					return same$5(row.condition, policy(row.choice));
+					return same$6(row.condition, policy(row.choice));
 				} catch {
 					return false;
 				}
@@ -34719,18 +35318,18 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 					matrix.replaceChildren();
 					const saved = rows();
 					for (const criterion of chosenCriteria()) {
-						const field = choice("pmq_policy_profile"), old = saved.find((row) => same$5(row.criterion, criterion.criterion));
+						const field = choice("pmq_policy_profile"), old = saved.find((row) => same$6(row.criterion, criterion.criterion));
 						options(field, policyChoices());
 						field.value = old?.choice || "";
 						field.addEventListener("change", () => {
 							if (create.locked()) return;
-							const values = rows().filter((row) => !same$5(row.criterion, criterion.criterion));
+							const values = rows().filter((row) => !same$6(row.criterion, criterion.criterion));
 							if (field.value) values.push({
 								criterion: criterion.criterion,
 								condition: policy(field.value),
 								choice: field.value
 							});
-							const ordered = chosenCriteria().map((item) => values.find((row) => same$5(row.criterion, item.criterion)) || {
+							const ordered = chosenCriteria().map((item) => values.find((row) => same$6(row.criterion, item.criterion)) || {
 								criterion: item.criterion,
 								condition: null,
 								choice: ""
@@ -34843,13 +35442,13 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			row.original_outcome.qualified && !row.qualified ? text("pmq_original_qualified") : null,
 			h("details", {}, h("summary", {}, t("pmq_original_sources")), line("pmq_package", row.context.package_ref.package_id), line("pmq_digest", row.context.package_ref.document_digest), line("pmq_scope", row.context.plan_ref.scope_revision), line("pmq_binding", row.context.work_ref.binding_id), line("pmq_dod", row.context.dod_ref?.revision_id), h("a", { href: `#/op/${row.context.execution_operation_id}` }, t("pmq_execution")), h("p", { class: "pm-note-text" }, row.context.policy_rationale)),
 			...(row.context.criteria || []).map((item) => {
-				const saved = document?.criteria.find((value) => same$5(value.criterion, item.criterion));
+				const saved = document?.criteria.find((value) => same$6(value.criterion, item.criterion));
 				return h("details", {}, h("summary", {}, `${item.text} · ${t("pmq_" + (saved?.status || "unassessed"))}`), saved ? h("p", { class: "pm-note-text" }, saved.rationale) : null, saved?.verification ? line("pmq_verification", t("pmq_" + saved.verification.status)) : text("pmq_no_proof"));
 			}),
 			row.revocation ? h("div", {}, h("h4", {}, t("pmq_revoked")), h("p", { class: "pm-note-text" }, row.revocation.document.reason), line("pmq_by", row.revocation.actor)) : null,
 			h("details", {}, h("summary", {}, t("pmq_history_receipts")), ...row.history.map((item) => h("p", { class: "pm-source" }, `${item.version} · ${item.actor} · ${t("pmq_" + item.kind)} · `, h("a", { href: `#/op/${item.operation_id}` }, item.operation_id), h("span", {}, " · " + item.document_digest)))),
 			use,
-			chosen && same$5(chosen, reference(row)) ? text("pmq_selected") : text("pmq_selection_help")
+			chosen && same$6(chosen, reference(row)) ? text("pmq_selected") : text("pmq_selection_help")
 		].filter(Boolean));
 		buildAssessment(row);
 	}
@@ -34867,7 +35466,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		return Boolean(row?.assessment && row.applicable === true && !row.revocation);
 	}
 	function proofChoices(row, item) {
-		return model.proofs.filter((proof) => proof.reference.candidate_commit === row.context.native_result.candidate_commit && same$5(proof.condition, item.condition) && (!proof.source_operation_id || proof.source_operation_id === row.context.execution_operation_id));
+		return model.proofs.filter((proof) => proof.reference.candidate_commit === row.context.native_result.candidate_commit && same$6(proof.condition, item.condition) && (!proof.source_operation_id || proof.source_operation_id === row.context.execution_operation_id));
 	}
 	function buildAssessment(row) {
 		const key = row.review_id;
@@ -35113,7 +35712,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			await verifier.setSources(operations.filter((op) => packages.some((pkg) => children(pkg).some((child) => child.operation_id === op.operation_id))));
 			if (!valid(ticket)) return;
 			status.replaceChildren(...filtered ? [text("pmq_filtered")] : []);
-			if (previous && selectable(current()) && same$5(previous, reference(current()))) emit(previous);
+			if (previous && selectable(current()) && same$6(previous, reference(current()))) emit(previous);
 			update();
 		} catch (err) {
 			if (valid(ticket)) failure(err);
@@ -36149,6 +36748,208 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 	};
 }
 //#endregion
+//#region src/pm-adopt-start-landing.js
+var terminal$8 = (status) => [
+	"succeeded",
+	"failed",
+	"cancelled"
+].includes(status);
+var opId$5 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
+var workId = (value) => typeof value === "string" && /^wi_[0-9a-f]{20}$/.test(value);
+var same$5 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+function adoptStartLanding({ t, api, alive, namespace, workspaceId, caps, errorBox }) {
+	const prefix = landingPrefix(namespace, workspaceId), body = h$1("div"), status = h$1("div", { role: "status" });
+	const element = sectionCard({ body: [body, status] });
+	element.dataset.adoptStartLanding = "";
+	element.hidden = true;
+	let serial = 0, current = null, disposed = false, busy = false, shown = null;
+	const valid = (own) => {
+		try {
+			alive();
+			return !disposed && serial === own;
+		} catch {
+			return false;
+		}
+	};
+	const forget = (id) => {
+		try {
+			localStorage.removeItem(prefix + id);
+		} catch {}
+	};
+	const fail = () => Error(t("loop_preview_mismatch"));
+	function bookmark() {
+		const selected = new URLSearchParams(location.hash.split("?")[1]).get("select");
+		if (!workId(selected)) return null;
+		if (current?.work_item_ids.includes(selected)) return current;
+		for (const key of Object.keys(localStorage).filter((key) => key.startsWith(prefix)).sort().reverse()) try {
+			const row = JSON.parse(localStorage.getItem(key));
+			if (row?.version !== 1 || !opId$5(row.operation_id) || key !== prefix + row.operation_id || !/^pmt_[0-9a-f]{32}$/.test(row.thread_id) || !Array.isArray(row.work_item_ids) || row.work_item_ids.length < 1 || row.work_item_ids.length > 10 || row.work_item_ids.some((id) => !workId(id)) || new Set(row.work_item_ids).size !== row.work_item_ids.length) continue;
+			if (row.work_item_ids.includes(selected)) return row;
+		} catch {}
+		return null;
+	}
+	function checked(op, hint) {
+		if (!op || op.operation_id !== hint.operation_id || op.action !== "work.adopt_and_start" || op.target?.workspace_id !== workspaceId || op.target?.thread_id !== hint.thread_id || op.actor !== caps()?.actor || !same$5(op.params?.works?.map((row) => row.work_item_id), hint.work_item_ids)) throw fail();
+		if (op.result) {
+			const result = op.result;
+			if (result.workspace_id !== workspaceId || result.thread_id !== hint.thread_id || typeof result.adopted !== "boolean" || !Array.isArray(result.works) || !same$5(result.works.map((row) => row.work_item_id), hint.work_item_ids) || result.works.some((row) => row.start_operation_id != null && !opId$5(row.start_operation_id))) throw fail();
+		}
+		return op;
+	}
+	const boardLink = (id) => `#/pm/${encodeURIComponent(workspaceId)}/board?select=${encodeURIComponent(id)}`;
+	async function steer(verb, operation) {
+		if (busy || !current) return;
+		const own = serial;
+		busy = true;
+		try {
+			alive();
+			for (const button of body.querySelectorAll("button")) button.disabled = true;
+			const value = await api("POST", `/operations/${operation.operation_id}/${verb}`, {});
+			if (!valid(own)) return;
+			checked(value.operation, current);
+			await refresh();
+		} catch (error) {
+			if (valid(own)) status.replaceChildren(errorBox(error, { within: status }));
+		} finally {
+			busy = false;
+			if (valid(own)) for (const button of body.querySelectorAll("button")) button.disabled = false;
+		}
+	}
+	function render(operation, children, names) {
+		const result = operation.result;
+		const key = !result ? "loop_queued" : result.stage === "cancelled" && result.adopted ? "loop_cancelled_adopted" : "loop_" + result.stage;
+		const label = !result && operation.status !== "accepted" ? operationStatusLabel(operation.status) : t(key) === key ? operationStatusLabel(operation.status) : t(key);
+		const actions = h$1("div", { class: "actions" }, h$1("a", { href: `#/op/${operation.operation_id}` }, t("pm_operation")), h$1("a", { href: `#/pm/${workspaceId}/discussions/${current.thread_id}` }, t("loop_return_discussion")), button({
+			size: "sm",
+			label: t("loop_close"),
+			onClick: () => {
+				forget(operation.operation_id);
+				withdraw();
+			}
+		}));
+		const list = h$1("div");
+		let hasUnknown = false;
+		for (const row of result?.works || []) {
+			const child = children.get(row.work_item_id), unknown = child ? child.result?.stage === "start_unknown" || child.status === "uncertain" : row.stage === "start_unknown";
+			hasUnknown = hasUnknown || unknown;
+			const stage = unknown ? "loop_work_unknown" : child?.status === "succeeded" ? "loop_work_started" : child && !terminal$8(child.status) ? "loop_work_starting" : "loop_not_started";
+			const links = h$1("div", { class: "actions" }, h$1("a", { href: boardLink(row.work_item_id) }, t("wst_open_work")));
+			if (row.start_operation_id) links.append(h$1("a", { href: `#/op/${row.start_operation_id}` }, t(unknown ? "loop_original" : "wst_view_operation")));
+			if (unknown && opId$5(row.handoff_operation_id)) links.append(h$1("a", { href: `#/op/${row.handoff_operation_id}` }, t("loop_reconcile")));
+			const session = child?.result?.session, attempt = child?.result?.attempt_id || row.attempt_id;
+			if (!unknown && child?.status === "succeeded" && typeof session?.host === "string" && typeof session?.session_id === "string" && /^att_[0-9a-f]{32}$/.test(attempt)) links.append(h$1("a", {
+				"data-adopt-live": "",
+				href: sessionHref$1({
+					host: session.host,
+					sessionId: session.session_id,
+					from: "board",
+					workspaceId,
+					workItemId: row.work_item_id,
+					attemptId: attempt
+				})
+			}, t("wst_open_live_output")));
+			if (result.adopted && terminal$8(operation.status) && !unknown && (!child || terminal$8(child.status) && child.status !== "succeeded")) links.append(h$1("a", {
+				href: boardLink(row.work_item_id),
+				"data-adopt-start-one": ""
+			}, t("loop_start_work")));
+			const code = child?.error_code || row.error_code, reasonKey = "wst_error_" + code;
+			const section = h$1("section", { class: "pm-adopt-work" }, h$1("h4", {}, names.get(row.work_item_id) || t("ui_work_item")), h$1("p", {}, t(stage)), links);
+			if (code) {
+				if (t(reasonKey) !== reasonKey) section.append(h$1("p", {}, t(reasonKey)));
+				section.append(disclosure({
+					label: t("pd_details"),
+					body: h$1("p", { class: "mono" }, code)
+				}));
+			}
+			list.append(section);
+		}
+		const authorized = operation.actor === caps()?.actor && [
+			"observe",
+			"manage",
+			"start"
+		].every((scope) => caps()?.scopes?.includes(scope)) && caps()?.actions?.some((row) => row.action === "work.adopt_and_start" && row.allowed === true);
+		const unknown = hasUnknown;
+		if (authorized && !terminal$8(operation.status)) {
+			if (operation.status === "needs_attention" && !unknown && !operation.cancel_requested) actions.append(button({
+				label: t("loop_resume"),
+				onClick: () => void steer("resume", operation)
+			}));
+			if (!operation.cancel_requested) actions.append(button({
+				label: t("loop_cancel"),
+				"aria-label": t(unknown ? "loop_cancel_unknown" : "loop_cancel"),
+				onClick: () => void steer("cancel", operation)
+			}));
+		}
+		const open = [...body.querySelectorAll("details")].map((node) => node.open);
+		body.replaceChildren(h$1("h3", {}, label), ...result?.adopted && terminal$8(operation.status) && operation.status !== "succeeded" ? [h$1("p", {}, t("loop_saved_plan"))] : [], list, actions);
+		[...body.querySelectorAll("details")].forEach((node, index) => node.open = open[index] || false);
+		element.hidden = false;
+		shown = operation.operation_id;
+		if (terminal$8(operation.status)) forget(operation.operation_id);
+	}
+	async function refresh() {
+		const hint = bookmark();
+		if (!hint) {
+			withdraw();
+			return;
+		}
+		const own = ++serial;
+		current = hint;
+		status.replaceChildren();
+		try {
+			const operation = checked((await api("GET", `/operations/${hint.operation_id}`)).operation, hint);
+			if (!valid(own)) return;
+			const children = new Map(), names = new Map();
+			for (const row of operation.result?.works || []) {
+				const value = await api("GET", `/work-items/${row.work_item_id}`);
+				if (!valid(own)) return;
+				const work = value.work_item;
+				if (work?.work_item_id !== row.work_item_id || typeof work.title !== "string") throw fail();
+				names.set(row.work_item_id, work.title);
+				if (row.start_operation_id) {
+					const child = (await api("GET", `/operations/${row.start_operation_id}`)).operation;
+					if (!valid(own)) return;
+					if (child?.operation_id !== row.start_operation_id || child.action !== "work.start" || child.target?.workspace_id !== workspaceId || child.target?.work_item_id !== row.work_item_id || child.actor !== operation.actor) throw fail();
+					children.set(row.work_item_id, child);
+				}
+			}
+			if (!valid(own)) return;
+			render(operation, children, names);
+		} catch (error) {
+			if (!valid(own)) return;
+			body.replaceChildren();
+			if ([403, 404].includes(error.status)) {
+				forget(hint.operation_id);
+				withdraw();
+			} else {
+				status.replaceChildren(errorBox(error, { within: status }), button({
+					label: t("ui_retry"),
+					onClick: () => void refresh()
+				}));
+				element.hidden = false;
+			}
+		}
+	}
+	function withdraw() {
+		serial++;
+		current = null;
+		shown = null;
+		body.replaceChildren();
+		status.replaceChildren();
+		element.hidden = true;
+	}
+	return {
+		element,
+		refresh,
+		withdraw,
+		pending: () => Boolean(current) && !shown,
+		dispose: () => {
+			disposed = true;
+			withdraw();
+		}
+	};
+}
+//#endregion
 //#region src/pm-kanban.js
 function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false, workspaceSettled = () => Promise.resolve() }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, preference = viewState(namespace, workspaceId, "board");
@@ -36227,6 +37028,15 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		return startPanel;
 	};
 	ensureStartPanel();
+	const landing = adoptStartLanding({
+		t,
+		api,
+		alive,
+		namespace,
+		workspaceId,
+		caps,
+		errorBox
+	});
 	const meta = h$1("span"), status = h$1("div", { role: "status" }), list = h$1("div", { class: "pm-kanban-list" }), boardInfo = h$1("div");
 	const refreshButton = iconButton({
 		icon: "refresh-cw",
@@ -36290,7 +37100,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		title: t("ui_board"),
 		meta,
 		actions: [refreshButton]
-	}) : null, h$1("div", { class: "pm-board-toolbar" }, searchField(search, { class: "pm-work-search" }), requirementFilter, agentFilter, h$1("label", {}, t("wv_group"), group)), status, layout, h$1("footer", { class: "pm-kanban-footer" }, more, disclosure({
+	}) : null, h$1("div", { class: "pm-board-toolbar" }, searchField(search, { class: "pm-work-search" }), requirementFilter, agentFilter, h$1("label", {}, t("wv_group"), group)), status, landing.element, layout, h$1("footer", { class: "pm-kanban-footer" }, more, disclosure({
 		label: t("pm_kanban_board_details"),
 		body: h$1("div", {}, boardInfo, h$1("p", {}, t("pm_kanban_wip_basis")), h$1("p", {}, t("pm_kanban_quality")), h$1("p", {}, t("pm_kanban_limits")))
 	})));
@@ -36358,6 +37168,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		preserveSelection = false;
 	}
 	function withdraw({ forgetRoute = true, keepStatus = false } = {}) {
+		landing.withdraw();
 		withdrawObservers();
 		++serial;
 		++detailSerial;
@@ -36686,6 +37497,10 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		if (routeId && rows.has(routeId)) {
 			selected = routeId;
 			preference.selected = routeId;
+		} else if (routeId && !landing.element.hidden) {
+			selected = null;
+			preference.selected = null;
+			closeRetaining();
 		}
 		next = data.next_cursor ?? null;
 		fillFilters();
@@ -36921,6 +37736,9 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			plan = accepted?.plan || null;
 			milestones = roadmap?.baseline?.document?.milestones || [];
 			sources = read;
+			await landing.refresh();
+			alive();
+			if (ticket !== serial) return;
 			present({
 				...data,
 				cards: [...combined.values()]
@@ -37000,6 +37818,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		}
 		active = value;
 		if (!value) {
+			landing.withdraw();
 			stale = true;
 			serial++;
 			detailSerial++;
@@ -37040,6 +37859,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		dispose: () => {
 			rememberScroll();
 			window.removeEventListener("scroll", onScroll);
+			landing.dispose();
 			startPanel?.dispose();
 			startPanel = null;
 			resultPanel?.dispose();
@@ -46422,6 +47242,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					input,
 					labelled,
 					caps,
+					namespace,
 					workspaceId,
 					threadId,
 					thread: () => threadData,

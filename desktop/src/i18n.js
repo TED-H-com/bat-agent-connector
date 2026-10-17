@@ -1,3 +1,4 @@
+import {adoptStartStrings} from './pm-adopt-start-strings.js';
 import {workbenchStrings} from './workbench-strings.js';
 import {workPathsStrings} from './work-paths-strings.js';
 import {diagnosticsStrings} from './diagnostics-strings.js';
@@ -56,6 +57,7 @@ export const STRINGS = {
     ...workDeliveryStrings["zh-TW"],
     ...pmSpecMaterializationStrings["zh-TW"],
     ...pmWorkBatchesStrings["zh-TW"],
+    ...adoptStartStrings["zh-TW"],
     ...pmMaintenancePolicyStrings["zh-TW"],
     ...maintenanceCheckStrings["zh-TW"],
     ...maintenanceReviewStrings["zh-TW"],
@@ -1085,6 +1087,7 @@ export const STRINGS = {
     ...workDeliveryStrings.en,
     ...pmSpecMaterializationStrings.en,
     ...pmWorkBatchesStrings.en,
+    ...adoptStartStrings.en,
     ...pmMaintenancePolicyStrings.en,
     ...maintenanceCheckStrings.en,
     ...maintenanceReviewStrings.en,

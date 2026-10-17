@@ -1,5 +1,16 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-10-17 未合併候選
+
+BAT 工作循環整合在草稿 #251（`integration/bat-work-loop`）；P6 後端在
+草稿 #252（`ux/p6-impl`，以前述整合分支為基底）。採用並開始的共用
+Web／Tauri 畫面由 `ux/e03-adopt-start-ui` 接續，實作與恢復邊界見
+[E03 核對](../design/v1.3-e03-loop-ui.md)。這些分支不改變下文的已合併結論。
+
+針對性後端、瀏覽器及 Rust 檢查已有通過紀錄；完整後端檢查曾中斷，
+整合 CI 的 relay 測試修正正在重新驗證，不能宣稱全綠。尚未安裝、
+未進行真實 BAT／CLI 或原生端到端驗收。來源、權限及人工會話邊界保持有效。
+
 ## 2026-10-16 體驗收斂方向
 
 Owner 已採用 [EC-1.0 整合決議](experience-convergence.md)，將既有 v1.3／Work-Centric

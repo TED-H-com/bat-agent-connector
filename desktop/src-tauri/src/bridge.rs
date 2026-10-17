@@ -232,6 +232,158 @@ fn validate_start_preview(body: Option<&Value>) -> Result<(), String> {
     Ok(())
 }
 
+// Read-only compound preview. Execution still goes through typed operations;
+// this route accepts the reviewed document and a bounded selection only.
+fn validate_adopt_start_preview(body: Option<&Value>) -> Result<(), String> {
+    let fail = || "Invalid typed adopt-and-start preview request".to_string();
+    let doc = body.and_then(Value::as_object).ok_or_else(fail)?;
+    if doc.keys().any(|key| {
+        !matches!(
+            key.as_str(),
+            "proposal_id" | "review" | "rationale" | "works"
+        )
+    }) || !Regex::new(r"^pmcp_[0-9a-f]{32}$")
+        .unwrap()
+        .is_match(doc.get("proposal_id").and_then(Value::as_str).unwrap_or(""))
+    {
+        return Err(fail());
+    }
+    let text = |value: &Value, max: usize| {
+        value
+            .as_str()
+            .is_some_and(|s| !s.trim().is_empty() && s.chars().count() <= max && !s.contains('\0'))
+    };
+    if doc.get("rationale").is_some_and(|value| !text(value, 4000)) {
+        return Err(fail());
+    }
+    let review = doc
+        .get("review")
+        .and_then(Value::as_object)
+        .ok_or_else(fail)?;
+    if review.len() != 4
+        || review.keys().any(|key| {
+            !matches!(
+                key.as_str(),
+                "title" | "rows" | "requirements" | "removed_requirement_ids"
+            )
+        })
+        || !review.get("title").is_some_and(|value| text(value, 160))
+    {
+        return Err(fail());
+    }
+    let rows = review
+        .get("rows")
+        .and_then(Value::as_array)
+        .ok_or_else(fail)?;
+    let requirements = review
+        .get("requirements")
+        .and_then(Value::as_array)
+        .ok_or_else(fail)?;
+    let removed = review
+        .get("removed_requirement_ids")
+        .and_then(Value::as_array)
+        .ok_or_else(fail)?;
+    if !(1..=20).contains(&rows.len()) || requirements.len() > 20 || removed.len() > 20 {
+        return Err(fail());
+    }
+    let item = Regex::new(r"^[a-z][a-z0-9_.-]{0,79}$").unwrap();
+    let ids = |value: &Value, max: usize| {
+        value.as_array().is_some_and(|list| {
+            list.len() <= max
+                && list
+                    .iter()
+                    .all(|id| id.as_str().is_some_and(|id| item.is_match(id)))
+        })
+    };
+    for row in rows {
+        let row = row.as_object().ok_or_else(fail)?;
+        if row.len() != 4
+            || row
+                .keys()
+                .any(|key| !matches!(key.as_str(), "key" | "text" | "status" | "include"))
+            || !row.get("key").is_some_and(|value| text(value, 60))
+            || !row.get("text").is_some_and(|value| text(value, 4000))
+            || !matches!(
+                row.get("status").and_then(Value::as_str),
+                Some(
+                    "user_confirmed"
+                        | "agent_assumption"
+                        | "unresolved"
+                        | "conflicting"
+                        | "not_applicable"
+                )
+            )
+            || !row.get("include").is_some_and(Value::is_boolean)
+        {
+            return Err(fail());
+        }
+    }
+    for requirement in requirements {
+        let row = requirement.as_object().ok_or_else(fail)?;
+        if row.len() != 5
+            || row.keys().any(|key| {
+                !matches!(
+                    key.as_str(),
+                    "id" | "source_key" | "acceptance_keys" | "priority" | "depends_on"
+                )
+            })
+            || !row
+                .get("id")
+                .and_then(Value::as_str)
+                .is_some_and(|value| item.is_match(value))
+            || !row.get("source_key").is_some_and(|value| text(value, 60))
+            || !row
+                .get("acceptance_keys")
+                .is_some_and(|value| ids(value, 20))
+            || !row.get("depends_on").is_some_and(|value| ids(value, 20))
+            || !matches!(
+                row.get("priority").and_then(Value::as_str),
+                Some("must" | "should" | "could" | "unresolved")
+            )
+        {
+            return Err(fail());
+        }
+    }
+    if removed
+        .iter()
+        .any(|value| !value.as_str().is_some_and(|id| item.is_match(id)))
+    {
+        return Err(fail());
+    }
+    let works = doc
+        .get("works")
+        .and_then(Value::as_array)
+        .ok_or_else(fail)?;
+    if !(1..=10).contains(&works.len()) {
+        return Err(fail());
+    }
+    let mut seen = std::collections::HashSet::new();
+    for work in works {
+        let mut work = work.as_object().ok_or_else(fail)?.clone();
+        let id = work
+            .remove("work_item_id")
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .ok_or_else(fail)?;
+        if !Regex::new(r"^wi_[0-9a-f]{20}$").unwrap().is_match(&id)
+            || !seen.insert(id)
+            || !work.contains_key("requirement_ids")
+        {
+            return Err(fail());
+        }
+        if work
+            .remove("agent")
+            .is_some_and(|value| !matches!(value.as_str(), Some("claude" | "codex")))
+            || work
+                .remove("model")
+                .is_some_and(|value| !value.is_null() && !text(&value, 128))
+        {
+            return Err(fail());
+        }
+        validate_start_preview(Some(&Value::Object(work)))?;
+    }
+    Ok(())
+}
+
 // Cleanup previews only describe existing central IDs. They cannot carry headers,
 // host paths, commands, credential material, or an altered cleanup apply envelope.
 #[derive(Deserialize)]
@@ -1301,7 +1453,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             r"delivery/previews/mpv_[0-9a-f]{32}|integrations/previews/ipv_[0-9a-f]{32}|integrations/op_[0-9a-f]{32})$")).unwrap())
     } else if input.method == "POST" {
         POST.get_or_init(|| {
-            Regex::new(r"^/(?:managed/setup/secrets|repository-previews|approval-previews|artifact-capture-previews|artifact-managed-capture-previews|cleanup-previews|operations(?:/op_[0-9a-f]{32}/(?:cancel|resume))?|pm/workspaces/ws_[0-9a-f]{32}/work/wi_[0-9a-f]{20}/start-preview)$")
+            Regex::new(r"^/(?:managed/setup/secrets|repository-previews|approval-previews|artifact-capture-previews|artifact-managed-capture-previews|cleanup-previews|operations(?:/op_[0-9a-f]{32}/(?:cancel|resume))?|pm/workspaces/ws_[0-9a-f]{32}/(?:work/wi_[0-9a-f]{20}/start-preview|threads/pmt_[0-9a-f]{32}/adopt-and-start-preview))$")
                 .unwrap()
         })
     } else {
@@ -1348,6 +1500,12 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             return Err("Repository preview accepts no query or operation key".into());
         }
         validate_repository_preview(input.body.as_ref())?;
+    }
+    if path.ends_with("/adopt-and-start-preview") {
+        if input.path != path || input.idempotency_key.is_some() {
+            return Err("Adopt-and-start preview accepts no query or operation key".into());
+        }
+        validate_adopt_start_preview(input.body.as_ref())?;
     }
     if path.ends_with("/start-preview") {
         if input.path != path || input.idempotency_key.is_some() {
@@ -2642,6 +2800,59 @@ mod tests {
         posted.idempotency_key = None;
         posted.path = format!("{preview}?limit=1");
         assert!(validate_request(&posted).is_err());
+    }
+
+    #[test]
+    fn adopt_and_start_preview_has_a_bounded_read_only_contract() {
+        let ws = format!("ws_{}", "a".repeat(32));
+        let thread = format!("pmt_{}", "b".repeat(32));
+        let path = format!("/pm/workspaces/{ws}/threads/{thread}/adopt-and-start-preview");
+        let body = serde_json::json!({
+            "proposal_id": format!("pmcp_{}", "c".repeat(32)),
+            "review": {"title":"Login repair", "rows":[{"key":"login","text":"Prevent duplicate login","status":"user_confirmed","include":true}],
+                "requirements":[{"id":"login","source_key":"login","acceptance_keys":["login"],"priority":"must","depends_on":[]}], "removed_requirement_ids":[]},
+            "rationale":"Adopt the reviewed repair",
+            "works":[{"work_item_id":format!("wi_{}", "d".repeat(20)),"requirement_ids":["login"]}]
+        });
+        let mut input = request("POST", &path);
+        input.body = Some(body.clone());
+        assert!(validate_request(&input).is_ok());
+        for bad_path in [
+            format!("{path}?limit=1"),
+            path.replace(&thread, "pmt_bad"),
+            format!("{path}/extra"),
+        ] {
+            input.path = bad_path;
+            assert!(validate_request(&input).is_err());
+        }
+        input.path = path.clone();
+        input.idempotency_key = Some("preview-is-not-an-operation".into());
+        assert!(validate_request(&input).is_err());
+        input.idempotency_key = None;
+        for bad in [
+            serde_json::json!({}),
+            serde_json::json!({"url":"https://example.invalid"}),
+        ] {
+            input.body = Some(bad);
+            assert!(validate_request(&input).is_err());
+        }
+        for field in ["command", "headers", "profile_id", "preconditions"] {
+            let mut changed = body.clone();
+            changed["works"][0][field] = serde_json::json!("forbidden");
+            input.body = Some(changed);
+            assert!(validate_request(&input).is_err());
+        }
+        for count in [0, 2, 11] {
+            let mut changed = body.clone();
+            changed["works"] = serde_json::json!(vec![body["works"][0].clone(); count]);
+            input.body = Some(changed);
+            assert!(validate_request(&input).is_err());
+        }
+        let mut changed = body.clone();
+        changed["review"]["rows"][0]["text"] = serde_json::json!("x".repeat(4001));
+        input.body = Some(changed);
+        assert!(validate_request(&input).is_err());
+        assert!(validate_request(&request("GET", &path)).is_err());
     }
 
     #[test]

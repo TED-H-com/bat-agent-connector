@@ -26,5 +26,6 @@ import "./pm-requirements.css";
 import "./pm-work-inspector.css";
 import "./pm-session.css";
 import "./pm-work-follow-up.css";
+import "./pm-adopt-start.css";
 import "./workbench.css";
 import "./app.js";

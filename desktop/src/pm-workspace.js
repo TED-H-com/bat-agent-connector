@@ -1217,7 +1217,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           capability: () => pmCapabilities, thread: () => threadData, permitted, target, refresh: load});
       }
       if (caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1) {
-        proposalReview = planProposals({h,t,api,alive,form,input,labelled,caps,workspaceId,threadId,
+        proposalReview = planProposals({h,t,api,alive,form,input,labelled,caps,namespace,workspaceId,threadId,
           thread:()=>threadData,permitted,refresh:load,errorBox, conversation: true, backLink, onRevision: id => {
             discussionTools.open('plan');
             // Let a new mobile sheet establish its focus boundary first.
