@@ -15884,12 +15884,15 @@ var discussionDom = (create, keyPrefix) => (tag, attrs, ...children) => {
 		key
 	}) : node;
 };
-function discussionTitle({ t, field, form, value, local = false }) {
+function discussionTitle({ t, field, form, value, local = false, resume = false, onEditing = () => {} }) {
 	let current = value, restoreFocus = false;
 	const title = h$1("h2", {
 		"data-discussion-title": "",
 		title: value
 	}, value);
+	const remember = () => {
+		if (!edit.hidden) onEditing(true, field.selectionStart ?? 0, field.selectionEnd ?? field.selectionStart ?? 0);
+	};
 	const pencil = iconButton({
 		icon: "pencil",
 		label: t("pd_rename"),
@@ -15901,6 +15904,7 @@ function discussionTitle({ t, field, form, value, local = false }) {
 			display.hidden = true;
 			field.focus();
 			field.select();
+			remember();
 		}
 	});
 	const display = h$1("div", { class: "pd-title-display" }, title, pencil);
@@ -15939,19 +15943,30 @@ function discussionTitle({ t, field, form, value, local = false }) {
 			cancel.click();
 		}
 	});
-	function finish({ focus = false } = {}) {
+	for (const eventName of [
+		"input",
+		"keyup",
+		"mouseup",
+		"select"
+	]) field.addEventListener(eventName, remember);
+	function finish({ focus = false, notify = true } = {}) {
 		restoreFocus = focus && (edit.contains(document.activeElement) || document.activeElement === document.body);
 		edit.hidden = true;
 		display.hidden = false;
+		if (notify) onEditing(false, 0, 0);
 	}
 	function updateState() {
 		pencil.disabled = field.disabled || field.readOnly;
 		cancel.disabled = form.locked();
 		if (local) edit.querySelector("button[type=submit]").disabled = field.disabled;
 	}
-	finish();
+	finish({ notify: false });
 	updateState();
 	if (!local && (form.locked() || form.hasDraft() && field.value !== current)) {
+		edit.hidden = false;
+		display.hidden = true;
+	}
+	if (local && resume) {
 		edit.hidden = false;
 		display.hidden = true;
 	}
@@ -15959,6 +15974,15 @@ function discussionTitle({ t, field, form, value, local = false }) {
 		box: h$1("div", { class: "pd-title" }, display, edit),
 		finish,
 		updateState,
+		editing: () => !edit.hidden,
+		focus(start, end) {
+			if (edit.hidden) return;
+			field.focus();
+			if (!Number.isInteger(start)) return;
+			const point = Math.max(0, Math.min(start, field.value.length));
+			const stop = Number.isInteger(end) ? Math.max(point, Math.min(end, field.value.length)) : point;
+			field.setSelectionRange(point, stop);
+		},
 		update(next) {
 			current = next;
 			title.textContent = next;
@@ -43189,7 +43213,7 @@ if (!customElements.get(formConnectionTag)) customElements.define(formConnection
 	}
 });
 var pmAvailable = (caps) => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes("observe");
-function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, savedText = "pm_saved", pendingText = "pm_pending" }) {
+function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, keepEditable = () => false, savedText = "pm_saved", pendingText = "pm_pending" }) {
 	const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
 	let saved = {
 		version: 1,
@@ -43345,9 +43369,10 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		const autoChecking = initialChecking && (busy || receiptTimer !== null);
 		const inFlight = busy || autoChecking;
 		const frozen = busy || damaged || Boolean(saved.intent), locked = frozen || !allowed();
-		for (const input of Object.values(fields)) {
-			input.disabled = locked && (!readOnlyWhenUnavailable || frozen);
-			if (readOnlyWhenUnavailable) input.readOnly = locked;
+		for (const [name, input] of Object.entries(fields)) {
+			const preserve = !frozen && !damaged && keepEditable(name);
+			input.disabled = !preserve && locked && (!readOnlyWhenUnavailable || frozen);
+			if (readOnlyWhenUnavailable) input.readOnly = locked && !preserve;
 		}
 		const hadFocus = document.activeElement === button;
 		const hadResetFocus = document.activeElement === reset;
@@ -43608,6 +43633,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	}
 	const launch = parseDiscussRefs(location.hash.split("?")[1] || "");
 	const uiState = viewState(namespace, workspaceId, "discussions");
+	const titleSession = viewState(namespace, workspaceId, "discussion-title." + (threadId || "list"));
 	const handoffKey = `batc.pm.${namespace}.discussion-send.${workspaceId}`;
 	const originKey = `batc.pm.${namespace}.discussion-origin.${workspaceId}.`;
 	let sendHandoff = null, firstMessagePending = false;
@@ -46169,6 +46195,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						recoverPermitted: () => permitted(false),
 						label: threadId === "new" ? "pd_send" : "pm_create_thread",
 						onStateChange: () => titleDraft?.updateState(),
+						keepEditable: (name) => name === "title" && Boolean(titleDraft?.editing()),
 						onBeforeSaved: (result, values) => {
 							if (values.content.trim()) localStorage.setItem(handoffKey, JSON.stringify({
 								threadId: result.thread_id,
@@ -46180,6 +46207,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 							});
 						},
 						onSaved: (result) => {
+							if (threadId === "new") titleSession.open = false;
 							alive();
 							location.replace(`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(result.thread_id)}`);
 						},
@@ -46190,8 +46218,17 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						field: name,
 						form: create,
 						value: name.value,
-						local: true
+						local: true,
+						resume: titleSession.open === true,
+						onEditing: (open, start, end) => {
+							titleSession.open = open;
+							if (open) {
+								titleSession.caret = start;
+								titleSession.caretEnd = end;
+							}
+						}
 					}) : null;
+					if (titleDraft) titleView = titleDraft;
 					if (threadId === "new" && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis)) {
 						workspaceCaps = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`);
 						alive();
@@ -46372,7 +46409,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const initialTranscript = content.querySelector(".pd-transcript");
 	if (initialTranscript && threadState.scroll) initialTranscript.scrollTop = threadState.scroll;
 	if (threadId === "new") setTimeout(() => {
-		if (!disposed) content.querySelector("[data-discussion-composer]")?.focus();
+		if (disposed) return;
+		if (titleView?.editing()) titleView.focus(titleSession.caret, titleSession.caretEnd);
+		else content.querySelector("[data-discussion-composer]")?.focus();
 	}, 0);
 	proposalReview?.recheck();
 	nativeAnalysis?.recheck();

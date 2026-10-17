@@ -506,6 +506,14 @@ Before a central thread exists, it mounts only the local discussion draft and
 list, deferring meetings, follow-ups, evidence and specification tools until Send.
 Its title can be renamed locally once the initial permission read completes; title
 controls follow the durable create form's gates and lock with its original intent.
+An already open rename stays editable through a background lifecycle withdrawal:
+the draft, caret and focus remain, and Save still commits the local title. A closed
+rename stays gated, and an admitted intent still locks the field.
+An access reset clears the page immediately, including while that field is focused.
+The open rename is remembered only as a UI preference and reopens on the rebuilt
+draft with the same text, caret and focus. Save still commits the local title.
+Cancel, a completed Save, or sending the discussion closes that remembered rename.
+The next new discussion opens with the rename closed and the composer focused.
 The draft title survives reload and becomes the central thread-create title.
 Governance context chips in an unsent draft read the current record title from
 central. A 403/404 removes the source label and ID and disables sending while

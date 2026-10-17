@@ -66,7 +66,7 @@ export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 
 
 // Save the exact request before admission. A later authorization/validation error can never
 // release an earlier ambiguous request; only its matching terminal receipt permits replacement.
-function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, savedText = 'pm_saved', pendingText = 'pm_pending'}) {
+function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, keepEditable = () => false, savedText = 'pm_saved', pendingText = 'pm_pending'}) {
   const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
   let saved = {version: 1, values: {}}, damaged = false, busy = false, operation = null;
   const receiptDelays = action === 'pm.conversation.adopt' ? [250, 500, 1000, 1500, 2000, 3000, 3000, 3000, 3000, 3000] : [250, 500, 1000, 1500, 2000, 3000];
@@ -167,11 +167,14 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     const autoChecking = initialChecking && (busy || receiptTimer !== null);
     const inFlight = busy || autoChecking;
     const frozen = busy || damaged || Boolean(saved.intent), locked = frozen || !allowed();
-    for (const input of Object.values(fields)) {
+    for (const [name, input] of Object.entries(fields)) {
       // A restored title draft must receive Escape while initial reads gate Save.
       // An admitted intent or damaged storage still disables the field entirely.
-      input.disabled = locked && (!readOnlyWhenUnavailable || frozen);
-      if (readOnlyWhenUnavailable) input.readOnly = locked;
+      // An open local rename is not a central write. Leaving it enabled keeps
+      // the draft, caret and focus while a background gate rereads lifecycle.
+      const preserve = !frozen && !damaged && keepEditable(name);
+      input.disabled = !preserve && locked && (!readOnlyWhenUnavailable || frozen);
+      if (readOnlyWhenUnavailable) input.readOnly = locked && !preserve;
     }
     const hadFocus = document.activeElement === button;
     const hadResetFocus = document.activeElement === reset;
@@ -333,6 +336,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   }
   const launch = parseDiscussRefs(location.hash.split('?')[1] || '');
   const uiState = viewState(namespace, workspaceId, 'discussions');
+  const titleSession = viewState(namespace, workspaceId, 'discussion-title.' + (threadId || 'list'));
   const handoffKey = `batc.pm.${namespace}.discussion-send.${workspaceId}`;
   const originKey = `batc.pm.${namespace}.discussion-origin.${workspaceId}.`;
   let sendHandoff = null, firstMessagePending = false;
@@ -1567,13 +1571,22 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
             params: values => ({title: values.title.trim(), ...(launch.refs.length ? {context: launch.refs} : {})}), preconditions: () => ({expected_version: workspace.version}),
             permitted: () => permitted(false) && !draftSourceUnavailable, recoverPermitted: () => permitted(false), label: threadId === 'new' ? 'pd_send' : 'pm_create_thread',
             onStateChange: () => titleDraft?.updateState(),
+            keepEditable: name => name === 'title' && Boolean(titleDraft?.editing()),
             onBeforeSaved: (result, values) => {
               if (values.content.trim()) localStorage.setItem(handoffKey, JSON.stringify({threadId: result.thread_id, content: values.content}));
               rememberOrigin(result.thread_id, {from: launch.from || 'discussions', report: launch.report});
             },
-            onSaved: result => {alive(); location.replace(`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(result.thread_id)}`);},
+            onSaved: result => {
+              // The thread now exists, so this local draft is gone. A later new
+              // discussion must not reopen the rename from that finished draft.
+              if (threadId === 'new') titleSession.open = false;
+              alive(); location.replace(`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(result.thread_id)}`);
+            },
             extra: threadId === 'new' ? text : h('div', {}, labelled('pd_title', name), text)});
-          titleDraft = threadId === 'new' ? discussionTitle({t, field: name, form: create, value: name.value, local: true}) : null;
+          titleDraft = threadId === 'new' ? discussionTitle({t, field: name, form: create, value: name.value, local: true,
+            resume: titleSession.open === true,
+            onEditing: (open, start, end) => {titleSession.open = open; if (open) {titleSession.caret = start; titleSession.caretEnd = end;}}}) : null;
+          if (titleDraft) titleView = titleDraft;
           if (threadId === 'new' && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis)) {
             workspaceCaps = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`); alive();
             if (ticket !== sequence) return;
@@ -1672,7 +1685,13 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   workspaceList.scrollTop = uiState.listScroll || 0;
   const initialTranscript = content.querySelector('.pd-transcript');
   if (initialTranscript && threadState.scroll) initialTranscript.scrollTop = threadState.scroll;
-  if (threadId === 'new') setTimeout(() => {if (!disposed) content.querySelector('[data-discussion-composer]')?.focus();}, 0);
+  if (threadId === 'new') setTimeout(() => {
+    if (disposed) return;
+    // An access reset rebuilds this page while rename is open. Restore that
+    // field instead of moving focus to the composer.
+    if (titleView?.editing()) titleView.focus(titleSession.caret, titleSession.caretEnd);
+    else content.querySelector('[data-discussion-composer]')?.focus();
+  }, 0);
   proposalReview?.recheck(); nativeAnalysis?.recheck();
   if (firstMessagePending) setTimeout(() => {
     if (!disposed) {firstMessagePending = false; void noteForm.submit();}

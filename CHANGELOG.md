@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- A new discussion's open rename keeps its text, caret and focus when a background
+  refresh or an access change rebuilds the page. Save still sets the title once.
+  Sending that discussion closes the rename, so the next new discussion opens on
+  the composer.
+
 - Published branch start, managed repair and Home keep keyboard focus on the
   button you press while that request runs. The button looks unavailable, and a
   second press is ignored. When Start finishes, focus moves to Check original
