@@ -18,6 +18,44 @@ async function open(page:any, zh=false) {
   await expect(editor(page).locator('select').first()).toHaveCount(1);
 }
 
+async function fillUnassessed(page:any, zh=false) {
+  const record=editor(page,RECORD);
+  for(const field of await record.getByLabel(zh?'條件判斷理由':'Criterion rationale',{exact:true}).all())
+    await field.fill('Independent verification is still missing for this original result.');
+  await record.getByLabel(zh?'這次評估的理由':'Reason for this assessment',{exact:true})
+    .fill('Keep the original requirement unassessed.');
+}
+
+for(const [locale,width] of [['en',1440],['zh-TW',390]] as const)
+test(`saving a Result review keeps its recorded conclusion in view: ${locale} ${width}`,async({page})=>{
+  await page.setViewportSize({width,height:844});
+  const f=fixture(),row=f.save(),zh=locale==='zh-TW';
+  f.state.resultEnvelope.next_allowed_actions=[{kind:'action',action:RECORD,target:{workspace_id:workspaceId,review_id:row.review_id}}];
+  await mountQuality(page,f,locale,true);await open(page,zh);await fillUnassessed(page,zh);
+  await editor(page,RECORD).locator('button[type=submit]').click();
+  await expect.poll(()=>row.assessment?.document.acceptance).toBe('unassessed');
+  const conclusion=panel(page).getByRole('heading',{level:3});
+  await expect(conclusion).toBeFocused();
+  await expect(conclusion).toBeInViewport();
+  expect(f.state.writes).toHaveLength(1);
+});
+
+test('a delayed review save does not move focus away from another field',async({page})=>{
+  const f=fixture(),row=f.save();
+  f.state.resultEnvelope.next_allowed_actions=[{kind:'action',action:RECORD,target:{workspace_id:workspaceId,review_id:row.review_id}}];
+  await mountQuality(page,f,'en',true);await open(page);await fillUnassessed(page);
+  let release!:()=>void;f.state.gate=new Promise<void>(resolve=>{release=resolve;});
+  const before=f.state.reads.filter((path:string)=>path.includes('/work-packages')).length;
+  await editor(page,RECORD).locator('button[type=submit]').click();
+  await expect.poll(()=>f.state.reads.filter((path:string)=>path.includes('/work-packages')).length).toBeGreaterThan(before);
+  await page.evaluate(()=>{const field=document.createElement('textarea');field.setAttribute('aria-label','Other draft');document.body.append(field);field.focus();});
+  const other=page.getByLabel('Other draft',{exact:true});await other.fill('Do not interrupt this draft');
+  release();f.state.gate=null;
+  await expect(editor(page,RECORD).locator('[data-pm-saved]')).toBeVisible();
+  await expect(other).toBeFocused();await expect(other).toHaveValue('Do not interrupt this draft');
+  expect(f.state.writes).toHaveLength(1);
+});
+
 for (const [locale, width] of [['en',1440],['en',768],['zh-TW',390]] as const) test(`Result review keeps the original candidate and submits the existing action: ${locale} ${width}`,async({page})=>{
   await page.setViewportSize({width,height:900});
   const f=fixture(), zh=locale==='zh-TW';

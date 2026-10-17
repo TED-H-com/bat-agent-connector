@@ -125,7 +125,7 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
     const row=current();facts.replaceChildren();if(!row){facts.append(text('pmq_empty'));assessment.hidden=withdrawal.hidden=true;return;}
     const document=row.assessment?.document;
     const use=h('button',{type:'button',class:'secondary',disabled:!selectable(row),onclick:()=>{if(!ready||!selectable(current()))return;emit(reference(current()));renderReview();}},t('pmq_use'));
-    facts.append(...[h('h3',{},t('pmq_result')),h('p',{},`${t('pmq_acceptance')}: ${t('pmq_'+row.acceptance)} · ${t('pmq_dod')}: ${t('pmq_'+row.dod)}`),
+    facts.append(...[h('h3',{tabindex:-1},t('pmq_result')),h('p',{},`${t('pmq_acceptance')}: ${t('pmq_'+row.acceptance)} · ${t('pmq_dod')}: ${t('pmq_'+row.dod)}`),
       line('pmq_candidate',row.context.native_result.candidate_commit),line('pmq_reviewer',row.context.reviewer_actor),
       row.context.self_review?text('pmq_self_review'):null,...row.applicability_reasons.map(reason=>text('pmq_reason_'+reason)),
       row.original_outcome.qualified&&!row.qualified?text('pmq_original_qualified'):null,
@@ -171,7 +171,18 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
     assessment.hidden=false;withdrawal.hidden=!!fixedResult;update();
   }
   function remember(){try{localStorage.setItem(navigation,JSON.stringify({workId,review_id:selected}));}catch{}}
-  async function refreshAfterSave(){await onSaved();await refresh();}
+  async function refreshAfterSave(){
+    const doc=element.ownerDocument,owner=doc.activeElement,work=workId,review=selected;
+    let restore=element.contains(owner);
+    const moved=event=>{if(event.target!==owner)restore=false;};
+    doc.addEventListener('focusin',moved);
+    try{
+      await onSaved();await refresh();
+      // Refresh briefly hides the long form. Keep the completed action's result
+      // readable, unless the user moved to another control while it was saving.
+      if(restore&&ready&&workId===work&&selected===review&&element.isConnected)facts.querySelector('h3')?.focus();
+    }finally{doc.removeEventListener('focusin',moved);}
+  }
   history.addEventListener('change',()=>{selected=history.value;emit(null);remember();renderReview();});
   async function refresh(){
     const id=workId,ticket=++serial,previous=chosen;clear();filtered=false;if(!supported())return;status.replaceChildren(skeleton(2));

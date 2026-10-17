@@ -28,6 +28,11 @@ After an explicit save succeeds, refresh the original Result's current actions
 before refreshing the editor. This lets the newly appointed reviewer record
 conclusions without reloading the page or using stale authority. A withdrawn
 Result still retires the editor; the original saved operation is not replayed.
+When a save refreshes the long review form, its recorded conclusion receives
+focus and stays in view. If the user moves to another control while saving, that
+new focus is preserved. A changed selection, unavailable source or withdrawn
+view cannot focus an old conclusion. Reopening the Result reads the original
+saved review again without writing another operation.
 
 Recorded conclusions appear with the Result through the existing central
 projection. This entry does not expose the Requirements editor's local evidence

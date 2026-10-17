@@ -55,6 +55,7 @@ const shot = name => page.screenshot({path: resolve(f.shots, name + '.png'), ani
 try {
   await launch();
   let start;
+  let savedReviewId=null;
   if (f.create_work) {
     step = 'create-work';
     await page.goto(`${origin}/dashboard/?workbench=1#/project/${f.project}`);
@@ -263,6 +264,13 @@ try {
     const saved = await clickOperation('pm.quality.review.record', record.locator('button[type=submit]'));
     send({stage: 'review-recorded', operation_id: saved.operation_id});
     assert.equal((await receive()).review_recorded, true);
+    await expect(record.locator('[data-pm-saved]')).toBeVisible();
+    const conclusion=quality.getByRole('heading', {level:3});
+    await expect(conclusion).toBeFocused();
+    await expect(conclusion).toBeInViewport();
+    await expect(quality).toContainText(zh ? '需求驗收: 未評估' : 'Requirement acceptance: Unassessed');
+    savedReviewId=await quality.getByLabel(zh ? '已保存審查' : 'Saved review', {exact:true}).inputValue();
+    assert.match(savedReviewId, /^pmqr_[0-9a-f]{32}$/);
     await shot('03-reviewed-unassessed');
   }
   step = 'publish';
@@ -276,6 +284,12 @@ try {
   await expect(page.locator('[data-follow-up-input]')).toHaveValue(draft);
   await page.getByRole('button', {name: zh ? '成果' : 'Results', exact: true}).click();
   await expect(page.locator('[data-work-publish-pr]')).toContainText('21');
+  if (f.review_result) {
+    await page.getByRole('button', {name: zh ? '審閱這份成果' : 'Review this result', exact:true}).click();
+    const quality=page.locator('[data-work-quality]');
+    await expect(quality.getByLabel(zh ? '已保存審查' : 'Saved review', {exact:true})).toHaveValue(savedReviewId);
+    await expect(quality).toContainText(zh ? '需求驗收: 未評估' : 'Requirement acceptance: Unassessed');
+  }
   await shot('04-published');
   if (f.peer_agent) {
     step = 'mcp-peer';

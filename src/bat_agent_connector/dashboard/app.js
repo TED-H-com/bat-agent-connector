@@ -16752,7 +16752,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			}
 		}, t("pmq_use"));
 		facts.append(...[
-			h("h3", {}, t("pmq_result")),
+			h("h3", { tabindex: -1 }, t("pmq_result")),
 			h("p", {}, `${t("pmq_acceptance")}: ${t("pmq_" + row.acceptance)} · ${t("pmq_dod")}: ${t("pmq_" + row.dod)}`),
 			line("pmq_candidate", row.context.native_result.candidate_commit),
 			line("pmq_reviewer", row.context.reviewer_actor),
@@ -16922,8 +16922,19 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		} catch {}
 	}
 	async function refreshAfterSave() {
-		await onSaved();
-		await refresh();
+		const doc = element.ownerDocument, owner = doc.activeElement, work = workId, review = selected;
+		let restore = element.contains(owner);
+		const moved = (event) => {
+			if (event.target !== owner) restore = false;
+		};
+		doc.addEventListener("focusin", moved);
+		try {
+			await onSaved();
+			await refresh();
+			if (restore && ready && workId === work && selected === review && element.isConnected) facts.querySelector("h3")?.focus();
+		} finally {
+			doc.removeEventListener("focusin", moved);
+		}
 	}
 	history.addEventListener("change", () => {
 		selected = history.value;
