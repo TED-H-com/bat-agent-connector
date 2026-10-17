@@ -2,6 +2,14 @@
 
 ## Next release (unreleased)
 
+- Design spec for publishing a Work Result as a pull request
+  (`docs/design/v1.3-e03-publish-pr.md`). The Dashboard still cannot publish:
+  `github.pr.publish` remains a label until that spec is implemented. The spec
+  shows the start's base branch and base commit as read-only, does not offer a
+  second pull request for the same commit, and does not call an integration
+  commit delivered. It adds no merge, deploy, or session controls on the Result.
+  A backend Result entry, which this spec does not add, still has to land first.
+
 - Document the closed-loop screens for adopting and starting selected work, queuing the next instruction on a busy work, and choosing a saved profile in the Start work panel. The screens are specified only; they are not in the Dashboard yet. English and zh-TW copy is in the spec.
 
 - Correct that closed-loop screen spec. A refused adopt-and-start can start a new request once the server marks the refusal, a chosen profile pins the Start work panel, and each selected work's start fields come from the preview. The screens are still specified only.
