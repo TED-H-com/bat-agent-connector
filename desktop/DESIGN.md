@@ -1310,10 +1310,14 @@ About retains its existing Settings frame and adds one build line and Export
 diagnostics. Error Details reuse the same entry point. The modal uses shared
 surface/type/spacing/overlay tokens, a compact source summary including stale host data, a wrapping,
 scrollable JSON preview and Save / Copy / Close. Native `<dialog>` makes the
-background inert; Tab wraps, Escape closes, and focus returns to the trigger.
+background inert; Tab wraps, including Save while a save is in progress. Save
+keeps keyboard focus until the write finishes, and a second press is ignored.
+Escape closes, and focus returns to the trigger.
 English and zh-TW share behavior. Only loaded session reads and an operation page
 are counted; unavailable sources remain unknown. Withdrawal clears preview facts
-and disables export actions together. See [the diagnostics contract](../docs/design/diagnostics.md).
+and disables export actions together. If Save or Copy had focus, or focus had
+already left the controls, it moves to Close. A preview over 256 KiB, and withdrawal,
+leave Save disabled outside that write. See [the diagnostics contract](../docs/design/diagnostics.md).
 
 Diagnostics export stays inside error Details as a ghost action. Error renderers
 pass their destination via `within` (or `insideDetails: true` when constructing a

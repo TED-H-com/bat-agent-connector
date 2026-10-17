@@ -48,6 +48,67 @@ for(const locale of ['en','zh-TW'])test.describe(locale,()=>{
    await expect(page.locator('[data-diagnostics-summary]')).toContainText(locale==='en'?'Desktop 0.1.1 (bbbbbbb)':'桌面版 0.1.1（bbbbbbb）');}
  });
 });
+test('busy focus: Save keeps the keyboard while the save is held',async({page})=>{
+ const state=await diagnosticsFixture(page,true);await open(page,'en');
+ await page.evaluate(()=>{
+  const env=(window as any).__diagHold={calls:0,release:null};
+  const orig=(window as any).diagnosticsSave.bind(window);
+  (window as any).diagnosticsSave=async(input:any)=>{env.calls+=1;if(env.calls===1)await new Promise<void>(resolve=>{env.release=resolve;});return orig(input);};
+ });
+ const dialog=page.getByRole('dialog');
+ const save=dialog.getByRole('button',{name:'Save',exact:true});
+ const copy=dialog.getByRole('button',{name:'Copy',exact:true});
+ const status=dialog.getByRole('status');
+ await save.focus();
+ await page.keyboard.press('Enter');
+ await page.waitForFunction(()=>typeof (window as any).__diagHold.release==='function');
+ await expect(save).toBeFocused();
+ await expect(save).toHaveAttribute('aria-disabled','true');
+ await expect(status).toHaveAttribute('aria-busy','true');
+ await page.keyboard.press('Tab');
+ await expect(copy).toBeFocused();
+ await page.keyboard.press('Shift+Tab');
+ await expect(save).toBeFocused();
+ await page.keyboard.press('Shift+Tab');
+ await expect(page.locator('[data-diagnostics-json]')).toBeFocused();
+ await page.keyboard.press('Tab');
+ await expect(save).toBeFocused();
+ await page.keyboard.press('Enter');
+ await page.evaluate(()=>(window as any).__diagHold.release());
+ await expect(status).toHaveText('Saved');
+ await expect(save).toBeFocused();
+ await expect(save).not.toHaveAttribute('aria-disabled');
+ await expect(status).not.toHaveAttribute('aria-busy');
+ expect(await page.evaluate(()=>(window as any).__diagHold.calls)).toBe(1);
+ expect(state.saved).toHaveLength(1);
+});
+test('busy focus: withdrawal during Save moves to Close',async({page})=>{
+ const state=await diagnosticsFixture(page,true);await open(page,'en');
+ await page.evaluate(()=>{
+  const env=(window as any).__diagHold={calls:0,release:null};
+  const orig=(window as any).diagnosticsSave.bind(window);
+  (window as any).diagnosticsSave=async(input:any)=>{env.calls+=1;if(env.calls===1)await new Promise<void>(resolve=>{env.release=resolve;});return orig(input);};
+ });
+ const dialog=page.getByRole('dialog');
+ const save=dialog.getByRole('button',{name:'Save',exact:true});
+ const close=dialog.getByRole('button',{name:'Close',exact:true});
+ const status=dialog.getByRole('status');
+ await save.focus();
+ await page.keyboard.press('Enter');
+ await page.waitForFunction(()=>typeof (window as any).__diagHold.release==='function');
+ await expect(save).toBeFocused();
+ state.eventStatus=403;
+ await expect(status).toContainText('Source access changed',{timeout:15000});
+ await expect(close).toBeFocused();
+ await expect(save).toBeDisabled();
+ await expect(save).not.toHaveAttribute('aria-disabled');
+ await expect(status).not.toHaveAttribute('aria-busy');
+ await page.evaluate(()=>(window as any).__diagHold.release());
+ await expect.poll(()=>state.saved.length).toBe(1);
+ await expect(close).toBeFocused();
+ await expect(status).toContainText('Source access changed');
+ expect(await page.evaluate(()=>(window as any).__diagHold.calls)).toBe(1);
+});
 test('session summary reflects client reads, then removes them after scope loss',async({page})=>{
  const state=await diagnosticsFixture(page);await page.goto('/dashboard/#/sessions');
  await expect(page.locator('.session-results')).toContainText('Private title');await open(page,'en');
