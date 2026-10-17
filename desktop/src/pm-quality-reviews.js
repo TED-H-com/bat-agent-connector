@@ -5,7 +5,7 @@ const CREATE='pm.quality.review.create',RECORD='pm.quality.review.record',REVOKE
 const sha=/^[0-9a-f]{40}$/,digest=/^[0-9a-f]{64}$/,operation=/^op_[0-9a-f]{32}$/,reviewId=/^pmqr_[0-9a-f]{32}$/;
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b),clone=value=>structuredClone(value);
 const github={kind:'fixed_revision_verification',profile:'github_reported_checks_v1'};
-export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox,namespace,onSelectionChange=()=>{}}){
+export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox,namespace,onSelectionChange=()=>{},fixedResult=null,allowedAction=()=>true}){
   const base=`/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   let workId=null,serial=0,ready=false,filtered=false,model=null,selected='',chosen=null,create=null,record=null,revoke=null,formKey='',matrixKey='',verifier=null;
   const navigation=`batc.pm.quality-navigation.${namespace}.${workspaceId}`;
@@ -20,13 +20,15 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
   const member=()=>workspace()?.members?.find(row=>row.actor===caps()?.actor)?.role||workspace()?.membership?.role;
   const writer=()=>ready&&permitted(false)&&['owner','contributor'].includes(member())&&caps()?.scopes?.includes('manage');
   const owner=()=>writer()&&member()==='owner';
+  const canCreate=()=>owner()&&allowedAction(CREATE,{workspace_id:workspaceId,work_item_id:workId});
   const current=()=>model?.reviews.find(row=>row.review_id===selected)||null;
   const supported=()=>caps()?.features?.pm_workspaces?.quality_reviews?.version===1;
   const error=()=>Error(t('pmq_invalid'));
   function emit(ref){chosen=ref?clone(ref):null;if(workId)onSelectionChange(workId,chosen?clone(chosen):null);}
   function options(field,rows){const previous=field.value;field.replaceChildren(h('option',{value:''},t('pmq_choose')),...rows.map(([id,label])=>h('option',{value:id},label)));
     if(previous&&!rows.some(([id])=>id===previous))field.append(h('option',{value:previous},t('pmq_original_missing')));field.value=previous;}
-  function update(){for(const editor of [create,record,revoke])editor?.update();history.disabled=!ready;}
+  function update(){for(const editor of [create,record,revoke])editor?.update();history.disabled=!ready;
+    if(fixedResult&&create)for(const key of ['package','execution','candidate'])create.fields[key].disabled=true;}
   function clear(){ready=false;model=null;verifier?.withdraw();facts.replaceChildren();history.replaceChildren();draft.hidden=assessment.hidden=withdrawal.hidden=true;emit(null);update();}
   function purge(){for(const editor of [create,record,revoke])editor?.dispose();create=record=revoke=null;formKey=matrixKey='';draft.replaceChildren();assessment.replaceChildren();withdrawal.replaceChildren();}
   function withdraw(){serial++;clear();purge();workChoice.replaceChildren();status.replaceChildren();}
@@ -68,7 +70,8 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
         &&(row.context.dod_ref?.revision_id||'')===dod.value&&!row.applicability_reasons.includes('review_superseded'))?.review_id||null;
       const chosenCriteria=()=>criteria(packageFor(pkg.value),model?.dods.find(row=>row.revision_id===dod.value));
       const rows=()=>{try{return JSON.parse(policies.value);}catch{return [];}};
-      const permittedCreate=()=>owner()&&packageFor(pkg.value)&&children(packageFor(pkg.value)).some(row=>row.operation_id===child.value)&&sha.test(candidate.value)
+      const permittedCreate=()=>canCreate()&&packageFor(pkg.value)&&children(packageFor(pkg.value)).some(row=>row.operation_id===child.value)&&sha.test(candidate.value)
+        &&(!fixedResult||pkg.value===fixedResult.package_id&&child.value===fixedResult.execution_operation_id&&candidate.value===fixedResult.candidate_commit)
         &&reviewer.value&&chosenCriteria().length>0&&same(rows().map(row=>row.criterion),chosenCriteria().map(row=>row.criterion))&&rows().every(row=>{try{return same(row.condition,policy(row.choice));}catch{return false;}})
         &&JSON.parse(baseline.value)===previous();
       const sync=()=>{if(!ready)return;const original=packageFor(pkg.value);options(pkg,model.packages.map(row=>[row.package_id,`${row.document.title} · ${row.package_id}`]));
@@ -85,17 +88,33 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
         }
         for(const node of matrix.querySelectorAll('select'))node.disabled=!owner()||create.locked();
         stale.hidden=rebase.hidden=!owner()||create.locked()||JSON.parse(baseline.value)===previous();create.update();};
+      if(fixedResult){
+        options(pkg,model.packages.map(row=>[row.package_id,row.document.title]));
+        options(child,[[fixedResult.execution_operation_id,fixedResult.execution_operation_id]]);
+        for(const [field,value] of [[pkg,fixedResult.package_id],[child,fixedResult.execution_operation_id],[candidate,fixedResult.candidate_commit]]){
+          field.value=value;field.dataset.pmDefault=value;
+        }
+      }
       create=form({namespace:`${namespace}.quality.${workId}`,api:request,action:CREATE,target:{workspace_id:workspaceId,work_item_id:workId},
         fields:{package:pkg,execution:child,candidate,dod,reviewer,criteria:policies,_previous:baseline,rationale},
         params:values=>{const original=packageFor(values.package);if(!permittedCreate())throw error();return {package_ref:{workspace_id:workspaceId,package_id:original.package_id,document_digest:original.document_digest},
           execution_operation_id:values.execution,candidate_commit:values.candidate,dod_revision_id:values.dod||null,reviewer_actor:values.reviewer,
           criteria:JSON.parse(values.criteria).map(({choice,...row})=>row),rationale:values.rationale};},preconditions:()=>({expected_previous_review_id:JSON.parse(baseline.value)}),
-        permitted:()=>owner()&&JSON.parse(baseline.value)===previous(),recoverPermitted:writer,label:'pmq_create',onSaved:async result=>{selected=result.review_id;remember();matrixKey='';await refresh();},
-        onStateChange:()=>{if(create){for(const node of matrix.querySelectorAll('select'))node.disabled=!owner()||create.locked();if(!create.locked())create.box.querySelector('button[type=submit]').disabled=!permittedCreate();}},
+        permitted:()=>canCreate()&&JSON.parse(baseline.value)===previous(),recoverPermitted:writer,label:'pmq_create',onSaved:async result=>{selected=result.review_id;remember();matrixKey='';await refresh();},
+        onStateChange:()=>{if(create){for(const node of matrix.querySelectorAll('select'))node.disabled=!canCreate()||create.locked();if(!create.locked())create.box.querySelector('button[type=submit]').disabled=!permittedCreate();
+          if(fixedResult)for(const key of ['package','execution','candidate'])create.fields[key].disabled=true;}},
         extra:h('div',{class:'pm-fields'},text('pmq_owner_help'),h('div',{class:'capture-fields'},labelled('pmq_package',pkg),labelled('pmq_execution',child)),
-          labelled('pmq_candidate',candidate),text('pmq_candidate_help'),h('div',{class:'capture-fields'},labelled('pmq_dod',dod),labelled('pmq_reviewer',reviewer)),
+          labelled('pmq_candidate',candidate),fixedResult?null:text('pmq_candidate_help'),h('div',{class:'capture-fields'},labelled('pmq_dod',dod),labelled('pmq_reviewer',reviewer)),
           text('pmq_dod_help'),matrix,labelled('pmq_policy_reason',rationale),stale,rebase)});
       for(const field of [pkg,dod,candidate])field.addEventListener('change',sync);for(const field of [child,candidate,reviewer])field.addEventListener('input',()=>create.update());
+      if(fixedResult){
+        for(const [key,value] of Object.entries({package:fixedResult.package_id,execution:fixedResult.execution_operation_id,candidate:fixedResult.candidate_commit})){
+          if(create.fields[key].value!==value)throw error();
+        }
+        const sources=h('details',{},h('summary',{},t('pmq_original_sources')));
+        for(const key of ['package','execution','candidate'])sources.append(create.fields[key].closest('label'));
+        create.box.prepend(h('p',{class:'pm-source'},t('pmq_candidate')+': '+fixedResult.candidate_commit.slice(0,12)),sources);
+      }
       create.sync=sync;draft.replaceChildren(create.box);
     }create.sync();draft.hidden=false;
   }
@@ -114,8 +133,8 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
         saved?h('p',{class:'pm-note-text'},saved.rationale):null,saved?.verification?line('pmq_verification',t('pmq_'+saved.verification.status)):text('pmq_no_proof'));}),
       row.revocation?h('div',{},h('h4',{},t('pmq_revoked')),h('p',{class:'pm-note-text'},row.revocation.document.reason),line('pmq_by',row.revocation.actor)):null,
       h('details',{},h('summary',{},t('pmq_history_receipts')),...row.history.map(item=>h('p',{class:'pm-source'},`${item.version} · ${item.actor} · ${t('pmq_'+item.kind)} · `,
-        h('a',{href:`#/op/${item.operation_id}`},item.operation_id),h('span',{},' · '+item.document_digest)))),use,
-      chosen&&same(chosen,reference(row))?text('pmq_selected'):text('pmq_selection_help')].filter(Boolean));
+        h('a',{href:`#/op/${item.operation_id}`},item.operation_id),h('span',{},' · '+item.document_digest)))),fixedResult?null:use,
+      fixedResult?text('pmq_result_help'):chosen&&same(chosen,reference(row))?text('pmq_selected'):text('pmq_selection_help')].filter(Boolean));
     buildAssessment(row);
   }
   function reference(row){const a=row.assessment;return a?{review_id:row.review_id,operation_id:a.operation_id,version:a.version,document_digest:a.document_digest,candidate_commit:row.context.native_result.candidate_commit}:null;}
@@ -129,7 +148,8 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
         options(verdict,['unassessed','accepted','rejected'].map(value=>[value,t('pmq_'+value)]));verdict.value='unassessed';verdict.dataset.pmDefault='unassessed';
         options(proof,proofChoices(row,item).map(value=>[value.key,value.label]));fields['verdict_'+index]=verdict;fields['proof_'+index]=proof;fields['reason_'+index]=reason;
         matrix.append(h('div',{},h('h4',{},item.text),h('div',{class:'capture-fields'},labelled('pmq_verdict',verdict),labelled('pmq_proof',proof)),labelled('pmq_criterion_reason',reason)));});
-      const reviewer=()=>writer()&&current()?.context.reviewer_actor===caps()?.actor;
+      const reviewer=()=>writer()&&current()?.context.reviewer_actor===caps()?.actor
+        &&allowedAction(RECORD,{workspace_id:workspaceId,review_id:current()?.review_id});
       const active=()=>current()&&!current().revocation&&!current().applicability_reasons.includes('review_superseded');
       const rebase=h('button',{type:'button',class:'secondary',onclick:()=>{if(record&&!record.locked()&&current()){record.set('_version',JSON.stringify(current().version));record.update();}}},t('pmq_use_version'));
       record=form({namespace:`${namespace}.quality.${workId}`,api:request,action:RECORD,target:{workspace_id:workspaceId,review_id:row.review_id},fields,
@@ -139,13 +159,13 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
         label:'pmq_record',onSaved:()=>refresh(),onStateChange:()=>{rebase.hidden=!reviewer()||JSON.parse(version.value)===current().version;rebase.disabled=!!record?.locked();},extra:h('div',{class:'pm-fields'},text('pmq_reviewer_help'),matrix,labelled('pmq_assessment_reason',rationale),h('div',{class:'actions'},rebase))});
       const reason=input('pmq_revoke_reason',{multiline:true,max:4000}),revokeVersion=hidden(row.version);
       revoke=form({namespace:`${namespace}.quality.${workId}`,api:request,action:REVOKE,target:{workspace_id:workspaceId,review_id:row.review_id},fields:{reason,_version:revokeVersion},params:values=>({reason:values.reason}),
-        preconditions:()=>({expected_version:JSON.parse(revokeVersion.value)}),permitted:()=>writer()&&(owner()||reviewer())&&active()&&JSON.parse(revokeVersion.value)===current().version,recoverPermitted:writer,
+        preconditions:()=>({expected_version:JSON.parse(revokeVersion.value)}),permitted:()=>writer()&&(owner()||reviewer())&&active()&&JSON.parse(revokeVersion.value)===current().version&&allowedAction(REVOKE,{workspace_id:workspaceId,review_id:current()?.review_id}),recoverPermitted:writer,
         label:'pmq_revoke',onSaved:()=>refresh(),extra:h('div',{class:'pm-fields'},labelled('pmq_revoke_reason',reason),h('button',{type:'button',class:'secondary',onclick:()=>{if(revoke&&!revoke.locked()&&current()){revoke.set('_version',JSON.stringify(current().version));revoke.update();}}},t('pmq_use_version')))});
       assessment.replaceChildren(h('details',{'data-quality-assess':'',open:row.context.reviewer_actor===caps()?.actor&&(!row.assessment||record.locked())},h('summary',{},t('pmq_assess_heading')),record.box));
       withdrawal.replaceChildren(h('details',{},h('summary',{},t('pmq_revoke_heading')),revoke.box));
     }
     row.context.criteria.forEach((item,index)=>options(record.fields['proof_'+index],proofChoices(row,item).map(value=>[value.key,value.label])));
-    assessment.hidden=withdrawal.hidden=false;update();
+    assessment.hidden=false;withdrawal.hidden=!!fixedResult;update();
   }
   function remember(){try{localStorage.setItem(navigation,JSON.stringify({workId,review_id:selected}));}catch{}}
   history.addEventListener('change',()=>{selected=history.value;emit(null);remember();renderReview();});
@@ -179,16 +199,28 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
           label:`${t('pmq_github')} · ${source.delivered_sha.slice(0,12)} · ${observation.observation_id}`,condition:github,
           reference:{integration_operation_id:delivery.operation_id,source_seq:source.seq,candidate_commit:source.delivered_sha,observation_id:observation.observation_id,document_digest:observation.document_digest}});}}
       if(packages.some(row=>row.workspace_id!==workspaceId||row.work_item_id!==id)||dods.some(row=>row.workspace_id!==workspaceId))throw error();
-      model={packages,operations,dods,reviews:reviews.map(checkReview),proofs};ready=true;options(history,reviews.map(row=>[row.review_id,`${row.context.native_result.candidate_commit.slice(0,12)} · ${row.context.reviewer_actor} · ${row.review_id}`]));
-      if(selected&&!reviews.some(row=>row.review_id===selected))selected='';history.value=selected;buildCreate();renderReview();await verifier.setSources(operations.filter(op=>packages.some(pkg=>children(pkg).some(child=>child.operation_id===op.operation_id))));if(!valid(ticket))return;status.replaceChildren(...(filtered?[text('pmq_filtered')]:[]));
+      model={packages,operations,dods,reviews:reviews.map(checkReview),proofs};
+      if(fixedResult){
+        if(workId!==fixedResult.work_item_id||!children(packageFor(fixedResult.package_id)).some(op=>op.operation_id===fixedResult.execution_operation_id))throw error();
+        model.packages=packages.filter(row=>row.package_id===fixedResult.package_id);
+        model.operations=operations.filter(row=>row.operation_id===fixedResult.execution_operation_id);
+        model.reviews=model.reviews.filter(row=>row.context.package_ref.package_id===fixedResult.package_id
+          &&row.context.execution_operation_id===fixedResult.execution_operation_id&&row.context.native_result.candidate_commit===fixedResult.candidate_commit);
+      }
+      ready=true;options(history,model.reviews.map(row=>[row.review_id,`${row.context.native_result.candidate_commit.slice(0,12)} · ${row.context.reviewer_actor} · ${row.review_id}`]));
+      if(selected&&!model.reviews.some(row=>row.review_id===selected))selected='';
+      if(fixedResult&&!selected&&model.reviews.length===1)selected=model.reviews[0].review_id;
+      history.value=selected;buildCreate();renderReview();if(!fixedResult)await verifier.setSources(operations.filter(op=>packages.some(pkg=>children(pkg).some(child=>child.operation_id===op.operation_id))));if(!valid(ticket))return;status.replaceChildren(...(filtered?[text('pmq_filtered')]:[]));
       if(previous&&selectable(current())&&same(previous,reference(current())))emit(previous);update();
     }catch(err){if(valid(ticket))failure(err);}
   }
-  function setWork(id){if(id===workId)return;withdraw();
+  function setWork(id){if(fixedResult&&id!==fixedResult.work_item_id)return;if(id===workId)return;withdraw();
     workId=/^wi_[0-9a-f]{20}$/.test(id||'')?id:null;selected='';try{const saved=JSON.parse(localStorage.getItem(navigation));if(saved.workId===workId)selected=saved.review_id||'';}catch{}
     void refresh();}
   workChoice.addEventListener('change',()=>setWork(workChoice.value));
   verifier=workspaceExecutionVerification({h,t,api:request,alive,workspaceId,workspace,caps,form,labelled,errorBox,namespace,onSaved:()=>refresh(),onUnavailable:failure,onConfiguration:value=>{if(model){model.configuration=value?.available&&digest.test(value.command_digest)?value:null;matrixKey='';create?.sync();}}});
   element.insertBefore(verifier.element,draft.parentElement);
+  if(fixedResult){workChoice.closest('label').hidden=true;verifier.element.hidden=true;
+    element.classList.remove('panel');element.querySelector('h2').textContent=t('pmq_result_open');}
   return {element,setWork,refresh,withdraw,selection:()=>ready&&chosen?clone(chosen):null};
 }

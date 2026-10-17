@@ -2,6 +2,7 @@ import {button, disclosure, statusPill} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
 import {sessionHref} from './session-navigation.js';
 import {createWorkPublish, publicationDeliveryLine, publicationPrLine} from './pm-work-publish.js';
+import {createWorkQuality} from './pm-work-quality.js';
 
 const KNOWN_STATES = new Set([
   'accepted',
@@ -84,6 +85,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
   const panelElement = h('div', {class: 'pm-work-result-panel', 'data-work-result': ''});
   panelElement.hidden = true;
   const publish = createWorkPublish({h, t, form, namespace, caps, errorBox});
+  const quality = createWorkQuality({h,t,api,alive,workspaceId,caps,form,errorBox,namespace});
 
   function updateVisibility(visible) {
     panelElement.hidden = !visible;
@@ -111,6 +113,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
     detailsOpen = false;
     filesOpen = false;
     publish.dispose();
+    quality.dispose();
     panelElement.replaceChildren();
     updateVisibility(false);
   }
@@ -218,6 +221,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
 
   function renderInvalid() {
     publish.dispose();
+    quality.dispose();
     panelElement.replaceChildren(
       h('h3', {}, t('wres_heading')),
       h('p', {class: 'pm-work-result-invalid'}, t('wres_invalid_envelope')),
@@ -226,6 +230,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
   }
 
   function renderError(err, attempt) {
+    quality.dispose();
     const heading = h('h3', {}, t('wres_heading'));
     const retryBtn = button({
       label: t('wres_try_again'),
@@ -263,6 +268,9 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
   function saveFocus() {
     const active = document.activeElement;
     if (active && panelElement.contains(active)) {
+      if (active.closest('[data-work-quality]')) {
+        return {type: 'quality-field', node: active, start: active.selectionStart, end: active.selectionEnd};
+      }
       if (active.dataset?.workResultFocus) {
         return {type: 'attr', value: active.dataset.workResultFocus};
       }
@@ -311,7 +319,12 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
 
   function restoreFocus(token) {
     if (!token) return;
-    if (token.type === 'attr') {
+    if (token.type === 'quality-field') {
+      if (panelElement.contains(token.node) && !token.node.disabled) {
+        token.node.focus({preventScroll: true});
+        if (typeof token.start === 'number') token.node.setSelectionRange?.(token.start, token.end);
+      }
+    } else if (token.type === 'attr') {
       elementByAttr(panelElement, 'data-work-result-focus', token.value)?.focus();
     } else if (token.type === 'diff-summary') {
       elementByAttr(panelElement, 'data-work-result-diff-summary', token.key)?.focus();
@@ -772,6 +785,10 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
 
     const publishNode = publish.render(envelope);
     if (publishNode) sections.push(publishNode);
+    if (!lastStale) {
+      const qualityNode = quality.render(envelope, attempt);
+      if (qualityNode) sections.push(qualityNode);
+    }
 
     // 6. Recorded turns disclosure
     const results = envelope.results || [];

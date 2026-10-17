@@ -30,8 +30,9 @@ export function qualityFixture(){
   const dispatch=async(input:any)=>{
     const url=new URL(input.path,'http://fixture'),pathname=url.pathname;if(input.method==='GET')state.reads.push(input.path);
     if(pathname==='/capabilities')return {status:200,data:caps()};
-    if(pathname===`/pm/workspaces/${workspaceId}`)return {status:200,data:{workspace:{membership:{role:state.role},members:[{actor:state.actor,role:state.role},{actor:'other-reviewer',role:'contributor'}]}}};
+    if(pathname===`/pm/workspaces/${workspaceId}`)return {status:200,data:{workspace:{workspace_id:workspaceId,membership:{role:state.role},members:[{actor:state.actor,role:state.role},{actor:'other-reviewer',role:'contributor'}]}}};
     if(state.deny)return {status:404,data:{error:{code:'NOT_FOUND',message:'Original sources withdrawn'}}};
+    if(state.resultEnvelope&&pathname.endsWith('/result'))return {status:200,data:structuredClone(state.resultEnvelope)};
     if(input.method==='GET'){
       if(pathname.startsWith('/operations/')){const op=[...state.ops.values()].find((op:any)=>pathname.endsWith(op.operation_id));return op?{status:200,data:{operation:op}}:{status:404,data:{error:{code:'NOT_FOUND',message:'Operation unavailable'}}};}
       if(pathname==='/operations')return {status:200,data:{operations:structuredClone(url.searchParams.get('action')===VERIFY?[...state.ops.values()].filter((op:any)=>op.action===VERIFY):state.operations),next_before:null}};
@@ -61,20 +62,20 @@ export function qualityFixture(){
     }throw Error('Unhandled fixture '+input.path);
   };return {state,save,assess,dispatch,criteria,package_ref};
 }
-export async function mountQuality(page:Page,f:ReturnType<typeof qualityFixture>,locale='en'){
+export async function mountQuality(page:Page,f:ReturnType<typeof qualityFixture>,locale='en',resultEntry=false){
   page.on('pageerror',error=>{throw error;});
   await page.exposeFunction('qualityFixtureRequest',f.dispatch);
   await page.route('**/__quality_src/*.js',async route=>{const file=path.basename(new URL(route.request().url()).pathname);let source=await readFile(new URL('../src/'+file,import.meta.url),'utf8');
     if(file==='pm-workspace.js')source=source.replace('function durableForm(', 'export function durableForm(');await route.fulfill({contentType:'text/javascript',body:source});});
   await unavailableBriefTransport(page,'__quality_src');
   await page.route('**/__quality_harness',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/dashboard/app.css"><main class="pm-main" id="mount"></main>'}));
-  await page.goto('/__quality_harness');await bootQuality(page,locale);
+  await page.goto('/__quality_harness');await bootQuality(page,locale,resultEntry);
 }
-export async function bootQuality(page:Page,locale='en'){
-  await page.evaluate(async({locale,workspaceId,workId})=>{
+export async function bootQuality(page:Page,locale='en',resultEntry=false){
+  await page.evaluate(async({locale,workspaceId,workId,resultEntry})=>{
     const {workspaceQualityReviews}=await import('/__quality_src/pm-quality-reviews.js'),{durableForm}=await import('/__quality_src/pm-workspace.js');
     const {pmQualityReviewsStrings}=await import('/__quality_src/pm-quality-reviews-strings.js'),{pmStrings}=await import('/__quality_src/pm-strings.js');
-    const strings={...pmStrings[locale],...pmQualityReviewsStrings[locale]},t=(key:string)=>strings[key]||key;
+    const strings={...pmStrings[locale],...pmQualityReviewsStrings[locale]},t=(key:string,values:any={})=>(strings[key]||key).replace(/\{(\w+)\}/g,(_:string,name:string)=>String(values[name]??'{'+name+'}'));
     const h=(tag:string,attrs:any={},...children:any[])=>{const el=document.createElement(tag);for(const[key,value]of Object.entries(attrs||{})){if(value===null||value===undefined||value===false)continue;
       if(key.startsWith('on'))el.addEventListener(key.slice(2),value as any);else el.setAttribute(key,value===true?'':String(value));}for(const child of children.flat()){if(child!==null&&child!==undefined&&child!==false)el.append(child instanceof Node?child:document.createTextNode(String(child)));}return el;};
     const win=window as any,api=async(method:string,path:string,body:any,key:any)=>{const result=await win.qualityFixtureRequest({method,path,body,idempotency_key:key});
@@ -84,9 +85,21 @@ export async function bootQuality(page:Page,locale='en'){
       const field=h(multiline?'textarea':'input',{'aria-label':t(label),maxlength:max,required}) as HTMLInputElement;field.value=value;return field;},labelled=(key:string,field:any)=>h('label',{},t(key),field),alive=()=>{};
     let caps=await api('GET','/capabilities'),workspace=(await api('GET','/pm/workspaces/'+workspaceId)).workspace;
     const form=(options:any)=>durableForm({h,t,api,caps:()=>caps,guard:alive,namespace:'quality-ui.'+caps.actor,errorBox,...options});
+    if(resultEntry){
+      const {workResultPanel}=await import('/__quality_src/pm-work-result.js');
+      const {workResultStrings}=await import('/__quality_src/pm-work-result-strings.js');
+      Object.assign(strings,workResultStrings[locale]);
+      const result=workResultPanel({h,t,api,alive,workspaceId,caps:()=>caps,form,errorBox,namespace:'quality-ui.'+caps.actor});
+      document.getElementById('mount')!.append(result.element);
+      win.qualityRefresh=()=>result.refresh();win.qualityWithdraw=()=>result.withdraw();
+      await result.setAttempt({attempt_id:'att_'+'1'.repeat(32),work_item_id:workId,session:{host:'fixture-host',session_id:'session-1'}});
+      return;
+    }
     const quality=workspaceQualityReviews({h,t,api,alive,workspaceId,workspace:()=>workspace,caps:()=>caps,permitted:()=>['owner','contributor'].includes(workspace.membership?.role),form,input,labelled,errorBox,namespace:'quality-ui.'+caps.actor,
       onSelectionChange:(work:string,ref:any)=>{win.qualitySelected=ref;win.qualityChanges=(win.qualityChanges||[]).concat([{work,ref}]);}});
     document.getElementById('mount')!.append(quality.element);win.qualityRefresh=async()=>{caps=await api('GET','/capabilities');workspace=(await api('GET','/pm/workspaces/'+workspaceId)).workspace;await quality.refresh();};
     win.qualityOnlyRefresh=()=>quality.refresh();win.qualityWithdraw=()=>quality.withdraw();win.qualitySelection=()=>quality.selection();quality.setWork(workId);
-  },{locale,workspaceId,workId});await expect(panel(page)).toBeVisible();await expect(editor(page).locator('select').first()).toHaveCount(1);
+  },{locale,workspaceId,workId,resultEntry});
+  if(resultEntry)await expect(page.locator('[data-work-result]')).toBeVisible();
+  else {await expect(panel(page)).toBeVisible();await expect(editor(page).locator('select').first()).toHaveCount(1);}
 }

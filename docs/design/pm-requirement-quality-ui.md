@@ -1,5 +1,34 @@
 # Explicit original requirement acceptance in engineering flows
 
+## Reviewing a fixed Work Result
+
+The shared Result panel offers **Review this result** in both Board and the live
+Work view when central supplies a complete Work/Attempt/package/execution identity
+and a fixed commit. Opening the entry reads the existing quality catalog; it does
+not create a review, run a verifier, start analysis or adopt evidence.
+
+The existing review editor is scoped to that original package, execution and
+commit. Those source fields are fixed under Details. Saved reviews for another
+execution or commit are excluded. A new review still requires the owner's
+explicit reviewer, criterion policy and rationale; recording conclusions remains
+the appointed reviewer's action. The Result's currently offered action targets
+add a guard to the existing role, scope, version and source checks. Central remains
+the authority at submission. The ordinary Requirements editor is unchanged.
+
+Each Attempt/commit has its own durable form namespace. Refresh preserves its
+draft and original operation key; changing Result withdraws the old editor without
+retargeting it. A failed, withdrawn or mismatched Result removes the review entry,
+and late source replies cannot recreate it. Missing original execution/package
+evidence is an unavailable state, never a reason to substitute another operation.
+
+Recorded conclusions appear with the Result through the existing central
+projection. This entry does not expose the Requirements editor's local evidence
+selection button: selecting a reference without an evidence consumer would have
+no effect. Requirement adoption, dependencies and milestones continue to follow
+their original evidence policy; a review or passing CI alone does not complete them.
+
+## Original requirement acceptance selections
+
 The shared workspace handoff and selected-batch panels consume the registered
 `accepted_requirements_v1` condition. They preserve the distinction between
 fixed revision verification and requirement acceptance. A checked prerequisite,

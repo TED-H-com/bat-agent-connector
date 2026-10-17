@@ -233,6 +233,13 @@ try {
   await expect(page.locator('[data-work-result]')).toContainText('Added the retry-after-failure case.');
   await expect(page.locator('[data-work-publish-commit]')).toHaveAttribute('title', fixed.candidate);
   await shot('03-reconnected-result');
+  step = 'review-result';
+  await page.getByRole('button', {name: zh ? '審閱這份成果' : 'Review this result', exact: true}).click();
+  const review = page.locator('[data-work-quality] [data-pm-action="pm.quality.review.create"]');
+  await expect(review.getByLabel(zh ? '候選提交' : 'Candidate commit', {exact: true})).toHaveValue(fixed.candidate);
+  await expect(review.getByLabel(zh ? '候選提交' : 'Candidate commit', {exact: true})).toBeDisabled();
+  assert.equal(requests.length, expectedOperations - 1, 'Opening the fixed Result review must not create an operation');
+  await shot('03-result-review');
   step = 'publish';
   await page.locator('[data-work-publish-title]').fill(zh ? '修正登入重複送出' : 'Fix duplicate login submission');
   await page.locator('[data-work-publish-body]').fill(zh ? '修正與重試案例已完成，等待審閱。' : 'Login repair and retry case ready for review.');

@@ -126,6 +126,8 @@ BAT 回合與 GitHub 由可控來源提供，Git 使用磁碟上的隔離 reposi
 測試不修改 operation rows、不強制 wake 或重新送出。重開瀏覽器後核對同一
 Work／Attempt、已送指令與固定 commit，切換 Work／Lineage／Live 保留草稿，
 再開啟原工作脈絡的 PM 討論、重新載入並返回，同一指令草稿與已送回執仍在。
+`ux/result-quality-review` 候選再從固定成果開啟既有審閱器，核對提交已帶入且
+不可改選，開啟本身不建立操作；實際執行結果依該候選 PR 紀錄判讀。
 往返不得建立操作或改選 Attempt，接著從同一固定成果發布 draft PR 並重新載入。
 所有三筆使用者寫入均由 UI 發起；討論往返本身不執行 PM 分析或採用決策。
 
@@ -180,10 +182,10 @@ BATC_WORK_LOOP_BROWSER=1 pytest-disktmp uv run --python 3.13 --extra dev pytest 
 這組需瀏覽器的測試；desktop CI 明確啟用並執行，產物在
 `desktop/test-results/work-loop/`，隨既有 `desktop-shared-ui-fixtures` artifact 保存。
 
-此回歸涵蓋 K03、K05、K07、K08、K09、K12 與 K15 的部分 I 路徑，以及 UX-A13
+此回歸涵蓋 K03–09、K12 與 K15 的部分 I 路徑，以及 UX-A13
 自動銜接的 I 證據。它使用已設定的專案及 repository／PM 綁定；直接開始路徑
 使用既有 Work，採用路徑由 UI 建立本次 Work。仍不涵蓋全新專案設定、
-真實 Idea／PM 回覆、P6 故障恢復、Hermes 產品端整合、兩份成果的 PM 影響評估、
+真實 Idea／PM 回覆、P6 的其他故障排列、Hermes 產品端整合、兩份成果的 PM 影響評估、
 原生安裝、真實模型／BAT／GitHub 或 R0／R1／L 驗收。
 
 ## 報告範本
