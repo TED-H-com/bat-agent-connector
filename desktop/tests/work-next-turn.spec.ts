@@ -761,8 +761,8 @@ for (const feature of [null, {version: 1, available: false}, {version: 2, availa
   });
 }
 
-test('the native shell does not advertise follow-up before its read routes exist', async ({page}) => {
-  const f = followUpFixture('en', {native: true});
+test('the native shell still requires a supported follow-up capability', async ({page}) => {
+  const f = followUpFixture('en', {native: true, feature: {version: 1, available: false}});
   await openWork(page, f, 'en', {section: false});
   await expect(page.locator('[data-work-section="next-turn"]')).toHaveCount(0);
   expect(f.follow.reads.some(row => row.includes('/inputs') || row.includes('/work-attempts/'))).toBe(false);

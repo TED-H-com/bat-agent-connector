@@ -4795,6 +4795,75 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn native_work_reads_and_next_input_keep_the_exact_central_identity() {
+        let ws = "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let wi = "wi_bbbbbbbbbbbbbbbbbbbb";
+        let att = "att_cccccccccccccccccccccccccccccccc";
+        let reads = [
+            format!("/pm/workspaces/{ws}/work-attempts/{att}"),
+            format!("/pm/workspaces/{ws}/work/{wi}/inputs?attempt_id={att}&limit=50"),
+            format!("/pm/workspaces/{ws}/work-attempts/{att}/result"),
+        ];
+        let views = [
+            serde_json::json!({"workspace_id":ws,"attempt":{"attempt_id":att,"work_item_id":wi}}),
+            serde_json::json!({"workspace_id":ws,"work_item_id":wi,"attempt_id":att,"items":[]}),
+            serde_json::json!({"contract":"pm-work-attempt-result/v1","workspace_id":ws,"attempt_id":att,"identity":{"work_item_id":wi}}),
+        ];
+        let mut responses = vec![
+            json_response(CAPS),
+            bootstrap_response("fixture", "principal"),
+        ];
+        responses.extend(views.iter().map(|view| json_response(&view.to_string())));
+        responses.extend([
+            json_response(CAPS),
+            bootstrap_response("fixture", "principal"),
+            json_response(r#"{"operation":{"operation_id":"op_fixture","status":"queued"}}"#),
+        ]);
+        let (endpoint, received, handle) = server(responses);
+        let bridge = Bridge::new(
+            Ok(config(&endpoint)),
+            Zeroizing::new("fixture-token".into()),
+        );
+        bridge.connect().await.unwrap();
+        for (path, view) in reads.iter().zip(&views) {
+            assert_eq!(bridge.request(get(path)).await.unwrap().data, *view);
+        }
+        let body = serde_json::json!({"action":"session.send", "target":{"workspace_id":ws,"work_item_id":wi},
+            "params":{"text":"補上重新送出的案例","schedule":"after_current"},"preconditions":{"expected_attempt_id":att}});
+        let mut input = request("POST", "/operations");
+        input.idempotency_key = Some("original-work-input-key".into());
+        input.body = Some(body.clone());
+        assert_eq!(
+            bridge.request(input).await.unwrap().data["operation"]["status"],
+            "queued"
+        );
+        handle.join().unwrap();
+        let requests: Vec<_> = received.iter().collect();
+        assert_eq!(requests.len(), 8);
+        for (raw, path) in requests[2..5].iter().zip(&reads) {
+            assert!(raw.starts_with(&format!("GET /api/v1{path} ")));
+            assert!(!raw.to_lowercase().contains("idempotency-key:"));
+        }
+        assert!(requests[5].starts_with("GET /api/v1/capabilities "));
+        assert!(requests[6].starts_with("GET /api/v1/bootstrap "));
+        let sent = &requests[7];
+        assert!(sent.starts_with("POST /api/v1/operations "));
+        assert!(sent
+            .to_lowercase()
+            .contains("idempotency-key: original-work-input-key"));
+        assert_eq!(
+            serde_json::from_str::<Value>(sent.split_once("\r\n\r\n").unwrap().1).unwrap(),
+            body
+        );
+        assert!(requests.iter().all(|raw| raw
+            .to_lowercase()
+            .contains("authorization: bearer fixture-token")));
+        assert!(!serde_json::to_string(&bridge.status())
+            .unwrap()
+            .contains("fixture-token"));
+    }
+
+    #[tokio::test]
     async fn redirects_never_receive_a_second_token_bearing_request() {
         let target = TcpListener::bind("127.0.0.1:0").unwrap();
         target.set_nonblocking(true).unwrap();

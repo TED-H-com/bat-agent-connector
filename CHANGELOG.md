@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Desktop Workbench now keeps the selected Work and Attempt when opening live
+  output, reading its fixed Result or sending the next instruction. It uses the
+  existing typed central bridge and the same capability, source and controller
+  checks as Web, with queued receipts and unsent drafts preserved on reload.
+
 - Workbench project navigation shows a Work and its proven execution as one row,
   preserving its exact Attempt, pending decisions, keyboard focus and older links.
   Same-name or unproven sources remain separate; the association grants no control.

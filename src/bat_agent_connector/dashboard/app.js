@@ -63439,7 +63439,7 @@ async function viewSession(main, host, sid, context = null) {
 	const path = `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(sid)}`;
 	const requestedWork = workSessionContext(params);
 	const workContextReadable = workFollowUpAvailable(state.caps) || state.caps?.features?.pm_workspaces?.work_start?.version === 1;
-	const workContext = !nativeDesktop && workbenchEnabled() && workContextReadable && requestedWork ? requestedWork : null;
+	const workContext = workbenchEnabled() && workContextReadable && requestedWork ? requestedWork : null;
 	let selectedAttempt = null;
 	if (workContext) try {
 		const selected = await readWorkSessionContext({
@@ -63904,7 +63904,7 @@ async function viewSession(main, host, sid, context = null) {
 	const followWorkspace = workContext?.workspaceId || "";
 	const followWorkId = workRecord?.work_item?.work_item_id || "";
 	let mobileLayout = null;
-	const followUp = workbenchEnabled() && !nativeDesktop && followWorkspace && /^wi_[0-9a-f]{20}$/.test(followWorkId) && workFollowUpAvailable(state.caps) ? mountWorkFollowUp({
+	const followUp = workbenchEnabled() && followWorkspace && /^wi_[0-9a-f]{20}$/.test(followWorkId) && workFollowUpAvailable(state.caps) ? mountWorkFollowUp({
 		h,
 		t,
 		api,

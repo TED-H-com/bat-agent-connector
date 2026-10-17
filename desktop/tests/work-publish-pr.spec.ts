@@ -329,10 +329,11 @@ test.describe('Work Result pull request publication', () => {
     expect(f.state.publishWrites).toEqual([]);
   });
 
-  test('the official Work Result publishes through the same durable form', async ({page}) => {
+  for (const native of [false, true]) {
+  test(`the official Work Result publishes through the same durable form (${native ? 'native IPC' : 'Web HTTP'})`, async ({page}) => {
     const entry = publishEntry(CANDIDATE);
     entry.target.host = 'demo';
-    const f = followUpFixture('en', {workspaceId, workItemId: workId(1), publication: entry,
+    const f = followUpFixture('en', {native, workspaceId, workItemId: workId(1), publication: entry,
       resultExtras: {execution: {state: 'turn-ended'}, identity: {execution_operation_id: EXEC}}});
     const writes: any[] = [];
     const dispatch = f.dispatch;
@@ -343,7 +344,7 @@ test.describe('Work Result pull request publication', () => {
       }
       return dispatch(input);
     };
-    await mountWorkspace(page, false, f);
+    await mountWorkspace(page, native, f);
     await page.goto(`/dashboard/?workbench=1#/session/demo/search-results?workspace=${workspaceId}&work=${workId(1)}&attempt=${LIVE_ATTEMPT}`);
     await page.getByRole('button', {name: 'Results', exact: true}).click();
     await fillPublish(page);
@@ -354,6 +355,8 @@ test.describe('Work Result pull request publication', () => {
     expect(writes[0].body.target).toEqual(entry.target);
     expect(writes[0].body.preconditions).toEqual(entry.preconditions);
   });
+
+  }
 
   test('an absent publication entry draws nothing', async ({page}) => {
     const f = workResultFixture();
