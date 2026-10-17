@@ -16354,7 +16354,8 @@ var sha$4 = /^[0-9a-f]{40}$/;
 var digest$8 = /^[0-9a-f]{64}$/;
 var operation = /^op_[0-9a-f]{32}$/;
 var reviewId = /^pmqr_[0-9a-f]{32}$/;
-var same$10 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+var ordered$1 = (value) => Array.isArray(value) ? value.map(ordered$1) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, ordered$1(value[key])])) : value;
+var same$10 = (a, b) => JSON.stringify(ordered$1(a)) === JSON.stringify(ordered$1(b));
 var clone$1 = (value) => structuredClone(value);
 var github = {
 	kind: "fixed_revision_verification",

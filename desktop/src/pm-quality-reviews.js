@@ -3,7 +3,10 @@ import {workspaceExecutionVerification} from './pm-execution-verification.js';
 // Fixed quality conclusions remain central; this view selects original receipts.
 const CREATE='pm.quality.review.create',RECORD='pm.quality.review.record',REVOKE='pm.quality.review.revoke';
 const sha=/^[0-9a-f]{40}$/,digest=/^[0-9a-f]{64}$/,operation=/^op_[0-9a-f]{32}$/,reviewId=/^pmqr_[0-9a-f]{32}$/;
-const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b),clone=value=>structuredClone(value);
+// JSON object member order is not source identity. Arrays retain their order.
+const ordered=value=>Array.isArray(value)?value.map(ordered):value&&typeof value==='object'
+  ?Object.fromEntries(Object.keys(value).sort().map(key=>[key,ordered(value[key])])):value;
+const same=(a,b)=>JSON.stringify(ordered(a))===JSON.stringify(ordered(b)),clone=value=>structuredClone(value);
 const github={kind:'fixed_revision_verification',profile:'github_reported_checks_v1'};
 export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox,namespace,onSelectionChange=()=>{},fixedResult=null,allowedAction=()=>true}){
   const base=`/pm/workspaces/${encodeURIComponent(workspaceId)}`;

@@ -20,6 +20,10 @@ draft and original operation key; changing Result withdraws the old editor witho
 retargeting it. A failed, withdrawn or mismatched Result removes the review entry,
 and late source replies cannot recreate it. Missing original execution/package
 evidence is an unavailable state, never a reason to substitute another operation.
+JSON object member order does not identify a source: central serializes original
+package references with a different key order from browser-created objects.
+Compare complete values with normalized object keys while retaining array order;
+changed package digests, criterion identities or policy values still differ.
 
 Recorded conclusions appear with the Result through the existing central
 projection. This entry does not expose the Requirements editor's local evidence
