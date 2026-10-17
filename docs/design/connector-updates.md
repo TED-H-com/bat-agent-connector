@@ -59,7 +59,8 @@ Pre-enrollment deployment backups remain available to the operator separately.
 ## Bounds and recovery
 
 Network responses, release enumeration and subprocess time are bounded. Only
-the updater's own spawned process group may be terminated on timeout. Failed
+the updater's own spawned process group may be terminated on timeout or interruption,
+before releasing the installation lease. Failed
 attempts retain a concise receipt and leave the active version intact. Retries
 reconcile existing installation evidence; they do not replay Work operations.
 The next scheduled run can retry a failed preparation, while an uncertain or

@@ -19,7 +19,7 @@ except ModuleNotFoundError:  # Python 3.10
     import tomli as tomllib
 
 from . import platform_files as files
-from .update_release import REPOSITORY, UpdateError, require
+from .update_release import REPOSITORY, require
 
 
 def clean_env(home):
@@ -36,20 +36,23 @@ def run(args, *, env, cwd=None, timeout=180):
     with tempfile.TemporaryFile(dir=logs) as output:
         process = subprocess.Popen(args, cwd=cwd, env=env, stdout=output, stderr=output,  # noqa: S603
                                    stdin=subprocess.DEVNULL, start_new_session=True)
-        deadline = time.monotonic() + timeout
-        failure = None
-        while process.poll() is None:
-            if os.fstat(output.fileno()).st_size > 4 * 1024 * 1024:
-                failure = "update_command_output_limit"
-                break
-            if time.monotonic() >= deadline:
-                failure = "update_command_timeout"
-                break
-            try:
-                process.wait(timeout=min(0.25, max(0.001, deadline - time.monotonic())))
-            except subprocess.TimeoutExpired:
-                pass
-        if failure:
+        try:
+            deadline = time.monotonic() + timeout
+            while process.poll() is None:
+                require(os.fstat(output.fileno()).st_size <= 4 * 1024 * 1024,
+                        "update_command_output_limit")
+                require(time.monotonic() < deadline, "update_command_timeout")
+                try:
+                    process.wait(timeout=min(0.25, max(0.001, deadline - time.monotonic())))
+                except subprocess.TimeoutExpired:
+                    pass
+            require(process.returncode == 0, "update_command_failed")
+            require(output.tell() <= 4 * 1024 * 1024, "update_command_output_limit")
+            output.seek(0)
+            return output.read().decode("utf-8", errors="replace").strip()
+        except BaseException:
+            # An interrupted updater must stop its installer before releasing the
+            # updater lease. The child has its own group, including build helpers.
             try:
                 os.killpg(process.pid, signal.SIGTERM)
             except ProcessLookupError:
@@ -57,13 +60,14 @@ def run(args, *, env, cwd=None, timeout=180):
             try:
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
+                pass
+            # A child can exit on TERM while its descendants ignore it.
+            try:
                 os.killpg(process.pid, signal.SIGKILL)
-                process.wait()
-            raise UpdateError(failure)
-        require(process.returncode == 0, "update_command_failed")
-        require(output.tell() <= 4 * 1024 * 1024, "update_command_output_limit")
-        output.seek(0)
-        return output.read().decode("utf-8", errors="replace").strip()
+            except ProcessLookupError:
+                pass
+            process.wait()
+            raise
 
 
 def package_files(path, *, python_only=False):

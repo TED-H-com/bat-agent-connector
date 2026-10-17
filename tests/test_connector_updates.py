@@ -4,7 +4,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import signal
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -414,3 +417,56 @@ def test_command_timeout_output_limit_and_clean_environment(tmp_path, monkeypatc
         run([sys.executable, "-c", "print('x' * (5 * 1024 * 1024))"], env=env)
     with pytest.raises(UpdateError, match="command_failed"):
         run([sys.executable, "-c", "raise SystemExit(4)"], env=env)
+
+
+def test_interrupted_updater_reaps_its_installer_and_descendant(tmp_path):
+    # Signal a separate updater process, never pytest or a live installation.
+    ready = tmp_path / "ready.json"
+    child_code = """
+import json, os, signal, subprocess, sys, time
+from pathlib import Path
+child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])
+def finish(*_):
+    child.wait(timeout=5)
+    raise SystemExit(0)
+signal.signal(signal.SIGTERM, finish)
+ready = Path(sys.argv[1])
+ready.with_suffix(".tmp").write_text(json.dumps([os.getpid(), child.pid]))
+ready.with_suffix(".tmp").replace(ready)
+time.sleep(60)
+"""
+    runner_code = """
+import sys
+from pathlib import Path
+from bat_agent_connector.update_install import clean_env, run
+try:
+    run([sys.executable, '-c', sys.argv[2], sys.argv[3]], env=clean_env(Path(sys.argv[1])))
+except KeyboardInterrupt:
+    raise SystemExit(130)
+"""
+    runner = subprocess.Popen([sys.executable, "-c", runner_code, str(tmp_path), child_code, str(ready)],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    owned = []
+    try:
+        deadline = time.monotonic() + 10
+        while not ready.exists():
+            assert runner.poll() is None and time.monotonic() < deadline
+            time.sleep(0.02)
+        owned = json.loads(ready.read_text())
+        runner.send_signal(signal.SIGINT)
+        assert runner.wait(timeout=10) == 130
+        for pid in owned:
+            with pytest.raises(ProcessLookupError):
+                os.kill(pid, 0)
+    finally:
+        # A regression must not leave the test's own children behind.
+        if ready.exists() and not owned:
+            owned = json.loads(ready.read_text())
+        if owned:
+            try:
+                os.killpg(owned[0], signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        if runner.poll() is None:
+            runner.kill()
+        runner.wait(timeout=10)
