@@ -125,6 +125,12 @@ impl Peer {
     }
 }
 async fn peer(mode: &'static str) -> Peer {
+    peer_with_workspace_signal(mode, None).await
+}
+async fn peer_with_workspace_signal(
+    mode: &'static str,
+    workspace_signal: Option<tokio::sync::oneshot::Sender<()>>,
+) -> Peer {
     let listener = TcpListener::bind(LOOPBACK).await.unwrap();
     let addr = endpoint(&listener);
     let cert = rcgen::generate_simple_self_signed(vec!["fixture.invalid".into()]).unwrap();
@@ -246,7 +252,9 @@ async fn peer(mode: &'static str) -> Peer {
                 .unwrap();
         }
         if mode == "total_deadline" {
-            tokio::time::sleep(Duration::from_millis(90)).await;
+            // This case uses a paused clock: real TLS/auth setup consumes no
+            // test budget. Spend 90 ms before acknowledging authentication.
+            tokio::time::advance(Duration::from_millis(90)).await;
         }
         send(&mut s, &reply).await.unwrap();
         let Ok((op, bytes)) = client_frame(&mut s).await else {
@@ -261,6 +269,7 @@ async fn peer(mode: &'static str) -> Peer {
         assert!(invoke.get("contextId").is_none());
         assert!(invoke.get("windowId").is_none());
         if mode == "total_deadline" {
+            workspace_signal.unwrap().send(()).unwrap();
             tokio::time::sleep(Duration::from_millis(90)).await;
         }
         let doc = match mode {
@@ -432,8 +441,26 @@ async fn bat_deadline_is_total_and_wrong_id_is_not_authentication() {
 }
 #[tokio::test]
 async fn bat_deadline_does_not_restart_at_workspace_and_cancel_drops_socket() {
-    let peer = peer("total_deadline").await;
+    let (workspace_signal, workspace_received) = tokio::sync::oneshot::channel();
+    let peer = peer_with_workspace_signal("total_deadline", Some(workspace_signal)).await;
+    tokio::time::pause();
+    // Keep the runtime runnable while real socket IO establishes TLS/auth so
+    // paused time cannot auto-advance to the probe deadline. Release it only
+    // after the peer receives workspace:load (proof auth completed). Retain the
+    // fixture's 2 s wall-clock bound if that IO itself stalls.
+    let drive_io = tokio::spawn(async move {
+        tokio::pin!(workspace_received);
+        let end = Instant::now() + Duration::from_secs(2);
+        while Instant::now() < end {
+            tokio::select! {
+                _ = &mut workspace_received => return,
+                _ = tokio::task::yield_now() => {}
+            }
+        }
+    });
     let out = run(&peer, TOKEN.into(), Duration::from_millis(150)).await;
+    drive_io.abort();
+    tokio::time::resume();
     assert_eq!(out.code, Some("PROBE_TIMEOUT"));
     assert_eq!(out.auth, Authentication::Ok);
     assert!(!out.workspace);
