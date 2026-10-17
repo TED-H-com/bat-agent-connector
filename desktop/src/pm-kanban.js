@@ -9,6 +9,7 @@ import {firstLabel, joinLabel, labelSegment} from './label-text.js';
 import {workInspector, workStatusLabel, workStatusPill, blockedWork, blockerText, workAgents, prGroups, readWorkSources, deliveryCoverage, elapsed, readEarlierPlans} from './pm-work-inspector.js';
 import {workStartPanel} from './pm-work-start.js';
 import {workResultPanel} from './pm-work-result.js';
+import {retiredView, viewLeft} from './pm-retired.js';
 
 // Central management columns stay separate from execution, quality and delivery.
 export function workspaceKanban({t, api, alive, namespace = '', workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false, workspaceSettled = () => Promise.resolve()}) {
@@ -123,7 +124,6 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     if (data.next_cursor != null && (!data.cards.length || data.next_cursor < data.cards.at(-1).binding.sequence)) throw Error(t('pm_kanban_scope_error'));
     return data;
   }
-  const retiredView = error => ['VIEW_CHANGED', 'CONNECTION_CHANGED', 'PM_DISPOSED'].includes(error.code);
   function writeSelection(id) {
     const [path, query] = location.hash.split('?');
     if (path !== `#/pm/${encodeURIComponent(workspaceId)}/board`) return;
@@ -380,14 +380,14 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       patchCard(current.node, data.card);
       renderColumns(); renderMetrics(); showDetail(data.card);
     } catch (error) {
-      if (retiredView(error)) return;
+      if (retiredView(error) || viewLeft(alive)) return;
       if (generation === serial && ticket === detailSerial) {
         observers.get(id)?.withdraw();
         if (error.message === t('pm_kanban_scope_error')) {unavailable(error); return;}
         if ([403, 404].includes(error.status)) {
           try {checkPage(await api('GET', path(0)), 0); alive(); if (generation !== serial || ticket !== detailSerial) return;}
           catch (parentError) {
-            if (retiredView(parentError)) return;
+            if (retiredView(parentError) || viewLeft(alive)) return;
             if (generation === serial && ticket === detailSerial) unavailable(parentError);
             return;
           }
@@ -424,7 +424,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       alive(); if (ticket !== serial) return;
       plan = accepted?.plan || null; milestones = roadmap?.baseline?.document?.milestones || []; sources = read;
       present({...data, cards: [...combined.values()]});
-    } catch (error) {if (retiredView(error)) return; if (ticket === serial) unavailable(error);}
+    } catch (error) {if (retiredView(error) || viewLeft(alive)) return; if (ticket === serial) unavailable(error);}
     finally {if (ticket === serial) {reading = false; element.removeAttribute('aria-busy'); more.disabled = false; refreshButton.disabled = false;}}
   }
   async function loadMore() {

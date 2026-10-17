@@ -71,6 +71,8 @@
   the control that replaces a refused action. Typing labels is not interrupted
   by a background refresh.
 
+- A Board read from a previous visit no longer clears the selected Work when its reply arrives late, including HTTP and network failures after returning to the same project.
+
 - A read from the overview brief, lifecycle, meetings, follow-up, sprints,
   governance, roadmap, evidence, a review candidate, or a worktree preview
   that fails or finishes after that project view was left does not mark the
@@ -83,7 +85,6 @@
   Python for every search, so the same checks finish on a busy disk without
   a longer time limit.
 
-- A Board that was already left no longer clears another project's selected Work when its own read fails.
 
 - Creating an operation, reading that one operation, cancelling it, and
   resuming it can include a loop. The loop covers the actions on this work
@@ -129,6 +130,7 @@
   on every page. A blank model is rejected, and a discovery citation has to cover
   that workspace. Starting work can name one saved revision and then requires all
   twelve preconditions. Starting work without a profile is unchanged.
+
 
 - The hidden Board and Requirements scroll checks wait for the read the test held, so a second read of the same address cannot make that wait miss.
 

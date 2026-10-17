@@ -1,4 +1,5 @@
 import {test, expect, type Page} from '@playwright/test';
+import {STRINGS} from '../src/i18n.js';
 import {workspaceFixture} from './workspace-fixture.ts';
 import {mountAttention} from './attention-fixture.ts';
 
@@ -55,25 +56,38 @@ function createFixture(locale: 'en' | 'zh-TW') {
     return value;
   };
 
-  let heldPromise: Promise<void> | null = null;
-  let releaseHeld: (() => void) | null = null;
-  let readStarted = false;
-  let holdPath: string | null = null;
+  type HeldFailure = 403 | 503 | 'abort';
+  type HeldRead = {
+    promise: Promise<void>;
+    release: () => void;
+    started: boolean;
+    token: string | null;
+    failure: HeldFailure | null;
+  };
+  const armed = new Map<string, HeldRead>();
+  const inflight = new Map<string, HeldRead>();
   let heldSerial = 0;
-  let lastHeldToken: string | null = null;
+  let watchedPath: string | null = null;
   const unexpected: string[] = [];
 
-  const holdNext = (path: string) => {
-    holdPath = path;
-    readStarted = false;
-    lastHeldToken = null;
-    heldPromise = new Promise(resolve => { releaseHeld = resolve; });
+  const holdNext = (path: string, failure: HeldFailure | null = null) => {
+    let releaseHold = () => {};
+    const promise = new Promise<void>(resolve => { releaseHold = resolve; });
+    armed.set(path, {promise, release: releaseHold, started: false, token: null, failure});
+    watchedPath = path;
   };
-  const release = () => {
-    releaseHeld?.();
-    releaseHeld = null;
-    heldPromise = null;
-    holdPath = null;
+  const release = (path?: string) => {
+    const keys = path ? [path] : [...new Set([...armed.keys(), ...inflight.keys()])];
+    for (const key of keys) {
+      armed.get(key)?.release();
+      inflight.get(key)?.release();
+      armed.delete(key);
+    }
+  };
+  const lookup = (path?: string) => {
+    const key = path || watchedPath;
+    if (!key) return null;
+    return inflight.get(key) || armed.get(key) || null;
   };
 
   const dispatch = async (input: any) => {
@@ -84,12 +98,21 @@ function createFixture(locale: 'en' | 'zh-TW') {
     // One token identifies this response after its body is parsed. A later read of
     // the same path must not be counted as the read this fixture held.
     let heldToken: string | null = null;
-    if (holdPath && path === holdPath && heldPromise) {
-      readStarted = true;
-      holdPath = null;
+    const hold = armed.get(path);
+    if (hold) {
+      armed.delete(path);
+      inflight.set(path, hold);
+      hold.started = true;
       heldToken = String(++heldSerial);
-      lastHeldToken = heldToken;
-      await heldPromise;
+      hold.token = heldToken;
+      await hold.promise;
+      inflight.delete(path);
+      if (hold.failure === 'abort') return {abort: true};
+      if (hold.failure) return {
+        status: hold.failure,
+        data: {error: {code: hold.failure === 403 ? 'FORBIDDEN' : 'UNAVAILABLE', message: 'Fixture refused the held read'}},
+        headers: {'x-batc-held-read': heldToken},
+      };
     }
     const finish = (result: any) => {
       if (!heldToken || !result || typeof result !== 'object') return result;
@@ -136,8 +159,8 @@ function createFixture(locale: 'en' | 'zh-TW') {
 
   return {
     ws, caps, dispatch, holdNext, release, unexpected,
-    isReadStarted: () => readStarted,
-    heldToken: () => lastHeldToken,
+    isReadStarted: (path?: string) => Boolean(lookup(path)?.started),
+    heldToken: (path?: string) => lookup(path)?.token ?? null,
     boardPath: (id: string) => `/pm/workspaces/${id}/kanban`,
     selectedTitle: () => titles.b[1],
   };
@@ -147,16 +170,24 @@ async function installHeldBodyProbe(page: Page) {
   await page.addInitScript(() => {
     const originalFetch = window.fetch;
     (window as any).__heldBodyTokens = [];
+    (window as any).__heldFetchRejections = [];
     window.fetch = async function(...args) {
-      const response = await originalFetch.apply(this, args as [RequestInfo, RequestInit?]);
-      const held = response.headers.get('x-batc-held-read');
-      const originalJson = response.json.bind(response);
-      response.json = async function() {
-        const data = await originalJson();
-        if (held) (window as any).__heldBodyTokens.push(held);
-        return data;
-      };
-      return response;
+      const request = args[0];
+      const url = typeof request === 'string' ? request : request instanceof URL ? request.href : request.url;
+      try {
+        const response = await originalFetch.apply(this, args as [RequestInfo, RequestInit?]);
+        const held = response.headers.get('x-batc-held-read');
+        const originalJson = response.json.bind(response);
+        response.json = async function() {
+          const data = await originalJson();
+          if (held) (window as any).__heldBodyTokens.push(held);
+          return data;
+        };
+        return response;
+      } catch (error) {
+        (window as any).__heldFetchRejections.push(String(url));
+        throw error;
+      }
     };
   });
 }
@@ -164,6 +195,13 @@ async function installHeldBodyProbe(page: Page) {
 async function syncHeldBody(page: Page, token: string) {
   await page.waitForFunction(expected => ((window as any).__heldBodyTokens || []).includes(expected), token);
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+}
+
+async function checkpoint(page: Page) {
+  return page.evaluate(() => {
+    const entry = Object.entries(localStorage).find(([key]) => key.startsWith('batc.sync.'));
+    return entry ? JSON.parse(entry[1]) as {cursor: number, token: string} : null;
+  });
 }
 
 function boardHash(workspaceId: string, workId?: string) {
@@ -231,4 +269,108 @@ test.describe('retired Board read keeps the other project selection', () => {
       expect(fixture.unexpected).toEqual([]);
     });
   }
+});
+
+test.describe('retired Board HTTP failure leaves the destination batch usable', () => {
+  for (const locale of ['en', 'zh-TW'] as const) for (const failure of [403, 503, 'abort'] as const) {
+  test(`an old ${failure} cannot clear the selection after returning to its project (${locale})`, async ({page}) => {
+    await page.addInitScript(language => Object.defineProperty(navigator, 'language', {value: language}), locale);
+    await installHeldBodyProbe(page);
+    const fixture = createFixture(locale);
+    await mountAttention(page, false, {...fixture.ws.fixture, caps: fixture.caps}, fixture.dispatch);
+    await page.goto(`/dashboard/?workbench=1${boardHash(workspaceB, selectedWork)}`);
+    await expect(page.locator('[data-work-inspector] h2')).toHaveText(fixture.selectedTitle());
+
+    fixture.holdNext(fixture.boardPath(workspaceA), failure);
+    await openBoard(page, workspaceA, workA[0]);
+    await expect.poll(() => fixture.isReadStarted(fixture.boardPath(workspaceA))).toBe(true);
+    const oldToken = fixture.heldToken(fixture.boardPath(workspaceA));
+    expect(oldToken).toBeTruthy();
+    await openBoard(page, workspaceB, selectedWork);
+    await expect(page.locator('[data-work-inspector] h2')).toHaveText(fixture.selectedTitle());
+    await openBoard(page, workspaceA, workA[1]);
+    const selectedTitle = locale === 'zh-TW' ? '核對來源' : 'Check the sources';
+    await expect(page.locator('[data-work-inspector] h2')).toHaveText(selectedTitle);
+    await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
+
+    fixture.release(fixture.boardPath(workspaceA));
+    if (failure === 'abort') {
+      await expect.poll(() => page.evaluate(path => (window as any).__heldFetchRejections.some((url: string) => new URL(url, location.href).pathname.endsWith(path)), fixture.boardPath(workspaceA))).toBe(true);
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+    } else await syncHeldBody(page, oldToken!);
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe(boardHash(workspaceA, workA[1]));
+    await expect(page.locator('[data-work-inspector] h2')).toHaveText(selectedTitle);
+    await expect(page.locator('.pm-board-error, [data-api-error]')).toHaveCount(0);
+    expect(fixture.unexpected).toEqual([]);
+  });
+  }
+
+  for (const failure of [403, 503, 'abort'] as const) {
+    test(`the current Board still displays ${failure}`, async ({page}) => {
+      const fixture = createFixture('en');
+      await mountAttention(page, false, {...fixture.ws.fixture, caps: fixture.caps}, fixture.dispatch);
+      await page.goto(`/dashboard/?workbench=1${boardHash(workspaceB, selectedWork)}`);
+      await expect(page.locator('[data-work-inspector] h2')).toHaveText(fixture.selectedTitle());
+      await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
+      fixture.holdNext(fixture.boardPath(workspaceB), failure);
+      await page.locator('button[data-pm-refresh]').click();
+      await expect.poll(() => fixture.isReadStarted(fixture.boardPath(workspaceB))).toBe(true);
+      fixture.release(fixture.boardPath(workspaceB));
+      await expect(page.locator('.pm-board-error')).toBeVisible();
+      await expect(page.locator('.pm-board-error')).toContainText(
+        failure === 403 ? STRINGS.en.forbidden_scope : STRINGS.en.wv_board_unavailable,
+      );
+      expect(fixture.unexpected).toEqual([]);
+    });
+  }
+
+  test('a left Board HTTP 503 does not pause the destination event batch (en)', async ({page}) => {
+    const copy = STRINGS.en;
+    await page.addInitScript(language => Object.defineProperty(navigator, 'language', {value: language}), 'en');
+    await installHeldBodyProbe(page);
+    await page.setViewportSize({width: 1440, height: 900});
+    const fixture = createFixture('en');
+    await mountAttention(page, false, {...fixture.ws.fixture, caps: fixture.caps}, fixture.dispatch);
+
+    // The event loop starts only after the first route settles. Land on the
+    // destination first so its later batch is real, then hold the Board being left.
+    await page.goto(`/dashboard/?workbench=1${boardHash(workspaceB, selectedWork)}`);
+    await expect(page.locator('[data-work-inspector] h2')).toHaveText(fixture.selectedTitle());
+    await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
+    await expect.poll(() => checkpoint(page)).toEqual({cursor: 0, token: 'w-0'});
+    await expect(page.locator('#live')).toHaveAttribute('title', copy.desktop_polling);
+
+    fixture.holdNext(fixture.boardPath(workspaceA), 503);
+    await openBoard(page, workspaceA);
+    await expect.poll(() => fixture.isReadStarted(fixture.boardPath(workspaceA))).toBe(true);
+    await expect(page.locator('[data-discussion-new]')).toBeAttached();
+    const failedToken = fixture.heldToken(fixture.boardPath(workspaceA));
+    expect(failedToken).toBeTruthy();
+
+    await openBoard(page, workspaceB, selectedWork);
+    await expect(page.locator('#main h1').first()).toHaveText(copy.ui_board);
+    await expect(page.locator('[data-pm-kanban] .pm-kanban-card')).toHaveCount(2);
+    await expect(page.locator('[data-work-inspector] h2')).toHaveText(fixture.selectedTitle());
+    await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
+    await expect(page.locator('#live')).toHaveAttribute('title', copy.desktop_polling);
+
+    fixture.holdNext(fixture.boardPath(workspaceB));
+    fixture.ws.data.events.push({seq: 1, kind: 'work_item.updated', resource_type: 'work_item', resource_id: selectedWork});
+    await expect.poll(() => fixture.isReadStarted(fixture.boardPath(workspaceB))).toBe(true);
+    const batchToken = fixture.heldToken(fixture.boardPath(workspaceB));
+    expect(batchToken).toBeTruthy();
+
+    fixture.release(fixture.boardPath(workspaceA));
+    await syncHeldBody(page, failedToken!);
+    fixture.release(fixture.boardPath(workspaceB));
+    await syncHeldBody(page, batchToken!);
+
+    await expect.poll(async () => ({
+      checkpoint: await checkpoint(page),
+      title: await page.locator('#live').getAttribute('title'),
+      refreshEnabled: await page.locator('button[data-pm-refresh]').isEnabled(),
+    })).toEqual({checkpoint: {cursor: 1, token: 'w-1'}, title: copy.desktop_polling, refreshEnabled: true});
+    await expectSelected(page, copy.ui_board, fixture.selectedTitle(), copy.wv_board_unavailable);
+    expect(fixture.unexpected).toEqual([]);
+  });
 });
