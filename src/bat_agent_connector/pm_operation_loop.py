@@ -100,8 +100,8 @@ async def _project(ops, principal, operation, parent):
     proven = parent is not None
     start_id = parent["operation_id"] if proven else (operation["operation_id"] if action == "work.start" else None)
     attempt = _attempt_row(ops.db, start_id) if start_id else None
-    view, view_unreadable = _attempt_view(ops, attempt) if attempt else (None, False)
-    dropped = False
+    view, view_unreadable, dropped = (
+        _attempt_view(ops, principal, operation, attempt) if attempt else (None, False, False))
     delivery_unlinked = False
     expects_work = proven or action in {"work.start", "pm.work_package.create"}
     expects_attempt = proven or action == "work.start"
@@ -199,10 +199,13 @@ def _delivery_work(ops, principal, operation):
         ).fetchall()
         for (work_id,) in rows:
             workspace_id = _visible_workspace(ops, principal, operation, work_id)
-            if workspace_id is not None:
-                found.append((workspace_id, work_id))
-    distinct = {work_id for _, work_id in found}
-    if len(distinct) == 1:
+            if workspace_id is None:
+                continue
+            found.append((workspace_id, work_id))
+            # Two distinct visible Works already answer delivery_unlinked.
+            if len({item for _, item in found}) > 1:
+                return None, None, True
+    if len(found) == 1:
         return found[0][1], found[0][0], False
     return None, None, True
 
@@ -322,8 +325,10 @@ def _completeness(operation, *, dropped, delivery_unlinked, expects_work, work_v
         return {"status": "partial", "reason": "no_attempt"}
     if attempt_unreadable:
         return {"status": "partial", "reason": "attempt_unreadable"}
-    target = operation.get("target") if isinstance(operation.get("target"), dict) else {}
-    if operation.get("action") == "session.send" and not target.get("work_item_id"):
+    # Registered session.send target is host and session_id only. A Work id,
+    # including a malformed or unknown one, is not that contract and cannot
+    # make the loop complete. P5 is not integrated here.
+    if operation.get("action") == "session.send":
         return {"status": "partial", "reason": "session_target"}
     return {"status": "complete", "reason": None}
 
@@ -337,16 +342,45 @@ def _attempt_row(db, start_operation_id):
     return dict(row) if row else None
 
 
-def _attempt_view(ops, row):
+def _attempt_view(ops, principal, operation, row):
+    """Return the view, whether it is unreadable, and a case-2 drop.
+
+    ``get_attempt`` refuses the view when a child operation's sources are
+    hidden. ``NOT_FOUND`` omits the view. That is ``source_withdrawn`` only
+    when this operation's own scanned fields do not name that child. Any
+    other ``OperationError`` is ``attempt_unreadable``. ``KeyError`` and
+    ``TypeError`` are bugs and are not caught.
+    """
+    from . import pm_source_lineage
     from .operations import OperationError
     from .pm_work_start import _attempt_view as view
 
     try:
-        return view(ops, row), False
+        shown = view(ops, row)
     except OperationError as error:
-        # NOT_FOUND omits the view. Any other OperationError is attempt_unreadable.
-        # KeyError and TypeError are bugs and are not caught.
-        return None, error.code != "NOT_FOUND"
+        return None, error.code != "NOT_FOUND", False
+    children = shown.get("children") if isinstance(shown.get("children"), dict) else {}
+    hidden = []
+    try:
+        for child_id in children.values():
+            if not isinstance(child_id, str) or not child_id:
+                continue
+            try:
+                pm_source_lineage.require(ops.db, principal, "operation", child_id)
+            except OperationError as error:
+                if error.code != "NOT_FOUND":
+                    raise
+                hidden.append(child_id)
+    except OperationError as error:
+        return None, error.code != "NOT_FOUND", False
+    if not hidden:
+        return shown, False, False
+    try:
+        scanned = {identity for kind, identity in pm_source_lineage.references(operation) if kind == "operation"}
+    except OperationError:
+        return None, True, False
+    # A scanned child is case 1: the read barrier owns that 404.
+    return None, False, any(child_id not in scanned for child_id in hidden)
 
 
 def _work_visible(ops, principal, workspace_id, work_item_id) -> bool:
