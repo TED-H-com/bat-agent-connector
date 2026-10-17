@@ -3,8 +3,9 @@ import {readFileSync} from "node:fs";
 const fixture = JSON.parse(readFileSync(new URL("./fixtures/fleet-status.json", import.meta.url), "utf8")).result;
 
 async function setup(page: any, options: any = {}) {
+  if (options.clock) await page.clock.install();
   await page.addInitScript(({doc, options}: any) => {
-    const env = {doc, calls: [] as any[], lose: false, failReads: false, statusCalls: 0, availabilityReads: 0, releaseStatus: null as any, ...options};
+    const env = {doc, calls: [] as any[], lose: false, failReads: false, statusCalls: 0, fleetReads: 0, availabilityReads: 0, releaseStatus: null as any, hold: null as string | null, release: null as null | (() => void), ...options};
     const caps = {actor: "fleet-fixture", scopes: ["observe"], api_version: 1, contract_version: "2026-10-08", features: {}, hosts: [], actions: []};
     const checkpoint = {cursor: 0, token: "fixture"};
     Object.assign(window, {__fleet: env, isTauri: true, __TAURI_INTERNALS__: {invoke: async (command: string, args: any) => {
@@ -22,11 +23,13 @@ async function setup(page: any, options: any = {}) {
       if (command === "fleet_availability") {env.availabilityReads++; return {configured: true, platform_supported: options.supported !== false};}
       if (command !== "fleet_request") throw new Error("Unexpected command " + command);
       const input = structuredClone(args.input);
+      if (input.action === "status") env.fleetReads++;
+      else env.calls.push(input);
+      if (env.hold === input.action) await new Promise<void>(resolve => {env.release = resolve;});
       if (input.action === "status") {
         if (env.failReads) throw new Error("Fixture unavailable");
         return structuredClone(env.doc);
       }
-      env.calls.push(input);
       if (input.action === "set_connections") {
         env.doc.selection.connections = input.connections;
         env.doc.selection.revision = "e".repeat(64);
@@ -98,6 +101,96 @@ test("Fleet control unavailable on other platforms", async ({page}) => {
   await setup(page, {supported: false});
   await expect(page.getByText("Fleet connection management requires Windows.")).toBeVisible();
   await expect(page.locator("[data-fleet-name]")).toHaveCount(0);
+});
+
+const fleetReads = (page: any) => page.evaluate(() => (window as any).__fleet.fleetReads as number);
+const selectionKey = "batc.desktop.fleet.selection." + "c".repeat(64);
+async function releaseHold(page: any) {
+  await page.evaluate(() => {
+    const env = (window as any).__fleet;
+    env.hold = null;
+    env.release?.();
+  });
+}
+
+test("a status poll keeps button focus", async ({page}) => {
+  await setup(page, {clock: true});
+  const region = page.getByRole("region", {name: "Local Fleet connections"});
+  const refresh = region.getByRole("button", {name: "Read status", exact: true});
+  const quit = region.getByRole("button", {name: "Stop local connection monitor", exact: true});
+  await expect(refresh).toBeEnabled();
+  await expect(quit).toBeEnabled();
+  await refresh.focus();
+  const before = await fleetReads(page);
+  await page.clock.fastForward(5000);
+  await expect.poll(() => fleetReads(page)).toBe(before + 1);
+  await expect(refresh).toBeFocused();
+  await quit.focus();
+  await page.clock.fastForward(5000);
+  await expect.poll(() => fleetReads(page)).toBe(before + 2);
+  await expect(quit).toBeFocused();
+});
+
+test("a status poll keeps connection checkbox focus", async ({page}) => {
+  await setup(page, {clock: true});
+  const box = page.locator('[data-fleet-name="node-1"]');
+  await box.focus();
+  await expect(box).toBeChecked();
+  await page.evaluate(() => {(window as any).__fleet.hold = "status";});
+  const before = await fleetReads(page);
+  await page.clock.fastForward(5000);
+  await expect.poll(() => fleetReads(page)).toBe(before + 1);
+  await expect(box).toBeFocused();
+  await expect(box).toHaveAttribute("aria-disabled", "true");
+  expect(await box.evaluate(node => (node as HTMLInputElement).disabled)).toBe(false);
+  await page.keyboard.press("Space");
+  await expect(box).toBeChecked();
+  expect(await page.evaluate(key => sessionStorage.getItem(key), selectionKey)).toBe(null);
+  await releaseHold(page);
+  await expect(box).not.toHaveAttribute("aria-disabled");
+  await expect(box).toBeFocused();
+  await expect(box).toBeChecked();
+  expect(await page.evaluate(key => sessionStorage.getItem(key), selectionKey)).toBe(null);
+});
+
+test("refresh keeps focus and ignores a second press", async ({page}) => {
+  await setup(page, {clock: true});
+  const region = page.getByRole("region", {name: "Local Fleet connections"});
+  const refresh = region.getByRole("button", {name: "Read status", exact: true});
+  const status = region.getByRole("status");
+  await page.evaluate(() => {(window as any).__fleet.hold = "status";});
+  const before = await fleetReads(page);
+  await refresh.focus();
+  await page.keyboard.press("Enter");
+  await expect(refresh).toHaveAttribute("aria-disabled", "true");
+  await expect(refresh).toBeFocused();
+  await expect(status).toHaveAttribute("aria-busy", "true");
+  expect(await refresh.evaluate(node => (node as HTMLButtonElement).disabled)).toBe(false);
+  await page.keyboard.press("Enter");
+  await refresh.evaluate(node => (node as HTMLButtonElement).click());
+  await releaseHold(page);
+  await expect(refresh).not.toHaveAttribute("aria-disabled");
+  await expect(status).not.toHaveAttribute("aria-busy");
+  expect(await fleetReads(page)).toBe(before + 1);
+  await expect(refresh).toBeFocused();
+});
+
+test("Apply keeps focus while saving, then moves to Read status", async ({page}) => {
+  await setup(page, {clock: true});
+  const region = page.getByRole("region", {name: "Local Fleet connections"});
+  await page.locator('[data-fleet-name="node-2"]').uncheck();
+  await page.evaluate(() => {(window as any).__fleet.hold = "set_connections";});
+  const apply = region.getByRole("button", {name: "Save connections", exact: true});
+  const refresh = region.getByRole("button", {name: "Read status", exact: true});
+  await apply.focus();
+  await page.keyboard.press("Enter");
+  await expect(apply).toHaveAttribute("aria-disabled", "true");
+  await expect(apply).toBeFocused();
+  expect(await apply.evaluate(node => (node as HTMLButtonElement).disabled)).toBe(false);
+  await releaseHold(page);
+  await expect(refresh).toBeFocused();
+  expect(await page.evaluate(() => document.activeElement === document.body)).toBe(false);
+  expect(await page.evaluate(() => (window as any).__fleet.calls.filter((call: {action: string}) => call.action === "set_connections"))).toHaveLength(1);
 });
 
 test("delayed settings status cannot mount Fleet into a later route", async ({page}) => {

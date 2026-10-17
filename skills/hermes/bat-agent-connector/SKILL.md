@@ -4,14 +4,14 @@ description: Use this when you need to check on, read, wait for, or (only when e
 version: 0.2.6
 license: MIT
 metadata:
-  workflow_version: "2026-10-13.2"
+  workflow_version: "2026-10-16.1"
   api_version: "1"
   contract_version: "2026-10-08"
   generated_by: "scripts/generate_agent_skills.py"
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "1ad53924540c92abc816f12921ac3e99e1659c5d584c51d247de651f712b0d52"
+  canonical_sha256: "03acb0c8dd7e288a0d2e13326f89d0a249fa5ec09894fd1512fff8f63352fd0d"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -897,8 +897,19 @@ journal. Then submit `work.start` through `operation_submit` with target
 one `pm.work.bind`, one deterministic `work_start_thin_v1` `pm.work_package.create`
 (or reuses the matching ready latest package) and one `repository.continue` child
 under the same controller. A definite child failure ends `work.start` as `failed` so a
-new reviewed start can reuse the prepared package when the basis is unchanged; a
-`needs_attention` child or pre-child guard pause puts the parent in `needs_attention`.
+new reviewed start can reuse the prepared package when the basis is unchanged. A
+pre-child stop on `PM_LIFECYCLE_STOPPED`, `PM_LIFECYCLE_EPOCH_CHANGED`,
+`PM_PACKAGE_SCOPE_CHANGED`, `WORK_ITEM_CHANGED`, `PROJECT_CHANGED`,
+`PM_WORK_BINDING_CHANGED`, `PM_PACKAGE_VERSION_CONFLICT`, `WORK_ITEM_ARCHIVED` or
+`PROJECT_ARCHIVED` also ends that start `failed` with stage `start_failed`. Resume
+cannot pass those codes; after the cause is gone, submit a new reviewed start. A
+repairable pre-child pause, such as a withdrawn credential
+(`PM_WORK_START_AUTHORITY_UNAVAILABLE`) or a lowered workspace role (`FORBIDDEN`),
+still leaves the parent in `needs_attention`. A `needs_attention` child, including a
+changed host execution location, and an uncertain child do the same. A start already
+waiting in `needs_attention` is not rewritten; resume or cancel that original
+operation. Resuming one of those nine codes then ends it `failed` with stage
+`start_failed`.
 Cancelling `work.start` also cancels its unfinished children while preserving read-back
 of any possibly sent step and leaving already-started sessions under original authority.
 On `PM_WORK_ATTEMPT_CHANGED` (409), follow the named latest attempt and start operation

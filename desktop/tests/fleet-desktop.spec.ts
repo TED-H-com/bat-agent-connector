@@ -2,16 +2,19 @@ import {test, expect} from '@playwright/test';
 import {readFileSync,mkdirSync} from 'node:fs';
 const fixture=JSON.parse(readFileSync(new URL('./fixtures/fleet-status.json',import.meta.url),'utf8')).result;
 async function setup(page:any,options:any={}) {
+ if(options.clock)await page.clock.install();
  await page.addInitScript(({doc,options}:any)=>{
  Object.assign(doc,{control_version:1,backend:'powershell',login:{show_picker:true,revision:'f'.repeat(64)},pending_migration:null,profiles:[{id:'default',label:'Local BAT',connection:null},{id:'profile-1',label:'Fixture 1',connection:'node-1'},{id:'profile-2',label:'Fixture 2',connection:'node-2'}]});Object.assign(doc.selection,{profiles:['profile-1'],dashboard:true});
- const env:any={doc,calls:[],receipt:null,migration:null,lose:null,wrongReceipt:false,...options};
+ const env:any={doc,calls:[],receipt:null,migration:null,lose:null,wrongReceipt:false,hold:null,...options};
  if(options.damaged)sessionStorage.setItem('batc.desktop.fleet.controls.'+doc.configuration.binding,JSON.stringify({launch:{preview_id:'1'.repeat(32),attempted:true}}));
  Object.assign(window,{__fleet:env,isTauri:true,__TAURI_INTERNALS__:{invoke:async(command:string,args:any)=>{
   if(command==='native_status')return {endpoint:null,error:'Fixture central offline',credential_available:false};
   if(command==='connector_connect')throw new Error('Fixture central offline');
   if(command==='fleet_availability')return {configured:true,platform_supported:true,native_controls:true};
   if(!['fleet_control','fleet_request'].includes(command))throw new Error('Unexpected '+command);
-  const input=structuredClone(args.input);env.calls.push(input);let result:any={};
+  const input=structuredClone(args.input);env.calls.push(input);
+  if(env.hold===input.action)await new Promise<void>(resolve=>{env.release=resolve;});
+  let result:any={};
   switch(input.action){
    case 'overview':return structuredClone(env.doc);
    case 'preview_choices':env.choices=input.choices;result={preview_id:'2'.repeat(32),summary:{choices:input.choices,added_connections:input.choices.profiles.includes('profile-2')?['node-2']:[]}};break;
@@ -68,6 +71,128 @@ test('damaged saved summary retains recoverable ID without crash or launch',asyn
 test('Dashboard-only launch survives reload without BAT receipt or another launch',async({page})=>{
  await setup(page);await page.evaluate(()=>{(window as any).__fleet.doc.selection.profiles=[]});await refresh(page);await launch(page);await expect(page.getByRole('button',{name:'New launch review'})).toBeVisible();await page.reload();await expect(page.getByRole('button',{name:'New launch review'})).toBeVisible();expect(await calls(page,'launch')).toHaveLength(0);
 });
+const overviews=(page:any)=>page.evaluate(()=>(window as any).__fleet.calls.filter((call:{action:string})=>call.action==='overview').length);
+const releaseHold=(page:any)=>page.evaluate(()=>{const env=(window as any).__fleet;env.hold=null;env.release?.();});
+const controlsKey='batc.desktop.fleet.controls.'+'c'.repeat(64);
+
+test('a status poll keeps button focus',async({page})=>{
+ await setup(page,{clock:true});
+ const region=page.getByRole('region',{name:'Local Fleet and windows'});
+ const refresh=region.getByRole('button',{name:'Read status',exact:true});
+ const quit=region.getByRole('button',{name:'Stop local connection monitor',exact:true});
+ await expect(quit).toBeEnabled();
+ await refresh.focus();
+ const before=await overviews(page);
+ await page.clock.fastForward(5000);
+ await expect.poll(()=>overviews(page)).toBe(before+1);
+ await expect(refresh).toBeFocused();
+ await quit.focus();
+ await page.clock.fastForward(5000);
+ await expect.poll(()=>overviews(page)).toBe(before+2);
+ await expect(quit).toBeFocused();
+});
+
+test('a status poll keeps connection checkbox focus',async({page})=>{
+ await setup(page,{clock:true});
+ const box=page.locator('[data-fleet-choice="connections:node-1"]');
+ await box.focus();
+ await expect(box).toBeChecked();
+ const stored=()=>page.evaluate((key:string)=>sessionStorage.getItem(key),controlsKey);
+ const beforeStored=await stored();
+ await page.evaluate(()=>{(window as any).__fleet.hold='overview';});
+ const before=await overviews(page);
+ await page.clock.fastForward(5000);
+ await expect.poll(()=>overviews(page)).toBe(before+1);
+ await expect(box).toBeFocused();
+ await expect(box).toHaveAttribute('aria-disabled','true');
+ expect(await box.evaluate(node=>(node as HTMLInputElement).disabled)).toBe(false);
+ await page.keyboard.press('Space');
+ await expect(box).toBeChecked();
+ expect(await stored()).toBe(beforeStored);
+ await releaseHold(page);
+ await expect(box).not.toHaveAttribute('aria-disabled');
+ await expect(box).toBeFocused();
+ await expect(box).toBeChecked();
+ expect(await stored()).toBe(beforeStored);
+});
+
+test('a status poll does not write the status message',async({page})=>{
+ await setup(page,{clock:true});
+ await page.evaluate(()=>{
+  const message=document.querySelector('.fleet-desktop [role="status"]') as HTMLElement;
+  const seen:string[]=[];
+  (window as any).__fleetMessages=seen;
+  let last=message.textContent;
+  new MutationObserver(()=>{const text=message.textContent??'';if(text!==last){seen.push(text);last=text;}}).observe(message,{childList:true,characterData:true,subtree:true});
+ });
+ const before=await overviews(page);
+ await page.clock.fastForward(5000);
+ await expect.poll(()=>overviews(page)).toBe(before+1);
+ expect(await page.evaluate(()=>(window as any).__fleetMessages)).toEqual([]);
+});
+
+test('refresh keeps focus and ignores a second press',async({page})=>{
+ await setup(page,{clock:true});
+ const region=page.getByRole('region',{name:'Local Fleet and windows'});
+ const refresh=region.getByRole('button',{name:'Read status',exact:true});
+ const status=region.getByRole('status');
+ await page.evaluate(()=>{(window as any).__fleet.hold='overview';});
+ const before=await overviews(page);
+ await refresh.focus();
+ await page.keyboard.press('Enter');
+ await expect(refresh).toHaveAttribute('aria-disabled','true');
+ await expect(refresh).toBeFocused();
+ await expect(status).toHaveAttribute('aria-busy','true');
+ expect(await refresh.evaluate(node=>(node as HTMLButtonElement).disabled)).toBe(false);
+ await page.keyboard.press('Enter');
+ await refresh.evaluate(node=>(node as HTMLButtonElement).click());
+ await releaseHold(page);
+ await expect(refresh).not.toHaveAttribute('aria-disabled');
+ await expect(status).not.toHaveAttribute('aria-busy');
+ expect(await overviews(page)).toBe(before+1);
+ await expect(refresh).toBeFocused();
+});
+
+test('a held read gives Use current, a profile and the backend no new effect',async({page})=>{
+ await setup(page,{clock:true});
+ const region=page.getByRole('region',{name:'Local Fleet and windows'});
+ await page.locator('[data-fleet-choice="profiles:profile-2"]').check();
+ const stored=()=>page.evaluate((key:string)=>sessionStorage.getItem(key),controlsKey);
+ const beforeStored=await stored();
+ const calls=()=>page.evaluate(()=>(window as any).__fleet.calls.length as number);
+ const beforeCalls=await calls();
+ await page.evaluate(()=>{(window as any).__fleet.hold='overview';});
+ const refresh=region.getByRole('button',{name:'Read status',exact:true});
+ await refresh.focus();
+ await page.keyboard.press('Enter');
+ await expect(refresh).toHaveAttribute('aria-disabled','true');
+ const useCurrent=region.getByRole('button',{name:'Use current selection',exact:true});
+ const profile=page.locator('[data-fleet-choice="profiles:profile-1"]');
+ const added=page.locator('[data-fleet-choice="profiles:profile-2"]');
+ const backend=region.getByRole('combobox',{name:'Connection monitor and startup'});
+ await expect(useCurrent).toHaveAttribute('aria-disabled','true');
+ await expect(profile).toHaveAttribute('aria-disabled','true');
+ await expect(backend).toHaveAttribute('aria-disabled','true');
+ expect(await useCurrent.evaluate(node=>(node as HTMLButtonElement).disabled)).toBe(false);
+ expect(await profile.evaluate(node=>(node as HTMLInputElement).disabled)).toBe(false);
+ expect(await backend.evaluate(node=>(node as HTMLSelectElement).disabled)).toBe(false);
+ await useCurrent.evaluate(node=>(node as HTMLButtonElement).click());
+ await profile.evaluate(node=>(node as HTMLInputElement).click());
+ await backend.evaluate(node=>{const select=node as HTMLSelectElement;select.value='rust';select.dispatchEvent(new Event('change',{bubbles:true}));});
+ await expect(added).toBeChecked();
+ await expect(profile).toBeChecked();
+ await expect(backend).toHaveValue('powershell');
+ expect(await stored()).toBe(beforeStored);
+ expect(await calls()).toBe(beforeCalls+1);
+ await releaseHold(page);
+ await expect(refresh).not.toHaveAttribute('aria-disabled');
+ expect(await calls()).toBe(beforeCalls+1);
+ expect(await stored()).toBe(beforeStored);
+ await expect(backend).toHaveValue('powershell');
+ await expect(profile).toBeChecked();
+ await expect(added).toBeChecked();
+});
+
 test('automatic login readback retains fixed original preview and does not auto-retry from UI',async({page})=>{
  await setup(page);await page.evaluate(()=>{const e=(window as any).__fleet;e.doc.login_launch={configuration_binding:e.doc.configuration.binding,preview_id:'5'.repeat(32),summary:{launch_id:'5'.repeat(32),profiles:['profile-1'],dashboard:true,opens_bat:true},state:'attention',code:'BAT_READINESS_PENDING'}});await refresh(page);await expect(page.getByRole('button',{name:'Retry original launch'})).toBeVisible();expect(await calls(page,'preview_launch')).toHaveLength(0);expect(await calls(page,'launch')).toHaveLength(0);expect(await calls(page,'launch_status')).toContainEqual({action:'launch_status',launch_id:'5'.repeat(32)});
 });
