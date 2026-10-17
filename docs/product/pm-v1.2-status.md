@@ -1,13 +1,13 @@
 # PM v1.2 開發狀態
 
-已合併主線 `f31e7964`（#276–278，2026 年 10 月 17 日）支援建立 Work、採用並開始已審閱計畫、對同一工作追加第二句、讀取固定成果與差異、執行已設定驗證、從同一成果發布 PR，以及選兩份既有評估帶入 PM 討論。工作設定檔、readiness 與 API／MCP 對等也已納入。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；安裝與真實 BAT／模型驗收仍須另有證據。
+已合併主線 `e94ea547`（#276–278、#282，2026 年 10 月 17 日）支援建立 Work、採用並開始已審閱計畫、對同一工作追加第二句、讀取固定成果與差異、執行已設定驗證、從同一成果發布 PR，以及選兩份既有評估帶入 PM 討論。工作設定檔、readiness 與 API／MCP 對等也已納入。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；安裝與真實 BAT／模型驗收仍須另有證據。
 
 完整範圍仍依 [PM v1.2](pm-v1.2-plan.md)、[v1.3](v1.3-closed-loop-plan.md) 與 [EC-1.1](experience-convergence.md)。Python Connector／Task Service 是唯一中央權威，Web／Tauri 共用 `desktop/src`。
 [10 月 17 日進度報告](progress-2026-10-17.md)列出主線整合、檢查及仍欠的交付證據。
 
 ## EC-1.1 接續
 
-已整合工作循環轉入具名真實路線驗收；手機導航／恢復、低干擾讀取、長討論與 PM 下一步沿原工作擴充。owner 同日要求 Connector 自動更新，納入 T8／E11／K16，見[更新契約](../design/connector-updates.md)。文件採用不代表新功能或實體手機驗收完成。
+已整合工作循環轉入具名真實路線驗收；手機導航／恢復、低干擾讀取、長討論與 PM 下一步沿原工作擴充。owner 同日要求 Connector 自動更新，納入 T8／E11／K16，見[更新契約](../design/connector-updates.md)。Connector 自動更新已由 #282 實作、發布並完成部署讀回，見[最新發布狀態](implementation-status.md)。其餘 EC-1.1 文件採用不代表新功能或實體手機驗收完成。
 
 ## M4 已合併主線（#116）
 
@@ -22,9 +22,9 @@ Roadmap 與 Brief 使用同一份固定的需求與完成定義評估。遺失�
 
 | 層級 | 狀態 |
 | --- | --- |
-| 發布（published） | `v0.2.6-preview.20261017`，固定來源 `f31e7964`；六個套件附 manifest 與 SHA-256。 |
-| 主線（merged） | #276–278 已合併；#279 更新網站。套件仍固定於 `f31e7964`，原提交與檢查紀錄保留。 |
-| 安裝／原生（installed/native） | 已記錄軟體安裝與來源讀回；原生隔離診斷的一次通過與先前啟動失敗分別保留。一般登入桌面及完整實機驗收仍待完成。 |
+| 發布（published） | `v0.2.7-preview.20261017`，固定來源 `e94ea547`；Connector 0.2.7／desktop 0.1.3，六個套件附 manifest 與 SHA-256。 |
+| 主線（merged） | #276–278 與 #282 已合併；套件固定於 `e94ea547`。#282 加入 Connector 自動更新與初次載入權限修正，原提交與檢查紀錄保留。 |
+| 安裝／原生（installed/native） | 七台 Connector 已安裝 0.2.7、啟用 preview 每小時更新並讀回排程成功；三台支援的 Linux 圖形主機安裝 desktop 0.1.3。既有 MCP 程序保留。前版原生診斷與啟動失敗分別保留，一般登入桌面及完整實機驗收仍待完成。 |
 | 實機（live-tested） | 本輪沒有真實 BAT／provider／模型完整驗收回執；軟體部署與綠燈 CI 不代替實機驗收。 |
 
 ### 主線現在的操作

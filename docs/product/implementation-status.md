@@ -1,5 +1,22 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-10-17 Connector 自動更新預覽
+
+[#282](https://github.com/TED-H-com/bat-agent-connector/pull/282) 已合併為
+`e94ea547051a059bd040c44a23aff0e24bcd2294`。
+[0.2.7 預覽版](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.7-preview.20261017)
+包含 Connector 0.2.7 與 desktop 0.1.3，來源、套件與檢查結果見發布清單。
+Linux 使用者安裝可由既有部署收據啟用自動更新，每小時檢查已發布版本；
+僅切換下一次啟動的套件，保留既有 MCP、central、BAT 程序與工作資料。
+用法與回退見[自動更新指南](../connector-updates.md)。
+
+EC-1.1 手機、來源同步與長討論增量已納入原計畫編號，並非全部已實作。
+真實 BAT／模型兩輪、實體手機與一般登入桌面驗收仍分別待完成。
+原完整測試的逾時、停滯與主機前提不足紀錄持續保留；分片 CI 通過不改寫原紀錄。
+七台 Connector 已安裝 0.2.7 並啟用 preview 更新排程，三台支援的 Linux 圖形主機
+已安裝 desktop 0.1.3；套件、來源與排程已逐台讀回，既有程序保留。
+下方 0.2.6 安裝狀態保留為上一版快照，詳細最新紀錄見[當日進度](progress-2026-10-17.md)。
+
 ## 2026-10-17 預覽發布與安裝
 
 [預覽版 v0.2.6-preview.20261017](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.6-preview.20261017)

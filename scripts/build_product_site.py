@@ -438,8 +438,8 @@ for en, zh, d, dz in [
     (
         "Match the package",
         "核對套件",
-        "Download Connector 0.2.6 / desktop 0.1.2 from the published preview. Check its source manifest and SHA-256 checksums.",
-        "下載已發布的 Connector 0.2.6／desktop 0.1.2 預覽版，核對來源清單與 SHA-256 校驗碼。",
+        "Download Connector 0.2.7 / desktop 0.1.3 from the published preview. Check its source manifest and SHA-256 checksums.",
+        "下載已發布的 Connector 0.2.7／desktop 0.1.3 預覽版，核對來源清單與 SHA-256 校驗碼。",
     ),
     (
         "Connect your environment",
@@ -472,11 +472,12 @@ parts.append(
         "button light lang-zh",
     )
     + link(
-        repo + "/releases/tag/v0.2.6-preview.20261017",
+        repo + "/releases/tag/v0.2.7-preview.20261017",
         "Download published preview →",
         "下載已發布預覽版 →",
         "text-link",
     )
+    + doc("docs/connector-updates.md", "Connector automatic updates", "Connector 自動更新", "text-link")
     + "</div></div></div></section>"
 )
 parts.append(
@@ -596,8 +597,8 @@ for label, lz, en, zh in [
     (
         "Merged workspace",
         "已合併工作台",
-        "Merged main at f31e7964 (#276–278, October 17, 2026) supports creating Work, adopting and starting a reviewed plan, sending a second instruction to the same Work, reading fixed Results and diffs, running configured verification, publishing a PR from the same Result, and opening a PM discussion with two existing assessments. Work profiles, readiness and API/MCP parity are included. Integration checks use the real Connector and disk Git with mock BAT/providers; installation and live BAT/model acceptance remain separate.",
-        "已合併主線 f31e7964（#276–278，2026 年 10 月 17 日）支援建立 Work、採用並開始已審閱計畫、對同一工作追加第二句、讀取固定成果與差異、執行已設定驗證、從同一成果發布 PR，以及選兩份既有評估帶入 PM 討論。工作設定檔、readiness 與 API／MCP 對等也已納入。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；安裝與真實 BAT／模型驗收仍須另有證據。",
+        "Merged main at e94ea547 (#276–278, #282, October 17, 2026) supports creating Work, adopting and starting a reviewed plan, sending a second instruction to the same Work, reading fixed Results and diffs, running configured verification, publishing a PR from the same Result, and opening a PM discussion with two existing assessments. Work profiles, readiness and API/MCP parity are included. Integration checks use the real Connector and disk Git with mock BAT/providers; installation and live BAT/model acceptance remain separate.",
+        "已合併主線 e94ea547（#276–278、#282，2026 年 10 月 17 日）支援建立 Work、採用並開始已審閱計畫、對同一工作追加第二句、讀取固定成果與差異、執行已設定驗證、從同一成果發布 PR，以及選兩份既有評估帶入 PM 討論。工作設定檔、readiness 與 API／MCP 對等也已納入。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；安裝與真實 BAT／模型驗收仍須另有證據。",
     ),
     (
         "Still ahead",
