@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Desktop Start work loads attempt history and the readiness preview, and Work
+  Result loads, instead of stopping on "Central route is not allowed". The
+  desktop bridge also allows the existing work-attempt changes and diff reads
+  before that result UI lands.
+
 - Capture a remote file: the button you pressed keeps keyboard focus and
   ignores a second press until that preview or save finishes. A button that
   cannot be used stays unavailable. When Save closes, or Capture another file
