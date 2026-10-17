@@ -1,5 +1,15 @@
 # Workbench presentation and selection
 
+The owner's October 16 [EC-1.0 decision](../product/experience-convergence.md)
+extends this presentation foundation. Its first delivery connects the existing
+start, server-owned follow-up queue, fixed Result and PR actions in the shared
+UI. Preserve one selection, draft namespace and event reader across perspectives;
+do not add a progress store or infer control from a session link. Empty inspectors
+take no space. Show outcome, changes, verification and delivery target before
+technical receipts. This is the implementation direction, not a claim that those
+pending contracts are available on main. Current differences and file ownership
+belong in the [existing handoff](../product/v1.3-agent-handoff.md).
+
 The owner's [October 15 supplement](../product/workbench-ux-plan.md) changes the
 v1.3 information architecture. Its [48 acceptance cases](../product/workbench-ux-acceptance.md)
 remain separate from E00–E11 and R0–R5. Private reference images were reviewed
