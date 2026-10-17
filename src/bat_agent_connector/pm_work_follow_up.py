@@ -53,8 +53,11 @@ WORK_FOLLOW_UP_FOLLOWER_FALLBACK_S = 60.0
 TEXT_EXCERPT_MAX_CHARS = 240
 
 ENDED_RUNTIME_STATUSES = frozenset({"exited", "stopped", "ended", "dead"})
-# Used only when the observation has no explicit streaming flag. A live process
-# whose runtime_status is "running" or "active" is not, by itself, mid-turn.
+# Inventory predecessor check only, and only when that row has no explicit
+# streaming flag. BAT documents runtimeStatus as "starting" or null. "running"
+# and "active" are not protocol values and do not make a row busy. Dropping
+# this set would treat a "starting" row with no stream flag as idle at
+# prepare_send, which is a wider permission than the final-frame idle check.
 BUSY_RUNTIME_STATUSES = frozenset({"streaming", "busy", "starting"})
 
 
@@ -295,6 +298,52 @@ def _is_streaming_or_busy(obs: dict[str, Any]) -> bool:
         return flag
     rt = obs.get("runtime_status")
     return isinstance(rt, str) and rt in BUSY_RUNTIME_STATUSES
+
+
+def _frame_idle_block(meta: Any, state: Any) -> str | None:
+    """Classify the final-frame meta and state reads.
+
+    Idle requires both values to be dictionaries whose ``isStreaming`` is
+    exactly ``False`` and no truthy ``service.SESSION_WAITING_FIELDS`` value.
+    ``queuedMessageCount`` of 0 is not a signal. A waiting signal is more
+    specific than an unreadable or streaming read. Anything else, including
+    null, a missing field, or a non-boolean ``isStreaming``, is busy.
+    """
+    waiting = isinstance(state, dict) and any(state.get(key) for key in service.SESSION_WAITING_FIELDS)
+    idle = (
+        isinstance(meta, dict)
+        and meta.get("isStreaming") is False
+        and isinstance(state, dict)
+        and state.get("isStreaming") is False
+        and not waiting
+    )
+    if idle:
+        return None
+    if waiting:
+        return "waiting"
+    return "busy"
+
+
+def _refuse_unidle_frame(kind: str, schedule: str) -> None:
+    if kind == "waiting":
+        if schedule == "after_current":
+            raise Wait(
+                status="waiting_external",
+                reason="waiting_permission_or_question_gate",
+                delay_s=WORK_FOLLOW_UP_HEAD_POLL_S,
+            )
+        raise _bad(
+            "PM_WORK_SESSION_WAITING_INPUT",
+            "session is waiting for permission or question input",
+            409,
+        )
+    if schedule == "after_current":
+        raise Wait(
+            status="waiting_external",
+            reason="session_busy_at_frame",
+            delay_s=WORK_FOLLOW_UP_HEAD_POLL_S,
+        )
+    raise _bad("PM_WORK_SESSION_BUSY", "session is not idle", 409)
 
 
 def _session_kind(
@@ -727,10 +776,13 @@ def admit_send(
     provenance = reg.get("provenance") if isinstance(reg, dict) else None
     # Registry has start_operation_id, not created_by_operation_id.
     # _check_managed_session_registry already requires start_operation_id == handoff id.
+    # Manual and unknown use resource_policy's names. A missing provenance is not
+    # manual: registry rows do not carry that field, and classify_row_for_read
+    # already refused a read-only session above.
     if (
         not ok_reg
         or reg is None
-        or provenance in {"manual_bat", "discovered_existing"}
+        or provenance in {resource_policy.MANUAL, resource_policy.UNKNOWN}
     ):
         raise _bad(
             "PM_WORK_SESSION_NOT_MANAGED",
@@ -1119,29 +1171,13 @@ async def execute_send_step(
         raise _bad("PM_WORK_SESSION_BUSY", "session is currently streaming a turn", 409)
 
     async def _before_frame() -> None:
+        # Both reads finish before the synchronous gate. before_send still runs
+        # after this returns and immediately before the transport fence.
         client = fleet.client(host)
         fresh_meta = await client.guard_read("claude:get-session-meta", {"sessionId": sid})
-        if isinstance(fresh_meta, dict):
-            if fresh_meta.get("pending"):
-                if schedule == "after_current":
-                    raise Wait(
-                        status="waiting_external",
-                        reason="waiting_permission_or_question_gate",
-                        delay_s=WORK_FOLLOW_UP_HEAD_POLL_S,
-                    )
-                raise _bad(
-                    "PM_WORK_SESSION_WAITING_INPUT",
-                    "session is waiting for permission or question input",
-                    409,
-                )
-            if fresh_meta.get("isStreaming"):
-                if schedule == "after_current":
-                    raise Wait(
-                        status="waiting_external",
-                        reason="session_busy_at_frame",
-                        delay_s=WORK_FOLLOW_UP_HEAD_POLL_S,
-                    )
-                raise _bad("PM_WORK_SESSION_BUSY", "session is currently streaming a turn", 409)
+        fresh_state = await client.guard_read("claude:get-session-state", {"sessionId": sid})
+        if block := _frame_idle_block(fresh_meta, fresh_state):
+            _refuse_unidle_frame(block, schedule)
 
     def _on_transport() -> None:
         ctx.set_refs(send_sent=True)
@@ -1155,6 +1191,7 @@ async def execute_send_step(
             text,
             confirm=True,
             message_id=mid,
+            ensure_loaded=False,
             queue=False,
             tool="api:" + ctx.actor,
             retry_on_disconnect=False,
@@ -1166,6 +1203,7 @@ async def execute_send_step(
             _controller_incarnation=incarnation_holder["incarnation"],
             _on_transport=_on_transport,
             _on_streaming=_on_streaming,
+            _on_unloaded=lambda: _refuse_unidle_frame("busy", schedule),
         )
     except Exception as exc:  # noqa: BLE001 - classified strictly by the fresh SQLite transport fence
         sent = fence_sent(ctx)

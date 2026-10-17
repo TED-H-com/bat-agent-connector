@@ -183,6 +183,7 @@ def _set_turn_messages(
     assistant_text: str = "Implemented credential validation and all unit tests pass.",
     include_echo: bool = True,
     last_data_at: int = 1_790_001_005_000,
+    echo_timestamp: int = 1_790_001_000_000,
     extra_items: list[dict] | None = None,
 ) -> None:
     msgs: list[dict] = []
@@ -192,7 +193,7 @@ def _set_turn_messages(
                 "id": turn_marker,
                 "role": "user",
                 "content": "[batc] Implement credential validation and tests.",
-                "timestamp": 1_790_001_000_000,
+                "timestamp": echo_timestamp,
             }
         )
     if extra_items:

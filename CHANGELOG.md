@@ -7,6 +7,10 @@
   or it goes out immediately when that session is already idle. You can read the
   queue, cancel an instruction that has not been sent, and reconcile an
   unconfirmed send with its original operation. A Codex session is refused.
+  Immediately before sending, both session metadata and state must confirm idle
+  with no pending input. An unloaded session is not resumed by a follow-up.
+  Agent errors affect a Result only when their session generation and all
+  supplied message or turn identifiers match that turn.
   The dashboard composer is not part of this change.
 
 - The hidden Board and Requirements scroll checks wait for the read the test held, so a second read of the same address cannot make that wait miss.

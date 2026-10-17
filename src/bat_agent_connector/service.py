@@ -1045,6 +1045,7 @@ async def session_send(
     _controller_incarnation: str | None = None,
     _on_transport: Callable[[], None] | None = None,
     _on_streaming: Callable[[dict[str, Any]], None] | None = None,
+    _on_unloaded: Callable[[], None] | None = None,
 ) -> dict:
     from . import orchestration_operations
     from .operations import OpContext
@@ -1089,6 +1090,8 @@ async def session_send(
         resumed = False
         if meta is None:
             if not ensure_loaded:
+                if _on_unloaded is not None:
+                    _on_unloaded()
                 raise WriteRefused(
                     "session is not loaded on the host (pass ensure_loaded=true to client-resume it)"
                 )

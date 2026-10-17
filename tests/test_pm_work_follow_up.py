@@ -2,12 +2,13 @@
 
 Tests drive public HTTP / RPC / MCP, mock BAT, and settle_operations. They do not
 edit operation rows or call ``_transition``. Timing uses ``asyncio.Event`` or a
-patched clock, never ``sleep``.
+patched clock. ``asyncio.sleep(0)`` only yields so a broadcast can be recorded.
 """
 
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 from contextlib import asynccontextmanager
 
@@ -20,9 +21,11 @@ from bat_agent_connector import (
     controller_authority,
     lifecycle,
     pm_access,
+    pm_attempt_results,
     pm_work_follow_up,
     pm_workspace,
     registry,
+    resource_policy,
     service,
 )
 from bat_agent_connector.api_auth import Principal
@@ -212,15 +215,17 @@ def _restore_roundtrip(original):
 
 
 async def _drain_uncertain(ops, op_id, monkeypatch):
+    from types import SimpleNamespace
+
     import bat_agent_connector.operations as operations_mod
 
-    original = operations_mod.time.time
-    clock = {"t": original() + 10_000}
+    original = operations_mod.time
+    clock = {"t": original.time() + 10_000}
 
     def now():
         return clock["t"]
 
-    monkeypatch.setattr(operations_mod.time, "time", now)
+    monkeypatch.setattr(operations_mod, "time", SimpleNamespace(time=now, monotonic=original.monotonic))
     try:
         for _ in range(8):
             current = ops.get(op_id)
@@ -233,7 +238,7 @@ async def _drain_uncertain(ops, op_id, monkeypatch):
         assert current["status"] == "needs_attention", current
         return current
     finally:
-        monkeypatch.setattr(operations_mod.time, "time", original)
+        monkeypatch.setattr(operations_mod, "time", original)
 
 
 # --------------------------------------------------------------------------- 1
@@ -952,9 +957,18 @@ async def test_manual_and_foreign_sessions_not_targetable(start_ready, mock):
     )
     registry.update(
         att["host"], att["session_id"],
-        start_operation_id=saved.get("start_operation_id"), provenance="manual_bat",
+        start_operation_id=saved.get("start_operation_id"), provenance=resource_policy.MANUAL,
     )
     status, body = await _post(w, att, "manual", key="p5-manual-send")  # gitleaks:allow (test idempotency key)
+    _assert_refused(
+        ops, mock, status, body, code="PM_WORK_SESSION_NOT_MANAGED", http_status=409,
+        before_ops=before_ops, before_inputs=before_inputs, before_invokes=before_invokes,
+    )
+    registry.update(
+        att["host"], att["session_id"],
+        start_operation_id=saved.get("start_operation_id"), provenance=resource_policy.UNKNOWN,
+    )
+    status, body = await _post(w, att, "unknown provenance", key="p5-unknown-provenance")  # gitleaks:allow (test idempotency key)
     _assert_refused(
         ops, mock, status, body, code="PM_WORK_SESSION_NOT_MANAGED", http_status=409,
         before_ops=before_ops, before_inputs=before_inputs, before_invokes=before_invokes,
@@ -1604,3 +1618,604 @@ async def test_admission_order_returns_the_earlier_code(start_ready, mock, case)
     finally:
         for restore in reversed(restores):
             restore()
+
+
+# --------------------------------------------------------------------------- final frame
+
+
+_META_CHANNEL = "claude:get-session-meta"
+_STATE_CHANNEL = "claude:get-session-state"
+_DEFAULT_ECHO_MS = 1_790_001_000_000
+
+
+def _copy_bat(value):
+    if isinstance(value, (dict, list)):
+        return copy.deepcopy(value)
+    return value
+
+
+def _install_final_frame(mock, sid):
+    """Serve one public send attempt, then repeat that pattern until reset.
+
+    ``task_control.guarded`` authorizes, then ``session_send`` authorizes again
+    and reads ``_meta``, all before ``_live_state``. Those three metas and the
+    first state stay idle. The fourth meta and the second state are the frame
+    (``_before_frame``). A waiting settle runs that attempt again, so the same
+    slots stay on the frame until ``reset``. A one-shot frame would look idle
+    on the retry and send.
+    """
+    phase = {"meta_n": 0, "state_n": 0}
+    holder = {"meta": None, "state": None}
+    idle_meta = copy.deepcopy(mock.metas[sid])
+    idle_meta["isStreaming"] = False
+    idle_state = copy.deepcopy(mock.states[sid])
+    idle_state["isStreaming"] = False
+    idle_state["queuedMessageCount"] = 0
+
+    def meta(_params):
+        phase["meta_n"] += 1
+        if phase["meta_n"] % 4 == 0:
+            return _copy_bat(holder["meta"])
+        return _copy_bat(idle_meta)
+
+    def state(_params):
+        phase["state_n"] += 1
+        if phase["state_n"] % 2 == 0:
+            return _copy_bat(holder["state"])
+        return _copy_bat(idle_state)
+
+    mock.handlers[_META_CHANNEL] = meta
+    mock.handlers[_STATE_CHANNEL] = state
+
+    def reset(frame_meta, frame_state):
+        holder["meta"] = frame_meta
+        holder["state"] = frame_state
+        phase["meta_n"] = 0
+        phase["state_n"] = 0
+
+    return reset, idle_meta, idle_state
+
+
+def _meta_state_channels(mock, start):
+    return [
+        frame["channel"] for frame in mock.invokes[start:]
+        if frame.get("channel") in {_META_CHANNEL, _STATE_CHANNEL}
+    ]
+
+
+def _assert_final_reads(mock, start, *, sent):
+    """Guard authorize, body authorize, ``_meta``, ``_live_state``, then the frame.
+
+    ``task_control.guarded("send")`` calls ``authorize_session`` before
+    ``session_send``. The body authorizes again, then ``_meta``, then
+    ``_live_state``. ``_before_frame`` is the next meta and state. A refusal
+    or wait stops on that pair and does not send. ``_settle`` reruns one
+    waiting operation, so those six reads repeat and no new operation appears.
+    A success may read again after the pair and sends once.
+    """
+    found = _meta_state_channels(mock, start)
+    expect = [
+        _META_CHANNEL,
+        _META_CHANNEL,
+        _META_CHANNEL,
+        _STATE_CHANNEL,
+        _META_CHANNEL,
+        _STATE_CHANNEL,
+    ]
+    channels = [frame.get("channel") for frame in mock.invokes[start:]]
+    assert found[: len(expect)] == expect, (found, channels)
+    if not sent:
+        width = len(expect)
+        assert found and len(found) % width == 0, (found, channels)
+        assert found == expect * (len(found) // width), (found, channels)
+    sends = [frame for frame in mock.invokes[start:] if frame.get("channel") == "claude:send-message"]
+    assert len(sends) == (1 if sent else 0), sends
+
+
+def _without_key(value, key):
+    copied = copy.deepcopy(value)
+    copied.pop(key, None)
+    return copied
+
+
+def _with_key(value, key, item):
+    copied = copy.deepcopy(value)
+    copied[key] = item
+    return copied
+
+
+@pytest.mark.parametrize("schedule", ["now", "after_current"])
+async def test_unloaded_follow_up_never_resumes_a_session(start_ready, mock, schedule):
+    """The real service metadata fallback is not permission to resume a Work session."""
+    w = start_ready
+    ops = w["d"].ops
+    att = await _start_managed_attempt(w, mock, key=f"p5-unloaded-{schedule}")
+    await _refresh(w, mock, att, att["turn_marker"], streaming=False)
+    idle_meta = copy.deepcopy(mock.metas[att["session_id"]])
+    reads = {"count": 0, "unloaded": 0}
+
+    def meta(_params):
+        reads["count"] += 1
+        # Guard and body authorization see the managed session. The service's
+        # own metadata read then discovers that it is no longer loaded.
+        if reads["count"] % 3 == 0:
+            reads["unloaded"] += 1
+            return None
+        return copy.deepcopy(idle_meta)
+
+    mock.handlers[_META_CHANNEL] = meta
+    start = len(mock.invokes)
+    status, body = await _post(
+        w, att, "continue only when loaded", key=f"p5-unloaded-send-{schedule}", schedule=schedule,
+    )
+    assert status == 202, body
+    op_id = body["operation"]["operation_id"]
+    settled = await _settle(ops, op_id, rounds=2)
+    assert reads["unloaded"] > 0
+    mutations = [frame for frame in mock.invokes[start:]
+                 if frame.get("channel") in {"claude:client-resume", "claude:send-message"}]
+    assert mutations == []
+    assert settled["external_refs"]["send_sent"] is False
+    if schedule == "after_current":
+        assert settled["status"] == "waiting_external", settled
+    else:
+        assert settled["error_code"] == "PM_WORK_SESSION_BUSY", settled
+
+
+async def test_final_frame_refuses_null_malformed_and_each_waiting_signal(start_ready, mock):
+    """A public now-send reaches the frame only after an idle receipt, then refuses there."""
+    w = start_ready
+    ops = w["d"].ops
+    w["d"].fleet.config.safety.max_writes_per_hour = 500
+    att = await _start_managed_attempt(w, mock, key="p5-frame-matrix")  # gitleaks:allow (test idempotency key)
+    await _refresh(w, mock, att, att["turn_marker"], streaming=False)
+    reset, idle_meta, idle_state = _install_final_frame(mock, att["session_id"])
+    waiting = {
+        "pendingPermission": {"id": "perm"},
+        "pendingQuestion": {"id": "question"},
+        "pendingPermissions": [{"id": "perm"}],
+        "pendingQuestions": [{"id": "question"}],
+        "queuedMessages": [{"id": "queued"}],
+        "pendingApproval": {"id": "approval"},
+        "pendingAskUser": {"id": "ask"},
+        "queuedMessageCount": 2,
+        "isWaitingForInput": True,
+    }
+    assert set(waiting) == set(service.SESSION_WAITING_FIELDS)
+    cases = [
+        ("null-meta", None, copy.deepcopy(idle_state), "busy"),
+        ("null-state", copy.deepcopy(idle_meta), None, "busy"),
+        ("meta-string", "not-a-meta", copy.deepcopy(idle_state), "busy"),
+        ("state-string", copy.deepcopy(idle_meta), "not-a-state", "busy"),
+        ("meta-missing-stream", _without_key(idle_meta, "isStreaming"), copy.deepcopy(idle_state), "busy"),
+        ("meta-stream-none", _with_key(idle_meta, "isStreaming", None), copy.deepcopy(idle_state), "busy"),
+        ("meta-streaming", _with_key(idle_meta, "isStreaming", True), copy.deepcopy(idle_state), "busy"),
+        ("meta-stream-zero", _with_key(idle_meta, "isStreaming", 0), copy.deepcopy(idle_state), "busy"),
+        ("state-streaming", copy.deepcopy(idle_meta), _with_key(idle_state, "isStreaming", True), "busy"),
+        ("state-missing-stream", copy.deepcopy(idle_meta), _without_key(idle_state, "isStreaming"), "busy"),
+        ("state-stream-zero", copy.deepcopy(idle_meta), _with_key(idle_state, "isStreaming", 0), "busy"),
+    ]
+    for field, sample in waiting.items():
+        cases.append((f"waiting-{field}", copy.deepcopy(idle_meta), _with_key(idle_state, field, sample), "waiting"))
+    cases.append((
+        "waiting-beats-streaming-meta",
+        _with_key(idle_meta, "isStreaming", True),
+        _with_key(idle_state, "pendingPermission", {"id": "perm"}),
+        "waiting",
+    ))
+    cases.append((
+        "waiting-beats-null-meta",
+        None,
+        _with_key(idle_state, "pendingPermission", {"id": "perm"}),
+        "waiting",
+    ))
+    before_inputs = ops.db.execute(
+        "SELECT COUNT(*) FROM work_inputs WHERE attempt_id=?", (att["attempt_id"],),
+    ).fetchone()[0]
+    for index, (name, frame_meta, frame_state, kind) in enumerate(cases, start=1):
+        reset(frame_meta, frame_state)
+        start = len(mock.invokes)
+        status, body = await _post(
+            w, att, f"frame {name}", key=f"p5-frame-{name}", schedule="now",  # gitleaks:allow (test idempotency key)
+        )
+        assert status == 202, (name, body)
+        op_id = body["operation"]["operation_id"]
+        settled = await _settle(ops, op_id)
+        code = "PM_WORK_SESSION_WAITING_INPUT" if kind == "waiting" else "PM_WORK_SESSION_BUSY"
+        message = (
+            "session is waiting for permission or question input"
+            if kind == "waiting" else "session is not idle"
+        )
+        assert settled["status"] == "failed", (name, settled)
+        assert settled["error_code"] == code, (name, settled)
+        assert settled.get("status_reason") == f"[{code}] {message}", (name, settled)
+        assert settled["external_refs"]["send_sent"] is False, (name, settled)
+        assert _frames(mock, f"batc-{op_id}") == [], name
+        assert _positions(ops, att["attempt_id"])[-1][1] == op_id, name
+        assert len(_positions(ops, att["attempt_id"])) == before_inputs + index, name
+        _assert_final_reads(mock, start, sent=False)
+
+
+async def test_idle_frame_sends_once_when_queued_count_is_zero(start_ready, mock):
+    w = start_ready
+    ops = w["d"].ops
+    att = await _start_managed_attempt(w, mock, key="p5-frame-idle")  # gitleaks:allow (test idempotency key)
+    await _refresh(w, mock, att, att["turn_marker"], streaming=False)
+    reset, idle_meta, idle_state = _install_final_frame(mock, att["session_id"])
+    assert idle_state["queuedMessageCount"] == 0
+    reset(copy.deepcopy(idle_meta), copy.deepcopy(idle_state))
+    start = len(mock.invokes)
+    status, body = await _post(
+        w, att, "idle frame", key="p5-frame-idle-send", schedule="now",  # gitleaks:allow (test idempotency key)
+    )
+    assert status == 202, body
+    op_id = body["operation"]["operation_id"]
+    settled = await _settle(ops, op_id)
+    message_id = f"batc-{op_id}"
+    assert settled["status"] == "succeeded", settled
+    assert settled["external_refs"]["send_sent"] is True, settled
+    assert len(_frames(mock, message_id)) == 1
+    assert len(_positions(ops, att["attempt_id"])) == 1
+    _assert_final_reads(mock, start, sent=True)
+    await _settle(ops, op_id)
+    assert len(_frames(mock, message_id)) == 1
+
+
+async def test_after_current_frame_waits_on_the_same_operation(start_ready, mock):
+    w = start_ready
+    ops = w["d"].ops
+    att = await _start_managed_attempt(w, mock, key="p5-frame-same-op")  # gitleaks:allow (test idempotency key)
+    await _refresh(w, mock, att, att["turn_marker"], streaming=False)
+    reset, idle_meta, idle_state = _install_final_frame(mock, att["session_id"])
+    reset(copy.deepcopy(idle_meta), _with_key(idle_state, "pendingPermission", {"id": "perm"}))
+    status, body = await _post(
+        w, att, "wait then send", key="p5-frame-same", schedule="after_current",  # gitleaks:allow (test idempotency key)
+    )
+    assert status == 202, body
+    op_id = body["operation"]["operation_id"]
+    message_id = f"batc-{op_id}"
+    start = len(mock.invokes)
+    waiting = await _settle(ops, op_id)
+    assert waiting["status"] == "waiting_external", waiting
+    assert waiting.get("status_reason") == "waiting_permission_or_question_gate", waiting
+    assert waiting["uncertain_tries"] == 0, waiting
+    assert waiting["external_refs"]["send_sent"] is False, waiting
+    assert _frames(mock, message_id) == []
+    assert _positions(ops, att["attempt_id"]) == [(1, op_id, message_id)]
+    _assert_final_reads(mock, start, sent=False)
+
+    reset(_with_key(idle_meta, "isStreaming", True), copy.deepcopy(idle_state))
+    start = len(mock.invokes)
+    busy = await _settle(ops, op_id)
+    assert busy["operation_id"] == op_id
+    assert busy["status"] == "waiting_external", busy
+    assert busy.get("status_reason") == "session_busy_at_frame", busy
+    assert busy["uncertain_tries"] == 0, busy
+    assert busy["external_refs"]["send_sent"] is False, busy
+    assert _frames(mock, message_id) == []
+    assert _positions(ops, att["attempt_id"]) == [(1, op_id, message_id)]
+    _assert_final_reads(mock, start, sent=False)
+
+    reset(copy.deepcopy(idle_meta), copy.deepcopy(idle_state))
+    start = len(mock.invokes)
+    sent = await _settle(ops, op_id)
+    assert sent["operation_id"] == op_id
+    assert sent["status"] == "succeeded", sent
+    assert sent["external_refs"]["send_sent"] is True, sent
+    assert len(_frames(mock, message_id)) == 1
+    assert _positions(ops, att["attempt_id"]) == [(1, op_id, message_id)]
+    _assert_final_reads(mock, start, sent=True)
+    await _settle(ops, op_id)
+    assert len(_frames(mock, message_id)) == 1
+
+
+async def _hold_second_state_read(monkeypatch, sid):
+    started = asyncio.Event()
+    release = asyncio.Event()
+    state_reads = {"n": 0}
+    original = client_mod.BatClient._roundtrip
+
+    async def wrapped(self, frame, timeout, on_transport=None):
+        params = frame.get("params") or {}
+        if frame.get("channel") == _STATE_CHANNEL and params.get("sessionId") == sid:
+            state_reads["n"] += 1
+            if state_reads["n"] == 2:
+                started.set()
+                await release.wait()
+        return await original(self, frame, timeout, on_transport)
+
+    monkeypatch.setattr(client_mod.BatClient, "_roundtrip", wrapped)
+    return original, started, release, state_reads
+
+
+async def _revoke_while_frame_is_held(w, mock, monkeypatch, *, key, revoke):
+    ops = w["d"].ops
+    att = await _start_managed_attempt(w, mock, key=key)  # gitleaks:allow (test idempotency key)
+    second = Principal("pm-second-owner", frozenset({"observe", "manage", "start", "operate"}))
+    current = pm_workspace.get_workspace(ops.db, STARTER_OWNER, att["workspace_id"])
+    await pkg_action(
+        w, "pm.workspace.member.set", {"workspace_id": att["workspace_id"]},
+        {"actor": second.actor, "role": "owner"}, {"expected_version": current["version"]},
+        who=STARTER_OWNER,
+    )
+    await _refresh(w, mock, att, att["turn_marker"], streaming=False)
+    original, started, release, state_reads = await _hold_second_state_read(monkeypatch, att["session_id"])
+    op_id = None
+    try:
+        status, body = await _post(
+            w, att, "revoke at frame", key=key + "-send", schedule="now",  # gitleaks:allow (test idempotency key)
+        )
+        assert status == 202, body
+        op_id = body["operation"]["operation_id"]
+        await ops.run_due()
+        await asyncio.wait_for(started.wait(), 10)
+        assert state_reads["n"] >= 2
+        assert _frames(mock, f"batc-{op_id}") == []
+        await revoke(ops, att, second)
+        release.set()
+        settled = await _settle(ops, op_id)
+        return att, op_id, settled
+    finally:
+        release.set()
+        _restore_roundtrip(original)
+        if op_id is not None:
+            await _settle(ops, op_id)
+
+
+async def test_writer_revoked_during_final_state_read_sends_nothing(start_ready, mock, monkeypatch):
+    async def revoke(ops, att, second):
+        viewed = pm_workspace.get_workspace(ops.db, second, att["workspace_id"])
+        created, _fresh = ops.create(
+            second,
+            action="pm.workspace.member.set",
+            target={"workspace_id": att["workspace_id"]},
+            params={"actor": STARTER_OWNER.actor, "role": "reader"},
+            preconditions={"expected_version": viewed["version"]},
+            idempotency_key="p5-frame-demote-writer",  # gitleaks:allow (test idempotency key)
+        )
+        await ops._execute(created["operation_id"])
+        assert ops.get(created["operation_id"])["status"] == "succeeded"
+
+    _att, op_id, settled = await _revoke_while_frame_is_held(
+        start_ready, mock, monkeypatch, key="p5-frame-writer", revoke=revoke,
+    )
+    assert settled["operation_id"] == op_id
+    assert settled["status"] == "failed", settled
+    assert settled["error_code"] == "FORBIDDEN", settled
+    assert settled.get("status_reason") == "[FORBIDDEN] Workspace membership does not permit this action", settled
+    assert settled["external_refs"]["send_sent"] is not True, settled
+    assert _frames(mock, f"batc-{op_id}") == []
+
+
+async def test_lifecycle_revoked_during_final_state_read_sends_nothing(start_ready, mock, monkeypatch):
+    async def revoke(ops, att, _second):
+        await decide(ops, att["workspace_id"], "pause", who=STARTER_OWNER)
+
+    _att, op_id, settled = await _revoke_while_frame_is_held(
+        start_ready, mock, monkeypatch, key="p5-frame-lifecycle", revoke=revoke,
+    )
+    assert settled["operation_id"] == op_id
+    assert settled["status"] == "failed", settled
+    assert settled["error_code"] == "PM_LIFECYCLE_STOPPED", settled
+    assert settled.get("status_reason") == (
+        "[PM_LIFECYCLE_STOPPED] This workspace has stopped new investment; "
+        "original effects may still be reconciled"
+    ), settled
+    assert settled["external_refs"]["send_sent"] is not True, settled
+    assert _frames(mock, f"batc-{op_id}") == []
+
+
+# --------------------------------------------------------------------------- current-turn agent:error
+
+
+def _stored_receipts(ops, att):
+    return pm_attempt_results.receipts(ops.db, att["workspace_id"], att["attempt_id"])["receipts"]
+
+
+def _stored_count(ops, att):
+    return ops.db.execute(
+        "SELECT COUNT(*) FROM session_results WHERE workspace_id=? AND attempt_id=?",
+        (att["workspace_id"], att["attempt_id"]),
+    ).fetchone()[0]
+
+
+def _generation(host, sid):
+    reg = registry.get(host, sid)
+    return f"{reg['controller_incarnation']}:{reg['created_at']}"
+
+
+async def _ops_client(w, host):
+    client = w["d"].ops.context["fleet"].client(host)
+    await client.connect()
+    return client
+
+
+async def _wait_until(predicate):
+    async def spin():
+        while not predicate():
+            await asyncio.sleep(0)
+    await asyncio.wait_for(spin(), 10)
+
+
+async def _broadcast_error(mock, client, params):
+    seen = client.events_seen
+    await mock.broadcast("agent:error", params)
+    await _wait_until(lambda: client.events_seen > seen)
+
+
+async def _observe_turn(w, mock, att, marker, *, streaming, echo_timestamp, assistant_id):
+    _seed_worktree_commits(mock, att["worktree_path"], att["base_sha"])
+    _set_turn_messages(
+        mock, att["session_id"], marker,
+        streaming=streaming, include_echo=True,
+        echo_timestamp=echo_timestamp, assistant_id=assistant_id,
+        last_data_at=echo_timestamp + 5_000,
+    )
+    mock.metas[att["session_id"]].pop("runtimeStatus", None)
+    await w["d"].inventory._refresh_scheduled(att["host"])
+
+
+def _next_run_at(ops, op_id):
+    return ops.db.execute(
+        "SELECT next_run_at FROM operations WHERE operation_id=?", (op_id,),
+    ).fetchone()[0]
+
+
+async def test_success_after_previous_turn_agent_error(start_ready, mock):
+    """Old, delayed, untagged and contradictory errors cannot fail the next turn."""
+    w = start_ready
+    ops = w["d"].ops
+    att = await _start_managed_attempt(w, mock, key="p5-stale-error")  # gitleaks:allow (test idempotency key)
+    host, sid = att["host"], att["session_id"]
+    client = await _ops_client(w, host)
+    await _broadcast_error(mock, client, {"sessionId": sid, "clientMessageId": att["turn_marker"]})
+    await _wait_until(lambda: any(
+        ev.get("channel") == "agent:error" and ev.get("sessionId") == sid
+        and ev.get("source_generation") == _generation(host, sid)
+        for ev in client.recent_events
+    ))
+    await _observe_turn(
+        w, mock, att, att["turn_marker"],
+        streaming=False, echo_timestamp=_DEFAULT_ECHO_MS, assistant_id="m-asst-turn1",
+    )
+    turn1 = next(row for row in _stored_receipts(ops, att) if row["turn_marker"] == att["turn_marker"])
+    assert turn1["document"]["boundary"] == "agent_error"
+    failed = await _result(w, att)
+    assert failed["execution"]["state"] == "failed", failed["execution"]
+    assert failed["execution"]["state_reason"] == "agent_error"
+
+    status, body = await _post(
+        w, att, "turn two", key="p5-stale-turn2", schedule="now",  # gitleaks:allow (test idempotency key)
+    )
+    assert status == 202, body
+    turn2_id = body["operation"]["operation_id"]
+    turn2 = await _settle(ops, turn2_id)
+    assert turn2["status"] == "succeeded", turn2
+    turn2_marker = f"batc-{turn2_id}"
+    assert len(_frames(mock, turn2_marker)) == 1
+    # The BAT host clock is behind the Connector. Receive time cannot prove
+    # which turn produced an error, including an old event delivered late.
+    echo_ms = _DEFAULT_ECHO_MS + 100_000
+    await _broadcast_error(mock, client, {"sessionId": sid})
+    await _broadcast_error(mock, client, {
+        "sessionId": sid, "clientMessageId": att["turn_marker"], "messageId": "m-asst-turn2",
+    })
+    await _observe_turn(
+        w, mock, att, turn2_marker,
+        streaming=True, echo_timestamp=echo_ms, assistant_id="m-asst-turn2",
+    )
+    assert _stored_count(ops, att) == 1
+    status, body = await _post(
+        w, att, "follower", key="p5-stale-follower", schedule="after_current",  # gitleaks:allow (test idempotency key)
+    )
+    assert status == 202, body
+    follower_id = body["operation"]["operation_id"]
+    queued = await _settle(ops, follower_id, rounds=2)
+    assert queued["status"] == "waiting_external", queued
+    assert _frames(mock, f"batc-{follower_id}") == []
+    due = _next_run_at(ops, follower_id)
+    await _observe_turn(
+        w, mock, att, turn2_marker,
+        streaming=True, echo_timestamp=echo_ms, assistant_id="m-asst-turn2",
+    )
+    assert _stored_count(ops, att) == 1
+    assert _next_run_at(ops, follower_id) == due
+    assert _frames(mock, f"batc-{follower_id}") == []
+
+    _seed_worktree_commits(mock, att["worktree_path"], att["base_sha"])
+    _set_turn_messages(
+        mock, sid, turn2_marker, streaming=False, include_echo=True,
+        echo_timestamp=echo_ms, assistant_id="m-asst-turn2", last_data_at=echo_ms + 5_000,
+    )
+    mock.metas[sid].pop("runtimeStatus", None)
+    await _broadcast_error(mock, client, {})
+    await _broadcast_error(mock, client, {"sessionId": "sess-other-turn"})
+    await _broadcast_error(mock, client, {"sessionId": sid, "clientMessageId": att["turn_marker"]})
+    original_created = registry.get(host, sid)["created_at"]
+    registry.update(host, sid, created_at=None)
+    await _broadcast_error(mock, client, {"sessionId": sid})
+    await _wait_until(lambda: any(
+        ev.get("channel") == "agent:error" and ev.get("sessionId") == sid and "source_generation" not in ev
+        for ev in client.recent_events
+    ))
+    registry.update(host, sid, created_at=original_created)
+    registry.update(host, sid, created_at=float(original_created) + 100_000.0)
+    temp_gen = _generation(host, sid)
+    await _broadcast_error(mock, client, {"sessionId": sid})
+    await _wait_until(lambda: any(
+        ev.get("source_generation") == temp_gen for ev in client.recent_events
+    ))
+    registry.update(host, sid, created_at=original_created)
+    assert _generation(host, sid) == f"{registry.get(host, sid)['controller_incarnation']}:{original_created}"
+    await w["d"].inventory._refresh_scheduled(host)
+    turn2_row = next(row for row in _stored_receipts(ops, att) if row["turn_marker"] == turn2_marker)
+    assert turn2_row["document"]["boundary"] == "turn_done", turn2_row["document"]
+    kept = next(row for row in _stored_receipts(ops, att) if row["turn_marker"] == att["turn_marker"])
+    assert kept["document"]["boundary"] == "agent_error"
+    ended = await _result(w, att)
+    assert ended["execution"]["state"] == "turn-ended", ended["execution"]
+    assert ended["execution"]["state_reason"] == "turn_done"
+    assert _frames(mock, f"batc-{follower_id}") == []
+    assert _next_run_at(ops, follower_id) == 0
+    followed = await _settle(ops, follower_id)
+    assert followed["status"] == "succeeded", followed
+    assert len(_frames(mock, f"batc-{follower_id}")) == 1
+    assert len(_frames(mock, turn2_marker)) == 1
+
+
+async def test_current_turn_agent_error_still_fails_and_releases_queue(start_ready, mock):
+    w = start_ready
+    ops = w["d"].ops
+    att = await _start_managed_attempt(w, mock, key="p5-current-error")  # gitleaks:allow (test idempotency key)
+    host, sid = att["host"], att["session_id"]
+    await _observe_turn(
+        w, mock, att, att["turn_marker"],
+        streaming=False, echo_timestamp=_DEFAULT_ECHO_MS, assistant_id="m-asst-ok",
+    )
+    opened = await _result(w, att)
+    assert opened["execution"]["state"] == "turn-ended", opened["execution"]
+    status, body = await _post(
+        w, att, "turn with error", key="p5-current-turn", schedule="now",  # gitleaks:allow (test idempotency key)
+    )
+    assert status == 202, body
+    turn_id = body["operation"]["operation_id"]
+    sent = await _settle(ops, turn_id)
+    assert sent["status"] == "succeeded", sent
+    marker = f"batc-{turn_id}"
+    echo_ms = 1_790_002_000_000
+    await _observe_turn(
+        w, mock, att, marker, streaming=True, echo_timestamp=echo_ms, assistant_id="m-asst-err",
+    )
+    status, body = await _post(
+        w, att, "release me", key="p5-current-follower", schedule="after_current",  # gitleaks:allow (test idempotency key)
+    )
+    assert status == 202, body
+    follower_id = body["operation"]["operation_id"]
+    queued = await _settle(ops, follower_id, rounds=2)
+    assert queued["status"] == "waiting_external", queued
+    assert _frames(mock, f"batc-{follower_id}") == []
+    _seed_worktree_commits(mock, att["worktree_path"], att["base_sha"])
+    _set_turn_messages(
+        mock, sid, marker, streaming=False, include_echo=True,
+        echo_timestamp=echo_ms, assistant_id="m-asst-err", last_data_at=echo_ms + 5_000,
+    )
+    mock.metas[sid].pop("runtimeStatus", None)
+    client = await _ops_client(w, host)
+    await _broadcast_error(mock, client, {"sessionId": sid, "clientMessageId": marker})
+    await _wait_until(lambda: any(
+        ev.get("channel") == "agent:error" and ev.get("clientMessageId") == marker
+        and ev.get("source_generation") == _generation(host, sid)
+        for ev in client.recent_events
+    ))
+    await w["d"].inventory._refresh_scheduled(host)
+    row = next(item for item in _stored_receipts(ops, att) if item["turn_marker"] == marker)
+    assert row["document"]["turn_done"] is True
+    assert row["document"]["boundary"] == "agent_error"
+    failed = await _result(w, att)
+    assert failed["execution"]["state"] == "failed", failed["execution"]
+    assert failed["execution"]["state_reason"] == "agent_error"
+    assert _frames(mock, f"batc-{follower_id}") == []
+    released = await _settle(ops, follower_id)
+    assert released["status"] == "succeeded", released
+    assert len(_frames(mock, f"batc-{follower_id}")) == 1
+    assert len(_frames(mock, marker)) == 1
