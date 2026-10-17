@@ -4,7 +4,7 @@ description: Use this when you need to check on, read, wait for, or (only when e
 version: 0.2.6
 license: MIT
 metadata:
-  workflow_version: "2026-10-16.1"
+  workflow_version: "2026-10-16.2"
   api_version: "1"
   contract_version: "2026-10-08"
 ---

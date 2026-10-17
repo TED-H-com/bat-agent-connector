@@ -54,7 +54,7 @@ async def test_allowlist_is_the_section_32_list():
 
 
 def test_session_send_completeness_stays_partial_for_unknown_targets():
-    """A Work id on session.send is not the registered target and is not complete."""
+    """A Work-shaped target without an admitted input is not a complete association."""
     from bat_agent_connector.pm_operation_loop import _completeness
 
     kwargs = dict(

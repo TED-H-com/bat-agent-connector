@@ -173,7 +173,7 @@ def test_skill_thread_actions_and_context_failures_match_the_current_workflow():
                          ('PM_CONTEXT_TOO_LARGE', '413')):
         assert re.search(rf'{code}[^\n]*{status}', text)
         assert re.search(rf'{code}[^\n]*{status}', contract)
-    assert 'workflow_version: "2026-10-16.1"' in text
+    assert 'workflow_version: "2026-10-16.2"' in text
     assert "pre-child guard pause puts the parent in `needs_attention`" not in text
     for code in (
         "PM_LIFECYCLE_STOPPED", "PM_LIFECYCLE_EPOCH_CHANGED", "PM_PACKAGE_SCOPE_CHANGED",
