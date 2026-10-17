@@ -1066,10 +1066,21 @@ async def test_existing_callers_preserve_exact_retry_settings_and_errors(start_r
     assert "BAT did not accept the message" in json.dumps(rejected)
     mock.handlers.pop("claude:send-message", None)
 
-    import bat_agent_connector.orchestration_operations as orchestration
-
-    monkeypatch.setattr(orchestration, "linked", lambda _op: True)
-    monkeypatch.setattr(orchestration, "check_child", lambda *_args, **_kwargs: None)
+    # PM-derived sessions deliberately have no relay handoff contract. Start a
+    # separate ordinary managed session; do not bypass that source boundary.
+    mock.handlers["git:log"] = lambda _params: [{"hash": att["base_sha"]}]
+    real_branch = mock.handlers["git:branch"]
+    mock.handlers["git:branch"] = lambda params: (
+        mock.git_branch[params["cwd"]] if params["cwd"] in mock.git_branch else real_branch(params)
+    )
+    ordinary, _ = ops.create(STARTER_OWNER, action="session.start",
+        target={"host": host, "workspace": mock.ws_doc["workspaces"][0]["id"]},
+        params={"agent": "claude", "prompt": "Prepare the ordinary relay fixture", "use_worktree": True},
+        idempotency_key="p5-ordinary-relay-start")
+    started = await _settle(ops, ordinary["operation_id"])
+    assert started["status"] == "succeeded", json.dumps(started, indent=2)
+    relay_sid = started["result"]["session_id"]
+    _set_turn_messages(mock, relay_sid, f"batc-{ordinary['operation_id']}", streaming=False)
 
     async def lose_before(_self, frame, timeout, on_transport, original):
         if frame.get("channel") == "claude:send-message":
@@ -1077,14 +1088,21 @@ async def test_existing_callers_preserve_exact_retry_settings_and_errors(start_r
         return await original(_self, frame, timeout, on_transport=on_transport)
 
     original_roundtrip = _patch_roundtrip(monkeypatch, lose_before)
-    status, body = await _post(
-        w, att, "relay child",
-        key="p5-relay-unsent",  # gitleaks:allow (test idempotency key)
-        target={"host": host, "session_id": sid},
-        params={"text": "relay was not sent"},
+    # A real relay parent supplies the canonical child relation. Replacing
+    # linked() with True also corrupts public control authorization, which needs
+    # the original parent_id and slot rather than a truthy stand-in.
+    status, body = await http(
+        w["port"], "POST", "/api/v1/operations", tok=w["owner_token"],
+        body={"action": "session.relay", "target": {"host": host, "session_id": relay_sid},
+              "params": {"message": "relay was not sent"}, "preconditions": {}},
+        headers={"Idempotency-Key": "p5-relay-unsent"},  # gitleaks:allow (test idempotency key)
     )
     assert status == 202, body
-    relay = await _settle(ops, body["operation"]["operation_id"])
+    parent = await _settle(ops, body["operation"]["operation_id"])
+    relay = ops.get(parent["external_refs"]["relay_child_id"])
+    assert relay["external_refs"]["orchestration_child"] == {
+        "parent_id": parent["operation_id"], "slot": "relay",
+    }
     assert relay["status"] == "failed" and relay["error_code"] == "RELAY_NOT_SENT", relay
     assert "relay prompt was not sent" in json.dumps(relay)
     _restore_roundtrip(original_roundtrip)
@@ -1098,9 +1116,13 @@ async def test_existing_callers_preserve_exact_retry_settings_and_errors(start_r
     assert instructions["interrupt_scope"] == "session"
     assert instructions["queue_receipt_semantics"] == "queued_at_submission_not_current_position"
     rows = instructions["instructions"]
-    assert {item["text_excerpt"] for item in rows} == {
-        "legacy busy once", "legacy rejected", "relay was not sent",
-    }
+    assert {item["text_excerpt"] for item in rows} == {"legacy busy once", "legacy rejected"}
+    relay_status, relay_history = await http(
+        w["port"], "GET", f"/api/v1/sessions/{host}/{relay_sid}/instructions", tok=w["owner_token"],
+    )
+    assert relay_status == 200, relay_history
+    assert len(relay_history["instructions"]) == 1
+    assert "relay was not sent" in relay_history["instructions"][0]["text_excerpt"]
     for item in rows:
         assert set(item) == _INSTRUCTION_KEYS
         assert item["queue_position"] is None
