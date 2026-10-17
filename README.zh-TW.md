@@ -4,12 +4,11 @@
 用合成的唯讀專案資料操作正式共用介面：搜尋工作、展開需求、查看交付證據與工作階段。
 展示內另有 v1.3 工作流程預覽，可模擬開始工作、追加修改與驗收決策；兩者都不連線到 BAT 或模型。
 主線上已有真正的「開始工作」面板，它需要已設定的 BAT 主機與已綁定的儲存庫。
-已合併的還包括以 `work.start` 開始一項已綁定的工作、該嘗試的固定成果讀取，以及看板工作詳情中的唯讀成果區（E03 part A）。
-尚未合併對同一工作的第二次指示（P5）、一步採用並開始（P6）、依要求讀取目前變更與逐 commit 差異（E03 part B）、工作 profile 與 readiness（E01）、MCP／API 迴圈對等（E10）與端到端閉環；尚未觀察到真實的 BAT 開始、追加或成果，這裡的內容也尚未安裝或實機驗收。
+已合併主線 `0daf283c`（#276，2026 年 10 月 17 日）支援建立 Work、採用並開始已審閱計畫、對同一工作追加第二句、讀取固定成果與差異、執行已設定驗證、從同一成果發布 PR，以及選兩份既有評估帶入 PM 討論。工作設定檔、readiness 與 API／MCP 對等也已納入。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；安裝與真實 BAT／模型驗收仍須另有證據。
 
 **看懂專案、找到問題，與 PM 完成一次決策。**
 
-[English](README.md) · **繁體中文** · [網站](https://ted-h-com.github.io/bat-agent-connector/?lang=zh-TW) · [安裝與開始使用](docs/getting-started.zh-TW.md) · [進度報告](docs/product/progress-2026-10-16.md)
+[English](README.md) · **繁體中文** · [網站](https://ted-h-com.github.io/bat-agent-connector/?lang=zh-TW) · [安裝與開始使用](docs/getting-started.zh-TW.md) · [進度報告](docs/product/progress-2026-10-17.md)
 
 Better Agent Dashboard 把專案狀況、PM 討論與決策放在同一個工作空間。
 先看即時總覽，找到問題，再從原紀錄直接與 PM 討論，不必重新整理脈絡。
@@ -23,7 +22,7 @@ Better Agent Dashboard 把專案狀況、PM 討論與決策放在同一個工作
 
 > **開發預覽。** 截圖來自已合併的 `main` `265026d4`（2026 年 10 月 16 日，包含 #205）。
 > 這裡呈現的內容都尚未安裝或實機驗收。
-> [進度報告](docs/product/progress-2026-10-16.md)分開列出分支、合併、安裝與實機驗收狀態。
+> [進度報告](docs/product/progress-2026-10-17.md)分開列出分支、合併、安裝與實機驗收狀態。
 > 下載時請核對套件的精確來源；截圖與 CI 不能代替原生或實機驗收。
 
 ## 它幫你回答什麼
@@ -44,7 +43,7 @@ Better Agent Dashboard 把專案狀況、PM 討論與決策放在同一個工作
 | 那個工作階段發生了什麼？ | **工作階段**一起呈現對話與成果；自有工作依權限操作，人工 BAT 工作階段保持唯讀。 |
 
 這些檢視都屬於同一個專案，次要工具需要時再展開。
-[目前範圍](#目前範圍與限制)分開列出已合併工作台與完整 PM v1.2 待辦。[進度報告](docs/product/progress-2026-10-16.md)另列審閱中的工作。
+[目前範圍](#目前範圍與限制)分開列出已合併工作台與完整 PM v1.2 待辦。[進度報告](docs/product/progress-2026-10-17.md)另列審閱中的工作。
 
 ## 先試一個小專案
 
@@ -120,13 +119,13 @@ flowchart TB
 | 狀態 | 範圍 |
 | --- | --- |
 | 已合併主線 | 桌面／中央底座；PM 討論及計畫採用；工程包及有界派工；驗證、需求接受與依賴證據；政策內維護修復；BAT 提案／Follow-up；AHP 唯讀觀察。#132 補上中央總覽、討論來源與改名、登記表、時程、技術相依及每日資源桶；#134 補上採用後目標、近期決策及問題解決回報引導。 |
-| 已合併工作台 | 專案總覽與已存報告；討論與討論資料（脈絡、資訊、計畫、會議）；需求與詳情面板；問題與變更，含治理與後續追蹤；時程；技術相依，含發布基準與維護政策；Agent 資源；工作看板；工作階段；以一個連線網址完成 BAT 首次設定。已於 2026 年 10 月 16 日合併到 `main`（包含 #205）。目前主線上的 v1.3 可以開始一項已綁定的工作（`work.start` 與「開始工作」面板；面板需要已設定的 BAT 主機與已綁定的儲存庫）、讀取該嘗試的固定成果，並在看板工作詳情顯示唯讀成果區（E03 part A）。尚未合併：對同一工作的第二次指示（P5）、一步採用並開始（P6）、依要求讀取目前變更與逐 commit 差異（E03 part B）、工作 profile 與 readiness（E01）、MCP／API 迴圈對等（E10），以及端到端閉環。尚未觀察到真實的 BAT 開始、追加或成果。沒有安裝或實機驗收。[自 `d66f032d` 之後合併的項目](docs/product/progress-2026-10-16.md)。 |
+| 已合併工作台 | 已合併主線 `0daf283c`（#276，2026 年 10 月 17 日）支援建立 Work、採用並開始已審閱計畫、對同一工作追加第二句、讀取固定成果與差異、執行已設定驗證、從同一成果發布 PR，以及選兩份既有評估帶入 PM 討論。工作設定檔、readiness 與 API／MCP 對等也已納入。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；安裝與真實 BAT／模型驗收仍須另有證據。 |
 | PM v1.2 剩餘工作 | 一般原生 coding adapter、AHP 自建／寫入、其餘文件視圖與簡報、更多 CLI 支援、遠端用量收集與交付效率歸因。 |
 
 已有 Codex／Claude 本機用量收集；這輪 Agent 資源改版補上有來源的每日趨勢與回報配額窗。
 遠端收集與交付效率歸因仍待做。
 缺資料不能當零，觀測 token、API 估價與訂閱配額也不能混算。
-尚未啟用依用量自動改模型的政策。[進度與優先順序](docs/product/progress-2026-10-16.md)。
+尚未啟用依用量自動改模型的政策。[進度與優先順序](docs/product/progress-2026-10-17.md)。
 
 正式簽章、Mac 公證、正式更新通道與 Linux 原生憑證持久儲存，已排除於本次交付。實際環境驗收由使用者執行，尚未宣稱通過。[完整 PM v1.2 計畫](docs/product/pm-v1.2-plan.md)仍是範圍依據，M4 是其中一個里程碑。
 
@@ -143,7 +142,7 @@ Connector 對人工 session 與 worktree 保持唯讀。Unknown 資源必須有�
 | 需要 | 入口 |
 | --- | --- |
 | 使用產品 | [首次使用](docs/getting-started.zh-TW.md) · [Windows Fleet](docs/windows.zh-TW.md) |
-| 了解進度 | [進度報告](docs/product/progress-2026-10-16.md) · [PM 狀態](docs/product/pm-v1.2-status.md) · [實作歷史](docs/product/implementation-status.md) |
+| 了解進度 | [進度報告](docs/product/progress-2026-10-17.md) · [PM 狀態](docs/product/pm-v1.2-status.md) · [實作歷史](docs/product/implementation-status.md) |
 | 接續開發 | [本輪交接](docs/handoff/2026-10-14-docs-ux-v2.md) · [已採用計畫](docs/product/pm-v1.2-plan.md) · [架構決策](docs/product/realignment-v2.md) |
 | 接入 Agent | [Agent skills](docs/agent-skills.md) · [API](docs/design/api-v1.md) · [Protocol](docs/PROTOCOL.md) |
 | 查交付能力 | [Artifacts](docs/design/artifacts.md) · [Delivery](docs/design/delivery.md) · [Cleanup](docs/design/cleanup.md) |

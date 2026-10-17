@@ -596,8 +596,8 @@ for label, lz, en, zh in [
     (
         "Merged workspace",
         "已合併工作台",
-        "Since d66f032d, merged main at 265026d4 through #205 on 16 October 2026 adds Overview records that open the exact item, honest progress and one primary action (#185); one localized error with the code in closed Details (#186); proposals reviewed, adopted and resolved in the conversation, settling as each child finishes (#188, #189); Send to PM, Save note only and Make a plan (#192); a link to the interactive synthetic read-only demo (#191); and Tools → Workbench preview, with the classic layout still the default (#193, #195). work.start starts a bound Work in its own managed BAT worktree and session, from a reviewed published commit and an adopted plan (#194). The Start work panel needs the work.start capability, a configured BAT host and a bound repository (#197). Fixed Result reads (#196) and a read-only Result section in the Board's Work inspector (E03 part A, #205) read a started attempt; they do not start, send or merge. The public gallery does not open that panel. The v1.3 workflow preview still simulates the flow. v1.3 documents and a synthetic clickable prototype are included (#183, #187, #190); the prototype makes no Connector, BAT, GitHub or model requests. Focus, scroll and refresh fixes are #199, #202, #204, #208 and #210. #198, #200 and #201 are test reliability fixes, not features. Not merged: a second instruction to the same Work (P5), adopt-and-start in one step (P6), on-request current changes and per-commit diffs (E03 part B), work profiles and readiness (E01), MCP/API loop parity (E10), and the closed loop end to end. No real BAT start, follow-up or Result has been observed. Nothing is installed or live-tested.",
-        "自 d66f032d 之後，2026 年 10 月 16 日已合併主線 265026d4（截至 #205）新增：總覽開啟原紀錄、顯示誠實進度與一個主要動作（#185）；一則在地化錯誤，代碼收在收合的詳細資料（#186）；提案在對話中審閱、採用與解決，並隨每個子操作完成而結算（#188、#189）；傳送給 PM、只存筆記與整理計畫（#192）；連到合成且唯讀的互動展示（#191）；以及工具 → 工作台預覽，經典版面仍是預設（#193、#195）。work.start 從已審閱的已發布 commit 與已採用計畫，在自己的受管 BAT worktree 與工作階段開始已綁定的工作（#194）。「開始工作」面板需要 work.start 能力、已設定的 BAT 主機與已綁定的儲存庫（#197）。固定成果讀取（#196）與看板工作詳情的唯讀成果區（E03 part A，#205）只讀取已開始的嘗試，不開始、不送出、不合併。公開圖庫沒有打開這個面板。v1.3 工作流程預覽仍是模擬。v1.3 文件與合成的可點選原型已包含在內（#183、#187、#190）；原型不向 Connector、BAT、GitHub 或模型發出請求。焦點、捲動與重新整理的修正是 #199、#202、#204、#208 與 #210。#198、#200 與 #201 是測試可靠度修正，不是功能。尚未合併：對同一工作的第二次指示（P5）、一步採用並開始（P6）、依要求讀取目前變更與逐 commit 差異（E03 part B）、工作 profile 與 readiness（E01）、MCP／API 迴圈對等（E10），以及端到端閉環。尚未觀察到真實的 BAT 開始、追加或成果。沒有安裝或實機驗收。",
+        "Merged main at 0daf283c (#276, October 17, 2026) supports creating Work, adopting and starting a reviewed plan, sending a second instruction to the same Work, reading fixed Results and diffs, running configured verification, publishing a PR from the same Result, and opening a PM discussion with two existing assessments. Work profiles, readiness and API/MCP parity are included. Integration checks use the real Connector and disk Git with mock BAT/providers; installation and live BAT/model acceptance remain separate.",
+        "已合併主線 0daf283c（#276，2026 年 10 月 17 日）支援建立 Work、採用並開始已審閱計畫、對同一工作追加第二句、讀取固定成果與差異、執行已設定驗證、從同一成果發布 PR，以及選兩份既有評估帶入 PM 討論。工作設定檔、readiness 與 API／MCP 對等也已納入。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；安裝與真實 BAT／模型驗收仍須另有證據。",
     ),
     (
         "Still ahead",
@@ -615,7 +615,7 @@ for label, lz, en, zh in [
     parts.append("<div>" + bi(label, lz, "dt") + bi(en, zh, "dd") + "</div>")
 parts.append(
     '</dl><div class="evidence-links">'
-    + doc("docs/product/progress-2026-10-16.md", "Progress and evidence ↗", "進度與證據 ↗", "")
+    + doc("docs/product/progress-2026-10-17.md", "Progress and evidence ↗", "進度與證據 ↗", "")
     + doc("docs/product/pm-v1.2-plan.md", "Adopted plan ↗", "已採用計畫 ↗", "")
     + link(repo + "/actions?query=branch%3Amain", "Current main checks ↗", "目前 main 檢查 ↗")
     + "</div></section>"
@@ -649,7 +649,7 @@ for i, (en, zh, d, dz, path, zpath) in enumerate(
             "進度報告",
             "Merged, candidate, tested and remaining scope.",
             "已合併、候選、已驗證及剩餘範圍。",
-            "docs/product/progress-2026-10-16.md",
+            "docs/product/progress-2026-10-17.md",
             None,
         ),
         (
