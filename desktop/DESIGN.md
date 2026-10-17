@@ -618,7 +618,11 @@ ordered work sections: Requirements served; Status & ownership; Start work (when
 `features.pm_workspaces.work_attempt_results` is available, replacing static result evidence
 with the latest attempt's live result envelope using 0 BAT calls, and providing on-demand
 "Read current changes" and per-file diff disclosures loaded once on first open with out-of-date
-event detection); Blocker & next step;
+event detection). When that result lists one complete `github.pr.publish` entry, the same
+inspector shows the offered commit and base, then the title, description, and draft choice, and
+submits only that entry through the existing operation form. An incomplete or missing entry does
+not submit. Opened pull requests link to the recorded operation when that id is present; the
+screen does not invent a GitHub URL. Blocker & next step;
 Delivery; Details. When the card is startable, the inspector
 header offers a Start work action alongside Discuss that scrolls and focuses the instruction
 field. The Start work panel previews readiness facts, candidate code targets, and requirement

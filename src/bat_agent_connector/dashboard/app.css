@@ -2781,6 +2781,27 @@ body.pm-mode #main { padding: 0; }
   align-self: flex-start;
 }
 
+.pm-work-publish { display: flex; flex-direction: column; gap: var(--space-3); max-width: 640px; min-width: 0; }
+.pm-work-publish h4 { margin: 0; }
+.pm-work-publish-fields { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.pm-work-publish-fact { margin: 0; overflow-wrap: anywhere; }
+.pm-work-publish-public { margin: 0; }
+.pm-work-publish label { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.pm-work-publish label.pm-work-publish-choice { flex-direction: row; align-items: flex-start; }
+.pm-work-publish-draft { display: flex; flex-direction: column; gap: var(--space-2); }
+.pm-work-publish input[type="text"],
+.pm-work-publish textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+}
+.pm-work-publish textarea { min-height: 96px; resize: vertical; }
+@media (max-width: 800px) {
+  .pm-work-publish .ui-button { min-height: 44px; }
+  .pm-work-publish input[type="text"],
+  .pm-work-publish textarea { font-size: 16px; }
+}
+
 /* Session workspace. Scoped so other views keep their own layout. */
 .session-workspace { min-width: 0; }
 main.session-view { display: flex; flex-direction: column; height: calc(100dvh - 48px); overflow: auto; }
