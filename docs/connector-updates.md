@@ -81,7 +81,9 @@ Run the real package fixture on disk:
 uv run python scripts/validate_connector_update.py --receipt "$HOME/agent-work/tmp/update-proof/receipt.json"
 ```
 
-The fixture installs a local published-tag substitute using the real locked
-package, verifies all package files and the canonical skill, exercises the actual
-launchers, and proves that a repeated stage uses the verified installation.
+The fixture installs two local published-tag substitutes using real locked
+packages, verifies all package files and canonical skills, and exercises actual
+enrollment, upgrade, launchers and rollback. An already loaded interpreter keeps
+its original identity while a new launch gets the new version; a journal sentinel
+stays unchanged. A repeated stage uses the verified installation without fetching.
 It does not contact BAT, run a model, or modify an existing installation.
