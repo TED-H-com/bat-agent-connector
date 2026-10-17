@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Result sources, the pull request list, project skills and model preferences keep
+  the keyboard on Refresh, More, Previous, Next or Save while that action runs.
+  The control looks unavailable and a second press does nothing. When More,
+  Previous, Next or Save cannot keep focus, it moves to the new child, the other
+  page control, or the status line.
+
 - Diagnostics withdrawal keeps the keyboard inside the dialog. If Save or Copy
   had focus, or focus had already left the controls, it moves to Close. A save
   that finishes afterwards does not move focus or replace the withdrawn notice.
