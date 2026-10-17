@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
 from pathlib import Path
 
 import pytest
@@ -1404,11 +1405,35 @@ async def test_state_facets_next_actions_and_links_invariants(start_ready, mock,
     monkeypatch.setattr(ops, "kick", lambda: None)
     op_attn, _ = ops.create(STARTER_OWNER, **env_attn)
     aid_attn = op_attn["result"]["attempt_id"]
-    with ops.journal.tx():
-        ops.db.execute("UPDATE work_items SET version=version+1 WHERE work_item_id=?", (wi_attn,))
+    # A work-item version bump is unresumable and ends the start failed. Lower the
+    # role instead, so this reader check still sees a repairable needs_attention.
+    from bat_agent_connector.api_auth import Principal
+
+    colleague_owner = Principal("colleague", frozenset({"observe", "manage", "start"}))
+
+    async def set_member(actor: str, role: str, who=PLAN_OWNER) -> None:
+        current = pm_workspace.get_workspace(ops.db, who, wid)
+        op, _ = ops.create(
+            who,
+            action="pm.workspace.member.set",
+            target={"workspace_id": wid},
+            params={"actor": actor, "role": role},
+            preconditions={"expected_version": current["version"]},
+            idempotency_key=uuid.uuid4().hex,
+        )
+        await ops._execute(op["operation_id"])
+        done = ops.get(op["operation_id"])
+        assert done["status"] == "succeeded", done
+
+    await set_member("colleague", "owner")
+    await set_member(STARTER_OWNER.actor, "reader", colleague_owner)
     monkeypatch.setattr(ops, "kick", orig_kick)
     await _advance_start_public(ops, op_attn["operation_id"], rounds=2)
-    assert ops.get(op_attn["operation_id"])["status"] == "needs_attention"
+    paused_attn = ops.get(op_attn["operation_id"])
+    assert paused_attn["status"] == "needs_attention"
+    assert paused_attn["error_code"] == "FORBIDDEN"
+    await set_member(STARTER_OWNER.actor, "owner", colleague_owner)
+    await set_member("colleague", "contributor")
 
     observe_only_tok = token(d, STARTER_OWNER.actor, "observe")
     _, res_attn = await http(

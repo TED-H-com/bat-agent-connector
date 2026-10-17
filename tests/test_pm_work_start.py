@@ -1000,11 +1000,13 @@ async def test_admin_principal_and_concurrent_start_rejection_and_reuse_after_fa
     assert resolved_admin.admin is True
     assert resolved_admin.actor == api_auth.ADMIN_ACTOR
 
-    # Trigger a real _guard pause into needs_attention via _execute, then restore and verify admin can resume.
-    ops.db.execute("UPDATE work_items SET version=version+1 WHERE work_item_id=?", (ctx["work_item_id"],))
+    # A withdrawn admin credential pauses in needs_attention; restoring that credential lets admin resume.
+    ops.context["daemon"]._admin_token = None
     await ops._execute(op_admin["operation_id"])
-    assert ops.get(op_admin["operation_id"])["status"] == "needs_attention"
-    ops.db.execute("UPDATE work_items SET version=1 WHERE work_item_id=?", (ctx["work_item_id"],))
+    paused_admin = ops.get(op_admin["operation_id"])
+    assert paused_admin["status"] == "needs_attention"
+    assert paused_admin["error_code"] == "PM_WORK_START_AUTHORITY_UNAVAILABLE"
+    ops.context["daemon"]._admin_token = admin_token
     resumed = ops.resume(minimal_admin, op_admin["operation_id"])
     assert resumed["status"] == "running"
 
@@ -1302,6 +1304,69 @@ async def _advance_start(ops, op_id: str, rounds: int = 6) -> dict:
     return cur
 
 
+async def _hold_before_handoff(w) -> tuple[str, str]:
+    """Admit a start, finish its package child, and leave the handoff child uncreated."""
+    ops = w["d"].ops
+    env = await _start_envelope(w, key=uuid.uuid4().hex)
+    parent, _ = ops.create(STARTER_OWNER, **env)
+    await ops._execute(parent["operation_id"])
+    held = ops.get(parent["operation_id"])
+    assert held["status"] == "waiting_external", held
+    package_operation = held["result"]["children"]["package"]
+    assert package_operation and held["result"]["children"]["handoff"] is None
+    await ops._execute(package_operation)
+    assert ops.get(package_operation)["status"] == "succeeded"
+    assert ops.get(parent["operation_id"])["status"] == "waiting_external"
+    attempt_id = "att_" + parent["operation_id"][3:]
+    origin = ops.db.execute(
+        "SELECT origin_id FROM work_attempts WHERE attempt_id=?", (attempt_id,)
+    ).fetchone()
+    assert origin["origin_id"] == parent["operation_id"]
+    # Child completion wakes the parent. Park it so a later public action's settle
+    # cannot admit the handoff child before that action commits.
+    _park_until_executed(ops, parent["operation_id"])
+    return parent["operation_id"], package_operation
+
+
+def _park_until_executed(ops, operation_id: str) -> None:
+    """Keep one held operation out of settle_operations until the test executes it."""
+    ops.db.execute(
+        "UPDATE operations SET next_run_at=? WHERE operation_id=? AND status NOT IN ('succeeded','failed','cancelled')",
+        (time.time() + 3600, operation_id),
+    )
+
+
+async def _assert_pre_child_failed(w, mock, parent_id: str, package_operation: str, code: str, fragment: str) -> dict:
+    ops = w["d"].ops
+    frames = len(mock.invokes)
+    await ops._execute(parent_id)
+    done = ops.get(parent_id)
+    assert done["status"] == "failed", done
+    assert done["error_code"] == code
+    assert fragment in (done["status_reason"] or "")
+    assert done["result"]["stage"] == "start_failed"
+    assert done["result"]["children"]["package"] == package_operation
+    assert done["result"]["children"]["handoff"] is None
+    assert ops.get(package_operation)["status"] == "succeeded"
+    assert len(mock.invokes) == frames
+    return done
+
+
+async def _admit_next_start(w, parent_id: str, *, requirement_ids: list[str] | None = None) -> dict:
+    ops = w["d"].ops
+    env = await _start_envelope(w, key=uuid.uuid4().hex, requirement_ids=requirement_ids)
+    try:
+        nxt, fresh = ops.create(STARTER_OWNER, **env)
+    except OperationError as exc:
+        raise AssertionError(exc.code) from exc
+    assert fresh is True
+    assert nxt["operation_id"] != parent_id
+    done = await _advance_start(ops, nxt["operation_id"])
+    assert done["status"] == "succeeded", done
+    assert done["result"]["predecessor_attempt_id"] == "att_" + parent_id[3:]
+    return done
+
+
 async def test_work_start_unbound_and_idea_stage_compose_and_dispatch_session(start_ready, mock):
     from bat_agent_connector import pm_lifecycle_gates, pm_package_handoff, work_items
 
@@ -1512,22 +1577,24 @@ async def test_published_head_move_requires_re_review_and_new_start_creates_pack
 
 
 async def test_child_outcome_mapping_failed_needs_attention_and_guard_pause(start_ready, mock, monkeypatch):
+    from bat_agent_connector import api_auth
+
     w = start_ready
     ops = w["d"].ops
-    wi_id = w["target"]["work_item_id"]
 
     env1 = await _start_envelope(w, key="outcome-map-1")
     op1, _ = ops.create(STARTER_OWNER, **env1)
 
-    # 1. Pre-child _guard failure pauses parent in 'needs_attention' with the slot's in-progress stage ('preparing').
-    ops.db.execute("UPDATE work_items SET version=version+1 WHERE work_item_id=?", (wi_id,))
+    # 1. A repairable pre-child stop stays needs_attention at the slot's in-progress stage.
+    # A work-item version change is unresumable and is covered by its own test.
+    assert api_auth.revoke(ops.db, STARTER_OWNER.actor) >= 1
     await ops._execute(op1["operation_id"])
     paused_guard = ops.get(op1["operation_id"])
     assert paused_guard["status"] == "needs_attention"
-    assert paused_guard["error_code"] == "WORK_ITEM_CHANGED"
+    assert paused_guard["error_code"] == "PM_WORK_START_AUTHORITY_UNAVAILABLE"
     assert paused_guard["result"]["stage"] == "preparing"
     assert paused_guard["result"]["children"]["package"] is None
-    ops.db.execute("UPDATE work_items SET version=1 WHERE work_item_id=?", (wi_id,))
+    api_auth.issue(ops.db, STARTER_OWNER.actor, ["observe", "manage", "start", "operate"])
     ops.resume(STARTER_OWNER, op1["operation_id"])
 
     # 2. If a child stops in 'needs_attention', parent also stops in 'needs_attention' with that slot's in-progress stage.
@@ -1599,6 +1666,269 @@ async def test_child_outcome_mapping_failed_needs_attention_and_guard_pause(star
         ops.cancel(STARTER_OWNER, op2["operation_id"])
     finally:
         ops.actions["repository.continue"] = handoff_act
+
+
+@pytest.mark.parametrize("action", ["pause", "close"])
+async def test_lifecycle_stop_ends_unresumable_start_failed(start_ready, mock, action):
+    from bat_agent_connector import pm_lifecycle_gates
+    from tests.test_pm_lifecycle import decide
+
+    w = start_ready
+    ops, wid = w["d"].ops, w["workspace_id"]
+    stage = pm_lifecycle_gates.head(ops.db, wid)["stage"]
+    assert stage in {"idea", "planning", "development"}
+    parent_id, package_operation = await _hold_before_handoff(w)
+    await decide(ops, wid, action, who=STARTER_OWNER)
+    await _assert_pre_child_failed(
+        w, mock, parent_id, package_operation, "PM_LIFECYCLE_STOPPED", "stopped new investment",
+    )
+    with pytest.raises(OperationError) as blocked:
+        ops.create(STARTER_OWNER, **await _start_envelope(w, key=uuid.uuid4().hex))
+    assert blocked.value.code == "PM_LIFECYCLE_STOPPED"
+    await decide(ops, wid, "reopen", who=STARTER_OWNER, params={"stage": stage})
+    await _admit_next_start(w, parent_id)
+
+
+@pytest.mark.parametrize("action", ["pause", "close"])
+async def test_lifecycle_epoch_change_ends_unresumable_start_failed(start_ready, mock, action):
+    from bat_agent_connector import pm_lifecycle_gates
+    from tests.test_pm_lifecycle import decide
+
+    w = start_ready
+    ops, wid = w["d"].ops, w["workspace_id"]
+    stage = pm_lifecycle_gates.head(ops.db, wid)["stage"]
+    assert stage in {"idea", "planning", "development"}
+    parent_id, package_operation = await _hold_before_handoff(w)
+    await decide(ops, wid, action, who=STARTER_OWNER)
+    await decide(ops, wid, "reopen", who=STARTER_OWNER, params={"stage": stage})
+    await _assert_pre_child_failed(
+        w, mock, parent_id, package_operation, "PM_LIFECYCLE_EPOCH_CHANGED", "earlier execution epoch",
+    )
+    await _admit_next_start(w, parent_id)
+
+
+async def test_scope_revision_change_ends_unresumable_start_failed(start_ready, mock):
+    from bat_agent_connector import pm_plans
+    from tests.test_pm_plan_operations import adopt, draft
+
+    w = start_ready
+    ops = w["d"].ops
+    parent_id, package_operation = await _hold_before_handoff(w)
+    plan = pm_plans.accepted_plan(ops, STARTER_OWNER, w["workspace_id"])["plan"]
+    revision = await draft(
+        w,
+        markdown="# Revised login scope\n\nAdoption remains a separate decision.\n",
+        requirements=w["requirements"],
+    )
+    adopted = await adopt(w, revision)
+    assert adopted["status"] == "succeeded", adopted
+    assert adopted["result"]["scope_changed"] is not False
+    assert adopted["result"]["scope_revision"] != plan["adoption"]["scope_revision"]
+    await _assert_pre_child_failed(
+        w, mock, parent_id, package_operation, "PM_PACKAGE_SCOPE_CHANGED", "Adopted scope changed",
+    )
+    # The existing association still names the previous plan revision, so the new
+    # start states the current plan's requirement ids and binds them.
+    await _admit_next_start(
+        w, parent_id, requirement_ids=[row["id"] for row in w["requirements"]],
+    )
+
+
+async def test_document_only_adoption_lets_the_held_start_continue(start_ready, mock):
+    from bat_agent_connector import pm_plans
+    from tests.test_pm_plan_operations import adopt, draft
+
+    w = start_ready
+    ops = w["d"].ops
+    parent_id, _package_operation = await _hold_before_handoff(w)
+    plan = pm_plans.accepted_plan(ops, STARTER_OWNER, w["workspace_id"])["plan"]
+    revision = await draft(
+        w,
+        title=plan["document"]["title"],
+        markdown=plan["document"]["markdown"],
+        requirements=w["requirements"],
+    )
+    adopted = await adopt(w, revision)
+    assert adopted["status"] == "succeeded", adopted
+    assert adopted["result"]["scope_changed"] is False
+    assert adopted["result"]["scope_revision"] == plan["adoption"]["scope_revision"]
+    done = await _advance_start(ops, parent_id)
+    assert done["status"] == "succeeded", done
+    assert done["error_code"] != "PM_PACKAGE_SCOPE_CHANGED"
+
+
+async def test_work_item_change_ends_unresumable_start_failed(start_ready, mock):
+    from bat_agent_connector import work_items
+
+    w = start_ready
+    ops = w["d"].ops
+    parent_id, package_operation = await _hold_before_handoff(w)
+    wi_id = w["target"]["work_item_id"]
+    item = work_items._get_item(ops.db, wi_id)
+    await pkg_action(
+        w, "work_item.update", {"work_item_id": wi_id},
+        {"title": "Implement login revised"}, {"expected_version": item["version"]},
+    )
+    await _assert_pre_child_failed(
+        w, mock, parent_id, package_operation, "WORK_ITEM_CHANGED",
+        "Work item changed after work.start admission",
+    )
+    await _admit_next_start(w, parent_id)
+
+
+async def test_project_change_ends_unresumable_start_failed(start_ready, mock):
+    from bat_agent_connector import work_items
+
+    w = start_ready
+    ops = w["d"].ops
+    parent_id, package_operation = await _hold_before_handoff(w)
+    project = work_items._get_project(ops.db, work_items._get_item(
+        ops.db, w["target"]["work_item_id"])["project_id"])
+    await pkg_action(
+        w, "project.update", {"project_id": project["project_id"]},
+        {"description": "Revised project note"}, {"expected_version": project["version"]},
+    )
+    await _assert_pre_child_failed(
+        w, mock, parent_id, package_operation, "PROJECT_CHANGED",
+        "Project changed after work.start admission",
+    )
+    await _admit_next_start(w, parent_id)
+
+
+async def test_work_binding_change_ends_unresumable_start_failed(start_ready, mock):
+    from tests.test_pm_work_packages import associate
+
+    w = start_ready
+    parent_id, package_operation = await _hold_before_handoff(w)
+    await associate(w)
+    await _assert_pre_child_failed(
+        w, mock, parent_id, package_operation, "PM_WORK_BINDING_CHANGED",
+        "Work association changed after work.start admission",
+    )
+    await _admit_next_start(w, parent_id)
+
+
+async def test_package_lineage_change_ends_unresumable_start_failed(start_ready, mock):
+    from tests.test_pm_work_packages import create as create_package
+
+    w = start_ready
+    ops = w["d"].ops
+    parent_id, package_operation = await _hold_before_handoff(w)
+    package_id = ops.get(package_operation)["result"]["package_id"]
+    await create_package(w, previous=package_id)
+    await _assert_pre_child_failed(
+        w, mock, parent_id, package_operation, "PM_PACKAGE_VERSION_CONFLICT",
+        "Work package lineage changed",
+    )
+    await _admit_next_start(w, parent_id)
+
+
+async def test_archived_work_item_ends_unresumable_start_failed(start_ready, mock):
+    from bat_agent_connector import work_items
+
+    w = start_ready
+    ops = w["d"].ops
+    parent_id, package_operation = await _hold_before_handoff(w)
+    wi_id = w["target"]["work_item_id"]
+    item = work_items._get_item(ops.db, wi_id)
+    await pkg_action(
+        w, "work_item.update", {"work_item_id": wi_id},
+        {"archived": True}, {"expected_version": item["version"]},
+    )
+    await _assert_pre_child_failed(
+        w, mock, parent_id, package_operation, "WORK_ITEM_ARCHIVED", "work item is archived",
+    )
+    with pytest.raises(OperationError) as blocked:
+        ops.create(STARTER_OWNER, **await _start_envelope(w, key=uuid.uuid4().hex))
+    assert blocked.value.code == "WORK_ITEM_ARCHIVED"
+    restored = work_items._get_item(ops.db, wi_id)
+    await pkg_action(
+        w, "work_item.update", {"work_item_id": wi_id},
+        {"archived": False}, {"expected_version": restored["version"]},
+    )
+    await _admit_next_start(w, parent_id)
+
+
+async def test_archived_project_ends_unresumable_start_failed(start_ready, mock):
+    from bat_agent_connector import work_items
+
+    w = start_ready
+    ops = w["d"].ops
+    parent_id, package_operation = await _hold_before_handoff(w)
+    project = work_items._get_project(ops.db, work_items._get_item(
+        ops.db, w["target"]["work_item_id"])["project_id"])
+    await pkg_action(
+        w, "project.update", {"project_id": project["project_id"]},
+        {"archived": True}, {"expected_version": project["version"]},
+    )
+    await _assert_pre_child_failed(
+        w, mock, parent_id, package_operation, "PROJECT_ARCHIVED", "project is archived",
+    )
+    with pytest.raises(OperationError) as blocked:
+        ops.create(STARTER_OWNER, **await _start_envelope(w, key=uuid.uuid4().hex))
+    assert blocked.value.code == "PROJECT_ARCHIVED"
+    restored = work_items._get_project(ops.db, project["project_id"])
+    await pkg_action(
+        w, "project.update", {"project_id": project["project_id"]},
+        {"archived": False}, {"expected_version": restored["version"]},
+    )
+    await _admit_next_start(w, parent_id)
+
+
+async def test_revoked_credential_stays_needs_attention_and_resume_passes(start_ready, mock):
+    from bat_agent_connector import api_auth
+
+    w = start_ready
+    ops = w["d"].ops
+    env = await _start_envelope(w, key="repair-credential")
+    op, _ = ops.create(STARTER_OWNER, **env)
+    frames = len(mock.invokes)
+    assert api_auth.revoke(ops.db, STARTER_OWNER.actor) >= 1
+    await ops._execute(op["operation_id"])
+    paused = ops.get(op["operation_id"])
+    assert paused["status"] == "needs_attention"
+    assert paused["error_code"] == "PM_WORK_START_AUTHORITY_UNAVAILABLE"
+    assert len(mock.invokes) == frames
+    api_auth.issue(ops.db, STARTER_OWNER.actor, ["observe", "manage", "start", "operate"])
+    ops.resume(STARTER_OWNER, op["operation_id"])
+    done = await _advance_start(ops, op["operation_id"])
+    assert done["status"] == "succeeded", done
+
+
+async def test_lowered_workspace_role_stays_needs_attention_and_resume_passes(start_ready, mock):
+    from bat_agent_connector import pm_workspace
+    from bat_agent_connector.api_auth import Principal
+    from tests.test_pm_work_packages import member
+
+    w = start_ready
+    ops, wid = w["d"].ops, w["workspace_id"]
+    env = await _start_envelope(w, key="repair-role")
+    op, _ = ops.create(STARTER_OWNER, **env)
+    _park_until_executed(ops, op["operation_id"])
+    await member(w, "second-owner", "owner")
+    current = pm_workspace.get_workspace(ops.db, STARTER_OWNER, wid)
+    await pkg_action(
+        w, "pm.workspace.member.set", {"workspace_id": wid},
+        {"actor": STARTER_OWNER.actor, "role": "reader"},
+        {"expected_version": current["version"]},
+    )
+    frames = len(mock.invokes)
+    await ops._execute(op["operation_id"])
+    paused = ops.get(op["operation_id"])
+    assert paused["status"] == "needs_attention"
+    assert paused["error_code"] == "FORBIDDEN"
+    assert "does not permit" in (paused["status_reason"] or "")
+    assert len(mock.invokes) == frames
+    second = Principal("second-owner", frozenset({"observe", "manage", "start"}))
+    current = pm_workspace.get_workspace(ops.db, second, wid)
+    await pkg_action(
+        w, "pm.workspace.member.set", {"workspace_id": wid},
+        {"actor": STARTER_OWNER.actor, "role": "owner"},
+        {"expected_version": current["version"]}, who=second,
+    )
+    ops.resume(STARTER_OWNER, op["operation_id"])
+    done = await _advance_start(ops, op["operation_id"])
+    assert done["status"] == "succeeded", done
 
 
 @pytest.mark.parametrize("channel", ["claude:start-session", "claude:send-message"])
@@ -1921,19 +2251,20 @@ async def test_lost_ack_after_fast_reuse_start_refused_by_expected_latest_attemp
 async def test_unsettled_latest_attempt_blocks_new_start_for_parent_child_and_unproven_outcome(
     start_ready, mock, monkeypatch
 ):
+    from bat_agent_connector import api_auth
+
     w = start_ready
     ops = w["d"].ops
-    wi_id = w["target"]["work_item_id"]
 
     env1 = await _start_envelope(w, key="settle-check-1")
     op1, _ = ops.create(STARTER_OWNER, **env1)
 
     # 1. Parent in needs_attention is NOT terminal (can be resumed) -> refused with PM_WORK_START_IN_PROGRESS.
-    ops.db.execute("UPDATE work_items SET version=version+1 WHERE work_item_id=?", (wi_id,))
+    assert api_auth.revoke(ops.db, STARTER_OWNER.actor) >= 1
     await ops._execute(op1["operation_id"])
-    ops.db.execute("UPDATE work_items SET version=1 WHERE work_item_id=?", (wi_id,))
     paused_parent = ops.get(op1["operation_id"])
     assert paused_parent["status"] == "needs_attention"
+    assert paused_parent["error_code"] == "PM_WORK_START_AUTHORITY_UNAVAILABLE"
 
     env_retry = await _start_envelope(w, key="settle-check-while-paused")
     with pytest.raises(OperationError) as exc_paused:
@@ -1944,6 +2275,7 @@ async def test_unsettled_latest_attempt_blocks_new_start_for_parent_child_and_un
 
     # Resume parent and advance until handoff child hits a lost ACK on claude:start-session (uncertain)
     # and subsequent read-backs (workspace:get-state) also time out while BAT is unreachable.
+    api_auth.issue(ops.db, STARTER_OWNER.actor, ["observe", "manage", "start", "operate"])
     ops.resume(STARTER_OWNER, op1["operation_id"])
     client = w["d"].fleet.client("h1")
     invoke, lost = client.invoke, False
