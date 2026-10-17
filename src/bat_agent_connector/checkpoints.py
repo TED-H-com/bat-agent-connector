@@ -558,13 +558,16 @@ async def start_in_worktree(ctx: OpContext, *, host: str, workspace: str, agent:
         if creation_fields is not None:
             # reserve commits the row with start_sent false, then the reservation ref, and only then can
             # the start frame leave. A later writer clears start_sent only while that same call's frame is
-            # still unsent, and a row is removed only when its own start_sent is false. No row and no ref,
-            # or a row still marked unsent, is therefore proof that no frame left. Anything else is not.
-            reserved = (ops.get(ctx.operation_id).get("external_refs") or {}).get("repository_reservation")
+            # still unsent, and a row is removed only when its own start_sent is false. An existing ref
+            # must also match: recovery can replace an unsent row and crash before updating the ref.
+            # That mismatch is still unproven, not a settled failure that releases the Work start lock.
+            refs = ops.get(ctx.operation_id).get("external_refs") or {}
+            has_reservation = "repository_reservation" in refs
+            reserved = refs.get("repository_reservation")
             ref_matches = entry is not None and reserved == {"session_id": sid, "created_at": entry.get("created_at")}
             unsent = entry is not None and entry.get("start_sent") is False
-            never_reserved = entry is None and not reserved
-            if not ref_matches and not unsent and not never_reserved:
+            never_reserved = entry is None and not has_reservation
+            if not ref_matches and (has_reservation or not (unsent or never_reserved)):
                 raise NeedsAttention("REPOSITORY_START_UNPROVEN", "original published start reservation is unavailable")
             if entry is not None and (entry.get("task_id") or entry.get("status") not in
                                       {"starting", "uncertain", "active", "failed"}):

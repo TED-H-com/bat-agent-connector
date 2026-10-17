@@ -2214,6 +2214,86 @@ async def test_unreserved_published_start_process_stop_reruns_on_recovery(start_
         await stop_workers(ops)
 
 
+async def test_replaced_unsent_reservation_keeps_unproven_start_locked(start_ready, mock, monkeypatch):
+    """A second crash between reserve and its receipt must not settle the first start."""
+    from bat_agent_connector import registry
+    from bat_agent_connector.operations import OpContext
+    from tests.operation_helpers import stop_workers
+
+    w = start_ready
+    original = w["d"].ops
+    services = [original]
+    set_refs = OpContext.set_refs
+    reservations = []
+
+    def crash_at_reservation_receipt(ctx, **refs):
+        if "repository_reservation" not in refs:
+            return set_refs(ctx, **refs)
+        reservations.append(refs["repository_reservation"])
+        if len(reservations) == 1:
+            set_refs(ctx, **refs)
+            raise _ProcessStopped("first reservation receipt is durable; no start frame sent")
+        if len(reservations) == 2:
+            raise _ProcessStopped("replacement reservation is durable; receipt write not reached")
+        return set_refs(ctx, **refs)
+
+    monkeypatch.setattr(OpContext, "set_refs", crash_at_reservation_receipt)
+    try:
+        parent, _fresh = original.create(
+            STARTER_OWNER, **(await _start_envelope(w, key="start-replaced-unsent-reservation"))
+        )
+        parent_id = parent["operation_id"]
+        handoff_id = await _drive_until_process_stops(original, parent_id)
+        first = original.get(handoff_id)
+        sid = first["external_refs"]["session_id"]
+        receipt = first["external_refs"]["repository_reservation"]
+        entry = registry.get("h1", sid)
+        assert len(reservations) == 1 and receipt == reservations[0]
+        assert entry["created_at"] == receipt["created_at"] and entry["start_sent"] is False
+        assert _session_start_row(original, handoff_id)["status"] == "started"
+        assert mock.channels().count("claude:start-session") == 0
+        await stop_workers(original)
+
+        first_recovery = _restart_service(original)
+        services.append(first_recovery)
+        assert await _drive_until_process_stops(first_recovery, parent_id) == handoff_id
+        replaced = registry.get("h1", sid)
+        assert len(reservations) == 2
+        assert replaced["created_at"] == reservations[1]["created_at"] != receipt["created_at"]
+        assert replaced["start_sent"] is False
+        assert first_recovery.get(handoff_id)["external_refs"]["repository_reservation"] == receipt
+        assert _session_start_row(first_recovery, handoff_id)["status"] == "started"
+        assert mock.channels().count("claude:start-session") == 0
+        await stop_workers(first_recovery)
+
+        monkeypatch.setattr(OpContext, "set_refs", set_refs)
+        second_recovery = _restart_service(first_recovery)
+        services.append(second_recovery)
+        await _advance_start(second_recovery, parent_id)
+        handoff = second_recovery.get(handoff_id)
+        step = _session_start_row(second_recovery, handoff_id)
+        parent_after = second_recovery.get(parent_id)
+        assert handoff["status"] == "needs_attention", handoff
+        assert handoff["error_code"] == "REPOSITORY_START_UNPROVEN"
+        # A reconciliation refusal preserves the original open step. It must
+        # not settle it as failed and release the Work's unproven-start lock.
+        assert step["status"] == "started" and step["error"] is None, dict(step)
+        assert parent_after["status"] == "needs_attention", parent_after
+        assert parent_after["error_code"] == "REPOSITORY_START_UNPROVEN"
+        assert _handoff_id(second_recovery, parent_id) == handoff_id
+        assert handoff["idempotency_key"] == first["idempotency_key"]
+        assert handoff["external_refs"]["repository_reservation"] == receipt
+        assert registry.get("h1", sid) == replaced
+        assert mock.channels().count("claude:start-session") == 0
+        assert mock.channels().count("claude:send-message") == 0
+        assert await _refuse_reason(w, second_recovery, "start-after-replaced-reservation") == (
+            "new work.start refused PM_WORK_START_OUTCOME_UNPROVEN"
+        )
+    finally:
+        for service in reversed(services):
+            await stop_workers(service)
+
+
 async def test_unreserved_published_start_cancel_before_reservation_is_proven_failure(start_ready, mock, monkeypatch):
     """Cancel reaches the step only after read-back proves the start frame never left."""
     from bat_agent_connector import registry
@@ -2867,5 +2947,3 @@ async def test_work_start_journal_only_admission_and_child_git_execution(start_r
     handoff_git_exec = (handoff_op["external_refs"].get("admission_binding") or {}).get("git_execution")
     assert handoff_git_exec is not None
     assert handoff_git_exec == {"h1": runner.execution_binding("h1")}
-
-
