@@ -152,6 +152,27 @@ try {
   await expect(page.locator('[data-follow-up-input]')).toHaveValue(draft);
   const expectedOperations = (f.mode === 'adopt' ? 5 : 3) + (f.create_work ? 1 : 0);
   assert.equal(requests.length, expectedOperations - 1, 'Changing views must not dispatch work');
+  step = 'discussion-return';
+  await page.getByRole('button', {name: zh ? '更多操作' : 'More actions', exact: true}).click();
+  await page.locator('[data-menu-key="discuss"]').click();
+  const discussion = new URLSearchParams(new URL(page.url()).hash.split('?')[1]);
+  assert.deepEqual(JSON.parse(discussion.getAll('ref')[0]), {kind: 'work_item', id: f.work});
+  const returnHref = discussion.get('from');
+  assert.ok(returnHref?.startsWith('#/session/'));
+  const selection = Object.fromEntries(new URLSearchParams(returnHref.split('?')[1]));
+  assert.equal(selection.workspace, f.workspace);
+  assert.equal(selection.work, f.work);
+  assert.equal(selection.attempt, active.attempt);
+  const back = page.locator('[data-discussion-back]');
+  await expect(back).toHaveAttribute('href', returnHref);
+  await expect(back).toBeVisible();
+  await shot('03-discussion');
+  await page.reload();
+  await expect(back).toHaveAttribute('href', returnHref);
+  await back.click();
+  await expect(page.locator('[data-follow-up-input]')).toHaveValue(draft);
+  await expect(page.locator('[data-follow-up-receipt]')).toContainText(text);
+  assert.equal(requests.length, expectedOperations - 1, 'Discuss and return must not create or dispatch an operation');
   await page.getByRole('button', {name: zh ? '成果' : 'Results', exact: true}).click();
   await expect(page.locator('[data-work-result]')).toContainText('Added the retry-after-failure case.');
   await expect(page.locator('[data-work-publish-commit]')).toHaveAttribute('title', fixed.candidate);
@@ -202,7 +223,7 @@ try {
   assert.deepEqual(follow.body.preconditions, {expected_attempt_id: active.attempt});
   assert.equal(requests.at(-1).body.params.candidate_sha, fixed.candidate);
   assert.equal(requests.at(-1).body.params.draft, true);
-  send({stage: 'done', operations, browser: browser.version()});
+  send({stage: 'done', operations, browser: browser.version(), discussion_return: selection});
 } catch (error) {
   console.error(JSON.stringify({step, url: page?.url(), errors, requests, responses, pending: [...pending.values()]}));
   if (page && !page.isClosed()) {

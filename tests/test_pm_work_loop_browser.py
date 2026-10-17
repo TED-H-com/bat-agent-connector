@@ -323,6 +323,8 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 await send(peer)
             done = await receive("done")
             assert await asyncio.wait_for(child.wait(), 10) == 0, (shots / "browser.log").read_text()
+            assert done["discussion_return"] == {"from": "board", "workspace": w["workspace_id"],
+                "work": w["target"]["work_item_id"], "attempt": att["attempt_id"]}
             if create_work:
                 assert ops.db.execute("SELECT count(*) FROM work_attempts WHERE work_item_id=?",
                     (original_work["work_item"]["work_item_id"],)).fetchone()[0] == 0
@@ -354,7 +356,8 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 "source_sha": git(ROOT, "rev-parse", "HEAD"),
                 "source_dirty": bool(git(ROOT, "status", "--porcelain")),
                 "python": sys.version, "browser": done["browser"],
-                "entry": mode, "created_work_in_ui": created_work, "same_attempt": att["attempt_id"], "browser_operations": len(user_ops), "bat_starts": len(starts),
+                "entry": mode, "created_work_in_ui": created_work, "same_attempt": att["attempt_id"],
+                "discussion_return": done["discussion_return"], "browser_operations": len(user_ops), "bat_starts": len(starts),
                 "bat_sends": len(sends), "github_posts": 1, "manual_unchanged": True, "mcp_peer": peer,
                 "candidate": candidate, "browser_closed_during_dispatch": True}, indent=2) + "\n")
     finally:
