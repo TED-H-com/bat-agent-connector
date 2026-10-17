@@ -1431,7 +1431,7 @@ def on_transition(ops: OperationService, operation_id: str, new_status: str) -> 
     wake_session_queue(ops, str(row["host"]), str(row["session_id"]))
 
 
-def _receipt_labels(state: str, blocked_by: str | None) -> dict[str, dict[str, str]]:
+def _receipt_labels(state: str, blocked_by: str | None, error_code: str | None = None) -> dict[str, dict[str, str]]:
     """English and zh-TW copy for the later UI. API error.message stays the English sentence."""
     if state == "queued" and blocked_by:
         detail_en = (
@@ -1455,6 +1455,9 @@ def _receipt_labels(state: str, blocked_by: str | None) -> dict[str, dict[str, s
             "that may have reached BAT; reconcile with the original ID instead."
         )
         detail_zh = "送出後未收到回覆，無法透過取消撤回可能已送達 BAT 的指令；請以原 ID 重新確認結果。"
+    elif state == "failed" and error_code == "FORBIDDEN":
+        detail_en = "Your current permissions do not allow sending this instruction. It was not sent."
+        detail_zh = "目前權限不允許送出此指令；指令尚未送出。"
     elif state == "failed":
         detail_en = "BAT rejected the message or the send failed before it left. Retry as a new instruction."
         detail_zh = "BAT 拒絕了此訊息，或送出前即失敗。請以新指令重試。"
@@ -1687,7 +1690,7 @@ def build_input_receipt(
         "cancellable": cancellable,
         "next_allowed_actions": next_actions,
         "links": links,
-        "labels": _receipt_labels(state, blocked_by),
+        "labels": _receipt_labels(state, blocked_by, op.get("error_code")),
     }
 
 

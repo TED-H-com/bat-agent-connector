@@ -84,6 +84,11 @@ async def test_start_queue_close_reconnect_result_and_pr(start_ready, mock, tmp_
 
 
 @pytest.mark.parametrize(("locale", "width"), [("en", 1440), ("zh-TW", 390)])
+async def test_queued_writer_withdrawal_keeps_history_without_dispatch(start_ready, mock, tmp_path, locale, width):
+    await work_loop(start_ready, mock, tmp_path, locale, width, withdraw_writer=True)
+
+
+@pytest.mark.parametrize(("locale", "width"), [("en", 1440), ("zh-TW", 390)])
 async def test_discussion_adopt_start_queue_and_pr(start_ready, proposal_world, mock, tmp_path, monkeypatch, locale, width):
     w = start_ready
     peer_token = None
@@ -112,12 +117,15 @@ async def test_discussion_adopt_start_queue_and_pr(start_ready, proposal_world, 
         peer_token=peer_token, monkeypatch=monkeypatch)
 
 
-async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_token=None, monkeypatch=None):
+async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_token=None, monkeypatch=None,
+                    withdraw_writer=False):
     ops = w["d"].ops
     # The handoff test runner decodes a single protocol. This journey also runs
     # checkpoint and publication shell scripts, so execute every actual script.
     ops.context["git_runner"] = LocalRunner()
     publication_provider(w)
+    if withdraw_writer:
+        await add_member(w, "queue-policy-owner", "owner")
     mock.metas[MANUAL]["isStreaming"] = mock.states[MANUAL]["isStreaming"] = True
     manual = copy.deepcopy((mock.metas[MANUAL], mock.states[MANUAL]))
     before = snapshot(w["human"])
@@ -129,7 +137,8 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
     assert status == 200, original_work
     project_id = original_work["work_item"]["project_id"]
     adoptions_before = ops.db.execute("SELECT count(*) FROM pm_plan_adoptions").fetchone()[0]
-    shots = ROOT / "desktop/test-results/work-loop" / f"{mode}-{locale}-{width}"
+    entry = "withdraw-writer" if withdraw_writer else mode
+    shots = ROOT / "desktop/test-results/work-loop" / f"{entry}-{locale}-{width}"
     shutil.rmtree(shots, ignore_errors=True)
     shots.mkdir(parents=True, exist_ok=True)
     browser_temp = tmp_path / "browser"
@@ -243,7 +252,7 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             await send({"port": w["port"], "token": w["owner_token"], "workspace": w["workspace_id"],
                 "work": w["target"]["work_item_id"], "locale": locale, "width": width, "shots": str(shots),
                 "mode": mode, "thread": thread_target(w)["thread_id"], "peer_agent": bool(peer_token),
-                "create_work": create_work, "project": project_id})
+                "create_work": create_work, "project": project_id, "withdraw_writer": withdraw_writer})
             if create_work:
                 created = await receive("created")
                 await wait_status(created["operation_id"], "succeeded")
@@ -286,12 +295,56 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             # Chromium is completely closed; its queue receipt is already durable.
             assert (await _get_op(w, queued_id))["input_receipt"]["state"] == "queued"
             assert len([f for f in mock.invokes if f["channel"] == "claude:send-message"]) == 1
+            if withdraw_writer:
+                # A different authorized owner withdraws writing while the first
+                # turn is still busy. Use public HTTP, never mutate the journal.
+                owner_token = token(w["d"], "queue-policy-owner", "observe", "manage")
+                status, workspace = await http(w["port"], "GET",
+                    f"/api/v1/pm/workspaces/{w['workspace_id']}", tok=owner_token)
+                assert status == 200, workspace
+                status, demotion = await http(w["port"], "POST", "/api/v1/operations", tok=owner_token,
+                    headers={"Idempotency-Key": "withdraw-queued-writer"},
+                    body={"action": "pm.workspace.member.set", "target": {"workspace_id": w["workspace_id"]},
+                        "params": {"actor": STARTER_OWNER.actor, "role": "reader"},
+                        "preconditions": {"expected_version": workspace["workspace"]["version"]}})
+                assert status == 202, demotion
+                await wait_status(demotion["operation"]["operation_id"], "succeeded")
             git(wt, "config", "user.name", "fixture")
             git(wt, "config", "user.email", "fixture@example.invalid")
             first_sha = await produce_commit(wt, "login.txt", "prevent double submit\n", "Fix login submit")
             _set_turn_messages(mock, sid, marker, assistant_id="first-answer", assistant_text="Fixed double submission.")
             await w["d"].inventory._refresh_scheduled("h1")
             # No forced wake/resend or journal edits: the production worker owns dispatch.
+            if withdraw_writer:
+                await wait_status(queued_id, "failed")
+                refused = await _get_op(w, queued_id)
+                assert refused["error_code"] == "FORBIDDEN", refused
+                assert refused["input_receipt"]["state"] == "failed"
+                assert refused["input_receipt"]["error_code"] == "FORBIDDEN"
+                final = await _result(w, att)
+                assert final["changes"]["fixed_result_commit"]["commit_sha"] == first_sha
+                assert not any(row.get("action") == "session.send" for row in final["next_allowed_actions"])
+                assert {"action": "session.send", "reason": "not_controller"} in final["blocked_actions"]
+                await send({"candidate": first_sha, "attempt": att["attempt_id"]})
+                done = await receive("withdrawn")
+                assert await asyncio.wait_for(child.wait(), 10) == 0, (shots / "browser.log").read_text()
+                assert done["operations"] == [start["operation_id"], queued_id]
+                assert snapshot(w["human"]) == before
+                assert (mock.metas[MANUAL], mock.states[MANUAL]) == manual
+                writes = bat_writes(mock)
+                assert [frame["channel"] for frame in writes] == ["claude:start-session", "claude:send-message"]
+                assert all(frame["params"]["sessionId"] == sid for frame in writes)
+                assert not any(frame["params"].get("clientMessageId") == "batc-" + queued_id for frame in writes)
+                assert not any(row[0] == "POST" for row in w["gh"].requests)
+                assert git(w["remote"], "rev-parse", "refs/heads/main") == w["sha"]
+                (shots / "evidence.json").write_text(json.dumps({"locale": locale, "width": width,
+                    "source_sha": git(ROOT, "rev-parse", "HEAD"), "source_dirty": bool(git(ROOT, "status", "--porcelain")),
+                    "python": sys.version, "browser": done["browser"], "entry": entry,
+                    "same_attempt": att["attempt_id"], "candidate": first_sha, "manual_unchanged": True,
+                    "queued_operation": queued_id, "receipt_state": "failed", "error_code": "FORBIDDEN",
+                    "browser_operations": 2, "bat_starts": 1, "bat_sends": 1, "github_posts": 0,
+                    "browser_closed_during_dispatch": True, "history_readable": True}, indent=2) + "\n")
+                return
             await wait_status(queued_id, "succeeded")
             assert (await _get_op(w, queued_id))["input_receipt"]["state"] == "sent"
             first = await _result(w, att)

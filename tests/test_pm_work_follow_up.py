@@ -881,6 +881,10 @@ async def test_writer_membership_rechecked_before_every_frame(start_ready, mock)
     assert refused.get("status_reason") == "[FORBIDDEN] Workspace membership does not permit this action", refused
     assert refused["input_receipt"]["state"] == "failed"
     assert refused["input_receipt"]["error_code"] == "FORBIDDEN"
+    assert refused["input_receipt"]["labels"]["detail"] == {
+        "en": "Your current permissions do not allow sending this instruction. It was not sent.",
+        "zh-TW": "目前權限不允許送出此指令；指令尚未送出。",
+    }
     assert _frames(mock, f"batc-{demoted_id}") == []
 
     await set_member(STARTER_OWNER.actor, "owner")

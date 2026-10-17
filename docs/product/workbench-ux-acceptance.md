@@ -153,6 +153,15 @@ FakeRuntime 提供，使用真正的提案、審閱、採用與操作 endpoint�
 session 與 checkout 不變。第二位 principal 的權限是測試前置配置，不由關聯
 或閱讀成果取得；不啟動 Hermes 或任何真實模型 CLI。
 
+K06 另有英文 1440px／繁中 390px 的撤權路徑：同一 Work 在 busy 時收到下一句，
+畫面已確認排隊後完全關閉 Chromium。另一位已授權 owner 經正式 HTTP 將原
+controller 降為 reader，第一輪再結束。server 原佇列必須留下相同 operation／
+key 的 `failed`／`FORBIDDEN` 回執，不送第二句、不啟動新 session、不發布 PR。
+重連及重新載入後仍可讀原指令、失敗理由與第一輪固定 Result；下一句與舊
+session composer 均不可用，發布入口也不可用。整段僅一個 start、一個 send、
+零次 GitHub POST，人工 session／checkout 及原 main ref 保持不變。
+測試透過原權限操作撤權，不直接修改 journal、不強制 wake，也不調高等待期限。
+
 本地執行：
 
 ```sh

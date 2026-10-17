@@ -142,6 +142,30 @@ try {
   await page.goto(workUrl);
   await expect(page.locator('[data-follow-up-receipt]')).toContainText(text);
   await expect(page.locator('[data-follow-up-receipt]')).not.toContainText(zh ? '排隊中' : 'Queued');
+  if (f.withdraw_writer) {
+    step = 'withdrawn-writer';
+    await expect(page.locator('[data-follow-up-receipt]')).toContainText(zh ? '目前權限不允許送出此指令；指令尚未送出。' : 'Your current permissions do not allow sending this instruction. It was not sent.');
+    await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
+    await expect(page.locator('.workspace-composer')).toBeHidden();
+    await page.getByRole('button', {name: zh ? '成果' : 'Results', exact: true}).click();
+    await expect(page.locator('[data-work-result]')).toContainText('Fixed double submission.');
+    await expect.poll(() => results.get(active.attempt)?.changes?.fixed_result_commit?.commit_sha).toBe(fixed.candidate);
+    await expect(page.locator('[data-work-publish-submit]')).toHaveCount(0);
+    await page.reload();
+    await expect(page.locator('[data-follow-up-receipt]')).toContainText(text);
+    await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
+    await expect(page.locator('.workspace-composer')).toBeHidden();
+    await expect(page.locator('.workspace-conversation .conversation')).toContainText('Fixed double submission.');
+    await shot('03-withdrawn-reader');
+    await page.getByRole('button', {name: zh ? '成果' : 'Results', exact: true}).click();
+    await expect(page.locator('[data-work-result]')).toContainText('Fixed double submission.');
+    await expect(page.locator('[data-work-publish-submit]')).toHaveCount(0);
+    await shot('04-withdrawn-result');
+    assert.deepEqual(errors, []);
+    assert.equal(requests.length, 2, 'Read-only reconnection must not dispatch, retry or publish');
+    assert.equal(new Set(requests.map(row => row.key)).size, 2);
+    send({stage: 'withdrawn', operations, browser: browser.version()});
+  } else {
   const draft = zh ? '保留這段尚未送出的草稿。' : 'Keep this unsent draft.';
   await page.locator('[data-follow-up-input]').fill(draft);
   const views = page.locator('[data-workbench-views]');
@@ -224,6 +248,7 @@ try {
   assert.equal(requests.at(-1).body.params.candidate_sha, fixed.candidate);
   assert.equal(requests.at(-1).body.params.draft, true);
   send({stage: 'done', operations, browser: browser.version(), discussion_return: selection});
+  }
 } catch (error) {
   console.error(JSON.stringify({step, url: page?.url(), errors, requests, responses, pending: [...pending.values()]}));
   if (page && !page.isClosed()) {
