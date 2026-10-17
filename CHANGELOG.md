@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Document the closed-loop screens for adopting and starting selected work, queuing the next instruction on a busy work, and choosing a saved profile in the Start work panel. The screens are specified only; they are not in the Dashboard yet. English and zh-TW copy is in the spec.
+
+- Correct that closed-loop screen spec. A refused adopt-and-start can start a new request once the server marks the refusal, a chosen profile pins the Start work panel, and each selected work's start fields come from the preview. The screens are still specified only.
+
 - Opening a project names that view in the header while the workspace is still
   loading, in English and Traditional Chinese. The view menu stays hidden until
   the workspace loads, so an empty menu is not in the keyboard order. If the
