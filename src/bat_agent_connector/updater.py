@@ -251,7 +251,12 @@ class Updater:
                     if path.name != "batc-update":
                         require(doc["entrypoints"].get(path.name) == str(path.resolve()), "deployment_entrypoint_mismatch")
                 originals[str(path)] = original
-            files.atomic_write(root / "skill/SKILL.md", (Path(proof["package"]) / "skill/SKILL.md").read_bytes())
+            staged_skill = root / "skill/SKILL.md"
+            canonical = (Path(proof["package"]) / "skill/SKILL.md").read_bytes()
+            if staged_skill.exists() or staged_skill.is_symlink():
+                require(files.read_private(staged_skill) == canonical, "deployment_staged_skill_changed")
+            else:
+                files.atomic_write(staged_skill, canonical)
             state = {"format": 1, "epoch": EPOCH, "channel": channel, "enabled": True, "current": sha,
                      "previous": None, "versions": {sha: {"root": str(root), "release": release, "proof": proof}},
                      "enrollment": originals, "created_at": timestamp()}
@@ -331,8 +336,7 @@ class Updater:
             self.reconcile(state)
             directory = self.home / ".config/systemd/user"
             # Do not chmod or take over a pre-existing scheduler directory.
-            directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-            parent = files._posix_dir(directory)
+            parent = files._posix_dir(directory, create=True)
             try:
                 info = os.fstat(parent)
                 require(info.st_uid == os.getuid() and not info.st_mode & 0o022, "scheduler_directory_not_owned")

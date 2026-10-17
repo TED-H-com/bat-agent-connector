@@ -337,6 +337,27 @@ def test_existing_scheduler_unit_has_no_creation_evidence(deployment):
         u.schedule()
 
 
+def test_scheduler_does_not_create_directories_through_a_foreign_link(deployment):
+    u, receipt, _ = deployment
+    u.enroll(receipt, "preview")
+    foreign = u.home / "foreign"
+    foreign.mkdir(mode=0o700)
+    (u.home / ".config").symlink_to(foreign)
+    with pytest.raises(OSError):
+        u.schedule()
+    assert list(foreign.iterdir()) == []
+
+
+def test_enrollment_preserves_a_foreign_staged_skill(deployment):
+    u, receipt, _ = deployment
+    staged = receipt.parent / "skill/SKILL.md"
+    staged.write_bytes(b"custom private skill")
+    with pytest.raises(UpdateError, match="deployment_staged_skill_changed"):
+        u.enroll(receipt, "preview")
+    assert staged.read_bytes() == b"custom private skill"
+    assert not (u.root / "current").exists()
+
+
 def test_stage_refuses_unknown_or_changed_candidate_before_commands(tmp_path):
     root = tmp_path / "candidate"
     files.ensure_private_directory(root)
