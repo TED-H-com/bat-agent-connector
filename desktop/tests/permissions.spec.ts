@@ -4,6 +4,19 @@ import {permissionFixture, openPermissions, operationId} from './permissions-fix
 
 for (const native of [false, true]) {
   const transport = native ? 'native' : 'browser';
+  test(`${transport}: permissions wait for the entire initial view read`, async ({page}) => {
+    const state = await permissionFixture(page, native, {delayLateSession: true});
+    const form = await openPermissions(page);
+    try {
+      await expect.poll(() => Boolean(state.releaseLateSession)).toBe(true);
+      await expect(form.getByRole('button', {name: 'Apply permissions', exact: true})).toBeDisabled();
+      expect(state.posts).toHaveLength(0);
+    } finally {state.releaseLateSession?.();}
+    await form.getByRole('button', {name: 'Apply permissions', exact: true}).click();
+    await expect(form).toContainText('BAT accepted the requested configuration');
+    expect(state.posts).toHaveLength(1);
+    expect(state.errors).toEqual([]);
+  });
   test(`${transport}: definitive admission refusal permits an explicit changed draft`, async ({page}) => {
     const state = await permissionFixture(page, native, {refuse: 'TASK_PAUSED'});
     let form = await openPermissions(page);

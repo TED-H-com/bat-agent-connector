@@ -2,6 +2,14 @@
 
 ## Next release (unreleased)
 
+- Linux Connector installations can enroll in a fixed published update channel.
+  A user timer stages and verifies newer packages, switches future launches
+  atomically, and retains interruption receipts and verified rollback. Existing
+  processes, credentials and operation journals stay under their existing owners.
+
+- EC-1.1 keeps the merged Work loop and extends its mobile, source refresh and PM
+  continuity acceptance. Real BAT/model and physical-device checks remain separate.
+
 - Cancelling or resuming an operation refuses before journal or child changes
   when its saved receipt names an unavailable original source. HTTP and MCP
   retain the same source refusal as a read of that receipt.

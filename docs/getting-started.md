@@ -442,3 +442,9 @@ plain package/editable checkout without Git-install provenance. A desktop bundle
 also shows its native app version/commit. Packaging records both commits; local
 native builds without `BATC_BUILD_COMMIT` show `unknown`. Browser assets use the
 serving Connector's identity and do not embed the checkout's HEAD.
+
+## Linux Connector automatic updates
+
+Connector 0.2.7 introduces an opt-in user timer for published Connector updates.
+See [enrollment, status and rollback](connector-updates.md). This changes future
+launches; the desktop bundled runtime retains its existing lifecycle.

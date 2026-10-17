@@ -12,6 +12,7 @@ export async function permissionFixture(page: Page, native: boolean, options: an
     const caps = {actor: state.actor, scopes: state.scopes, api_version: 1, contract_version: '2026-10-08',
       hosts: [{host: 'demo', writes: state.writes}], actions: state.action === null ? []
         : [{action: 'session.permissions', allowed: state.action}], features: {checkpoints: []}};
+    if (state.delayLateSession) caps.actions.push({action: 'session.labels.set', allowed: false});
     const row = {host: 'demo', session_id: 'managed-session-1', title: 'Managed session', agent_kind: 'claude',
       api_access: state.apiAccess, provenance: state.provenance, streaming: state.streaming, control_version: state.controlVersion};
     if (input.method === 'POST') {
@@ -34,6 +35,8 @@ export async function permissionFixture(page: Page, native: boolean, options: an
       return {status: 200, data: {operation}};
     }
     state.reads.push(input.path);
+    if (path === sessionPath && state.delayLateSession && state.reads.filter(path => path === sessionPath).length === 2)
+      await new Promise(resolve => {state.releaseLateSession = resolve;});
     if (path === '/operations/'+operationId) {
       if (state.delayRead) {state.delayRead = false; await new Promise(resolve => {state.holdRead = resolve;});}
       if (state.failRead) return {status: 503, data: {error: {code: 'READ_FAILED', message: 'Permission read failed'}}};
@@ -46,7 +49,7 @@ export async function permissionFixture(page: Page, native: boolean, options: an
     return {status: 200, data: path === '/capabilities' ? caps : path === '/bootstrap' ? {capabilities: caps,
       sync: {version: 1, server_id: state.server, principal_id: state.principal, checkpoint: {cursor: 0, token: 'proof-0'}}}
       : path === '/events' ? {events, head_cursor: cursor, next_cursor: cursor, sync: {checkpoint: {cursor, token: 'proof-'+cursor}}}
-      : path === sessionPath ? {session: row}
+      : path === sessionPath ? {session: row, connector_metadata: {version: 0, labels: []}}
       : {messages: [], sessions: [], operations: [], hosts: [], work_items: [], checkpoints: []}};
   };
   page.on('pageerror', error => state.errors.push(error.message));

@@ -1,15 +1,17 @@
-> 2026-10-16 owner 採用的 EC-1.0 整合決議。本文統一既有 v1.3 與 Work-Centric 的體驗方向，保留 E／UX／A／UX-A 編號，不另立 v1.4 或平行 backlog。
-> 日常開工入口仍是 [v1.3 agent handoff](v1.3-agent-handoff.md)，[K 與原驗收對照](workbench-ux-acceptance.md#ec-10-整合驗收索引)記在既有驗收表。
-> 本文由 owner 提供的 Markdown 匯入；公開版僅將具體主機例子換成合成名稱 `host-a`，將 Markdown 換行正規化，並補此導讀。附件的外部來源主張保留為交付時查核記錄，並非本次重新驗證；移植前仍須核對來源及授權。Word／ZIP 不另存為第二份規格。
+> 2026-10-17 owner 提供並要求接續的 EC-1.1 增量方向，更新原 EC-1.0 文件；E／UX／R／V／K 編號及未修訂範圍保留，不另立 v1.4。
+> 開工入口仍是 [v1.3 handoff](v1.3-agent-handoff.md)，[差額](experience-convergence-delta.md)與[原驗收表](workbench-ux-acceptance.md#ec-10-整合驗收索引)共同使用。
+> **現況校正：**附件研究時 `f31e7964` CI 尚在執行；現在該來源後端、四平台建置與工作循環均已通過，預覽版已發布並有安裝讀回。#280 的下載文件亦已合併並部署。真 BAT／模型與實體手機驗收仍分開，詳見[發布進度](progress-2026-10-17.md)。
+> **同日新增授權：**owner 要求 Connector 自動取得更新，納入 T8／E11／K16，見[Connector 更新契約](../design/connector-updates.md)。這更新了此前對 Connector 自動更新的範圍排除；桌面簽章與 native 更新檢查沿既有契約。
+> 本文以 owner 提供的 Markdown 為維護來源，僅正規化內部連結並將主機例子換成合成名稱。外部版本與來源主張保留為附件作者的固定查核紀錄，非本次重新執行競品測試。Word／ZIP 不另存成第二份規格；Git 保留 EC-1.0 歷史。
 
 # Better Agent Dashboard
 ## 介面與使用者體驗收斂企劃書
 ### 保留可靠底座，讓日常工作變得直接
 
-**文件版本：EC-1.0｜v1.3 產品體驗整合決議稿**\
-**日期：2026-10-16｜產品負責人：Ted**\
+**文件版本：EC-1.1｜v1.3 產品體驗整合決議稿（2026-10-17 增量修訂）**\
+**日期：2026-10-17｜產品負責人：使用者**\
 **適用 repository：TED-H-com/bat-agent-connector**\
-**本次查核主線：87433260f5b12a2b323c50d9c04260d5cd0d9293**\
+**本次查核主線：f31e7964c627e4b6d3af2e2370e7a38c64a20e25**\
 **狀態：提供採用、整合與驗收的企劃，不是已完成或已實機驗證聲明。**
 
 > **核心承諾：**像 Project Hub 一樣，說了就能做、做完能接著改；借鏡 Cantus 的工作閱讀與脈絡整理；所有動作仍回到既有 Connector／BAT／CLI、共同操作紀錄與權限模型，並持續形成可信的 PM 追蹤、交付與維護。
@@ -17,6 +19,14 @@
 本文件不是 v1.4、不建立另一套產品，也不重置原有驗收。v1.3 的 E00–E11／R0–R5、Work-Centric 的 UX01–UX10／V0–V4 與既有驗收仍有效。本文件集中決定如何把它們組合成可使用的體驗；發現重複工作，應更新既有 issue，而不是另開平行 backlog。
 
 ---
+
+## 修訂導讀｜EC-1.1 不重置正在開發的工作
+
+上一版 EC-1.0 已投入實作。本版將 #276 合併的工作循環列為「已整合，待真實環境驗收」，並擴充手機互動、低干擾同步、長討論與下一步。保留原 E／UX／R／V／K 編號。
+
+本輪差額及具體 mobile 驗收見同包 `experience-convergence-delta.md`。其中 D1–D6 只是修改定位，不是新 backlog。未被該差額明確改動的本企劃規格繼續有效。
+
+**最重要的基線更正：** Project Hub 已公開 4.124.0 source；我們已合併 #209 與 #276 所整合的採用／開始／結果／下一輪等工作。不要繼續按 EC-1.0 的舊狀態重新派工。
 
 ## 01｜企劃目的與產品定位
 
@@ -46,23 +56,22 @@ Better Agent Dashboard 是「可直接做事的專案工作台」。它保留使
 
 ### 2.1 本次採用的基線
 
-我們的固定主線為 `87433260…`。目前文件與已合併成果可確認：普通 PM 對話、可切換的 Workbench、`work.start` 與開始面板、固定 Result 讀取、工作成果區塊已存在。Workbench 仍是預覽入口；不能把其存在等同完整 v1.3 已交付。[S1][S2][S3]
+我們固定主線 `f31e7964c627e4b6d3af2e2370e7a38c64a20e25`，已含 #276 整合與 #277／#278。工作建立、採用／開始、同 Work 下一輪、profile/readiness、固定 Result／diff、驗證、PR、MCP/API等價及固定評估進PM草稿，已有整合實作。[S17][S18][S20]
 
-`work.start`、Result 等現有成果要重用。整合前重新核對進行中的 #209、#211、#215、#220、#223：本次 #209 仍為 draft，正在補 Work 下一輪；#215 仍為 draft，查到的內容主要是採用並開始的規格。PR 內文可能落後 head，狀態與程式要一起核對。[S4][S5]
+這些工作轉入回歸與實機驗收，不重做。#209 的特定 Codex/BAT 下一輪限制仍在；T5 原生歷史和更多完整 route、T6 真實 PM 目標判讀與維護、E11 安裝與實機仍需完成。[S19][S21]
+
+#276 候選CI通過；最新主線 push CI／Desktop 在本輪查核時仍執行中。未在本輪安裝應用或啟動真實BAT／模型，不以綠燈聲稱 ready。
 
 ### 2.2 參考範圍
 
-| 來源 | 本次可用依據 | 不可據此推論 |
+| 來源 | 本輪版本與可採用內容 | 邊界 |
 |---|---|---|
-| Project Hub | 公開 `a277d2e`／4.90 的快速開始、任務對話、草稿、後續指令及成果整理 | 公開 source 等於最新 4.123.1 的全部實作 |
-| Project Hub 4.123.1 | Release 公告與附件；公告明示未加入此次開發歷史 | 新 DMG 與舊公開 source 完全相同，或可直接搬用新版程式 |
-| arumwu/cantus-panel | `4343c6ee…` 公開 README 與先前已核對的來源閱讀、排隊、續作設計 | 概念圖上的所有 PM／派工能力都已完成 |
-| 使用者提供的五張圖 | 閱讀層級、Work／Lineage／Live、選取一致與按需詳情 | 原圖可公開再利用、或圖中數字／狀態就是正確 domain model |
-| 既有 Work-Centric 文件 | 四入口、六管理視圖、不中斷、來源、48 項 UX 驗收 | 要求全部再開發一次 |
+| Project Hub | `e5e1696a7a8df930b0693bbd8418696a15c52585`／4.124.0；公開 source已更新，低負擔清單、可調側欄、整理後下一步與一次擁塞交接 | 公開快照不等於全部私人開發歷史；不能照搬權限和自動Git行為。 |
+| Cantus Panel | `496dc178ac8c32d6ae01c9c77a9c0c2dc8714e36`；手機全螢幕流程、底部視角、sheet、composer、來源自動刷新 | 瀏覽器touch test非真iPhone；queue依賴分頁；外部session續作政策不同；UNLICENSED。 |
+| 先前五張參考圖 | 繼續作閱讀層級參考 | 不作真實功能證據，不含入公開展示。 |
+| 原Work-Centric補充 | 架構、選取、48項UX驗收繼續有效 | 已合併視圖不重做；手機新增行為詳見差額。 |
 
-Project Hub 最新 Release 為 4.123.1，公告的 target 仍是公開 4.90 的 commit，並說明不加入此次開發歷史。Cantus README 則明示預設示範、可選啟用真實來源與執行、瀏覽器 queue 的限制，以及 `UNLICENSED`。本企劃依可確認的互動與文件作設計，不虛構競品完整能力。[S6][S7][S8]
-
-本次沒有進行三套產品的實機 benchmark、安裝、帳號登入或真實付費模型測試。尺寸、效能、體驗指標均為待驗收目標。
+本輪來源支持現況；以下介面與效能數值是產品目標，非本次測得。競品未提供可驗證的能力，不推定已完成。[S11–S22]
 
 ## 03｜借用什麼，以及如何改接到我們的底座
 
@@ -176,6 +185,13 @@ Idea 長談預設對話最大；Planning 才依需要展開草稿；執行中以
 
 使用 WCAG 2.2 相關條件驗證對比、鍵盤與焦點；一般文字至少 4.5:1、大字至少 3:1。最低指標 target 的 24×24 規則及例外按標準檢查，產品手機主動作以 44px 為設計目標。截圖不能代替實際渲染測量。[S9]
 
+### 6.4 EC-1.1 手機互動契約
+
+手機不是縮小四欄。全螢幕清單→對話／Work，資訊與設定使用sheet，返回保持選取和草稿。全域Today／Projects／Work／Resources與Work內的三視角分層，不攤七個底部入口。觸控橫向保持可讀操作。
+
+composer 使用同一shared邏輯與server queue；visual viewport、safe area、IME、browser Back、方向切換、前景恢復都需測。隱藏無意義idle但保留錯誤／未知；圖示不省略可存取名稱與目前runtime。參照差額 §4 與原K15擴充。這是呈現層改動，不新增mobile-only API或排程器。[S11–S13]
+
+
 ## 07｜第一次使用：先有價值，再逐步啟用能力
 
 ### 7.1 三條入口不是三套 App
@@ -240,7 +256,7 @@ UI 送出一個可查回的 intent，後端組合 adoption、必要的 work bind
 
 預設不 steer／interrupt 目前回合。取消 queue 只取消已證明尚未送出的 input；可能已送出但 ACK 遺失時，查原 receipt，不換新 request ID 重送。暫時無法查證則顯示結果未知，後續同目標的依賴 input 等待，不擅自移到另一個 session。
 
-#209 正在提供 Work-target `session.send` 與 server queue；本次不能把 native CLI 能接續當作每條 BAT route 都可接續。查核時其說明仍列 Codex follow-up 限制，必須依實際 adapter／版本驗證與補完，不能為 demo 關掉檢查。[S4]
+#209 的 Work-target `session.send` 與 server queue 已整合；本次不能把原生CLI能接續當作每條BAT route都可接續。特定Codex工作仍受回合歸因限制；由能力矩陣在開始前說明，不為demo關掉檢查。[S17][S19]
 
 ### 9.3 可停止、可修復，但不搶走工作
 
@@ -289,6 +305,8 @@ Live 的 Now 只放有新鮮執行證據的工作，Next 只放 server 已確認
 
 資源頁分清 host、controller、runtime、model。可以簡短呈現「Hermes 委派／Claude 執行／host-a」，但不以 Worker 一詞混淆身分和機器。換來源清除不再有權的內容；延遲 response 不得把舊來源資料帶回新 workspace。
 
+**EC-1.1 讀取面要求：**清單傳摘要，選取後按需读 steps／transcript／diff；來源刷新保留焦點與草稿。快取依來源、身分、權限和版本隔離；寫入前仍新鮮核對。觀測端異步與coalescing不改業務一致性。參照差額 §5。[S15][S22]
+
 ## 12｜PM tracking 與 Maintainer：我們自己的產品價值
 
 ### 12.1 五個重點自動整理
@@ -319,7 +337,7 @@ ReleaseBaseline 固定維護版本與證據；滿足已採用的條件才進 Mai
 |---|---|---|
 | 傳送給 PM／存筆記 | 重用已存在的一般 reply 與 note 路徑，模式與效果清楚 | 每句強制產生 plan，或保存後假裝 AI 已回覆 |
 | 開始一件工作 | 沿 `work.start`、原 package／handoff／attempt | 新建平行 runner 或讓前端自行 launch SSH |
-| 採用並開始 | 沿 #215 所定的組合，子操作各有固定 key | 覆蓋單一布林成功，或失敗後整批重做 |
+| 採用並開始 | 沿 #276 內已實作的採用／開始組合，子操作各有固定 key | 覆蓋單一布林成功，或失敗後整批重做 |
 | 第二句 | 沿 Work-target `session.send`／server queue | 分頁 timer 成為派送權威、切工作後送到別處 |
 | 查看成果 | 沿固定 Result 及按需 changes／diff | 讀取時寫進度，或改採用版本 |
 | 外部來源接續 | 固定來源、建立新自有 attempt | 直接 resume 外部原生 session |
@@ -381,7 +399,7 @@ UI SelectionContext 保存 service／principal、workspace、主選取、被檢�
 
 **增量 B：跨來源與跨入口。** 加入既有 native 歷史、可信去重、第二種完整執行 route、agents 從 MCP 派工，以及真正的 queue／關聯。保留原 v1.3 的 BAT、原生 Claude、原生 Codex、AHP 及 API／MCP 成功條件；只完成一部分就明確標示。
 
-**增量 C：PM 決策到維護。** 真實驗收更新目標與依賴，維護修復、週報與重新規劃回到同一套畫面。通過必要項目後，Workbench 對已就緒 workspace 成為預設，Classic 只作有限期回退。
+**增量 C：PM 決策到維護。** 真實驗收更新目標與依賴，維護修復、週報與重新規劃回到同一套畫面。Workbench 的預設 rollout 依其導航、核心兩輪、恢復與相容性門檻，可先對已就緒 workspace 啟用，不必等待所有 PM／維護功能齊全；Classic 只作有限期回退。
 
 實際日期與人力費用由團隊在差額盤點後估算，不在未知容量下承諾一週做完。開始實作前只需一次集中確認互動與風險邊界；間距、元件細節與非破壞重構由 integrator 決定。真實驗收環境尚未指定時，不阻擋唯讀、fixture 與契約工作，但不可虛報 live 完成。
 
@@ -456,7 +474,7 @@ Cantus 公開版標示 `UNLICENSED`，與 The Unlicense 不同。可以參考已
 
 建議採用本企劃的體驗與邊界作為 v1.3／UX 補充的整合決議：保留可靠底座，將專業管理能力整理成日常可用的工作台。這份文件交付不等於批准 merge、部署、R0 或實機驗收。
 
-團隊第一批交付應是：一份最新 main／PR 差額圖、一條使用正式共用元件的完整工作路徑，以及具名的首條實機 profile／repo。已完成 Workbench 和 Result 不重做；把 #209／#215 等未完成段接到同一個 Work，而不是把它們再變成獨立管理頁。
+團隊第一批交付應是：一份最新 main／PR 差額圖、一條使用正式共用元件的完整工作路徑，以及具名的首條實機 profile／repo。已完成 Workbench 和 Result 不重做；把已整合的第二輪／採用／結果在同一版本實機驗證，不重寫；剩餘T5／T6缺口沿原分工推進。
 
 使用者只需確認明顯的產品取捨與真實環境授權。工程接線、可讀性微調、非破壞重構由指定 integrator 負責。各 PR 用「哪個使用者步驟現在能完整完成」回報，而不是以新增幾百行或通過幾輪文件審閱回報成功。
 
@@ -466,14 +484,14 @@ Cantus 公開版標示 `UNLICENSED`，與 The Unlicense 不同。可以參考已
 
 ## 附錄 A｜來源與版本
 
-以下來源支持現況與限制；本文尺寸、工作分配、KPI 和新互動是提案，不是來源已提供的功能。開工時重新核對狀態。
+S0–S10 為 EC-1.0 的歷史基線，不能用其舊狀態判斷本輪完成度；EC-1.1 的現況依 S11–S22。本文尺寸、工作分配與 KPI 是產品目標。開工時再核對固定候選及最新 metadata。
 
 - **[S0] 既有規劃基線。** 使用者本對話已提供 `Work-Centric-Workbench-Plan-zh-TW.md`、`Dev-Handoff-zh-TW.md`、`Acceptance-Checklist-zh-TW.md`；以及 repo 的 `docs/product/v1.3-closed-loop-plan.md`。原 E／UX／驗收編號全部保留。
 - **[S1] 本次主線。** https://github.com/TED-H-com/bat-agent-connector/commit/87433260f5b12a2b323c50d9c04260d5cd0d9293
 - **[S2] Workbench 整合契約。** https://github.com/TED-H-com/bat-agent-connector/blob/87433260f5b12a2b323c50d9c04260d5cd0d9293/docs/design/workbench.md
 - **[S3] 現有產品進度。** https://github.com/TED-H-com/bat-agent-connector/blob/87433260f5b12a2b323c50d9c04260d5cd0d9293/docs/product/progress-2026-10-16.md （該報告自己的產品 pin 為 265026d4；不把其舊「未合併」清單當所有 PR 的即時狀態。）
-- **[S4] Work 第二輪。** https://github.com/TED-H-com/bat-agent-connector/pull/209 （本次 head 23e17e768924a87fdbfb9a78365f2081b0b77fe3，draft；內文與 head 需一起核對。）
-- **[S5] 採用並開始。** https://github.com/TED-H-com/bat-agent-connector/pull/215 （本次 head 23f6d42ffb023913dedabf53b05f129e815215ed，draft；規格不當作正式能力。）
+- **[S4] Work 第二輪。** https://github.com/TED-H-com/bat-agent-connector/pull/209 （EC-1.0 歷史查核：當時 head 23e17e76 為 draft；EC-1.1 的合併狀態改依 [S17–S20]。）
+- **[S5] 採用並開始。** https://github.com/TED-H-com/bat-agent-connector/pull/215 （EC-1.0 歷史查核：當時 head 23f6d42f 為 draft 規格；後續真正實作已由 #276 整合。）
 - **[S6] Project Hub 公開工作流程。** https://github.com/kieiken/project-hub/blob/a277d2ed5ce439c248fc32fa8ff9fa4124a06027/hub/README.zh-TW.md
 - **[S7] Project Hub 4.123.1 公告。** https://github.com/kieiken/project-hub/releases/tag/v4.123.1
 - **[S8] Cantus 分享版與限制。** https://github.com/arumwu/cantus-panel/blob/4343c6eef7090a6a9ad34841fea07ee18e73890d/README.md ；先前核對的執行／queue 實作可見 https://github.com/arumwu/cantus-panel/blob/7c9456f779d44bb7d8d593f77743125627d2b217/native-ui.js 與同版 `native.cjs`、`managed.cjs`、`handoff.cjs`。
@@ -482,6 +500,24 @@ Cantus 公開版標示 `UNLICENSED`，與 The Unlicense 不同。可以參考已
 
 ## 附錄 B｜本包與舊文件的使用方式
 
-本企劃是 v1.3 與 Work-Centric 的收斂決議，開工時將優先順序、參考來源與本次補充行為整合回既有產品文件；不要永久維護互相衝突的三份規格。未明確修訂的生命週期、控制者、證據與原驗收保持有效。
+本企劃 EC-1.1 是 v1.3 與 Work-Centric 的收斂決議，開工時將優先順序、參考來源與本次補充行為整合回既有產品文件；不要永久維護互相衝突的三份規格。未明確修訂的生命週期、控制者、證據與原驗收保持有效。
 
-同包 `Dev-Execution-Brief-zh-TW.md` 是簡短開工入口，不另定規格。Word 與 Markdown 是本企劃相同版本的閱讀／維護格式；Git 中以 Markdown 為建議的編輯來源。本包不附競品程式或未獲公開授權的參考圖，可沿用先前由使用者提供、供內部評審的圖片與導讀。
+[現行 agent handoff](v1.3-agent-handoff.md) 是簡短開工入口，不另定規格。Word 與 Markdown 是本企劃相同版本的閱讀／維護格式；Git 中以 Markdown 為建議的編輯來源。本包不附競品程式或未獲公開授權的參考圖，可沿用先前由使用者提供、供內部評審的圖片與導讀。
+
+
+## 附錄 C｜EC-1.1 新查核來源
+
+- **[S11] Cantus 手機操作與驗證邊界**：https://github.com/arumwu/cantus-panel/blob/496dc178ac8c32d6ae01c9c77a9c0c2dc8714e36/README.md
+- **[S12] Cantus 手機導航與可視高度實作**：https://github.com/arumwu/cantus-panel/blob/496dc178ac8c32d6ae01c9c77a9c0c2dc8714e36/app.js
+- **[S13] Cantus 手機瀏覽器測試**：https://github.com/arumwu/cantus-panel/blob/496dc178ac8c32d6ae01c9c77a9c0c2dc8714e36/cloud/mobile-ui.test.cjs
+- **[S14] Project Hub 4.124.0 發布及 source 更新**：https://github.com/kieiken/project-hub/releases/tag/v4.124.0
+- **[S15] Project Hub 本輪變更**：https://github.com/kieiken/project-hub/blob/e5e1696a7a8df930b0693bbd8418696a15c52585/hub/CHANGELOG.md
+- **[S16] Project Hub 長對話整理與下一步**：https://github.com/kieiken/project-hub/blob/e5e1696a7a8df930b0693bbd8418696a15c52585/hub/README.md
+- **[S17] BAT Work loop 主線整合 #276**：https://github.com/TED-H-com/bat-agent-connector/pull/276
+- **[S18] 我們本輪實作與產品行為**：https://github.com/TED-H-com/bat-agent-connector/blob/f31e7964c627e4b6d3af2e2370e7a38c64a20e25/CHANGELOG.md
+- **[S19] Work 下一輪前端**：https://github.com/TED-H-com/bat-agent-connector/blob/f31e7964c627e4b6d3af2e2370e7a38c64a20e25/desktop/src/pm-work-follow-up.js
+- **[S20] 目前整合追蹤；以當次 metadata 為準**：https://github.com/TED-H-com/bat-agent-connector/issues/182
+- **[S21] 本輪 handoff；早期段落保留歷史基線**：https://github.com/TED-H-com/bat-agent-connector/blob/f31e7964c627e4b6d3af2e2370e7a38c64a20e25/docs/product/v1.3-agent-handoff.md
+- **[S22] Cantus 原生來源自動重讀的測試**：https://github.com/arumwu/cantus-panel/blob/496dc178ac8c32d6ae01c9c77a9c0c2dc8714e36/catalog-refresh.test.cjs
+
+EC-1.1 的詳細差額、mobile行為、優先順序與原K驗收擴充，見同包 `experience-convergence-delta.md`。該檔與本企劃一起整合回repo；不要永久保留互相矛盾的產品指令。

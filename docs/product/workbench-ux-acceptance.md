@@ -113,6 +113,23 @@ K10–11 擴原生來源，K13–14 接 PM／維護。分段交付不刪除最�
 PR；Hermes 經 MCP 另開 Work，PM 能解釋兩份成果對目標的影響。這段仍需 L 證據，
 不得由 fixture、CI、merge 或靜態截圖替代。
 
+### EC-1.1 追加情境（沿原 K 編號）
+
+[EC-1.1 差額 §9](experience-convergence-delta.md)細化下列情境，不覆寫原結果：
+
+| 原編號 | 追加驗收 |
+| --- | --- |
+| K01 | 接續摘要保留候選／否決／採用的區別；已取消未送 input 的 Idea 草稿可恢復。 |
+| K02 | profile 修復返回原 Work 草稿；開始前揭露第二輪與成果能力。 |
+| K04–05 | 原受理結果未知時查原 key；已確認排入的第二句在關頁／鎖屏後由 server 繼續，本地草稿不自動發送。 |
+| K08–09 | 清單→Work→局部視角→返回保留 exact 選取；另一 client／Hermes 工作不轉移控制權。 |
+| K10–11 | 外部新來源增量可見，多 reader 不重算；partial 不當空；路線能力與錯誤類型分開。 |
+| K13–14 | 兩份真成果支持目標影響、接受缺口與維護下一步，保留固定來源。 |
+| K15 | 320／390／768、觸控橫向、Back／Forward、safe area、中文 IME、登入到期及前景恢復；iPhone Safari、Android Chrome、Tauri 各自留證。 |
+| K16 | 同源版本、安裝更新／回退、payload 與來源讀取量測；Connector 自動更新須有來源驗證、併發／中斷／回退及設定保留證據，不重播工作。 |
+
+手機鍵盤 viewport 模擬只算 I 證據。新的情境尚未因文件更新、CI 或發布而取得 L 通過。
+
 ## Connector 工作循環回歸（I 證據）
 
 [`test_pm_work_loop_browser.py`](../../tests/test_pm_work_loop_browser.py) 啟動真正
