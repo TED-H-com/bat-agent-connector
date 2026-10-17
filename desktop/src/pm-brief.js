@@ -1,5 +1,6 @@
 import {emptyState, disclosure, statusPill} from './ui/components.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
+import {retiredView, viewLeft} from './pm-retired.js';
 // Source records share a readable surface; the full identity remains copyable in Details.
 export function proof({h, t, value, name, kind}) {
   const records = Array.isArray(value) ? value : [value];
@@ -132,7 +133,7 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
     for (const entry of page.snapshots || []) history.append(h('button', {type:'button',class:'secondary',onclick:async()=>{
       selectedSnapshotId=entry.snapshot_id;const ticket=++serial;snapshot=null;signature='';view.replaceChildren();exports?.update();
       try {const data=await api('GET',`${endpoint}/snapshots/${entry.snapshot_id}`);alive();if(ticket===serial)render(data);}
-      catch(error){if(ticket===serial)unavailable(error);}
+      catch(error){if(retiredView(error)||viewLeft(alive))return;if(ticket===serial)unavailable(error);}
     }}, entry.title || t('pm_brief_title'), ' · ', stamp(entry.as_of)));
     if (page.next_cursor !== null && page.next_cursor !== undefined) {
       const more=h('button',{type:'button',class:'secondary',onclick:async()=>{
@@ -153,7 +154,7 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
       head=current.head;status.replaceChildren();
       const next=JSON.stringify([latest,listing]);if(signature!==next){signature=next;render(latest);renderHistory(listing);}
       create.update();
-    }catch(error){if(ticket===serial)unavailable(error);}
+    }catch(error){if(retiredView(error)||viewLeft(alive))return;if(ticket===serial)unavailable(error);}
   }
   return {box,refresh,withdraw};
 }

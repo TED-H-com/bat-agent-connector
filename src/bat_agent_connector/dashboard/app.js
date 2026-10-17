@@ -17484,6 +17484,21 @@ function savedFilter(value) {
 		value: ""
 	};
 }
+//#endregion
+//#region src/pm-retired.js
+var retiredView = (error) => [
+	"VIEW_CHANGED",
+	"CONNECTION_CHANGED",
+	"PM_DISPOSED"
+].includes(error.code);
+var viewLeft = (alive) => {
+	try {
+		alive();
+		return false;
+	} catch (error) {
+		return retiredView(error);
+	}
+};
 var init_tslib_es6 = __esmMin((() => {}));
 async function invoke(cmd, args = {}, options) {
 	return window.__TAURI_INTERNALS__.invoke(cmd, args, options);
@@ -17982,6 +17997,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 					alive();
 					if (ticket === serial) render(data);
 				} catch (error) {
+					if (retiredView(error) || viewLeft(alive)) return;
 					if (ticket === serial) unavailable(error);
 				}
 			}
@@ -18038,6 +18054,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 			}
 			create.update();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -26731,6 +26748,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 				if (selection) focused.setSelectionRange(...selection);
 			}
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -29238,6 +29256,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 			renderWork();
 			notify();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -29325,6 +29344,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 			render();
 			if (history.open) await loadHistory();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -29354,6 +29374,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 						if (original.transition?.transition_id !== row.transition_id) throw Error(t("pm_scope_mismatch"));
 						detail.append(h("pre", { class: "pm-brief-proof" }, JSON.stringify(original.transition, null, 2)));
 					} catch (error) {
+						if (retiredView(error) || viewLeft(alive)) return;
 						if (ticket === serial) unavailable(error);
 					}
 				});
@@ -29368,6 +29389,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 			}, t("pm_lifecycle_more_history")));
 			if (page.visibility_filtered) historyBody.append(h("p", { class: "muted" }, t("pm_lifecycle_filtered")));
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		} finally {
 			if (historyRequest === ticket) historyRequest = null;
@@ -30082,6 +30104,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 			render(row);
 			status.replaceChildren();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error);
 		}
 	}
@@ -30097,6 +30120,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 			next = data.next_cursor;
 			navigation();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error.message === t("pm_fa_mismatch") ? Error(t("pm_fa_read_failed")) : error);
 		} finally {
 			if (ticket === serial) {
@@ -30121,6 +30145,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 			if (selected) await read(selected);
 			else if (rows.length) detail.append(note("pm_fa_select"));
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error.message === t("pm_fa_mismatch") ? Error(t("pm_fa_read_failed")) : error);
 		}
 	}
@@ -30350,6 +30375,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 			body.append(warning, rebase, request.box);
 			request.update();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error);
 		}
 	}
@@ -30363,6 +30389,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 			next = data.next_cursor;
 			await readThread();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error);
 		}
 	}
@@ -30386,6 +30413,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 				await readThreads();
 			}
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error);
 		}
 	}
@@ -30772,6 +30800,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			renderNavigation();
 			editor.update();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		} finally {
 			if (ticket === serial) {
@@ -30813,6 +30842,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			sourceStatus.replaceChildren(snapshot && !snapshot.baseline?.document ? note("pm_fu_accepted_required") : note("pm_fu_source_help"));
 			editor.update();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial && sourceTicket === sourceSerial) unavailable(error);
 		}
 	}
@@ -30971,6 +31001,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			renderSourceChoices();
 			return true;
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return false;
 			if (ticket === serial) unavailable(error);
 			return false;
 		}
@@ -31070,6 +31101,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			editor.update();
 			if (prepareOpen) await loadSources();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -32190,6 +32222,7 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 				if (selection) focused.setSelectionRange(...selection);
 			}
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -36854,6 +36887,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 				if (selection) focused.setSelectionRange(...selection);
 			}
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -38184,6 +38218,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 						const doc = value.revision.document;
 						content.replaceChildren(h("p", {}, doc.rationale || t(doc.milestones?.some((row) => row.actual?.quality) ? "pm_roadmap_quality_fixed" : "pm_roadmap_quality_unknown")), h("pre", { class: "pm-brief-proof" }, JSON.stringify(value.revision, null, 2)));
 					} catch (error) {
+						if (retiredView(error) || viewLeft(alive)) return;
 						content.replaceChildren(errorBox(error, { within: content }));
 						fetched = false;
 					}
@@ -38345,6 +38380,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 				if (history.open) loadHistory();
 			}
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) {
 				current = null;
 				signature = "";
@@ -38901,6 +38937,7 @@ function reviewCandidateToIdea({ h, t, api, alive, workspaceId, caps, can, form,
 			body.append(thread.thread.mode !== "idea" ? h("p", { class: "muted" }, t("pmrv_idea_only")) : "", request.box, warning, rebase, h("a", { href: `#/pm/${workspaceId}/${selected}` }, t("pmrv_idea_open")));
 			sync();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (n === ticket && !dead) {
 				thread = null;
 				body.replaceChildren();
@@ -38927,6 +38964,7 @@ function reviewCandidateToIdea({ h, t, api, alive, workspaceId, caps, can, form,
 			if (!rows.some((row) => row.mode === "idea") && !selected) status.replaceChildren(emptyState({ title: t("pmrv_idea_empty") }));
 			if (selected && !more) await choose();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (n === ticket && !dead) {
 				thread = null;
 				request?.update();
@@ -42817,6 +42855,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 				}));
 			}
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === generation) {
 				rows.replaceChildren();
 				active = null;
@@ -42862,6 +42901,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 			selected = choose.value;
 			await loadProject();
 		} catch (error) {
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === generation) {
 				rows.replaceChildren();
 				active = null;
@@ -42928,6 +42968,7 @@ function pmWorktreeChoice({ h, t, api, alive, input, labelled, capability, scope
 				}));
 				renderProof();
 			} catch (error) {
+				if (retiredView(error) || viewLeft(alive)) return;
 				if (ticket === sequence) proof.replaceChildren(errorBox(error, { within: proof }));
 			} finally {
 				if (ticket === sequence) {
@@ -43012,11 +43053,6 @@ function pmWorktreeChoice({ h, t, api, alive, input, labelled, capability, scope
 //#endregion
 //#region src/pm-workspace.js
 var same$3 = (a, b) => a === b || a && b && typeof a === "object" && typeof b === "object" && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((key) => Object.hasOwn(b, key) && same$3(a[key], b[key]));
-var retired = (error) => [
-	"VIEW_CHANGED",
-	"CONNECTION_CHANGED",
-	"PM_DISPOSED"
-].includes(error.code);
 var receiptSubscribers = new Map();
 var formConnectionTag = "batc-pm-form-connection";
 if (!customElements.get(formConnectionTag)) customElements.define(formConnectionTag, class extends HTMLElement {
@@ -43135,7 +43171,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				receipt.replaceChildren();
 				update();
 			} catch (error) {
-				if (!retired(error)) status.replaceChildren(errorBox(error, { within: status }));
+				if (!retiredView(error)) status.replaceChildren(errorBox(error, { within: status }));
 			}
 		}
 	}, t("pm_edit_request"));
@@ -43314,7 +43350,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			} catch {
 				return;
 			}
-			if (!retired(error)) {
+			if (!retiredView(error)) {
 				if (firstAttempt && error.admissionRefused === true && !saved.intent?.operation_id) {
 					saved.intent.initialAdmissionRefused = true;
 					try {
@@ -45721,7 +45757,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					if (value.plan?.workspace_id !== workspaceId || value.plan.revision_id !== adoptionRef[1] || typeof value.plan.document?.title !== "string" || !Number.isSafeInteger(value.plan.sequence)) throw Error(t("pm_scope_mismatch"));
 					caption.textContent = value.plan.document.title + " · " + t("pm_revision_number", { number: value.plan.sequence });
 				} catch (error) {
-					if (!item.isConnected || retired(error)) return;
+					if (!item.isConnected || retiredView(error)) return;
 					if ([403, 404].includes(error.status)) item.remove();
 					else detail.replaceChildren(errorBox(error, { within: detail }));
 				}
@@ -45746,7 +45782,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					if (context.coverage?.omitted_message_ids?.length || context.coverage?.omitted_input_ids?.length || context.coverage?.messages_truncated || context.coverage?.inputs_truncated) detail.append(h("p", { class: "muted" }, t("pm_partial")));
 					fetched = true;
 				} catch (error) {
-					if (!retired(error) && item.isConnected) detail.replaceChildren(errorBox(error, { within: detail }));
+					if (!retiredView(error) && item.isConnected) detail.replaceChildren(errorBox(error, { within: detail }));
 				} finally {
 					pending = false;
 				}
@@ -45770,7 +45806,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						more.remove();
 						renderPackages(next, true);
 					} catch (error) {
-						if (!retired(error)) {
+						if (!retiredView(error)) {
 							status.replaceChildren(errorBox(error, { within: status }));
 							more.disabled = false;
 						}
@@ -45797,7 +45833,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			historyExpanded = true;
 			renderThread(data);
 		} catch (error) {
-			if (!retired(error) && ticket === sequence) {
+			if (!retiredView(error) && ticket === sequence) {
 				loaded = false;
 				lastThreadList = null;
 				workspace = null;
@@ -46159,7 +46195,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				nativeAnalysis?.recheck();
 			}
 		} catch (error) {
-			if (!retired(error) && ticket === sequence) {
+			if (!retiredView(error) && ticket === sequence) {
 				loaded = false;
 				workspace = null;
 				threadData = null;

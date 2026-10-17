@@ -2,6 +2,14 @@
 
 ## Next release (unreleased)
 
+- A read from the overview brief, lifecycle, meetings, follow-up, sprints,
+  governance, roadmap, evidence, a review candidate, or a worktree preview
+  that fails or finishes after that project view was left does not mark the
+  next view's update as failed or pause actions. Closing the view withdraws
+  an open plan proposal before that update. The board refresh is unchanged.
+  An error while that project view is still open, including a source outage
+  or a lost network, still stops its update.
+
 - Confinement closure tests scan with a shell fixture instead of starting
   Python for every search, so the same checks finish on a busy disk without
   a longer time limit.

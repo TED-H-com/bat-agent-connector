@@ -651,7 +651,12 @@ on narrow screens. Explicit destinations cancel queued scroll restoration; revis
 a view restores its own scroll. Board and Requirements record their scroll position before
 a view switch hides them or on route departure (including during in-flight reads). The restore
 waits until the workspace header has settled. A hidden view, or a view retired before its mount
-finished, never moves the window. Unassigned
+finished, never moves the window. A read from the overview brief, lifecycle, meetings,
+follow-up, sprints, governance, roadmap, evidence, a review candidate, or a worktree preview
+that fails or finishes after that project view was left does not mark the next view's update
+as failed or pause its actions. Closing the view withdraws an open plan proposal before that
+update. The board refresh is unchanged until its own fix. An error in the project view that
+is still open, including a source outage or a lost network, still stops that update. Unassigned
 work remains selectable before plan adoption. Preferences are bounded by connection/principal and workspace; fetched
 facts are reauthorized, never stored in the preference map.
 
