@@ -2,10 +2,10 @@ name: desktop
 
 on:
   pull_request:
-    paths: ["desktop/**", "src/**", "tests/manual/**", "scripts/check_glib_backport.py", "tests/test_release_dependencies.py", "pyproject.toml", "uv.lock", ".github/workflows/desktop*.yml"]
+    paths: ["desktop/**", "src/**", "tests/manual/**", "tests/test_pm_work_loop_browser.py", "scripts/check_glib_backport.py", "tests/test_release_dependencies.py", "pyproject.toml", "uv.lock", ".github/workflows/desktop*.yml"]
   push:
     branches: [main]
-    paths: ["desktop/**", "src/**", "tests/manual/**", "scripts/check_glib_backport.py", "tests/test_release_dependencies.py", "pyproject.toml", "uv.lock", ".github/workflows/desktop*.yml"]
+    paths: ["desktop/**", "src/**", "tests/manual/**", "tests/test_pm_work_loop_browser.py", "scripts/check_glib_backport.py", "tests/test_release_dependencies.py", "pyproject.toml", "uv.lock", ".github/workflows/desktop*.yml"]
 
 env:
   BATC_BUILD_COMMIT: ${{ inputs.source_sha || github.sha }}
@@ -129,8 +129,8 @@ jobs:
   central-ui:
     runs-on: ubuntu-24.04
     # Five minutes for setup and a shared ten-minute script budget below.
-    # The walkthrough's two minutes sit outside that shared budget.
-    timeout-minutes: 17
+    # PM walkthrough (2m) and Work loop (3m) have separate script budgets.
+    timeout-minutes: 20
     env:
       TZ: UTC
     defaults:
@@ -198,6 +198,16 @@ jobs:
         env:
           BATC_WALKTHROUGH_SHOTS: test-results/walkthrough
         run: npm run test:walkthrough
+      - name: Work start, closed-client queue, Result and PR through actual central
+        working-directory: .
+        timeout-minutes: 3
+        env:
+          BATC_WORK_LOOP_BROWSER: "1"
+        run: |
+          mkdir -p "$HOME/agent-work/tmp/pytest"
+          loop_temp=$(mktemp -d "$HOME/agent-work/tmp/pytest/work-loop-XXXXXX")
+          trap 'rm -rf -- "$loop_temp"' EXIT
+          uv run --extra dev pytest -q tests/test_pm_work_loop_browser.py --basetemp="$loop_temp/bt"
       - name: Preserve shared UI fixture evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

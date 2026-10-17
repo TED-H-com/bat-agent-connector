@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Work reading controls no longer overlap the next-step heading when the
+  transcript and server queue share a short viewport. A browser integration
+  journey now exercises actual Connector start, queued follow-up, closed-client
+  dispatch, fixed Result and PR publication against controllable BAT/GitHub
+  sources, while preserving the original manual session and checkout.
+
 - The shared Start work panel can select a saved execution profile without
   selecting the default automatically. It pins the agent, model and execution
   location, reviews the current profile revision before starting, and separates
@@ -39,8 +45,8 @@
   `docs/design/v1.3-e05-bat-loop.md`. No behavior change.
 
 - Design spec for publishing a Work Result as a pull request
-  (`docs/design/v1.3-e03-publish-pr.md`). The Dashboard still cannot publish:
-  `github.pr.publish` remains a label until that spec is implemented. The spec
+  (`docs/design/v1.3-e03-publish-pr.md`) defines the contract used by the
+  publication form described below. The spec
   shows the start's base branch and base commit as read-only, does not offer a
   second pull request for the same commit, and does not call an integration
   commit delivered. It adds no merge, deploy, or session controls on the Result.

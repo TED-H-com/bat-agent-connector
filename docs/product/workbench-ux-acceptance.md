@@ -113,6 +113,39 @@ K10–11 擴原生來源，K13–14 接 PM／維護。分段交付不刪除最�
 PR；Hermes 經 MCP 另開 Work，PM 能解釋兩份成果對目標的影響。這段仍需 L 證據，
 不得由 fixture、CI、merge 或靜態截圖替代。
 
+## Connector 工作循環回歸（I 證據）
+
+[`test_pm_work_loop_browser.py`](../../tests/test_pm_work_loop_browser.py) 啟動真正
+TaskDaemon HTTP、操作 worker、journal 與 Result collector；
+[`work-loop-browser.mjs`](../../desktop/tests/work-loop-browser.mjs) 透過正式共用
+工作台預覽（`?workbench=1`）操作，不攔截或假造 Connector API 回應。
+BAT 回合與 GitHub 由可控來源提供，Git 使用磁碟上的隔離 repositories。
+
+在已有採用計畫、綁定與 Work 的環境，從 Board 填入要求並開始，忙碌時送出
+第二句，等待排隊回執後完全關閉 Chromium。只有 server worker 繼續派送；
+測試不修改 operation rows、不強制 wake 或重新送出。重開瀏覽器後核對同一
+Work／Attempt、已送指令與固定 commit，切換 Work／Lineage／Live 保留草稿，
+再從成果發布 draft PR 並重新載入。所有三筆使用者寫入均由 UI 發起。
+
+核對一個 session start、兩個 send、一次 GitHub POST、原操作 key，以及
+人工忙碌 session／未提交 checkout 不變。磁碟上的兩次變更必須對應 Result
+與發布分支；PR 不代表需求驗收或部署。390／768／1440px 額外檢查閱讀按鈕
+不遮住下一步，並保存實際畫面、操作及版本資訊。
+
+本地執行：
+
+```sh
+BATC_WORK_LOOP_BROWSER=1 pytest-disktmp uv run --python 3.13 --extra dev pytest -q tests/test_pm_work_loop_browser.py
+```
+
+需先安裝 `desktop` npm 依賴及 Playwright Chromium。一般 Python suite 會略過
+這組需瀏覽器的測試；desktop CI 明確啟用並執行，產物在
+`desktop/test-results/work-loop/`，隨既有 `desktop-shared-ui-fixtures` artifact 保存。
+
+此回歸涵蓋 K05、K07、K08、K09 與 K15 的部分 I 路徑。它不證明新 Idea／PM
+回覆到採用並開始的整段操作，也不取代 P6 故障測試、Hermes MCP 第二件 Work、
+原生安裝、真實模型／BAT／GitHub 或 R0／R1／L 驗收。
+
 ## 報告範本
 
 ```text

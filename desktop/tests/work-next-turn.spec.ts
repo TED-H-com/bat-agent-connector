@@ -39,6 +39,34 @@ const field = (page: Page) => page.locator('[data-follow-up-input]');
 const send = (page: Page, lang: Lang) => section(page).getByRole('button', {name: ui[lang].send, exact: true});
 const receipts = (page: Page) => page.locator('[data-follow-up-receipt]');
 
+for (const width of [390, 768, 1440]) {
+  test(`reading controls stay above the next step at ${width}px`, async ({page}) => {
+    await page.setViewportSize({width, height: width === 390 ? 844 : 900});
+    const f = followUpFixture('zh-TW'), dispatch = f.dispatch;
+    f.dispatch = async input => {
+      const result = await dispatch(input);
+      const path = new URL(input.path, 'http://fixture').pathname;
+      if (path === '/capabilities' || path === '/bootstrap') {
+        const caps = path === '/bootstrap' ? result.data.capabilities : result.data;
+        caps.features.session_reading = {version: 1};
+      }
+      return result;
+    };
+    await openWork(page, f, 'zh-TW');
+    await field(page).fill('再補一個失敗後重新送出的案例。');
+    await send(page, 'zh-TW').click();
+    await expect(receipts(page)).toHaveCount(1);
+    const reading = page.locator('.conversation > .actions');
+    await expect(reading).toBeVisible();
+    const layout = await page.locator('.workspace-conversation').evaluate(lane => ({
+      readingBottom: Math.max(...[...lane.querySelectorAll('.conversation > .actions > *')]
+        .map(node => node.getBoundingClientRect().bottom)),
+      nextTop: lane.querySelector('[data-work-section="next-turn"]')!.getBoundingClientRect().top,
+    }));
+    expect(layout.readingBottom).toBeLessThanOrEqual(layout.nextTop);
+  });
+}
+
 function queuedReceipt(id = 'op_' + 'c'.repeat(32), extra: Record<string, unknown> = {}) {
   return {
     operation_id: id, workspace_id: WS, work_item_id: WI, attempt_id: ATTEMPT,
