@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Starting a session, saving labels, reloading workspaces, and pausing or
+  resuming an execution keep the keyboard on the pressed control while the
+  request runs. A second press is ignored. Focus then moves to Check, or to
+  the control that replaces a refused action. Typing labels is not interrupted
+  by a background refresh.
+
 - A read from the overview brief, lifecycle, meetings, follow-up, sprints,
   governance, roadmap, evidence, a review candidate, or a worktree preview
   that fails or finishes after that project view was left does not mark the

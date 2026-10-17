@@ -48521,6 +48521,44 @@ function validLabels(v) {
 	return Array.isArray(v) && v.length <= 8 && new Set(v).size === v.length && v.every((x) => typeof x === "string" && x === x.trim() && [...x].length >= 1 && [...x].length <= 40 && !/[\p{C}\u2028\u2029]/u.test(x));
 }
 var metadata = (v) => object$6(v) && version$1(v.version) && validLabels(v.labels);
+function markControl$2(el, blocked, flight, own = false) {
+	if (!el.hidden && flight && (own || !blocked)) {
+		el.disabled = false;
+		el.setAttribute("aria-disabled", "true");
+	} else {
+		el.disabled = Boolean(blocked || flight);
+		el.removeAttribute("aria-disabled");
+	}
+}
+function markRegion$2(region, controls) {
+	if (controls.some((el) => !el.hidden && el.getAttribute("aria-disabled") === "true")) region.setAttribute("aria-busy", "true");
+	else region.removeAttribute("aria-busy");
+}
+function controlShown$2(el) {
+	return Boolean(el?.isConnected && !el.disabled && !el.closest("[hidden]"));
+}
+function moveFocus$2(from, candidate, root, region) {
+	if (controlShown$2(candidate)) {
+		candidate.focus();
+		return;
+	}
+	const controls = [...root.querySelectorAll("button, a[href], input, select, textarea")];
+	const start = Math.max(controls.indexOf(from), 0);
+	const next = [...controls.slice(start + 1), ...controls.slice(0, start)].find((el) => controlShown$2(el) && el.getAttribute("aria-disabled") !== "true");
+	if (next) {
+		next.focus();
+		return;
+	}
+	region.tabIndex = -1;
+	region.focus();
+}
+function settleFocus$2(before, buttons, candidate, root, region) {
+	if (!root?.isConnected || !buttons.includes(before)) return;
+	const active = document.activeElement;
+	if (active !== before && active !== document.body && active !== document.documentElement) return;
+	if (!before.disabled && !before.closest("[hidden]")) return;
+	moveFocus$2(before, candidate, root, region);
+}
 function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorBox, opStatus }) {
 	const path = `/sessions/${encodeURIComponent(target.host)}/${encodeURIComponent(target.session_id)}`;
 	const valid = (request) => request?.action === "session.labels.set" && equal$8(request.target, target) && object$6(request.params) && Object.keys(request.params).length === 1 && validLabels(request.params.labels) && object$6(request.preconditions) && Object.keys(request.preconditions).length === 1 && version$1(request.preconditions.expected_version);
@@ -48666,7 +48704,10 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 	}, t("labels_save"));
 	const check = h("button", {
 		class: "secondary",
-		onclick: () => refresh(true).catch(error)
+		onclick: () => {
+			if (!live() || busy || refreshing) return;
+			refresh(true).catch(error);
+		}
 	}, t("permissions_check"));
 	const renew = h("button", {
 		class: "secondary",
@@ -48731,6 +48772,7 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 	}, stateLine, tags, fold);
 	function update() {
 		if (!live()) return;
+		const before = document.activeElement;
 		const fixed = Boolean(saved.intent);
 		const showEdit = readable && permitted() && !damaged || fixed || damaged || readable && Object.hasOwn(saved, "text");
 		const chips = current?.labels.length ? current.labels.map((v) => h("span", { class: "chip" }, v)) : [];
@@ -48745,14 +48787,26 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 		fold.hidden = !showEdit && !why;
 		editorMount.hidden = !showEdit;
 		if (showEdit && fold.open) mountEditor();
-		input.disabled = fixed || busy || Boolean(refreshing) || !readable || !permitted() || damaged;
+		input.disabled = fixed || busy || !readable || !permitted() || damaged;
+		const flight = busy || Boolean(refreshing);
 		apply.hidden = Boolean(saved.intent?.operation_id || saved.intent?.refused);
-		apply.disabled = busy || Boolean(refreshing) || !readable || !permitted() || damaged || Boolean(fixed && !saved.intent.request) || !validLabels(parsed());
 		apply.textContent = t(fixed ? "permissions_retry" : "labels_save");
+		markControl$2(apply, !readable || !permitted() || damaged || Boolean(fixed && !saved.intent.request) || !validLabels(parsed()), flight, busy);
 		check.textContent = t(fixed ? "permissions_check" : "labels_refresh");
-		check.disabled = busy || Boolean(refreshing);
+		markControl$2(check, false, flight, false);
 		renew.hidden = fixed ? !terminal() && !saved.intent.refused : !damaged && !(current && saved.base_version !== void 0 && saved.base_version !== current.version);
-		renew.disabled = busy || Boolean(refreshing) || !readable || !permitted();
+		markControl$2(renew, !readable || !permitted(), flight, false);
+		markRegion$2(message, [
+			apply,
+			check,
+			renew
+		]);
+		const candidate = before === apply ? saved.intent?.operation_id ? check : saved.intent?.refused ? renew : null : before === renew ? input : null;
+		settleFocus$2(before, [
+			apply,
+			check,
+			renew
+		], candidate, box, message);
 		restriction.textContent = !permitted() ? t("labels_scope") : !readable ? t("labels_unreadable") : saved.base_version !== void 0 && saved.base_version !== current.version ? t("labels_changed") : "";
 		result.replaceChildren();
 		if (fixed) {
@@ -48795,8 +48849,13 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 		try {
 			await refreshing;
 		} catch (e) {
+			const typing = document.activeElement === input && !input.disabled;
 			readable = false;
 			error(e);
+			if (typing && input.disabled && live()) {
+				message.tabIndex = -1;
+				message.focus();
+			}
 			throw e;
 		} finally {
 			refreshing = null;
@@ -53212,6 +53271,44 @@ var terminal$6 = (op) => [
 	"failed",
 	"cancelled"
 ].includes(op?.status);
+function markControl$1(el, blocked, flight, own = false) {
+	if (!el.hidden && flight && (own || !blocked)) {
+		el.disabled = false;
+		el.setAttribute("aria-disabled", "true");
+	} else {
+		el.disabled = Boolean(blocked || flight);
+		el.removeAttribute("aria-disabled");
+	}
+}
+function markRegion$1(region, controls) {
+	if (controls.some((el) => !el.hidden && el.getAttribute("aria-disabled") === "true")) region.setAttribute("aria-busy", "true");
+	else region.removeAttribute("aria-busy");
+}
+function controlShown$1(el) {
+	return Boolean(el?.isConnected && !el.disabled && !el.closest("[hidden]"));
+}
+function moveFocus$1(from, candidate, root, region) {
+	if (controlShown$1(candidate)) {
+		candidate.focus();
+		return;
+	}
+	const controls = [...root.querySelectorAll("button, a[href], input, select, textarea")];
+	const start = Math.max(controls.indexOf(from), 0);
+	const next = [...controls.slice(start + 1), ...controls.slice(0, start)].find((el) => controlShown$1(el) && el.getAttribute("aria-disabled") !== "true");
+	if (next) {
+		next.focus();
+		return;
+	}
+	region.tabIndex = -1;
+	region.focus();
+}
+function settleFocus$1(before, buttons, candidate, root, region) {
+	if (!root?.isConnected || !buttons.includes(before)) return;
+	const active = document.activeElement;
+	if (active !== before && active !== document.body && active !== document.documentElement) return;
+	if (!before.disabled && !before.closest("[hidden]")) return;
+	moveFocus$1(before, candidate, root, region);
+}
 function valid(request, id) {
 	return ["task.pause", "task.resume"].includes(request?.action) && equal$5(request.target, { task_id: id }) && object$4(request.params) && (request.action === "task.pause" ? typeof request.params.abort_current === "boolean" && Object.keys(request.params).length === 1 : Object.keys(request.params).length === 0) && object$4(request.preconditions) && Object.keys(request.preconditions).length === 1 && version(request.preconditions.control_version);
 }
@@ -53220,7 +53317,7 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 	try {
 		raw = JSON.parse(localStorage.getItem(storageKey));
 	} catch {}
-	let saved = { abort: raw?.abort === true }, operation = null, submission = null, refreshing = null, busy = false, readFailed = false;
+	let saved = { abort: raw?.abort === true }, operation = null, submission = null, refreshing = null, busy = false, checking = false, readFailed = false;
 	if (raw?.intent) {
 		const proven = valid(raw.intent.request, taskId) && typeof raw.intent.key === "string" && raw.intent.key.length > 0 && raw.intent.key.length <= 200;
 		saved.intent = {
@@ -53283,7 +53380,7 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 		variant: "secondary",
 		label: t("task_pause"),
 		onClick: async () => {
-			if (!live() || busy || refreshing || readFailed || !writable() || saved.intent?.operation_id || saved.intent && (!saved.intent.request || saved.intent.refused)) return;
+			if (!live() || busy || refreshing || checking || readFailed || !writable() || saved.intent?.operation_id || saved.intent && (!saved.intent.request || saved.intent.refused)) return;
 			const previous = saved;
 			if (!saved.intent) saved = {
 				...saved,
@@ -53343,13 +53440,30 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 	const check = button({
 		variant: "secondary",
 		label: t("permissions_check"),
-		onClick: () => (onSettled ? onSettled() : refresh(true)).catch(showError)
+		onClick: () => {
+			if (!live() || busy || refreshing || checking) return;
+			checking = true;
+			update();
+			let run;
+			try {
+				run = onSettled ? onSettled() : refresh(true);
+			} catch (error) {
+				checking = false;
+				if (live()) update();
+				showError(error);
+				return;
+			}
+			Promise.resolve(run).then(() => {}, showError).finally(() => {
+				checking = false;
+				if (live()) update();
+			});
+		}
 	});
 	const another = button({
 		variant: "secondary",
 		label: t("task_control_new"),
 		onClick: () => {
-			if (!live() || busy || refreshing || readFailed || !writable() || !(terminal$6(operation) || saved.intent?.refused)) return;
+			if (!live() || busy || refreshing || checking || readFailed || !writable() || !(terminal$6(operation) || saved.intent?.refused)) return;
 			const previous = saved;
 			saved = { abort: false };
 			try {
@@ -53386,19 +53500,32 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 	});
 	box.dataset.taskControls = "";
 	function update() {
+		const before = document.activeElement;
 		const fixed = Boolean(saved.intent);
 		const canOperate = permitted();
+		const flight = busy || Boolean(refreshing) || checking;
 		box.hidden = !(caps()?.scopes || []).includes("operate");
 		help.hidden = !canOperate;
 		abortLabel.hidden = !canOperate || action() !== "task.pause";
 		abort.disabled = fixed || busy;
 		apply.hidden = !canOperate || Boolean(saved.intent?.operation_id || saved.intent?.refused);
-		apply.disabled = busy || Boolean(refreshing) || readFailed || !writable() || Boolean(fixed && !saved.intent.request);
 		apply.textContent = t(fixed ? "permissions_retry" : action() === "task.pause" ? "task_pause" : "task_resume");
+		markControl$1(apply, readFailed || !writable() || Boolean(fixed && !saved.intent.request), flight, busy);
 		check.hidden = !saved.intent?.operation_id;
-		check.disabled = busy || Boolean(refreshing);
+		markControl$1(check, false, flight, checking);
 		another.hidden = !canOperate || !(terminal$6(operation) || saved.intent?.refused);
-		another.disabled = busy || Boolean(refreshing) || readFailed || !writable();
+		markControl$1(another, readFailed || !writable(), flight, false);
+		markRegion$1(message, [
+			apply,
+			check,
+			another
+		]);
+		const candidate = before === apply ? saved.intent?.operation_id ? check : saved.intent?.refused ? another : null : before === another ? apply : null;
+		settleFocus$1(before, [
+			apply,
+			check,
+			another
+		], candidate, box, message);
 		restriction.textContent = writable() ? "" : observedText(t, !canOperate ? "or_readonly_task" : ["done", "failed"].includes(task()?.state) ? "or_work_ended" : "or_controls_unavailable");
 		result.replaceChildren();
 		if (fixed) {
@@ -54292,6 +54419,44 @@ var fields = [
 	"prompt"
 ];
 var admissionRefusals$1 = new Set(["TIER_DISABLED", "START_WORKTREE_REQUIRED"]);
+function markControl(el, blocked, flight, own = false) {
+	if (!el.hidden && flight && (own || !blocked)) {
+		el.disabled = false;
+		el.setAttribute("aria-disabled", "true");
+	} else {
+		el.disabled = Boolean(blocked || flight);
+		el.removeAttribute("aria-disabled");
+	}
+}
+function markRegion(region, controls) {
+	if (controls.some((el) => !el.hidden && el.getAttribute("aria-disabled") === "true")) region.setAttribute("aria-busy", "true");
+	else region.removeAttribute("aria-busy");
+}
+function controlShown(el) {
+	return Boolean(el?.isConnected && !el.disabled && !el.closest("[hidden]"));
+}
+function moveFocus(from, candidate, root, region) {
+	if (controlShown(candidate)) {
+		candidate.focus();
+		return;
+	}
+	const controls = [...root.querySelectorAll("button, a[href], input, select, textarea")];
+	const start = Math.max(controls.indexOf(from), 0);
+	const next = [...controls.slice(start + 1), ...controls.slice(0, start)].find((el) => controlShown(el) && el.getAttribute("aria-disabled") !== "true");
+	if (next) {
+		next.focus();
+		return;
+	}
+	region.tabIndex = -1;
+	region.focus();
+}
+function settleFocus(before, buttons, candidate, root, region) {
+	if (!root?.isConnected || !buttons.includes(before)) return;
+	const active = document.activeElement;
+	if (active !== before && active !== document.body && active !== document.documentElement) return;
+	if (!before.disabled && !before.closest("[hidden]")) return;
+	moveFocus(before, candidate, root, region);
+}
 function validRequest$2(r) {
 	return r?.action === "session.start" && object$2(r.target) && Object.keys(r.target).length === 2 && text$3(r.target.host, 256) && text$3(r.target.workspace, 256) && object$2(r.params) && Object.keys(r.params).every((k) => [
 		"agent",
@@ -54331,7 +54496,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 		saved.workspace = "";
 	}
 	let operation = null, busy = false, submission = null, refreshing = null, readFailed = false;
-	let workspaces = [], discovery = 0, discovering = false, discoveredHost = "";
+	let workspaces = [], discovery = 0, discovering = false, discoveredHost = "", ownedDiscovery = 0;
 	const current = () => {
 		try {
 			guard();
@@ -54433,7 +54598,12 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 	}
 	const reload = h("button", {
 		class: "secondary",
-		onclick: discover
+		onclick: () => {
+			if (discovering) return;
+			const ticket = discovery;
+			discover();
+			if (discovery !== ticket) ownedDiscovery = discovery;
+		}
 	}, t("start_reload_workspaces"));
 	const accept = (candidate) => {
 		guard();
@@ -54492,6 +54662,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 				update();
 				return;
 			}
+			if (Object.values(inputs).includes(document.activeElement)) apply.focus();
 			busy = true;
 			update();
 			const intent = saved.intent;
@@ -54524,7 +54695,10 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 	}, t("start_apply"));
 	const check = h("button", {
 		class: "secondary",
-		onclick: () => refresh(true).catch(() => {})
+		onclick: () => {
+			if (!current() || busy || refreshing) return;
+			refresh(true).catch(() => {});
+		}
 	}, t("permissions_check"));
 	const another = h("button", {
 		class: "secondary",
@@ -54589,19 +54763,33 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 		"data-session-start": ""
 	}, h("div", { class: "panel" }, h("div", { class: "capture-fields" }, label("host", host), label("start_workspace", workspace)), h("div", { class: "actions" }, reload), discoveryStatus, h("p", { class: "muted" }, t("start_isolation"))), h("div", { class: "panel" }, h("div", { class: "capture-fields" }, label("start_agent", agent), label("start_model", model), label("start_title", title)), models.box, label("start_prompt", prompt), shortcut.box, h("p", { class: "muted" }, t("start_prompt_help"))), h("div", { class: "actions" }, apply, check, another), result, status);
 	function update() {
+		const before = document.activeElement;
 		const fixed = Boolean(saved.intent);
 		for (const el of Object.values(inputs)) el.disabled = busy || fixed;
 		models.update();
 		workspace.disabled ||= discovering || !saved.host;
 		reload.hidden = fixed;
-		reload.disabled = discovering || !observe() || !saved.host;
+		markControl(reload, !observe() || !saved.host, discovering, discovering && ownedDiscovery === discovery);
 		apply.hidden = Boolean(saved.intent?.operation_id || saved.intent?.refused);
 		apply.textContent = t(fixed ? "permissions_retry" : "start_apply");
-		apply.disabled = busy || readFailed || !ready() || !allowed() || (fixed ? !saved.intent.request || !saved.intent.key : !hostAllowed() || discoveredHost !== saved.host || !workspaces.some((w) => w.workspace_id === saved.workspace) || !validRequest$2(request()));
+		markControl(apply, readFailed || !ready() || !allowed() || (fixed ? !saved.intent.request || !saved.intent.key : !hostAllowed() || discoveredHost !== saved.host || !workspaces.some((w) => w.workspace_id === saved.workspace) || !validRequest$2(request())), busy, busy);
 		check.hidden = !saved.intent?.operation_id;
-		check.disabled = busy || Boolean(refreshing);
+		markControl(check, false, busy || Boolean(refreshing), busy);
 		another.hidden = !(terminal$3(operation) || saved.intent?.refused);
-		another.disabled = busy || Boolean(refreshing) || readFailed;
+		markControl(another, readFailed, busy || Boolean(refreshing), false);
+		markRegion(status, [
+			apply,
+			check,
+			another
+		]);
+		markRegion(discoveryStatus, [reload]);
+		const candidate = before === apply ? saved.intent?.operation_id ? check : saved.intent?.refused ? another : null : before === another ? host : null;
+		settleFocus(before, [
+			apply,
+			check,
+			another,
+			reload
+		], candidate, box, before === reload ? discoveryStatus : status);
 		result.replaceChildren();
 		if (!allowed()) result.append(h("p", { class: "muted" }, t("start_unavailable")));
 		if (!fixed) return;

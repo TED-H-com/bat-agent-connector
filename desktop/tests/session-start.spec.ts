@@ -114,3 +114,107 @@ test('host route hints preserve a frozen start and its original key', async ({pa
   await expect(form).toContainText('Start confirmed');
   expect(state.posts).toEqual([original, original]);
 });
+
+// The pressed control is renamed to "Retry original request" before the POST returns.
+const pressed = (control: any, kind: 'direct' | 'discovery') => control.evaluate((el: HTMLButtonElement, kind: string) => {
+  const root = el.closest('[data-session-start]') as HTMLElement;
+  const status = kind === 'discovery'
+    ? [...(el.closest('.panel') as HTMLElement).children].find(node => node.getAttribute('role') === 'status')
+    : [...root.children].find(node => node.getAttribute('role') === 'status');
+  return {focused: document.activeElement === el, ariaDisabled: el.getAttribute('aria-disabled'), disabled: el.disabled, busy: status?.getAttribute('aria-busy') ?? null};
+}, kind);
+const operationReads = (state: {reads: string[]}) => state.reads.filter(path => path === '/operations/'+startOperationId).length;
+
+test('busy: Start with Enter keeps focus while the POST is held', async ({page}) => {
+  const state = await startFixture(page, false, {delayPost: true});
+  const form = await openStart(page); await chooseWorkspace(page);
+  const button = form.locator('button.primary');
+  await button.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => Boolean(state.holdPost)).toBe(true);
+  await expect.poll(() => pressed(button, 'direct')).toEqual({focused: true, ariaDisabled: 'true', disabled: false, busy: 'true'});
+  await page.keyboard.press('Enter');
+  await button.evaluate((el: HTMLButtonElement) => el.click());
+  await expect.poll(() => state.posts.length).toBe(1);
+  state.delayPost = false; state.holdPost();
+  await expect(form.getByRole('button', {name: 'Check original operation'})).toBeFocused();
+  expect(state.posts).toHaveLength(1);
+  await expect(form.locator(':scope > [role="status"]')).not.toHaveAttribute('aria-busy', 'true');
+});
+
+test('busy: the composer shortcut in the prompt moves focus to Start', async ({page}) => {
+  const state = await startFixture(page, false, {delayPost: true});
+  const form = await openStart(page); await chooseWorkspace(page);
+  await prompt(form).focus();
+  await page.keyboard.press('Control+Enter');
+  await expect.poll(() => Boolean(state.holdPost)).toBe(true);
+  await expect.poll(() => pressed(form.locator('button.primary'), 'direct')).toEqual({focused: true, ariaDisabled: 'true', disabled: false, busy: 'true'});
+  expect(state.posts).toHaveLength(1);
+  state.delayPost = false; state.holdPost();
+  await expect(form.getByRole('button', {name: 'Check original operation'})).toBeVisible();
+  expect(state.posts).toHaveLength(1);
+});
+
+test('busy: a refused start moves focus to Start another', async ({page}) => {
+  const state = await startFixture(page, false, {refuse: 'TIER_DISABLED'});
+  const form = await openStart(page); await chooseWorkspace(page);
+  await form.locator('button.primary').focus();
+  await page.keyboard.press('Enter');
+  await expect(form.getByRole('button', {name: 'Prepare another session'})).toBeFocused();
+  expect(state.posts).toHaveLength(1);
+});
+
+test('busy: Start another moves focus to the host select', async ({page}) => {
+  const state = await startFixture(page, false, {refuse: 'TIER_DISABLED'});
+  const form = await openStart(page); await chooseWorkspace(page);
+  await form.locator('button.primary').focus();
+  await page.keyboard.press('Enter');
+  const another = form.getByRole('button', {name: 'Prepare another session'});
+  await expect(another).toBeVisible();
+  await another.focus();
+  await page.keyboard.press('Enter');
+  await expect(form.getByRole('combobox', {name: 'Host', exact: true})).toBeFocused();
+  expect(state.posts).toHaveLength(1);
+});
+
+test('busy: an operation event keeps focus on Check', async ({page}) => {
+  const state = await startFixture(page, false);
+  const form = await openStart(page); await chooseWorkspace(page);
+  await form.locator('button.primary').click();
+  const check = form.getByRole('button', {name: 'Check original operation'});
+  await expect(check).toBeVisible();
+  const before = operationReads(state);
+  await check.focus();
+  state.delayRead = true;
+  state.events.push({seq: 1, resource_type: 'operation', resource_id: startOperationId, kind: 'operation.updated'});
+  await expect.poll(() => Boolean(state.holdRead)).toBe(true);
+  await expect.poll(() => pressed(check, 'direct')).toEqual({focused: true, ariaDisabled: 'true', disabled: false, busy: 'true'});
+  await page.keyboard.press('Enter');
+  await check.evaluate((el: HTMLButtonElement) => el.click());
+  expect(operationReads(state)).toBe(before + 1);
+  state.delayRead = false; state.holdRead();
+  await expect(check).toBeFocused();
+  await expect(check).not.toHaveAttribute('aria-disabled', 'true');
+  expect(operationReads(state)).toBe(before + 1);
+});
+
+test('busy: Reload workspaces keeps focus while discovery is held', async ({page}) => {
+  const state = await startFixture(page, false);
+  const form = await openStart(page);
+  await form.getByRole('combobox', {name: 'Host', exact: true}).selectOption('demo');
+  await expect(form.getByRole('combobox', {name: 'Workspace', exact: true})).toBeEnabled();
+  const workspaces = () => state.reads.filter(path => path.startsWith('/workspaces')).length;
+  const before = workspaces();
+  state.delayHost = 'demo';
+  const reload = form.getByRole('button', {name: 'Reload workspaces', exact: true});
+  await reload.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => Boolean(state.holdDiscovery)).toBe(true);
+  await expect.poll(() => pressed(reload, 'discovery')).toEqual({focused: true, ariaDisabled: 'true', disabled: false, busy: 'true'});
+  await page.keyboard.press('Enter');
+  expect(workspaces()).toBe(before + 1);
+  state.delayHost = null; state.holdDiscovery();
+  await expect(reload).toBeFocused();
+  expect(workspaces()).toBe(before + 1);
+  await expect(form.locator('.panel').first().locator(':scope > [role="status"]')).not.toHaveAttribute('aria-busy', 'true');
+});
