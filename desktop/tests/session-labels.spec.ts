@@ -220,6 +220,9 @@ test('busy: Check keeps focus while the label read is held', async ({page}) => {
   await panel.getByRole('button', {name: 'Save labels', exact: true}).click();
   const check = panel.getByRole('button', {name: 'Check original operation'});
   await expect(check).toBeVisible();
+  // The receipt reveals Check before the initial read finishes. Wait until that
+  // request releases it, then hold only the keyboard-triggered read below.
+  await expect(check).not.toHaveAttribute('aria-disabled', 'true');
   const before = operationReads(state);
   await check.focus();
   state.delayRead = true;
