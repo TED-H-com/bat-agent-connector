@@ -545,7 +545,7 @@ class TaskDaemon:
         if method == "project_get":
             return session_reading.decorate(self.journal, principal,
                 work_items.project_get(self.journal.db, str(params.get("project_id")),
-                                       include_archived=bool(params.get("include_archived")), ops=self.ops))
+                    include_archived=bool(params.get("include_archived")), ops=self.ops, principal=principal))
         if method == "work_items_list":
             from .dashboard_sync import identity
             pending = params.get("pending")

@@ -69,6 +69,34 @@ async def attach(ops, principal, operation):
     return {**operation, "loop": await _project(ops, principal, operation, parent)}
 
 
+def execution_work_identity(ops, principal, item):
+    """Read-only association for a visible, proven Work handoff in a project list.
+
+    Reuse loop lineage and visibility checks without collecting Result/actions.
+    This association grants no control and does not match names or checkout paths.
+    """
+    if item.get("kind") != "execution" or not _operation_visible(ops, principal, item.get("id")):
+        return None
+    operation = ops.get(item["id"], steps=False)
+    kind, parent_id = _classify(ops.db, operation)
+    if kind != "proven":
+        return None
+    parent = ops._row(parent_id)
+    if parent is None or parent.get("action") != "work.start" or not _parent_visible(ops, principal, parent):
+        return None
+    attempt = _attempt_row(ops.db, parent_id)
+    if not attempt or not _work_visible(ops, principal, attempt["workspace_id"], attempt["work_item_id"]):
+        return None
+    view, unreadable, dropped = _attempt_view(ops, principal, operation, attempt)
+    if (not view or unreadable or dropped or view.get("stage") != "started"
+            or view.get("execution_operation_id") != operation["operation_id"]):
+        return None
+    pair = _session_pair(view.get("session"))
+    if pair != _session_pair(item) or pair is None or not _session_source_visible(ops.db, principal, *pair):
+        return None
+    return {key: attempt[key] for key in ("workspace_id", "work_item_id", "attempt_id")}
+
+
 def _classify(db, operation):
     from .pm_work_start import LINK, installed
 

@@ -42,6 +42,21 @@ allows. The list moves into the existing keyboard-accessible mobile drawer at
 less than 1000px. No second catalog or search cache is created. The original
 workspace binding, partial-source and permission rules still select its rows.
 
+The preview project list joins an execution to its existing Work only when the
+project response supplies a caller-visible `work_identity`. This projection checks
+both recorded start-child links, the Attempt, the exact session and source visibility;
+titles, paths and ordinary user-added associations cannot establish it. It reads the
+existing journal without collecting Result/actions or creating progress records.
+HTTP and MCP/RPC return the same optional association. It grants no control.
+
+A joined Work has one row, retains its canonical title and pending decision state,
+and carries the selected Attempt's existing session link (otherwise the newest
+visible execution in this bounded project read). Old execution links still select
+the same Work. Attempts and source records remain available through their original
+views and links. Unproven, unavailable or unloaded Work associations stay separate,
+including sources with identical titles. A fresh withdrawal removes the join;
+keyboard focus stays on the still-visible Work when its link changes.
+
 ### Classic → preview location
 
 | Classic destination | Route | Preview location | Reached via |

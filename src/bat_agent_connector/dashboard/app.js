@@ -49832,24 +49832,72 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 		item.kind,
 		item.id
 	].map(encodeURIComponent).join("/")}`, item.title || item.branch || (item.action ? actionLabel$1(item.action) : item.id), workActivity(item), item.reading);
+	const selectedWork = () => {
+		return workSessionContext(new URLSearchParams(selected.split("?")[1] || ""))?.workItemId || /^#\/item\/(wi_[0-9a-f]{20})(?:[/?]|$)/.exec(selected)?.[1] || null;
+	};
+	const selectedExecution = () => /^#\/work\/[^/]+\/execution\/(op_[0-9a-f]{32})(?:[/?]|$)/.exec(selected)?.[1];
+	const selectedRow = (node) => node.getAttribute("href") === selected || node.dataset.workItem && node.dataset.workItem === selectedWork() || (node.dataset.workOperations || "").split(",").includes(selectedExecution());
+	const workIdentity = (item) => {
+		const value = item.work_identity;
+		if (!workbenchEnabled() || item.kind !== "execution" || item.id !== item.operation_id || !value || typeof item.host !== "string" || !item.host || typeof item.session_id !== "string" || !item.session_id) return null;
+		const context = workSessionContext(new URLSearchParams({
+			workspace: value.workspace_id,
+			work: value.work_item_id,
+			attempt: value.attempt_id
+		}));
+		if (!context || pmWorkspace && !globalTree && context.workspaceId !== pmWorkspace) return null;
+		return context;
+	};
 	const render = () => {
 		if (disposed) return;
 		createProject.hidden = !catalogKnown || !caps()?.scopes?.includes("manage") || caps()?.actions?.find((row) => row.action === "project.create")?.allowed === false;
 		const focus = tree.contains(document.activeElement) ? document.activeElement?.dataset.treeKey : null;
+		const focusWork = tree.contains(document.activeElement) ? document.activeElement?.dataset.workItem : null;
 		const query = search.value.trim().toLocaleLowerCase();
 		const matches = (text) => !query || String(text || "").toLocaleLowerCase().includes(query);
-		const itemNodes = (items) => (items || []).flatMap((item) => {
-			const children = itemNodes(item.children);
-			if (!matches(item.title) && !children.length) return [];
-			return [h("li", {}, link(`#/item/${encodeURIComponent(item.work_item_id)}`, item.title, {
+		const itemNodes = (items, executions) => (items || []).flatMap((item) => {
+			const linked = executions.get(item.work_item_id) || [];
+			const requested = workSessionContext(new URLSearchParams(selected.split("?")[1] || ""));
+			const current = linked.find((row) => row.context.attemptId === requested?.attemptId || row.source.id === selectedExecution()) || linked[0];
+			const children = itemNodes(item.children, executions);
+			if (!(matches(item.title) || linked.some(({ source }) => matches(source.title || source.branch || source.id))) && !children.length) return [];
+			const href = current ? sessionHref$1({
+				host: current.source.host,
+				sessionId: current.source.session_id,
+				...current.context
+			}) : `#/item/${encodeURIComponent(item.work_item_id)}`;
+			const itemActivity = {
 				key: "wi_state_" + (item.completion?.display_state || item.state),
 				tone: item.completion?.pending ? "stale" : ""
-			}), children.length ? h("ul", {}, ...children) : null)];
+			};
+			const row = link(href, item.title, current && !item.completion?.pending ? workActivity(current.source) : itemActivity, current?.source.reading);
+			row.dataset.workItem = item.work_item_id;
+			row.dataset.workOperations = linked.map(({ source }) => source.id).join(",");
+			if (selectedRow(row)) row.setAttribute("aria-current", "page");
+			return [h("li", {}, row, children.length ? h("ul", {}, ...children) : null)];
 		});
 		const projectNodes = (items) => items.flatMap((project) => {
 			const id = project.project_id, data = projects.get(id), children = projectNodes(project.children || []);
-			const work = (data?.work || []).filter((item) => matches(item.title || item.branch || item.action || item.id));
-			const items = itemNodes(data?.work_items);
+			const ids = new Set(), executions = new Map();
+			const collect = (rows) => {
+				for (const row of rows || []) {
+					ids.add(row.work_item_id);
+					collect(row.children);
+				}
+			};
+			collect(data?.work_items);
+			const work = (data?.work || []).filter((source) => {
+				const context = workIdentity(source);
+				if (!context || !ids.has(context.workItemId)) return true;
+				const rows = executions.get(context.workItemId) || [];
+				rows.push({
+					source,
+					context
+				});
+				executions.set(context.workItemId, rows);
+				return false;
+			}).filter((item) => matches(item.title || item.branch || item.action || item.id));
+			const items = itemNodes(data?.work_items, executions);
 			if (!matches(project.name) && !children.length && !work.length && !items.length) return [];
 			const open = expanded.has(id) || Boolean(query);
 			return [h("li", {}, h("div", { class: "workspace-project-row" }, h("button", {
@@ -49875,7 +49923,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 		bindingNote.hidden = !bound || !bindingPartial;
 		tree.dataset.bindingState = bound ? bindingKnown ? roots.length ? "available" : "empty" : "unknown" : "global";
 		if (!nodes.length && (query || !bound && catalogKnown)) tree.append(h("p", { class: "muted workspace-tree-hint" }, t(bound && !bindingKnown ? "ui_work_links_unavailable" : !bound && !catalogKnown ? "ui_work_unavailable" : query ? "workspace_no_match" : "no_projects")));
-		if (focus) [...tree.querySelectorAll("[data-tree-key]")].find((node) => node.dataset.treeKey === focus)?.focus({ preventScroll: true });
+		if (focus) ([...tree.querySelectorAll("[data-tree-key]")].find((node) => node.dataset.treeKey === focus) || [...tree.querySelectorAll("[data-work-item]")].find((node) => focusWork && node.dataset.workItem === focusWork))?.focus({ preventScroll: true });
 		filterSessions();
 	};
 	const filterSessions = () => {
@@ -50114,7 +50162,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 				...sessionTree.querySelectorAll("a")
 			])) {
 				if (node.closest(".wc-daily")) continue;
-				if (node.getAttribute("href") === hash) node.setAttribute("aria-current", "page");
+				if (selectedRow(node)) node.setAttribute("aria-current", "page");
 				else node.removeAttribute("aria-current");
 			}
 		},

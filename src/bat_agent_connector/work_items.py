@@ -1028,7 +1028,7 @@ def _project_path(db, project: dict) -> list[dict]:
     return path
 
 
-def project_get(db, project_id: str, *, include_archived: bool = False, ops=None) -> dict:
+def project_get(db, project_id: str, *, include_archived: bool = False, ops=None, principal=None) -> dict:
     """One project with its work item tree (display order) and its sub-projects."""
     if not isinstance(project_id, str) or not PROJECT_ID.fullmatch(project_id):
         raise _bad("PROJECT_NOT_FOUND", "no such project", 404)
@@ -1043,6 +1043,12 @@ def project_get(db, project_id: str, *, include_archived: bool = False, ops=None
     if ops is not None:
         from . import execution_sources, integration
         out["work"] = [integration.candidate_evidence(ops, item) for item in execution_sources.for_project(ops, project)]
+        if principal is not None:
+            from .pm_operation_loop import execution_work_identity
+            for item in out["work"]:
+                identity = execution_work_identity(ops, principal, item)
+                if identity is not None:
+                    item["work_identity"] = identity
     if include_archived:
         out["archived"] = [_public(_item(r)) for r in db.execute(
             """SELECT * FROM work_items WHERE project_id=? AND archived_at IS NOT NULL ORDER BY archived_at DESC

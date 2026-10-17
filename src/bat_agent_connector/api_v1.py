@@ -1675,7 +1675,7 @@ class ApiV1:
     async def project(self, query, prj, principal, **_):
         from .session_reading import decorate
         return 200, decorate(self.daemon.journal, principal, work_items.project_get(self.daemon.journal.db, prj,
-                                           include_archived=bool(self._bool(query, "include_archived")), ops=self.daemon.ops))
+            include_archived=bool(self._bool(query, "include_archived")), ops=self.daemon.ops, principal=principal))
 
     async def work_items(self, query, principal, **_):
         return 200, work_items.work_items_list(

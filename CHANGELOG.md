@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Workbench project navigation shows a Work and its proven execution as one row,
+  preserving its exact Attempt, pending decisions, keyboard focus and older links.
+  Same-name or unproven sources remain separate; the association grants no control.
+
 - After a successful Adopt and start, the submitting tab opens the first
   selected Work's exact live Attempt automatically. Leaving that Work cancels
   the navigation; partial, unknown or withdrawn results retain their recovery

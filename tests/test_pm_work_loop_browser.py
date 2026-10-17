@@ -212,6 +212,7 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             assert peer["attempt_id"] != original["attempt_id"] and peer_work != original["work_item_id"]
             return {**peer, "candidate": sha, "session_id": sid, "operation_id": started["operation_id"],
                 "create_operation_id": created["operation_id"], "host": "h1",
+                "execution_operation_id": result["children"]["handoff"],
                 "work_hash": via_mcp["links"]["work_item_hash"]}
         finally:
             await fleet.close()
@@ -255,7 +256,7 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 "agentPreset": "claude-code", "sdkSessionId": "sdk-work-loop", "model": "claude-sonnet-4-5"})
             _set_turn_messages(mock, sid, marker, streaming=True, assistant_text="Working on the login repair.")
             await w["d"].inventory._refresh_scheduled("h1")
-            await send({"ready": True, "attempt": att["attempt_id"]})
+            await send({"ready": True, "attempt": att["attempt_id"], "execution": result["children"]["handoff"]})
             closed = await receive("closed")
             queued_id = closed["operation_id"]
             await wait_status(queued_id, "waiting_external")

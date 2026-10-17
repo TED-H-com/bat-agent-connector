@@ -95,6 +95,9 @@ try {
     await expect(page).toHaveURL(new RegExp(`/session/.+[?&]work=${f.work}&attempt=${active.attempt}`));
   } else await page.locator('[data-work-start-item]').click();
   await expect(page.locator('[data-follow-up-input]')).toBeVisible();
+  const navigation = () => page.locator('.workspace-tree-scroll > .workspace-tree');
+  await expect(navigation().locator(`[data-work-item="${f.work}"]`)).toHaveAttribute('href', new RegExp(`work=${f.work}&attempt=${active.attempt}$`));
+  await expect(navigation().locator(`a[href$="/execution/${active.execution}"]`)).toHaveCount(0);
   if (f.mode === 'adopt') await shot('01-started');
   const workUrl = page.url();
   assert.equal(new URL(workUrl).hash.includes(active.attempt), true);
@@ -162,6 +165,8 @@ try {
     await expect.poll(() => results.get(peer.attempt_id)?.changes?.fixed_result_commit?.commit_sha).toBe(peer.candidate);
     assert.equal(results.get(peer.attempt_id).identity.work_item_id, peer.work_item_id);
     await expect(page.locator('[data-work-publish-submit]')).toHaveCount(0);
+    await expect(navigation().locator(`[data-work-item="${peer.work_item_id}"]`)).toHaveAttribute('href', new RegExp(`work=${peer.work_item_id}&attempt=${peer.attempt_id}$`));
+    await expect(navigation().locator(`a[href$="/execution/${peer.execution_operation_id}"]`)).toHaveCount(0);
     await shot('05-mcp-peer-result');
     await page.goto(workUrl);
     await expect(page.locator('[data-follow-up-input]')).toHaveValue(draft);
