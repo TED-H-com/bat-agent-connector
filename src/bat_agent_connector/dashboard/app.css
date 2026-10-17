@@ -2787,7 +2787,11 @@ body.pm-mode #main { padding: 0; }
 .pm-work-publish-fact { margin: 0; overflow-wrap: anywhere; }
 .pm-work-publish-public { margin: 0; }
 .pm-work-publish label { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
-.pm-work-publish label.pm-work-publish-choice { flex-direction: row; align-items: flex-start; }
+.pm-work-publish label.pm-work-publish-choice { flex-direction: row; align-items: flex-start; gap: var(--space-2); min-height: 44px; }
+.pm-work-publish label.pm-work-publish-choice input[type="radio"] {
+  flex: 0 0 var(--space-4); width: var(--space-4); height: var(--space-4);
+  min-height: 0; padding: 0; margin: var(--space-1) 0;
+}
 .pm-work-publish-draft { display: flex; flex-direction: column; gap: var(--space-2); }
 .pm-work-publish input[type="text"],
 .pm-work-publish textarea {
@@ -2799,7 +2803,7 @@ body.pm-mode #main { padding: 0; }
 @media (max-width: 800px) {
   .pm-work-publish .ui-button { min-height: 44px; }
   .pm-work-publish input[type="text"],
-  .pm-work-publish textarea { font-size: 16px; }
+  .pm-work-publish textarea { font-size: var(--fs-input-mobile); }
 }
 
 /* Session workspace. Scoped so other views keep their own layout. */

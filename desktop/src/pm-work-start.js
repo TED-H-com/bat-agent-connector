@@ -262,11 +262,12 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     // started with a session: show "Open live output" (use sessionHref with from: 'board') and "Open work" (#/item/<wid>)
     if ((attempt.stage === 'started' || attempt.status === 'succeeded') && attempt.session?.session_id) {
       const liveLink = h('a', {
-        href: sessionHref({host: attempt.session.host, sessionId: attempt.session.session_id, from: 'board'}),
+        href: sessionHref({host: attempt.session.host, sessionId: attempt.session.session_id, from: 'board',
+          workspaceId, workItemId: activeWorkId, attemptId: attempt.attempt_id}),
         'data-work-start-session': '',
       }, t('wst_open_live_output'));
       const workLink = h('a', {
-        href: `#/item/${encodeURIComponent(activeCard.work_item_id)}`,
+        href: `#/item/${encodeURIComponent(activeCard.work_item_id)}/${encodeURIComponent(attempt.session.host)}/${encodeURIComponent(attempt.session.session_id)}?${new URLSearchParams({workspace: workspaceId, work: activeWorkId, attempt: attempt.attempt_id})}`,
         'data-work-start-item': '',
       }, t('wst_open_work'));
       if (links.childNodes.length > 0) links.append(' · ');

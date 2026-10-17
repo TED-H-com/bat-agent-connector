@@ -58,9 +58,33 @@ var projectViews$2 = new Set([
 	"agents",
 	"board"
 ]);
-function sessionHref$1({ host, sessionId, from = "" }) {
-	const query = projectViews$2.has(from) ? "?" + new URLSearchParams({ from }) : "";
-	return `#/session/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}${query}`;
+function workSessionContext(params) {
+	const fields = {
+		workspaceId: "workspace",
+		workItemId: "work",
+		attemptId: "attempt"
+	};
+	const patterns = {
+		workspaceId: /^ws_[0-9a-f]{32}$/,
+		workItemId: /^wi_[0-9a-f]{20}$/,
+		attemptId: /^att_[0-9a-f]{32}$/
+	};
+	const context = {};
+	for (const [key, name] of Object.entries(fields)) {
+		if (params.getAll(name).length !== 1 || !patterns[key].test(params.get(name))) return null;
+		context[key] = params.get(name);
+	}
+	return context;
+}
+function sessionHref$1({ host, sessionId, from = "", workspaceId, workItemId, attemptId }) {
+	const query = new URLSearchParams(projectViews$2.has(from) ? { from } : {});
+	const context = new URLSearchParams({
+		workspace: workspaceId || "",
+		work: workItemId || "",
+		attempt: attemptId || ""
+	});
+	if (workSessionContext(context)) for (const [key, value] of context) query.set(key, value);
+	return `#/session/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}${query.size ? "?" + query : ""}`;
 }
 function sessionOrigin(value) {
 	if (typeof value !== "string" || value.length > 4096) return "";
@@ -70,13 +94,25 @@ function sessionOrigin(value) {
 		const host = decodeURIComponent(match[1]), sessionId = decodeURIComponent(match[2]);
 		if (!host || !sessionId || /[\u0000-\u001f\u007f]/.test(host + sessionId)) return "";
 		const query = new URLSearchParams(match[3] || "");
-		if ([...query.keys()].some((key) => key !== "from") || query.getAll("from").length > 1) return "";
+		if ([...query.keys()].some((key) => ![
+			"from",
+			"workspace",
+			"work",
+			"attempt"
+		].includes(key)) || query.getAll("from").length > 1) return "";
 		const from = query.get("from") || "";
 		if (from && !projectViews$2.has(from)) return "";
+		const context = workSessionContext(query);
+		if ([
+			"workspace",
+			"work",
+			"attempt"
+		].some((key) => query.has(key)) && !context) return "";
 		return sessionHref$1({
 			host,
 			sessionId,
-			from
+			from,
+			...context
 		});
 	} catch {
 		return "";
@@ -8472,9 +8508,9 @@ var workPublishStrings = {
 		wpub_base_sha: "基底 commit",
 		wpub_base_from_start: "兩者都來自這次嘗試的開始。發布時會確認這個分支仍指向這個 commit。",
 		wpub_draft_group: "是否為草稿",
-		wpub_draft_help: "請選擇一項。這份成果沒有帶入預設值。",
+		wpub_draft_help: "選擇先保留為草稿，或開放審閱。",
 		wpub_draft_yes: "建立為草稿 PR",
-		wpub_draft_yes_help: "草稿還不能審閱。",
+		wpub_draft_yes_help: "先保留為草稿。",
 		wpub_draft_no: "開放審閱",
 		wpub_draft_no_help: "GitHub 會把它顯示為可審閱。合併與部署是另外的事。",
 		wpub_commit: "固定 commit",
@@ -8503,7 +8539,7 @@ var workPublishStrings = {
 		wpub_result_held: "有較新的成果。這筆請求仍對準原來的 commit，不會改指到較新的成果。",
 		wpub_blocked_not_controller: "只有原本這次嘗試的控制者可以發布。你可以閱讀這份成果。這個畫面不會對工作階段送訊息。",
 		wpub_blocked_not_writer: "發布需要能在這個工作區寫入的成員。這個畫面不能變更成員資格。",
-		wpub_blocked_scope: "發布需要同時具備 observe、manage 與 integrate。這個畫面沒有切換這些權限的開關。",
+		wpub_blocked_scope: "你需要這項工作的檢視、管理與整合權限，才能發布。",
 		wpub_blocked_reconcile: "這份成果還有一筆未結束的操作。請等待。不要發布，也不要清掉它的鎖。",
 		wpub_blocked_pr_exists: "這個 commit 已經有記錄到的 PR。請打開該操作。不要再發布一筆。",
 		wpub_blocked_lifecycle: "這個工作區已停止新工作。不要發布。重新開啟在別的地方。",
@@ -8530,9 +8566,9 @@ var workPublishStrings = {
 		wpub_base_sha: "Base commit",
 		wpub_base_from_start: "Both come from the start of this attempt. Publishing checks that this branch still points at this commit.",
 		wpub_draft_group: "Draft",
-		wpub_draft_help: "Choose one. Nothing on this result selects it for you.",
+		wpub_draft_help: "Choose whether this pull request is ready for review.",
 		wpub_draft_yes: "Draft pull request",
-		wpub_draft_yes_help: "A draft is not ready for review.",
+		wpub_draft_yes_help: "Keep this as a draft.",
 		wpub_draft_no: "Ready for review",
 		wpub_draft_no_help: "GitHub will show it as ready for review. Merging and deploying are separate.",
 		wpub_commit: "Fixed commit",
@@ -8561,7 +8597,7 @@ var workPublishStrings = {
 		wpub_result_held: "A newer result arrived. This request stays on the original commit. It is not pointed at the newer result.",
 		wpub_blocked_not_controller: "Only the original attempt controller can publish. You can read this result. This screen does not message the session.",
 		wpub_blocked_not_writer: "Publishing needs a member who can write in this workspace. This screen cannot change membership.",
-		wpub_blocked_scope: "Publishing needs observe, manage, and integrate together. This screen has no switch for those scopes.",
+		wpub_blocked_scope: "You need permission to view, manage, and integrate this work before publishing.",
 		wpub_blocked_reconcile: "An earlier operation for this result is still open. Wait for it. Do not publish, and do not clear its lock.",
 		wpub_blocked_pr_exists: "A pull request for this commit is already recorded. Open that operation. Do not publish another.",
 		wpub_blocked_lifecycle: "This workspace has stopped new work. Do not publish. Reopening is elsewhere.",
@@ -15297,6 +15333,1668 @@ function reasonText$1(code) {
 	const token = labelSegment(code);
 	if (!token) return "";
 	return reasonLabel(t, token);
+}
+//#endregion
+//#region src/work-session-context.js
+async function readWorkSessionContext({ api, guard, workspaceId, workItemId, attemptId, host, sessionId, missingMessage }) {
+	const [record, data] = await Promise.all([api("GET", `/work-items/${encodeURIComponent(workItemId)}`), api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}`)]);
+	guard();
+	const attempt = data?.attempt;
+	const linked = record?.links?.some((link) => {
+		const target = link.target?.found ? link.kind === "session" ? link.target : link.kind === "operation" ? link.target.session : null : null;
+		return target?.host === host && target?.session_id === sessionId;
+	});
+	if (record?.work_item?.work_item_id !== workItemId || !linked || data?.workspace_id !== workspaceId || attempt?.workspace_id !== workspaceId || attempt?.work_item_id !== workItemId || attempt?.attempt_id !== attemptId || attempt?.session?.host !== host || attempt?.session?.session_id !== sessionId) throw new ApiError(404, "WORK_CONTEXT_MISMATCH", missingMessage);
+	return {
+		record,
+		attempt
+	};
+}
+//#endregion
+//#region src/pm-work-publish.js
+var ACTION$2 = "github.pr.publish";
+var SHA40 = /^[0-9a-f]{40}$/;
+var OP_ID = /^op_[0-9a-f]{32}$/;
+var TARGET_KEYS = [
+	"workspace_id",
+	"repository",
+	"host",
+	"source_operation_id"
+];
+var PARAM_NAMES = [
+	"candidate_sha",
+	"base_ref",
+	"public_title",
+	"public_body",
+	"draft"
+];
+var BLOCKED_KEYS = {
+	not_controller: "wpub_blocked_not_controller",
+	not_writer_member: "wpub_blocked_not_writer",
+	missing_scope: "wpub_blocked_scope",
+	WAIT_ORIGINAL_OPERATION_RECONCILE: "wpub_blocked_reconcile",
+	pull_request_exists: "wpub_blocked_pr_exists",
+	lifecycle_stopped: "wpub_blocked_lifecycle",
+	github_not_configured: "wpub_blocked_github",
+	publication_source_incomplete: "wpub_blocked_source"
+};
+var HOST_CODES = {
+	PR_SOURCE_MOVED: "wpub_source_moved",
+	PR_BASE_MOVED: "wpub_base_moved",
+	PR_SOURCE_HISTORY_CHANGED: "wpub_history_changed",
+	PR_BASE_NOT_ANCESTOR: "wpub_base_not_ancestor",
+	PR_EMPTY_CHANGE: "wpub_empty_change",
+	PR_PIN_CHANGED: "wpub_pin_changed",
+	PR_RECEIPT_EXISTS: "wpub_receipt_exists",
+	PR_BRANCH_EXISTS: "wpub_branch_exists",
+	PR_BRANCH_CREATE_REFUSED: "wpub_branch_refused",
+	PR_CHANGE_LIMIT: "wpub_change_limit",
+	PR_CREATE_REFUSED: "pm_terminal",
+	PR_PATH_UNREADABLE: "pm_terminal",
+	PR_PUBLISHED_HEAD_CHANGED: "pm_terminal",
+	PR_RECEIPT_UNAVAILABLE: "pm_terminal",
+	PR_PROVIDER_TARGET_CHANGED: "wpub_source_changed",
+	PR_CREATED_TARGET_CHANGED: "wpub_created_target_changed",
+	PR_FOREIGN_CONTROLLER: "wpub_blocked_not_controller",
+	INTERNAL: "error_generic",
+	PR_AUTHORITY_UNAVAILABLE: "wpub_authority"
+};
+var SETUP_CODES = new Set([
+	"GITHUB_NOT_CONFIGURED",
+	"REPO_NOT_CONFIGURED",
+	"INTEGRATION_DISABLED",
+	"UNKNOWN_HOST",
+	"TIER_DISABLED",
+	"NO_MANAGED_ROOT",
+	"GIT_RUNNER_UNAVAILABLE"
+]);
+var QUIET_CODES = new Set([
+	"TIMEOUT",
+	"NETWORK_ERROR",
+	"CENTRAL_OFFLINE",
+	"CONNECTION_CHANGED"
+]);
+var radioSerial = 0;
+var text$5 = (value) => typeof value === "string" && value.length > 0;
+var sha$6 = (value) => typeof value === "string" && SHA40.test(value);
+var bytes = (value) => new TextEncoder().encode(value).length;
+function exactTarget$1(target) {
+	if (!target || typeof target !== "object" || Array.isArray(target)) return null;
+	if (Object.keys(target).length !== TARGET_KEYS.length) return null;
+	if (!TARGET_KEYS.every((key) => Object.hasOwn(target, key) && text$5(target[key]))) return null;
+	if (!/^ws_[0-9a-f]{32}$/.test(target.workspace_id) || !OP_ID.test(target.source_operation_id)) return null;
+	return {
+		workspace_id: target.workspace_id,
+		repository: target.repository,
+		host: target.host,
+		source_operation_id: target.source_operation_id
+	};
+}
+function exactPreconditions(value) {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+	const keys = Object.keys(value).sort();
+	if (keys.length !== 2 || keys[0] !== "expected_base_sha" || keys[1] !== "repository_id") return null;
+	const id = value.repository_id;
+	if (typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0) return null;
+	if (!sha$6(value.expected_base_sha)) return null;
+	return {
+		repository_id: id,
+		expected_base_sha: value.expected_base_sha
+	};
+}
+function actionRows(list) {
+	if (!Array.isArray(list)) return [];
+	return list.filter((row) => row && row.action === ACTION$2);
+}
+function paramsReady(entry) {
+	return Array.isArray(entry?.required_params) && PARAM_NAMES.every((name) => entry.required_params.includes(name)) && entry.required_params.every((name) => PARAM_NAMES.includes(name));
+}
+function classifyPublicationEntry(envelope) {
+	const blocked = actionRows(envelope?.blocked_actions);
+	const allowed = actionRows(envelope?.next_allowed_actions);
+	if (blocked.length) {
+		const reasons = blocked.map((row) => typeof row.reason === "string" ? row.reason : "");
+		return {
+			mode: "blocked",
+			gap: "",
+			reason: new Set(reasons).size === 1 ? reasons[0] : "",
+			entry: null
+		};
+	}
+	if (!allowed.length) return {
+		mode: "absent",
+		gap: "",
+		reason: "",
+		entry: null
+	};
+	if (allowed.length > 1) return {
+		mode: "incomplete",
+		gap: "target",
+		reason: "",
+		entry: null
+	};
+	const row = allowed[0];
+	if (row.allowed === false || row.kind != null && row.kind !== "action") return {
+		mode: "incomplete",
+		gap: "target",
+		reason: "",
+		entry: null
+	};
+	const target = exactTarget$1(row.target);
+	const prefilled = row.prefilled_params && typeof row.prefilled_params === "object" && !Array.isArray(row.prefilled_params) ? row.prefilled_params : {};
+	const candidate = sha$6(prefilled.candidate_sha) ? prefilled.candidate_sha : "";
+	const baseRef = text$5(prefilled.base_ref) ? prefilled.base_ref : "";
+	const preconditions = exactPreconditions(row.preconditions);
+	const scopes = Array.isArray(row.required_scopes) ? row.required_scopes.filter((item) => typeof item === "string") : [];
+	if (!target || envelope?.workspace_id && target.workspace_id !== envelope.workspace_id || envelope?.identity?.execution_operation_id && target.source_operation_id !== envelope.identity.execution_operation_id) return {
+		mode: "incomplete",
+		gap: "target",
+		reason: "",
+		entry: null
+	};
+	const entry = {
+		target,
+		candidate,
+		baseRef,
+		preconditions,
+		scopes
+	};
+	if (!candidate) return {
+		mode: "incomplete",
+		gap: "commit",
+		reason: "",
+		entry
+	};
+	if (!baseRef || !preconditions || !paramsReady(row)) return {
+		mode: "incomplete",
+		gap: "preconditions",
+		reason: "",
+		entry
+	};
+	return {
+		mode: "ready",
+		gap: "",
+		reason: "",
+		entry
+	};
+}
+function identityOf(entry) {
+	if (!entry?.target) return "";
+	return JSON.stringify({
+		target: entry.target,
+		candidate_sha: entry.candidate || ""
+	});
+}
+function readCaps(caps) {
+	return typeof caps === "function" ? caps() : caps;
+}
+function catalogAllows(caps, entry) {
+	const current = readCaps(caps);
+	const scopes = Array.isArray(current?.scopes) ? current.scopes : [];
+	if (!(entry?.scopes?.length ? entry.scopes : [
+		"observe",
+		"manage",
+		"integrate"
+	]).every((scope) => scopes.includes(scope))) return false;
+	if (!scopes.includes("integrate")) return false;
+	return Boolean(current?.actions?.some((row) => row.action === ACTION$2 && row.allowed === true));
+}
+function receiptSha(envelope) {
+	const rows = envelope?.delivery?.pull_requests;
+	if (!Array.isArray(rows) || !rows.length) return "";
+	const last = rows[rows.length - 1];
+	return sha$6(last?.candidate_sha) ? last.candidate_sha : "";
+}
+function sourceSentence(t, envelope, candidate) {
+	const fixed = envelope?.changes?.fixed_result_commit;
+	if (fixed?.commit_sha === candidate) {
+		if (fixed.source_kind === "turn_end_observation") return t("wres_source_turn_end_observation");
+		if (fixed.source_kind === "execution_verification" || fixed.source_kind === "session_verification") return t("wres_source_verified_commit");
+		if (fixed.source_kind === "integration") return t("wres_source_integration_commit");
+	}
+	const receipt = receiptSha(envelope);
+	if (receipt && receipt === candidate && receipt !== fixed?.commit_sha) return t("wpub_commit_from_receipt");
+	return t("wpub_commit_from_result");
+}
+function operationId$3(value) {
+	return typeof value === "string" && OP_ID.test(value) ? value : "";
+}
+function publicationPrLine(h, t, pr) {
+	if (!pr || typeof pr !== "object") return null;
+	const opId = operationId$3(pr.publication_operation_id);
+	const number = Number.isSafeInteger(pr.pull_number) ? pr.pull_number : null;
+	const repo = text$5(pr.repository) ? pr.repository : "";
+	const label = number != null && repo ? `PR #${number} · ${repo}` : "";
+	const item = h("li", {});
+	if (opId) {
+		item.append(h("a", {
+			href: `#/op/${encodeURIComponent(opId)}`,
+			"data-work-publish-pr": opId
+		}, label || t("pm_operation")));
+		if (pr.target_verified !== true) item.append(" ", h("span", { "data-work-publish-unverified": "" }, t("wpub_pr_unverified")));
+	} else if (label) item.append(h("span", {}, label));
+	else return null;
+	if (pr.requirement_acceptance === "not_evaluated_by_publication") item.append(" ", h("span", { "data-work-publish-not-accepted": "" }, t("wpub_pr_not_accepted")));
+	return item;
+}
+function publicationDeliveryLine(h, t, pr, envelope, attempt) {
+	if (!operationId$3(pr?.publication_operation_id)) return null;
+	const host = text$5(attempt?.session?.host) ? attempt.session.host : text$5(attempt?.native_session?.host) ? attempt.native_session.host : "";
+	const source = text$5(pr.child_operation_id) ? pr.child_operation_id : text$5(envelope?.identity?.execution_operation_id) ? envelope.identity.execution_operation_id : "";
+	const repo = text$5(pr.repository) ? pr.repository : "";
+	if (!host || !source || !repo) return null;
+	return h("p", { "data-work-publish-delivery": "" }, h("a", { href: `#/delivery/${encodeURIComponent(host)}/execution/${encodeURIComponent(source)}/${encodeURIComponent(repo)}` }, t("nav_delivery")), " ", t("wpub_delivery_link"));
+}
+function gapSentence(t, gap) {
+	if (gap === "commit") return t("wpub_commit_missing");
+	if (gap === "preconditions") return t("wpub_gap_preconditions");
+	return t("wpub_gap_target");
+}
+function createWorkPublish({ h, t, form, namespace, caps, errorBox }) {
+	let editor = null;
+	let root = null;
+	let mode = "absent";
+	let bound = null;
+	let pinned = null;
+	let identity = "";
+	let heldNode = null;
+	let gapNode = null;
+	let radios = null;
+	let facts = null;
+	let shownEnvelope = null;
+	const displayEntry = () => editor?.locked() ? pinned || bound : bound;
+	function dispose() {
+		dropEditor();
+		root = null;
+	}
+	function dropEditor() {
+		editor?.dispose();
+		editor = null;
+		identity = "";
+		bound = null;
+		pinned = null;
+		mode = "absent";
+		radios = null;
+		facts = null;
+		heldNode = null;
+		gapNode = null;
+	}
+	function sync() {
+		editor?.update();
+	}
+	function recheck() {
+		sync();
+		if (editor?.locked()) editor.recheck();
+	}
+	function sentenceFor(error) {
+		const code = error?.code || "";
+		const status = editor?.operation()?.status || "";
+		if (status === "uncertain" || code === "UNCERTAIN") return t("wpub_uncertain");
+		if (code === "PR_CREATED_TARGET_CHANGED") return t("wpub_created_target_changed");
+		if (status === "needs_attention" || code === "UNCERTAIN_UNRESOLVED") return t("wpub_needs_attention");
+		if (HOST_CODES[code]) return t(HOST_CODES[code]);
+		if (SETUP_CODES.has(code)) return t(readCaps(caps)?.managed_installation ? "wpub_blocked_github_managed" : "wpub_blocked_github_plain");
+		if (!code || QUIET_CODES.has(code)) return "";
+		if (status === "failed" || status === "cancelled" || error?.admissionRefused === true || error?.status) return t("error_generic");
+		return "";
+	}
+	function paintFacts() {
+		if (!facts) return;
+		const entry = displayEntry();
+		const candidate = entry?.candidate || "";
+		facts.commit.hidden = !candidate;
+		if (candidate) {
+			facts.commitSha.textContent = candidate.slice(0, 12);
+			facts.commitSha.title = candidate;
+			facts.commitSha.setAttribute("aria-label", `${t("wpub_commit")} ${candidate}`);
+			facts.commitSource.textContent = sourceSentence(t, shownEnvelope, candidate);
+			facts.detailCommit.textContent = candidate;
+		}
+		const showBase = Boolean(entry?.baseRef && entry?.preconditions);
+		facts.base.hidden = !showBase;
+		facts.baseSha.hidden = !showBase;
+		facts.origin.hidden = !showBase;
+		if (showBase) {
+			facts.baseValue.textContent = entry.baseRef;
+			const full = entry.preconditions.expected_base_sha;
+			facts.baseShaValue.textContent = full.slice(0, 12);
+			facts.baseShaValue.title = full;
+			facts.baseShaValue.setAttribute("aria-label", `${t("wpub_base_sha")} ${full}`);
+			facts.detailBase.textContent = full;
+		}
+	}
+	function applyChrome() {
+		if (!editor) return;
+		const submit = editor.box.querySelector("button[type=\"submit\"]");
+		const reset = editor.box.querySelector(".actions > button[type=\"button\"]");
+		if (submit) submit.setAttribute("data-work-publish-submit", "");
+		if (reset) reset.setAttribute("data-work-publish-new-request", "");
+		const locked = Boolean(editor.locked());
+		if (submit && !locked && mode !== "ready") submit.hidden = true;
+		const code = editor.operation()?.error_code || editor.operation()?.error?.code;
+		if (reset && code === "PR_RECEIPT_EXISTS") reset.hidden = true;
+		if (radios) {
+			radios.yes.disabled = locked;
+			radios.no.disabled = locked;
+			const value = radios.mirror.value;
+			radios.yes.checked = value === "true";
+			radios.no.checked = value === "false";
+		}
+		if (gapNode) gapNode.hidden = mode === "ready" || locked;
+		const statusBox = editor.box.querySelector(":scope > [role=\"status\"]");
+		const op = editor.operation();
+		if (statusBox) {
+			let note = statusBox.querySelector("[data-work-publish-admitted]");
+			if (op?.status === "accepted") {
+				if (!note) statusBox.append(h("p", { "data-work-publish-admitted": "" }, t("wpub_admitted_note")));
+			} else if (note) note.remove();
+		}
+		if (locked) pinned = pinned || bound;
+		else pinned = null;
+		paintFacts();
+	}
+	function noteHeld(decision) {
+		if (!heldNode) return;
+		const next = identityOf(decision.entry);
+		const current = displayEntry();
+		const baseMoved = Boolean(decision.entry && current && (decision.entry.baseRef !== current.baseRef || decision.entry.preconditions?.expected_base_sha !== current.preconditions?.expected_base_sha || decision.entry.preconditions?.repository_id !== current.preconditions?.repository_id || decision.entry.target?.repository !== current.target?.repository));
+		heldNode.hidden = Boolean(next && next === identity && !baseMoved);
+	}
+	function chooseDraft(value) {
+		if (!radios || editor?.locked()) return;
+		radios.mirror.value = value;
+		radios.mirror.dispatchEvent(new Event("input", { bubbles: true }));
+		radios.mirror.dispatchEvent(new Event("change", { bubbles: true }));
+	}
+	function mountEditor(decision, envelope) {
+		const entry = decision.entry;
+		bound = entry;
+		mode = decision.mode;
+		shownEnvelope = envelope;
+		identity = identityOf(entry);
+		const candidateKey = entry.candidate || "no-commit";
+		const groupId = `wpub-draft-${++radioSerial}`;
+		const titleInput = h("input", {
+			type: "text",
+			"data-work-publish-title": "",
+			"aria-label": t("wpub_title")
+		});
+		const bodyInput = h("textarea", {
+			"data-work-publish-body": "",
+			"aria-label": t("wpub_body")
+		});
+		const mirror = h("input", {
+			type: "hidden",
+			"data-work-publish-draft-value": ""
+		});
+		titleInput.dataset.pmDefault = "";
+		bodyInput.dataset.pmDefault = "";
+		mirror.dataset.pmDefault = "";
+		const yes = h("input", {
+			type: "radio",
+			name: `work-publish-draft-${radioSerial}`,
+			value: "true",
+			"data-work-publish-draft": "true"
+		});
+		const no = h("input", {
+			type: "radio",
+			name: `work-publish-draft-${radioSerial}`,
+			value: "false",
+			"data-work-publish-draft": "false"
+		});
+		yes.addEventListener("change", () => {
+			if (yes.checked) chooseDraft("true");
+		});
+		no.addEventListener("change", () => {
+			if (no.checked) chooseDraft("false");
+		});
+		radios = {
+			yes,
+			no,
+			mirror,
+			titleInput,
+			bodyInput
+		};
+		const commitSha = h("span", {
+			class: "mono",
+			"data-work-publish-commit": ""
+		}, "");
+		const commitSource = h("span", { "data-work-publish-commit-source": "" }, "");
+		const baseValue = h("span", { "data-work-publish-base": "" }, "");
+		const baseShaValue = h("span", {
+			class: "mono",
+			"data-work-publish-base-sha": ""
+		}, "");
+		const detailCommit = h("span", { class: "mono" }, "");
+		const detailBase = h("span", { class: "mono" }, "");
+		facts = {
+			commit: h("p", { class: "pm-work-publish-fact" }, h("strong", {}, `${t("wpub_commit")}: `), commitSha, " · ", commitSource),
+			commitSha,
+			commitSource,
+			base: h("p", { class: "pm-work-publish-fact" }, h("strong", {}, `${t("wpub_base")}: `), baseValue),
+			baseValue,
+			baseSha: h("p", { class: "pm-work-publish-fact" }, h("strong", {}, `${t("wpub_base_sha")}: `), baseShaValue),
+			baseShaValue,
+			origin: h("p", { class: "muted pm-work-publish-fact" }, t("wpub_base_from_start")),
+			detailCommit,
+			detailBase
+		};
+		heldNode = h("p", {
+			"data-work-publish-held": "",
+			hidden: true
+		}, t("wpub_result_held"));
+		gapNode = h("p", { "data-work-publish-gap": decision.gap || "none" }, gapSentence(t, decision.gap));
+		const extra = h("div", { class: "pm-work-publish-fields" }, h("p", { class: "pm-work-publish-public" }, t("wpub_public")), facts.commit, facts.base, facts.baseSha, facts.origin, h("details", { "data-work-publish-sha-details": "" }, h("summary", {}, t("wres_details")), h("p", {}, t("wpub_commit"), " ", detailCommit), h("p", {}, t("wpub_base_sha"), " ", detailBase)), h("label", {}, t("wpub_title"), titleInput), h("label", {}, t("wpub_body"), bodyInput), h("div", {
+			role: "radiogroup",
+			"aria-labelledby": groupId,
+			class: "pm-work-publish-draft"
+		}, h("p", { id: groupId }, t("wpub_draft_group")), h("p", { class: "muted" }, t("wpub_draft_help")), h("label", { class: "pm-work-publish-choice" }, yes, h("span", {}, t("wpub_draft_yes"), " ", h("span", { class: "muted" }, t("wpub_draft_yes_help")))), h("label", { class: "pm-work-publish-choice" }, no, h("span", {}, t("wpub_draft_no"), " ", h("span", { class: "muted" }, t("wpub_draft_no_help"))))), gapNode);
+		editor = form({
+			namespace: `${namespace}.work-publish.${candidateKey}`,
+			action: ACTION$2,
+			target: {
+				workspace_id: entry.target.workspace_id,
+				repository: entry.target.repository,
+				host: entry.target.host,
+				source_operation_id: entry.target.source_operation_id
+			},
+			requiredScope: "integrate",
+			savedText: "wpub_success",
+			pendingText: "wpub_pending",
+			label: "action_github_pr_publish",
+			fields: {
+				public_title: titleInput,
+				public_body: bodyInput,
+				draft: mirror
+			},
+			params: (values) => {
+				const current = bound;
+				const title = values.public_title ?? "";
+				const body = values.public_body ?? "";
+				if (!current || mode !== "ready" || !current.candidate || !current.baseRef || !current.preconditions) throw Error(t("wpub_gap_target"));
+				if (title.trim() === "") {
+					titleInput.focus();
+					throw Error(t("wpub_title_required"));
+				}
+				if (title.includes("\n") || title.includes("\r") || bytes(title) > 256) {
+					titleInput.focus();
+					throw Error(t("wpub_title_bounds"));
+				}
+				if (bytes(body) > 32e3) {
+					bodyInput.focus();
+					throw Error(t("wpub_body_bounds"));
+				}
+				if (values.draft !== "true" && values.draft !== "false") {
+					yes.focus();
+					throw Error(t("wpub_draft_required"));
+				}
+				pinned = {
+					target: current.target,
+					candidate: current.candidate,
+					baseRef: current.baseRef,
+					preconditions: current.preconditions,
+					scopes: current.scopes
+				};
+				return {
+					candidate_sha: current.candidate,
+					base_ref: current.baseRef,
+					public_title: title,
+					public_body: body,
+					draft: values.draft === "true"
+				};
+			},
+			preconditions: () => {
+				const current = editor?.locked() ? pinned || bound : bound;
+				if (!current?.preconditions) return {};
+				return {
+					repository_id: current.preconditions.repository_id,
+					expected_base_sha: current.preconditions.expected_base_sha
+				};
+			},
+			permitted: () => mode === "incomplete" || mode === "ready" && catalogAllows(caps, bound),
+			recoverPermitted: () => true,
+			onSaved: () => {
+				if (!radios) return;
+				radios.yes.checked = false;
+				radios.no.checked = false;
+				radios.mirror.value = "";
+			},
+			onError: (error) => {
+				const operation = editor?.operation();
+				error = {
+					...error,
+					code: error?.code || operation?.error_code,
+					message: error?.message || operation?.status_reason
+				};
+				const sentence = sentenceFor(error);
+				if (!sentence) return false;
+				const statusBox = editor?.box.querySelector(":scope > [role=\"status\"]");
+				if (!statusBox) return false;
+				statusBox.hidden = false;
+				const presented = errorBox ? errorBox(error, {
+					summary: sentence,
+					within: statusBox
+				}) : h("p", {}, sentence);
+				statusBox.replaceChildren(presented);
+				if (error?.code === "PR_AUTHORITY_UNAVAILABLE" || SETUP_CODES.has(error?.code) && readCaps(caps)?.managed_installation) statusBox.append(h("p", {}, h("a", { href: "#/settings?section=connection" }, t("paths_setup"))));
+				return true;
+			},
+			extra
+		});
+		const originalUpdate = editor.update;
+		editor.update = () => {
+			originalUpdate();
+			applyChrome();
+		};
+		editor.box.addEventListener("submit", (event) => {
+			if (!editor.locked() && mode !== "ready") {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+			}
+		}, true);
+		editor.box.addEventListener("click", (event) => {
+			const reset = editor.box.querySelector("[data-work-publish-new-request]");
+			if (!reset || event.target !== reset && !reset.contains(event.target)) return;
+			if ((editor.operation()?.error_code || editor.operation()?.error?.code) === "PR_RECEIPT_EXISTS") {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+			}
+		}, true);
+		editor.box.classList.add("pm-work-publish-form");
+		editor.update();
+		root = h("section", {
+			class: "pm-work-publish",
+			"data-work-publish": ""
+		}, h("h4", {}, t("action_github_pr_publish")), heldNode, editor.box);
+		paintFacts();
+		return root;
+	}
+	function staticSection(decision, envelope) {
+		dropEditor();
+		mode = decision.mode;
+		shownEnvelope = envelope;
+		if (decision.mode === "absent") {
+			root = null;
+			return null;
+		}
+		if (decision.mode === "blocked") {
+			const known = BLOCKED_KEYS[decision.reason];
+			const copy = known ? t(known) : t("wres_unknown");
+			const next = decision.reason === "github_not_configured" ? readCaps(caps)?.managed_installation ? h("p", {}, h("a", { href: "#/settings?section=connection" }, t("paths_setup")), " ", t("wpub_blocked_github_managed")) : h("p", {}, t("wpub_blocked_github_plain")) : null;
+			root = h("section", {
+				class: "pm-work-publish",
+				"data-work-publish": "",
+				"data-work-publish-blocked": decision.reason || "unknown"
+			}, h("h4", {}, t("action_github_pr_publish")), h("p", { "data-work-publish-blocked-reason": "" }, copy), next, decision.reason && !known ? h("details", {}, h("summary", {}, t("wres_details")), h("p", {}, decision.reason)) : null);
+			return root;
+		}
+		const entry = decision.entry;
+		if (!form || !entry?.target) {
+			root = h("section", {
+				class: "pm-work-publish",
+				"data-work-publish": ""
+			}, h("h4", {}, t("action_github_pr_publish")), h("p", { "data-work-publish-gap": decision.gap || "target" }, decision.mode === "ready" ? t("wpub_no_submit") : gapSentence(t, decision.gap || "target")));
+			return root;
+		}
+		return mountEditor(decision, envelope);
+	}
+	function render(envelope) {
+		const decision = classifyPublicationEntry(envelope);
+		if (decision.mode === "blocked" && [
+			"not_controller",
+			"not_writer_member",
+			"missing_scope"
+		].includes(decision.reason)) return staticSection(decision, envelope);
+		if (editor?.locked() && root) {
+			noteHeld(decision);
+			return root;
+		}
+		shownEnvelope = envelope;
+		if (decision.mode === "absent") return staticSection(decision, envelope);
+		if (decision.mode === "blocked") return staticSection(decision, envelope);
+		if (!form || !decision.entry?.target) return staticSection(decision, envelope);
+		const nextIdentity = identityOf(decision.entry);
+		if (editor && root && identity === nextIdentity) {
+			if (!editor.locked()) {
+				bound = decision.entry;
+				mode = decision.mode;
+				if (gapNode) {
+					gapNode.setAttribute("data-work-publish-gap", decision.gap || "none");
+					gapNode.textContent = gapSentence(t, decision.gap);
+				}
+				applyChrome();
+			}
+			return root;
+		}
+		dropEditor();
+		return mountEditor(decision, envelope);
+	}
+	return {
+		render,
+		dispose,
+		recheck,
+		sync,
+		element: () => root
+	};
+}
+//#endregion
+//#region src/pm-work-result.js
+var KNOWN_STATES = new Set([
+	"accepted",
+	"starting",
+	"active",
+	"waiting",
+	"turn-ended",
+	"process-ended",
+	"failed",
+	"unknown"
+]);
+var KNOWN_REASONS = new Set([
+	"bat_unreachable",
+	"observation_stale",
+	"session_not_found",
+	"transcript_truncated_by_size",
+	"archived_messages_omitted",
+	"parse_error",
+	"session_not_started_yet",
+	"start_outcome_uncertain",
+	"handoff_outcome_uncertain",
+	"unloaded_history_session",
+	"turn_marker_not_visible",
+	"turn_boundary_not_collected",
+	"session_not_managed_by_attempt",
+	"turn_slice_bounded",
+	"result_document_bounded",
+	"worktree_unreachable",
+	"bat_empty_status_not_clean_proof",
+	"diff_exceeded_pipe_limit",
+	"commit_limit_exceeded",
+	"changeset_time_budget_exceeded",
+	"base_commit_not_ancestor",
+	"source_digest_conflict"
+]);
+function normalizeForComparison(envelope) {
+	if (!envelope || typeof envelope !== "object") return null;
+	const clone = JSON.parse(JSON.stringify(envelope));
+	delete clone.cursor;
+	delete clone.events_read;
+	delete clone.wait;
+	if (clone.collection) delete clone.collection.checked_at;
+	return clone;
+}
+function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisibility = () => {}, form = null, namespace = "" }) {
+	let activeAttempt = null;
+	let readSerial = 0;
+	let lastEnvelope = null;
+	let lastNormalized = null;
+	let lastStale = false;
+	let turnsOpen = false;
+	let detailsOpen = false;
+	let filesOpen = false;
+	let currentChanges = null;
+	let currentChangesError = null;
+	let changesBusy = false;
+	let isOutOfDate = false;
+	let changesSerial = 0;
+	let diffGeneration = 0;
+	const diffKeySerials = new Map();
+	const diffCache = new Map();
+	const diffErrors = new Map();
+	const diffLoading = new Set();
+	const openDiffs = new Set();
+	const getCaps = () => typeof caps === "function" ? caps() : caps;
+	const canChanges = () => Boolean(getCaps()?.features?.pm_workspaces?.work_attempt_results?.routes?.changes);
+	const canDiff = () => Boolean(getCaps()?.features?.pm_workspaces?.work_attempt_results?.routes?.diff);
+	const panelElement = h("div", {
+		class: "pm-work-result-panel",
+		"data-work-result": ""
+	});
+	panelElement.hidden = true;
+	const publish = createWorkPublish({
+		h,
+		t,
+		form,
+		namespace,
+		caps,
+		errorBox
+	});
+	function updateVisibility(visible) {
+		panelElement.hidden = !visible;
+		onVisibility(visible);
+	}
+	function withdraw() {
+		readSerial++;
+		changesSerial++;
+		diffGeneration++;
+		diffKeySerials.clear();
+		lastEnvelope = null;
+		lastNormalized = null;
+		lastStale = false;
+		currentChanges = null;
+		currentChangesError = null;
+		changesBusy = false;
+		isOutOfDate = false;
+		diffCache.clear();
+		diffErrors.clear();
+		diffLoading.clear();
+		openDiffs.clear();
+		turnsOpen = false;
+		detailsOpen = false;
+		filesOpen = false;
+		publish.dispose();
+		panelElement.replaceChildren();
+		updateVisibility(false);
+	}
+	function dispose() {
+		activeAttempt = null;
+		withdraw();
+	}
+	async function setAttempt(attempt) {
+		if (!attempt || !attempt.attempt_id) {
+			activeAttempt = null;
+			withdraw();
+			return;
+		}
+		if (!Boolean(attempt.session?.session_id || attempt.native_session?.session_id || attempt.session_id)) {
+			activeAttempt = attempt;
+			withdraw();
+			return;
+		}
+		if (activeAttempt?.attempt_id !== attempt.attempt_id) withdraw();
+		activeAttempt = attempt;
+		await readResult();
+	}
+	async function refresh() {
+		if (!activeAttempt) return;
+		if (!Boolean(activeAttempt.session?.session_id || activeAttempt.native_session?.session_id || activeAttempt.session_id)) return;
+		await readResult();
+	}
+	async function readResult() {
+		if (!activeAttempt) return;
+		const ticket = ++readSerial;
+		const attemptId = activeAttempt.attempt_id;
+		const currentAttempt = activeAttempt;
+		try {
+			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/result`);
+			try {
+				alive?.();
+			} catch {
+				return;
+			}
+			if (ticket !== readSerial || activeAttempt?.attempt_id !== attemptId) return;
+			if (!(data && typeof data === "object" && data.contract === "pm-work-attempt-result/v1" && data.workspace_id === workspaceId && data.attempt_id === attemptId && data.execution && KNOWN_STATES.has(data.execution.state))) {
+				lastEnvelope = null;
+				lastNormalized = null;
+				lastStale = false;
+				renderInvalid();
+				return;
+			}
+			const normalized = normalizeForComparison(data);
+			const isUnchanged = lastNormalized && JSON.stringify(lastNormalized) === JSON.stringify(normalized);
+			if (!isUnchanged || lastStale) {
+				if (!isUnchanged && currentChanges) isOutOfDate = true;
+				lastEnvelope = data;
+				lastNormalized = normalized;
+				lastStale = false;
+				renderEnvelope(data, currentAttempt);
+			} else publish.recheck();
+		} catch (err) {
+			try {
+				alive?.();
+			} catch {
+				return;
+			}
+			if (ticket !== readSerial || activeAttempt?.attempt_id !== attemptId) return;
+			const status = err?.status;
+			if (status === 401 || status === 403 || status === 404) {
+				withdraw();
+				return;
+			}
+			lastStale = true;
+			renderError(err, currentAttempt);
+		}
+	}
+	function renderInvalid() {
+		publish.dispose();
+		panelElement.replaceChildren(h("h3", {}, t("wres_heading")), h("p", { class: "pm-work-result-invalid" }, t("wres_invalid_envelope")));
+		updateVisibility(true);
+	}
+	function renderError(err, attempt) {
+		const heading = h("h3", {}, t("wres_heading"));
+		const retryBtn = button({
+			label: t("wres_try_again"),
+			class: "ui-button secondary ui-sm pm-work-result-retry",
+			onClick: () => {
+				readResult();
+			}
+		});
+		retryBtn.setAttribute("data-work-result-retry", "result");
+		const errorContainer = h("div", { class: "pm-work-result-error-box" }, errorBox ? errorBox(err, { within: panelElement }) : h("div", { class: "error" }, err?.message || String(err)), retryBtn);
+		if (lastEnvelope) renderEnvelope(lastEnvelope, attempt, errorContainer);
+		else {
+			panelElement.replaceChildren(heading, errorContainer);
+			updateVisibility(true);
+		}
+	}
+	function formatCount(val) {
+		if (val === "unknown" || val == null) return t("wres_unknown");
+		return String(val);
+	}
+	function elementByAttr(root, name, value) {
+		if (!root || value == null) return null;
+		for (const node of root.querySelectorAll(`[${name}]`)) if (node.getAttribute(name) === value) return node;
+		return null;
+	}
+	function saveFocus() {
+		const active = document.activeElement;
+		if (active && panelElement.contains(active)) {
+			if (active.dataset?.workResultFocus) return {
+				type: "attr",
+				value: active.dataset.workResultFocus
+			};
+			if (active.dataset?.workResultDiffSummary) return {
+				type: "diff-summary",
+				key: active.dataset.workResultDiffSummary
+			};
+			if (active.dataset?.workResultDiffRegion) return {
+				type: "diff-region",
+				key: active.dataset.workResultDiffRegion
+			};
+			if (active.getAttribute("data-work-result-retry") === "result") return { type: "retry-result" };
+			if (active.getAttribute("data-work-result-retry") === "changes") return { type: "retry-changes" };
+			if (active.getAttribute("data-work-result-retry-diff")) return {
+				type: "retry-diff",
+				key: active.getAttribute("data-work-result-retry-diff")
+			};
+			if (active.classList.contains("pm-work-result-read-changes")) return { type: "read-changes" };
+			if (active.classList.contains("pm-work-result-read-again")) return { type: "read-again" };
+			if (active.matches?.("[data-work-publish-title], [data-work-publish-body]")) return {
+				type: "publish-field",
+				hook: active.hasAttribute("data-work-publish-title") ? "title" : "body",
+				start: active.selectionStart,
+				end: active.selectionEnd
+			};
+			if (active.matches?.("[data-work-publish-draft]")) return {
+				type: "publish-draft",
+				value: active.getAttribute("data-work-publish-draft")
+			};
+			if (active.matches?.("[data-work-publish-submit]")) return { type: "publish-submit" };
+			if (active.tagName === "SUMMARY" && active.parentElement?.tagName === "DETAILS") {
+				const details = active.parentElement;
+				if (details.dataset.workResultTurns !== void 0) return { type: "turns" };
+				if (details.dataset.workResultDetails !== void 0) return { type: "details" };
+				if (details.classList.contains("pm-work-result-files")) return { type: "files" };
+			}
+		}
+		return null;
+	}
+	function restoreFocus(token) {
+		if (!token) return;
+		if (token.type === "attr") elementByAttr(panelElement, "data-work-result-focus", token.value)?.focus();
+		else if (token.type === "diff-summary") elementByAttr(panelElement, "data-work-result-diff-summary", token.key)?.focus();
+		else if (token.type === "diff-region") elementByAttr(panelElement, "data-work-result-diff-region", token.key)?.focus();
+		else if (token.type === "read-changes") (panelElement.querySelector(".pm-work-result-read-changes") || panelElement.querySelector("[data-work-result-retry=\"changes\"]"))?.focus();
+		else if (token.type === "read-again") (panelElement.querySelector(".pm-work-result-read-again") || panelElement.querySelector(".pm-work-result-read-changes") || panelElement.querySelector("[data-work-result-retry=\"changes\"]"))?.focus();
+		else if (token.type === "retry-changes") (panelElement.querySelector("[data-work-result-retry=\"changes\"]") || panelElement.querySelector(".pm-work-result-read-changes"))?.focus();
+		else if (token.type === "retry-diff") (elementByAttr(panelElement, "data-work-result-retry-diff", token.key) || elementByAttr(panelElement, "data-work-result-diff-summary", token.key))?.focus();
+		else if (token.type === "retry-result") elementByAttr(panelElement, "data-work-result-retry", "result")?.focus();
+		else if (token.type === "turns") panelElement.querySelector("[data-work-result-turns] > summary")?.focus();
+		else if (token.type === "details") panelElement.querySelector("[data-work-result-details] > summary")?.focus();
+		else if (token.type === "files") panelElement.querySelector(".pm-work-result-files > summary")?.focus();
+		else if (token.type === "publish-field") {
+			const node = panelElement.querySelector(token.hook === "title" ? "[data-work-publish-title]" : "[data-work-publish-body]");
+			if (node) {
+				node.focus();
+				try {
+					node.setSelectionRange(token.start ?? 0, token.end ?? token.start ?? 0);
+				} catch {}
+			} else publishFocusFallback();
+		} else if (token.type === "publish-draft") {
+			const node = elementByAttr(panelElement, "data-work-publish-draft", token.value);
+			if (node) node.focus();
+			else publishFocusFallback();
+		} else if (token.type === "publish-submit") {
+			const node = panelElement.querySelector("[data-work-publish-submit]");
+			if (node) node.focus();
+			else publishFocusFallback();
+		}
+	}
+	function publishFocusFallback() {
+		const link = panelElement.querySelector("[data-work-publish-pr]");
+		const note = panelElement.querySelector("[data-work-publish-blocked-reason], [data-work-publish-gap], [data-work-publish-held]");
+		const target = link || note;
+		if (!target || target.hidden) return;
+		if (!link) target.tabIndex = -1;
+		target.focus();
+	}
+	function renderEnvelope(envelope, attempt, errorBoxNode = null) {
+		const focusToken = saveFocus();
+		const existingTurns = panelElement.querySelector("[data-work-result-turns]");
+		if (existingTurns) turnsOpen = existingTurns.open;
+		const existingDetails = panelElement.querySelector("[data-work-result-details]");
+		if (existingDetails) detailsOpen = existingDetails.open;
+		const existingFiles = panelElement.querySelector(".pm-work-result-files");
+		if (existingFiles) filesOpen = existingFiles.open;
+		for (const dt of panelElement.querySelectorAll(".pm-work-result-diff-details[open]")) {
+			const sum = dt.querySelector("[data-work-result-diff-summary]");
+			if (sum?.dataset.workResultDiffSummary) openDiffs.add(sum.dataset.workResultDiffSummary);
+		}
+		for (const dt of panelElement.querySelectorAll(".pm-work-result-diff-details:not([open])")) {
+			const sum = dt.querySelector("[data-work-result-diff-summary]");
+			if (sum?.dataset.workResultDiffSummary) openDiffs.delete(sum.dataset.workResultDiffSummary);
+		}
+		const sections = [];
+		const panelReasons = new Set();
+		const unlistedFacets = [];
+		const unlistedFileStatuses = [];
+		const heading = h("h3", {}, t("wres_heading"));
+		sections.push(heading);
+		if (errorBoxNode) {
+			const stalePill = h("span", {
+				class: "ui-pill tone-warn",
+				"data-status": "stale"
+			}, t("ui_status_stale"));
+			sections.push(h("div", { class: "pm-work-result-stale-banner" }, stalePill, errorBoxNode));
+		}
+		const exec = envelope.execution || {};
+		const stateKey = `wres_state_${exec.state?.replace(/-/g, "_")}`;
+		const stateLabel = t(stateKey) !== stateKey ? t(stateKey) : t("wres_unknown");
+		const stateP = h("p", { class: "pm-work-result-state" });
+		stateP.append(h("strong", {}, stateLabel));
+		if (exec.observed_at) stateP.append(" · ", timeStamp(exec.observed_at));
+		sections.push(stateP);
+		if (exec.state_reason) {
+			const reason = exec.state_reason;
+			panelReasons.add(reason);
+			if (reason === "agent_error") sections.push(h("p", { class: "muted pm-work-result-reason" }, t("wres_agent_error")));
+			else if (KNOWN_REASONS.has(reason)) {
+				const textKey = `wres_reason_${reason}`;
+				if (t(textKey) !== textKey) sections.push(h("p", { class: "muted pm-work-result-reason" }, t(textKey)));
+			} else if (exec.state === "failed") {
+				const wstKey = `wst_error_${reason}`;
+				const errKey = `error_code_${reason}`;
+				let failText = "";
+				if (t(wstKey) !== wstKey) failText = t(wstKey);
+				else if (t(errKey) !== errKey) failText = t(errKey);
+				if (failText) sections.push(h("p", { class: "muted pm-work-result-reason" }, failText));
+			}
+		} else if (exec.state === "waiting" && exec.pending != null) sections.push(h("p", { class: "muted pm-work-result-reason" }, t("wres_waiting_pending")));
+		if (exec.attention) {
+			let attnText = t("wres_status_needs_attention");
+			if (exec.attention.message) attnText += ` ${exec.attention.message}`;
+			sections.push(h("p", { class: "muted pm-work-result-attention" }, attnText));
+		}
+		const linkItems = [];
+		const sess = attempt?.session || attempt?.native_session;
+		if (sess?.session_id && sess?.host) {
+			const liveHref = sessionHref$1({
+				host: sess.host,
+				sessionId: sess.session_id,
+				from: "board",
+				workspaceId,
+				workItemId: envelope.identity?.work_item_id,
+				attemptId: attempt.attempt_id
+			});
+			linkItems.push(h("a", {
+				href: liveHref,
+				"data-work-result-focus": "live-output"
+			}, t("wres_open_live_output")));
+		}
+		const opHash = envelope.links?.start_operation_hash || (envelope.identity?.start_operation_id ? `#/op/${envelope.identity.start_operation_id}` : null);
+		if (opHash) linkItems.push(h("a", {
+			href: opHash,
+			"data-work-result-focus": "operation"
+		}, t("wres_view_operation")));
+		if (linkItems.length > 0) {
+			const linksContainer = h("div", { class: "pm-work-result-links" });
+			for (let i = 0; i < linkItems.length; i++) {
+				if (i > 0) linksContainer.append(" · ");
+				linksContainer.append(linkItems[i]);
+			}
+			sections.push(linksContainer);
+		}
+		const summaryHeader = h("div", { class: "pm-work-result-summary-header" });
+		summaryHeader.append(h("h4", {}, t("wres_agent_summary_label")));
+		if (exec.state_facets?.self_reported === "claimed_done") {
+			const pill = h("span", {
+				class: "ui-pill tone-neutral",
+				"data-work-result-pill": "claimed_done"
+			}, t("wres_pill_claimed_done"));
+			summaryHeader.append(" ", pill);
+		}
+		sections.push(summaryHeader);
+		const summaryText = envelope.conversation?.latest_assistant_summary?.text;
+		if (summaryText && typeof summaryText === "string") {
+			const summaryBox = h("div", {
+				role: "region",
+				tabindex: "0",
+				"aria-label": t("wres_agent_summary_label"),
+				class: "pm-work-result-summary-box",
+				"data-work-result-focus": "summary-box"
+			});
+			summaryBox.textContent = summaryText;
+			sections.push(summaryBox);
+		} else sections.push(h("p", { class: "muted pm-work-result-empty-summary" }, t("wres_no_recorded_turn")));
+		const dl = h("dl", { class: "pm-work-result-checks" });
+		const verifStatus = exec.state_facets?.verification || envelope.verification?.status;
+		let verifText = t("wres_unknown");
+		if (verifStatus && [
+			"unverified",
+			"running",
+			"verified",
+			"failed",
+			"stale",
+			"unknown"
+		].includes(verifStatus)) verifText = t(`wres_verification_${verifStatus}`);
+		else if (verifStatus) unlistedFacets.push(`verification: ${verifStatus}`);
+		dl.append(h("dt", {}, t("wres_check_verification")), h("dd", { "data-check": "verification" }, verifText));
+		const reviewDecision = exec.state_facets?.review_decision || envelope.verification?.quality_reviews?.current?.decision;
+		let reviewText = t("wres_unknown");
+		if (typeof reviewDecision === "string") {
+			if (reviewDecision === "unassessed") reviewText = t("wres_review_unassessed");
+			else if (reviewDecision === "revocation") reviewText = t("wres_review_revocation");
+			else unlistedFacets.push(`review_decision: ${reviewDecision}`);
+		} else if (reviewDecision && typeof reviewDecision === "object") {
+			if (reviewDecision.kind === "unassessed") reviewText = t("wres_review_unassessed");
+			else if (reviewDecision.kind === "revocation") reviewText = t("wres_review_revocation");
+			else if (reviewDecision.kind === "assessment" || reviewDecision.acceptance) {
+				if (reviewDecision.acceptance === "accepted") reviewText = t("wres_review_accepted");
+				else if (reviewDecision.acceptance === "rejected") reviewText = t("wres_review_rejected");
+				else if (reviewDecision.acceptance === "unassessed") reviewText = t("wres_review_unassessed");
+				else if (reviewDecision.acceptance) unlistedFacets.push(`review_acceptance: ${reviewDecision.acceptance}`);
+			} else if (reviewDecision.kind) unlistedFacets.push(`review_kind: ${reviewDecision.kind}`);
+		}
+		dl.append(h("dt", {}, t("wres_check_review")), h("dd", { "data-check": "review" }, reviewText));
+		const acceptStatus = (exec.state_facets?.acceptance)?.status;
+		let acceptText = t("wres_unknown");
+		if (acceptStatus === "passed") acceptText = t("wres_acceptance_passed");
+		else if (acceptStatus === "blocked") acceptText = t("wres_acceptance_blocked");
+		else if (acceptStatus === "unassessed") acceptText = t("wres_acceptance_unassessed");
+		else if (acceptStatus) unlistedFacets.push(`acceptance_status: ${acceptStatus}`);
+		dl.append(h("dt", {}, t("wres_check_acceptance")), h("dd", { "data-check": "acceptance" }, acceptText));
+		const mergeStatus = exec.state_facets?.merge;
+		let mergeText = t("wres_unknown");
+		if ([
+			"not_started",
+			"not_merged",
+			"pr_open",
+			"pr_closed_unmerged",
+			"merge_pending",
+			"merged"
+		].includes(mergeStatus)) mergeText = t(`wres_merge_${mergeStatus}`);
+		else if (mergeStatus) unlistedFacets.push(`merge: ${mergeStatus}`);
+		const prDd = h("dd", { "data-check": "pr" });
+		prDd.append(h("span", { class: "pm-work-result-pr-status" }, mergeText));
+		const prs = envelope.delivery?.pull_requests || [];
+		if (prs.length > 0) {
+			const prList = h("ul", { class: "pm-work-result-pr-list" });
+			for (const pr of prs) {
+				const line = publicationPrLine(h, t, pr);
+				if (line) prList.append(line);
+			}
+			if (prList.childElementCount) prDd.append(prList);
+			for (const pr of prs) {
+				const delivery = publicationDeliveryLine(h, t, pr, envelope, attempt);
+				if (delivery) prDd.append(delivery);
+			}
+		}
+		if (envelope.completeness?.coverage?.delivery === "partial") prDd.append(h("p", { "data-work-publish-partial": "" }, t("wpub_pr_partial")));
+		dl.append(h("dt", {}, t("wres_check_pr")), prDd);
+		const deployObj = exec.state_facets?.deployment;
+		const deployState = deployObj?.state;
+		const deployVerified = deployObj?.verified === true;
+		let deployText = t("wres_unknown");
+		if ([
+			"not_deployed",
+			"pending",
+			"running",
+			"failed",
+			"needs_attention",
+			"cancelled"
+		].includes(deployState)) deployText = t(`wres_deploy_${deployState}`);
+		else if (deployState === "succeeded") deployText = deployVerified ? t("wres_deploy_succeeded_verified") : t("wres_deploy_succeeded");
+		else if (deployState) unlistedFacets.push(`deployment_state: ${deployState}`);
+		dl.append(h("dt", {}, t("wres_check_deployment")), h("dd", { "data-check": "deployment" }, deployText));
+		const goal = envelope.delivery?.delivery_goal;
+		let goalText = t("wres_unknown");
+		if (goal === "pull_request") goalText = t("wres_goal_pr");
+		else if (goal === "reviewable_changes") goalText = t("wres_goal_reviewable_changes");
+		else if (goal && goal !== "unknown") unlistedFacets.push(`delivery_goal: ${goal}`);
+		dl.append(h("dt", {}, t("wres_check_delivery_goal")), h("dd", { "data-check": "delivery-goal" }, goalText));
+		sections.push(dl);
+		const changesBox = h("div", { class: "pm-work-result-changes" });
+		const ch = envelope.changes || {};
+		const summary = ch.summary || {};
+		const isComplete = summary.complete === true && (!summary.unavailable || summary.unavailable.length === 0);
+		const filesCountNum = Number.isSafeInteger(summary.file_count) ? summary.file_count : Array.isArray(summary.files) ? summary.files.length : null;
+		const commitsCountNum = Number.isSafeInteger(summary.commit_count) ? summary.commit_count : Array.isArray(summary.commits) ? summary.commits.length : null;
+		if (isComplete) {
+			let summaryKey = "wres_changes_summary";
+			if (filesCountNum === 1 && commitsCountNum === 1) summaryKey = "wres_changes_summary_one";
+			else if (filesCountNum === 1) summaryKey = "wres_changes_summary_one_file";
+			else if (commitsCountNum === 1) summaryKey = "wres_changes_summary_one_commit";
+			const summaryText = t(summaryKey, {
+				files: formatCount(filesCountNum),
+				commits: formatCount(commitsCountNum),
+				additions: formatCount(summary.additions),
+				deletions: formatCount(summary.deletions)
+			});
+			changesBox.append(h("p", { class: "pm-work-result-changes-summary" }, summaryText, " · ", t("wres_as_of_last_turn")));
+		} else {
+			const partlyText = h("p", { class: "pm-work-result-changes-summary" }, t("wres_changes_partly_read"), " · ", t("wres_as_of_last_turn"));
+			changesBox.append(partlyText);
+			const changeReasons = [];
+			if (summary.reason && !panelReasons.has(summary.reason)) {
+				changeReasons.push(summary.reason);
+				panelReasons.add(summary.reason);
+			}
+			if (Array.isArray(summary.reasons)) {
+				for (const r of summary.reasons) if (!changeReasons.includes(r) && !panelReasons.has(r)) {
+					changeReasons.push(r);
+					panelReasons.add(r);
+				}
+			}
+			if (changeReasons.length > 0) {
+				const reasonsList = h("ul", { class: "pm-work-result-changes-reasons" });
+				for (const code of changeReasons) {
+					const key = `wres_reason_${code}`;
+					let text = t(key);
+					if (!text || text === key) text = t("wres_reason_generic_limit");
+					reasonsList.append(h("li", {}, text));
+				}
+				changesBox.append(reasonsList);
+			}
+		}
+		if (canChanges()) changesBox.append(renderCurrentChangesBlock());
+		const files = summary.files || [];
+		if (files.length > 0) {
+			const renderFileRow = (f) => {
+				let statusLabel = t("wres_unknown");
+				if (f.status === "M" || f.status === "modified") statusLabel = t("wres_file_modified");
+				else if (f.status === "A" || f.status === "added") statusLabel = t("wres_file_added");
+				else if (f.status === "D" || f.status === "deleted") statusLabel = t("wres_file_deleted");
+				else if (typeof f.status === "string" && (f.status.startsWith("R") || f.status === "renamed")) statusLabel = t("wres_file_renamed");
+				else if (f.status) unlistedFileStatuses.push(`${f.path}: ${f.status}`);
+				const adds = f.additions === "unknown" || f.additions == null ? "?" : `+${f.additions}`;
+				const dels = f.deletions === "unknown" || f.deletions == null ? "?" : `−${f.deletions}`;
+				return h("li", { class: "pm-work-result-file-row" }, h("span", { class: "pm-work-result-file-path mono" }, f.path), " ", h("span", { class: "pm-work-result-file-status muted" }, statusLabel), " ", h("span", { class: "pm-work-result-file-diff mono" }, `${adds} ${dels}`));
+			};
+			const fileList = h("ul", { class: "pm-work-result-file-list" }, ...files.slice(0, 20).map(renderFileRow));
+			changesBox.append(fileList);
+			if (files.length > 20) {
+				const remainingFiles = files.slice(20);
+				const remainingList = h("ul", { class: "pm-work-result-file-list" }, ...remainingFiles.map(renderFileRow));
+				const filesDisclosure = disclosure({
+					label: remainingFiles.length === 1 ? t("wres_show_all_files_one") : t("wres_show_all_files", { n: files.length }),
+					body: remainingList,
+					open: filesOpen
+				});
+				filesDisclosure.classList.add("pm-work-result-files");
+				changesBox.append(filesDisclosure);
+			}
+		}
+		if (ch.base_commit) changesBox.append(h("p", { class: "pm-work-result-base-commit" }, h("strong", {}, `${t("wres_base_commit")}: `), h("span", { class: "mono" }, ch.base_commit.slice(0, 12))));
+		const fixedCommit = ch.fixed_result_commit;
+		if (fixedCommit && fixedCommit.commit_sha) {
+			const srcKind = fixedCommit.source_kind;
+			let srcText = "";
+			if (srcKind === "turn_end_observation") srcText = t("wres_source_turn_end_observation");
+			else if (srcKind === "execution_verification" || srcKind === "session_verification") srcText = t("wres_source_verified_commit");
+			else if (srcKind === "integration") srcText = t("wres_source_integration_commit");
+			const commitP = h("p", { class: "pm-work-result-commit" }, h("strong", {}, `${t("wres_result_commit")}: `), h("span", { class: "mono" }, fixedCommit.commit_sha.slice(0, 12)));
+			if (srcText) commitP.append(" · ", srcText);
+			changesBox.append(commitP);
+		}
+		const uncommitted = ch.uncommitted || {};
+		if (uncommitted.count === "unknown") changesBox.append(h("p", { class: "muted pm-work-result-uncommitted" }, t("wres_uncommitted_unknown")));
+		else if (Number.isSafeInteger(uncommitted.count) && uncommitted.count > 0) changesBox.append(h("p", { class: "pm-work-result-uncommitted" }, t("wres_uncommitted_changes", { n: uncommitted.count })));
+		sections.push(changesBox);
+		const completeness = envelope.completeness;
+		const completenessStatus = completeness?.status;
+		if (completenessStatus && completenessStatus !== "complete") {
+			const compDiv = h("div", { class: "pm-work-result-completeness" });
+			if (completenessStatus === "partial") compDiv.append(statusPill("partial"));
+			else compDiv.append(h("span", {
+				class: "ui-pill tone-bad",
+				"data-status": "unavailable"
+			}, t("wres_status_unavailable")));
+			const reasons = (completeness.reasons || []).filter((code) => {
+				if (panelReasons.has(code)) return false;
+				panelReasons.add(code);
+				return true;
+			});
+			if (reasons.length > 0) {
+				const reasonList = h("ul", { class: "pm-work-result-completeness-reasons" });
+				for (const code of reasons) {
+					const key = `wres_reason_${code}`;
+					let text = t(key);
+					if (!text || text === key) text = t("wres_reason_generic_limit");
+					reasonList.append(h("li", {}, text));
+				}
+				compDiv.append(reasonList);
+			}
+			sections.push(compDiv);
+		}
+		const publishNode = publish.render(envelope);
+		if (publishNode) sections.push(publishNode);
+		const results = envelope.results || [];
+		if (results.length > 0) {
+			const turnsBody = h("div", { class: "pm-work-result-turns-body" });
+			if (envelope.results_has_more) turnsBody.append(h("p", { class: "muted pm-work-result-more-turns" }, t("wres_showing_latest_20")));
+			const turnsList = h("ul", { class: "pm-work-result-turns-list" });
+			for (let i = 0; i < results.length; i++) {
+				const turn = results[i];
+				const row = h("li", { class: "pm-work-result-turn-row" });
+				if (turn.observed_at) row.append(timeStamp(turn.observed_at), " ");
+				const sha = turn.head_commit ? turn.head_commit.slice(0, 12) : "—";
+				row.append(h("span", { class: "mono" }, sha));
+				if (i === 0) row.append(" ", h("span", {
+					class: "ui-pill tone-neutral ui-xs",
+					"data-work-result-pill": "latest_turn"
+				}, t("wres_latest_turn")));
+				turnsList.append(row);
+			}
+			turnsBody.append(turnsList);
+			const turnsDisclosure = disclosure({
+				label: results.length === 1 ? t("wres_recorded_turns_count_one") : t("wres_recorded_turns_count", { n: results.length }),
+				body: turnsBody,
+				open: turnsOpen
+			});
+			turnsDisclosure.dataset.workResultTurns = "";
+			sections.push(turnsDisclosure);
+		}
+		const detailsBody = h("div", { class: "pm-work-result-details-body" });
+		const addDetailRow = (label, value) => {
+			if (value === void 0) return;
+			detailsBody.append(h("p", {}, h("strong", {}, `${label}: `), h("span", { class: "mono" }, String(value == null ? "—" : value))));
+		};
+		addDetailRow(t("wres_attempt_id"), envelope.attempt_id);
+		addDetailRow(t("wres_result_id"), envelope.sources?.result_id);
+		addDetailRow(t("wres_start_operation_id"), envelope.identity?.start_operation_id);
+		addDetailRow(t("wres_execution_operation_id"), envelope.identity?.execution_operation_id);
+		addDetailRow(t("wres_source_key"), envelope.sources?.source_key);
+		addDetailRow(t("wres_digest"), envelope.sources?.digest ? envelope.sources.digest.slice(0, 16) : null);
+		addDetailRow(t("wres_collection_outcome"), envelope.collection?.outcome);
+		addDetailRow(t("wres_raw_state"), exec.state);
+		addDetailRow(t("wres_raw_stage"), exec.stage);
+		if (exec.state_reason) addDetailRow(t("wres_raw_reasons"), exec.state_reason);
+		if (unlistedFacets.length > 0) addDetailRow(t("wres_unlisted_facets"), unlistedFacets.join(", "));
+		if (unlistedFileStatuses.length > 0) addDetailRow(t("wres_unlisted_file_statuses"), unlistedFileStatuses.join(", "));
+		const unlistedReasons = (completeness?.reasons || []).filter((r) => !KNOWN_REASONS.has(r));
+		if (unlistedReasons.length > 0) addDetailRow(t("wres_unlisted_completeness_reasons"), unlistedReasons.join(", "));
+		const usage = envelope.usage || {};
+		const formatUsageVal = (val) => val == null || val === "unknown" ? t("ui_status_unknown") : String(val);
+		addDetailRow(t("wres_usage_context_tokens"), formatUsageVal(usage.context_tokens));
+		addDetailRow(t("wres_usage_context_window"), formatUsageVal(usage.context_window));
+		addDetailRow(t("wres_usage_num_turns"), formatUsageVal(usage.num_turns));
+		detailsBody.append(h("p", { class: "muted" }, t("wres_exit_code_not_exposed")));
+		const detailsDisclosure = disclosure({
+			label: t("wres_details"),
+			body: detailsBody,
+			open: detailsOpen
+		});
+		detailsDisclosure.dataset.workResultDetails = "";
+		sections.push(detailsDisclosure);
+		panelElement.replaceChildren(...sections);
+		updateVisibility(true);
+		restoreFocus(focusToken);
+	}
+	function sortCommitsOldestFirst(commitsTouched, allCommits) {
+		if (!Array.isArray(commitsTouched)) return [];
+		if (!Array.isArray(allCommits) || allCommits.length === 0) return [...commitsTouched];
+		const order = new Map();
+		allCommits.forEach((sha, idx) => order.set(sha, idx));
+		const originalIndex = new Map();
+		commitsTouched.forEach((sha, idx) => originalIndex.set(sha, idx));
+		return [...commitsTouched].sort((a, b) => {
+			const hasA = order.has(a);
+			const hasB = order.has(b);
+			if (hasA && hasB) return order.get(a) - order.get(b);
+			if (hasA) return -1;
+			if (hasB) return 1;
+			return originalIndex.get(a) - originalIndex.get(b);
+		});
+	}
+	function renderDiffContent(container, commit, path, key, summaryNode) {
+		container.replaceChildren();
+		if (diffLoading.has(key)) {
+			container.append(h("p", { class: "muted pm-work-result-diff-loading" }, t("wres_diff_loading")));
+			return;
+		}
+		const err = diffErrors.get(key);
+		if (err) {
+			if (err.status === 404 || err.code === "PM_DIFF_NOT_FOUND") container.append(h("p", { class: "muted pm-work-result-diff-notice" }, t("error_code_PM_DIFF_NOT_FOUND")));
+			else {
+				const errBoxNode = errorBox ? errorBox(err, { within: container }) : h("div", { class: "error" }, err?.message || String(err));
+				const retryBtn = button({
+					label: t("wres_try_again"),
+					class: "ui-button secondary ui-sm pm-work-result-retry",
+					onClick: () => {
+						diffErrors.delete(key);
+						loadDiff(commit, path, key, container, summaryNode);
+					}
+				});
+				retryBtn.setAttribute("data-work-result-retry-diff", key);
+				container.append(h("div", { class: "pm-work-result-error-box" }, errBoxNode, retryBtn));
+			}
+			return;
+		}
+		const data = diffCache.get(key);
+		if (!data) return;
+		const stats = data.stats || {};
+		const adds = stats.additions === "unknown" || stats.additions == null ? "?" : `+${stats.additions}`;
+		const dels = stats.deletions === "unknown" || stats.deletions == null ? "?" : `−${stats.deletions}`;
+		container.append(h("p", { class: "pm-work-result-diff-stats mono" }, `${adds} ${dels}`));
+		if (data.truncated === true) {
+			const noticeP = h("p", { class: "muted pm-work-result-diff-notice" });
+			const rawText = t("wres_diff_truncated");
+			if (rawText.includes("256 KiB")) {
+				const [before, after] = rawText.split("256 KiB");
+				noticeP.append(before, h("span", { class: "mono" }, "256 KiB"), after);
+			} else noticeP.textContent = rawText;
+			container.append(noticeP);
+		}
+		if (data.available === false) {
+			let reasonText = "";
+			if (data.reason === "diff_exceeded_pipe_limit") reasonText = t("wres_reason_diff_exceeded_pipe_limit");
+			else if (data.reason && t(`wres_reason_${data.reason}`) !== `wres_reason_${data.reason}`) reasonText = t(`wres_reason_${data.reason}`);
+			else if (data.reason && t(`error_code_${data.reason}`) !== `error_code_${data.reason}`) reasonText = t(`error_code_${data.reason}`);
+			else reasonText = t("wres_reason_generic_limit");
+			container.append(h("p", { class: "muted pm-work-result-diff-notice" }, reasonText));
+		} else if (typeof data.diff === "string") {
+			const pre = h("pre", {
+				class: "pm-work-result-diff-pre mono",
+				tabindex: "0",
+				role: "region",
+				"aria-label": t("wres_diff_region_label", {
+					path,
+					sha: commit.slice(0, 12)
+				}),
+				"data-work-result-diff-region": key
+			});
+			pre.textContent = data.diff;
+			container.append(pre);
+		}
+	}
+	async function loadDiff(commit, path, key, container, summaryNode) {
+		if (diffLoading.has(key)) return;
+		diffLoading.add(key);
+		diffErrors.delete(key);
+		const generation = diffGeneration;
+		const keyTicket = (diffKeySerials.get(key) || 0) + 1;
+		diffKeySerials.set(key, keyTicket);
+		const attemptId = activeAttempt?.attempt_id;
+		const activeAtStart = document.activeElement;
+		const startedFromRetry = Boolean(activeAtStart && activeAtStart.getAttribute("data-work-result-retry-diff") === key);
+		if (Boolean(activeAtStart && (container.contains(activeAtStart) || activeAtStart === summaryNode))) summaryNode.focus();
+		renderDiffContent(container, commit, path, key, summaryNode);
+		try {
+			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/diff?commit=${encodeURIComponent(commit)}&path=${encodeURIComponent(path)}`);
+			try {
+				alive?.();
+			} catch {
+				return;
+			}
+			if (generation !== diffGeneration || diffKeySerials.get(key) !== keyTicket || activeAttempt?.attempt_id !== attemptId) return;
+			diffCache.set(key, data);
+		} catch (err) {
+			try {
+				alive?.();
+			} catch {
+				return;
+			}
+			if (generation !== diffGeneration || diffKeySerials.get(key) !== keyTicket || activeAttempt?.attempt_id !== attemptId) return;
+			diffErrors.set(key, err);
+		} finally {
+			if (generation === diffGeneration && diffKeySerials.get(key) === keyTicket) {
+				diffLoading.delete(key);
+				if (activeAttempt?.attempt_id === attemptId && panelElement.contains(container)) {
+					renderDiffContent(container, commit, path, key, summaryNode);
+					const activeNow = document.activeElement;
+					if (Boolean(activeNow && (activeNow === summaryNode && summaryNode.isConnected || panelElement.contains(activeNow) && activeNow.getAttribute("data-work-result-diff-summary") === key)) && startedFromRetry && diffErrors.has(key)) elementByAttr(container, "data-work-result-retry-diff", key)?.focus();
+				}
+			}
+		}
+	}
+	async function readCurrentChanges(isReadAgain = false) {
+		if (changesBusy) return;
+		changesBusy = true;
+		const ticket = ++changesSerial;
+		const attemptId = activeAttempt?.attempt_id;
+		if (isReadAgain) {
+			diffGeneration++;
+			diffKeySerials.clear();
+			diffCache.clear();
+			diffErrors.clear();
+			diffLoading.clear();
+			openDiffs.clear();
+			for (const dt of panelElement.querySelectorAll(".pm-work-result-diff-details[open]")) dt.open = false;
+		}
+		currentChangesError = null;
+		if (lastEnvelope && activeAttempt) renderEnvelope(lastEnvelope, activeAttempt);
+		try {
+			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/changes`);
+			try {
+				alive?.();
+			} catch {
+				return;
+			}
+			if (ticket !== changesSerial || activeAttempt?.attempt_id !== attemptId) return;
+			currentChanges = data;
+			isOutOfDate = false;
+			currentChangesError = null;
+		} catch (err) {
+			try {
+				alive?.();
+			} catch {
+				return;
+			}
+			if (ticket !== changesSerial || activeAttempt?.attempt_id !== attemptId) return;
+			currentChangesError = err;
+		} finally {
+			if (ticket === changesSerial) changesBusy = false;
+			if (ticket === changesSerial && activeAttempt?.attempt_id === attemptId && lastEnvelope) renderEnvelope(lastEnvelope, activeAttempt);
+		}
+	}
+	function renderCurrentChangesBlock() {
+		const block = h("div", {
+			class: "pm-work-result-current-changes",
+			"data-work-result-current-changes": ""
+		});
+		if (changesBusy) block.setAttribute("aria-busy", "true");
+		if (currentChangesError) {
+			const errBoxNode = errorBox ? errorBox(currentChangesError, { within: block }) : h("div", { class: "error" }, currentChangesError?.message || String(currentChangesError));
+			const retryBtn = button({
+				label: t("wres_try_again"),
+				class: "ui-button secondary ui-sm pm-work-result-retry",
+				onClick: () => {
+					readCurrentChanges(false);
+				}
+			});
+			retryBtn.setAttribute("data-work-result-retry", "changes");
+			if (changesBusy) retryBtn.setAttribute("aria-disabled", "true");
+			block.append(h("div", { class: "pm-work-result-error-box" }, errBoxNode, retryBtn));
+			return block;
+		}
+		if (isOutOfDate) {
+			const outPill = h("span", {
+				class: "ui-pill tone-warn",
+				"data-status": "out-of-date"
+			}, t("wres_out_of_date"));
+			const readAgainBtn = button({
+				label: t("wres_read_again"),
+				class: "ui-button secondary ui-sm pm-work-result-read-again",
+				onClick: () => {
+					readCurrentChanges(true);
+				}
+			});
+			if (changesBusy) readAgainBtn.setAttribute("aria-disabled", "true");
+			block.append(h("div", { class: "pm-work-result-out-of-date-banner" }, outPill, " ", readAgainBtn));
+		} else {
+			const readBtn = button({
+				label: t("wres_read_current_changes"),
+				class: "ui-button secondary ui-sm pm-work-result-read-changes",
+				onClick: () => {
+					readCurrentChanges(false);
+				}
+			});
+			if (changesBusy) readBtn.setAttribute("aria-disabled", "true");
+			block.append(readBtn);
+		}
+		if (!currentChanges) return block;
+		const headSha = currentChanges.live_head_commit;
+		const headP = h("p", { class: "pm-work-result-head" });
+		headP.append(h("strong", {}, `${t("wres_head")}: `));
+		if (headSha && headSha !== "unknown") headP.append(h("span", { class: "mono" }, headSha.slice(0, 12)));
+		else headP.append(t("wres_unknown"));
+		block.append(headP);
+		const freshness = currentChanges.head_freshness;
+		let freshnessKey = "wres_freshness_unavailable";
+		if (freshness === "live") freshnessKey = "wres_freshness_live";
+		else if (freshness === "cached_receipt") freshnessKey = "wres_freshness_cached_receipt";
+		block.append(h("p", { class: "muted pm-work-result-freshness" }, t(freshnessKey)));
+		const curSummary = currentChanges.summary || {};
+		const isCurComplete = curSummary.complete === true && (!curSummary.unavailable || curSummary.unavailable.length === 0);
+		const curFilesCountNum = Number.isSafeInteger(curSummary.file_count) ? curSummary.file_count : Array.isArray(curSummary.files) ? curSummary.files.length : null;
+		const curCommitsCountNum = Number.isSafeInteger(curSummary.commit_count) ? curSummary.commit_count : Array.isArray(curSummary.commits) ? curSummary.commits.length : null;
+		let curSummaryKey = "wres_changes_summary";
+		if (curFilesCountNum === 1 && curCommitsCountNum === 1) curSummaryKey = "wres_changes_summary_one";
+		else if (curFilesCountNum === 1) curSummaryKey = "wres_changes_summary_one_file";
+		else if (curCommitsCountNum === 1) curSummaryKey = "wres_changes_summary_one_commit";
+		const curSummaryText = t(curSummaryKey, {
+			files: formatCount(curFilesCountNum),
+			commits: formatCount(curCommitsCountNum),
+			additions: formatCount(curSummary.additions),
+			deletions: formatCount(curSummary.deletions)
+		});
+		if (isCurComplete) block.append(h("p", { class: "pm-work-result-changes-summary" }, curSummaryText));
+		else block.append(h("p", { class: "pm-work-result-changes-summary" }, t("wres_changes_partly_read")));
+		const blockReasons = new Set();
+		if (!isCurComplete) {
+			const curChangeReasons = [];
+			if (curSummary.reason) {
+				curChangeReasons.push(curSummary.reason);
+				blockReasons.add(curSummary.reason);
+			}
+			if (Array.isArray(curSummary.reasons)) {
+				for (const r of curSummary.reasons) if (!curChangeReasons.includes(r) && !blockReasons.has(r)) {
+					curChangeReasons.push(r);
+					blockReasons.add(r);
+				}
+			}
+			if (curChangeReasons.length > 0) {
+				const reasonsList = h("ul", { class: "pm-work-result-changes-reasons" });
+				for (const code of curChangeReasons) {
+					const key = `wres_reason_${code}`;
+					let text = t(key);
+					if (!text || text === key) text = t("wres_reason_generic_limit");
+					reasonsList.append(h("li", {}, text));
+				}
+				block.append(reasonsList);
+			}
+		}
+		const curCompleteness = currentChanges.completeness;
+		const curCompStatus = curCompleteness?.status;
+		if (curCompStatus && curCompStatus !== "complete") {
+			const compDiv = h("div", { class: "pm-work-result-completeness" });
+			if (curCompStatus === "partial") compDiv.append(statusPill("partial"));
+			else compDiv.append(h("span", {
+				class: "ui-pill tone-bad",
+				"data-status": "unavailable"
+			}, t("wres_status_unavailable")));
+			const compReasons = (curCompleteness.reasons || []).filter((code) => {
+				if (blockReasons.has(code)) return false;
+				blockReasons.add(code);
+				return true;
+			});
+			if (compReasons.length > 0) {
+				const reasonList = h("ul", { class: "pm-work-result-completeness-reasons" });
+				for (const code of compReasons) {
+					const key = `wres_reason_${code}`;
+					let text = t(key);
+					if (!text || text === key) text = t("wres_reason_generic_limit");
+					reasonList.append(h("li", {}, text));
+				}
+				compDiv.append(reasonList);
+			}
+			block.append(compDiv);
+		}
+		const curFiles = curSummary.files || [];
+		if (curFiles.length > 0) {
+			const curFileList = h("ul", { class: "pm-work-result-file-list" });
+			for (const f of curFiles) {
+				let statusLabel = t("wres_unknown");
+				if (f.status === "M" || f.status === "modified") statusLabel = t("wres_file_modified");
+				else if (f.status === "A" || f.status === "added") statusLabel = t("wres_file_added");
+				else if (f.status === "D" || f.status === "deleted") statusLabel = t("wres_file_deleted");
+				else if (typeof f.status === "string" && (f.status.startsWith("R") || f.status === "renamed")) statusLabel = t("wres_file_renamed");
+				const adds = f.additions === "unknown" || f.additions == null ? "?" : `+${f.additions}`;
+				const dels = f.deletions === "unknown" || f.deletions == null ? "?" : `−${f.deletions}`;
+				const row = h("li", { class: "pm-work-result-file-row" }, h("span", { class: "pm-work-result-file-path mono" }, f.path), " ", h("span", { class: "pm-work-result-file-status muted" }, statusLabel), " ", h("span", { class: "pm-work-result-file-diff mono" }, `${adds} ${dels}`));
+				if (canDiff()) {
+					const commits = sortCommitsOldestFirst(f.commits_touched, curSummary.commits);
+					for (const commit of commits) {
+						const key = `${commit}:${f.path}`;
+						const isOpen = openDiffs.has(key);
+						const sha12 = commit.slice(0, 12);
+						const summaryNode = h("summary", {
+							"data-work-result-diff-summary": key,
+							tabindex: "0"
+						}, t("wres_show_diff_label"), " · ", h("span", { class: "mono" }, sha12));
+						const bodyContainer = h("div", { class: "pm-work-result-diff-body" });
+						renderDiffContent(bodyContainer, commit, f.path, key, summaryNode);
+						const diffDetails = disclosure({ element: h("details", {
+							class: "pm-work-result-diff-details",
+							open: isOpen
+						}, summaryNode, bodyContainer) });
+						diffDetails.addEventListener("toggle", () => {
+							if (diffDetails.open) {
+								openDiffs.add(key);
+								if (!diffCache.has(key) && !diffLoading.has(key) && !diffErrors.has(key)) loadDiff(commit, f.path, key, bodyContainer, summaryNode);
+							} else openDiffs.delete(key);
+						});
+						row.append(diffDetails);
+					}
+				}
+				curFileList.append(row);
+			}
+			block.append(curFileList);
+		}
+		const curUncommitted = currentChanges.uncommitted || {};
+		const uncommittedBox = h("div", { class: "pm-work-result-uncommitted-box" });
+		if (curUncommitted.count === "unknown") uncommittedBox.append(h("p", { class: "muted pm-work-result-uncommitted" }, t("wres_uncommitted_unknown")));
+		else if (Number.isSafeInteger(curUncommitted.count) && curUncommitted.count > 0) {
+			uncommittedBox.append(h("p", { class: "pm-work-result-uncommitted" }, t("wres_uncommitted_changes", { n: curUncommitted.count })));
+			if (Array.isArray(curUncommitted.files) && curUncommitted.files.length > 0) {
+				const uncommittedList = h("ul", { class: "pm-work-result-file-list pm-work-result-uncommitted-list" });
+				for (const uf of curUncommitted.files) {
+					const p = typeof uf === "string" ? uf : uf?.path;
+					const s = typeof uf === "object" && uf?.status ? uf.status : null;
+					const li = h("li", { class: "pm-work-result-file-row" }, h("span", { class: "pm-work-result-file-path mono" }, p));
+					if (s) {
+						let statusLabel = s;
+						if (s === "M" || s === "modified") statusLabel = t("wres_file_modified");
+						else if (s === "A" || s === "added") statusLabel = t("wres_file_added");
+						else if (s === "D" || s === "deleted") statusLabel = t("wres_file_deleted");
+						li.append(" ", h("span", { class: "pm-work-result-file-status muted" }, statusLabel));
+					}
+					uncommittedList.append(li);
+				}
+				uncommittedBox.append(uncommittedList);
+			}
+		}
+		uncommittedBox.append(h("p", { class: "muted pm-work-result-uncommitted-no-diff" }, t("wres_uncommitted_no_diff")));
+		block.append(uncommittedBox);
+		return block;
+	}
+	return {
+		element: panelElement,
+		sync: () => publish.sync(),
+		setAttempt,
+		refresh,
+		withdraw,
+		dispose
+	};
 }
 //#endregion
 //#region src/pm-quality-projections.js
@@ -23707,7 +25405,7 @@ function structuredAnalysis({ h, t, labelled, action, capability, legacyEligible
 }
 //#endregion
 //#region src/pm-issue-resolution.js
-var ACTION$2 = "pm.governance.revise";
+var ACTION$1 = "pm.governance.revise";
 var findingFields = [
 	"title",
 	"description",
@@ -23724,7 +25422,7 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	const box = h("div", { "data-proposal-resolution": "" }), entries = new Map();
 	let serial = 0, current = null, workspace = null, enabled = false;
-	const scope = () => caps()?.scopes?.includes("observe") && caps()?.scopes?.includes("manage") && caps()?.actions?.some((row) => row.action === ACTION$2 && row.allowed === true) && permitted(false);
+	const scope = () => caps()?.scopes?.includes("observe") && caps()?.scopes?.includes("manage") && caps()?.actions?.some((row) => row.action === ACTION$1 && row.allowed === true) && permitted(false);
 	const role = () => Array.isArray(workspace?.members) ? workspace.members.find((row) => row.actor === caps()?.actor)?.role : workspace?.membership?.actor === caps()?.actor ? workspace.membership.role : null;
 	const authorized = (entry) => enabled && Boolean(entry.value) && scope() && ["owner", "contributor"].includes(role()) && (role() === "owner" || entry.value?.revision.document.owner_actor === caps()?.actor);
 	const open = (entry) => ["open", "monitoring"].includes(entry.value?.revision.document.status);
@@ -23764,7 +25462,7 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 		});
 		const extra = h("div", {}, finding, labelled("pcp_resolve_rationale", rationale));
 		entry.editor = form({
-			action: ACTION$2,
+			action: ACTION$1,
 			target: {
 				workspace_id: workspaceId,
 				record_id: id
@@ -23990,7 +25688,7 @@ var defaults = {
 };
 var record$4 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var key$1 = (value, max) => typeof value === "string" && value.length <= max && /^[a-z][a-z0-9_.-]*$/.test(value);
-var text$5 = (value, max) => typeof value === "string" && !!value.trim() && [...value].length <= max && !value.includes("\0");
+var text$4 = (value, max) => typeof value === "string" && !!value.trim() && [...value].length <= max && !value.includes("\0");
 var refs$1 = (values, allowed, min = 1) => Array.isArray(values) && values.length >= min && values.length <= 20 && new Set(values).size === values.length && values.every((value) => allowed.has(value));
 function cyclic(requirements) {
 	const graph = new Map(requirements.map((row) => [row.id, row.depends_on])), active = new Set(), done = new Set();
@@ -24230,10 +25928,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			if (p.document !== null || p.document_digest !== null) throw fail();
 		} else {
 			const d = p.document;
-			if (!/^[0-9a-f]{64}$/.test(p.document_digest) || d?.version !== 1 || !text$5(d.title, 160) || !text$5(d.summary, 8e3) || !Array.isArray(d.candidates) || !d.candidates.length || d.candidates.length > 20 || !Array.isArray(d.requirements) || d.requirements.length > 20 || !Array.isArray(d.questions) || d.questions.length > 3) throw fail();
+			if (!/^[0-9a-f]{64}$/.test(p.document_digest) || d?.version !== 1 || !text$4(d.title, 160) || !text$4(d.summary, 8e3) || !Array.isArray(d.candidates) || !d.candidates.length || d.candidates.length > 20 || !Array.isArray(d.requirements) || d.requirements.length > 20 || !Array.isArray(d.questions) || d.questions.length > 3) throw fail();
 			const keys = new Set();
 			for (const row of d.candidates) {
-				if (!record$4(row) || !key$1(row.key, 60) || keys.has(row.key) || !text$5(row.text, 4e3) || !Object.hasOwn(defaults, row.kind) || !Array.isArray(row.source_refs) || !row.source_refs.length || row.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
+				if (!record$4(row) || !key$1(row.key, 60) || keys.has(row.key) || !text$4(row.text, 4e3) || !Object.hasOwn(defaults, row.kind) || !Array.isArray(row.source_refs) || !row.source_refs.length || row.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
 				keys.add(row.key);
 			}
 			if (!validRequirements(d.requirements, new Set(d.candidates.filter((row) => row.kind !== "excluded").map((row) => row.key)))) throw fail();
@@ -24256,9 +25954,9 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		};
 	}
 	function reviewIssue(value) {
-		if (!active || !record$4(value) || !text$5(value.title, 160) || !Array.isArray(value.rows) || value.rows.some((row) => !record$4(row)) || !Array.isArray(value.requirements) || value.requirements.length > 20 || value.requirements.some((row) => !record$4(row))) return "pcp_missing";
+		if (!active || !record$4(value) || !text$4(value.title, 160) || !Array.isArray(value.rows) || value.rows.some((row) => !record$4(row)) || !Array.isArray(value.requirements) || value.requirements.length > 20 || value.requirements.some((row) => !record$4(row))) return "pcp_missing";
 		const keys = active.document?.candidates?.map((row) => row.key) || [];
-		if (value.rows.length !== keys.length || new Set(value.rows.map((row) => row.key)).size !== keys.length || value.rows.some((row) => !keys.includes(row.key) || !key$1(row.key, 60) || !text$5(row.text, 4e3) || !statuses.includes(row.status) || typeof row.include !== "boolean")) return "pcp_missing";
+		if (value.rows.length !== keys.length || new Set(value.rows.map((row) => row.key)).size !== keys.length || value.rows.some((row) => !keys.includes(row.key) || !key$1(row.key, 60) || !text$4(row.text, 4e3) || !statuses.includes(row.status) || typeof row.include !== "boolean")) return "pcp_missing";
 		const included = new Set(value.rows.filter((row) => row.include).map((row) => row.key));
 		if (!included.size) return "pcp_empty_selection";
 		if (value.requirements.some((row) => Array.isArray(row.acceptance_keys) && !row.acceptance_keys.length)) return "pcp_acceptance_missing";
@@ -25128,7 +26826,7 @@ function workspaceWorkDeliveries({ h, t, api, alive, workspaceId, errorBox }) {
 //#region src/pm-spec-materialization.js
 var id = /^pmsp_[0-9a-f]{32}$/;
 var digest$9 = /^[0-9a-f]{64}$/;
-var sha$6 = /^[0-9a-f]{40}$/;
+var sha$5 = /^[0-9a-f]{40}$/;
 var artifactRef = (row) => Object.fromEntries([
 	"artifact_id",
 	"revision",
@@ -25140,7 +26838,7 @@ function checkSpecMaterialization(value, workspaceId, selected, { full = false, 
 	}, row = value;
 	if (!row || row.workspace_id !== workspaceId || row.package_id !== selected.package_id || !id.test(row.materialization_id) || !digest$9.test(row.document_digest) || !/^op_[0-9a-f]{32}$/.test(row.operation_id) || !/^art_[0-9a-f]{32}$/.test(row.artifact_ref?.artifact_id) || !Number.isSafeInteger(row.artifact_ref.revision) || row.artifact_ref.revision < 1 || row.artifact_ref.digest !== row.document_digest) fail();
 	const receipt = row.git_receipt;
-	if (receipt?.status !== "verified" || receipt.workspace_id !== workspaceId || receipt.revision_id !== row.materialization_id || receipt.package_id !== row.package_id || receipt.operation_id !== row.operation_id || receipt.artifact_kind !== "pm-spec" || !sha$6.test(receipt.commit_sha) || !sha$6.test(receipt.tree_sha) || !digest$9.test(receipt.document_digest) || !receipt.file_digests || typeof receipt.file_digests !== "object" || !Object.keys(receipt.file_digests).length || Object.values(receipt.file_digests).some((value) => !digest$9.test(value))) fail();
+	if (receipt?.status !== "verified" || receipt.workspace_id !== workspaceId || receipt.revision_id !== row.materialization_id || receipt.package_id !== row.package_id || receipt.operation_id !== row.operation_id || receipt.artifact_kind !== "pm-spec" || !sha$5.test(receipt.commit_sha) || !sha$5.test(receipt.tree_sha) || !digest$9.test(receipt.document_digest) || !receipt.file_digests || typeof receipt.file_digests !== "object" || !Object.keys(receipt.file_digests).length || Object.values(receipt.file_digests).some((value) => !digest$9.test(value))) fail();
 	if (original && (JSON.stringify(fixedSpecSelection(row, workspaceId)) !== JSON.stringify(fixedSpecSelection(original, workspaceId)) || row.operation_id !== original.operation_id || receipt.commit_sha !== original.git_receipt.commit_sha || receipt.document_digest !== original.git_receipt.document_digest)) fail();
 	if (full) {
 		const doc = row.document, ref = doc?.package_ref;
@@ -25479,7 +27177,7 @@ var profile = {
 };
 var same$6 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 var clone$1 = (value) => structuredClone(value);
-var sha$5 = /^[0-9a-f]{40}$/;
+var sha$4 = /^[0-9a-f]{40}$/;
 var digest$8 = /^[0-9a-f]{64}$/;
 var op$1 = /^op_[0-9a-f]{32}$/;
 function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox, namespace, reviewedHandoff = () => null }) {
@@ -25985,7 +27683,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 	});
 	function checkBatch(value) {
 		if (value?.workspace_id !== workspaceId || !/^pmbt_[0-9a-f]{32}$/.test(value.batch_id) || !op$1.test(value.operation_id) || !Number.isSafeInteger(value.version) || value.version < 0 || !Array.isArray(value.entries) || value.entries.length > 16 || !["not_evaluated", "see_explicit_original_evidence"].includes(value.requirement_acceptance) || value.model_provider_cost !== "unmeasured") throw error();
-		for (const entry of value.entries) if (!/^[a-z][a-z0-9_]{0,47}$/.test(entry.key) || !sha$5.test(entry.source_sha) || !Array.isArray(entry.depends_on) || !Array.isArray(entry.verification_evidence) || entry.operation_id && !op$1.test(entry.operation_id)) throw error();
+		for (const entry of value.entries) if (!/^[a-z][a-z0-9_]{0,47}$/.test(entry.key) || !sha$4.test(entry.source_sha) || !Array.isArray(entry.depends_on) || !Array.isArray(entry.verification_evidence) || entry.operation_id && !op$1.test(entry.operation_id)) throw error();
 		return value;
 	}
 	function proofFacts(proof) {
@@ -26076,7 +27774,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 			if (!valid(ticket) || !data) return;
 			evidenceFiltered ||= data.filtered;
 			for (const delivery of data.rows) if (delivery.action === "integration.apply" && op$1.test(delivery.operation_id)) {
-				for (const source of delivery.integration?.sources || []) if (source.source_kind === "execution" && source.source_id === entry.operation_id && source.status === "delivered" && sha$5.test(source.delivered_sha) && Number.isSafeInteger(source.seq) && source.seq >= 0) deliveries.push({
+				for (const source of delivery.integration?.sources || []) if (source.source_kind === "execution" && source.source_id === entry.operation_id && source.status === "delivered" && sha$4.test(source.delivered_sha) && Number.isSafeInteger(source.seq) && source.seq >= 0) deliveries.push({
 					entry_key: entry.key,
 					operation_id: delivery.operation_id,
 					seq: source.seq,
@@ -32605,8 +34303,8 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 }
 //#endregion
 //#region src/pm-execution-verification.js
-var ACTION$1 = "pm.execution.verify";
-var sha$4 = /^[0-9a-f]{40}$/;
+var ACTION = "pm.execution.verify";
+var sha$3 = /^[0-9a-f]{40}$/;
 var digest$7 = /^[0-9a-f]{64}$/;
 var operation$1 = /^op_[0-9a-f]{32}$/;
 function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspace, caps, form, labelled, errorBox, namespace, onSaved, onConfiguration = () => {}, onUnavailable = () => {} }) {
@@ -32670,7 +34368,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 		try {
 			const value = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/executions/${selected}/verification-config`);
 			if (!valid(ticket)) return;
-			if (value.workspace_id !== workspaceId || value.execution_operation_id !== selected || value.profile !== "observed_runner_v1" || !digest$7.test(value.handoff_contract_digest) || typeof value.available !== "boolean" || value.available && !digest$7.test(value.command_digest) || value.candidate_commit !== null && !sha$4.test(value.candidate_commit) || value.tree_hash !== null && !sha$4.test(value.tree_hash)) throw Error(t("pmq_invalid"));
+			if (value.workspace_id !== workspaceId || value.execution_operation_id !== selected || value.profile !== "observed_runner_v1" || !digest$7.test(value.handoff_contract_digest) || typeof value.available !== "boolean" || value.available && !digest$7.test(value.command_digest) || value.candidate_commit !== null && !sha$3.test(value.candidate_commit) || value.tree_hash !== null && !sha$3.test(value.tree_hash)) throw Error(t("pmq_invalid"));
 			configuration = value;
 			ready = true;
 			status.replaceChildren();
@@ -32690,7 +34388,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 				value: value[key] || ""
 			})]));
 			const matches = () => configuration && Object.entries(fields).every(([key, field]) => field.value === configuration[key]);
-			const admissible = () => writer() && configuration?.available && sha$4.test(configuration.candidate_commit) && sha$4.test(configuration.tree_hash) && matches();
+			const admissible = () => writer() && configuration?.available && sha$3.test(configuration.candidate_commit) && sha$3.test(configuration.tree_hash) && matches();
 			const rebase = button({
 				variant: "secondary",
 				label: t("pmq_verify_use_config"),
@@ -32705,7 +34403,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 				namespace: `${namespace}.verification`,
 				api,
 				requiredScope: "operate",
-				action: ACTION$1,
+				action: ACTION,
 				target: {
 					workspace_id: workspaceId,
 					execution_operation_id: selected
@@ -32772,7 +34470,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 var CREATE = "pm.quality.review.create";
 var RECORD$1 = "pm.quality.review.record";
 var REVOKE = "pm.quality.review.revoke";
-var sha$3 = /^[0-9a-f]{40}$/;
+var sha$2 = /^[0-9a-f]{40}$/;
 var digest$6 = /^[0-9a-f]{64}$/;
 var operation = /^op_[0-9a-f]{32}$/;
 var reviewId = /^pmqr_[0-9a-f]{32}$/;
@@ -32908,7 +34606,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		throw Error(t("pmq_history_bound"));
 	}
 	function checkReview(row) {
-		if (row?.workspace_id !== workspaceId || row.work_item_id !== workId || !reviewId.test(row.review_id) || !operation.test(row.operation_id) || !Number.isSafeInteger(row.version) || row.version < 1 || !digest$6.test(row.context_digest) || !Array.isArray(row.context?.criteria) || !Array.isArray(row.history) || !Array.isArray(row.applicability_reasons) || typeof row.qualified !== "boolean" || !sha$3.test(row.context?.native_result?.candidate_commit) || !operation.test(row.context?.execution_operation_id) || !row.original_outcome || row.assessment && (!operation.test(row.assessment.operation_id) || !digest$6.test(row.assessment.document_digest) || !Number.isSafeInteger(row.assessment.version) || !Array.isArray(row.assessment.document?.criteria)) || row.qualified && !row.assessment) throw error();
+		if (row?.workspace_id !== workspaceId || row.work_item_id !== workId || !reviewId.test(row.review_id) || !operation.test(row.operation_id) || !Number.isSafeInteger(row.version) || row.version < 1 || !digest$6.test(row.context_digest) || !Array.isArray(row.context?.criteria) || !Array.isArray(row.history) || !Array.isArray(row.applicability_reasons) || typeof row.qualified !== "boolean" || !sha$2.test(row.context?.native_result?.candidate_commit) || !operation.test(row.context?.execution_operation_id) || !row.original_outcome || row.assessment && (!operation.test(row.assessment.operation_id) || !digest$6.test(row.assessment.document_digest) || !Number.isSafeInteger(row.assessment.version) || !Array.isArray(row.assessment.document?.criteria)) || row.qualified && !row.assessment) throw error();
 		return row;
 	}
 	function packageFor(id) {
@@ -32992,7 +34690,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 					return [];
 				}
 			};
-			const permittedCreate = () => owner() && packageFor(pkg.value) && children(packageFor(pkg.value)).some((row) => row.operation_id === child.value) && sha$3.test(candidate.value) && reviewer.value && chosenCriteria().length > 0 && same$5(rows().map((row) => row.criterion), chosenCriteria().map((row) => row.criterion)) && rows().every((row) => {
+			const permittedCreate = () => owner() && packageFor(pkg.value) && children(packageFor(pkg.value)).some((row) => row.operation_id === child.value) && sha$2.test(candidate.value) && reviewer.value && chosenCriteria().length > 0 && same$5(rows().map((row) => row.criterion), chosenCriteria().map((row) => row.criterion)) && rows().every((row) => {
 				try {
 					return same$5(row.condition, policy(row.choice));
 				} catch {
@@ -33343,7 +35041,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				const receipt = saved.verification;
 				if (saved.workspace_id !== workspaceId) throw error();
 				if (!receipt) continue;
-				if (receipt.operation_id !== op.operation_id || receipt.workspace_id !== workspaceId || receipt.execution_operation_id !== op.target.execution_operation_id || !digest$6.test(receipt.receipt_digest) || receipt.reference?.verification_operation_id !== op.operation_id || !sha$3.test(receipt.reference.candidate_commit) || !sha$3.test(receipt.reference.tree_hash) || !digest$6.test(op.params?.command_digest) || receipt.profile !== "observed_runner_v1") throw error();
+				if (receipt.operation_id !== op.operation_id || receipt.workspace_id !== workspaceId || receipt.execution_operation_id !== op.target.execution_operation_id || !digest$6.test(receipt.receipt_digest) || receipt.reference?.verification_operation_id !== op.operation_id || !sha$2.test(receipt.reference.candidate_commit) || !sha$2.test(receipt.reference.tree_hash) || !digest$6.test(op.params?.command_digest) || receipt.profile !== "observed_runner_v1") throw error();
 				proofs.push({
 					key: op.operation_id,
 					label: `${t("pmq_runner")} · ${receipt.reference.candidate_commit.slice(0, 12)} · ${op.operation_id}`,
@@ -33360,7 +35058,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				const data = await request("GET", `${base}/evidence/${entry.evidence_id}`);
 				if (!valid(ticket)) return;
 				const e = data.evidence, f = e?.document?.facts;
-				if (e?.workspace_id !== workspaceId || e.evidence_id !== entry.evidence_id || !f || !sha$3.test(f.candidate_commit) || !sha$3.test(f.tree_hash) || !digest$6.test(f.command_digest) || !Number.isSafeInteger(f.verification_id) || f.verification_id < 1) throw error();
+				if (e?.workspace_id !== workspaceId || e.evidence_id !== entry.evidence_id || !f || !sha$2.test(f.candidate_commit) || !sha$2.test(f.tree_hash) || !digest$6.test(f.command_digest) || !Number.isSafeInteger(f.verification_id) || f.verification_id < 1) throw error();
 				proofs.push({
 					key: entry.evidence_id,
 					label: `${t("pmq_runner")} · #${f.verification_id} · ${f.candidate_commit.slice(0, 12)}`,
@@ -33377,7 +35075,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				});
 			}
 			for (const delivery of deliveries) for (const source of delivery.integration?.sources || []) {
-				if (source.source_kind !== "execution" || source.status !== "delivered" || !sha$3.test(source.delivered_sha) || !operation.test(source.source_id)) continue;
+				if (source.source_kind !== "execution" || source.status !== "delivered" || !sha$2.test(source.delivered_sha) || !operation.test(source.source_id)) continue;
 				for (const observation of observations) {
 					if (!digest$6.test(observation.document_digest)) throw error();
 					proofs.push({
@@ -33809,12 +35507,19 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 				href: sessionHref$1({
 					host: attempt.session.host,
 					sessionId: attempt.session.session_id,
-					from: "board"
+					from: "board",
+					workspaceId,
+					workItemId: activeWorkId,
+					attemptId: attempt.attempt_id
 				}),
 				"data-work-start-session": ""
 			}, t("wst_open_live_output"));
 			const workLink = h("a", {
-				href: `#/item/${encodeURIComponent(activeCard.work_item_id)}`,
+				href: `#/item/${encodeURIComponent(activeCard.work_item_id)}/${encodeURIComponent(attempt.session.host)}/${encodeURIComponent(attempt.session.session_id)}?${new URLSearchParams({
+					workspace: workspaceId,
+					work: activeWorkId,
+					attempt: attempt.attempt_id
+				})}`,
 				"data-work-start-item": ""
 			}, t("wst_open_work"));
 			if (links.childNodes.length > 0) links.append(" · ");
@@ -34438,1643 +36143,6 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 		dispose,
 		startable: () => startable(),
 		focus
-	};
-}
-//#endregion
-//#region src/pm-work-publish.js
-var ACTION = "github.pr.publish";
-var SHA40 = /^[0-9a-f]{40}$/;
-var OP_ID = /^op_[0-9a-f]{32}$/;
-var TARGET_KEYS = [
-	"workspace_id",
-	"repository",
-	"host",
-	"source_operation_id"
-];
-var PARAM_NAMES = [
-	"candidate_sha",
-	"base_ref",
-	"public_title",
-	"public_body",
-	"draft"
-];
-var BLOCKED_KEYS = {
-	not_controller: "wpub_blocked_not_controller",
-	not_writer_member: "wpub_blocked_not_writer",
-	missing_scope: "wpub_blocked_scope",
-	WAIT_ORIGINAL_OPERATION_RECONCILE: "wpub_blocked_reconcile",
-	pull_request_exists: "wpub_blocked_pr_exists",
-	lifecycle_stopped: "wpub_blocked_lifecycle",
-	github_not_configured: "wpub_blocked_github",
-	publication_source_incomplete: "wpub_blocked_source"
-};
-var HOST_CODES = {
-	PR_SOURCE_MOVED: "wpub_source_moved",
-	PR_BASE_MOVED: "wpub_base_moved",
-	PR_SOURCE_HISTORY_CHANGED: "wpub_history_changed",
-	PR_BASE_NOT_ANCESTOR: "wpub_base_not_ancestor",
-	PR_EMPTY_CHANGE: "wpub_empty_change",
-	PR_PIN_CHANGED: "wpub_pin_changed",
-	PR_RECEIPT_EXISTS: "wpub_receipt_exists",
-	PR_BRANCH_EXISTS: "wpub_branch_exists",
-	PR_BRANCH_CREATE_REFUSED: "wpub_branch_refused",
-	PR_CHANGE_LIMIT: "wpub_change_limit",
-	PR_CREATE_REFUSED: "pm_terminal",
-	PR_PATH_UNREADABLE: "pm_terminal",
-	PR_PUBLISHED_HEAD_CHANGED: "pm_terminal",
-	PR_RECEIPT_UNAVAILABLE: "pm_terminal",
-	PR_PROVIDER_TARGET_CHANGED: "wpub_source_changed",
-	PR_CREATED_TARGET_CHANGED: "wpub_created_target_changed",
-	PR_FOREIGN_CONTROLLER: "wpub_blocked_not_controller",
-	INTERNAL: "error_generic",
-	PR_AUTHORITY_UNAVAILABLE: "wpub_authority"
-};
-var SETUP_CODES = new Set([
-	"GITHUB_NOT_CONFIGURED",
-	"REPO_NOT_CONFIGURED",
-	"INTEGRATION_DISABLED",
-	"UNKNOWN_HOST",
-	"TIER_DISABLED",
-	"NO_MANAGED_ROOT",
-	"GIT_RUNNER_UNAVAILABLE"
-]);
-var QUIET_CODES = new Set([
-	"TIMEOUT",
-	"NETWORK_ERROR",
-	"CENTRAL_OFFLINE",
-	"CONNECTION_CHANGED"
-]);
-var radioSerial = 0;
-var text$4 = (value) => typeof value === "string" && value.length > 0;
-var sha$2 = (value) => typeof value === "string" && SHA40.test(value);
-var bytes = (value) => new TextEncoder().encode(value).length;
-function exactTarget$1(target) {
-	if (!target || typeof target !== "object" || Array.isArray(target)) return null;
-	if (Object.keys(target).length !== TARGET_KEYS.length) return null;
-	if (!TARGET_KEYS.every((key) => Object.hasOwn(target, key) && text$4(target[key]))) return null;
-	if (!/^ws_[0-9a-f]{32}$/.test(target.workspace_id) || !OP_ID.test(target.source_operation_id)) return null;
-	return {
-		workspace_id: target.workspace_id,
-		repository: target.repository,
-		host: target.host,
-		source_operation_id: target.source_operation_id
-	};
-}
-function exactPreconditions(value) {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-	const keys = Object.keys(value).sort();
-	if (keys.length !== 2 || keys[0] !== "expected_base_sha" || keys[1] !== "repository_id") return null;
-	const id = value.repository_id;
-	if (typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0) return null;
-	if (!sha$2(value.expected_base_sha)) return null;
-	return {
-		repository_id: id,
-		expected_base_sha: value.expected_base_sha
-	};
-}
-function actionRows(list) {
-	if (!Array.isArray(list)) return [];
-	return list.filter((row) => row && row.action === ACTION);
-}
-function paramsReady(entry) {
-	return Array.isArray(entry?.required_params) && PARAM_NAMES.every((name) => entry.required_params.includes(name)) && entry.required_params.every((name) => PARAM_NAMES.includes(name));
-}
-function classifyPublicationEntry(envelope) {
-	const blocked = actionRows(envelope?.blocked_actions);
-	const allowed = actionRows(envelope?.next_allowed_actions);
-	if (blocked.length) {
-		const reasons = blocked.map((row) => typeof row.reason === "string" ? row.reason : "");
-		return {
-			mode: "blocked",
-			gap: "",
-			reason: new Set(reasons).size === 1 ? reasons[0] : "",
-			entry: null
-		};
-	}
-	if (!allowed.length) return {
-		mode: "absent",
-		gap: "",
-		reason: "",
-		entry: null
-	};
-	if (allowed.length > 1) return {
-		mode: "incomplete",
-		gap: "target",
-		reason: "",
-		entry: null
-	};
-	const row = allowed[0];
-	if (row.allowed === false || row.kind != null && row.kind !== "action") return {
-		mode: "incomplete",
-		gap: "target",
-		reason: "",
-		entry: null
-	};
-	const target = exactTarget$1(row.target);
-	const prefilled = row.prefilled_params && typeof row.prefilled_params === "object" && !Array.isArray(row.prefilled_params) ? row.prefilled_params : {};
-	const candidate = sha$2(prefilled.candidate_sha) ? prefilled.candidate_sha : "";
-	const baseRef = text$4(prefilled.base_ref) ? prefilled.base_ref : "";
-	const preconditions = exactPreconditions(row.preconditions);
-	const scopes = Array.isArray(row.required_scopes) ? row.required_scopes.filter((item) => typeof item === "string") : [];
-	if (!target || envelope?.workspace_id && target.workspace_id !== envelope.workspace_id || envelope?.identity?.execution_operation_id && target.source_operation_id !== envelope.identity.execution_operation_id) return {
-		mode: "incomplete",
-		gap: "target",
-		reason: "",
-		entry: null
-	};
-	const entry = {
-		target,
-		candidate,
-		baseRef,
-		preconditions,
-		scopes
-	};
-	if (!candidate) return {
-		mode: "incomplete",
-		gap: "commit",
-		reason: "",
-		entry
-	};
-	if (!baseRef || !preconditions || !paramsReady(row)) return {
-		mode: "incomplete",
-		gap: "preconditions",
-		reason: "",
-		entry
-	};
-	return {
-		mode: "ready",
-		gap: "",
-		reason: "",
-		entry
-	};
-}
-function identityOf(entry) {
-	if (!entry?.target) return "";
-	return JSON.stringify({
-		target: entry.target,
-		candidate_sha: entry.candidate || ""
-	});
-}
-function readCaps(caps) {
-	return typeof caps === "function" ? caps() : caps;
-}
-function catalogAllows(caps, entry) {
-	const current = readCaps(caps);
-	const scopes = Array.isArray(current?.scopes) ? current.scopes : [];
-	if (!(entry?.scopes?.length ? entry.scopes : [
-		"observe",
-		"manage",
-		"integrate"
-	]).every((scope) => scopes.includes(scope))) return false;
-	if (!scopes.includes("integrate")) return false;
-	return Boolean(current?.actions?.some((row) => row.action === ACTION && row.allowed === true));
-}
-function receiptSha(envelope) {
-	const rows = envelope?.delivery?.pull_requests;
-	if (!Array.isArray(rows) || !rows.length) return "";
-	const last = rows[rows.length - 1];
-	return sha$2(last?.candidate_sha) ? last.candidate_sha : "";
-}
-function sourceSentence(t, envelope, candidate) {
-	const fixed = envelope?.changes?.fixed_result_commit;
-	if (fixed?.commit_sha === candidate) {
-		if (fixed.source_kind === "turn_end_observation") return t("wres_source_turn_end_observation");
-		if (fixed.source_kind === "execution_verification" || fixed.source_kind === "session_verification") return t("wres_source_verified_commit");
-		if (fixed.source_kind === "integration") return t("wres_source_integration_commit");
-	}
-	const receipt = receiptSha(envelope);
-	if (receipt && receipt === candidate && receipt !== fixed?.commit_sha) return t("wpub_commit_from_receipt");
-	return t("wpub_commit_from_result");
-}
-function operationId$3(value) {
-	return typeof value === "string" && OP_ID.test(value) ? value : "";
-}
-function publicationPrLine(h, t, pr) {
-	if (!pr || typeof pr !== "object") return null;
-	const opId = operationId$3(pr.publication_operation_id);
-	const number = Number.isSafeInteger(pr.pull_number) ? pr.pull_number : null;
-	const repo = text$4(pr.repository) ? pr.repository : "";
-	const label = number != null && repo ? `PR #${number} · ${repo}` : "";
-	const item = h("li", {});
-	if (opId) {
-		item.append(h("a", {
-			href: `#/op/${encodeURIComponent(opId)}`,
-			"data-work-publish-pr": opId
-		}, label || t("pm_operation")));
-		if (pr.target_verified !== true) item.append(" ", h("span", { "data-work-publish-unverified": "" }, t("wpub_pr_unverified")));
-	} else if (label) item.append(h("span", {}, label));
-	else return null;
-	if (pr.requirement_acceptance === "not_evaluated_by_publication") item.append(" ", h("span", { "data-work-publish-not-accepted": "" }, t("wpub_pr_not_accepted")));
-	return item;
-}
-function publicationDeliveryLine(h, t, pr, envelope, attempt) {
-	if (!operationId$3(pr?.publication_operation_id)) return null;
-	const host = text$4(attempt?.session?.host) ? attempt.session.host : text$4(attempt?.native_session?.host) ? attempt.native_session.host : "";
-	const source = text$4(pr.child_operation_id) ? pr.child_operation_id : text$4(envelope?.identity?.execution_operation_id) ? envelope.identity.execution_operation_id : "";
-	const repo = text$4(pr.repository) ? pr.repository : "";
-	if (!host || !source || !repo) return null;
-	return h("p", { "data-work-publish-delivery": "" }, h("a", { href: `#/delivery/${encodeURIComponent(host)}/execution/${encodeURIComponent(source)}/${encodeURIComponent(repo)}` }, t("nav_delivery")), " ", t("wpub_delivery_link"));
-}
-function gapSentence(t, gap) {
-	if (gap === "commit") return t("wpub_commit_missing");
-	if (gap === "preconditions") return t("wpub_gap_preconditions");
-	return t("wpub_gap_target");
-}
-function createWorkPublish({ h, t, form, namespace, caps, errorBox }) {
-	let editor = null;
-	let root = null;
-	let mode = "absent";
-	let bound = null;
-	let pinned = null;
-	let identity = "";
-	let heldNode = null;
-	let gapNode = null;
-	let radios = null;
-	let facts = null;
-	let shownEnvelope = null;
-	const displayEntry = () => editor?.locked() ? pinned || bound : bound;
-	function dispose() {
-		dropEditor();
-		root = null;
-	}
-	function dropEditor() {
-		editor?.dispose();
-		editor = null;
-		identity = "";
-		bound = null;
-		pinned = null;
-		mode = "absent";
-		radios = null;
-		facts = null;
-		heldNode = null;
-		gapNode = null;
-	}
-	function recheck() {
-		if (editor?.locked()) editor.recheck();
-	}
-	function sentenceFor(error) {
-		const code = error?.code || "";
-		const status = editor?.operation()?.status || "";
-		if (status === "uncertain" || code === "UNCERTAIN") return t("wpub_uncertain");
-		if (code === "PR_CREATED_TARGET_CHANGED") return t("wpub_created_target_changed");
-		if (status === "needs_attention" || code === "UNCERTAIN_UNRESOLVED") return t("wpub_needs_attention");
-		if (HOST_CODES[code]) return t(HOST_CODES[code]);
-		if (SETUP_CODES.has(code)) return t(readCaps(caps)?.managed_installation ? "wpub_blocked_github_managed" : "wpub_blocked_github_plain");
-		if (!code || QUIET_CODES.has(code)) return "";
-		if (status === "failed" || status === "cancelled" || error?.admissionRefused === true || error?.status) return t("error_generic");
-		return "";
-	}
-	function paintFacts() {
-		if (!facts) return;
-		const entry = displayEntry();
-		const candidate = entry?.candidate || "";
-		facts.commit.hidden = !candidate;
-		if (candidate) {
-			facts.commitSha.textContent = candidate.slice(0, 12);
-			facts.commitSha.title = candidate;
-			facts.commitSha.setAttribute("aria-label", `${t("wpub_commit")} ${candidate}`);
-			facts.commitSource.textContent = sourceSentence(t, shownEnvelope, candidate);
-			facts.detailCommit.textContent = candidate;
-		}
-		const showBase = Boolean(entry?.baseRef && entry?.preconditions);
-		facts.base.hidden = !showBase;
-		facts.baseSha.hidden = !showBase;
-		facts.origin.hidden = !showBase;
-		if (showBase) {
-			facts.baseValue.textContent = entry.baseRef;
-			const full = entry.preconditions.expected_base_sha;
-			facts.baseShaValue.textContent = full.slice(0, 12);
-			facts.baseShaValue.title = full;
-			facts.baseShaValue.setAttribute("aria-label", `${t("wpub_base_sha")} ${full}`);
-			facts.detailBase.textContent = full;
-		}
-	}
-	function applyChrome() {
-		if (!editor) return;
-		const submit = editor.box.querySelector("button[type=\"submit\"]");
-		const reset = editor.box.querySelector(".actions > button[type=\"button\"]");
-		if (submit) submit.setAttribute("data-work-publish-submit", "");
-		if (reset) reset.setAttribute("data-work-publish-new-request", "");
-		const locked = Boolean(editor.locked());
-		if (submit && !locked && mode !== "ready") submit.hidden = true;
-		const code = editor.operation()?.error_code || editor.operation()?.error?.code;
-		if (reset && code === "PR_RECEIPT_EXISTS") reset.hidden = true;
-		if (radios) {
-			radios.yes.disabled = locked;
-			radios.no.disabled = locked;
-			const value = radios.mirror.value;
-			radios.yes.checked = value === "true";
-			radios.no.checked = value === "false";
-		}
-		if (gapNode) gapNode.hidden = mode === "ready" || locked;
-		const statusBox = editor.box.querySelector(":scope > [role=\"status\"]");
-		const op = editor.operation();
-		if (statusBox) {
-			let note = statusBox.querySelector("[data-work-publish-admitted]");
-			if (op?.status === "accepted") {
-				if (!note) statusBox.append(h("p", { "data-work-publish-admitted": "" }, t("wpub_admitted_note")));
-			} else if (note) note.remove();
-		}
-		if (locked) pinned = pinned || bound;
-		else pinned = null;
-		paintFacts();
-	}
-	function noteHeld(decision) {
-		if (!heldNode) return;
-		const next = identityOf(decision.entry);
-		const current = displayEntry();
-		const baseMoved = Boolean(decision.entry && current && (decision.entry.baseRef !== current.baseRef || decision.entry.preconditions?.expected_base_sha !== current.preconditions?.expected_base_sha || decision.entry.target?.repository !== current.target?.repository));
-		heldNode.hidden = Boolean(next && next === identity && !baseMoved);
-	}
-	function chooseDraft(value) {
-		if (!radios || editor?.locked()) return;
-		radios.mirror.value = value;
-		radios.mirror.dispatchEvent(new Event("input", { bubbles: true }));
-		radios.mirror.dispatchEvent(new Event("change", { bubbles: true }));
-	}
-	function mountEditor(decision, envelope) {
-		const entry = decision.entry;
-		bound = entry;
-		mode = decision.mode;
-		shownEnvelope = envelope;
-		identity = identityOf(entry);
-		const candidateKey = entry.candidate || "no-commit";
-		const groupId = `wpub-draft-${++radioSerial}`;
-		const titleInput = h("input", {
-			type: "text",
-			"data-work-publish-title": "",
-			"aria-label": t("wpub_title")
-		});
-		const bodyInput = h("textarea", {
-			"data-work-publish-body": "",
-			"aria-label": t("wpub_body")
-		});
-		const mirror = h("input", {
-			type: "hidden",
-			"data-work-publish-draft-value": ""
-		});
-		titleInput.dataset.pmDefault = "";
-		bodyInput.dataset.pmDefault = "";
-		mirror.dataset.pmDefault = "";
-		const yes = h("input", {
-			type: "radio",
-			name: `work-publish-draft-${radioSerial}`,
-			value: "true",
-			"data-work-publish-draft": "true"
-		});
-		const no = h("input", {
-			type: "radio",
-			name: `work-publish-draft-${radioSerial}`,
-			value: "false",
-			"data-work-publish-draft": "false"
-		});
-		yes.addEventListener("change", () => {
-			if (yes.checked) chooseDraft("true");
-		});
-		no.addEventListener("change", () => {
-			if (no.checked) chooseDraft("false");
-		});
-		radios = {
-			yes,
-			no,
-			mirror,
-			titleInput,
-			bodyInput
-		};
-		const commitSha = h("span", {
-			class: "mono",
-			"data-work-publish-commit": ""
-		}, "");
-		const commitSource = h("span", { "data-work-publish-commit-source": "" }, "");
-		const baseValue = h("span", { "data-work-publish-base": "" }, "");
-		const baseShaValue = h("span", {
-			class: "mono",
-			"data-work-publish-base-sha": ""
-		}, "");
-		const detailCommit = h("span", { class: "mono" }, "");
-		const detailBase = h("span", { class: "mono" }, "");
-		facts = {
-			commit: h("p", { class: "pm-work-publish-fact" }, h("strong", {}, `${t("wpub_commit")}: `), commitSha, " · ", commitSource),
-			commitSha,
-			commitSource,
-			base: h("p", { class: "pm-work-publish-fact" }, h("strong", {}, `${t("wpub_base")}: `), baseValue),
-			baseValue,
-			baseSha: h("p", { class: "pm-work-publish-fact" }, h("strong", {}, `${t("wpub_base_sha")}: `), baseShaValue),
-			baseShaValue,
-			origin: h("p", { class: "muted pm-work-publish-fact" }, t("wpub_base_from_start")),
-			detailCommit,
-			detailBase
-		};
-		heldNode = h("p", {
-			"data-work-publish-held": "",
-			hidden: true
-		}, t("wpub_result_held"));
-		gapNode = h("p", { "data-work-publish-gap": decision.gap || "none" }, gapSentence(t, decision.gap));
-		const extra = h("div", { class: "pm-work-publish-fields" }, h("p", { class: "pm-work-publish-public" }, t("wpub_public")), facts.commit, facts.base, facts.baseSha, facts.origin, h("details", { "data-work-publish-sha-details": "" }, h("summary", {}, t("wres_details")), h("p", {}, t("wpub_commit"), " ", detailCommit), h("p", {}, t("wpub_base_sha"), " ", detailBase)), h("label", {}, t("wpub_title"), titleInput), h("label", {}, t("wpub_body"), bodyInput), h("div", {
-			role: "radiogroup",
-			"aria-labelledby": groupId,
-			class: "pm-work-publish-draft"
-		}, h("p", { id: groupId }, t("wpub_draft_group")), h("p", { class: "muted" }, t("wpub_draft_help")), h("label", { class: "pm-work-publish-choice" }, yes, h("span", {}, t("wpub_draft_yes"), " ", h("span", { class: "muted" }, t("wpub_draft_yes_help")))), h("label", { class: "pm-work-publish-choice" }, no, h("span", {}, t("wpub_draft_no"), " ", h("span", { class: "muted" }, t("wpub_draft_no_help"))))), gapNode);
-		editor = form({
-			namespace: `${namespace}.work-publish.${candidateKey}`,
-			action: ACTION,
-			target: {
-				workspace_id: entry.target.workspace_id,
-				repository: entry.target.repository,
-				host: entry.target.host,
-				source_operation_id: entry.target.source_operation_id
-			},
-			requiredScope: "integrate",
-			savedText: "wpub_success",
-			pendingText: "wpub_pending",
-			label: "action_github_pr_publish",
-			fields: {
-				public_title: titleInput,
-				public_body: bodyInput,
-				draft: mirror
-			},
-			params: (values) => {
-				const current = bound;
-				const title = values.public_title ?? "";
-				const body = values.public_body ?? "";
-				if (!current || mode !== "ready" || !current.candidate || !current.baseRef || !current.preconditions) throw Error(t("wpub_gap_target"));
-				if (title.trim() === "") {
-					titleInput.focus();
-					throw Error(t("wpub_title_required"));
-				}
-				if (title.includes("\n") || title.includes("\r") || bytes(title) > 256) {
-					titleInput.focus();
-					throw Error(t("wpub_title_bounds"));
-				}
-				if (bytes(body) > 32e3) {
-					bodyInput.focus();
-					throw Error(t("wpub_body_bounds"));
-				}
-				if (values.draft !== "true" && values.draft !== "false") {
-					yes.focus();
-					throw Error(t("wpub_draft_required"));
-				}
-				pinned = {
-					target: current.target,
-					candidate: current.candidate,
-					baseRef: current.baseRef,
-					preconditions: current.preconditions,
-					scopes: current.scopes
-				};
-				return {
-					candidate_sha: current.candidate,
-					base_ref: current.baseRef,
-					public_title: title,
-					public_body: body,
-					draft: values.draft === "true"
-				};
-			},
-			preconditions: () => {
-				const current = editor?.locked() ? pinned || bound : bound;
-				if (!current?.preconditions) return {};
-				return {
-					repository_id: current.preconditions.repository_id,
-					expected_base_sha: current.preconditions.expected_base_sha
-				};
-			},
-			permitted: () => mode === "incomplete" || mode === "ready" && catalogAllows(caps, bound),
-			recoverPermitted: () => true,
-			onSaved: () => {
-				if (!radios) return;
-				radios.yes.checked = false;
-				radios.no.checked = false;
-				radios.mirror.value = "";
-			},
-			onError: (error) => {
-				const operation = editor?.operation();
-				error = {
-					...error,
-					code: error?.code || operation?.error_code,
-					message: error?.message || operation?.status_reason
-				};
-				const sentence = sentenceFor(error);
-				if (!sentence) return false;
-				const statusBox = editor?.box.querySelector(":scope > [role=\"status\"]");
-				if (!statusBox) return false;
-				statusBox.hidden = false;
-				const presented = errorBox ? errorBox(error, {
-					summary: sentence,
-					within: statusBox
-				}) : h("p", {}, sentence);
-				statusBox.replaceChildren(presented);
-				if (error?.code === "PR_AUTHORITY_UNAVAILABLE" || SETUP_CODES.has(error?.code) && readCaps(caps)?.managed_installation) statusBox.append(h("p", {}, h("a", { href: "#/settings?section=connection" }, t("paths_setup"))));
-				return true;
-			},
-			extra
-		});
-		const originalUpdate = editor.update;
-		editor.update = () => {
-			originalUpdate();
-			applyChrome();
-		};
-		editor.box.addEventListener("submit", (event) => {
-			if (!editor.locked() && mode !== "ready") {
-				event.preventDefault();
-				event.stopImmediatePropagation();
-			}
-		}, true);
-		editor.box.addEventListener("click", (event) => {
-			const reset = editor.box.querySelector("[data-work-publish-new-request]");
-			if (!reset || event.target !== reset && !reset.contains(event.target)) return;
-			if ((editor.operation()?.error_code || editor.operation()?.error?.code) === "PR_RECEIPT_EXISTS") {
-				event.preventDefault();
-				event.stopImmediatePropagation();
-			}
-		}, true);
-		editor.box.classList.add("pm-work-publish-form");
-		editor.update();
-		root = h("section", {
-			class: "pm-work-publish",
-			"data-work-publish": ""
-		}, h("h4", {}, t("action_github_pr_publish")), heldNode, editor.box);
-		paintFacts();
-		return root;
-	}
-	function staticSection(decision, envelope) {
-		dropEditor();
-		mode = decision.mode;
-		shownEnvelope = envelope;
-		if (decision.mode === "absent") {
-			root = null;
-			return null;
-		}
-		if (decision.mode === "blocked") {
-			const known = BLOCKED_KEYS[decision.reason];
-			const copy = known ? t(known) : t("wres_unknown");
-			const next = decision.reason === "github_not_configured" ? readCaps(caps)?.managed_installation ? h("p", {}, h("a", { href: "#/settings?section=connection" }, t("paths_setup")), " ", t("wpub_blocked_github_managed")) : h("p", {}, t("wpub_blocked_github_plain")) : null;
-			root = h("section", {
-				class: "pm-work-publish",
-				"data-work-publish": "",
-				"data-work-publish-blocked": decision.reason || "unknown"
-			}, h("h4", {}, t("action_github_pr_publish")), h("p", { "data-work-publish-blocked-reason": "" }, copy), next, decision.reason && !known ? h("details", {}, h("summary", {}, t("wres_details")), h("p", {}, decision.reason)) : null);
-			return root;
-		}
-		const entry = decision.entry;
-		if (!form || !entry?.target) {
-			root = h("section", {
-				class: "pm-work-publish",
-				"data-work-publish": ""
-			}, h("h4", {}, t("action_github_pr_publish")), h("p", { "data-work-publish-gap": decision.gap || "target" }, decision.mode === "ready" ? t("wpub_no_submit") : gapSentence(t, decision.gap || "target")));
-			return root;
-		}
-		return mountEditor(decision, envelope);
-	}
-	function render(envelope) {
-		const decision = classifyPublicationEntry(envelope);
-		if (decision.mode === "blocked" && [
-			"not_controller",
-			"not_writer_member",
-			"missing_scope"
-		].includes(decision.reason)) return staticSection(decision, envelope);
-		if (editor?.locked() && root) {
-			noteHeld(decision);
-			return root;
-		}
-		shownEnvelope = envelope;
-		if (decision.mode === "absent") return staticSection(decision, envelope);
-		if (decision.mode === "blocked") return staticSection(decision, envelope);
-		if (!form || !decision.entry?.target) return staticSection(decision, envelope);
-		const nextIdentity = identityOf(decision.entry);
-		if (editor && root && identity === nextIdentity) {
-			if (!editor.locked()) {
-				bound = decision.entry;
-				mode = decision.mode;
-				if (gapNode) {
-					gapNode.setAttribute("data-work-publish-gap", decision.gap || "none");
-					gapNode.textContent = gapSentence(t, decision.gap);
-				}
-				applyChrome();
-			}
-			return root;
-		}
-		dropEditor();
-		return mountEditor(decision, envelope);
-	}
-	return {
-		render,
-		dispose,
-		recheck,
-		element: () => root
-	};
-}
-//#endregion
-//#region src/pm-work-result.js
-var KNOWN_STATES = new Set([
-	"accepted",
-	"starting",
-	"active",
-	"waiting",
-	"turn-ended",
-	"process-ended",
-	"failed",
-	"unknown"
-]);
-var KNOWN_REASONS = new Set([
-	"bat_unreachable",
-	"observation_stale",
-	"session_not_found",
-	"transcript_truncated_by_size",
-	"archived_messages_omitted",
-	"parse_error",
-	"session_not_started_yet",
-	"start_outcome_uncertain",
-	"handoff_outcome_uncertain",
-	"unloaded_history_session",
-	"turn_marker_not_visible",
-	"turn_boundary_not_collected",
-	"session_not_managed_by_attempt",
-	"turn_slice_bounded",
-	"result_document_bounded",
-	"worktree_unreachable",
-	"bat_empty_status_not_clean_proof",
-	"diff_exceeded_pipe_limit",
-	"commit_limit_exceeded",
-	"changeset_time_budget_exceeded",
-	"base_commit_not_ancestor",
-	"source_digest_conflict"
-]);
-function normalizeForComparison(envelope) {
-	if (!envelope || typeof envelope !== "object") return null;
-	const clone = JSON.parse(JSON.stringify(envelope));
-	delete clone.cursor;
-	delete clone.events_read;
-	delete clone.wait;
-	if (clone.collection) delete clone.collection.checked_at;
-	return clone;
-}
-function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisibility = () => {}, form = null, namespace = "" }) {
-	let activeAttempt = null;
-	let readSerial = 0;
-	let lastEnvelope = null;
-	let lastNormalized = null;
-	let lastStale = false;
-	let turnsOpen = false;
-	let detailsOpen = false;
-	let filesOpen = false;
-	let currentChanges = null;
-	let currentChangesError = null;
-	let changesBusy = false;
-	let isOutOfDate = false;
-	let changesSerial = 0;
-	let diffGeneration = 0;
-	const diffKeySerials = new Map();
-	const diffCache = new Map();
-	const diffErrors = new Map();
-	const diffLoading = new Set();
-	const openDiffs = new Set();
-	const getCaps = () => typeof caps === "function" ? caps() : caps;
-	const canChanges = () => Boolean(getCaps()?.features?.pm_workspaces?.work_attempt_results?.routes?.changes);
-	const canDiff = () => Boolean(getCaps()?.features?.pm_workspaces?.work_attempt_results?.routes?.diff);
-	const panelElement = h("div", {
-		class: "pm-work-result-panel",
-		"data-work-result": ""
-	});
-	panelElement.hidden = true;
-	const publish = createWorkPublish({
-		h,
-		t,
-		form,
-		namespace,
-		caps,
-		errorBox
-	});
-	function updateVisibility(visible) {
-		panelElement.hidden = !visible;
-		onVisibility(visible);
-	}
-	function withdraw() {
-		readSerial++;
-		changesSerial++;
-		diffGeneration++;
-		diffKeySerials.clear();
-		lastEnvelope = null;
-		lastNormalized = null;
-		lastStale = false;
-		currentChanges = null;
-		currentChangesError = null;
-		changesBusy = false;
-		isOutOfDate = false;
-		diffCache.clear();
-		diffErrors.clear();
-		diffLoading.clear();
-		openDiffs.clear();
-		turnsOpen = false;
-		detailsOpen = false;
-		filesOpen = false;
-		publish.dispose();
-		panelElement.replaceChildren();
-		updateVisibility(false);
-	}
-	function dispose() {
-		activeAttempt = null;
-		withdraw();
-	}
-	async function setAttempt(attempt) {
-		if (!attempt || !attempt.attempt_id) {
-			activeAttempt = null;
-			withdraw();
-			return;
-		}
-		if (!Boolean(attempt.session?.session_id || attempt.native_session?.session_id || attempt.session_id)) {
-			activeAttempt = attempt;
-			withdraw();
-			return;
-		}
-		if (activeAttempt?.attempt_id !== attempt.attempt_id) withdraw();
-		activeAttempt = attempt;
-		await readResult();
-	}
-	async function refresh() {
-		if (!activeAttempt) return;
-		if (!Boolean(activeAttempt.session?.session_id || activeAttempt.native_session?.session_id || activeAttempt.session_id)) return;
-		await readResult();
-	}
-	async function readResult() {
-		if (!activeAttempt) return;
-		const ticket = ++readSerial;
-		const attemptId = activeAttempt.attempt_id;
-		const currentAttempt = activeAttempt;
-		try {
-			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/result`);
-			try {
-				alive?.();
-			} catch {
-				return;
-			}
-			if (ticket !== readSerial || activeAttempt?.attempt_id !== attemptId) return;
-			if (!(data && typeof data === "object" && data.contract === "pm-work-attempt-result/v1" && data.workspace_id === workspaceId && data.attempt_id === attemptId && data.execution && KNOWN_STATES.has(data.execution.state))) {
-				lastEnvelope = null;
-				lastNormalized = null;
-				lastStale = false;
-				renderInvalid();
-				return;
-			}
-			const normalized = normalizeForComparison(data);
-			const isUnchanged = lastNormalized && JSON.stringify(lastNormalized) === JSON.stringify(normalized);
-			if (!isUnchanged || lastStale) {
-				if (!isUnchanged && currentChanges) isOutOfDate = true;
-				lastEnvelope = data;
-				lastNormalized = normalized;
-				lastStale = false;
-				renderEnvelope(data, currentAttempt);
-			} else publish.recheck();
-		} catch (err) {
-			try {
-				alive?.();
-			} catch {
-				return;
-			}
-			if (ticket !== readSerial || activeAttempt?.attempt_id !== attemptId) return;
-			const status = err?.status;
-			if (status === 401 || status === 403 || status === 404) {
-				withdraw();
-				return;
-			}
-			lastStale = true;
-			renderError(err, currentAttempt);
-		}
-	}
-	function renderInvalid() {
-		publish.dispose();
-		panelElement.replaceChildren(h("h3", {}, t("wres_heading")), h("p", { class: "pm-work-result-invalid" }, t("wres_invalid_envelope")));
-		updateVisibility(true);
-	}
-	function renderError(err, attempt) {
-		const heading = h("h3", {}, t("wres_heading"));
-		const retryBtn = button({
-			label: t("wres_try_again"),
-			class: "ui-button secondary ui-sm pm-work-result-retry",
-			onClick: () => {
-				readResult();
-			}
-		});
-		retryBtn.setAttribute("data-work-result-retry", "result");
-		const errorContainer = h("div", { class: "pm-work-result-error-box" }, errorBox ? errorBox(err, { within: panelElement }) : h("div", { class: "error" }, err?.message || String(err)), retryBtn);
-		if (lastEnvelope) renderEnvelope(lastEnvelope, attempt, errorContainer);
-		else {
-			panelElement.replaceChildren(heading, errorContainer);
-			updateVisibility(true);
-		}
-	}
-	function formatCount(val) {
-		if (val === "unknown" || val == null) return t("wres_unknown");
-		return String(val);
-	}
-	function elementByAttr(root, name, value) {
-		if (!root || value == null) return null;
-		for (const node of root.querySelectorAll(`[${name}]`)) if (node.getAttribute(name) === value) return node;
-		return null;
-	}
-	function saveFocus() {
-		const active = document.activeElement;
-		if (active && panelElement.contains(active)) {
-			if (active.dataset?.workResultFocus) return {
-				type: "attr",
-				value: active.dataset.workResultFocus
-			};
-			if (active.dataset?.workResultDiffSummary) return {
-				type: "diff-summary",
-				key: active.dataset.workResultDiffSummary
-			};
-			if (active.dataset?.workResultDiffRegion) return {
-				type: "diff-region",
-				key: active.dataset.workResultDiffRegion
-			};
-			if (active.getAttribute("data-work-result-retry") === "result") return { type: "retry-result" };
-			if (active.getAttribute("data-work-result-retry") === "changes") return { type: "retry-changes" };
-			if (active.getAttribute("data-work-result-retry-diff")) return {
-				type: "retry-diff",
-				key: active.getAttribute("data-work-result-retry-diff")
-			};
-			if (active.classList.contains("pm-work-result-read-changes")) return { type: "read-changes" };
-			if (active.classList.contains("pm-work-result-read-again")) return { type: "read-again" };
-			if (active.matches?.("[data-work-publish-title], [data-work-publish-body]")) return {
-				type: "publish-field",
-				hook: active.hasAttribute("data-work-publish-title") ? "title" : "body",
-				start: active.selectionStart,
-				end: active.selectionEnd
-			};
-			if (active.matches?.("[data-work-publish-draft]")) return {
-				type: "publish-draft",
-				value: active.getAttribute("data-work-publish-draft")
-			};
-			if (active.matches?.("[data-work-publish-submit]")) return { type: "publish-submit" };
-			if (active.tagName === "SUMMARY" && active.parentElement?.tagName === "DETAILS") {
-				const details = active.parentElement;
-				if (details.dataset.workResultTurns !== void 0) return { type: "turns" };
-				if (details.dataset.workResultDetails !== void 0) return { type: "details" };
-				if (details.classList.contains("pm-work-result-files")) return { type: "files" };
-			}
-		}
-		return null;
-	}
-	function restoreFocus(token) {
-		if (!token) return;
-		if (token.type === "attr") elementByAttr(panelElement, "data-work-result-focus", token.value)?.focus();
-		else if (token.type === "diff-summary") elementByAttr(panelElement, "data-work-result-diff-summary", token.key)?.focus();
-		else if (token.type === "diff-region") elementByAttr(panelElement, "data-work-result-diff-region", token.key)?.focus();
-		else if (token.type === "read-changes") (panelElement.querySelector(".pm-work-result-read-changes") || panelElement.querySelector("[data-work-result-retry=\"changes\"]"))?.focus();
-		else if (token.type === "read-again") (panelElement.querySelector(".pm-work-result-read-again") || panelElement.querySelector(".pm-work-result-read-changes") || panelElement.querySelector("[data-work-result-retry=\"changes\"]"))?.focus();
-		else if (token.type === "retry-changes") (panelElement.querySelector("[data-work-result-retry=\"changes\"]") || panelElement.querySelector(".pm-work-result-read-changes"))?.focus();
-		else if (token.type === "retry-diff") (elementByAttr(panelElement, "data-work-result-retry-diff", token.key) || elementByAttr(panelElement, "data-work-result-diff-summary", token.key))?.focus();
-		else if (token.type === "retry-result") elementByAttr(panelElement, "data-work-result-retry", "result")?.focus();
-		else if (token.type === "turns") panelElement.querySelector("[data-work-result-turns] > summary")?.focus();
-		else if (token.type === "details") panelElement.querySelector("[data-work-result-details] > summary")?.focus();
-		else if (token.type === "files") panelElement.querySelector(".pm-work-result-files > summary")?.focus();
-		else if (token.type === "publish-field") {
-			const node = panelElement.querySelector(token.hook === "title" ? "[data-work-publish-title]" : "[data-work-publish-body]");
-			if (node) {
-				node.focus();
-				try {
-					node.setSelectionRange(token.start ?? 0, token.end ?? token.start ?? 0);
-				} catch {}
-			} else publishFocusFallback();
-		} else if (token.type === "publish-draft") {
-			const node = elementByAttr(panelElement, "data-work-publish-draft", token.value);
-			if (node) node.focus();
-			else publishFocusFallback();
-		} else if (token.type === "publish-submit") {
-			const node = panelElement.querySelector("[data-work-publish-submit]");
-			if (node) node.focus();
-			else publishFocusFallback();
-		}
-	}
-	function publishFocusFallback() {
-		const link = panelElement.querySelector("[data-work-publish-pr]");
-		const note = panelElement.querySelector("[data-work-publish-blocked-reason], [data-work-publish-gap], [data-work-publish-held]");
-		const target = link || note;
-		if (!target || target.hidden) return;
-		if (!link) target.tabIndex = -1;
-		target.focus();
-	}
-	function renderEnvelope(envelope, attempt, errorBoxNode = null) {
-		const focusToken = saveFocus();
-		const existingTurns = panelElement.querySelector("[data-work-result-turns]");
-		if (existingTurns) turnsOpen = existingTurns.open;
-		const existingDetails = panelElement.querySelector("[data-work-result-details]");
-		if (existingDetails) detailsOpen = existingDetails.open;
-		const existingFiles = panelElement.querySelector(".pm-work-result-files");
-		if (existingFiles) filesOpen = existingFiles.open;
-		for (const dt of panelElement.querySelectorAll(".pm-work-result-diff-details[open]")) {
-			const sum = dt.querySelector("[data-work-result-diff-summary]");
-			if (sum?.dataset.workResultDiffSummary) openDiffs.add(sum.dataset.workResultDiffSummary);
-		}
-		for (const dt of panelElement.querySelectorAll(".pm-work-result-diff-details:not([open])")) {
-			const sum = dt.querySelector("[data-work-result-diff-summary]");
-			if (sum?.dataset.workResultDiffSummary) openDiffs.delete(sum.dataset.workResultDiffSummary);
-		}
-		const sections = [];
-		const panelReasons = new Set();
-		const unlistedFacets = [];
-		const unlistedFileStatuses = [];
-		const heading = h("h3", {}, t("wres_heading"));
-		sections.push(heading);
-		if (errorBoxNode) {
-			const stalePill = h("span", {
-				class: "ui-pill tone-warn",
-				"data-status": "stale"
-			}, t("ui_status_stale"));
-			sections.push(h("div", { class: "pm-work-result-stale-banner" }, stalePill, errorBoxNode));
-		}
-		const exec = envelope.execution || {};
-		const stateKey = `wres_state_${exec.state?.replace(/-/g, "_")}`;
-		const stateLabel = t(stateKey) !== stateKey ? t(stateKey) : t("wres_unknown");
-		const stateP = h("p", { class: "pm-work-result-state" });
-		stateP.append(h("strong", {}, stateLabel));
-		if (exec.observed_at) stateP.append(" · ", timeStamp(exec.observed_at));
-		sections.push(stateP);
-		if (exec.state_reason) {
-			const reason = exec.state_reason;
-			panelReasons.add(reason);
-			if (reason === "agent_error") sections.push(h("p", { class: "muted pm-work-result-reason" }, t("wres_agent_error")));
-			else if (KNOWN_REASONS.has(reason)) {
-				const textKey = `wres_reason_${reason}`;
-				if (t(textKey) !== textKey) sections.push(h("p", { class: "muted pm-work-result-reason" }, t(textKey)));
-			} else if (exec.state === "failed") {
-				const wstKey = `wst_error_${reason}`;
-				const errKey = `error_code_${reason}`;
-				let failText = "";
-				if (t(wstKey) !== wstKey) failText = t(wstKey);
-				else if (t(errKey) !== errKey) failText = t(errKey);
-				if (failText) sections.push(h("p", { class: "muted pm-work-result-reason" }, failText));
-			}
-		} else if (exec.state === "waiting" && exec.pending != null) sections.push(h("p", { class: "muted pm-work-result-reason" }, t("wres_waiting_pending")));
-		if (exec.attention) {
-			let attnText = t("wres_status_needs_attention");
-			if (exec.attention.message) attnText += ` ${exec.attention.message}`;
-			sections.push(h("p", { class: "muted pm-work-result-attention" }, attnText));
-		}
-		const linkItems = [];
-		const sess = attempt?.session || attempt?.native_session;
-		if (sess?.session_id && sess?.host) {
-			const liveHref = sessionHref$1({
-				host: sess.host,
-				sessionId: sess.session_id,
-				from: "board"
-			});
-			linkItems.push(h("a", {
-				href: liveHref,
-				"data-work-result-focus": "live-output"
-			}, t("wres_open_live_output")));
-		}
-		const opHash = envelope.links?.start_operation_hash || (envelope.identity?.start_operation_id ? `#/op/${envelope.identity.start_operation_id}` : null);
-		if (opHash) linkItems.push(h("a", {
-			href: opHash,
-			"data-work-result-focus": "operation"
-		}, t("wres_view_operation")));
-		if (linkItems.length > 0) {
-			const linksContainer = h("div", { class: "pm-work-result-links" });
-			for (let i = 0; i < linkItems.length; i++) {
-				if (i > 0) linksContainer.append(" · ");
-				linksContainer.append(linkItems[i]);
-			}
-			sections.push(linksContainer);
-		}
-		const summaryHeader = h("div", { class: "pm-work-result-summary-header" });
-		summaryHeader.append(h("h4", {}, t("wres_agent_summary_label")));
-		if (exec.state_facets?.self_reported === "claimed_done") {
-			const pill = h("span", {
-				class: "ui-pill tone-neutral",
-				"data-work-result-pill": "claimed_done"
-			}, t("wres_pill_claimed_done"));
-			summaryHeader.append(" ", pill);
-		}
-		sections.push(summaryHeader);
-		const summaryText = envelope.conversation?.latest_assistant_summary?.text;
-		if (summaryText && typeof summaryText === "string") {
-			const summaryBox = h("div", {
-				role: "region",
-				tabindex: "0",
-				"aria-label": t("wres_agent_summary_label"),
-				class: "pm-work-result-summary-box",
-				"data-work-result-focus": "summary-box"
-			});
-			summaryBox.textContent = summaryText;
-			sections.push(summaryBox);
-		} else sections.push(h("p", { class: "muted pm-work-result-empty-summary" }, t("wres_no_recorded_turn")));
-		const dl = h("dl", { class: "pm-work-result-checks" });
-		const verifStatus = exec.state_facets?.verification || envelope.verification?.status;
-		let verifText = t("wres_unknown");
-		if (verifStatus && [
-			"unverified",
-			"running",
-			"verified",
-			"failed",
-			"stale",
-			"unknown"
-		].includes(verifStatus)) verifText = t(`wres_verification_${verifStatus}`);
-		else if (verifStatus) unlistedFacets.push(`verification: ${verifStatus}`);
-		dl.append(h("dt", {}, t("wres_check_verification")), h("dd", { "data-check": "verification" }, verifText));
-		const reviewDecision = exec.state_facets?.review_decision || envelope.verification?.quality_reviews?.current?.decision;
-		let reviewText = t("wres_unknown");
-		if (typeof reviewDecision === "string") {
-			if (reviewDecision === "unassessed") reviewText = t("wres_review_unassessed");
-			else if (reviewDecision === "revocation") reviewText = t("wres_review_revocation");
-			else unlistedFacets.push(`review_decision: ${reviewDecision}`);
-		} else if (reviewDecision && typeof reviewDecision === "object") {
-			if (reviewDecision.kind === "unassessed") reviewText = t("wres_review_unassessed");
-			else if (reviewDecision.kind === "revocation") reviewText = t("wres_review_revocation");
-			else if (reviewDecision.kind === "assessment" || reviewDecision.acceptance) {
-				if (reviewDecision.acceptance === "accepted") reviewText = t("wres_review_accepted");
-				else if (reviewDecision.acceptance === "rejected") reviewText = t("wres_review_rejected");
-				else if (reviewDecision.acceptance === "unassessed") reviewText = t("wres_review_unassessed");
-				else if (reviewDecision.acceptance) unlistedFacets.push(`review_acceptance: ${reviewDecision.acceptance}`);
-			} else if (reviewDecision.kind) unlistedFacets.push(`review_kind: ${reviewDecision.kind}`);
-		}
-		dl.append(h("dt", {}, t("wres_check_review")), h("dd", { "data-check": "review" }, reviewText));
-		const acceptStatus = (exec.state_facets?.acceptance)?.status;
-		let acceptText = t("wres_unknown");
-		if (acceptStatus === "passed") acceptText = t("wres_acceptance_passed");
-		else if (acceptStatus === "blocked") acceptText = t("wres_acceptance_blocked");
-		else if (acceptStatus === "unassessed") acceptText = t("wres_acceptance_unassessed");
-		else if (acceptStatus) unlistedFacets.push(`acceptance_status: ${acceptStatus}`);
-		dl.append(h("dt", {}, t("wres_check_acceptance")), h("dd", { "data-check": "acceptance" }, acceptText));
-		const mergeStatus = exec.state_facets?.merge;
-		let mergeText = t("wres_unknown");
-		if ([
-			"not_started",
-			"not_merged",
-			"pr_open",
-			"pr_closed_unmerged",
-			"merge_pending",
-			"merged"
-		].includes(mergeStatus)) mergeText = t(`wres_merge_${mergeStatus}`);
-		else if (mergeStatus) unlistedFacets.push(`merge: ${mergeStatus}`);
-		const prDd = h("dd", { "data-check": "pr" });
-		prDd.append(h("span", { class: "pm-work-result-pr-status" }, mergeText));
-		const prs = envelope.delivery?.pull_requests || [];
-		if (prs.length > 0) {
-			const prList = h("ul", { class: "pm-work-result-pr-list" });
-			for (const pr of prs) {
-				const line = publicationPrLine(h, t, pr);
-				if (line) prList.append(line);
-			}
-			if (prList.childElementCount) prDd.append(prList);
-			for (const pr of prs) {
-				const delivery = publicationDeliveryLine(h, t, pr, envelope, attempt);
-				if (delivery) prDd.append(delivery);
-			}
-		}
-		if (envelope.completeness?.coverage?.delivery === "partial") prDd.append(h("p", { "data-work-publish-partial": "" }, t("wpub_pr_partial")));
-		dl.append(h("dt", {}, t("wres_check_pr")), prDd);
-		const deployObj = exec.state_facets?.deployment;
-		const deployState = deployObj?.state;
-		const deployVerified = deployObj?.verified === true;
-		let deployText = t("wres_unknown");
-		if ([
-			"not_deployed",
-			"pending",
-			"running",
-			"failed",
-			"needs_attention",
-			"cancelled"
-		].includes(deployState)) deployText = t(`wres_deploy_${deployState}`);
-		else if (deployState === "succeeded") deployText = deployVerified ? t("wres_deploy_succeeded_verified") : t("wres_deploy_succeeded");
-		else if (deployState) unlistedFacets.push(`deployment_state: ${deployState}`);
-		dl.append(h("dt", {}, t("wres_check_deployment")), h("dd", { "data-check": "deployment" }, deployText));
-		const goal = envelope.delivery?.delivery_goal;
-		let goalText = t("wres_unknown");
-		if (goal === "pull_request") goalText = t("wres_goal_pr");
-		else if (goal === "reviewable_changes") goalText = t("wres_goal_reviewable_changes");
-		else if (goal && goal !== "unknown") unlistedFacets.push(`delivery_goal: ${goal}`);
-		dl.append(h("dt", {}, t("wres_check_delivery_goal")), h("dd", { "data-check": "delivery-goal" }, goalText));
-		sections.push(dl);
-		const changesBox = h("div", { class: "pm-work-result-changes" });
-		const ch = envelope.changes || {};
-		const summary = ch.summary || {};
-		const isComplete = summary.complete === true && (!summary.unavailable || summary.unavailable.length === 0);
-		const filesCountNum = Number.isSafeInteger(summary.file_count) ? summary.file_count : Array.isArray(summary.files) ? summary.files.length : null;
-		const commitsCountNum = Number.isSafeInteger(summary.commit_count) ? summary.commit_count : Array.isArray(summary.commits) ? summary.commits.length : null;
-		if (isComplete) {
-			let summaryKey = "wres_changes_summary";
-			if (filesCountNum === 1 && commitsCountNum === 1) summaryKey = "wres_changes_summary_one";
-			else if (filesCountNum === 1) summaryKey = "wres_changes_summary_one_file";
-			else if (commitsCountNum === 1) summaryKey = "wres_changes_summary_one_commit";
-			const summaryText = t(summaryKey, {
-				files: formatCount(filesCountNum),
-				commits: formatCount(commitsCountNum),
-				additions: formatCount(summary.additions),
-				deletions: formatCount(summary.deletions)
-			});
-			changesBox.append(h("p", { class: "pm-work-result-changes-summary" }, summaryText, " · ", t("wres_as_of_last_turn")));
-		} else {
-			const partlyText = h("p", { class: "pm-work-result-changes-summary" }, t("wres_changes_partly_read"), " · ", t("wres_as_of_last_turn"));
-			changesBox.append(partlyText);
-			const changeReasons = [];
-			if (summary.reason && !panelReasons.has(summary.reason)) {
-				changeReasons.push(summary.reason);
-				panelReasons.add(summary.reason);
-			}
-			if (Array.isArray(summary.reasons)) {
-				for (const r of summary.reasons) if (!changeReasons.includes(r) && !panelReasons.has(r)) {
-					changeReasons.push(r);
-					panelReasons.add(r);
-				}
-			}
-			if (changeReasons.length > 0) {
-				const reasonsList = h("ul", { class: "pm-work-result-changes-reasons" });
-				for (const code of changeReasons) {
-					const key = `wres_reason_${code}`;
-					let text = t(key);
-					if (!text || text === key) text = t("wres_reason_generic_limit");
-					reasonsList.append(h("li", {}, text));
-				}
-				changesBox.append(reasonsList);
-			}
-		}
-		if (canChanges()) changesBox.append(renderCurrentChangesBlock());
-		const files = summary.files || [];
-		if (files.length > 0) {
-			const renderFileRow = (f) => {
-				let statusLabel = t("wres_unknown");
-				if (f.status === "M" || f.status === "modified") statusLabel = t("wres_file_modified");
-				else if (f.status === "A" || f.status === "added") statusLabel = t("wres_file_added");
-				else if (f.status === "D" || f.status === "deleted") statusLabel = t("wres_file_deleted");
-				else if (typeof f.status === "string" && (f.status.startsWith("R") || f.status === "renamed")) statusLabel = t("wres_file_renamed");
-				else if (f.status) unlistedFileStatuses.push(`${f.path}: ${f.status}`);
-				const adds = f.additions === "unknown" || f.additions == null ? "?" : `+${f.additions}`;
-				const dels = f.deletions === "unknown" || f.deletions == null ? "?" : `−${f.deletions}`;
-				return h("li", { class: "pm-work-result-file-row" }, h("span", { class: "pm-work-result-file-path mono" }, f.path), " ", h("span", { class: "pm-work-result-file-status muted" }, statusLabel), " ", h("span", { class: "pm-work-result-file-diff mono" }, `${adds} ${dels}`));
-			};
-			const fileList = h("ul", { class: "pm-work-result-file-list" }, ...files.slice(0, 20).map(renderFileRow));
-			changesBox.append(fileList);
-			if (files.length > 20) {
-				const remainingFiles = files.slice(20);
-				const remainingList = h("ul", { class: "pm-work-result-file-list" }, ...remainingFiles.map(renderFileRow));
-				const filesDisclosure = disclosure({
-					label: remainingFiles.length === 1 ? t("wres_show_all_files_one") : t("wres_show_all_files", { n: files.length }),
-					body: remainingList,
-					open: filesOpen
-				});
-				filesDisclosure.classList.add("pm-work-result-files");
-				changesBox.append(filesDisclosure);
-			}
-		}
-		if (ch.base_commit) changesBox.append(h("p", { class: "pm-work-result-base-commit" }, h("strong", {}, `${t("wres_base_commit")}: `), h("span", { class: "mono" }, ch.base_commit.slice(0, 12))));
-		const fixedCommit = ch.fixed_result_commit;
-		if (fixedCommit && fixedCommit.commit_sha) {
-			const srcKind = fixedCommit.source_kind;
-			let srcText = "";
-			if (srcKind === "turn_end_observation") srcText = t("wres_source_turn_end_observation");
-			else if (srcKind === "execution_verification" || srcKind === "session_verification") srcText = t("wres_source_verified_commit");
-			else if (srcKind === "integration") srcText = t("wres_source_integration_commit");
-			const commitP = h("p", { class: "pm-work-result-commit" }, h("strong", {}, `${t("wres_result_commit")}: `), h("span", { class: "mono" }, fixedCommit.commit_sha.slice(0, 12)));
-			if (srcText) commitP.append(" · ", srcText);
-			changesBox.append(commitP);
-		}
-		const uncommitted = ch.uncommitted || {};
-		if (uncommitted.count === "unknown") changesBox.append(h("p", { class: "muted pm-work-result-uncommitted" }, t("wres_uncommitted_unknown")));
-		else if (Number.isSafeInteger(uncommitted.count) && uncommitted.count > 0) changesBox.append(h("p", { class: "pm-work-result-uncommitted" }, t("wres_uncommitted_changes", { n: uncommitted.count })));
-		sections.push(changesBox);
-		const completeness = envelope.completeness;
-		const completenessStatus = completeness?.status;
-		if (completenessStatus && completenessStatus !== "complete") {
-			const compDiv = h("div", { class: "pm-work-result-completeness" });
-			if (completenessStatus === "partial") compDiv.append(statusPill("partial"));
-			else compDiv.append(h("span", {
-				class: "ui-pill tone-bad",
-				"data-status": "unavailable"
-			}, t("wres_status_unavailable")));
-			const reasons = (completeness.reasons || []).filter((code) => {
-				if (panelReasons.has(code)) return false;
-				panelReasons.add(code);
-				return true;
-			});
-			if (reasons.length > 0) {
-				const reasonList = h("ul", { class: "pm-work-result-completeness-reasons" });
-				for (const code of reasons) {
-					const key = `wres_reason_${code}`;
-					let text = t(key);
-					if (!text || text === key) text = t("wres_reason_generic_limit");
-					reasonList.append(h("li", {}, text));
-				}
-				compDiv.append(reasonList);
-			}
-			sections.push(compDiv);
-		}
-		const publishNode = publish.render(envelope);
-		if (publishNode) sections.push(publishNode);
-		const results = envelope.results || [];
-		if (results.length > 0) {
-			const turnsBody = h("div", { class: "pm-work-result-turns-body" });
-			if (envelope.results_has_more) turnsBody.append(h("p", { class: "muted pm-work-result-more-turns" }, t("wres_showing_latest_20")));
-			const turnsList = h("ul", { class: "pm-work-result-turns-list" });
-			for (let i = 0; i < results.length; i++) {
-				const turn = results[i];
-				const row = h("li", { class: "pm-work-result-turn-row" });
-				if (turn.observed_at) row.append(timeStamp(turn.observed_at), " ");
-				const sha = turn.head_commit ? turn.head_commit.slice(0, 12) : "—";
-				row.append(h("span", { class: "mono" }, sha));
-				if (i === 0) row.append(" ", h("span", {
-					class: "ui-pill tone-neutral ui-xs",
-					"data-work-result-pill": "latest_turn"
-				}, t("wres_latest_turn")));
-				turnsList.append(row);
-			}
-			turnsBody.append(turnsList);
-			const turnsDisclosure = disclosure({
-				label: results.length === 1 ? t("wres_recorded_turns_count_one") : t("wres_recorded_turns_count", { n: results.length }),
-				body: turnsBody,
-				open: turnsOpen
-			});
-			turnsDisclosure.dataset.workResultTurns = "";
-			sections.push(turnsDisclosure);
-		}
-		const detailsBody = h("div", { class: "pm-work-result-details-body" });
-		const addDetailRow = (label, value) => {
-			if (value === void 0) return;
-			detailsBody.append(h("p", {}, h("strong", {}, `${label}: `), h("span", { class: "mono" }, String(value == null ? "—" : value))));
-		};
-		addDetailRow(t("wres_attempt_id"), envelope.attempt_id);
-		addDetailRow(t("wres_result_id"), envelope.sources?.result_id);
-		addDetailRow(t("wres_start_operation_id"), envelope.identity?.start_operation_id);
-		addDetailRow(t("wres_execution_operation_id"), envelope.identity?.execution_operation_id);
-		addDetailRow(t("wres_source_key"), envelope.sources?.source_key);
-		addDetailRow(t("wres_digest"), envelope.sources?.digest ? envelope.sources.digest.slice(0, 16) : null);
-		addDetailRow(t("wres_collection_outcome"), envelope.collection?.outcome);
-		addDetailRow(t("wres_raw_state"), exec.state);
-		addDetailRow(t("wres_raw_stage"), exec.stage);
-		if (exec.state_reason) addDetailRow(t("wres_raw_reasons"), exec.state_reason);
-		if (unlistedFacets.length > 0) addDetailRow(t("wres_unlisted_facets"), unlistedFacets.join(", "));
-		if (unlistedFileStatuses.length > 0) addDetailRow(t("wres_unlisted_file_statuses"), unlistedFileStatuses.join(", "));
-		const unlistedReasons = (completeness?.reasons || []).filter((r) => !KNOWN_REASONS.has(r));
-		if (unlistedReasons.length > 0) addDetailRow(t("wres_unlisted_completeness_reasons"), unlistedReasons.join(", "));
-		const usage = envelope.usage || {};
-		const formatUsageVal = (val) => val == null || val === "unknown" ? t("ui_status_unknown") : String(val);
-		addDetailRow(t("wres_usage_context_tokens"), formatUsageVal(usage.context_tokens));
-		addDetailRow(t("wres_usage_context_window"), formatUsageVal(usage.context_window));
-		addDetailRow(t("wres_usage_num_turns"), formatUsageVal(usage.num_turns));
-		detailsBody.append(h("p", { class: "muted" }, t("wres_exit_code_not_exposed")));
-		const detailsDisclosure = disclosure({
-			label: t("wres_details"),
-			body: detailsBody,
-			open: detailsOpen
-		});
-		detailsDisclosure.dataset.workResultDetails = "";
-		sections.push(detailsDisclosure);
-		panelElement.replaceChildren(...sections);
-		updateVisibility(true);
-		restoreFocus(focusToken);
-	}
-	function sortCommitsOldestFirst(commitsTouched, allCommits) {
-		if (!Array.isArray(commitsTouched)) return [];
-		if (!Array.isArray(allCommits) || allCommits.length === 0) return [...commitsTouched];
-		const order = new Map();
-		allCommits.forEach((sha, idx) => order.set(sha, idx));
-		const originalIndex = new Map();
-		commitsTouched.forEach((sha, idx) => originalIndex.set(sha, idx));
-		return [...commitsTouched].sort((a, b) => {
-			const hasA = order.has(a);
-			const hasB = order.has(b);
-			if (hasA && hasB) return order.get(a) - order.get(b);
-			if (hasA) return -1;
-			if (hasB) return 1;
-			return originalIndex.get(a) - originalIndex.get(b);
-		});
-	}
-	function renderDiffContent(container, commit, path, key, summaryNode) {
-		container.replaceChildren();
-		if (diffLoading.has(key)) {
-			container.append(h("p", { class: "muted pm-work-result-diff-loading" }, t("wres_diff_loading")));
-			return;
-		}
-		const err = diffErrors.get(key);
-		if (err) {
-			if (err.status === 404 || err.code === "PM_DIFF_NOT_FOUND") container.append(h("p", { class: "muted pm-work-result-diff-notice" }, t("error_code_PM_DIFF_NOT_FOUND")));
-			else {
-				const errBoxNode = errorBox ? errorBox(err, { within: container }) : h("div", { class: "error" }, err?.message || String(err));
-				const retryBtn = button({
-					label: t("wres_try_again"),
-					class: "ui-button secondary ui-sm pm-work-result-retry",
-					onClick: () => {
-						diffErrors.delete(key);
-						loadDiff(commit, path, key, container, summaryNode);
-					}
-				});
-				retryBtn.setAttribute("data-work-result-retry-diff", key);
-				container.append(h("div", { class: "pm-work-result-error-box" }, errBoxNode, retryBtn));
-			}
-			return;
-		}
-		const data = diffCache.get(key);
-		if (!data) return;
-		const stats = data.stats || {};
-		const adds = stats.additions === "unknown" || stats.additions == null ? "?" : `+${stats.additions}`;
-		const dels = stats.deletions === "unknown" || stats.deletions == null ? "?" : `−${stats.deletions}`;
-		container.append(h("p", { class: "pm-work-result-diff-stats mono" }, `${adds} ${dels}`));
-		if (data.truncated === true) {
-			const noticeP = h("p", { class: "muted pm-work-result-diff-notice" });
-			const rawText = t("wres_diff_truncated");
-			if (rawText.includes("256 KiB")) {
-				const [before, after] = rawText.split("256 KiB");
-				noticeP.append(before, h("span", { class: "mono" }, "256 KiB"), after);
-			} else noticeP.textContent = rawText;
-			container.append(noticeP);
-		}
-		if (data.available === false) {
-			let reasonText = "";
-			if (data.reason === "diff_exceeded_pipe_limit") reasonText = t("wres_reason_diff_exceeded_pipe_limit");
-			else if (data.reason && t(`wres_reason_${data.reason}`) !== `wres_reason_${data.reason}`) reasonText = t(`wres_reason_${data.reason}`);
-			else if (data.reason && t(`error_code_${data.reason}`) !== `error_code_${data.reason}`) reasonText = t(`error_code_${data.reason}`);
-			else reasonText = t("wres_reason_generic_limit");
-			container.append(h("p", { class: "muted pm-work-result-diff-notice" }, reasonText));
-		} else if (typeof data.diff === "string") {
-			const pre = h("pre", {
-				class: "pm-work-result-diff-pre mono",
-				tabindex: "0",
-				role: "region",
-				"aria-label": t("wres_diff_region_label", {
-					path,
-					sha: commit.slice(0, 12)
-				}),
-				"data-work-result-diff-region": key
-			});
-			pre.textContent = data.diff;
-			container.append(pre);
-		}
-	}
-	async function loadDiff(commit, path, key, container, summaryNode) {
-		if (diffLoading.has(key)) return;
-		diffLoading.add(key);
-		diffErrors.delete(key);
-		const generation = diffGeneration;
-		const keyTicket = (diffKeySerials.get(key) || 0) + 1;
-		diffKeySerials.set(key, keyTicket);
-		const attemptId = activeAttempt?.attempt_id;
-		const activeAtStart = document.activeElement;
-		const startedFromRetry = Boolean(activeAtStart && activeAtStart.getAttribute("data-work-result-retry-diff") === key);
-		if (Boolean(activeAtStart && (container.contains(activeAtStart) || activeAtStart === summaryNode))) summaryNode.focus();
-		renderDiffContent(container, commit, path, key, summaryNode);
-		try {
-			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/diff?commit=${encodeURIComponent(commit)}&path=${encodeURIComponent(path)}`);
-			try {
-				alive?.();
-			} catch {
-				return;
-			}
-			if (generation !== diffGeneration || diffKeySerials.get(key) !== keyTicket || activeAttempt?.attempt_id !== attemptId) return;
-			diffCache.set(key, data);
-		} catch (err) {
-			try {
-				alive?.();
-			} catch {
-				return;
-			}
-			if (generation !== diffGeneration || diffKeySerials.get(key) !== keyTicket || activeAttempt?.attempt_id !== attemptId) return;
-			diffErrors.set(key, err);
-		} finally {
-			if (generation === diffGeneration && diffKeySerials.get(key) === keyTicket) {
-				diffLoading.delete(key);
-				if (activeAttempt?.attempt_id === attemptId && panelElement.contains(container)) {
-					renderDiffContent(container, commit, path, key, summaryNode);
-					const activeNow = document.activeElement;
-					if (Boolean(activeNow && (activeNow === summaryNode && summaryNode.isConnected || panelElement.contains(activeNow) && activeNow.getAttribute("data-work-result-diff-summary") === key)) && startedFromRetry && diffErrors.has(key)) elementByAttr(container, "data-work-result-retry-diff", key)?.focus();
-				}
-			}
-		}
-	}
-	async function readCurrentChanges(isReadAgain = false) {
-		if (changesBusy) return;
-		changesBusy = true;
-		const ticket = ++changesSerial;
-		const attemptId = activeAttempt?.attempt_id;
-		if (isReadAgain) {
-			diffGeneration++;
-			diffKeySerials.clear();
-			diffCache.clear();
-			diffErrors.clear();
-			diffLoading.clear();
-			openDiffs.clear();
-			for (const dt of panelElement.querySelectorAll(".pm-work-result-diff-details[open]")) dt.open = false;
-		}
-		currentChangesError = null;
-		if (lastEnvelope && activeAttempt) renderEnvelope(lastEnvelope, activeAttempt);
-		try {
-			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/changes`);
-			try {
-				alive?.();
-			} catch {
-				return;
-			}
-			if (ticket !== changesSerial || activeAttempt?.attempt_id !== attemptId) return;
-			currentChanges = data;
-			isOutOfDate = false;
-			currentChangesError = null;
-		} catch (err) {
-			try {
-				alive?.();
-			} catch {
-				return;
-			}
-			if (ticket !== changesSerial || activeAttempt?.attempt_id !== attemptId) return;
-			currentChangesError = err;
-		} finally {
-			if (ticket === changesSerial) changesBusy = false;
-			if (ticket === changesSerial && activeAttempt?.attempt_id === attemptId && lastEnvelope) renderEnvelope(lastEnvelope, activeAttempt);
-		}
-	}
-	function renderCurrentChangesBlock() {
-		const block = h("div", {
-			class: "pm-work-result-current-changes",
-			"data-work-result-current-changes": ""
-		});
-		if (changesBusy) block.setAttribute("aria-busy", "true");
-		if (currentChangesError) {
-			const errBoxNode = errorBox ? errorBox(currentChangesError, { within: block }) : h("div", { class: "error" }, currentChangesError?.message || String(currentChangesError));
-			const retryBtn = button({
-				label: t("wres_try_again"),
-				class: "ui-button secondary ui-sm pm-work-result-retry",
-				onClick: () => {
-					readCurrentChanges(false);
-				}
-			});
-			retryBtn.setAttribute("data-work-result-retry", "changes");
-			if (changesBusy) retryBtn.setAttribute("aria-disabled", "true");
-			block.append(h("div", { class: "pm-work-result-error-box" }, errBoxNode, retryBtn));
-			return block;
-		}
-		if (isOutOfDate) {
-			const outPill = h("span", {
-				class: "ui-pill tone-warn",
-				"data-status": "out-of-date"
-			}, t("wres_out_of_date"));
-			const readAgainBtn = button({
-				label: t("wres_read_again"),
-				class: "ui-button secondary ui-sm pm-work-result-read-again",
-				onClick: () => {
-					readCurrentChanges(true);
-				}
-			});
-			if (changesBusy) readAgainBtn.setAttribute("aria-disabled", "true");
-			block.append(h("div", { class: "pm-work-result-out-of-date-banner" }, outPill, " ", readAgainBtn));
-		} else {
-			const readBtn = button({
-				label: t("wres_read_current_changes"),
-				class: "ui-button secondary ui-sm pm-work-result-read-changes",
-				onClick: () => {
-					readCurrentChanges(false);
-				}
-			});
-			if (changesBusy) readBtn.setAttribute("aria-disabled", "true");
-			block.append(readBtn);
-		}
-		if (!currentChanges) return block;
-		const headSha = currentChanges.live_head_commit;
-		const headP = h("p", { class: "pm-work-result-head" });
-		headP.append(h("strong", {}, `${t("wres_head")}: `));
-		if (headSha && headSha !== "unknown") headP.append(h("span", { class: "mono" }, headSha.slice(0, 12)));
-		else headP.append(t("wres_unknown"));
-		block.append(headP);
-		const freshness = currentChanges.head_freshness;
-		let freshnessKey = "wres_freshness_unavailable";
-		if (freshness === "live") freshnessKey = "wres_freshness_live";
-		else if (freshness === "cached_receipt") freshnessKey = "wres_freshness_cached_receipt";
-		block.append(h("p", { class: "muted pm-work-result-freshness" }, t(freshnessKey)));
-		const curSummary = currentChanges.summary || {};
-		const isCurComplete = curSummary.complete === true && (!curSummary.unavailable || curSummary.unavailable.length === 0);
-		const curFilesCountNum = Number.isSafeInteger(curSummary.file_count) ? curSummary.file_count : Array.isArray(curSummary.files) ? curSummary.files.length : null;
-		const curCommitsCountNum = Number.isSafeInteger(curSummary.commit_count) ? curSummary.commit_count : Array.isArray(curSummary.commits) ? curSummary.commits.length : null;
-		let curSummaryKey = "wres_changes_summary";
-		if (curFilesCountNum === 1 && curCommitsCountNum === 1) curSummaryKey = "wres_changes_summary_one";
-		else if (curFilesCountNum === 1) curSummaryKey = "wres_changes_summary_one_file";
-		else if (curCommitsCountNum === 1) curSummaryKey = "wres_changes_summary_one_commit";
-		const curSummaryText = t(curSummaryKey, {
-			files: formatCount(curFilesCountNum),
-			commits: formatCount(curCommitsCountNum),
-			additions: formatCount(curSummary.additions),
-			deletions: formatCount(curSummary.deletions)
-		});
-		if (isCurComplete) block.append(h("p", { class: "pm-work-result-changes-summary" }, curSummaryText));
-		else block.append(h("p", { class: "pm-work-result-changes-summary" }, t("wres_changes_partly_read")));
-		const blockReasons = new Set();
-		if (!isCurComplete) {
-			const curChangeReasons = [];
-			if (curSummary.reason) {
-				curChangeReasons.push(curSummary.reason);
-				blockReasons.add(curSummary.reason);
-			}
-			if (Array.isArray(curSummary.reasons)) {
-				for (const r of curSummary.reasons) if (!curChangeReasons.includes(r) && !blockReasons.has(r)) {
-					curChangeReasons.push(r);
-					blockReasons.add(r);
-				}
-			}
-			if (curChangeReasons.length > 0) {
-				const reasonsList = h("ul", { class: "pm-work-result-changes-reasons" });
-				for (const code of curChangeReasons) {
-					const key = `wres_reason_${code}`;
-					let text = t(key);
-					if (!text || text === key) text = t("wres_reason_generic_limit");
-					reasonsList.append(h("li", {}, text));
-				}
-				block.append(reasonsList);
-			}
-		}
-		const curCompleteness = currentChanges.completeness;
-		const curCompStatus = curCompleteness?.status;
-		if (curCompStatus && curCompStatus !== "complete") {
-			const compDiv = h("div", { class: "pm-work-result-completeness" });
-			if (curCompStatus === "partial") compDiv.append(statusPill("partial"));
-			else compDiv.append(h("span", {
-				class: "ui-pill tone-bad",
-				"data-status": "unavailable"
-			}, t("wres_status_unavailable")));
-			const compReasons = (curCompleteness.reasons || []).filter((code) => {
-				if (blockReasons.has(code)) return false;
-				blockReasons.add(code);
-				return true;
-			});
-			if (compReasons.length > 0) {
-				const reasonList = h("ul", { class: "pm-work-result-completeness-reasons" });
-				for (const code of compReasons) {
-					const key = `wres_reason_${code}`;
-					let text = t(key);
-					if (!text || text === key) text = t("wres_reason_generic_limit");
-					reasonList.append(h("li", {}, text));
-				}
-				compDiv.append(reasonList);
-			}
-			block.append(compDiv);
-		}
-		const curFiles = curSummary.files || [];
-		if (curFiles.length > 0) {
-			const curFileList = h("ul", { class: "pm-work-result-file-list" });
-			for (const f of curFiles) {
-				let statusLabel = t("wres_unknown");
-				if (f.status === "M" || f.status === "modified") statusLabel = t("wres_file_modified");
-				else if (f.status === "A" || f.status === "added") statusLabel = t("wres_file_added");
-				else if (f.status === "D" || f.status === "deleted") statusLabel = t("wres_file_deleted");
-				else if (typeof f.status === "string" && (f.status.startsWith("R") || f.status === "renamed")) statusLabel = t("wres_file_renamed");
-				const adds = f.additions === "unknown" || f.additions == null ? "?" : `+${f.additions}`;
-				const dels = f.deletions === "unknown" || f.deletions == null ? "?" : `−${f.deletions}`;
-				const row = h("li", { class: "pm-work-result-file-row" }, h("span", { class: "pm-work-result-file-path mono" }, f.path), " ", h("span", { class: "pm-work-result-file-status muted" }, statusLabel), " ", h("span", { class: "pm-work-result-file-diff mono" }, `${adds} ${dels}`));
-				if (canDiff()) {
-					const commits = sortCommitsOldestFirst(f.commits_touched, curSummary.commits);
-					for (const commit of commits) {
-						const key = `${commit}:${f.path}`;
-						const isOpen = openDiffs.has(key);
-						const sha12 = commit.slice(0, 12);
-						const summaryNode = h("summary", {
-							"data-work-result-diff-summary": key,
-							tabindex: "0"
-						}, t("wres_show_diff_label"), " · ", h("span", { class: "mono" }, sha12));
-						const bodyContainer = h("div", { class: "pm-work-result-diff-body" });
-						renderDiffContent(bodyContainer, commit, f.path, key, summaryNode);
-						const diffDetails = disclosure({ element: h("details", {
-							class: "pm-work-result-diff-details",
-							open: isOpen
-						}, summaryNode, bodyContainer) });
-						diffDetails.addEventListener("toggle", () => {
-							if (diffDetails.open) {
-								openDiffs.add(key);
-								if (!diffCache.has(key) && !diffLoading.has(key) && !diffErrors.has(key)) loadDiff(commit, f.path, key, bodyContainer, summaryNode);
-							} else openDiffs.delete(key);
-						});
-						row.append(diffDetails);
-					}
-				}
-				curFileList.append(row);
-			}
-			block.append(curFileList);
-		}
-		const curUncommitted = currentChanges.uncommitted || {};
-		const uncommittedBox = h("div", { class: "pm-work-result-uncommitted-box" });
-		if (curUncommitted.count === "unknown") uncommittedBox.append(h("p", { class: "muted pm-work-result-uncommitted" }, t("wres_uncommitted_unknown")));
-		else if (Number.isSafeInteger(curUncommitted.count) && curUncommitted.count > 0) {
-			uncommittedBox.append(h("p", { class: "pm-work-result-uncommitted" }, t("wres_uncommitted_changes", { n: curUncommitted.count })));
-			if (Array.isArray(curUncommitted.files) && curUncommitted.files.length > 0) {
-				const uncommittedList = h("ul", { class: "pm-work-result-file-list pm-work-result-uncommitted-list" });
-				for (const uf of curUncommitted.files) {
-					const p = typeof uf === "string" ? uf : uf?.path;
-					const s = typeof uf === "object" && uf?.status ? uf.status : null;
-					const li = h("li", { class: "pm-work-result-file-row" }, h("span", { class: "pm-work-result-file-path mono" }, p));
-					if (s) {
-						let statusLabel = s;
-						if (s === "M" || s === "modified") statusLabel = t("wres_file_modified");
-						else if (s === "A" || s === "added") statusLabel = t("wres_file_added");
-						else if (s === "D" || s === "deleted") statusLabel = t("wres_file_deleted");
-						li.append(" ", h("span", { class: "pm-work-result-file-status muted" }, statusLabel));
-					}
-					uncommittedList.append(li);
-				}
-				uncommittedBox.append(uncommittedList);
-			}
-		}
-		uncommittedBox.append(h("p", { class: "muted pm-work-result-uncommitted-no-diff" }, t("wres_uncommitted_no_diff")));
-		block.append(uncommittedBox);
-		return block;
-	}
-	return {
-		element: panelElement,
-		setAttempt,
-		refresh,
-		withdraw,
-		dispose
 	};
 }
 //#endregion
@@ -47625,7 +47693,7 @@ function actionLabel(action, t) {
 	const value = locale === "zh-TW" ? action?.label_zh_TW : action?.label;
 	return typeof value === "string" && value.trim() ? value : "";
 }
-function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, workItemId, errorBox, canSend = () => true, managed = () => false, onField = () => {} }) {
+function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, workItemId, selectedAttemptId = "", errorBox, canSend = () => true, managed = () => false, onField = () => {} }) {
 	if (!workFollowUpAvailable(caps()) || !WORKSPACE_ID.test(workspaceId || "") || !WORK_ITEM_ID.test(workItemId || "")) return null;
 	const titleId = `work-next-title-${workItemId}`;
 	const hintId = `work-next-hint-${workItemId}`;
@@ -47651,7 +47719,7 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		"data-work-section": "next-turn"
 	}, h("header", { class: "work-next-head" }, heading, pill), list, note, formHost, status, live);
 	let epoch = 0, serial = 0, stopped = false, suspended = false, disposed = false;
-	let attemptId = "", sendOffer = null, blockedReason = "", resultSettled = false;
+	let attemptId = ATTEMPT_ID.test(selectedAttemptId) ? selectedAttemptId : "", sendOffer = null, blockedReason = "", resultSettled = false;
 	let reading = false, admissionReady = false;
 	let pageItems = [], nextCursor = null, hasMore = false, filtered = false, listSettled = false;
 	const pinned = new Map(), announced = new Set(), cancelDenied = new Set();
@@ -47682,7 +47750,7 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		});
 	}
 	function rememberAttempt(value) {
-		if (typeof value === "string" && ATTEMPT_ID.test(value)) attemptId = value;
+		if (!selectedAttemptId && typeof value === "string" && ATTEMPT_ID.test(value)) attemptId = value;
 	}
 	function sentence(code) {
 		const key = `loop_next_err_${code || ""}`;
@@ -47980,7 +48048,7 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		}
 	}
 	function takeList(data, append) {
-		if (!data || data.workspace_id !== workspaceId || data.work_item_id !== workItemId || !Array.isArray(data.items)) return false;
+		if (!data || data.workspace_id !== workspaceId || data.work_item_id !== workItemId || !Array.isArray(data.items) || selectedAttemptId && data.attempt_id !== selectedAttemptId) return false;
 		const rows = data.items.filter(validReceipt);
 		pageItems = append ? [...pageItems, ...rows] : rows;
 		nextCursor = typeof data.next_cursor === "string" && data.next_cursor ? data.next_cursor : Number.isInteger(data.next_cursor) ? data.next_cursor : null;
@@ -61985,6 +62053,30 @@ async function viewSession(main, host, sid, context = null) {
 		generation
 	};
 	const path = `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(sid)}`;
+	const requestedWork = workSessionContext(params);
+	const workContextReadable = workFollowUpAvailable(state.caps) || state.caps?.features?.pm_workspaces?.work_start?.version === 1;
+	const workContext = !nativeDesktop && workbenchEnabled() && workContextReadable && requestedWork ? requestedWork : null;
+	let selectedAttempt = null;
+	if (workContext) try {
+		const selected = await readWorkSessionContext({
+			api,
+			guard: () => assertView(connection),
+			...workContext,
+			host,
+			sessionId: sid,
+			missingMessage: t("workspace_work_missing")
+		});
+		workRecord = selected.record;
+		selectedAttempt = selected.attempt;
+	} catch (error) {
+		try {
+			assertView(connection);
+		} catch {
+			return;
+		}
+		if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error, { within: main }));
+		return;
+	}
 	const projectViews = new Set([
 		"overview",
 		"discussions",
@@ -61996,7 +62088,7 @@ async function viewSession(main, host, sid, context = null) {
 		"board"
 	]);
 	const storedOrigin = history.state?.batcSessionOrigin;
-	const sessionWorkspace = lastWorkspace(connection.namespace) || (storedOrigin?.namespace === connection.namespace && storedOrigin.host === host && storedOrigin.sessionId === sid ? storedOrigin.workspaceId : "");
+	const sessionWorkspace = workContext?.workspaceId || lastWorkspace(connection.namespace) || (storedOrigin?.namespace === connection.namespace && storedOrigin.host === host && storedOrigin.sessionId === sid ? storedOrigin.workspaceId : "");
 	if (!projectViews.has(fromQuery) && projectViews.has(sessionFromMemory)) {
 		fromQuery = sessionFromMemory;
 		params.set("from", fromQuery);
@@ -62380,7 +62472,38 @@ async function viewSession(main, host, sid, context = null) {
 		overflow
 	});
 	head.append(backSlot, header);
+	const resultSourceAvailable = () => !disposed && !withdrawn && readReady && row?.provenance === "connector_managed" && row?.api_access === "managed";
+	const resultForm = (options) => durableForm({
+		h,
+		t,
+		api,
+		caps: () => state.caps,
+		namespace: connection.namespace,
+		...options,
+		guard: () => {
+			assertView(connection);
+			if (disposed || withdrawn) throw new ApiError(410, "VIEW_CHANGED", "View retired");
+		},
+		permitted: () => resultSourceAvailable() && options.permitted(),
+		recoverPermitted: () => resultSourceAvailable() && (options.recoverPermitted || options.permitted)(),
+		canSend: () => state.online && !state.nativeBusy && state.viewReady
+	});
+	const fixedResult = workContext ? workResultPanel({
+		h,
+		t,
+		api,
+		workspaceId: workContext.workspaceId,
+		caps: () => state.caps,
+		errorBox,
+		form: resultForm,
+		namespace: connection.namespace,
+		alive: () => {
+			assertView(connection);
+			if (disposed || withdrawn) throw new ApiError(410, "VIEW_CHANGED", "View retired");
+		}
+	}) : null;
 	results.body.append(...[
+		fixedResult?.element,
 		context?.itemBox,
 		changesSection,
 		sessionSection("list-checks", t("checkpoints"), cps.box, cps.action),
@@ -62394,7 +62517,7 @@ async function viewSession(main, host, sid, context = null) {
 		details
 	].filter(Boolean));
 	const lane = h("section", { class: "workspace-conversation" }, conversation.box, readonly, controls, status);
-	const followWorkspace = /^ws_[0-9a-f]{32}$/.test(sessionWorkspace || "") ? sessionWorkspace : "";
+	const followWorkspace = workContext?.workspaceId || "";
 	const followWorkId = workRecord?.work_item?.work_item_id || "";
 	let mobileLayout = null;
 	const followUp = workbenchEnabled() && !nativeDesktop && followWorkspace && /^wi_[0-9a-f]{20}$/.test(followWorkId) && workFollowUpAvailable(state.caps) ? mountWorkFollowUp({
@@ -62406,6 +62529,7 @@ async function viewSession(main, host, sid, context = null) {
 		namespace: connection.namespace,
 		workspaceId: followWorkspace,
 		workItemId: followWorkId,
+		selectedAttemptId: selectedAttempt.attempt_id,
 		errorBox,
 		canSend: () => state.online && !state.nativeBusy && state.viewReady,
 		managed: () => !withdrawn && row?.provenance === "connector_managed" && row?.api_access === "managed",
@@ -62421,10 +62545,12 @@ async function viewSession(main, host, sid, context = null) {
 			else mobileLayout.detachComposer();
 		}
 	}) : null;
-	if (followUp) {
-		workSendOwned = true;
-		lane.append(followUp.box);
-	}
+	workSendOwned = workFollowUpAvailable(state.caps) && Boolean(workRecord || [
+		"workspace",
+		"work",
+		"attempt"
+	].some((key) => params.has(key)));
+	if (followUp) lane.append(followUp.box);
 	mobileLayout = setupMobileSessionLayout({
 		head,
 		composer: controls,
@@ -62743,6 +62869,7 @@ async function viewSession(main, host, sid, context = null) {
 	const updateControls = () => {
 		permissions?.update();
 		followUp?.sync();
+		fixedResult?.sync();
 		send.disabled = sending ? false : !allowed("session.send");
 		if (sending) send.setAttribute("aria-disabled", "true");
 		else send.removeAttribute("aria-disabled");
@@ -62926,7 +63053,7 @@ async function viewSession(main, host, sid, context = null) {
 		let data;
 		try {
 			data = await api("GET", path);
-			if (workRecord && current()) {
+			if (workRecord && !workContext && current()) {
 				const id = workRecord.work_item.work_item_id;
 				const next = await api("GET", `/work-items/${encodeURIComponent(id)}`);
 				if (!current()) return;
@@ -62936,6 +63063,19 @@ async function viewSession(main, host, sid, context = null) {
 				});
 				if (next.work_item?.work_item_id !== id || !linked) throw new ApiError(404, "WORK_LINK_REMOVED", t("workspace_work_missing"));
 				workRecord = next;
+			}
+			if (workContext && current()) {
+				const selected = await readWorkSessionContext({
+					api,
+					guard: () => assertView(connection),
+					...workContext,
+					host,
+					sessionId: sid,
+					missingMessage: t("workspace_work_missing")
+				});
+				if (!current()) return;
+				workRecord = selected.record;
+				selectedAttempt = selected.attempt;
 			}
 		} catch (error) {
 			if ([
@@ -62950,6 +63090,8 @@ async function viewSession(main, host, sid, context = null) {
 		}
 		if (!current()) return;
 		applyObservation(data);
+		if (fixedResult) await fixedResult.setAttempt(selectedAttempt);
+		if (!current()) return;
 		let work = [], repositories = [];
 		if (context?.project) {
 			const project = await api("GET", `/projects/${encodeURIComponent(context.project.project_id)}`);
@@ -63043,6 +63185,7 @@ async function viewSession(main, host, sid, context = null) {
 		const first = !withdrawn;
 		withdrawn = kind;
 		followUp?.suspend();
+		fixedResult?.withdraw();
 		perspectives?.withdraw();
 		withdrawalVersion += 1;
 		clearTimeout(retryTimer);
@@ -63186,13 +63329,19 @@ async function viewSession(main, host, sid, context = null) {
 	const followSync = setTimeout(() => {
 		try {
 			assertView(connection);
-			if (!disposed) followUp?.sync();
+			if (!disposed) {
+				followUp?.sync();
+				fixedResult?.sync();
+			}
 		} catch {}
 	}, 0);
 	const offFollowOnline = onOnline(() => {
 		try {
 			assertView(connection);
-			if (!disposed) followUp?.sync();
+			if (!disposed) {
+				followUp?.sync();
+				fixedResult?.sync();
+			}
 		} catch {}
 	});
 	return () => {
@@ -63200,6 +63349,7 @@ async function viewSession(main, host, sid, context = null) {
 		clearTimeout(followSync);
 		offFollowOnline();
 		followUp?.dispose();
+		fixedResult?.dispose();
 		perspectives?.dispose();
 		clearTimeout(retryTimer);
 		off();

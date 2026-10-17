@@ -1,4 +1,7 @@
 import {test, expect} from '@playwright/test';
+import {followUpFixture, ATTEMPT as LIVE_ATTEMPT} from './work-next-turn-fixture.ts';
+import {mountWorkspace} from './workspace-fixture.ts';
+import {mkdirSync} from 'node:fs';
 import {mountConversation} from './conversation-fixture.ts';
 import {workResultFixture, buildResultEnvelope, workspaceId, workId, route} from './work-result-fixture.ts';
 
@@ -73,6 +76,7 @@ function armPublish(f: any) {
     const path = new URL(input.path, 'http://fixture').pathname;
     if (input.method === 'POST' && path === '/operations' && input.body?.action === 'github.pr.publish') {
       f.state.publishWrites.push(structuredClone(input));
+      if (f.state.publishRefusal) return {status: 409, data: {error: f.state.publishRefusal}};
       const key = input.idempotency_key;
       if (f.state.publishOps.has(key)) {
         return {status: 200, data: {operation: structuredClone(f.state.publishOps.get(key))}};
@@ -85,10 +89,18 @@ function armPublish(f: any) {
         f.state.publishOps.set(key, op);
         return {status: 503, data: {error: {code: 'LOST_REPLY', message: 'Reply unavailable'}}};
       }
-      const op = publishOperation(actor, input, f.state.publishMode === 'failed' ? 'failed' : 'succeeded');
+      const op = publishOperation(actor, input, ['failed', 'accepted'].includes(f.state.publishMode) ? f.state.publishMode : 'succeeded');
       if (op.status === 'failed' && f.state.publishError) op.error_code = f.state.publishError;
       f.state.publishOps.set(key, op);
       return {status: 200, data: {operation: op}};
+    }
+    if (input.method === 'GET' && path === '/operations/' + PUBLISH_OP) {
+      const op = [...f.state.publishOps.values()].find((row: any) => row.operation_id === PUBLISH_OP);
+      if (op) {
+        f.state.publishReads = (f.state.publishReads || 0) + 1;
+        if (f.state.finishPublication) {op.status = 'succeeded'; op.result = {published: true, merged: false, deployed: false};}
+        return {status: 200, data: {operation: structuredClone(op)}};
+      }
     }
     return inner(input);
   };
@@ -151,6 +163,196 @@ test.describe('Work Result pull request publication', () => {
     await expect(page.locator('[data-work-publish-blocked="not_controller"]')).toBeVisible();
     await expect(page.locator('[data-work-publish] input, [data-work-publish] textarea, [data-work-publish] button')).toHaveCount(0);
     expect(f.state.publishWrites).toHaveLength(1);
+  });
+
+  test('a changed repository or base keeps the original target and preconditions', async ({page}) => {
+    const f = workResultFixture();
+    f.state.publishMode = 'lost';
+    f.state.currentEnvelope = resultEnvelope([publishEntry(CANDIDATE)]);
+    await openResult(page, f);
+    await fillPublish(page);
+    await page.locator('[data-work-publish-submit]').click();
+    await expect(page.getByRole('button', {name: 'Check original request'})).toBeVisible();
+    const original = f.state.publishWrites[0];
+    const entry = publishEntry(CANDIDATE);
+    entry.target.repository = 'acme/other';
+    entry.prefilled_params.base_ref = 'release';
+    entry.preconditions = {repository_id: 8, expected_base_sha: 'b'.repeat(40)};
+    f.emitResultRecorded(ATT, resultEnvelope([entry]));
+    await expect(page.locator('[data-work-publish-held]')).toBeVisible();
+    await expect(page.locator('[data-work-publish-base]')).toHaveText('main');
+    await expect(page.locator('[data-work-publish-base-sha]')).toHaveAttribute('title', BASE);
+    await page.getByRole('button', {name: 'Check original request'}).click();
+    await expect.poll(() => f.state.publishWrites.length).toBe(2);
+    expect(f.state.publishWrites[1].body).toEqual(original.body);
+    expect(f.state.publishWrites[1].idempotency_key).toEqual(original.idempotency_key);
+  });
+
+  test('an explicit admission refusal permits a reviewed new key', async ({page}) => {
+    const f = workResultFixture();
+    f.state.publishRefusal = {code: 'PR_PROVIDER_TARGET_CHANGED', message: 'source changed', admission_refused: true};
+    f.state.currentEnvelope = resultEnvelope([publishEntry(CANDIDATE)]);
+    await openResult(page, f);
+    await fillPublish(page);
+    await page.locator('[data-work-publish-submit]').click();
+    await expect(page.locator('[data-work-publish-new-request]')).toBeVisible();
+    await expect(page.locator('[data-work-publish]')).toContainText('repository');
+    const original = f.state.publishWrites[0];
+    f.state.publishRefusal = null;
+    await page.locator('[data-work-publish-new-request]').click();
+    await page.locator('[data-work-publish-submit]').click();
+    await expect.poll(() => f.state.publishWrites.length).toBe(2);
+    expect(f.state.publishWrites[1].idempotency_key).not.toBe(original.idempotency_key);
+    expect(f.state.publishWrites[1].body).toEqual(original.body);
+  });
+
+  test('two submits while awaiting a receipt create only one request', async ({page}) => {
+    const f = workResultFixture();
+    let release = () => {};
+    f.state.holdPublish = new Promise<void>(resolve => {release = resolve;});
+    f.state.currentEnvelope = resultEnvelope([publishEntry(CANDIDATE)]);
+    await openResult(page, f);
+    await fillPublish(page);
+    await page.locator('[data-work-publish-submit]').click();
+    await expect.poll(() => f.state.publishWrites.length).toBe(1);
+    await page.locator('.pm-work-publish-form').evaluate(node => node.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true})));
+    expect(f.state.publishWrites).toHaveLength(1);
+    release();
+    await expect(page.locator('[data-pm-saved]')).toBeVisible();
+    expect(f.state.publishWrites).toHaveLength(1);
+  });
+
+  test('an accepted publication is checked by its original operation id', async ({page}) => {
+    const f = workResultFixture();
+    f.state.publishMode = 'accepted';
+    f.state.finishPublication = true;
+    f.state.currentEnvelope = resultEnvelope([publishEntry(CANDIDATE)]);
+    await openResult(page, f);
+    await fillPublish(page);
+    await page.locator('[data-work-publish-submit]').click();
+    await expect(page.locator('[data-pm-saved]')).toBeVisible();
+    expect(f.state.publishReads).toBeGreaterThan(0);
+    expect(f.state.publishWrites).toHaveLength(1);
+  });
+
+  test('a lost reply survives reload with the original request and key', async ({page}) => {
+    const f = workResultFixture();
+    f.state.publishMode = 'lost';
+    f.state.currentEnvelope = resultEnvelope([publishEntry(CANDIDATE)]);
+    await openResult(page, f);
+    await fillPublish(page);
+    await page.locator('[data-work-publish-submit]').click();
+    await expect(page.getByRole('button', {name: 'Check original request'})).toBeVisible();
+    const original = f.state.publishWrites[0];
+    await page.reload();
+    await page.locator(`[data-pm-kanban-work="${workId(1)}"] [data-board-open]`).click();
+    await page.getByRole('button', {name: 'Check original request'}).click();
+    await expect(page.locator('[data-pm-saved]')).toBeVisible();
+    expect(f.state.publishWrites).toHaveLength(2);
+    expect(f.state.publishWrites[1].body).toEqual(original.body);
+    expect(f.state.publishWrites[1].idempotency_key).toBe(original.idempotency_key);
+  });
+
+  test('a withdrawn Result clears publication fields and keeps only the local draft', async ({page}) => {
+    const f = workResultFixture();
+    f.state.currentEnvelope = resultEnvelope([publishEntry(CANDIDATE)]);
+    await openResult(page, f);
+    await fillPublish(page);
+    f.state.resultStatus = 403;
+    f.emitResultRecorded(ATT);
+    await expect(page.locator('[data-work-result]')).toBeHidden();
+    await expect(page.locator('[data-work-publish-title]')).toHaveCount(0);
+    await expect(page.locator('[data-work-publish-submit]')).toHaveCount(0);
+    const drafts = await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.includes('github.pr.publish')).map(([, value]) => value));
+    expect(drafts.some(value => value.includes('Login fixes'))).toBe(true);
+    expect(f.state.publishWrites).toEqual([]);
+  });
+
+  test('a late Result cannot resurrect publication after leaving the board', async ({page}) => {
+    const f = workResultFixture();
+    f.state.currentEnvelope = resultEnvelope([publishEntry(CANDIDATE)]);
+    await openResult(page, f);
+    await fillPublish(page);
+    let release = () => {};
+    f.state.holdResult = new Promise<void>(resolve => {release = resolve;});
+    const before = f.state.resultRequests.length;
+    f.emitResultRecorded(ATT);
+    await expect.poll(() => f.state.resultRequests.length).toBeGreaterThan(before);
+    await page.locator('[data-pm-view="requirements"]').click();
+    const response = page.waitForResponse(row => row.url().endsWith('/result') && row.status() === 200);
+    release();
+    await response;
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await expect(page.locator('[data-work-publish-title]')).toHaveCount(0);
+    await expect(page.locator('[data-work-publish-submit]')).toHaveCount(0);
+    expect(f.state.publishWrites).toEqual([]);
+  });
+
+  for (const lang of ['en', 'zh-TW']) {
+    test(`${lang}: refresh preserves publication focus, selection and keyboard draft choice`, async ({page}) => {
+      const f = workResultFixture();
+      f.state.currentEnvelope = resultEnvelope([publishEntry(CANDIDATE)]);
+      await page.addInitScript(value => Object.defineProperty(navigator, 'language', {value}), lang);
+      await openResult(page, f);
+      await fillPublish(page);
+      const title = page.locator('[data-work-publish-title]');
+      await title.focus();
+      await title.evaluate((node: HTMLInputElement) => node.setSelectionRange(2, 7));
+      f.emitResultRecorded(ATT, resultEnvelope([publishEntry(CANDIDATE)], {execution_observed_at: 1791705900}));
+      await expect(title).toBeFocused();
+      expect(await title.evaluate((node: HTMLInputElement) => [node.selectionStart, node.selectionEnd])).toEqual([2, 7]);
+      await page.locator('[data-work-publish-draft="true"]').focus();
+      await page.keyboard.press('ArrowRight');
+      await expect(page.locator('[data-work-publish-draft="false"]')).toBeChecked();
+      expect(f.state.publishWrites).toEqual([]);
+    });
+  }
+
+  test('zh-TW publication layout at 1440, 768 and 390', async ({page}) => {
+    const f = workResultFixture();
+    f.state.currentEnvelope = resultEnvelope([publishEntry(CANDIDATE)]);
+    await page.addInitScript(() => Object.defineProperty(navigator, 'language', {value: 'zh-TW'}));
+    await openResult(page, f);
+    await page.locator('[data-work-publish-title]').fill('修正登入按鈕重複送出，保留失敗後重新送出的操作與回歸測試');
+    await page.locator('[data-work-publish-body]').fill('修改登入流程，補上重複送出與失敗後再次送出的測試。\n\n目前只建立 PR，尚未合併或部署。');
+    await page.locator('[data-work-publish-draft="true"]').check();
+    const dir = `${process.env.TMPDIR || '/tmp'}/work-publication`;
+    mkdirSync(dir, {recursive: true});
+    for (const width of [1440, 768, 390]) {
+      await page.setViewportSize({width, height: width === 390 ? 844 : 900});
+      await page.locator('[data-work-publish]').scrollIntoViewIfNeeded();
+      const radio = await page.locator('[data-work-publish-draft="true"]').boundingBox();
+      expect(radio?.width).toBeLessThanOrEqual(24);
+      await page.screenshot({path: `${dir}/publish-${width}.png`, animations: 'disabled'});
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    }
+    expect(f.state.publishWrites).toEqual([]);
+  });
+
+  test('the official Work Result publishes through the same durable form', async ({page}) => {
+    const entry = publishEntry(CANDIDATE);
+    entry.target.host = 'demo';
+    const f = followUpFixture('en', {workspaceId, workItemId: workId(1), publication: entry,
+      resultExtras: {execution: {state: 'turn-ended'}, identity: {execution_operation_id: EXEC}}});
+    const writes: any[] = [];
+    const dispatch = f.dispatch;
+    f.dispatch = async input => {
+      if (input.body?.action === 'github.pr.publish') {
+        writes.push(input);
+        return {status: 200, data: {operation: publishOperation(f.follow.actor, input)}};
+      }
+      return dispatch(input);
+    };
+    await mountWorkspace(page, false, f);
+    await page.goto(`/dashboard/?workbench=1#/session/demo/search-results?workspace=${workspaceId}&work=${workId(1)}&attempt=${LIVE_ATTEMPT}`);
+    await page.getByRole('button', {name: 'Results', exact: true}).click();
+    await fillPublish(page);
+    await expect(page.locator('[data-work-publish-submit]')).toBeEnabled();
+    await page.locator('[data-work-publish-submit]').click();
+    await expect(page.locator('[data-pm-saved]')).toBeVisible();
+    expect(writes).toHaveLength(1);
+    expect(writes[0].body.target).toEqual(entry.target);
+    expect(writes[0].body.preconditions).toEqual(entry.preconditions);
   });
 
   test('an absent publication entry draws nothing', async ({page}) => {

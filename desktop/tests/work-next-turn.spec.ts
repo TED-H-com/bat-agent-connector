@@ -188,7 +188,7 @@ for (const lang of ['en', 'zh-TW'] as const) {
   });
 }
 
-test('a proven admission refusal can use the attempt reported for a new request', async ({page}) => {
+test('a proven admission refusal keeps the explicitly selected attempt for a new request', async ({page}) => {
   const f = followUpFixture('en');
   const next = 'att_' + 'c'.repeat(32);
   f.follow.failPost = {status: 409, code: 'PM_WORK_ATTEMPT_CHANGED', admission_refused: true};
@@ -203,7 +203,7 @@ test('a proven admission refusal can use the attempt reported for a new request'
   expect(f.follow.posts).toHaveLength(1);
   expect(f.follow.posts[0].body.preconditions).toEqual({expected_attempt_id: ATTEMPT});
   await expect.poll(() => f.follow.reads.length).toBeGreaterThan(reads);
-  await expect.poll(() => f.follow.reads.some(row => row.includes('/work-attempts/') && row.includes(next))).toBe(true);
+  expect(f.follow.reads.some(row => row.includes('/work-attempts/') && row.includes(next))).toBe(false);
   await fresh.click();
   f.follow.failPost = null;
   await expect(send(page, 'en')).toBeEnabled();
@@ -211,7 +211,7 @@ test('a proven admission refusal can use the attempt reported for a new request'
   await expect(receipts(page)).toHaveCount(1);
   expect(f.follow.posts).toHaveLength(2);
   expect(f.follow.posts[1].idempotency_key).not.toBe(f.follow.posts[0].idempotency_key);
-  expect(f.follow.posts[1].body.preconditions).toEqual({expected_attempt_id: next});
+  expect(f.follow.posts[1].body.preconditions).toEqual({expected_attempt_id: ATTEMPT});
   expect(f.follow.posts[1].body.params).toEqual({text: 'Write it again', schedule: 'after_current'});
 });
 
@@ -262,14 +262,14 @@ test('remount and reload show the server receipt without another send', async ({
   const before = operationReads();
   await page.evaluate(id => { location.hash = '#/pm/' + id + '/discussions'; }, WS);
   await expect(page.locator('[data-workspace-id]')).toHaveAttribute('data-workspace-id', WS);
-  await page.evaluate(id => { location.hash = '#/item/' + id; }, WI);
+  await page.evaluate(({work, workspace, attempt}) => { location.hash = '#/item/' + work + '?' + new URLSearchParams({workspace, work, attempt}); }, {work: WI, workspace: WS, attempt: ATTEMPT});
   await expect(receipts(page)).toHaveCount(1);
   await expect(section(page)).toContainText('Remember this receipt');
   expect(f.follow.posts).toHaveLength(posts);
   expect(operationReads()).toBe(before);
   await page.goto(`/dashboard/?workbench=1#/pm/${WS}/discussions`);
   await expect(page.locator('[data-workspace-id]')).toHaveAttribute('data-workspace-id', WS);
-  await page.evaluate(id => { location.hash = '#/item/' + id; }, WI);
+  await page.evaluate(({work, workspace, attempt}) => { location.hash = '#/item/' + work + '?' + new URLSearchParams({workspace, work, attempt}); }, {work: WI, workspace: WS, attempt: ATTEMPT});
   await expect(receipts(page)).toHaveCount(1);
   expect(f.follow.posts).toHaveLength(posts);
   expect(operationReads()).toBe(before);
@@ -501,8 +501,7 @@ test('withdrawal drops the list and a late 200 does not restore it', async ({pag
   f.follow.holdFiltered = true;
   f.follow.items = [queuedReceipt()];
   await openWork(page, f, 'en');
-  await expect(receipts(page)).toHaveCount(1);
-  await expect.poll(() => f.follow.reads.some(row => row.includes('attempt_id='))).toBe(true);
+  await expect.poll(() => f.follow.holdConsumed).toBe(true);
   f.follow.inputsStatus = 404;
   f.pushEvent('operation');
   await expect(page.locator('[data-follow-up-withdrawn]')).toBeVisible({timeout: 15000});
@@ -525,7 +524,7 @@ test('more steps, hidden rows, an unknown label and a bad page stay honest', asy
   f.follow.hasMore = true;
   f.follow.cursor = 'page-2';
   f.follow.pages.set('page-2', {
-    workspace_id: WS, work_item_id: WI, items: [second], next_cursor: null, has_more: false,
+    workspace_id: WS, work_item_id: WI, attempt_id: ATTEMPT, items: [second], next_cursor: null, has_more: false,
     latest_attempt_id: ATTEMPT, visibility_filtered: true,
   });
   await openWork(page, f, 'zh-TW');
@@ -601,7 +600,7 @@ for (const lang of ['en', 'zh-TW'] as const) {
       const ns = key.slice('batc.sync.'.length);
       localStorage.setItem(`batc.draft.${ns}.send.demo.search-results`, 'keep the old draft');
     });
-    await page.evaluate(id => { location.hash = '#/item/' + id; }, WI);
+    await page.evaluate(({work, workspace, attempt}) => { location.hash = '#/item/' + work + '?' + new URLSearchParams({workspace, work, attempt}); }, {work: WI, workspace: WS, attempt: ATTEMPT});
     await expect(field(page)).toBeVisible();
     await expect(field(page)).toHaveValue('');
     await expect(page.locator('#workspace-message-input textarea')).toHaveValue('keep the old draft');

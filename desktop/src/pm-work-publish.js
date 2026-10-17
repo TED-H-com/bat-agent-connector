@@ -229,7 +229,9 @@ export function createWorkPublish({h, t, form, namespace, caps, errorBox}) {
     gapNode = null;
   }
 
+  function sync() {editor?.update();}
   function recheck() {
+    sync();
     if (editor?.locked()) editor.recheck();
   }
 
@@ -310,6 +312,7 @@ export function createWorkPublish({h, t, form, namespace, caps, errorBox}) {
     const baseMoved = Boolean(decision.entry && current && (
       decision.entry.baseRef !== current.baseRef
       || decision.entry.preconditions?.expected_base_sha !== current.preconditions?.expected_base_sha
+      || decision.entry.preconditions?.repository_id !== current.preconditions?.repository_id
       || decision.entry.target?.repository !== current.target?.repository
     ));
     heldNode.hidden = Boolean(next && next === identity && !baseMoved);
@@ -547,5 +550,5 @@ export function createWorkPublish({h, t, form, namespace, caps, errorBox}) {
     return mountEditor(decision, envelope);
   }
 
-  return {render, dispose, recheck, element: () => root};
+  return {render, dispose, recheck, sync, element: () => root};
 }
