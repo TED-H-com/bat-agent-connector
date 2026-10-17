@@ -7,7 +7,7 @@ const WORK_ITEM_ID = /^wi_[0-9a-f]{20}$/;
 const ATTEMPT_ID = /^att_[0-9a-f]{32}$/;
 const OPERATION_ID = /^op_[0-9a-f]{32}$/;
 const REKEY = new Set(['PM_WORK_ATTEMPT_CHANGED', 'INVALID_PRECONDITIONS']);
-const QUEUED_STATUS = new Set(['accepted', 'queued', 'pending', 'running', 'waiting_external']);
+const QUEUED_RECEIPT = new Set(['queued', 'waiting_external']);
 
 export function workFollowUpAvailable(caps) {
   const feature = caps?.features?.pm_workspaces?.work_follow_up;
@@ -33,7 +33,7 @@ function actionLabel(action, t) {
   return typeof value === 'string' && value.trim() ? value : '';
 }
 
-export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceId, workItemId, errorBox, canSend = () => true, managed = () => false}) {
+export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceId, workItemId, errorBox, canSend = () => true, managed = () => false, onField = () => {}}) {
   if (!workFollowUpAvailable(caps()) || !WORKSPACE_ID.test(workspaceId || '') || !WORK_ITEM_ID.test(workItemId || '')) return null;
   const titleId = `work-next-title-${workItemId}`;
   const hintId = `work-next-hint-${workItemId}`;
@@ -49,10 +49,10 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
 
   let epoch = 0, serial = 0, stopped = false, suspended = false, disposed = false;
   let attemptId = '', sendOffer = null, blockedReason = '', resultSettled = false;
+  let reading = false, admissionReady = false;
   let pageItems = [], nextCursor = null, hasMore = false, filtered = false, listSettled = false;
   const pinned = new Map(), announced = new Set(), cancelDenied = new Set();
   let composer = null, composing = false, composeEnded = -Infinity, focusAfter = null;
-  let composeDepth = 0, composeSession = 0;
   let sawList = false;
 
   const seen = () => epoch;
@@ -98,6 +98,16 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
     composer?.dispose();
     composer = null;
     formHost.replaceChildren();
+    try {onField(null, null);} catch { /* the host reports its own binding */ }
+  }
+  function composerAllowed() {
+    return !reading && admissionReady && Boolean(sendOffer) && resultSettled && managed() && !suspended
+      && caps()?.scopes?.includes('operate')
+      && caps()?.actions?.some(row => row.action === 'session.send' && row.allowed === true);
+  }
+  function dropUnconfirmedPins() {
+    const visible = new Set(pageItems.map(row => row.operation_id));
+    for (const id of [...pinned.keys()]) if (!visible.has(id)) pinned.delete(id);
   }
   function actorMatches(receipt) {
     const actor = caps()?.actor;
@@ -113,52 +123,37 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
       && Array.isArray(row.allowed_schedules) && row.allowed_schedules.includes('after_current')) || null;
   }
   function applyResult(result) {
+    if (!result || result.contract !== 'pm-work-attempt-result/v1') return false;
+    if (result.workspace_id !== workspaceId || result.identity?.work_item_id !== workItemId) return false;
+    if (attemptId && result.attempt_id !== attemptId) return false;
     resultSettled = true;
     sendOffer = offerSend(result);
-    const blocked = Array.isArray(result?.blocked_actions) ? result.blocked_actions.find(row => row?.action === 'session.send') : null;
+    const blocked = Array.isArray(result.blocked_actions) ? result.blocked_actions.find(row => row?.action === 'session.send') : null;
     blockedReason = sendOffer ? '' : blocked?.reason || '';
+    return true;
   }
   function syncComposer() {
     if (stopped || disposed) return;
-    const allowed = Boolean(sendOffer) && resultSettled && managed() && !suspended
-      && caps()?.scopes?.includes('operate')
-      && caps()?.actions?.some(row => row.action === 'session.send' && row.allowed === true);
-    const showReadOnly = !allowed && resultSettled && (blockedReason === 'missing_scope' || blockedReason === 'not_writer_member' || !caps()?.scopes?.includes('operate'));
+    const allowed = composerAllowed();
+    const showReadOnly = !reading && !allowed && resultSettled && admissionReady
+      && (blockedReason === 'missing_scope' || blockedReason === 'not_writer_member' || !caps()?.scopes?.includes('operate'));
     pill.replaceChildren(...(showReadOnly ? [statusPill('read_only')] : []));
     const reason = blockedReason === 'codex_uncorrelated_turn_boundary' ? t('loop_next_codex')
       : blockedReason === 'not_controller' ? t('loop_next_not_controller') : '';
     note.replaceChildren(...(reason ? [h('p', {class: 'work-next-note'}, reason)] : []));
     if (!allowed) {
+      if (reading && composer) {composer.update(); paint(); return;}
       if (composer) clearComposer();
       paint();
       return;
     }
     if (composer) {composer.update(); paint(); return;}
-    const field = h('textarea', {'data-follow-up-input': '', rows: '4'});
+    const field = h('textarea', {id: `work-next-input-${workItemId}`, 'data-follow-up-input': '', rows: '4'});
     field.setAttribute('aria-labelledby', titleId);
     field.setAttribute('aria-describedby', hintId);
-    const refreshSend = () => {composer?.update(); setTimeout(() => composer?.update(), 50);};
-    // A stray keydown 229 without a composition must not leave Send next disabled.
-    const beginTransientCompose = () => {
-      if (composeDepth > 0) {composing = true; composer?.update(); return;}
-      const session = ++composeSession;
-      composing = true;
-      composer?.update();
-      setTimeout(() => {
-        if (session !== composeSession || composeDepth > 0 || !composing) return;
-        composing = false; composeEnded = performance.now(); refreshSend();
-      }, 300);
-    };
-    const endTransientCompose = () => {
-      if (composeDepth > 0) return;
-      composeSession += 1; composing = false; composeEnded = performance.now(); refreshSend();
-    };
-    field.addEventListener('compositionstart', () => {composeDepth += 1; composeSession += 1; composing = true; composer?.update();});
-    field.addEventListener('compositionend', () => {
-      composeDepth = Math.max(0, composeDepth - 1); composeSession += 1;
-      composing = false; composeEnded = performance.now(); refreshSend();
-    });
-    field.addEventListener('input', () => refreshSend());
+    field.addEventListener('compositionstart', () => {composing = true;});
+    field.addEventListener('compositionend', () => {composing = false; composeEnded = performance.now();});
+    field.addEventListener('input', () => composer?.update());
     const hint = h('p', {class: 'ui-meta', id: hintId}, t('loop_next_hint'));
     composer = pmDurableForm({
       h, t, api, caps, guard, namespace,
@@ -166,9 +161,10 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
       target: {workspace_id: workspaceId, work_item_id: workItemId},
       fields: {text: field},
       params: values => ({text: values.text.trim(), schedule: 'after_current'}),
+      // Preconditions are captured only when a new request is authorized.
       preconditions: () => attemptId ? {expected_attempt_id: attemptId} : {},
       permitted: () => managed() && !stopped && !suspended,
-      canSend: () => !composing && performance.now() - composeEnded >= 50 && field.value.trim().length > 0
+      canSend: () => !reading && admissionReady && field.value.trim().length > 0
         && field.value.trim().length <= 20000 && canSend(),
       requiredScope: 'operate',
       label: 'loop_next_send',
@@ -176,17 +172,10 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
       acknowledgeStatus: acknowledge,
       onAcknowledged: acceptOperation,
       onSaved: async () => {},
-      abandonIntentOn: error => REKEY.has(error?.code),
       onError: handleFormError,
       errorBox,
       extra: h('div', {class: 'pm-fields work-next-field'}, field, hint),
     });
-    composer.box.addEventListener('keydown', event => {
-      if (event.isComposing || event.keyCode === 229) beginTransientCompose();
-    }, true);
-    composer.box.addEventListener('keyup', event => {
-      if (event.isComposing || event.keyCode === 229) endTransientCompose();
-    }, true);
     composer.box.addEventListener('submit', event => {
       if (composing || performance.now() - composeEnded < 50) {
         event.preventDefault();
@@ -195,19 +184,31 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
     }, true);
     formHost.append(composer.box);
     if (field.value) field.selectionStart = field.selectionEnd = field.value.length;
+    try {onField(field, composer.box.querySelector('button[type=submit]'));} catch { /* the host reports its own binding */ }
     paint();
   }
-  function acknowledge(op, builder, translate) {
+  function correlatedReceipt(op) {
     const receipt = op?.input_receipt;
-    const known = validReceipt(receipt);
-    const state = receipt?.state;
-    const title = known ? receiptText(receipt, 'state', translate) : '';
-    // A failed or cancelled id is not "queued". Only a missing receipt uses the operation status.
-    const queued = known
-      ? state === 'queued' || state === 'accepted' || state === 'waiting_external'
-      : QUEUED_STATUS.has(op?.status);
-    if (!queued && title) return builder('span', {'data-pm-acknowledged': ''}, title);
-    return builder('span', {'data-pm-acknowledged': ''}, translate('loop_next_queued'), title ? ' · ' : '', title || null);
+    if (!validReceipt(receipt) || receipt.operation_id !== op?.operation_id) return null;
+    return receipt;
+  }
+  function acknowledge(op, builder, translate) {
+    const receipt = correlatedReceipt(op);
+    if (receipt) {
+      const title = receiptText(receipt, 'state', translate);
+      if (QUEUED_RECEIPT.has(receipt.state)) {
+        return builder('span', {'data-pm-acknowledged': '', 'data-follow-up-ack': 'queued'},
+          translate('loop_next_queued'), title ? ' · ' : '', title || null);
+      }
+      const kind = receipt.state === 'accepted' ? 'accepted' : (receipt.state || 'unknown');
+      return builder('span', {'data-pm-acknowledged': '', 'data-follow-up-ack': kind}, title);
+    }
+    const accepted = op?.status === 'accepted' || op?.status === 'succeeded';
+    const id = OPERATION_ID.test(op?.operation_id || '') ? op.operation_id : '';
+    return builder('span', {'data-pm-acknowledged': '', 'data-follow-up-ack': accepted ? 'accepted' : 'unknown'},
+      translate(accepted ? 'loop_next_accepted' : 'loop_next_unknown'),
+      id ? ' ' : null,
+      id ? builder('a', {href: `#/op/${encodeURIComponent(id)}`}, id) : null);
   }
   function acceptOperation(op) {
     const receipt = op?.input_receipt;
@@ -220,6 +221,7 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
     if (!error?.code || error.code === 'NETWORK_ERROR' || error.code === 'TIMEOUT' || error.code === 'CENTRAL_OFFLINE') return false;
     const formStatus = composer?.box.querySelector('[role=status]');
     if (formStatus) showError(error, formStatus);
+    // A newer attempt can be read. It does not replace the original key or request.
     if (REKEY.has(error.code)) void refresh();
     return true;
   }
@@ -252,6 +254,7 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
     }
   }
   function mutationsAllowed() {
+    if (reading || !admissionReady || !sendOffer) return false;
     if (['not_controller', 'codex_uncorrelated_turn_boundary', 'not_writer_member', 'missing_scope'].includes(blockedReason)) return false;
     return managed() && !stopped && !suspended
       && caps()?.scopes?.includes('operate')
@@ -332,44 +335,65 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
     filtered = data.visibility_filtered === true;
     rememberAttempt(data.latest_attempt_id);
     listSettled = true;
+    dropUnconfirmedPins();
     return true;
   }
+  function denyAdmission(message) {
+    reading = false;
+    admissionReady = false;
+    sendOffer = null;
+    dropUnconfirmedPins();
+    if (message) status.replaceChildren(h('p', {}, message));
+    syncComposer();
+  }
   async function readResult(ticket, mark) {
-    if (!attemptId) {resultSettled = true; sendOffer = null; blockedReason = ''; syncComposer(); return;}
-    const data = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/result`);
     if (!alive(ticket, mark)) return;
-    applyResult(data);
+    if (!attemptId) {
+      resultSettled = true; sendOffer = null; blockedReason = '';
+      reading = false; admissionReady = true; syncComposer(); return;
+    }
+    let data;
+    try {
+      data = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/result`);
+    } catch (error) {
+      if (!alive(ticket, mark) || retired(error)) return;
+      if ([403, 404, 410].includes(error?.status)) {withdrawSource(); return;}
+      throw error;
+    }
+    if (!alive(ticket, mark)) return;
+    if (!applyResult(data)) {denyAdmission(t('loop_next_err_unknown')); return;}
+    reading = false;
+    admissionReady = true;
     syncComposer();
   }
   async function refresh() {
     if (stopped || suspended || disposed) return;
     const mark = epoch;
     const ticket = ++serial;
+    reading = true;
+    admissionReady = false;
+    sendOffer = null;
+    syncComposer();
     const queried = attemptId;
     try {
       guard();
       const data = await api('GET', inputsPath(''));
       if (!alive(ticket, mark)) return;
-      if (!takeList(data, false)) {status.replaceChildren(h('p', {}, t('loop_next_err_unknown'))); return;}
+      if (!takeList(data, false)) {denyAdmission(t('loop_next_err_unknown')); return;}
       paint();
       sawList = true;
       for (const row of mergedItems()) announced.add(row.operation_id);
       if (!queried && attemptId) {
         const filteredPage = await api('GET', inputsPath(''));
         if (!alive(ticket, mark)) return;
-        if (takeList(filteredPage, false)) paint();
+        if (!takeList(filteredPage, false)) {denyAdmission(t('loop_next_err_unknown')); return;}
+        paint();
       }
-      try {await readResult(ticket, mark);} catch (error) {
-        if (!alive(ticket, mark) || retired(error)) return;
-        if ([404, 410].includes(error?.status)) {withdrawSource(); return;}
-        resultSettled = true; sendOffer = null;
-        if (error?.status === 403) blockedReason = blockedReason || 'missing_scope';
-        syncComposer();
-        if (error?.status !== 403) showError(error, status);
-      }
+      await readResult(ticket, mark);
     } catch (error) {
       if (!alive(ticket, mark) || retired(error)) return;
       if ([403, 404, 410].includes(error?.status)) {withdrawSource(); return;}
+      denyAdmission();
       showError(error, status);
     }
   }
@@ -381,7 +405,7 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
     try {
       const data = await api('GET', inputsPath(after));
       if (!alive(ticket, mark)) return;
-      if (!takeList(data, true)) return;
+      if (!takeList(data, true)) {status.replaceChildren(h('p', {}, t('loop_next_err_unknown'))); return;}
       paint();
     } catch (error) {
       if (!alive(ticket, mark) || retired(error)) return;
@@ -391,6 +415,7 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
   }
   function withdrawSource() {
     epoch += 1; serial += 1; stopped = true;
+    reading = false; admissionReady = false;
     pageItems = []; pinned.clear(); announced.clear();
     sendOffer = null; resultSettled = false; hasMore = false; filtered = false;
     clearComposer();
@@ -400,6 +425,7 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
   }
   function suspend() {
     epoch += 1; serial += 1; suspended = true;
+    reading = false; admissionReady = false; sendOffer = null;
     if (stopped) return;
     pageItems = []; pinned.clear();
     list.replaceChildren(); note.replaceChildren(); status.replaceChildren();

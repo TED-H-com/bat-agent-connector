@@ -66,11 +66,11 @@ export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 
 
 // Save the exact request before admission. A later authorization/validation error can never
 // release an earlier ambiguous request; only its matching terminal receipt permits replacement.
-function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, savedText = 'pm_saved', pendingText = 'pm_pending', releaseAfterAcknowledgement = false, acknowledgedText = '', onAcknowledged = () => {}, acknowledgeStatus = null, abandonIntentOn = () => false}) {
+function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, savedText = 'pm_saved', pendingText = 'pm_pending', releaseAfterAcknowledgement = false, acknowledgedText = '', onAcknowledged = () => {}, acknowledgeStatus = null}) {
   const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
   let saved = {version: 1, values: {}}, damaged = false, busy = false, operation = null;
   const receiptDelays = action === 'pm.conversation.adopt' ? [250, 500, 1000, 1500, 2000, 3000, 3000, 3000, 3000, 3000] : [250, 500, 1000, 1500, 2000, 3000];
-  let receiptTimer = null, receiptAttempt = 0, receiptPolling = true, disposed = false, stagedHere = false, initialChecking = false;
+  let receiptTimer = null, receiptAttempt = 0, receiptPolling = true, disposed = false, stagedHere = false, initialChecking = false, focusRelease = false;
   const stopTimer = () => {clearTimeout(receiptTimer); receiptTimer = null;};
   try {
     const raw = localStorage.getItem(storage);
@@ -268,10 +268,10 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
         }
         if (announced) status.replaceChildren(announced);
         else status.replaceChildren();
+        // The caller's refresh may disable this button before run() clears busy.
+        // Remember the keyboard owner now and return there after the field is enabled again.
+        focusRelease = document.activeElement === button || document.activeElement === document.body;
         try {onAcknowledged(op);} catch { /* the caller reports its own read */ }
-        const field = Object.values(fields)[0];
-        const active = document.activeElement;
-        if (field && (active === button || active === document.body)) field.focus();
         return;
       }
       receipt.replaceChildren(h('a', {href: `#/op/${op.operation_id}`}, t('pm_operation')), ' · ', statusText(op.status));
@@ -290,24 +290,23 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
       try {guard();} catch {return;}
       if (!retired(error)) {
         // Explicit server pre-admission refusal is useful only for the first attempt.
+        // Only an explicit pre-admission refusal may be replaced. Any other error,
+        // including a changed attempt or preconditions, leaves the original key and request.
         if (firstAttempt && error.admissionRefused === true && !saved.intent?.operation_id) {
           saved.intent.initialAdmissionRefused = true;
           try {persist();} catch { /* keep the frozen original in memory */ }
         }
-        // A refused attempt id must not be replayed on the original key. Keep the typed text.
-        let abandon = false;
-        try {
-          abandon = Boolean(saved.intent && !saved.intent.operation_id && !saved.intent.initialAdmissionRefused && abandonIntentOn(error));
-        } catch {abandon = false;}
-        if (abandon) {
-          saved = {version: 1, values: capture()};
-          try {persist();} catch { /* keep the draft in memory */ }
-          operation = null;
-        }
         const handled = onError(error);
         if (!handled) status.replaceChildren(errorBox(error, error.code === 'VERSION_CONFLICT' ? {summary: t('pm_stale'), within: status} : {within: status}));
       }
-    } finally {busy = false; update();}
+    } finally {
+      busy = false; update();
+      if (focusRelease) {
+        focusRelease = false;
+        const field = Object.values(fields)[0];
+        if (field && !field.disabled) field.focus();
+      }
+    }
   }
   if (damaged) status.append(h('p', {class: 'error'}, t('pm_damaged')));
   const connection = h(formConnectionTag, {hidden: true});

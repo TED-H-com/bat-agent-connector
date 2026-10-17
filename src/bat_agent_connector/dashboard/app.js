@@ -8327,6 +8327,7 @@ var workFollowUpStrings = {
 		loop_next_send: "送出下一步",
 		loop_next_hint: "本輪結束後才會送出。",
 		loop_next_queued: "已排入下一輪",
+		loop_next_accepted: "已接受。排隊狀態尚未確認。",
 		loop_next_waiting: "本輪在等回答。這一步仍先排隊，不會中斷本輪。",
 		loop_next_readonly: "唯讀",
 		loop_next_hidden: "有些步驟因來源不可見而沒有列出。",
@@ -8348,7 +8349,7 @@ var workFollowUpStrings = {
 		loop_next_err_PM_WORK_SESSION_ENDED: "這個工作階段已結束。請查看本輪結果。",
 		loop_next_err_PM_WORK_SESSION_BUSY: "本輪仍在進行，沒有改成立刻送出。",
 		loop_next_err_PM_WORK_SESSION_WAITING_INPUT: "本輪正在等回答，沒有改成立刻送出。",
-		loop_next_err_PM_WORK_ATTEMPT_CHANGED: "這項工作已有較新的嘗試。請先查看，再重新送出這一步。",
+		loop_next_err_PM_WORK_ATTEMPT_CHANGED: "這項工作已有較新的嘗試。原請求維持不變。",
 		loop_next_err_WORK_ITEM_NOT_FOUND: "這項工作已不在這裡。",
 		loop_next_err_WORK_ITEM_ARCHIVED: "這項工作已封存。",
 		loop_next_err_PROJECT_NOT_FOUND: "這項工作所屬的專案不在這裡。",
@@ -8362,7 +8363,7 @@ var workFollowUpStrings = {
 		loop_next_err_PM_WORK_CONTROLLER_CONFLICT: "你不是這項工作的控制者。",
 		loop_next_err_INVALID_TARGET: "目標不是這項工作，因此沒有送出。",
 		loop_next_err_INVALID_PARAMS: "請修改文字後再送出。",
-		loop_next_err_INVALID_PRECONDITIONS: "嘗試已變更。請重新送出這一步。",
+		loop_next_err_INVALID_PRECONDITIONS: "前置條件已變更。原請求維持不變。",
 		loop_next_err_IDEMPOTENCY_CONFLICT: "請查回原請求。",
 		loop_next_err_PM_WORK_CANCEL_NOT_ALLOWED_AFTER_SEND: "指令已進入送出階段；開始送出後無法透過取消撤回指令。",
 		loop_next_err_FORBIDDEN: "你無法變更這一步。",
@@ -8374,6 +8375,7 @@ var workFollowUpStrings = {
 		loop_next_send: "Send next",
 		loop_next_hint: "This is sent after the current turn ends.",
 		loop_next_queued: "Queued for the next turn",
+		loop_next_accepted: "Accepted. Queue status is unconfirmed.",
 		loop_next_waiting: "The turn is waiting for an answer. This step is still queued. It does not interrupt.",
 		loop_next_readonly: "Read-only",
 		loop_next_hidden: "Some steps are hidden because their source is not visible.",
@@ -8395,7 +8397,7 @@ var workFollowUpStrings = {
 		loop_next_err_PM_WORK_SESSION_ENDED: "This session has ended. Review the current result.",
 		loop_next_err_PM_WORK_SESSION_BUSY: "This turn is still running. Nothing was switched to send now.",
 		loop_next_err_PM_WORK_SESSION_WAITING_INPUT: "This turn is waiting for an answer. Nothing was switched to send now.",
-		loop_next_err_PM_WORK_ATTEMPT_CHANGED: "This work has a newer attempt. Review it, then send the step again.",
+		loop_next_err_PM_WORK_ATTEMPT_CHANGED: "This work has a newer attempt. The original request stays in place.",
 		loop_next_err_WORK_ITEM_NOT_FOUND: "This work is no longer here.",
 		loop_next_err_WORK_ITEM_ARCHIVED: "This work is archived.",
 		loop_next_err_PROJECT_NOT_FOUND: "The project for this work is not here.",
@@ -8409,7 +8411,7 @@ var workFollowUpStrings = {
 		loop_next_err_PM_WORK_CONTROLLER_CONFLICT: "You are not this work's controller.",
 		loop_next_err_INVALID_TARGET: "This step was not sent because the target was not the work item.",
 		loop_next_err_INVALID_PARAMS: "Change the text and send again.",
-		loop_next_err_INVALID_PRECONDITIONS: "The attempt changed. Send this step again.",
+		loop_next_err_INVALID_PRECONDITIONS: "The preconditions changed. The original request stays in place.",
 		loop_next_err_IDEMPOTENCY_CONFLICT: "Check the original request.",
 		loop_next_err_PM_WORK_CANCEL_NOT_ALLOWED_AFTER_SEND: "This instruction has entered sending and can no longer be withdrawn by cancelling.",
 		loop_next_err_FORBIDDEN: "You cannot change this step.",
@@ -42649,7 +42651,7 @@ if (!customElements.get(formConnectionTag)) customElements.define(formConnection
 	}
 });
 var pmAvailable = (caps) => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes("observe");
-function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, savedText = "pm_saved", pendingText = "pm_pending", releaseAfterAcknowledgement = false, acknowledgedText = "", onAcknowledged = () => {}, acknowledgeStatus = null, abandonIntentOn = () => false }) {
+function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, savedText = "pm_saved", pendingText = "pm_pending", releaseAfterAcknowledgement = false, acknowledgedText = "", onAcknowledged = () => {}, acknowledgeStatus = null }) {
 	const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
 	let saved = {
 		version: 1,
@@ -42674,7 +42676,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		2e3,
 		3e3
 	];
-	let receiptTimer = null, receiptAttempt = 0, receiptPolling = true, disposed = false, stagedHere = false, initialChecking = false;
+	let receiptTimer = null, receiptAttempt = 0, receiptPolling = true, disposed = false, stagedHere = false, initialChecking = false, focusRelease = false;
 	const stopTimer = () => {
 		clearTimeout(receiptTimer);
 		receiptTimer = null;
@@ -42939,12 +42941,10 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				}
 				if (announced) status.replaceChildren(announced);
 				else status.replaceChildren();
+				focusRelease = document.activeElement === button || document.activeElement === document.body;
 				try {
 					onAcknowledged(op);
 				} catch {}
-				const field = Object.values(fields)[0];
-				const active = document.activeElement;
-				if (field && (active === button || active === document.body)) field.focus();
 				return;
 			}
 			receipt.replaceChildren(h("a", { href: `#/op/${op.operation_id}` }, t("pm_operation")), " · ", statusText(op.status));
@@ -42978,22 +42978,6 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 						persist();
 					} catch {}
 				}
-				let abandon = false;
-				try {
-					abandon = Boolean(saved.intent && !saved.intent.operation_id && !saved.intent.initialAdmissionRefused && abandonIntentOn(error));
-				} catch {
-					abandon = false;
-				}
-				if (abandon) {
-					saved = {
-						version: 1,
-						values: capture()
-					};
-					try {
-						persist();
-					} catch {}
-					operation = null;
-				}
 				if (!onError(error)) status.replaceChildren(errorBox(error, error.code === "VERSION_CONFLICT" ? {
 					summary: t("pm_stale"),
 					within: status
@@ -43002,6 +42986,11 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		} finally {
 			busy = false;
 			update();
+			if (focusRelease) {
+				focusRelease = false;
+				const field = Object.values(fields)[0];
+				if (field && !field.disabled) field.focus();
+			}
 		}
 	}
 	if (damaged) status.append(h("p", { class: "error" }, t("pm_damaged")));
@@ -46136,13 +46125,7 @@ var WORK_ITEM_ID = /^wi_[0-9a-f]{20}$/;
 var ATTEMPT_ID = /^att_[0-9a-f]{32}$/;
 var OPERATION_ID = /^op_[0-9a-f]{32}$/;
 var REKEY = new Set(["PM_WORK_ATTEMPT_CHANGED", "INVALID_PRECONDITIONS"]);
-var QUEUED_STATUS = new Set([
-	"accepted",
-	"queued",
-	"pending",
-	"running",
-	"waiting_external"
-]);
+var QUEUED_RECEIPT = new Set(["queued", "waiting_external"]);
 function workFollowUpAvailable(caps) {
 	const feature = caps?.features?.pm_workspaces?.work_follow_up;
 	return feature?.version === 1 && feature?.available === true;
@@ -46164,7 +46147,7 @@ function actionLabel(action, t) {
 	const value = locale === "zh-TW" ? action?.label_zh_TW : action?.label;
 	return typeof value === "string" && value.trim() ? value : "";
 }
-function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, workItemId, errorBox, canSend = () => true, managed = () => false }) {
+function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, workItemId, errorBox, canSend = () => true, managed = () => false, onField = () => {} }) {
 	if (!workFollowUpAvailable(caps()) || !WORKSPACE_ID.test(workspaceId || "") || !WORK_ITEM_ID.test(workItemId || "")) return null;
 	const titleId = `work-next-title-${workItemId}`;
 	const hintId = `work-next-hint-${workItemId}`;
@@ -46191,10 +46174,10 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 	}, h("header", { class: "work-next-head" }, heading, pill), list, note, formHost, status, live);
 	let epoch = 0, serial = 0, stopped = false, suspended = false, disposed = false;
 	let attemptId = "", sendOffer = null, blockedReason = "", resultSettled = false;
+	let reading = false, admissionReady = false;
 	let pageItems = [], nextCursor = null, hasMore = false, filtered = false, listSettled = false;
 	const pinned = new Map(), announced = new Set(), cancelDenied = new Set();
 	let composer = null, composing = false, composeEnded = -Infinity, focusAfter = null;
-	let composeDepth = 0, composeSession = 0;
 	let sawList = false;
 	function alive(ticket, mark) {
 		try {
@@ -46241,6 +46224,16 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		composer?.dispose();
 		composer = null;
 		formHost.replaceChildren();
+		try {
+			onField(null, null);
+		} catch {}
+	}
+	function composerAllowed() {
+		return !reading && admissionReady && Boolean(sendOffer) && resultSettled && managed() && !suspended && caps()?.scopes?.includes("operate") && caps()?.actions?.some((row) => row.action === "session.send" && row.allowed === true);
+	}
+	function dropUnconfirmedPins() {
+		const visible = new Set(pageItems.map((row) => row.operation_id));
+		for (const id of [...pinned.keys()]) if (!visible.has(id)) pinned.delete(id);
 	}
 	function actorMatches(receipt) {
 		const actor = caps()?.actor;
@@ -46253,19 +46246,28 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		return (Array.isArray(result.next_allowed_actions) ? result.next_allowed_actions : []).find((row) => row?.kind === "action" && row.action === "session.send" && row.allowed !== false && exactTarget(row.target, workspaceId, workItemId) && Array.isArray(row.allowed_schedules) && row.allowed_schedules.includes("after_current")) || null;
 	}
 	function applyResult(result) {
+		if (!result || result.contract !== "pm-work-attempt-result/v1") return false;
+		if (result.workspace_id !== workspaceId || result.identity?.work_item_id !== workItemId) return false;
+		if (attemptId && result.attempt_id !== attemptId) return false;
 		resultSettled = true;
 		sendOffer = offerSend(result);
-		const blocked = Array.isArray(result?.blocked_actions) ? result.blocked_actions.find((row) => row?.action === "session.send") : null;
+		const blocked = Array.isArray(result.blocked_actions) ? result.blocked_actions.find((row) => row?.action === "session.send") : null;
 		blockedReason = sendOffer ? "" : blocked?.reason || "";
+		return true;
 	}
 	function syncComposer() {
 		if (stopped || disposed) return;
-		const allowed = Boolean(sendOffer) && resultSettled && managed() && !suspended && caps()?.scopes?.includes("operate") && caps()?.actions?.some((row) => row.action === "session.send" && row.allowed === true);
-		const showReadOnly = !allowed && resultSettled && (blockedReason === "missing_scope" || blockedReason === "not_writer_member" || !caps()?.scopes?.includes("operate"));
+		const allowed = composerAllowed();
+		const showReadOnly = !reading && !allowed && resultSettled && admissionReady && (blockedReason === "missing_scope" || blockedReason === "not_writer_member" || !caps()?.scopes?.includes("operate"));
 		pill.replaceChildren(...showReadOnly ? [statusPill("read_only")] : []);
 		const reason = blockedReason === "codex_uncorrelated_turn_boundary" ? t("loop_next_codex") : blockedReason === "not_controller" ? t("loop_next_not_controller") : "";
 		note.replaceChildren(...reason ? [h("p", { class: "work-next-note" }, reason)] : []);
 		if (!allowed) {
+			if (reading && composer) {
+				composer.update();
+				paint();
+				return;
+			}
 			if (composer) clearComposer();
 			paint();
 			return;
@@ -46276,52 +46278,20 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 			return;
 		}
 		const field = h("textarea", {
+			id: `work-next-input-${workItemId}`,
 			"data-follow-up-input": "",
 			rows: "4"
 		});
 		field.setAttribute("aria-labelledby", titleId);
 		field.setAttribute("aria-describedby", hintId);
-		const refreshSend = () => {
-			composer?.update();
-			setTimeout(() => composer?.update(), 50);
-		};
-		const beginTransientCompose = () => {
-			if (composeDepth > 0) {
-				composing = true;
-				composer?.update();
-				return;
-			}
-			const session = ++composeSession;
-			composing = true;
-			composer?.update();
-			setTimeout(() => {
-				if (session !== composeSession || composeDepth > 0 || !composing) return;
-				composing = false;
-				composeEnded = performance.now();
-				refreshSend();
-			}, 300);
-		};
-		const endTransientCompose = () => {
-			if (composeDepth > 0) return;
-			composeSession += 1;
-			composing = false;
-			composeEnded = performance.now();
-			refreshSend();
-		};
 		field.addEventListener("compositionstart", () => {
-			composeDepth += 1;
-			composeSession += 1;
 			composing = true;
-			composer?.update();
 		});
 		field.addEventListener("compositionend", () => {
-			composeDepth = Math.max(0, composeDepth - 1);
-			composeSession += 1;
 			composing = false;
 			composeEnded = performance.now();
-			refreshSend();
 		});
-		field.addEventListener("input", () => refreshSend());
+		field.addEventListener("input", () => composer?.update());
 		const hint = h("p", {
 			class: "ui-meta",
 			id: hintId
@@ -46345,24 +46315,17 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 			}),
 			preconditions: () => attemptId ? { expected_attempt_id: attemptId } : {},
 			permitted: () => managed() && !stopped && !suspended,
-			canSend: () => !composing && performance.now() - composeEnded >= 50 && field.value.trim().length > 0 && field.value.trim().length <= 2e4 && canSend(),
+			canSend: () => !reading && admissionReady && field.value.trim().length > 0 && field.value.trim().length <= 2e4 && canSend(),
 			requiredScope: "operate",
 			label: "loop_next_send",
 			releaseAfterAcknowledgement: true,
 			acknowledgeStatus: acknowledge,
 			onAcknowledged: acceptOperation,
 			onSaved: async () => {},
-			abandonIntentOn: (error) => REKEY.has(error?.code),
 			onError: handleFormError,
 			errorBox,
 			extra: h("div", { class: "pm-fields work-next-field" }, field, hint)
 		});
-		composer.box.addEventListener("keydown", (event) => {
-			if (event.isComposing || event.keyCode === 229) beginTransientCompose();
-		}, true);
-		composer.box.addEventListener("keyup", (event) => {
-			if (event.isComposing || event.keyCode === 229) endTransientCompose();
-		}, true);
 		composer.box.addEventListener("submit", (event) => {
 			if (composing || performance.now() - composeEnded < 50) {
 				event.preventDefault();
@@ -46371,15 +46334,35 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		}, true);
 		formHost.append(composer.box);
 		if (field.value) field.selectionStart = field.selectionEnd = field.value.length;
+		try {
+			onField(field, composer.box.querySelector("button[type=submit]"));
+		} catch {}
 		paint();
 	}
-	function acknowledge(op, builder, translate) {
+	function correlatedReceipt(op) {
 		const receipt = op?.input_receipt;
-		const known = validReceipt(receipt);
-		const state = receipt?.state;
-		const title = known ? receiptText(receipt, "state", translate) : "";
-		if (!(known ? state === "queued" || state === "accepted" || state === "waiting_external" : QUEUED_STATUS.has(op?.status)) && title) return builder("span", { "data-pm-acknowledged": "" }, title);
-		return builder("span", { "data-pm-acknowledged": "" }, translate("loop_next_queued"), title ? " · " : "", title || null);
+		if (!validReceipt(receipt) || receipt.operation_id !== op?.operation_id) return null;
+		return receipt;
+	}
+	function acknowledge(op, builder, translate) {
+		const receipt = correlatedReceipt(op);
+		if (receipt) {
+			const title = receiptText(receipt, "state", translate);
+			if (QUEUED_RECEIPT.has(receipt.state)) return builder("span", {
+				"data-pm-acknowledged": "",
+				"data-follow-up-ack": "queued"
+			}, translate("loop_next_queued"), title ? " · " : "", title || null);
+			return builder("span", {
+				"data-pm-acknowledged": "",
+				"data-follow-up-ack": receipt.state === "accepted" ? "accepted" : receipt.state || "unknown"
+			}, title);
+		}
+		const accepted = op?.status === "accepted" || op?.status === "succeeded";
+		const id = OPERATION_ID.test(op?.operation_id || "") ? op.operation_id : "";
+		return builder("span", {
+			"data-pm-acknowledged": "",
+			"data-follow-up-ack": accepted ? "accepted" : "unknown"
+		}, translate(accepted ? "loop_next_accepted" : "loop_next_unknown"), id ? " " : null, id ? builder("a", { href: `#/op/${encodeURIComponent(id)}` }, id) : null);
 	}
 	function acceptOperation(op) {
 		const receipt = op?.input_receipt;
@@ -46427,6 +46410,7 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		}
 	}
 	function mutationsAllowed() {
+		if (reading || !admissionReady || !sendOffer) return false;
 		if ([
 			"not_controller",
 			"codex_uncorrelated_turn_boundary",
@@ -46527,56 +46511,31 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		filtered = data.visibility_filtered === true;
 		rememberAttempt(data.latest_attempt_id);
 		listSettled = true;
+		dropUnconfirmedPins();
 		return true;
 	}
+	function denyAdmission(message) {
+		reading = false;
+		admissionReady = false;
+		sendOffer = null;
+		dropUnconfirmedPins();
+		if (message) status.replaceChildren(h("p", {}, message));
+		syncComposer();
+	}
 	async function readResult(ticket, mark) {
+		if (!alive(ticket, mark)) return;
 		if (!attemptId) {
 			resultSettled = true;
 			sendOffer = null;
 			blockedReason = "";
+			reading = false;
+			admissionReady = true;
 			syncComposer();
 			return;
 		}
-		const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/result`);
-		if (!alive(ticket, mark)) return;
-		applyResult(data);
-		syncComposer();
-	}
-	async function refresh() {
-		if (stopped || suspended || disposed) return;
-		const mark = epoch;
-		const ticket = ++serial;
-		const queried = attemptId;
+		let data;
 		try {
-			guard();
-			const data = await api("GET", inputsPath(""));
-			if (!alive(ticket, mark)) return;
-			if (!takeList(data, false)) {
-				status.replaceChildren(h("p", {}, t("loop_next_err_unknown")));
-				return;
-			}
-			paint();
-			sawList = true;
-			for (const row of mergedItems()) announced.add(row.operation_id);
-			if (!queried && attemptId) {
-				const filteredPage = await api("GET", inputsPath(""));
-				if (!alive(ticket, mark)) return;
-				if (takeList(filteredPage, false)) paint();
-			}
-			try {
-				await readResult(ticket, mark);
-			} catch (error) {
-				if (!alive(ticket, mark) || retired(error)) return;
-				if ([404, 410].includes(error?.status)) {
-					withdrawSource();
-					return;
-				}
-				resultSettled = true;
-				sendOffer = null;
-				if (error?.status === 403) blockedReason = blockedReason || "missing_scope";
-				syncComposer();
-				if (error?.status !== 403) showError(error, status);
-			}
+			data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/result`);
 		} catch (error) {
 			if (!alive(ticket, mark) || retired(error)) return;
 			if ([
@@ -46587,6 +46546,58 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 				withdrawSource();
 				return;
 			}
+			throw error;
+		}
+		if (!alive(ticket, mark)) return;
+		if (!applyResult(data)) {
+			denyAdmission(t("loop_next_err_unknown"));
+			return;
+		}
+		reading = false;
+		admissionReady = true;
+		syncComposer();
+	}
+	async function refresh() {
+		if (stopped || suspended || disposed) return;
+		const mark = epoch;
+		const ticket = ++serial;
+		reading = true;
+		admissionReady = false;
+		sendOffer = null;
+		syncComposer();
+		const queried = attemptId;
+		try {
+			guard();
+			const data = await api("GET", inputsPath(""));
+			if (!alive(ticket, mark)) return;
+			if (!takeList(data, false)) {
+				denyAdmission(t("loop_next_err_unknown"));
+				return;
+			}
+			paint();
+			sawList = true;
+			for (const row of mergedItems()) announced.add(row.operation_id);
+			if (!queried && attemptId) {
+				const filteredPage = await api("GET", inputsPath(""));
+				if (!alive(ticket, mark)) return;
+				if (!takeList(filteredPage, false)) {
+					denyAdmission(t("loop_next_err_unknown"));
+					return;
+				}
+				paint();
+			}
+			await readResult(ticket, mark);
+		} catch (error) {
+			if (!alive(ticket, mark) || retired(error)) return;
+			if ([
+				403,
+				404,
+				410
+			].includes(error?.status)) {
+				withdrawSource();
+				return;
+			}
+			denyAdmission();
 			showError(error, status);
 		}
 	}
@@ -46598,7 +46609,10 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		try {
 			const data = await api("GET", inputsPath(after));
 			if (!alive(ticket, mark)) return;
-			if (!takeList(data, true)) return;
+			if (!takeList(data, true)) {
+				status.replaceChildren(h("p", {}, t("loop_next_err_unknown")));
+				return;
+			}
 			paint();
 		} catch (error) {
 			if (!alive(ticket, mark) || retired(error)) return;
@@ -46617,6 +46631,8 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		epoch += 1;
 		serial += 1;
 		stopped = true;
+		reading = false;
+		admissionReady = false;
 		pageItems = [];
 		pinned.clear();
 		announced.clear();
@@ -46639,6 +46655,9 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		epoch += 1;
 		serial += 1;
 		suspended = true;
+		reading = false;
+		admissionReady = false;
+		sendOffer = null;
 		if (stopped) return;
 		pageItems = [];
 		pinned.clear();
@@ -48289,10 +48308,13 @@ function setupMobileSessionLayout({ head, composer, textarea, t, guard, infoRow 
 	composerToggle.type = "button";
 	composerToggle.className = "mini workspace-composer-toggle";
 	composerToggle.setAttribute("aria-controls", "workspace-message-input");
+	let boundArea = textarea || null;
+	let boundComposer = composer;
+	let boundRow = composerRow || null;
 	const renderComposerToggle = () => {
 		if (!alive()) return;
-		const hasDraft = (textarea?.value || "").trim().length > 0;
-		composer.classList.toggle("workspace-composer-collapsed", isComposerCollapsed);
+		const hasDraft = (boundArea?.value || "").trim().length > 0;
+		boundComposer?.classList.toggle("workspace-composer-collapsed", isComposerCollapsed && Boolean(boundArea));
 		composerToggle.setAttribute("aria-expanded", String(!isComposerCollapsed));
 		const baseText = t(isComposerCollapsed ? "mobile_compose_open" : "mobile_compose_close");
 		const draftSuffix = hasDraft ? ` · ${t("mobile_draft_indicator")}` : "";
@@ -48307,17 +48329,27 @@ function setupMobileSessionLayout({ head, composer, textarea, t, guard, infoRow 
 			localStorage.setItem(KEY_MOBILE_COMPOSER_COLLAPSED, String(isComposerCollapsed));
 		} catch {}
 		renderComposerToggle();
-		if (!isComposerCollapsed) textarea?.focus({ preventScroll: true });
+		if (!isComposerCollapsed) boundArea?.focus({ preventScroll: true });
 		else composerToggle.focus({ preventScroll: true });
 	});
 	const onTextareaInput = () => {
 		renderComposerToggle();
 	};
-	textarea?.addEventListener("input", onTextareaInput);
-	textarea?.addEventListener("change", onTextareaInput);
-	if (composerRow) {
-		if (!composerRow.contains(composerToggle)) composerRow.append(composerToggle);
-	} else if (!composer.contains(composerToggle)) composer.prepend(composerToggle);
+	const unbindArea = (node) => {
+		node?.removeEventListener("input", onTextareaInput);
+		node?.removeEventListener("change", onTextareaInput);
+		node?.removeEventListener("focusin", onFocusIn);
+		node?.removeEventListener("focusout", onFocusOut);
+	};
+	const bindArea = (node) => {
+		node?.addEventListener("input", onTextareaInput);
+		node?.addEventListener("change", onTextareaInput);
+		node?.addEventListener("focusin", onFocusIn);
+		node?.addEventListener("focusout", onFocusOut);
+	};
+	if (boundRow) {
+		if (!boundRow.contains(composerToggle)) boundRow.append(composerToggle);
+	} else if (!boundComposer.contains(composerToggle)) boundComposer.prepend(composerToggle);
 	const updateViewport = () => {
 		if (!alive()) return;
 		const isMob = isMobileLayout();
@@ -48344,8 +48376,7 @@ function setupMobileSessionLayout({ head, composer, textarea, t, guard, infoRow 
 	window.visualViewport?.addEventListener("resize", updateViewport);
 	window.visualViewport?.addEventListener("scroll", updateViewport);
 	window.addEventListener("resize", updateViewport);
-	textarea?.addEventListener("focusin", onFocusIn);
-	textarea?.addEventListener("focusout", onFocusOut);
+	bindArea(boundArea);
 	updateInfo();
 	renderComposerToggle();
 	updateViewport();
@@ -48354,18 +48385,37 @@ function setupMobileSessionLayout({ head, composer, textarea, t, guard, infoRow 
 		composerToggle,
 		updateInfo,
 		updateDraft: renderComposerToggle,
+		retarget({ textarea: nextArea = null, composer: nextComposer = null, composerRow: nextRow = null, controlsId = "" } = {}) {
+			if (!alive()) return;
+			unbindArea(boundArea);
+			boundComposer?.classList.remove("workspace-composer-collapsed");
+			boundArea = nextArea;
+			if (nextComposer) boundComposer = nextComposer;
+			boundRow = nextRow;
+			if (controlsId) composerToggle.setAttribute("aria-controls", controlsId);
+			bindArea(boundArea);
+			composerToggle.remove();
+			if (boundRow) boundRow.append(composerToggle);
+			else if (boundArea && boundComposer && !boundComposer.contains(composerToggle)) boundComposer.prepend(composerToggle);
+			renderComposerToggle();
+		},
+		detachComposer() {
+			if (!alive()) return;
+			unbindArea(boundArea);
+			boundArea = null;
+			boundComposer?.classList.remove("workspace-composer-collapsed");
+			composerToggle.remove();
+		},
 		dispose() {
 			isDisposed = true;
 			window.visualViewport?.removeEventListener("resize", updateViewport);
 			window.visualViewport?.removeEventListener("scroll", updateViewport);
 			window.removeEventListener("resize", updateViewport);
-			textarea?.removeEventListener("input", onTextareaInput);
-			textarea?.removeEventListener("change", onTextareaInput);
-			textarea?.removeEventListener("focusin", onFocusIn);
-			textarea?.removeEventListener("focusout", onFocusOut);
+			unbindArea(boundArea);
 			infoToggle.remove();
 			composerToggle.remove();
 			head.classList.remove("workspace-info-collapsed");
+			boundComposer?.classList.remove("workspace-composer-collapsed");
 			composer.classList.remove("workspace-composer-collapsed");
 			document.body.classList.remove("mobile-keyboard");
 			document.documentElement.style.removeProperty("--workspace-visible-height");
@@ -49551,26 +49601,44 @@ function composerShortcut({ h, t, input, button, storageKey, guard }) {
 		composing = false;
 		ended = performance.now();
 	};
+	let currentInput = input, currentButton = button;
 	const keydown = (event) => {
+		if (!currentButton) return;
 		if (event.key !== "Enter" || event.shiftKey || event.altKey || event.repeat || event.isComposing || composing || event.keyCode === 229 || performance.now() - ended < 50) return;
-		if (!(mode === "modified" ? event.ctrlKey || event.metaKey : mode === "enter" && !event.ctrlKey && !event.metaKey) || button.disabled || button.hidden) return;
+		if (!(mode === "modified" ? event.ctrlKey || event.metaKey : mode === "enter" && !event.ctrlKey && !event.metaKey) || currentButton.disabled || currentButton.hidden) return;
 		try {
 			guard();
 		} catch {
 			return;
 		}
 		event.preventDefault();
-		button.click();
+		currentButton.click();
 	};
-	input.addEventListener("compositionstart", start);
-	input.addEventListener("compositionend", end);
-	input.addEventListener("keydown", keydown);
+	const listen = (node) => {
+		if (!node) return;
+		node.addEventListener("compositionstart", start);
+		node.addEventListener("compositionend", end);
+		node.addEventListener("keydown", keydown);
+	};
+	const unlisten = (node) => {
+		if (!node) return;
+		node.removeEventListener("compositionstart", start);
+		node.removeEventListener("compositionend", end);
+		node.removeEventListener("keydown", keydown);
+	};
+	listen(currentInput);
 	return {
 		box: h("div", { class: "actions composer-shortcut" }, h("label", { class: "muted" }, t("composer_shortcut"), " ", select), h("span", { class: "muted" }, t("composer_newline")), status),
+		rebind(nextInput, nextButton) {
+			unlisten(currentInput);
+			currentInput = nextInput || null;
+			currentButton = nextButton || null;
+			listen(currentInput);
+		},
 		dispose() {
-			input.removeEventListener("compositionstart", start);
-			input.removeEventListener("compositionend", end);
-			input.removeEventListener("keydown", keydown);
+			unlisten(currentInput);
+			currentInput = null;
+			currentButton = null;
 		}
 	};
 }
@@ -59794,7 +59862,7 @@ async function viewSession(main, host, sid, context = null) {
 		} catch {}
 	};
 	const queue = h("input", { type: "checkbox" });
-	let row, pendingIdentity, sending = false, readReady = false, refreshInFlight = null, readError = null, queueKnown = false;
+	let row, pendingIdentity, sending = false, readReady = false, refreshInFlight = null, readError = null, queueKnown = false, workSendOwned = false;
 	let withdrawn = "", withdrawalVersion = 0, retryTimer = null, retryDelay = 1e3, retryAt = 0, disposed = false, observationRequest = 0;
 	const allowed = (action) => !withdrawn && readReady && row?.api_access === "managed" && may("operate") && state.caps?.hosts?.find((item) => item.host === host)?.writes !== false && state.caps?.actions?.find((item) => item.action === action)?.allowed !== false;
 	const identity = (pend) => pend ? JSON.stringify({
@@ -59842,7 +59910,7 @@ async function viewSession(main, host, sid, context = null) {
 		class: "primary",
 		disabled: true,
 		onclick: async () => {
-			if (sending) return;
+			if (workSendOwned || sending) return;
 			if (!box.value.trim() || !allowed("session.send")) return;
 			const submitted = box.value;
 			sending = true;
@@ -60120,6 +60188,7 @@ async function viewSession(main, host, sid, context = null) {
 	const lane = h("section", { class: "workspace-conversation" }, conversation.box, readonly, controls, status);
 	const followWorkspace = /^ws_[0-9a-f]{32}$/.test(sessionWorkspace || "") ? sessionWorkspace : "";
 	const followWorkId = workRecord?.work_item?.work_item_id || "";
+	let mobileLayout = null;
 	const followUp = workbenchEnabled() && !nativeDesktop && followWorkspace && /^wi_[0-9a-f]{20}$/.test(followWorkId) && workFollowUpAvailable(state.caps) ? mountWorkFollowUp({
 		h,
 		t,
@@ -60131,10 +60200,24 @@ async function viewSession(main, host, sid, context = null) {
 		workItemId: followWorkId,
 		errorBox,
 		canSend: () => state.online && !state.nativeBusy && state.viewReady,
-		managed: () => !withdrawn && row?.provenance === "connector_managed" && row?.api_access === "managed"
+		managed: () => !withdrawn && row?.provenance === "connector_managed" && row?.api_access === "managed",
+		onField: (field, button) => {
+			shortcut.rebind(field, button);
+			if (!mobileLayout) return;
+			if (field && button) mobileLayout.retarget({
+				textarea: field,
+				composer: followUp.box,
+				composerRow: field.closest("form")?.querySelector(".actions") || null,
+				controlsId: field.id
+			});
+			else mobileLayout.detachComposer();
+		}
 	}) : null;
-	if (followUp) lane.append(followUp.box);
-	const mobileLayout = setupMobileSessionLayout({
+	if (followUp) {
+		workSendOwned = true;
+		lane.append(followUp.box);
+	}
+	mobileLayout = setupMobileSessionLayout({
 		head,
 		composer: controls,
 		textarea: box,
@@ -60143,6 +60226,11 @@ async function viewSession(main, host, sid, context = null) {
 		infoRow: conversation.box.querySelector(".conversation-caption"),
 		composerRow
 	});
+	if (followUp) {
+		composer.hidden = true;
+		shortcut.rebind(null, null);
+		mobileLayout.detachComposer();
+	}
 	if (context?.picker) main.append(context.picker);
 	const workspaceNode = h("div", {
 		class: "workspace-session session-workspace",
@@ -60459,9 +60547,10 @@ async function viewSession(main, host, sid, context = null) {
 			else if (state.caps?.hosts?.find((item) => item.host === host)?.writes === false) reason = t("session_send_host");
 			else if (state.caps?.actions?.find((item) => item.action === "session.send")?.allowed === false) reason = t("session_send_denied");
 		}
-		sendReason.hidden = !reason;
+		sendReason.hidden = workSendOwned || !reason;
 		sendReason.textContent = reason;
 		for (const control of pending.querySelectorAll("[data-answer-action]")) control.disabled = !row?.pending?.toolUseId || !allowed("session.answer");
+		if (workSendOwned) controls.hidden = row?.api_access !== "managed" || pending.childElementCount === 0;
 	};
 	let lastReading = null;
 	const readingDetail = h("p", {
@@ -60593,7 +60682,7 @@ async function viewSession(main, host, sid, context = null) {
 		}
 		if (capture) capture.hidden = !manualSource;
 		syncChanges();
-		composer.hidden = !managed;
+		composer.hidden = workSendOwned ? true : !managed;
 		controls.hidden = !managed;
 		readonly.hidden = managed;
 		if (row.provenance === "manual") {

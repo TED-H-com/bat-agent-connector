@@ -2928,6 +2928,7 @@ main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-it
 .work-next-row .ui-button { margin-top: var(--space-2); }
 .work-next-field { display: block; max-width: 100%; margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--line); }
 .work-next textarea { display: block; width: 100%; max-width: 100%; min-height: 80px; margin-top: var(--space-2); }
+.work-next.workspace-composer-collapsed [data-follow-up-input] { display: none !important; }
 .work-next .ui-meta { overflow-wrap: anywhere; }
 .work-next-note { margin: var(--space-2) 0; }
 .work-next .ui-empty { padding: var(--space-4); }
