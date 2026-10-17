@@ -127,6 +127,11 @@ BAT 回合與 GitHub 由可控來源提供，Git 使用磁碟上的隔離 reposi
 Work／Attempt、已送指令與固定 commit，切換 Work／Lineage／Live 保留草稿，
 再從成果發布 draft PR 並重新載入。所有三筆使用者寫入均由 UI 發起。
 
+另一條英文 1440px／繁中 390px 路徑從既有專案討論開始：只存筆記、整理計畫、
+審閱提案、選取既有 Work 及需求，再採用並開始，接上相同的第二句與發布流程。
+五筆使用者操作都由 UI 發起；核對只新增一次採用及一個啟動嘗試。PM 回覆由
+FakeRuntime 提供，使用真正的提案、審閱、採用與操作 endpoint；不呼叫真實 CLI。
+
 核對一個 session start、兩個 send、一次 GitHub POST、原操作 key，以及
 人工忙碌 session／未提交 checkout 不變。磁碟上的兩次變更必須對應 Result
 與發布分支；PR 不代表需求驗收或部署。390／768／1440px 額外檢查閱讀按鈕
@@ -142,9 +147,10 @@ BATC_WORK_LOOP_BROWSER=1 pytest-disktmp uv run --python 3.13 --extra dev pytest 
 這組需瀏覽器的測試；desktop CI 明確啟用並執行，產物在
 `desktop/test-results/work-loop/`，隨既有 `desktop-shared-ui-fixtures` artifact 保存。
 
-此回歸涵蓋 K05、K07、K08、K09 與 K15 的部分 I 路徑。它不證明新 Idea／PM
-回覆到採用並開始的整段操作，也不取代 P6 故障測試、Hermes MCP 第二件 Work、
-原生安裝、真實模型／BAT／GitHub 或 R0／R1／L 驗收。
+此回歸涵蓋 K03、K05、K07、K08、K09 與 K15 的部分 I 路徑。它使用已設定的
+專案、綁定及 Work，尚需從 Board 點選開啟現場輸出，不能宣稱 UX-A13 的自動
+銜接已完成；也不涵蓋全新專案設定、真實 Idea／PM 回覆、P6 故障恢復、Hermes
+MCP 第二件 Work、原生安裝、真實模型／BAT／GitHub 或 R0／R1／L 驗收。
 
 ## 報告範本
 

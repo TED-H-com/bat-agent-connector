@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Adopt and start waits for a child operation's active worker instead of stopping
+  with an unknown-start warning while a work package or handoff is still running.
+  Unresolved effects retain the same cancellation and recovery fences. The real
+  Connector browser journey now also covers proposal review and adoption before
+  the queued follow-up and draft PR.
+
 - Work reading controls no longer overlap the next-step heading when the
   transcript and server queue share a short viewport. A browser integration
   journey now exercises actual Connector start, queued follow-up, closed-client

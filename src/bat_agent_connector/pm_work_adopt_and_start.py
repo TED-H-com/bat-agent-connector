@@ -349,12 +349,20 @@ def _record_refusal(ctx, slot, exc):
     return ctx.effect(ACTION + ".refused." + slot, record, receipt_only=True)
 
 
-def _uncertain(ops, child):
-    if child["status"] == "uncertain" or start._uncertain(ops, child):
+def _uncertain(ops, child, *, include_inflight=True):
+    def unresolved(item):
+        # A started external step remains a safety fence, but while its worker
+        # is alive it is not a reason for the composing parent to stop. Keep
+        # the conservative default for cancellation, recovery and admission.
+        return item["status"] == "uncertain" or (
+            start._uncertain(ops, item)
+            and (include_inflight or not ops._running(item["operation_id"])))
+
+    if unresolved(child):
         return True
     descendants = (adoption._children(ops.db, child) if child["action"] == proposals.ADOPT
                    else start._children(ops, child).values())
-    return any(item["status"] == "uncertain" or start._uncertain(ops, item) for item in descendants)
+    return any(unresolved(item) for item in descendants)
 
 
 def _adoption_failure(ops, child):
@@ -385,7 +393,7 @@ def _state(ops, parent):
         child = children.get(slot)
         refusal = _refusal(ops, parent, slot)
         result = (child.get("result") or {}) if child else {}
-        unknown = _uncertain(ops, child) if child else False
+        unknown = _uncertain(ops, child, include_inflight=False) if child else False
         stage = ("start_unknown" if unknown else "started" if child and child["status"] == "succeeded"
                  else "starting" if child and child["status"] in RUNNABLE else "not_started")
         handoff = start._children(ops, child).get("handoff") if child else None
@@ -502,7 +510,7 @@ def _advance(ctx):
                 continue
             _save(ops, parent)
             raise Wait("waiting_external", "Waiting for the original Work start", 1)
-        if _uncertain(ops, child):
+        if _uncertain(ops, child, include_inflight=False):
             state = _save(ops, parent)
             raise NeedsAttention("PM_WORK_START_OUTCOME_UNPROVEN", "Read back the original start; never resend it")
         if child["status"] == "needs_attention":

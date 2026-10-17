@@ -43,18 +43,46 @@ const operation = async response => {
 const shot = name => page.screenshot({path: resolve(f.shots, name + '.png'), animations: 'disabled'});
 try {
   await launch();
-  await page.goto(`${origin}/dashboard/?workbench=1#/pm/${f.workspace}/overview`);
-  await page.locator('[data-workbench-management]').selectOption('board');
-  await page.locator(`[data-pm-kanban-work="${f.work}"] [data-board-open]`).click();
-  const instruction = page.locator('[data-work-start-instruction]');
-  await expect(instruction).toBeVisible();
-  await instruction.fill(zh ? '修正登入重複送出，補測試，先開 PR。' : 'Fix duplicate login submission, add tests and prepare a PR.');
-  await page.locator('[data-work-start-check]').click();
-  const submit = page.locator('[data-pm-action="work.start"] button[type="submit"]');
-  await expect(submit).toBeEnabled();
-  const starting = post('work.start');
-  await submit.click();
-  const start = await operation(await starting);
+  let start;
+  if (f.mode === 'adopt') {
+    await page.goto(`${origin}/dashboard/?workbench=1#/pm/${f.workspace}/discussions/${f.thread}`);
+    const composer = page.locator('[data-discussion-composer]');
+    await composer.fill(zh ? '會員用 Email 登入與忘記密碼。第一版不要推薦碼。請整理成計畫。' : 'Plan member email sign-in and password recovery, excluding referrals.');
+    const saving = post('pm.message.append');
+    await page.getByRole('button', {name: zh ? '只存筆記' : 'Save note only', exact: true}).click();
+    await operation(await saving);
+    await expect(composer).toHaveValue('');
+    const proposing = post('pm.conversation.propose');
+    await page.locator('[data-discussion-ask]').click();
+    await operation(await proposing);
+    await page.locator('[data-proposal-review]').click();
+    await page.locator('[data-proposal-adopt-panel] textarea').last().fill(zh ? '採用登入與密碼重設，先開始登入工作。' : 'Adopt sign-in and recovery; start the sign-in work first.');
+    const row = page.locator(`[data-adopt-work="${f.work}"]`);
+    await row.locator('.pm-adopt-choice > input').first().check();
+    await row.getByLabel('付費會員可使用 Email 登入', {exact: true}).check();
+    await page.getByRole('button', {name: zh ? '檢查就緒' : 'Check readiness', exact: true}).click();
+    const submit = page.getByRole('button', {name: zh ? '採用並開始' : 'Adopt and start', exact: true});
+    await expect(submit).toBeEnabled();
+    await shot('00-plan-review');
+    const starting = post('work.adopt_and_start');
+    await submit.click();
+    start = await operation(await starting);
+    await expect(page).toHaveURL(new RegExp(`/board\\?select=${f.work}`));
+    await expect(page.locator('[data-adopt-start-landing]')).toBeVisible();
+  } else {
+    await page.goto(`${origin}/dashboard/?workbench=1#/pm/${f.workspace}/overview`);
+    await page.locator('[data-workbench-management]').selectOption('board');
+    await page.locator(`[data-pm-kanban-work="${f.work}"] [data-board-open]`).click();
+    const instruction = page.locator('[data-work-start-instruction]');
+    await expect(instruction).toBeVisible();
+    await instruction.fill(zh ? '修正登入重複送出，補測試，先開 PR。' : 'Fix duplicate login submission, add tests and prepare a PR.');
+    await page.locator('[data-work-start-check]').click();
+    const submit = page.locator('[data-pm-action="work.start"] button[type="submit"]');
+    await expect(submit).toBeEnabled();
+    const starting = post('work.start');
+    await submit.click();
+    start = await operation(await starting);
+  }
   await expect(page.locator('[data-work-start-item]')).toBeVisible();
   await shot('01-started');
   send({stage: 'started', operation_id: start.operation_id});
@@ -97,7 +125,8 @@ try {
     assert.equal(page.url(), workUrl);
   }
   await expect(page.locator('[data-follow-up-input]')).toHaveValue(draft);
-  assert.equal(requests.length, 2, 'Changing views must not dispatch work');
+  const expectedOperations = f.mode === 'adopt' ? 5 : 3;
+  assert.equal(requests.length, expectedOperations - 1, 'Changing views must not dispatch work');
   await page.getByRole('button', {name: zh ? '成果' : 'Results', exact: true}).click();
   await expect(page.locator('[data-work-result]')).toContainText('Added the retry-after-failure case.');
   await expect(page.locator('[data-work-publish-commit]')).toHaveAttribute('title', fixed.candidate);
@@ -117,14 +146,15 @@ try {
   await expect(page.locator('[data-work-publish-pr]')).toContainText('21');
   await shot('04-published');
   assert.deepEqual(errors, []);
-  assert.equal(requests.length, 3);
-  assert.equal(new Set(requests.map(r => r.key)).size, 3);
+  assert.equal(requests.length, expectedOperations);
+  assert.equal(new Set(requests.map(r => r.key)).size, expectedOperations);
   assert.ok(requests.every(r => r.key));
-  assert.deepEqual(requests[1].body.target, {workspace_id: f.workspace, work_item_id: f.work});
-  assert.deepEqual(requests[1].body.params, {text, schedule: 'after_current'});
-  assert.deepEqual(requests[1].body.preconditions, {expected_attempt_id: active.attempt});
-  assert.equal(requests[2].body.params.candidate_sha, fixed.candidate);
-  assert.equal(requests[2].body.params.draft, true);
+  const follow = requests.find(row => row.body.action === 'session.send');
+  assert.deepEqual(follow.body.target, {workspace_id: f.workspace, work_item_id: f.work});
+  assert.deepEqual(follow.body.params, {text, schedule: 'after_current'});
+  assert.deepEqual(follow.body.preconditions, {expected_attempt_id: active.attempt});
+  assert.equal(requests.at(-1).body.params.candidate_sha, fixed.candidate);
+  assert.equal(requests.at(-1).body.params.draft, true);
   send({stage: 'done', operations, browser: browser.version()});
 } catch (error) {
   console.error(JSON.stringify({step, url: page?.url(), errors, requests, responses, pending: [...pending.values()]}));

@@ -1,6 +1,7 @@
 """The actual proposal/adoption/start chain uses disk Git and mocked BAT only."""
 from __future__ import annotations
 
+import asyncio
 import copy
 import sqlite3
 import time
@@ -105,6 +106,67 @@ async def test_real_adoption_then_work_start_retains_receipts_and_never_repeats(
     assert snapshot(selected["human"]) == before
     with pytest.raises(sqlite3.IntegrityError, match="immutable"):
         ops.db.execute("DELETE FROM pm_work_adopt_and_start_children WHERE parent_id=?", (op["operation_id"],))
+
+
+@pytest.mark.parametrize("phase", ["package", "handoff"])
+async def test_parent_waits_for_inflight_external_step_without_manual_resume(selected, mock, monkeypatch, phase):
+    ops = selected["d"].ops
+    entered, release = asyncio.Event(), asyncio.Event()
+    if phase == "package":
+        original = compound.pm_work_packages._read_sources
+
+        async def hold(*args, **kwargs):
+            entered.set()
+            await release.wait()
+            return await original(*args, **kwargs)
+
+        monkeypatch.setattr(compound.pm_work_packages, "_read_sources", hold)
+    else:
+        client = selected["d"].fleet.client("h1")
+        original = client.invoke
+
+        async def hold(name, *args, **kwargs):
+            if name == "claude:start-session":
+                entered.set()
+                await release.wait()
+            return await original(name, *args, **kwargs)
+
+        monkeypatch.setattr(client, "invoke", hold)
+
+    async def until(predicate):
+        async def poll():
+            while not predicate():
+                await asyncio.sleep(0.03)
+        await asyncio.wait_for(poll(), 60)
+
+    # Adopt first, then exercise the real concurrent worker at the specific
+    # start boundary. Adoption's disk Git work is not part of the barrier.
+    identity = await hold_after_adoption(selected)
+    ops.wake(identity)
+    worker = asyncio.create_task(ops.loop(0.03))
+    try:
+        await asyncio.wait_for(entered.wait(), 60)
+        child = compound._child(ops, ops._row(identity), "work:0")
+        assert compound._uncertain(ops, child), "The in-flight external effect must remain fenced"
+        attempts = ops.get(identity)["attempts"]
+        await until(lambda: ops.get(identity)["status"] == "needs_attention"
+            or ops.get(identity)["attempts"] > attempts and ops.get(identity)["status"] != "running")
+        waiting = ops.get(identity)
+        assert waiting["status"] == "waiting_external", waiting
+        assert waiting["result"]["stage"] == "starting"
+        assert waiting["result"]["summary"]["unknown_count"] == 0
+        release.set()
+        await until(lambda: ops.get(identity)["status"] in {"succeeded", "failed", "needs_attention"})
+        done = ops.get(identity)
+        assert done["status"] == "succeeded", done
+        assert done["result"]["summary"]["started_count"] == 1
+        assert mock.channels().count("claude:start-session") == 1
+        assert ops.db.execute("SELECT count(*) FROM work_attempts").fetchone()[0] == 1
+    finally:
+        release.set()
+        worker.cancel()
+        await asyncio.gather(worker, return_exceptions=True)
+        await settle_operations(ops)
 
 
 @pytest.mark.parametrize("change,code", [

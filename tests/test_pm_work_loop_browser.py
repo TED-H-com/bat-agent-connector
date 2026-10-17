@@ -18,9 +18,13 @@ from urllib.parse import unquote
 
 import pytest
 
-from bat_agent_connector import pr_publication
+from bat_agent_connector import pm_native_runtime, pr_publication
+from tests import test_pm_conversation_proposals as conversation
+from tests import test_pm_native_operations as native
 from tests.test_checkpoints import MANUAL, LocalRunner, bat_writes, git, snapshot
 from tests.test_integration import commit
+from tests.test_pm_native_runtime import protocol
+from tests.test_pm_plan_operations import target as thread_target
 from tests.test_pm_work_attempt_result import (
     _enable_integrate,
     _result,
@@ -34,6 +38,7 @@ from tests.test_pm_work_follow_up import _get_op
 from tests.test_pm_work_start import STARTER_OWNER
 
 _ = (world, pm, ready, start_ready)  # Reuse disk-backed PM setup, without starting a Work.
+proposal_world = conversation.proposal_world
 pytestmark = pytest.mark.skipif(os.environ.get("BATC_WORK_LOOP_BROWSER") != "1",
     reason="Opt-in real Connector + Chromium journey; run by the desktop integration job")
 ROOT = Path(__file__).resolve().parents[1]
@@ -70,7 +75,34 @@ async def eventually(predicate, *, seconds=60):
 
 @pytest.mark.parametrize(("locale", "width"), [("en", 1440), ("zh-TW", 768), ("zh-TW", 390)])
 async def test_start_queue_close_reconnect_result_and_pr(start_ready, mock, tmp_path, locale, width):
-    w, ops = start_ready, start_ready["d"].ops
+    await work_loop(start_ready, mock, tmp_path, locale, width)
+
+
+@pytest.mark.parametrize(("locale", "width"), [("en", 1440), ("zh-TW", 390)])
+async def test_discussion_adopt_start_queue_and_pr(start_ready, proposal_world, mock, tmp_path, monkeypatch, locale, width):
+    w = start_ready
+
+    def reply_protocol(prompt, client_id):
+        context = json.loads(prompt.split("\n\n", 1)[1])["context"]
+        message = next(message for message in reversed(context["messages"]) if message["role"] == "user")
+        reply = json.dumps(conversation.envelope("message." + message["message_id"]), ensure_ascii=False)
+        events = protocol(prompt, client_id)
+        events[2]["params"]["item"]["text"] = reply
+        events[-1]["params"]["turn"]["items"][-1]["text"] = reply
+        return events
+
+    monkeypatch.setattr(native, "protocol", reply_protocol)
+    monkeypatch.setattr(pm_native_runtime, "installation_eligibility", lambda: {
+        "adapter": "codex-native-linux", "contract": pm_native_runtime.CONTRACT,
+        "required_version": pm_native_runtime.VERSION, "eligible_for_preflight": True,
+        "options_confirmed": False, "reason": None, "execution_scope": "frozen_context_only",
+        "execution_location": "connector_service", "version_verification": "per_run",
+        "auth_validity": "unverified", "model_execution_verified": False})
+    await work_loop(w, mock, tmp_path, locale, width, mode="adopt")
+
+
+async def work_loop(w, mock, tmp_path, locale, width, *, mode="start"):
+    ops = w["d"].ops
     # The handoff test runner decodes a single protocol. This journey also runs
     # checkpoint and publication shell scripts, so execute every actual script.
     ops.context["git_runner"] = LocalRunner()
@@ -79,7 +111,8 @@ async def test_start_queue_close_reconnect_result_and_pr(start_ready, mock, tmp_
     manual = copy.deepcopy((mock.metas[MANUAL], mock.states[MANUAL]))
     before = snapshot(w["human"])
     seed_ids = {r[0] for r in ops.db.execute("SELECT operation_id FROM operations")}
-    shots = ROOT / "desktop/test-results/work-loop" / f"{locale}-{width}"
+    adoptions_before = ops.db.execute("SELECT count(*) FROM pm_plan_adoptions").fetchone()[0]
+    shots = ROOT / "desktop/test-results/work-loop" / f"{mode}-{locale}-{width}"
     shutil.rmtree(shots, ignore_errors=True)
     shots.mkdir(parents=True, exist_ok=True)
     browser_temp = tmp_path / "browser"
@@ -123,9 +156,16 @@ async def test_start_queue_close_reconnect_result_and_pr(start_ready, mock, tmp_
                 return data
 
             await send({"port": w["port"], "token": w["owner_token"], "workspace": w["workspace_id"],
-                "work": w["target"]["work_item_id"], "locale": locale, "width": width, "shots": str(shots)})
+                "work": w["target"]["work_item_id"], "locale": locale, "width": width, "shots": str(shots),
+                "mode": mode, "thread": thread_target(w)["thread_id"]})
             started = await receive("started")
             start = ops.get(started["operation_id"])
+            if mode == "adopt":
+                await wait_status(start["operation_id"], "succeeded")
+                parent = ops.get(start["operation_id"])
+                assert parent["action"] == "work.adopt_and_start" and parent["result"]["adopted"] is True
+                assert parent["result"]["summary"]["started_count"] == 1
+                start = ops.get(parent["result"]["works"][0]["start_operation_id"])
             assert start["action"] == "work.start" and start["status"] == "succeeded", start
             result = start["result"]
             execution = ops.get(result["children"]["handoff"])["result"]
@@ -186,17 +226,22 @@ async def test_start_queue_close_reconnect_result_and_pr(start_ready, mock, tmp_
             assert sends[-1]["params"]["clientMessageId"] == second_marker
             assert len([r for r in w["gh"].requests if r[:2] == ("POST", "/repos/o/r/pulls")]) == 1
             user_ops = [ops.get(oid) for oid in done["operations"]]
-            assert [op["action"] for op in user_ops] == ["work.start", "session.send", "github.pr.publish"]
+            initial = ["pm.message.append", "pm.conversation.propose", "work.adopt_and_start"] if mode == "adopt" else ["work.start"]
+            assert [op["action"] for op in user_ops] == [*initial, "session.send", "github.pr.publish"]
             assert all(op["actor"] == STARTER_OWNER.actor and op["status"] == "succeeded" for op in user_ops)
-            assert len({op["idempotency_key"] for op in user_ops}) == 3
+            assert len({op["idempotency_key"] for op in user_ops}) == len(user_ops)
             created = {r[0] for r in ops.db.execute("SELECT operation_id FROM operations")} - seed_ids
-            assert created == {op["operation_id"] for op in user_ops} | {
-                child_id for child_id in result["children"].values() if child_id is not None}
+            if mode == "start":
+                assert created == {op["operation_id"] for op in user_ops} | {
+                    child_id for child_id in result["children"].values() if child_id is not None}
+            else:
+                assert len([oid for oid in created if ops.get(oid)["action"] == "work.start"]) == 1
+                assert ops.db.execute("SELECT count(*) FROM pm_plan_adoptions").fetchone()[0] == adoptions_before + 1
             (shots / "evidence.json").write_text(json.dumps({"locale": locale, "width": width,
                 "source_sha": git(ROOT, "rev-parse", "HEAD"),
                 "source_dirty": bool(git(ROOT, "status", "--porcelain")),
                 "python": sys.version, "browser": done["browser"],
-                "same_attempt": att["attempt_id"], "browser_operations": 3, "bat_starts": 1,
+                "entry": mode, "same_attempt": att["attempt_id"], "browser_operations": len(user_ops), "bat_starts": 1,
                 "bat_sends": 2, "github_posts": 1, "manual_unchanged": True,
                 "candidate": candidate, "browser_closed_during_dispatch": True}, indent=2) + "\n")
     finally:
