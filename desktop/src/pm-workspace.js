@@ -502,7 +502,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     const source = parseDiscussRefs(new URLSearchParams({from: launch.from || savedOrigin.from || '', report: launch.report || savedOrigin.report || ''}));
     const origin = source.from || 'discussions';
     const session = sessionOrigin(origin);
-    return h('a', {class: 'pd-back', href: session || `#/pm/${encodeURIComponent(workspaceId)}/${origin}`, 'data-discussion-back': '', onclick: () => {
+    return h('a', {class: 'pd-back', href: session || `#/pm/${encodeURIComponent(workspaceId)}/${origin}`, 'data-discussion-back': '', ...(session ? {'data-discussion-session-return': ''} : {}), onclick: () => {
       // Restore the originating fixed report even after a discussion-draft reload.
       if (origin === 'overview' && source.report) Object.assign(viewState(namespace, workspaceId, 'overview'), {snapshotId: source.report, mode: 'saved'});
     }}, icon('chevron-left'), t('pd_back', {view: t(session ? 'ui_session' : 'ui_' + origin)}));

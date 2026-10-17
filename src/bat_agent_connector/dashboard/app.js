@@ -46149,6 +46149,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			class: "pd-back",
 			href: session || `#/pm/${encodeURIComponent(workspaceId)}/${origin}`,
 			"data-discussion-back": "",
+			...session ? { "data-discussion-session-return": "" } : {},
 			onclick: () => {
 				if (origin === "overview" && source.report) Object.assign(viewState(namespace, workspaceId, "overview"), {
 					snapshotId: source.report,
@@ -63997,7 +63998,7 @@ async function viewSession(main, host, sid, context = null) {
 			link.setAttribute("aria-disabled", "true");
 			return;
 		}
-		const refs = (items || []).map((item) => ({
+		const refs = (workContext ? [{ work_item_id: workContext.workItemId }, ...items || []] : items || []).map((item) => ({
 			kind: "work_item",
 			id: item.work_item_id
 		})).filter(isContextRef);
@@ -64010,7 +64011,8 @@ async function viewSession(main, host, sid, context = null) {
 			from: sessionHref$1({
 				host,
 				sessionId: sid,
-				from: originView()
+				from: originView(),
+				...workContext
 			})
 		}));
 	};

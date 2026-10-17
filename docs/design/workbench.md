@@ -57,6 +57,15 @@ views and links. Unproven, unavailable or unloaded Work associations stay separa
 including sources with identical titles. A fresh withdrawal removes the join;
 keyboard focus stays on the still-visible Work when its link changes.
 
+Discuss from a validated Work keeps that Work first in the bounded PM context
+list and preserves the exact workspace, Work and Attempt in its return link.
+The originating session link remains visible on wide screens as well as mobile;
+the discussion list cannot restore that execution selection. Reloading the PM
+draft and returning keeps the existing next-instruction draft. The destination
+reads the public Work and Attempt again before offering any controls, even if
+another Attempt became latest in the meantime. A legacy session link does not
+acquire Work identity from the last workspace or an earlier route.
+
 ### Classic → preview location
 
 | Classic destination | Route | Preview location | Reached via |

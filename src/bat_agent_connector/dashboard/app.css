@@ -2385,7 +2385,9 @@ body.pm-mode #main { padding: 0; }
   .pd-panel-home > .pd-panel-overlay > header { padding: var(--space-2) var(--space-3); }
   .pd-panel-home > .pd-panel-overlay > .ui-inspector-body { padding: var(--space-3); overflow: visible; }
 }
-@media (min-width: 800px) { [data-discussion-back] { display: none; } }
+/* The thread list replaces ordinary back links on wide screens, but cannot
+   return the reader to the originating execution and its selected Work. */
+@media (min-width: 800px) { [data-discussion-back]:not([data-discussion-session-return]) { display: none; } }
 .pd-context-trigger { cursor: pointer; font: inherit; padding-inline: var(--space-2); border: 0; color: var(--text-2); }
 .pd-impact { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block: var(--space-3); }
 .pd-exclusion { display: flex; align-items: start; gap: var(--space-2); margin-block: var(--space-2); font-size: var(--fs-small); }

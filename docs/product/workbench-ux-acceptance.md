@@ -134,7 +134,7 @@ Work／Attempt、已送指令與固定 commit，切換 Work／Lineage／Live 保
 work.start 負責。原先 fixture 的另一件 Work 不得意外開始。建立、討論與
 採用皆由 UI 送出，六筆使用者操作各有獨立且穩定的 key，不手填內部 ID。
 採用成功後必須自動開啟該次 Work／Attempt，測試不再點選另一個現場連結。
-五筆使用者操作都由 UI 發起；核對只新增一次採用及一個啟動嘗試。PM 回覆由
+核對只新增一次採用及一個啟動嘗試。PM 回覆由
 FakeRuntime 提供，使用真正的提案、審閱、採用與操作 endpoint；不呼叫真實 CLI。
 
 核對一個 session start、兩個 send、一次 GitHub POST、原操作 key，以及

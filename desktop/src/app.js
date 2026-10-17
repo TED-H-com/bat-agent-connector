@@ -1714,10 +1714,13 @@ async function viewSession(main, host, sid, context = null) {
     const workspaceId = sessionWorkspace;
     if (!link) return;
     if (!workspaceId) {link.hidden = true; link.setAttribute("aria-disabled", "true"); return;}
-    const refs = (items || []).map(item => ({kind: "work_item", id: item.work_item_id})).filter(isContextRef);
+    // The selected Work has already passed the public Work/Attempt/session check.
+    // Keep it first even if the session's broader related-work list is empty or long.
+    const related = workContext ? [{work_item_id: workContext.workItemId}, ...(items || [])] : items || [];
+    const refs = related.map(item => ({kind: "work_item", id: item.work_item_id})).filter(isContextRef);
     link.hidden = false; link.removeAttribute("aria-disabled");
     // An unknown title stays empty; the session ID is not a title.
-    link.setAttribute("href", discussHref({workspaceId, refs, title: row?.title || "", from: sessionHref({host, sessionId: sid, from: originView()})}));
+    link.setAttribute("href", discussHref({workspaceId, refs, title: row?.title || "", from: sessionHref({host, sessionId: sid, from: originView(), ...workContext})}));
   };
   let deliveryTicket = 0, deliveryItems = [], sourceItemId = "";
   const deliveryKnown = new Map();

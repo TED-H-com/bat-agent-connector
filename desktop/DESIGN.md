@@ -9,6 +9,9 @@ rail from a 256px context list, collapses the list into the drawer below 1000px,
 and uses an optional Results inspector. Work/Lineage/Live keep the selected
 identity, conversation nodes and original composer. The item purpose and observed
 activity precede details; the session's Interrupt action lives in More.
+When a discussion was opened from an execution, keep its existing return link
+visible at every width. A wide-screen discussion list cannot restore that Work
+and Attempt selection; ordinary discussion-list back links remain mobile-only.
 
 The Web and Tauri clients share `src/`. Python Connector / Task Service remains the
 only authority for permissions, project bindings, lifecycle, operations and evidence.
