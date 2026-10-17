@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Owners can preview one reviewed proposal and start up to ten existing Works
+  with `work.adopt_and_start` through the central API/MCP operation service.
+  Adoption and individual starts keep separate durable receipts: a refusal
+  preserves the adopted plan, and an unknown start is reconciled without another
+  session. The proposal UI and native preview entry remain integration work.
+
 - Work live links retain the selected workspace, Work, and Attempt. The Dashboard
   verifies that selection against public Work and Attempt reads before offering
   the next instruction, and shows its fixed Result in the existing results panel.

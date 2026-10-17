@@ -190,9 +190,10 @@ class ApiV1:
         pm_execution_verification.install(daemon.ops)
         from . import pr_publication
         pr_publication.install(daemon.ops)
-        from . import pm_attempt_results, pm_work_profiles, pm_work_start
+        from . import pm_attempt_results, pm_work_adopt_and_start, pm_work_profiles, pm_work_start
         pm_work_profiles.install(daemon.ops)
         pm_work_start.install(daemon.ops)
+        pm_work_adopt_and_start.install(daemon.ops)
         pm_attempt_results.install(daemon.ops)
         from .session_observation import SessionObservation
         self.session_observation = SessionObservation(daemon)
@@ -247,6 +248,7 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-sources/github-releases", self.pm_release_baseline_releases, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-sources/deployments", self.pm_release_baseline_deployments, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-preview", self.pm_release_baseline_preview, "observe"),
+            ("POST", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/threads/(?P<thread_id>pmt_[0-9a-f]{32})/adopt-and-start-preview", self.pm_work_adopt_and_start_preview, "observe"),
             ("POST", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/start-preview", self.pm_work_start_preview, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/attempts", self.pm_work_attempts, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/inputs", self.pm_work_inputs, "observe"),
@@ -548,7 +550,7 @@ class ApiV1:
                       self.pm_release_baselines, self.pm_release_baseline_current, self.pm_release_baseline,
                       self.pm_release_baseline_sources, self.pm_release_baseline_releases,
                       self.pm_release_baseline_deployments, self.pm_release_baseline_preview,
-                      self.pm_work_start_preview, self.pm_work_attempts, self.pm_work_attempt, self.pm_work_inputs,
+                      self.pm_work_adopt_and_start_preview, self.pm_work_start_preview, self.pm_work_attempts, self.pm_work_attempt, self.pm_work_inputs,
                       self.pm_work_attempt_result, self.pm_work_attempt_changes, self.pm_work_attempt_diff,
                       self.pm_spec_sources, self.pm_spec_source_capabilities}:
                 # Empty or repeated selectors cannot silently become defaults.
@@ -868,6 +870,11 @@ class ApiV1:
     async def pm_release_baseline_preview(self, principal, query, workspace_id, **_):
         return await self._pm_release_source_read(principal, "pm_release_baseline_preview", query, workspace_id)
 
+    async def pm_work_adopt_and_start_preview(self, principal, query, body, workspace_id, thread_id, **_):
+        from . import pm_work_adopt_and_start
+        self._exact_query(query, set())
+        return 200, await pm_work_adopt_and_start.preview(self.daemon.ops, principal, workspace_id, thread_id, body)
+
     async def pm_work_start_preview(self, principal, query, body, workspace_id, work_item_id, **_):
         from . import pm_work_start
         self._exact_query(query, set())
@@ -1174,6 +1181,7 @@ class ApiV1:
         gh_cfg = self.daemon.ops.context["github_config"]
         from . import (
             pm_attempt_result_reads,
+            pm_work_adopt_and_start,
             pm_work_follow_up,
             pm_work_profiles,
             pm_work_start,
@@ -1185,7 +1193,7 @@ class ApiV1:
                                and (a.name != "session.failover" or principal.allows("operate"))
                                and (a.name != pm_execution_verification.ACTION or all(principal.allows(s) for s in pm_execution_verification.REQUIRED))
                                and (a.name != pr_publication.ACTION or all(principal.allows(s) for s in pr_publication.REQUIRED))
-                               and (a.name != pm_work_start.ACTION or all(principal.allows(s) for s in pm_work_start.REQUIRED_SCOPES))
+                               and (a.name not in {pm_work_start.ACTION, pm_work_adopt_and_start.ACTION} or all(principal.allows(s) for s in pm_work_start.REQUIRED_SCOPES))
                                and (a.name != "pm.maintenance.repair" or principal.allows("observe") and principal.allows("manage"))
                                and (a.name not in {"pm.maintenance.repair.evidence.record", *pm_quality_reviews.ACTIONS} or principal.allows("observe"))
                                and (a.name not in {"pm.spec.materialize", "pm.work_batch.start", "pm.work_batch.evidence.record"}
@@ -1258,6 +1266,7 @@ class ApiV1:
                                                     "spec_materialization": pm_spec_materialization.capabilities(),
                                                     "work_batches": pm_work_batches.capabilities(self.daemon.ops),
                                                     "work_start": pm_work_start.capabilities(self.daemon.ops),
+                                                    "work_adopt_and_start": pm_work_adopt_and_start.capabilities(self.daemon.ops),
                                                     "work_profiles": pm_work_profiles.capabilities(self.daemon.ops),
                                                     "work_attempt_results": pm_attempt_result_reads.capabilities(self.daemon.ops),
                                                     "operation_loop": {"version": 1},
@@ -1523,7 +1532,7 @@ class ApiV1:
             )
             if (not str(action or "").startswith("pm.")
                     and action not in {
-                        "setup.host", "setup.repository", "setup.verification", "work.start",
+                        "setup.host", "setup.repository", "setup.verification", "work.start", "work.adopt_and_start",
                         "github.pr.publish",
                     } and not is_work_send):
                 raise

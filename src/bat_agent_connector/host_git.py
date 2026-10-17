@@ -294,6 +294,7 @@ JOURNAL_ONLY_ACTIONS = frozenset({
     "session.position",
     "session.read",
     "work.start",
+    "work.adopt_and_start",
     "work_item.approve",
     "work_item.continue",
     "work_item.create",

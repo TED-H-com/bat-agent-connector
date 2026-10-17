@@ -109,6 +109,9 @@ def _visible(db, principal, operation):
     if operation.get('action') == 'github.pr.publish':
         from .pr_publication import operation_visible
         return operation_visible(db, principal, operation)
+    if operation.get("action") == "work.adopt_and_start":
+        from .pm_work_adopt_and_start import operation_visible as adopt_start_visible
+        return adopt_start_visible(db, principal, operation)
     if operation.get("action") == "work.start":
         from .pm_work_start import operation_visible
         return operation_visible(db, principal, operation)
@@ -140,7 +143,7 @@ def event_visible(db, principal, event):
             action = str(body.get("action") or "")
             if pm_work_follow_up.is_work_input_event(db, event):
                 return pm_work_follow_up.missing_row_event_visible(db, principal, event)
-            return not action.startswith("pm.") and action != "work.start"
+            return not action.startswith("pm.") and action not in {"work.start", "work.adopt_and_start"}
         return visible(db, principal, {**dict(row), "target": json.loads(row["target"]),
                                       "result": json.loads(row["result"]) if row["result"] else None})
     if event["resource_type"] == "pm_work_attempt" or event["kind"].startswith("work.start."):

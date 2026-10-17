@@ -70,7 +70,7 @@ READ_TOOLS = [
     "pm_governance_list", "pm_governance_get", "pm_governance_history_list",
     "pm_work_packages_list", "pm_work_package_get", "pm_work_package_readiness_get",
     "pm_work_profiles_list", "pm_work_profile_get", "pm_work_profile_readiness_get",
-    "pm_work_start_preview", "pm_work_attempts_list", "pm_work_attempt_get", "pm_work_inputs_list",
+    "pm_work_adopt_and_start_preview", "pm_work_start_preview", "pm_work_attempts_list", "pm_work_attempt_get", "pm_work_inputs_list",
     "pm_work_attempt_result_get", "pm_work_attempt_changes_get", "pm_work_attempt_diff_get",
     "pm_issue_mappings_list", "pm_issue_mapping_get",
 
@@ -901,6 +901,15 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Read work-profile readiness from the local journal. This does not call BAT or write."""
         return await pm_daemon("pm_work_profile_readiness_get", workspace_id=workspace_id, profile_id=profile_id)
 
+    async def pm_work_adopt_and_start_preview(workspace_id: str, thread_id: str, proposal_id: str,
+                                              review: dict[str, Any], works: list[dict[str, Any]],
+                                              rationale: str | None = None) -> dict[str, Any]:
+        """Preview one reviewed adoption and up to ten existing Works; read-only, no start or adoption."""
+        body = {"proposal_id": proposal_id, "review": review, "works": works}
+        if rationale is not None:
+            body["rationale"] = rationale
+        return await pm_daemon("pm_work_adopt_and_start_preview", workspace_id=workspace_id, thread_id=thread_id, body=body)
+
     async def pm_work_start_preview(workspace_id: str, work_item_id: str,
                                     code_target: dict[str, Any] | None = None,
                                     delivery: str | None = None,
@@ -1186,7 +1195,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_governance_list, pm_governance_get, pm_governance_history_list,
                pm_work_packages_list, pm_work_package_get, pm_work_package_readiness_get,
                pm_work_profiles_list, pm_work_profile_get, pm_work_profile_readiness_get,
-               pm_work_start_preview, pm_work_attempts_list, pm_work_attempt_get, pm_work_inputs_list,
+               pm_work_adopt_and_start_preview, pm_work_start_preview, pm_work_attempts_list, pm_work_attempt_get, pm_work_inputs_list,
                pm_work_attempt_result_get, pm_work_attempt_changes_get, pm_work_attempt_diff_get,
                pm_issue_mappings_list, pm_issue_mapping_get,
 

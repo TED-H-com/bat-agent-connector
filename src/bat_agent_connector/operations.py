@@ -124,7 +124,7 @@ def _canonical(value: Any) -> str:
 
 
 def _workspace_key(action: str, target: Any = None) -> bool:
-    if action.startswith("pm.") or action == "work.start":
+    if action.startswith("pm.") or action in {"work.start", "work.adopt_and_start"}:
         return True
     return (
         action == "session.send"
@@ -503,6 +503,8 @@ class OperationService:
                 admit_restart(self, operation_id, name)
                 from .pm_work_start import admit_restart as admit_work_start_restart
                 admit_work_start_restart(self, operation_id, name)
+                from .pm_work_adopt_and_start import admit_restart as admit_adopt_start_restart
+                admit_adopt_start_restart(self, operation_id, name)
                 from .pm_maintenance_repairs import admit_restart as admit_repair_restart
                 admit_repair_restart(self, operation_id, name, request)
             from .pm_lifecycle_gates import admit_step
@@ -667,6 +669,8 @@ class OperationService:
         from .pm_access import require_visible
         require_visible(self.db, principal, op)
         self._authorize_controller(principal, op, verb)
+        from .pm_work_adopt_and_start import authorize_child as authorize_adopt_start_child
+        authorize_adopt_start_child(self, principal, op, verb)
         from .bulk_approval import authorize_child
         authorize_child(self, principal, op, verb)
         from .orchestration_operations import authorize_child as authorize_orchestration_child
@@ -698,7 +702,7 @@ class OperationService:
             return
         if not (action.startswith(("session.", "worktree.", "fanout.", "cleanup."))
                 or action in {"checkpoint.continue", "checkpoint.continue.revalidate",
-                              "repository.continue", "integration.handoff", "work.start"}):
+                              "repository.continue", "integration.handoff", "work.start", "work.adopt_and_start"}):
             return
         from . import controller_authority
         saved = controller_authority.operation_binding(op)
@@ -737,6 +741,11 @@ class OperationService:
         if op["action"] in {"pm.run.prepare", "pm.plan.adopt"}:
             from .pm_run_operations import cancel
             return cancel(self, principal, op)
+        if op["action"] == "work.adopt_and_start":
+            from .pm_work_adopt_and_start import cancel_children as cancel_adopt_start
+            pending = cancel_adopt_start(self, principal, op)
+            if pending is not None:
+                return pending
         if op["action"] == "work.start":
             from .pm_work_start import cancel_children as cancel_work_start_children
             cancel_work_start_children(self, principal, op)
@@ -788,6 +797,9 @@ class OperationService:
         if op["action"] in {"session.relay", "fanout.plan", "fanout.start"}:
             from .orchestration_operations import resume_children
             resume_children(self, principal, op)
+        if op["action"] == "work.adopt_and_start":
+            from .pm_work_adopt_and_start import resume_children as resume_adopt_start
+            resume_adopt_start(self, principal, op)
         if op["action"] == "work.start":
             from .pm_work_start import resume_children as resume_work_start_children
             resume_work_start_children(self, principal, op)
