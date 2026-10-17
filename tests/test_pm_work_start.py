@@ -321,7 +321,7 @@ async def test_child_settled_trigger_wakes_waiting_parent(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def _setup_full_pm_world(tmp_path):
+def _setup_full_pm_world(tmp_path, *, ops=None):
     """Build a lightweight local PM + repository_sync world without slow git clones."""
     from types import SimpleNamespace
 
@@ -336,11 +336,12 @@ def _setup_full_pm_world(tmp_path):
         work_items,
     )
 
-    journal = Journal(tmp_path / "full.sqlite3")
+    journal = ops.journal if ops is not None else Journal(tmp_path / "full.sqlite3")
     pm_workspace.schema(journal)
-    ops = OperationService(journal)
+    ops = ops if ops is not None else OperationService(journal)
     for adef in work_items.ACTIONS:
-        ops.register(adef)
+        if adef.name not in ops.actions:
+            ops.register(adef)
     pm_discussions.install(ops)
     pm_plans.install(ops)
     pm_lifecycle.install(ops)
@@ -3393,5 +3394,3 @@ async def test_execution_location_change_pauses_handoff_and_resume_starts_once(s
     assert created is False
     assert replay["operation_id"] == parent_id
     assert _operation_counts(ops) == before
-
-

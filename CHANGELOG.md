@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Cancelling or resuming an operation refuses before journal or child changes
+  when its saved receipt names an unavailable original source. HTTP and MCP
+  retain the same source refusal as a read of that receipt.
+
 - A fixed Result review can open a new PM discussion draft with two explicitly
   selected original assessments. The source picker preserves each commit and
   assessment version, rechecks refreshed sources and leaves PM sending and
