@@ -11,6 +11,7 @@ const send = data => process.stdout.write(JSON.stringify(data) + '\n');
 const f = await receive(), origin = `http://127.0.0.1:${f.port}`;
 const zh = f.locale === 'zh-TW';
 const errors = [], operations = [], requests = [], responses = [], pending = new Map(), results = new Map();
+const resumedOperations = [];
 let browser, page, step = 'start';
 const launch = async () => {
   browser = await chromium.launch();
@@ -25,6 +26,8 @@ const launch = async () => {
     if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/operations') {
       requests.push({key: request.headers()['idempotency-key'], body: request.postDataJSON()});
     }
+    const resumed = new URL(request.url()).pathname.match(/^\/api\/v1\/operations\/(op_[0-9a-f]{32})\/resume$/);
+    if (request.method() === 'POST' && resumed) resumedOperations.push(resumed[1]);
   });
   page.on('response', response => {
     pending.delete(response.request());
@@ -106,10 +109,44 @@ try {
     await shot('01-started');
   }
   send({stage: 'started', operation_id: start.operation_id});
-  const active = await receive();
+  let active = await receive();
+  if (f.lost_start_reply) {
+    step = 'unknown-start';
+    assert.equal(active.ready, false);
+    const recovery = active.recovery;
+    const landing = page.locator('[data-adopt-start-landing]');
+    await expect(landing.getByRole('link', {name: 'Resume reconciliation', exact: true}))
+      .toHaveAttribute('href', '#/op/' + recovery.handoff);
+    const boardUrl = page.url();
+    await page.reload();
+    await expect(landing.getByRole('link', {name: 'Resume reconciliation', exact: true})).toBeVisible();
+    await shot('00-unconfirmed-start');
+    send({stage: 'unknown-shown'});
+    assert.equal((await receive()).readback_restored, true);
+    for (const kind of ['start', 'parent']) {
+      step = 'recover-' + kind;
+      await page.goto(boardUrl);
+      if (kind === 'parent') {
+        await expect(landing.getByRole('button', {name: 'Resume', exact: true})).toBeVisible();
+      } else {
+        await landing.locator(`a[href="#/op/${recovery[kind]}"]`).click();
+        await expect(page).toHaveURL(new RegExp('#/op/' + recovery[kind] + '$'));
+      }
+      const [resumed] = await Promise.all([
+        page.waitForResponse(response => response.request().method() === 'POST'
+          && new URL(response.url()).pathname === `/api/v1/operations/${recovery[kind]}/resume`),
+        page.getByRole('button', {name: 'Resume', exact: true}).click(),
+      ]);
+      assert.ok([200, 202].includes(resumed.status()), await resumed.text());
+      assert.equal((await resumed.json()).operation.operation_id, recovery[kind]);
+      send({stage: 'resumed-' + kind, operation_id: recovery[kind]});
+      assert.equal((await receive()).settled, true);
+    }
+    active = await receive();
+  }
   assert.equal(active.ready, true);
   step = 'queue';
-  if (f.mode === 'adopt') {
+  if (f.mode === 'adopt' && !f.lost_start_reply) {
     // Adoption must lead to its own live Work without another navigation click.
     await expect(page).toHaveURL(new RegExp(`/session/.+[?&]work=${f.work}&attempt=${active.attempt}`));
   } else await page.locator('[data-work-start-item]').click();
@@ -247,7 +284,7 @@ try {
   assert.deepEqual(follow.body.preconditions, {expected_attempt_id: active.attempt});
   assert.equal(requests.at(-1).body.params.candidate_sha, fixed.candidate);
   assert.equal(requests.at(-1).body.params.draft, true);
-  send({stage: 'done', operations, browser: browser.version(), discussion_return: selection});
+  send({stage: 'done', operations, resumed_operations: resumedOperations, browser: browser.version(), discussion_return: selection});
   }
 } catch (error) {
   console.error(JSON.stringify({step, url: page?.url(), errors, requests, responses, pending: [...pending.values()]}));

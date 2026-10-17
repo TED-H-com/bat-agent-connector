@@ -21,6 +21,7 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
 from bat_agent_connector import pm_native_runtime, pr_publication
+from bat_agent_connector.errors import InvokeTimeout
 from tests import test_pm_conversation_proposals as conversation
 from tests import test_pm_native_operations as native
 from tests.test_api_v1 import http, token
@@ -90,9 +91,17 @@ async def test_queued_writer_withdrawal_keeps_history_without_dispatch(start_rea
 
 @pytest.mark.parametrize(("locale", "width"), [("en", 1440), ("zh-TW", 390)])
 async def test_discussion_adopt_start_queue_and_pr(start_ready, proposal_world, mock, tmp_path, monkeypatch, locale, width):
+    await discussion_loop(start_ready, mock, tmp_path, monkeypatch, locale, width)
+
+
+async def test_adopt_lost_start_reply_recovers_original_work_from_ui(start_ready, proposal_world, mock, tmp_path, monkeypatch):
+    await discussion_loop(start_ready, mock, tmp_path, monkeypatch, "en", 1440, lose_start_reply=True)
+
+
+async def discussion_loop(start_ready, mock, tmp_path, monkeypatch, locale, width, *, lose_start_reply=False):
     w = start_ready
     peer_token = None
-    if locale == "en":
+    if locale == "en" and not lose_start_reply:
         # Both configured project owners keep distinct controller identities.
         peer_token = token(w["d"], "mcp-peer", "observe", "manage", "start", "operate")
         await add_member(w, "mcp-peer", "owner")
@@ -113,12 +122,28 @@ async def test_discussion_adopt_start_queue_and_pr(start_ready, proposal_world, 
         "options_confirmed": False, "reason": None, "execution_scope": "frozen_context_only",
         "execution_location": "connector_service", "version_verification": "per_run",
         "auth_validity": "unverified", "model_execution_verified": False})
+    lost_reply = None
+    if lose_start_reply:
+        client = w["d"].fleet.client("h1")
+        invoke = client.invoke
+        lost_reply = {"sent": False, "hide_receipt": True}
+
+        async def lose_ack(name, *args, **kwargs):
+            if lost_reply["sent"] and lost_reply["hide_receipt"] and name == "claude:get-session-meta":
+                raise InvokeTimeout("Fixture read-back unavailable")
+            result = await invoke(name, *args, **kwargs)
+            if name == "claude:start-session" and not lost_reply["sent"]:
+                lost_reply["sent"] = True
+                raise InvokeTimeout("Fixture lost start reply")
+            return result
+
+        monkeypatch.setattr(client, "invoke", lose_ack)
     await work_loop(w, mock, tmp_path, locale, width, mode="adopt",
-        peer_token=peer_token, monkeypatch=monkeypatch)
+        peer_token=peer_token, monkeypatch=monkeypatch, lost_reply=lost_reply)
 
 
 async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_token=None, monkeypatch=None,
-                    withdraw_writer=False):
+                    withdraw_writer=False, lost_reply=None):
     ops = w["d"].ops
     # The handoff test runner decodes a single protocol. This journey also runs
     # checkpoint and publication shell scripts, so execute every actual script.
@@ -137,7 +162,7 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
     assert status == 200, original_work
     project_id = original_work["work_item"]["project_id"]
     adoptions_before = ops.db.execute("SELECT count(*) FROM pm_plan_adoptions").fetchone()[0]
-    entry = "withdraw-writer" if withdraw_writer else mode
+    entry = "lost-start-reply" if lost_reply else "withdraw-writer" if withdraw_writer else mode
     shots = ROOT / "desktop/test-results/work-loop" / f"{entry}-{locale}-{width}"
     shutil.rmtree(shots, ignore_errors=True)
     shots.mkdir(parents=True, exist_ok=True)
@@ -252,7 +277,8 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             await send({"port": w["port"], "token": w["owner_token"], "workspace": w["workspace_id"],
                 "work": w["target"]["work_item_id"], "locale": locale, "width": width, "shots": str(shots),
                 "mode": mode, "thread": thread_target(w)["thread_id"], "peer_agent": bool(peer_token),
-                "create_work": create_work, "project": project_id, "withdraw_writer": withdraw_writer})
+                "create_work": create_work, "project": project_id, "withdraw_writer": withdraw_writer,
+                "lost_start_reply": lost_reply is not None})
             if create_work:
                 created = await receive("created")
                 await wait_status(created["operation_id"], "succeeded")
@@ -270,12 +296,39 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 await send({"verified": True})
             started = await receive("started")
             start = ops.get(started["operation_id"])
+            recovery = None
             if mode == "adopt":
+                if lost_reply is not None:
+                    await wait_status(start["operation_id"], "needs_attention")
+                    unknown = ops.get(start["operation_id"])
+                    assert unknown["result"]["adopted"] and unknown["result"]["stage"] == "start_unknown", unknown
+                    original = unknown["result"]["works"][0]
+                    recovery = {"parent": start["operation_id"], "start": original["start_operation_id"],
+                        "handoff": original["handoff_operation_id"], "attempt": original["attempt_id"]}
+                    assert mock.channels().count("claude:start-session") == 1
+                    assert mock.channels().count("claude:send-message") == 0
+                    await send({"ready": False, "recovery": recovery})
+                    await receive("unknown-shown")
+                    lost_reply["hide_receipt"] = False
+                    # The original scheduled read-back recovers the handoff;
+                    # the UI then resumes only its paused original parents.
+                    await eventually(lambda: ops.get(recovery["handoff"])["status"] == "succeeded")
+                    assert mock.channels().count("claude:start-session") == 1
+                    await send({"readback_restored": True})
+                    for kind in ("start", "parent"):
+                        resumed = await receive("resumed-" + kind)
+                        assert resumed["operation_id"] == recovery[kind]
+                        await wait_status(recovery[kind], "succeeded")
+                        assert mock.channels().count("claude:start-session") == 1
+                        await send({"settled": True})
                 await wait_status(start["operation_id"], "succeeded")
                 parent = ops.get(start["operation_id"])
                 assert parent["action"] == "work.adopt_and_start" and parent["result"]["adopted"] is True
                 assert parent["result"]["summary"]["started_count"] == 1
                 start = ops.get(parent["result"]["works"][0]["start_operation_id"])
+                if recovery:
+                    assert start["operation_id"] == recovery["start"]
+                    assert start["result"]["attempt_id"] == recovery["attempt"]
             assert start["action"] == "work.start" and start["status"] == "succeeded", start
             assert start["target"] == w["target"]
             result = start["result"]
@@ -376,6 +429,7 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 await send(peer)
             done = await receive("done")
             assert await asyncio.wait_for(child.wait(), 10) == 0, (shots / "browser.log").read_text()
+            assert done["resumed_operations"] == ([recovery[kind] for kind in ("start", "parent")] if recovery else [])
             assert done["discussion_return"] == {"from": "board", "workspace": w["workspace_id"],
                 "work": w["target"]["work_item_id"], "attempt": att["attempt_id"]}
             if create_work:
@@ -409,7 +463,7 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 "source_sha": git(ROOT, "rev-parse", "HEAD"),
                 "source_dirty": bool(git(ROOT, "status", "--porcelain")),
                 "python": sys.version, "browser": done["browser"],
-                "entry": mode, "created_work_in_ui": created_work, "same_attempt": att["attempt_id"],
+                "entry": entry, "recovery": recovery, "created_work_in_ui": created_work, "same_attempt": att["attempt_id"],
                 "discussion_return": done["discussion_return"], "browser_operations": len(user_ops), "bat_starts": len(starts),
                 "bat_sends": len(sends), "github_posts": 1, "manual_unchanged": True, "mcp_peer": peer,
                 "candidate": candidate, "browser_closed_during_dispatch": True}, indent=2) + "\n")
