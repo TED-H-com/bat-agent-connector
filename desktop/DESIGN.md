@@ -31,7 +31,9 @@ are ignored, and terminal failures or admission refusals move focus to the reset
 The Work next-step field is the exception that opts into releasing after a central
 operation id: the receipt stays in the list, the field clears, and focus returns to
 that field so the next instruction can be written. Every other durable form still
-locks until the operation succeeds. A local draft is not a queue.
+locks until the operation succeeds. A local draft is not a queue. On a work route
+where that follow-up is offered, it is the only instruction composer. An attempt or
+precondition error that was not refused before admission keeps the original request.
 
 Keep existing drafts, stable IDs, operation keys, receipt recovery and read-only
 manual resources. A source withdrawal removes its facts, counts and inspector;

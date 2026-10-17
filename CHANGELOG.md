@@ -2,12 +2,14 @@
 
 ## Next release (unreleased)
 
-- Work: when the service offers a follow-up for the open work item, the Work
-  view can queue one next instruction for after the current turn. The service's
-  receipt stays on screen, and another instruction can be written once that
-  receipt exists. The status text comes from the service. Manual, unknown, and
-  Codex sessions do not gain this control. Without the service capability, the
-  existing session composer is unchanged.
+- Work: when the service offers a follow-up for the open work item, that Work
+  view has one composer for the next instruction. It queues the instruction for
+  after the current turn. The service's receipt stays on screen, and another
+  instruction can be written once that receipt exists. The status text comes from
+  the service. A lost or ambiguous reply keeps the original request. Questions and
+  permission prompts stay available. Manual, unknown, and Codex sessions do not
+  gain this control. Without the service capability, the existing session composer
+  is unchanged.
 
 - Fleet: keyboard focus stays on the control you are using while a status
   refresh or your own action runs. The control looks unavailable until that
