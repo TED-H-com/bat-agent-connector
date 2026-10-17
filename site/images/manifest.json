@@ -3,7 +3,7 @@
   "frontend_source_commit": "265026d4c1fc2bc04a9aaa727d566c1a2906b256",
   "source_pin_kind": "merged",
   "frontend_source_tree": "593db3b68606b82630fb8f5130842e18f7bb77db",
-  "captured_at": "2026-10-16T19:36:12.614Z",
+  "captured_at": "2026-10-17T03:52:46.182Z",
   "fixture_clock": "2026-10-13T09:00:00.000Z",
   "timezone": "UTC",
   "browser": "156.0.8078.4",
@@ -15,7 +15,7 @@
     {
       "file": "desktop/package-lock.json",
       "digest": "without_root_version",
-      "sha256": "8a2ad8c5c884e97c20ac23c79bc87eace2e97298306ea984a2db5e780ba53639"
+      "sha256": "e767b121cdedcf80fe5673f05c82d23cfa7ac839898d7b5ee1921ff06aeaf31f"
     },
     {
       "file": "desktop/src/pm-agents-trend.js",
@@ -480,7 +480,7 @@
     },
     {
       "file": "discussions-zh.png",
-      "sha256": "0f0b8a9c6d26f4d8c7940f62c7dd70c1ca63283d3950e1a43eae639ee88b8ee8",
+      "sha256": "20a770b122ee5da517c291c75cbc8657fbf512ed65881e8d84ab080f803e5188",
       "scenario": "discussions",
       "locale": "zh-TW",
       "viewport": {
