@@ -602,7 +602,9 @@ on larger viewports. Its entire header is hidden; the wide table retains its hea
 ordered work sections: Requirements served; Status & ownership; Start work (when the
 `features.pm_workspaces.work_start` capability is available); Result (when
 `features.pm_workspaces.work_attempt_results` is available, replacing static result evidence
-with the latest attempt's live result envelope using 0 BAT calls); Blocker & next step;
+with the latest attempt's live result envelope using 0 BAT calls, and providing on-demand
+"Read current changes" and per-file diff disclosures loaded once on first open with out-of-date
+event detection); Blocker & next step;
 Delivery; Details. When the card is startable, the inspector
 header offers a Start work action alongside Discuss that scrolls and focuses the instruction
 field. The Start work panel previews readiness facts, candidate code targets, and requirement
@@ -622,6 +624,14 @@ details start collapsed. Unknown and Not assessed summaries retain their evidenc
 Auxiliary source failures clear only their own facts and offer Retry; plan and work
 catalogue withdrawal clears the view. Inspector actions retain their nodes across live
 age updates, and closing returns to the current selection.
+
+A Work Result diff reply moves focus only while it is still on that diff's summary.
+A read started from the summary stays there whatever the outcome. A read started from
+that diff's Try again focuses the new Try again only when it fails again and focus is
+still on the summary. File paths are matched by attribute value, so a quote or
+backslash cannot throw during the render or the focus restore. The result read's Try
+again has `data-work-result-retry="result"` and is restored by that attribute.
+
 Milestone destinations apply once for the current route. Live refresh retains the
 reader's search and restores group-heading focus by central milestone identity.
 Unchanged delivery reads retain row nodes, position and focus regardless of response
