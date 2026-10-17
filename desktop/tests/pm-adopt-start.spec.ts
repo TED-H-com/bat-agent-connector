@@ -34,6 +34,35 @@ function fixture(){
 }
 async function prepare(page:any,f:any){await mountProposal(page,f);await selectProposal(page);await editor(page).getByLabel('Reason for adopting this update').fill('Adopt the reviewed login repair');}
 async function choose(page:any,id=work){const row=page.locator(`[data-adopt-work="${id}"]`);await row.locator('.pm-adopt-choice > input').first().check();await row.getByLabel('Paid members can log in',{exact:true}).check();}
+test('unchanged background proposal refresh preserves checked adoption readiness',async({page})=>{
+  const {f,state}=fixture();await prepare(page,f);await choose(page);
+  const start=page.getByRole('button',{name:'Adopt and start',exact:true});
+  await page.getByRole('button',{name:'Check readiness',exact:true}).click();await expect(start).toBeEnabled();
+  let release:any;f.state.gate=new Promise(resolve=>release=resolve);const reads=f.state.reads.length;
+  await page.evaluate(()=>{(window as any).pendingRefresh=(window as any).proposalRefresh({background:true});});
+  await expect.poll(()=>f.state.reads.length).toBeGreaterThan(reads+1);await expect(start).toBeDisabled();
+  release();await page.evaluate(()=>(window as any).pendingRefresh);
+  await expect(start).toBeEnabled();expect(state.previews).toHaveLength(1);
+  await start.click();await expect.poll(()=>f.state.writes.length).toBe(1);
+  expect(f.state.writes[0].body.preconditions.expected_proposal_digest).toBe('a'.repeat(64));
+});
+test('background baseline change and manual refresh still require checked readiness',async({page})=>{
+  const {f}=fixture();await prepare(page,f);await choose(page);
+  const start=page.getByRole('button',{name:'Adopt and start',exact:true});
+  await page.getByRole('button',{name:'Check readiness',exact:true}).click();await expect(start).toBeEnabled();
+  await page.evaluate(()=>(window as any).proposalRefresh());await expect(start).toBeDisabled();
+  await page.getByRole('button',{name:'Check readiness',exact:true}).click();await expect(start).toBeEnabled();
+  f.state.head.version++;await page.evaluate(()=>(window as any).proposalRefresh({background:true}));
+  await expect(start).toBeDisabled();expect(f.state.writes).toEqual([]);
+});
+test('background authority loss cannot restore the old checked readiness',async({page})=>{
+  const {f,state}=fixture();await prepare(page,f);await choose(page);
+  const start=page.getByRole('button',{name:'Adopt and start',exact:true});
+  await page.getByRole('button',{name:'Check readiness',exact:true}).click();await expect(start).toBeEnabled();
+  state.denied=true;await page.evaluate(()=>(window as any).proposalRefresh({background:true}));await expect(start).toBeHidden();
+  state.denied=false;await page.evaluate(()=>(window as any).proposalRefresh({background:true}));await expect(start).toBeDisabled();
+  expect(f.state.writes).toEqual([]);
+});
 test('one preview supplies the original compound request and lands on its first Work',async({page})=>{
   const {f,state}=fixture();await prepare(page,f);await choose(page);
   await page.getByRole('button',{name:'Check readiness',exact:true}).click();await expect(page.getByRole('button',{name:'Adopt and start',exact:true})).toBeEnabled();

@@ -26078,7 +26078,7 @@ function adoptStartReview({ t, api, alive, form, caps, namespace, workspaceId, t
 		if (disposed || updating) return;
 		updating = true;
 		try {
-			if (prepared && signature !== fingerprint()) invalidate();
+			if (prepared && (signature !== fingerprint() || !capable() || !readable())) invalidate();
 			const reason = availability();
 			notice.textContent = reason ? t(reason) : "";
 			notice.hidden = !reason;
@@ -26389,6 +26389,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 			return null;
 		}
 	};
+	const reviewedBaselineCurrent = () => {
+		const before = original()?.preconditions;
+		return before && before.expected_version === thread()?.thread.version && before.expected_plan_version === head?.version && before.expected_accepted_revision_id === head?.accepted_revision_id && before.expected_proposal_digest === active?.document_digest;
+	};
 	const actionButton = (attrs, label) => button({
 		...Object.fromEntries(Object.entries(attrs).filter(([key]) => key !== "class")),
 		variant: attrs.class === "primary" ? "primary" : "secondary",
@@ -26528,7 +26532,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 		review: original,
 		rationale: () => adopt.values().rationale,
 		permitted: deciding,
-		reviewable: () => fresh() && validReview(original()?.review),
+		reviewable: () => !loading && fresh() && reviewedBaselineCurrent() && validReview(original()?.review),
 		readable: () => visible && writing(),
 		otherLocked: () => prepare.locked() || adopt.locked() && !adopt.replaceable(),
 		errorBox,
@@ -27157,19 +27161,20 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 			text: t("pcp_empty")
 		})] : [], ...cursor !== null ? [note("pcp_partial")] : []);
 	}
-	async function refresh(preferred) {
+	async function refresh(preferred, { background = false } = {}) {
 		if (!enabled()) {
 			withdraw();
 			box.hidden = true;
 			return;
 		}
-		compound?.refresh();
+		if (!background) compound?.refresh();
 		if (preferred) queuedPreferred = preferred;
 		if (loading) {
 			refreshAgain = true;
 			return inFlight;
 		}
 		loading = true;
+		compound?.update();
 		inFlight = (async () => {
 			do {
 				refreshAgain = false;
@@ -27217,6 +27222,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 			inFlight = null;
 			prepare.update();
 			adopt.update();
+			compound?.update();
 			updateControls();
 		});
 		return inFlight;
@@ -48627,7 +48633,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					head: plans?.head,
 					capabilities: workspaceCaps
 				});
-				await proposalReview.refresh();
+				await proposalReview.refresh(void 0, { background: Boolean(event) });
 				alive();
 				if (ticket !== sequence) return;
 			}

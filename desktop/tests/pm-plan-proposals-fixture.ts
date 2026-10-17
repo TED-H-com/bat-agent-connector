@@ -68,7 +68,7 @@ export async function bootProposal(page:Page,locale='en'){
     const proposal=planProposals({h,t,api,alive,namespace:'proposal-ui.'+current.caps.actor,workspaceId,threadId,caps:()=>current.caps,thread:()=>current.thread,
       permitted:(decide:boolean)=>current.caps.actor==='owner'&&(decide?current.thread.capabilities.decide:current.thread.capabilities.write),form,input,labelled,errorBox,refresh:async()=>{current=await api('GET','/fixture-state');proposal.update({head:current.head,capabilities:current.capability});}});
     document.getElementById('mount')!.replaceChildren(proposal.box);proposal.update({head:current.head,capabilities:current.capability});
-    win.proposalRefresh=async()=>{current=await api('GET','/fixture-state');proposal.update({head:current.head,capabilities:current.capability});await proposal.refresh();};
+    win.proposalRefresh=async(options={})=>{current=await api('GET','/fixture-state');proposal.update({head:current.head,capabilities:current.capability});await proposal.refresh(undefined,options);};
     win.proposalWithdraw=()=>proposal.withdraw();win.proposalDispose=()=>proposal.dispose();await proposal.refresh();
   },{locale,workspaceId,threadId});
 }

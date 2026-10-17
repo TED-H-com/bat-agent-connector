@@ -38,6 +38,12 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,namespace=
   const fresh=()=>!conflict&&active?.adoptable===true;
   const adopted=()=>active?.adoptable_reason==='adopted';
   const original=()=>{try{return JSON.parse(adopt?.values().review||'null');}catch{return null;}};
+  const reviewedBaselineCurrent=()=>{
+    const before=original()?.preconditions;
+    return before&&before.expected_version===thread()?.thread.version
+      &&before.expected_plan_version===head?.version&&before.expected_accepted_revision_id===head?.accepted_revision_id
+      &&before.expected_proposal_digest===active?.document_digest;
+  };
   const actionButton=(attrs,label)=>button({...Object.fromEntries(Object.entries(attrs).filter(([key])=>key!=='class')),variant:attrs.class==='primary'?'primary':'secondary',label});
   const note=key=>h('p',{class:'muted'},t(key));
   const acceptedDocument=p=>p.context.accepted_plan?.document||p.context.accepted_plan;
@@ -73,7 +79,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,namespace=
     recoverPermitted:()=>writing()&&permitted(true)&&caps()?.scopes?.includes('start'),label:'pcp_adopt',onError:error=>{if(!conversation||error.code!=='VERSION_CONFLICT')return false;conflict=true;updateControls();return true;},onSaved:async()=>{adoptedId=active?.proposal_id;if(conversation&&refreshParent)await refreshParent();else{await refreshParent?.();await refresh();}},
     onStateChange:()=>{if(ready)updateControls();},extra:h('div',{'data-proposal-adopt-panel':''},review,content,labelled('pcp_rationale',rationale))});
   compound=adoptStartReview({t,api,alive,form,caps,namespace,workspaceId,threadId,
-    review:original,rationale:()=>adopt.values().rationale,permitted:deciding,reviewable:()=>fresh()&&validReview(original()?.review),
+    review:original,rationale:()=>adopt.values().rationale,permitted:deciding,reviewable:()=>!loading&&fresh()&&reviewedBaselineCurrent()&&validReview(original()?.review),
     readable:()=>visible&&writing(),otherLocked:()=>prepare.locked()||adopt.locked()&&!adopt.replaceable(),errorBox,
     onStateChange:()=>{if(ready){adopt.update();updateControls();}}});
   rationale.addEventListener('input',()=>compound.update());
@@ -289,7 +295,11 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,namespace=
     rows=append?[...rows,...value.proposals]:value.proposals;cursor=next??null;const selected=picker.value;picker.replaceChildren(h('option',{value:''},t('pcp_choose')),...rows.map(row=>h('option',{value:row.proposal_id},[row.title??t('pd_proposed'),row.adoptable_reason==='adopted'?t('ui_status_adopted'):row.validation?.status!=='format_valid'?proposalReasonLabel(t,'invalid_proposal'):t(row.adoptable===false?'pd_stale':'pcp_proposal')].join(' · '))));picker.value=selected;more.hidden=cursor===null;
     notice.replaceChildren(...(!rows.length&&!conversation?[emptyState({title:t('pcp_empty_title'),text:t('pcp_empty')})]:[]),...(cursor!==null?[note('pcp_partial')]:[]));
   }
-  async function refresh(preferred){if(!enabled()){withdraw();box.hidden=true;return;}compound?.refresh();if(preferred)queuedPreferred=preferred;if(loading){refreshAgain=true;return inFlight;}loading=true;
+  async function refresh(preferred,{background=false}={}){if(!enabled()){withdraw();box.hidden=true;return;}
+    // Replayed or unrelated PM events can reread the same proposal after the
+    // owner checked readiness. Suspend admission while reading, but preserve
+    // those exact conditions unless intent, baseline, sources or authority change.
+    if(!background)compound?.refresh();if(preferred)queuedPreferred=preferred;if(loading){refreshAgain=true;return inFlight;}loading=true;compound?.update();
     inFlight=(async()=>{do{refreshAgain=false;const nextPreferred=queuedPreferred;queuedPreferred=null;const own=++ticket;updateControls();
       try{const [list,plans]=await Promise.all([api('GET',`${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=0&limit=20`),api('GET',base+'/plans?limit=1')]);alive();if(own!==ticket)return;
         if(plans.workspace_id!==workspaceId||!record(plans.head))throw fail();head=plans.head;
@@ -300,7 +310,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,namespace=
         if(id){const result=checked(await api('GET',endpoint+'/'+encodeURIComponent(id)));alive();if(own!==ticket)return;if(result.proposal_id!==id)throw fail();if(active?.proposal_id!==result.proposal_id)conflict=false;active=result;renderReview();
           await resolution?.refresh(adopted() ? result.adopted_revision_id : null);alive();if(own!==ticket)return;}
       }catch(error){if(own===ticket){withdraw();notice.replaceChildren(errorBox(error, {within:notice}));box.hidden=false;}}
-    }while(refreshAgain&&visible&&enabled());})().finally(()=>{loading=false;inFlight=null;prepare.update();adopt.update();updateControls();});
+    }while(refreshAgain&&visible&&enabled());})().finally(()=>{loading=false;inFlight=null;prepare.update();adopt.update();compound?.update();updateControls();});
     return inFlight;
   }
   async function loadMore(){if(cursor===null||loading)return;loading=true;const own=ticket;updateControls();try{const result=await api('GET',`${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=${cursor}&limit=20`);alive();if(own!==ticket)return;page(result,true);}catch(error){if(own===ticket){withdraw();notice.replaceChildren(errorBox(error, {within:notice}));box.hidden=false;}}finally{loading=false;updateControls();}}

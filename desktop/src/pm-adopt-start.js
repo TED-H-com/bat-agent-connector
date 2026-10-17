@@ -98,7 +98,7 @@ export function adoptStartReview({t,api,alive,form,caps,namespace,workspaceId,th
   function update() {
     if(disposed||updating)return;updating=true;
     try{
-      if(prepared&&signature!==fingerprint())invalidate();
+      if(prepared&&(signature!==fingerprint()||!capable()||!readable()))invalidate();
       const reason=availability();notice.textContent=reason?t(reason):'';notice.hidden=!reason;
       request.box.hidden=!capable()&&!request.locked();
       const frozen=request.locked()||otherLocked()||!capable()||!readable();

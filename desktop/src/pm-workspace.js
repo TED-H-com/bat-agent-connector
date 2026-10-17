@@ -1668,7 +1668,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (plans && revisions) revisions.update(plans, accepted, workspaceCaps);
       if (proposalReview) {
         proposalReview.update({head: plans?.head, capabilities: workspaceCaps});
-        await proposalReview.refresh();
+        await proposalReview.refresh(undefined, {background: Boolean(event)});
         alive(); if (ticket !== sequence) return;
       }
       worktreeChoice?.update();
