@@ -10250,6 +10250,7 @@ var STRINGS = {
 		load_more: "載入更多",
 		session_untitled: "未命名工作階段",
 		session_details_session: "工作階段詳細資料",
+		session_tools_history: "更多工具與歷史",
 		session_send_details: "傳送紀錄",
 		session_label_details: "標籤詳細資料",
 		session_readonly_manual: "這是有人在 BAT 開啟的工作階段，這裡只能檢視。",
@@ -11904,6 +11905,7 @@ var STRINGS = {
 		load_more: "Load more",
 		session_untitled: "Untitled session",
 		session_details_session: "Session details",
+		session_tools_history: "More tools and history",
 		session_send_details: "Send record",
 		session_label_details: "Label details",
 		session_readonly_manual: "Started in BAT by a person, so it's read-only here.",
@@ -64119,11 +64121,33 @@ async function viewSession(main, host, sid, context = null) {
 		recoverPermitted: () => resultSourceAvailable() && (options.recoverPermitted || options.permitted)(),
 		canSend: () => state.online && !state.nativeBusy && state.viewReady
 	});
+	const workResultTools = workbenchEnabled() && Boolean(workContext);
+	const sessionTools = h("div", {}, workResultTools ? context?.itemBox : null, sessionSection("list-checks", t("checkpoints"), cps.box, cps.action), sessionSection("check", t("session_delivery"), result), sessionSection("inbox", t("session_sources"), sourcesBody), batSlot, permissionsSlot, labels.box, instructions?.box, observations.box, details);
+	const supporting = h("div", {}, sessionTools);
+	const toolsDisclosure = workResultTools ? disclosure({
+		label: t("session_tools_history"),
+		body: h("div"),
+		key: `work-result-tools:${connection.namespace}:${workContext.workspaceId}:${selectedAttempt.attempt_id}`
+	}) : null;
+	if (toolsDisclosure) toolsDisclosure.dataset.workResultTools = "";
+	const showSupportingTools = (visible) => {
+		if (!toolsDisclosure) return;
+		const target = visible ? toolsDisclosure : sessionTools;
+		if (supporting.firstChild === target) return;
+		const focused = sessionTools.contains(document.activeElement) ? document.activeElement : null;
+		if (visible) {
+			toolsDisclosure.append(sessionTools);
+			if (focused) toolsDisclosure.open = true;
+		}
+		supporting.replaceChildren(target);
+		focused?.focus({ preventScroll: true });
+	};
 	const fixedResult = workContext ? workResultPanel({
 		h,
 		t,
 		api,
 		workspaceId: workContext.workspaceId,
+		onVisibility: showSupportingTools,
 		caps: () => state.caps,
 		errorBox,
 		form: resultForm,
@@ -64135,17 +64159,9 @@ async function viewSession(main, host, sid, context = null) {
 	}) : null;
 	results.body.append(...[
 		fixedResult?.element,
-		context?.itemBox,
+		workResultTools ? null : context?.itemBox,
 		changesSection,
-		sessionSection("list-checks", t("checkpoints"), cps.box, cps.action),
-		sessionSection("check", t("session_delivery"), result),
-		sessionSection("inbox", t("session_sources"), sourcesBody),
-		batSlot,
-		permissionsSlot,
-		labels.box,
-		instructions?.box,
-		observations.box,
-		details
+		supporting
 	].filter(Boolean));
 	const lane = h("section", { class: "workspace-conversation" }, conversation.box, readonly, controls, status);
 	const followWorkspace = workContext?.workspaceId || "";

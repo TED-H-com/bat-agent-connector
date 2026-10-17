@@ -10,6 +10,15 @@ technical receipts. This is the implementation direction, not a claim that those
 pending contracts are available on main. Current differences and file ownership
 belong in the [existing handoff](../product/v1.3-agent-handoff.md).
 
+When the selected Work's Result is available, the shared Workbench keeps that
+Result and its review first, with existing work/session tools and history in one
+disclosure. Work record controls, checkpoint actions, delivery/source readers, permissions, labels and
+history remain the same mounted components. Opening this disclosure performs no
+write. Its open state belongs to the selected Attempt, and an active field is not
+hidden if a Result becomes available while it is being edited. If the Result is
+unavailable, the existing tools remain directly accessible. Ordinary session and
+classic-layout paths keep their existing presentation and authority.
+
 The owner's [October 15 supplement](../product/workbench-ux-plan.md) changes the
 v1.3 information architecture. Its [48 acceptance cases](../product/workbench-ux-acceptance.md)
 remain separate from E00–E11 and R0–R5. Private reference images were reviewed

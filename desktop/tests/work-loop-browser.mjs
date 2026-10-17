@@ -233,6 +233,12 @@ try {
   await page.getByRole('button', {name: zh ? '成果' : 'Results', exact: true}).click();
   await expect(page.locator('[data-work-result]')).toContainText('Added the retry-after-failure case.');
   await expect(page.locator('[data-work-publish-commit]')).toHaveAttribute('title', fixed.candidate);
+  const supportingTools=page.locator('[data-work-result-tools]');
+  await expect(supportingTools).not.toHaveAttribute('open');
+  await expect(page.locator('[data-session-sources]')).toBeHidden();
+  await supportingTools.locator(':scope > summary').click();
+  await expect(page.locator('[data-session-sources]')).toBeVisible();
+  await supportingTools.locator(':scope > summary').click();
   await shot('03-reconnected-result');
   step = 'review-result';
   await page.getByRole('button', {name: zh ? '審閱這份成果' : 'Review this result', exact: true}).click();

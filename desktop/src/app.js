@@ -1655,17 +1655,35 @@ async function viewSession(main, host, sid, context = null) {
     recoverPermitted: () => resultSourceAvailable() && (options.recoverPermitted || options.permitted)(),
     canSend: () => state.online && !state.nativeBusy && state.viewReady,
   });
+  const workResultTools = workbenchEnabled() && Boolean(workContext);
+  const sessionTools = h('div', {}, workResultTools ? context?.itemBox : null,
+    sessionSection("list-checks", t("checkpoints"), cps.box, cps.action),
+    sessionSection("check", t("session_delivery"), result),
+    sessionSection("inbox", t("session_sources"), sourcesBody),
+    batSlot, permissionsSlot, labels.box, instructions?.box, observations.box, details);
+  const supporting = h('div', {}, sessionTools);
+  const toolsDisclosure = workResultTools ? disclosure({label: t('session_tools_history'),
+    body: h('div'), key: `work-result-tools:${connection.namespace}:${workContext.workspaceId}:${selectedAttempt.attempt_id}`}) : null;
+  if (toolsDisclosure) toolsDisclosure.dataset.workResultTools = '';
+  const showSupportingTools = visible => {
+    if (!toolsDisclosure) return;
+    const target = visible ? toolsDisclosure : sessionTools;
+    if (supporting.firstChild === target) return;
+    const focused = sessionTools.contains(document.activeElement) ? document.activeElement : null;
+    if (visible) {
+      toolsDisclosure.append(sessionTools);
+      if (focused) toolsDisclosure.open = true;
+    }
+    supporting.replaceChildren(target);
+    focused?.focus({preventScroll: true});
+  };
   const fixedResult = workContext ? workResultPanel({h, t, api, workspaceId: workContext.workspaceId,
+    onVisibility: showSupportingTools,
     caps: () => state.caps, errorBox, form: resultForm, namespace: connection.namespace, alive: () => {
       assertView(connection);
       if (disposed || withdrawn) throw new ApiError(410, 'VIEW_CHANGED', 'View retired');
     }}) : null;
-  results.body.append(...[fixedResult?.element, context?.itemBox,
-    changesSection,
-    sessionSection("list-checks", t("checkpoints"), cps.box, cps.action),
-    sessionSection("check", t("session_delivery"), result),
-    sessionSection("inbox", t("session_sources"), sourcesBody),
-    batSlot, permissionsSlot, labels.box, instructions?.box, observations.box, details].filter(Boolean));
+  results.body.append(...[fixedResult?.element, workResultTools ? null : context?.itemBox, changesSection, supporting].filter(Boolean));
   const lane = h("section", {class: "workspace-conversation"}, conversation.box, readonly, controls, status);
   // Work-target second input stays in this lane. Tab switches hide the lane; they do not rebuild it.
   // With the capability, this lane has one instruction composer. The legacy field stays for its draft
