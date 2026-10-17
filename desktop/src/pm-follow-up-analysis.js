@@ -1,5 +1,5 @@
 import {panelActorLabel} from './pm-governance-strings.js';
-import {retiredView} from './pm-retired.js';
+import {retiredView, viewLeft} from './pm-retired.js';
 import {disclosure, statusPill, inlineError} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
 // Assessments quote one immutable intake. A valid response format is not verified advice.
@@ -113,20 +113,20 @@ export function followUpAssessments({h,t,api,alive,workspaceId,caps,errorBox,onA
     try{const data=check(await api('GET',`${endpoint}/${encodeURIComponent(id)}`));if(!current(ticket))return;
       const row=valid(data.assessment);if(row.assessment_id!==id)throw Error(t('pm_fa_mismatch'));
       render(row);status.replaceChildren();
-    }catch(error){if(retiredView(error))return;if(ticket===serial)fail(error);}
+    }catch(error){if(retiredView(error)||viewLeft(alive))return;if(ticket===serial)fail(error);}
   }
   async function loadMore() {
     if(reading||next==null||!intake)return;const ticket=serial,after=next;reading=true;more.disabled=true;
     try{const data=page(await api('GET',path(after)),after);if(!current(ticket))return;
       rows.push(...data.assessments.filter(row=>!rows.some(old=>old.assessment_id===row.assessment_id)));next=data.next_cursor;navigation();
-    }catch(error){if(retiredView(error))return;if(ticket===serial)fail(error.message===t('pm_fa_mismatch')?Error(t('pm_fa_read_failed')):error);}finally{if(ticket===serial){reading=false;more.disabled=false;}}
+    }catch(error){if(retiredView(error)||viewLeft(alive))return;if(ticket===serial)fail(error.message===t('pm_fa_mismatch')?Error(t('pm_fa_read_failed')):error);}finally{if(ticket===serial){reading=false;more.disabled=false;}}
   }
   async function load(row) {
     clear();intake=row;selected=selections.get(row.intake_id)||'';const ticket=serial;status.replaceChildren(note('pm_fa_loading'));
     try{const data=page(await api('GET',path(0)),0);if(!current(ticket))return;
       rows=data.assessments;next=data.next_cursor;navigation();status.replaceChildren();
       if(selected)await read(selected);else if(rows.length)detail.append(note('pm_fa_select'));
-    }catch(error){if(retiredView(error))return;if(ticket===serial)fail(error.message===t('pm_fa_mismatch')?Error(t('pm_fa_read_failed')):error);}
+    }catch(error){if(retiredView(error)||viewLeft(alive))return;if(ticket===serial)fail(error.message===t('pm_fa_mismatch')?Error(t('pm_fa_read_failed')):error);}
   }
   async function showResult(result){
     const id=result?.outcome?.assessment_id;

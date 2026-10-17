@@ -17446,6 +17446,14 @@ var retiredView = (error) => [
 	"CONNECTION_CHANGED",
 	"PM_DISPOSED"
 ].includes(error.code);
+var viewLeft = (alive) => {
+	try {
+		alive();
+		return false;
+	} catch (error) {
+		return retiredView(error);
+	}
+};
 var init_tslib_es6 = __esmMin((() => {}));
 async function invoke(cmd, args = {}, options) {
 	return window.__TAURI_INTERNALS__.invoke(cmd, args, options);
@@ -17944,7 +17952,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 					alive();
 					if (ticket === serial) render(data);
 				} catch (error) {
-					if (retiredView(error)) return;
+					if (retiredView(error) || viewLeft(alive)) return;
 					if (ticket === serial) unavailable(error);
 				}
 			}
@@ -18001,7 +18009,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 			}
 			create.update();
 		} catch (error) {
-			if (retiredView(error)) return;
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -26695,7 +26703,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 				if (selection) focused.setSelectionRange(...selection);
 			}
 		} catch (error) {
-			if (retiredView(error)) return;
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -29203,7 +29211,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 			renderWork();
 			notify();
 		} catch (error) {
-			if (retiredView(error)) return;
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -29291,7 +29299,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 			render();
 			if (history.open) await loadHistory();
 		} catch (error) {
-			if (retiredView(error)) return;
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -29321,7 +29329,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 						if (original.transition?.transition_id !== row.transition_id) throw Error(t("pm_scope_mismatch"));
 						detail.append(h("pre", { class: "pm-brief-proof" }, JSON.stringify(original.transition, null, 2)));
 					} catch (error) {
-						if (retiredView(error)) return;
+						if (retiredView(error) || viewLeft(alive)) return;
 						if (ticket === serial) unavailable(error);
 					}
 				});
@@ -29336,7 +29344,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 			}, t("pm_lifecycle_more_history")));
 			if (page.visibility_filtered) historyBody.append(h("p", { class: "muted" }, t("pm_lifecycle_filtered")));
 		} catch (error) {
-			if (retiredView(error)) return;
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		} finally {
 			if (historyRequest === ticket) historyRequest = null;
@@ -30051,7 +30059,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 			render(row);
 			status.replaceChildren();
 		} catch (error) {
-			if (retiredView(error)) return;
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error);
 		}
 	}
@@ -30067,7 +30075,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 			next = data.next_cursor;
 			navigation();
 		} catch (error) {
-			if (retiredView(error)) return;
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error.message === t("pm_fa_mismatch") ? Error(t("pm_fa_read_failed")) : error);
 		} finally {
 			if (ticket === serial) {
@@ -30092,7 +30100,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 			if (selected) await read(selected);
 			else if (rows.length) detail.append(note("pm_fa_select"));
 		} catch (error) {
-			if (retiredView(error)) return;
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error.message === t("pm_fa_mismatch") ? Error(t("pm_fa_read_failed")) : error);
 		}
 	}
@@ -30322,7 +30330,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 			body.append(warning, rebase, request.box);
 			request.update();
 		} catch (error) {
-			if (retiredView(error)) return;
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error);
 		}
 	}
@@ -30336,7 +30344,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 			next = data.next_cursor;
 			await readThread();
 		} catch (error) {
-			if (retiredView(error)) return;
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error);
 		}
 	}
@@ -30360,7 +30368,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 				await readThreads();
 			}
 		} catch (error) {
-			if (retiredView(error)) return;
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) fail(error);
 		}
 	}
@@ -30747,7 +30755,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			renderNavigation();
 			editor.update();
 		} catch (error) {
-			if (retiredView(error)) return;
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		} finally {
 			if (ticket === serial) {
@@ -30789,7 +30797,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			sourceStatus.replaceChildren(snapshot && !snapshot.baseline?.document ? note("pm_fu_accepted_required") : note("pm_fu_source_help"));
 			editor.update();
 		} catch (error) {
-			if (retiredView(error)) return;
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial && sourceTicket === sourceSerial) unavailable(error);
 		}
 	}
@@ -30948,7 +30956,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			renderSourceChoices();
 			return true;
 		} catch (error) {
-			if (retiredView(error)) return false;
+			if (retiredView(error) || viewLeft(alive)) return false;
 			if (ticket === serial) unavailable(error);
 			return false;
 		}
@@ -31048,7 +31056,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			editor.update();
 			if (prepareOpen) await loadSources();
 		} catch (error) {
-			if (retiredView(error)) return;
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -32169,7 +32177,7 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 				if (selection) focused.setSelectionRange(...selection);
 			}
 		} catch (error) {
-			if (retiredView(error)) return;
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -36396,7 +36404,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 				if (selection) focused.setSelectionRange(...selection);
 			}
 		} catch (error) {
-			if (retiredView(error)) return;
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) unavailable(error);
 		}
 	}
@@ -37727,7 +37735,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 						const doc = value.revision.document;
 						content.replaceChildren(h("p", {}, doc.rationale || t(doc.milestones?.some((row) => row.actual?.quality) ? "pm_roadmap_quality_fixed" : "pm_roadmap_quality_unknown")), h("pre", { class: "pm-brief-proof" }, JSON.stringify(value.revision, null, 2)));
 					} catch (error) {
-						if (retiredView(error)) return;
+						if (retiredView(error) || viewLeft(alive)) return;
 						content.replaceChildren(errorBox(error, { within: content }));
 						fetched = false;
 					}
@@ -37889,7 +37897,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 				if (history.open) loadHistory();
 			}
 		} catch (error) {
-			if (retiredView(error)) return;
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === serial) {
 				current = null;
 				signature = "";
@@ -38446,7 +38454,7 @@ function reviewCandidateToIdea({ h, t, api, alive, workspaceId, caps, can, form,
 			body.append(thread.thread.mode !== "idea" ? h("p", { class: "muted" }, t("pmrv_idea_only")) : "", request.box, warning, rebase, h("a", { href: `#/pm/${workspaceId}/${selected}` }, t("pmrv_idea_open")));
 			sync();
 		} catch (error) {
-			if (retiredView(error)) return;
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (n === ticket && !dead) {
 				thread = null;
 				body.replaceChildren();
@@ -38473,7 +38481,7 @@ function reviewCandidateToIdea({ h, t, api, alive, workspaceId, caps, can, form,
 			if (!rows.some((row) => row.mode === "idea") && !selected) status.replaceChildren(emptyState({ title: t("pmrv_idea_empty") }));
 			if (selected && !more) await choose();
 		} catch (error) {
-			if (retiredView(error)) return;
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (n === ticket && !dead) {
 				thread = null;
 				request?.update();
@@ -42364,7 +42372,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 				}));
 			}
 		} catch (error) {
-			if (retiredView(error)) return;
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === generation) {
 				rows.replaceChildren();
 				active = null;
@@ -42410,7 +42418,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 			selected = choose.value;
 			await loadProject();
 		} catch (error) {
-			if (retiredView(error)) return;
+			if (retiredView(error) || viewLeft(alive)) return;
 			if (ticket === generation) {
 				rows.replaceChildren();
 				active = null;
@@ -42477,7 +42485,7 @@ function pmWorktreeChoice({ h, t, api, alive, input, labelled, capability, scope
 				}));
 				renderProof();
 			} catch (error) {
-				if (retiredView(error)) return;
+				if (retiredView(error) || viewLeft(alive)) return;
 				if (ticket === sequence) proof.replaceChildren(errorBox(error, { within: proof }));
 			} finally {
 				if (ticket === sequence) {

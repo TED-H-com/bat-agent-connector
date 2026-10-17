@@ -10,6 +10,12 @@ import {openPmPanel, openReportTask, openThreadTab} from './pm-navigation.ts';
 // The polling title is painted only after that batch is acknowledged and actions are
 // writable again. A missing error node is not that proof: evidence can discard the
 // node or parent it to a status that is no longer on the page.
+// A failed read is separate. The transport throws HTTP 503 or NETWORK_ERROR
+// before the caller reaches alive(). Leaving the workspace changes the view
+// generation, not the connection epoch, so that failure is not a retired-view
+// code. These tests reject the old request while the next batch is open. The
+// checkpoint must still advance and Refresh must stay usable. A failure in the
+// view that is still open must still stop that batch.
 // Quality projections (pm-quality-projections.js:41), plan diff (pm-plan-diff.js:56,
 // :81, :169), plan revision paging (pm-plans.js:158), evidence detail toggles, and the
 // other catches that already check isConnected are not covered. Replacing the page
@@ -76,15 +82,21 @@ async function installHeldBodyProbe(page: Page) {
     const originalFetch = window.fetch;
     (window as any).__heldBodyTokens = [];
     window.fetch = async function(...args) {
-      const response = await originalFetch.apply(this, args as [RequestInfo, RequestInit?]);
-      const held = response.headers.get('x-batc-held-read');
-      const originalJson = response.json.bind(response);
-      response.json = async function() {
-        const data = await originalJson();
-        if (held) (window as any).__heldBodyTokens.push(held);
-        return data;
-      };
-      return response;
+      const requestUrl = typeof args[0] === 'string' ? args[0] : args[0] instanceof Request ? args[0].url : '';
+      try {
+        const response = await originalFetch.apply(this, args as [RequestInfo, RequestInit?]);
+        const held = response.headers.get('x-batc-held-read');
+        const originalJson = response.json.bind(response);
+        response.json = async function() {
+          const data = await originalJson();
+          if (held) (window as any).__heldBodyTokens.push(held);
+          return data;
+        };
+        return response;
+      } catch (error) {
+        ((window as any).__heldFetchRejections ||= []).push(requestUrl);
+        throw error;
+      }
     };
   });
 }
@@ -94,10 +106,19 @@ async function syncHeldBody(page: Page, token: string) {
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => resolve(undefined))));
 }
 
+async function syncHeldRejection(page: Page, path: string) {
+  await page.waitForFunction(expected => ((window as any).__heldFetchRejections || []).some((url: string) => url.includes(expected)), path);
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => resolve(undefined))));
+}
+
+type HeldFailure = 'unavailable' | 'network';
+
 interface Hold {
+  path: string;
   started: () => boolean;
   token: () => string | null;
   release: () => void;
+  fail: (kind: HeldFailure) => void;
 }
 
 interface FixtureExtras {catalog?: boolean, briefHistory?: boolean, phaseHistory?: boolean, roadmapHistory?: boolean}
@@ -131,14 +152,14 @@ function createFixture(locale: 'en' | 'zh-TW', features: Record<string, unknown>
   let failEvidence = false;
   let eventCursor = 0;
   let eventWorkspace = destId;
-  const slots: {path: string, method: string, promise: Promise<void>, release: () => void, started: boolean, token: string | null, armed: boolean}[] = [];
+  const slots: {path: string, method: string, promise: Promise<HeldFailure | null>, started: boolean, token: string | null, armed: boolean}[] = [];
 
   const hold = (path: string, method = 'GET'): Hold => {
-    let release = () => {};
-    const promise = new Promise<void>(resolve => {release = resolve;});
-    const slot = {path, method, promise, release, started: false, token: null as string | null, armed: true};
+    let settle = (_failure: HeldFailure | null) => {};
+    const promise = new Promise<HeldFailure | null>(resolve => {settle = resolve;});
+    const slot = {path, method, promise, started: false, token: null as string | null, armed: true};
     slots.push(slot);
-    return {started: () => slot.started, token: () => slot.token, release: () => {slot.release();}};
+    return {path, started: () => slot.started, token: () => slot.token, release: () => settle(null), fail: kind => settle(kind)};
   };
 
   const pmBody = (id: string, rest: string, url: URL, input: any) => {
@@ -181,16 +202,20 @@ function createFixture(locale: 'en' | 'zh-TW', features: Record<string, unknown>
     reads.push(`${method} ${input.path}`);
     const slot = slots.find(item => item.armed && item.method === method && item.path === path);
     let heldToken: string | null = null;
+    let failure: HeldFailure | null = null;
     if (slot) {
       slot.armed = false;
       slot.started = true;
       slot.token = String(++serial);
       heldToken = slot.token;
-      await slot.promise;
+      failure = await slot.promise;
     }
+    if (failure === 'network') return {abort: true};
     const finish = (result: any) => heldToken && result && typeof result === 'object'
       ? {...result, headers: {...(result.headers || {}), 'x-batc-held-read': heldToken}}
       : result;
+
+    if (failure === 'unavailable') return finish({status: 503, data: {error: {code: 'UNAVAILABLE', message: 'Read failed'}}});
 
     if (method === 'POST' && path === '/repository-previews') {
       const target = {...(input.body || {})};
@@ -269,6 +294,31 @@ async function releaseDuringDestRefresh(page: Page, fixture: ReturnType<typeof c
   }).not.toBe('pending');
   expect(seen.value).toBe('polling');
   expect(await savedSync(page)).toEqual(checkpoint(1));
+  await expect(page.locator('[data-api-error]')).toHaveCount(0);
+}
+
+async function rejectDuringDestRefresh(page: Page, fixture: ReturnType<typeof createFixture>, source: Hold, kind: HeldFailure) {
+  const token = source.token();
+  expect(token).toBeTruthy();
+  const dest = fixture.hold(`/pm/workspaces/${destId}`);
+  fixture.emit(destId);
+  await expect.poll(() => dest.started()).toBe(true);
+  await expect(page.locator('#live')).toHaveAttribute('title', waitingTitle);
+  expect(await savedSync(page)).toEqual(checkpoint(0));
+  source.fail(kind);
+  if (kind === 'network') await syncHeldRejection(page, source.path);
+  else await syncHeldBody(page, token!);
+  dest.release();
+  const seen = {value: 'pending'};
+  await expect.poll(async () => {
+    const title = await page.locator('#live').getAttribute('title') || '';
+    if (pausedTitle.test(title)) seen.value = 'paused';
+    else if (pollingTitle.test(title)) seen.value = 'polling';
+    return seen.value;
+  }).not.toBe('pending');
+  expect(seen.value).toBe('polling');
+  expect(await savedSync(page)).toEqual(checkpoint(1));
+  await expect(page.locator('[data-pm-refresh]')).toBeEnabled();
   await expect(page.locator('[data-api-error]')).toHaveCount(0);
 }
 
@@ -379,6 +429,14 @@ const families: {name: string, features: Record<string, unknown>, hash: string, 
     start: async page => {await page.locator('[data-pm-roadmap-history] details > summary').click();}},
 ];
 
+// One primary refresh and one sibling detail stand in for the same catch shape.
+const failedReads: typeof families = [
+  families.find(family => family.name === 'evidence project')!,
+  families.find(family => family.name === 'evidence refresh')!,
+  families.find(family => family.name === 'brief')!,
+  families.find(family => family.name === 'brief history')!,
+];
+
 test.describe('a left PM view does not fail the next view refresh', () => {
   for (const locale of ['en', 'zh-TW'] as const) {
     for (const family of families) {
@@ -394,6 +452,22 @@ test.describe('a left PM view does not fail the next view refresh', () => {
         await leaveForDest(page, fixture);
         await releaseDuringDestRefresh(page, fixture, held);
       });
+    }
+
+    for (const kind of ['unavailable', 'network'] as const) {
+      for (const read of failedReads) {
+        test(`${read.name} late ${kind} does not fail the next view (${locale})`, async ({page}) => {
+          const fixture = createFixture(locale, read.features, read.review, read.extras);
+          await openSource(page, locale, fixture, read.hash);
+          await expect.poll(() => connectionPhase(page, fixture)).toBe('settled');
+          if (read.prepare) await read.prepare(page);
+          const held = fixture.hold(read.path, read.method);
+          if (read.start) await read.start(page);
+          await expect.poll(() => held.started()).toBe(true);
+          await leaveForDest(page, fixture);
+          await rejectDuringDestRefresh(page, fixture, held, kind);
+        });
+      }
     }
 
     test(`a real error in the current brief still stops the refresh (${locale})`, async ({page}) => {
@@ -428,6 +502,50 @@ test.describe('a left PM view does not fail the next view refresh', () => {
         const title = await page.locator('#live').getAttribute('title') || '';
         if (pausedTitle.test(title)) seen.value = 'paused';
         else if (waitingTitle.test(title)) seen.value = 'waiting';
+        else if (pollingTitle.test(title)) seen.value = 'polling';
+        return seen.value;
+      }).toBe('paused');
+      await expect(page.locator('[data-pm-evidence]')).toContainText(locale === 'zh-TW' ? '無法取得專案' : 'Projects unavailable');
+      expect(await savedSync(page)).toEqual(checkpoint(0));
+      expect(errors).toEqual([]);
+    });
+
+    test(`a lost network in the current brief still stops the refresh (${locale})`, async ({page}) => {
+      const fixture = createFixture(locale, {brief_snapshots: true});
+      const errors = await openSource(page, locale, fixture, `#/pm/${sourceId}/overview`);
+      await expect.poll(() => connectionPhase(page, fixture)).toBe('settled');
+      const held = fixture.hold(`/pm/workspaces/${sourceId}/snapshots/latest`);
+      fixture.emit(sourceId);
+      await expect.poll(() => held.started()).toBe(true);
+      held.fail('network');
+      await syncHeldRejection(page, held.path);
+      const seen = {value: 'pending'};
+      await expect.poll(async () => {
+        const title = await page.locator('#live').getAttribute('title') || '';
+        if (pausedTitle.test(title)) seen.value = 'paused';
+        else if (pollingTitle.test(title)) seen.value = 'polling';
+        return seen.value;
+      }).toBe('paused');
+      await expect(page.locator('[data-api-error]')).not.toHaveCount(0);
+      expect(await savedSync(page)).toEqual(checkpoint(0));
+      expect(errors).toEqual([]);
+    });
+
+    test(`a lost network in the current evidence refresh still stops the refresh (${locale})`, async ({page}) => {
+      const fixture = createFixture(locale, {work_evidence: true});
+      const errors = await openSource(page, locale, fixture, `#/pm/${sourceId}/requirements`);
+      await expect.poll(() => connectionPhase(page, fixture)).toBe('settled');
+      await openEvidence(page);
+      await expect(page.locator('[data-pm-evidence]')).toContainText(/No projects yet|尚無專案/);
+      const held = fixture.hold(`/pm/workspaces/${sourceId}/work`);
+      fixture.emit(sourceId);
+      await expect.poll(() => held.started()).toBe(true);
+      held.fail('network');
+      await syncHeldRejection(page, held.path);
+      const seen = {value: 'pending'};
+      await expect.poll(async () => {
+        const title = await page.locator('#live').getAttribute('title') || '';
+        if (pausedTitle.test(title)) seen.value = 'paused';
         else if (pollingTitle.test(title)) seen.value = 'polling';
         return seen.value;
       }).toBe('paused');

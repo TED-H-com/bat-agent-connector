@@ -1,5 +1,5 @@
 import {emptyState} from './ui/components.js';
-import {retiredView} from './pm-retired.js';
+import {retiredView, viewLeft} from './pm-retired.js';
 import {timeStamp} from './ui/stamps.js';
 // One scheduling baseline, explicit forecasts and fixed source observations.
 export function workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox}) {
@@ -145,7 +145,7 @@ export function workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input
             if(value.workspace_id!==workspaceId||value.revision.revision_id!==entry.revision_id)throw Error(t('pm_scope_mismatch'));
             const doc=value.revision.document;content.replaceChildren(h('p',{},doc.rationale||t(doc.milestones?.some(row=>row.actual?.quality)?'pm_roadmap_quality_fixed':'pm_roadmap_quality_unknown')),
               h('pre',{class:'pm-brief-proof'},JSON.stringify(value.revision,null,2)));
-          }catch(error){if(retiredView(error))return;content.replaceChildren(errorBox(error, {within:content}));fetched=false;}
+          }catch(error){if(retiredView(error)||viewLeft(alive))return;content.replaceChildren(errorBox(error, {within:content}));fetched=false;}
         });historyBody.append(detail);
       }
       if(page.next_cursor!==null&&page.next_cursor!==undefined){
@@ -239,7 +239,7 @@ export function workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input
         options(snapshot,(snapshots.snapshots||[]).map(row=>[row.snapshot_id,row.title]));initializeEditor();}
       baselineForm.update();forecast.update();observe.update();
       if(historyVersion!==data.head.version){historyLoaded=false;if(history.open)void loadHistory();}
-    }catch(error){if(retiredView(error))return;if(ticket===serial){current=null;signature='';view.replaceChildren();historyBody.replaceChildren();historyLoaded=false;status.replaceChildren(errorBox(error, {within:status}));baselineForm.update();forecast.update();observe.update();}}
+    }catch(error){if(retiredView(error)||viewLeft(alive))return;if(ticket===serial){current=null;signature='';view.replaceChildren();historyBody.replaceChildren();historyLoaded=false;status.replaceChildren(errorBox(error, {within:status}));baselineForm.update();forecast.update();observe.update();}}
   }
   return{box,refresh};
 }

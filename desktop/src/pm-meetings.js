@@ -1,5 +1,5 @@
 import {iconButton, button, sectionCard, statusPill, disclosure, contextChip} from './ui/components.js';
-import {retiredView} from './pm-retired.js';
+import {retiredView, viewLeft} from './pm-retired.js';
 import {timeStamp, timeText} from './ui/stamps.js';
 import {panelActorLabel} from './pm-governance-strings.js';
 // Meeting records share the existing durable command forms. A draft is not a completed discussion.
@@ -418,7 +418,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
       if(force||!signature||changed&&!dirty&&!forms.some(editor=>editor.locked()))renderEditors();else if(changed)stale=true;
       signature=next;update();
       if(focused?.isConnected&&!focused.disabled&&document.activeElement===document.body){focused.focus({preventScroll:true});if(selection)focused.setSelectionRange(...selection);}
-    }catch(error){if(retiredView(error))return;if(ticket===serial)unavailable(error);}
+    }catch(error){if(retiredView(error)||viewLeft(alive))return;if(ticket===serial)unavailable(error);}
   }
   function reveal(action, followUpId) {
     const editor = forms.find(row => row.box.dataset.pmAction === action);

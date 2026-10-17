@@ -1,5 +1,5 @@
 import {disclosure} from './ui/components.js';
-import {retiredView} from './pm-retired.js';
+import {retiredView, viewLeft} from './pm-retired.js';
 // The central service checks the explicitly selected runtime against a fixed intake.
 import {structuredAnalysis} from './pm-structured-analysis.js';
 export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespace,form,input,labelled,permitted,errorBox,onSaved,onAccessFailure=()=>{}}) {
@@ -78,7 +78,7 @@ export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespac
         permitted:eligible,recoverPermitted:authorized,label:'pm_fa_analyze',onStateChange:sync,onSaved,
         extra:h('div',{class:'pm-fields'},labelled('pm_fa_purpose',purpose),runtime.box,h('details',{},h('summary',{},t('pm_fa_model_optional')),labelled('pm_native_model',model)),version)});
       body.append(warning,rebase,request.box);request.update();
-    }catch(error){if(retiredView(error))return;if(ticket===serial)fail(error);}
+    }catch(error){if(retiredView(error)||viewLeft(alive))return;if(ticket===serial)fail(error);}
   }
   async function readThreads(after=null){
     const ticket=serial;
@@ -87,7 +87,7 @@ export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespac
       if(!Array.isArray(data.threads)||data.next_cursor!=null&&(!/^pmt_[0-9a-f]{32}$/.test(data.next_cursor)||data.next_cursor===after)
         ||data.threads.some(row=>row.workspace_id!==workspaceId||!/^pmt_[0-9a-f]{32}$/.test(row.thread_id)))throw Error(t('pm_fa_mismatch'));
       rows.push(...data.threads.filter(row=>['idea','planning'].includes(row.mode)&&!rows.some(old=>old.thread_id===row.thread_id)));next=data.next_cursor;await readThread();
-    }catch(error){if(retiredView(error))return;if(ticket===serial)fail(error);}
+    }catch(error){if(retiredView(error)||viewLeft(alive))return;if(ticket===serial)fail(error);}
   }
   async function prepare(){
     if(!intake||retired)return;const ticket=++serial;status.replaceChildren(note('pm_fa_loading_thread'));
@@ -96,7 +96,7 @@ export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespac
       capability=data;rows=[];next=null;
       if(intake.document.thread_ref){choices.set(intake.intake_id,intake.document.thread_ref.thread_id);await readThread();}
       else {const saved=savedTarget();targetLocked=saved.locked;saveTarget(saved.id);await readThreads();}
-    }catch(error){if(retiredView(error))return;if(ticket===serial)fail(error);}
+    }catch(error){if(retiredView(error)||viewLeft(alive))return;if(ticket===serial)fail(error);}
   }
   chooser.addEventListener('change',()=>{
     if(!intake||targetLocked||request?.locked()){if(intake)navigation();return;}
