@@ -19,7 +19,7 @@ from urllib.parse import unquote
 import pytest
 
 from bat_agent_connector import pr_publication
-from tests.test_checkpoints import MANUAL, LocalRunner, git, snapshot
+from tests.test_checkpoints import MANUAL, LocalRunner, bat_writes, git, snapshot
 from tests.test_integration import commit
 from tests.test_pm_work_attempt_result import (
     _enable_integrate,
@@ -181,6 +181,7 @@ async def test_start_queue_close_reconnect_result_and_pr(start_ready, mock, tmp_
             starts = [f for f in mock.invokes if f["channel"] == "claude:start-session"]
             sends = [f for f in mock.invokes if f["channel"] == "claude:send-message"]
             assert len(starts) == 1 and len(sends) == 2
+            assert bat_writes(mock) == starts + sends, "Unexpected resume, interrupt or other BAT write"
             assert all(f["params"]["sessionId"] == sid for f in starts + sends)
             assert sends[-1]["params"]["clientMessageId"] == second_marker
             assert len([r for r in w["gh"].requests if r[:2] == ("POST", "/repos/o/r/pulls")]) == 1
