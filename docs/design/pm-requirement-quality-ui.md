@@ -61,7 +61,7 @@ After explicit verification, focus moves to the refreshed verification conclusio
 so it stays visible. A newer user focus, changed source or retired view prevents
 that move.
 
-## Discussing one saved assessment
+## Discussing saved assessments
 
 A Result review may open an ordinary PM discussion with a `quality_assessment`
 context reference: the original assessment operation ID, review ID and document
@@ -85,6 +85,21 @@ first-note flow saves a discussion and note under their original keys; it does n
 run a model. A Work-session origin survives reload and returns to the same
 Attempt, unsent next-step draft and saved review. The new source chip identifies
 the original assessment in English and Traditional Chinese.
+
+Beside a saved Result assessment, a collapsed selection panel can add a second
+original assessment from the same workspace. It reads that Work's quality history
+only after selection, offers explicit bounded pagination, and labels each choice
+with its fixed commit, review sequence and assessment version. The Work title has
+its own selector so it does not obscure the version on a phone. Older assessments
+and two assessments of the same Work retain separate immutable identities; repeated
+Work references are deduplicated by the shared discussion-link builder.
+
+Opening the link creates only a new discussion draft with both exact assessment
+references and their Works. Existing thread origins stay fixed. Refresh hides the
+link until the original choices are readable again, including when a later page
+must be explicitly loaded; it never substitutes the latest assessment. Source
+withdrawal, mismatched workspace/Work/package/history and late reads retire the
+link. Selection neither sends to PM nor adopts a conclusion or current acceptance.
 
 Opening the discussion's Context panel reads the existing bounded thread-context
 endpoint and displays the exact original assessment beside the conversation.

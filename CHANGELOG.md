@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- A fixed Result review can open a new PM discussion draft with two explicitly
+  selected original assessments. The source picker preserves each commit and
+  assessment version, rechecks refreshed sources and leaves PM sending and
+  requirement acceptance to their existing explicit actions.
+
 - Desktop Workbench now keeps the selected Work and Attempt when opening live
   output, reading its fixed Result or sending the next instruction. It uses the
   existing typed central bridge and the same capability, source and controller

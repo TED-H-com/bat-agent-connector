@@ -43,7 +43,7 @@ export function qualityFixture(){
       let key='',rows:any[]=[],cursor='next_cursor';
       if(pathname.endsWith('/work-packages')){key='packages';rows=state.packages;}
       else if(pathname.endsWith('/sprint-artifacts/dod')){key='revisions';rows=state.dods;}
-      else if(pathname.endsWith('/quality')){key='reviews';rows=state.reviews;}
+      else if(pathname.endsWith('/quality')){key='reviews';rows=state.reviews.filter((row:any)=>row.work_item_id===pathname.split('/').at(-2));}
       else if(pathname.endsWith('/evidence')){key='evidence';rows=state.evidence;}
       else if(pathname.endsWith('/deliveries')){key='deliveries';rows=state.deliveries;cursor='next_after';}
       else if(pathname.endsWith('/github-observations')){key='observations';rows=state.observations;}

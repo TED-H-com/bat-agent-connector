@@ -2319,6 +2319,18 @@ var pmQualityReviewsStrings = {
 		pmq_result_open: "Review this result",
 		pmq_discuss: "Discuss this assessment with PM",
 		pmq_discuss_title: "Review this result with PM",
+		pmq_compare_heading: "Discuss alongside another assessment",
+		pmq_compare_help: "Choose another saved assessment to bring both original results into a new discussion.",
+		pmq_compare_work: "Other work",
+		pmq_compare_assessment: "Original assessment",
+		pmq_compare_open: "Discuss both assessments with PM",
+		pmq_compare_title: "Review both results with PM",
+		pmq_compare_version: "Review {review} · assessment {version}",
+		pmq_compare_more: "Load more assessments",
+		pmq_compare_originals: "These are saved conclusions. They do not establish current project acceptance.",
+		pmq_compare_empty: "No other saved assessment is available for this work.",
+		pmq_compare_partial: "More saved assessments may be available on the next page.",
+		pmq_compare_unavailable: "The original sources could not be checked. Refresh quality sources to choose again.",
 		pmq_result_help: "These conclusions belong to this fixed result. Project acceptance still follows its original evidence policy.",
 		pmq_verify_heading: "Verify an original implementation",
 		pmq_verify_help: "Run the trusted project verifier for the selected original implementation. The candidate and command are its saved settings.",
@@ -2421,6 +2433,18 @@ var pmQualityReviewsStrings = {
 		pmq_result_open: "審閱這份成果",
 		pmq_discuss: "與 PM 討論這次評估",
 		pmq_discuss_title: "與 PM 討論成果",
+		pmq_compare_heading: "一併討論另一份評估",
+		pmq_compare_help: "選擇另一份已保存評估，將兩份原始成果帶入新討論。",
+		pmq_compare_work: "另一件工作",
+		pmq_compare_assessment: "原始評估",
+		pmq_compare_open: "與 PM 討論兩份評估",
+		pmq_compare_title: "與 PM 討論兩份成果",
+		pmq_compare_version: "審查 {review} · 評估 {version}",
+		pmq_compare_more: "載入更多評估",
+		pmq_compare_originals: "這些是已保存的結論，不代表目前專案已通過驗收。",
+		pmq_compare_empty: "這件工作沒有其他可用的已保存評估。",
+		pmq_compare_partial: "下一頁可能還有其他已保存評估。",
+		pmq_compare_unavailable: "目前無法核對原始來源，請重新整理審查來源後再選擇。",
 		pmq_result_help: "這些結論屬於這份固定成果；專案驗收仍依原本的證據政策判定。",
 		pmq_verify_heading: "驗證原始實作",
 		pmq_verify_help: "為選定的原始實作執行專案的受信任驗證器。候選結果與命令來自已保存的設定。",
@@ -16416,6 +16440,210 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 	};
 }
 //#endregion
+//#region src/pm-discussion-result-sources.js
+function discussionResultSources({ h, t, api, alive, workspaceId, labelled, available }) {
+	const work = h("select", { "aria-label": t("pmq_compare_work") }), assessment = h("select", { "aria-label": t("pmq_compare_assessment") });
+	const status = h("p", {
+		class: "muted",
+		role: "status"
+	}), link = h("a", {}, t("pmq_compare_open"));
+	const more = h("button", {
+		type: "button",
+		class: "secondary",
+		hidden: true,
+		onclick: () => void load(true)
+	}, t("pmq_compare_more"));
+	const element = h("details", { "data-quality-compare": "" }, h("summary", {}, t("pmq_compare_heading")), h("p", { class: "muted" }, t("pmq_compare_help")), h("div", { class: "capture-fields" }, labelled("pmq_compare_work", work), labelled("pmq_compare_assessment", assessment)), status, more, h("p", {}, link));
+	let serial = 0, primary = null, catalog = [], choices = new Map(), seen = new Set(), cursor = null, pages = 0, filtered = false, busy = false;
+	let sourceKey = "", workId = "", assessmentId = "";
+	const op = /^op_[0-9a-f]{32}$/, digest = /^[0-9a-f]{64}$/, sha = /^[0-9a-f]{40}$/;
+	const ref = (row, item) => ({
+		kind: "quality_assessment",
+		id: item.operation_id,
+		review_id: row.review_id,
+		document_digest: item.document_digest
+	});
+	const key = (value) => JSON.stringify(value);
+	const valid = (ticket) => {
+		try {
+			alive();
+			return ticket === serial && primary && available();
+		} catch {
+			return false;
+		}
+	};
+	const choose = (field) => field.replaceChildren(h("option", { value: "" }, t("pmq_choose")));
+	function update() {
+		const selected = choices.get(assessmentId);
+		work.disabled = !primary || busy;
+		assessment.disabled = !primary || busy || !choices.size;
+		more.disabled = busy;
+		link.hidden = busy || !primary || !selected || !available();
+		link.removeAttribute("href");
+		if (!link.hidden) link.href = discussHref({
+			workspaceId,
+			title: t("pmq_compare_title"),
+			from: sessionOrigin(location.hash) || "board",
+			refs: [
+				primary.ref,
+				{
+					kind: "work_item",
+					id: primary.work
+				},
+				selected.ref,
+				{
+					kind: "work_item",
+					id: workId
+				}
+			]
+		});
+	}
+	function invalidate() {
+		serial++;
+		primary = null;
+		catalog = [];
+		choices.clear();
+		seen.clear();
+		cursor = null;
+		pages = 0;
+		filtered = busy = false;
+		choose(work);
+		choose(assessment);
+		status.textContent = "";
+		more.hidden = true;
+		update();
+	}
+	function withdraw() {
+		invalidate();
+		sourceKey = workId = assessmentId = "";
+		element.open = false;
+	}
+	function refresh() {
+		serial++;
+		busy = false;
+		choices.clear();
+		seen.clear();
+		cursor = null;
+		pages = 0;
+		filtered = false;
+		choose(assessment);
+		status.textContent = "";
+		more.hidden = true;
+		update();
+		if (element.open && primary && workId) load();
+	}
+	function setSources(row, packages) {
+		invalidate();
+		if (!row?.assessment || !available()) return;
+		const first = ref(row, row.assessment), signature = key(first);
+		if (sourceKey !== signature) {
+			workId = assessmentId = "";
+			sourceKey = signature;
+		}
+		primary = {
+			ref: first,
+			work: row.work_item_id
+		};
+		catalog = packages;
+		const works = new Map(packages.map((pkg) => [pkg.work_item_id, pkg.document.title]));
+		for (const [id, title] of works) work.append(h("option", { value: id }, title));
+		if (!works.has(workId)) workId = assessmentId = "";
+		work.value = workId;
+		update();
+		if (element.open && workId) load();
+	}
+	async function load(append = false) {
+		if (!primary || !workId || busy || !available()) return;
+		const ticket = ++serial, id = workId, after = append ? cursor : 0, selected = assessmentId;
+		if (!append) {
+			choices.clear();
+			seen.clear();
+			cursor = null;
+			pages = 0;
+			filtered = false;
+			choose(assessment);
+		}
+		busy = true;
+		status.textContent = t("pmq_loading");
+		more.hidden = true;
+		update();
+		try {
+			const value = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${id}/quality?after=${after}&limit=20`);
+			if (!valid(ticket)) return;
+			if (value.workspace_id !== workspaceId || !Array.isArray(value.reviews) || value.next_cursor !== null && (!Number.isSafeInteger(value.next_cursor) || value.next_cursor <= after)) throw Error();
+			for (const row of value.reviews) {
+				const pkg = catalog.find((item) => item.package_id === row.context?.package_ref?.package_id && item.work_item_id === id);
+				if (row.workspace_id !== workspaceId || row.work_item_id !== id || !/^pmqr_[0-9a-f]{32}$/.test(row.review_id) || seen.has(row.review_id) || row.context?.work_ref?.work_item_id !== id || !pkg || row.context.package_ref.workspace_id !== workspaceId || row.context.package_ref.document_digest !== pkg.document_digest || !Number.isSafeInteger(row.sequence) || row.sequence < 1 || !sha.test(row.context?.native_result?.candidate_commit) || !Array.isArray(row.history)) throw Error();
+				seen.add(row.review_id);
+				for (const item of row.history) {
+					if (item.kind !== "assessment") continue;
+					if (!op.test(item.operation_id) || !digest.test(item.document_digest) || !Number.isSafeInteger(item.version) || item.version < 1) throw Error();
+					const original = ref(row, item), identity = key(original);
+					if (identity === key(primary.ref)) continue;
+					if (choices.has(identity)) throw Error();
+					const label = `${row.context.native_result.candidate_commit.slice(0, 12)} · ${t("pmq_compare_version", {
+						review: row.sequence,
+						version: item.version
+					})}`;
+					choices.set(identity, {
+						ref: original,
+						label
+					});
+				}
+			}
+			cursor = value.next_cursor;
+			pages++;
+			filtered ||= !!value.visibility_filtered;
+			choose(assessment);
+			for (const [id, item] of choices) assessment.append(h("option", { value: id }, item.label));
+			assessmentId = choices.has(selected) || cursor !== null ? selected : "";
+			assessment.value = choices.has(assessmentId) ? assessmentId : "";
+			status.textContent = cursor !== null && pages >= 20 ? t("pmq_history_bound") : filtered ? t("pmq_filtered") : cursor !== null ? t("pmq_compare_partial") : choices.size ? t("pmq_compare_originals") : t("pmq_compare_empty");
+			more.hidden = cursor === null || pages >= 20;
+		} catch {
+			if (!valid(ticket)) return;
+			invalidate();
+			assessmentId = "";
+			status.textContent = t("pmq_compare_unavailable");
+		} finally {
+			if (valid(ticket)) {
+				busy = false;
+				update();
+			}
+		}
+	}
+	work.addEventListener("change", () => {
+		serial++;
+		busy = false;
+		workId = work.value;
+		assessmentId = "";
+		choices.clear();
+		choose(assessment);
+		status.textContent = "";
+		more.hidden = true;
+		update();
+		if (workId) load();
+	});
+	assessment.addEventListener("change", () => {
+		assessmentId = assessment.value;
+		update();
+	});
+	element.addEventListener("toggle", () => {
+		if (element.open && primary && workId && pages === 0) load();
+	});
+	link.addEventListener("click", (event) => {
+		if (!primary || busy || !choices.has(assessmentId) || !available()) event.preventDefault();
+	});
+	invalidate();
+	return {
+		element,
+		setSources,
+		invalidate,
+		withdraw,
+		refresh
+	};
+}
+//#endregion
 //#region src/pm-quality-reviews.js
 var CREATE = "pm.quality.review.create";
 var RECORD$2 = "pm.quality.review.record";
@@ -16493,10 +16721,20 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			"candidate"
 		]) create.fields[key].disabled = true;
 	}
+	const comparison = discussionResultSources({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		labelled,
+		available: () => ready && !!fixedResult && caps()?.features?.pm_workspaces?.quality_reviews?.discussion_contexts?.includes("quality_assessment")
+	});
 	function clear() {
 		ready = false;
 		model = null;
 		verifier?.withdraw();
+		comparison.invalidate();
 		facts.replaceChildren();
 		history.replaceChildren();
 		draft.hidden = assessment.hidden = withdrawal.hidden = true;
@@ -16518,6 +16756,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 	function withdraw() {
 		serial++;
 		clear();
+		comparison.withdraw();
 		purge();
 		workChoice.replaceChildren();
 		status.replaceChildren();
@@ -16803,6 +17042,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		draft.hidden = false;
 	}
 	function renderReview() {
+		comparison.invalidate();
 		const row = current();
 		facts.replaceChildren();
 		if (!row) {
@@ -16853,6 +17093,10 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				}]
 			}) }, t("pmq_discuss"))) : null
 		].filter(Boolean));
+		if (fixedResult && row.assessment && caps()?.features?.pm_workspaces?.quality_reviews?.discussion_contexts?.includes("quality_assessment")) {
+			comparison.setSources(row, model.catalog);
+			facts.append(comparison.element);
+		}
 		buildAssessment(row);
 	}
 	function reference(row) {
@@ -17122,6 +17366,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			}
 			if (packages.some((row) => row.workspace_id !== workspaceId || row.work_item_id !== id) || dods.some((row) => row.workspace_id !== workspaceId)) throw error();
 			model = {
+				catalog,
 				packages,
 				operations,
 				dods,
@@ -17201,6 +17446,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		setWork,
 		refresh,
 		withdraw,
+		refreshDiscussionSources: comparison.refresh,
 		selection: () => ready && chosen ? clone$1(chosen) : null
 	};
 }
@@ -17325,12 +17571,18 @@ function createWorkQuality({ h, t, api, alive, workspaceId, caps, form, errorBox
 		const sourcesChanged = signature !== sourceSignature;
 		sourceSignature = signature;
 		envelope = value;
-		if (editor && sourcesChanged && !saving) editor.refresh();
+		if (editor && !saving) {
+			if (sourcesChanged) editor.refresh();
+			else editor.refreshDiscussionSources();
+		}
 		return element;
 	}
 	return {
 		render,
-		dispose
+		dispose,
+		recheck: () => {
+			if (editor && !saving) editor.refreshDiscussionSources();
+		}
 	};
 }
 //#endregion
@@ -17506,7 +17758,10 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 				lastNormalized = normalized;
 				lastStale = false;
 				renderEnvelope(data, currentAttempt);
-			} else publish.recheck();
+			} else {
+				publish.recheck();
+				quality.recheck();
+			}
 		} catch (err) {
 			try {
 				alive?.();

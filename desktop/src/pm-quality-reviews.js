@@ -2,6 +2,7 @@ import {iconButton, skeleton} from './ui/components.js';
 import {workspaceExecutionVerification} from './pm-execution-verification.js';
 import {discussHref} from './pm-discuss-link.js';
 import {sessionOrigin} from './session-navigation.js';
+import {discussionResultSources} from './pm-discussion-result-sources.js';
 // Fixed quality conclusions remain central; this view selects original receipts.
 const CREATE='pm.quality.review.create',RECORD='pm.quality.review.record',REVOKE='pm.quality.review.revoke';
 const sha=/^[0-9a-f]{40}$/,digest=/^[0-9a-f]{64}$/,operation=/^op_[0-9a-f]{32}$/,reviewId=/^pmqr_[0-9a-f]{32}$/;
@@ -34,9 +35,10 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
     if(previous&&!rows.some(([id])=>id===previous))field.append(h('option',{value:previous},t('pmq_original_missing')));field.value=previous;}
   function update(){for(const editor of [create,record,revoke])editor?.update();history.disabled=!ready;
     if(fixedResult&&create)for(const key of ['package','execution','candidate'])create.fields[key].disabled=true;}
-  function clear(){ready=false;model=null;verifier?.withdraw();facts.replaceChildren();history.replaceChildren();draft.hidden=assessment.hidden=withdrawal.hidden=true;emit(null);update();}
+  const comparison=discussionResultSources({h,t,api,alive,workspaceId,labelled,available:()=>ready&&!!fixedResult&&caps()?.features?.pm_workspaces?.quality_reviews?.discussion_contexts?.includes('quality_assessment')});
+  function clear(){ready=false;model=null;verifier?.withdraw();comparison.invalidate();facts.replaceChildren();history.replaceChildren();draft.hidden=assessment.hidden=withdrawal.hidden=true;emit(null);update();}
   function purge(){for(const editor of [create,record,revoke])editor?.dispose();create=record=revoke=null;formKey=matrixKey='';draft.replaceChildren();assessment.replaceChildren();withdrawal.replaceChildren();}
-  function withdraw(){serial++;clear();purge();workChoice.replaceChildren();status.replaceChildren();}
+  function withdraw(){serial++;clear();comparison.withdraw();purge();workChoice.replaceChildren();status.replaceChildren();}
   function failure(err){serial++;clear();purge();workChoice.replaceChildren();status.replaceChildren(errorBox(err,{summary:t('pmq_unavailable'), within:status}));}
   const request=async(...args)=>{const ticket=serial;try{return await api(...args);}catch(err){if(valid(ticket)&&[401,403,404].includes(err.status))failure(err);throw err;}};
   async function pages(path,key,ticket,{cursor='next_cursor',wid=true,descending=false}={}){
@@ -124,6 +126,7 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
     }create.sync();draft.hidden=false;
   }
   function renderReview(){
+    comparison.invalidate();
     const row=current();facts.replaceChildren();if(!row){facts.append(text('pmq_empty'));assessment.hidden=withdrawal.hidden=true;return;}
     const document=row.assessment?.document;
     const use=h('button',{type:'button',class:'secondary',disabled:!selectable(row),onclick:()=>{if(!ready||!selectable(current()))return;emit(reference(current()));renderReview();}},t('pmq_use'));
@@ -144,6 +147,9 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
         ?h('p',{},h('a',{href:discussHref({workspaceId,title:t('pmq_discuss_title'),from:sessionOrigin(location.hash)||'board',
           refs:[{kind:'quality_assessment',id:row.assessment.operation_id,review_id:row.review_id,document_digest:row.assessment.document_digest},
             {kind:'work_item',id:fixedResult.work_item_id}]})},t('pmq_discuss'))):null].filter(Boolean));
+    if(fixedResult&&row.assessment&&caps()?.features?.pm_workspaces?.quality_reviews?.discussion_contexts?.includes('quality_assessment')){
+      comparison.setSources(row,model.catalog);facts.append(comparison.element);
+    }
     buildAssessment(row);
   }
   function reference(row){const a=row.assessment;return a?{review_id:row.review_id,operation_id:a.operation_id,version:a.version,document_digest:a.document_digest,candidate_commit:row.context.native_result.candidate_commit}:null;}
@@ -220,7 +226,7 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
           label:`${t('pmq_github')} · ${source.delivered_sha.slice(0,12)} · ${observation.observation_id}`,condition:github,
           reference:{integration_operation_id:delivery.operation_id,source_seq:source.seq,candidate_commit:source.delivered_sha,observation_id:observation.observation_id,document_digest:observation.document_digest}});}}
       if(packages.some(row=>row.workspace_id!==workspaceId||row.work_item_id!==id)||dods.some(row=>row.workspace_id!==workspaceId))throw error();
-      model={packages,operations,dods,reviews:reviews.map(checkReview),proofs};
+      model={catalog,packages,operations,dods,reviews:reviews.map(checkReview),proofs};
       if(fixedResult){
         if(workId!==fixedResult.work_item_id||!children(packageFor(fixedResult.package_id)).some(op=>op.operation_id===fixedResult.execution_operation_id))throw error();
         model.packages=packages.filter(row=>row.package_id===fixedResult.package_id);
@@ -243,5 +249,5 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
   element.insertBefore(verifier.element,draft.parentElement);
   if(fixedResult){workChoice.closest('label').hidden=true;
     element.classList.remove('panel');element.querySelector('h2').textContent=t('pmq_result_open');}
-  return {element,setWork,refresh,withdraw,selection:()=>ready&&chosen?clone(chosen):null};
+  return {element,setWork,refresh,withdraw,refreshDiscussionSources:comparison.refresh,selection:()=>ready&&chosen?clone(chosen):null};
 }

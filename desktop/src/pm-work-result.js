@@ -198,6 +198,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
         renderEnvelope(data, currentAttempt);
       } else {
         publish.recheck();
+        quality.recheck();
       }
     } catch (err) {
       try { alive?.(); } catch { return; }

@@ -68,8 +68,11 @@ export function createWorkQuality({h, t, api, alive, workspaceId, caps, form, er
     const sourcesChanged = signature !== sourceSignature; sourceSignature = signature;
     envelope = value;
     // Existing readers may inspect the fixed review without acquiring write rights.
-    if (editor && sourcesChanged && !saving) void editor.refresh();
+    if (editor && !saving) {
+      if (sourcesChanged) void editor.refresh();
+      else editor.refreshDiscussionSources();
+    }
     return element;
   }
-  return {render, dispose};
+  return {render, dispose, recheck: () => {if (editor && !saving) editor.refreshDiscussionSources();}};
 }
