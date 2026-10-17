@@ -310,12 +310,13 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                     await send({"ready": False, "recovery": recovery})
                     await receive("unknown-shown")
                     lost_reply["hide_receipt"] = False
-                    # The original scheduled read-back recovers the handoff;
-                    # the UI then resumes only its paused original parents.
+                    # The original scheduled read-back recovers the handoff and
+                    # wakes Work start. Only the paused adoption parent needs UI resume.
                     await eventually(lambda: ops.get(recovery["handoff"])["status"] == "succeeded")
+                    await wait_status(recovery["start"], "succeeded")
                     assert mock.channels().count("claude:start-session") == 1
                     await send({"readback_restored": True})
-                    for kind in ("start", "parent"):
+                    for kind in ("parent",):
                         resumed = await receive("resumed-" + kind)
                         assert resumed["operation_id"] == recovery[kind]
                         await wait_status(recovery[kind], "succeeded")
@@ -429,7 +430,7 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 await send(peer)
             done = await receive("done")
             assert await asyncio.wait_for(child.wait(), 10) == 0, (shots / "browser.log").read_text()
-            assert done["resumed_operations"] == ([recovery[kind] for kind in ("start", "parent")] if recovery else [])
+            assert done["resumed_operations"] == ([recovery["parent"]] if recovery else [])
             assert done["discussion_return"] == {"from": "board", "workspace": w["workspace_id"],
                 "work": w["target"]["work_item_id"], "attempt": att["attempt_id"]}
             if create_work:

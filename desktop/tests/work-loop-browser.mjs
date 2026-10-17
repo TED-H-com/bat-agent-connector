@@ -123,15 +123,10 @@ try {
     await shot('00-unconfirmed-start');
     send({stage: 'unknown-shown'});
     assert.equal((await receive()).readback_restored, true);
-    for (const kind of ['start', 'parent']) {
+    for (const kind of ['parent']) {
       step = 'recover-' + kind;
       await page.goto(boardUrl);
-      if (kind === 'parent') {
-        await expect(landing.getByRole('button', {name: 'Resume', exact: true})).toBeVisible();
-      } else {
-        await landing.locator(`a[href="#/op/${recovery[kind]}"]`).click();
-        await expect(page).toHaveURL(new RegExp('#/op/' + recovery[kind] + '$'));
-      }
+      await expect(landing.getByRole('button', {name: 'Resume', exact: true})).toBeVisible();
       const [resumed] = await Promise.all([
         page.waitForResponse(response => response.request().method() === 'POST'
           && new URL(response.url()).pathname === `/api/v1/operations/${recovery[kind]}/resume`),
@@ -146,7 +141,7 @@ try {
   }
   assert.equal(active.ready, true);
   step = 'queue';
-  if (f.mode === 'adopt' && !f.lost_start_reply) {
+  if (f.mode === 'adopt') {
     // Adoption must lead to its own live Work without another navigation click.
     await expect(page).toHaveURL(new RegExp(`/session/.+[?&]work=${f.work}&attempt=${active.attempt}`));
   } else await page.locator('[data-work-start-item]').click();
