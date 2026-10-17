@@ -1840,7 +1840,7 @@ async def test_b03_observation_never_starts_resumes_rehydrates_or_locks_git(mock
     from tests.test_checkpoints import LocalRunner, git, snapshot
     repo = tmp_path / "repo"
     repo.mkdir()
-    git(repo, "init", "-q", "-b", "main")
+    git(repo, "init", "--template=", "-q", "-b", "main")
     git(repo, "config", "user.email", "dev@example.invalid")
     git(repo, "config", "user.name", "dev")
     (repo / "file.txt").write_text("one\n")

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shutil
+import subprocess
 from contextlib import contextmanager
 
 import pytest
@@ -17,7 +19,13 @@ def isolated_dirs(tmp_path, monkeypatch):
     monkeypatch.setenv("BATC_STATE_DIR", str(tmp_path / "state"))
     monkeypatch.setenv("BATC_TEST_TOKEN", TOKEN)
     monkeypatch.delenv("BATC_DEVICE_ID", raising=False)
-    yield tmp_path
+    # Autouse setup precedes other per-test fixtures, so this teardown runs
+    # after their servers, journals and worktrees have been closed. Retention
+    # alone only removes passing tmp_paths; failed tests must release large state too.
+    try:
+        yield tmp_path
+    finally:
+        shutil.rmtree(tmp_path, ignore_errors=True)
 
 
 @pytest.fixture
@@ -93,3 +101,32 @@ def adopt(session_id: str, *, host: str = "h1", cwd: str = "/srv/demo", authorit
     registry.reserve(host, {"session_id": session_id, "cwd": cwd, "origin_cwd": fields.pop("origin_cwd", cwd),
                             **fields}, 32)
     registry.update(host, session_id, status="active")
+
+
+@pytest.fixture(scope="session")
+def checkpoint_repo_seed(tmp_path_factory, request):
+    """Build the common two-commit history once; copies keep independent Git state."""
+    repo = tmp_path_factory.mktemp("checkpoint-seed")
+    request.addfinalizer(lambda: shutil.rmtree(repo, ignore_errors=True))
+
+    return build_checkpoint_repo(repo)
+
+
+def build_checkpoint_repo(repo):
+    """Also support standalone desktop fixtures that run outside pytest."""
+    repo.mkdir(parents=True, exist_ok=True)
+
+    def git(*args):
+        subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+
+    git("init", "--template=", "-q", "-b", "main")
+    git("config", "user.email", "dev@example.invalid")
+    git("config", "user.name", "dev")
+    git("remote", "add", "origin", "https://github.example/o/r.git")
+    for i in (1, 2):
+        (repo / "notes.txt").write_text(f"v{i}\n")
+        git("add", "notes.txt")
+        git("commit", "-q", "-m", f"step {i}")
+    # Consolidate six loose objects before copying this repository many times.
+    git("repack", "-ad")
+    return repo
