@@ -96,6 +96,21 @@
   A `session.send` loop stays partial with reason `session_target`. This build
   registers only `{host, session_id}` for that action and does not treat a
   Work id on the target as complete.
+- A work attempt's result now includes the repository, the base commit recorded
+  at the start, and the base branch, so a client can submit publish as given.
+  Publish is withheld while a publication is still unfinished, when that same
+  commit already has a pull request, when the workspace is stopped, or when
+  GitHub is not configured. A refused publish tells the Dashboard it may start
+  a new request. Publishing still needs the base branch unchanged since the
+  work started. This release does not add a way to read the live base.
+
+- A needs-attention result says it can be resumed only when this caller is
+  actually offered resume. An unknown child outcome keeps the stop reason and
+  does not claim the attempt is resumable. Cancel stays available to the
+  person who started it. Publish also stays withheld when the recorded head
+  commit is not one the publish action can accept. The commit recorded at the
+  start remains the base. The turn-end commit remains the head.
+
 - Starting a Work now ends failed when that start stops on something resuming cannot pass, such as a paused or reopened workspace, a changed adopted plan, or an edited Work, project, association, or package. After that cause is gone, starting the same Work again is accepted. A stop that can be repaired, such as a withdrawn credential or a lowered workspace role, still waits and can be resumed.
 
 - Fleet: keyboard focus stays on the control you are using while a status
