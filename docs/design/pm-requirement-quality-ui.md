@@ -24,6 +24,10 @@ JSON object member order does not identify a source: central serializes original
 package references with a different key order from browser-created objects.
 Compare complete values with normalized object keys while retaining array order;
 changed package digests, criterion identities or policy values still differ.
+After an explicit save succeeds, refresh the original Result's current actions
+before refreshing the editor. This lets the newly appointed reviewer record
+conclusions without reloading the page or using stale authority. A withdrawn
+Result still retires the editor; the original saved operation is not replayed.
 
 Recorded conclusions appear with the Result through the existing central
 projection. This entry does not expose the Requirements editor's local evidence

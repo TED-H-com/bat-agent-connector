@@ -14,8 +14,8 @@ export function workQualityContext(envelope, workspaceId, attempt) {
     execution_operation_id: id.execution_operation_id, candidate_commit: commit};
 }
 
-export function createWorkQuality({h, t, api, alive, workspaceId, caps, form, errorBox, namespace}) {
-  let context = null, envelope = null, editor = null, workspace = null, serial = 0, sourceSignature = null;
+export function createWorkQuality({h, t, api, alive, workspaceId, caps, form, errorBox, namespace, refreshResult}) {
+  let context = null, envelope = null, editor = null, workspace = null, serial = 0, sourceSignature = null, saving = 0;
   const body = h('div'), status = h('div', {role: 'status'});
   const open = button({variant: 'secondary', size: 'sm', label: t('pmq_result_open'), onClick: () => void load()});
   const element = h('section', {'data-work-quality': ''}, open, status, body);
@@ -45,7 +45,11 @@ export function createWorkQuality({h, t, api, alive, workspaceId, caps, form, er
         workspaceId, workspace: () => workspace, caps: getCaps, permitted: () => Boolean(envelope),
         form, input, labelled: (key, field) => h('label', {}, t(key), field), errorBox,
         namespace: `${namespace}.result.${envelope.attempt_id}.${selected.candidate_commit}`,
-        fixedResult: selected, allowedAction: offered});
+        fixedResult: selected, allowedAction: offered, onSaved: async () => {
+          saving++;
+          try {await refreshResult();} finally {saving--;}
+          if (!valid()) throw Error('VIEW_CHANGED');
+        }});
       body.replaceChildren(editor.element); status.replaceChildren(); open.hidden = true;
       const heading = editor.element.querySelector('h2'); heading.tabIndex = -1; heading.focus({preventScroll: true});
       editor.setWork(selected.work_item_id);
@@ -63,7 +67,7 @@ export function createWorkQuality({h, t, api, alive, workspaceId, caps, form, er
     const sourcesChanged = signature !== sourceSignature; sourceSignature = signature;
     envelope = value;
     // Existing readers may inspect the fixed review without acquiring write rights.
-    if (editor && sourcesChanged) void editor.refresh();
+    if (editor && sourcesChanged && !saving) void editor.refresh();
     return element;
   }
   return {render, dispose};

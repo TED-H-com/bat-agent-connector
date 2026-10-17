@@ -43,6 +43,7 @@ for (const [locale, width] of [['en',1440],['en',768],['zh-TW',390]] as const) t
   expect(f.state.writes[0].body.action).toBe(CREATE);
   expect(f.state.writes[0].body.params).toMatchObject({package_ref:f.package_ref,execution_operation_id:childId,candidate_commit:candidate});
   expect(f.state.writes[0].body.params.criteria).toHaveLength(2);
+  await expect(editor(page,RECORD).locator('button[type=submit]')).toBeEnabled();
 });
 
 test('appointed reviewer sees only this execution and commit; withdrawn actions disable writes',async({page})=>{

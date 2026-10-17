@@ -16361,7 +16361,7 @@ var github = {
 	kind: "fixed_revision_verification",
 	profile: "github_reported_checks_v1"
 };
-function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox, namespace, onSelectionChange = () => {}, fixedResult = null, allowedAction = () => true }) {
+function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox, namespace, onSelectionChange = () => {}, fixedResult = null, allowedAction = () => true, onSaved = () => {} }) {
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	let workId = null, serial = 0, ready = false, filtered = false, model = null, selected = "", chosen = null, create = null, record = null, revoke = null, formKey = "", matrixKey = "", verifier = null;
 	const navigation = `batc.pm.quality-navigation.${namespace}.${workspaceId}`;
@@ -16687,7 +16687,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 					selected = result.review_id;
 					remember();
 					matrixKey = "";
-					await refresh();
+					await refreshAfterSave();
 				},
 				onStateChange: () => {
 					if (create) {
@@ -16859,7 +16859,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				permitted: () => reviewer() && active() && JSON.parse(version.value) === current().version,
 				recoverPermitted: writer,
 				label: "pmq_record",
-				onSaved: () => refresh(),
+				onSaved: refreshAfterSave,
 				onStateChange: () => {
 					rebase.hidden = !reviewer() || JSON.parse(version.value) === current().version;
 					rebase.disabled = !!record?.locked();
@@ -16890,7 +16890,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				}),
 				recoverPermitted: writer,
 				label: "pmq_revoke",
-				onSaved: () => refresh(),
+				onSaved: refreshAfterSave,
 				extra: h("div", { class: "pm-fields" }, labelled("pmq_revoke_reason", reason), h("button", {
 					type: "button",
 					class: "secondary",
@@ -16920,6 +16920,10 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				review_id: selected
 			}));
 		} catch {}
+	}
+	async function refreshAfterSave() {
+		await onSaved();
+		await refresh();
 	}
 	history.addEventListener("change", () => {
 		selected = history.value;
@@ -17114,8 +17118,8 @@ function workQualityContext(envelope, workspaceId, attempt) {
 		candidate_commit: commit
 	};
 }
-function createWorkQuality({ h, t, api, alive, workspaceId, caps, form, errorBox, namespace }) {
-	let context = null, envelope = null, editor = null, workspace = null, serial = 0, sourceSignature = null;
+function createWorkQuality({ h, t, api, alive, workspaceId, caps, form, errorBox, namespace, refreshResult }) {
+	let context = null, envelope = null, editor = null, workspace = null, serial = 0, sourceSignature = null, saving = 0;
 	const body = h("div"), status = h("div", { role: "status" });
 	const open = button({
 		variant: "secondary",
@@ -17179,7 +17183,16 @@ function createWorkQuality({ h, t, api, alive, workspaceId, caps, form, errorBox
 				errorBox,
 				namespace: `${namespace}.result.${envelope.attempt_id}.${selected.candidate_commit}`,
 				fixedResult: selected,
-				allowedAction: offered
+				allowedAction: offered,
+				onSaved: async () => {
+					saving++;
+					try {
+						await refreshResult();
+					} finally {
+						saving--;
+					}
+					if (!valid()) throw Error("VIEW_CHANGED");
+				}
 			});
 			body.replaceChildren(editor.element);
 			status.replaceChildren();
@@ -17213,7 +17226,7 @@ function createWorkQuality({ h, t, api, alive, workspaceId, caps, form, errorBox
 		const sourcesChanged = signature !== sourceSignature;
 		sourceSignature = signature;
 		envelope = value;
-		if (editor && sourcesChanged) editor.refresh();
+		if (editor && sourcesChanged && !saving) editor.refresh();
 		return element;
 	}
 	return {
@@ -17311,7 +17324,8 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		caps,
 		form,
 		errorBox,
-		namespace
+		namespace,
+		refreshResult: readResult
 	});
 	function updateVisibility(visible) {
 		panelElement.hidden = !visible;

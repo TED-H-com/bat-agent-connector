@@ -240,6 +240,31 @@ try {
   await expect(review.getByLabel(zh ? '候選提交' : 'Candidate commit', {exact: true})).toBeDisabled();
   assert.equal(requests.length, expectedOperations - 1, 'Opening the fixed Result review must not create an operation');
   await shot('03-result-review');
+  if (f.review_result) {
+    step = 'appoint-review';
+    const quality = page.locator('[data-work-quality]');
+    await quality.locator('[data-quality-create]>summary').click();
+    await review.getByLabel(zh ? '負責審查者' : 'Responsible reviewer', {exact: true}).selectOption(f.reviewer_actor);
+    const policies = await review.getByLabel(zh ? '指定驗證' : 'Required verification', {exact: true}).all();
+    assert.ok(policies.length > 0);
+    for (const policy of policies) await policy.selectOption('github');
+    await review.getByLabel(zh ? '審查政策理由' : 'Reason for this review policy', {exact: true})
+      .fill('Review the fixed result against its original criteria and independent GitHub checks.');
+    const created = await clickOperation('pm.quality.review.create', review.locator('button[type=submit]'));
+    send({stage: 'review-created', operation_id: created.operation_id});
+    assert.equal((await receive()).review_created, true);
+    step = 'record-review';
+    const record = quality.locator('[data-pm-action="pm.quality.review.record"]');
+    await expect(record.locator('button[type=submit]')).toBeEnabled();
+    for (const rationale of await record.getByLabel(zh ? '條件判斷理由' : 'Criterion rationale', {exact: true}).all())
+      await rationale.fill('Independent verification has not been supplied for this fixed result.');
+    await record.getByLabel(zh ? '這次評估的理由' : 'Reason for this assessment', {exact: true})
+      .fill('Keep the original requirement unassessed until its evidence is available.');
+    const saved = await clickOperation('pm.quality.review.record', record.locator('button[type=submit]'));
+    send({stage: 'review-recorded', operation_id: saved.operation_id});
+    assert.equal((await receive()).review_recorded, true);
+    await shot('03-reviewed-unassessed');
+  }
   step = 'publish';
   await page.locator('[data-work-publish-title]').fill(zh ? '修正登入重複送出' : 'Fix duplicate login submission');
   await page.locator('[data-work-publish-body]').fill(zh ? '修正與重試案例已完成，等待審閱。' : 'Login repair and retry case ready for review.');
@@ -277,8 +302,8 @@ try {
     await expect(page.locator('[data-work-publish-pr]')).toContainText('21');
   }
   assert.deepEqual(errors, []);
-  assert.equal(requests.length, expectedOperations);
-  assert.equal(new Set(requests.map(r => r.key)).size, expectedOperations);
+  assert.equal(requests.length, expectedOperations + (f.review_result ? 2 : 0));
+  assert.equal(new Set(requests.map(r => r.key)).size, expectedOperations + (f.review_result ? 2 : 0));
   assert.ok(requests.every(r => r.key));
   const follow = requests.find(row => row.body.action === 'session.send');
   assert.deepEqual(follow.body.target, {workspace_id: f.workspace, work_item_id: f.work});

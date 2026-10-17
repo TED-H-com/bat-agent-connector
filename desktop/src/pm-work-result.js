@@ -85,7 +85,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
   const panelElement = h('div', {class: 'pm-work-result-panel', 'data-work-result': ''});
   panelElement.hidden = true;
   const publish = createWorkPublish({h, t, form, namespace, caps, errorBox});
-  const quality = createWorkQuality({h,t,api,alive,workspaceId,caps,form,errorBox,namespace});
+  const quality = createWorkQuality({h,t,api,alive,workspaceId,caps,form,errorBox,namespace,refreshResult:readResult});
 
   function updateVisibility(visible) {
     panelElement.hidden = !visible;

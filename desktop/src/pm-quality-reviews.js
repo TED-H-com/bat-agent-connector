@@ -8,7 +8,7 @@ const ordered=value=>Array.isArray(value)?value.map(ordered):value&&typeof value
   ?Object.fromEntries(Object.keys(value).sort().map(key=>[key,ordered(value[key])])):value;
 const same=(a,b)=>JSON.stringify(ordered(a))===JSON.stringify(ordered(b)),clone=value=>structuredClone(value);
 const github={kind:'fixed_revision_verification',profile:'github_reported_checks_v1'};
-export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox,namespace,onSelectionChange=()=>{},fixedResult=null,allowedAction=()=>true}){
+export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox,namespace,onSelectionChange=()=>{},fixedResult=null,allowedAction=()=>true,onSaved=()=>{}}){
   const base=`/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   let workId=null,serial=0,ready=false,filtered=false,model=null,selected='',chosen=null,create=null,record=null,revoke=null,formKey='',matrixKey='',verifier=null;
   const navigation=`batc.pm.quality-navigation.${namespace}.${workspaceId}`;
@@ -103,7 +103,7 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
         params:values=>{const original=packageFor(values.package);if(!permittedCreate())throw error();return {package_ref:{workspace_id:workspaceId,package_id:original.package_id,document_digest:original.document_digest},
           execution_operation_id:values.execution,candidate_commit:values.candidate,dod_revision_id:values.dod||null,reviewer_actor:values.reviewer,
           criteria:JSON.parse(values.criteria).map(({choice,...row})=>row),rationale:values.rationale};},preconditions:()=>({expected_previous_review_id:JSON.parse(baseline.value)}),
-        permitted:()=>canCreate()&&JSON.parse(baseline.value)===previous(),recoverPermitted:writer,label:'pmq_create',onSaved:async result=>{selected=result.review_id;remember();matrixKey='';await refresh();},
+        permitted:()=>canCreate()&&JSON.parse(baseline.value)===previous(),recoverPermitted:writer,label:'pmq_create',onSaved:async result=>{selected=result.review_id;remember();matrixKey='';await refreshAfterSave();},
         onStateChange:()=>{if(create){for(const node of matrix.querySelectorAll('select'))node.disabled=!canCreate()||create.locked();if(!create.locked())create.box.querySelector('button[type=submit]').disabled=!permittedCreate();
           if(fixedResult)for(const key of ['package','execution','candidate'])create.fields[key].disabled=true;}},
         extra:h('div',{class:'pm-fields'},text('pmq_owner_help'),h('div',{class:'capture-fields'},labelled('pmq_package',pkg),labelled('pmq_execution',child)),
@@ -159,11 +159,11 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
         params:values=>({conclusions:row.context.criteria.map((item,index)=>{const key=values['proof_'+index],proof=key?proofChoices(current(),item).find(value=>value.key===key):null;if(key&&!proof)throw Error(t('pmq_select_proof'));
           return {criterion:item.criterion,verdict:values['verdict_'+index],rationale:values['reason_'+index],reference:proof?.reference||null};}),rationale:values.rationale}),
         preconditions:()=>({expected_version:JSON.parse(version.value)}),permitted:()=>reviewer()&&active()&&JSON.parse(version.value)===current().version,recoverPermitted:writer,
-        label:'pmq_record',onSaved:()=>refresh(),onStateChange:()=>{rebase.hidden=!reviewer()||JSON.parse(version.value)===current().version;rebase.disabled=!!record?.locked();},extra:h('div',{class:'pm-fields'},text('pmq_reviewer_help'),matrix,labelled('pmq_assessment_reason',rationale),h('div',{class:'actions'},rebase))});
+        label:'pmq_record',onSaved:refreshAfterSave,onStateChange:()=>{rebase.hidden=!reviewer()||JSON.parse(version.value)===current().version;rebase.disabled=!!record?.locked();},extra:h('div',{class:'pm-fields'},text('pmq_reviewer_help'),matrix,labelled('pmq_assessment_reason',rationale),h('div',{class:'actions'},rebase))});
       const reason=input('pmq_revoke_reason',{multiline:true,max:4000}),revokeVersion=hidden(row.version);
       revoke=form({namespace:`${namespace}.quality.${workId}`,api:request,action:REVOKE,target:{workspace_id:workspaceId,review_id:row.review_id},fields:{reason,_version:revokeVersion},params:values=>({reason:values.reason}),
         preconditions:()=>({expected_version:JSON.parse(revokeVersion.value)}),permitted:()=>writer()&&(owner()||reviewer())&&active()&&JSON.parse(revokeVersion.value)===current().version&&allowedAction(REVOKE,{workspace_id:workspaceId,review_id:current()?.review_id}),recoverPermitted:writer,
-        label:'pmq_revoke',onSaved:()=>refresh(),extra:h('div',{class:'pm-fields'},labelled('pmq_revoke_reason',reason),h('button',{type:'button',class:'secondary',onclick:()=>{if(revoke&&!revoke.locked()&&current()){revoke.set('_version',JSON.stringify(current().version));revoke.update();}}},t('pmq_use_version')))});
+        label:'pmq_revoke',onSaved:refreshAfterSave,extra:h('div',{class:'pm-fields'},labelled('pmq_revoke_reason',reason),h('button',{type:'button',class:'secondary',onclick:()=>{if(revoke&&!revoke.locked()&&current()){revoke.set('_version',JSON.stringify(current().version));revoke.update();}}},t('pmq_use_version')))});
       assessment.replaceChildren(h('details',{'data-quality-assess':'',open:row.context.reviewer_actor===caps()?.actor&&(!row.assessment||record.locked())},h('summary',{},t('pmq_assess_heading')),record.box));
       withdrawal.replaceChildren(h('details',{},h('summary',{},t('pmq_revoke_heading')),revoke.box));
     }
@@ -171,6 +171,7 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
     assessment.hidden=false;withdrawal.hidden=!!fixedResult;update();
   }
   function remember(){try{localStorage.setItem(navigation,JSON.stringify({workId,review_id:selected}));}catch{}}
+  async function refreshAfterSave(){await onSaved();await refresh();}
   history.addEventListener('change',()=>{selected=history.value;emit(null);remember();renderReview();});
   async function refresh(){
     const id=workId,ticket=++serial,previous=chosen;clear();filtered=false;if(!supported())return;status.replaceChildren(skeleton(2));

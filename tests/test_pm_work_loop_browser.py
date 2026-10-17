@@ -85,6 +85,11 @@ async def test_start_queue_close_reconnect_result_and_pr(start_ready, mock, tmp_
 
 
 @pytest.mark.parametrize(("locale", "width"), [("en", 1440), ("zh-TW", 390)])
+async def test_fixed_result_review_records_insufficient_evidence_from_ui(start_ready, mock, tmp_path, locale, width):
+    await work_loop(start_ready, mock, tmp_path, locale, width, review_result=True)
+
+
+@pytest.mark.parametrize(("locale", "width"), [("en", 1440), ("zh-TW", 390)])
 async def test_queued_writer_withdrawal_keeps_history_without_dispatch(start_ready, mock, tmp_path, locale, width):
     await work_loop(start_ready, mock, tmp_path, locale, width, withdraw_writer=True)
 
@@ -143,7 +148,7 @@ async def discussion_loop(start_ready, mock, tmp_path, monkeypatch, locale, widt
 
 
 async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_token=None, monkeypatch=None,
-                    withdraw_writer=False, lost_reply=None):
+                    withdraw_writer=False, lost_reply=None, review_result=False):
     ops = w["d"].ops
     # The handoff test runner decodes a single protocol. This journey also runs
     # checkpoint and publication shell scripts, so execute every actual script.
@@ -162,7 +167,7 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
     assert status == 200, original_work
     project_id = original_work["work_item"]["project_id"]
     adoptions_before = ops.db.execute("SELECT count(*) FROM pm_plan_adoptions").fetchone()[0]
-    entry = "lost-start-reply" if lost_reply else "withdraw-writer" if withdraw_writer else mode
+    entry = "review-result" if review_result else "lost-start-reply" if lost_reply else "withdraw-writer" if withdraw_writer else mode
     shots = ROOT / "desktop/test-results/work-loop" / f"{entry}-{locale}-{width}"
     shutil.rmtree(shots, ignore_errors=True)
     shots.mkdir(parents=True, exist_ok=True)
@@ -278,7 +283,8 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 "work": w["target"]["work_item_id"], "locale": locale, "width": width, "shots": str(shots),
                 "mode": mode, "thread": thread_target(w)["thread_id"], "peer_agent": bool(peer_token),
                 "create_work": create_work, "project": project_id, "withdraw_writer": withdraw_writer,
-                "lost_start_reply": lost_reply is not None})
+                "lost_start_reply": lost_reply is not None, "review_result": review_result,
+                "reviewer_actor": STARTER_OWNER.actor})
             if create_work:
                 created = await receive("created")
                 await wait_status(created["operation_id"], "succeeded")
@@ -413,6 +419,32 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             final = await _result(w, att)
             assert final["changes"]["fixed_result_commit"]["commit_sha"] == candidate, final
             await send({"candidate": candidate, "attempt": att["attempt_id"]})
+            quality = None
+            if review_result:
+                created_review = await receive("review-created")
+                await wait_status(created_review["operation_id"], "succeeded")
+                review_op = ops.get(created_review["operation_id"])
+                assert review_op["action"] == "pm.quality.review.create"
+                assert review_op["params"]["candidate_commit"] == candidate
+                assert review_op["params"]["execution_operation_id"] == result["children"]["handoff"]
+                assert review_op["target"] == w["target"]
+                quality = {"review_id": review_op["result"]["review_id"], "candidate_commit": candidate}
+                await send({"review_created": True})
+                recorded = await receive("review-recorded")
+                await wait_status(recorded["operation_id"], "succeeded")
+                recorded_op = ops.get(recorded["operation_id"])
+                assert recorded_op["action"] == "pm.quality.review.record"
+                assert recorded_op["target"]["review_id"] == quality["review_id"]
+                status, data = await http(w["port"], "GET",
+                    f"/api/v1/pm/workspaces/{w['workspace_id']}/quality-reviews/{quality['review_id']}", tok=w["owner_token"])
+                assert status == 200, data
+                review = data["review"]
+                assert review["qualified"] is False and review["acceptance"] == "unassessed"
+                assert review["context"]["native_result"]["candidate_commit"] == candidate
+                assert all(row["status"] == "unassessed" for row in review["assessment"]["document"]["criteria"])
+                projected = await _result(w, att)
+                assert projected["verification"]["quality_reviews"]["current"]["review_id"] == quality["review_id"]
+                await send({"review_recorded": True})
             published = await receive("published")
             publication = ops.get(published["operation_id"])
             await wait_status(publication["operation_id"], "succeeded")
@@ -450,7 +482,8 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             assert len([r for r in w["gh"].requests if r[:2] == ("POST", "/repos/o/r/pulls")]) == 1
             user_ops = [ops.get(oid) for oid in done["operations"]]
             initial = ["pm.message.append", "pm.conversation.propose", "work.adopt_and_start"] if mode == "adopt" else ["work.start"]
-            assert [op["action"] for op in user_ops] == [*(["work_item.create"] if create_work else []), *initial, "session.send", "github.pr.publish"]
+            review_actions = ["pm.quality.review.create", "pm.quality.review.record"] if review_result else []
+            assert [op["action"] for op in user_ops] == [*(["work_item.create"] if create_work else []), *initial, "session.send", *review_actions, "github.pr.publish"]
             assert all(op["actor"] == STARTER_OWNER.actor and op["status"] == "succeeded" for op in user_ops)
             assert len({op["idempotency_key"] for op in user_ops}) == len(user_ops)
             created = {r[0] for r in ops.db.execute("SELECT operation_id FROM operations")} - seed_ids
@@ -464,7 +497,7 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 "source_sha": git(ROOT, "rev-parse", "HEAD"),
                 "source_dirty": bool(git(ROOT, "status", "--porcelain")),
                 "python": sys.version, "browser": done["browser"],
-                "entry": entry, "recovery": recovery, "created_work_in_ui": created_work, "same_attempt": att["attempt_id"],
+                "entry": entry, "recovery": recovery, "quality_review": quality, "created_work_in_ui": created_work, "same_attempt": att["attempt_id"],
                 "discussion_return": done["discussion_return"], "browser_operations": len(user_ops), "bat_starts": len(starts),
                 "bat_sends": len(sends), "github_posts": 1, "manual_unchanged": True, "mcp_peer": peer,
                 "candidate": candidate, "browser_closed_during_dispatch": True}, indent=2) + "\n")
