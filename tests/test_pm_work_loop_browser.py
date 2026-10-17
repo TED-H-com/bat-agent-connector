@@ -20,7 +20,7 @@ from urllib.parse import unquote
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
-from bat_agent_connector import pm_discussions, pm_native_runtime, pr_publication
+from bat_agent_connector import pm_discussions, pm_native_runtime, pm_plans, pm_runs, pr_publication
 from bat_agent_connector.errors import InvokeTimeout
 from tests import test_pm_conversation_proposals as conversation
 from tests import test_pm_native_operations as native
@@ -85,8 +85,41 @@ async def test_start_queue_close_reconnect_result_and_pr(start_ready, mock, tmp_
 
 
 @pytest.mark.parametrize(("locale", "width"), [("en", 1440), ("zh-TW", 390)])
-async def test_fixed_result_review_records_insufficient_evidence_from_ui(start_ready, mock, tmp_path, locale, width):
-    await work_loop(start_ready, mock, tmp_path, locale, width, review_result=True)
+async def test_fixed_result_review_records_insufficient_evidence_from_ui(start_ready, mock, tmp_path, monkeypatch, locale, width):
+    w, ops = start_ready, start_ready["d"].ops
+    captured, instances = [], []
+
+    def assessment_reply(prompt, client_id):
+        request = json.loads(prompt.split("\n\n", 1)[1])
+        captured.append(request)
+        source = request["context"]["bound_context"][0]
+        assert source["kind"] == "quality_assessment" and source["available"]
+        original = source["summary"]
+        assert original["assessment"]["document"]["acceptance"] == "unassessed"
+        assert original["current_applicability"] == "not_evaluated"
+        commit = original["context"]["native_result"]["candidate_commit"][:12]
+        reply = (f"原始成果 {commit} 的需求驗收仍未評估；還缺固定版本的驗證證據。先補足證據，再決定是否接受成果。"
+                 if locale == "zh-TW" else
+                 f"The original result {commit} remains unassessed. Fixed-revision verification evidence is missing. "
+                 "Gather that evidence before deciding whether to accept the result.")
+        events = protocol(prompt, client_id)
+        events[2]["params"]["item"]["text"] = reply
+        events[-1]["params"]["turn"]["items"][-1]["text"] = reply
+        return events
+
+    monkeypatch.setattr(native, "protocol", assessment_reply)
+    monkeypatch.setattr(pm_native_runtime, "installation_eligibility", lambda: {
+        "adapter": "codex-native-linux", "contract": pm_native_runtime.CONTRACT,
+        "required_version": pm_native_runtime.VERSION, "eligible_for_preflight": True,
+        "options_confirmed": False, "reason": None, "execution_scope": "frozen_context_only",
+        "execution_location": "connector_service", "version_verification": "per_run",
+        "auth_validity": "unverified", "model_execution_verified": False})
+    ops.context["pm_native_runtime_factory"] = lambda *args, **kwargs: native.FakeRuntime(
+        *args, **kwargs, settings={}, instances=instances)
+    ops.context["pm_native_process_inspector"] = lambda identity: {
+        "state": "unknown", "process": identity, "proof": "identity_unavailable", "observed_at": 1.0}
+    w["review_pm"] = {"captured": captured, "instances": instances}
+    await work_loop(w, mock, tmp_path, locale, width, review_result=True)
 
 
 @pytest.mark.parametrize(("locale", "width"), [("en", 1440), ("zh-TW", 390)])
@@ -463,7 +496,32 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 note_op = ops.get(discussed["message_operation_id"])
                 assert note_op["action"] == "pm.message.append" and note_op["target"]["thread_id"] == thread_id
                 quality.update(discussion_thread_id=thread_id, assessment_operation_id=recorded_op["operation_id"])
+                plan_before = pm_plans.head(ops.db, w["workspace_id"])
                 await send({"review_discussed": True})
+                analyzed = await receive("review-analyzed")
+                await wait_status(analyzed["operation_id"], "succeeded")
+                analysis_op = ops.get(analyzed["operation_id"])
+                assert analysis_op["action"] == "pm.run.analyze"
+                assert analysis_op["target"] == {"workspace_id": w["workspace_id"], "thread_id": thread_id}
+                run = pm_runs.get_by_operation(ops.db, analysis_op["operation_id"])
+                assert run["state"] == "completed" and run["context"]["bound_context"][0]["summary"] == original
+                assert w["review_pm"]["captured"] == [{"purpose": analysis_op["params"]["purpose"], "context": run["context"]}]
+                assert len(w["review_pm"]["instances"]) == 1
+                runtime = w["review_pm"]["instances"][0]
+                assert runtime.sends == 1 and runtime.closed
+                doc = pm_discussions.get_thread(ops, STARTER_OWNER, w["workspace_id"], thread_id)
+                answer = doc["messages"][-1]
+                assert answer["role"] == "assistant" and candidate[:12] in answer["content"]
+                assert answer["operation_id"] == analysis_op["operation_id"]
+                assert answer["provenance"]["run_id"] == run["run_id"]
+                assert answer["provenance"]["context_digest"] == run["context_digest"]
+                assert pm_plans.head(ops.db, w["workspace_id"]) == plan_before
+                status, unchanged = await http(w["port"], "GET",
+                    f"/api/v1/pm/workspaces/{w['workspace_id']}/quality-reviews/{quality['review_id']}", tok=w["owner_token"])
+                assert status == 200 and unchanged["review"] == review
+                quality.update(analysis_operation_id=analysis_op["operation_id"], analysis_run_id=run["run_id"],
+                    original_assessment_in_model_context=True, mock_model_sends=runtime.sends)
+                await send({"review_analyzed": True})
             published = await receive("published")
             publication = ops.get(published["operation_id"])
             await wait_status(publication["operation_id"], "succeeded")
@@ -501,7 +559,7 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             assert len([r for r in w["gh"].requests if r[:2] == ("POST", "/repos/o/r/pulls")]) == 1
             user_ops = [ops.get(oid) for oid in done["operations"]]
             initial = ["pm.message.append", "pm.conversation.propose", "work.adopt_and_start"] if mode == "adopt" else ["work.start"]
-            review_actions = ["pm.quality.review.create", "pm.quality.review.record", "pm.thread.create", "pm.message.append"] if review_result else []
+            review_actions = ["pm.quality.review.create", "pm.quality.review.record", "pm.thread.create", "pm.message.append", "pm.run.analyze"] if review_result else []
             assert [op["action"] for op in user_ops] == [*(["work_item.create"] if create_work else []), *initial, "session.send", *review_actions, "github.pr.publish"]
             assert all(op["actor"] == STARTER_OWNER.actor and op["status"] == "succeeded" for op in user_ops)
             assert len({op["idempotency_key"] for op in user_ops}) == len(user_ops)

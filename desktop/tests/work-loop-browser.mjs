@@ -292,7 +292,19 @@ try {
     ]);
     send({stage:'review-discussed',thread_operation_id:discussion.operation_id,message_operation_id:note.operation_id});
     assert.equal((await receive()).review_discussed,true);
+    step = 'analyze-review';
+    await page.locator('[data-discussion-composer]').fill(zh
+      ? '這份成果距離原本的驗收條件還缺什麼？請根據這次評估說明下一步。'
+      : 'What is missing for the original acceptance criteria? Explain the next step from this assessment.');
+    const analysis=await clickOperation('pm.run.analyze',page.locator('[data-discussion-reply]'));
+    send({stage:'review-analyzed',operation_id:analysis.operation_id});
+    assert.equal((await receive()).review_analyzed,true);
+    const answer=page.locator('[data-pm-role="assistant"]');
+    await expect(answer).toContainText(fixed.candidate.slice(0,12));
+    await expect(answer).toContainText(zh ? '還缺固定版本的驗證證據' : 'Fixed-revision verification evidence is missing');
     await page.reload();
+    await expect(page.locator('[data-pm-role="assistant"]')).toHaveCount(1);
+    await expect(page.locator('[data-pm-role="assistant"]')).toContainText(fixed.candidate.slice(0,12));
     await expect(page.locator('.pd-context [data-discussion-context="quality_assessment"]')).toBeVisible();
     await expect(page.locator('[data-discussion-back]')).toHaveAttribute('href',reviewReturn);
     await shot('03-discussed-assessment');
@@ -345,8 +357,8 @@ try {
     await expect(page.locator('[data-work-publish-pr]')).toContainText('21');
   }
   assert.deepEqual(errors, []);
-  assert.equal(requests.length, expectedOperations + (f.review_result ? 4 : 0));
-  assert.equal(new Set(requests.map(r => r.key)).size, expectedOperations + (f.review_result ? 4 : 0));
+  assert.equal(requests.length, expectedOperations + (f.review_result ? 5 : 0));
+  assert.equal(new Set(requests.map(r => r.key)).size, expectedOperations + (f.review_result ? 5 : 0));
   assert.ok(requests.every(r => r.key));
   const follow = requests.find(row => row.body.action === 'session.send');
   assert.deepEqual(follow.body.target, {workspace_id: f.workspace, work_item_id: f.work});

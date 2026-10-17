@@ -91,3 +91,32 @@ async def test_withdrawn_verifier_redacts_discussion_and_frozen_context(reviewed
         pm_thread_contexts.admission(ops, OWNER, w['workspace_id'], [ref])
     assert caught.value.code == 'PM_CONTEXT_SOURCE_UNAVAILABLE'
     assert list(bat_writes(mock)) == before
+
+
+async def test_original_assessment_withdrawal_blocks_the_final_model_send(reviewed, mock):
+    from bat_agent_connector import pm_native_journal, pm_runs
+    from tests import test_pm_native_operations as native
+
+    w, ops = reviewed, reviewed['d'].ops
+    _, ref = await original(w)
+    done, _ = await create(ops, w['workspace_id'], [ref], who=OWNER)
+    target = {'workspace_id': w['workspace_id'], 'thread_id': done['result']['thread_id']}
+    instances = []
+    settings = {'before_intent': lambda _: quality.withdraw_verifier(w)}
+    ops.context['pm_native_runtime_factory'] = lambda *args, **kwargs: native.FakeRuntime(
+        *args, **kwargs, settings=settings, instances=instances)
+    ops.context['pm_native_process_inspector'] = lambda identity: {
+        'state': 'unknown', 'process': identity, 'proof': 'identity_unavailable', 'observed_at': 1.0}
+    before = list(bat_writes(mock))
+    request = native.request(ops, target, who=OWNER, version=1)
+    result = await native.finish(ops, request)
+    assert result['status'] == 'failed' and result['error_code'] == 'PM_FOLLOW_UP_SOURCE_UNAVAILABLE', result
+    assert len(instances) == 1 and instances[0].sends == 0 and instances[0].closed
+    run = pm_runs.get_by_operation(ops.db, request['operation_id'])
+    assert run['context']['bound_context'][0]['summary']['assessment']['operation_id'] == ref['id']
+    assert 'send_intent' not in pm_native_journal.lifecycle(ops.db, run['run_id'])
+    assert native.writer(ops, target) is None
+    thread = pm_discussions.get_thread(ops, OWNER, **target)
+    assert thread['messages'] == []
+    assert thread['thread']['context'] == [{'kind': 'quality_assessment', 'position': 0, 'available': False}]
+    assert list(bat_writes(mock)) == before
