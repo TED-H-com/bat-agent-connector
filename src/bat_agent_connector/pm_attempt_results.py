@@ -1362,20 +1362,55 @@ class AttemptResultCollector:
             return []
         return await self.collect_host(host)
 
-    def _has_agent_error_event(self, host: str, session_id: str) -> bool:
-        """Inspect already-open clients' recent_events without opening a connection or subscribing."""
-        candidates = []
+    def _iter_recent_events(self, host: str):
+        """Yield recent_events from clients that are already open. Never connects."""
         ro_client = self.fleet._clients.get(host)
         if ro_client is not None:
-            candidates.append(ro_client)
+            yield ro_client
         ops_fleet = self.ops.context.get("fleet")
         if isinstance(ops_fleet, Fleet):
             rw_client = ops_fleet._clients.get(host)
             if rw_client is not None and rw_client is not ro_client:
-                candidates.append(rw_client)
-        for client in candidates:
+                yield rw_client
+
+    def _agent_error_for_turn(
+        self,
+        host: str,
+        session_id: str,
+        *,
+        turn_marker: str,
+        source_generation: str,
+        message_ids: set[str],
+    ) -> bool:
+        """True when an already-received agent:error belongs to this turn.
+
+        PROTOCOL §5 lists ``agent:error`` and says to filter by ``params.sessionId``.
+        It does not define a turn id or ``clientMessageId`` on that event, and
+        ``BatClient`` does not invent one. The read loop keeps ``clientMessageId``,
+        ``messageId``, and ``turnId`` only when the wire params include a
+        non-empty string, plus the registry ``source_generation`` observed at
+        receive time.
+
+        Every supplied id must match ``turn_marker`` or the correlated slice;
+        contradictory tags cannot be rescued by one matching id. An event with
+        no id remains an unattributed diagnostic. Connector receive time and
+        host echo time are different clocks and cannot attribute a delayed
+        event to a turn. Such an event proves neither failure nor completion;
+        the collector still requires its existing correlated boundary evidence.
+        """
+        attributed = {turn_marker, *message_ids}
+        for client in self._iter_recent_events(host):
             for ev in list(getattr(client, "recent_events", ())):
-                if isinstance(ev, dict) and ev.get("channel") == "agent:error" and ev.get("sessionId") == session_id:
+                if not isinstance(ev, dict) or ev.get("channel") != "agent:error":
+                    continue
+                if ev.get("sessionId") != session_id or ev.get("source_generation") != source_generation:
+                    continue
+                explicit = [
+                    ev.get(key)
+                    for key in ("clientMessageId", "messageId", "turnId")
+                    if isinstance(ev.get(key), str) and ev.get(key)
+                ]
+                if explicit and all(value in attributed for value in explicit):
                     return True
         return False
 
@@ -1417,7 +1452,7 @@ class AttemptResultCollector:
             cand_host = res.get("host")
             cand_sid = res.get("session_id")
             cand_wt = res.get("worktree_path")
-            cand_mid = res.get("message_id")
+            handoff_mid = res.get("message_id")
             if (
                 not isinstance(cand_host, str)
                 or cand_host != host
@@ -1425,10 +1460,18 @@ class AttemptResultCollector:
                 or not cand_sid.strip()
                 or not isinstance(cand_wt, str)
                 or not cand_wt.strip()
-                or not isinstance(cand_mid, str)
-                or not cand_mid.strip()
+                or not isinstance(handoff_mid, str)
+                or not handoff_mid.strip()
             ):
                 continue
+            cand_mid = handoff_mid
+            receipt_operation_id = str(handoff["operation_id"])
+            from .pm_work_follow_up import latest_sent_turn
+            sent_mid, sent_op = latest_sent_turn(self.ops.db, str(row["attempt_id"]))
+            if isinstance(sent_mid, str) and sent_mid.strip():
+                cand_mid = sent_mid
+                if isinstance(sent_op, str) and sent_op:
+                    receipt_operation_id = sent_op
             if session_ref != {"host": cand_host, "session_id": cand_sid}:
                 continue
 
@@ -1456,8 +1499,11 @@ class AttemptResultCollector:
             has_receipt = (
                 installed(self.ops.db)
                 and self.ops.db.execute(
-                    "SELECT 1 FROM session_results WHERE workspace_id=? AND attempt_id=? LIMIT 1",
-                    (workspace_id, attempt_id),
+                    """SELECT 1 FROM session_results
+                       WHERE workspace_id=? AND attempt_id=?
+                         AND json_extract(document, '$.turn_marker') = ?
+                       LIMIT 1""",
+                    (workspace_id, attempt_id, cand_mid),
                 ).fetchone()
                 is not None
             )
@@ -1486,6 +1532,7 @@ class AttemptResultCollector:
                     "session_id": cand_sid,
                     "worktree_path": cand_wt,
                     "turn_marker": cand_mid,
+                    "receipt_operation_id": receipt_operation_id,
                     "base_sha": base_sha,
                     "registry_entry": reg,
                     "obs_row": obs_row,
@@ -1556,9 +1603,23 @@ class AttemptResultCollector:
         runtime_status = obs_body.get("runtime_status") or read_res.get("runtime_status")
         gone_at = obs_row.get("gone_at") if obs_row is not None else None
         has_process_ended = (runtime_status in {"exited", "stopped"}) or (gone_at is not None)
-        has_agent_error = self._has_agent_error_event(host, session_id)
         raw_td = read_res.get("turn_done")
         turn_done_ready = (raw_td is True) and (read_res.get("pending") is None)
+        slice_items = list(turn_slice.get("items") or [])
+        message_ids = {
+            str(item.get("id"))
+            for item in slice_items
+            if isinstance(item, dict) and item.get("id")
+        }
+        source_key = f"bat:{host}:{session_id}"
+        source_generation = source_generation_from_registry(host, session_id, current_reg)
+        has_agent_error = self._agent_error_for_turn(
+            host,
+            session_id,
+            turn_marker=str(turn_marker),
+            source_generation=source_generation,
+            message_ids=message_ids,
+        )
 
         if has_agent_error:
             boundary = "agent_error"
@@ -1570,7 +1631,6 @@ class AttemptResultCollector:
             self._record_check(attempt_id, "no_boundary")
             return None
 
-        slice_items = list(turn_slice.get("items") or [])
         last_message_id = ""
         for item in reversed(slice_items):
             if isinstance(item, dict) and item.get("id"):
@@ -1578,9 +1638,6 @@ class AttemptResultCollector:
                 break
         if not last_message_id:
             last_message_id = str(turn_marker)
-
-        source_key = f"bat:{host}:{session_id}"
-        source_generation = source_generation_from_registry(host, session_id, current_reg)
         source_position = format_source_position(turn_marker, last_message_id)
         digest_bytes = canonical_digest_bytes(
             source_key=source_key,
@@ -1605,6 +1662,7 @@ class AttemptResultCollector:
             if obs_tuple is not None:
                 self._memo[attempt_id] = {"obs_tuple": obs_tuple, "checked_at": time.monotonic()}
             self._record_check(attempt_id, "unchanged")
+            self._wake_follow_up_if_idle(host, session_id, boundary=boundary, read_res=read_res)
             return None
 
         rid = new_result_id()
@@ -1672,7 +1730,7 @@ class AttemptResultCollector:
             digest=digest,
             document=doc,
             observed_at=observed_at,
-            operation_id=cand["handoff_operation_id"],
+            operation_id=cand.get("receipt_operation_id") or cand["handoff_operation_id"],
             result_id=rid,
             decoder_version=self.decoder_version,
             work_item_id=cand["work_item_id"],
@@ -1681,11 +1739,21 @@ class AttemptResultCollector:
         )
         if obs_tuple is not None:
             self._memo[attempt_id] = {"obs_tuple": obs_tuple, "checked_at": time.monotonic()}
+        self._wake_follow_up_if_idle(host, session_id, boundary=boundary, read_res=read_res)
         if inserted:
             self._record_check(attempt_id, "recorded")
             return stored
         self._record_check(attempt_id, "unchanged")
         return None
+
+    def _wake_follow_up_if_idle(self, host: str, session_id: str, *, boundary: str, read_res: dict) -> None:
+        """Wake the queue head after a turn_done or agent_error boundary when the session is idle."""
+        if boundary not in {"turn_done", "agent_error"}:
+            return
+        if bool(read_res.get("streaming")) or read_res.get("pending") not in (None, {}, []):
+            return
+        from .pm_work_follow_up import wake_session_queue
+        wake_session_queue(self.ops, host, session_id)
 
     async def collect_host(self, host: str) -> list[dict[str, Any]]:
         """Collect turn-boundary receipts for up to ``max_per_pass`` managed attempts on ``host``."""
@@ -1713,6 +1781,5 @@ class AttemptResultCollector:
                     self._record_check(cand["attempt_id"], "bat_error")
                     continue
             return collected
-
 
 

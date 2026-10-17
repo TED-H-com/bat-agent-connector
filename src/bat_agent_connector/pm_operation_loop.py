@@ -98,19 +98,22 @@ async def _project(ops, principal, operation, parent):
 
     action = operation["action"]
     proven = parent is not None
+    work_input = _input_attempt(ops, principal, operation) if not proven else None
     start_id = parent["operation_id"] if proven else (operation["operation_id"] if action == "work.start" else None)
-    attempt = _attempt_row(ops.db, start_id) if start_id else None
+    if work_input is not None:
+        start_id = work_input["start_operation_id"]
+    attempt = work_input if work_input is not None else (_attempt_row(ops.db, start_id) if start_id else None)
     view, view_unreadable, dropped = (
         _attempt_view(ops, principal, operation, attempt) if attempt else (None, False, False))
     delivery_unlinked = False
-    expects_work = proven or action in {"work.start", "pm.work_package.create"}
-    expects_attempt = proven or action == "work.start"
+    expects_work = proven or work_input is not None or action in {"work.start", "pm.work_package.create"}
+    expects_attempt = proven or work_input is not None or action == "work.start"
     work_item_id = None
     workspace_id = None
     work_visible = False
     attempt_id = attempt["attempt_id"] if attempt else None
 
-    if proven or action == "work.start":
+    if proven or work_input is not None or action == "work.start":
         work_item_id, workspace_id, work_visible, dropped = _start_work(
             ops, principal, parent or operation, attempt, dropped)
     elif action == "pm.work_package.create":
@@ -157,7 +160,7 @@ async def _project(ops, principal, operation, parent):
         "completeness": _completeness(
             operation, dropped=dropped, delivery_unlinked=delivery_unlinked, expects_work=expects_work,
             work_visible=work_visible, expects_attempt=expects_attempt, attempt_present=attempt is not None,
-            attempt_unreadable=unreadable),
+            attempt_unreadable=unreadable, work_input=work_input is not None),
     }
 
 
@@ -314,7 +317,7 @@ def _result_read(attempt_id):
 
 
 def _completeness(operation, *, dropped, delivery_unlinked, expects_work, work_visible, expects_attempt,
-                  attempt_present, attempt_unreadable):
+                  attempt_present, attempt_unreadable, work_input=False):
     if dropped:
         return {"status": "unavailable", "reason": "source_withdrawn"}
     if delivery_unlinked:
@@ -325,12 +328,34 @@ def _completeness(operation, *, dropped, delivery_unlinked, expects_work, work_v
         return {"status": "partial", "reason": "no_attempt"}
     if attempt_unreadable:
         return {"status": "partial", "reason": "attempt_unreadable"}
-    # Registered session.send target is host and session_id only. A Work id,
-    # including a malformed or unknown one, is not that contract and cannot
-    # make the loop complete. P5 is not integrated here.
-    if operation.get("action") == "session.send":
+    # Only an immutable admitted work_inputs row can associate this send with
+    # an Attempt. A Work-shaped target alone is not that proof.
+    if operation.get("action") == "session.send" and not work_input:
         return {"status": "partial", "reason": "session_target"}
     return {"status": "complete", "reason": None}
+
+
+def _input_attempt(ops, principal, operation):
+    from . import pm_work_follow_up, pm_work_start
+
+    if (not pm_work_follow_up.is_work_follow_up(operation)
+            or not pm_work_follow_up.installed(ops.db)
+            or not pm_work_start.installed(ops.db)
+            or not pm_work_follow_up.operation_visible(ops.db, principal, operation)):
+        return None
+    row = ops.db.execute(
+        """SELECT a.* FROM work_inputs i JOIN work_attempts a
+           ON a.attempt_id=i.attempt_id AND a.workspace_id=i.workspace_id
+           AND a.work_item_id=i.work_item_id WHERE i.operation_id=?""",
+        (operation["operation_id"],),
+    ).fetchone()
+    if row is None or operation.get("target") != {
+        "workspace_id": row["workspace_id"], "work_item_id": row["work_item_id"],
+    }:
+        return None
+    if not _operation_visible(ops, principal, row["start_operation_id"]):
+        return None
+    return dict(row)
 
 
 def _attempt_row(db, start_operation_id):
@@ -602,6 +627,9 @@ def _pure_scopes(operation, verb):
         found.extend(sorted(REQUIRED))
     if action == "pm.work.bind":
         found.extend(("observe", "manage"))
+    from .pm_work_follow_up import is_work_follow_up
+    if is_work_follow_up(operation):
+        found.append("observe")
     if action == "pm.maintenance.repair":
         found.append("manage")
     if action == "repository.continue" and params.get("work_item_id"):
@@ -626,7 +654,7 @@ def _steer_reason(ops, principal, operation, verb):
 
 
 def _steer_checks(ops, principal, operation, verb):
-    from . import bulk_approval, orchestration_operations
+    from . import bulk_approval, orchestration_operations, pm_work_follow_up
     from .operations import OperationError
     from .pm_access import require_visible
 
@@ -637,6 +665,10 @@ def _steer_checks(ops, principal, operation, verb):
     defined = ops.actions.get(operation["action"])
     if defined and defined.authorize_existing:
         defined.authorize_existing(ops, principal, operation, verb)
+    if verb == "cancel":
+        pm_work_follow_up.check_cancel_allowed(ops, principal, operation)
+    elif verb == "resume":
+        pm_work_follow_up.resume(ops, principal, operation)
     if not (operation.get("actor") == principal.actor or principal.admin
             or (defined and principal.allows(defined.scope))):
         raise OperationError(

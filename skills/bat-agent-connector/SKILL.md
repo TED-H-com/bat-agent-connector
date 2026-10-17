@@ -968,13 +968,12 @@ capability you need is absent.
    tools above. Do not nest that envelope inside `loop`.
 5. A delivery read does not decide requirement acceptance. The field stays
    `not_evaluated_by_delivery`. Do not add another acceptance judgment.
-6. The registered `session.send` target is only `{host, session_id}`. P5's Work
-   target is a draft and is not in this build. Do not put a Work id in the
-   target, and do not start sending one because some other capability appeared.
-   `loop.work_item_id` stays null; that is not a failure. Completeness stays
-   `partial` with reason `session_target`, including when a stored target
-   carries a Work id or a malformed value. Do not call the legacy Fleet
-   `session_send`. This loop has no busy queue and does not derive.
+6. When `features.pm_workspaces.work_follow_up` has version 1 and available true,
+   send a Work target with `operation_submit` as described below. The immutable
+   admitted input links its Work and Attempt in `loop`; a Work-shaped target
+   alone is not proof. Direct `{host, session_id}` sends remain `partial` with
+   reason `session_target`. Keep the queue receipt in `operation.input_receipt`.
+   Do not call the legacy Fleet `session_send` for this loop or derive a new Work.
 7. `loop.dashboard_hash` and `loop.links` are hashes. Resolve a hash against the
    client's own Dashboard base with standard URL resolution. With no base, keep
    the hash and treat the absolute URL as unavailable. Do not guess a localhost
@@ -994,6 +993,21 @@ capability you need is absent.
 12. Before replacing a fleet copy of this skill, compare its `workflow_version`
     and the sha256 of this canonical file. If the fleet copy is newer, do not
     overwrite it with an older canonical.
+When `features.pm_workspaces.work_follow_up` has version 1 and available true, a second instruction to a
+started Work uses the existing `operation_submit` tool. Do not call `session_send`
+for that path, and do not invent a follow-up alias. Submit
+`action="session.send"` with `target={"workspace_id", "work_item_id"}` and
+`params={"text", "schedule"}`. `schedule` is `after_current` (the default; the
+instruction waits for the current turn boundary) or `now` (only when that session
+is already idle). Optional `preconditions.expected_attempt_id` pins the latest
+attempt. The server assigns `message_id` as `batc-<operation_id>`; do not send
+`queue` or `message_id`. Read the queue with
+`pm_work_inputs_list(workspace_id, work_item_id, attempt_id?, after?, limit?)`
+or `GET /api/v1/pm/workspaces/{workspace_id}/work/{work_item_id}/inputs`.
+A Codex work session is refused with `PM_WORK_CODEX_FOLLOW_UP_UNSUPPORTED`.
+If a receipt stays `unknown`, reconcile that same operation with `operation_resume`
+or `POST /api/v1/operations/{operation_id}/resume`. Never resend it and never
+mint a new message id for it. Cancel applies only while the receipt is `queued`.
 
 ## Concept
 

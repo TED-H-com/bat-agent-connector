@@ -249,6 +249,7 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-preview", self.pm_release_baseline_preview, "observe"),
             ("POST", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/start-preview", self.pm_work_start_preview, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/attempts", self.pm_work_attempts, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/inputs", self.pm_work_inputs, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-attempts/(?P<attempt_id>att_[0-9a-f]{32})", self.pm_work_attempt, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-attempts/(?P<attempt_id>att_[0-9a-f]{32})/result", self.pm_work_attempt_result, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-attempts/(?P<attempt_id>att_[0-9a-f]{32})/changes", self.pm_work_attempt_changes, "observe"),
@@ -547,7 +548,7 @@ class ApiV1:
                       self.pm_release_baselines, self.pm_release_baseline_current, self.pm_release_baseline,
                       self.pm_release_baseline_sources, self.pm_release_baseline_releases,
                       self.pm_release_baseline_deployments, self.pm_release_baseline_preview,
-                      self.pm_work_start_preview, self.pm_work_attempts, self.pm_work_attempt,
+                      self.pm_work_start_preview, self.pm_work_attempts, self.pm_work_attempt, self.pm_work_inputs,
                       self.pm_work_attempt_result, self.pm_work_attempt_changes, self.pm_work_attempt_diff,
                       self.pm_spec_sources, self.pm_spec_source_capabilities}:
                 # Empty or repeated selectors cannot silently become defaults.
@@ -722,7 +723,7 @@ class ApiV1:
             integer_fields.add("cursor")
         if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list", "pm_follow_up_list", "pm_follow_up_assessments_list", "pm_work_packages_list", "pm_issue_mappings_list", "pm_release_baselines_list", "pm_maintenance_policies_list", "pm_workload_snapshots_list"}:
             integer_fields.add("after")
-        wide_cursor = method in {"pm_dependencies_revisions_list", "pm_conversation_proposals_list", "pm_maintenance_repairs_list", "pm_quality_reviews_list", "pm_work_quality_get", "pm_work_deliveries_list", "pm_work_batches_list", "pm_work_attempts_list", "pm_spec_materializations_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
+        wide_cursor = method in {"pm_dependencies_revisions_list", "pm_conversation_proposals_list", "pm_maintenance_repairs_list", "pm_quality_reviews_list", "pm_work_quality_get", "pm_work_deliveries_list", "pm_work_batches_list", "pm_work_attempts_list", "pm_work_inputs_list", "pm_spec_materializations_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
                                  "pm_workload_snapshots_list", "pm_ahp_observations_list", "pm_github_observations_list", "pm_maintenance_checks_list", "pm_maintenance_reviews_list", "pm_maintenance_review_events_list"}
         if wide_cursor:
             integer_fields.add("after")
@@ -874,6 +875,9 @@ class ApiV1:
 
     async def pm_work_attempts(self, principal, query, workspace_id, work_item_id, **_):
         return self._pm_read(principal, "pm_work_attempts_list", query, workspace_id=workspace_id, work_item_id=work_item_id)
+
+    async def pm_work_inputs(self, principal, query, workspace_id, work_item_id, **_):
+        return self._pm_read(principal, "pm_work_inputs_list", query, workspace_id=workspace_id, work_item_id=work_item_id)
 
     async def pm_work_attempt(self, principal, query, workspace_id, attempt_id, **_):
         return self._pm_read(principal, "pm_work_attempt_get", query, workspace_id=workspace_id, attempt_id=attempt_id)
@@ -1168,7 +1172,13 @@ class ApiV1:
             worktree_merge_operations,
         )
         gh_cfg = self.daemon.ops.context["github_config"]
-        from . import pm_attempt_result_reads, pm_work_profiles, pm_work_start, pr_publication
+        from . import (
+            pm_attempt_result_reads,
+            pm_work_follow_up,
+            pm_work_profiles,
+            pm_work_start,
+            pr_publication,
+        )
         actions = [{"action": a.name, "scope": a.scope, "summary": a.summary, "allowed": principal.allows(a.scope)
                                and a.name not in {pm_execution_runtime.ACTION, pm_maintenance_repair_runtime.ACTION}
                                and (a.name != "delivery.merge_and_deploy" or principal.allows("deploy"))
@@ -1251,6 +1261,7 @@ class ApiV1:
                                                     "work_profiles": pm_work_profiles.capabilities(self.daemon.ops),
                                                     "work_attempt_results": pm_attempt_result_reads.capabilities(self.daemon.ops),
                                                     "operation_loop": {"version": 1},
+                                                    "work_follow_up": pm_work_follow_up.capabilities(self.daemon.ops),
                                                     "workload": pm_workload.capabilities(),
                                                     "work_package_prepare": "pm.work_package.create" in self.daemon.ops.actions,
                                                     "issue_mapping": all(action in self.daemon.ops.actions for action in ("pm.issue.publish", "pm.issue.cancel")),
@@ -1503,11 +1514,18 @@ class ApiV1:
                 principal, action=body.get("action"), target=body.get("target"), params=body.get("params"),
                 preconditions=body.get("preconditions"), idempotency_key=key, entry="http")
         except OperationError as error:
-            if (not str(body.get("action", "")).startswith("pm.")
-                    and body.get("action") not in {
+            action = body.get("action") if isinstance(body, dict) else None
+            target = body.get("target") if isinstance(body, dict) else None
+            is_work_send = (
+                action == "session.send"
+                and isinstance(target, dict)
+                and ("workspace_id" in target or "work_item_id" in target)
+            )
+            if (not str(action or "").startswith("pm.")
+                    and action not in {
                         "setup.host", "setup.repository", "setup.verification", "work.start",
                         "github.pr.publish",
-                    }):
+                    } and not is_work_send):
                 raise
             # A source-hidden replay is still the original admitted operation.
             # Only proven absence in this actor/key namespace permits a fresh UI key.
@@ -1520,19 +1538,25 @@ class ApiV1:
             # Waiting is not a read grant: membership or original source access
             # may have changed. Outside the admission catch: never mark this unsent.
             op = self.daemon.ops.get(op["operation_id"], principal=principal)
+        from . import pm_work_follow_up
+        op = pm_work_follow_up.enrich_operation(self.daemon.ops.db, op)
         op = await pm_operation_loop.attach(self.daemon.ops, principal, op)
         return (202 if created else 200), {"operation": op, "created": created}
 
     async def operation(self, op, principal, **_):
+        from . import pm_work_follow_up
         operation = await pm_operation_loop.attach(
-            self.daemon.ops, principal, self.daemon.ops.get(op, principal=principal))
+            self.daemon.ops, principal, pm_work_follow_up.enrich_operation(
+                self.daemon.ops.db, self.daemon.ops.get(op, principal=principal)))
         return 200, {"operation": operation,
                      "work_items": work_items.work_items_for(self.daemon.journal.db, "operation", op),
                      "cleanup_receipts": cleanup.receipts(self.daemon.ops, op)}
 
     async def cancel_operation(self, principal, op, **_):
+        from . import pm_work_follow_up
         result = self.daemon.ops.cancel(principal, op)
         await self.daemon.artifact_store.reap_best_effort(op)
+        result = pm_work_follow_up.enrich_operation(self.daemon.ops.db, result)
         return 200, {"operation": await pm_operation_loop.attach(self.daemon.ops, principal, result)}
 
     async def create_artifact(self, principal, query, body, headers, **_):
@@ -1554,7 +1578,9 @@ class ApiV1:
         return 200, {"artifact": artifacts.get(self.daemon.journal.db, aid, int(revision), principal=principal)}
 
     async def resume_operation(self, principal, op, **_):
+        from . import pm_work_follow_up
         resumed = self.daemon.ops.resume(principal, op)
+        resumed = pm_work_follow_up.enrich_operation(self.daemon.ops.db, resumed)
         return 200, {"operation": await pm_operation_loop.attach(self.daemon.ops, principal, resumed)}
 
     async def events(self, query, principal, **_):

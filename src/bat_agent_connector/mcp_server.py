@@ -70,7 +70,7 @@ READ_TOOLS = [
     "pm_governance_list", "pm_governance_get", "pm_governance_history_list",
     "pm_work_packages_list", "pm_work_package_get", "pm_work_package_readiness_get",
     "pm_work_profiles_list", "pm_work_profile_get", "pm_work_profile_readiness_get",
-    "pm_work_start_preview", "pm_work_attempts_list", "pm_work_attempt_get",
+    "pm_work_start_preview", "pm_work_attempts_list", "pm_work_attempt_get", "pm_work_inputs_list",
     "pm_work_attempt_result_get", "pm_work_attempt_changes_get", "pm_work_attempt_diff_get",
     "pm_issue_mappings_list", "pm_issue_mapping_get",
 
@@ -919,6 +919,16 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """List immutable work.start attempt records and current stage/session state for one Work item."""
         return await pm_daemon("pm_work_attempts_list", workspace_id=workspace_id, work_item_id=work_item_id, after=after, limit=limit)
 
+    async def pm_work_inputs_list(workspace_id: str, work_item_id: str, attempt_id: str | None = None,
+                                  after: StrictInt = 0, limit: StrictInt = 50) -> dict[str, Any]:
+        """List follow-up instructions queued or sent to a started Work item."""
+        params: dict[str, Any] = {
+            "workspace_id": workspace_id, "work_item_id": work_item_id, "after": after, "limit": limit,
+        }
+        if attempt_id is not None:
+            params["attempt_id"] = attempt_id
+        return await pm_daemon("pm_work_inputs_list", **params)
+
     async def pm_work_attempt_get(workspace_id: str, attempt_id: str) -> dict[str, Any]:
         """Read one immutable work.start attempt record, child operations, package and execution session."""
         return await pm_daemon("pm_work_attempt_get", workspace_id=workspace_id, attempt_id=attempt_id)
@@ -1176,7 +1186,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_governance_list, pm_governance_get, pm_governance_history_list,
                pm_work_packages_list, pm_work_package_get, pm_work_package_readiness_get,
                pm_work_profiles_list, pm_work_profile_get, pm_work_profile_readiness_get,
-               pm_work_start_preview, pm_work_attempts_list, pm_work_attempt_get,
+               pm_work_start_preview, pm_work_attempts_list, pm_work_attempt_get, pm_work_inputs_list,
                pm_work_attempt_result_get, pm_work_attempt_changes_get, pm_work_attempt_diff_get,
                pm_issue_mappings_list, pm_issue_mapping_get,
 

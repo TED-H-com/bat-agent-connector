@@ -93,9 +93,10 @@
   dashboard hash, and whether this caller may cancel or resume. HTTP and MCP
   return the same loop. Capabilities advertise operation_loop version 1, and
   the agent skill teaches when to read it and when a missing loop is expected.
-  A `session.send` loop stays partial with reason `session_target`. This build
-  registers only `{host, session_id}` for that action and does not treat a
-  Work id on the target as complete.
+  Direct session sends stay partial with reason `session_target`. An admitted
+  Work input names its immutable Work and Attempt; a target alone is not proof.
+  Its loop uses the same authorization and sent-frame cancellation gate as the
+  operation endpoint, alongside the original input receipt.
 - A work attempt's result now includes the repository, the base commit recorded
   at the start, and the base branch, so a client can submit publish as given.
   Publish is withheld while a publication is still unfinished, when that same
@@ -147,6 +148,16 @@
   that workspace. Starting work can name one saved revision and then requires all
   twelve preconditions. Starting work without a profile is unchanged.
 
+- A started Work item can take another instruction. Send `session.send` with
+  the Work as the target. The instruction waits until the current turn finishes,
+  or it goes out immediately when that session is already idle. You can read the
+  queue, cancel an instruction that has not been sent, and reconcile an
+  unconfirmed send with its original operation. A Codex session is refused.
+  Immediately before sending, both session metadata and state must confirm idle
+  with no pending input. An unloaded session is not resumed by a follow-up.
+  Agent errors affect a Result only when their session generation and all
+  supplied message or turn identifiers match that turn.
+  The dashboard composer is not part of this change.
 
 - The hidden Board and Requirements scroll checks wait for the read the test held, so a second read of the same address cannot make that wait miss.
 

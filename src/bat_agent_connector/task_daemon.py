@@ -101,6 +101,7 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "pm_work_packages_list": "observe", "pm_work_package_get": "observe", "pm_work_package_readiness_get": "observe",
            "pm_work_profiles_list": "observe", "pm_work_profile_get": "observe", "pm_work_profile_readiness_get": "observe",
            "pm_work_start_preview": "observe", "pm_work_attempts_list": "observe", "pm_work_attempt_get": "observe",
+           "pm_work_inputs_list": "observe",
            "pm_work_attempt_result_get": "observe", "pm_work_attempt_changes_get": "observe", "pm_work_attempt_diff_get": "observe",
            "pm_issue_mappings_list": "observe", "pm_issue_mapping_get": "observe",
            "pm_follow_up_assessments_list": "observe", "pm_follow_up_assessment_get": "observe",
@@ -426,10 +427,14 @@ class TaskDaemon:
                 # The MCP/RPC response uses current membership and original source
                 # visibility even if the admitted operation has already completed.
                 op = self.ops.get(op["operation_id"], principal=principal)
+            from . import pm_work_follow_up
+            op = pm_work_follow_up.enrich_operation(self.ops.db, op)
             op = await pm_operation_loop.attach(self.ops, principal, op)
             return {"operation": op, "created": created}
         if method == "op_get":
+            from . import pm_work_follow_up
             loaded = self.ops.get(str(params.get("operation_id")), principal=principal)
+            loaded = pm_work_follow_up.enrich_operation(self.ops.db, loaded)
             return {"operation": await pm_operation_loop.attach(self.ops, principal, loaded)}
         if method == "op_list":
             statuses = params.get("statuses")
@@ -437,11 +442,15 @@ class TaskDaemon:
                                  actor=params.get("actor"), action=params.get("action"),
                                  limit=int(params.get("limit") or 50), principal=principal)
         if method == "op_cancel":
+            from . import pm_work_follow_up
             op = self.ops.cancel(principal, str(params.get("operation_id")))
             await self.artifact_store.reap_best_effort(op["operation_id"])
+            op = pm_work_follow_up.enrich_operation(self.ops.db, op)
             return {"operation": await pm_operation_loop.attach(self.ops, principal, op)}
         if method == "op_resume":
+            from . import pm_work_follow_up
             resumed = self.ops.resume(principal, str(params.get("operation_id")))
+            resumed = pm_work_follow_up.enrich_operation(self.ops.db, resumed)
             return {"operation": await pm_operation_loop.attach(self.ops, principal, resumed)}
         if method == "api_events":
             from .pm_access import filter_events
