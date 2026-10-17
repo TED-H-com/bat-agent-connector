@@ -19,6 +19,7 @@ export function followUpFixture(locale = 'en', options: Record<string, any> = {}
   base.data.session.agent_kind = options.agent || 'claude';
   if (options.provenance) base.data.session.provenance = options.provenance;
   if (options.api_access) base.data.session.api_access = options.api_access;
+  if (options.pending) base.data.session.pending = options.pending;
   if (options.title) base.fixture.data.items[0].title = options.title;
   base.fixture.data.items[0].work_item_id = WI;
   const zh = locale.startsWith('zh');
@@ -47,6 +48,12 @@ export function followUpFixture(locale = 'en', options: Record<string, any> = {}
     holdConsumed: false,
     releaseHold: () => {},
     lateReturned: false,
+    hold: {inputs: false, result: false},
+    held: [] as Array<() => void>,
+    releaseHeld() {const waiting = follow.held.splice(0); for (const resolve of waiting) resolve();},
+    receiptMode: 'normal' as 'normal' | 'missing' | 'mismatch',
+    opStatus: '' as string,
+    receiptState: '' as string,
     ops: new Map<string, any>(),
     seq: 0,
     reads: [] as string[],
@@ -99,22 +106,29 @@ export function followUpFixture(locale = 'en', options: Record<string, any> = {}
     if (input.method === 'GET' && path === '/pm/workspaces') return {status: 200, data: {workspaces: [{workspace_id: WS, name}]}};
     if (input.method === 'GET' && path === `/pm/workspaces/${WS}`) return {status: 200, data: {workspace: {workspace_id: WS, name, version: 1, membership: {role: 'owner', actor: follow.actor}}}};
     if (input.method === 'GET' && path === `/pm/workspaces/${WS}/threads`) return {status: 200, data: {workspace_id: WS, threads: [], next_cursor: null}};
+    const pause = async (kind: 'inputs' | 'result') => {
+      if (!follow.hold[kind]) return;
+      await new Promise<void>(resolve => { follow.held.push(resolve); });
+    };
     if (input.method === 'GET' && path === `/pm/workspaces/${WS}/work/${WI}/inputs`) {
-      if (follow.inputsStatus !== 200) return {status: follow.inputsStatus, data: {error: {code: 'NOT_FOUND', message: 'gone'}}};
+      const status = follow.inputsStatus;
       const after = url.searchParams.get('after');
-      if (after && follow.pages.has(after)) return {status: 200, data: follow.pages.get(after)};
-      if (follow.malformed) return {status: 200, data: {workspace_id: 'not-this-workspace'}};
+      const body = status !== 200 ? {error: {code: 'NOT_FOUND', message: 'gone'}}
+        : after && follow.pages.has(after) ? follow.pages.get(after)
+        : follow.malformed ? {workspace_id: 'not-this-workspace'}
+        : listBody(follow.items.map(row => ({...row})));
       if (url.searchParams.has('attempt_id') && follow.holdFiltered && !follow.holdConsumed) {
         follow.holdConsumed = true;
-        const body = listBody(follow.items.map(row => ({...row})));
         await new Promise<void>(resolve => { follow.releaseHold = () => { follow.lateReturned = true; resolve(); }; });
-        return {status: 200, data: body};
       }
-      return {status: 200, data: listBody(follow.items.map(row => ({...row})))};
+      await pause('inputs');
+      return {status, data: body};
     }
     if (input.method === 'GET' && path.startsWith(`/pm/workspaces/${WS}/work-attempts/`) && path.endsWith('/result')) {
-      if (follow.resultStatus !== 200) return {status: follow.resultStatus, data: {error: {code: follow.resultStatus === 403 ? 'FORBIDDEN' : 'NOT_FOUND', message: 'no'}}};
-      return {status: 200, data: resultBody()};
+      const status = follow.resultStatus;
+      const data = status === 200 ? resultBody() : {error: {code: status === 403 ? 'FORBIDDEN' : 'NOT_FOUND', message: 'no'}};
+      await pause('result');
+      return {status, data};
     }
     const target = input.body?.target;
     const workTarget = target && !Array.isArray(target) && Object.keys(target).length === 2 && target.workspace_id === WS && target.work_item_id === WI;
@@ -128,22 +142,27 @@ export function followUpFixture(locale = 'en', options: Record<string, any> = {}
         follow.seq += 1;
         const operation_id = 'op_' + follow.seq.toString(16).padStart(32, '0');
         const text = input.body.params?.text || '';
-        const receipt = {
-          operation_id, workspace_id: WS, work_item_id: WI, attempt_id: ATTEMPT,
-          sequence: follow.items.length + 1, state: 'queued', actor: follow.actor, cancellable: true,
+        const state = follow.receiptState || 'queued';
+        const receipt = follow.receiptMode === 'missing' ? null : {
+          operation_id: follow.receiptMode === 'mismatch' ? 'op_' + 'f'.repeat(32) : operation_id,
+          workspace_id: WS, work_item_id: WI, attempt_id: ATTEMPT,
+          sequence: follow.items.length + 1, state, actor: follow.actor, cancellable: state === 'queued',
           text_excerpt: text, text_truncated: false,
           host: 'do-not-render-host', message_id: 'msg-secret', session_id: 'search-results',
-          labels: QUEUED_LABELS,
-          next_allowed_actions: [{kind: 'operation_endpoint', endpoint: 'cancel', operation_id, label: 'Cancel queued instruction', label_zh_TW: '取消排隊中的指令'}],
+          labels: state === 'queued' ? QUEUED_LABELS : {
+            state: {en: state, 'zh-TW': state === 'failed' ? '失敗' : state === 'cancelled' ? '已取消' : '已接受'},
+            detail: {en: state, 'zh-TW': '狀態說明'},
+          },
+          next_allowed_actions: state === 'queued' ? [{kind: 'operation_endpoint', endpoint: 'cancel', operation_id, label: 'Cancel queued instruction', label_zh_TW: '取消排隊中的指令'}] : [],
         };
         op = {
-          operation_id, actor: follow.actor, idempotency_key: key, status: 'queued',
+          operation_id, actor: follow.actor, idempotency_key: key, status: follow.opStatus || 'queued',
           action: input.body.action, target: input.body.target, params: input.body.params, preconditions: input.body.preconditions,
-          input_receipt: receipt,
+          ...(receipt ? {input_receipt: receipt} : {}),
           result: {input_receipt: {labels: {state: {en: 'DECOY', 'zh-TW': '誘餌'}, detail: {en: 'DECOY', 'zh-TW': '誘餌'}}}},
         };
         follow.ops.set(key, op);
-        follow.items = [...follow.items, receipt];
+        if (receipt && follow.receiptMode !== 'mismatch') follow.items = [...follow.items, receipt];
       }
       return {status: 200, data: {operation: op}};
     }

@@ -5,7 +5,8 @@ import {followUpFixture, openWork, WS, WI, ATTEMPT} from './work-next-turn-fixtu
 const ui = {
   en: {
     send: 'Send next', check: 'Check original request', fresh: 'New request',
-    queued: 'Queued for the next turn', state: 'Queued', detail: 'Waiting for the current turn to end.',
+    queued: 'Queued for the next turn', accepted: 'Accepted. Queue status is unconfirmed.',
+    state: 'Queued', detail: 'Waiting for the current turn to end.',
     empty: 'No next step yet.', more: 'More steps', hidden: 'Some steps are hidden because their source is not visible.',
     withdrawn: 'This work is no longer here.', unknown: 'Unknown',
     codex: 'A next step is not available for this Codex session.',
@@ -18,7 +19,8 @@ const ui = {
   },
   'zh-TW': {
     send: '送出下一步', check: '查回原請求', fresh: '新請求',
-    queued: '已排入下一輪', state: '排隊中', detail: '正在等待目前回合結束。',
+    queued: '已排入下一輪', accepted: '已接受。排隊狀態尚未確認。',
+    state: '排隊中', detail: '正在等待目前回合結束。',
     empty: '還沒有下一步。', more: '還有步驟', hidden: '有些步驟因來源不可見而沒有列出。',
     withdrawn: '這項工作已不在這裡。', unknown: '未知',
     codex: '這個 Codex 工作階段無法排入下一步。',
@@ -101,7 +103,9 @@ for (const lang of ['en', 'zh-TW'] as const) {
     expect(f.follow.posts[1].idempotency_key).not.toBe(first);
     assertWorkPost(f.follow.posts[1], 'Same text');
     expect(f.follow.ops.size).toBe(2);
-    await expect(page.locator('#workspace-message-input textarea')).toBeVisible();
+    await expect(page.locator('#workspace-message-input')).toBeHidden();
+    await expect(page.locator('.workspace-conversation .workspace-composer')).toBeHidden();
+    await expect(page.locator('.workspace-conversation textarea:visible')).toHaveCount(1);
     expect(f.follow.errors).toEqual([]);
   });
 
@@ -143,41 +147,88 @@ test('a held accept is not a local queue, and the field is free once the id exis
   assertWorkPost(f.follow.posts[0], 'After this turn');
 });
 
-test('attempt change and idempotency conflict keep or drop the original key on purpose', async ({page}) => {
+for (const lang of ['en', 'zh-TW'] as const) {
+  test(`${lang}: an attempt error without admission refusal keeps the original request`, async ({page}) => {
+    const f = followUpFixture(lang);
+    const next = 'att_' + 'c'.repeat(32);
+    let release = () => {};
+    f.follow.holdPost = new Promise<void>(resolve => { release = resolve; });
+    f.follow.failPost = {status: 409, code: 'INVALID_PRECONDITIONS'};
+    await openWork(page, f, lang);
+    await field(page).fill('Keep this wording');
+    await send(page, lang).click();
+    await expect.poll(() => f.follow.postStarted).toBe(true);
+    f.follow.latest = next;
+    release();
+    const check = section(page).getByRole('button', {name: ui[lang].check, exact: true});
+    await expect(check).toBeVisible();
+    await expect(section(page).getByRole('button', {name: ui[lang].fresh, exact: true})).toHaveCount(0);
+    await expect(field(page)).toHaveValue('Keep this wording');
+    await expect(field(page)).toBeDisabled();
+    await expect(section(page)).toContainText(lang === 'zh-TW' ? '前置條件已變更。原請求維持不變。' : 'The preconditions changed. The original request stays in place.');
+    expect(f.follow.posts).toHaveLength(1);
+    const body = f.follow.posts[0].body;
+    const key = f.follow.posts[0].idempotency_key;
+    expect(body.preconditions).toEqual({expected_attempt_id: ATTEMPT});
+    await expect(check).toBeEnabled();
+    await check.click();
+    await expect.poll(() => f.follow.posts.length).toBe(2);
+    expect(f.follow.posts[1].idempotency_key).toBe(key);
+    expect(f.follow.posts[1].body).toEqual(body);
+    await expect(section(page).getByRole('button', {name: ui[lang].fresh, exact: true})).toHaveCount(0);
+    expect(f.follow.posts).toHaveLength(2);
+    f.follow.failPost = null;
+    await expect(check).toBeEnabled();
+    await check.click();
+    await expect(receipts(page)).toHaveCount(1);
+    expect(f.follow.posts).toHaveLength(3);
+    expect(f.follow.posts[2].idempotency_key).toBe(key);
+    expect(f.follow.posts[2].body).toEqual(body);
+    expect(f.follow.ops.size).toBe(1);
+  });
+}
+
+test('a proven admission refusal can use the attempt reported for a new request', async ({page}) => {
   const f = followUpFixture('en');
-  f.follow.failPost = {status: 409, code: 'PM_WORK_ATTEMPT_CHANGED'};
+  const next = 'att_' + 'c'.repeat(32);
+  f.follow.failPost = {status: 409, code: 'PM_WORK_ATTEMPT_CHANGED', admission_refused: true};
   await openWork(page, f, 'en');
-  await field(page).fill('Keep this wording');
+  await field(page).fill('Write it again');
+  const reads = f.follow.reads.length;
+  f.follow.latest = next;
   await send(page, 'en').click();
-  await expect(field(page)).toHaveValue('Keep this wording');
-  await expect(section(page)).toContainText('This work has a newer attempt.');
-  await expect(send(page, 'en')).toBeEnabled();
-  const first = f.follow.posts[0].idempotency_key;
+  const fresh = section(page).getByRole('button', {name: 'New request', exact: true});
+  await expect(fresh).toBeVisible();
+  await expect(section(page)).toContainText('This work has a newer attempt. The original request stays in place.');
+  expect(f.follow.posts).toHaveLength(1);
+  expect(f.follow.posts[0].body.preconditions).toEqual({expected_attempt_id: ATTEMPT});
+  await expect.poll(() => f.follow.reads.length).toBeGreaterThan(reads);
+  await expect.poll(() => f.follow.reads.some(row => row.includes('/work-attempts/') && row.includes(next))).toBe(true);
+  await fresh.click();
   f.follow.failPost = null;
+  await expect(send(page, 'en')).toBeEnabled();
   await send(page, 'en').click();
   await expect(receipts(page)).toHaveCount(1);
-  expect(f.follow.posts[1].idempotency_key).not.toBe(first);
-  assertWorkPost(f.follow.posts[1], 'Keep this wording');
+  expect(f.follow.posts).toHaveLength(2);
+  expect(f.follow.posts[1].idempotency_key).not.toBe(f.follow.posts[0].idempotency_key);
+  expect(f.follow.posts[1].body.preconditions).toEqual({expected_attempt_id: next});
+  expect(f.follow.posts[1].body.params).toEqual({text: 'Write it again', schedule: 'after_current'});
+});
 
-  f.follow.failPost = {status: 409, code: 'INVALID_PRECONDITIONS'};
-  await field(page).fill('Preconditions moved');
-  await send(page, 'en').click();
-  await expect(field(page)).toHaveValue('Preconditions moved');
-  await expect(section(page)).toContainText('The attempt changed. Send this step again.');
-  const moved = f.follow.posts.at(-1).idempotency_key;
-  f.follow.failPost = null;
-  await send(page, 'en').click();
-  expect(f.follow.posts.at(-1).idempotency_key).not.toBe(moved);
-
+test('an idempotency conflict retries the original key', async ({page}) => {
+  const f = followUpFixture('en');
   f.follow.failPost = {status: 409, code: 'IDEMPOTENCY_CONFLICT'};
+  await openWork(page, f, 'en');
   await field(page).fill('Conflict stays');
   await send(page, 'en').click();
   const check = section(page).getByRole('button', {name: 'Check original request', exact: true});
   await expect(check).toBeVisible();
   const conflict = f.follow.posts.at(-1).idempotency_key;
+  const body = f.follow.posts.at(-1).body;
   f.follow.failPost = null;
   await check.click();
   expect(f.follow.posts.at(-1).idempotency_key).toBe(conflict);
+  expect(f.follow.posts.at(-1).body).toEqual(body);
 });
 
 test('an admission refusal uses New request instead of the original key', async ({page}) => {
@@ -290,7 +341,8 @@ test('composition and IME Enter do not send', async ({page}) => {
   expect(f.follow.posts).toEqual([]);
   await expect.poll(() => field(page).evaluate((node: HTMLTextAreaElement) => !node.form?.querySelector('button[type=submit]')?.hasAttribute('disabled')
     && node.form?.querySelector('button[type=submit]')?.getAttribute('aria-disabled') !== 'true')).toBe(true);
-  await send(page, 'zh-TW').click();
+  await page.waitForTimeout(80);
+  await field(page).press('Control+Enter');
   await expect.poll(() => f.follow.posts.length).toBe(1);
   expect(f.follow.posts[0].body.params.text).toBe('組成中');
 });
@@ -425,14 +477,14 @@ test('a missing operate scope keeps history without a composer', async ({page}) 
   await expect(receipts(page)).toHaveCount(1);
 });
 
-test('a forbidden result keeps history without a composer', async ({page}) => {
+test('a forbidden result withdraws receipts and controls', async ({page}) => {
   const denied = followUpFixture('en', {resultStatus: 403});
   denied.follow.items = [queuedReceipt()];
   await openWork(page, denied, 'en');
-  await expect(receipts(page)).toHaveCount(1);
-  await expect(page.locator('[data-follow-up-pill]')).toContainText('Read-only');
-  await expect(page.locator('[data-follow-up-withdrawn]')).toHaveCount(0);
+  await expect(page.locator('[data-follow-up-withdrawn]')).toBeVisible();
+  await expect(receipts(page)).toHaveCount(0);
   await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
+  await expect(section(page)).not.toContainText('queued instruction');
 });
 
 test('a missing result withdraws the list', async ({page}) => {
@@ -503,6 +555,8 @@ test('more steps, hidden rows, an unknown label and a bad page stay honest', asy
   f.pushEvent('operation');
   await expect(section(page)).toContainText('這一步無法送出。', {timeout: 15000});
   await expect(receipts(page)).toHaveCount(1);
+  await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
+  await expect(page.locator('[data-follow-up-action]')).toHaveCount(0);
 });
 
 test('an empty list is not a zero count', async ({page}) => {
@@ -527,18 +581,145 @@ test('text longer than 20000 characters is not sent', async ({page}) => {
   expect(f.follow.posts).toEqual([]);
 });
 
-test('the legacy composer still sends the session target while follow-up is available', async ({page}) => {
-  const f = followUpFixture('en');
-  await openWork(page, f, 'en');
-  await page.locator('#workspace-message-input textarea').fill('legacy queue');
-  await page.getByRole('button', {name: 'Send', exact: true}).click();
-  await expect.poll(() => f.data.posts.length).toBe(1);
-  expect(f.data.posts[0].body).toMatchObject({
-    action: 'session.send', target: {host: 'demo', session_id: 'search-results'},
-    params: {text: 'legacy queue', queue: true},
+for (const lang of ['en', 'zh-TW'] as const) {
+  test(`${lang}: the work route has one instruction composer and keeps the old draft`, async ({page}) => {
+    const allow = lang === 'zh-TW' ? '允許' : 'Allow';
+    const deny = lang === 'zh-TW' ? '拒絕' : 'Deny';
+    const f = followUpFixture(lang, {pending: {
+      kind: 'permission', toolUseId: 'toolu_next', toolName: 'Bash', input_preview: 'npm test',
+    }});
+    await openWork(page, f, lang);
+    await expect(field(page)).toBeVisible();
+    await expect(page.locator('#workspace-message-input')).toBeHidden();
+    await expect(page.locator('.workspace-conversation textarea:visible')).toHaveCount(1);
+    await expect(page.getByRole('button', {name: allow, exact: true})).toBeVisible();
+    await expect(page.getByRole('button', {name: deny, exact: true})).toBeVisible();
+    await page.evaluate(id => { location.hash = '#/pm/' + id + '/discussions'; }, WS);
+    await page.evaluate(() => {
+      const key = Object.keys(localStorage).find(item => item.startsWith('batc.sync.'));
+      if (!key) throw new Error('missing sync scope');
+      const ns = key.slice('batc.sync.'.length);
+      localStorage.setItem(`batc.draft.${ns}.send.demo.search-results`, 'keep the old draft');
+    });
+    await page.evaluate(id => { location.hash = '#/item/' + id; }, WI);
+    await expect(field(page)).toBeVisible();
+    await expect(field(page)).toHaveValue('');
+    await expect(page.locator('#workspace-message-input textarea')).toHaveValue('keep the old draft');
+    await expect(page.locator('#workspace-message-input')).toBeHidden();
+    expect(f.follow.posts).toEqual([]);
+    expect(f.data.posts).toEqual([]);
+    await field(page).fill('next instruction');
+    await send(page, lang).click();
+    await expect.poll(() => f.follow.posts.length).toBe(1);
+    assertWorkPost(f.follow.posts[0], 'next instruction');
+    expect(f.data.posts).toEqual([]);
+    await expect(page.locator('#workspace-message-input textarea')).toHaveValue('keep the old draft');
   });
-  expect(f.follow.posts).toEqual([]);
+
+  test(`${lang}: a missing or non-queued receipt is not called queued`, async ({page}) => {
+    const f = followUpFixture(lang);
+    f.follow.receiptMode = 'missing';
+    f.follow.opStatus = 'failed';
+    await openWork(page, f, lang);
+    await field(page).fill('no receipt');
+    await send(page, lang).click();
+    const ack = section(page).locator('[data-pm-acknowledged]');
+    await expect(ack).toHaveAttribute('data-follow-up-ack', 'unknown');
+    await expect(ack).not.toContainText(ui[lang].queued);
+    await expect(ack.locator('a')).toHaveAttribute('href', /^#\/op\/op_[0-9a-f]{32}$/);
+    f.follow.opStatus = 'succeeded';
+    await field(page).fill('accepted without a receipt');
+    await send(page, lang).click();
+    await expect(ack).toHaveAttribute('data-follow-up-ack', 'accepted');
+    await expect(ack).toContainText(ui[lang].accepted);
+    await expect(ack).not.toContainText(ui[lang].queued);
+    f.follow.receiptMode = 'mismatch';
+    f.follow.opStatus = 'queued';
+    await field(page).fill('wrong receipt');
+    await send(page, lang).click();
+    await expect(ack).toHaveAttribute('data-follow-up-ack', 'unknown');
+    await expect(ack).not.toContainText(ui[lang].queued);
+    f.follow.receiptMode = 'normal';
+    f.follow.receiptState = 'failed';
+    f.follow.opStatus = 'failed';
+    await field(page).fill('failed receipt');
+    await send(page, lang).click();
+    await expect(ack).toHaveAttribute('data-follow-up-ack', 'failed');
+    await expect(ack).not.toContainText(ui[lang].queued);
+    expect(f.follow.posts).toHaveLength(4);
+    expect(new Set(f.follow.posts.map(row => row.idempotency_key)).size).toBe(4);
+  });
+}
+
+test('a held offer does not return after a denial or a malformed result', async ({page}) => {
+  const f = followUpFixture('en');
+  f.follow.items = [queuedReceipt()];
+  await openWork(page, f, 'en');
+  await expect(field(page)).toBeVisible();
+  await expect(receipts(page)).toHaveCount(1);
+  // The form refresh is not the event queue, so a later denial can finish while this result is still held.
+  f.follow.hold.result = true;
+  f.follow.failPost = {status: 409, code: 'INVALID_PRECONDITIONS'};
+  await field(page).fill('held refresh');
+  await send(page, 'en').click();
+  await expect.poll(() => f.follow.held.length).toBeGreaterThan(0);
+  await expect(section(page).getByRole('button', {name: ui.en.check, exact: true})).toBeDisabled();
+  f.follow.resultStatus = 403;
+  f.follow.hold.result = false;
+  f.pushEvent('operation');
+  await expect(page.locator('[data-follow-up-withdrawn]')).toBeVisible({timeout: 15000});
+  f.follow.releaseHeld();
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)))));
+  await expect(page.locator('[data-follow-up-withdrawn]')).toBeVisible();
+  await expect(receipts(page)).toHaveCount(0);
+  await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
+  await expect(section(page)).not.toContainText('queued instruction');
 });
+
+test('zh-TW: a held offer does not return after a malformed result', async ({page}) => {
+  const f = followUpFixture('zh-TW');
+  f.follow.items = [queuedReceipt()];
+  await openWork(page, f, 'zh-TW');
+  await expect(field(page)).toBeVisible();
+  f.follow.hold.result = true;
+  f.follow.failPost = {status: 409, code: 'PM_WORK_ATTEMPT_CHANGED'};
+  await field(page).fill('保留這次讀取');
+  await send(page, 'zh-TW').click();
+  await expect.poll(() => f.follow.held.length).toBeGreaterThan(0);
+  f.follow.result = 'bad';
+  f.follow.hold.result = false;
+  f.pushEvent('operation');
+  await expect(section(page)).toContainText('這一步無法送出。', {timeout: 15000});
+  await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
+  f.follow.releaseHeld();
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)))));
+  await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
+  await expect(page.locator('[data-follow-up-action]')).toHaveCount(0);
+  await expect(receipts(page)).toHaveCount(1);
+  await expect(section(page)).toContainText('這一步無法送出。');
+});
+
+for (const lang of ['en', 'zh-TW'] as const) {
+  test(`${lang}: an acknowledged row disappears when the list no longer shows it`, async ({page}) => {
+    const f = followUpFixture(lang);
+    await openWork(page, f, lang);
+    await field(page).fill('visible then hidden');
+    await send(page, lang).click();
+    await expect(receipts(page)).toHaveCount(1);
+    f.follow.items = [];
+    f.follow.filtered = true;
+    f.follow.hasMore = true;
+    f.follow.cursor = 'later';
+    f.pushEvent('operation');
+    await expect(receipts(page)).toHaveCount(0, {timeout: 15000});
+    await expect(section(page)).not.toContainText('visible then hidden');
+    await expect(page.locator('[data-follow-up-hidden]')).toBeVisible();
+    await expect(section(page).getByRole('button', {name: ui[lang].more, exact: true})).toBeVisible();
+    await expect(section(page)).not.toContainText(lang === 'zh-TW' ? '總共' : 'total');
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)))));
+    await expect(receipts(page)).toHaveCount(0);
+  });
+}
 
 for (const feature of [null, {version: 1, available: false}, {version: 2, available: true}] as const) {
   test(`follow-up ${JSON.stringify(feature)} is not advertised`, async ({page}) => {
