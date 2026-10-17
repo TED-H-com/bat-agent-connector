@@ -365,10 +365,7 @@ fn validate_adopt_start_preview(body: Option<&Value>) -> Result<(), String> {
             .remove("work_item_id")
             .and_then(|v| v.as_str().map(str::to_owned))
             .ok_or_else(fail)?;
-        if !work_id.is_match(&id)
-            || !seen.insert(id)
-            || !work.contains_key("requirement_ids")
-        {
+        if !work_id.is_match(&id) || !seen.insert(id) || !work.contains_key("requirement_ids") {
             return Err(fail());
         }
         if work
