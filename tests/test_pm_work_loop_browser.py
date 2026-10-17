@@ -2,7 +2,8 @@
 
 Run BATC_WORK_LOOP_BROWSER=1 pytest-disktmp uv run --extra dev pytest -q
 tests/test_pm_work_loop_browser.py after installing desktop's Playwright Chromium.
-All user writes originate in the browser; IPC only controls external BAT evidence.
+User writes originate in the browser; a separately authorized MCP principal opens
+its own Work. IPC coordinates the clients and controls external BAT evidence.
 """
 from __future__ import annotations
 
@@ -17,12 +18,15 @@ from pathlib import Path
 from urllib.parse import unquote
 
 import pytest
+from mcp.server.mcpserver.exceptions import ToolError
 
 from bat_agent_connector import pm_native_runtime, pr_publication
 from tests import test_pm_conversation_proposals as conversation
 from tests import test_pm_native_operations as native
+from tests.test_api_v1 import token
 from tests.test_checkpoints import MANUAL, LocalRunner, bat_writes, git, snapshot
 from tests.test_integration import commit
+from tests.test_pm_loop_parity import _open_mcp, unpack
 from tests.test_pm_native_runtime import protocol
 from tests.test_pm_plan_operations import target as thread_target
 from tests.test_pm_work_attempt_result import (
@@ -35,6 +39,7 @@ from tests.test_pm_work_attempt_result import (
     world,
 )
 from tests.test_pm_work_follow_up import _get_op
+from tests.test_pm_work_packages import member as add_member
 from tests.test_pm_work_start import STARTER_OWNER
 
 _ = (world, pm, ready, start_ready)  # Reuse disk-backed PM setup, without starting a Work.
@@ -81,6 +86,11 @@ async def test_start_queue_close_reconnect_result_and_pr(start_ready, mock, tmp_
 @pytest.mark.parametrize(("locale", "width"), [("en", 1440), ("zh-TW", 390)])
 async def test_discussion_adopt_start_queue_and_pr(start_ready, proposal_world, mock, tmp_path, monkeypatch, locale, width):
     w = start_ready
+    peer_token = None
+    if locale == "en":
+        # Both configured project owners keep distinct controller identities.
+        peer_token = token(w["d"], "mcp-peer", "observe", "manage", "start", "operate")
+        await add_member(w, "mcp-peer", "owner")
 
     def reply_protocol(prompt, client_id):
         context = json.loads(prompt.split("\n\n", 1)[1])["context"]
@@ -98,10 +108,11 @@ async def test_discussion_adopt_start_queue_and_pr(start_ready, proposal_world, 
         "options_confirmed": False, "reason": None, "execution_scope": "frozen_context_only",
         "execution_location": "connector_service", "version_verification": "per_run",
         "auth_validity": "unverified", "model_execution_verified": False})
-    await work_loop(w, mock, tmp_path, locale, width, mode="adopt")
+    await work_loop(w, mock, tmp_path, locale, width, mode="adopt",
+        peer_token=peer_token, monkeypatch=monkeypatch)
 
 
-async def work_loop(w, mock, tmp_path, locale, width, *, mode="start"):
+async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_token=None, monkeypatch=None):
     ops = w["d"].ops
     # The handoff test runner decodes a single protocol. This journey also runs
     # checkpoint and publication shell scripts, so execute every actual script.
@@ -138,6 +149,73 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start"):
             pytest.fail(f"Operation did not settle: {ops.get(operation_id)}")
         assert ops.get(operation_id)["status"] == expected, ops.get(operation_id)
 
+    async def start_peer_work(original):
+        server, fleet = _open_mcp(w["d"], monkeypatch, w["port"], peer_token)
+        async def call(name, **arguments):
+            return unpack(await server.call_tool(name, arguments))
+
+        async def submit(action, target, params, key, preconditions=None):
+            reply = await call("operation_submit", action=action, target=target, params=params,
+                preconditions=preconditions or {}, idempotency_key=key, confirm=True, wait_s=0)
+            identity = reply["operation"]["operation_id"]
+            await wait_status(identity, "succeeded")
+            return (await call("operation_get", operation_id=identity))["operation"]
+
+        try:
+            count = ops.db.execute("SELECT count(*) FROM operations").fetchone()[0]
+            with pytest.raises(ToolError, match="PM_WORK_CONTROLLER_CONFLICT"):
+                await call("operation_submit", action="session.send", target=w["target"],
+                    params={"text": "This must never reach the other controller.", "schedule": "after_current"},
+                    preconditions={"expected_attempt_id": original["attempt_id"]},
+                    idempotency_key="peer-takeover-refused", confirm=True, wait_s=0)
+            assert ops.db.execute("SELECT count(*) FROM operations").fetchone()[0] == count
+            first = await call("work_item_get", work_item_id=w["target"]["work_item_id"])
+            created = await submit("work_item.create", {"project_id": first["work_item"]["project_id"]},
+                {"title": "Check keyboard focus", "goal": "Verify focus after a failed login"}, "peer-create")
+            peer_work = created["result"]["work_item_id"]
+            target = {"workspace_id": w["workspace_id"], "work_item_id": peer_work}
+            instruction = "Check keyboard focus after a failed login."
+            preview = await call("pm_work_start_preview", **target, instruction=instruction,
+                requirement_ids=["member.login"], delivery="reviewable_changes")
+            assert preview["readiness"]["status"] == "ready", preview
+            started = await submit("work.start", target,
+                {"instruction": instruction, "requirement_ids": ["member.login"], "delivery": "reviewable_changes",
+                 "agent": "claude", "code_target": preview["code_target"]}, "peer-start", preview["preconditions"])
+            assert started["actor"] == "mcp-peer"
+            result = started["result"]
+            execution = ops.get(result["children"]["handoff"])["result"]
+            sid, wt = execution["session_id"], execution["worktree_path"]
+            mock.ws_doc["terminals"].append({"id": sid, "workspaceId": "ws-1", "title": "Check keyboard focus",
+                "type": "terminal", "cwd": wt, "worktreePath": wt, "worktreeBranch": execution["branch"],
+                "agentPreset": "claude-code", "sdkSessionId": "sdk-mcp-peer", "model": "claude-sonnet-4-5"})
+            git(wt, "config", "user.name", "fixture")
+            git(wt, "config", "user.email", "fixture@example.invalid")
+            sha = await produce_commit(wt, "keyboard.txt", "return focus after failed login\n", "Check keyboard focus")
+            _set_turn_messages(mock, sid, execution["message_id"], assistant_id="peer-answer",
+                assistant_text="Checked keyboard focus after login failure.")
+            mock.states[sid]["messages"][0]["content"] = "[batc] " + instruction
+            await w["d"].inventory._refresh_scheduled("h1")
+            peer = {**target, "attempt_id": result["attempt_id"]}
+            via_mcp = await call("pm_work_attempt_result_get", workspace_id=w["workspace_id"], attempt_id=peer["attempt_id"])
+            via_owner = await _result(w, peer)
+            assert via_mcp["changes"]["fixed_result_commit"]["commit_sha"] == sha
+            assert via_owner["changes"]["fixed_result_commit"]["commit_sha"] == sha
+            assert via_mcp["identity"]["caller_is_controller"] is True
+            assert via_owner["identity"]["caller_is_controller"] is False
+            first_result = await _result(w, original)
+            assert via_owner["identity"]["controller"] != first_result["identity"]["controller"]
+            assert started["loop"]["work_item_id"] == peer_work
+            assert started["loop"]["attempt_id"] == peer["attempt_id"]
+            assert started["loop"]["dashboard_hash"] == via_mcp["links"]["work_item_hash"]
+            assert any(row["action"] == "session.send" and row["reason"] == "not_controller"
+                for row in via_owner["blocked_actions"])
+            assert peer["attempt_id"] != original["attempt_id"] and peer_work != original["work_item_id"]
+            return {**peer, "candidate": sha, "session_id": sid, "operation_id": started["operation_id"],
+                "create_operation_id": created["operation_id"], "host": "h1",
+                "work_hash": via_mcp["links"]["work_item_hash"]}
+        finally:
+            await fleet.close()
+
     try:
         with (shots / "browser.log").open("w") as errors:
             child = await asyncio.create_subprocess_exec("node", "tests/work-loop-browser.mjs",
@@ -157,7 +235,7 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start"):
 
             await send({"port": w["port"], "token": w["owner_token"], "workspace": w["workspace_id"],
                 "work": w["target"]["work_item_id"], "locale": locale, "width": width, "shots": str(shots),
-                "mode": mode, "thread": thread_target(w)["thread_id"]})
+                "mode": mode, "thread": thread_target(w)["thread_id"], "peer_agent": bool(peer_token)})
             started = await receive("started")
             start = ops.get(started["operation_id"])
             if mode == "adopt":
@@ -214,16 +292,24 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start"):
             assert git(w["remote"], "rev-parse", "refs/heads/" + receipt["branch_ref"]) == candidate
             assert git(w["remote"], "rev-parse", "refs/heads/main") == w["sha"]
             await send({"verified": True})
+            peer = None
+            if peer_token:
+                await receive("peer-ready")
+                peer = await start_peer_work(att)
+                await send(peer)
             done = await receive("done")
             assert await asyncio.wait_for(child.wait(), 10) == 0, (shots / "browser.log").read_text()
             assert snapshot(w["human"]) == before
             assert (mock.metas[MANUAL], mock.states[MANUAL]) == manual
             starts = [f for f in mock.invokes if f["channel"] == "claude:start-session"]
             sends = [f for f in mock.invokes if f["channel"] == "claude:send-message"]
-            assert len(starts) == 1 and len(sends) == 2
-            assert bat_writes(mock) == starts + sends, "Unexpected resume, interrupt or other BAT write"
-            assert all(f["params"]["sessionId"] == sid for f in starts + sends)
-            assert sends[-1]["params"]["clientMessageId"] == second_marker
+            assert len(starts) == (2 if peer else 1) and len(sends) == (3 if peer else 2)
+            expected_writes = [starts[0], sends[0], sends[1], starts[1], sends[2]] if peer else starts + sends
+            assert bat_writes(mock) == expected_writes
+            assert all(f["params"]["sessionId"] == sid for f in starts[:1] + sends[:2])
+            assert sends[1]["params"]["clientMessageId"] == second_marker
+            if peer:
+                assert starts[-1]["params"]["sessionId"] == sends[-1]["params"]["sessionId"] == peer["session_id"]
             assert len([r for r in w["gh"].requests if r[:2] == ("POST", "/repos/o/r/pulls")]) == 1
             user_ops = [ops.get(oid) for oid in done["operations"]]
             initial = ["pm.message.append", "pm.conversation.propose", "work.adopt_and_start"] if mode == "adopt" else ["work.start"]
@@ -235,14 +321,14 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start"):
                 assert created == {op["operation_id"] for op in user_ops} | {
                     child_id for child_id in result["children"].values() if child_id is not None}
             else:
-                assert len([oid for oid in created if ops.get(oid)["action"] == "work.start"]) == 1
+                assert len([oid for oid in created if ops.get(oid)["action"] == "work.start"]) == (2 if peer else 1)
                 assert ops.db.execute("SELECT count(*) FROM pm_plan_adoptions").fetchone()[0] == adoptions_before + 1
             (shots / "evidence.json").write_text(json.dumps({"locale": locale, "width": width,
                 "source_sha": git(ROOT, "rev-parse", "HEAD"),
                 "source_dirty": bool(git(ROOT, "status", "--porcelain")),
                 "python": sys.version, "browser": done["browser"],
-                "entry": mode, "same_attempt": att["attempt_id"], "browser_operations": len(user_ops), "bat_starts": 1,
-                "bat_sends": 2, "github_posts": 1, "manual_unchanged": True,
+                "entry": mode, "same_attempt": att["attempt_id"], "browser_operations": len(user_ops), "bat_starts": len(starts),
+                "bat_sends": len(sends), "github_posts": 1, "manual_unchanged": True, "mcp_peer": peer,
                 "candidate": candidate, "browser_closed_during_dispatch": True}, indent=2) + "\n")
     finally:
         (shots / "operations.json").write_text(json.dumps([ops.get(row[0]) for row in

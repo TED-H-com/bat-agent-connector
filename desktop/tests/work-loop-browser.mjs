@@ -1,4 +1,4 @@
-// IPC controls only external BAT evidence. Every user action uses the real UI/API.
+// User actions use the real UI/API; IPC also coordinates the independent MCP client.
 import assert from 'node:assert/strict';
 import {createInterface} from 'node:readline';
 import {resolve} from 'node:path';
@@ -10,7 +10,7 @@ const receive = async () => JSON.parse((await lines.next()).value);
 const send = data => process.stdout.write(JSON.stringify(data) + '\n');
 const f = await receive(), origin = `http://127.0.0.1:${f.port}`;
 const zh = f.locale === 'zh-TW';
-const errors = [], operations = [], requests = [], responses = [], pending = new Map();
+const errors = [], operations = [], requests = [], responses = [], pending = new Map(), results = new Map();
 let browser, page, step = 'start';
 const launch = async () => {
   browser = await chromium.launch();
@@ -29,6 +29,9 @@ const launch = async () => {
   page.on('response', response => {
     pending.delete(response.request());
     if (new URL(response.url()).pathname.startsWith('/api/')) responses.push({path: new URL(response.url()).pathname, status: response.status()});
+    if (response.ok() && /\/work-attempts\/[^/]+\/result$/.test(new URL(response.url()).pathname)) {
+      response.json().then(result => results.set(result.attempt_id, result)).catch(() => {});
+    }
     if (response.status() >= 400) response.text().then(body => console.error(response.url(), response.status(), body)).catch(() => {});
   });
   page.on('requestfailed', request => {pending.delete(request); console.error('Request failed', request.url(), request.failure());});
@@ -40,6 +43,11 @@ const operation = async response => {
   assert.ok([200, 202].includes(response.status()), await response.text());
   const data = await response.json(); operations.push(data.operation.operation_id); return data.operation;
 };
+const clickOperation = async (action, button) => {
+  // Observe both promises immediately so a response timeout reaches diagnostics.
+  const [response] = await Promise.all([post(action), button.click()]);
+  return operation(response);
+};
 const shot = name => page.screenshot({path: resolve(f.shots, name + '.png'), animations: 'disabled'});
 try {
   await launch();
@@ -48,13 +56,9 @@ try {
     await page.goto(`${origin}/dashboard/?workbench=1#/pm/${f.workspace}/discussions/${f.thread}`);
     const composer = page.locator('[data-discussion-composer]');
     await composer.fill(zh ? '會員用 Email 登入與忘記密碼。第一版不要推薦碼。請整理成計畫。' : 'Plan member email sign-in and password recovery, excluding referrals.');
-    const saving = post('pm.message.append');
-    await page.getByRole('button', {name: zh ? '只存筆記' : 'Save note only', exact: true}).click();
-    await operation(await saving);
+    await clickOperation('pm.message.append', page.getByRole('button', {name: zh ? '只存筆記' : 'Save note only', exact: true}));
     await expect(composer).toHaveValue('');
-    const proposing = post('pm.conversation.propose');
-    await page.locator('[data-discussion-ask]').click();
-    await operation(await proposing);
+    await clickOperation('pm.conversation.propose', page.locator('[data-discussion-ask]'));
     await page.locator('[data-proposal-review]').click();
     await page.locator('[data-proposal-adopt-panel] textarea').last().fill(zh ? '採用登入與密碼重設，先開始登入工作。' : 'Adopt sign-in and recovery; start the sign-in work first.');
     const row = page.locator(`[data-adopt-work="${f.work}"]`);
@@ -65,9 +69,7 @@ try {
     await expect(submit).toBeEnabled();
     await submit.scrollIntoViewIfNeeded();
     await shot('00-plan-review');
-    const starting = post('work.adopt_and_start');
-    await submit.click();
-    start = await operation(await starting);
+    start = await clickOperation('work.adopt_and_start', submit);
   } else {
     await page.goto(`${origin}/dashboard/?workbench=1#/pm/${f.workspace}/overview`);
     await page.locator('[data-workbench-management]').selectOption('board');
@@ -78,9 +80,7 @@ try {
     await page.locator('[data-work-start-check]').click();
     const submit = page.locator('[data-pm-action="work.start"] button[type="submit"]');
     await expect(submit).toBeEnabled();
-    const starting = post('work.start');
-    await submit.click();
-    start = await operation(await starting);
+    start = await clickOperation('work.start', submit);
   }
   if (f.mode !== 'adopt') {
     await expect(page.locator('[data-work-start-item]')).toBeVisible();
@@ -100,9 +100,7 @@ try {
   assert.equal(new URL(workUrl).hash.includes(active.attempt), true);
   const text = zh ? '再補一個失敗後重新送出的案例。' : 'Add a retry-after-failure case.';
   await page.locator('[data-follow-up-input]').fill(text);
-  const sending = post('session.send');
-  await page.locator('[data-work-section="next-turn"]').getByRole('button', {name: zh ? '送出下一步' : 'Send next', exact: true}).click();
-  const queued = await operation(await sending);
+  const queued = await clickOperation('session.send', page.locator('[data-work-section="next-turn"]').getByRole('button', {name: zh ? '送出下一步' : 'Send next', exact: true}));
   await expect(page.locator('[data-follow-up-receipt]')).toContainText(zh ? '排隊中' : 'Queued');
   await shot('02-queued');
   const layout = await page.locator('.workspace-conversation').evaluate(lane => ({
@@ -140,9 +138,7 @@ try {
   await page.locator('[data-work-publish-title]').fill(zh ? '修正登入重複送出' : 'Fix duplicate login submission');
   await page.locator('[data-work-publish-body]').fill(zh ? '修正與重試案例已完成，等待審閱。' : 'Login repair and retry case ready for review.');
   await page.locator('[data-work-publish-draft="true"]').check();
-  const publishing = post('github.pr.publish');
-  await page.locator('[data-work-publish-submit]').click();
-  const published = await operation(await publishing);
+  const published = await clickOperation('github.pr.publish', page.locator('[data-work-publish-submit]'));
   send({stage: 'published', operation_id: published.operation_id});
   assert.equal((await receive()).verified, true);
   await page.reload();
@@ -150,6 +146,28 @@ try {
   await page.getByRole('button', {name: zh ? '成果' : 'Results', exact: true}).click();
   await expect(page.locator('[data-work-publish-pr]')).toContainText('21');
   await shot('04-published');
+  if (f.peer_agent) {
+    step = 'mcp-peer';
+    send({stage: 'peer-ready'});
+    const peer = await receive();
+    // Follow the MCP Result's own Work link, then the existing UI link to its Attempt.
+    await page.goto(`${origin}/dashboard/?workbench=1${peer.work_hash}`);
+    await page.locator('[data-work-start-item]').click();
+    assert.ok(page.url().includes(`work=${peer.work_item_id}&attempt=${peer.attempt_id}`));
+    await expect(page.locator('[data-follow-up-note]')).toContainText("You are not this work's controller.");
+    await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
+    await expect(page.locator('.workspace-composer')).toBeHidden();
+    await page.getByRole('button', {name: 'Results', exact: true}).click();
+    await expect(page.locator('[data-work-result]')).toContainText('Checked keyboard focus after login failure.');
+    await expect.poll(() => results.get(peer.attempt_id)?.changes?.fixed_result_commit?.commit_sha).toBe(peer.candidate);
+    assert.equal(results.get(peer.attempt_id).identity.work_item_id, peer.work_item_id);
+    await expect(page.locator('[data-work-publish-submit]')).toHaveCount(0);
+    await shot('05-mcp-peer-result');
+    await page.goto(workUrl);
+    await expect(page.locator('[data-follow-up-input]')).toHaveValue(draft);
+    await page.getByRole('button', {name: 'Results', exact: true}).click();
+    await expect(page.locator('[data-work-publish-pr]')).toContainText('21');
+  }
   assert.deepEqual(errors, []);
   assert.equal(requests.length, expectedOperations);
   assert.equal(new Set(requests.map(r => r.key)).size, expectedOperations);

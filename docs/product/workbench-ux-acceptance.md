@@ -138,6 +138,15 @@ FakeRuntime 提供，使用真正的提案、審閱、採用與操作 endpoint�
 與發布分支；PR 不代表需求驗收或部署。390／768／1440px 額外檢查閱讀按鈕
 不遮住下一步，並保存實際畫面、操作及版本資訊。
 
+英文採用路徑再接第二位已授權的 MCP principal：透過正式 MCP→RPC→操作服務
+建立自己的 Work、檢查就緒並開始，取得固定 Result。MCP 的操作投影、Result
+與 Dashboard 深層連結須指向相同 Work／Attempt／commit；Dashboard 開啟這份
+成果後，返回原工作仍保留草稿與 PR。兩個 controller 身分不同，MCP 送往原
+工作會被拒且不建立 operation；Dashboard 讀取第二份成果不會取得下一句或
+發布控制。此路徑總計兩個 start、三個 send，仍只有一次 GitHub POST，人工
+session 與 checkout 不變。第二位 principal 的權限是測試前置配置，不由關聯
+或閱讀成果取得；不啟動 Hermes 或任何真實模型 CLI。
+
 本地執行：
 
 ```sh
@@ -148,10 +157,10 @@ BATC_WORK_LOOP_BROWSER=1 pytest-disktmp uv run --python 3.13 --extra dev pytest 
 這組需瀏覽器的測試；desktop CI 明確啟用並執行，產物在
 `desktop/test-results/work-loop/`，隨既有 `desktop-shared-ui-fixtures` artifact 保存。
 
-此回歸涵蓋 K03、K05、K07、K08、K09 與 K15 的部分 I 路徑，以及 UX-A13
+此回歸涵蓋 K03、K05、K07、K08、K09、K12 與 K15 的部分 I 路徑，以及 UX-A13
 自動銜接的 I 證據。它使用已設定的專案、綁定及 Work，不涵蓋全新專案設定、
-真實 Idea／PM 回覆、P6 故障恢復、Hermes
-MCP 第二件 Work、原生安裝、真實模型／BAT／GitHub 或 R0／R1／L 驗收。
+真實 Idea／PM 回覆、P6 故障恢復、Hermes 產品端整合、兩份成果的 PM 影響評估、
+原生安裝、真實模型／BAT／GitHub 或 R0／R1／L 驗收。
 
 ## 報告範本
 
