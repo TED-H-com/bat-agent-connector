@@ -2,7 +2,7 @@
 
 ## Next release (unreleased)
 
-- A Board that was already left no longer clears another project's selected Work when its own read fails.
+- A Board read from a previous visit no longer clears the selected Work when its reply arrives late, including HTTP and network failures after returning to the same project.
 
 - A read from the overview brief, lifecycle, meetings, follow-up, sprints,
   governance, roadmap, evidence, a review candidate, or a worktree preview

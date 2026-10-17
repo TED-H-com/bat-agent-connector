@@ -107,7 +107,7 @@ function createFixture(locale: 'en' | 'zh-TW') {
       hold.token = heldToken;
       await hold.promise;
       inflight.delete(path);
-      if (hold.failure === 'abort') throw new Error('abort held read');
+      if (hold.failure === 'abort') return {abort: true};
       if (hold.failure) return {
         status: hold.failure,
         data: {error: {code: hold.failure === 403 ? 'FORBIDDEN' : 'UNAVAILABLE', message: 'Fixture refused the held read'}},
@@ -272,6 +272,58 @@ test.describe('retired Board read keeps the other project selection', () => {
 });
 
 test.describe('retired Board HTTP failure leaves the destination batch usable', () => {
+  for (const locale of ['en', 'zh-TW'] as const) for (const failure of [403, 503, 'abort'] as const) {
+  test(`an old ${failure} cannot clear the selection after returning to its project (${locale})`, async ({page}) => {
+    await page.addInitScript(language => Object.defineProperty(navigator, 'language', {value: language}), locale);
+    await installHeldBodyProbe(page);
+    const fixture = createFixture(locale);
+    await mountAttention(page, false, {...fixture.ws.fixture, caps: fixture.caps}, fixture.dispatch);
+    await page.goto(`/dashboard/?workbench=1${boardHash(workspaceB, selectedWork)}`);
+    await expect(page.locator('[data-work-inspector] h2')).toHaveText(fixture.selectedTitle());
+
+    fixture.holdNext(fixture.boardPath(workspaceA), failure);
+    await openBoard(page, workspaceA, workA[0]);
+    await expect.poll(() => fixture.isReadStarted(fixture.boardPath(workspaceA))).toBe(true);
+    const oldToken = fixture.heldToken(fixture.boardPath(workspaceA));
+    expect(oldToken).toBeTruthy();
+    await openBoard(page, workspaceB, selectedWork);
+    await expect(page.locator('[data-work-inspector] h2')).toHaveText(fixture.selectedTitle());
+    await openBoard(page, workspaceA, workA[1]);
+    const selectedTitle = locale === 'zh-TW' ? '核對來源' : 'Check the sources';
+    await expect(page.locator('[data-work-inspector] h2')).toHaveText(selectedTitle);
+    await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
+
+    fixture.release(fixture.boardPath(workspaceA));
+    if (failure === 'abort') {
+      await expect.poll(() => page.evaluate(path => (window as any).__heldFetchRejections.some((url: string) => new URL(url, location.href).pathname.endsWith(path)), fixture.boardPath(workspaceA))).toBe(true);
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+    } else await syncHeldBody(page, oldToken!);
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe(boardHash(workspaceA, workA[1]));
+    await expect(page.locator('[data-work-inspector] h2')).toHaveText(selectedTitle);
+    await expect(page.locator('.pm-board-error, [data-api-error]')).toHaveCount(0);
+    expect(fixture.unexpected).toEqual([]);
+  });
+  }
+
+  for (const failure of [403, 503, 'abort'] as const) {
+    test(`the current Board still displays ${failure}`, async ({page}) => {
+      const fixture = createFixture('en');
+      await mountAttention(page, false, {...fixture.ws.fixture, caps: fixture.caps}, fixture.dispatch);
+      await page.goto(`/dashboard/?workbench=1${boardHash(workspaceB, selectedWork)}`);
+      await expect(page.locator('[data-work-inspector] h2')).toHaveText(fixture.selectedTitle());
+      await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
+      fixture.holdNext(fixture.boardPath(workspaceB), failure);
+      await page.locator('button[data-pm-refresh]').click();
+      await expect.poll(() => fixture.isReadStarted(fixture.boardPath(workspaceB))).toBe(true);
+      fixture.release(fixture.boardPath(workspaceB));
+      await expect(page.locator('.pm-board-error')).toBeVisible();
+      await expect(page.locator('.pm-board-error')).toContainText(
+        failure === 403 ? STRINGS.en.forbidden_scope : STRINGS.en.wv_board_unavailable,
+      );
+      expect(fixture.unexpected).toEqual([]);
+    });
+  }
+
   test('a left Board HTTP 503 does not pause the destination event batch (en)', async ({page}) => {
     const copy = STRINGS.en;
     await page.addInitScript(language => Object.defineProperty(navigator, 'language', {value: language}), 'en');
