@@ -1,5 +1,9 @@
 export const discussionStrings = {
   en: {
+    pd_assessment_historical: 'This is the saved assessment. Current acceptance has not been checked here.',
+    pd_assessment_unavailable: 'The original assessment is unavailable. Its conclusion cannot be shown.',
+    pd_assessment_omitted: 'The complete assessment was not included in this context. Return to the original Result to review it.',
+    pd_assessment_loading: 'Reading the original assessment…', pd_assessment_retry: 'Read again',
     pd_notes_empty: 'No messages yet', pd_notes_empty_help: 'Record the problem, an option, or a question to revisit.',
     pd_search_empty_help: 'Try another title or context name.', pd_no_context_help: 'Open a discussion from a project record to add context.',
     pd_inputs_empty: 'No inputs yet', pd_inputs_empty_help: 'Add a sourced statement or a question from this discussion.',
@@ -27,6 +31,10 @@ export const discussionStrings = {
     pm_mode_follow_up: 'Follow-up',
   },
   'zh-TW': {
+    pd_assessment_historical: '這是當時保存的評估。此處未重新判定目前是否符合驗收。',
+    pd_assessment_unavailable: '無法讀取原始評估，因此無法顯示其結論。',
+    pd_assessment_omitted: '這份脈絡未包含完整評估。請返回原成果檢視。',
+    pd_assessment_loading: '正在讀取原始評估…', pd_assessment_retry: '重新讀取',
     pd_notes_empty: '尚無訊息', pd_notes_empty_help: '先記下問題、一個選項，或待釐清的疑問。',
     pd_search_empty_help: '試試其他標題或脈絡名稱。', pd_no_context_help: '從專案紀錄開啟討論，即可帶入脈絡。',
     pd_inputs_empty: '尚無資訊', pd_inputs_empty_help: '加入有來源的陳述，或這段討論中的疑問。',

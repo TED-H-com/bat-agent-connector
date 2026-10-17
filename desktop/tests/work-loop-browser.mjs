@@ -308,6 +308,15 @@ try {
     await expect(page.locator('.pd-context [data-discussion-context="quality_assessment"]')).toBeVisible();
     await expect(page.locator('[data-discussion-back]')).toHaveAttribute('href',reviewReturn);
     await shot('03-discussed-assessment');
+    await page.locator('.pd-context [data-discussion-context="quality_assessment"]').click();
+    const source=page.locator('[data-discussion-assessment]');
+    await expect(source).toContainText(fixed.candidate.slice(0,12));
+    await expect(source).toContainText('Keep the original requirement unassessed until its evidence is available.');
+    const criterion=source.locator('summary').filter({hasText:zh ? '未評估' : 'Unassessed'}).first();
+    await criterion.click();
+    await expect(source).toContainText('Independent verification has not been supplied for this fixed result.');
+    await shot('03-original-assessment');
+    await page.keyboard.press('Escape');
     await page.locator('[data-discussion-back]').click();
     await expect(page.locator('[data-follow-up-input]')).toHaveValue(draft);
     await page.getByRole('button', {name:zh ? '成果' : 'Results',exact:true}).click();

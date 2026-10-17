@@ -32,6 +32,7 @@ import {workspaceFollowUp} from './pm-follow-up.js';
 import {workspaceWorkPackages} from './pm-work-packages.js';
 import {workspaceSprints} from './pm-sprints.js';
 import {workspaceQualityReviews} from './pm-quality-reviews.js';
+import {discussionAssessments} from './pm-discussion-assessments.js';
 import {workspaceKanban} from './pm-kanban.js';
 import {workspaceMeetings} from './pm-meetings.js';
 import {workspaceSchedule} from './pm-schedule.js';
@@ -598,7 +599,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   let replyRuns = [], replyPartial = false;
   let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null,
     sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = '', earlier = null, historyCursor = null, historyExpanded = false,
-    packages = null, packageSignature = '', revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, proposalReview = null, discussionHint = null;
+    packages = null, packageSignature = '', revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, proposalReview = null, discussionHint = null, assessmentSources = null;
   lifecycle = workspaceId && caps()?.features?.pm_workspaces?.lifecycle?.version === 1
     ? workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted:()=>loaded&&workspace?.membership?.role==='owner',form,input,labelled,errorBox,onChange:()=>{updateForms();publishContext();}}) : null;
   if(lifecycle&&!threadId)body.insertBefore(lifecycle.element,content);
@@ -1308,7 +1309,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         disclosure({label: t('pd_details'), body: h('p', {class: 'muted'}, t('pm_unverified'))}),
         h('details', {'data-pm-add-input': ''}, h('summary', {}, t('pm_add_input')), factForm.box),
       );
-      const contextPane = h('section', {'data-discussion-tab': 'context'}, panelContext);
+      assessmentSources?.dispose();
+      assessmentSources = discussionAssessments({h,t,api,alive,workspaceId,threadId,namespace});
+      const contextPane = h('section', {'data-discussion-tab': 'context'}, panelContext, assessmentSources.element);
       for (const node of [...column.querySelectorAll(':scope > .pm-package-preparation, :scope > .pm-packages')]) contextPane.append(node);
       if (nativeAnalysis) contextPane.append(h('details', {}, h('summary', {}, t('pd_analysis')), nativeAnalysis.box));
       const meetingThread = ['sprint_planning', 'sprint_review', 'retrospective', 'maintenance_review'].includes(thread.mode);
@@ -1323,6 +1326,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       discussionTools = discussionPanel({t, namespace, workspaceId, threadId, panes: {context: contextPane,
         inputs: h('section', {'data-discussion-tab': 'inputs'}, information), plan: planPane,
         ...(meetings ? {meeting: h('section', {'data-discussion-tab': 'meeting'}, meetings.element)} : {})}, onSelect: key => {
+          if (key === 'context') void assessmentSources?.refresh();
           revisions?.setActive(key === 'plan');
           if (key === 'meeting' && initialReadComplete) void refreshSection(meetings);
           if (key === 'context' && initialReadComplete) for (const [section, details] of lazyThreadSections) if (details.open && !details.closest('[data-discussion-tab]')?.hidden) void refreshSection(section);
@@ -1355,6 +1359,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     mode.hidden = thread.title.trim().toLocaleLowerCase() === mode.textContent.toLocaleLowerCase();
     boundContext.replaceChildren(...discussionContext(t, thread.context, {limit: 1, onMore: () => discussionTools.open('context', {returnFocus: () => boundContext.querySelector('[data-discussion-more-context]')}), onOpen: () => discussionTools.open('context', {returnFocus: () => boundContext.querySelector('[data-discussion-context]')})}));
     panelContext.replaceChildren(...discussionContext(t, thread.context), ...(thread.context?.length ? [] : [emptyState({title:t('pd_no_context'),text:t('pd_no_context_help')})]));
+    assessmentSources?.update(thread.context);
     discussionHint.textContent = '';
     const transcript = notes.closest('.pd-transcript');
     const bottom = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 32, scroll = transcript.scrollTop;
@@ -1566,6 +1571,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   }
   async function load({event = false} = {}) {
     const ticket = ++sequence; refreshing = true; refresh.disabled = true;
+    assessmentSources?.withdraw();
     if (!event) {invalidateSections(); withdrawNames(); lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();
       ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();qualityReviews?.withdraw();qualitySelections.clear();}
     headerReads++;
@@ -1685,6 +1691,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       // views hidden and their first/manual refresh deferred until opened.
       for (const section of sourceSections()) section.hidden = false;
       workbench?.apply();
+      assessmentSources?.update(threadData?.thread?.context);
       for (const section of [lifecycle, evidence, brief, ahp, releaseBaselines, maintenancePolicy, maintenanceRepairs, maintenanceReview, qualityReviews, roadmap, schedule, kanban, sprints, meetings, governance, register, specifications, followUp, engineering,materialization,handoff,workBatches,issues,traceability]) {
         const lazy = lazyThreadSections.get(section);
         if (section && sectionRequired(section) && (!threadId || !lazy || lazy.open && !lazy.closest('[data-discussion-tab]')?.hidden)
@@ -1803,6 +1810,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   let contextSequence = 0;
   async function refreshDiscussionSources() {
     const ticket = ++contextSequence, generation = sequence;
+    assessmentSources?.withdraw();
     try {
     if (threadId === 'new') {
       const refs = await draftSourceRefs(); alive();
@@ -1843,6 +1851,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const off = onEvents(event => {
     const kind = event.resource_type;
     if (!pmEvent(kind) && !liveEvent(kind)) return;
+    assessmentSources?.withdraw();
     invalidateSections();
     if (kind.startsWith('pm_plan') || kind === 'pm_workspace') withdrawNames();
     // Withdraw changed authority before coalescing: an earlier unrelated event in
@@ -1872,7 +1881,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     disposed = true; main.removeEventListener('toggle', openedSource, true); for (const placeholder of maskedSources.values()) placeholder.remove(); maskedSources.clear();
     discussionTools?.dispose(); sequence++; off(); offOnline(); createPanel?.close(); detailPanel?.close(); reportMenu?.dispose(); overflow.dispose();
     brief?.dispose?.();traceability?.dispose();kanban?.dispose();resources?.dispose();schedule?.dispose();scheduleTools?.dispose();dependencies?.dispose();register?.dispose();
-    proposalReview?.dispose();nativeAnalysis?.dispose();ahp?.dispose();
+    proposalReview?.dispose();nativeAnalysis?.dispose();ahp?.dispose();assessmentSources?.dispose();
     for (const control of viewToolMenus.values()) control.dispose();
     for (const value of forms) value.dispose();
     refreshing = false;

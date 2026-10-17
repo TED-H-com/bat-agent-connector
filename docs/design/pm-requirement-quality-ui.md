@@ -65,6 +65,18 @@ run a model. A Work-session origin survives reload and returns to the same
 Attempt, unsent next-step draft and saved review. The new source chip identifies
 the original assessment in English and Traditional Chinese.
 
+Opening the discussion's Context panel reads the existing bounded thread-context
+endpoint and displays the exact original assessment beside the conversation.
+The view matches the workspace, thread, original operation, review and document
+digest, and requires the whole original criterion matrix. It shows the saved
+criterion text, conclusion and rationale, with current acceptance explicitly
+unevaluated; it never replaces the original with the review's latest assessment.
+An omitted whole assessment is labelled incomplete, and withdrawn or mismatched
+sources show no conclusion. Source events and navigation retire pending reads.
+Ordinary discussions and closed context panels perform no extra assessment read.
+The reader uses existing typography, disclosures and technical-details treatment,
+with no new action, endpoint, data store or model request.
+
 ## Original requirement acceptance selections
 
 The shared workspace handoff and selected-batch panels consume the registered

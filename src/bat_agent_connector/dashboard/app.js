@@ -4375,6 +4375,11 @@ var pmPackageHandoffStrings = {
 //#region src/pm-discussions-strings.js
 var discussionStrings = {
 	en: {
+		pd_assessment_historical: "This is the saved assessment. Current acceptance has not been checked here.",
+		pd_assessment_unavailable: "The original assessment is unavailable. Its conclusion cannot be shown.",
+		pd_assessment_omitted: "The complete assessment was not included in this context. Return to the original Result to review it.",
+		pd_assessment_loading: "Reading the original assessment…",
+		pd_assessment_retry: "Read again",
 		pd_notes_empty: "No messages yet",
 		pd_notes_empty_help: "Record the problem, an option, or a question to revisit.",
 		pd_search_empty_help: "Try another title or context name.",
@@ -4482,6 +4487,11 @@ var discussionStrings = {
 		pm_mode_follow_up: "Follow-up"
 	},
 	"zh-TW": {
+		pd_assessment_historical: "這是當時保存的評估。此處未重新判定目前是否符合驗收。",
+		pd_assessment_unavailable: "無法讀取原始評估，因此無法顯示其結論。",
+		pd_assessment_omitted: "這份脈絡未包含完整評估。請返回原成果檢視。",
+		pd_assessment_loading: "正在讀取原始評估…",
+		pd_assessment_retry: "重新讀取",
 		pd_notes_empty: "尚無訊息",
 		pd_notes_empty_help: "先記下問題、一個選項，或待釐清的疑問。",
 		pd_search_empty_help: "試試其他標題或脈絡名稱。",
@@ -36140,6 +36150,145 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 	};
 }
 //#endregion
+//#region src/pm-discussion-assessments.js
+var criterionKey = (value) => value?.kind === "acceptance" && [value.requirement_id, value.input_id].every((id) => typeof id === "string" && id.length) ? JSON.stringify([
+	value.kind,
+	value.requirement_id,
+	value.input_id
+]) : value?.kind === "dod" && typeof value.criterion_id === "string" && value.criterion_id.length ? JSON.stringify([value.kind, value.criterion_id]) : null;
+var outcomes = [
+	"accepted",
+	"rejected",
+	"unassessed",
+	"not_defined"
+];
+function discussionAssessments({ h, t, api, alive, workspaceId, threadId, namespace }) {
+	let refs = [], serial = 0, ready = false, pending = null, disposed = false;
+	const body = h("div"), status = h("div", { role: "status" });
+	const element = h("section", {
+		"data-discussion-assessment": "",
+		hidden: true
+	}, status, body);
+	const text = (key, attrs = {}) => h("p", {
+		class: "muted",
+		...attrs
+	}, t(key));
+	const valid = (ticket) => {
+		try {
+			alive();
+			return !disposed && ticket === serial;
+		} catch {
+			return false;
+		}
+	};
+	const unavailable = () => text("pd_assessment_unavailable");
+	function withdraw() {
+		serial++;
+		ready = false;
+		pending = null;
+		body.replaceChildren();
+		status.replaceChildren();
+	}
+	function original(ref, item) {
+		const value = item?.summary, assessment = value?.assessment, context = value?.context;
+		if (item?.available !== true || item.id !== ref.id || item.review_id !== ref.review_id || item.document_digest !== ref.document_digest || value?.workspace_id !== workspaceId || value.review_id !== ref.review_id || value.semantics !== "immutable_original_assessment" || value.current_applicability !== "not_evaluated" || assessment?.operation_id !== ref.id || assessment.document_digest !== ref.document_digest || !Number.isSafeInteger(assessment.version) || !/^[0-9a-f]{40}$/.test(context?.native_result?.candidate_commit) || !Array.isArray(context.criteria) || !context.criteria.length || !Array.isArray(assessment.document?.criteria) || typeof assessment.actor !== "string" || typeof assessment.document.rationale !== "string" || !outcomes.includes(assessment.document.acceptance) || !outcomes.includes(assessment.document.dod)) return null;
+		const keys = context.criteria.map((row) => criterionKey(row.criterion));
+		const conclusions = assessment.document.criteria;
+		if (keys.some((key) => !key) || new Set(keys).size !== keys.length || conclusions.length !== keys.length || new Set(conclusions.map((row) => criterionKey(row.criterion))).size !== keys.length || context.criteria.some((row) => typeof row.text !== "string") || conclusions.some((row) => !keys.includes(criterionKey(row.criterion)) || ![
+			"accepted",
+			"rejected",
+			"unassessed"
+		].includes(row.status) || typeof row.rationale !== "string")) return null;
+		return value;
+	}
+	function render(ref, item, coverage) {
+		if (ref.available === false) return unavailable();
+		if (item?.available === true && !item.summary && coverage?.omitted_context_positions?.includes(item.position)) return text("pd_assessment_omitted");
+		const value = original(ref, item);
+		if (!value) return unavailable();
+		const { context, assessment } = value, document = assessment.document;
+		const line = (key, content) => h("p", { class: "pm-source" }, h("strong", {}, t(key) + ": "), content);
+		return h("section", {}, h("h3", {}, t("pd_kind_quality_assessment")), text("pd_assessment_historical"), h("p", {}, `${t("pmq_acceptance")}: ${t("pmq_" + document.acceptance)} · ${t("pmq_dod")}: ${t("pmq_" + document.dod)}`), line("pmq_candidate", h("span", { title: context.native_result.candidate_commit }, context.native_result.candidate_commit.slice(0, 12))), document.rationale ? h("p", { class: "pm-note-text" }, document.rationale) : null, ...context.criteria.map((row) => {
+			const saved = document.criteria.find((item) => criterionKey(item.criterion) === criterionKey(row.criterion));
+			return disclosure({
+				key: JSON.stringify([
+					namespace,
+					workspaceId,
+					threadId,
+					ref.id,
+					criterionKey(row.criterion)
+				]),
+				label: `${row.text} · ${t("pmq_" + saved.status)}`,
+				body: h("div", {}, h("p", { class: "pm-note-text" }, saved.rationale), saved.verification ? line("pmq_verification", [
+					"passed",
+					"failed",
+					"unassessed",
+					"unavailable"
+				].includes(saved.verification.status) ? t("pmq_" + saved.verification.status) : t("ui_status_unknown")) : text("pmq_no_proof"))
+			});
+		}), disclosure({
+			label: t("pd_details"),
+			body: h("div", {}, line("pmq_reviewer", assessment.actor), line("pmq_candidate", context.native_result.candidate_commit), line("pmq_digest", assessment.document_digest), h("a", { href: `#/op/${ref.id}` }, t("pmq_history_receipts")))
+		}));
+	}
+	function refresh() {
+		if (disposed || !refs.length || ready) return Promise.resolve();
+		if (pending) return pending;
+		if (!refs.some((ref) => ref.available !== false)) {
+			body.replaceChildren(unavailable());
+			ready = true;
+			return Promise.resolve();
+		}
+		const ticket = ++serial, selected = structuredClone(refs);
+		status.replaceChildren(text("pd_assessment_loading"));
+		const read = (async () => {
+			try {
+				const value = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}/context?max_chars=64000`);
+				if (!valid(ticket)) return;
+				if (value.workspace_id !== workspaceId || value.thread_id !== threadId || !Array.isArray(value.bound_context)) throw Error("scope");
+				body.replaceChildren(...selected.map((ref) => {
+					const matches = value.bound_context.filter((item) => item.kind === "quality_assessment" && item.position === ref.position);
+					return matches.length === 1 ? render(ref, matches[0], value.coverage) : unavailable();
+				}));
+				status.replaceChildren();
+				ready = true;
+			} catch {
+				if (!valid(ticket)) return;
+				body.replaceChildren();
+				status.replaceChildren(unavailable(), button({
+					variant: "secondary",
+					size: "sm",
+					label: t("pd_assessment_retry"),
+					onClick: () => void refresh()
+				}));
+			} finally {
+				if (valid(ticket)) pending = null;
+			}
+		})();
+		pending = read;
+		return read;
+	}
+	function update(context = []) {
+		const next = context.filter((ref) => ref.kind === "quality_assessment");
+		if (JSON.stringify(next) !== JSON.stringify(refs)) {
+			withdraw();
+			refs = structuredClone(next);
+		}
+		element.hidden = !refs.length;
+		if (element.isConnected && !element.closest("[hidden]")) refresh();
+	}
+	return {
+		element,
+		update,
+		refresh,
+		withdraw,
+		dispose() {
+			withdraw();
+			disposed = true;
+		}
+	};
+}
+//#endregion
 //#region src/pm-kanban-observation.js
 function kanbanObservation({ h, t, api, alive, workspaceId, workId, caps, permitted, form, errorBox, onSourceFailure }) {
 	const action = "pm.session.quiescence.observe", sources = new Map();
@@ -46626,7 +46775,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		});
 	}
 	let replyRuns = [], replyPartial = false;
-	let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null, sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = "", earlier = null, historyCursor = null, historyExpanded = false, packages = null, packageSignature = "", revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, proposalReview = null, discussionHint = null;
+	let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null, sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = "", earlier = null, historyCursor = null, historyExpanded = false, packages = null, packageSignature = "", revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, proposalReview = null, discussionHint = null, assessmentSources = null;
 	lifecycle = workspaceId && caps()?.features?.pm_workspaces?.lifecycle?.version === 1 ? workspaceLifecycle({
 		h,
 		t,
@@ -48276,7 +48425,17 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				label: t("pd_details"),
 				body: h("p", { class: "muted" }, t("pm_unverified"))
 			}), h("details", { "data-pm-add-input": "" }, h("summary", {}, t("pm_add_input")), factForm.box));
-			const contextPane = h("section", { "data-discussion-tab": "context" }, panelContext);
+			assessmentSources?.dispose();
+			assessmentSources = discussionAssessments({
+				h,
+				t,
+				api,
+				alive,
+				workspaceId,
+				threadId,
+				namespace
+			});
+			const contextPane = h("section", { "data-discussion-tab": "context" }, panelContext, assessmentSources.element);
 			for (const node of [...column.querySelectorAll(":scope > .pm-package-preparation, :scope > .pm-packages")]) contextPane.append(node);
 			if (nativeAnalysis) contextPane.append(h("details", {}, h("summary", {}, t("pd_analysis")), nativeAnalysis.box));
 			if ([
@@ -48319,6 +48478,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					...meetings ? { meeting: h("section", { "data-discussion-tab": "meeting" }, meetings.element) } : {}
 				},
 				onSelect: (key) => {
+					if (key === "context") assessmentSources?.refresh();
 					revisions?.setActive(key === "plan");
 					if (key === "meeting" && initialReadComplete) refreshSection(meetings);
 					if (key === "context" && initialReadComplete) {
@@ -48363,6 +48523,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			title: t("pd_no_context"),
 			text: t("pd_no_context_help")
 		})]);
+		assessmentSources?.update(thread.context);
 		discussionHint.textContent = "";
 		const transcript = notes.closest(".pd-transcript");
 		const bottom = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 32, scroll = transcript.scrollTop;
@@ -48682,6 +48843,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		const ticket = ++sequence;
 		refreshing = true;
 		refresh.disabled = true;
+		assessmentSources?.withdraw();
 		if (!event) {
 			invalidateSections();
 			withdrawNames();
@@ -48917,6 +49079,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			worktreeChoice?.update();
 			for (const section of sourceSections()) section.hidden = false;
 			workbench?.apply();
+			assessmentSources?.update(threadData?.thread?.context);
 			for (const section of [
 				lifecycle,
 				evidence,
@@ -49138,6 +49301,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	let contextSequence = 0;
 	async function refreshDiscussionSources() {
 		const ticket = ++contextSequence, generation = sequence;
+		assessmentSources?.withdraw();
 		try {
 			if (threadId === "new") {
 				const refs = await draftSourceRefs();
@@ -49224,6 +49388,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const off = onEvents((event) => {
 		const kind = event.resource_type;
 		if (!pmEvent(kind) && !liveEvent(kind)) return;
+		assessmentSources?.withdraw();
 		invalidateSections();
 		if (kind.startsWith("pm_plan") || kind === "pm_workspace") withdrawNames();
 		const lifecycleChanged = ["pm_workspace", "pm_lifecycle"].includes(kind) && event.resource_id === workspaceId;
@@ -49268,6 +49433,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		proposalReview?.dispose();
 		nativeAnalysis?.dispose();
 		ahp?.dispose();
+		assessmentSources?.dispose();
 		for (const control of viewToolMenus.values()) control.dispose();
 		for (const value of forms) value.dispose();
 		refreshing = false;
