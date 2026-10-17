@@ -121,6 +121,7 @@ const ACTIONS = {
   'pm.work_batch.evidence.record': 'action_pm_work_batch_evidence_record',
   'pm.work_batch.start': 'action_pm_work_batch_start',
   'pm.work_package.create': 'action_pm_work_package_create',
+  'pm.work_profile.save': 'action_pm_work_profile_save',
   'pm.workload.capture': 'action_pm_workload_capture',
   'pm.workspace.create': 'action_pm_workspace_create',
   'pm.workspace.member.set': 'action_pm_workspace_member_set',

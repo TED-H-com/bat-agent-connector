@@ -279,6 +279,7 @@ JOURNAL_ONLY_ACTIONS = frozenset({
     "pm.work_batch.evidence.record",
     "pm.work_batch.start",
     "pm.work_package.create",
+    "pm.work_profile.save",
     "pm.workload.capture",
     "pm.workspace.create",
     "pm.workspace.member.set",
