@@ -13,6 +13,11 @@ import tempfile
 import time
 from pathlib import Path
 
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib
+
 from . import platform_files as files
 from .update_release import REPOSITORY, UpdateError, require
 
@@ -84,6 +89,37 @@ def digest_files(values):
     return digest.hexdigest()
 
 
+def prepare_tool_paths(root):
+    """A partial uv attempt cannot redirect the next install outside its root."""
+    for name in ("tools", "bin"):
+        files.ensure_private_directory(root / name)
+    environment = root / "tools/bat-agent-connector"
+    for entry in (root / "tools").iterdir():
+        require(entry.name in {"bat-agent-connector", ".lock", ".gitignore"} and not entry.is_symlink(),
+                "candidate_tool_path_changed")
+    if environment.exists():
+        descriptor = files._posix_dir(environment)
+        os.close(descriptor)
+        receipt = environment / "uv-receipt.toml"
+        if receipt.exists() or receipt.is_symlink():
+            info = receipt.lstat()
+            require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid() and info.st_nlink == 1
+                    and info.st_size <= 1024 * 1024, "candidate_tool_receipt_changed")
+            tool = tomllib.loads(receipt.read_text())["tool"]
+            require(isinstance(tool, dict) and isinstance(tool.get("entrypoints", []), list),
+                    "candidate_tool_receipt_changed")
+            for entry in tool.get("entrypoints", []):
+                require(isinstance(entry, dict), "candidate_tool_receipt_changed")
+                name = entry.get("name")
+                require(name in {"batc", "bat-agent-connector-mcp", "batc-update"}
+                        and entry.get("install-path") == str(root / "bin" / name)
+                        and entry.get("from") == "bat-agent-connector", "candidate_tool_receipt_changed")
+    for entry in (root / "bin").iterdir():
+        require(entry.name in {"batc", "bat-agent-connector-mcp", "batc-update"}
+                and entry.is_symlink() and entry.resolve() == environment / "bin" / entry.name,
+                "candidate_tool_entrypoint_changed")
+
+
 def installed(root, release, *, home, command=run):
     files.check_private(root, directory=True)
     files.ensure_private_directory(root)
@@ -102,6 +138,8 @@ def installed(root, release, *, home, command=run):
     for name in ("direct_url.json", "METADATA"):
         require(not (distribution / name).is_symlink(), "installed_metadata_linked")
     provenance = json.loads((distribution / "direct_url.json").read_text())
+    require(isinstance(provenance, dict) and isinstance(provenance.get("vcs_info"), dict),
+            "installed_identity_mismatch")
     require(provenance.get("vcs_info", {}).get("commit_id") == release["commit"]
             and provenance.get("vcs_info", {}).get("vcs") == "git", "installed_identity_mismatch")
     require("\nVersion: " + release["version"] + "\n" in (distribution / "METADATA").read_text(),
@@ -150,6 +188,7 @@ def stage(root, release, *, home, command=run):
         proof = json.loads(files.read_private(ready))
         require(installed(root, release, home=home, command=command) == proof, "staged_package_changed")
         return proof
+    prepare_tool_paths(root)
     env = clean_env(home)
     env.update(UV_TOOL_DIR=str(root / "tools"), UV_TOOL_BIN_DIR=str(root / "bin"), UV_PYTHON="3.13")
     git = shutil.which("git", path=env["PATH"])

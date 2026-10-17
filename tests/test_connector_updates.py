@@ -11,7 +11,14 @@ import pytest
 
 from bat_agent_connector import platform_files as files
 from bat_agent_connector import updater
-from bat_agent_connector.update_install import clean_env, digest_files, package_files, run, stage
+from bat_agent_connector.update_install import (
+    clean_env,
+    digest_files,
+    package_files,
+    prepare_tool_paths,
+    run,
+    stage,
+)
 from bat_agent_connector.update_release import API, REPOSITORY, UpdateError, discover, manifest, version
 
 pytestmark = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux per-user updater")
@@ -369,6 +376,31 @@ def test_stage_refuses_unknown_or_changed_candidate_before_commands(tmp_path):
     files.atomic_write(root / "candidate.json", b"different release")
     with pytest.raises(UpdateError, match="candidate_identity_changed"):
         stage(root, release(), home=tmp_path)
+
+
+@pytest.mark.parametrize("entries", [
+    '[{name = "batc", install-path = "/foreign/batc", from = "bat-agent-connector"}]',
+    '["malformed"]', '{}',
+])
+def test_partial_tool_install_cannot_follow_a_foreign_directory_or_receipt(tmp_path, entries):
+    root = tmp_path / "candidate"
+    foreign = tmp_path / "foreign"
+    files.ensure_private_directory(root)
+    files.ensure_private_directory(foreign)
+    sentinel = foreign / "keep"
+    sentinel.write_text("existing installation")
+    (root / "tools").symlink_to(foreign, target_is_directory=True)
+    with pytest.raises(OSError):
+        prepare_tool_paths(root)
+    assert sentinel.read_text() == "existing installation"
+    (root / "tools").unlink()
+    prepare_tool_paths(root)
+    environment = root / "tools/bat-agent-connector"
+    environment.mkdir(mode=0o700)
+    (environment / "uv-receipt.toml").write_text('[tool]\nentrypoints = ' + entries + '\n')
+    with pytest.raises(UpdateError, match="candidate_tool_receipt_changed"):
+        prepare_tool_paths(root)
+    assert sentinel.read_text() == "existing installation"
 
 
 def test_command_timeout_output_limit_and_clean_environment(tmp_path, monkeypatch):
