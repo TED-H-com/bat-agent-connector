@@ -28,6 +28,10 @@ or being checked automatically via `aria-disabled="true"` and an `aria-busy="tru
 preventing focus ejection to `<body>`. Submitting from a field shifts focus to the submit
 button before locking fields, duplicate submissions while busy or during automatic checks
 are ignored, and terminal failures or admission refusals move focus to the reset button.
+The Work next-step field is the exception that opts into releasing after a central
+operation id: the receipt stays in the list, the field clears, and focus returns to
+that field so the next instruction can be written. Every other durable form still
+locks until the operation succeeds. A local draft is not a queue.
 
 Keep existing drafts, stable IDs, operation keys, receipt recovery and read-only
 manual resources. A source withdrawal removes its facts, counts and inspector;
