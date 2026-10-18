@@ -127,7 +127,9 @@ export function overviewAssessment(options) {
     const label=t(current?'poa_refresh':'poa_assess');assess.replaceChildren(current?icon('refresh-cw'):label);
     assess.className=current?'ui-button ghost ui-icon-button':'ui-button secondary ui-sm';assess.setAttribute('aria-label',label);assess.title=label;
     const cap=capability?.overview_assessment,recover=request.hasPending();
-    assess.disabled=busy||!permitted(false)||cap?.authorized!==true||(!recover&&(cap?.eligible_for_preflight!==true||cap?.limits?.allowed!==true));
+    // Opening a draft performs fresh capability/source reads. A factual refresh
+    // must not disable a held pointer press and silently discard its click.
+    assess.disabled=!permitted(false)||cap?.authorized!==true||(!recover&&(cap?.eligible_for_preflight!==true||cap?.limits?.allowed!==true));
     history.disabled=busy||!capability;
     more.hidden=!latest||!current||latest.assessment_id===current.assessment.assessment_id;
     state.hidden=!current;

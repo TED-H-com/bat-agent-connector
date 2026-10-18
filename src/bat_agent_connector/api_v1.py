@@ -162,6 +162,8 @@ class ApiV1:
         from . import pm_bat_operations
         pm_bat_operations.install(daemon.ops)
         pm_plan_operations.install(daemon.ops)
+        from . import pm_workspace_adapter
+        pm_workspace_adapter.install(daemon.ops)
         pm_evidence.install(daemon.ops)
         pm_snapshots.install(daemon.ops)
         pm_roadmap.install(daemon.ops)
@@ -1270,6 +1272,7 @@ class ApiV1:
                                                     "installation_eligibility": True,
                                                     "native_analysis": "pm.run.analyze" in self.daemon.ops.actions,
                                                     "bat_analysis": "pm.run.bat.analyze" in self.daemon.ops.actions,
+                                                    "workspace_adapter": {"version": 1, "action": "pm.workspace.adapter.select"},
                                                     "runtime_reason": "external_tool_policy_unverified",
                                                     "plan_drafting": "pm.plan.draft" in self.daemon.ops.actions,
                                                     "plan_adoption": "pm.plan.adopt" in self.daemon.ops.actions,

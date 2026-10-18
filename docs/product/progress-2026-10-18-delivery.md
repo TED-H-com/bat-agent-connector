@@ -46,7 +46,7 @@ PM 評估準備競態修正有 161 項介面及 187 項 Node 測試通過；
 正常順序完整套件另由 [#283](https://github.com/TED-H-com/bat-agent-connector/issues/283) 追蹤：
 原 b238 Python 3.13 有 5 failures／5 errors；3.10 為 7067 通過、60 跳過。
 原 d4 Python 3.13 為 7064 通過、60 跳過、1 failure／2 errors；不宣稱整批通過。
-較後的 e78 固定版本 Python 3.13 正常順序整批為 7071 通過、60 跳過、8 warnings；3.10 尚在執行。
+15:44 UTC 補記：較後的 `e78e978e` 固定版本正常順序整批已完成，Python 3.13／3.10 各為 7071 通過、60 跳過、8 warnings（5569.67／5988.95 秒）。這是該較早來源的完整紀錄；`0bf36674` 修正版的整批測試接續執行，不以較早成功代替最新版本。
 它早於本次發布來源，不算最新版本整批通過，也不是原卡住原因的修復。
 [#241](https://github.com/TED-H-com/bat-agent-connector/issues/241) 已按 confinement 自身的三份完整紀錄及附 I/O 壓力量測的雙版本檢查結案；
 這不會關閉 #283 或把其他 deadline 問題標成已修。

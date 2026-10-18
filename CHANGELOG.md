@@ -2,6 +2,18 @@
 
 ## Next release (unreleased)
 
+- A factual refresh no longer drops an Overview assessment button press. Returning
+  to a mobile work board retains the requested reading position through its loading
+  layout, while a new user scroll still takes precedence.
+
+- Persist each workspace’s bounded PM analysis runtime through the existing durable operation. New discussion analysis, proposals, reviews, Overview assessments and continuation summaries use the saved choice; pending requests retain their original receipt, and a changed choice fences queued work before it starts. Active or unresolved PM analysis prevents switching.
+- Saving a workspace PM runtime choice remains a central journal operation;
+  unrelated Git host availability or configuration changes do not block it.
+- Opening PM request details focuses the original analysis recovery control even
+  when workspace runtime settings contain another form. Background resolution
+  reads retain the draft, caret and focus while gating submission; changed or
+  withdrawn sources still require fresh authorization and baseline review.
+
 - Preparing a PM Overview assessment survives an overlapping factual refresh.
   Source withdrawal and leaving the workspace still discard the pending read;
   refreshing facts never starts model work.
