@@ -1,3 +1,4 @@
+import {workspaceExternalHistory} from './pm-external-history.js';
 import {continuationBrief} from './pm-continuation.js';
 import {workbenchEnabled} from './workbench-mode.js';
 import {operationStatusLabel} from './global-labels.js';
@@ -778,6 +779,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const resources = workspaceId && !threadId && caps()?.features?.pm_resources
     ? workspaceResources({h, t, api, alive, namespace, workspaceId, errorBox, bucketsSupported: caps()?.features?.pm_resources?.buckets?.granularity === 'day'}) : null;
   if (resources) body.insertBefore(resources.element, content);
+  const externalHistory = workspaceId && !threadId && caps()?.features?.external_history?.version === 1
+    ? workspaceExternalHistory({h, t, api, alive, workspaceId, errorBox}) : null;
+  if (externalHistory) body.insertBefore(externalHistory.element, content);
+  const agentsContent = resources && externalHistory ? h('div', {}, resources.element, externalHistory.element) : resources?.element || externalHistory?.element;
   const drawersHome = h('div', {hidden: true});
   body.append(drawersHome);
   let detailPanel = null;
@@ -989,7 +994,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       ['schedule', schedule?.element || roadmap?.box || (sprints ? emptyState({title: t('wv_no_schedule'), text: h('span', {class: 'muted'}, t('wv_no_schedule_reason'))}) : null), schedule ? [] : [['ui_sprints', sprints?.box]]],
       ['dependencies', dependencies?.element || (maintenancePolicy || releaseBaselines ? emptyState({title: t('wv_no_dependencies'), text: h('span', {class: 'muted'}, t('wv_no_dependencies_reason'))}) : null), [['ui_policy', maintenancePolicy?.element], ['ui_baselines', releaseBaselines?.element]]],
       ['issues', register?.element || governance?.element, [...(register && governance ? [['ui_governance', governance.element]] : []), ['ui_repairs', maintenanceRepairs?.element], ['ui_maintenance_review', maintenanceReview?.element], ['ui_follow_up', followUp?.element]]],
-      ['agents', resources?.element || (ahp ? emptyState({title: t('wv_no_agents'), text: h('span', {class: 'muted'}, t('wv_no_agents_reason'))}) : null), [['ui_observations', ahp?.element]]],
+      ['agents', agentsContent || (ahp ? emptyState({title: t('wv_no_agents'), text: h('span', {class: 'muted'}, t('wv_no_agents_reason'))}) : null), [['ui_observations', ahp?.element]]],
       ['board', kanban?.element || (workBatches ? emptyState({title: t('wv_board_unavailable')}) : null), []],
     ];
     for (const [id, primarySection, secondaries] of definitions) {
@@ -1011,7 +1016,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     }, onSelect: id => {
       if (shownView === 'issues' && id !== 'issues') register?.rememberScroll();
       if (id !== 'issues') brief?.closeRelated?.();
-      title.textContent = t('ui_' + id); activateSection(resources, id === 'agents'); activateSection(schedule, id === 'schedule');
+      title.textContent = t('ui_' + id); activateSection(resources, id === 'agents'); activateSection(externalHistory, id === 'agents'); activateSection(schedule, id === 'schedule');
       activateSection(dependencies, id === 'dependencies');
       brief?.setActive?.(id === 'overview');
       activateSection(register, id === 'issues');
@@ -1043,8 +1048,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     if (primary) primary.hidden = workbench.selected() !== 'overview';
     if (reportMenu) reportMenu.hidden = workbench.selected() !== 'overview';
   }
-  const sourceSections = () => [...groups.flatMap(group => group.sections), content, schedule?.element, resources?.element, dependencies?.element, traceability?.element, ahp?.element, lifecycle?.element, evidence?.box, brief?.box, releaseBaselines?.element, maintenancePolicy?.element, maintenanceRepairs?.element, maintenanceReview?.element, qualityReviews?.element, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, register?.element, specifications?.element, followUp?.element, engineering?.element,materialization?.element,handoff?.element,workBatches?.element,issues?.element].filter(Boolean);
-  const sectionModules = () => [lifecycle, evidence, brief, ahp, releaseBaselines, maintenancePolicy, maintenanceRepairs, maintenanceReview, qualityReviews, roadmap, schedule, kanban, sprints, meetings, governance, register, specifications, followUp, engineering, materialization, handoff, workBatches, issues, traceability, resources, dependencies].filter(Boolean);
+  const sourceSections = () => [...groups.flatMap(group => group.sections), content, schedule?.element, resources?.element, externalHistory?.element, dependencies?.element, traceability?.element, ahp?.element, lifecycle?.element, evidence?.box, brief?.box, releaseBaselines?.element, maintenancePolicy?.element, maintenanceRepairs?.element, maintenanceReview?.element, qualityReviews?.element, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, register?.element, specifications?.element, followUp?.element, engineering?.element,materialization?.element,handoff?.element,workBatches?.element,issues?.element].filter(Boolean);
+  const sectionModules = () => [lifecycle, evidence, brief, ahp, releaseBaselines, maintenancePolicy, maintenanceRepairs, maintenanceReview, qualityReviews, roadmap, schedule, kanban, sprints, meetings, governance, register, specifications, followUp, engineering, materialization, handoff, workBatches, issues, traceability, resources, externalHistory, dependencies].filter(Boolean);
   const sectionNode = section => section?.element || section?.box;
   const sectionVisible = section => {
     const node = sectionNode(section);
@@ -1091,7 +1096,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   async function refreshSection(section, activation = false, event = false) {
     const read = activation ? activationReads.get(section) : null;
     activationReads.delete(section);
-    await (read || (section === dependencies ? section.setActive(true) : section === resources ? section.refresh({event:true})
+    await (read || (section === dependencies || section === externalHistory ? section.setActive(true) : section === resources ? section.refresh({event:true})
       : section === lifecycle ? section.refresh({event}) : section.refresh()));
     alive();
     if (sectionRequired(section)) revealSource(section);
@@ -1733,6 +1738,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       publishContext(); brief?.setActive?.(workbench?.selected() === 'overview');
       updateWorkView(workbench?.selected());
       resources?.setActive(workbench?.selected() === 'agents');
+      externalHistory?.setActive(workbench?.selected() === 'agents');
       schedule?.setActive(workbench?.selected() === 'schedule' && !detailPanel);
       if (dependencies) await dependencies.setActive(workbench?.selected() === 'dependencies');
       await register?.setActive(workbench?.selected() === 'issues');
@@ -1899,7 +1905,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     threadState.scroll = content.querySelector('.pd-transcript')?.scrollTop || 0;
     disposed = true; main.removeEventListener('toggle', openedSource, true); for (const placeholder of maskedSources.values()) placeholder.remove(); maskedSources.clear();
     discussionTools?.dispose(); sequence++; off(); offOnline(); createPanel?.close(); detailPanel?.close(); reportMenu?.dispose(); overflow.dispose();
-    brief?.dispose?.();traceability?.dispose();kanban?.dispose();resources?.dispose();schedule?.dispose();scheduleTools?.dispose();dependencies?.dispose();register?.dispose();
+    brief?.dispose?.();traceability?.dispose();kanban?.dispose();resources?.dispose();externalHistory?.dispose();schedule?.dispose();scheduleTools?.dispose();dependencies?.dispose();register?.dispose();
     proposalReview?.dispose();nativeAnalysis?.dispose();ahp?.dispose();assessmentSources?.dispose();
     for (const control of viewToolMenus.values()) control.dispose();
     for (const value of forms) value.dispose();

@@ -34,7 +34,7 @@ def _hash(value):
     return hashlib.sha256(value).hexdigest()
 
 
-def read_page(source, cursor, parser):
+def read_page(source, cursor, parser, *, decoder=None):
     """Worker thread has no journal access and returns allowlisted metadata only."""
     cursor, parser = dict(cursor), dict(parser)
     # Config authorizes one regular file; symlinks, pipes, devices and recursive scans are refused.
@@ -65,6 +65,7 @@ def read_page(source, cursor, parser):
         values, rate = [], None
         consumed = lines = 0
         while consumed < PAGE_BYTES and lines < PAGE_LINES:
+            line_offset = stream.tell()
             line = stream.readline(LINE_BYTES + 1)
             if not line:
                 break
@@ -81,7 +82,12 @@ def read_page(source, cursor, parser):
                 record = json.loads(line)
             except (ValueError, RecursionError):
                 raise UsageInvalid("invalid_json") from None
-            value, incoming_rate = parse(record, source, parser)
+            if decoder is None:
+                value, incoming_rate = parse(record, source, parser)
+            else:
+                # A separately authorized collector may reuse only the bounded
+                # file transport. Usage grants never select this decoder.
+                value, incoming_rate = decoder(record, source, parser, offset=line_offset, digest=_hash(line))
             if value:
                 values.append(value)
             if incoming_rate and (rate is None or incoming_rate["observed_at"] >= rate["observed_at"]):

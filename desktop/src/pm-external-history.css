@@ -1,0 +1,12 @@
+[data-external-history] { margin-top: var(--space-4); min-width: 0; }
+.exh-list { display: grid; min-width: 0; }
+.exh-source { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); padding-block: var(--space-2); border-bottom: 1px solid var(--line); }
+.exh-source:last-child { border-bottom: 0; }
+.exh-source button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: start; }
+.exh-entry { padding-block: var(--space-4); border-bottom: 1px solid var(--line); }
+.exh-entry header { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: baseline; }
+.exh-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-body); }
+.exh-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block: var(--space-3); }
+@media (max-width: 799px) { .exh-source button, .exh-actions button { min-height: 44px; } }
+
+@media (min-width: 800px) { [data-history-detail] > header > .ui-icon-button { display: inline-flex; } }

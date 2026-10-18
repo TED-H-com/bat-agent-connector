@@ -1,0 +1,26 @@
+export const externalHistoryStrings = {
+  en: {
+    exh_title: 'External conversations', exh_help: 'Read conversations shared with this workspace. Their original CLI sessions remain read-only.',
+    exh_empty: 'No conversation histories are shared with you', exh_empty_help: 'An administrator can connect a specific local transcript and grant access to named readers.',
+    exh_source: 'Source', exh_entries: '{count} entries', exh_open: 'Read {name}', exh_scope: 'Partial history · text and tool markers only',
+    exh_asof: 'Collected {time}', exh_unknown_time: 'Collection time unknown', exh_unavailable: 'This history is unavailable. Its last saved content is hidden.',
+    exh_pending: 'Waiting for collection', exh_catching: 'Still collecting', exh_ready: 'Ready to read', exh_stale: 'Collection is out of date', exh_limit: 'Collection limit reached',
+    exh_more: 'Read more', exh_new: 'New entries available', exh_new_read: 'Read new entries', exh_no_entries: 'No readable entries in this collected portion',
+    exh_user: 'User', exh_assistant: 'Assistant', exh_tool: 'Tool record', exh_tool_request: 'Tool requested: {name}', exh_tool_result: 'Tool result recorded · content omitted',
+    exh_tool_unknown: 'Unknown tool', exh_clipped: 'This entry is shortened.', exh_omitted: '{count} parts omitted', exh_coverage: 'Source and coverage',
+    exh_coverage_counts: '{records} records and {parts} parts omitted · {clipped} shortened entries', exh_cli: 'Recorded CLI version',
+    exh_page_limit: 'This view shows the first 500 collected entries.', exh_retry: 'Try reading again', exh_current: 'No newer collected entries',
+  },
+  'zh-TW': {
+    exh_title: '外部對話', exh_help: '閱讀分享至此工作區的對話。原本的 CLI 會話維持唯讀。',
+    exh_empty: '目前沒有分享給你的對話歷史', exh_empty_help: '管理者可連接指定的本機對話檔，並授權具名讀者。',
+    exh_source: '來源', exh_entries: '{count} 則紀錄', exh_open: '閱讀 {name}', exh_scope: '部分歷史 · 僅含文字與工具標記',
+    exh_asof: '收集於 {time}', exh_unknown_time: '收集時間未知', exh_unavailable: '目前無法讀取這份歷史，已隱藏先前儲存的內容。',
+    exh_pending: '等待收集', exh_catching: '仍在收集', exh_ready: '可閱讀', exh_stale: '收集資料已過期', exh_limit: '已達收集上限',
+    exh_more: '閱讀更多', exh_new: '有新紀錄', exh_new_read: '閱讀新紀錄', exh_no_entries: '目前收集的部分沒有可閱讀紀錄',
+    exh_user: '使用者', exh_assistant: '助理', exh_tool: '工具紀錄', exh_tool_request: '已要求工具：{name}', exh_tool_result: '已記錄工具結果 · 內容略去',
+    exh_tool_unknown: '未知工具', exh_clipped: '這則紀錄已縮短。', exh_omitted: '已略去 {count} 個部分', exh_coverage: '來源與涵蓋範圍',
+    exh_coverage_counts: '略去 {records} 則紀錄與 {parts} 個部分 · {clipped} 則已縮短', exh_cli: '記錄的 CLI 版本',
+    exh_page_limit: '此畫面最多顯示最早收集的 500 則紀錄。', exh_retry: '重新讀取', exh_current: '目前沒有更新的已收集紀錄',
+  },
+};
