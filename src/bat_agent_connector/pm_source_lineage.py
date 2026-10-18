@@ -236,6 +236,10 @@ def _visible_roots(db, principal, original_ids):
             from .pm_conversation_proposals import operation_visible as conversation_visible
             if not conversation_visible(db, principal, operation):
                 return False
+        elif operation['action'] == 'pm.overview.assess':
+            from .pm_overview_assessments import operation_visible as overview_visible
+            if not overview_visible(db, principal, operation):
+                return False
         elif operation['action'] == 'pm.continuation.prepare':
             from .pm_continuation import operation_visible as continuation_visible
             if not continuation_visible(db, principal, operation):
@@ -346,7 +350,8 @@ def bind_operation(db, operation_id, target, params, binding):
         original_ids = [operation_id, *original_ids]
         resources.append(("session", binding["pm_bat_binding"]["target"]["host"] + "/" + str(uuid.uuid5(NAMESPACE, operation_id))))
     if (binding.get("pm_spec_materialization") is not None or binding.get("pm_maintenance_repair") is not None
-            or binding.get('pm_review_candidate') is not None or binding.get('pm_work_input_idea') is not None):
+            or binding.get('pm_review_candidate') is not None or binding.get('pm_work_input_idea') is not None
+            or binding.get('overview_assessment') is not None):
         original_ids = [operation_id, *original_ids]
     if binding.get("pm_handoff") is not None:
         from .checkpoints import _SESSION_NS

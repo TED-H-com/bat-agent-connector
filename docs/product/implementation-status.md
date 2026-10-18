@@ -111,7 +111,8 @@ Python Connector／Task Service 是唯一中央權威；Web／Tauri 共用 `desk
 詳細增量、合約與檢查見 [PM 狀態](pm-v1.2-status.md) 與 [進度報告](progress-2026-10-16.md)。
 第 7 輪已合併的部分不再列為待實作；#174、#175、#167、#177、#179 與 #180 已合併至主線。
 本機連線網址已由 #153 提供；[本機 Git](../design/local-host.md) 尚未實作，#167 的 Git transport 合約已合併，本機 Git 仍回報無法使用。
-[Overview PM 重點判讀](../design/pm-overview-assessment.md) 也只有設計（#143 待負責人裁決），不等於現有進度提示。
+[Overview PM 重點判讀](../design/pm-overview-assessment.md)（#143）已依後續 EC-1.1 授權進入程式候選，
+包含固定來源、結構化判讀、既有分析路線與雙語卡片／歷史；尚未合併、發布或完成真實 PM 品質驗收。
 一般 native coding、AHP 寫入、其餘文件／簡報、更多 CLI、遠端資源收集與交付效率歸因仍待做。
 完整工作表見[PM 狀態](pm-v1.2-status.md)；M4 已於 #116 合併，M5 保留歷史候選及檢查，不由本輪重新驗證。
 

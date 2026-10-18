@@ -13,7 +13,75 @@ what needs the owner's decision. Add one compact assessment below the factual
 status strip. Register `pm.overview.assess` as a structured sink over the existing
 analysis executor and an Overview-only frozen bundle. Store each verified result
 as immutable history. Opening or refreshing factual Overview data never spends
-model budget. This document does not authorize implementation or adopt a policy.
+model budget. The original design-only document did not authorize implementation or adopt a policy; the later EC-1.1 authorization and implementation scope are recorded below.
+
+## EC-1.1 implementation, October 18
+
+The October 14 inspection and line references below remain historical. The
+owner subsequently authorized continuing the full EC-1.1 plan and shipping
+reviewed increments. The backend increment now implements this contract on the
+integrated Workbench baseline. The same candidate now adds the shared Live card,
+explicit request/recovery controls and exact history inspector under issue #143.
+The initial four-group card keeps additional recommendations, arrangements, watch
+items and original provenance in Details. First use prepares its ordinary carrier
+through a durable thread-create request; model analysis remains a separate explicit
+action. Existing history supplies the carrier on later clients. Read refreshes do
+not spend model budget. This candidate is not yet merged, packaged or live-tested.
+
+Version 1 uses the proposed deterministic templates, a visible ordinary carrier,
+Live-only placement, one turn, 300 seconds, 32,000 context characters / 256 KiB,
+and workspace admission caps of 1/minute, 6/hour and 24/day. These are conservative
+implementation defaults under that authorization, not a claim that the owner
+separately approved each proposed setting. There is no automatic model work,
+measured dollar cap or real model acceptance evidence.
+
+The new `pm.overview.assess` action freezes its selector inside the intent INSERT
+transaction, uses the existing structured adapters, and atomically saves its
+immutable assessment with the original verified import receipt. New admissions
+are counted from original operations across actors, using the timestamp after the
+admission transaction acquires its lock. A same-key admission race rechecks the
+original source-gated receipt before reserving another rate slot. Replay and recovery keep the
+original key, adapter and source bundle. Invalid output remains review-only.
+
+HTTP `/api/v1/pm/workspaces/{workspace_id}/overview-assessments` and its exact
+`/{assessment_id}` detail route share `pm_overview_assessments_list` /
+`pm_overview_assessment_get` with RPC/MCP and the typed desktop allowlist. The
+list accepts an opaque workspace-bound `before` cursor and `limit` 1–50
+(default 10), returns newest-first metadata and explicit partial/filter flags.
+Detail returns the original context and centrally checked freshness.
+`pm_context_bundle_preview` accepts `kind=overview_assessment`; the default
+accepted-document read stays unchanged. Neither read creates a carrier or calls
+a model. Capability and preview report enforced limits and a central retry time.
+
+DDL adds an append-only result table and indexes without a data migration or
+`user_version` change. Original source withdrawal applies to operation/event/run
+reads and whole assessments, including uncited evidence. Model output cannot
+adopt a plan, append assistant prose, change the thread version or start Work.
+
+
+The registry computes these version-1 template prerequisites centrally; the
+provider can only select from the saved `eligible_templates` of each subject:
+
+| Template | Frozen prerequisite |
+| --- | --- |
+| `goal_blocker` | Visible blocker with explicit current adopted-plan requirement edges and a confirmed goal; basis must contain that goal and one affected requirement. |
+| `decision_first`, `prepare_options` | Pending decision in the visible Overview. |
+| `confirm_direction` / `review_proposal` / `choose_response` | Pending decision whose original type is plan revision / proposal / governance. |
+| `watch_exposure` | Recorded risk or deviation; original severity stays unchanged. |
+| `watch_recorded_risk` | Recorded risk in the projection. |
+| `watch_recorded_forecast` | A milestone with a recorded forecast, or its explicit later-than-baseline deviation. |
+| `clarify_dependency` | Open blocker from a governance record whose actual kind is dependency. |
+| `follow_recorded_action` | Governance record with response and assigned owner, affecting requirements explicitly blocked in the current plan. No authority is inferred. |
+| `review_evidence` | Visible attention item, milestone or delivery with a resolved original typed source. |
+| `insufficient_basis` | Projection/coverage subject; mandatory when no goal is confirmed. |
+| `no_priority_identified` | Confirmed goal, no missing/truncated/incomplete coverage and no visible unresolved attention. |
+| `await_recorded_evidence` | Reserved vocabulary; no current Overview field proves this state, so version 1 never advertises it for a source. |
+
+Every statement cites 1–4 distinct original registry tokens including its subject.
+All computed coverage limitations must be returned; invalid/extra text and
+invented quantities are rejected. Decision/handled/watch categories cannot
+classify the same subject twice. Format-valid output is still unadopted analysis.
+
 
 ## Verified foundations and gaps
 

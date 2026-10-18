@@ -7,6 +7,15 @@
   stage and cleanup evidence without changing deadlines or retrying a model.
 
 - Retain a proven-unsent Work instruction for later: cancel its original queue entry, then save an Idea with the complete source and reason. Restart and lost-reply recovery keep the original request, and partial saves never resend the instruction. Shared English and Traditional Chinese controls preserve drafts and focus.
+
+- The explicit Overview assessment API freezes current visible facts and saves
+  structured PM priorities in immutable history through the existing native/BAT
+  analysis runtimes. It enforces workspace admission and context/time bounds,
+  preserves original-source withdrawal and recovery, and performs no model work
+  on reads. The shared English/zh-TW Live card keeps original evidence, explicit
+  request recovery, partial/stale states and separate exact history. Reading or
+  refreshing the page never launches a model; a saved report stays unchanged.
+
 - Conversation pinning survives late session controls changing the available height.
   Queued programmatic scroll events preserve the reader's existing follow choice;
   readers who scrolled to earlier messages keep their position.

@@ -690,6 +690,136 @@ var diagnosticsStrings = {
 	}
 };
 //#endregion
+//#region src/pm-overview-assessment-strings.js
+var overviewAssessmentStrings = {
+	en: {
+		poa_details: "Details",
+		poa_current_read: "Current read",
+		poa_this_week: "This week",
+		poa_based_on: "Based on",
+		poa_overview: "Overview",
+		poa_partial: "Partial evidence",
+		poa_model_unknown: "Model not reported",
+		poa_permission: "Assessment requires management access.",
+		poa_agent_missing: "PM agent is not connected.",
+		poa_setup: "Set up PM",
+		poa_record: "Assessment record",
+		poa_generated: "Generated {date}",
+		poa_title: "PM assessment",
+		poa_empty: "Ask PM what matters next for this goal.",
+		poa_assess: "Assess priorities",
+		poa_refresh: "Refresh PM assessment",
+		poa_prepare: "Prepare assessment",
+		poa_create: "Prepare discussion",
+		poa_create_help: "The first assessment keeps its evidence in an ordinary PM discussion. Prepare it, then run the selected analysis.",
+		poa_controls: "Assessment options",
+		poa_history: "Assessment history",
+		poa_more: "Older assessments",
+		poa_newer: "A newer assessment is available",
+		poa_latest: "Read latest assessment",
+		poa_current: "Current basis",
+		poa_out_of_date: "Out of date",
+		poa_unknown: "Freshness unknown",
+		poa_unadopted: "PM suggestion · not adopted",
+		poa_as_of: "Evidence as of {date}",
+		poa_needs_review: "This reply needs review and cannot be used as an assessment.",
+		poa_raw: "Original reply",
+		poa_basis: "Original evidence",
+		poa_limits: "Evidence limits",
+		poa_recommendations: "Suggested next steps",
+		poa_needs_decision: "Your decision",
+		poa_can_be_handled: "Existing arrangements",
+		poa_watch: "Keep in view",
+		poa_unavailable: "The original assessment sources are unavailable.",
+		poa_partial_history: "Only accessible history is shown; more records may remain.",
+		poa_loading: "Reading assessment evidence…",
+		poa_retry: "Read assessment again",
+		poa_rate: "Assessment is available again after {date}.",
+		poa_cost: "One analysis turn. Reading this page does not run a model.",
+		poa_mismatch: "The assessment response does not match this workspace.",
+		poa_pending_damaged: "The original assessment request cannot be identified. Keep its saved receipt and inspect the operation before starting another.",
+		poa_thread: "Open assessment discussion",
+		poa_goal_blocker: "Prioritize resolving {subject} to protect the current goal.",
+		poa_decision_first: "Clarify {subject} before choosing the next step.",
+		poa_watch_exposure: "Keep {subject} in view when setting the next priority.",
+		poa_insufficient_basis: "The available evidence cannot establish the main impact on the goal.",
+		poa_no_priority_identified: "The available evidence identifies no unresolved priority for the current goal.",
+		poa_review_evidence: "Review the recorded evidence for {subject}.",
+		poa_clarify_dependency: "Clarify the recorded dependency in {subject}.",
+		poa_prepare_options: "Prepare options for {subject}.",
+		poa_follow_recorded_action: "Follow the existing arrangement for {subject}.",
+		poa_confirm_direction: "Decide whether to confirm the direction in {subject}.",
+		poa_choose_response: "Choose a response for {subject}.",
+		poa_review_proposal: "Review the proposal for {subject}.",
+		poa_watch_recorded_risk: "Watch the recorded risk in {subject}.",
+		poa_watch_recorded_forecast: "Watch the recorded forecast for {subject}.",
+		poa_await_recorded_evidence: "Await the recorded evidence for {subject}."
+	},
+	"zh-TW": {
+		poa_details: "詳情",
+		poa_current_read: "目前判斷",
+		poa_this_week: "本週建議",
+		poa_based_on: "依據",
+		poa_overview: "總覽",
+		poa_partial: "依據不完整",
+		poa_model_unknown: "未回報模型",
+		poa_permission: "判讀需要管理權限。",
+		poa_agent_missing: "尚未連接 PM。",
+		poa_setup: "設定 PM",
+		poa_record: "判讀紀錄",
+		poa_generated: "產生於 {date}",
+		poa_title: "PM 重點判讀",
+		poa_empty: "請 PM 整理本輪目標最值得處理的下一步。",
+		poa_assess: "判讀優先事項",
+		poa_refresh: "更新 PM 判讀",
+		poa_prepare: "準備判讀",
+		poa_create: "準備本次判讀的討論",
+		poa_create_help: "首次判讀會使用一般 PM 討論保存依據。準備完成後，再執行選定的分析。",
+		poa_controls: "判讀選項",
+		poa_history: "判讀歷史",
+		poa_more: "較早的判讀",
+		poa_newer: "已有較新的判讀",
+		poa_latest: "閱讀最新判讀",
+		poa_current: "依據仍為最新",
+		poa_out_of_date: "已過期",
+		poa_unknown: "無法確認是否為最新",
+		poa_unadopted: "PM 建議・尚未採用",
+		poa_as_of: "依據截至 {date}",
+		poa_needs_review: "這份回覆需要檢查，尚不能作為判讀使用。",
+		poa_raw: "原始回覆",
+		poa_basis: "原始依據",
+		poa_limits: "依據限制",
+		poa_recommendations: "建議下一步",
+		poa_needs_decision: "需要你決定",
+		poa_can_be_handled: "既有安排",
+		poa_watch: "持續留意",
+		poa_unavailable: "原始判讀來源目前無法讀取。",
+		poa_partial_history: "目前僅顯示可讀取的歷史，可能還有其他紀錄。",
+		poa_loading: "正在讀取判讀依據…",
+		poa_retry: "重新讀取判讀",
+		poa_rate: "{date} 後可再次判讀。",
+		poa_cost: "執行一次分析；閱讀此頁不會啟動模型。",
+		poa_mismatch: "判讀回覆與目前工作區不符。",
+		poa_pending_damaged: "無法確認原始判讀請求。請保留原收據並檢查操作，暫勿另開請求。",
+		poa_thread: "開啟判讀討論",
+		poa_goal_blocker: "建議優先排除{subject}，以推進本輪目標。",
+		poa_decision_first: "建議先釐清{subject}，再安排下一步。",
+		poa_watch_exposure: "安排下一個優先事項時，建議留意{subject}。",
+		poa_insufficient_basis: "目前依據不足，尚無法判斷哪件事最影響本輪目標。",
+		poa_no_priority_identified: "目前依據未指出本輪目標仍有待處理的優先事項。",
+		poa_review_evidence: "檢視{subject}的既有證據。",
+		poa_clarify_dependency: "釐清{subject}已記錄的依賴。",
+		poa_prepare_options: "整理{subject}的可選方案。",
+		poa_follow_recorded_action: "依照{subject}的既有安排處理。",
+		poa_confirm_direction: "決定是否確認{subject}的方向。",
+		poa_choose_response: "選擇{subject}的處理方式。",
+		poa_review_proposal: "審閱{subject}的提案。",
+		poa_watch_recorded_risk: "留意{subject}已記錄的風險。",
+		poa_watch_recorded_forecast: "留意{subject}已記錄的預測。",
+		poa_await_recorded_evidence: "等待{subject}已記錄的證據。"
+	}
+};
+//#endregion
 //#region src/pm-overview-strings.js
 var overviewStrings = {
 	en: {
@@ -1672,6 +1802,7 @@ var globalStrings = {
 		action_pm_ahp_observe: "Observe AHP",
 		action_pm_backlog_revise: "Revise backlog",
 		action_pm_conversation_adopt: "Adopt discussion",
+		action_pm_overview_assess: "Assess Overview priorities",
 		action_pm_continuation_prepare: "Prepare continuation",
 		action_pm_work_input_defer: "Keep instruction for later",
 		action_pm_conversation_propose: "Propose in discussion",
@@ -1875,6 +2006,7 @@ var globalStrings = {
 		action_pm_ahp_observe: "觀察 AHP",
 		action_pm_backlog_revise: "修訂待辦",
 		action_pm_conversation_adopt: "採用討論",
+		action_pm_overview_assess: "判讀總覽優先事項",
 		action_pm_continuation_prepare: "整理接續摘要",
 		action_pm_work_input_defer: "指令留到稍後",
 		action_pm_conversation_propose: "在討論中提案",
@@ -8948,6 +9080,7 @@ var STRINGS = {
 		...createRecordStrings["zh-TW"],
 		...uiStrings["zh-TW"],
 		...overviewStrings["zh-TW"],
+		...overviewAssessmentStrings["zh-TW"],
 		...scheduleStrings["zh-TW"],
 		...globalStrings["zh-TW"],
 		...workPathsStrings["zh-TW"],
@@ -10602,6 +10735,7 @@ var STRINGS = {
 		...createRecordStrings.en,
 		...uiStrings.en,
 		...overviewStrings.en,
+		...overviewAssessmentStrings.en,
 		...scheduleStrings.en,
 		...globalStrings.en,
 		...workPathsStrings.en,
@@ -15554,6 +15688,7 @@ var ACTIONS = {
 	"pm.ahp.observe": "action_pm_ahp_observe",
 	"pm.backlog.revise": "action_pm_backlog_revise",
 	"pm.conversation.adopt": "action_pm_conversation_adopt",
+	"pm.overview.assess": "action_pm_overview_assess",
 	"pm.continuation.prepare": "action_pm_continuation_prepare",
 	"pm.work_input.defer": "action_pm_work_input_defer",
 	"pm.conversation.propose": "action_pm_conversation_propose",
@@ -15806,7 +15941,7 @@ async function readWorkSessionContext({ api, guard, workspaceId, workItemId, att
 }
 //#endregion
 //#region src/pm-work-publish.js
-var ACTION$4 = "github.pr.publish";
+var ACTION$5 = "github.pr.publish";
 var SHA40 = /^[0-9a-f]{40}$/;
 var OP_ID = /^op_[0-9a-f]{32}$/;
 var TARGET_KEYS = [
@@ -15898,7 +16033,7 @@ function exactPreconditions(value) {
 }
 function actionRows(list) {
 	if (!Array.isArray(list)) return [];
-	return list.filter((row) => row && row.action === ACTION$4);
+	return list.filter((row) => row && row.action === ACTION$5);
 }
 function paramsReady(entry) {
 	return Array.isArray(entry?.required_params) && PARAM_NAMES.every((name) => entry.required_params.includes(name)) && entry.required_params.every((name) => PARAM_NAMES.includes(name));
@@ -15991,7 +16126,7 @@ function catalogAllows(caps, entry) {
 		"integrate"
 	]).every((scope) => scopes.includes(scope))) return false;
 	if (!scopes.includes("integrate")) return false;
-	return Boolean(current?.actions?.some((row) => row.action === ACTION$4 && row.allowed === true));
+	return Boolean(current?.actions?.some((row) => row.action === ACTION$5 && row.allowed === true));
 }
 function receiptSha(envelope) {
 	const rows = envelope?.delivery?.pull_requests;
@@ -16245,7 +16380,7 @@ function createWorkPublish({ h, t, form, namespace, caps, errorBox }) {
 		}, h("p", { id: groupId }, t("wpub_draft_group")), h("p", { class: "muted" }, t("wpub_draft_help")), h("label", { class: "pm-work-publish-choice" }, yes, h("span", {}, t("wpub_draft_yes"), " ", h("span", { class: "muted" }, t("wpub_draft_yes_help")))), h("label", { class: "pm-work-publish-choice" }, no, h("span", {}, t("wpub_draft_no"), " ", h("span", { class: "muted" }, t("wpub_draft_no_help"))))), gapNode);
 		editor = form({
 			namespace: `${namespace}.work-publish.${candidateKey}`,
-			action: ACTION$4,
+			action: ACTION$5,
 			target: {
 				workspace_id: entry.target.workspace_id,
 				repository: entry.target.repository,
@@ -16433,7 +16568,7 @@ function createWorkPublish({ h, t, form, namespace, caps, errorBox }) {
 }
 //#endregion
 //#region src/pm-execution-verification.js
-var ACTION$3 = "pm.execution.verify";
+var ACTION$4 = "pm.execution.verify";
 var sha$5 = /^[0-9a-f]{40}$/;
 var digest$9 = /^[0-9a-f]{64}$/;
 var operation$1 = /^op_[0-9a-f]{32}$/;
@@ -16479,7 +16614,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 		execution_operation_id: selected
 	});
 	const fixedMatches = (value) => !fixedResult || value?.execution_operation_id === fixedResult.execution_operation_id && value?.candidate_commit === fixedResult.candidate_commit;
-	const canWrite = () => writer() && allowedAction(ACTION$3, target());
+	const canWrite = () => writer() && allowedAction(ACTION$4, target());
 	const enabled = () => caps()?.features?.pm_workspaces?.execution_verification?.version === 1;
 	const line = (key, value) => h("p", { class: "pm-source" }, h("strong", {}, t(key) + ": "), value);
 	function clear() {
@@ -16569,7 +16704,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 				namespace: `${namespace}.verification`,
 				api,
 				requiredScope: "operate",
-				action: ACTION$3,
+				action: ACTION$4,
 				target: target(),
 				fields,
 				params: (values) => {
@@ -19628,7 +19763,7 @@ function structuredAnalysis({ h, t, labelled, action, capability, legacyEligible
 }
 //#endregion
 //#region src/pm-continuation.js
-var ACTION$2 = "pm.continuation.prepare";
+var ACTION$3 = "pm.continuation.prepare";
 function continuationBrief({ h, t, form, input, labelled, caps, capability, thread, permitted, target, refresh, onOpen }) {
 	let head = null, ready = false, signature = "", request, status;
 	const source = () => thread()?.continuation_brief;
@@ -19638,7 +19773,7 @@ function continuationBrief({ h, t, form, input, labelled, caps, capability, thre
 		h,
 		t,
 		labelled,
-		action: ACTION$2,
+		action: ACTION$3,
 		capability,
 		legacyEligible: () => false,
 		authorized,
@@ -19655,7 +19790,7 @@ function continuationBrief({ h, t, form, input, labelled, caps, capability, thre
 		"data-pm-default": ""
 	});
 	request = form({
-		action: ACTION$2,
+		action: ACTION$3,
 		target,
 		fields: {
 			purpose,
@@ -19699,7 +19834,7 @@ function continuationBrief({ h, t, form, input, labelled, caps, capability, thre
 	}
 	function render() {
 		const saved = source();
-		tools.hidden = !thread() || !capability()?.structured_analysis?.actions?.[ACTION$2] && !request.locked();
+		tools.hidden = !thread() || !capability()?.structured_analysis?.actions?.[ACTION$3] && !request.locked();
 		reader.hidden = !thread() || !saved;
 		const stale = saved?.thread_version !== thread()?.thread.version || head && (saved?.plan_head?.version !== head.version || saved?.plan_head?.accepted_revision_id !== head.accepted_revision_id);
 		const statusText = () => t(!usable() ? "pcb_needs_review" : stale ? "pcb_stale" : "pcb_status_" + saved.document.status);
@@ -22208,6 +22343,702 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 	};
 }
 //#endregion
+//#region src/pm-overview-assessment-request.js
+var ACTION$2 = "pm.overview.assess";
+var validThread = (id) => typeof id === "string" && /^pmt_[0-9a-f]{32}$/.test(id);
+function overviewAssessmentRequest(options) {
+	const { h, t, api, alive, caps, workspaceId, namespace, form, input, labelled, permitted, errorBox, readLatest, onSaved } = options;
+	const root = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, ns = `${namespace}.overview-assessment.${workspaceId}`;
+	const actor = caps()?.actor, pointerKey = `batc.pm.${ns}.carrier`;
+	let serial = 0, request = null, capability = null, thread = null, preparing = false;
+	const status = h("div", { role: "status" }), body = h("div"), element = h("div", { "data-overview-assessment-request": "" }, status, body);
+	const authorized = () => permitted(false) && caps()?.actor === actor && caps()?.scopes?.includes("start");
+	const current = (ticket) => {
+		alive();
+		return ticket === serial && caps()?.actor === actor;
+	};
+	const hidden = (value) => h("input", {
+		type: "hidden",
+		value: String(value)
+	});
+	const mismatch = () => Error(t("poa_mismatch"));
+	function pending() {
+		const prefix = `batc.pm.${ns}.`, found = [];
+		let count = 0;
+		try {
+			for (let index = 0; index < localStorage.length; index++) {
+				const key = localStorage.key(index);
+				if (!key?.startsWith(prefix) || key === pointerKey) continue;
+				if (++count > 64) throw Error();
+				const raw = localStorage.getItem(key);
+				if (!raw || raw.length > 65536) throw Error();
+				const value = JSON.parse(raw);
+				if (value?.version !== 1 || !value.values || typeof value.values !== "object" || Array.isArray(value.values) || Object.values(value.values).some((item) => typeof item !== "string")) throw Error();
+				if (!value.intent) continue;
+				const original = value.intent.request, target = original?.target;
+				if (![ACTION$2, "pm.thread.create"].includes(original?.action) || target?.workspace_id !== workspaceId || key !== prefix + original.action + "." + JSON.stringify(target) || typeof value.intent.key !== "string" || !value.intent.key || (original.action === ACTION$2 ? !validThread(target.thread_id) || Object.keys(target).length !== 2 : Object.keys(target).length !== 1)) throw Error();
+				found.push({
+					action: original.action,
+					thread_id: target.thread_id,
+					values: value.values
+				});
+			}
+			if (found.length > 1) throw Error();
+			return found[0];
+		} catch {
+			throw Error(t("poa_pending_damaged"));
+		}
+	}
+	function clear() {
+		serial++;
+		preparing = false;
+		request?.dispose();
+		request = null;
+		capability = null;
+		thread = null;
+		body.replaceChildren();
+		status.replaceChildren();
+	}
+	function fail(error, ticket) {
+		if (retiredView(error) || viewLeft(alive) || !current(ticket)) return;
+		request?.dispose();
+		request = null;
+		thread = null;
+		body.replaceChildren();
+		status.replaceChildren(errorBox(error, { within: status }));
+	}
+	function runtime() {
+		return structuredAnalysis({
+			h,
+			t,
+			labelled,
+			action: ACTION$2,
+			capability: () => capability,
+			authorized,
+			legacyEligible: () => false
+		});
+	}
+	async function carrierPointer() {
+		const raw = localStorage.getItem(pointerKey);
+		if (raw === null) return null;
+		let pointer;
+		try {
+			pointer = JSON.parse(raw);
+			if (pointer.version !== 1 || pointer.actor !== actor || pointer.workspace_id !== workspaceId || !validThread(pointer.thread_id) || !/^op_[0-9a-f]{32}$/.test(pointer.operation_id)) throw Error();
+		} catch {
+			throw Error(t("poa_pending_damaged"));
+		}
+		const op = (await api("GET", `/operations/${pointer.operation_id}`)).operation;
+		if (op?.operation_id !== pointer.operation_id || op.actor !== actor || op.action !== "pm.thread.create" || op.target?.workspace_id !== workspaceId || op.status !== "succeeded" || op.result?.thread_id !== pointer.thread_id) throw mismatch();
+		return pointer.thread_id;
+	}
+	async function createCarrier(ticket) {
+		const value = await api("GET", root);
+		if (!current(ticket)) return;
+		const workspace = value.workspace;
+		if (workspace?.workspace_id !== workspaceId || !Number.isSafeInteger(workspace.version)) throw mismatch();
+		const title = hidden(t("poa_title")), version = hidden(workspace.version), refs = hidden(JSON.stringify(options.refs()));
+		request = form({
+			namespace: ns,
+			action: "pm.thread.create",
+			target: { workspace_id: workspaceId },
+			fields: {
+				title,
+				_version: version,
+				_refs: refs
+			},
+			params: (values) => ({
+				title: values.title,
+				context: JSON.parse(values._refs)
+			}),
+			preconditions: () => ({ expected_version: Number(version.value) }),
+			permitted: () => authorized() && capability?.overview_assessment?.eligible_for_preflight === true,
+			recoverPermitted: authorized,
+			label: "poa_create",
+			extra: h("p", { class: "ui-meta" }, t("poa_create_help")),
+			onBeforeSaved: (result) => {
+				if (!validThread(result?.thread_id)) throw mismatch();
+				const op = request.operation();
+				localStorage.setItem(pointerKey, JSON.stringify({
+					version: 1,
+					actor,
+					workspace_id: workspaceId,
+					thread_id: result.thread_id,
+					operation_id: op.operation_id
+				}));
+			},
+			onSaved: () => {
+				queueMicrotask(() => void prepare(true));
+			}
+		});
+		body.replaceChildren(request.box);
+		request.update();
+	}
+	async function assessment(ticket, id, preserved) {
+		const page = await api("GET", `${root}/threads/${encodeURIComponent(id)}`);
+		if (!current(ticket)) return;
+		if (page.thread?.thread_id !== id || page.thread.workspace_id !== workspaceId || !Number.isSafeInteger(page.thread.version) || !["idea", "planning"].includes(page.thread.mode)) throw mismatch();
+		thread = page;
+		let preview = null;
+		if (!preserved) {
+			preview = await api("GET", `${root}/threads/${encodeURIComponent(id)}/context-bundle?kind=overview_assessment`);
+			if (!current(ticket)) return;
+			if (preview.workspace_id !== workspaceId || preview.thread_id !== id || preview.schema !== "pm_overview_bundle_v1" || preview.selector?.schema !== preview.schema || !/^[0-9a-f]{64}$/.test(preview.selector?.projection_digest) || preview.context?.thread_version !== page.thread.version || preview.calls_provider !== false) throw mismatch();
+		}
+		const adapter = runtime(), model = input("pm_native_model", {
+			required: false,
+			max: 128
+		});
+		model.placeholder = t("pm_native_default_model");
+		const version = hidden(page.thread.version), selector = hidden(JSON.stringify(preview?.selector || {}));
+		const limits = preview?.limits || capability.overview_assessment.limits;
+		const canAssess = () => authorized() && thread?.capabilities?.write === true && adapter.eligible() && limits?.allowed === true;
+		const extra = h("div", { class: "pm-fields" }, adapter.box, h("details", {}, h("summary", {}, t("pm_fa_model_optional")), labelled("pm_native_model", model)), h("p", { class: "ui-meta" }, t("poa_cost")), limits?.allowed === false && Number.isFinite(limits.retry_at) ? h("p", { class: "ui-meta" }, timeLabel(t, "poa_rate", { date: timeStamp(limits.retry_at) })) : null);
+		request = form({
+			namespace: ns,
+			action: ACTION$2,
+			target: {
+				workspace_id: workspaceId,
+				thread_id: id
+			},
+			fields: {
+				adapter: adapter.field,
+				model,
+				_version: version,
+				_selector: selector
+			},
+			params: (values) => ({
+				adapter: values.adapter,
+				context_bundle_ref: JSON.parse(values._selector),
+				...values.model.trim() ? { model: values.model.trim() } : {}
+			}),
+			preconditions: () => ({ expected_version: Number(version.value) }),
+			permitted: canAssess,
+			recoverPermitted: authorized,
+			label: "poa_assess",
+			extra,
+			onStateChange: () => adapter.update(request),
+			onBeforeSaved: () => localStorage.removeItem(pointerKey),
+			onSaved: async () => {
+				await onSaved();
+			}
+		});
+		body.replaceChildren(request.box);
+		request.update();
+	}
+	async function prepare(replace = false) {
+		if (preparing || request?.locked() && !replace) {
+			request?.recheck();
+			return;
+		}
+		const ticket = ++serial;
+		preparing = true;
+		request?.dispose();
+		request = null;
+		body.replaceChildren();
+		status.replaceChildren(h("p", { class: "ui-meta" }, t("poa_loading")));
+		try {
+			capability = await api("GET", `${root}/capabilities`);
+			if (!current(ticket)) return;
+			if (capability.workspace_id !== workspaceId || capability.overview_assessment?.version !== 1) throw mismatch();
+			const saved = pending();
+			if (saved?.action === "pm.thread.create") await createCarrier(ticket);
+			else {
+				let id = saved?.thread_id;
+				if (!id) id = await carrierPointer();
+				if (!current(ticket)) return;
+				if (!id) {
+					const row = await readLatest();
+					if (!current(ticket)) return;
+					id = row?.thread_id;
+				}
+				if (id) await assessment(ticket, id, saved);
+				else await createCarrier(ticket);
+			}
+			if (current(ticket)) status.replaceChildren();
+		} catch (error) {
+			fail(error, ticket);
+		} finally {
+			if (ticket === serial) preparing = false;
+		}
+	}
+	return {
+		element,
+		prepare,
+		clear,
+		hasPending: () => {
+			try {
+				return Boolean(pending() || localStorage.getItem(pointerKey));
+			} catch {
+				return true;
+			}
+		},
+		locked: () => Boolean(request?.locked()),
+		recheck: () => request?.recheck()
+	};
+}
+//#endregion
+//#region src/pm-overview-assessment.js
+var validId = (id) => typeof id === "string" && /^pmoa_[0-9a-f]{32}$/.test(id);
+var templates = new Set([
+	"goal_blocker",
+	"decision_first",
+	"watch_exposure",
+	"insufficient_basis",
+	"no_priority_identified",
+	"review_evidence",
+	"clarify_dependency",
+	"prepare_options",
+	"follow_recorded_action",
+	"confirm_direction",
+	"choose_response",
+	"review_proposal",
+	"watch_recorded_risk",
+	"watch_recorded_forecast",
+	"await_recorded_evidence"
+]);
+function overviewAssessment(options) {
+	const { h, t, api, alive, workspaceId, errorBox, permitted } = options, root = `/pm/workspaces/${encodeURIComponent(workspaceId)}/overview-assessments`;
+	let serial = 0, epoch = 0, current = null, latest = null, capability = null, signature = "", reader = null, readerId = null, active = false, busy = false, readerSignature = "";
+	const content = h("div", { "data-overview-assessment-content": "" }, skeleton(2, { label: t("poa_loading") })), state = h("span", {
+		class: "ui-pill tone-neutral",
+		"data-overview-assessment-freshness": "",
+		hidden: true
+	});
+	const attribution = h("span", { class: "ui-meta" }), availability = h("div", { "data-overview-assessment-availability": "" });
+	const status = h("div", { role: "status" }), more = button({
+		size: "sm",
+		label: t("poa_latest"),
+		"data-overview-assessment-latest": "",
+		onClick: () => void refresh(true)
+	});
+	more.hidden = true;
+	const history = button({
+		variant: "ghost",
+		size: "sm",
+		label: t("poa_history"),
+		onClick: () => void openHistory()
+	});
+	const assess = button({
+		variant: "secondary",
+		size: "sm",
+		label: t("poa_assess"),
+		"data-overview-assessment-prepare": "",
+		onClick: () => {
+			controls.hidden = false;
+			request.prepare();
+		}
+	});
+	const controls = h("div", {
+		hidden: true,
+		"data-overview-assessment-controls": ""
+	});
+	const request = overviewAssessmentRequest({
+		...options,
+		readLatest: latestCarrier,
+		onSaved: async () => {
+			const ownsFocus = controls.contains(document.activeElement);
+			await refresh(true);
+			controls.hidden = true;
+			request.clear();
+			if (ownsFocus && active && content.isConnected) {
+				content.tabIndex = -1;
+				content.focus({ preventScroll: true });
+				content.scrollIntoView({ block: "nearest" });
+			}
+		}
+	});
+	controls.append(request.element);
+	const box = sectionCard({
+		title: t("poa_title"),
+		actions: [history, assess],
+		body: h("div", {}, h("div", { class: "pm-assessment-meta" }, state, h("span", { class: "ui-meta" }, t("poa_unadopted")), attribution), status, content, more, availability, controls)
+	});
+	box.dataset.overviewAssessment = "";
+	const valid = (ticket) => {
+		alive();
+		return ticket === serial;
+	};
+	const mismatch = () => Object.assign(Error(t("poa_mismatch")), { code: "PM_SCOPE_MISMATCH" });
+	const checkList = (data) => {
+		if (data?.version !== 1 || data.workspace_id !== workspaceId || data.order !== "newest_first" || !Array.isArray(data.assessments) || data.assessments.some((row) => !validId(row.assessment_id) || !/^pmt_[0-9a-f]{32}$/.test(row.thread_id)) || typeof data.partial !== "boolean" || typeof data.source_filtered !== "boolean" || data.next_cursor !== null && (typeof data.next_cursor !== "string" || !/^[A-Za-z0-9_-]{1,256}$/.test(data.next_cursor)) || data.partial !== (data.next_cursor !== null)) throw mismatch();
+		return data;
+	};
+	const list = async (before) => checkList(await api("GET", `${root}?limit=10${before ? `&before=${encodeURIComponent(before)}` : ""}`));
+	async function latestCarrier() {
+		let before = null;
+		const seen = new Set(), ticket = serial;
+		for (let count = 0; count < 32; count++) {
+			const data = await list(before);
+			if (!valid(ticket)) throw Object.assign(Error(), { code: "PM_DISPOSED" });
+			if (data.assessments.length) return data.assessments[0];
+			if (!data.partial) return null;
+			if (seen.has(data.next_cursor)) throw mismatch();
+			seen.add(data.next_cursor);
+			before = data.next_cursor;
+		}
+		throw Error(t("poa_partial_history"));
+	}
+	async function detail(id) {
+		const value = await api("GET", `${root}/${encodeURIComponent(id)}`), row = value?.assessment;
+		if (value?.version !== 1 || value.workspace_id !== workspaceId || !validId(id) || row?.assessment_id !== id || row.workspace_id !== workspaceId || ![
+			"current",
+			"out_of_date",
+			"unknown"
+		].includes(value.freshness) || value.context?.workspace_id !== workspaceId || value.context?.thread_id !== row.thread_id || value.context?.projection_digest !== row.projection_digest || value.context?.schema !== "pm_overview_bundle_v1" || row.output_version !== 1) throw mismatch();
+		return value;
+	}
+	function evidence(value, claim) {
+		const refs = value.context.source_references;
+		return disclosure({
+			label: t("poa_basis"),
+			body: h("ul", {}, ...claim.basis_refs.map((token) => {
+				const ref = refs[token];
+				return h("li", {}, ref.ref ? h("button", {
+					type: "button",
+					class: "pm-overview-link",
+					onclick: () => options.onOpen(ref.ref, {
+						title: ref.label,
+						ref: ref.ref
+					})
+				}, ref.label) : ref.label || reasonLabel(t, ref.reason || "unknown"));
+			}))
+		});
+	}
+	function claimNode(value, claim, heading = false) {
+		const refs = value.context.source_references;
+		if (!templates.has(claim?.template) || !refs?.[claim.subject_ref] || !Array.isArray(claim.basis_refs) || claim.basis_refs.some((token) => !refs[token])) throw mismatch();
+		const subject = refs[claim.subject_ref], text = t("poa_" + claim.template, { subject: subject.label || t("poa_basis") });
+		return h("div", {
+			class: "pm-assessment-claim",
+			"data-overview-assessment-claim": claim.key
+		}, h(heading ? "p" : "div", { class: heading ? "pm-assessment-judgment" : "" }, text), h("div", { class: "pm-assessment-evidence" }, evidence(value, claim), subject.ref ? discussLink({
+			workspaceId,
+			refs: [subject.ref],
+			title: subject.label,
+			from: "overview"
+		}) : null));
+	}
+	function renderDocument(value) {
+		const row = value.assessment, doc = row.document, refs = value.context.source_references;
+		const result = h("div", { "data-overview-assessment-id": row.assessment_id }, h("p", { class: "ui-meta" }, timeLabel(t, "poa_as_of", { date: timeStamp(row.as_of) })));
+		if (row.validation?.status === "format_valid" && doc?.version === 1) {
+			result.append(claimNode(value, doc.judgment, true));
+			for (const group of [
+				"recommendations",
+				"needs_decision",
+				"can_be_handled",
+				"watch"
+			]) {
+				if (!Array.isArray(doc[group])) throw mismatch();
+				if (doc[group].length) result.append(h("section", { class: "pm-assessment-group" }, h("h3", {}, t("poa_" + group)), ...doc[group].map((claim) => claimNode(value, claim))));
+			}
+			if (!Array.isArray(doc.limitations) || doc.limitations.some((token) => refs?.[token]?.category !== "coverage")) throw mismatch();
+			if (doc.limitations.length) result.append(disclosure({
+				label: t("poa_limits"),
+				body: h("ul", {}, ...doc.limitations.map((token) => h("li", {}, reasonLabel(t, refs[token].reason))))
+			}));
+		} else {
+			result.append(h("p", {}, t("poa_needs_review")));
+			if (typeof row.raw_reply === "string") result.append(disclosure({
+				label: t("poa_raw"),
+				body: h("pre", { class: "pm-assessment-raw" }, row.raw_reply)
+			}));
+		}
+		result.append(disclosure({
+			label: t("poa_record"),
+			body: h("div", {}, h("p", { class: "ui-meta" }, timeLabel(t, "poa_generated", { date: timeStamp(row.created_at) })), row.provenance?.actual_model ? h("p", {}, t("pm_native_model") + ": " + row.provenance.actual_model) : null, /^op_[0-9a-f]{32}$/.test(row.operation_id) ? h("a", { href: `#/op/${row.operation_id}` }, t("pm_operation")) : null, proof({
+				h,
+				t,
+				name: t("poa_record"),
+				value: {
+					assessment_id: row.assessment_id,
+					operation_id: row.operation_id,
+					run_id: row.run_id,
+					generated_at: row.created_at,
+					as_of: row.as_of,
+					journal_cursor: value.context.journal_cursor,
+					profile: value.context.profile,
+					output_version: row.output_version,
+					context_digest: row.context_digest,
+					document_digest: row.document_digest,
+					coverage: value.context.coverage,
+					validation: row.validation,
+					provenance: row.provenance
+				}
+			}))
+		}));
+		result.append(h("a", {
+			class: "ui-meta",
+			href: `#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(row.thread_id)}`
+		}, t("poa_thread")));
+		return result;
+	}
+	function renderCard(value) {
+		const row = value.assessment, doc = row.document, refs = value.context.source_references;
+		const details = button({
+			variant: "ghost",
+			size: "sm",
+			label: t("poa_details"),
+			"data-overview-assessment-details": "",
+			onClick: () => void openHistory(row.assessment_id)
+		});
+		if (row.validation?.status !== "format_valid" || doc?.version !== 1) return h("div", { "data-overview-assessment-id": row.assessment_id }, h("p", {}, t("poa_needs_review")), details);
+		const group = (label, body) => h("div", { class: "pm-assessment-summary-row" }, h("dt", {}, t(label)), h("dd", {}, body));
+		const shown = [
+			doc.judgment,
+			...doc.recommendations.slice(0, 1),
+			...doc.needs_decision
+		];
+		const text = (claim) => {
+			if (!templates.has(claim?.template) || !refs?.[claim.subject_ref]) throw mismatch();
+			return t("poa_" + claim.template, { subject: refs[claim.subject_ref].label || t("poa_basis") });
+		};
+		const subjectLink = (claim) => {
+			const subject = refs[claim.subject_ref];
+			return subject.ref ? h("button", {
+				type: "button",
+				class: "pm-overview-link",
+				onclick: () => options.onOpen(subject.ref, {
+					title: subject.label,
+					ref: subject.ref
+				})
+			}, subject.label) : null;
+		};
+		const result = h("dl", {
+			class: "pm-assessment-summary",
+			"data-overview-assessment-id": row.assessment_id
+		}, group("poa_current_read", h("span", {}, text(doc.judgment))));
+		if (doc.recommendations.length) result.append(group("poa_this_week", h("div", {}, timeLabel(t, "poa_" + doc.recommendations[0].template, { subject: subjectLink(doc.recommendations[0]) || refs[doc.recommendations[0].subject_ref].label }))));
+		if (doc.needs_decision.length) result.append(group("poa_needs_decision", h("div", {}, ...doc.needs_decision.map((claim) => {
+			const subject = refs[claim.subject_ref];
+			return h("div", { class: "pm-assessment-decision" }, h("span", {}, timeLabel(t, "poa_" + claim.template, { subject: subjectLink(claim) || subject.label })), subject.ref ? discussLink({
+				workspaceId,
+				refs: [subject.ref],
+				title: subject.label,
+				from: "overview"
+			}) : null);
+		}))));
+		const tokens = [...new Set(shown.map((claim) => claim.subject_ref))];
+		result.append(group("poa_based_on", h("div", { class: "pm-assessment-evidence" }, ...tokens.map((token) => {
+			const ref = refs[token];
+			return ref.ref ? h("button", {
+				type: "button",
+				class: "ui-button ghost ui-sm",
+				onclick: () => options.onOpen(ref.ref, {
+					title: ref.label,
+					ref: ref.ref
+				})
+			}, ref.label) : h("span", { class: "ui-meta" }, ref.category === "projection" ? t("poa_overview") : reasonLabel(t, ref.reason || "unknown"));
+		}), details)));
+		return result;
+	}
+	function historyDocument(value) {
+		return h("div", {}, h("p", {
+			class: "ui-meta",
+			"data-overview-history-freshness": ""
+		}, t("poa_" + value.freshness)), renderDocument(value));
+	}
+	function sync() {
+		const label = t(current ? "poa_refresh" : "poa_assess");
+		assess.replaceChildren(current ? icon("refresh-cw") : label);
+		assess.className = current ? "ui-button ghost ui-icon-button" : "ui-button secondary ui-sm";
+		assess.setAttribute("aria-label", label);
+		assess.title = label;
+		const cap = capability?.overview_assessment, recover = request.hasPending();
+		assess.disabled = busy || !permitted(false) || cap?.authorized !== true || !recover && (cap?.eligible_for_preflight !== true || cap?.limits?.allowed !== true);
+		history.disabled = busy || !capability;
+		more.hidden = !latest || !current || latest.assessment_id === current.assessment.assessment_id;
+		state.hidden = !current;
+		if (current) {
+			const row = current.assessment, source = row.provenance;
+			state.textContent = t("poa_" + (current.freshness === "current" && row.document?.limitations?.length ? "partial" : current.freshness));
+			attribution.textContent = [source?.adapter, source?.actual_model || t("poa_model_unknown")].filter(Boolean).join(" · ");
+			attribution.title = t("poa_as_of", { date: timeStamp(row.as_of).textContent });
+		} else attribution.textContent = "";
+		availability.replaceChildren();
+		if (cap && !cap.authorized) availability.append(h("p", { class: "ui-meta" }, t("poa_permission")));
+		else if (cap && cap.eligible_for_preflight !== true) availability.append(h("p", { class: "ui-meta" }, t("poa_agent_missing"), " ", h("a", { href: `#/settings?section=agents&from=${encodeURIComponent(`#/pm/${workspaceId}/overview`)}` }, t("poa_setup"))));
+		else if (cap?.limits?.allowed === false) availability.append(h("p", { class: "ui-meta" }, timeLabel(t, "poa_rate", { date: timeStamp(cap.limits.retry_at) })));
+	}
+	function closeHistory() {
+		reader?.close();
+		reader = null;
+		readerId = null;
+		readerSignature = "";
+	}
+	function withdraw() {
+		serial++;
+		epoch++;
+		current = null;
+		latest = null;
+		capability = null;
+		signature = "";
+		busy = false;
+		closeHistory();
+		request.clear();
+		controls.hidden = true;
+		content.replaceChildren();
+		status.replaceChildren();
+		sync();
+	}
+	function unavailable() {
+		withdraw();
+		content.replaceChildren(h("p", { class: "ui-meta" }, t("poa_unavailable")));
+	}
+	async function refresh(selectLatest = false) {
+		const ticket = ++serial;
+		busy = true;
+		sync();
+		try {
+			const cap = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`);
+			if (!valid(ticket)) return;
+			if (cap?.workspace_id !== workspaceId) throw mismatch();
+			if (cap.overview_assessment?.version !== 1) {
+				withdraw();
+				box.hidden = true;
+				return;
+			}
+			box.hidden = false;
+			const page = await list();
+			if (!valid(ticket)) return;
+			capability = cap;
+			latest = page.assessments[0] || null;
+			const id = selectLatest ? latest?.assessment_id : current?.assessment.assessment_id || latest?.assessment_id;
+			const value = id ? await detail(id) : null;
+			if (!valid(ticket)) return;
+			if (readerId) {
+				const historical = await detail(readerId);
+				if (!valid(ticket)) return;
+				const stamp = JSON.stringify(historical.assessment);
+				if (stamp !== readerSignature) {
+					reader.body.querySelector("[data-overview-history-detail]")?.replaceChildren(historyDocument(historical));
+					readerSignature = stamp;
+				}
+				const freshness = reader.body.querySelector("[data-overview-history-freshness]");
+				if (freshness) freshness.textContent = t("poa_" + historical.freshness);
+			}
+			const next = JSON.stringify(value?.assessment || null);
+			if (signature !== next) {
+				const node = value ? renderCard(value) : h("p", { class: "ui-meta" }, t(page.partial ? "poa_partial_history" : "poa_empty"));
+				content.replaceChildren(node);
+				signature = next;
+			}
+			current = value;
+			status.replaceChildren();
+		} catch (error) {
+			if (retiredView(error) || viewLeft(alive) || !valid(ticket)) return;
+			if ([403, 404].includes(error.status) || error.code === "PM_SCOPE_MISMATCH") {
+				unavailable();
+				return;
+			} else if (current) current = {
+				...current,
+				freshness: "unknown"
+			};
+			status.replaceChildren(errorBox(error, { within: status }), button({
+				size: "sm",
+				label: t("poa_retry"),
+				onClick: () => void refresh()
+			}));
+		} finally {
+			if (ticket === serial) {
+				busy = false;
+				sync();
+			}
+		}
+	}
+	async function openHistory(initialId = null) {
+		closeHistory();
+		const ticket = epoch;
+		reader = inspector({
+			title: t(initialId ? "poa_title" : "poa_history"),
+			returnFocus: initialId ? () => content.querySelector("[data-overview-assessment-details]") : history,
+			onClose: () => {
+				reader = null;
+				readerId = null;
+				readerSignature = "";
+			}
+		});
+		reader.dataset.overviewAssessmentHistory = "";
+		const opened = reader;
+		const rows = h("div"), selected = h("div", { "data-overview-history-detail": "" }), notice = h("div", { role: "status" });
+		const next = button({
+			size: "sm",
+			label: t("poa_more"),
+			onClick: () => void load(before)
+		});
+		let before = null, selection = 0;
+		const cursors = new Set();
+		opened.body.append(rows, next, notice, selected);
+		box.append(opened);
+		async function select(id) {
+			const turn = ++selection;
+			readerId = null;
+			selected.replaceChildren(skeleton(2, { label: t("poa_loading") }));
+			try {
+				const value = await detail(id);
+				if (!valid(serial) || ticket !== epoch || reader !== opened || turn !== selection) return;
+				readerId = id;
+				readerSignature = JSON.stringify(value.assessment);
+				selected.replaceChildren(historyDocument(value));
+				notice.replaceChildren();
+			} catch (error) {
+				if (retiredView(error) || viewLeft(alive) || reader !== opened || !valid(serial) || ticket !== epoch || turn !== selection) return;
+				if ([403, 404].includes(error.status)) {
+					unavailable();
+					return;
+				}
+				selected.replaceChildren();
+				readerId = null;
+				notice.replaceChildren(errorBox(error, { within: notice }));
+			}
+		}
+		async function load(cursor) {
+			next.disabled = true;
+			try {
+				const page = await list(cursor);
+				if (!valid(serial) || ticket !== epoch || reader !== opened) return;
+				if (page.next_cursor && cursors.has(page.next_cursor)) throw mismatch();
+				if (page.next_cursor) cursors.add(page.next_cursor);
+				for (const row of page.assessments) rows.append(button({
+					variant: "ghost",
+					size: "sm",
+					label: h("span", {}, timeStamp(row.created_at), " · ", t("poa_" + row.freshness)),
+					"data-overview-history-id": row.assessment_id,
+					onClick: () => void select(row.assessment_id)
+				}));
+				before = page.next_cursor;
+				next.hidden = !before;
+				notice.replaceChildren(...page.partial || page.source_filtered ? [h("p", { class: "ui-meta" }, t("poa_partial_history"))] : []);
+			} catch (error) {
+				if (retiredView(error) || viewLeft(alive) || reader !== opened || !valid(serial) || ticket !== epoch) return;
+				if ([403, 404].includes(error.status)) {
+					unavailable();
+					return;
+				}
+				notice.replaceChildren(errorBox(error, { within: notice }));
+			} finally {
+				if (reader === opened) next.disabled = false;
+			}
+		}
+		if (initialId) {
+			rows.hidden = true;
+			next.hidden = true;
+			await select(initialId);
+		} else await load(null);
+	}
+	return {
+		box,
+		refresh,
+		withdraw,
+		setActive(value) {
+			active = value;
+			if (!active) closeHistory();
+		},
+		dispose: withdraw
+	};
+}
+//#endregion
 //#region src/pm-plan-diff-strings.js
 var planDiffStrings = {
 	en: {
@@ -23651,6 +24482,10 @@ function workspaceOverview(options) {
 			id: saved.snapshot_id
 		}] : []];
 	};
+	const assessment = options.caps()?.features?.pm_workspaces?.overview_assessment === true ? overviewAssessment({
+		...options,
+		refs
+	}) : null;
 	function header() {
 		const current = mode === "saved" ? saved : projection;
 		primary.href = discussHref({
@@ -24237,6 +25072,7 @@ function workspaceOverview(options) {
 	}
 	function renderContent(resetOrder) {
 		if (mode === "live" && reportStatus.parentNode !== reportStatusHome) reportStatusHome.append(reportStatus);
+		assessment?.setActive(active && mode === "live");
 		header();
 		savedBar.hidden = mode !== "saved";
 		box.dataset.overviewMode = mode;
@@ -24329,6 +25165,11 @@ function workspaceOverview(options) {
 				],
 				render: () => statusStrip(projection)
 			},
+			...assessment ? [{
+				key: "assessment",
+				value: true,
+				render: () => assessment.box
+			}] : [],
 			{
 				key: "columns",
 				value: [
@@ -24384,6 +25225,7 @@ function workspaceOverview(options) {
 			loading = false;
 			status.replaceChildren();
 			render(anchor);
+			if (mode === "live") await assessment?.refresh();
 		} catch (error) {
 			try {
 				alive();
@@ -24395,6 +25237,7 @@ function workspaceOverview(options) {
 			plan = null;
 			loading = false;
 			signature = "";
+			assessment?.withdraw();
 			closeReader();
 			render();
 			status.replaceChildren(options.errorBox(error, { within: status }));
@@ -24414,6 +25257,7 @@ function workspaceOverview(options) {
 		saved = null;
 		signature = "";
 		loading = false;
+		assessment?.withdraw();
 		closeReader();
 		reports.withdraw();
 		resetContent();
@@ -24465,6 +25309,7 @@ function workspaceOverview(options) {
 				return;
 			}
 			active = value;
+			assessment?.setActive(value && mode === "live");
 			if (!value) {
 				preference.scroll = window.scrollY;
 				closeReader();
@@ -24479,6 +25324,7 @@ function workspaceOverview(options) {
 		dispose() {
 			active = false;
 			serial++;
+			assessment?.dispose();
 			closeReader();
 		}
 	};
