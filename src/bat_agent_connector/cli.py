@@ -927,6 +927,7 @@ def build_parser() -> argparse.ArgumentParser:
     c = psp.add_parser("show", help="one project and its work item tree")
     c.add_argument("project_id")
     c.add_argument("--archived", action="store_true", help="also list archived work items")
+    c.add_argument("--projection", choices=("full", "navigation"), default="full", help="read full items or compact navigation summaries")
     for name in ("create", "update"):
         c = psp.add_parser(name, help=f"{name} a project")
         c.add_argument("name" if name == "create" else "project_id")
@@ -1265,7 +1266,7 @@ def cmd_project(args) -> int:
     if cmd == "list":
         out = request("projects_list", include_archived=args.archived, entry="cli")
     elif cmd == "show":
-        out = request("project_get", project_id=args.project_id, include_archived=args.archived, entry="cli")
+        out = request("project_get", project_id=args.project_id, include_archived=args.archived, projection=args.projection, entry="cli")
     else:
         params = {k: v for k, v in (("description", args.description), ("parent_id", args.parent),
                                     ("repositories", args.repo), ("task_project", args.task_project))

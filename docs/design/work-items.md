@@ -138,3 +138,50 @@ Restore、reviewed task leftovers／coordinator 准入與 TaskDaemon 歷史投�
 - 專案的階段與專案層級的完成確認。
 - 在專案之間移動工作項目。
 - `work_submit` 與 checkpoint 派工以外的入口自動建立連結。
+
+## EC-1.1 navigation projection
+
+`GET /api/v1/projects/{prj}?projection=navigation` retains the original Work IDs,
+ordering, hierarchy and fresh completion state. Work rows carry title/state/version,
+step counts and the first unfinished step, without request/goal/acceptance text,
+attachments or the full step array. Approval fingerprints remain on the full read.
+The existing project detail defaults to `projection=full`; MCP `project_get`, RPC
+and CLI `batc project show --projection navigation` share the same implementation.
+Unknown or duplicate HTTP projection selectors are refused. Tauri permits this
+selector only on the exact project GET route.
+
+The shared navigation chooses the projection only when the central capability
+`project_navigation.version=1` is advertised; older servers retain their existing
+read. Selecting an item still retrieves its full original detail. Event-page
+coalescing, cursor acknowledgements, source withdrawal, selected Work/Attempt,
+search and focus behavior use the original controller. No new poller, source
+collector, persistent cache or read-marker write is added.
+
+Execution lineage in one synchronous project read shares one current registry
+load per configured host. It still performs the original creation/ownership and
+principal visibility checks. The snapshot never survives the request or reaches
+write admission: the next read, execution preview and `revalidate` load fresh
+registry evidence. No Git/transcript source scan is started by navigation.
+
+The payload regression compares actual HTTP responses on the same journal with
+long original requirements and twenty steps. Its size reduction is fixture
+measurement, not a live network or p95 claim. Browser fixtures cover HTTP/IPC,
+older-server fallback, one refresh for a twelve-event page, query/focus retention
+and displaying the original full goal after selection. Backend readback also
+checks that the unchanged request and full steps remain available.
+
+A 60-second Chromium fixture measurement used two readers per projection,
+twenty Work items with twenty steps each, and eleven twelve-event batches.
+Each reader made eleven project refreshes while retaining its query and focus;
+none sent a write. UTF-8 JSON response bodies (excluding initial load, headers
+and compression) totaled about 3.51 MB per legacy reader and 0.140 MB per
+navigation reader. Selecting the full Work detail took 98–104 ms in these four
+samples; this is not a latency percentile or a live-server speedup claim.
+The actual HTTP payload test separately measured 36,645 → 982 bytes on one
+journal-backed item. The lineage fixture reduced one project read from three
+registry loads to two, including its unchanged principal control check, and
+proved the next read and write revalidation see changed source evidence.
+
+These fixtures measure bounded payload/read behavior. Real source-collector
+cost, multi-client deployment latency and physical-mobile behavior remain
+EC-1.1 T3/T4 acceptance work.

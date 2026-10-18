@@ -2223,6 +2223,17 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             }
             continue;
         }
+        if key == "projection" {
+            if input.method != "GET"
+                || !path.starts_with("/projects/prj_")
+                || path.split('/').count() != 3
+                || !matches!(value.as_ref(), "full" | "navigation")
+                || !query_keys.insert(key.to_string())
+            {
+                return Err("Invalid project read projection".into());
+            }
+            continue;
+        }
         if matches!(key.as_ref(), "source_kind" | "source_id") {
             let valid = if key == "source_kind" {
                 matches!(value.as_ref(), "execution" | "task_command")
@@ -2416,6 +2427,23 @@ mod tests {
         write.method = "POST".into();
         assert!(validate_request(&write).is_err());
     }
+    #[test]
+    fn navigation_projection_stays_on_project_reads() {
+        let root = "/projects/prj_11111111111111111111";
+        for value in ["full", "navigation"] {
+            assert!(validate_request(&get(&format!("{root}?projection={value}"))).is_ok());
+        }
+        for suffix in [
+            "?projection=other",
+            "?projection=",
+            "?projection=navigation&projection=full",
+            "/skills?projection=navigation",
+        ] {
+            assert!(validate_request(&get(&format!("{root}{suffix}"))).is_err());
+        }
+        assert!(validate_request(&get("/sessions?projection=navigation")).is_err());
+    }
+
     #[test]
     fn project_overview_is_an_exact_read_only_route() {
         let root = "/pm/workspaces/ws_11111111111111111111111111111111/overview";

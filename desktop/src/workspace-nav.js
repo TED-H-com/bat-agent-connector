@@ -224,7 +224,8 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
         for (const id of projects.keys()) if (!ids.has(id) || !expanded.has(id)) projects.delete(id);
         // Lazy project reads bound work to expanded projects, not every session on every host.
         for (const id of expanded) if (ids.has(id)) {
-          const detail = await api('GET', `/projects/${encodeURIComponent(id)}`); current(); projects.set(id, detail);
+          const projection = caps()?.features?.project_navigation?.version === 1 ? '?projection=navigation' : '';
+          const detail = await api('GET', `/projects/${encodeURIComponent(id)}${projection}`); current(); projects.set(id, detail);
         }
         if (catalogKnown && !roots.length && !sessionsLoaded && ['#/home', '#/sessions', '#/work-list', '#/', ''].includes(selected)) sessionTree.open = true;
         if (sessionTree.open && (!pmWorkspace || globalTree)) {

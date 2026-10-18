@@ -43,11 +43,11 @@ def creation_base(ops, entry, origin, kind):
     return json.loads(row[0]).get("base_commit") if row else None
 
 
-def resolve(ops, kind, source_id):
+def resolve(ops, kind, source_id, *, _entries=None):
     host, sid, selector, origin = reference(ops, kind, source_id)
     if not host or not sid or host not in ops.context["fleet"].config.hosts:
         raise OperationError("SOURCE_UNAVAILABLE", "execution has no configured session binding", 409)
-    entry = registry.get(host, sid)
+    entry = registry.get(host, sid) if _entries is None else next((row for row in _entries if row.get("session_id") == sid), None)
     if not entry:
         raise OperationError("SOURCE_LINEAGE_UNPROVEN", "execution has no current creation record", 409)
     try:
@@ -55,7 +55,7 @@ def resolve(ops, kind, source_id):
     except OperationError as error:
         raise OperationError("SOURCE_LINEAGE_UNPROVEN", error.message, 409) from None
     cls = resource_policy.classify(ops.context["fleet"].config.host(host), sid, terminal=None,
-                                   entries=registry.list_entries(host))
+                                   entries=registry.list_entries(host) if _entries is None else _entries)
     branch = entry.get("branch")
     if (cls.provenance != resource_policy.MANAGED or not cls.writable or not cls.workdir
             or not isinstance(branch, str) or not resource_policy.HEAD_REF.fullmatch(branch)
@@ -128,7 +128,7 @@ def candidates(ops, host, limit=50):
     return sorted(out, key=lambda item: (item["created_at"], item["id"]), reverse=True)[:limit]
 
 
-def describe(ops, kind, source_id):
+def describe(ops, kind, source_id, *, _registry=None):
     source_host, sid, _, origin = reference(ops, kind, source_id)
     item = {"kind": kind, "id": source_id, "host": source_host, "session_id": sid,
                 "created_at": origin["created_at"] if kind == "execution" else origin["command_created_at"],
@@ -141,7 +141,12 @@ def describe(ops, kind, source_id):
                 "title": (origin.get("params") or {}).get("title") if kind == "execution" else origin["original_words"][:120],
                 "project_ids": project_ids(ops, kind, source_id, source_host, sid, origin)}
     try:
-        source = resolve(ops, kind, source_id)
+        entries = None
+        if _registry is not None and source_host in ops.context["fleet"].config.hosts:
+            if source_host not in _registry:
+                _registry[source_host] = registry.list_entries(source_host)
+            entries = _registry[source_host]
+        source = resolve(ops, kind, source_id, _entries=entries)
         item.update(branch=source["ref"], worktree_path=source["location"], eligible=True, unavailable=None)
     except OperationError as error:
         item.update(branch=None, worktree_path=None, eligible=False,
@@ -164,7 +169,10 @@ def for_project(ops, project, limit=50):
             OR (l.kind='session' AND l.ref=COALESCE(json_extract(o.result,'$.host'),json_extract(o.target,'$.host')) || '/'
               || COALESCE(json_extract(o.result,'$.session_id'),json_extract(o.target,'$.session_id'))))))
         ORDER BY o.created_at DESC,o.operation_id DESC LIMIT ?""", (pid, pid, limit))
-    items = [describe(ops, "execution", row[0]) for row in rows]
+    # One registry read per host in this synchronous response only. Later reads
+    # and every write/preview still load current creation evidence independently.
+    registry_rows = {}
+    items = [describe(ops, "execution", row[0], _registry=registry_rows) for row in rows]
     tasks = ops.db.execute("""SELECT t.* FROM tasks t WHERE t.project=? OR EXISTS (
         SELECT 1 FROM work_item_links l JOIN work_items w USING(work_item_id)
         WHERE w.project_id=? AND l.removed_at IS NULL AND l.kind='task' AND l.ref=t.task_id)
@@ -174,7 +182,7 @@ def for_project(ops, project, limit=50):
             AND kind='send' AND status IN ('accepted','settled') ORDER BY created_at DESC,command_id DESC LIMIT 1""",
                                  (task["task_id"], task["session_id"])).fetchone()
         if command:
-            items.append(describe(ops, "task_command", command[0]))
+            items.append(describe(ops, "task_command", command[0], _registry=registry_rows))
         else:
             items.append({"kind": "task", "id": task["task_id"], "task_id": task["task_id"], "host": task["host"],
                           "session_id": task["session_id"], "created_at": task["submitted_at"], "status": task["state"],

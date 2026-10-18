@@ -1101,11 +1101,11 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         (project.* and work_item.* actions)."""
         return await daemon("projects_list", include_archived=include_archived)
 
-    async def project_get(project_id: str, include_archived: bool = False) -> dict[str, Any]:
+    async def project_get(project_id: str, include_archived: bool = False, projection: str = "full") -> dict[str, Any]:
         """One project and its work item tree. Each work item carries version (pass it as
         preconditions.expected_version to work_item.update) and completion (display_state, pending,
-        fingerprint)."""
-        return await daemon("project_get", project_id=project_id, include_archived=include_archived)
+        fingerprint). projection="navigation" returns compact item summaries; read full details before editing or approval."""
+        return await daemon("project_get", project_id=project_id, include_archived=include_archived, projection=projection)
 
     async def work_items_list(project_id: str | None = None, state: str | None = None,
                               pending: bool | None = None, limit: int = 50,

@@ -6,6 +6,11 @@
   Queued programmatic scroll events preserve the reader's existing follow choice;
   readers who scrolled to earlier messages keep their position.
 
+- Shared navigation requests compact Work summaries from capable servers; original
+  requirements and full steps remain available on selected Work detail.
+- A project response shares registry reads per host while retaining fresh source
+  and permission checks for later reads and every execution action.
+
 - Discussions can explicitly prepare a versioned continuation brief with original
   goals, decision facts, fixed references, coverage and up to two next steps.
   Later PM turns reuse a readable brief within their existing context budget;

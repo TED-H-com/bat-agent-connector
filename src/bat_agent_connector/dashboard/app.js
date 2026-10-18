@@ -51170,7 +51170,8 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 				}
 				for (const id of projects.keys()) if (!ids.has(id) || !expanded.has(id)) projects.delete(id);
 				for (const id of expanded) if (ids.has(id)) {
-					const detail = await api("GET", `/projects/${encodeURIComponent(id)}`);
+					const projection = caps()?.features?.project_navigation?.version === 1 ? "?projection=navigation" : "";
+					const detail = await api("GET", `/projects/${encodeURIComponent(id)}${projection}`);
 					current();
 					projects.set(id, detail);
 				}
