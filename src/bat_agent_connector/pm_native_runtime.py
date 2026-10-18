@@ -29,6 +29,8 @@ SYSTEM_CONFIG_ROOT = Path("/etc/codex")
 MAX_LINE_BYTES = 1024 * 1024
 MAX_STREAM_BYTES = 8 * 1024 * 1024
 MAX_OUTPUT_CHARS = 128_000
+LAUNCH_TIMEOUT = 20
+PREFLIGHT_TIMEOUT = 20
 DISABLED_FEATURES = (
     "shell_tool", "unified_exec", "multi_agent", "multi_agent_v2", "agent_message_board",
     "hooks", "apps", "plugins", "remote_plugin", "recommended_plugins", "tool_suggest",
@@ -73,7 +75,10 @@ async def _runtime_version(executable: str) -> str:
     process = await _spawn(executable, "--version", stdout=asyncio.subprocess.PIPE,
                            stderr=asyncio.subprocess.DEVNULL)
     try:
-        output, _ = await asyncio.wait_for(process.communicate(), 5)
+        try:
+            output, _ = await asyncio.wait_for(process.communicate(), 5)
+        except asyncio.TimeoutError:
+            raise NativeRuntimeError("PM_NATIVE_VERSION_TIMEOUT") from None
         _require(process.returncode == 0 and output.strip() == f"codex-cli {VERSION}".encode(),
                  "PM_NATIVE_VERSION_UNSUPPORTED")
         return VERSION
@@ -360,14 +365,40 @@ class NativePmRuntime:
         self._events = []
         self._event_sink = None
         self._stderr_bytes = 0
+        self.preflight_diagnostic = None
+        self._stage = "not_started"
+        self._stage_started = None
+
+    def _diagnostic_stage(self, stage):
+        # Call sites supply fixed labels only; no paths, request bodies or stderr.
+        self._stage, self._stage_started = stage, time.monotonic()
+
+    def _preflight_failure(self, error, boundary, started, deadline):
+        at = time.monotonic()
+        timed_out = isinstance(error, asyncio.TimeoutError) or getattr(error, "code", None) == "PM_NATIVE_VERSION_TIMEOUT"
+        code = getattr(error, "code", f"PM_NATIVE_{boundary.upper()}_TIMEOUT" if timed_out else "native_probe_failed")
+        self.preflight_diagnostic = {
+            "boundary": boundary, "stage": self._stage, "code": code,
+            "failure": "timeout" if timed_out else "cancelled" if isinstance(error, asyncio.CancelledError)
+                else "boundary_rejected" if code == "PM_NATIVE_BOUNDARY_UNVERIFIED" else "runtime_error",
+            "elapsed_s": round(max(0, at - started), 3),
+            "stage_elapsed_s": round(max(0, at - (self._stage_started or started)), 3),
+            "deadline_s": 5 if code == "PM_NATIVE_VERSION_TIMEOUT" else deadline,
+        }
+        return NativeRuntimeError(code) if isinstance(error, asyncio.TimeoutError) else error
 
     async def __aenter__(self):
+        started = time.monotonic()
+        self._diagnostic_stage("installation")
         try:
-            await asyncio.wait_for(self._launch(), 20)
+            await asyncio.wait_for(self._launch(), LAUNCH_TIMEOUT)
             return self
-        except BaseException:
+        except BaseException as error:
+            failure = self._preflight_failure(error, "launch", started, LAUNCH_TIMEOUT)
             await self.close()
-            raise
+            if failure is error:
+                raise
+            raise failure from None
 
     async def __aexit__(self, *_):
         await self.close()
@@ -392,7 +423,9 @@ class NativePmRuntime:
         bwrap = shutil.which("bwrap")
         _require(executable and bwrap, "PM_NATIVE_EXECUTABLE_UNAVAILABLE")
         self.executable = str(Path(executable).resolve())
+        self._diagnostic_stage("version")
         await _runtime_version(self.executable)
+        self._diagnostic_stage("isolation_setup")
         home, native = _host_paths()
         self.scratch_root = self.scratch_root.resolve()
         _check_host_config()
@@ -431,9 +464,11 @@ class NativePmRuntime:
                        "NO_PROXY", "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS"}
         environment = {key: value for key, value in os.environ.items() if key in allowed_env}
         try:
+            self._diagnostic_stage("launch_receipt")
             self._spool_record({"source": "adapter", "kind": "process_launch_attempted", "run_id": self.run_id})
             self.process_launch_attempted = True
             try:
+                self._diagnostic_stage("spawn")
                 self.process = await _spawn(*command, cwd=self.workspace, env=environment,
                                             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
                                             stderr=asyncio.subprocess.PIPE, start_new_session=True,
@@ -445,7 +480,9 @@ class NativePmRuntime:
         finally:
             if fd is not None:
                 os.close(fd)
+        self._diagnostic_stage("process_identity")
         self.identity = _process_identity(self.process.pid)
+        self._diagnostic_stage("process_receipt")
         await self._receipt({"kind": "process_started", "contract": CONTRACT, "run_id": self.run_id,
                              "process": self.identity, "started_at": time.time()})
         self._stderr_task = asyncio.create_task(self._drain_stderr())
@@ -503,17 +540,31 @@ class NativePmRuntime:
 
     async def preflight(self) -> dict:
         if self.capability is None:
-            self.capability = await asyncio.wait_for(self._preflight(), 20)
-            await self._receipt({"kind": "preflight", "run_id": self.run_id, "capability": self.capability})
+            started = time.monotonic()
+            self._diagnostic_stage("initialize")
+            try:
+                self.capability = await asyncio.wait_for(self._preflight(), PREFLIGHT_TIMEOUT)
+                self._diagnostic_stage("preflight_receipt")
+                await self._receipt({"kind": "preflight", "run_id": self.run_id, "capability": self.capability})
+            except BaseException as error:
+                failure = self._preflight_failure(error, "preflight", started, PREFLIGHT_TIMEOUT)
+                if failure is error:
+                    raise
+                raise failure from None
         return copy.deepcopy(self.capability)
 
     async def _preflight(self):
         await self._request("initialize", {"clientInfo": {"name": "batc_pm", "version": "1"},
                                            "capabilities": {"experimentalApi": True}})
+        self._diagnostic_stage("initialized")
         await self._send({"method": "initialized", "params": {}})
+        self._diagnostic_stage("config_read")
         config = await self._request("config/read", {"cwd": str(self.workspace), "includeLayers": True})
+        self._diagnostic_stage("config_validate")
         validate_config(config.get("config"))
+        self._diagnostic_stage("skills_read")
         skills = await self._request("skills/list", {"cwds": [str(self.workspace)], "forceReload": True})
+        self._diagnostic_stage("skills_validate")
         _require(isinstance(skills.get("data"), list) and len(skills["data"]) == 1)
         _require(isinstance(skills["data"][0], dict))
         _require(skills["data"][0].get("skills") == [] and skills["data"][0].get("errors") == [])
@@ -522,7 +573,9 @@ class NativePmRuntime:
                   "approvalPolicy": "never", "allowProviderModelFallback": False}
         if self.requested_model is not None:
             params["model"] = self.requested_model
+        self._diagnostic_stage("thread_start")
         started = await self._request("thread/start", params)
+        self._diagnostic_stage("thread_validate")
         thread = started.get("thread", {})
         _require(isinstance(thread, dict))
         _require(started.get("sandbox") == {"type": "readOnly", "networkAccess": False})
@@ -532,7 +585,9 @@ class NativePmRuntime:
         _require(isinstance(thread.get("id"), str) and bool(thread["id"]))
         _require(isinstance(started.get("model"), str) and bool(started["model"]))
         _require(self.requested_model is None or started["model"] == self.requested_model)
+        self._diagnostic_stage("mcp_read")
         inventory = await self._request("mcpServerStatus/list", {"threadId": thread["id"], "limit": 100})
+        self._diagnostic_stage("mcp_validate")
         _require(inventory.get("data") == [] and inventory.get("nextCursor") is None)
         return {"contract": CONTRACT, "adapter": "codex-native-linux", "version": VERSION, "source": SOURCE,
                 "run_id": self.run_id, "thread_id": thread["id"], "actual_model": started["model"],
@@ -638,6 +693,8 @@ class NativePmRuntime:
                                  "sent": self._sent, "native_event_count": len(self._events),
                                  "stderr_bytes": self._stderr_bytes,
                                  "process_death_confirmed": dead}
+            if self.preflight_diagnostic is not None:
+                self.exit_receipt["preflight_diagnostic"] = copy.deepcopy(self.preflight_diagnostic)
             try:
                 await self._receipt(self.exit_receipt)
             except BaseException:
@@ -653,11 +710,14 @@ class NativePmRuntime:
 
 async def probe(scratch_root: Path, run_id: str, **kwargs) -> dict:
     """No model input. Returns an explicit unsupported report on a failed boundary check."""
+    runtime = None
     try:
-        async with NativePmRuntime(scratch_root, run_id, **kwargs) as runtime:
+        runtime = NativePmRuntime(scratch_root, run_id, **kwargs)
+        async with runtime:
             capability = await runtime.preflight()
         return {**capability, "process_exited": bool(runtime.exit_receipt
                                                      and runtime.exit_receipt["process_death_confirmed"])}
     except (NativeRuntimeError, OSError, ValueError, asyncio.TimeoutError) as error:
         return {"contract": CONTRACT, "adapter": "codex-native-linux", "automatic_pm_turn": False,
-                "options_confirmed": False, "reason": getattr(error, "code", "native_probe_failed")}
+                "options_confirmed": False, "reason": getattr(error, "code", "native_probe_failed"),
+                "diagnostic": copy.deepcopy(runtime.preflight_diagnostic) if runtime else None}

@@ -403,7 +403,109 @@ async def test_unsafe_config_fails_before_any_thread_or_model_start(fake_runtime
     options["bad_config"] = True
     result = await native.probe(scratch, RUN)
     assert not result["automatic_pm_turn"] and not result["options_confirmed"]
+    assert result["reason"] == "PM_NATIVE_BOUNDARY_UNVERIFIED"
+    assert result["diagnostic"]["stage"] == "config_validate"
+    assert result["diagnostic"]["failure"] == "boundary_rejected"
     assert [request["method"] for request in processes[0].requests] == ["initialize", "initialized", "config/read"]
+    assert processes[0].returncode == 0 and not list(scratch.iterdir())
+
+
+@pytest.mark.parametrize("method,stage", [
+    ("initialize", "initialize"), ("config/read", "config_read"),
+    ("skills/list", "skills_read"), ("thread/start", "thread_start"),
+    ("mcpServerStatus/list", "mcp_read"),
+])
+async def test_preflight_timeout_names_original_stage_and_preserves_zero_prompt_cleanup(
+        fake_runtime, monkeypatch, method, stage):
+    scratch, _, processes, _ = fake_runtime
+    receive = FakeProcess.receive
+
+    def stall(process, request):
+        if request["method"] == method:
+            process.requests.append(request)
+            return
+        receive(process, request)
+
+    monkeypatch.setattr(FakeProcess, "receive", stall)
+    monkeypatch.setattr(native, "PREFLIGHT_TIMEOUT", 0.03)
+    lifecycle = []
+    result = await native.probe(scratch, RUN, record_lifecycle=lifecycle.append)
+    assert result["reason"] == "PM_NATIVE_PREFLIGHT_TIMEOUT"
+    assert not result["automatic_pm_turn"] and not result["options_confirmed"]
+    diagnostic = result["diagnostic"]
+    assert diagnostic["boundary"] == "preflight" and diagnostic["stage"] == stage
+    assert diagnostic["failure"] == "timeout" and diagnostic["deadline_s"] == 0.03
+    assert diagnostic["elapsed_s"] >= diagnostic["stage_elapsed_s"] >= 0
+    assert str(scratch) not in json.dumps(diagnostic)
+    assert all(row["method"] != "turn/start" for row in processes[0].requests)
+    assert [row["method"] for row in processes[0].requests].count(method) == 1
+    assert lifecycle[-1]["preflight_diagnostic"] == diagnostic
+    assert lifecycle[-1]["process_death_confirmed"] and not lifecycle[-1]["sent"]
+    assert processes[0].returncode == 0 and not list(scratch.iterdir())
+
+
+async def test_launch_timeout_is_distinct_and_does_not_create_an_analysis_process(fake_runtime, monkeypatch):
+    scratch, _, processes, _ = fake_runtime
+
+    async def stalled_version(_):
+        await asyncio.Future()
+
+    monkeypatch.setattr(native, "_runtime_version", stalled_version)
+    monkeypatch.setattr(native, "LAUNCH_TIMEOUT", 0.03)
+    result = await native.probe(scratch, RUN)
+    assert result["reason"] == "PM_NATIVE_LAUNCH_TIMEOUT"
+    assert result["diagnostic"]["stage"] == "version"
+    assert result["diagnostic"]["boundary"] == "launch"
+    assert result["diagnostic"]["failure"] == "timeout"
+    assert not processes and not scratch.exists()
+
+
+async def test_version_timeout_keeps_its_inner_bound_and_joins_its_owned_process(monkeypatch):
+    class VersionProcess:
+        returncode = None
+        killed = False
+        joined = False
+
+        async def communicate(self):
+            raise asyncio.TimeoutError()
+
+        def kill(self):
+            self.killed = True
+
+        async def wait(self):
+            self.joined, self.returncode = True, -9
+
+    process = VersionProcess()
+
+    async def spawn(*args, **kwargs):
+        return process
+
+    monkeypatch.setattr(native, "_spawn", spawn)
+    with pytest.raises(native.NativeRuntimeError, match="PM_NATIVE_VERSION_TIMEOUT"):
+        await native._runtime_version("fixture-codex")
+    assert process.killed and process.joined
+
+
+async def test_cancelled_preflight_remains_cancellation_and_keeps_original_cleanup(fake_runtime, monkeypatch):
+    scratch, _, processes, _ = fake_runtime
+    ready = asyncio.Event()
+    original = native.NativePmRuntime._request
+
+    async def stalled(runtime, method, params):
+        if method == "initialize":
+            ready.set()
+            await asyncio.Future()
+        return await original(runtime, method, params)
+
+    monkeypatch.setattr(native.NativePmRuntime, "_request", stalled)
+    lifecycle = []
+    task = asyncio.create_task(native.probe(scratch, RUN, record_lifecycle=lifecycle.append))
+    await asyncio.wait_for(ready.wait(), 5)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert lifecycle[-1]["preflight_diagnostic"]["failure"] == "cancelled"
+    assert lifecycle[-1]["process_death_confirmed"] and not lifecycle[-1]["sent"]
     assert processes[0].returncode == 0 and not list(scratch.iterdir())
 
 
@@ -569,7 +671,7 @@ async def test_real_offline_preflight_is_zero_prompt_and_leaves_no_process_or_fi
     # Unsupported kernel user namespaces are an explicit capability failure, not a fake pass.
     if not result["options_confirmed"] and not lifecycle:
         pytest.skip(f"Host cannot start isolated runtime: {result.get('reason')}")
-    assert result["options_confirmed"], result
+    assert result["options_confirmed"], json.dumps(result, sort_keys=True)
     assert result["process_exited"] and not result["automatic_pm_turn"]
     assert result["mcp_servers"] == [] and result["skills"] == []
     assert result["auth_file_readable"] is False and result["model_execution_verified"] is False
@@ -592,7 +694,7 @@ async def test_real_preflight_does_not_inherit_project_tools_or_hooks(tmp_path):
     config_file.write_text("features.hooks=true\nfeatures.multi_agent=true\nfeatures.shell_tool=true\n")
     original = config_file.read_bytes()
     result = await native.probe(tmp_path / "scratch", "inherited-config-test", use_auth=False, offline=True)
-    assert result["options_confirmed"], result
+    assert result["options_confirmed"], json.dumps(result, sort_keys=True)
     assert not result["automatic_pm_turn"] and result["process_exited"]
     assert config_file.read_bytes() == original
     assert not list((tmp_path / "scratch").iterdir())
