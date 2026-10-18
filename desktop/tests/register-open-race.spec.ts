@@ -30,7 +30,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 1440]) {
   });
 }
 
-for (const close of ['dismiss', 'withdraw']) test(`Pending register opening respects ${close}`, async ({page}) => {
+for (const close of ['selection', 'withdraw']) test(`Pending register opening respects ${close}`, async ({page}) => {
   await page.setViewportSize({width: 390, height: 900});
   const f = registerStatusFixture('en');
   let reads = 0, release!: () => void, withdrawn = false;
@@ -47,17 +47,19 @@ for (const close of ['dismiss', 'withdraw']) test(`Pending register opening resp
   });
   await f.mount(page, 'issues');
   await page.locator(`[data-row-key="${id}"]`).click();
-  await expect(page.locator('[data-reg-inspector][data-reg-loading]')).toBeVisible();
-  if (close === 'dismiss') await page.keyboard.press('Escape');
+  await expect.poll(() => reads).toBe(1);
+  await expect(page.locator('[data-reg-inspector]')).toHaveCount(0);
+  if (close === 'selection') await page.locator(`[data-row-key]:not([data-row-key="${id}"])`).first().click();
   else withdrawn = true;
   const before = f.reads.filter(path => path.includes('/register?')).length;
   f.emit();
   try {
     await expect.poll(() => f.reads.filter(path => path.includes('/register?')).length).toBeGreaterThan(before);
     if (close === 'withdraw') await expect.poll(() => reads).toBeGreaterThan(1);
-    await expect(page.locator('[data-reg-inspector]')).toHaveCount(0);
+    if (close === 'withdraw') await expect(page.locator('[data-reg-inspector]')).toHaveCount(0);
+    else await expect(page.locator('[data-reg-inspector]')).not.toHaveAttribute('data-reg-row', id);
     release();
-    await expect(page.locator('[data-reg-inspector]')).toHaveCount(0);
+    await expect(page.locator(`[data-reg-inspector][data-reg-row="${id}"]`)).toHaveCount(0);
     expect(f.writes).toEqual([]);
   } finally {release();}
 });

@@ -31489,7 +31489,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 	let ageValue = Object.hasOwn(AGE_KEYS, preference.age) ? preference.age : "";
 	let weekValue = /^\d{4}-\d{2}-\d{2}$/.test(preference.week || "") ? preference.week : "";
 	let inspectorMenu = null;
-	let debounce = null, sheet = null, retainSheet = false, opening = false;
+	let debounce = null, sheet = null, retainSheet = false, opening = false, pendingOpen = null;
 	const statusLine = h("div", {
 		class: "reg-status",
 		role: "status"
@@ -32199,6 +32199,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		else if (chip) (chipHost.querySelector(`[data-reg-filter="${CSS.escape(chip)}"] button`) || (chip === "age" ? ageSelect : summaryHost.querySelector("[data-reg-week][aria-pressed=true]") || ageSelect)).focus({ preventScroll: true });
 	}
 	function closeSheet(retain) {
+		if (!retain) pendingOpen = null;
 		retainSheet = retain;
 		sheet?.close();
 		retainSheet = false;
@@ -32392,6 +32393,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 				title,
 				onClose: () => {
 					sheet = null;
+					pendingOpen = null;
 					inspectorMenu?.dispose();
 					inspectorMenu = null;
 					if (!retainSheet && !opening) preference.inspector = false;
@@ -32418,6 +32420,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		selected = row.row_id;
 		preference.selected = selected;
 		preference.inspector = true;
+		pendingOpen = selected;
 		render();
 		loadDetail(row.row_id);
 	}
@@ -32508,7 +32511,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			loaded = true;
 			statusLine.replaceChildren();
 			render();
-			const showSheet = Boolean(sheet) || matchMedia("(min-width: 1200px)").matches;
+			const showSheet = pendingOpen === selected || Boolean(sheet) || matchMedia("(min-width: 1200px)").matches;
 			if (preference.inspector && selected && (changed || stale || showSheet && (!sheet || sheet.hasAttribute("data-reg-loading")))) loadDetail(selected, showSheet);
 		} catch (error) {
 			try {
@@ -32529,10 +32532,6 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 	}
 	async function loadDetail(rowId, paint = true) {
 		if (!active) return;
-		if (paint && preference.inspector && selected === rowId) {
-			const row = rows.find((item) => item.row_id === rowId);
-			if (row) prepareInspector(row);
-		}
 		const ticket = ++detailSerial;
 		const listTicket = serial;
 		try {
@@ -32546,6 +32545,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 				render();
 			}
 			paintInspector(data);
+			pendingOpen = null;
 		} catch (error) {
 			try {
 				alive();
@@ -32667,6 +32667,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		}
 		active = next;
 		if (!active) {
+			pendingOpen = null;
 			serial++;
 			detailSerial++;
 			busy = false;
@@ -32708,6 +32709,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		selected = rowId;
 		preference.selected = rowId;
 		preference.inspector = true;
+		pendingOpen = rowId;
 		render();
 		await loadDetail(rowId);
 	}

@@ -55,7 +55,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
   let ageValue = Object.hasOwn(AGE_KEYS, preference.age) ? preference.age : '';
   let weekValue = /^\d{4}-\d{2}-\d{2}$/.test(preference.week || '') ? preference.week : '';
   let inspectorMenu = null;
-  let debounce = null, sheet = null, retainSheet = false, opening = false;
+  let debounce = null, sheet = null, retainSheet = false, opening = false, pendingOpen = null;
   const statusLine = h('div', {class: 'reg-status', role: 'status'});
   const summaryHost = h('div', {class: 'reg-summary', 'data-reg-summary': ''});
   const trends = h('details', {class: 'ui-disclosure reg-trends', 'data-reg-trends': ''},
@@ -479,6 +479,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     }
   }
   function closeSheet(retain) {
+    if (!retain) pendingOpen = null;
     retainSheet = retain;
     sheet?.close();
     retainSheet = false;
@@ -596,7 +597,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       closeSheet(true);
       opening = true;
       sheet = inspector({title, onClose: () => {
-        sheet = null; inspectorMenu?.dispose(); inspectorMenu = null;
+        sheet = null; pendingOpen = null; inspectorMenu?.dispose(); inspectorMenu = null;
         if (!retainSheet && !opening) preference.inspector = false;
         // close() focuses its captured opener after onClose. A rebuilt row is disconnected, so focus again on the next turn.
         queueMicrotask(() => {if (!opening && !sheet && active) focusSelectedRow();});
@@ -619,6 +620,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     selected = row.row_id;
     preference.selected = selected;
     preference.inspector = true;
+    pendingOpen = selected;
     render();
     void loadDetail(row.row_id);
   }
@@ -699,7 +701,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       render();
       // Below 1200 the inspector is a modal sheet. A refresh or a return keeps the selection
       // and leaves that sheet closed. The side panel (1200 and above) still restores.
-      const showSheet = Boolean(sheet) || matchMedia('(min-width: 1200px)').matches;
+      const showSheet = pendingOpen === selected || Boolean(sheet) || matchMedia('(min-width: 1200px)').matches;
       if (preference.inspector && selected && (changed || stale || (showSheet && (!sheet || sheet.hasAttribute('data-reg-loading'))))) void loadDetail(selected, showSheet);
     } catch (error) {
       try {alive();} catch {return;}
@@ -711,13 +713,8 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
   }
   async function loadDetail(rowId, paint = true) {
     if (!active) return;
-    // Reserve the sheet for an explicit opening before awaiting its exact read.
-    // A concurrent list refresh invalidates that read and must still see the
-    // pending opening, so it can request fresh detail instead of losing the click.
-    if (paint && preference.inspector && selected === rowId) {
-      const row = rows.find(item => item.row_id === rowId);
-      if (row) prepareInspector(row);
-    }
+    // Keep an explicit open intent through list refreshes without opening a
+    // modal before the authorized detail arrives. Navigation remains usable.
     const ticket = ++detailSerial;
     const listTicket = serial;
     try {
@@ -729,6 +726,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       const index = rows.findIndex(row => row.row_id === rowId);
       if (index >= 0) {rows[index] = data.row; render();}
       paintInspector(data);
+      pendingOpen = null;
     } catch (error) {
       try {alive();} catch {return;}
       if (!active || ticket !== detailSerial || listTicket !== serial) return;
@@ -800,7 +798,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     const next = Boolean(value);
     if (active === next) {if (active) publishMeta(); else onMeta(null); return;}
     active = next;
-    if (!active) {serial++; detailSerial++; busy = false; onMeta(null); closeSheet(true); return;}
+    if (!active) {pendingOpen = null; serial++; detailSerial++; busy = false; onMeta(null); closeSheet(true); return;}
     // Reserve the returning side panel before exposing the table. Opening it only
     // after the read hides secondary chips that may already be under the pointer.
     const selectedRow = rows.find(row => row.row_id === selected);
@@ -829,7 +827,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     await refresh();
     try {alive();} catch {return;}
     if (!active || unavailable || failed || query !== String(pageQuery())) return;
-    selected = rowId; preference.selected = rowId; preference.inspector = true;
+    selected = rowId; preference.selected = rowId; preference.inspector = true; pendingOpen = rowId;
     render();
     await loadDetail(rowId);
   }
