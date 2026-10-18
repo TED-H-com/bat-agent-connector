@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Add optional Linux user SSH tunnel units, loopback validation and pluggable Bitwarden/command token-file provisioning helpers.
+
 - Read-only manual-session observation can prove 2–64 serial native inputs from complete same-epoch replay and exact counters. Public receipts retain only bounded counts and digests; gaps, overlap and incomplete retention stay unknown. Original single-input receipts remain compatible, and no session control or work acceptance is inferred.
 - A factual refresh no longer drops an Overview assessment button press. Returning
   to a mobile work board retains the requested reading position through its loading

@@ -241,6 +241,8 @@ A development checkout can instead use `uv sync --locked --extra dev`, with `uv 
 
 ### 3. Configure BAT access
 
+Linux operators can use the optional [user SSH tunnels and token-file provisioning helpers](../contrib/linux/README.md) with existing trusted SSH aliases and Bitwarden or command sources.
+
 If this host has the BAT desktop client's profiles:
 
 ```bash
