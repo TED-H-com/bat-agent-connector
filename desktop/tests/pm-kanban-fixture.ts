@@ -87,9 +87,10 @@ export async function mount(page:Page, f:ReturnType<typeof fixture>, {locale='en
       return result.data;
     };
     const ui = workspaceKanban({h,t,api,alive:()=>{},workspaceId,pageSize,projectId:project,
-      errorBox:(error:any)=>h('p',{class:'error'},error.message)});
+      errorBox:(error:any)=>h('p',{class:'error'},error.message),
+      workspaceSettled:()=>win.kanbanWorkspaceSettled || Promise.resolve()});
     document.getElementById('mount')!.append(ui.element);
-    win.refreshKanban = ui.refresh;
+    win.refreshKanban = ui.refresh;win.activateKanban=ui.setActive;
     await ui.refresh();
   }, {locale, workspaceId, pageSize, project});
   await expect(page.locator('[data-pm-kanban]')).toBeVisible();

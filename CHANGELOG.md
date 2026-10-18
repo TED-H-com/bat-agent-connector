@@ -3,6 +3,9 @@
 ## Next release (unreleased)
 
 - Read-only manual-session observation can prove 2–64 serial native inputs from complete same-epoch replay and exact counters. Public receipts retain only bounded counts and digests; gaps, overlap and incomplete retention stay unknown. Original single-input receipts remain compatible, and no session control or work acceptance is inferred.
+- A factual refresh no longer drops an Overview assessment button press. Returning
+  to a mobile work board retains the requested reading position through its loading
+  layout, while a new user scroll still takes precedence.
 
 - Persist each workspace’s bounded PM analysis runtime through the existing durable operation. New discussion analysis, proposals, reviews, Overview assessments and continuation summaries use the saved choice; pending requests retain their original receipt, and a changed choice fences queued work before it starts. Active or unresolved PM analysis prevents switching.
 - Saving a workspace PM runtime choice remains a central journal operation;

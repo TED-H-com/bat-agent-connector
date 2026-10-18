@@ -509,6 +509,27 @@ for (const lang of ['en', 'zh-TW'] as const) {
   }
 }
 
+test('board return keeps the requested scroll while workspace layout is still loading',async({page})=>{
+  await page.setViewportSize({width:390,height:844});
+  const f=createLegacyFixture();let hold=false,release:(()=>void)|null=null,boardReads=0;
+  await mountAttention(page,false,{...f.ws.fixture,caps:f.combinedCaps},async input=>{
+    const path=new URL(input.path,'http://fixture').pathname;
+    if(hold&&path===`/pm/workspaces/${fixtureWorkspaceId}`){hold=false;await new Promise<void>(resolve=>{release=resolve;});}
+    const result=await f.dispatch(input);if(path.endsWith('/kanban'))boardReads++;return result;
+  });
+  const route=legacyRoutes.find(row=>row.id==='board')!;await page.goto(route.url);
+  await expect(page.locator('.pm-kanban-card').first()).toBeVisible();await waitForViewSettled(page);
+  await page.evaluate(()=>window.scrollTo(0,200));await expect.poll(()=>page.evaluate(()=>scrollY)).toBe(200);
+  await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+  await ensureDrawerOpen(page,390);await page.locator('.wc-daily a[data-daily="today"]').click();await ensureDrawerClosed(page,390);
+  await waitForViewSettled(page);const before=boardReads;hold=true;await page.goBack();
+  await expect.poll(()=>Boolean(release)).toBe(true);await expect.poll(()=>boardReads).toBeGreaterThan(before);
+  await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+  release!();await waitForViewSettled(page);
+  await expect.poll(async()=>Math.abs(await page.evaluate(()=>scrollY)-200)).toBeLessThanOrEqual(8);
+  expect(f.nonGetDispatches).toEqual([]);
+});
+
 // --------------------------------------------------------------------------
 // UX-A07: The feature map (EN and zh-TW at 1440, EN at 390)
 // --------------------------------------------------------------------------

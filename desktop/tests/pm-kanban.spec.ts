@@ -199,3 +199,23 @@ test('live updates hold a hovered or focused lane until the reader leaves it', a
   await expect(page.locator('[data-pm-kanban-column=waiting] [data-pm-kanban-work]')).toHaveCount(1);
   expect(f.state.writes).toHaveLength(0);
 });
+
+
+for(const move of [false,true])test(`board restoration keeps its target across a clamped loading layout; user moved=${move}`,async({page})=>{
+  const f=fixture();await page.setViewportSize({width:390,height:844});await mount(page,f);
+  await page.evaluate(()=>{document.getElementById('mount')!.style.height='3000px';window.scrollTo(0,200);});
+  await expect.poll(()=>page.evaluate(()=>scrollY)).toBe(200);
+  await page.evaluate(async()=>{
+    const win=window as any;win.activateKanban(false);
+    const node=document.getElementById('mount')!;node.style.height='300px';node.style.overflow='hidden';
+    win.kanbanWorkspaceSettled=new Promise<void>(resolve=>{win.releaseKanbanWorkspace=resolve;});
+    await win.activateKanban(true);
+    await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+  });
+  await expect.poll(()=>page.evaluate(()=>scrollY)).toBeLessThan(200);
+  await page.evaluate(()=>{document.getElementById('mount')!.style.height='3000px';});
+  if(move){await page.evaluate(()=>window.scrollTo(0,80));await expect.poll(()=>page.evaluate(()=>scrollY)).toBe(80);}
+  await page.evaluate(()=>{(window as any).releaseKanbanWorkspace();});
+  await expect.poll(()=>page.evaluate(()=>scrollY)).toBe(move?80:200);
+  expect(f.state.writes).toEqual([]);
+});
