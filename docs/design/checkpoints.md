@@ -39,6 +39,8 @@ BAT 的 `worktree:create` 不能指定起點 commit，所以 clone 與 worktree 
    - `git clone` 與 `git fetch` 只讀人的 repository。來源的 origin 是網路 URL（https、ssh、`git@`）時，clone 的 `origin` 改成它並去掉帳密；是本機路徑或沒有時移除 `origin`，所以從 clone push 不會進到任何人的資料夾。
    - 同一個 clone 的腳本在主機上以 `flock` 一次只跑一個：SSH 回應遺失後的重跑會等前一次跑完，不會同時改同一個 clone。
    - Clone 先建在暫存目錄，標上 `batc.managed-clone` 與 `batc.source` 後才搬到正式位置。目標路徑已存在但不是 Connector 的 clone（或屬於別的來源）時中止（`GIT_FAILED: not a connector clone`），不接管別人的資料夾。
+   - 暫存路徑若已有檔案、目錄或符號連結（包含失效連結），沒有獨立建立收據可證明歸屬時立即中止並保留，不刪除後重建。Clone 期間若正式目的地出現，也保留暫存副本及目的地供核對。此保守拒絕包含未完成的舊暫存副本；不靠路徑或 marker 推定可以清理。
+     這項保留修正不代替完整的跨程序 inode 鎖、clone 建立證據與來源程式隔離；本機 Git 仍未啟用。
 2. 腳本回報的 HEAD 必須等於 checkpoint commit 且乾淨，否則 `START_MISMATCH`。
 3. `verify.start`：BAT 的 `git:getRoot` 與 `git:log` 必須在新資料夾看到 worktree 本身與 checkpoint commit（計畫 §12 第 5 步），之後才啟動 session。這是一個 step：重跑時直接回傳記下的結果，不會因為 agent 已經 commit 而誤判起點不符。
 4. `session.start`：`session_start` 以 `cwd_override` 在 worktree 開新 session，session ID 由 operation ID 衍生；資源政策確認目的地在 managed root 內（`managed_clone`），並用 `git:getRoot` 確認沒有連結到 managed root 外。Session 以 `write_scope="confined"` 啟動，見下方「Agent 的可寫範圍」。

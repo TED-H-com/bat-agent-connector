@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Checkpoint preparation preserves an existing staging file, directory or link
+  when its creation is unproven. If the destination appears during cloning, keep
+  both paths for inspection instead of deleting the staged copy.
+
 - Checkpoint source status refuses repository filters, fsmonitor/hooks, config
   includes, submodules and lazy-fetch configuration before reading dirt. Reads
   discard inherited Git overrides, preserve the source index and report unknown
