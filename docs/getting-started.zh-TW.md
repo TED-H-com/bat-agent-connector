@@ -4,7 +4,7 @@
 
 ## 選擇相符的候選安裝包
 
-先下載[已發布預覽版](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.6-preview.20261017)，固定來源為 `f31e7964`：Connector 0.2.6、desktop 0.1.2，附來源清單及 SHA-256 校驗碼。後續候選可從 [`main` 的 desktop workflow](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) 選擇成功的平台 job，並核對精確來源與安裝 fixture 紀錄。
+目前最新已發布預覽版為 [v0.2.10-preview.20261018](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.10-preview.20261018)：Connector 0.2.10、desktop 0.1.6，附來源清單及 SHA-256 校驗碼。後續版本請從[發布頁](https://github.com/TED-H-com/bat-agent-connector/releases)選擇，核對 tag、manifest 與平台套件；預覽版不一定標記為 Latest。新版驗證安裝器尚未發布，0.2.10 不含安裝腳本；發布後的一行安裝與收據流程見[英文安裝說明](getting-started.md#2-install-connector)。CI 與安裝 fixture 不代表實機驗收。
 
 | 平台 | Artifact | 格式 |
 | --- | --- | --- |
