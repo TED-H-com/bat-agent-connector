@@ -1,13 +1,13 @@
 # PM v1.2 開發狀態
 
-已合併主線 `001662eb`（#276–278、#282、#285、#287–291，2026 年 10 月 18 日）支援建立 Work、採用並開始已審閱計畫、對同一工作追加第二句、讀取固定成果與差異、執行已設定驗證、從同一成果發布 PR，以及選兩份既有評估帶入 PM 討論。工作設定檔、readiness 與 API／MCP 對等也已納入。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；安裝與真實 BAT／模型驗收仍須另有證據。
+已合併主線 `b44a83ab`（#276–278、#282、#285、#287–301，2026 年 10 月 18 日）支援建立 Work、採用並開始已審閱計畫、對同一工作追加第二句、讀取固定成果與差異、執行已設定驗證、從同一成果發布 PR，以及選兩份既有評估帶入 PM 討論。工作設定檔、readiness 與 API／MCP 對等也已納入。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；安裝與真實 BAT／模型驗收仍須另有證據。
 
 完整範圍仍依 [PM v1.2](pm-v1.2-plan.md)、[v1.3](v1.3-closed-loop-plan.md) 與 [EC-1.1](experience-convergence.md)。Python Connector／Task Service 是唯一中央權威，Web／Tauri 共用 `desktop/src`。
-[10 月 18 日進度報告](progress-2026-10-18-continuity.md)列出主線整合、檢查及仍欠的交付證據。
+[10 月 18 日進度報告](progress-2026-10-18-delivery.md)列出主線整合、檢查及仍欠的交付證據。
 
 ## EC-1.1 接續
 
-Workbench 新增手機全螢幕工作清單，返回時保留搜尋與位置，成果面板支援瀏覽器上一頁／下一頁。Classic 仍為預設。#285 與 #287–291 的 CI、發布與 Fleet 讀回已完成。Discussion 面板保留上一頁／下一頁位置，回到前景先核對 server 狀態，手機輸入區配合可視畫面。工作設定檔在開始前顯示該路線的下一輪限制；PM 可明確建立有來源的接續摘要，供後續討論沿用。#292 的清單讀取優化已另行合併，尚未納入本版套件；低干擾來源同步與真實 PM 判讀仍待接續。
+Workbench 新增手機全螢幕工作清單，返回時保留搜尋與位置，成果面板支援瀏覽器上一頁／下一頁。Classic 仍為預設。#285 與 #287–291 的 CI、發布與 Fleet 讀回已完成。Discussion 面板保留上一頁／下一頁位置，回到前景先核對 server 狀態，手機輸入區配合可視畫面。工作設定檔在開始前顯示該路線的下一輪限制；PM 可明確建立有來源的接續摘要，供後續討論沿用。#292／#293 與 #300 已納入本版套件。總覽可明確請 PM 建立附固定來源與歷史的判讀；資源頁可讀取另行授權的本機 Codex／Claude 對話檔案，不取得控制權。清單先載入摘要；尚未送出的佇列指令可以留成 Idea。真實 PM 品質與跨 CLI 完整能力仍待驗收或實作。
 
 已整合工作循環轉入具名真實路線驗收；手機導航／恢復、低干擾讀取、長討論與 PM 下一步沿原工作擴充。owner 同日要求 Connector 自動更新，納入 T8／E11／K16，見[更新契約](../design/connector-updates.md)。Connector 自動更新已由 #282 實作、發布並完成部署讀回，見[最新發布狀態](implementation-status.md)。其餘 EC-1.1 文件採用不代表新功能或實體手機驗收完成。
 
@@ -24,9 +24,9 @@ Roadmap 與 Brief 使用同一份固定的需求與完成定義評估。遺失�
 
 | 層級 | 狀態 |
 | --- | --- |
-| 發布（published） | `v0.2.9-preview.20261018`，固定來源 `001662eb`；Connector 0.2.9／desktop 0.1.5，六個套件附 manifest 與 SHA-256。 |
-| 主線（merged） | #276–278、#282、#285、#287–291 已合併；套件固定於 `001662eb`。#282 加入 Connector 自動更新與初次載入權限修正，原提交與檢查紀錄保留。 |
-| 安裝／原生（installed/native） | 七台 Connector 已更新至 0.2.9、啟用 preview 每小時更新並讀回排程成功；三台支援的 Linux 圖形主機安裝 desktop 0.1.5。既有 MCP 程序保留。前版原生診斷與啟動失敗分別保留，一般登入桌面及完整實機驗收仍待完成。 |
+| 發布（published） | `v0.2.10-preview.20261018`，固定來源 `b44a83ab`；Connector 0.2.10／desktop 0.1.6，六個套件附 manifest 與 SHA-256。 |
+| 主線（merged） | #276–278、#282、#285、#287–301 已合併；套件固定於 `b44a83ab`。#282 加入 Connector 自動更新與初次載入權限修正，原提交與檢查紀錄保留。 |
+| 安裝／原生（installed/native） | 七台 Connector 已更新至 0.2.10、啟用 preview 每小時更新並讀回排程成功；三台支援的 Linux 圖形主機安裝 desktop 0.1.6。既有 MCP 程序保留。前版原生診斷與啟動失敗分別保留，一般登入桌面及完整實機驗收仍待完成。 |
 | 實機（live-tested） | 本輪沒有真實 BAT／provider／模型完整驗收回執；軟體部署與綠燈 CI 不代替實機驗收。 |
 
 ### 主線現在的操作
@@ -72,7 +72,7 @@ Roadmap 與 Brief 使用同一份固定的需求與完成定義評估。遺失�
 - **v1.3 文件與原型（#183、#187、#190）：** 文件與可點選原型已合併。原型維持合成，不向 Connector、BAT、GitHub 或模型發出請求。#198、#200、#201 是測試可靠度修正，不是功能。#184 是前一次文件 pin 更新。
 
 既有 #132／#134／#139 提供總覽、討論來源、登記、時程、相依、每日資源桶與發現身分。
-#133 合併工作台與 [walkthrough](../../desktop/tests/pm-walkthrough.mjs)；本輪未重跑 walkthrough。
+#133 合併工作台與 [walkthrough](../../desktop/tests/pm-walkthrough.mjs)；後續原始 walkthrough 失敗與修正紀錄另存，受控測試不代替真人驗收。
 本機 Codex／Claude collector 與來源配額窗已合併。遠端收集、交付效率歸因與預測仍待完成。
 缺資料保留未知；來源撤回時移除相關列、計數與詳情，晚到回覆不能復活資料。
 
@@ -82,14 +82,18 @@ Roadmap 與 Brief 使用同一份固定的需求與完成定義評估。遺失�
 #174、#175、#167、#177、#179 與 #180 已合併至主線。
 [#141](https://github.com/TED-H-com/bat-agent-connector/issues/141) 的連線網址首次使用已由 #153 合併，工作階段狀態、診斷與路徑亦已隨 #152、#171、#169 合併；
 [#142 本機主機設計](../design/local-host.md)的本機 Git 尚未實作；#167 的 Git transport 合約已合併，本機 Git 仍回報無法使用。
-[#143](https://github.com/TED-H-com/bat-agent-connector/issues/143) 的 PM 重點判讀已依 EC-1.1 後續授權進入實作候選：
+[#143](https://github.com/TED-H-com/bat-agent-connector/issues/143) 的 PM 重點判讀已由 #300 合併並納入本版套件：
 固定總覽依據、既有 native／BAT 分析、不可變判讀、來源撤回、受理限制及雙語卡片／詳情／歷史。
-候選沿用[既定契約](../design/pm-overview-assessment.md)的保守預設；模型判讀必須明確啟動，
-不會自動採用或執行建議。尚未合併、發布或進行真實 PM 品質驗收，不能視為整個 PM 計畫完成。
+實作沿用[既定契約](../design/pm-overview-assessment.md)的保守預設；模型判讀必須明確啟動，
+不會自動採用或執行建議。已合併、發布及安裝；尚未進行真實 PM 品質驗收，不能視為整個 PM 計畫完成。
 
 完整[採用計畫](pm-v1.2-plan.md)的 W01–W52、A01–A64、M0–M6 保留。
 M5 保留[歷史來源](progress-2026-10-12.md)（M4 已隨 #116 合併至主線），不能由本輪 UI 推定完成。
 下表的候選敘述沿用其原歷史範圍，不是主線已提供的功能。
+
+## 後續實作與發布界線
+
+W24 工作區 PM 路線選擇 [#302](https://github.com/TED-H-com/bat-agent-connector/pull/302) 為待合併候選；W45 人工序列輸入觀察 [#303](https://github.com/TED-H-com/bat-agent-connector/pull/303) 為待合併候選。兩項均不在本次固定 0.2.10／0.1.6 套件內；本段不宣稱已安裝或實機通過。
 
 ## 工作與剩餘範圍
 
@@ -111,8 +115,8 @@ M5 保留[歷史來源](progress-2026-10-12.md)（M4 已隨 #116 合併至主線
 | W09 | P1 | PM runner 與 adapter selection | 主線 #115：按操作選 native／BAT 有界分析、計畫提案與 Follow-up；持久 workspace 選擇見 W24。 |
 | W10 | P1 | 一位 PM 討論與 evidence snapshot | 主線：固定脈絡、來源快照、Idea／Planning／Follow-up 分析與品質紀錄。#132 已合併有序 context、來源撤回、durable rename 與中央提案可採用性；#134 已合併決策流程後端；#133 已合併前端及 walkthrough；更完整專業會議主持仍待做。 |
 | W11 | P1 | Plan diff 與影響分析 | 主線：固定版本／來源／條件差異及影響候選；#113 提供候選更新及整組採用，完整語意判讀待強化。 |
-| W12 | P1 | Project Brief | 主線：固定 Project Brief 與選定品質評估；M4 候選補條件偏差及同快照說明。即時 overview、可見需求進度／待決／偏差與涵蓋標記已由 #132 合併；#134 已合併採用後目標與近期決策；#133 已合併即時／報告介面。固定報告不混入即時數字，見 [API 合約](../design/pm-overview-discussion-context.md)。 |
-| W13 | P1 | Roadmap 與 scope | 主線：固定里程碑、需求與時程證據。#132 已合併唯讀時程投影（[合約](../design/pm-schedule.md)）；不推算預測或 critical path；#133 已合併甘特圖。M4 候選補採用需求品質與涵蓋缺口投影；完整 Git materialization 仍待做。 |
+| W12 | P1 | Project Brief | 主線：固定 Project Brief 與選定品質評估；M4 #116 已補條件偏差及同快照說明。即時 overview、可見需求進度／待決／偏差與涵蓋標記已由 #132 合併；#134 已合併採用後目標與近期決策；#133 已合併即時／報告介面。固定報告不混入即時數字，見 [API 合約](../design/pm-overview-discussion-context.md)。 |
+| W13 | P1 | Roadmap 與 scope | 主線：固定里程碑、需求與時程證據。#132 已合併唯讀時程投影（[合約](../design/pm-schedule.md)）；不推算預測或 critical path；#133 已合併甘特圖。M4 #116 已補採用需求品質與涵蓋缺口投影；完整 Git materialization 仍待做。 |
 | W14 | P1 | Kanban | 主線：工作／執行狀態、WIP、固定品質投影及依賴證據；M4 補原 runtime 完成；完整 WIP 政策待做。 |
 | W15 | P1 | Sprint artifacts 與時間 | 主線：Sprint 承諾、固定 DoD／接受條件及原成果品質；完整 Scrum 事件與引導待做。 |
 | W16 | P1 | Planning Review Retro | 主線：Planning／Review／Retro 的固定討論、結果與改善追蹤；Daily Scrum／LLM 會議主持待做。 |
@@ -123,8 +127,8 @@ M5 保留[歷史來源](progress-2026-10-12.md)（M4 已隨 #116 合併至主線
 | W21 | P1 | 現有 deploy 與 receipt 接入 | 主線：deploy／rollback／merge-and-deploy、固定 release receipt 與交付投影；未宣稱 owner 實際部署。 |
 | W22 | P1 | AHP observer 與 create-own | 主線 #114：固定 AHP 1.0 canonical subset／VS Code 0.10 唯讀 observer；create-own、寫入及 live host 未驗證。 |
 | W23 | P1 | 第一個 native CLI adapter | 仍待完成一般 native coding adapter；現有 Linux 有界 PM 分析不能代替 coding／隔離 canaries。 |
-| W24 | P1 | PM adapter 切換 | M5 本機 f6c8f6b：持久 workspace native／BAT 分析選擇、文件／writer generation、原 request 恢復；未合併、完整矩陣待跑。 |
-| W25 | P1 | Fleet readiness 與安裝版 | 主線 #115：core 0.2.5／desktop 0.1.1 平台 CI 及原實包升級通過；M4 0.2.6／0.1.2 最終 gate 尚未完成。 |
+| W24 | P1 | PM adapter 切換 | #302 待合併候選：持久 workspace native／BAT 分析選擇及原請求恢復，涵蓋總覽與接續摘要；不在本次 0.2.10 套件，真實切換另驗。 |
+| W25 | P1 | Fleet readiness 與安裝版 | 主線 #115：core 0.2.5／desktop 0.1.1 平台 CI 及原實包升級通過；M4 #116 最終 CI 已通過；本次 0.2.10／0.1.6 精確 main CI、套件及七台 Connector／三台 Linux 桌面讀回完成，實機條件另列。 |
 | W26 | P1 | Canonical MCP skills | 主線：PM read tools、註冊 operations 與共用 skills；後續契約需同版生成及能力揭露。 |
 | W27 | P1 | 端到端實機驗收 | 受控自動 fixtures 已有；owner 真人硬體驗收另行執行，未宣稱通過。 |
 | W28 | P2 | 其餘具名 CLI 能力 | 其他具名 CLI 的能力與版本逐一接入，尚未宣稱全面支援。 |
@@ -137,21 +141,21 @@ M5 保留[歷史來源](progress-2026-10-12.md)（M4 已隨 #116 合併至主線
 | W35 | P1 | 架構與 SDD 工程工作包 | 主線：固定需求／接受條件、規格 bytes、程式基底及工程安排；原驗證／品質／需求接受各自保留。 |
 | W36 | P1 | OpenSpec read adapter | 主線：原 carrier commit 的 OpenSpec 文件唯讀來源；其他 commit、自訂 schema 與 CLI JSON 契約待做。 |
 | W37 | P1 | OpenSpec 自有產物與 reconciliation | 主線：PM 自有 Git append-only 規格、immutable artifact、穩定 task ID 及刪除歷史；不宣稱 OpenSpec CLI 相容。 |
-| W38 | P1 | 有界批次與工作包交接 | 主線：1–16 筆固定 handoff、有界並行／期限與 proven-unsent retry；M4 候選補原完成及容量觀察。 |
+| W38 | P1 | 有界批次與工作包交接 | 主線：1–16 筆固定 handoff、有界並行／期限與 proven-unsent retry；M4 #116 已補原完成及容量觀察。 |
 | W39 | P1 | DocumentSnapshot 與五視圖 SVG | 主線：DocumentSnapshot 與 Brief 分頁 SVG；其餘四視圖仍在未完成草稿，不得直接合入。 |
 | W40 | P1 | 專案文件與簡報 | 主線：同一固定 Brief 的 Markdown／HTML／SVG 及雙語存檔；其他文件、可編輯簡報／播放／下載待做。 |
 | W41 | P1 | Actor 決策責任與 follow-up | 主線：决策責任、改善追蹤、固定前次結果與有來源 Follow-up；完整主動主持及判斷品質待驗證。 |
 | W42 | P1 | Idea 到 Review 真實驗收 | M4 755f126：真實磁碟 Git／驗證器及 mock providers 的會員案例，兩個 Python 版本完整 joined 通過；真人驗收另列。 |
 | W43 | P0 | ProjectLifecycle 與 Idea 長期停留 | 主線：生命周期及有固定政策／基準／完整新鮮工作量證據的 Maintain gate；階段名稱不授權效果。 |
 | W44 | P0 | ReleaseBaseline 與發布 receipt | 主線：明確 release／已驗證部署基準與原通道／commit／receipt；完整 registry adapter 待做。 |
-| W45 | P0 | 閒置與 workload coverage | 主線：中央工作量、來源涵蓋與穩定期間；M4 原完成／人工單次觀察、M5 人工序列觀察尚未合併。 |
-| W46 | P1 | Maintainer profile 與政策執行 | 主線 #113：採用政策內的自有 repair、驗證／PR／交付上限、原完成與基準更新；M4 完整串接仍待最終 CI。 |
+| W45 | P0 | 閒置與 workload coverage | 主線已有中央工作量、來源涵蓋、M4 原完成與人工單次觀察；#303 人工序列輸入觀察為待合併候選，不在本次 0.2.10 套件，真實人工序列另驗。 |
+| W46 | P1 | Maintainer profile 與政策執行 | 主線 #113：採用政策內的自有 repair、驗證／PR／交付上限、原完成與基準更新；M4 #116 完整串接及最終 CI 已通過；真實維護驗收另列。 |
 | W47 | P1 | 依賴 Issue PR 維護來源 | 主線：有界 GitHub PR／checks／Actions、明確 Issue／Dependabot／alert 來源與固定 findings，#132 已合併 [固定 commit 相依清冊](../design/pm-dependencies.md)、宣告／撤回、CI hints 和有界 impact。#133 已合併矩陣／相依圖；安裝版／原生及實機驗收仍待執行。 |
 | W48 | P0 | 維護排程與恢復 | 主線：有界到期檢查、週 Review、窗去重／漏跑合併、原 owner 憑證、容量／期限及原 children 查回。 |
 | W49 | P1 | 每週 Maintenance Review 與改進研究 | 主線：固定週報、原 findings／repairs、前次決策、owner outcome、责任與雙語輸出；改進研究待做。 |
 | W50 | P0 | 暫停 關閉與 reopen | 主線：pause／close／reopen、原 execution epoch、在途查回與保留；不復活舊佇列、不接管外部 session；M4 joined 有接續回歸。 |
 | W51 | P1 | 維護 API MCP skills 與 UI | 主線：維護與品質使用同一註冊操作，Web／Tauri／API／MCP 共用；新能力隨候選更新。 |
-| W52 | P1 | 完整生命週期實機驗收 | M4 755f126 同帳本完整生命週期本機兩版通過；最終候選 CI／平台有阻擋，owner live 未執行。 |
+| W52 | P1 | 完整生命週期實機驗收 | M4 755f126 同帳本完整生命週期本機兩版通過；M4 #116 最終 CI／四平台建置已通過；owner live 未執行。 |
 
 ## 文件及歷史
 

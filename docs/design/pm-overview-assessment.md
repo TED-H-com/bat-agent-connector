@@ -26,7 +26,7 @@ The initial four-group card keeps additional recommendations, arrangements, watc
 items and original provenance in Details. First use prepares its ordinary carrier
 through a durable thread-create request; model analysis remains a separate explicit
 action. Existing history supplies the carrier on later clients. Read refreshes do
-not spend model budget. This candidate is not yet merged, packaged or live-tested.
+not spend model budget. #300 merged this implementation; Connector 0.2.10 / desktop 0.1.6 package and Fleet installation evidence is recorded in [the delivery report](../product/progress-2026-10-18-delivery.md). Real PM quality and owner live acceptance remain open.
 
 Version 1 uses the proposed deterministic templates, a visible ordinary carrier,
 Live-only placement, one turn, 300 seconds, 32,000 context characters / 256 KiB,
