@@ -23,6 +23,13 @@
 
 Checkpoint ID 由 operation ID 衍生（`cp_<32 hex>`），所以重跑同一個 operation 不會產生第二個 checkpoint。之後來源分支前進，不會改變已選定的 checkpoint。
 
+來源狀態讀取清除繼承的 Git index／worktree／config 環境覆寫，停用使用者與系統 Git 設定、
+optional locks 及 lazy fetch。Repository／worktree 設定若含 filter、fsmonitor、hooks、
+config include 或 promisor／partial-clone 宣告，會在執行狀態讀取前拒絕；含 submodule 的
+index 也不略過或遞迴讀取。這些情況記為未觀測，不是零項修改。一般與 linked worktree
+仍核對自己的根目錄、HEAD 及 index，不改寫來源。這項讀取保護不啟用本機 Git transport，
+也不代替 managed clone 的建立證據、目錄鎖與後續執行核對。
+
 ## checkpoint.continue
 
 BAT 的 `worktree:create` 不能指定起點 commit，所以 clone 與 worktree 由 Connector 經主機的 SSH alias 以 git 建立（與 verification 共用 `[verification] ssh_hosts`）：

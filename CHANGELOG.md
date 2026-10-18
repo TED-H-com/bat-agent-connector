@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Checkpoint source status refuses repository filters, fsmonitor/hooks, config
+  includes, submodules and lazy-fetch configuration before reading dirt. Reads
+  discard inherited Git overrides, preserve the source index and report unknown
+  when the selected checkout cannot be verified.
+
 - Preparing a PM Overview assessment survives an overlapping factual refresh.
   Source withdrawal and leaving the workspace still discard the pending read;
   refreshing facts never starts model work.
