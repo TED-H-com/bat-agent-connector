@@ -15,7 +15,7 @@ function fixture(locale='en') {
       adopted_decisions:[],rejected_directions:[{text:'Do not add referrals to this release.',source_refs:['message.one']}],
       candidates:[],completed_evidence:[],open_questions:[],remaining_work:[]}};
   detail.continuation_brief=saved;
-  const state={writes:[] as any[],withdrawn:false,unavailable:false,lost:false,operation:null as any};
+  const state={choice:null as string|null,writes:[] as any[],withdrawn:false,unavailable:false,lost:false,operation:null as any};
   const dispatch=async(input:any)=>{
     const path=new URL(input.path,'http://fixture').pathname;
     if(input.method==='POST' && input.body?.action===action){
@@ -33,6 +33,7 @@ function fixture(locale='en') {
     if(path===root+'/capabilities')value.data.structured_analysis={version:1,actions:{[action]:{adapters:[
       {adapter:'codex-native-linux',action_registered:true,authorized:true,eligible_for_preflight:!state.unavailable},
       {adapter:'bat-pm-linux-v1',action_registered:true,authorized:true,eligible_for_preflight:true}]}}};
+    if(path===root+'/capabilities'&&state.choice)value.data.workspace_adapter={version:1,choice:{adapter:state.choice}};
     if(path===root+'/plans')saved.plan_head=structuredClone(value.data.head);
     if(path===root+'/threads/'+f.ids.threadIdea){
       value.data.continuation_brief=state.withdrawn?{available:false}:structuredClone(saved);
@@ -120,4 +121,18 @@ test('discussion refresh preserves an open brief and does not run an unavailable
   await page.locator('[data-discussion-panel-toggle]').click();
   const tools=page.locator('[data-continuation-tools]');await expect(tools.locator('button[type=submit]')).toBeDisabled();
   expect(x.state.writes).toEqual([]);
+});
+
+for(const native of [false,true])test(`workspace choice routes continuation while its original receipt survives a later choice ${native?'IPC':'HTTP'}`,async({page})=>{
+  const x=fixture();x.state.choice='bat-pm-linux-v1';x.state.lost=true;await mountConversation(page,native,x.dispatch);
+  await page.goto(`/dashboard/#/pm/${x.f.ids.workspaceId}/discussions/${x.f.ids.threadIdea}`);
+  await page.locator('[data-discussion-panel-toggle]').click();
+  const tools=page.locator('[data-continuation-tools]'),adapter=tools.getByLabel('Run analysis with',{exact:true});
+  await expect(adapter).toHaveValue('bat-pm-linux-v1');await expect(adapter).toBeDisabled();
+  await tools.locator('button[type=submit]').click();await expect(tools).toContainText('Reply unavailable');
+  const original=structuredClone(x.state.writes[0]);x.state.choice='codex-native-linux';
+  await page.reload();await page.locator('[data-discussion-panel-toggle]').click();
+  await expect(adapter).toHaveValue('bat-pm-linux-v1');await expect(adapter).toBeDisabled();
+  await tools.locator('button[type=submit]').click();await expect.poll(()=>x.state.writes.length).toBe(2);
+  expect(x.state.writes[1]).toEqual(original);expect(x.f.discussion.writes).toEqual([]);
 });

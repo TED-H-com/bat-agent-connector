@@ -165,8 +165,10 @@ def _admit(ops, principal, target, params, pre):
     context = pm_native_operations._values(ops, principal, target, params, pre)
     binding = _binding(ops, target["workspace_id"])
     starts._tier(ops.context["fleet"], binding["target"]["host"])
+    from .pm_workspace_adapter import admission
     return {"principal": pm_workspace.principal_binding(principal),
-        "pm_bat_binding": binding, "pm_bat_binding_digest": pm_runs._digest(binding), **context}
+        "pm_bat_binding": binding, "pm_bat_binding_digest": pm_runs._digest(binding), **context,
+        **admission(ops, principal, target['workspace_id'], runtime.ADAPTER)}
 
 
 def _check(ctx, run, *, sending=False):

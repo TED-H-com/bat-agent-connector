@@ -1,4 +1,5 @@
 // One adapter field in the existing durable intent; never switch a saved request.
+import {workspaceAdapter,workspaceAdapterAllows} from './pm-workspace-adapter.js';
 const NATIVE='codex-native-linux',BAT='bat-pm-linux-v1';
 export function structuredAnalysis({h,t,labelled,action,capability,legacyEligible,authorized,readable=()=>true}) {
   const field=h('select',{'aria-label':t('pm_analysis_adapter'),'data-pm-default':NATIVE},
@@ -11,13 +12,15 @@ export function structuredAnalysis({h,t,labelled,action,capability,legacyEligibl
   const supported=()=>capability()?.structured_analysis?.version===1;
   const descriptor=()=>{const rows=supported()?capability().structured_analysis.actions?.[action]?.adapters:null;
     return Array.isArray(rows)?rows.find(row=>row?.adapter===field.value):null;};
-  const eligible=()=>supported()?Boolean([NATIVE,BAT].includes(field.value)&&descriptor()?.action_registered===true
-    &&descriptor()?.authorized===true&&descriptor()?.eligible_for_preflight===true):field.value===NATIVE&&legacyEligible();
+  const eligible=()=>workspaceAdapterAllows(capability(),field.value)&&(supported()?Boolean([NATIVE,BAT].includes(field.value)&&descriptor()?.action_registered===true
+    &&descriptor()?.authorized===true&&descriptor()?.eligible_for_preflight===true):field.value===NATIVE&&legacyEligible());
   function update(request){
     activeRequest=request;
+    const fixed=workspaceAdapter(capability())?.choice?.adapter;
+    if(supported()&&fixed&&!request?.locked()&&field.value!==fixed){request?.set('adapter',fixed);request?.update();}
     box.hidden=!readable();choice.hidden=!supported()&&field.value===NATIVE;
     // Unavailable native must still allow an explicit choice of an eligible BAT adapter.
-    field.disabled=Boolean(request?.locked())||!authorized();
+    field.disabled=Boolean(request?.locked())||Boolean(fixed)||!authorized();
     const selected=descriptor(),legacy=action==='pm.conversation.propose'?capability()?.native_analysis:capability()?.follow_up_analysis;
     const code=selected?.reason||(!supported()&&field.value===NATIVE?legacy?.reason:null);
     const key=!authorized()||selected?.authorized===false?'pm_native_permissions':eligible()?(field.value===BAT?'pm_analysis_bat_preflight':'pm_native_preflight_pending')
