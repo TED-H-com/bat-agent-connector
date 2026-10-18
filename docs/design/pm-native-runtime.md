@@ -113,6 +113,20 @@ eligible and an auth file is bound; authentication and provider response remain
 unverified until an actual authorized turn. No live model completion is claimed
 by the no-model tests.
 
+Failed preflights also report a fixed diagnostic stage: installation/version,
+isolation setup, process spawn/identity/receipt, initialization, configuration,
+skills, fresh thread or MCP inventory. `PM_NATIVE_VERSION_TIMEOUT`,
+`PM_NATIVE_LAUNCH_TIMEOUT` and `PM_NATIVE_PREFLIGHT_TIMEOUT` distinguish elapsed
+bounds from `PM_NATIVE_BOUNDARY_UNVERIFIED`. Elapsed boundary and stage times are
+captured before process cleanup; they identify the suspended phase, not its cause.
+The version check remains bounded at 5 seconds and launch/preflight each at 20
+seconds. No retry or model input follows a failed probe. Cancellation still
+propagates as cancellation. Diagnostics contain only fixed labels and timings,
+never configuration values, paths, credentials or stderr. After process launch,
+the original exit receipt retains the same diagnostic beside its independent
+process-death evidence. Real offline tests print the complete report on failure;
+a focused pass does not replace a prior loaded-host failure.
+
 ## One turn and original evidence
 
 The callable interface is:

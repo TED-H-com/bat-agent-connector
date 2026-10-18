@@ -6,6 +6,10 @@
   envelope also reports rate limiting. Unknown replies remain unclassified;
   configured pre-prompt fallback and uncertain-send handling are unchanged.
 
+- Native PM preflight reports distinguish a timed-out version check, launch or
+  protocol read from a rejected isolation boundary, retaining the original
+  stage and cleanup evidence without changing deadlines or retrying a model.
+
 - Retain a proven-unsent Work instruction for later: cancel its original queue entry, then save an Idea with the complete source and reason. Restart and lost-reply recovery keep the original request, and partial saves never resend the instruction. Shared English and Traditional Chinese controls preserve drafts and focus.
 
 - The explicit Overview assessment API freezes current visible facts and saves
