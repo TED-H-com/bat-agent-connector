@@ -60,7 +60,7 @@ const SEGMENT = new Map([
   ['pr-publications', ID.op], ['integrations', ID.op], ['product_goal', `pmgoal_${hex(32)}`],
   ['dod', `pmdod_${hex(32)}`], ['backlog', `pmbkl_${hex(32)}`], ['kanban', ID.wi],
   ['cleanup-tombstones', `cr_${hex(32)}`], ['transitions', ID.pmlt],
-  ['deployments', ID.dep],
+  ['deployments', ID.dep], ['history', 'fixture'],
 ]);
 const NAME_SAMPLE = new Map([
   ['endpoint', `/pm/workspaces/${ID.ws}`], ['base', `/pm/workspaces/${ID.ws}`],

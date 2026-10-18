@@ -207,6 +207,8 @@ class ApiV1:
         self.routes = [
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/overview", self.pm_overview, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/resources", self.pm_resources, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/history", self.pm_history_sources, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/history/(?P<source_id>[A-Za-z0-9][A-Za-z0-9_.:-]{0,127})", self.pm_history, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/schedule", self.pm_schedule, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/register", self.pm_register, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/register/(?P<row_id>[^/]+)", self.pm_register_row, "observe"),
@@ -548,7 +550,7 @@ class ApiV1:
                       self.pm_maintenance_checks, self.pm_maintenance_check_current, self.pm_maintenance_check, self.pm_maintenance_schedule,
                       self.pm_ahp_adapters, self.pm_ahp_observations, self.pm_ahp_observation_current, self.pm_ahp_observation,
                       self.pm_overview, self.pm_dependencies, self.pm_dependency_revisions, self.pm_dependency_impact,
-                      self.pm_resources, self.pm_register, self.pm_register_row, self.pm_schedule, self.pm_github_observations, self.pm_github_observation_current, self.pm_github_observation,
+                      self.pm_history_sources, self.pm_history, self.pm_resources, self.pm_register, self.pm_register_row, self.pm_schedule, self.pm_github_observations, self.pm_github_observation_current, self.pm_github_observation,
                       self.pm_workload_snapshots, self.pm_workload_snapshot_current, self.pm_workload_snapshot,
                       self.pm_maintenance_policies, self.pm_maintenance_policy_current, self.pm_maintenance_policy,
                       self.pm_release_baselines, self.pm_release_baseline_current, self.pm_release_baseline,
@@ -729,7 +731,7 @@ class ApiV1:
             integer_fields.add("cursor")
         if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list", "pm_follow_up_list", "pm_follow_up_assessments_list", "pm_work_packages_list", "pm_issue_mappings_list", "pm_release_baselines_list", "pm_maintenance_policies_list", "pm_workload_snapshots_list"}:
             integer_fields.add("after")
-        wide_cursor = method in {"pm_dependencies_revisions_list", "pm_conversation_proposals_list", "pm_maintenance_repairs_list", "pm_quality_reviews_list", "pm_work_quality_get", "pm_work_deliveries_list", "pm_work_batches_list", "pm_work_attempts_list", "pm_work_inputs_list", "pm_spec_materializations_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
+        wide_cursor = method in {"pm_history_get", "pm_dependencies_revisions_list", "pm_conversation_proposals_list", "pm_maintenance_repairs_list", "pm_quality_reviews_list", "pm_work_quality_get", "pm_work_deliveries_list", "pm_work_batches_list", "pm_work_attempts_list", "pm_work_inputs_list", "pm_spec_materializations_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
                                  "pm_workload_snapshots_list", "pm_ahp_observations_list", "pm_github_observations_list", "pm_maintenance_checks_list", "pm_maintenance_reviews_list", "pm_maintenance_review_events_list"}
         if wide_cursor:
             integer_fields.add("after")
@@ -1004,6 +1006,12 @@ class ApiV1:
     async def pm_dependency_impact(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_dependencies_impact_get", query, workspace_id=workspace_id)
 
+    async def pm_history_sources(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_history_sources_list", query, workspace_id=workspace_id)
+
+    async def pm_history(self, principal, query, workspace_id, source_id, **_):
+        return self._pm_read(principal, "pm_history_get", query, workspace_id=workspace_id, source_id=source_id)
+
     async def pm_resources(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_resources_get", query, workspace_id=workspace_id)
 
@@ -1164,6 +1172,7 @@ class ApiV1:
             pm_register,
             pm_resources,
             pm_schedule,
+            session_history,
         )
         fleet = self.daemon.fleet
         from . import (
@@ -1238,6 +1247,7 @@ class ApiV1:
                                       "unproven_legacy": "read_only", "admin_takeover": False},
                                   "pm_overview": pm_overview.capabilities(),
                                   "pm_resources": pm_resources.capabilities(),
+                                  "external_history": session_history.capabilities(),
                                   "pm_schedule": pm_schedule.capabilities(),
                                   "pm_register": pm_register.capabilities(),
                                   "pm_dependencies": pm_dependencies.capabilities(),

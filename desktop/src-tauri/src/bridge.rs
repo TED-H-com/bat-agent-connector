@@ -1460,7 +1460,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/installation-capabilities|pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context(?:-bundle)?)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/resources|/overview|/schedule|/register(?:/(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision)\.[A-Za-z0-9._-]{1,180})?|/dependencies(?:/(?:revisions|impact))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/maintenance-checks(?:/(?:current|pmck_[0-9a-f]{32}))?|/maintenance-reviews(?:/(?:current|pmrevw_[0-9a-f]{32}(?:/events)?))?|/maintenance-schedule|/ahp-adapters|/ahp-observations(?:/(?:current|pmah_[0-9a-f]{32}))?|/github-observations(?:/(?:current|pmgh_[0-9a-f]{32}))?|/maintenance-repairs(?:/(?:current|pmrp_[0-9a-f]{32}))?|/executions/op_[0-9a-f]{32}/verification-config|/execution-verifications/op_[0-9a-f]{32}|/pr-publications/op_[0-9a-f]{32}|/quality-reviews(?:/pmqr_[0-9a-f]{32})?|/work-batches(?:/pmbt_[0-9a-f]{32})?|/maintenance-findings/current|/spec-materializations(?:/pmsp_[0-9a-f]{32})?|/work-profiles(?:/wpf_[0-9a-f]{32}(?:/readiness)?)?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/conversation-proposals(?:/pmcp_[0-9a-f]{32})?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/(?:capture|deliveries|quality|attempts|inputs))?|/work-attempts/att_[0-9a-f]{32}(?:/(?:result|changes|diff))?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+            r"pm/installation-capabilities|pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context(?:-bundle)?)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/resources|/history(?:/[A-Za-z0-9][A-Za-z0-9_.:-]{0,127})?|/overview|/schedule|/register(?:/(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision)\.[A-Za-z0-9._-]{1,180})?|/dependencies(?:/(?:revisions|impact))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/maintenance-checks(?:/(?:current|pmck_[0-9a-f]{32}))?|/maintenance-reviews(?:/(?:current|pmrevw_[0-9a-f]{32}(?:/events)?))?|/maintenance-schedule|/ahp-adapters|/ahp-observations(?:/(?:current|pmah_[0-9a-f]{32}))?|/github-observations(?:/(?:current|pmgh_[0-9a-f]{32}))?|/maintenance-repairs(?:/(?:current|pmrp_[0-9a-f]{32}))?|/executions/op_[0-9a-f]{32}/verification-config|/execution-verifications/op_[0-9a-f]{32}|/pr-publications/op_[0-9a-f]{32}|/quality-reviews(?:/pmqr_[0-9a-f]{32})?|/work-batches(?:/pmbt_[0-9a-f]{32})?|/maintenance-findings/current|/spec-materializations(?:/pmsp_[0-9a-f]{32})?|/work-profiles(?:/wpf_[0-9a-f]{32}(?:/readiness)?)?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/conversation-proposals(?:/pmcp_[0-9a-f]{32})?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/(?:capture|deliveries|quality|attempts|inputs))?|/work-attempts/att_[0-9a-f]{32}(?:/(?:result|changes|diff))?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1613,6 +1613,8 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             let roadmap_list = path.ends_with("/roadmap/revisions");
             let governance_list = path.ends_with("/governance");
             let register_list = path.ends_with("/register");
+            let external_history = path.split('/').nth(4) == Some("history")
+                && path.split('/').count() == 6;
             let follow_up_list = path.ends_with("/follow-ups");
             let assessment_list = path.ends_with("/follow-up-assessments");
             let conversation_list = path.ends_with("/conversation-proposals");
@@ -1718,6 +1720,16 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                         && !value.contains("..")
                         && !value.starts_with('/')
                         && !value.ends_with('/')
+                }
+                "after" if external_history => {
+                    !value.is_empty() && value.len() <= 16
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<u64>().is_ok_and(|n| n <= 9_007_199_254_740_991)
+                }
+                "limit" if external_history => {
+                    !value.is_empty() && value.len() <= 3
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<u16>().is_ok_and(|n| (1..=100).contains(&n))
                 }
                 "limit" if profile_list => {
                     !value.is_empty()
@@ -2490,6 +2502,20 @@ mod tests {
             );
         }
         let mut write = get(root);
+        write.method = "POST".into();
+        assert!(validate_request(&write).is_err());
+    }
+
+    #[test]
+    fn external_history_accepts_only_bounded_read_pages() {
+        let root = "/pm/workspaces/ws_11111111111111111111111111111111/history";
+        for suffix in ["", "/example", "/example?after=0&limit=100", "/example?after=9007199254740991"] {
+            assert!(validate_request(&get(&format!("{root}{suffix}"))).is_ok(), "{suffix}");
+        }
+        for suffix in ["?after=0", "/example?path=/private", "/example?refresh=1", "/example?limit=101", "/example?after=9007199254740992", "/example?after=-1", "/example?after=1&after=2", "/example?before=1", "/example/messages", "/example?limit=0"] {
+            assert!(validate_request(&get(&format!("{root}{suffix}"))).is_err(), "{suffix}");
+        }
+        let mut write = get(&format!("{root}/example"));
         write.method = "POST".into();
         assert!(validate_request(&write).is_err());
     }

@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Read explicitly shared Codex and Claude plaintext histories from Resources, with
+  separate reader grants, bounded server collection and stable paginated records.
+  Source withdrawal hides prior content; original CLI sessions remain read-only.
+
 - Retain a proven-unsent Work instruction for later: cancel its original queue entry, then save an Idea with the complete source and reason. Restart and lost-reply recovery keep the original request, and partial saves never resend the instruction. Shared English and Traditional Chinese controls preserve drafts and focus.
 - Conversation pinning survives late session controls changing the available height.
   Queued programmatic scroll events preserve the reader's existing follow choice;

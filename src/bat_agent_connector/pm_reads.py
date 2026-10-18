@@ -11,6 +11,8 @@ FIELDS = {
     "pm_dependencies_revisions_list": ("workspace_id", "after", "limit"),
     "pm_dependencies_impact_get": ("workspace_id", "dependency"),
     "pm_overview_get": ("workspace_id",),
+    "pm_history_sources_list": ("workspace_id",),
+    "pm_history_get": ("workspace_id", "source_id", "after", "limit"),
     "pm_resources_get": ("workspace_id", "since", "until", "buckets", "tz"),
     "pm_schedule_get": ("workspace_id", "after", "limit"),
     "pm_register_list": ("workspace_id", "type", "status", "owner", "q", "after", "limit"),
@@ -136,6 +138,12 @@ def read(ops, principal, method, params):
         if method == "pm_dependencies_impact_get":
             return dependencies.impact(ops, principal, workspace_id, dependency=params.get("dependency"))
         return dependencies.revisions(ops, principal, workspace_id, after=params.get("after", 0), limit=params.get("limit", 20))
+    if method in {"pm_history_sources_list", "pm_history_get"}:
+        from . import session_history
+        if method == "pm_history_sources_list":
+            return session_history.list_sources(ops, principal, workspace_id)
+        return session_history.read(ops, principal, workspace_id, params.get("source_id"),
+            after=params.get("after", 0), limit=params.get("limit", 50))
     if method == "pm_resources_get":
         from .pm_resources import read as resources
         return resources(ops, principal, workspace_id, since=params.get("since"), until=params.get("until"),

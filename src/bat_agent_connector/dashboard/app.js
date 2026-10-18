@@ -210,6 +210,82 @@ function parseDiscussRefs(query) {
 	};
 }
 //#endregion
+//#region src/pm-external-history-strings.js
+var externalHistoryStrings = {
+	en: {
+		exh_title: "External conversations",
+		exh_help: "Read conversations shared with this workspace. Their original CLI sessions remain read-only.",
+		exh_empty: "No conversation histories are shared with you",
+		exh_empty_help: "An administrator can connect a specific local transcript and grant access to named readers.",
+		exh_source: "Source",
+		exh_entries: "{count} entries",
+		exh_open: "Read {name}",
+		exh_scope: "Partial history · text and tool markers only",
+		exh_asof: "Collected {time}",
+		exh_unknown_time: "Collection time unknown",
+		exh_unavailable: "This history is unavailable. Its last saved content is hidden.",
+		exh_pending: "Waiting for collection",
+		exh_catching: "Still collecting",
+		exh_ready: "Ready to read",
+		exh_stale: "Collection is out of date",
+		exh_limit: "Collection limit reached",
+		exh_more: "Read more",
+		exh_new: "New entries available",
+		exh_new_read: "Read new entries",
+		exh_no_entries: "No readable entries in this collected portion",
+		exh_user: "User",
+		exh_assistant: "Assistant",
+		exh_tool: "Tool record",
+		exh_tool_request: "Tool requested: {name}",
+		exh_tool_result: "Tool result recorded · content omitted",
+		exh_tool_unknown: "Unknown tool",
+		exh_clipped: "This entry is shortened.",
+		exh_omitted: "{count} parts omitted",
+		exh_coverage: "Source and coverage",
+		exh_coverage_counts: "{records} records and {parts} parts omitted · {clipped} shortened entries",
+		exh_cli: "Recorded CLI version",
+		exh_page_limit: "This view shows the first 500 collected entries.",
+		exh_retry: "Try reading again",
+		exh_current: "No newer collected entries"
+	},
+	"zh-TW": {
+		exh_title: "外部對話",
+		exh_help: "閱讀分享至此工作區的對話。原本的 CLI 會話維持唯讀。",
+		exh_empty: "目前沒有分享給你的對話歷史",
+		exh_empty_help: "管理者可連接指定的本機對話檔，並授權具名讀者。",
+		exh_source: "來源",
+		exh_entries: "{count} 則紀錄",
+		exh_open: "閱讀 {name}",
+		exh_scope: "部分歷史 · 僅含文字與工具標記",
+		exh_asof: "收集於 {time}",
+		exh_unknown_time: "收集時間未知",
+		exh_unavailable: "目前無法讀取這份歷史，已隱藏先前儲存的內容。",
+		exh_pending: "等待收集",
+		exh_catching: "仍在收集",
+		exh_ready: "可閱讀",
+		exh_stale: "收集資料已過期",
+		exh_limit: "已達收集上限",
+		exh_more: "閱讀更多",
+		exh_new: "有新紀錄",
+		exh_new_read: "閱讀新紀錄",
+		exh_no_entries: "目前收集的部分沒有可閱讀紀錄",
+		exh_user: "使用者",
+		exh_assistant: "助理",
+		exh_tool: "工具紀錄",
+		exh_tool_request: "已要求工具：{name}",
+		exh_tool_result: "已記錄工具結果 · 內容略去",
+		exh_tool_unknown: "未知工具",
+		exh_clipped: "這則紀錄已縮短。",
+		exh_omitted: "已略去 {count} 個部分",
+		exh_coverage: "來源與涵蓋範圍",
+		exh_coverage_counts: "略去 {records} 則紀錄與 {parts} 個部分 · {clipped} 則已縮短",
+		exh_cli: "記錄的 CLI 版本",
+		exh_page_limit: "此畫面最多顯示最早收集的 500 則紀錄。",
+		exh_retry: "重新讀取",
+		exh_current: "目前沒有更新的已收集紀錄"
+	}
+};
+//#endregion
 //#region src/pm-adopt-start-strings.js
 var adoptStartStrings = {
 	en: {
@@ -8938,6 +9014,7 @@ var workPublishStrings = {
 var STRINGS = {
 	"zh-TW": {
 		...workbenchStrings$1["zh-TW"],
+		...externalHistoryStrings["zh-TW"],
 		...diagnosticsStrings["zh-TW"],
 		...workStartStrings["zh-TW"],
 		...workProfileStrings["zh-TW"],
@@ -10592,6 +10669,7 @@ var STRINGS = {
 	},
 	en: {
 		...workbenchStrings$1.en,
+		...externalHistoryStrings.en,
 		...diagnosticsStrings.en,
 		...workStartStrings.en,
 		...workProfileStrings.en,
@@ -19570,6 +19648,263 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	return {
 		container,
 		loadList
+	};
+}
+//#endregion
+//#region src/pm-external-history.js
+function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox }) {
+	const root = `/pm/workspaces/${encodeURIComponent(workspaceId)}/history`;
+	let active = false, disposed = false, serial = 0, detailSerial = 0, timer = null, loading = null;
+	let rows = [], signature = "", selected = null, panel = null, count = 0, last = 0, next = null, detailBusy = false;
+	let messages = null, detailStatus = null, more = null, newEntries = null;
+	const status = h("div", { role: "status" }), list = h("div", { class: "exh-list" });
+	const element = sectionCard({
+		title: t("exh_title"),
+		body: h("div", {}, h("p", { class: "ui-meta" }, t("exh_help")), status, list)
+	});
+	element.dataset.externalHistory = "";
+	const sourceName = (row) => `${row.adapter?.startsWith("codex-") ? "Codex" : row.adapter?.startsWith("claude-") ? "Claude" : t("exh_source")} · ${row.source_id}`;
+	const state = (row) => t(row.stale ? "exh_stale" : {
+		current: "exh_ready",
+		catching_up: "exh_catching",
+		entry_limit: "exh_limit",
+		pending: "exh_pending"
+	}[row.status] || "exh_unavailable");
+	const valid = (ticket) => {
+		try {
+			alive();
+		} catch {
+			return false;
+		}
+		return !disposed && active && ticket === serial;
+	};
+	function close() {
+		detailSerial++;
+		selected = null;
+		count = 0;
+		last = 0;
+		next = null;
+		detailBusy = false;
+		const old = panel;
+		panel = null;
+		old?.dispose();
+		messages = detailStatus = more = newEntries = null;
+	}
+	function draw() {
+		const changed = JSON.stringify(rows.map((row) => [
+			row.source_id,
+			row.adapter,
+			row.status,
+			row.stale,
+			row.readable,
+			row.entries
+		]));
+		if (signature === changed) return;
+		signature = changed;
+		const focused = list.contains(document.activeElement) ? document.activeElement?.dataset.historySource : null;
+		list.replaceChildren(...rows.length ? rows.map((row) => {
+			const control = button({
+				variant: "ghost",
+				size: "sm",
+				label: t("exh_open", { name: sourceName(row) }),
+				onclick: () => void open(row.source_id)
+			});
+			control.dataset.historySource = row.source_id;
+			return h("div", { class: "exh-source" }, control, h("span", { class: "ui-meta" }, state(row), row.readable ? ` · ${t("exh_entries", { count: row.entries })}` : ""));
+		}) : [emptyState({
+			title: t("exh_empty"),
+			text: t("exh_empty_help"),
+			heading: "h3"
+		})]);
+		if (focused) [...list.querySelectorAll("[data-history-source]")].find((node) => node.dataset.historySource === focused)?.focus({ preventScroll: true });
+	}
+	function controls(row) {
+		if (!panel || !more || !newEntries) return;
+		more.hidden = next == null || count >= 500;
+		more.disabled = detailBusy;
+		newEntries.hidden = !count || next != null || !row?.readable || !(row.entries > count) || count >= 500;
+		newEntries.disabled = detailBusy;
+	}
+	function coverage(row) {
+		return disclosure({
+			label: t("exh_coverage"),
+			body: h("div", { class: "ui-meta" }, h("p", {}, t("exh_scope")), h("p", {}, row.collected_at ? t("exh_asof", { time: timeStamp(row.collected_at) }) : t("exh_unknown_time")), h("p", {}, t("exh_coverage_counts", {
+				records: row.coverage?.omitted_records || 0,
+				parts: row.coverage?.omitted_parts || 0,
+				clipped: row.coverage?.clipped_records || 0
+			})), h("p", {}, t("exh_cli"), ": ", row.cli_version || "—"), h("code", {}, row.adapter))
+		});
+	}
+	function entry(value) {
+		return h("article", {
+			class: "exh-entry",
+			"data-history-entry": value.entry_id
+		}, h("header", {}, h("strong", {}, t([
+			"user",
+			"assistant",
+			"tool"
+		].includes(value.role) ? `exh_${value.role}` : "exh_tool")), h("span", { class: "ui-meta" }, value.observed_at ? timeStamp(value.observed_at) : "—")), ...(value.parts || []).map((part) => part.kind === "text" ? h("p", { class: "exh-text" }, part.text) : h("p", { class: "ui-meta" }, t(part.kind === "tool_request" ? "exh_tool_request" : "exh_tool_result", { name: part.name || t("exh_tool_unknown") }))), value.clipped ? h("p", { class: "ui-meta" }, t("exh_clipped")) : null, value.omitted_parts ? h("p", { class: "ui-meta" }, t("exh_omitted", { count: value.omitted_parts })) : null);
+	}
+	async function page({ initial = false } = {}) {
+		if (!selected || !panel || detailBusy || count >= 500) return;
+		const id = selected, ticket = ++detailSerial, current = serial;
+		detailBusy = true;
+		controls(rows.find((row) => row.source_id === id));
+		try {
+			const data = await api("GET", `${root}/${encodeURIComponent(id)}?after=${initial ? 0 : last}&limit=${Math.min(50, 500 - count)}`);
+			if (!valid(current) || ticket !== detailSerial || selected !== id || !panel) return;
+			if (data.workspace_id !== workspaceId || data.source?.source_id !== id || !Array.isArray(data.entries)) throw Error(t("pm_scope_mismatch"));
+			detailStatus.replaceChildren();
+			if (!data.source.readable) {
+				messages.replaceChildren();
+				count = last = 0;
+				next = null;
+				detailStatus.replaceChildren(h("p", {}, t("exh_unavailable")));
+				return;
+			}
+			if (initial) {
+				messages.replaceChildren();
+				panel.body.prepend(coverage(data.source));
+			}
+			for (const value of data.entries || []) if (Number.isSafeInteger(value.sequence) && value.sequence > last) {
+				messages.append(entry(value));
+				last = value.sequence;
+				count++;
+			}
+			next = data.next_after;
+			if (!count) detailStatus.replaceChildren(h("p", {}, t("exh_no_entries")));
+			if (count >= 500) detailStatus.replaceChildren(h("p", {}, t("exh_page_limit")));
+			const index = rows.findIndex((row) => row.source_id === id);
+			if (index >= 0) rows[index] = data.source;
+		} catch (error) {
+			if (!valid(current) || ticket !== detailSerial || selected !== id || !panel) return;
+			messages.replaceChildren();
+			count = last = 0;
+			next = null;
+			detailStatus.replaceChildren(errorBox(error), button({
+				variant: "secondary",
+				size: "sm",
+				label: t("exh_retry"),
+				onclick: () => void open(id)
+			}));
+		} finally {
+			if (ticket === detailSerial) {
+				detailBusy = false;
+				controls(rows.find((row) => row.source_id === id));
+			}
+		}
+	}
+	async function open(id) {
+		close();
+		selected = id;
+		const row = rows.find((row) => row.source_id === id);
+		if (!row) return;
+		panel = inspector({
+			title: sourceName(row),
+			dock: true,
+			overlay: true,
+			historyNavigation: true,
+			returnFocus: () => [...list.querySelectorAll("[data-history-source]")].find((node) => node.dataset.historySource === id),
+			onClose: () => {
+				detailSerial++;
+				selected = null;
+				count = last = 0;
+				next = null;
+				detailBusy = false;
+				panel?.body.replaceChildren();
+				messages = detailStatus = more = newEntries = null;
+			},
+			canReopen: () => active && selected === id && rows.some((row) => row.source_id === id)
+		});
+		panel.dataset.historyDetail = "";
+		detailStatus = h("div", { role: "status" }, skeleton(3));
+		messages = h("div", { class: "exh-messages" });
+		more = button({
+			variant: "secondary",
+			size: "sm",
+			label: t("exh_more"),
+			onclick: () => void page()
+		});
+		more.hidden = true;
+		newEntries = button({
+			variant: "secondary",
+			size: "sm",
+			label: t("exh_new_read"),
+			onclick: () => void page()
+		});
+		newEntries.hidden = true;
+		panel.body.append(h("p", { class: "ui-meta" }, t("exh_scope")), detailStatus, messages, h("div", { class: "exh-actions" }, more, newEntries));
+		element.append(panel);
+		const opened = panel;
+		queueMicrotask(() => {
+			if (panel === opened) opened.open();
+		});
+		await page({ initial: true });
+	}
+	function withdraw() {
+		serial++;
+		loading = null;
+		clearTimeout(timer);
+		rows = [];
+		signature = "";
+		close();
+		list.replaceChildren();
+		status.replaceChildren();
+	}
+	async function refresh() {
+		if (!active || disposed) return;
+		if (loading) return loading;
+		const ticket = serial;
+		const request = (async () => {
+			try {
+				const data = await api("GET", root);
+				if (!valid(ticket)) return;
+				if (data.workspace_id !== workspaceId || !Array.isArray(data.rows)) throw Error(t("pm_scope_mismatch"));
+				rows = data.rows;
+				status.replaceChildren();
+				draw();
+				if (selected) {
+					const row = rows.find((item) => item.source_id === selected);
+					if (!row || !row.readable) {
+						close();
+						status.replaceChildren(h("p", {}, t("exh_unavailable")));
+					} else controls(row);
+				}
+			} catch (error) {
+				if (!valid(ticket)) return;
+				withdraw();
+				status.replaceChildren(errorBox(error));
+			} finally {
+				if (loading === request) loading = null;
+				clearTimeout(timer);
+				if (active && !disposed) timer = setTimeout(() => void refresh(), 6e4);
+			}
+		})();
+		loading = request;
+		return request;
+	}
+	function setActive(value) {
+		if (active === value) return value ? refresh() : void 0;
+		active = value;
+		if (!value) {
+			serial++;
+			loading = null;
+			clearTimeout(timer);
+			close();
+			return;
+		}
+		return refresh();
+	}
+	return {
+		element,
+		refresh,
+		setActive,
+		withdraw,
+		dispose() {
+			disposed = true;
+			active = false;
+			withdraw();
+		}
 	};
 }
 //#endregion
@@ -48015,6 +48350,16 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		bucketsSupported: caps()?.features?.pm_resources?.buckets?.granularity === "day"
 	}) : null;
 	if (resources) body.insertBefore(resources.element, content);
+	const externalHistory = workspaceId && !threadId && caps()?.features?.external_history?.version === 1 ? workspaceExternalHistory({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		errorBox
+	}) : null;
+	if (externalHistory) body.insertBefore(externalHistory.element, content);
+	const agentsContent = resources && externalHistory ? h("div", {}, resources.element, externalHistory.element) : resources?.element || externalHistory?.element;
 	const drawersHome = h("div", { hidden: true });
 	body.append(drawersHome);
 	let detailPanel = null;
@@ -48445,7 +48790,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			],
 			[
 				"agents",
-				resources?.element || (ahp ? emptyState({
+				agentsContent || (ahp ? emptyState({
 					title: t("wv_no_agents"),
 					text: h("span", { class: "muted" }, t("wv_no_agents_reason"))
 				}) : null),
@@ -48490,6 +48835,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				if (id !== "issues") brief?.closeRelated?.();
 				title.textContent = t("ui_" + id);
 				activateSection(resources, id === "agents");
+				activateSection(externalHistory, id === "agents");
 				activateSection(schedule, id === "schedule");
 				activateSection(dependencies, id === "dependencies");
 				brief?.setActive?.(id === "overview");
@@ -48528,6 +48874,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		content,
 		schedule?.element,
 		resources?.element,
+		externalHistory?.element,
 		dependencies?.element,
 		traceability?.element,
 		ahp?.element,
@@ -48579,6 +48926,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		issues,
 		traceability,
 		resources,
+		externalHistory,
 		dependencies
 	].filter(Boolean);
 	const sectionNode = (section) => section?.element || section?.box;
@@ -48628,7 +48976,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	async function refreshSection(section, activation = false, event = false) {
 		const read = activation ? activationReads.get(section) : null;
 		activationReads.delete(section);
-		await (read || (section === dependencies ? section.setActive(true) : section === resources ? section.refresh({ event: true }) : section === lifecycle ? section.refresh({ event }) : section.refresh()));
+		await (read || (section === dependencies || section === externalHistory ? section.setActive(true) : section === resources ? section.refresh({ event: true }) : section === lifecycle ? section.refresh({ event }) : section.refresh()));
 		alive();
 		if (sectionRequired(section)) revealSource(section);
 	}
@@ -49857,6 +50205,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			brief?.setActive?.(workbench?.selected() === "overview");
 			updateWorkView(workbench?.selected());
 			resources?.setActive(workbench?.selected() === "agents");
+			externalHistory?.setActive(workbench?.selected() === "agents");
 			schedule?.setActive(workbench?.selected() === "schedule" && !detailPanel);
 			if (dependencies) await dependencies.setActive(workbench?.selected() === "dependencies");
 			await register?.setActive(workbench?.selected() === "issues");
@@ -50152,6 +50501,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		traceability?.dispose();
 		kanban?.dispose();
 		resources?.dispose();
+		externalHistory?.dispose();
 		schedule?.dispose();
 		scheduleTools?.dispose();
 		dependencies?.dispose();
