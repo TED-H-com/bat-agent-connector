@@ -338,65 +338,21 @@ export function setupMobileSessionLayout({ head, composer, textarea, t, guard, i
   const unbindArea = node => {
     node?.removeEventListener("input", onTextareaInput);
     node?.removeEventListener("change", onTextareaInput);
-    node?.removeEventListener("focusin", onFocusIn);
-    node?.removeEventListener("focusout", onFocusOut);
   };
   const bindArea = node => {
     node?.addEventListener("input", onTextareaInput);
     node?.addEventListener("change", onTextareaInput);
-    node?.addEventListener("focusin", onFocusIn);
-    node?.addEventListener("focusout", onFocusOut);
   };
 
   if (boundRow) {
     if (!boundRow.contains(composerToggle)) boundRow.append(composerToggle);
   } else if (!boundComposer.contains(composerToggle)) boundComposer.prepend(composerToggle);
 
-  // 3. visualViewport keyboard adaptation (ignoring pinch-zoom)
-  const updateViewport = () => {
-    if (!alive()) return;
-    const isMob = isMobileLayout();
-    const vv = window.visualViewport;
-    if (!isMob || !vv) {
-      document.body.classList.remove("mobile-keyboard");
-      document.documentElement.style.removeProperty("--workspace-visible-height");
-      return;
-    }
-
-    // Pinch-zoom protection: when pinch zooming, scale is not 1.
-    // We must NOT treat pinch zoom as a virtual keyboard.
-    const isPinchZoom = Math.abs(vv.scale - 1) > 0.05;
-    if (isPinchZoom) {
-      document.body.classList.remove("mobile-keyboard");
-      document.documentElement.style.removeProperty("--workspace-visible-height");
-      return;
-    }
-
-    // When virtual keyboard opens on mobile, scale is ~1 and visualViewport height drops
-    const isKeyboard = vv.height < (window.innerHeight - 80);
-    document.body.classList.toggle("mobile-keyboard", isKeyboard);
-    if (isKeyboard) {
-      document.documentElement.style.setProperty("--workspace-visible-height", `${vv.height}px`);
-      if (window.scrollY || vv.offsetTop) {
-        window.scrollTo(0, 0);
-      }
-    } else {
-      document.documentElement.style.removeProperty("--workspace-visible-height");
-    }
-  };
-
-  const onFocusIn = () => requestAnimationFrame(updateViewport);
-  const onFocusOut = () => requestAnimationFrame(updateViewport);
-
-  window.visualViewport?.addEventListener("resize", updateViewport);
-  window.visualViewport?.addEventListener("scroll", updateViewport);
-  window.addEventListener("resize", updateViewport);
   bindArea(boundArea);
 
   // Initial renders
   updateInfo();
   renderComposerToggle();
-  updateViewport();
 
   return {
     infoToggle,
@@ -426,17 +382,12 @@ export function setupMobileSessionLayout({ head, composer, textarea, t, guard, i
     },
     dispose() {
       isDisposed = true;
-      window.visualViewport?.removeEventListener("resize", updateViewport);
-      window.visualViewport?.removeEventListener("scroll", updateViewport);
-      window.removeEventListener("resize", updateViewport);
       unbindArea(boundArea);
       infoToggle.remove();
       composerToggle.remove();
       head.classList.remove("workspace-info-collapsed");
       boundComposer?.classList.remove("workspace-composer-collapsed");
       composer.classList.remove("workspace-composer-collapsed");
-      document.body.classList.remove("mobile-keyboard");
-      document.documentElement.style.removeProperty("--workspace-visible-height");
     }
   };
 }

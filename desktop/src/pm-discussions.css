@@ -83,7 +83,7 @@
   .pd-panel-home { display: none; }
   .pd-panel-toggle { display: inline-flex; }
 }
-@media (max-width: 799px) {
+@media (max-width: 999px) {
   [data-discussions] { grid-template-columns: minmax(0, 1fr); height: calc(100dvh - 144px); }
   [data-discussions] .pm-workspace-list { max-height: 176px; border-right: 0; border-bottom: 1px solid var(--line); }
   [data-discussions] .pm-workspace-list:has([data-discussion-search-empty]) { max-height: none; }
@@ -120,7 +120,7 @@
 }
 /* The thread list replaces ordinary back links on wide screens, but cannot
    return the reader to the originating execution and its selected Work. */
-@media (min-width: 800px) { [data-discussion-back]:not([data-discussion-session-return]) { display: none; } }
+@media (min-width: 1000px) { [data-discussion-back]:not([data-discussion-session-return]) { display: none; } }
 .pd-context-trigger { cursor: pointer; font: inherit; padding-inline: var(--space-2); border: 0; color: var(--text-2); }
 .pd-impact { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block: var(--space-3); }
 .pd-exclusion { display: flex; align-items: start; gap: var(--space-2); margin-block: var(--space-2); font-size: var(--fs-small); }
@@ -137,16 +137,16 @@
 .pd-source-facts dt { color: var(--text-3); }
 .pd-panel .pm-fact-heading { flex-wrap: wrap; }
 .pd-panel .pm-fact-heading input[type=checkbox] { flex: 0 0 auto; width: 16px; min-height: 0; }
-@media (max-width: 799px) { .pd-candidate input[type=checkbox] { margin-top: 14px; } }
+@media (max-width: 999px) { .pd-candidate input[type=checkbox] { margin-top: 14px; } }
 
 :root body [data-discussions] .pd-thread-header .ui-context-chip { max-width: min(280px, 100%); }
-@media (max-width: 799px) { :root body [data-discussions] .pd-thread-header .ui-context-chip { max-width: min(240px, 100%); } }
+@media (max-width: 999px) { :root body [data-discussions] .pd-thread-header .ui-context-chip { max-width: min(240px, 100%); } }
 
 .pd-composer-status a, .pd-ask a { white-space: nowrap; }
 [data-proposal-resolution] { margin-top: var(--space-3); }
 [data-issue-resolution] { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); }
 [data-issue-resolution] > form { width: 100%; }
-@media (max-width: 799px) {
+@media (max-width: 999px) {
   [data-discussions]:has([data-pm-plan-proposals]:not([hidden])) {
     height: auto;
     min-height: calc(100dvh - 144px);

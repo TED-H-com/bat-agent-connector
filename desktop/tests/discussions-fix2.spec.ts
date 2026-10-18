@@ -27,15 +27,15 @@ for(const locale of ['en','zh-TW']){
     expect(f.discussion.writes.map((row:any)=>row.body.action)).toEqual(['pm.conversation.propose']);await context.close();
   });
 
-  for(const width of [390,799,800,1000,1440])test(`the list and draft follow their routes ${locale} ${width}`,async({browser,baseURL})=>{
+  for(const width of [390,799,800,844,999,1000,1440])test(`the list and draft follow their routes ${locale} ${width}`,async({browser,baseURL})=>{
     const context=await browser.newContext({baseURL,locale,viewport:{width,height:900}}),page=await context.newPage(),f=demoFixture({locale,discussions:true});await mountConversation(page,false,f.dispatch);
     const root=`/dashboard/#/pm/${f.ids.workspaceId}/discussions`;await page.goto(root);await expect(page.locator('.pm-thread-link')).toHaveCount(3);
     await expect(page.getByRole('searchbox',{name:zh?'搜尋':'Search',exact:true})).toBeVisible();
-    if(width<800){await expect(page.locator('.pd-new-layout')).toBeHidden();await expect(page.locator('[data-discussion-back]')).toBeHidden();for(const row of await page.locator('.pm-thread-link').all())await expect(row).toBeInViewport({ratio:1});}
+    if(width<1000){await expect(page.locator('.pd-new-layout')).toBeHidden();await expect(page.locator('[data-discussion-back]')).toBeHidden();for(const row of await page.locator('.pm-thread-link').all())await expect(row).toBeInViewport({ratio:1});}
     else{await expect(page.locator('.pd-new-layout')).toBeVisible();const list=(await page.locator('.pm-workspace-list').boundingBox())!,draft=(await page.locator('.pd-new-layout').boundingBox())!;expect(draft.x).toBeGreaterThanOrEqual(list.x+list.width-1);}
     await page.locator('[data-discussion-new]').click();await expect(page).toHaveURL(/\/discussions\/new$/);const composer=page.locator('[data-discussion-composer]');await expect(composer).toBeFocused();
     const draft=zh?'保留這段討論草稿。':'Keep this discussion draft.';await composer.fill(draft);
-    if(width<800){await expect(page.locator('.pm-workspace-list')).toBeHidden();await page.locator('[data-discussion-back]').click();await expect(page).toHaveURL(/\/discussions$/);await expect(page.locator('.pd-new-layout')).toBeHidden();await page.locator('[data-discussion-new]').click();}
+    if(width<1000){await expect(page.locator('.pm-workspace-list')).toBeHidden();await page.locator('[data-discussion-back]').click();await expect(page).toHaveURL(/\/discussions$/);await expect(page.locator('.pd-new-layout')).toBeHidden();await page.locator('[data-discussion-new]').click();}
     else await page.reload();
     await expect(composer).toHaveValue(draft);await expect(composer).toBeFocused();expect(f.discussion.writes).toEqual([]);await context.close();
   });

@@ -2350,7 +2350,7 @@ body.pm-mode #main { padding: 0; }
   .pd-panel-home { display: none; }
   .pd-panel-toggle { display: inline-flex; }
 }
-@media (max-width: 799px) {
+@media (max-width: 999px) {
   [data-discussions] { grid-template-columns: minmax(0, 1fr); height: calc(100dvh - 144px); }
   [data-discussions] .pm-workspace-list { max-height: 176px; border-right: 0; border-bottom: 1px solid var(--line); }
   [data-discussions] .pm-workspace-list:has([data-discussion-search-empty]) { max-height: none; }
@@ -2387,7 +2387,7 @@ body.pm-mode #main { padding: 0; }
 }
 /* The thread list replaces ordinary back links on wide screens, but cannot
    return the reader to the originating execution and its selected Work. */
-@media (min-width: 800px) { [data-discussion-back]:not([data-discussion-session-return]) { display: none; } }
+@media (min-width: 1000px) { [data-discussion-back]:not([data-discussion-session-return]) { display: none; } }
 .pd-context-trigger { cursor: pointer; font: inherit; padding-inline: var(--space-2); border: 0; color: var(--text-2); }
 .pd-impact { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block: var(--space-3); }
 .pd-exclusion { display: flex; align-items: start; gap: var(--space-2); margin-block: var(--space-2); font-size: var(--fs-small); }
@@ -2404,16 +2404,16 @@ body.pm-mode #main { padding: 0; }
 .pd-source-facts dt { color: var(--text-3); }
 .pd-panel .pm-fact-heading { flex-wrap: wrap; }
 .pd-panel .pm-fact-heading input[type=checkbox] { flex: 0 0 auto; width: 16px; min-height: 0; }
-@media (max-width: 799px) { .pd-candidate input[type=checkbox] { margin-top: 14px; } }
+@media (max-width: 999px) { .pd-candidate input[type=checkbox] { margin-top: 14px; } }
 
 :root body [data-discussions] .pd-thread-header .ui-context-chip { max-width: min(280px, 100%); }
-@media (max-width: 799px) { :root body [data-discussions] .pd-thread-header .ui-context-chip { max-width: min(240px, 100%); } }
+@media (max-width: 999px) { :root body [data-discussions] .pd-thread-header .ui-context-chip { max-width: min(240px, 100%); } }
 
 .pd-composer-status a, .pd-ask a { white-space: nowrap; }
 [data-proposal-resolution] { margin-top: var(--space-3); }
 [data-issue-resolution] { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); }
 [data-issue-resolution] > form { width: 100%; }
-@media (max-width: 799px) {
+@media (max-width: 999px) {
   [data-discussions]:has([data-pm-plan-proposals]:not([hidden])) {
     height: auto;
     min-height: calc(100dvh - 144px);
@@ -3094,4 +3094,59 @@ body.workbench-preview.wc-list-page.has-workspace #workspace { grid-template-col
 }
 @media (max-width: 799px) {
   .workbench-preview .session-workspace > .ui-inspector-overlay { width: 100vw; }
+}
+/* The keyboard changes the available reading area, never the composer or its draft. */
+@media (max-width: 999px) {
+  body.mobile-keyboard:has(main.session-view, [data-discussion-route=detail]) > .top {
+    position: fixed; top: var(--workspace-visible-top); inset-inline: 0;
+  }
+  body.mobile-keyboard main.session-view,
+  body.mobile-keyboard main:has([data-discussion-route=detail]) {
+    position: fixed; inset-inline: 0; top: calc(var(--workspace-visible-top) + 48px);
+    height: calc(var(--workspace-visible-height) - 48px); min-height: 0; overflow: clip;
+  }
+  body.mobile-keyboard main.session-view { padding: var(--space-2) var(--space-3); }
+  body.mobile-keyboard .workspace-session-heading { max-height: 44px; overflow: auto; margin: 0; }
+  body.mobile-keyboard .workspace-session-heading .workspace-session-meta { display: none; }
+  body.mobile-keyboard .wc-view-bar { display: none; }
+  body.mobile-keyboard .session-workspace :is(.conversation, .conversation-scroll) { min-height: 0; height: auto; }
+  body.mobile-keyboard .session-workspace .conversation { overflow: clip; }
+  body.mobile-keyboard .session-workspace .workspace-composer { max-height: none; margin-top: var(--space-1); }
+  body.mobile-keyboard .workspace-composer textarea { height: 52px; min-height: 52px; }
+  body.mobile-keyboard .workspace-conversation:has(> .work-next:not([hidden])) > .conversation { flex-shrink: 1; }
+  body.mobile-keyboard .work-next {
+    display: flex; flex-direction: column; flex: none; min-height: 0; height: min(240px, 100%);
+    padding: var(--space-2); margin-block: var(--space-1); overflow: auto;
+  }
+  body.mobile-keyboard .work-next > :is(header, [data-follow-up-form], [data-follow-up-status], [data-follow-up-note]) { flex: none; }
+  body.mobile-keyboard .work-next-list { flex: 1 1 auto; min-height: 0; overflow: auto; }
+  body.mobile-keyboard .work-next form { padding: 0; border: 0; }
+  body.mobile-keyboard .work-next-field { margin-top: var(--space-1); padding-top: 0; border-top: 0; }
+  body.mobile-keyboard .work-next-list:has(> .ui-empty) { display: none; }
+  body.mobile-keyboard .work-next:has(.work-next-list > .ui-empty) { height: auto; }
+  body.mobile-keyboard .work-next textarea { height: 52px; min-height: 52px; margin-top: 0; }
+  body.mobile-keyboard .work-next :is(.ui-meta, .actions) { margin-block: var(--space-1) 0; }
+  body.mobile-keyboard main:has([data-discussion-route=detail]) :is(.pm-shell, .pm-main, [data-pm-region=discussions]) {
+    height: 100%; min-height: 0;
+  }
+  body.mobile-keyboard main:has([data-discussion-route=detail]) .pm-main { padding: var(--space-2); }
+  body.mobile-keyboard main:has([data-discussion-route=detail]) .pm-main > .ui-page-header { display: none; }
+  body.mobile-keyboard [data-discussions][data-discussion-route=detail] { height: 100%; min-height: 0; overflow: hidden; }
+  body.mobile-keyboard [data-discussions] .pd-thread-header { padding: var(--space-1) var(--space-2); max-height: 68px; overflow: auto; flex: none; }
+  body.mobile-keyboard [data-discussions] .pd-transcript { min-height: 0; overflow: auto; padding-block: var(--space-1); }
+  body.mobile-keyboard [data-discussions] .pd-composer { padding: var(--space-2); flex: none; }
+  body.mobile-keyboard .pd-composer textarea { height: 52px; min-height: 52px; }
+  body.mobile-keyboard .pd-composer-row { margin-top: var(--space-1); }
+  body.mobile-keyboard :is(.workspace-composer, .pd-composer, .work-next) button { min-height: 44px; }
+  body.mobile-keyboard .pd-panel-overlay {
+    top: var(--workspace-visible-top); height: var(--workspace-visible-height); max-height: var(--workspace-visible-height); bottom: auto;
+  }
+}
+@media (max-width: 999px) and (max-height: 450px) {
+  body.mobile-keyboard main.session-view { padding-block: var(--space-1); }
+  body.mobile-keyboard .workspace-session-heading .session-back { display: none; }
+  body.mobile-keyboard .workspace-session-heading h1 { font-size: var(--fs-section); }
+  body.mobile-keyboard .work-next { margin-block: 0; padding-block: var(--space-1); }
+  body.mobile-keyboard .work-next textarea { height: 44px; min-height: 44px; }
+  body.mobile-keyboard .work-next-field { margin-top: 0; }
 }
