@@ -1,6 +1,7 @@
 import {locale} from './i18n.js';
 import {pmDurableForm} from './pm-workspace.js';
 import {button, emptyState, statusPill} from './ui/components.js';
+import {mountWorkInputIdea} from './pm-work-input-idea.js';
 
 const WORKSPACE_ID = /^ws_[0-9a-f]{32}$/;
 const WORK_ITEM_ID = /^wi_[0-9a-f]{20}$/;
@@ -54,6 +55,9 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
   const pinned = new Map(), announced = new Set(), cancelDenied = new Set();
   let composer = null, composing = false, composeEnded = -Infinity, focusAfter = null;
   let sawList = false;
+  const idea = mountWorkInputIdea({h, t, api, caps, guard, namespace, workspaceId, workItemId,
+    receipts: mergedItems, permitted: mutationsAllowed, refresh, errorBox});
+  list.after(idea.box);
 
   const seen = () => epoch;
   function alive(ticket, mark) {
@@ -267,6 +271,8 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
     }
     const actions = Array.isArray(receipt.next_allowed_actions) ? receipt.next_allowed_actions : [];
     const nodes = [];
+    if (idea.offered(receipt)) nodes.push(button({variant: 'secondary', label: t('loop_next_idea_title'),
+      'data-follow-up-action': 'defer', onClick: () => idea.open(receipt)}));
     for (const action of actions) {
       if (action?.kind === 'operation_endpoint' && action.endpoint === 'cancel' && action.operation_id === receipt.operation_id
         && receipt.cancellable === true && !cancelDenied.has(receipt.operation_id)) {
@@ -308,12 +314,13 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
       receipt.status_reason === 'waiting_permission_or_question_gate' ? h('p', {}, t('loop_next_waiting')) : null,
       typeof receipt.blocked_by_operation_id === 'string' && OPERATION_ID.test(receipt.blocked_by_operation_id)
         ? h('a', {href: `#/op/${encodeURIComponent(receipt.blocked_by_operation_id)}`}, t('loop_next_blocked_link')) : null,
-      ...rowActions(receipt)));
+      ...idea.links(receipt), ...rowActions(receipt)));
     const tail = [];
     if (filtered) tail.push(h('p', {class: 'work-next-note', 'data-follow-up-hidden': ''}, t('loop_next_hidden')));
     if (hasMore) tail.push(button({variant: 'ghost', label: t('loop_next_more'), 'data-follow-up-more': '', onClick: () => loadMore()}));
     if (!items.length && listSettled && !hasMore) tail.push(emptyState({title: t('loop_next_empty'), heading: 'h3'}));
     list.replaceChildren(...rows, ...tail);
+    idea.update();
     if (focusAfter) {
       const pending = focusAfter;
       const node = list.querySelector(`[data-follow-up-receipt="${CSS.escape(pending.id)}"] [data-follow-up-action="${pending.kind}"]`);
@@ -420,6 +427,7 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
     sendOffer = null; resultSettled = false; hasMore = false; filtered = false;
     clearComposer();
     list.replaceChildren(); note.replaceChildren(); pill.replaceChildren(); status.replaceChildren();
+    idea.clear();
     live.textContent = t('loop_next_withdrawn');
     box.replaceChildren(h('p', {role: 'status', 'data-follow-up-withdrawn': ''}, t('loop_next_withdrawn')));
   }
@@ -431,6 +439,7 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
     list.replaceChildren(); note.replaceChildren(); status.replaceChildren();
     clearComposer();
     box.hidden = true;
+    idea.clear();
   }
   function restore() {
     if (stopped || disposed) return;
@@ -445,6 +454,7 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
   function dispose() {
     disposed = true; epoch += 1; serial += 1;
     clearComposer();
+    idea.dispose();
   }
   void refresh();
   return {box, refresh, suspend, restore, sync, withdraw: withdrawSource, dispose};

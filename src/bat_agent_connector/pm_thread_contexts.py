@@ -18,6 +18,7 @@ KINDS = {
     'requirement': (r'[a-z][a-z0-9_.-]{0,79}', {'revision_id': r'pmrev_[0-9a-f]{32}'}),
     'milestone': (r'[a-z][a-z0-9_.-]{0,79}', {'revision_id': r'pmrb_[0-9a-f]{32}'}),
     'work_item': (r'wi_[0-9a-f]{20}', {}),
+    'work_input': (r'op_[0-9a-f]{32}', {}),
     'quality_assessment': (r'op_[0-9a-f]{32}', {'review_id': r'pmqr_[0-9a-f]{32}', 'document_digest': r'[0-9a-f]{64}'}),
     'governance': (r'pmgov_[0-9a-f]{32}', {}),
     'finding': (r'pmfn_[0-9a-f]{32}', {'observation_id': r'pmgh_[0-9a-f]{32}', 'document_digest': r'[0-9a-f]{64}'}),
@@ -139,6 +140,14 @@ def resolve(ops, principal, wid, ref):
         record = work_items._get_item(ops.db, identity)
         label, sources = record['title'], [binding['operation_id']]
         summary = {k: record[k] for k in ('title', 'goal', 'state', 'version')}
+    elif kind == 'work_input':
+        from . import pm_work_input_idea
+        record, receipt = pm_work_input_idea.source(ops, principal, wid, identity)
+        if receipt['state'] != 'cancelled':
+            raise unavailable()
+        summary = {key: receipt[key] for key in ('workspace_id', 'work_item_id', 'attempt_id', 'state')}
+        summary.update(source_operation_id=identity, text=record['params']['text'])
+        label, sources = record['params']['text'].strip()[:160], [identity]
     elif kind == 'quality_assessment':
         _table(ops, 'pm_quality_review_records')
         review = pm_quality_reviews.get_review(ops, principal, wid, ref['review_id'])['review']
@@ -245,9 +254,9 @@ def admission(ops, principal, wid, refs):
     return result
 
 
-def bind(ctx, thread_id):
+def bind(ctx, thread_id, *, contexts=None):
     # _check has just re-authorized every source inside this same transaction.
-    saved = (ctx.admission_binding or {}).get('pm_thread_contexts', [])
+    saved = (ctx.admission_binding or {}).get('pm_thread_contexts', []) if contexts is None else contexts
     for position, item in enumerate(saved):
         ref = item['ref']
         ctx.service.db.execute('INSERT INTO pm_thread_contexts VALUES(?,?,?,?,?,?,?,?)',

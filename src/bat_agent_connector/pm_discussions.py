@@ -303,6 +303,21 @@ async def _run(ctx):
     return result
 
 
+def create_idea(ctx, title, *, initial_message=None, contexts=None):
+    """Write an Idea inside the caller's authorized local-effect transaction."""
+    db, now = ctx.service.db, time.time()
+    thread_id, wid = 'pmt_' + ctx.operation_id[3:], ctx.target['workspace_id']
+    db.execute('INSERT INTO pm_threads VALUES(?,?,?,?,?,?,?,?,?,?)',
+        (thread_id, wid, title, 'idea', 1, ctx.actor, now, now, None, ctx.operation_id))
+    from . import pm_thread_contexts
+    pm_thread_contexts.bind(ctx, thread_id, contexts=contexts)
+    if initial_message is not None:
+        db.execute('INSERT INTO pm_messages(message_id,workspace_id,thread_id,actor,content,created_at,operation_id) '
+            'VALUES(?,?,?,?,?,?,?)',
+            ('pmm_' + ctx.operation_id[3:], wid, thread_id, ctx.actor, initial_message, now, ctx.operation_id))
+    return {'thread_id': thread_id, 'version': 1, 'mode': 'idea'}
+
+
 def _apply(ctx, thread):
     db, params, now = ctx.service.db, ctx.params, time.time()
     suffix, workspace_id = ctx.operation_id[3:], ctx.target["workspace_id"]
@@ -310,12 +325,8 @@ def _apply(ctx, thread):
     from .pm_access import inherit_operation_sources
     inherit_operation_sources(db, ctx.operation_id, _derived_sources(db, action, thread, params))
     if action == "pm.thread.create":
-        thread_id = "pmt_" + suffix
-        db.execute("INSERT INTO pm_threads VALUES(?,?,?,?,?,?,?,?,?,?)",
-            (thread_id, workspace_id, params["title"], "idea", 1, ctx.actor, now, now, None, ctx.operation_id))
-        from . import pm_thread_contexts
-        pm_thread_contexts.bind(ctx, thread_id)
-        result = {"thread_id": thread_id, "version": 1, "mode": "idea"}
+        result = create_idea(ctx, params['title'])
+        thread_id = result['thread_id']
     else:
         thread_id = thread["thread_id"]
         result = {"thread_id": thread_id, "version": thread["version"] + 1, "mode": thread["mode"]}

@@ -1581,6 +1581,12 @@ def build_input_receipt(
 
     next_actions: list[dict[str, Any]] = []
     if state == "queued" and cancellable:
+        if not op.get('cancel_requested'):
+            next_actions.append({'kind': 'action', 'action': 'pm.work_input.defer',
+                'target': {'workspace_id': wid, 'work_item_id': wi_id, 'source_operation_id': op_id},
+                'preconditions': {'expected_state': 'queued'},
+                'required_scopes': ['observe', 'manage', 'operate'],
+                'label': 'Keep for later', 'label_zh_TW': '留到稍後'})
         next_actions.append(
             {
                 "kind": "operation_endpoint",
@@ -1660,8 +1666,11 @@ def build_input_receipt(
         links["blocked_by_operation"] = f"/api/v1/operations/{blocked_by}"
         links["blocked_by_operation_hash"] = f"#/op/{blocked_by}"
 
+    from .pm_work_input_idea import receipt as idea_receipt
+    deferred = idea_receipt(db, op_id)
     return {
         "sequence": sequence,
+        **({'deferred_idea': deferred} if deferred is not None else {}),
         "operation_id": op_id,
         "workspace_id": wid,
         "work_item_id": wi_id,

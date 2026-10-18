@@ -15,7 +15,9 @@ export function discussionContext(t, refs = [], {limit = refs.length, onMore, ti
     const kind = ['risk','issue','action','change','decision'].includes(ref.record_type) ? t('reg_type_' + ref.record_type) : discussionLabel(t, 'pd_kind_', ref.kind);
     const named = ref.available !== false && ref.kind === 'finding' ? findingName(ref.finding, locale, '') : '';
     const text = named || `${kind} · ${ref.available === false ? t('pd_unavailable') : ref.label || t('pd_unavailable')}`;
-    const chip = onOpen ? button({variant: 'ghost', label: h('span', {class: 'ui-chip-label'}, text), class: 'ui-context-chip pd-context-trigger', onClick: event => onOpen(event.currentTarget)}) : contextChip({text});
+    const chip = onOpen ? button({variant: 'ghost', label: h('span', {class: 'ui-chip-label'}, text), class: 'ui-context-chip pd-context-trigger', onClick: event => onOpen(event.currentTarget)})
+      : ref.kind === 'work_input' && ref.available !== false && /^op_[0-9a-f]{32}$/.test(ref.id || '')
+        ? h('a', {href: `#/op/${ref.id}`, class: 'ui-context-chip'}, text) : contextChip({text});
     chip.dataset.discussionContext = ref.kind;
     chip.title = text; chip.setAttribute('aria-label', text);
     // A withdrawn reference contains only its kind and position. Never consult a cache.
