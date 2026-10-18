@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Preparing a PM Overview assessment survives an overlapping factual refresh.
+  Source withdrawal and leaving the workspace still discard the pending read;
+  refreshing facts never starts model work.
 - A failed checkpoint source-status read stays unknown in previews, saved
   checkpoints and continuation context, instead of becoming a zero-change count.
   Successful status output remains streamed and the source index is not rewritten.

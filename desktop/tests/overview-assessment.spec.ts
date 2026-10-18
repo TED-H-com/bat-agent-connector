@@ -32,7 +32,8 @@ function assessmentFixture(locale='en') {
     document:{version:1,judgment:{key:'j',template:'decision_first',subject_ref:'decision',basis_refs:['decision']},recommendations:[],
       needs_decision:[{key:'d.a',template:'confirm_direction',subject_ref:'decision',basis_refs:['decision']}],can_be_handled:[],watch:[],limitations:[]}}};
   const state={withdrawn:false,lost:false,empty:false,partial:false,readOnly:false,version:1,newer:false,needsReview:false,noAgent:false,unsupported:false,
-    holdDetail:null as string|null,releaseDetail:null as null|(()=>void),writes:[] as any[],previews:0,operation:null as any,create:null as any};
+    holdDetail:null as string|null,releaseDetail:null as null|(()=>void),holdList:false,releaseList:null as null|(()=>void),
+    detailReads:0,writes:[] as any[],previews:0,operation:null as any,create:null as any};
   const dispatch=async(input:any)=>{
     const url=new URL(input.path,'http://fixture'),path=url.pathname;
     if(input.method==='POST'&&[assessAction,'pm.thread.create'].includes(input.body?.action)) {
@@ -48,12 +49,14 @@ function assessmentFixture(locale='en') {
     if(path==='/operations/'+opId&&state.operation)return {status:200,data:{operation:state.operation}};
     if(path==='/operations/op_'+'9'.repeat(32)&&state.create)return {status:200,data:{operation:state.create}};
     if(path===root+'/overview-assessments') {
+      if(state.holdList){state.holdList=false;await new Promise<void>(resolve=>{state.releaseList=resolve;});}
       const filtered=state.partial&&!url.searchParams.has('before');
       const rows=state.empty||filtered?[]:[{...data.assessment,freshness:data.freshness}];
       if(state.newer)rows.unshift({...rows[0],assessment_id:'pmoa_'+'6'.repeat(32),thread_id:f.ids.threadPlanning});
       return {status:200,data:{version:1,workspace_id:wid,order:'newest_first',assessments:rows,partial:filtered,next_cursor:filtered?'original_cursor':null,source_filtered:filtered}};
     }
     if(path.startsWith(root+'/overview-assessments/')) {
+      state.detailReads++;
       if(state.holdDetail===path.split('/').at(-1))await new Promise<void>(resolve=>{state.releaseDetail=resolve;});
       if(state.withdrawn)return {status:404,data:{error:{code:'PM_OVERVIEW_SOURCE_UNAVAILABLE',message:'Sources withdrawn'}}};
       const copy=structuredClone(data);copy.assessment.assessment_id=path.split('/').at(-1);
@@ -99,6 +102,31 @@ for(const locale of ['en','zh-TW'])for(const width of [1440,768,390])test(`expli
   expect(x.state.writes[0].body).toEqual({action:assessAction,target:{workspace_id:x.f.ids.workspaceId,thread_id:x.f.ids.threadIdea},
     params:{adapter:'bat-pm-linux-v1',context_bundle_ref:{schema:'pm_overview_bundle_v1',projection_digest:'a'.repeat(64)}},preconditions:{expected_version:1}});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
+for(const native of [false,true])for(const withdrawn of [false,true])test(`assessment carrier read survives only ordinary refresh: native=${native} withdrawn=${withdrawn}`,async({page})=>{
+  const x=assessmentFixture();await x.mount(page,native);
+  const card=page.locator('[data-overview-assessment]');await expect(card).toContainText('Keep account recovery in scope');
+  x.state.holdList=true;
+  await card.locator('[data-overview-assessment-prepare]').click();
+  await expect.poll(()=>Boolean(x.state.releaseList)).toBe(true);
+  x.state.withdrawn=withdrawn;
+  const before=x.state.detailReads;
+  await page.getByRole('button',{name:'Refresh',exact:true}).click();
+  await expect.poll(()=>x.state.detailReads).toBeGreaterThan(before);
+  if(withdrawn)await expect(card).not.toContainText('Keep account recovery in scope');
+  else await expect(card.locator('[data-overview-assessment-prepare]')).toBeEnabled();
+  x.state.releaseList!();
+  const form=card.locator('[data-pm-action="pm.overview.assess"]');
+  if(withdrawn){
+    await expect(card.locator('[data-overview-assessment-controls]')).toBeHidden();
+    await page.getByRole('button',{name:'Refresh',exact:true}).click();
+    await expect(form).toHaveCount(0);expect(x.state.previews).toBe(0);
+  }else{
+    await expect(form.locator('button[type=submit]')).toBeEnabled();
+    expect(x.state.previews).toBe(1);
+  }
+  expect(x.state.writes).toEqual([]);
 });
 
 test('lost acknowledgement retains original carrier selector adapter and key across reload',async({page})=>{

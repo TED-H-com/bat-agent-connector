@@ -23002,10 +23002,11 @@ function overviewAssessment(options) {
 	const list = async (before) => checkList(await api("GET", `${root}?limit=10${before ? `&before=${encodeURIComponent(before)}` : ""}`));
 	async function latestCarrier() {
 		let before = null;
-		const seen = new Set(), ticket = serial;
+		const seen = new Set(), ticket = epoch;
 		for (let count = 0; count < 32; count++) {
 			const data = await list(before);
-			if (!valid(ticket)) throw Object.assign(Error(), { code: "PM_DISPOSED" });
+			alive();
+			if (ticket !== epoch) throw Object.assign(Error(), { code: "PM_DISPOSED" });
 			if (data.assessments.length) return data.assessments[0];
 			if (!data.partial) return null;
 			if (seen.has(data.next_cursor)) throw mismatch();

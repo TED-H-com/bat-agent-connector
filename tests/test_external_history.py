@@ -151,14 +151,24 @@ async def test_claude_public_content_omits_reasoning_and_tool_arguments(ready):
 
 
 async def test_withdrawal_during_file_read_prevents_commit(ready, monkeypatch):
+    import threading
+
     d, wid, source = ready
     append(source.path, message())
     original = session_history.read_page
     loop = asyncio.get_running_loop()
+    applied = threading.Event()
+
+    def withdraw():
+        d.history_collector.config = HistoryConfig()
+        applied.set()
 
     def revoke(*args, **kwargs):
         page = original(*args, **kwargs)
-        loop.call_soon_threadsafe(setattr, d.history_collector, "config", HistoryConfig())
+        loop.call_soon_threadsafe(withdraw)
+        # Scheduling withdrawal is not applying it. A fast executor may return
+        # an already-complete future before the event loop runs that callback.
+        assert applied.wait(2)
         return page
 
     monkeypatch.setattr(session_history, "read_page", revoke)
