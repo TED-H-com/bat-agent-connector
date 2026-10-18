@@ -14,7 +14,7 @@ expand requirements, inspect delivery evidence and browse sessions. The demo als
 the v1.3 workflow preview, which simulates the proposed start, follow-up and decision flow.
 Neither example connects to a BAT host or model.
 The real Start work panel is on `main` and needs a configured BAT host and a bound repository.
-Merged main at `e94ea547` (#276–278, #282, October 17, 2026) supports creating Work, adopting and starting a reviewed plan, sending a second instruction to the same Work, reading fixed Results and diffs, running configured verification, publishing a PR from the same Result, and opening a PM discussion with two existing assessments. Work profiles, readiness and API/MCP parity are included. Integration checks use the real Connector and disk Git with mock BAT/providers; installation and live BAT/model acceptance remain separate.
+Merged main at `1a5834fe` (#276–278, #282, #285, October 18, 2026) supports creating Work, adopting and starting a reviewed plan, sending a second instruction to the same Work, reading fixed Results and diffs, running configured verification, publishing a PR from the same Result, and opening a PM discussion with two existing assessments. Work profiles, readiness and API/MCP parity are included. Workbench adds a full-screen mobile Work list, preserved search and position on return, and Results navigation with browser Back/Forward. Classic remains the default. Integration checks use the real Connector and disk Git with mock BAT/providers; installation and live BAT/model acceptance remain separate.
 
 ![Overview: live project progress, blockers and pending decisions.](site/images/overview-en.png)
 
@@ -73,7 +73,7 @@ Policy-bounded delivery and maintenance remain available through the project's s
 
 ## Install and connect
 
-Download the [published preview](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.7-preview.20261017): Connector **0.2.7** and desktop **0.1.3**, pinned to `e94ea547`. It includes Python packages, Windows/Linux/macOS desktop packages, a source manifest and SHA-256 checksums. These are unsigned or ad-hoc-signed development packages. For later candidates, use the [desktop workflow on main](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) and match a successful platform job to its source; Actions artifacts can expire.
+Download the [published preview](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.8-preview.20261018): Connector **0.2.8** and desktop **0.1.4**, pinned to `1a5834fe`. It includes Python packages, Windows/Linux/macOS desktop packages, a source manifest and SHA-256 checksums. These are unsigned or ad-hoc-signed development packages. For later candidates, use the [desktop workflow on main](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) and match a successful platform job to its source; Actions artifacts can expire.
 
 | Entry | Package / local features | Boundary |
 | --- | --- | --- |
@@ -125,7 +125,7 @@ flowchart TB
 | Status | Scope |
 | --- | --- |
 | Merged baseline | Desktop/central foundation; PM discussions and plan adoption; engineering packages and bounded dispatch; verification, requirement acceptance and dependency evidence; policy-bounded maintenance repairs; BAT proposals/Follow-up; AHP read-only observation. #132 adds central Overview, discussion context and renames, register, Schedule, Dependencies and daily resource buckets. #134 adds adopted goals, recent decisions and the guided close of a resolved issue. |
-| Merged workspace | Merged main at `e94ea547` (#276–278, #282, October 17, 2026) supports creating Work, adopting and starting a reviewed plan, sending a second instruction to the same Work, reading fixed Results and diffs, running configured verification, publishing a PR from the same Result, and opening a PM discussion with two existing assessments. Work profiles, readiness and API/MCP parity are included. Integration checks use the real Connector and disk Git with mock BAT/providers; installation and live BAT/model acceptance remain separate. |
+| Merged workspace | Merged main at `1a5834fe` (#276–278, #282, #285, October 18, 2026) supports creating Work, adopting and starting a reviewed plan, sending a second instruction to the same Work, reading fixed Results and diffs, running configured verification, publishing a PR from the same Result, and opening a PM discussion with two existing assessments. Work profiles, readiness and API/MCP parity are included. Workbench adds a full-screen mobile Work list, preserved search and position on return, and Results navigation with browser Back/Forward. Classic remains the default. Integration checks use the real Connector and disk Git with mock BAT/providers; installation and live BAT/model acceptance remain separate. |
 | Remaining PM v1.2 | General native coding adapter, AHP create-own/write support, remaining document views and presentations, wider CLI support, remote usage collection and delivery-efficiency attribution. |
 
 Local Codex/Claude usage collection exists; the redesign's Agents view adds sourced daily trends and reported quota windows.

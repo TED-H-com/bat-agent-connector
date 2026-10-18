@@ -1,5 +1,12 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-10-18 手機導航預覽
+
+#285 已合併為 `1a5834fe6a42d6cb47048c1bdfc5be8308620a8a`，發布 Connector 0.2.8／desktop 0.1.4。
+Workbench 新增手機全螢幕工作清單，返回時保留搜尋與位置，成果面板支援瀏覽器上一頁／下一頁。Classic 仍為預設。 七台 Connector 已沿既有更新服務取得新版，三台 Linux desktop 已安裝；
+來源、套件與原程序持續性已讀回。真實 BAT／模型、實體手機和一般登入桌面仍未驗收。
+本輪檢查與原失敗見[10 月 18 日進度](progress-2026-10-18.md)。以下保留前版快照。
+
 ## 2026-10-17 Connector 自動更新預覽
 
 [#282](https://github.com/TED-H-com/bat-agent-connector/pull/282) 已合併為

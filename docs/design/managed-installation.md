@@ -46,11 +46,11 @@ version is insufficient: `ensure` deliberately reuses a verified running core of
 the same runtime version. Development commits do not each need a version bump;
 release preparation fixes the next package identity before final validation.
 
-The next update candidate pairs core `0.2.7` with desktop `0.1.3`. Its packaged
+The published update candidate pairs core `0.2.8` with desktop `0.1.4`. Its packaged
 upgrade fixture builds the published core `0.2.6` from fixed source
 `f31e7964c627e4b6d3af2e2370e7a38c64a20e25` and compares the two actual payloads.
 Earlier `0.2.4` → `0.2.5` receipts remain historical evidence for their original
-candidates. The new version declarations are preparation, not proof of a passing
+candidates. Version declarations alone are preparation, not proof of a passing
 package build, published release or upgrade of an operator's installation.
 
 Expired/revoked credentials, invalid manifests, changed identity or missing ready-state data are recovery failures. They do not cause automatic credential reissue, deletion of history or replacement ownership. Reinstallation reuses preserved application data; deliberately deleting that data is outside ordinary reopen/upgrade behavior.

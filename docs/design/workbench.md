@@ -88,7 +88,7 @@ acquire Work identity from the last workspace or an earlier route.
 | Overview | `#/pm/{id}/overview` | Projects daily entry | Daily entry (`.wc-daily a[href="#/pm/{id}/overview"]`) / Management selector (`select[data-workbench-management]` value `overview`) |
 | Discussions | `#/pm/{id}/discussions` | Project management selector | Management selector (`select[data-workbench-management]` value `discussions`) |
 | Requirements | `#/pm/{id}/requirements` | Project management selector | Management selector (`select[data-workbench-management]` value `requirements`) |
-| Board | `#/pm/{id}/board` | Work daily entry | Daily entry (`.wc-daily a[href="#/pm/{id}/board"]`) / Management selector (`select[data-workbench-management]` value `board`) |
+| Board | `#/pm/{id}/board` | Work list / project management | Desktop Work daily entry; mobile Work-list header; Management selector (`select[data-workbench-management]` value `board`) |
 | Operations | `#/operations` | Tools menu | Tools menu (`[data-shell-tools]` → `.ui-menu-panel [role="menuitem"][href="#/operations"]`) |
 | Delivery | `#/delivery` | Tools menu | Tools menu (`[data-shell-tools]` → `.ui-menu-panel [role="menuitem"][href="#/delivery"]`) |
 | Artifact review | `#/artifact-review` | Tools menu | Tools menu (`[data-shell-tools]` → `.ui-menu-panel [role="menuitem"][href="#/artifact-review"]`) |
@@ -96,7 +96,7 @@ acquire Work identity from the last workspace or an earlier route.
 | Sessions | `#/sessions` | Tools menu | Tools menu (`[data-shell-tools]` → `.ui-menu-panel [role="menuitem"][href="#/sessions"]`) |
 | Pending | `#/home` | Today daily entry | Daily entry (`.wc-daily a[href="#/home"]`) |
 | Settings | `#/settings` | Settings link | Navigation footer link (`a[data-shell-settings]`) |
-| All projects | `#/projects` | Switcher / Catalog link | Workspace switcher menu (`.shell-workspace-switch` → `.ui-menu-panel [role="menuitem"][href="#/projects"]`) at desktop; drawer catalog link (`.shell-all-projects, a[href="#/projects"]`) at 390px |
+| All projects | `#/projects` | Workspace switcher | Workspace switcher menu (`.shell-workspace-switch` → `.ui-menu-panel [role="menuitem"][href="#/projects"]`); on mobile open the workspace drawer first |
 
 ## Source mapping
 
