@@ -8,12 +8,13 @@ const form=(page:any)=>page.locator('[data-pm-action="pm.thread.create"]');
 const intents=(page:any)=>page.evaluate(()=>Object.entries(localStorage).filter(([key])=>key.includes('.pm.thread.create.')).map(([key,value])=>({key,...JSON.parse(value)})));
 
 for(const native of [false,true])test.describe(native?'Native receipt continuity':'Web receipt continuity',()=>{
-  for(const interruption of ['read failure','view remount','access reset'])test(`${interruption} preserves an acknowledged request and recovers only by original ID`,async({page})=>{
+  for(const interruption of ['read failure','view remount','access reset','foreground'])test(`${interruption} preserves an acknowledged request and recovers only by original ID`,async({page})=>{
     const f=pmFixture();let release=()=>{};f.state.defer=new Promise<void>(resolve=>release=resolve);
-    let reset=false,bootstraps=0,replied=false;const reads:string[]=[];
+    let reset=false,bootstraps=0,replied=false,polls=0;const reads:string[]=[];
     await mountConversation(page,native,async(input)=>{
       const path=new URL(input.path,'http://fixture').pathname;
       if(path==='/bootstrap')bootstraps++;
+      if(path==='/events')polls++;
       if(path==='/events'&&reset){reset=false;return {status:409,data:{error:{code:'EVENT_CURSOR_RESET',reason:'access_changed',message:'Access changed'}}};}
       if(path.startsWith('/operations/')&&input.method==='GET')reads.push(path);
       const result=await f.dispatch(input);if(input.method==='POST')replied=true;return result;
@@ -30,11 +31,25 @@ for(const native of [false,true])test.describe(native?'Native receipt continuity
       await expect(page.getByRole('heading',{name:'Start an idea discussion',exact:true})).toHaveCount(0);
       await page.evaluate(wid=>{location.hash=`#/pm/${wid}`;},workspaceId);
       await expect(form(page).getByRole('button',{name:'Check original request',exact:true})).toBeVisible();
+    }else if(interruption==='foreground'){
+      await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});document.dispatchEvent(new Event('visibilitychange'));});
     }else{
       reset=true;await expect.poll(()=>bootstraps).toBe(2);
       await expect(form(page).getByRole('button',{name:'Check original request',exact:true})).toBeVisible();
     }
     release();await expect.poll(()=>replied).toBe(true);
+    if(interruption==='foreground'){
+      // This mounted form received a verified terminal receipt while hidden.
+      // It may finish that original request; resume must not submit it again.
+      await expect(page).toHaveURL(new RegExp(`${workspaceId}/discussions/${threadId}$`));
+      expect(reads).toEqual([]);
+      const before=polls;
+      await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});document.dispatchEvent(new Event('visibilitychange'));});
+      await expect.poll(()=>polls).toBeGreaterThan(before);
+      expect(f.state.writes).toHaveLength(1);expect(f.state.writes[0].idempotency_key).toBe(original.intent.key);
+      expect(f.state.writes[0].body).toEqual(original.intent.request);
+      return;
+    }
     await expect.poll(async()=>Boolean((await intents(page))[0]?.intent?.operation_id)).toBe(true);
     if(interruption==='read failure'){
       expect(reads).toEqual([]);await expect(page).toHaveURL(new RegExp(`${workspaceId}/discussions$`));

@@ -84,13 +84,7 @@ for (const native of [false, true]) for (const refresh of ["messages", "preview"
       await expect(page.getByRole("button", {name: "Record", exact: true})).toBeDisabled();
       await expect(page.getByRole("combobox", {name: "Commit"})).toHaveValue("b".repeat(40));
     }
-    if (refresh === "messages") {
-      await expect(page.getByRole("button", {name: "Send", exact: true})).toBeDisabled();
-    } else {
-      await page.getByRole("button", {name: "Send", exact: true}).click();
-      await expect(page.locator('[data-session-error=CENTRAL_OFFLINE] .session-error-line')).toContainText('Connector offline');
-      await expect(page.locator('[data-session-error=CENTRAL_OFFLINE] details')).toContainText('CENTRAL_OFFLINE');
-    }
+    await expect(page.getByRole("button", {name: "Send", exact: true})).toBeDisabled();
     expect(writes).toHaveLength(1);
     await expect(draft).toHaveValue("Keep this exact draft and original operation key");
     failing = false;

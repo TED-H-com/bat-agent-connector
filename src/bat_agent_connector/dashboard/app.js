@@ -63335,19 +63335,40 @@ function paintConnection(waiting = false, paused = false) {
 	live.title = t(paused ? "sync_actions_paused" : waiting ? "sync_waiting" : status === "connected" ? "desktop_polling" : "offline_actions_paused");
 	for (const paint of [...connectionPainters]) paint();
 }
+var foregroundVersion = 0;
+var wakeEventPoll = null;
+function waitForEventPoll(ms) {
+	return new Promise((resolve) => {
+		const finish = () => {
+			clearTimeout(timer);
+			wakeEventPoll = null;
+			resolve();
+		};
+		const timer = setTimeout(finish, ms);
+		wakeEventPoll = finish;
+	});
+}
+function foregroundChanged() {
+	foregroundVersion++;
+	if (state.token) {
+		updateOnline(false);
+		paintConnection(true, true);
+	}
+	wakeEventPoll?.();
+}
 async function streamEvents() {
 	for (;;) {
-		if (state.nativeBusy || !state.token || !state.viewReady) {
+		if (state.nativeBusy || !state.token || !state.viewReady || document.visibilityState === "hidden") {
 			paintConnection(true);
-			await sleep(1e3);
+			await waitForEventPoll(1e3);
 			continue;
 		}
-		const epoch = state.epoch, view = generation;
+		const epoch = state.epoch, view = generation, foreground = foregroundVersion;
 		let cycle, pollSucceeded = false;
 		try {
 			const before = state.lastEvent;
 			const page = await api("GET", `/events?after=${before}&limit=100${state.sync ? `&checkpoint=${encodeURIComponent(state.sync.token)}` : ""}`);
-			if (epoch !== state.epoch) continue;
+			if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
 			pollSucceeded = true;
 			state.pollHealth = "connected";
 			paintConnection(true);
@@ -63357,7 +63378,7 @@ async function streamEvents() {
 			const cursor = await consumePageAsync(page, before, (ev) => {
 				return settleRefreshes([...state.listeners].map((fn) => Promise.resolve().then(() => fn(ev))));
 			});
-			if (epoch !== state.epoch || view !== generation || !state.viewReady) continue;
+			if (epoch !== state.epoch || view !== generation || foreground !== foregroundVersion || !state.viewReady) continue;
 			if (cycle.error) throw cycle.error;
 			if (state.sync) {
 				if (page.sync?.checkpoint?.cursor !== cursor || !page.sync?.checkpoint?.token) throw new Error("Invalid central event checkpoint");
@@ -63369,9 +63390,9 @@ async function streamEvents() {
 			state.refreshCycle = null;
 			updateOnline(true);
 			paintConnection();
-			if (!page.has_more || cursor <= before) await sleep(1e3);
+			if (!page.has_more || cursor <= before) await waitForEventPoll(1e3);
 		} catch (error) {
-			if (epoch !== state.epoch) continue;
+			if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
 			if (!pollSucceeded) {
 				state.pollHealth = "reconnecting";
 				paintConnection();
@@ -63410,7 +63431,7 @@ async function streamEvents() {
 					state.viewReady = true;
 				}
 			}
-			await sleep(3e3);
+			await waitForEventPoll(3e3);
 		} finally {
 			if (state.refreshCycle === cycle) state.refreshCycle = null;
 		}
@@ -64468,7 +64489,7 @@ async function viewSession(main, host, sid, context = null) {
 	const queue = h("input", { type: "checkbox" });
 	let row, pendingIdentity, sending = false, readReady = false, refreshInFlight = null, readError = null, queueKnown = false, workSendOwned = false;
 	let withdrawn = "", withdrawalVersion = 0, retryTimer = null, retryDelay = 1e3, retryAt = 0, disposed = false, observationRequest = 0;
-	const allowed = (action) => !withdrawn && readReady && row?.api_access === "managed" && may("operate") && state.caps?.hosts?.find((item) => item.host === host)?.writes !== false && state.caps?.actions?.find((item) => item.action === action)?.allowed !== false;
+	const allowed = (action) => !withdrawn && readReady && state.online && state.viewReady && !state.nativeBusy && row?.api_access === "managed" && may("operate") && state.caps?.hosts?.find((item) => item.host === host)?.writes !== false && state.caps?.actions?.find((item) => item.action === action)?.allowed !== false;
 	const identity = (pend) => pend ? JSON.stringify({
 		kind: pend.kind,
 		toolUseId: pend.toolUseId,
@@ -65198,7 +65219,8 @@ async function viewSession(main, host, sid, context = null) {
 		stop.hidden = withdrawn || row?.api_access !== "managed";
 		let reason = "";
 		if (row?.api_access === "managed" && send.disabled && !sending) {
-			if (!readReady) reason = t("session_send_waiting");
+			if (!state.online || !state.viewReady || state.nativeBusy) reason = t("sync_actions_paused");
+			else if (!readReady) reason = t("session_send_waiting");
 			else if (!may("operate")) reason = t("session_send_scope");
 			else if (state.caps?.hosts?.find((item) => item.host === host)?.writes === false) reason = t("session_send_host");
 			else if (state.caps?.actions?.find((item) => item.action === "session.send")?.allowed === false) reason = t("session_send_denied");
@@ -65650,11 +65672,7 @@ async function viewSession(main, host, sid, context = null) {
 	const syncReady = () => {
 		try {
 			assertView(connection);
-			if (!disposed) {
-				permissions?.update();
-				followUp?.sync();
-				fixedResult?.sync();
-			}
+			if (!disposed) updateControls();
 		} catch {}
 	};
 	const followSync = setTimeout(syncReady, 0);
@@ -69848,6 +69866,10 @@ async function route() {
 }
 async function start() {
 	window.addEventListener("hashchange", route);
+	document.addEventListener("visibilitychange", foregroundChanged);
+	window.addEventListener("pageshow", (event) => {
+		if (event.persisted) foregroundChanged();
+	});
 	if (nativeDesktop) {
 		clearToken();
 		const attempt = ++state.nativeAttempt;

@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Returning from the background or browser page cache pauses new sends until the
+  shared event reader checks current continuity and settles affected sources.
+  Existing drafts and acknowledged operations retain their original identities;
+  an older in-flight poll cannot reopen the send controls.
+
 - Discussion info supports browser Back/Forward while retaining the selected tab,
   reading position and original drafts. Workspace/thread withdrawal invalidates
   the old sheet entry without navigating away or sending a message.

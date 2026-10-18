@@ -786,19 +786,34 @@ function paintConnection(waiting = false, paused = false) {
   live.title = t(paused ? 'sync_actions_paused' : waiting ? 'sync_waiting' : status === 'connected' ? 'desktop_polling' : 'offline_actions_paused');
   for (const paint of [...connectionPainters]) paint();
 }
+let foregroundVersion = 0, wakeEventPoll = null;
+function waitForEventPoll(ms) {
+  return new Promise(resolve => {
+    const finish = () => {clearTimeout(timer); wakeEventPoll = null; resolve();};
+    const timer = setTimeout(finish, ms);
+    wakeEventPoll = finish;
+  });
+}
+function foregroundChanged() {
+  // Invalidate an in-flight page as well as the sleeping poll. Only the existing
+  // reader can re-enable writes, after a post-resume page and its sources settle.
+  foregroundVersion++;
+  if (state.token) {updateOnline(false); paintConnection(true, true);}
+  wakeEventPoll?.();
+}
 async function streamEvents() {
   for (;;) {
-    if (state.nativeBusy || !state.token || !state.viewReady) {
+    if (state.nativeBusy || !state.token || !state.viewReady || document.visibilityState === 'hidden') {
       paintConnection(true);
-      await sleep(1000); continue;
+      await waitForEventPoll(1000); continue;
     }
-    const epoch = state.epoch, view = generation;
+    const epoch = state.epoch, view = generation, foreground = foregroundVersion;
     let cycle, pollSucceeded = false;
     try {
       const before = state.lastEvent;
       const checkpoint = state.sync ? `&checkpoint=${encodeURIComponent(state.sync.token)}` : "";
       const page = await api("GET", `/events?after=${before}&limit=100${checkpoint}`);
-      if (epoch !== state.epoch) continue;
+      if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
       pollSucceeded = true; state.pollHealth = 'connected'; paintConnection(true);
       if (view !== generation || !state.viewReady) continue;
       cycle = {error: null}; state.refreshCycle = cycle;
@@ -807,7 +822,7 @@ async function streamEvents() {
       const cursor = await consumePageAsync(page, before, ev => {
         return settleRefreshes([...state.listeners].map(fn => Promise.resolve().then(() => fn(ev))));
       });
-      if (epoch !== state.epoch || view !== generation || !state.viewReady) continue;
+      if (epoch !== state.epoch || view !== generation || foreground !== foregroundVersion || !state.viewReady) continue;
       if (cycle.error) throw cycle.error;
       if (state.sync) {
         if (page.sync?.checkpoint?.cursor !== cursor || !page.sync?.checkpoint?.token)
@@ -820,9 +835,9 @@ async function streamEvents() {
       state.refreshCycle = null;
       updateOnline(true);
       paintConnection();
-      if (!page.has_more || cursor <= before) await sleep(1000);
+      if (!page.has_more || cursor <= before) await waitForEventPoll(1000);
     } catch (error) {
-      if (epoch !== state.epoch) continue;
+      if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
       if (!pollSucceeded) {state.pollHealth = 'reconnecting'; paintConnection();}
       if (view !== generation) continue;
       if (state.refreshCycle === cycle) state.refreshCycle = null;
@@ -847,7 +862,7 @@ async function streamEvents() {
           else await route();
         } catch { state.sync = previous.sync; state.viewReady = true; /* retry continuity proof */ }
       }
-      await sleep(3000);
+      await waitForEventPoll(3000);
     } finally {
       if (state.refreshCycle === cycle) state.refreshCycle = null;
     }
@@ -1523,7 +1538,8 @@ async function viewSession(main, host, sid, context = null) {
   let row, pendingIdentity, sending = false, readReady = false, refreshInFlight = null, readError = null, queueKnown = false, workSendOwned = false;
   // Withdrawal (404/410/403 on the session read) is a settled state, not a failure to retry every second.
   let withdrawn = "", withdrawalVersion = 0, retryTimer = null, retryDelay = 1000, retryAt = 0, disposed = false, observationRequest = 0;
-  const allowed = action => !withdrawn && readReady && row?.api_access === "managed" && may("operate")
+  const allowed = action => !withdrawn && readReady && state.online && state.viewReady && !state.nativeBusy
+    && row?.api_access === "managed" && may("operate")
     && state.caps?.hosts?.find(item => item.host === host)?.writes !== false
     && state.caps?.actions?.find(item => item.action === action)?.allowed !== false;
   const identity = pend => pend ? JSON.stringify({kind: pend.kind, toolUseId: pend.toolUseId,
@@ -1893,7 +1909,8 @@ async function viewSession(main, host, sid, context = null) {
     stop.hidden = withdrawn || row?.api_access !== "managed";
     let reason = "";
     if (row?.api_access === "managed" && send.disabled && !sending) {
-      if (!readReady) reason = t("session_send_waiting");
+      if (!state.online || !state.viewReady || state.nativeBusy) reason = t('sync_actions_paused');
+      else if (!readReady) reason = t("session_send_waiting");
       else if (!may("operate")) reason = t("session_send_scope");
       else if (state.caps?.hosts?.find(item => item.host === host)?.writes === false) reason = t("session_send_host");
       else if (state.caps?.actions?.find(item => item.action === "session.send")?.allowed === false) reason = t("session_send_denied");
@@ -2207,7 +2224,7 @@ async function viewSession(main, host, sid, context = null) {
   });
   // viewReady flips after this function returns. Permissions and Work actions
   // become available only after the router finishes the complete initial read.
-  const syncReady = () => {try {assertView(connection); if (!disposed) {permissions?.update(); followUp?.sync(); fixedResult?.sync();}} catch { /* the view already left */ }};
+  const syncReady = () => {try {assertView(connection); if (!disposed) updateControls();} catch { /* the view already left */ }};
   const followSync = setTimeout(syncReady, 0);
   const offFollowOnline = onOnline(syncReady);
   return () => {disposed = true; clearTimeout(followSync); offFollowOnline(); followUp?.dispose(); fixedResult?.dispose(); perspectives?.dispose(); clearTimeout(retryTimer); off(); instructions?.dispose(); batHandoff?.dispose(); conversation.dispose(); mobileLayout?.dispose(); shortcut.dispose();
@@ -4766,6 +4783,8 @@ async function route() {
 
 async function start() {
   window.addEventListener("hashchange", route);
+  document.addEventListener('visibilitychange', foregroundChanged);
+  window.addEventListener('pageshow', event => {if (event.persisted) foregroundChanged();});
   if (nativeDesktop) {
     clearToken(); // discard obsolete browser credentials if an older build ever stored them
     const attempt = ++state.nativeAttempt;
