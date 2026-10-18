@@ -12,6 +12,7 @@ DESTINATIONS = {
     'pm.conversation.propose': ('conversation_proposal', 'conversation_proposal'),
     'pm.follow_up.analyze': ('follow_up_assessment', 'follow_up_analysis'),
     'pm.continuation.prepare': ('continuation_brief', 'continuation_brief'),
+    'pm.overview.assess': ('overview_assessment', 'overview_assessment'),
 }
 ADAPTERS = (pm_native_journal.ADAPTER, pm_bat_runtime.ADAPTER)
 

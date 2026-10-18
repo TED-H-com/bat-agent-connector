@@ -11,6 +11,8 @@ FIELDS = {
     "pm_dependencies_revisions_list": ("workspace_id", "after", "limit"),
     "pm_dependencies_impact_get": ("workspace_id", "dependency"),
     "pm_overview_get": ("workspace_id",),
+    "pm_overview_assessments_list": ("workspace_id", "before", "limit"),
+    "pm_overview_assessment_get": ("workspace_id", "assessment_id"),
     "pm_resources_get": ("workspace_id", "since", "until", "buckets", "tz"),
     "pm_schedule_get": ("workspace_id", "after", "limit"),
     "pm_register_list": ("workspace_id", "type", "status", "owner", "q", "after", "limit"),
@@ -95,7 +97,7 @@ FIELDS = {
     "pm_threads_list": ("workspace_id", "limit", "after"),
     "pm_thread_get": ("workspace_id", "thread_id", "limit", "before_message", "before_input"),
     "pm_context_get": ("workspace_id", "thread_id", "max_chars"),
-    "pm_context_bundle_preview": ("workspace_id", "thread_id", "max_chars"),
+    "pm_context_bundle_preview": ("workspace_id", "thread_id", "max_chars", "kind"),
     "pm_profiles_get": (),
     "pm_runs_list": ("workspace_id", "thread_id", "limit", "after"),
     "pm_run_get": ("workspace_id", "run_id"),
@@ -126,6 +128,11 @@ def read(ops, principal, method, params):
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise OperationError("INVALID_PARAMS", "Unknown PM read parameters", 422)
     workspace_id, thread_id = params.get("workspace_id"), params.get("thread_id")
+    if method in {"pm_overview_assessments_list", "pm_overview_assessment_get"}:
+        from . import pm_overview_assessments as assessments
+        if method == "pm_overview_assessment_get":
+            return assessments.get_assessment(ops, principal, workspace_id, params.get("assessment_id"))
+        return assessments.list_assessments(ops, principal, workspace_id, before=params.get("before"), limit=params.get("limit", 10))
     if method == "pm_overview_get":
         from .pm_overview import read as overview
         return overview(ops, principal, workspace_id)
@@ -151,6 +158,11 @@ def read(ops, principal, method, params):
         from .pm_register import get_register
         return get_register(ops, principal, workspace_id, params.get("row_id"))
     if method == "pm_context_bundle_preview":
+        if params.get("kind") == "overview_assessment":
+            from .pm_overview_assessment_context import preview as overview_preview
+            return overview_preview(ops, principal, workspace_id, thread_id, max_chars=params.get("max_chars", 32000))
+        if params.get("kind") is not None:
+            raise OperationError("INVALID_PARAMS", "Unknown context bundle kind", 422)
         from .pm_context_bundles import preview
         return preview(ops, principal, workspace_id, thread_id, max_chars=params.get("max_chars", 32000))
     if method in {"pm_ahp_adapters_list", "pm_ahp_observations_list", "pm_ahp_observation_current_get", "pm_ahp_observation_get"}:
@@ -423,6 +435,7 @@ def read(ops, principal, method, params):
             pm_attempt_result_reads,
             pm_bat_operations,
             pm_native_capabilities,
+            pm_overview_assessments,
             pm_runs,
             pm_runtime,
             pm_work_follow_up,
@@ -462,6 +475,7 @@ def read(ops, principal, method, params):
                 "bat_analysis": bat,
                 "structured_analysis": pm_analysis_adapters.capabilities(ops, principal, workspace, native=native, bat=bat),
                 "follow_up_analysis": follow_up,
+                "overview_assessment": pm_overview_assessments.capabilities(ops, principal, workspace, native=native, bat=bat),
                 "conversation_proposals": {"version": 1, "analysis": native, "adoption_available": adoption_reason is None,
                     "adoption_scopes": ["observe", "manage", "start"], "adoption_role": "owner"},
                 "work_attempt_results": pm_attempt_result_reads.capabilities(ops),
