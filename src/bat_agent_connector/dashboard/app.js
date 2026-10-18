@@ -32529,6 +32529,10 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 	}
 	async function loadDetail(rowId, paint = true) {
 		if (!active) return;
+		if (paint && preference.inspector && selected === rowId) {
+			const row = rows.find((item) => item.row_id === rowId);
+			if (row) prepareInspector(row);
+		}
 		const ticket = ++detailSerial;
 		const listTicket = serial;
 		try {

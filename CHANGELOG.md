@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Opening an Issues & changes record reserves its detail panel while loading.
+  Concurrent list refreshes preserve that explicit opening; dismissal and source
+  withdrawal still close it and discard late replies.
+
 - Retain a proven-unsent Work instruction for later: cancel its original queue entry, then save an Idea with the complete source and reason. Restart and lost-reply recovery keep the original request, and partial saves never resend the instruction. Shared English and Traditional Chinese controls preserve drafts and focus.
 - Conversation pinning survives late session controls changing the available height.
   Queued programmatic scroll events preserve the reader's existing follow choice;

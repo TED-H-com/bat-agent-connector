@@ -711,6 +711,13 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
   }
   async function loadDetail(rowId, paint = true) {
     if (!active) return;
+    // Reserve the sheet for an explicit opening before awaiting its exact read.
+    // A concurrent list refresh invalidates that read and must still see the
+    // pending opening, so it can request fresh detail instead of losing the click.
+    if (paint && preference.inspector && selected === rowId) {
+      const row = rows.find(item => item.row_id === rowId);
+      if (row) prepareInspector(row);
+    }
     const ticket = ++detailSerial;
     const listTicket = serial;
     try {
