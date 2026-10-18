@@ -1,7 +1,7 @@
 # Original batch-turn completion and manual quiescence
 
-This is the contract for the M4 joined-flow integration under development. It
-does not claim installed BAT or live-model acceptance. The first supported
+This contract covers original batch-turn completion and bounded read-only manual
+observation. It does not claim installed BAT or live-model acceptance. The first supported
 managed path is an explicitly selected W38 batch child. A standalone handoff
 without an original explicit result-evidence selection remains unproven; a
 matching newest review or branch is not a substitute.
@@ -110,7 +110,7 @@ also in the allowed policy. Future human activity still requires fresh
 observation. Neither profile freezes or controls that activity.
 
 This is supported by the ordinary Rust Codex producer in BAT
-[`c397fd7`](https://github.com/teddashh/better-agent-terminal/blob/c397fd7/src-tauri/src/codex_app_server.rs#L637):
+[`c397fd7`](https://github.com/TED-H-com/better-agent-terminal/blob/c397fd7a36593ed0fb57a0a4c5cc005f09149466/src-tauri/src/codex_app_server.rs#L637):
 metadata includes `inputState`; `send_message` emits user echo then metadata
 (lines 5912–5920), and native completion emits metadata then the original
 SDK/turn identity (lines 8314–8350). Tests reproduce this source order, including
