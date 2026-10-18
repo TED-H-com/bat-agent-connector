@@ -201,6 +201,12 @@ poll stays Connected while listeners or a view mount are pending. Retrying a fai
 poll or waiting for the first poll is Reconnecting; a disconnected client is Offline.
 Source refresh failures still pause mutations and event acknowledgment independently
 of transport health, with the pause explained in the tooltip.
+Visibility changes and restored browser pages invalidate the current poll's
+permission to reopen writes. The same bounded event reader wakes on return and
+settles current continuity and source reads before enabling new sends. Background
+event polling waits; server work continues independently. Forms keep their draft
+and original operation keys. A verified terminal reply may finish its original
+request while hidden; returning never submits an unsent draft automatically.
 
 One persistent sidebar is 248px (232px at 1000–1199px), with its own scroll and an
 optional saved resize preference. Below 1000px it is a drawer with scrim, focus trap
