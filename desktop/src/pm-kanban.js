@@ -476,19 +476,23 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     if (!value) {landing.withdraw();stale = true; serial++; detailSerial++; ++scrollGeneration; rememberScroll(); closeRetaining();}
     else {
       const generation = ++scrollGeneration;
+      // The loading layout can clamp the first scroll and emit a scroll event.
+      // Keep the requested position until workspace layout settles; an actual
+      // user movement still wins through the restoreY check below.
+      const targetY = preference.scroll || 0;
       const read = stale || !page ? refresh() : null;
       if (!read && selected && rows.has(selected)) void select(selected, true);
       list.scrollLeft = preference.laneScroll || 0;
       let restoreY = 0;
       requestAnimationFrame(() => {
         if (generation === scrollGeneration) {
-          window.scrollTo(0, preference.scroll || 0);
+          window.scrollTo(0, targetY);
           restoreY = window.scrollY;
         }
       });
       void Promise.all([read, workspaceSettled()]).then(() => {
         if (generation === scrollGeneration && window.scrollY === restoreY) {
-          window.scrollTo(0, preference.scroll || 0);
+          window.scrollTo(0, targetY);
         }
       });
       return read;

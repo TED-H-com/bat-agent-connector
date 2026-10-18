@@ -23273,7 +23273,7 @@ function overviewAssessment(options) {
 		assess.setAttribute("aria-label", label);
 		assess.title = label;
 		const cap = capability?.overview_assessment, recover = request.hasPending();
-		assess.disabled = busy || !permitted(false) || cap?.authorized !== true || !recover && (cap?.eligible_for_preflight !== true || cap?.limits?.allowed !== true);
+		assess.disabled = !permitted(false) || cap?.authorized !== true || !recover && (cap?.eligible_for_preflight !== true || cap?.limits?.allowed !== true);
 		history.disabled = busy || !capability;
 		more.hidden = !latest || !current || latest.assessment_id === current.assessment.assessment_id;
 		state.hidden = !current;
@@ -40810,18 +40810,19 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			closeRetaining();
 		} else {
 			const generation = ++scrollGeneration;
+			const targetY = preference.scroll || 0;
 			const read = stale || !page ? refresh() : null;
 			if (!read && selected && rows.has(selected)) select(selected, true);
 			list.scrollLeft = preference.laneScroll || 0;
 			let restoreY = 0;
 			requestAnimationFrame(() => {
 				if (generation === scrollGeneration) {
-					window.scrollTo(0, preference.scroll || 0);
+					window.scrollTo(0, targetY);
 					restoreY = window.scrollY;
 				}
 			});
 			Promise.all([read, workspaceSettled()]).then(() => {
-				if (generation === scrollGeneration && window.scrollY === restoreY) window.scrollTo(0, preference.scroll || 0);
+				if (generation === scrollGeneration && window.scrollY === restoreY) window.scrollTo(0, targetY);
 			});
 			return read;
 		}
