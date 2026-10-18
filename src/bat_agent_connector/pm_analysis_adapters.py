@@ -1,4 +1,4 @@
-"""Explicit backend selection for the two existing structured PM sinks.
+"""Explicit backend selection for registered structured PM sinks.
 
 This module owns no executor, process or queue. Legacy requests remain native;
 only trusted domain callbacks choose the fixed context and import destination.
@@ -11,6 +11,7 @@ from .operations import OperationError
 DESTINATIONS = {
     'pm.conversation.propose': ('conversation_proposal', 'conversation_proposal'),
     'pm.follow_up.analyze': ('follow_up_assessment', 'follow_up_analysis'),
+    'pm.continuation.prepare': ('continuation_brief', 'continuation_brief'),
 }
 ADAPTERS = (pm_native_journal.ADAPTER, pm_bat_runtime.ADAPTER)
 
@@ -24,7 +25,7 @@ def selection(params):
 
 def ordinary_params(params):
     selection(params)
-    return {key: value for key, value in params.items() if key not in {'adapter', 'intake_id'}}
+    return {key: value for key, value in params.items() if key not in {'adapter', 'intake_id', 'previous_brief_ref'}}
 
 
 def admission(ops, principal, target, params, pre):

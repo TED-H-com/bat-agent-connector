@@ -1,5 +1,11 @@
 # BAT Dashboard design v2
 
+The [continuation brief](../docs/design/pm-continuation-brief.md) reuses the shared
+Discussion disclosures, source links and Context forms. It keeps the existing
+composer and an open unchanged brief through refresh. The contract includes
+same-data English desktop and zh-TW phone comparisons; these are synthetic
+browser evidence, separate from physical-device acceptance.
+
 The October 15 [workbench supplement](../docs/product/workbench-ux-plan.md)
 revises navigation and information hierarchy. Its first candidate is selected
 through Tools → Workbench preview (`?workbench=1`); legacy layout remains the

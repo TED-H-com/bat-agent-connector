@@ -199,6 +199,9 @@ def _source_visible(db, principal, run):
     if run["context"].get("output_destination") == "conversation_proposal" or row and row[0] == "pm.conversation.propose":
         from .pm_conversation_proposals import operation_visible
         return operation_visible(db, principal, {"operation_id": run["operation_id"]})
+    if run['context'].get('output_destination') == 'continuation_brief' or row and row[0] == 'pm.continuation.prepare':
+        from .pm_continuation import operation_visible
+        return operation_visible(db, principal, {'operation_id': run['operation_id']})
     if row and row[0] == "pm.spec.materialize":
         from .pm_spec_materialization import source_visible as spec_visible
         return spec_visible(db, principal, {"operation_id": run["operation_id"]})
@@ -571,7 +574,7 @@ def import_reply(journal, run_id, generation, *, content, native_turn_id, sdk_se
         if value is not None:
             pm_discussions._text(value, label, 300)
     with journal.tx():
-        if get(journal.db, run_id)["context"].get("output_destination") in {"follow_up_assessment", "conversation_proposal"}:
+        if get(journal.db, run_id)["context"].get("output_destination") in {"follow_up_assessment", "conversation_proposal", "continuation_brief"}:
             raise _error("Follow-up output cannot enter ordinary discussion history", "PM_OUTPUT_DESTINATION_REFUSED")
         saved = journal.db.execute("""SELECT p.*,m.content FROM pm_assistant_provenance p
             JOIN pm_messages m USING(message_id) WHERE p.run_id=?""", (run_id,)).fetchone()

@@ -1671,6 +1671,7 @@ var globalStrings = {
 		action_pm_ahp_observe: "Observe AHP",
 		action_pm_backlog_revise: "Revise backlog",
 		action_pm_conversation_adopt: "Adopt discussion",
+		action_pm_continuation_prepare: "Prepare continuation",
 		action_pm_conversation_propose: "Propose in discussion",
 		action_pm_dependencies_capture: "Capture dependency",
 		action_pm_dependencies_declare: "Declare dependency",
@@ -1872,6 +1873,7 @@ var globalStrings = {
 		action_pm_ahp_observe: "觀察 AHP",
 		action_pm_backlog_revise: "修訂待辦",
 		action_pm_conversation_adopt: "採用討論",
+		action_pm_continuation_prepare: "整理接續摘要",
 		action_pm_conversation_propose: "在討論中提案",
 		action_pm_dependencies_capture: "記錄相依",
 		action_pm_dependencies_declare: "宣告相依",
@@ -4417,6 +4419,29 @@ var pmPackageHandoffStrings = {
 //#region src/pm-discussions-strings.js
 var discussionStrings = {
 	en: {
+		pcb_title: "Continue from here",
+		pcb_purpose: "Focus for this summary",
+		pcb_default_purpose: "Preserve the goal and decisions, review remaining work, and suggest the next one or two steps.",
+		pcb_prepare: "Prepare continuation",
+		pcb_update: "Update continuation",
+		pcb_help: "Summarize the previous brief and new discussion in one PM turn. Original messages and decisions remain available.",
+		pcb_goal: "Original goal",
+		pcb_adopted_decisions: "Adopted decisions",
+		pcb_candidates: "Candidates",
+		pcb_rejected_directions: "Excluded directions",
+		pcb_completed_evidence: "Evidence of completed work",
+		pcb_open_questions: "Open questions",
+		pcb_remaining_work: "Remaining work",
+		pcb_interpretation: "PM interpretation. This does not adopt scope or accept delivery.",
+		pcb_partial: "Some source history is omitted. Review the original context before deciding.",
+		pcb_coverage: "Covers the recorded discussion through the time shown.",
+		pcb_unavailable: "The original continuation sources are unavailable.",
+		pcb_needs_review: "The PM reply needs review before it can be used for continuation.",
+		pcb_stale: "New discussion or plan changes are not included yet.",
+		pcb_status_next_steps: "Suggested next steps",
+		pcb_status_needs_decision: "A decision is needed",
+		pcb_status_no_remaining_work: "PM found no remaining work in this context",
+		pcb_status_insufficient_information: "More information is needed",
 		pd_assessment_historical: "This is the saved assessment. Current acceptance has not been checked here.",
 		pd_assessment_unavailable: "The original assessment is unavailable. Its conclusion cannot be shown.",
 		pd_assessment_omitted: "The complete assessment was not included in this context. Return to the original Result to review it.",
@@ -4529,6 +4554,29 @@ var discussionStrings = {
 		pm_mode_follow_up: "Follow-up"
 	},
 	"zh-TW": {
+		pcb_title: "從這裡接續",
+		pcb_purpose: "本次整理重點",
+		pcb_default_purpose: "保留原目標與決定，檢視剩餘工作，提出最值得處理的一至兩個下一步。",
+		pcb_prepare: "整理接續摘要",
+		pcb_update: "更新接續摘要",
+		pcb_help: "由 PM 用一輪整理前次摘要與新增討論；原始訊息與決定仍保留。",
+		pcb_goal: "原目標",
+		pcb_adopted_decisions: "已採用決定",
+		pcb_candidates: "候選方向",
+		pcb_rejected_directions: "已排除方向",
+		pcb_completed_evidence: "已完成工作的證據",
+		pcb_open_questions: "未決問題",
+		pcb_remaining_work: "剩餘工作",
+		pcb_interpretation: "這是 PM 判讀，不會採用範圍或接受交付。",
+		pcb_partial: "部分來源歷史未納入；決策前請檢視原始脈絡。",
+		pcb_coverage: "涵蓋截至所示時間的已記錄討論。",
+		pcb_unavailable: "無法讀取接續摘要的原始來源。",
+		pcb_needs_review: "PM 回覆需要檢查，目前無法作為接續摘要。",
+		pcb_stale: "尚未納入新增討論或計畫變更。",
+		pcb_status_next_steps: "建議下一步",
+		pcb_status_needs_decision: "需要決策",
+		pcb_status_no_remaining_work: "PM 在這份脈絡中未找到剩餘工作",
+		pcb_status_insufficient_information: "仍需要更多資訊",
 		pd_assessment_historical: "這是當時保存的評估。此處未重新判定目前是否符合驗收。",
 		pd_assessment_unavailable: "無法讀取原始評估，因此無法顯示其結論。",
 		pd_assessment_omitted: "這份脈絡未包含完整評估。請返回原成果檢視。",
@@ -15489,6 +15537,7 @@ var ACTIONS = {
 	"pm.ahp.observe": "action_pm_ahp_observe",
 	"pm.backlog.revise": "action_pm_backlog_revise",
 	"pm.conversation.adopt": "action_pm_conversation_adopt",
+	"pm.continuation.prepare": "action_pm_continuation_prepare",
 	"pm.conversation.propose": "action_pm_conversation_propose",
 	"pm.dependencies.capture": "action_pm_dependencies_capture",
 	"pm.dependencies.declare": "action_pm_dependencies_declare",
@@ -15739,7 +15788,7 @@ async function readWorkSessionContext({ api, guard, workspaceId, workItemId, att
 }
 //#endregion
 //#region src/pm-work-publish.js
-var ACTION$2 = "github.pr.publish";
+var ACTION$3 = "github.pr.publish";
 var SHA40 = /^[0-9a-f]{40}$/;
 var OP_ID = /^op_[0-9a-f]{32}$/;
 var TARGET_KEYS = [
@@ -15831,7 +15880,7 @@ function exactPreconditions(value) {
 }
 function actionRows(list) {
 	if (!Array.isArray(list)) return [];
-	return list.filter((row) => row && row.action === ACTION$2);
+	return list.filter((row) => row && row.action === ACTION$3);
 }
 function paramsReady(entry) {
 	return Array.isArray(entry?.required_params) && PARAM_NAMES.every((name) => entry.required_params.includes(name)) && entry.required_params.every((name) => PARAM_NAMES.includes(name));
@@ -15924,7 +15973,7 @@ function catalogAllows(caps, entry) {
 		"integrate"
 	]).every((scope) => scopes.includes(scope))) return false;
 	if (!scopes.includes("integrate")) return false;
-	return Boolean(current?.actions?.some((row) => row.action === ACTION$2 && row.allowed === true));
+	return Boolean(current?.actions?.some((row) => row.action === ACTION$3 && row.allowed === true));
 }
 function receiptSha(envelope) {
 	const rows = envelope?.delivery?.pull_requests;
@@ -16178,7 +16227,7 @@ function createWorkPublish({ h, t, form, namespace, caps, errorBox }) {
 		}, h("p", { id: groupId }, t("wpub_draft_group")), h("p", { class: "muted" }, t("wpub_draft_help")), h("label", { class: "pm-work-publish-choice" }, yes, h("span", {}, t("wpub_draft_yes"), " ", h("span", { class: "muted" }, t("wpub_draft_yes_help")))), h("label", { class: "pm-work-publish-choice" }, no, h("span", {}, t("wpub_draft_no"), " ", h("span", { class: "muted" }, t("wpub_draft_no_help"))))), gapNode);
 		editor = form({
 			namespace: `${namespace}.work-publish.${candidateKey}`,
-			action: ACTION$2,
+			action: ACTION$3,
 			target: {
 				workspace_id: entry.target.workspace_id,
 				repository: entry.target.repository,
@@ -16366,7 +16415,7 @@ function createWorkPublish({ h, t, form, namespace, caps, errorBox }) {
 }
 //#endregion
 //#region src/pm-execution-verification.js
-var ACTION$1 = "pm.execution.verify";
+var ACTION$2 = "pm.execution.verify";
 var sha$5 = /^[0-9a-f]{40}$/;
 var digest$9 = /^[0-9a-f]{64}$/;
 var operation$1 = /^op_[0-9a-f]{32}$/;
@@ -16412,7 +16461,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 		execution_operation_id: selected
 	});
 	const fixedMatches = (value) => !fixedResult || value?.execution_operation_id === fixedResult.execution_operation_id && value?.candidate_commit === fixedResult.candidate_commit;
-	const canWrite = () => writer() && allowedAction(ACTION$1, target());
+	const canWrite = () => writer() && allowedAction(ACTION$2, target());
 	const enabled = () => caps()?.features?.pm_workspaces?.execution_verification?.version === 1;
 	const line = (key, value) => h("p", { class: "pm-source" }, h("strong", {}, t(key) + ": "), value);
 	function clear() {
@@ -16502,7 +16551,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 				namespace: `${namespace}.verification`,
 				api,
 				requiredScope: "operate",
-				action: ACTION$1,
+				action: ACTION$2,
 				target: target(),
 				fields,
 				params: (values) => {
@@ -19503,6 +19552,204 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	return {
 		container,
 		loadList
+	};
+}
+//#endregion
+//#region src/pm-structured-analysis.js
+var NATIVE = "codex-native-linux";
+var BAT = "bat-pm-linux-v1";
+function structuredAnalysis({ h, t, labelled, action, capability, legacyEligible, authorized, readable = () => true }) {
+	const field = h("select", {
+		"aria-label": t("pm_analysis_adapter"),
+		"data-pm-default": NATIVE
+	}, h("option", { value: NATIVE }, t("pm_analysis_local")), h("option", { value: BAT }, t("pm_analysis_bat")));
+	field.value = NATIVE;
+	const choice = labelled("pm_analysis_adapter", field), reason = h("p", {
+		class: "muted",
+		"data-structured-analysis-reason": ""
+	}), binding = h("p", { class: "muted pm-note-text" });
+	const box = h("div", { "data-pm-structured-analysis": "" }, choice, reason, binding);
+	let activeRequest = null;
+	field.addEventListener("change", () => activeRequest?.update());
+	const supported = () => capability()?.structured_analysis?.version === 1;
+	const descriptor = () => {
+		const rows = supported() ? capability().structured_analysis.actions?.[action]?.adapters : null;
+		return Array.isArray(rows) ? rows.find((row) => row?.adapter === field.value) : null;
+	};
+	const eligible = () => supported() ? Boolean([NATIVE, BAT].includes(field.value) && descriptor()?.action_registered === true && descriptor()?.authorized === true && descriptor()?.eligible_for_preflight === true) : field.value === NATIVE && legacyEligible();
+	function update(request) {
+		activeRequest = request;
+		box.hidden = !readable();
+		choice.hidden = !supported() && field.value === NATIVE;
+		field.disabled = Boolean(request?.locked()) || !authorized();
+		const selected = descriptor(), legacy = action === "pm.conversation.propose" ? capability()?.native_analysis : capability()?.follow_up_analysis;
+		const code = selected?.reason || (!supported() && field.value === NATIVE ? legacy?.reason : null);
+		const key = !authorized() || selected?.authorized === false ? "pm_native_permissions" : eligible() ? field.value === BAT ? "pm_analysis_bat_preflight" : "pm_native_preflight_pending" : field.value === BAT ? {
+			PM_WORKTREE_REQUIRED: "pm_analysis_bat_worktree",
+			REPOSITORY_BINDING_CHANGED: "pm_analysis_bat_binding_changed",
+			HOST_READ_ONLY: "pm_analysis_bat_readonly"
+		}[code] || "pm_analysis_bat_unavailable" : {
+			PM_NATIVE_PLATFORM_UNSUPPORTED: "pm_native_platform",
+			PM_NATIVE_EXECUTABLE_UNAVAILABLE: "pm_native_install",
+			PM_NATIVE_MANAGED_CONFIG_UNSUPPORTED: "pm_native_managed",
+			PM_NATIVE_AUTH_UNAVAILABLE: "pm_native_auth",
+			PM_NATIVE_HOME_UNAVAILABLE: "pm_native_auth"
+		}[code] || "pm_native_unavailable";
+		reason.textContent = t(key);
+		const source = field.value === BAT && selected?.selected_binding;
+		binding.hidden = !source;
+		binding.textContent = source ? `${t("pm_analysis_selected_binding")} ${source.host} / ${source.workspace_id} / ${source.repository}` : "";
+	}
+	return {
+		field,
+		box,
+		eligible,
+		update,
+		params: (values) => supported() ? { adapter: values.adapter } : {}
+	};
+}
+//#endregion
+//#region src/pm-continuation.js
+var ACTION$1 = "pm.continuation.prepare";
+function continuationBrief({ h, t, form, input, labelled, caps, capability, thread, permitted, target, refresh, onOpen }) {
+	let head = null, ready = false, signature = "", request, status;
+	const source = () => thread()?.continuation_brief;
+	const usable = () => source()?.available === true && source()?.document && source()?.validation?.status === "format_valid";
+	const authorized = () => permitted(false) && thread()?.capabilities?.write === true && caps()?.scopes?.includes("start");
+	const adapter = structuredAnalysis({
+		h,
+		t,
+		labelled,
+		action: ACTION$1,
+		capability,
+		legacyEligible: () => false,
+		authorized,
+		readable: () => Boolean(thread())
+	});
+	const purpose = input("pcb_purpose", {
+		multiline: true,
+		max: 4e3,
+		value: t("pcb_default_purpose")
+	});
+	const previous = h("input", {
+		type: "hidden",
+		value: "",
+		"data-pm-default": ""
+	});
+	request = form({
+		action: ACTION$1,
+		target,
+		fields: {
+			purpose,
+			adapter: adapter.field,
+			previous
+		},
+		params: (values) => ({
+			purpose: values.purpose,
+			...adapter.params(values),
+			max_chars: 64e3,
+			...values.previous ? { previous_brief_ref: JSON.parse(values.previous) } : {}
+		}),
+		preconditions: () => ({
+			expected_version: thread().thread.version,
+			expected_plan_version: head.version,
+			expected_accepted_revision_id: head.accepted_revision_id
+		}),
+		permitted: () => authorized() && adapter.eligible() && Boolean(head),
+		recoverPermitted: authorized,
+		label: "pcb_prepare",
+		onSaved: refresh,
+		onStateChange: () => {
+			adapter.update(request);
+			if (ready) render();
+		},
+		extra: h("div", { class: "pm-fields" }, labelled("pcb_purpose", purpose), adapter.box, previous)
+	});
+	const reader = h("section", {
+		"data-continuation-brief": "",
+		hidden: true
+	});
+	const tools = h("section", {
+		"data-continuation-tools": "",
+		hidden: true
+	}, h("h3", {}, t("pcb_title")), h("p", { class: "muted" }, t("pcb_help")), request.box);
+	function links(row, saved) {
+		return h("span", { class: "pm-source" }, ...(row.source_refs || []).flatMap((key, index) => {
+			const ref = saved.source_references?.[key];
+			return ref?.operation_id ? [index ? " · " : " ", h("a", { href: "#/op/" + encodeURIComponent(ref.operation_id) }, t("pd_source_record") + " " + (index + 1))] : [];
+		}));
+	}
+	function render() {
+		const saved = source();
+		tools.hidden = !thread() || !capability()?.structured_analysis?.actions?.[ACTION$1] && !request.locked();
+		reader.hidden = !thread() || !saved;
+		const stale = saved?.thread_version !== thread()?.thread.version || head && (saved?.plan_head?.version !== head.version || saved?.plan_head?.accepted_revision_id !== head.accepted_revision_id);
+		const statusText = () => t(!usable() ? "pcb_needs_review" : stale ? "pcb_stale" : "pcb_status_" + saved.document.status);
+		if (status) status.textContent = statusText();
+		const next = JSON.stringify(saved);
+		if (signature === next) return;
+		const open = reader.querySelector(":scope > details")?.open;
+		signature = next;
+		reader.replaceChildren();
+		status = null;
+		if (!saved || !thread()) return;
+		if (saved.available !== true) {
+			reader.append(h("p", { class: "muted" }, t("pcb_unavailable")));
+			return;
+		}
+		const doc = usable() ? saved.document : null;
+		const details = h("div", {});
+		const rows = (values) => h("ul", {}, ...values.map((row) => h("li", {}, row.text, links(row, saved))));
+		const meta = h("p", { class: "pm-source" }, timeStamp(saved.as_of), " · ", h("a", { href: "#/op/" + encodeURIComponent(saved.operation_id) }, t("pm_operation")));
+		if (doc) {
+			if (doc.goal) details.append(h("h4", {}, t("pcb_goal")), h("p", {}, doc.goal.text, links(doc.goal, saved)));
+			for (const name of [
+				"adopted_decisions",
+				"candidates",
+				"rejected_directions",
+				"completed_evidence",
+				"open_questions",
+				"remaining_work"
+			]) if (doc[name]?.length) details.append(h("h4", {}, t("pcb_" + name)), rows(doc[name]));
+		}
+		details.append(meta, h("p", { class: "muted" }, t("pcb_interpretation")), h("p", { class: "muted" }, t(saved.coverage?.partial ? "pcb_partial" : "pcb_coverage")));
+		status = h("p", { class: "muted" }, statusText());
+		const body = h("div", {}, status, doc?.next_steps?.length ? rows(doc.next_steps) : "", disclosure({
+			label: t("pd_details"),
+			body: details
+		}), button({
+			size: "sm",
+			variant: "ghost",
+			label: t("pcb_update"),
+			onClick: onOpen
+		}));
+		const panel = disclosure({
+			label: t("pcb_title"),
+			body
+		});
+		panel.open = Boolean(open);
+		reader.append(panel);
+	}
+	ready = true;
+	return {
+		reader,
+		tools,
+		update(nextHead) {
+			if (nextHead !== void 0) head = nextHead;
+			if (!request.locked()) {
+				const value = usable() ? JSON.stringify({
+					run_id: source().run_id,
+					document_digest: source().document_digest
+				}) : "";
+				if (request.values().previous !== value) request.set("previous", value);
+			}
+			adapter.update(request);
+			render();
+			request.update();
+		},
+		recheck() {
+			request.recheck();
+		}
 	};
 }
 //#endregion
@@ -27153,60 +27400,6 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 			disposed = true;
 			withdraw();
 		}
-	};
-}
-//#endregion
-//#region src/pm-structured-analysis.js
-var NATIVE = "codex-native-linux";
-var BAT = "bat-pm-linux-v1";
-function structuredAnalysis({ h, t, labelled, action, capability, legacyEligible, authorized, readable = () => true }) {
-	const field = h("select", {
-		"aria-label": t("pm_analysis_adapter"),
-		"data-pm-default": NATIVE
-	}, h("option", { value: NATIVE }, t("pm_analysis_local")), h("option", { value: BAT }, t("pm_analysis_bat")));
-	field.value = NATIVE;
-	const choice = labelled("pm_analysis_adapter", field), reason = h("p", {
-		class: "muted",
-		"data-structured-analysis-reason": ""
-	}), binding = h("p", { class: "muted pm-note-text" });
-	const box = h("div", { "data-pm-structured-analysis": "" }, choice, reason, binding);
-	let activeRequest = null;
-	field.addEventListener("change", () => activeRequest?.update());
-	const supported = () => capability()?.structured_analysis?.version === 1;
-	const descriptor = () => {
-		const rows = supported() ? capability().structured_analysis.actions?.[action]?.adapters : null;
-		return Array.isArray(rows) ? rows.find((row) => row?.adapter === field.value) : null;
-	};
-	const eligible = () => supported() ? Boolean([NATIVE, BAT].includes(field.value) && descriptor()?.action_registered === true && descriptor()?.authorized === true && descriptor()?.eligible_for_preflight === true) : field.value === NATIVE && legacyEligible();
-	function update(request) {
-		activeRequest = request;
-		box.hidden = !readable();
-		choice.hidden = !supported() && field.value === NATIVE;
-		field.disabled = Boolean(request?.locked()) || !authorized();
-		const selected = descriptor(), legacy = action === "pm.conversation.propose" ? capability()?.native_analysis : capability()?.follow_up_analysis;
-		const code = selected?.reason || (!supported() && field.value === NATIVE ? legacy?.reason : null);
-		const key = !authorized() || selected?.authorized === false ? "pm_native_permissions" : eligible() ? field.value === BAT ? "pm_analysis_bat_preflight" : "pm_native_preflight_pending" : field.value === BAT ? {
-			PM_WORKTREE_REQUIRED: "pm_analysis_bat_worktree",
-			REPOSITORY_BINDING_CHANGED: "pm_analysis_bat_binding_changed",
-			HOST_READ_ONLY: "pm_analysis_bat_readonly"
-		}[code] || "pm_analysis_bat_unavailable" : {
-			PM_NATIVE_PLATFORM_UNSUPPORTED: "pm_native_platform",
-			PM_NATIVE_EXECUTABLE_UNAVAILABLE: "pm_native_install",
-			PM_NATIVE_MANAGED_CONFIG_UNSUPPORTED: "pm_native_managed",
-			PM_NATIVE_AUTH_UNAVAILABLE: "pm_native_auth",
-			PM_NATIVE_HOME_UNAVAILABLE: "pm_native_auth"
-		}[code] || "pm_native_unavailable";
-		reason.textContent = t(key);
-		const source = field.value === BAT && selected?.selected_binding;
-		binding.hidden = !source;
-		binding.textContent = source ? `${t("pm_analysis_selected_binding")} ${source.host} / ${source.workspace_id} / ${source.repository}` : "";
-	}
-	return {
-		field,
-		box,
-		eligible,
-		update,
-		params: (values) => supported() ? { adapter: values.adapter } : {}
 	};
 }
 //#endregion
@@ -47257,7 +47450,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		});
 	}
 	let replyRuns = [], replyPartial = false;
-	let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null, sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = "", earlier = null, historyCursor = null, historyExpanded = false, packages = null, packageSignature = "", revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, proposalReview = null, discussionHint = null, assessmentSources = null;
+	let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null, sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = "", earlier = null, historyCursor = null, historyExpanded = false, packages = null, packageSignature = "", revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, proposalReview = null, discussionHint = null, assessmentSources = null, continuation = null;
 	lifecycle = workspaceId && caps()?.features?.pm_workspaces?.lifecycle?.version === 1 ? workspaceLifecycle({
 		h,
 		t,
@@ -48511,6 +48704,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	};
 	const updateForms = () => {
 		for (const value of forms) value.update();
+		continuation?.update();
 	};
 	const offOnline = onOnline(() => {
 		try {
@@ -48659,6 +48853,21 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				target,
 				refresh: load
 			});
+			continuation = continuationBrief({
+				h,
+				t,
+				form,
+				input,
+				labelled,
+				caps,
+				capability: () => pmCapabilities,
+				thread: () => threadData,
+				permitted,
+				target,
+				refresh: load,
+				onOpen: () => discussionTools.open("context")
+			});
+			column.querySelector(".pd-transcript").prepend(continuation.reader);
 			if (caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1) {
 				proposalReview = planProposals({
 					h,
@@ -48917,7 +49126,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				threadId,
 				namespace
 			});
-			const contextPane = h("section", { "data-discussion-tab": "context" }, panelContext, assessmentSources.element);
+			const contextPane = h("section", { "data-discussion-tab": "context" }, panelContext, assessmentSources.element, continuation.tools);
 			for (const node of [...column.querySelectorAll(":scope > .pm-package-preparation, :scope > .pm-packages")]) contextPane.append(node);
 			if (nativeAnalysis) contextPane.append(h("details", {}, h("summary", {}, t("pd_analysis")), nativeAnalysis.box));
 			if ([
@@ -49605,6 +49814,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				if (ticket !== sequence) return;
 			}
 			nativeAnalysis?.update(runs?.runs || []);
+			continuation?.update(plans?.head || null);
 			const stage = lifecycle?.phase?.();
 			phasePill.hidden = !stage;
 			phasePill.textContent = stage && [
@@ -49632,6 +49842,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			if (initialReadComplete) {
 				proposalReview?.recheck();
 				nativeAnalysis?.recheck();
+				continuation?.recheck();
 			}
 		} catch (error) {
 			if (!retiredView(error) && ticket === sequence) {
@@ -49696,6 +49907,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	}, 0);
 	proposalReview?.recheck();
 	nativeAnalysis?.recheck();
+	continuation?.recheck();
 	if (firstMessagePending) setTimeout(() => {
 		if (!disposed) {
 			firstMessagePending = false;

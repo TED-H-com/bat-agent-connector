@@ -23,6 +23,9 @@ def operation_source_visible(db, principal, operation_id):
     if row and row[0] in {"pm.conversation.propose", "pm.conversation.adopt"}:
         from .pm_conversation_proposals import operation_visible
         return operation_visible(db, principal, {"operation_id": operation_id})
+    if row and row[0] == 'pm.continuation.prepare':
+        from .pm_continuation import operation_visible
+        return operation_visible(db, principal, {'operation_id': operation_id})
     return True
 
 
@@ -46,7 +49,7 @@ def inherit_operation_sources(db, operation_id, source_operation_ids):
             continue
         roots.update(pm_source_lineage.roots(db, "operation", identity))
         row = db.execute("SELECT action FROM operations WHERE operation_id=?", (identity,)).fetchone()
-        if row and row[0] in {"pm.conversation.propose", "pm.conversation.adopt"}:
+        if row and row[0] in {"pm.conversation.propose", "pm.conversation.adopt", "pm.continuation.prepare"}:
             roots.add(identity)
         if len(roots) > pm_source_lineage.MAX_ROOTS:
             raise OperationError("PM_SOURCE_LINEAGE_LIMIT", "Too many original sources for one PM record", 409)
@@ -218,6 +221,10 @@ def event_visible(db, principal, event):
         from .pm_conversation_proposals import operation_visible as conversation_visible
         operation_id = event.get("body", {}).get("operation_id")
         return bool(operation_id) and conversation_visible(db, principal, {"operation_id": operation_id})
+    if event['resource_type'] == 'pm_continuation' or event['kind'] == 'pm.continuation.prepare':
+        from .pm_continuation import operation_visible
+        identity = event.get('body', {}).get('operation_id')
+        return bool(identity) and operation_visible(db, principal, {'operation_id': identity})
     if event["resource_type"] == "pm_follow_up_assessment" or event["kind"] == "pm.follow_up.analyze":
         from .pm_follow_up_analysis import operation_visible as assessment_visible
         operation_id = event.get("body", {}).get("operation_id")

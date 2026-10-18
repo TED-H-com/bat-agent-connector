@@ -501,7 +501,7 @@ def _draft(db, thread, *, draft_id=None, principal=None):
     return draft
 
 
-def get_thread(ops, principal, workspace_id, thread_id, *, limit=50, before_message=None, before_input=None):
+def get_thread(ops, principal, workspace_id, thread_id, *, limit=50, before_message=None, before_input=None, _with_continuation=True):
     from .pm_runs import message_out
 
     workspace = _read(ops, principal, workspace_id)
@@ -531,9 +531,12 @@ def get_thread(ops, principal, workspace_id, thread_id, *, limit=50, before_mess
         if any(not message_source_visible(ops.db, principal, row) for row in messages[:limit]):
             raise _bad("Original discussion sources are unavailable", "PM_SOURCE_UNAVAILABLE", 404)
         draft = _draft(ops.db, thread, principal=principal)
+        from .pm_continuation import latest
+        continuation = latest(ops, principal, workspace_id, thread_id) if _with_continuation else None
         return {"version": 1, "thread": thread, "profile": pm_profiles.get(thread["mode"]),
             "messages": [message_out(ops.db, row) for row in reversed(messages[:limit])], "inputs": [_input_out(row, db=ops.db) for row in inputs[:100]],
             "input_history": [_input_out(row, db=ops.db) for row in history[:limit]], "draft": draft,
+            "continuation_brief": continuation,
             "next_message_cursor": messages[limit - 1]["sequence"] if len(messages) > limit else None,
             "next_input_cursor": history[limit - 1]["sequence"] if len(history) > limit else None,
             "coverage": {"messages_truncated": len(messages) > limit, "inputs_truncated": len(inputs) > 100,
@@ -591,7 +594,24 @@ def context(ops, principal, workspace_id, thread_id, *, max_chars=32000):
         else:
             result["inputs_by_status"][item["status"]].append(item)
             used += size
+    continuation = doc.get('continuation_brief')
+    after = 0
+    result['coverage']['continuation_omitted'] = False
+    if continuation and continuation.get('available') and continuation.get('document') is not None:
+        size = len(json.dumps(continuation, ensure_ascii=False))
+        if used + size <= max_chars:
+            result['continuation_brief'] = continuation
+            result['continuation_role'] = 'prior_model_interpretation_not_decision_authority'
+            result['source_operation_ids'] = sorted(set(result['source_operation_ids']) | {continuation['operation_id']})
+            after = continuation['coverage']['through_message']
+            result['coverage']['covered_by_continuation_through_message'] = after
+            result['coverage']['continuation_partial'] = continuation['coverage']['partial']
+            used += size
+        else:
+            result['coverage']['continuation_omitted'] = True
     for message in reversed(doc["messages"]):
+        if message['sequence'] <= after:
+            continue
         size = len(json.dumps(message, ensure_ascii=False))
         if used + size > max_chars:
             result["coverage"]["omitted_message_ids"].append(message["message_id"])

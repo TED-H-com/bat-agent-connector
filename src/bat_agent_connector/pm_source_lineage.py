@@ -236,6 +236,10 @@ def _visible_roots(db, principal, original_ids):
             from .pm_conversation_proposals import operation_visible as conversation_visible
             if not conversation_visible(db, principal, operation):
                 return False
+        elif operation['action'] == 'pm.continuation.prepare':
+            from .pm_continuation import operation_visible as continuation_visible
+            if not continuation_visible(db, principal, operation):
+                return False
         elif operation['action'] == 'pm.follow_up.analyze':
             from .pm_follow_up_analysis import operation_visible as follow_up_visible
             if not follow_up_visible(db, principal, operation):

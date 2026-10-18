@@ -49,6 +49,7 @@ const ACTIONS = {
   'pm.ahp.observe': 'action_pm_ahp_observe',
   'pm.backlog.revise': 'action_pm_backlog_revise',
   'pm.conversation.adopt': 'action_pm_conversation_adopt',
+  'pm.continuation.prepare': 'action_pm_continuation_prepare',
   'pm.conversation.propose': 'action_pm_conversation_propose',
   'pm.dependencies.capture': 'action_pm_dependencies_capture',
   'pm.dependencies.declare': 'action_pm_dependencies_declare',
