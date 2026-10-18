@@ -12531,6 +12531,56 @@ function errorPresentation(error, t, { summary, fallback } = {}) {
 	};
 }
 //#endregion
+//#region src/ui/sheet-history.js
+function sheetHistory({ show, hide, canRestore = () => true }) {
+	const id = crypto.randomUUID(), url = location.href;
+	const key = "batcSheet";
+	let disposed = false, visible = false;
+	const owned = () => location.href === url && history.state?.[key] === id;
+	const reveal = () => {
+		if (!visible) {
+			visible = true;
+			show();
+		}
+	};
+	const conceal = () => {
+		if (visible) {
+			visible = false;
+			hide();
+		}
+	};
+	function pop() {
+		if (disposed) return;
+		if (owned() && canRestore()) reveal();
+		else conceal();
+	}
+	window.addEventListener("popstate", pop);
+	return {
+		open() {
+			if (disposed || visible || location.href !== url) return;
+			history.pushState({
+				...history.state,
+				[key]: id
+			}, "", url);
+			reveal();
+		},
+		close() {
+			if (disposed || !visible) return;
+			conceal();
+			if (owned()) history.back();
+		},
+		dispose() {
+			disposed = true;
+			window.removeEventListener("popstate", pop);
+			if (owned()) {
+				const state = { ...history.state };
+				delete state[key];
+				history.replaceState(state, "", url);
+			}
+		}
+	};
+}
+//#endregion
 //#region src/ui/components.js
 var sequence = 0;
 var uid = () => `ui-${++sequence}`;
@@ -12936,7 +12986,7 @@ function trapFocus(root, event) {
 		first.focus();
 	}
 }
-function inspector({ title, onClose = () => {}, returnFocus, dock = false, overlay = false } = {}) {
+function inspector({ title, onClose = () => {}, returnFocus, dock = false, overlay = false, historyNavigation = false, canReopen = () => true } = {}) {
 	const opener = document.activeElement, media = matchMedia("(min-width: 1200px)"), titleId = uid();
 	const wide = () => media.matches && !overlay;
 	const body = h$1("div", { class: "ui-inspector-body" });
@@ -12998,6 +13048,11 @@ function inspector({ title, onClose = () => {}, returnFocus, dock = false, overl
 		} else if (!wide()) trapFocus(root, event);
 	}
 	let closed = false;
+	const sheet = historyNavigation && dock && overlay ? sheetHistory({
+		show: reveal,
+		hide,
+		canRestore: () => !closed && root.isConnected && canReopen()
+	}) : null;
 	function restoreFocus() {
 		let target = null;
 		try {
@@ -13012,6 +13067,7 @@ function inspector({ title, onClose = () => {}, returnFocus, dock = false, overl
 	function destroy() {
 		if (closed) return;
 		closed = true;
+		sheet?.dispose();
 		release();
 		scrim.remove();
 		root.remove();
@@ -13019,6 +13075,13 @@ function inspector({ title, onClose = () => {}, returnFocus, dock = false, overl
 		media.removeEventListener("change", onMedia);
 	}
 	function close() {
+		if (sheet) {
+			sheet.close();
+			return;
+		}
+		hide();
+	}
+	function hide() {
 		if (closed) return;
 		if (dock && !wide()) {
 			root.hidden = true;
@@ -13035,13 +13098,20 @@ function inspector({ title, onClose = () => {}, returnFocus, dock = false, overl
 		restoreFocus();
 	}
 	function open() {
+		if (sheet) {
+			sheet.open();
+			return;
+		}
+		reveal();
+	}
+	function reveal() {
 		if (closed) return;
 		root.hidden = false;
 		resize();
 		(matchMedia("(max-width: 799px)").matches ? back : closeButton).focus();
 	}
 	function onMedia() {
-		if (dock && !wide()) root.hidden = true;
+		if (dock && !wide() && !sheet) root.hidden = true;
 		if (dock && wide()) root.hidden = false;
 		resize();
 	}
@@ -14651,25 +14721,65 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		"aria-label": t("wc_list"),
 		hidden: true
 	});
+	const listLink = h$1("a", {
+		class: "wc-list-back ui-button ghost",
+		href: "#/work-list",
+		title: t("wc_list"),
+		"aria-label": t("wc_list")
+	}, icon("chevron-left"));
+	const listTitle = h$1("h1", {
+		class: "wc-list-title",
+		tabindex: -1
+	}, t("wc_list"));
+	const boardLink = h$1("a", {
+		class: "ui-button ghost",
+		hidden: true
+	}, t("wc_board"));
+	const listHeader = h$1("header", { class: "wc-list-header" }, listTitle, boardLink);
+	const listScroll = {
+		page: 0,
+		rail: 0
+	};
+	let listPlacement = null;
+	contextList.addEventListener("scroll", () => {
+		if (listPlacement && contextList.getClientRects().length) listScroll[listPlacement] = contextList.scrollTop;
+	});
 	const contextNodes = candidate ? [workTitle, ...aside.querySelectorAll(":scope > .workspace-nav-heading, :scope > .workspace-search, :scope > .workspace-tree-status, :scope > .workspace-binding-note, :scope > .workspace-tree-scroll")] : [];
 	aside.prepend(workspaceBlock, daily, projectNav, workTitle);
 	if (candidate) {
 		aside.after(contextList);
+		contextList.append(listHeader);
+		toggle.after(listLink);
 		document.body.classList.add("workbench-preview");
 	}
 	function locateContext() {
 		if (!candidate) return;
-		const show = [
+		const listing = currentRoute === "work-list";
+		const show = listing || [
 			"session",
 			"item",
 			"work",
 			"sessions"
 		].includes(currentRoute);
-		contextList.hidden = !show || !media.matches;
+		const placement = listing ? "page" : show && media.matches ? "rail" : null;
+		if (listPlacement && contextList.getClientRects().length) listScroll[listPlacement] = contextList.scrollTop;
+		contextList.hidden = !listing && (!show || !media.matches);
+		contextList.setAttribute("role", listing ? "main" : "region");
+		listHeader.hidden = !listing;
+		document.body.classList.toggle("wc-list-page", listing);
+		listLink.hidden = ![
+			"session",
+			"item",
+			"work"
+		].includes(currentRoute);
 		const heading = contextNodes.find((node) => node.matches(".workspace-nav-heading"));
 		if (heading) heading.querySelector("strong").textContent = t("wc_work");
 		document.body.classList.toggle("wc-has-list", show);
-		for (const node of contextNodes) (media.matches ? contextList : aside).insertBefore(node, media.matches ? null : aside.querySelector(".workspace-nav-footer"));
+		for (const node of contextNodes) if (node.parentElement !== contextList) contextList.append(node);
+		if (placement !== listPlacement && placement) contextList.scrollTop = listScroll[placement];
+		listPlacement = placement;
+		const workEntry = daily.querySelector("[data-daily=work]");
+		if (workEntry) workEntry.href = !media.matches ? "#/work-list" : workEntry.dataset.desktopHref;
 	}
 	let workspace = null, workspaces = [], views = [], currentView = "", currentRoute = "", disposed = false, serial = 0;
 	let renderSignature = null;
@@ -14693,6 +14803,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		toggle.setAttribute("aria-expanded", "false");
 		crumb.querySelector(".shell-mobile-name")?.setAttribute("aria-expanded", "false");
 		main.inert = false;
+		contextList.inert = false;
 		document.body.classList.remove("shell-drawer-open");
 		aside.removeAttribute("aria-modal");
 		aside.removeAttribute("role");
@@ -14708,6 +14819,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		aside.setAttribute("role", "dialog");
 		aside.setAttribute("aria-modal", "true");
 		main.inert = true;
+		contextList.inert = true;
 		aside.querySelector("button, a, input")?.focus();
 	}
 	toggle.onclick = () => scrim.hidden ? openDrawer() : closeDrawer();
@@ -14848,7 +14960,8 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 				"session",
 				"item",
 				"work",
-				"sessions"
+				"sessions",
+				"work-list"
 			].includes(currentRoute) || currentRoute === "pm" && currentView === "board" ? "work" : currentRoute === "pm" && currentView === "agents" ? "resources" : [
 				"pm",
 				"project",
@@ -14878,9 +14991,12 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			].map(([id, glyph, href]) => h$1("a", {
 				class: "ui-button ghost",
 				href,
+				"data-desktop-href": href,
 				"data-daily": id,
 				"aria-current": id === current ? "page" : "false"
 			}, icon(glyph), t("wc_" + id))));
+			boardLink.hidden = !project || !views.includes("board");
+			boardLink.href = project + "board";
 			locateContext();
 		}
 		aside.classList.toggle("has-pm-context", Boolean(workspace));
@@ -14959,7 +15075,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			worktree: "obs_worktree",
 			dispatch: "dispatch_title"
 		}[currentRoute];
-		const routeTitle = candidate && currentRoute === "home" ? t("wc_today") : routeKey ? t(routeKey) : "";
+		const routeTitle = candidate && currentRoute === "work-list" ? t("wc_list") : candidate && currentRoute === "home" ? t("wc_today") : routeKey ? t(routeKey) : "";
 		if (workspace && [
 			"session",
 			"item",
@@ -15071,6 +15187,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			closeDrawer(false);
 			navigation.setWorkspace(workspace?.workspace_id || null, Boolean(caps()?.features?.pm_workspaces?.work_evidence), name === "projects");
 			render();
+			if (candidate && name === "work-list") listTitle.focus({ preventScroll: true });
 		},
 		pending({ count, partial } = {}) {
 			for (const badge of pendingCounts) {
@@ -15104,9 +15221,10 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			scrim.remove();
 			top.append(document.getElementById("live"));
 			right.remove();
+			listLink.remove();
 			creator = null;
 			contextList.remove();
-			document.body.classList.remove("workbench-preview", "wc-has-list");
+			document.body.classList.remove("workbench-preview", "wc-has-list", "wc-list-page");
 		}
 	};
 }
@@ -50785,6 +50903,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 				if (catalogKnown && !roots.length && !sessionsLoaded && [
 					"#/home",
 					"#/sessions",
+					"#/work-list",
 					"#/",
 					""
 				].includes(selected)) sessionTree.open = true;
@@ -50902,6 +51021,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 			refresh().catch(() => {});
 		},
 		select(hash) {
+			if (hash === "#/work-list" && workbenchEnabled()) return;
 			selected = hash;
 			const [type, pid] = hash.replace(/^#\//, "").split("/");
 			if ([
@@ -64528,6 +64648,8 @@ async function viewSession(main, host, sid, context = null) {
 		title: t("session_results"),
 		dock: true,
 		overlay: workbenchEnabled(),
+		historyNavigation: workbenchEnabled(),
+		canReopen: () => !disposed && !withdrawn && readReady,
 		returnFocus: () => openResults
 	});
 	const openResults = workbenchEnabled() ? button({
@@ -69597,6 +69719,7 @@ async function route() {
 		return;
 	}
 	const off = await ({
+		"work-list": workbenchEnabled() ? () => {} : viewSessions,
 		pm: viewPmWorkspace,
 		home: viewHome,
 		projects: viewProjects,

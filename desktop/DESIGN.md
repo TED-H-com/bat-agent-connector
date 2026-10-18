@@ -5,8 +5,14 @@ revises navigation and information hierarchy. Its first candidate is selected
 through Tools → Workbench preview (`?workbench=1`); legacy layout remains the
 default until review. See [source mapping and limits](../docs/design/workbench.md).
 Reuse the tokens and components below. The candidate separates the 208px daily
-rail from a 256px context list, collapses the list into the drawer below 1000px,
-and uses an optional Results inspector. Work/Lineage/Live keep the selected
+rail from a 256px context list, provides a full-screen list below 1000px,
+and uses an optional Results inspector. Below 1000px, Work opens the full-screen
+shared source list at `#/work-list`; the workspace drawer keeps global navigation
+and settings. A selected Work has a separate return-to-list control. The list
+retains search, selection and its page scroll separately from the desktop column.
+Workbench Results participates in browser Back/Forward while its source remains
+readable; closing it restores focus without remounting the composer. At less than
+800px the Results sheet fills the viewport. Work/Lineage/Live keep the selected
 identity, conversation nodes and original composer. The item purpose and observed
 activity precede details; the session's Interrupt action lives in More.
 When a discussion was opened from an execution, keep its existing return link

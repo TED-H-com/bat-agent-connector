@@ -39,7 +39,8 @@ Legacy layout remains the default during this first review increment.
 
 The four daily entries use existing views: Today opens Pending, Projects opens
 the selected workspace's Overview (otherwise the project catalog), Work opens
-the workspace Board (otherwise Sessions), and Resources opens the workspace's
+the workspace Board (otherwise Sessions) on desktop and the shared full-screen
+Work list below 1000px, and Resources opens the workspace's
 Agents view (otherwise connection settings). The project header's management
 selector retains every capability-supported view, including Discussions and
 Board. Tools and legacy links retain operations, delivery, artifacts, cleanup,
@@ -47,8 +48,13 @@ sessions and workspace creation. These are entry mappings; Today has not yet
 acquired the new PM recommendations, and Sessions is not a count of product Work.
 
 Navigation and the existing context list occupy separate columns where space
-allows. The list moves into the existing keyboard-accessible mobile drawer at
-less than 1000px. No second catalog or search cache is created. The original
+allows. On smaller screens `#/work-list` gives those same list/search nodes a
+full-screen location, separate from the workspace drawer. Board remains in the
+project management selector and has a link from the workspace's list. The selected
+Work header returns to that list; browser Back/Forward follows the same routes.
+Search, the selected row and list-page scroll survive the round trip. The desktop
+column has its own scroll so rotation cannot overwrite the list-page position.
+No second catalog or search cache is created. The original
 workspace binding, partial-source and permission rules still select its rows.
 
 The preview project list joins an execution to its existing Work only when the
@@ -197,5 +203,28 @@ IDs, scopes and events. New data keeps the reader's focus and position. Measure 
 reads, payload/minute and selection-to-content separately from model time. No per-client
 collector, mobile command layer or second completion store is introduced.
 
-These are added acceptance requirements, not implementation or physical-device evidence.
+The first implemented increment covers the shared Work list, Work return link,
+and Results sheet browser history. Back closes Results before leaving the Work;
+Forward can reopen the still-mounted readable Results. Withdrawal prevents that
+reopening, and route/connection teardown discards the sheet registration. History
+contains only an opaque presentation marker, never a draft or command. Other
+inspectors and the workspace drawer retain their existing close behavior.
+
+`workbench-mobile.spec.ts` exercises English/zh-TW at 390/768/1440px, 844px
+landscape reflow, original composer identity, one send after reflow, IME key
+suppression, draft reload and HTTP/IPC source withdrawal. These are browser
+fixtures, not physical keyboard, lock-screen, Safari or installed Tauri evidence.
+Review images use synthetic shared-component fixtures. Before/after Work captures
+use identical data, draft, viewport and locale; list/Results captures add rows to
+exercise scrolling. They contain no live Fleet or account data.
+
+| View | Before | Candidate |
+| --- | --- | --- |
+| Work, zh-TW, 390×900 | [Before](workbench-evidence/ec11-mobile/before-phone-zh-TW.png) | [After](workbench-evidence/ec11-mobile/work-phone-zh-TW.png) |
+| Work, English, 1440×900 | [Before](workbench-evidence/ec11-mobile/before-desktop-en.png) | [After](workbench-evidence/ec11-mobile/work-desktop-en.png) |
+| List, zh-TW, 390×844 | — | [Full-screen list](workbench-evidence/ec11-mobile/list-phone-zh-TW.png) |
+| Results, English, 768×844 | — | [Full-width sheet](workbench-evidence/ec11-mobile/results-tablet-en.png) |
+
+The remaining EC-1.1 mobile requirements (including discussion sheets, foreground
+recovery and device acceptance) remain open.
 See [K extensions](../product/workbench-ux-acceptance.md#ec-11-追加情境沿原-k-編號).
