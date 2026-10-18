@@ -552,6 +552,26 @@ def readiness(ops, principal: Principal, workspace_id: str, profile_id: str) -> 
     return _readiness_body(ops, principal, workspace_id, row)
 
 
+def _work_follow_up_readiness(ops, agent: str) -> dict:
+    # Use the Work route's registered capability, not generic session continuation
+    # evidence. This observation never admits a send or probes a BAT session.
+    from .pm_work_follow_up import capabilities
+
+    route = capabilities(ops)
+    reason = None
+    if not route["available"]:
+        reason = "action_unavailable"
+    elif agent == "codex" and not route["codex_supported"]:
+        reason = "codex_uncorrelated_turn_boundary"
+    return {
+        "route": "bat_work_start",
+        "agent": agent,
+        "state": "unavailable" if reason else "requires_attempt",
+        "reason": reason or "owned_attempt_required",
+        "admission_checked": False,
+    }
+
+
 def _table(db, name: str) -> bool:
     return db.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
@@ -956,6 +976,7 @@ def _readiness_body(ops, principal: Principal, workspace_id: str, row) -> dict:
         "observed_at": observed_at,
         "calls_bat": False,
         "coding_route_ready": states["can_start_own"]["value"] == "ready",
+        "work_follow_up": _work_follow_up_readiness(ops, agent),
         "configured": {
             "agent": agent,
             "model": document.get("model"),

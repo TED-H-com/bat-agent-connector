@@ -666,6 +666,34 @@ async def test_pm_eligibility_does_not_mark_coding_route_ready(ops, monkeypatch)
     assert unknown["coding_route_ready"] is False
 
 
+@pytest.mark.parametrize("agent", ["claude", "codex"])
+@pytest.mark.parametrize("registered", [False, True])
+async def test_profile_reports_work_next_turn_before_start_without_probing(ops, agent, registered):
+    invokes = _configure(ops, register_send=registered)
+    saved = await _finish(ops, _save(ops, _document(agent=agent))[0])
+    profile_id = saved["result"]["profile_id"]
+    _continue_row(ops, created_at=40, session_id="owned", agent=agent, body_agent=agent,
+                  provenance="connector_managed", api_access="managed")
+    before = ops.db.total_changes
+    from bat_agent_connector.pm_reads import read
+    body = read(ops, OWNER, "pm_work_profile_readiness_get", {"workspace_id": WS, "profile_id": profile_id})
+    next_turn = body["work_follow_up"]
+    assert next_turn["route"] == "bat_work_start" and next_turn["agent"] == agent
+    assert next_turn["admission_checked"] is False
+    if not registered:
+        assert next_turn["state"] == "unavailable" and next_turn["reason"] == "action_unavailable"
+    elif agent == "codex":
+        assert next_turn["state"] == "unavailable"
+        assert next_turn["reason"] == "codex_uncorrelated_turn_boundary"
+        # A historical generic continuation does not prove a Work turn boundary.
+        assert body["states"]["can_continue_own"]["verified"]["value"] == "ready"
+    else:
+        assert next_turn["state"] == "requires_attempt" and next_turn["reason"] == "owned_attempt_required"
+    assert body["coding_route_ready"] is False
+    assert body["calls_bat"] is False and invokes["n"] == 0
+    assert ops.db.total_changes == before
+
+
 async def test_manual_session_does_not_satisfy_continue(ops):
     invokes = _configure(ops, register_send=True)
     profile_id = await _profile(ops)
