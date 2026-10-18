@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Persist each workspace’s bounded PM analysis runtime through the existing durable operation. New discussion analysis, proposals, reviews, Overview assessments and continuation summaries use the saved choice; pending requests retain their original receipt, and a changed choice fences queued work before it starts. Active or unresolved PM analysis prevents switching.
+
 - Preparing a PM Overview assessment survives an overlapping factual refresh.
   Source withdrawal and leaving the workspace still discard the pending read;
   refreshing facts never starts model work.

@@ -4,14 +4,14 @@ description: Use this when you need to check on, read, wait for, or (only when e
 version: 0.2.10
 license: MIT
 metadata:
-  workflow_version: "2026-10-16.3"
+  workflow_version: "2026-10-18.1"
   api_version: "1"
   contract_version: "2026-10-08"
   generated_by: "scripts/generate_agent_skills.py"
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "6e5e90d85ee276511223b0ec47cab0df87d4658640820b4963bf32b84eecc5e6"
+  canonical_sha256: "56f0c3d76dc3649d90450f788a8810dd918bfc45189b5bb9fcfb26e2d4bd07a7"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -186,7 +186,8 @@ params `{adapter,rationale}`, copying all returned preconditions unchanged. The
 supported choices are `codex-native-linux` and `bat-pm-linux-v1`. This local receipt
 does not launch work or prove runtime/auth/model readiness. An occupied or unknown
 writer must reconcile first; never clear its slot to switch. Once saved, all new
-ordinary/structured PM analysis must explicitly use that adapter. Existing pending
+ordinary/structured PM analysis, including Overview assessments and continuation
+briefs, must explicitly use that adapter. Existing pending
 operations retain their original adapter/key, and queued old-choice requests may
 be refused before starting. Recover original receipts through the existing operation
 read; a new choice never replaces their source references. An unconfigured workspace

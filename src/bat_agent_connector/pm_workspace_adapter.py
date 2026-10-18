@@ -9,7 +9,7 @@ from .operations import ActionDef, OperationError, OperationService
 
 ACTION = 'pm.workspace.adapter.select'
 ADAPTERS = ('codex-native-linux', 'bat-pm-linux-v1')
-ANALYSIS = {'pm.run.analyze', 'pm.run.bat.analyze', 'pm.conversation.propose', 'pm.follow_up.analyze'}
+ANALYSIS = {'pm.run.analyze', 'pm.run.bat.analyze'}
 SCOPES = ('observe', 'manage', 'start')
 
 
@@ -200,8 +200,10 @@ def admission(ops, principal, wid, adapter):
 
 
 def require_new_run(ops, principal, operation_id, wid, adapter):
+    from .pm_analysis_adapters import DESTINATIONS
+
     row = ops.db.execute('SELECT * FROM operations WHERE operation_id=?', (operation_id,)).fetchone()
-    if not row or row['action'] not in ANALYSIS:
+    if not row or row['action'] not in ANALYSIS | DESTINATIONS.keys():
         return
     op = OperationService._decode(row)
     original = op['external_refs']['admission_binding'].get('pm_adapter_choice')

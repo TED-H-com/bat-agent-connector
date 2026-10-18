@@ -164,6 +164,56 @@ async def test_first_choice_also_fences_an_already_queued_legacy_intent(chosen_w
     assert not w['native_instances']
 
 
+@pytest.mark.parametrize('action', ['pm.overview.assess', 'pm.continuation.prepare'])
+@pytest.mark.parametrize('replacement', adapters.ADAPTERS)
+async def test_newer_analysis_sinks_cannot_start_under_a_later_choice(chosen_world, action, replacement):
+    from tests import test_pm_continuation as continuation
+    from tests import test_pm_overview_assessments as overview
+
+    w, ops = chosen_world, chosen_world['d'].ops
+    w['settings'] = w['native_settings']
+    await select(w)
+    value = overview.request(w) if action == 'pm.overview.assess' else continuation.request(w)
+    pending = ops.create(plans.OWNER, **value)[0]
+    changed = request(w, replacement)
+    await ops._execute(changed['operation_id'])
+    assert ops.get(changed['operation_id'])['status'] == 'succeeded'
+    result = await bundles.finish(w, pending)
+    assert result['status'] == 'failed', result
+    assert result['error_code'] in {'PM_ADAPTER_CHANGED', 'PM_ADAPTER_MISMATCH'}
+    assert not w['native_instances']
+    assert pm_runs.get_by_operation(ops.db, pending['operation_id']) is None
+
+
+@pytest.mark.parametrize('action', ['pm.overview.assess', 'pm.continuation.prepare'])
+async def test_newer_bat_sinks_keep_completed_receipt_after_workspace_choice_changes(structured, mock, action):
+    from tests import test_pm_continuation as continuation
+    from tests import test_pm_overview_assessments as overview
+
+    w, ops = structured, structured['d'].ops
+    adapters.install(ops)
+    selected = await select(w, adapters.ADAPTERS[1])
+    if action == 'pm.overview.assess':
+        value = overview.request(w, adapters.ADAPTERS[1])
+    else:
+        value = continuation.request(w, adapter=adapters.ADAPTERS[1])
+        w['settings']['raw_reply'] = json.dumps(continuation.envelope('message.' + w['message']['message_id']))
+    done = await structured_analysis.execute(w, value)
+    assert done['status'] == 'succeeded', done
+    run = pm_runs.get_by_operation(ops.db, done['operation_id'])
+    assert run['adapter'] == adapters.ADAPTERS[1] and run['state'] == 'completed'
+    assert done['external_refs']['admission_binding']['pm_adapter_choice']['operation_id'] == selected['operation_id']
+    starts, sends = mock.channels().count('claude:start-session'), mock.channels().count('claude:send-message')
+    assert starts == sends == 1
+    await select(w, adapters.ADAPTERS[0])
+    recovered, fresh = ops.create(plans.OWNER, **value)
+    assert not fresh and recovered['operation_id'] == done['operation_id']
+    assert recovered['result'] == done['result']
+    assert pm_runs.get_by_operation(ops.db, done['operation_id']) == run
+    assert mock.channels().count('claude:start-session') == starts
+    assert mock.channels().count('claude:send-message') == sends
+
+
 async def test_stale_choice_cas_and_mismatched_adapter_cannot_create_new_effect(chosen_world):
     w, ops = chosen_world, chosen_world['d'].ops
     pre = adapters.read(ops, plans.OWNER, w['workspace_id'])['preconditions']

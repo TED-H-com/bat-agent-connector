@@ -32,7 +32,7 @@ function assessmentFixture(locale='en') {
     document:{version:1,judgment:{key:'j',template:'decision_first',subject_ref:'decision',basis_refs:['decision']},recommendations:[],
       needs_decision:[{key:'d.a',template:'confirm_direction',subject_ref:'decision',basis_refs:['decision']}],can_be_handled:[],watch:[],limitations:[]}}};
   const state={withdrawn:false,lost:false,empty:false,partial:false,readOnly:false,version:1,newer:false,needsReview:false,noAgent:false,unsupported:false,
-    holdDetail:null as string|null,releaseDetail:null as null|(()=>void),holdList:false,releaseList:null as null|(()=>void),
+    choice:null as string|null,holdDetail:null as string|null,releaseDetail:null as null|(()=>void),holdList:false,releaseList:null as null|(()=>void),
     detailReads:0,writes:[] as any[],previews:0,operation:null as any,create:null as any};
   const dispatch=async(input:any)=>{
     const url=new URL(input.path,'http://fixture'),path=url.pathname;
@@ -75,6 +75,7 @@ function assessmentFixture(locale='en') {
       caps.scopes=state.readOnly?['observe']:['observe','manage','start'];caps.actions.push({action:assessAction,allowed:!state.readOnly});
     }
     if(path===root+'/capabilities') {
+      if(state.choice)result.data.workspace_adapter={version:1,choice:{adapter:state.choice}};
       result.data.overview_assessment=state.unsupported?undefined:{version:1,authorized:!state.readOnly,eligible_for_preflight:!state.noAgent,limits};
       result.data.structured_analysis={version:1,actions:{[assessAction]:{adapters:[
         {adapter:'codex-native-linux',action_registered:true,authorized:!state.readOnly,eligible_for_preflight:true},
@@ -242,4 +243,17 @@ test('compact card keeps extra recommendations and watch items in exact Details'
   await expect(card.locator('.pm-assessment-summary-row')).toHaveCount(4);await expect(card).not.toContainText('A recorded risk');
   await card.locator('[data-overview-assessment-details]').click();const detail=page.locator('[data-overview-history-detail]');
   await expect(detail).toContainText('A recorded risk');await expect(detail.locator('[data-overview-assessment-claim="r.b"]')).toBeVisible();expect(x.state.writes).toEqual([]);
+});
+
+for(const native of [false,true])test(`workspace choice routes Overview while its original receipt survives a later choice ${native?'IPC':'HTTP'}`,async({page})=>{
+  const x=assessmentFixture();x.state.choice='bat-pm-linux-v1';x.state.lost=true;await x.mount(page,native);
+  await page.locator('[data-overview-assessment-prepare]').click();
+  const form=page.locator('[data-pm-action="pm.overview.assess"]'),adapter=form.getByLabel('Run analysis with',{exact:true});
+  await expect(adapter).toHaveValue('bat-pm-linux-v1');await expect(adapter).toBeDisabled();
+  await form.locator('button[type=submit]').click();await expect(form).toContainText('Reply unavailable');
+  const original=structuredClone(x.state.writes[0]);x.state.choice='codex-native-linux';
+  await page.reload();await page.locator('[data-overview-assessment-prepare]').click();
+  await expect(adapter).toHaveValue('bat-pm-linux-v1');await expect(adapter).toBeDisabled();
+  await form.locator('button[type=submit]').click();await expect.poll(()=>x.state.writes.length).toBe(2);
+  expect(x.state.writes[1]).toEqual(original);expect(x.state.previews).toBe(1);
 });

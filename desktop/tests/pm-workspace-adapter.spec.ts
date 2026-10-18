@@ -1,3 +1,4 @@
+import {openThreadAnalysis} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {nativeFixture} from './pm-analysis-fixture.ts';
@@ -54,18 +55,18 @@ async function setup(browser:any,baseURL:any,native:boolean,locale:string,f:any)
   if(native)await page.addInitScript(caps=>{const ipc=(window as any).__TAURI_INTERNALS__,invoke=ipc.invoke;
     ipc.invoke=(command:string,args:any)=>command==='connector_connect'?Promise.resolve(caps):invoke(command,args);
   },(await f.dispatch({method:'GET',path:'/capabilities'})).data);
-  await page.goto(pmRoute);return {page,context};
+  await page.goto(pmRoute);await openThreadAnalysis(page);return {page,context};
 }
 
 for(const native of [false,true])for(const locale of ['en','zh-TW']){
   test(`workspace choice ${native?'Tauri':'Web'} ${locale} saves one local receipt then routes new analysis`,async({browser,baseURL},info)=>{
     const f=fixture(),{page,context}=await setup(browser,baseURL,native,locale,f);
     try{
-      await expect(panel(page).locator('summary')).toHaveText(locale==='zh-TW'?'工作區 PM 執行方式':'Workspace PM adapter');
+      await expect(panel(page).locator('summary')).toHaveText(locale==='zh-TW'?'工作區 PM 執行方式':'Workspace PM runtime');
       await panel(page).locator('summary').click();await expect(selector(page)).toHaveValue('');
       await page.screenshot({path:info.outputPath(`before-${locale}.png`),fullPage:true});
       await selector(page).selectOption(BAT);await panel(page).locator('textarea').fill('Use the already selected BAT carrier.');
-      await page.reload();await expect(selector(page)).toHaveValue(BAT);await expect(panel(page).locator('textarea')).toHaveValue('Use the already selected BAT carrier.');
+      await page.reload();await openThreadAnalysis(page);await expect(selector(page)).toHaveValue(BAT);await expect(panel(page).locator('textarea')).toHaveValue('Use the already selected BAT carrier.');
       if(!await panel(page).getAttribute('open'))await panel(page).locator('summary').click();
       await panel(page).locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(1);
       expect(f.state.writes[0].body).toEqual({action:ACTION,target:{workspace_id:workspaceId},
@@ -76,6 +77,7 @@ for(const native of [false,true])for(const locale of ['en','zh-TW']){
       await expect(panel(page).locator('[data-pm-choice-current]')).toContainText(locale==='zh-TW'?'選擇版本 1':'Choice 1');
       for(const width of [390,768,1440]){
         await page.setViewportSize({width,height:900});await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+        await panel(page).scrollIntoViewIfNeeded();
         await page.screenshot({path:info.outputPath(`choice-${locale}-${width}.png`),fullPage:true});
       }
       await analysis(page,'pm.run.bat.analyze').locator('textarea').fill('Discuss the saved fixed sources.');
@@ -94,7 +96,7 @@ for(const native of [false,true])for(const locale of ['en','zh-TW']){
       await panel(page).locator('textarea').fill('Recover this original choice only.');await panel(page).locator('button[type=submit]').click();
       await expect(panel(page)).toContainText('Original choice reply unavailable');
       const original=structuredClone(f.state.writes[0]);f.selection.choice=f.fixed(NATIVE,2);
-      await page.reload();if(!await panel(page).getAttribute('open'))await panel(page).locator('summary').click();
+      await page.reload();await openThreadAnalysis(page);if(!await panel(page).getAttribute('open'))await panel(page).locator('summary').click();
       await expect(selector(page)).toHaveValue(BAT);await expect(selector(page)).toBeDisabled();
       await panel(page).locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(2);
       expect(f.state.writes[1]).toEqual(original);expect(f.state.ops.size).toBe(1);
@@ -107,8 +109,9 @@ for(const native of [false,true])for(const locale of ['en','zh-TW']){
     try{
       const form=analysis(page,PROPOSE),runtime=form.locator('[data-pm-structured-analysis] select');
       await expect(runtime).toHaveValue(BAT);await expect(runtime).toBeDisabled();
-      await form.locator('textarea').fill('Prepare a proposal using the saved workspace adapter.');
-      await form.locator('button[type=submit]').click();await expect.poll(()=>f.proposal.state.writes.length).toBe(1);
+      await page.locator('[data-discussion-panel-toggle]').click();
+      await page.locator('[data-discussion-composer]').fill('Prepare a proposal using the saved workspace adapter.');
+      await page.locator('[data-discussion-ask]').click();await expect.poll(()=>f.proposal.state.writes.length).toBe(1);
       expect(f.proposal.state.writes[0].body.params.adapter).toBe(BAT);expect(f.state.writes).toEqual([]);
     }finally{await context.close();}
   });
@@ -118,8 +121,8 @@ test('unconfigured legacy server keeps per-request controls; unknown writer bloc
   const f=fixture();f.selection.supported=false;const {page,context}=await setup(browser,baseURL,false,'en',f);
   try{
     await expect(panel(page)).toBeHidden();await expect(page.locator('[data-pm-analysis-adapter]')).toBeEnabled();
-    f.selection.supported=true;f.selection.reason='original_writer_unresolved';await page.reload();
-    await panel(page).locator('summary').click();await expect(panel(page)).toContainText('Unknown work keeps its slot');
+    f.selection.supported=true;f.selection.reason='original_writer_unresolved';await page.reload();await openThreadAnalysis(page);
+    await panel(page).locator('summary').click();await expect(panel(page)).toContainText('Wait for the current PM analysis');
     await expect(selector(page)).toBeDisabled();expect(f.state.writes).toEqual([]);
   }finally{await context.close();}
 });
@@ -129,7 +132,7 @@ test('pending original analysis stays on its native key when workspace changes t
   try{
     await analysis(page).locator('textarea').fill('Original native analysis.');await analysis(page).locator('button[type=submit]').click();
     await expect(analysis(page)).toContainText('Reply unavailable');const original=structuredClone(f.state.writes[0]);
-    f.selection.choice=f.fixed(BAT);await page.reload();await expect(page.locator('[data-pm-analysis-adapter]')).toHaveValue('native_analysis');
+    f.selection.choice=f.fixed(BAT);await page.reload();await openThreadAnalysis(page);await expect(page.locator('[data-pm-analysis-adapter]')).toHaveValue('native_analysis');
     await expect(page.locator('[data-pm-analysis-adapter]')).toBeDisabled();
     await analysis(page).locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(2);
     expect(f.state.writes[1]).toEqual(original);await expect(page.locator('[data-pm-analysis-adapter]')).toHaveValue('bat_analysis');

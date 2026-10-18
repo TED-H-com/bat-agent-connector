@@ -25,7 +25,9 @@ Concurrent choices use CAS; each successful choice has one immutable original
 operation receipt. Replaying that receipt precedes later versions and readiness.
 The choice may be saved while paused/closed, but does not reopen or launch work.
 
-Four existing analysis actions keep their exact legacy wire forms. Once a workspace
+Ordinary discussion analysis and all registered structured analysis destinations
+(plan proposals, Follow-up, continuation briefs and Overview assessments) keep their
+exact legacy wire forms. Once a workspace
 has a choice, a new request must explicitly target that adapter; there is no native
 to BAT fallback. Admission freezes the choice revision. The original writer
 transaction rechecks it before creating a run, so an earlier queued request cannot
