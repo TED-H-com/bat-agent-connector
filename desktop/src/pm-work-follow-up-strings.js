@@ -2,6 +2,12 @@
 // titles stay on the receipt; these strings are the section around that receipt.
 export const workFollowUpStrings = {
   'zh-TW': {
+    loop_next_idea_title: '留到稍後',
+    loop_next_idea_save: '取消排隊並保存想法',
+    loop_next_idea_reason: '留到稍後的原因',
+    loop_next_idea_hint: '先取消尚未送出的指令，再把原文保留到想法討論草稿。',
+    loop_next_idea_open: '開啟想法草稿',
+    loop_next_idea_request: '查看保存請求',
     loop_next_label: '下一步',
     loop_next_send: '送出下一步',
     loop_next_hint: '本輪結束後才會送出。',
@@ -50,6 +56,12 @@ export const workFollowUpStrings = {
     loop_next_err_TIER_DISABLED: '這台主機不允許這項寫入。',
   },
   en: {
+    loop_next_idea_title: 'Keep for later',
+    loop_next_idea_save: 'Cancel queue and save Idea',
+    loop_next_idea_reason: 'Reason for keeping it for later',
+    loop_next_idea_hint: 'Cancel the unsent instruction, then retain its original words in an Idea discussion draft.',
+    loop_next_idea_open: 'Open Idea draft',
+    loop_next_idea_request: 'View save request',
     loop_next_label: 'Next step',
     loop_next_send: 'Send next',
     loop_next_hint: 'This is sent after the current turn ends.',

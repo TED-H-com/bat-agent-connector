@@ -197,6 +197,8 @@ class ApiV1:
         pm_work_start.install(daemon.ops)
         pm_work_adopt_and_start.install(daemon.ops)
         pm_attempt_results.install(daemon.ops)
+        from . import pm_work_input_idea
+        pm_work_input_idea.install(daemon.ops)
         from .session_observation import SessionObservation
         self.session_observation = SessionObservation(daemon)
         self.allowed_origins = allowed_origins
@@ -1273,6 +1275,7 @@ class ApiV1:
                                                     "work_attempt_results": pm_attempt_result_reads.capabilities(self.daemon.ops),
                                                     "operation_loop": {"version": 1},
                                                     "work_follow_up": pm_work_follow_up.capabilities(self.daemon.ops),
+                                                    "work_input_idea": {"version": 1, "available": "pm.work_input.defer" in self.daemon.ops.actions},
                                                     "workload": pm_workload.capabilities(),
                                                     "work_package_prepare": "pm.work_package.create" in self.daemon.ops.actions,
                                                     "issue_mapping": all(action in self.daemon.ops.actions for action in ("pm.issue.publish", "pm.issue.cancel")),

@@ -428,6 +428,14 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           const card = value.card;
           if (card?.work_item_id !== ref.id || card.work?.work_item_id !== ref.id || card.binding?.workspace_id !== workspaceId || card.binding?.work_item_id !== ref.id) unavailable();
           label = text(card.work.title);
+        } else if (ref.kind === 'work_input') {
+          const key = `/operations/${encodeURIComponent(ref.id)}`;
+          if (!reads.has(key)) reads.set(key, api('GET', key));
+          const value = (await reads.get(key)).operation;
+          const receipt = value?.input_receipt;
+          if (value?.operation_id !== ref.id || receipt?.operation_id !== ref.id
+            || receipt.workspace_id !== workspaceId || receipt.state !== 'cancelled') unavailable();
+          label = text(receipt.text_excerpt);
         } else if (ref.kind === 'quality_assessment') {
           const value = scoped(await read(`/quality-reviews/${encodeURIComponent(ref.review_id)}`), workspaceId, 'workspace_id');
           const review = scoped(value.review, ref.review_id, 'review_id');

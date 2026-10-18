@@ -18,6 +18,7 @@ LOOP_ACTIONS = frozenset({
     "pm.run.bat.analyze",
     "pm.conversation.propose",
     "pm.continuation.prepare",
+    "pm.work_input.defer",
     "pm.conversation.adopt",
     "pm.plan.draft",
     "pm.plan.adopt",
@@ -37,6 +38,7 @@ LOOP_ACTIONS = frozenset({
 })
 
 _DISCUSSION = frozenset({
+    "pm.work_input.defer",
     "pm.continuation.prepare",
     "pm.thread.create",
     "pm.thread.rename",
@@ -489,7 +491,7 @@ def _recorded_thread(operation):
     if operation.get("action") not in _DISCUSSION:
         return None
     target = operation.get("target") if isinstance(operation.get("target"), dict) else {}
-    if operation["action"] == "pm.thread.create":
+    if operation["action"] in {"pm.thread.create", "pm.work_input.defer"}:
         result = operation.get("result") if isinstance(operation.get("result"), dict) else {}
         thread_id = result.get("thread_id")
     else:
@@ -644,6 +646,8 @@ def _pure_scopes(operation, verb):
 
     if action in discussion:
         found.append("manage")
+    if action == 'pm.work_input.defer':
+        found.extend(('observe', 'manage', 'operate'))
     if action == "pm.work_package.create":
         found.extend(("observe", "manage"))
     if action in {"pm.run.analyze", "pm.run.bat.analyze", "pm.conversation.propose", "pm.conversation.adopt", "pm.continuation.prepare"}:

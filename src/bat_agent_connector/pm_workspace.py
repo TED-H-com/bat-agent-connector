@@ -142,6 +142,9 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
     if op['action'] == 'pm.thread.create':
         from .pm_thread_contexts import operation_visible as context_visible
         return context_visible(db, principal, op)
+    if op['action'] == 'pm.work_input.defer':
+        from .pm_work_input_idea import operation_visible as deferred_visible
+        return deferred_visible(db, principal, op)
     if op['action'] in {'pm.run.analyze', 'pm.run.bat.analyze'}:
         from .pm_thread_contexts import frozen_visible
         run = db.execute('SELECT context FROM pm_runs WHERE operation_id=?', (op['operation_id'],)).fetchone()

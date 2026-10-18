@@ -130,6 +130,7 @@ var contextFields = {
 		revision_id: /^pmrb_[0-9a-f]{32}$/
 	},
 	work_item: { id: /^wi_[0-9a-f]{20}$/ },
+	work_input: { id: /^op_[0-9a-f]{32}$/ },
 	quality_assessment: {
 		id: /^op_[0-9a-f]{32}$/,
 		review_id: /^pmqr_[0-9a-f]{32}$/,
@@ -1672,6 +1673,7 @@ var globalStrings = {
 		action_pm_backlog_revise: "Revise backlog",
 		action_pm_conversation_adopt: "Adopt discussion",
 		action_pm_continuation_prepare: "Prepare continuation",
+		action_pm_work_input_defer: "Keep instruction for later",
 		action_pm_conversation_propose: "Propose in discussion",
 		action_pm_dependencies_capture: "Capture dependency",
 		action_pm_dependencies_declare: "Declare dependency",
@@ -1874,6 +1876,7 @@ var globalStrings = {
 		action_pm_backlog_revise: "修訂待辦",
 		action_pm_conversation_adopt: "採用討論",
 		action_pm_continuation_prepare: "整理接續摘要",
+		action_pm_work_input_defer: "指令留到稍後",
 		action_pm_conversation_propose: "在討論中提案",
 		action_pm_dependencies_capture: "記錄相依",
 		action_pm_dependencies_declare: "宣告相依",
@@ -4525,6 +4528,7 @@ var discussionStrings = {
 		pd_kind_requirement: "Requirement",
 		pd_kind_milestone: "Milestone",
 		pd_kind_work_item: "Work",
+		pd_kind_work_input: "Original instruction",
 		pd_kind_quality_assessment: "Original assessment",
 		pd_kind_governance: "Governance record",
 		pd_kind_finding: "Finding",
@@ -4660,6 +4664,7 @@ var discussionStrings = {
 		pd_kind_requirement: "需求",
 		pd_kind_milestone: "里程碑",
 		pd_kind_work_item: "工作",
+		pd_kind_work_input: "原始指令",
 		pd_kind_quality_assessment: "原始評估",
 		pd_kind_governance: "治理紀錄",
 		pd_kind_finding: "發現",
@@ -8700,6 +8705,12 @@ var workResultStrings = {
 //#region src/pm-work-follow-up-strings.js
 var workFollowUpStrings = {
 	"zh-TW": {
+		loop_next_idea_title: "留到稍後",
+		loop_next_idea_save: "取消排隊並保存想法",
+		loop_next_idea_reason: "留到稍後的原因",
+		loop_next_idea_hint: "先取消尚未送出的指令，再把原文保留到想法討論草稿。",
+		loop_next_idea_open: "開啟想法草稿",
+		loop_next_idea_request: "查看保存請求",
 		loop_next_label: "下一步",
 		loop_next_send: "送出下一步",
 		loop_next_hint: "本輪結束後才會送出。",
@@ -8748,6 +8759,12 @@ var workFollowUpStrings = {
 		loop_next_err_TIER_DISABLED: "這台主機不允許這項寫入。"
 	},
 	en: {
+		loop_next_idea_title: "Keep for later",
+		loop_next_idea_save: "Cancel queue and save Idea",
+		loop_next_idea_reason: "Reason for keeping it for later",
+		loop_next_idea_hint: "Cancel the unsent instruction, then retain its original words in an Idea discussion draft.",
+		loop_next_idea_open: "Open Idea draft",
+		loop_next_idea_request: "View save request",
 		loop_next_label: "Next step",
 		loop_next_send: "Send next",
 		loop_next_hint: "This is sent after the current turn ends.",
@@ -15538,6 +15555,7 @@ var ACTIONS = {
 	"pm.backlog.revise": "action_pm_backlog_revise",
 	"pm.conversation.adopt": "action_pm_conversation_adopt",
 	"pm.continuation.prepare": "action_pm_continuation_prepare",
+	"pm.work_input.defer": "action_pm_work_input_defer",
 	"pm.conversation.propose": "action_pm_conversation_propose",
 	"pm.dependencies.capture": "action_pm_dependencies_capture",
 	"pm.dependencies.declare": "action_pm_dependencies_declare",
@@ -15788,7 +15806,7 @@ async function readWorkSessionContext({ api, guard, workspaceId, workItemId, att
 }
 //#endregion
 //#region src/pm-work-publish.js
-var ACTION$3 = "github.pr.publish";
+var ACTION$4 = "github.pr.publish";
 var SHA40 = /^[0-9a-f]{40}$/;
 var OP_ID = /^op_[0-9a-f]{32}$/;
 var TARGET_KEYS = [
@@ -15880,7 +15898,7 @@ function exactPreconditions(value) {
 }
 function actionRows(list) {
 	if (!Array.isArray(list)) return [];
-	return list.filter((row) => row && row.action === ACTION$3);
+	return list.filter((row) => row && row.action === ACTION$4);
 }
 function paramsReady(entry) {
 	return Array.isArray(entry?.required_params) && PARAM_NAMES.every((name) => entry.required_params.includes(name)) && entry.required_params.every((name) => PARAM_NAMES.includes(name));
@@ -15973,7 +15991,7 @@ function catalogAllows(caps, entry) {
 		"integrate"
 	]).every((scope) => scopes.includes(scope))) return false;
 	if (!scopes.includes("integrate")) return false;
-	return Boolean(current?.actions?.some((row) => row.action === ACTION$3 && row.allowed === true));
+	return Boolean(current?.actions?.some((row) => row.action === ACTION$4 && row.allowed === true));
 }
 function receiptSha(envelope) {
 	const rows = envelope?.delivery?.pull_requests;
@@ -16227,7 +16245,7 @@ function createWorkPublish({ h, t, form, namespace, caps, errorBox }) {
 		}, h("p", { id: groupId }, t("wpub_draft_group")), h("p", { class: "muted" }, t("wpub_draft_help")), h("label", { class: "pm-work-publish-choice" }, yes, h("span", {}, t("wpub_draft_yes"), " ", h("span", { class: "muted" }, t("wpub_draft_yes_help")))), h("label", { class: "pm-work-publish-choice" }, no, h("span", {}, t("wpub_draft_no"), " ", h("span", { class: "muted" }, t("wpub_draft_no_help"))))), gapNode);
 		editor = form({
 			namespace: `${namespace}.work-publish.${candidateKey}`,
-			action: ACTION$3,
+			action: ACTION$4,
 			target: {
 				workspace_id: entry.target.workspace_id,
 				repository: entry.target.repository,
@@ -16415,7 +16433,7 @@ function createWorkPublish({ h, t, form, namespace, caps, errorBox }) {
 }
 //#endregion
 //#region src/pm-execution-verification.js
-var ACTION$2 = "pm.execution.verify";
+var ACTION$3 = "pm.execution.verify";
 var sha$5 = /^[0-9a-f]{40}$/;
 var digest$9 = /^[0-9a-f]{64}$/;
 var operation$1 = /^op_[0-9a-f]{32}$/;
@@ -16461,7 +16479,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 		execution_operation_id: selected
 	});
 	const fixedMatches = (value) => !fixedResult || value?.execution_operation_id === fixedResult.execution_operation_id && value?.candidate_commit === fixedResult.candidate_commit;
-	const canWrite = () => writer() && allowedAction(ACTION$2, target());
+	const canWrite = () => writer() && allowedAction(ACTION$3, target());
 	const enabled = () => caps()?.features?.pm_workspaces?.execution_verification?.version === 1;
 	const line = (key, value) => h("p", { class: "pm-source" }, h("strong", {}, t(key) + ": "), value);
 	function clear() {
@@ -16551,7 +16569,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 				namespace: `${namespace}.verification`,
 				api,
 				requiredScope: "operate",
-				action: ACTION$2,
+				action: ACTION$3,
 				target: target(),
 				fields,
 				params: (values) => {
@@ -19610,7 +19628,7 @@ function structuredAnalysis({ h, t, labelled, action, capability, legacyEligible
 }
 //#endregion
 //#region src/pm-continuation.js
-var ACTION$1 = "pm.continuation.prepare";
+var ACTION$2 = "pm.continuation.prepare";
 function continuationBrief({ h, t, form, input, labelled, caps, capability, thread, permitted, target, refresh, onOpen }) {
 	let head = null, ready = false, signature = "", request, status;
 	const source = () => thread()?.continuation_brief;
@@ -19620,7 +19638,7 @@ function continuationBrief({ h, t, form, input, labelled, caps, capability, thre
 		h,
 		t,
 		labelled,
-		action: ACTION$1,
+		action: ACTION$2,
 		capability,
 		legacyEligible: () => false,
 		authorized,
@@ -19637,7 +19655,7 @@ function continuationBrief({ h, t, form, input, labelled, caps, capability, thre
 		"data-pm-default": ""
 	});
 	request = form({
-		action: ACTION$1,
+		action: ACTION$2,
 		target,
 		fields: {
 			purpose,
@@ -19681,7 +19699,7 @@ function continuationBrief({ h, t, form, input, labelled, caps, capability, thre
 	}
 	function render() {
 		const saved = source();
-		tools.hidden = !thread() || !capability()?.structured_analysis?.actions?.[ACTION$1] && !request.locked();
+		tools.hidden = !thread() || !capability()?.structured_analysis?.actions?.[ACTION$2] && !request.locked();
 		reader.hidden = !thread() || !saved;
 		const stale = saved?.thread_version !== thread()?.thread.version || head && (saved?.plan_head?.version !== head.version || saved?.plan_head?.accepted_revision_id !== head.accepted_revision_id);
 		const statusText = () => t(!usable() ? "pcb_needs_review" : stale ? "pcb_stale" : "pcb_status_" + saved.document.status);
@@ -19773,7 +19791,10 @@ function discussionContext(t, refs = [], { limit = refs.length, onMore, title, o
 			label: h$1("span", { class: "ui-chip-label" }, text),
 			class: "ui-context-chip pd-context-trigger",
 			onClick: (event) => onOpen(event.currentTarget)
-		}) : contextChip({ text });
+		}) : ref.kind === "work_input" && ref.available !== false && /^op_[0-9a-f]{32}$/.test(ref.id || "") ? h$1("a", {
+			href: `#/op/${ref.id}`,
+			class: "ui-context-chip"
+		}, text) : contextChip({ text });
 		chip.dataset.discussionContext = ref.kind;
 		chip.title = text;
 		chip.setAttribute("aria-label", text);
@@ -27404,7 +27425,7 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 }
 //#endregion
 //#region src/pm-issue-resolution.js
-var ACTION = "pm.governance.revise";
+var ACTION$1 = "pm.governance.revise";
 var findingFields = [
 	"title",
 	"description",
@@ -27421,7 +27442,7 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	const box = h("div", { "data-proposal-resolution": "" }), entries = new Map();
 	let serial = 0, current = null, workspace = null, enabled = false;
-	const scope = () => caps()?.scopes?.includes("observe") && caps()?.scopes?.includes("manage") && caps()?.actions?.some((row) => row.action === ACTION && row.allowed === true) && permitted(false);
+	const scope = () => caps()?.scopes?.includes("observe") && caps()?.scopes?.includes("manage") && caps()?.actions?.some((row) => row.action === ACTION$1 && row.allowed === true) && permitted(false);
 	const role = () => Array.isArray(workspace?.members) ? workspace.members.find((row) => row.actor === caps()?.actor)?.role : workspace?.membership?.actor === caps()?.actor ? workspace.membership.role : null;
 	const authorized = (entry) => enabled && Boolean(entry.value) && scope() && ["owner", "contributor"].includes(role()) && (role() === "owner" || entry.value?.revision.document.owner_actor === caps()?.actor);
 	const open = (entry) => ["open", "monitoring"].includes(entry.value?.revision.document.status);
@@ -27461,7 +27482,7 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 		});
 		const extra = h("div", {}, finding, labelled("pcp_resolve_rationale", rationale));
 		entry.editor = form({
-			action: ACTION,
+			action: ACTION$1,
 			target: {
 				workspace_id: workspaceId,
 				record_id: id
@@ -47137,6 +47158,13 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					const card = value.card;
 					if (card?.work_item_id !== ref.id || card.work?.work_item_id !== ref.id || card.binding?.workspace_id !== workspaceId || card.binding?.work_item_id !== ref.id) unavailable();
 					label = text(card.work.title);
+				} else if (ref.kind === "work_input") {
+					const key = `/operations/${encodeURIComponent(ref.id)}`;
+					if (!reads.has(key)) reads.set(key, api("GET", key));
+					const value = (await reads.get(key)).operation;
+					const receipt = value?.input_receipt;
+					if (value?.operation_id !== ref.id || receipt?.operation_id !== ref.id || receipt.workspace_id !== workspaceId || receipt.state !== "cancelled") unavailable();
+					label = text(receipt.text_excerpt);
 				} else if (ref.kind === "quality_assessment") {
 					const value = scoped(await read(`/quality-reviews/${encodeURIComponent(ref.review_id)}`), workspaceId, "workspace_id");
 					const review = scoped(value.review, ref.review_id, "review_id");
@@ -50149,6 +50177,97 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	return dispose;
 }
 //#endregion
+//#region src/pm-work-input-idea.js
+var ACTION = "pm.work_input.defer";
+var OP = /^op_[0-9a-f]{32}$/;
+var THREAD = /^pmt_[0-9a-f]{32}$/;
+function mountWorkInputIdea({ h, t, api, caps, guard, namespace, workspaceId, workItemId, receipts, permitted, refresh, errorBox }) {
+	const box = h("div", { "data-work-input-idea": "" });
+	let form = null, selected = "", completed = false, disposed = false;
+	const current = () => receipts().find((row) => row.operation_id === selected);
+	const allowed = () => !disposed && permitted() && caps()?.scopes?.includes("manage") && caps()?.actions?.some((row) => row.action === ACTION && row.allowed === true);
+	function offered(row) {
+		return row?.state === "queued" && row.cancellable === true && !row.deferred_idea && row.actor === caps()?.actor && allowed() && row.next_allowed_actions?.some((action) => action.kind === "action" && action.action === ACTION && Object.keys(action.target || {}).length === 3 && action.target.workspace_id === workspaceId && action.target.work_item_id === workItemId && action.target.source_operation_id === row.operation_id);
+	}
+	function clear() {
+		form?.dispose();
+		form = null;
+		selected = "";
+		completed = false;
+		box.replaceChildren();
+	}
+	function open(row) {
+		if (!offered(row) || !OP.test(row.operation_id)) return;
+		if (selected === row.operation_id && form) {
+			form.fields.reason.focus();
+			return;
+		}
+		clear();
+		selected = row.operation_id;
+		const reason = h("textarea", {
+			id: `idea-reason-${selected}`,
+			rows: 2,
+			maxlength: 4e3
+		});
+		const result = h("div", { "data-work-idea-result": "" });
+		const exactSource = selected;
+		form = durableForm({
+			h,
+			t,
+			api,
+			caps,
+			guard,
+			namespace,
+			action: ACTION,
+			target: {
+				workspace_id: workspaceId,
+				work_item_id: workItemId,
+				source_operation_id: selected
+			},
+			fields: { reason },
+			params: (values) => ({ reason: values.reason }),
+			preconditions: () => ({ expected_state: "queued" }),
+			permitted: () => !completed && offered(current()),
+			recoverPermitted: allowed,
+			canSend: () => allowed() && Boolean(reason.value.trim()) && reason.value.length <= 4e3,
+			keepEditable: () => !disposed && !completed,
+			label: "loop_next_idea_save",
+			errorBox,
+			extra: h("div", { class: "pm-fields" }, h("p", { class: "ui-meta" }, t("loop_next_idea_hint")), h("blockquote", { class: "pm-note-text" }, row.text_excerpt || ""), h("label", { for: reason.id }, t("loop_next_idea_reason")), reason),
+			onSaved: async (value) => {
+				guard();
+				if (disposed || selected !== exactSource || value?.workspace_id !== workspaceId || value?.work_item_id !== workItemId || value?.source_operation_id !== selected || value?.execution_authorized !== false || !THREAD.test(value?.thread_id || "")) return;
+				completed = true;
+				result.replaceChildren(h("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/discussions/${value.thread_id}` }, t("loop_next_idea_open")));
+				refresh();
+			}
+		});
+		reason.addEventListener("input", () => form?.update());
+		box.replaceChildren(h("details", { open: true }, h("summary", {}, t("loop_next_idea_title")), form.box, result));
+		reason.focus();
+	}
+	function links(row) {
+		const saved = row?.deferred_idea;
+		if (!saved || !OP.test(saved.operation_id || "")) return [];
+		return [h("a", { href: `#/op/${saved.operation_id}` }, t("loop_next_idea_request")), ...saved.status === "succeeded" && THREAD.test(saved.thread_id || "") ? [h("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/discussions/${saved.thread_id}` }, t("loop_next_idea_open"))] : []];
+	}
+	return {
+		box,
+		offered,
+		open,
+		links,
+		clear,
+		update: () => {
+			if (selected && !current()) clear();
+			else form?.update();
+		},
+		dispose: () => {
+			disposed = true;
+			clear();
+		}
+	};
+}
+//#endregion
 //#region src/pm-work-follow-up.js
 var WORKSPACE_ID = /^ws_[0-9a-f]{32}$/;
 var WORK_ITEM_ID = /^wi_[0-9a-f]{20}$/;
@@ -50209,6 +50328,21 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 	const pinned = new Map(), announced = new Set(), cancelDenied = new Set();
 	let composer = null, composing = false, composeEnded = -Infinity, focusAfter = null;
 	let sawList = false;
+	const idea = mountWorkInputIdea({
+		h,
+		t,
+		api,
+		caps,
+		guard,
+		namespace,
+		workspaceId,
+		workItemId,
+		receipts: mergedItems,
+		permitted: mutationsAllowed,
+		refresh,
+		errorBox
+	});
+	list.after(idea.box);
 	function alive(ticket, mark) {
 		try {
 			guard();
@@ -50453,6 +50587,12 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		if (!actorMatches(receipt)) return Array.isArray(receipt.next_allowed_actions) && receipt.next_allowed_actions.length > 0 ? [h("p", { class: "ui-meta" }, t("loop_next_not_actor"))] : [];
 		const actions = Array.isArray(receipt.next_allowed_actions) ? receipt.next_allowed_actions : [];
 		const nodes = [];
+		if (idea.offered(receipt)) nodes.push(button({
+			variant: "secondary",
+			label: t("loop_next_idea_title"),
+			"data-follow-up-action": "defer",
+			onClick: () => idea.open(receipt)
+		}));
 		for (const action of actions) if (action?.kind === "operation_endpoint" && action.endpoint === "cancel" && action.operation_id === receipt.operation_id && receipt.cancellable === true && !cancelDenied.has(receipt.operation_id)) {
 			const label = actionLabel(action, t);
 			if (!label) continue;
@@ -50502,7 +50642,7 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 			class: "work-next-row",
 			"data-follow-up-receipt": receipt.operation_id,
 			"data-follow-up-state": receipt.state || ""
-		}, h("a", { href: `#/op/${encodeURIComponent(receipt.operation_id)}` }, receiptText(receipt, "state", t)), h("p", {}, receiptText(receipt, "detail", t)), typeof receipt.text_excerpt === "string" && receipt.text_excerpt ? h("p", {}, receipt.text_excerpt) : null, receipt.text_truncated === true ? h("p", { class: "ui-meta" }, t("loop_next_excerpt")) : null, receipt.status_reason === "waiting_permission_or_question_gate" ? h("p", {}, t("loop_next_waiting")) : null, typeof receipt.blocked_by_operation_id === "string" && OPERATION_ID.test(receipt.blocked_by_operation_id) ? h("a", { href: `#/op/${encodeURIComponent(receipt.blocked_by_operation_id)}` }, t("loop_next_blocked_link")) : null, ...rowActions(receipt)));
+		}, h("a", { href: `#/op/${encodeURIComponent(receipt.operation_id)}` }, receiptText(receipt, "state", t)), h("p", {}, receiptText(receipt, "detail", t)), typeof receipt.text_excerpt === "string" && receipt.text_excerpt ? h("p", {}, receipt.text_excerpt) : null, receipt.text_truncated === true ? h("p", { class: "ui-meta" }, t("loop_next_excerpt")) : null, receipt.status_reason === "waiting_permission_or_question_gate" ? h("p", {}, t("loop_next_waiting")) : null, typeof receipt.blocked_by_operation_id === "string" && OPERATION_ID.test(receipt.blocked_by_operation_id) ? h("a", { href: `#/op/${encodeURIComponent(receipt.blocked_by_operation_id)}` }, t("loop_next_blocked_link")) : null, ...idea.links(receipt), ...rowActions(receipt)));
 		const tail = [];
 		if (filtered) tail.push(h("p", {
 			class: "work-next-note",
@@ -50519,6 +50659,7 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 			heading: "h3"
 		}));
 		list.replaceChildren(...rows, ...tail);
+		idea.update();
 		if (focusAfter) {
 			const pending = focusAfter;
 			const node = list.querySelector(`[data-follow-up-receipt="${CSS.escape(pending.id)}"] [data-follow-up-action="${pending.kind}"]`);
@@ -50674,6 +50815,7 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		note.replaceChildren();
 		pill.replaceChildren();
 		status.replaceChildren();
+		idea.clear();
 		live.textContent = t("loop_next_withdrawn");
 		box.replaceChildren(h("p", {
 			role: "status",
@@ -50695,6 +50837,7 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		status.replaceChildren();
 		clearComposer();
 		box.hidden = true;
+		idea.clear();
 	}
 	function restore() {
 		if (stopped || disposed) return;
@@ -50711,6 +50854,7 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		epoch += 1;
 		serial += 1;
 		clearComposer();
+		idea.dispose();
 	}
 	refresh();
 	return {
