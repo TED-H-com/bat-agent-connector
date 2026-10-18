@@ -1,3 +1,4 @@
+import {openPmSection} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {workStartFixture,workspaceId,workId,route} from './work-start-fixture.ts';
@@ -22,6 +23,7 @@ function fixture(){
       const data={contract:'work-profile-readiness/v1',workspace_id:workspaceId,profile_id:id,revision:row.revision,digest:row.digest,calls_bat:false,
         states:Object.fromEntries(names.map(name=>[name,{value:name==='can_observe'?'ready':'unknown',evidence_ref:null,verified:null}])),
         pm_analysis:{pm_ready:true},smallest_gap:structuredClone(state.gap)};
+      if(state.nextTurn)Object.assign(data,{work_follow_up: state.nextTurn(row)});
       if(state.held)await state.held;return {status:200,data};
     }
     const result=await base(input);
@@ -39,7 +41,7 @@ function fixture(){
   return {f,state};
 }
 async function mount(page:any,f:any,native=false){
-  await mountConversation(page,native,f.dispatch);await page.goto(route);await page.locator('[data-pm-view="board"]').click();
+  await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'board');
   await page.locator(`[data-pm-kanban-work="${workId(1)}"] [data-board-open]`).click();
   return page.locator('[data-work-inspector]');
 }
@@ -215,4 +217,27 @@ for(const locale of ['en','zh-TW'])test(`saved profile review remains readable $
     for(const width of [1440,768,390]){await page.setViewportSize({width,height:900});await panel.locator('[data-work-profile-picker]').scrollIntoViewIfNeeded();
       expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:testInfo.outputPath(`profile-${locale}-${width}.png`),fullPage:true});}
   }finally{await context.close();}
+});
+
+for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test(`profile reports the Work next-turn limit before starting ${locale} ${native ? 'IPC' : 'HTTP'}`, async ({browser, baseURL}, testInfo) => {
+  const context = await browser.newContext({baseURL, locale, viewport: {width: locale === 'en' ? 1440 : 390, height: 900}});
+  try {
+    const page = await context.newPage(), {f, state} = fixture();
+    state.nextTurn = (row:any) => ({route: 'bat_work_start', agent: row.agent, admission_checked: false,
+      state: row.agent === 'codex' ? 'unavailable' : 'requires_attempt', reason: row.agent === 'codex' ? 'codex_uncorrelated_turn_boundary' : 'owned_attempt_required'});
+    const panel = await mount(page, f, native), select = panel.getByLabel(locale === 'en' ? 'Saved profile' : '已存設定檔', {exact: true});
+    await select.selectOption(second);
+    await expect(panel.getByLabel(locale === 'en' ? 'Agent' : '代理', {exact: true})).toHaveValue('codex');
+    const note = panel.locator('[data-work-profile-next-turn]');
+    await expect(note).toContainText(locale === 'en' ? 'This BAT Codex route does not currently support another turn.' : '這條 BAT Codex 路線目前不支援追加下一輪。');
+    await note.scrollIntoViewIfNeeded();
+    await page.screenshot({path: testInfo.outputPath(`next-turn-${locale}-${native}.png`), fullPage: true});
+    await select.selectOption(first);
+    await expect(note).toContainText(locale === 'en' ? 'Availability is checked against the owned attempt after starting.' : '開始後會再核對自己的工作嘗試');
+    await expect(note).not.toContainText('Codex');
+    state.nextTurn = () => undefined;
+    await select.selectOption(second);
+    await expect(note).toContainText(locale === 'en' ? 'This connection has not reported next-turn support' : '這次連線尚未回報');
+    expect(f.state.writes).toEqual([]);
+  } finally {await context.close();}
 });

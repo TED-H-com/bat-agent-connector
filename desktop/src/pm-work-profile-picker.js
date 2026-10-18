@@ -43,6 +43,13 @@ export function workProfilePicker({t,api,alive,namespace,workspaceId,workId,caps
     status.replaceChildren(h('p',{class:'muted'},t(message)));options();
   }
   function display(data,row){
+    const next=data.work_follow_up;
+    let nextKey='wpf_next_unknown';
+    if(next?.route==='bat_work_start'&&next.agent===row.agent&&next.admission_checked===false){
+      if(next.state==='unavailable'&&next.reason==='codex_uncorrelated_turn_boundary'&&row.agent==='codex')nextKey='wpf_next_codex';
+      else if(next.state==='unavailable'&&next.reason==='action_unavailable')nextKey='wpf_action_unavailable';
+      else if(next.state==='requires_attempt'&&next.reason==='owned_attempt_required')nextKey='wpf_next_attempt';
+    }
     const list=h('dl',{class:'pm-work-profile-states'});
     for(const name of states){const state=data.states[name],value=h('dd',{},t('wpf_'+state.value));list.append(h('dt',{},t('wpf_'+name)),value);
       const op=state.evidence_ref?.operation_id;
@@ -61,11 +68,14 @@ export function workProfilePicker({t,api,alive,namespace,workspaceId,workId,caps
       }
       if(typeof gap.last_success_at==='number'&&Number.isFinite(gap.last_success_at)&&gap.last_success_at>0)details.push(timeStamp(gap.last_success_at));
     }
-    facts.replaceChildren(h('h4',{},t('wpf_coding')),h('p',{class:'muted'},t('wpf_locked')),list,
+    facts.replaceChildren(h('h4',{},t('wpf_coding')),
+      h('p',{class:'muted','data-work-profile-next-turn':''},h('strong',{},t('wpf_next_turn')+' · '),t(nextKey)),
+      h('p',{class:'muted'},t('wpf_locked')),list,
       ...(data.states.can_start_own.value!=='ready'?[h('p',{class:'muted'},t('wpf_unverified'))]:[]),...details,
       h('h4',{},t('wpf_pm')),h('p',{},t(data.pm_analysis?.pm_ready===true?'wpf_pm_preflight':'wpf_pm_unverified')));
     const gapName=states.find(name=>data.states[name].value!=='ready');
-    announcement.textContent=gapName?`${t('wpf_'+gapName)}: ${t('wpf_'+data.states[gapName].value)}. ${t('wpf_unverified')}`:'';
+    announcement.textContent=[`${t('wpf_next_turn')}: ${t(nextKey)}`,
+      gapName?`${t('wpf_'+gapName)}: ${t('wpf_'+data.states[gapName].value)}. ${t('wpf_unverified')}`:''].filter(Boolean).join(' ');
     verified={profile_id:row.profile_id,revision:row.revision,digest:row.digest};
     request()?.update();
   }

@@ -1413,3 +1413,17 @@ the keyboard restores the full heading, perspectives and page navigation.
 Tests dispatch browser viewport events before asserting real control geometry,
 node identity, drafts and zero writes; they never apply product classes themselves.
 These are simulated keyboard checks, not physical Safari/IME/lockscreen acceptance.
+
+### Work profile next-turn capability
+
+A short next-turn note sits directly under Coding route when a saved profile is
+selected. It reads the fixed profile readiness response; it does not infer
+capability from an agent name or a historical owned session. The BAT Codex limit
+is scoped to that route. Other routes require the actual owned attempt; an older
+response with no field, or an inconsistent route/agent, says not reported. The
+existing status announcement includes the note. Start preview and admission stay
+under their existing checks; this additional observation causes no probe or write.
+
+Synthetic evidence: [English desktop before](../docs/design/workbench-evidence/ec11-readiness/before-en-1440.png),
+[English desktop after](../docs/design/workbench-evidence/ec11-readiness/after-en-1440.png),
+[zh-TW phone after](../docs/design/workbench-evidence/ec11-readiness/after-zh-TW-390.png).

@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Saved Work profiles report known next-turn limits before starting, including the
+  current BAT Codex limitation. Historical owned-session evidence stays separate
+  from Work-targeted follow-up readiness; the added observation performs no probe.
+
 - Mobile Work, Session and PM Discussion composers share keyboard viewport handling,
   keep drafts through resize and pinch zoom, and retain reachable send controls.
   Discussions keep list/detail navigation in phone landscape as well as portrait.

@@ -322,6 +322,10 @@ var workProfileStrings = {
 		wpf_pm: "PM analysis",
 		wpf_pm_preflight: "PM preflight is available.",
 		wpf_pm_unverified: "PM preflight is not available.",
+		wpf_next_turn: "Next turn",
+		wpf_next_codex: "This BAT Codex route does not currently support another turn.",
+		wpf_next_attempt: "Availability is checked against the owned attempt after starting.",
+		wpf_next_unknown: "This connection has not reported next-turn support for this route.",
 		wpf_withdrawn: "This profile is no longer available.",
 		wpf_changed: "This profile changed. Check readiness again.",
 		wpf_mismatch: "This start does not match the saved profile.",
@@ -361,6 +365,10 @@ var workProfileStrings = {
 		wpf_pm: "PM 分析",
 		wpf_pm_preflight: "PM 可以進行預檢。",
 		wpf_pm_unverified: "PM 尚無法進行預檢。",
+		wpf_next_turn: "下一輪",
+		wpf_next_codex: "這條 BAT Codex 路線目前不支援追加下一輪。",
+		wpf_next_attempt: "開始後會再核對自己的工作嘗試，確認能否追加下一輪。",
+		wpf_next_unknown: "這次連線尚未回報這條路線的下一輪支援。",
 		wpf_withdrawn: "這份設定檔已經不在。",
 		wpf_changed: "這份設定檔已變更。請再檢查就緒。",
 		wpf_mismatch: "這次啟動與已存設定檔不一致。",
@@ -36987,6 +36995,13 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		options();
 	}
 	function display(data, row) {
+		const next = data.work_follow_up;
+		let nextKey = "wpf_next_unknown";
+		if (next?.route === "bat_work_start" && next.agent === row.agent && next.admission_checked === false) {
+			if (next.state === "unavailable" && next.reason === "codex_uncorrelated_turn_boundary" && row.agent === "codex") nextKey = "wpf_next_codex";
+			else if (next.state === "unavailable" && next.reason === "action_unavailable") nextKey = "wpf_action_unavailable";
+			else if (next.state === "requires_attempt" && next.reason === "owned_attempt_required") nextKey = "wpf_next_attempt";
+		}
 		const list = h$1("dl", { class: "pm-work-profile-states" });
 		for (const name of states$1) {
 			const state = data.states[name], value = h$1("dd", {}, t("wpf_" + state.value));
@@ -37013,9 +37028,12 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 			}
 			if (typeof gap.last_success_at === "number" && Number.isFinite(gap.last_success_at) && gap.last_success_at > 0) details.push(timeStamp(gap.last_success_at));
 		}
-		facts.replaceChildren(h$1("h4", {}, t("wpf_coding")), h$1("p", { class: "muted" }, t("wpf_locked")), list, ...data.states.can_start_own.value !== "ready" ? [h$1("p", { class: "muted" }, t("wpf_unverified"))] : [], ...details, h$1("h4", {}, t("wpf_pm")), h$1("p", {}, t(data.pm_analysis?.pm_ready === true ? "wpf_pm_preflight" : "wpf_pm_unverified")));
+		facts.replaceChildren(h$1("h4", {}, t("wpf_coding")), h$1("p", {
+			class: "muted",
+			"data-work-profile-next-turn": ""
+		}, h$1("strong", {}, t("wpf_next_turn") + " · "), t(nextKey)), h$1("p", { class: "muted" }, t("wpf_locked")), list, ...data.states.can_start_own.value !== "ready" ? [h$1("p", { class: "muted" }, t("wpf_unverified"))] : [], ...details, h$1("h4", {}, t("wpf_pm")), h$1("p", {}, t(data.pm_analysis?.pm_ready === true ? "wpf_pm_preflight" : "wpf_pm_unverified")));
 		const gapName = states$1.find((name) => data.states[name].value !== "ready");
-		announcement.textContent = gapName ? `${t("wpf_" + gapName)}: ${t("wpf_" + data.states[gapName].value)}. ${t("wpf_unverified")}` : "";
+		announcement.textContent = [`${t("wpf_next_turn")}: ${t(nextKey)}`, gapName ? `${t("wpf_" + gapName)}: ${t("wpf_" + data.states[gapName].value)}. ${t("wpf_unverified")}` : ""].filter(Boolean).join(" ");
 		verified = {
 			profile_id: row.profile_id,
 			revision: row.revision,
