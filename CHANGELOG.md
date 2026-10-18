@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- The explicit Overview assessment API freezes current visible facts and saves
+  structured PM priorities in immutable history through the existing native/BAT
+  analysis runtimes. It enforces workspace admission and context/time bounds,
+  preserves original-source withdrawal and recovery, and performs no model work
+  on reads. The Overview card and its refresh/history interface remain in progress.
+
 - Conversation pinning survives late session controls changing the available height.
   Queued programmatic scroll events preserve the reader's existing follow choice;
   readers who scrolled to earlier messages keep their position.

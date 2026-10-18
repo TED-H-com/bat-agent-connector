@@ -22,9 +22,10 @@ def capabilities():
 
 
 class Projection:
-    def __init__(self, ops, principal, wid):
+    def __init__(self, ops, principal, wid, *, retain=None):
         self.ops, self.principal, self.wid = ops, principal, wid
         self.unknown, self.coverage, self.attention = [], {}, []
+        self.retain = retain or (lambda value: None)
 
     def missing(self, field, reason):
         item = {'field': field, 'reason': reason}
@@ -79,6 +80,7 @@ class Projection:
     def visible(self, value, field):
         try:
             pm_source_lineage.require_document(self.ops.db, self.principal, value)
+            self.retain(value)
             return True
         except OperationError as exc:
             if exc.status not in (403, 404, 409, 413):
@@ -117,9 +119,11 @@ class Projection:
                 self.ops, self.principal, self.wid, latest))
             if candidate:
                 row = candidate['plan']
+                self.retain(row)
                 self.add('decision', row['document']['title'], {'kind': 'plan_revision', 'id': latest}, row['created_at'])
         if not plan:
             return None, None
+        self.retain(plan)
         goal = next((item['value'] for slot in GOAL_SLOTS for item in plan['document']['selected_inputs']
             if item['slot'] == slot and item['status'] in {'user_confirmed', 'repo_evidence'}), None)
         if goal is None:
@@ -213,9 +217,9 @@ class Projection:
         for binding in page['bindings'] if page else []:
             ref = {'kind': 'work_item', 'id': binding['work_item_id']}
             try:
-                pm_thread_contexts.resolve(self.ops, self.principal, self.wid, ref)
+                resolved = pm_thread_contexts.resolve(self.ops, self.principal, self.wid, ref)
                 if binding['plan_revision_id']:
-                    pm_thread_contexts.resolve(self.ops, self.principal, self.wid,
+                    plan_source = pm_thread_contexts.resolve(self.ops, self.principal, self.wid,
                         {'kind': 'plan_revision', 'id': binding['plan_revision_id']})
             except OperationError as exc:
                 if exc.status not in (403, 404, 409, 413):
@@ -224,6 +228,10 @@ class Projection:
                     self.incomplete('work')
                 continue
             item = work_items._get_item(self.ops.db, binding['work_item_id'])
+            self.retain(resolved)
+            if binding['plan_revision_id']:
+                self.retain(plan_source)
+            self.retain({'binding': binding, 'work': item})
             result[item['work_item_id']] = {'binding': binding, 'work': item}
         return result
 
@@ -370,13 +378,14 @@ class Projection:
         for item in page['revision']['document']['milestones']:
             ref = {'kind': 'milestone', 'id': item['milestone_id'], 'revision_id': rid}
             try:
-                pm_thread_contexts.resolve(self.ops, self.principal, self.wid, ref)
+                resolved = pm_thread_contexts.resolve(self.ops, self.principal, self.wid, ref)
             except OperationError as exc:
                 if exc.status not in (403, 404, 409, 413):
                     raise
                 if exc.status in (409, 413):
                     self.incomplete('roadmap')
                 continue
+            self.retain(resolved)
             date = dates.get(item['milestone_id'])
             if date is None:
                 self.missing('milestones.forecast_date', 'source_unavailable' if head['forecast_revision_id'] and forecast is None else 'not_recorded')
@@ -422,6 +431,7 @@ class Projection:
                 AND json_extract(a.result,'$.version')<=t.version AND o.action='pm.thread.rename')
             ORDER BY p.sequence LIMIT ?""", decode)
         for row in rows:
+            self.retain(row)
             self.add('decision', row['document']['title'], {'kind': 'proposal', 'id': row['proposal_id']}, row['created_at'])
 
     def findings(self):
@@ -434,6 +444,7 @@ class Projection:
             self.ops, self.principal, self.wid))
         if not page:
             return
+        self.retain(page)
         if all(source['status'] in {'disabled', 'stopped'} for source in page['sources'].values()):
             self.coverage['findings']['status'] = 'not_applicable'
         for name, source in page['sources'].items():
@@ -505,6 +516,7 @@ class Projection:
                 self.incomplete('lifecycle_inflight', 'source_unavailable')
                 self.coverage['lifecycle_inflight']['omitted'] = None
                 return None
+            self.retain(row)
             page = self.source('lifecycle_inflight', 'pm_lifecycle_inflight', lambda: pm_lifecycle.list_inflight(
                 self.ops, self.principal, self.wid, limit=20))
             if page and page.get('visibility_filtered'):

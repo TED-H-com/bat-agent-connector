@@ -173,6 +173,8 @@ class ApiV1:
         pm_conversation_proposals.install(daemon.ops)
         from . import pm_continuation
         pm_continuation.install(daemon.ops)
+        from . import pm_overview_assessments
+        pm_overview_assessments.install(daemon.ops)
         pm_work_packages.install(daemon.ops)
         pm_spec_materialization.install(daemon.ops)
         pm_work_batches.install(daemon.ops)
@@ -305,6 +307,8 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-profiles/(?P<profile_id>wpf_[0-9a-f]{32})/readiness", self.pm_work_profile_readiness, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/conversation-proposals", self.pm_conversation_proposals, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/conversation-proposals/(?P<proposal_id>pmcp_[0-9a-f]{32})", self.pm_conversation_proposal, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/overview-assessments", self.pm_overview_assessments, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/overview-assessments/(?P<assessment_id>pmoa_[0-9a-f]{32})", self.pm_overview_assessment, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/follow-up-assessments", self.pm_follow_up_assessments, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/snapshots/(?P<snapshot_id>pmsnap_[0-9a-f]{32})/brief-export", self.pm_brief_export, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/follow-up-assessments/(?P<assessment_id>pmfa_[0-9a-f]{32})", self.pm_follow_up_assessment, "observe"),
@@ -532,6 +536,7 @@ class ApiV1:
                       self.pm_governance_records, self.pm_governance_record, self.pm_governance_history,
                       self.pm_follow_ups, self.pm_follow_up, self.pm_follow_up_latest,
                       self.pm_follow_up_assessments, self.pm_follow_up_assessment,
+                      self.pm_overview_assessments, self.pm_overview_assessment,
                       self.pm_conversation_proposals, self.pm_conversation_proposal,
                       self.pm_brief_export, self.pm_work_deliveries, self.pm_context_bundle,
                       self.pm_lifecycle, self.pm_lifecycle_transitions, self.pm_lifecycle_transition, self.pm_lifecycle_inflight,
@@ -1083,6 +1088,12 @@ class ApiV1:
     async def pm_conversation_proposal(self, principal, query, workspace_id, proposal_id, **_):
         return self._pm_read(principal, "pm_conversation_proposal_get", query, workspace_id=workspace_id, proposal_id=proposal_id)
 
+    async def pm_overview_assessments(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_overview_assessments_list", query, workspace_id=workspace_id)
+
+    async def pm_overview_assessment(self, principal, query, workspace_id, assessment_id, **_):
+        return self._pm_read(principal, "pm_overview_assessment_get", query, workspace_id=workspace_id, assessment_id=assessment_id)
+
     async def pm_follow_up_assessments(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_follow_up_assessments_list", query, workspace_id=workspace_id)
 
@@ -1282,6 +1293,7 @@ class ApiV1:
                                                         "materialization_action": "pm.spec.materialize",
                                                         "requirement_acceptance_profiles": ["accepted_requirements_v1"]},
                                                     "follow_up_analysis": "pm.follow_up.analyze" in self.daemon.ops.actions,
+                                                    "overview_assessment": "pm.overview.assess" in self.daemon.ops.actions,
                                                     "conversation_proposals": pm_conversation_proposals.capabilities(),
                                                     "brief_export": {"formats": ["markdown", "html", "svg"], "locales": ["en", "zh-TW"], "renderer_version": 4},
                                                     "follow_up_prepare": "pm.follow_up.prepare" in self.daemon.ops.actions,
