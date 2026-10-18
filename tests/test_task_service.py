@@ -2890,7 +2890,7 @@ async def test_agy_provider_contract_with_fake_endpoint():
         await server.wait_closed()
 
 
-@pytest.mark.parametrize("failure", ["quota", "setup"])
+@pytest.mark.parametrize("failure", ["quota", "exhausted_quota", "setup"])
 @authenticated_task_test
 async def test_goose_provider_fallback_before_prompt_only(task_controller, tmp_path, monkeypatch, failure):
     script = tmp_path / "fake_acp.py"
@@ -2901,8 +2901,10 @@ for line in sys.stdin:
     with open(log,"a") as f: f.write(os.environ["GOOSE_PROVIDER"]+":"+os.environ["GOOSE_MODEL"]+":"+req["method"]+":"+str("BATC_PRIVATE_TEST_SECRET" in os.environ)+"\\n")
     if req["method"]=="notifications/initialized":
         continue
-    if req["method"]=="initialize" and os.environ["GOOSE_PROVIDER"]=="claude-acp" and sys.argv[2]=="quota":
-        result={"jsonrpc":"2.0","id":req["id"],"error":{"status":429}}
+    if req["method"]=="initialize" and os.environ["GOOSE_PROVIDER"]=="claude-acp" and sys.argv[2] in {"quota","exhausted_quota"}:
+        error={"status":429}
+        if sys.argv[2]=="exhausted_quota": error["code"]="insufficient_quota"
+        result={"jsonrpc":"2.0","id":req["id"],"error":error}
     elif req["method"]=="session/new" and os.environ["GOOSE_PROVIDER"]=="claude-acp" and sys.argv[2]=="setup":
         result={"jsonrpc":"2.0","id":req["id"],"error":{"code":"unsupported_model"}}
     elif req["method"]=="session/new":
@@ -2931,6 +2933,8 @@ for line in sys.stdin:
     assert lines.count("openai:claude-opus-4-6-thinking:session/prompt:False") == 1
     assert all(line.endswith(":False") for line in lines)
     assert [b["provider"] for b in j.branches(task["task_id"])] == ["claude", "agy-claude"]
+    if failure == "exhausted_quota":
+        assert j.branches(task["task_id"])[-1]["reason"] == "quota_error"
     assert j.provider_unavailable("claude", since=0)
     j.close()
 
