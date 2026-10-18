@@ -127,5 +127,5 @@ export function overviewAssessmentRequest(options) {
       if(current(ticket))status.replaceChildren();
     }catch(error){fail(error,ticket);}finally{if(ticket===serial)preparing=false;}
   }
-  return {element,prepare,clear,locked:()=>Boolean(request?.locked()),recheck:()=>request?.recheck()};
+  return {element,prepare,clear,hasPending:()=>{try{return Boolean(pending()||localStorage.getItem(pointerKey));}catch{return true;}},locked:()=>Boolean(request?.locked()),recheck:()=>request?.recheck()};
 }

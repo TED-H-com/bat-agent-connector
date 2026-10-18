@@ -82,8 +82,10 @@ Roadmap 與 Brief 使用同一份固定的需求與完成定義評估。遺失�
 #174、#175、#167、#177、#179 與 #180 已合併至主線。
 [#141](https://github.com/TED-H-com/bat-agent-connector/issues/141) 的連線網址首次使用已由 #153 合併，工作階段狀態、診斷與路徑亦已隨 #152、#171、#169 合併；
 [#142 本機主機設計](../design/local-host.md)的本機 Git 尚未實作；#167 的 Git transport 合約已合併，本機 Git 仍回報無法使用。
-[#143](https://github.com/TED-H-com/bat-agent-connector/issues/143) 的 PM 重點判讀只有
-[#144 設計](../design/pm-overview-assessment.md)，未由進度提示取代，待負責人裁決。
+[#143](https://github.com/TED-H-com/bat-agent-connector/issues/143) 的 PM 重點判讀已依 EC-1.1 後續授權進入實作候選：
+固定總覽依據、既有 native／BAT 分析、不可變判讀、來源撤回、受理限制及雙語卡片／詳情／歷史。
+候選沿用[既定契約](../design/pm-overview-assessment.md)的保守預設；模型判讀必須明確啟動，
+不會自動採用或執行建議。尚未合併、發布或進行真實 PM 品質驗收，不能視為整個 PM 計畫完成。
 
 完整[採用計畫](pm-v1.2-plan.md)的 W01–W52、A01–A64、M0–M6 保留。
 M5 保留[歷史來源](progress-2026-10-12.md)（M4 已隨 #116 合併至主線），不能由本輪 UI 推定完成。

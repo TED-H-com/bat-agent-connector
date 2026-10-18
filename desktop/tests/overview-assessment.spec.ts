@@ -31,8 +31,8 @@ function assessmentFixture(locale='en') {
     operation_id:opId,as_of:1792320000,created_at:1792320000,projection_digest:'a'.repeat(64),validation:{status:'format_valid'},
     document:{version:1,judgment:{key:'j',template:'decision_first',subject_ref:'decision',basis_refs:['decision']},recommendations:[],
       needs_decision:[{key:'d.a',template:'confirm_direction',subject_ref:'decision',basis_refs:['decision']}],can_be_handled:[],watch:[],limitations:[]}}};
-  const state={withdrawn:false,lost:false,empty:false,partial:false,readOnly:false,version:1,newer:false,needsReview:false,
-    writes:[] as any[],previews:0,operation:null as any,create:null as any};
+  const state={withdrawn:false,lost:false,empty:false,partial:false,readOnly:false,version:1,newer:false,needsReview:false,noAgent:false,unsupported:false,
+    holdDetail:null as string|null,releaseDetail:null as null|(()=>void),writes:[] as any[],previews:0,operation:null as any,create:null as any};
   const dispatch=async(input:any)=>{
     const url=new URL(input.path,'http://fixture'),path=url.pathname;
     if(input.method==='POST'&&[assessAction,'pm.thread.create'].includes(input.body?.action)) {
@@ -54,6 +54,7 @@ function assessmentFixture(locale='en') {
       return {status:200,data:{version:1,workspace_id:wid,order:'newest_first',assessments:rows,partial:filtered,next_cursor:filtered?'original_cursor':null,source_filtered:filtered}};
     }
     if(path.startsWith(root+'/overview-assessments/')) {
+      if(state.holdDetail===path.split('/').at(-1))await new Promise<void>(resolve=>{state.releaseDetail=resolve;});
       if(state.withdrawn)return {status:404,data:{error:{code:'PM_OVERVIEW_SOURCE_UNAVAILABLE',message:'Sources withdrawn'}}};
       const copy=structuredClone(data);copy.assessment.assessment_id=path.split('/').at(-1);
       if(state.needsReview){copy.assessment.document=null;copy.assessment.validation={status:'needs_review'};copy.assessment.raw_reply='<script>untrusted reply</script>';}
@@ -71,7 +72,7 @@ function assessmentFixture(locale='en') {
       caps.scopes=state.readOnly?['observe']:['observe','manage','start'];caps.actions.push({action:assessAction,allowed:!state.readOnly});
     }
     if(path===root+'/capabilities') {
-      result.data.overview_assessment={version:1,authorized:!state.readOnly,eligible_for_preflight:true,limits};
+      result.data.overview_assessment=state.unsupported?undefined:{version:1,authorized:!state.readOnly,eligible_for_preflight:!state.noAgent,limits};
       result.data.structured_analysis={version:1,actions:{[assessAction]:{adapters:[
         {adapter:'codex-native-linux',action_registered:true,authorized:!state.readOnly,eligible_for_preflight:true},
         {adapter:'bat-pm-linux-v1',action_registered:true,authorized:!state.readOnly,eligible_for_preflight:true}]}}};
@@ -148,7 +149,9 @@ test('invalid result remains inspectable without rendering model prose as advice
   const x=assessmentFixture();x.state.needsReview=true;await x.mount(page);
   const card=page.locator('[data-overview-assessment]');await expect(card).toContainText('This reply needs review');
   expect(await card.locator('[data-overview-assessment-claim]').count()).toBe(0);
-  await card.getByText('Original reply',{exact:true}).click();await expect(card.locator('pre')).toHaveText('<script>untrusted reply</script>');
+  await card.locator('[data-overview-assessment-details]').click();
+  const history=page.locator('[data-overview-assessment-history]');
+  await history.getByText('Original reply',{exact:true}).click();await expect(history.locator('pre')).toHaveText('<script>untrusted reply</script>');
   expect(await card.locator('script').count()).toBe(0);expect(x.state.writes).toEqual([]);
 });
 
@@ -173,8 +176,42 @@ test('background evidence update preserves draft focus and requires explicit sel
 
 test('central admission limit disables fresh model work without removing the previous assessment',async({page})=>{
   const x=assessmentFixture();x.limits.allowed=false;x.limits.retry_at=1792320123 as any;await x.mount(page);
-  await page.locator('[data-overview-assessment-prepare]').click();
-  const form=page.locator('[data-pm-action="pm.overview.assess"]');await expect(form).toContainText('Assessment is available again after');
-  await expect(form.locator('button[type=submit]')).toBeDisabled();
+  await expect(page.locator('[data-overview-assessment-availability]')).toContainText('Assessment is available again after');
+  await expect(page.locator('[data-overview-assessment-prepare]')).toBeDisabled();
   await expect(page.locator('[data-overview-assessment-content]')).toContainText('Keep account recovery in scope');expect(x.state.writes).toEqual([]);
+});
+
+for(const mode of ['unconfigured','unsupported'])test(`assessment handles ${mode} central without model work`,async({page})=>{
+  const x=assessmentFixture();x.state.empty=true;x.state.noAgent=mode==='unconfigured';x.state.unsupported=mode==='unsupported';await x.mount(page);
+  await expect(page.locator('[data-overview-metric=goal]')).toContainText(x.f.copy.goal);
+  const card=page.locator('[data-overview-assessment]');
+  if(mode==='unsupported')await expect(card).toBeHidden();
+  else {await expect(card).toContainText('PM agent is not connected.');await expect(card.locator('[data-overview-assessment-prepare]')).toBeDisabled();
+    await expect(card.getByRole('link',{name:'Set up PM'})).toHaveAttribute('href',`#/settings?section=agents&from=${encodeURIComponent(`#/pm/${x.f.ids.workspaceId}/overview`)}`);}
+  expect(x.state.writes).toEqual([]);
+});
+
+
+test('late history selection cannot replace the subsequently selected original assessment',async({page})=>{
+  const x=assessmentFixture();x.state.newer=true;await x.mount(page);const card=page.locator('[data-overview-assessment]');
+  await expect(card).toContainText('Keep account recovery in scope');await card.getByRole('button',{name:'Assessment history',exact:true}).click();
+  x.state.holdDetail=assessmentId;
+  await page.locator(`[data-overview-history-id="${assessmentId}"]`).click();await expect.poll(()=>Boolean(x.state.releaseDetail)).toBe(true);
+  const other='pmoa_'+'6'.repeat(32);await page.locator(`[data-overview-history-id="${other}"]`).click();
+  await expect(page.locator('[data-overview-history-detail] [data-overview-assessment-id]')).toHaveAttribute('data-overview-assessment-id',other);
+  x.state.holdDetail=null;x.state.releaseDetail!();
+  await page.getByRole('complementary').last().getByText('Original evidence',{exact:true}).first().click();
+  await expect(page.locator('[data-overview-history-detail] [data-overview-assessment-id]')).toHaveAttribute('data-overview-assessment-id',other);expect(x.state.writes).toEqual([]);
+});
+
+test('compact card keeps extra recommendations and watch items in exact Details',async({page})=>{
+  const x=assessmentFixture(),doc=x.data.assessment.document;
+  doc.recommendations=[{key:'r.a',template:'prepare_options',subject_ref:'decision',basis_refs:['decision']},
+    {key:'r.b',template:'review_evidence',subject_ref:'decision',basis_refs:['decision']}];
+  x.data.context.source_references.risk={category:'risk',label:'A recorded risk',ref:{kind:'plan_revision',id:x.f.ids.planV3}};
+  doc.watch=[{key:'w.a',template:'watch_recorded_risk',subject_ref:'risk',basis_refs:['risk']}];
+  await x.mount(page);const card=page.locator('[data-overview-assessment]');
+  await expect(card.locator('.pm-assessment-summary-row')).toHaveCount(4);await expect(card).not.toContainText('A recorded risk');
+  await card.locator('[data-overview-assessment-details]').click();const detail=page.locator('[data-overview-history-detail]');
+  await expect(detail).toContainText('A recorded risk');await expect(detail.locator('[data-overview-assessment-claim="r.b"]')).toBeVisible();expect(x.state.writes).toEqual([]);
 });

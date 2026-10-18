@@ -20,8 +20,13 @@ model budget. The original design-only document did not authorize implementation
 The October 14 inspection and line references below remain historical. The
 owner subsequently authorized continuing the full EC-1.1 plan and shipping
 reviewed increments. The backend increment now implements this contract on the
-integrated Workbench baseline; the card and explicit refresh/history interface
-are subsequent increments under the same issue #143.
+integrated Workbench baseline. The same candidate now adds the shared Live card,
+explicit request/recovery controls and exact history inspector under issue #143.
+The initial four-group card keeps additional recommendations, arrangements, watch
+items and original provenance in Details. First use prepares its ordinary carrier
+through a durable thread-create request; model analysis remains a separate explicit
+action. Existing history supplies the carrier on later clients. Read refreshes do
+not spend model budget. This candidate is not yet merged, packaged or live-tested.
 
 Version 1 uses the proposed deterministic templates, a visible ordinary carrier,
 Live-only placement, one turn, 300 seconds, 32,000 context characters / 256 KiB,
@@ -33,7 +38,9 @@ measured dollar cap or real model acceptance evidence.
 The new `pm.overview.assess` action freezes its selector inside the intent INSERT
 transaction, uses the existing structured adapters, and atomically saves its
 immutable assessment with the original verified import receipt. New admissions
-are counted from original operations across actors. Replay and recovery keep the
+are counted from original operations across actors, using the timestamp after the
+admission transaction acquires its lock. A same-key admission race rechecks the
+original source-gated receipt before reserving another rate slot. Replay and recovery keep the
 original key, adapter and source bundle. Invalid output remains review-only.
 
 HTTP `/api/v1/pm/workspaces/{workspace_id}/overview-assessments` and its exact

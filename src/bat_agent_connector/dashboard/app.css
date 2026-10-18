@@ -2281,6 +2281,14 @@ body.pm-mode #main { padding: 0; }
   [data-overview-assessment] > header { align-items: flex-start; flex-wrap: wrap; }
   [data-overview-assessment] .ui-header-actions { flex-wrap: wrap; }
 }
+
+.pm-assessment-summary { margin: var(--space-3) 0 0; }
+.pm-assessment-summary-row { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: var(--space-3); padding-block: var(--space-2); }
+.pm-assessment-summary dt { color: var(--text-3); font-size: var(--fs-small); }
+.pm-assessment-summary dd { margin: 0; line-height: 1.55; min-width: 0; }
+.pm-assessment-decision { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.pm-assessment-decision + .pm-assessment-decision { margin-top: var(--space-2); }
+@media (max-width: 599px) { .pm-assessment-summary-row { grid-template-columns: minmax(0, 1fr); gap: var(--space-1); } }
 /* Discussions owns this layout; shared controls retain the design-system tokens. */
 [data-discussions] { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 0; min-width: 0; height: calc(100dvh - 144px); min-height: 480px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); overflow: hidden; }
 [data-discussions] .pm-workspace-list { display: flex; flex-direction: column; gap: var(--space-2); overflow: auto; padding: var(--space-3); border-right: 1px solid var(--line); min-width: 0; }
