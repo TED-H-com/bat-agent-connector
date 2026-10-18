@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Discussion info supports browser Back/Forward while retaining the selected tab,
+  reading position and original drafts. Workspace/thread withdrawal invalidates
+  the old sheet entry without navigating away or sending a message.
+
 - Workbench on phones opens a full-screen Work list separately from workspace
   settings. Returning preserves the search, selected row and list position.
   Browser Back closes the Results sheet before leaving the Work; Forward reopens

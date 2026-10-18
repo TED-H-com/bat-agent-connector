@@ -1,6 +1,7 @@
 import {contextChip, tabs, inspector, button, iconButton, disclosure} from './ui/components.js';
 import {h} from './ui/dom.js';
 import {viewState} from './ui/view-state.js';
+import {sheetHistory} from './ui/sheet-history.js';
 import {locale} from './i18n.js';
 import {findingName} from './ui/finding-name.js';
 
@@ -137,13 +138,14 @@ export function discussionFeedback({t, request, node, eligible}) {
     }}));
   }
 }
-export function discussionPanel({t, namespace, workspaceId, threadId = 'new', panes, onSelect = () => {}}) {
+export function discussionPanel({t, namespace, workspaceId, threadId = 'new', panes, onSelect = () => {}, canRestore = () => false}) {
   // Only cosmetic choices live in this page-session map, never source records.
   const state = viewState(namespace, workspaceId, 'discussion-panel.' + threadId);
   if (!Object.hasOwn(panes, state.tab)) state.tab = 'context';
   const home = h('aside', {class: 'pd-panel-home', hidden: true}), body = h('div', {class: 'pd-panel', 'data-discussion-panel': ''});
-  let overlay = null, opener = null, panelFocus = null, disposed = false;
+  let overlay = null, opener = null, panelFocus = null, navigation = null, disposed = false, scroll = 0;
   const media = matchMedia('(min-width: 1200px)');
+  home.addEventListener('scroll', () => {if (media.matches && overlay) scroll = home.scrollTop;});
   const select = key => {
     if (!Object.hasOwn(panes, key)) return;
     state.tab = key;
@@ -167,7 +169,16 @@ export function discussionPanel({t, namespace, workspaceId, threadId = 'new', pa
   }
   function close(explicit = false) {
     if (explicit) {state.explicit = true; state.open = false;}
+    // Withdrawal and unmount invalidate Forward without navigating the user.
+    if (!explicit) {navigation?.dispose(); navigation = null;}
     overlay?.close();
+  }
+  function conceal() {
+    if (!overlay) return;
+    // Read before the inspector removes its dock: removing it collapses home's
+    // scroll range, and a queued scroll event may not have fired yet.
+    scroll = media.matches ? home.scrollTop : overlay.body.scrollTop;
+    overlay.close();
   }
   function open(key = 'context', {explicit = true, returnFocus, focus = explicit} = {}) {
     if (disposed) return;
@@ -175,20 +186,42 @@ export function discussionPanel({t, namespace, workspaceId, threadId = 'new', pa
     if (explicit) state.explicit = true;
     if (returnFocus) opener = returnFocus;
     select(key); controls.setValue(key);
+    if (explicit) {
+      navigation ??= sheetHistory({show: ({restoring}) => reveal(true, restoring), hide: conceal,
+        canRestore: () => !disposed && home.isConnected && canRestore()});
+      navigation.open();
+      if (focus) queueMicrotask(() => {if (overlay) controls.querySelector('[aria-selected=true]')?.focus({preventScroll: true});});
+    } else reveal(focus);
+  }
+  function reveal(focus, restoring = false) {
+    const savedScroll = scroll;
     if (!overlay) {
       home.hidden = false;
       overlay = inspector({title: t('pd_panel'), returnFocus: () => (typeof opener === 'function' ? opener() : opener) || trigger, onClose: () => {
         home.append(body); home.hidden = true; overlay = null; trigger.setAttribute('aria-expanded', 'false');
         if (!disposed) {state.open = false; state.explicit = true;}
         onSelect(null);
+        // An explicit X / Back / Escape consumes the entry. During browser Back
+        // the history helper is already hidden, so this cannot navigate twice.
+        navigation?.close();
       }});
       overlay.addEventListener('focusin', event => {panelFocus = event.target;});
+      const scroller = overlay.body;
+      scroller.addEventListener('scroll', () => {if (!media.matches && overlay?.body === scroller) scroll = scroller.scrollTop;});
       overlay.classList.add('pd-panel-overlay'); overlay.body.append(body); locate();
       if (!focus && media.matches) {const previous = document.activeElement; queueMicrotask(() => {if (previous?.isConnected && !previous.closest('[hidden], [inert]')) previous.focus({preventScroll: true});});}
       trigger.setAttribute('aria-expanded', 'true');
     }
-    onSelect(key);
-    if (focus) queueMicrotask(() => controls.querySelector('[aria-selected=true]')?.focus());
+    state.open = true;
+    onSelect(state.tab);
+    const panel = overlay;
+    if (focus) queueMicrotask(() => {if (overlay === panel) controls.querySelector('[aria-selected=true]')?.focus({preventScroll: true});});
+    // History traversal restores browser scroll after popstate/microtasks. Apply
+    // the retained panel position after that and the inspector's initial focus.
+    if (restoring) requestAnimationFrame(() => {
+      if (overlay !== panel) return;
+      (media.matches ? home : panel.body).scrollTop = savedScroll;
+    });
   }
   media.addEventListener('change', locate);
   return {home, trigger, select(key) {select(key); controls.setValue(key);}, open(key, options) {open(key, options);},
@@ -198,7 +231,7 @@ export function discussionPanel({t, namespace, workspaceId, threadId = 'new', pa
       if (arrived) {state.proposalId = proposalId; state.explicit = false;}
       if (arrived || !state.explicit && (plan || inputs)) open(inputs && !plan ? 'inputs' : 'plan', {explicit: false});
       else if (!overlay && state.open) open(state.tab, {explicit: false});
-    }, close() {close();}, dispose() {disposed = true; media.removeEventListener('change', locate); overlay?.close();}};
+    }, close() {close();}, dispose() {disposed = true; media.removeEventListener('change', locate); close();}};
 }
 
 export function discussionOperation(t, operation) {

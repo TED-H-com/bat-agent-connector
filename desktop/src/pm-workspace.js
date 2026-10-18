@@ -384,7 +384,11 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   try {sendHandoff = JSON.parse(localStorage.getItem(handoffKey));} catch { /* An invalid draft cannot authorize a write. */ }
   const staleSections = new Set(), activationReads = new Map(), maskedSources = new Map();
   let discussionTools = null, boundContext = null, panelContext = null, renameForm = null, threadSearch = null, titleView = null;
-  let draftSourceUnavailable = false;
+  let draftSourceUnavailable = false, contextSequence = 0, settledContextSequence = 0;
+  const canRestoreDiscussion = () => !disposed && loaded && !refreshing && contextSequence === settledContextSequence
+    && workspace?.workspace_id === workspaceId && (threadId === 'new' ? !draftSourceUnavailable
+      : threadData?.thread?.workspace_id === workspaceId && threadData.thread.thread_id === threadId
+        && !(threadData.thread.context || []).some(ref => ref.available === false));
   async function draftSourceRefs(refs = launch.refs, reads = new Map()) {
     const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
     const read = path => {
@@ -1323,7 +1327,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         h('details', {'data-pm-plan': ''}, h('summary', {}, t('pm_direction')), planForm.box),
         planningRevisionForm ? h('details', {'data-pm-planning-revision': ''}, h('summary', {}, t('pm_planning_revision_title')), planningRevisionForm.box) : '',
         proposalReview?.tools || '', revisions?.box || '', brief ? secondary('pm_brief_title', brief.box) : '');
-      discussionTools = discussionPanel({t, namespace, workspaceId, threadId, panes: {context: contextPane,
+      discussionTools = discussionPanel({t, namespace, workspaceId, threadId, canRestore: canRestoreDiscussion, panes: {context: contextPane,
         inputs: h('section', {'data-discussion-tab': 'inputs'}, information), plan: planPane,
         ...(meetings ? {meeting: h('section', {'data-discussion-tab': 'meeting'}, meetings.element)} : {})}, onSelect: key => {
           if (key === 'context') void assessmentSources?.refresh();
@@ -1571,6 +1575,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   }
   async function load({event = false} = {}) {
     const ticket = ++sequence; refreshing = true; refresh.disabled = true;
+    const contextTicket = ++contextSequence;
     assessmentSources?.withdraw();
     if (!event) {invalidateSections(); withdrawNames(); lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();
       ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();qualityReviews?.withdraw();qualitySelections.clear();}
@@ -1656,7 +1661,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
             : workspaceCaps?.native_analysis?.authorized !== false && workspaceCaps?.native_analysis?.eligible_for_preflight === true
               || workspaceCaps?.bat_analysis?.authorized !== false && workspaceCaps?.bat_analysis?.eligible_for_preflight === true));
           const contextDraft = h('section', {'data-discussion-tab': 'context'}, ...discussionContext(t, draftRefs || launch.refs, {title: launch.title}));
-          const draftPanel = discussionPanel({t, namespace, workspaceId, threadId, panes: {context: contextDraft}});
+          const draftPanel = discussionPanel({t, namespace, workspaceId, threadId, canRestore: canRestoreDiscussion, panes: {context: contextDraft}});
           if (threadId === 'new') discussionTools = draftPanel;
           boundContext = h('div', {class: 'pd-context'});
           panelContext = contextDraft;
@@ -1720,6 +1725,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       await register?.setActive(workbench?.selected() === 'issues');
       alive(); if (ticket !== sequence) return;
       await refreshNames(); alive(); if (ticket !== sequence) return;
+      settledContextSequence = contextTicket;
       updateForms();
       if (initialReadComplete) {proposalReview?.recheck(); nativeAnalysis?.recheck();}
     } catch (error) {
@@ -1807,7 +1813,6 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       settleReadComplete();
     }
   }
-  let contextSequence = 0;
   async function refreshDiscussionSources() {
     const ticket = ++contextSequence, generation = sequence;
     assessmentSources?.withdraw();
@@ -1835,6 +1840,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (ticket !== contextSequence || generation !== sequence) return;
       lastThreadList = page; renderThreadRows(page); publishContext();
     }
+    settledContextSequence = ticket;
     content.hidden = false;
     } catch (error) {
       alive(); if (ticket !== contextSequence || generation !== sequence) return;

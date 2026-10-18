@@ -4,11 +4,11 @@ export function sheetHistory({show, hide, canRestore = () => true}) {
   const key = 'batcSheet';
   let disposed = false, visible = false;
   const owned = () => location.href === url && history.state?.[key] === id;
-  const reveal = () => {if (!visible) {visible = true; show();}};
+  const reveal = (restoring = false) => {if (!visible) {visible = true; show({restoring});}};
   const conceal = () => {if (visible) {visible = false; hide();}};
   function pop() {
     if (disposed) return;
-    if (owned() && canRestore()) reveal();
+    if (owned() && canRestore()) reveal(true);
     else conceal();
   }
   window.addEventListener('popstate', pop);
