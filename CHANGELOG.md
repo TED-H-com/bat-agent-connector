@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Conversation pinning survives late session controls changing the available height.
+  Queued programmatic scroll events preserve the reader's existing follow choice;
+  readers who scrolled to earlier messages keep their position.
+
 - Discussions can explicitly prepare a versioned continuation brief with original
   goals, decision facts, fixed references, coverage and up to two next steps.
   Later PM turns reuse a readable brief within their existing context budget;

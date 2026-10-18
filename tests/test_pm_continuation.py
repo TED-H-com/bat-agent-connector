@@ -13,6 +13,7 @@ from bat_agent_connector import (
     pm_continuation,
     pm_discussions,
     pm_native_journal,
+    pm_operation_loop,
     pm_plans,
     pm_runs,
 )
@@ -67,6 +68,9 @@ async def test_incremental_brief_preserves_receipt_and_original_text(proposal_wo
     assert saved['validation']['status'] == 'format_valid', saved
     assert saved['document']['adopted_decisions'] == []
     assert first['outcome']['accepted_plan_changed'] is False
+    public = await pm_operation_loop.attach(ops, OWNER, ops.get(first['operation_id']))
+    assert public['loop']['dashboard_hash'] == f"#/pm/{w['workspace_id']}/discussions/{original['target']['thread_id']}"
+    assert public['loop']['completeness'] == {'status': 'complete', 'reason': None}
     assert plans.version(w) == version and pm_plans.head(ops.db, w['workspace_id']) == head
     assert ops.create(OWNER, **original)[0]['operation_id'] == first['operation_id']
     assert pm_continuation._import(ops.journal, first['run_id'], first['generation']) == pm_runs.get(ops.db, first['run_id'])

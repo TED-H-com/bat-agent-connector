@@ -47,6 +47,7 @@ for(const native of [false,true]){
   await expect(panel).toContainText('This label change was saved');expect(state.posts[2]).toEqual(state.posts[0]);
  });
  test(`${name}: event before POST reply waits for original receipt and failed metadata read`,async({page})=>{
+  await page.clock.install();
   const state=await labelsFixture(page,native,{delayPost:true,status:'running'});const panel=await openLabels(page);
   await panel.getByRole('textbox').fill('Fixed');await panel.getByRole('button',{name:'Save labels',exact:true}).click();
   await expect.poll(()=>Boolean(state.holdPost)).toBe(true);
@@ -55,7 +56,17 @@ for(const native of [false,true]){
   await expect.poll(()=>state.delivered).toBe(true);expect(state.after).toBe(0);state.holdPost();
   await expect(panel).toContainText('Metadata read failed');expect(state.after).toBe(0);
   await expect(panel.getByRole('button',{name:'Review current version and prepare change'})).toBeDisabled();
-  state.failMetadata=false;await expect.poll(()=>state.after).toBe(1);
+  // The shared event reader and the session read each back off after failure.
+  // Drive their real timers within a bounded virtual interval; do not race the
+  // five-second wall-clock assertion against a queued three-second retry.
+  await page.clock.pauseAt(await page.evaluate(() => Date.now()));
+  state.failMetadata=false;
+  let advanced=0;
+  await expect.poll(async()=>{
+   if(state.after===1)return 1;
+   if(advanced>=8000)throw Error('Metadata recovery did not acknowledge within 8 virtual seconds');
+   await page.clock.runFor(250);advanced+=250;return state.after;
+  },{intervals:[10]}).toBe(1);
   await expect(panel).toContainText('This label change was saved');expect(state.posts).toHaveLength(1);
  });
  test(`${name}: active draft survives label event and uses its originally observed version`,async({page})=>{

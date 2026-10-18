@@ -53394,6 +53394,11 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 			return false;
 		}
 	};
+	let scrollPosition = 0;
+	const setPosition = (value) => {
+		viewport.scrollTop = value;
+		scrollPosition = viewport.scrollTop;
+	};
 	const atBottom = () => viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 48;
 	const visible = () => {
 		if (document.visibilityState !== "visible") return [];
@@ -53421,7 +53426,7 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 	const follow = () => {
 		pinned = true;
 		unseen = 0;
-		viewport.scrollTop = viewport.scrollHeight;
+		setPosition(viewport.scrollHeight);
 		indicator();
 	};
 	const run = async (action, summary = t("conversation_save_failed"), isSave = true) => {
@@ -53447,7 +53452,8 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 		}
 	};
 	const onScroll = () => {
-		if (initialized && !resizing) pinned = atBottom();
+		if (initialized && !resizing && viewport.scrollTop !== scrollPosition) pinned = atBottom();
+		scrollPosition = viewport.scrollTop;
 		indicator();
 	};
 	viewport.addEventListener("scroll", onScroll, { passive: true });
@@ -53457,7 +53463,7 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 		resizing = true;
 		requestAnimationFrame(() => {
 			if (!alive()) return;
-			if (pinned && initialized) viewport.scrollTop = viewport.scrollHeight;
+			if (pinned && initialized) setPosition(viewport.scrollHeight);
 			requestAnimationFrame(() => {
 				resizing = false;
 				indicator();
@@ -53466,7 +53472,7 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 	};
 	window.addEventListener("resize", onResize);
 	const resized = typeof ResizeObserver === "function" ? new ResizeObserver(() => {
-		if (alive() && pinned && initialized) viewport.scrollTop = viewport.scrollHeight;
+		if (alive() && pinned && initialized) setPosition(viewport.scrollHeight);
 	}) : null;
 	resized?.observe(viewport);
 	const copy = async (text) => {
@@ -53656,23 +53662,23 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 		}));
 		if (initialized && !followNow && added) unseen += added;
 		if (followNow) {
-			viewport.scrollTop = viewport.scrollHeight;
+			setPosition(viewport.scrollHeight);
 			pinned = true;
 			unseen = 0;
 			notice.hidden = true;
 		} else if (savedScroll) {
-			viewport.scrollTop = memory.scrollTop;
+			setPosition(memory.scrollTop);
 			notice.hidden = true;
-		} else if (anchor && next.has(anchor[0])) viewport.scrollTop += next.get(anchor[0]).node.getBoundingClientRect().top - viewport.getBoundingClientRect().top - offset;
+		} else if (anchor && next.has(anchor[0])) setPosition(viewport.scrollTop + next.get(anchor[0]).node.getBoundingClientRect().top - viewport.getBoundingClientRect().top - offset);
 		else {
-			viewport.scrollTop = scrollTop;
+			setPosition(scrollTop);
 			if (anchor) notice.hidden = false;
 		}
 		rows = next;
 		if (state?.restore) {
 			const row = [...rows.values()].find((row) => row.id === state.restore.message_id);
 			if (row) {
-				viewport.scrollTop += row.node.getBoundingClientRect().top - viewport.getBoundingClientRect().top - state.restore.offset;
+				setPosition(viewport.scrollTop + row.node.getBoundingClientRect().top - viewport.getBoundingClientRect().top - state.restore.offset);
 				notice.hidden = false;
 				notice.textContent = t("conversation_restored");
 			} else {
@@ -53681,7 +53687,7 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 			}
 		}
 		if (state?.latest) {
-			viewport.scrollTop = viewport.scrollHeight;
+			setPosition(viewport.scrollHeight);
 			notice.hidden = true;
 			viewport.focus({ preventScroll: true });
 		}
@@ -53700,7 +53706,7 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 			progress.textContent = summary.line;
 			progress.title = [summary.detail, t("conversation_count_note")].filter(Boolean).join(" ");
 		} else caption.textContent = countCaption(next.size, more);
-		if (!initialized || followNow || savedScroll || state?.latest || state?.restore) pinned = atBottom() || followNow;
+		if (!initialized || followNow || savedScroll || state?.latest || state?.restore || state?.preserve) pinned = atBottom() || followNow && !state?.restore && !state?.preserve;
 		initialized = true;
 		indicator();
 	};
