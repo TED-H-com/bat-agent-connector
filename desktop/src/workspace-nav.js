@@ -226,7 +226,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
         for (const id of expanded) if (ids.has(id)) {
           const detail = await api('GET', `/projects/${encodeURIComponent(id)}`); current(); projects.set(id, detail);
         }
-        if (catalogKnown && !roots.length && !sessionsLoaded && ['#/home', '#/sessions', '#/', ''].includes(selected)) sessionTree.open = true;
+        if (catalogKnown && !roots.length && !sessionsLoaded && ['#/home', '#/sessions', '#/work-list', '#/', ''].includes(selected)) sessionTree.open = true;
         if (sessionTree.open && (!pmWorkspace || globalTree)) {
           const rows = new Map(), cursors = new Set();
           let cursor = null;
@@ -295,6 +295,8 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     sessionTree.hidden = Boolean(id) && !all; heading.hidden = Boolean(id) && !all;
     render(); refresh().catch(() => {});
   }, select(hash) {
+    // The list is a location, not a different selected Work. Keep its last highlight.
+    if (hash === '#/work-list' && workbenchEnabled()) return;
     selected = hash;
     const [type, pid] = hash.replace(/^#\//, '').split('/');
     if (['project', 'dispatch', 'work'].includes(type) && pid) {

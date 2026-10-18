@@ -4,6 +4,7 @@ import {t} from '../i18n.js';
 import {icon as drawIcon} from './icons.js';
 import {statusVocabulary} from './ui-strings.js';
 import {errorPresentation} from '../error-presentation.js';
+import {sheetHistory} from './sheet-history.js';
 export {statusVocabulary};
 let sequence = 0;
 const uid = () => `ui-${++sequence}`;
@@ -242,7 +243,7 @@ export function trapFocus(root, event) {
   else if (event.shiftKey && (document.activeElement === first || !root.contains(document.activeElement))) {event.preventDefault(); last.focus();}
   else if (!event.shiftKey && (document.activeElement === last || !root.contains(document.activeElement))) {event.preventDefault(); first.focus();}
 }
-export function inspector({title, onClose = () => {}, returnFocus, dock = false, overlay = false} = {}) {
+export function inspector({title, onClose = () => {}, returnFocus, dock = false, overlay = false, historyNavigation = false, canReopen = () => true} = {}) {
   const opener = document.activeElement, media = matchMedia('(min-width: 1200px)'), titleId = uid();
   const wide = () => media.matches && !overlay;
   const body = h('div', {class: 'ui-inspector-body'});
@@ -276,6 +277,7 @@ export function inspector({title, onClose = () => {}, returnFocus, dock = false,
     else if (!wide()) trapFocus(root, event);
   }
   let closed = false;
+  const sheet = historyNavigation && dock && overlay ? sheetHistory({show: reveal, hide, canOpen: () => !closed && root.isConnected && canReopen()}) : null;
   function restoreFocus() {
     let target = null;
     try { target = typeof returnFocus === 'function' ? returnFocus() : returnFocus; } catch { target = null; }
@@ -284,10 +286,14 @@ export function inspector({title, onClose = () => {}, returnFocus, dock = false,
     else if (rendered(opener)) opener.focus();
   }
   function destroy() {
-    if (closed) return; closed = true; release(); scrim.remove(); root.remove();
+    if (closed) return; closed = true; sheet?.dispose(); release(); scrim.remove(); root.remove();
     document.removeEventListener('keydown', keys); media.removeEventListener('change', onMedia);
   }
   function close() {
+    if (sheet) {sheet.close(); return;}
+    hide();
+  }
+  function hide() {
     if (closed) return;
     if (dock && !wide()) {
       root.hidden = true; release(); scrim.remove(); root.removeAttribute('aria-modal');
@@ -298,12 +304,16 @@ export function inspector({title, onClose = () => {}, returnFocus, dock = false,
     destroy(); onClose(); restoreFocus();
   }
   function open() {
+    if (sheet) {sheet.open(); return;}
+    reveal();
+  }
+  function reveal() {
     if (closed) return;
     root.hidden = false; resize();
     (matchMedia('(max-width: 799px)').matches ? back : closeButton).focus();
   }
   function onMedia() {
-    if (dock && !wide()) root.hidden = true;
+    if (dock && !wide() && !sheet) root.hidden = true;
     if (dock && wide()) root.hidden = false;
     resize();
   }

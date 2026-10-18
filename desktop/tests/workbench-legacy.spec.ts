@@ -429,7 +429,7 @@ for (const lang of ['en', 'zh-TW'] as const) {
           // Wait for hash to change away and the destination view to settle
           await expect.poll(() => page.evaluate(() => location.hash)).not.toBe(expectedHash);
           await expect(otherEntry).toHaveAttribute('aria-current', 'page');
-          await expect(page.locator('#main h1').first()).toBeVisible();
+          await expect(page.getByRole('main').getByRole('heading', {level: 1}).first()).toBeVisible();
           await waitForViewSettled(page);
 
           // Press Back
@@ -484,7 +484,7 @@ for (const lang of ['en', 'zh-TW'] as const) {
 
             await expect.poll(() => page.evaluate(() => location.hash)).not.toBe(expectedHash);
             await expect(other).toHaveAttribute('aria-current', 'page');
-            await expect(page.locator('#main h1').first()).toBeVisible();
+            await expect(page.getByRole('main').getByRole('heading', {level: 1}).first()).toBeVisible();
             await waitForViewSettled(page);
 
             await page.goBack();
@@ -787,12 +787,11 @@ for (const {lang, width} of featureMapMatrix) {
           uiMethod = 'switcher-menu';
         } else {
           await ensureDrawerOpen(page, width);
-          const catalogLink = page.locator('.shell-all-projects').first();
-          await expect(catalogLink).toBeVisible();
-          await catalogLink.click();
+          await page.locator('.shell-workspace-switch').click();
+          await page.locator('.ui-menu:has(.shell-workspace-switch) [role="menuitem"][href="#/projects"]').click();
           await ensureDrawerClosed(page, width);
           reached = true;
-          uiMethod = 'catalog-link';
+          uiMethod = 'switcher-menu';
         }
       }
 

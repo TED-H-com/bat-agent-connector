@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Workbench on phones opens a full-screen Work list separately from workspace
+  settings. Returning preserves the search, selected row and list position.
+  Browser Back closes the Results sheet before leaving the Work; Forward reopens
+  it only while its source remains readable. Reflow keeps the original composer.
+
 - Linux Connector installations can enroll in a fixed published update channel.
   A user timer stages and verifies newer packages, switches future launches
   atomically, and retains interruption receipts and verified rollback. Existing

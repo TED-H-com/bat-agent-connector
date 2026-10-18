@@ -1620,7 +1620,8 @@ async function viewSession(main, host, sid, context = null) {
   const details = disclosure({label: t("session_details_session"), body: metadata, key: `session-details:${connection.namespace}:${host}:${sid}`});
   details.classList.add("workspace-evidence");
   details.dataset.sessionDetails = "";
-  const results = inspector({title: t("session_results"), dock: true, overlay: workbenchEnabled(), returnFocus: () => openResults});
+  const results = inspector({title: t("session_results"), dock: true, overlay: workbenchEnabled(),
+    historyNavigation: workbenchEnabled(), canReopen: () => !disposed && !withdrawn && readReady, returnFocus: () => openResults});
   const openResults = workbenchEnabled() ? button({variant: "secondary", icon: "panel-right", label: t("session_results"), onClick: () => results.open()})
     : iconButton({icon: "inbox", label: t("session_results"), onClick: () => results.open()});
   const wide = matchMedia("(min-width: 1200px)");
@@ -4730,7 +4731,7 @@ async function route() {
     teardown = off || null;
     return;
   }
-  const views = { pm: viewPmWorkspace, home: viewHome, projects: viewProjects, project: viewProject, item: viewLinkedWorkItem, sessions: viewSessions,
+  const views = { 'work-list': workbenchEnabled() ? () => {} : viewSessions, pm: viewPmWorkspace, home: viewHome, projects: viewProjects, project: viewProject, item: viewLinkedWorkItem, sessions: viewSessions,
     cleanup: viewCleanup, approvals: viewApprovals, delivery: viewDelivery, operations: viewOperations, session: viewSession, start: viewStart, published: viewPublished, orchestrate: viewOrchestration, op: viewOperation, settings: viewSettings,
     "artifact-review": viewArtifactReview, work: viewProjectWork, dispatch: viewProjectDispatch,
     host: viewHostDiscovery, task: viewTask,

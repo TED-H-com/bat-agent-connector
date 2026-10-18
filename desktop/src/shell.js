@@ -14,17 +14,38 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
     h('a', {class: 'shell-all-projects', href: '#/projects'}, t('ui_all_projects')));
   const daily = h('nav', {class: 'wc-daily', 'aria-label': t('wc_candidate'), hidden: !candidate});
   const contextList = h('section', {class: 'wc-context-list', 'aria-label': t('wc_list'), hidden: true});
+  const listLink = h('a', {class: 'wc-list-back ui-button ghost', href: '#/work-list', title: t('wc_list'), 'aria-label': t('wc_list')}, icon('chevron-left'));
+  const listTitle = h('h1', {class: 'wc-list-title', tabindex: -1}, t('wc_list'));
+  const boardLink = h('a', {class: 'ui-button ghost', hidden: true}, t('wc_board'));
+  const listHeader = h('header', {class: 'wc-list-header'}, listTitle, boardLink);
+  const listScroll = {page: 0, rail: 0};
+  let listPlacement = null;
+  contextList.addEventListener('scroll', () => {
+    if (listPlacement && contextList.getClientRects().length) listScroll[listPlacement] = contextList.scrollTop;
+  });
   const contextNodes = candidate ? [workTitle, ...aside.querySelectorAll(':scope > .workspace-nav-heading, :scope > .workspace-search, :scope > .workspace-tree-status, :scope > .workspace-binding-note, :scope > .workspace-tree-scroll')] : [];
   aside.prepend(workspaceBlock, daily, projectNav, workTitle);
-  if (candidate) {aside.after(contextList); document.body.classList.add('workbench-preview');}
+  if (candidate) {aside.after(contextList); contextList.append(listHeader); toggle.after(listLink); document.body.classList.add('workbench-preview');}
   function locateContext() {
     if (!candidate) return;
-    const show = ['session', 'item', 'work', 'sessions'].includes(currentRoute);
-    contextList.hidden = !show || !media.matches;
+    const listing = currentRoute === 'work-list';
+    const show = listing || ['session', 'item', 'work', 'sessions'].includes(currentRoute);
+    const placement = listing ? 'page' : show && media.matches ? 'rail' : null;
+    if (listPlacement && contextList.getClientRects().length) listScroll[listPlacement] = contextList.scrollTop;
+    contextList.hidden = !listing && (!show || !media.matches);
+    contextList.setAttribute('role', listing ? 'main' : 'region');
+    listHeader.hidden = !listing;
+    document.body.classList.toggle('wc-list-page', listing);
+    listLink.hidden = !['session', 'item', 'work'].includes(currentRoute);
     const heading = contextNodes.find(node => node.matches('.workspace-nav-heading'));
     if (heading) heading.querySelector('strong').textContent = t('wc_work');
     document.body.classList.toggle('wc-has-list', show);
-    for (const node of contextNodes) (media.matches ? contextList : aside).insertBefore(node, media.matches ? null : aside.querySelector('.workspace-nav-footer'));
+    // Move the existing source controls once; reflow never copies a search or event reader.
+    for (const node of contextNodes) if (node.parentElement !== contextList) contextList.append(node);
+    if (placement !== listPlacement && placement) contextList.scrollTop = listScroll[placement];
+    listPlacement = placement;
+    const workEntry = daily.querySelector('[data-daily=work]');
+    if (workEntry) workEntry.href = !media.matches ? '#/work-list' : workEntry.dataset.desktopHref;
   }
   let workspace = null, workspaces = [], views = [], currentView = '', currentRoute = '', disposed = false, serial = 0;
   let renderSignature = null;
@@ -38,7 +59,7 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
   function closeDrawer(restore = true) {
     document.body.classList.remove('workspace-nav-open'); scrim.hidden = true; toggle.setAttribute('aria-expanded', 'false');
     crumb.querySelector('.shell-mobile-name')?.setAttribute('aria-expanded', 'false');
-    main.inert = false; document.body.classList.remove('shell-drawer-open');
+    main.inert = false; contextList.inert = false; document.body.classList.remove('shell-drawer-open');
     aside.removeAttribute('aria-modal'); aside.removeAttribute('role');
     if (restore) drawerOpener?.focus();
   }
@@ -47,7 +68,7 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
     drawerOpener = document.activeElement?.closest('#workspace-menu, .shell-mobile-name') || toggle;
     document.body.classList.add('workspace-nav-open', 'shell-drawer-open'); scrim.hidden = false; toggle.setAttribute('aria-expanded', 'true');
     crumb.querySelector('.shell-mobile-name')?.setAttribute('aria-expanded', 'true');
-    aside.setAttribute('role', 'dialog'); aside.setAttribute('aria-modal', 'true'); main.inert = true;
+    aside.setAttribute('role', 'dialog'); aside.setAttribute('aria-modal', 'true'); main.inert = true; contextList.inert = true;
     aside.querySelector('button, a, input')?.focus();
   }
   toggle.onclick = () => scrim.hidden ? openDrawer() : closeDrawer();
@@ -87,13 +108,15 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
     workspaceBlock.replaceChildren(); projectNav.replaceChildren(); crumb.replaceChildren();
     if (candidate) {
       const project = workspace ? `#/pm/${encodeURIComponent(workspace.workspace_id)}/` : '';
-      const current = currentRoute === 'home' ? 'today' : ['session','item','work','sessions'].includes(currentRoute) || currentRoute === 'pm' && currentView === 'board' ? 'work' : currentRoute === 'pm' && currentView === 'agents' ? 'resources' : ['pm','project','projects'].includes(currentRoute) ? 'projects' : '';
+      const current = currentRoute === 'home' ? 'today' : ['session','item','work','sessions','work-list'].includes(currentRoute) || currentRoute === 'pm' && currentView === 'board' ? 'work' : currentRoute === 'pm' && currentView === 'agents' ? 'resources' : ['pm','project','projects'].includes(currentRoute) ? 'projects' : '';
       daily.replaceChildren(...[
         ['today', 'layout-dashboard', '#/home'],
         ['projects', 'folder', project ? project + 'overview' : '#/projects'],
         ['work', 'list-checks', project && views.includes('board') ? project + 'board' : '#/sessions'],
         ['resources', 'cpu', project && views.includes('agents') ? project + 'agents' : '#/settings?section=connection'],
-      ].map(([id, glyph, href]) => h('a', {class: 'ui-button ghost', href, 'data-daily': id, 'aria-current': id === current ? 'page' : 'false'}, icon(glyph), t('wc_' + id))));
+      ].map(([id, glyph, href]) => h('a', {class: 'ui-button ghost', href, 'data-desktop-href': href, 'data-daily': id, 'aria-current': id === current ? 'page' : 'false'}, icon(glyph), t('wc_' + id))));
+      boardLink.hidden = !project || !views.includes('board');
+      boardLink.href = project + 'board';
       locateContext();
     }
     aside.classList.toggle('has-pm-context', Boolean(workspace)); workTitle.hidden = !workspace;
@@ -122,7 +145,7 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
       item: 'ui_work_item', work: 'workspace_work_details', approvals: 'bulk_title', start: 'start_title_page',
       published: 'pub_title', orchestrate: 'orch_title', op: 'link_operation', host: 'host', task: 'task_title',
       worktree: 'obs_worktree', dispatch: 'dispatch_title'}[currentRoute];
-    const routeTitle = candidate && currentRoute === 'home' ? t('wc_today') : routeKey ? t(routeKey) : '';
+    const routeTitle = candidate && currentRoute === 'work-list' ? t('wc_list') : candidate && currentRoute === 'home' ? t('wc_today') : routeKey ? t(routeKey) : '';
     const workSession = workspace && ['session', 'item', 'work'].includes(currentRoute);
     if (workSession) crumb.append(h('span', {class: 'shell-breadcrumb-divider', 'aria-hidden': 'true'}, '/'), h('span', {class: 'shell-crumb-view'}, t('ui_work')),
       h('span', {class: 'shell-breadcrumb-divider', 'aria-hidden': 'true'}, '/'), h('span', {class: 'shell-crumb-view'}, t('ui_session')));
@@ -166,7 +189,8 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
   render();
   return {update, refresh, setRoute(name) {currentRoute = name;
       if (name === 'pm') {const routeView = location.hash.split('?')[0].split('/')[3]; currentView = routeView === 'discussions' ? 'discussions' : availableProjectViews(caps()).includes(routeView) ? routeView : lastProjectView(namespace, location.hash.split('/')[2]);}
-      serial++; closeDrawer(false); navigation.setWorkspace(workspace?.workspace_id || null, Boolean(caps()?.features?.pm_workspaces?.work_evidence), name === 'projects'); render();},
+      serial++; closeDrawer(false); navigation.setWorkspace(workspace?.workspace_id || null, Boolean(caps()?.features?.pm_workspaces?.work_evidence), name === 'projects'); render();
+      if (candidate && name === 'work-list') listTitle.focus({preventScroll: true});},
     pending({count, partial} = {}) {for (const badge of pendingCounts) {
       const known = Number.isSafeInteger(count) && count > 0;
       badge.hidden = !known; badge.textContent = known ? String(count) + (partial ? '+' : '') : '';
@@ -176,6 +200,6 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
     dispose() {disposed = true; serial++; off(); menus.forEach(control => control.dispose()); tools.dispose(); closeDrawer(false);
       document.removeEventListener('keydown', keydown, true); media.removeEventListener('change', resize); scrim.remove();
       // The static connection control belongs to the application, not this namespace.
-      top.append(document.getElementById('live')); right.remove(); creator = null; contextList.remove(); document.body.classList.remove('workbench-preview', 'wc-has-list');},
+      top.append(document.getElementById('live')); right.remove(); listLink.remove(); creator = null; contextList.remove(); document.body.classList.remove('workbench-preview', 'wc-has-list', 'wc-list-page');},
   };
 }
