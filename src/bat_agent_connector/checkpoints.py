@@ -189,18 +189,40 @@ def started_from(db, host: str, session_id: str) -> dict | None:
 
 
 def source_state_script(root: str) -> str:
-    """HEAD and the count of changed paths, without taking or rewriting the index lock."""
+    """Read HEAD and dirt without optional locks, configured programs or lazy fetch."""
     q = shlex.quote(root)
+    unsafe = (r'^(filter\..*\.(clean|process|smudge)|core\.(fsmonitor|hookspath)|'
+              r'diff\.(external|.*\.(command|textconv))|include(if)?\..*|'
+              r'remote\..*\.promisor|extensions\.partialclone)$')
     # POSIX sh reports only the last pipeline command's exit status. Require a
     # completion marker emitted after successful Git status, while streaming the
     # rows rather than saving an unbounded status listing in a shell variable.
-    return ("set -eu; "
-            f"head=$(git --no-optional-locks -C {q} rev-parse --verify HEAD); "
-            f"n=$( (git --no-optional-locks -C {q} status --porcelain --untracked-files=normal "
+    script = ("set -eu; "
+            f"root={q}; "
+            # Reading config names does not execute their values. Refuse includes
+            # before following them, including worktree-specific configuration.
+            'set +e; git --no-optional-locks -C "$root" config --no-includes --name-only '
+            f"--get-regexp {shlex.quote(unsafe)} >/dev/null; rc=$?; set -e; "
+            'test "$rc" = 1 || { echo source_configuration_unavailable >&2; exit 3; }; '
+            'g() { git --no-optional-locks -c core.hooksPath=/dev/null -c core.fsmonitor=false '
+            '-c gc.auto=0 -c maintenance.auto=false -c protocol.allow=never -C "$root" "$@"; }; '
+            'test "$(g rev-parse --show-toplevel)" = "$root"; '
+            'head=$(g rev-parse --verify HEAD); '
+            # A submodule has its own unchecked config; do not recurse or silently
+            # ignore its dirty state. The marker preserves an index-read failure.
+            '(g ls-files --stage && printf "__BATC_INDEX_OK__\\n") | '
+            "awk '$0 == \"__BATC_INDEX_OK__\" { ok=1; next } /^160000 / { unsafe=1 } "
+            "END { if (!ok || unsafe) exit 1 }'; "
+            "n=$( (g status --porcelain --untracked-files=normal "
             "&& printf '__BATC_GIT_STATUS_OK__\\n') | "
             "awk '$0 == \"__BATC_GIT_STATUS_OK__\" { ok=1; next } { n++ } "
             "END { if (!ok) exit 1; print n+0 }'); "
             "printf '%s %s\n' \"$head\" \"$n\"")
+    # Keep the configured SSH host's executable search path, but no inherited Git
+    # worktree/index/config overrides or login/profile programs in this read.
+    return ('env -i PATH="$PATH" LANG=C LC_ALL=C GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null '
+            'GIT_OPTIONAL_LOCKS=0 GIT_TERMINAL_PROMPT=0 GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 '
+            'GIT_ATTR_NOSYSTEM=1 GIT_LFS_SKIP_SMUDGE=1 sh -c ' + shlex.quote(script))
 
 
 async def source_state(ops: OperationService, host: str, root: str) -> tuple[str, int] | None:
