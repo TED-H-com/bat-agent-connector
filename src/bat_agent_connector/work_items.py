@@ -1028,8 +1028,21 @@ def _project_path(db, project: dict) -> list[dict]:
     return path
 
 
-def project_get(db, project_id: str, *, include_archived: bool = False, ops=None, principal=None) -> dict:
-    """One project with its work item tree (display order) and its sub-projects."""
+def _navigation_item(item):
+    state = completion(item)
+    return {**{key: item[key] for key in ('work_item_id', 'project_id', 'parent_id', 'derived_from',
+            'title', 'state', 'pinned', 'archived', 'version', 'updated_at')},
+        'completion': {key: state[key] for key in ('display_state', 'pending', 'approved')},
+        'step_summary': {'total': len(item['steps']), 'done': sum(step['done'] for step in item['steps']),
+            'next': next((step['text'] for step in item['steps'] if not step['done']), None)}}
+
+
+def project_get(db, project_id: str, *, include_archived: bool = False, ops=None, principal=None,
+                projection: str = 'full') -> dict:
+    """One project; navigation omits content that is read on the selected item."""
+    if not isinstance(projection, str) or projection not in {'full', 'navigation'}:
+        raise _bad('INVALID_PARAMS', 'projection must be full or navigation')
+    present = _navigation_item if projection == 'navigation' else _public
     if not isinstance(project_id, str) or not PROJECT_ID.fullmatch(project_id):
         raise _bad("PROJECT_NOT_FOUND", "no such project", 404)
     project = _get_project(db, project_id)
@@ -1039,7 +1052,9 @@ def project_get(db, project_id: str, *, include_archived: bool = False, ops=None
     out = {"project": {**project, "counts": _counts(items)}, "path": _project_path(db, project),
            "sub_projects": [{"project_id": p["project_id"], "name": p["name"], "pinned": p["pinned"]}
                             for p in children],
-           "work_items": _tree(items, _item_scope(project_id), db, "work_item_id", _public)}
+           "work_items": _tree(items, _item_scope(project_id), db, "work_item_id", present)}
+    if projection == 'navigation':
+        out['projection'] = 'navigation'
     if ops is not None:
         from . import execution_sources, integration
         out["work"] = [integration.candidate_evidence(ops, item) for item in execution_sources.for_project(ops, project)]
@@ -1050,7 +1065,7 @@ def project_get(db, project_id: str, *, include_archived: bool = False, ops=None
                 if identity is not None:
                     item["work_identity"] = identity
     if include_archived:
-        out["archived"] = [_public(_item(r)) for r in db.execute(
+        out["archived"] = [present(_item(r)) for r in db.execute(
             """SELECT * FROM work_items WHERE project_id=? AND archived_at IS NOT NULL ORDER BY archived_at DESC
             LIMIT ?""", (project_id, LIST_MAX))]
     return out

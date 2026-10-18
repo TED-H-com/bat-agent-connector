@@ -527,7 +527,7 @@ class ApiV1:
                 query = parse_qs(parts.query, keep_blank_values=True)
                 kwargs.update(reader=reader, writer=writer,
                               check_authorization=authorizer(self.daemon, token, principal))
-            if fn in {self.repair_evidence, self.work_item_repair, self.session_instructions,
+            if fn in {self.project, self.repair_evidence, self.work_item_repair, self.session_instructions,
                       self.host_preferences, self.project_skills, self.work_item_results,
                       self.pm_governance_records, self.pm_governance_record, self.pm_governance_history,
                       self.pm_follow_ups, self.pm_follow_up, self.pm_follow_up_latest,
@@ -1293,6 +1293,7 @@ class ApiV1:
                                   "host_preferences": {"version": 1, "model_catalog": True, "usage": True, "personal_models": True},
                                   "project_skills": {"version": 1, "pinned_selection": True, "application": False},
                                   "work_item_results": {"version": 1},
+                                  "project_navigation": {"version": 1},
                                   "managed_repairs": {"version": 1, "fixed_evidence": True, "auto_launch": False},
                                   "session_instructions": {"version": 1, "live_queue": False, "per_message_cancel": False},
                                   "repository_sync": repository_sync.capabilities(self.daemon.ops),
@@ -1676,8 +1677,11 @@ class ApiV1:
 
     async def project(self, query, prj, principal, **_):
         from .session_reading import decorate
+        if 'projection' in query:
+            self._exact_query(query, {'projection', 'include_archived'})
         return 200, decorate(self.daemon.journal, principal, work_items.project_get(self.daemon.journal.db, prj,
-            include_archived=bool(self._bool(query, "include_archived")), ops=self.daemon.ops, principal=principal))
+            include_archived=bool(self._bool(query, "include_archived")), ops=self.daemon.ops, principal=principal,
+            projection=self._q(query, 'projection', 'full')))
 
     async def work_items(self, query, principal, **_):
         return 200, work_items.work_items_list(
