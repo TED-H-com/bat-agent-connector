@@ -9,7 +9,7 @@ const findingFields = ['title', 'description', 'owner_actor', 'affected_requirem
 export function issueResolution({h, t, api, alive, caps, workspaceId, thread, permitted, form, input, labelled, errorBox, refreshParent, onStateChange}) {
   const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   const box = h('div', {'data-proposal-resolution': ''}), entries = new Map();
-  let serial = 0, current = null, workspace = null, enabled = false;
+  let serial = 0, current = null, workspace = null, enabled = false, reading = false, sourceKey = null;
   const scope = () => caps()?.scopes?.includes('observe') && caps()?.scopes?.includes('manage')
     && caps()?.actions?.some(row => row.action === ACTION && row.allowed === true) && permitted(false);
   const role = () => Array.isArray(workspace?.members) ? workspace.members.find(row => row.actor === caps()?.actor)?.role
@@ -39,7 +39,9 @@ export function issueResolution({h, t, api, alive, caps, workspaceId, thread, pe
     entry.editor = form({action: ACTION, target: {workspace_id: workspaceId, record_id: id}, fields: {finding, rationale},
       params: values => ({...JSON.parse(values.finding).params, rationale: values.rationale}),
       preconditions: () => ({expected_version: baseline(entry).version}),
-      permitted: () => authorized(entry) && open(entry) && fresh(entry), recoverPermitted: () => authorized(entry),
+      permitted: () => !reading && authorized(entry) && open(entry) && fresh(entry),
+      recoverPermitted: () => !reading && authorized(entry),
+      keepEditable: name => name === 'rationale' && authorized(entry),
       label: 'pcp_resolve_issue', extra,
       onStateChange: () => {
         if (!entry.node?.isConnected || !authorized(entry)) return;
@@ -92,24 +94,28 @@ export function issueResolution({h, t, api, alive, caps, workspaceId, thread, pe
     const entry = [...entries.values()].find(row => authorized(row) && row.editor.locked())
       || [...entries.values()].find(row => authorized(row) && open(row))
       || [...entries.values()].find(row => authorized(row) && row.value?.revision.document.status === 'reported_resolved');
-    box.replaceChildren();
-    if (!entry) {onStateChange?.(); return;}
+    if (!entry) {box.replaceChildren(); onStateChange?.(); return;}
     if (!open(entry) && !entry.editor.locked()) {
       showResolved(entry);
       return;
     }
     controls(entry);
-    box.append(entry.node);
+    if (box.childNodes.length !== 1 || box.firstChild !== entry.node) box.replaceChildren(entry.node);
     onStateChange?.();
   }
   async function refresh(revision) {
     current = revision;
     const ticket = ++serial;
-    enabled = false; workspace = null; box.replaceChildren();
-    for (const entry of entries.values()) {entry.value = null; entry.editor.update();}
-    onStateChange?.();
     const refs = (thread()?.thread.context || []).filter(ref => ref.kind === 'governance' && ref.available !== false && /^pmgov_[0-9a-f]{32}$/.test(ref.id));
-    if (!scope() || !/^pmrev_[0-9a-f]{32}$/.test(revision || '') || !refs.length) return;
+    const key = JSON.stringify([revision, refs.map(ref => ref.id)]);
+    const readable = scope() && /^pmrev_[0-9a-f]{32}$/.test(revision || '') && refs.length;
+    // A factual reread gates submission, but keeps the same authorized local
+    // draft mounted. Different or withdrawn sources clear it immediately.
+    if (!readable || key !== sourceKey) clear();
+    reading = Boolean(readable);
+    for (const entry of entries.values()) entry.editor.update();
+    onStateChange?.();
+    if (!readable) return;
     try {
       const [ws, plan, ...records] = await Promise.all([api('GET', base), api('GET', base + '/plans/' + revision),
         ...refs.map(async ref => {
@@ -119,7 +125,9 @@ export function issueResolution({h, t, api, alive, caps, workspaceId, thread, pe
       alive(); if (ticket !== serial) return;
       if (ws.workspace?.workspace_id !== workspaceId || plan.plan?.workspace_id !== workspaceId || plan.plan.revision_id !== revision
         || typeof plan.plan.document?.title !== 'string' || !Number.isSafeInteger(plan.plan.sequence)) throw Error(t('pm_scope_mismatch'));
-      workspace = ws.workspace; enabled = true;
+      if (!scope()) {clear(); onStateChange?.(); return;}
+      workspace = ws.workspace; enabled = true; reading = false; sourceKey = key;
+      for (const entry of entries.values()) entry.value = null;
       for (const value of records) {
         if (!value || value.record.kind !== 'issue') continue;
         let entry = entries.get(value.record.record_id);
@@ -129,14 +137,17 @@ export function issueResolution({h, t, api, alive, caps, workspaceId, thread, pe
       render();
     } catch (error) {
       try {alive(); if (ticket !== serial) return;} catch {return;}
-      enabled = false; workspace = null; box.replaceChildren();
+      clear();
       if (![403, 404].includes(error.status)) box.append(errorBox(error, {within:box}));
       onStateChange?.();
     }
   }
-  function withdraw() {
-    serial++; enabled = false; workspace = null; box.replaceChildren();
+  function clear() {
+    enabled = false; reading = false; sourceKey = null; workspace = null; box.replaceChildren();
     for (const entry of entries.values()) {entry.value = null; entry.editor.update();}
+  }
+  function withdraw() {
+    serial++; clear();
     onStateChange?.();
   }
   return {box, refresh, withdraw,

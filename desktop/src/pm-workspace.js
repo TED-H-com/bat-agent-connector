@@ -1360,7 +1360,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         }, () => {
           discussionTools.open('context');
           nativeAnalysis.box.closest('details').open = true;
-          queueMicrotask(() => nativeAnalysis.box.querySelector('form:not([hidden]) [role=status] summary, form:not([hidden]) button[type=submit]:not([hidden])')?.focus());
+          // Workspace settings also contain a form. Focus only the selected
+          // analysis request, including when settings are hidden or collapsed.
+          queueMicrotask(() => nativeAnalysis.box.querySelector(':scope > form:not([hidden])')
+            ?.querySelector('[role=status] summary, button[type=submit]:not([hidden])')?.focus());
         })});
       column.append(composer);
       content.append(h('div', {class: 'pm-thread-layout'}, column, discussionTools.home));

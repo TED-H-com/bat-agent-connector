@@ -16,10 +16,13 @@ function fixture({locale = 'en', role = 'owner', assigned = false, manage = true
     alternatives: ['Keep the original expiry'], disambiguation: {record_ids: ['pmgov_' + 'a'.repeat(32)], rationale: 'Distinct cause'}});
   const data = f.discussion.details.get(f.ids.threadFollow);
   data.thread.context = [{kind: 'governance', id, available: true, position: 0, label: finding.revision.document.title}];
-  const state = {writes: [] as any[], operations: new Map<string, any>(), effects: 0, denied: 0, lose: false, held: null as Promise<void> | null, reads: [] as string[]};
+  const state = {cursor: 0, planHeld: null as Promise<void> | null, planWaiting: false, writes: [] as any[], operations: new Map<string, any>(), effects: 0, denied: 0, lose: false, held: null as Promise<void> | null, reads: [] as string[]};
   const dispatch = async (input: any): Promise<any> => {
     state.reads.push(input.path);
-    const path = new URL(input.path, 'http://fixture').pathname;
+    const url = new URL(input.path, 'http://fixture'), path = url.pathname;
+    if(path === '/events') return {status:200,data:{events:Number(url.searchParams.get('after')) < state.cursor
+      ? [{seq:state.cursor,resource_type:'pm_governance',resource_id:id,kind:'pm.governance.updated'}] : [],
+      next_cursor:state.cursor,head_cursor:state.cursor,has_more:false,sync:{checkpoint:{cursor:state.cursor,token:`demo-${state.cursor}`}}}};
     if (input.method === 'POST' && input.body?.action === 'pm.governance.revise') {
       state.writes.push(structuredClone(input));
       let operation = state.operations.get(input.idempotency_key);
@@ -48,6 +51,7 @@ function fixture({locale = 'en', role = 'owner', assigned = false, manage = true
       return reply;
     }
     const result = await f.dispatch(input);
+    if(path.startsWith(root + '/plans/pmrev_') && state.planHeld){const held=state.planHeld;state.planHeld=null;state.planWaiting=true;await held;}
     const caps = path === '/bootstrap' ? result.data.capabilities : path === '/capabilities' ? result.data : null;
     if (caps) {
       if (!manage) caps.scopes = caps.scopes.filter((scope: string) => scope !== 'manage');
@@ -157,4 +161,26 @@ test('a late finding read cannot revive withdrawn resolution controls after remo
   f.state.denied = 404; await page.goto(f.route);
   try {await expect(page.getByRole('button', {name: 'Refresh', exact: true})).toBeEnabled();} finally {release();}
   await expect(resolution(page).locator('[data-issue-resolve-open]')).toHaveCount(0); expect(f.state.writes).toHaveLength(0);
+});
+
+for(const native of [false,true])test(`background resolution read retains the open draft and focus ${native?'IPC':'HTTP'}`,async({page})=>{
+  const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(f.route);
+  await resolution(page).locator('[data-issue-resolve-open]').click();
+  const reason=resolution(page).getByRole('textbox'),submit=resolution(page).getByRole('button',{name:'Resolve issue',exact:true});
+  await reason.fill('Keep this precise resolution draft.');await reason.focus();
+  await reason.evaluate((node:HTMLTextAreaElement)=>node.setSelectionRange(5,9));
+  const original=await reason.elementHandle();let release!:()=>void;
+  f.state.planHeld=new Promise<void>(resolve=>{release=resolve;});f.state.cursor++;
+  try{
+    await expect.poll(()=>f.state.planWaiting).toBe(true);
+    expect(await original!.evaluate(node=>node.isConnected)).toBe(true);
+    await expect(reason).toBeFocused();await expect(submit).toBeDisabled();
+  }finally{release();}
+  await expect(submit).toBeEnabled();await expect(reason).toBeFocused();
+  expect(await reason.evaluate((node,old)=>node===old,original)).toBe(true);
+  await expect(reason).toHaveValue('Keep this precise resolution draft.');
+  expect(await reason.evaluate((node:HTMLTextAreaElement)=>[node.selectionStart,node.selectionEnd])).toEqual([5,9]);
+  f.state.denied=404;f.state.cursor++;
+  await expect(resolution(page).locator('[data-issue-resolution]')).toHaveCount(0);
+  expect(f.state.writes).toEqual([]);
 });

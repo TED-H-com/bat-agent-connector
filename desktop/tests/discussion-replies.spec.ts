@@ -37,9 +37,9 @@ for (const native of [false, true]) for (const adapter of ['native', 'bat'] as c
   });
 }
 
-test('lost reply recovers the original request and preserves a newer composer draft', async ({page}) => {
+for (const native of [false, true]) test(`lost reply recovers the original request and preserves a newer composer draft ${native ? 'IPC' : 'HTTP'}`, async ({page}) => {
   const f = nativeFixture(); f.state.lost = true;
-  await mountConversation(page, false, f.dispatch); await page.goto(route);
+  await mountConversation(page, native, f.dispatch); await page.goto(route);
   const composer = page.locator('[data-discussion-composer]'), reply = page.locator('[data-discussion-reply]');
   await composer.fill('Original question'); await reply.click();
   await expect(page.locator('[data-discussion-reply-working]')).toContainText('Check Details');
