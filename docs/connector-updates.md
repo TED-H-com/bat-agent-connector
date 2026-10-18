@@ -1,7 +1,7 @@
 # Connector automatic updates / Connector 自動更新
 
-Connector **0.2.7** includes automatic updates. Start with the
-[published preview](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.7-preview.20261017)
+Connector **0.2.8** includes automatic updates (introduced in 0.2.7). Start with the
+[published preview](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.8-preview.20261018)
 and its matching source manifest and checksums.
 
 For an existing per-user Linux installation, an operator first installs a release
@@ -40,7 +40,7 @@ outside the package switch. See the [contract](design/connector-updates.md).
 
 ## 發布與使用邊界
 
-已發布的 Connector 0.2.7 預覽版加入 Linux 使用者層級自動更新。
+Connector 自 0.2.7 起提供 Linux 使用者層級自動更新，目前已發布預覽版為 0.2.8。
 由管理者先安裝含 `batc-update` 的已發布套件，保留部署收據，再用上方指令
 選擇 `preview` 或 `stable` 並啟用排程。未知或被自行修改的安裝不會被接管。
 
