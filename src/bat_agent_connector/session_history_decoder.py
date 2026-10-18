@@ -60,8 +60,10 @@ def decode(record, source, state, *, offset, digest):
             state["omitted_records"] = state.get("omitted_records", 0) + 1
             return None, None
         if kind == "session_meta":
+            origin = payload.get("source")
             if (payload.get("id") != source.session_id or any(payload.get(k) is not None for k in
-                    ("forked_from_id", "parent_thread_id", "history_base", "subagent_history_start_ordinal"))):
+                    ("forked_from_id", "forked_from_ordinal_exclusive", "parent_thread_id", "history_base", "subagent_history_start_ordinal"))
+                    or isinstance(origin, dict) and "subagent" in origin):
                 raise UsageInvalid("history_identity_unproven")
             state["identified"] = True
             state["cli_version"] = identifier(payload.get("cli_version"))
@@ -91,7 +93,7 @@ def decode(record, source, state, *, offset, digest):
         if record.get("type") not in ("user", "assistant"):
             state["omitted_records"] = state.get("omitted_records", 0) + 1
             return None, None
-        if record.get("sessionId") != source.session_id or record.get("isSidechain") is True:
+        if record.get("sessionId") != source.session_id or record.get("isSidechain", False) is not False:
             raise UsageInvalid("history_identity_unproven")
         message = record.get("message")
         role = record["type"]

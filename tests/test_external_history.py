@@ -221,6 +221,8 @@ async def test_lease_loss_prevents_history_commit(ready, monkeypatch):
 
 
 @pytest.mark.parametrize("field,value", [("forked_from_id", SESSION), ("parent_thread_id", SESSION),
+    ("forked_from_ordinal_exclusive", 0), ("source", {"subagent": "review"}),
+    ("source", {"subagent": {"thread_spawn": {"parent_thread_id": SESSION}}}),
     ("history_base", 0), ("subagent_history_start_ordinal", 0), ("id", "different")])
 async def test_inherited_or_mismatched_codex_history_is_not_claimed(ready, field, value):
     d, wid, source = ready
@@ -358,3 +360,16 @@ async def test_source_local_sequences_do_not_disclose_other_history_activity(rea
     result = read(d, wid, second)
     assert [e["sequence"] for e in result["entries"]] == [1]
     assert result["entries"][0]["entry_id"] != read(d, wid, first)["entries"][0]["entry_id"]
+
+
+@pytest.mark.parametrize("sidechain", [True, "false", 0, None])
+async def test_claude_sidechain_requires_explicit_false_if_present(ready, sidechain):
+    d, wid, source = ready
+    source = replace(source, adapter="claude-history-jsonl-v1")
+    source.path.write_text("")
+    d.history_collector.config = HistoryConfig(10, (source,))
+    append(source.path, {"type": "assistant", "uuid": "message-1", "timestamp": AT,
+        "sessionId": SESSION, "isSidechain": sidechain, "message": {"role": "assistant", "content": "Unsupported lineage"}})
+    await d.history_collector.collect_once()
+    result = read(d, wid, source)
+    assert result["source"]["status"] == "history_identity_unproven" and result["entries"] == []
