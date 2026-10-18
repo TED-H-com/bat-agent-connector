@@ -4,6 +4,35 @@ Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot 'windows-installed-support.ps1')
 function Assert-Fixture([bool]$Value, [string]$Message) { if (-not $Value) { throw $Message } }
 function New-Diagnostics { return [ordered]@{attempts=0; transient_failures=0; last_transport_error_type=$null} }
+
+$registered = @(Get-FixtureRegistration 'fixture-root' 'Fixture Dashboard' {
+    @([pscustomobject]@{PSPath='removed'}, [pscustomobject]@{PSPath='unrelated'}, [pscustomobject]@{PSPath='present'})
+} {
+    param($Path)
+    if ($Path -eq 'removed') { throw [System.Management.Automation.ItemNotFoundException]::new('Removed after enumeration') }
+    [pscustomobject]@{DisplayName=$(if ($Path -eq 'present') {'Fixture Dashboard'} else {'Another app'}); Marker=$Path}
+})
+Assert-Fixture ($registered.Count -eq 1 -and $registered[0].Marker -ceq 'present') 'A vanished key hid a still-installed product'
+$absent = @(Get-FixtureRegistration 'fixture-root' 'Fixture Dashboard' {
+    [pscustomobject]@{PSPath='removed'}
+} { throw [System.Management.Automation.ItemNotFoundException]::new('Removed after enumeration') })
+Assert-Fixture ($absent.Count -eq 0) 'A removed key prevented uninstall observation'
+$absentRoot = @(Get-FixtureRegistration 'fixture-root' 'Fixture Dashboard' {
+    throw [System.Management.Automation.ItemNotFoundException]::new('Absent root')
+} { throw 'An absent root must not be read' })
+Assert-Fixture ($absentRoot.Count -eq 0) 'Absent registration root was not empty'
+foreach ($phase in @('enumerate', 'read')) {
+    $propagated = $false
+    try {
+        Get-FixtureRegistration 'fixture-root' 'Fixture Dashboard' {
+            if ($phase -eq 'enumerate') { throw [UnauthorizedAccessException]::new('Synthetic denied enumeration') }
+            [pscustomobject]@{PSPath='denied'}
+        } { throw [UnauthorizedAccessException]::new('Synthetic denied properties') } | Out-Null
+    } catch [UnauthorizedAccessException] { $propagated = $true }
+    Assert-Fixture $propagated "Registration $phase access failure was swallowed"
+}
+Write-Host 'Passed helper: concurrent registration removal is absent; remaining products and access failures stay visible'
+
 function New-FakeClock([DateTime]$StartTime = [DateTime]::UtcNow) {
     $state = [ordered]@{ current = $StartTime }
     return [pscustomobject]@{
