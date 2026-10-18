@@ -33,7 +33,7 @@ from bat_agent_connector.automation import BatError, open_fleet, sessions_triage
 
 
 async def sweep():
-    async with open_fleet() as fleet:
+    async with open_fleet(actor="hourly-sweep") as fleet:
         # example-host is a configured synthetic host name.
         report = await sessions_triage(fleet, host="example-host", use_jev="never")
         # Inspect report and select any authorized follow-up through this API.

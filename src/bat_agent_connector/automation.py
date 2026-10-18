@@ -44,9 +44,20 @@ __all__ = [
 
 
 @asynccontextmanager
-async def open_fleet(config: _Config | None = None) -> AsyncIterator[_Fleet]:
+async def open_fleet(
+    config: _Config | None = None,
+    *,
+    actor: str = "automation",
+    read_only: bool = False,
+    idle_timeout: float = 120.0,
+) -> AsyncIterator[_Fleet]:
     """Yield a Fleet using the supplied or default config, then always close it."""
-    fleet = _Fleet(load_config() if config is None else config)
+    fleet = _Fleet(
+        load_config() if config is None else config,
+        actor=actor,
+        read_only=read_only,
+        idle_timeout=idle_timeout,
+    )
     try:
         yield fleet
     finally:

@@ -40,14 +40,22 @@ def test_exports_and_signatures():
             assert inspect.signature(exported) == inspect.signature(internal)
     assert callable(automation.open_fleet)
     assert callable(automation.jev_for)
-    assert list(inspect.signature(automation.open_fleet).parameters) == ["config"]
+    parameters = inspect.signature(automation.open_fleet).parameters
+    assert list(parameters) == ["config", "actor", "read_only", "idle_timeout"]
+    for name, default in {"actor": "automation", "read_only": False, "idle_timeout": 120.0}.items():
+        assert parameters[name].kind is inspect.Parameter.KEYWORD_ONLY
+        assert parameters[name].default == default
     assert inspect.signature(automation.open_fleet).parameters["config"].default is None
     assert list(inspect.signature(automation.jev_for).parameters) == ["fleet"]
 
 
+@pytest.mark.parametrize(
+    "options",
+    [{}, {"actor": "hourly-sweep", "read_only": True, "idle_timeout": 30.0}],
+)
 @pytest.mark.parametrize("explicit_config", [False, True])
 @pytest.mark.parametrize("raises", [False, True])
-async def test_open_fleet_closes(monkeypatch, explicit_config, raises):
+async def test_open_fleet_closes(monkeypatch, explicit_config, raises, options):
     cfg = object()
     fleet = SimpleNamespace(close=AsyncMock())
     constructor = Mock(return_value=fleet)
@@ -56,7 +64,7 @@ async def test_open_fleet_closes(monkeypatch, explicit_config, raises):
     monkeypatch.setattr(automation, "load_config", loader)
 
     async def run():
-        async with automation.open_fleet(cfg if explicit_config else None) as opened:
+        async with automation.open_fleet(cfg if explicit_config else None, **options) as opened:
             assert opened is fleet
             fleet.close.assert_not_awaited()
             if raises:
@@ -67,7 +75,9 @@ async def test_open_fleet_closes(monkeypatch, explicit_config, raises):
             await run()
     else:
         await run()
-    constructor.assert_called_once_with(cfg)
+    constructor.assert_called_once_with(
+        cfg, **({"actor": "automation", "read_only": False, "idle_timeout": 120.0} | options)
+    )
     if explicit_config:
         loader.assert_not_called()
     else:
