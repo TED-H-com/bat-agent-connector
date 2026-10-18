@@ -42,6 +42,32 @@ async def select(w, adapter=adapters.ADAPTERS[0]):
     return out
 
 
+@pytest.mark.parametrize('transport', ['ssh', 'local'])
+async def test_choice_remains_central_when_unrelated_git_host_changes(chosen_world, monkeypatch, transport):
+    from bat_agent_connector import host_git
+    from tests.test_host_git import config
+
+    w, ops = chosen_world, chosen_world['d'].ops
+    cfg = config(transport)
+    ops.context['git_runner'] = host_git.HostGitRunner(cfg, {'fixture': 'fixture-bat'})
+
+    async def unexpected_git(*args, **kwargs):
+        raise AssertionError('Saving a PM choice must not execute Git')
+
+    monkeypatch.setattr(host_git.HostGitRunner, 'run', unexpected_git)
+    before = list(ops.db.execute('SELECT run_id FROM pm_runs'))
+    original = request(w)
+    assert 'git_execution' not in original['external_refs']['admission_binding']
+    cfg.host('fixture').url = 'wss://changed.example.invalid:9876/'
+    result = await bundles.finish(w, original)
+    assert result['status'] == 'succeeded', result
+    assert result['result']['runtime_preflight'] == 'not_performed'
+    assert not result['result']['execution_authorized']
+    assert not result['result']['successor_started']
+    assert list(ops.db.execute('SELECT run_id FROM pm_runs')) == before
+    assert not w['native_instances']
+
+
 async def test_choice_then_completed_native_to_bat_keeps_exact_files_and_original_receipts(chosen_world):
     w, ops = chosen_world, chosen_world['d'].ops
     human = snapshot(w['human'])

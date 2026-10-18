@@ -284,6 +284,7 @@ JOURNAL_ONLY_ACTIONS = frozenset({
     "pm.work_package.create",
     "pm.work_profile.save",
     "pm.workload.capture",
+    "pm.workspace.adapter.select",
     "pm.workspace.create",
     "pm.workspace.member.set",
     "preferences.models.update",
