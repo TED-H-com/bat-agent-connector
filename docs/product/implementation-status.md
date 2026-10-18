@@ -1,5 +1,13 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-10-18 PM 判讀與外部歷史交付
+
+#300／#301 已合併，發布來源 `b44a83abc7d548747983298b8290ab1d544898d6`，Connector 0.2.10／desktop 0.1.6。
+七台 Connector 經既有 updater 更新、三台 Linux desktop 已安裝並讀回。
+總覽可明確請 PM 建立附固定來源與歷史的判讀；資源頁可讀取另行授權的本機 Codex／Claude 對話檔案，不取得控制權。清單先載入摘要；尚未送出的佇列指令可以留成 Idea。 #292／#293 本次已納入套件。Classic 仍為預設；真 BAT／模型、PM 判斷品質、
+實體手機及一般登入桌面仍未驗收。外部歷史只讀不表示已完成跨 CLI 執行與歸因。
+完整證據及剩餘工作見[本次交付進度](progress-2026-10-18-delivery.md)。以下保留較早快照。
+
 ## 2026-10-18 討論接續與手機連續操作預覽
 
 #287–291 已合併，發布來源 `001662eba19cc43a1a5d2085d1f4f9a6fe4a8457`，Connector 0.2.9／desktop 0.1.5。

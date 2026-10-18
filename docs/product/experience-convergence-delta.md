@@ -1,4 +1,4 @@
-> 本附錄與[現行收斂企劃](experience-convergence.md)共同更新原工作，不新增平行 backlog。附件的「CI 執行中」是研究當時狀態；最新發布、安裝與未驗收範圍見[進度](progress-2026-10-18-continuity.md)。同日 owner 另要求的 Connector 自動更新歸入 T8／E11／K16，契約見[此處](../design/connector-updates.md)。
+> 本附錄與[現行收斂企劃](experience-convergence.md)共同更新原工作，不新增平行 backlog。附件的「CI 執行中」是研究當時狀態；最新發布、安裝與未驗收範圍見[進度](progress-2026-10-18-delivery.md)。同日 owner 另要求的 Connector 自動更新歸入 T8／E11／K16，契約見[此處](../design/connector-updates.md)。
 
 # EC-1.1｜24 小時更新研究與差額修訂
 ## 手機優先互動、低干擾同步與真實閉環驗收
