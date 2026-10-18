@@ -647,6 +647,16 @@ class OperationService:
             refs["resolved_params"] = _resolved_params
         now = time.time()
         with self.journal.tx():
+            from .pm_overview_assessments import ACTION as OVERVIEW_ACTION
+            from .pm_overview_assessments import admit_operation as admit_overview
+            if action == OVERVIEW_ACTION:
+                # A caller may have waited behind another accepted request.
+                # Original-key replay precedes the new-intent rate reservation.
+                replay = self._prepare_create(principal, action=action, target=target, params=params,
+                    preconditions=preconditions, idempotency_key=idempotency_key)[-1]
+                if replay:
+                    return replay, False
+                now = admit_overview(self, principal, action, target, params, preconditions, binding)
             self.db.execute("""INSERT INTO operations(operation_id,actor,entry,idem_key,request_hash,action,target,
                 params,preconditions,status,created_at,updated_at,external_refs) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                             (operation_id, principal.actor, entry[:20], key, request_hash, action,
@@ -739,7 +749,7 @@ class OperationService:
         if op["action"] == "session.approve_pending":
             from .bulk_approval import cancel
             return cancel(self, principal, op)
-        if op["action"] in {"pm.run.analyze", "pm.run.bat.analyze", "pm.follow_up.analyze", "pm.conversation.propose", "pm.continuation.prepare"}:
+        if op["action"] in {"pm.run.analyze", "pm.run.bat.analyze", "pm.follow_up.analyze", "pm.conversation.propose", "pm.continuation.prepare", "pm.overview.assess"}:
             from .pm_native_operations import cancel
             return cancel(self, principal, op)
         if op["action"] in {"pm.run.prepare", "pm.plan.adopt"}:

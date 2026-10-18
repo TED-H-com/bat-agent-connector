@@ -503,6 +503,7 @@ def _activate(daemon, config, document, revision=None, *, runner=None):
         fleet.config = config
     daemon._config = config
     daemon.usage_collector.config = config.usage
+    daemon.history_collector.config = config.session_history
     daemon.inventory.config = config
     daemon.inventory.observation.config = config
     daemon.ops.context["github_config"] = config.github

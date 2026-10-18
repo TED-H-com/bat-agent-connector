@@ -1,3 +1,4 @@
+import {overviewAssessment} from './pm-overview-assessment.js';
 import {proof} from './pm-brief.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
 import {workspaceCharter, charterSections} from './pm-charter.js';
@@ -53,6 +54,8 @@ export function workspaceOverview(options) {
     const revision = mode === 'saved' ? saved?.baseline?.document_revision : projection?.plan?.revision_id;
     return [...(revision ? [{kind: 'plan_revision', id: revision}] : []), ...(mode === 'saved' && saved ? [{kind: 'snapshot', id: saved.snapshot_id}] : [])];
   };
+  const assessment = options.caps()?.features?.pm_workspaces?.overview_assessment === true
+    ? overviewAssessment({...options, refs}) : null;
   function header() {
     const current = mode === 'saved' ? saved : projection;
     primary.href = discussHref({workspaceId, refs: refs(), title: mode === 'saved' ? saved?.title : projection?.plan?.title, from: 'overview', report: mode === 'saved' ? saved?.snapshot_id : undefined});
@@ -348,6 +351,7 @@ export function workspaceOverview(options) {
   }
   function renderContent(resetOrder) {
     if (mode === 'live' && reportStatus.parentNode !== reportStatusHome) reportStatusHome.append(reportStatus);
+    assessment?.setActive(active && mode === 'live');
     header(); savedBar.hidden = mode !== 'saved'; box.dataset.overviewMode = mode;
     if (mode === 'saved') {
       reportPartial.hidden = !savedPartial();
@@ -384,6 +388,7 @@ export function workspaceOverview(options) {
       {key: 'status', value: [projection.plan, projection.progress, projection.attention_counts, projection.attention, projection.next_milestone, projection.unknown,
         projection.recent_decisions, projection.recent_decisions_count, projection.recent_decisions_complete, projection.recent_decisions_truncated,
         projection.attention_truncated, projection.recent_deliveries.length > 0], render: () => statusStrip(projection)},
+      ...(assessment ? [{key: 'assessment', value: true, render: () => assessment.box}] : []),
       {key: 'columns', value: [projection.milestones, projection.recent_deliveries, projection.milestones_truncated, projection.recent_deliveries_complete, projection.coverage, projection.unknown], render: () => {
         const columns = parts.get('columns')?.node;
         if (columns) {columns.querySelector('.pm-overview-side').replaceWith(sidebar(projection)); return columns;}
@@ -408,13 +413,14 @@ export function workspaceOverview(options) {
       }
       const anchor = mode === 'live' ? readingAnchor() : null;
       projection = data; plan = adopted; loading = false; status.replaceChildren(); render(anchor);
+      if (mode === 'live') await assessment?.refresh();
     } catch (error) {
       try {alive(); if (ticket !== serial) return;} catch {return;}
-      projection = null; plan = null; loading = false; signature = ''; closeReader(); render(); status.replaceChildren(options.errorBox(error, {within:status}));
+      projection = null; plan = null; loading = false; signature = ''; assessment?.withdraw(); closeReader(); render(); status.replaceChildren(options.errorBox(error, {within:status}));
     }
   }
   async function refresh() {if (mode === 'live') await refreshLive(); if (reportsLoaded || mode === 'saved') {await reports.refresh(); if (mode === 'saved') render();}}
-  function withdraw() {serial++; projection = null; plan = null; saved = null; signature = ''; loading = false; closeReader(); reports.withdraw(); resetContent(); status.replaceChildren(); header();}
+  function withdraw() {serial++; projection = null; plan = null; saved = null; signature = ''; loading = false; assessment?.withdraw(); closeReader(); reports.withdraw(); resetContent(); status.replaceChildren(); header();}
   function prepareReports() {
     reportsLoaded = true;
     if (!reportRead) reportRead = reports.refresh().finally(() => {reportRead = null;});
@@ -427,7 +433,7 @@ export function workspaceOverview(options) {
   }
   return {box, primary, meta, reportTools, refresh, refreshProjection: () => mode === 'live' ? refreshLive() : undefined, phase: () => mode === 'live' ? projection?.lifecycle?.stage : null, withdraw, prepareReports, openRelated, labelFor, closeRelated: () => {if (relatedSelection) closeReader();},
     reportActions: {compare: () => {if (mode !== 'saved') {mode = preference.mode = 'saved'; saved = reports.current(); signature = ''; render();} return reports.comparePrevious();}, print: () => window.print()},
-    setActive(value) {if (active === value) {header(); return;} active = value;
+    setActive(value) {if (active === value) {header(); return;} active = value; assessment?.setActive(value && mode === 'live');
       if (!value) {preference.scroll = window.scrollY; closeReader();}
       else {
         // Returning to Overview starts with Central's order, including unchanged data.
@@ -435,6 +441,6 @@ export function workspaceOverview(options) {
         if (preference.scroll) requestAnimationFrame(() => {if (active) window.scrollTo(0, preference.scroll);});
       }
       header();},
-    dispose() {active = false; serial++; closeReader();},
+    dispose() {active = false; serial++; assessment?.dispose(); closeReader();},
   };
 }

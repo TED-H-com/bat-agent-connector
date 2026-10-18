@@ -220,7 +220,7 @@ def import_reply(journal, run_id, generation):
     """Recompute native completion; never route this evidence through BAT's parser."""
     with journal.tx():
         run = pm_runs.get(journal.db, run_id)
-        if run["context"].get("output_destination") in {"follow_up_assessment", "conversation_proposal", "continuation_brief"}:
+        if run["context"].get("output_destination") in {"follow_up_assessment", "conversation_proposal", "continuation_brief", "overview_assessment"}:
             raise _bad("Follow-up output cannot enter ordinary discussion history", "PM_OUTPUT_DESTINATION_REFUSED")
         if run["generation"] != generation:
             raise _bad("PM writer changed", "PM_WRITER_CHANGED")

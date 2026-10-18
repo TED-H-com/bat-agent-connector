@@ -16,6 +16,7 @@ import "./pm-follow-up.css";
 import "./pm-lifecycle.css";
 import "./pm-issues.css";
 import "./pm-agents.css";
+import "./pm-external-history.css";
 import "./pm-register.css";
 import "./shell.css";
 import "./pm-overview.css";

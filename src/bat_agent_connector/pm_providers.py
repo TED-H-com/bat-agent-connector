@@ -175,12 +175,19 @@ class ProviderCatalog:
 
 def classify_provider_error(*, status: int | None = None, code: str | None = None) -> str | None:
     """Classify structured provider errors only; never guess from exception text."""
-    if status == 429 or code in {"rate_limit_exceeded", "rate_limited"}:
-        return "rate_limited"
-    if status in {401, 403} or code in {"invalid_api_key", "unauthorized"}:
-        return "auth_error"
+    # The provider's recognized code is more specific than an HTTP envelope:
+    # exhausted quota can also arrive as 429, without being a transient throttle.
+    code = code if isinstance(code, str) else None
     if code in {"insufficient_quota", "quota_exceeded"}:
         return "quota_error"
+    if code in {"invalid_api_key", "unauthorized"}:
+        return "auth_error"
+    if code in {"rate_limit_exceeded", "rate_limited"}:
+        return "rate_limited"
+    if type(status) is int and status in {401, 403}:
+        return "auth_error"
+    if type(status) is int and status == 429:
+        return "rate_limited"
     return None
 
 

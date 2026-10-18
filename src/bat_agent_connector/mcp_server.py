@@ -81,7 +81,7 @@ READ_TOOLS = [
     "pm_spec_materializations_list", "pm_spec_materialization_get",
     "pm_maintenance_reviews_list", "pm_maintenance_review_current_get", "pm_maintenance_review_get", "pm_maintenance_review_events_list",
     "pm_maintenance_checks_list", "pm_maintenance_check_current_get", "pm_maintenance_check_get", "pm_maintenance_schedule_get",
-    "pm_overview_get", "pm_dependencies_get", "pm_dependencies_revisions_list", "pm_dependencies_impact_get", "pm_resources_get", "pm_register_list", "pm_register_get", "pm_schedule_get", "pm_ahp_adapters_list", "pm_ahp_observations_list", "pm_ahp_observation_current_get", "pm_ahp_observation_get",
+    "pm_overview_get", "pm_dependencies_get", "pm_dependencies_revisions_list", "pm_dependencies_impact_get", "pm_resources_get", "pm_history_sources_list", "pm_history_get", "pm_register_list", "pm_register_get", "pm_schedule_get", "pm_ahp_adapters_list", "pm_ahp_observations_list", "pm_ahp_observation_current_get", "pm_ahp_observation_get",
     "pm_github_observations_list", "pm_github_observation_current_get", "pm_github_observation_get",
     "pm_workload_snapshots_list", "pm_workload_snapshot_current_get", "pm_workload_snapshot_get",
     "pm_maintenance_policies_list", "pm_maintenance_policy_current_get", "pm_maintenance_policy_get",
@@ -89,6 +89,7 @@ READ_TOOLS = [
     "pm_release_baseline_sources_list", "pm_release_baseline_releases_list",
     "pm_release_baseline_deployments_list", "pm_release_baseline_preview",
     "pm_follow_up_assessments_list", "pm_follow_up_assessment_get",
+    "pm_overview_assessments_list", "pm_overview_assessment_get",
     "pm_conversation_proposals_list", "pm_conversation_proposal_get",
     "pm_brief_export_get",
     "pm_lifecycle_get", "pm_lifecycle_transitions_list", "pm_lifecycle_transition_get", "pm_lifecycle_inflight_list",
@@ -574,11 +575,11 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         read grants no execution authority and does not start an LLM runner."""
         return await pm_daemon("pm_context_get", workspace_id=workspace_id, thread_id=thread_id, max_chars=max_chars)
 
-    async def pm_context_bundle_preview(workspace_id: str, thread_id: str, max_chars: int = 32000) -> dict[str, Any]:
+    async def pm_context_bundle_preview(workspace_id: str, thread_id: str, max_chars: int = 32000, kind: str | None = None) -> dict[str, Any]:
         """Preview the exact accepted revision, original Git receipt and complete-file coverage.
         Explicitly select its context_bundle_ref in pm.run.analyze or pm.run.bat.analyze;
         partial coverage never authorizes adoption or execution."""
-        return await pm_daemon("pm_context_bundle_preview", workspace_id=workspace_id, thread_id=thread_id, max_chars=max_chars)
+        return await pm_daemon("pm_context_bundle_preview", workspace_id=workspace_id, thread_id=thread_id, max_chars=max_chars, **({"kind": kind} if kind is not None else {}))
 
     async def pm_profiles_get() -> dict[str, Any]:
         """Versioned discussion purposes, inputs, question policies and outputs; check executable_modes."""
@@ -766,6 +767,14 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
     async def pm_overview_get(workspace_id: str) -> dict[str, Any]:
         """Read live visible project status: confirmed adopted goal (governance.goal before goal/value/problem), progress with stable blocker impacts across plan revisions, pending attention and up to five recent decided plan/governance items with register refs. Incomplete decision totals stay null; inspect coverage. Separate from fixed saved reports; never collects or dispatches."""
         return await pm_daemon("pm_overview_get", workspace_id=workspace_id)
+
+    async def pm_history_sources_list(workspace_id: str) -> dict[str, Any]:
+        """List explicitly granted external conversation sources. No discovery, collection or session control."""
+        return await pm_daemon("pm_history_sources_list", workspace_id=workspace_id)
+
+    async def pm_history_get(workspace_id: str, source_id: str, after: StrictInt = 0, limit: StrictInt = 50) -> dict[str, Any]:
+        """Read a bounded page from one separately granted history source. Coverage stays partial; never resumes a session."""
+        return await pm_daemon("pm_history_get", workspace_id=workspace_id, source_id=source_id, after=after, limit=limit)
 
     async def pm_resources_get(workspace_id: str, since: str | None = None, until: str | None = None,
                                buckets: str | None = None, tz: str | None = None) -> dict[str, Any]:
@@ -968,6 +977,14 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
     async def pm_conversation_proposal_get(workspace_id: str, proposal_id: str) -> dict[str, Any]:
         """Read one fixed proposal, original quotes, raw reply and baseline for owner review."""
         return await pm_daemon("pm_conversation_proposal_get", workspace_id=workspace_id, proposal_id=proposal_id)
+
+    async def pm_overview_assessments_list(workspace_id: str, before: str | None = None, limit: int = 10) -> dict[str, Any]:
+        """Newest source-visible Overview assessments; no model call or hidden carrier creation."""
+        return await pm_daemon("pm_overview_assessments_list", workspace_id=workspace_id, before=before, limit=limit)
+
+    async def pm_overview_assessment_get(workspace_id: str, assessment_id: str) -> dict[str, Any]:
+        """Read an exact original assessment and its frozen evidence, with current source access."""
+        return await pm_daemon("pm_overview_assessment_get", workspace_id=workspace_id, assessment_id=assessment_id)
 
     async def pm_follow_up_assessments_list(workspace_id: str, intake_id: str | None = None, after: int = 0, limit: int = 50) -> dict[str, Any]:
         """List fixed Follow-up assessment metadata; source filtering retains the original cursor."""
@@ -1207,7 +1224,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_maintenance_reviews_list, pm_maintenance_review_current_get, pm_maintenance_review_get, pm_maintenance_review_events_list,
                pm_maintenance_checks_list, pm_maintenance_check_current_get, pm_maintenance_check_get, pm_maintenance_schedule_get,
                pm_overview_get, pm_dependencies_get, pm_dependencies_revisions_list, pm_dependencies_impact_get,
-               pm_resources_get, pm_register_list, pm_register_get, pm_schedule_get, pm_ahp_adapters_list, pm_ahp_observations_list, pm_ahp_observation_current_get, pm_ahp_observation_get,
+               pm_resources_get, pm_history_sources_list, pm_history_get, pm_register_list, pm_register_get, pm_schedule_get, pm_ahp_adapters_list, pm_ahp_observations_list, pm_ahp_observation_current_get, pm_ahp_observation_get,
                pm_github_observations_list, pm_github_observation_current_get, pm_github_observation_get,
                pm_workload_snapshots_list, pm_workload_snapshot_current_get, pm_workload_snapshot_get,
                pm_maintenance_policies_list, pm_maintenance_policy_current_get, pm_maintenance_policy_get,
@@ -1215,6 +1232,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_release_baseline_sources_list, pm_release_baseline_releases_list,
                pm_release_baseline_deployments_list, pm_release_baseline_preview,
                pm_follow_up_assessments_list, pm_follow_up_assessment_get,
+               pm_overview_assessments_list, pm_overview_assessment_get,
                pm_conversation_proposals_list, pm_conversation_proposal_get,
                pm_brief_export_get,
                pm_lifecycle_get, pm_lifecycle_transitions_list, pm_lifecycle_transition_get, pm_lifecycle_inflight_list,
