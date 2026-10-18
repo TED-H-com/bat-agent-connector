@@ -465,6 +465,8 @@ def read(ops, principal, method, params):
             adoption_reason = None
         native = pm_native_capabilities.read(ops, principal, workspace)
         bat = pm_bat_operations.capabilities(ops, principal, workspace)
+        from . import pm_workspace_adapter
+        choice = pm_workspace_adapter.read(ops, principal, workspace_id) if pm_workspace_adapter.ACTION in ops.actions else None
         follow_up_registered = "pm.follow_up.analyze" in ops.actions
         follow_up = {**native, "action_registered": follow_up_registered,
             "authorized": (follow_up_registered and (principal.admin or workspace["membership"]["role"] in {"owner", "contributor"})
@@ -482,6 +484,7 @@ def read(ops, principal, method, params):
                 "native_analysis": native,
                 "bat_analysis": bat,
                 "structured_analysis": pm_analysis_adapters.capabilities(ops, principal, workspace, native=native, bat=bat),
+                "workspace_adapter": choice,
                 "follow_up_analysis": follow_up,
                 "overview_assessment": pm_overview_assessments.capabilities(ops, principal, workspace, native=native, bat=bat),
                 "conversation_proposals": {"version": 1, "analysis": native, "adoption_available": adoption_reason is None,

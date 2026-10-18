@@ -126,6 +126,7 @@ const ACTIONS = {
   'pm.work_package.create': 'action_pm_work_package_create',
   'pm.work_profile.save': 'action_pm_work_profile_save',
   'pm.workload.capture': 'action_pm_workload_capture',
+  'pm.workspace.adapter.select': 'action_pm_workspace_adapter_select',
   'pm.workspace.create': 'action_pm_workspace_create',
   'pm.workspace.member.set': 'action_pm_workspace_member_set',
   'project.skills.update': 'action_project_skills_update',

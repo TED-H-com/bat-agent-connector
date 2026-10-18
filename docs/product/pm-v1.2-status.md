@@ -93,7 +93,7 @@ M5 保留[歷史來源](progress-2026-10-12.md)（M4 已隨 #116 合併至主線
 
 ## 後續實作與發布界線
 
-W24 工作區 PM 路線選擇 [#302](https://github.com/TED-H-com/bat-agent-connector/pull/302) 為待合併候選；W45 人工序列輸入觀察 [#303](https://github.com/TED-H-com/bat-agent-connector/pull/303) 為待合併候選。兩項均不在本次固定 0.2.10／0.1.6 套件內；本段不宣稱已安裝或實機通過。
+後續 W24 工作區 PM 路線選擇由 [#302](https://github.com/TED-H-com/bat-agent-connector/pull/302) 提供；W45 人工序列輸入觀察 [#303](https://github.com/TED-H-com/bat-agent-connector/pull/303) 為待合併候選。兩項均不在本次固定 0.2.10／0.1.6 套件內；本段不宣稱已安裝或實機通過。
 
 ## 工作與剩餘範圍
 
@@ -127,7 +127,7 @@ W24 工作區 PM 路線選擇 [#302](https://github.com/TED-H-com/bat-agent-conn
 | W21 | P1 | 現有 deploy 與 receipt 接入 | 主線：deploy／rollback／merge-and-deploy、固定 release receipt 與交付投影；未宣稱 owner 實際部署。 |
 | W22 | P1 | AHP observer 與 create-own | 主線 #114：固定 AHP 1.0 canonical subset／VS Code 0.10 唯讀 observer；create-own、寫入及 live host 未驗證。 |
 | W23 | P1 | 第一個 native CLI adapter | 仍待完成一般 native coding adapter；現有 Linux 有界 PM 分析不能代替 coding／隔離 canaries。 |
-| W24 | P1 | PM adapter 切換 | #302 待合併候選：持久 workspace native／BAT 分析選擇及原請求恢復，涵蓋總覽與接續摘要；不在本次 0.2.10 套件，真實切換另驗。 |
+| W24 | P1 | PM adapter 切換 | #302 增量：持久 workspace native／BAT 分析選擇、原文件與請求恢復，涵蓋總覽與接續摘要；[契約](../design/pm-workspace-adapter.md)。不在固定 0.2.10 套件，真實切換與完整 M5 矩陣另驗。 |
 | W25 | P1 | Fleet readiness 與安裝版 | 主線 #115：core 0.2.5／desktop 0.1.1 平台 CI 及原實包升級通過；M4 #116 最終 CI 已通過；本次 0.2.10／0.1.6 精確 main CI、套件及七台 Connector／三台 Linux 桌面讀回完成，實機條件另列。 |
 | W26 | P1 | Canonical MCP skills | 主線：PM read tools、註冊 operations 與共用 skills；後續契約需同版生成及能力揭露。 |
 | W27 | P1 | 端到端實機驗收 | 受控自動 fixtures 已有；owner 真人硬體驗收另行執行，未宣稱通過。 |
