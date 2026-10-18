@@ -128,3 +128,27 @@ for (const native of [false, true]) test(`Forward cannot reopen withdrawn Result
   await expect(page.locator('[data-session-withdrawn]')).toBeVisible();
   expect(f.data.posts).toEqual([]);
 });
+
+test('a transient source error keeps manual Results reading but blocks automatic reopening', async ({page}) => {
+  const f = workspaceFixture(), dispatch = f.dispatch;
+  let failed = false;
+  f.dispatch = async input => input.path === '/sessions/demo/search-results' && failed
+    ? {status: 503, data: {error: {code: 'UNAVAILABLE', message: 'Read failed'}}} : dispatch(input);
+  await mountWorkspace(page, false, f);
+  await page.setViewportSize({width: 390, height: 844});
+  await page.goto('/dashboard/?workbench=1' + workspaceRoute);
+  await page.locator('#workspace-message-input textarea').fill('Keep this draft');
+  failed = true;
+  f.data.events.push({seq: 1, resource_type: 'session', resource_id: 'demo/search-results', kind: 'session.updated'});
+  await expect(page.locator('[data-workbench-summary]')).toContainText('could not be refreshed');
+  await page.locator('.workspace-session-heading').getByRole('button', {name: 'Results', exact: true}).click();
+  const results = page.locator('.wc-inspector-host > .ui-inspector');
+  await expect(results).toBeVisible();
+  await page.goBack();
+  await expect(results).toBeHidden();
+  await page.goForward();
+  await expect(results).toBeHidden();
+  await expect(page.getByRole('button', {name: 'Send', exact: true})).toBeDisabled();
+  await expect(page.locator('#workspace-message-input textarea')).toHaveValue('Keep this draft');
+  expect(f.data.posts).toEqual([]);
+});

@@ -64,7 +64,7 @@ for (const width of [390, 768, 1440]) test(`Work identity navigation layout ${wi
   await page.setViewportSize({width, height: width === 390 ? 844 : 900});
   await mountWorkspace(page, false, f);
   await page.goto('/dashboard/?workbench=1' + workspaceRoute);
-  if (width < 1000) await page.locator('#workspace-menu').click();
+  if (width < 1000) await page.locator('.wc-list-back').click();
   const tree = page.locator('.workspace-tree-scroll > .workspace-tree');
   await expect(tree.getByRole('link', {name: /Repair login/}).first()).toBeVisible();
   await page.screenshot({path: `test-results/work-identity-${width}.png`});

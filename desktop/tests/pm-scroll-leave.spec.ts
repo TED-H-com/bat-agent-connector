@@ -214,22 +214,16 @@ async function leaveByAnotherProjectView(page: Page, view: string) {
   await mgmt.selectOption(view);
 }
 
-async function leaveByProjectsEntry(page: Page, width: number) {
-  if (width < 1000) {
-    const toggle = page.locator('#workspace-menu');
-    await expect(toggle).toBeVisible();
-    await toggle.click();
-    const link = page.locator('.shell-work-header .shell-all-projects').first();
-    await expect(link).toBeVisible();
-    await link.click();
-  } else {
-    const switcher = page.locator('button.shell-workspace-switch').first();
-    await expect(switcher).toBeVisible();
-    await switcher.click();
-    const allProjects = page.locator('.ui-menu a[href="#/projects"]').first();
-    await expect(allProjects).toBeVisible();
-    await allProjects.click();
-  }
+async function leaveByProjectsEntry(page: Page) {
+  // Workbench keeps workspace switching separate from the mobile Work list.
+  const toggle = page.locator('#workspace-menu');
+  if (await toggle.isVisible()) await toggle.click();
+  const switcher = page.locator('button.shell-workspace-switch').first();
+  await expect(switcher).toBeVisible();
+  await switcher.click();
+  const allProjects = page.locator('.ui-menu a[href="#/projects"]').first();
+  await expect(allProjects).toBeVisible();
+  await allProjects.click();
   await expect(page.locator('[data-project-list]')).toBeVisible();
 }
 
@@ -332,7 +326,7 @@ test.describe('PM Scroll Leave & Restore', () => {
         await leaveByAnotherProjectView(page, 'overview');
         await expect(page.locator('[data-pm-overview]')).toBeVisible();
       } else {
-        await leaveByProjectsEntry(page, tc.width);
+        await leaveByProjectsEntry(page);
         await page.evaluate(() => window.scrollTo(0, 0));
         await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
       }
@@ -434,7 +428,7 @@ test.describe('PM Scroll Leave & Restore', () => {
       await page.evaluate(() => window.scrollTo(0, 200));
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
 
-      await leaveByProjectsEntry(page, tc.width);
+      await leaveByProjectsEntry(page);
       await page.evaluate(() => window.scrollTo(0, 0));
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
 
@@ -482,7 +476,7 @@ test.describe('PM Scroll Leave & Restore', () => {
       await page.evaluate(() => window.scrollTo(0, 200));
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
 
-      await leaveByProjectsEntry(page, tc.width);
+      await leaveByProjectsEntry(page);
       await page.evaluate(() => window.scrollTo(0, 0));
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
 
@@ -534,7 +528,7 @@ test.describe('PM Scroll Leave & Restore', () => {
       await page.evaluate(() => window.scrollTo(0, 200));
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
 
-      await leaveByProjectsEntry(page, 390);
+      await leaveByProjectsEntry(page);
       await page.evaluate(() => window.scrollTo(0, 0));
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
 
@@ -662,7 +656,7 @@ test.describe('PM Scroll Leave & Restore', () => {
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
 
       // 2. Leave by Projects entry, scroll to 0.
-      await leaveByProjectsEntry(page, width);
+      await leaveByProjectsEntry(page);
       await page.evaluate(() => window.scrollTo(0, 0));
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
 

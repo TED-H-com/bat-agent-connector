@@ -1,5 +1,5 @@
 // History belongs to presentation only. Never persist a command, source fact or draft here.
-export function sheetHistory({show, hide, canOpen = () => true}) {
+export function sheetHistory({show, hide, canRestore = () => true}) {
   const id = crypto.randomUUID(), url = location.href;
   const key = 'batcSheet';
   let disposed = false, visible = false;
@@ -8,13 +8,15 @@ export function sheetHistory({show, hide, canOpen = () => true}) {
   const conceal = () => {if (visible) {visible = false; hide();}};
   function pop() {
     if (disposed) return;
-    if (owned() && canOpen()) reveal();
+    if (owned() && canRestore()) reveal();
     else conceal();
   }
   window.addEventListener('popstate', pop);
   return {
     open() {
-      if (disposed || visible || !canOpen()) return;
+      // Explicit reading retains the inspector's existing error/retry behavior.
+      // Only automatic Forward restoration needs the additional source gate.
+      if (disposed || visible || location.href !== url) return;
       history.pushState({...history.state, [key]: id}, '', url);
       reveal();
     },

@@ -12532,7 +12532,7 @@ function errorPresentation(error, t, { summary, fallback } = {}) {
 }
 //#endregion
 //#region src/ui/sheet-history.js
-function sheetHistory({ show, hide, canOpen = () => true }) {
+function sheetHistory({ show, hide, canRestore = () => true }) {
 	const id = crypto.randomUUID(), url = location.href;
 	const key = "batcSheet";
 	let disposed = false, visible = false;
@@ -12551,13 +12551,13 @@ function sheetHistory({ show, hide, canOpen = () => true }) {
 	};
 	function pop() {
 		if (disposed) return;
-		if (owned() && canOpen()) reveal();
+		if (owned() && canRestore()) reveal();
 		else conceal();
 	}
 	window.addEventListener("popstate", pop);
 	return {
 		open() {
-			if (disposed || visible || !canOpen()) return;
+			if (disposed || visible || location.href !== url) return;
 			history.pushState({
 				...history.state,
 				[key]: id
@@ -13051,7 +13051,7 @@ function inspector({ title, onClose = () => {}, returnFocus, dock = false, overl
 	const sheet = historyNavigation && dock && overlay ? sheetHistory({
 		show: reveal,
 		hide,
-		canOpen: () => !closed && root.isConnected && canReopen()
+		canRestore: () => !closed && root.isConnected && canReopen()
 	}) : null;
 	function restoreFocus() {
 		let target = null;

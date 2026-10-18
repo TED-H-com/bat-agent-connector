@@ -277,7 +277,7 @@ export function inspector({title, onClose = () => {}, returnFocus, dock = false,
     else if (!wide()) trapFocus(root, event);
   }
   let closed = false;
-  const sheet = historyNavigation && dock && overlay ? sheetHistory({show: reveal, hide, canOpen: () => !closed && root.isConnected && canReopen()}) : null;
+  const sheet = historyNavigation && dock && overlay ? sheetHistory({show: reveal, hide, canRestore: () => !closed && root.isConnected && canReopen()}) : null;
   function restoreFocus() {
     let target = null;
     try { target = typeof returnFocus === 'function' ? returnFocus() : returnFocus; } catch { target = null; }
