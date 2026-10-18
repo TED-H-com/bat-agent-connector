@@ -448,19 +448,22 @@ def prepare_script(src: str, dest: str, worktree: str, branch: str, commit: str,
     source's own origin only when that is a network URL (credentials stripped); a local-path origin is removed, so
     nothing pushed from the clone can land in a person's folder. One script runs per clone at a time (``flock`` on
     the host): a re-run after a lost SSH reply waits for a first run that is still going instead of racing it.
+    Existing staging content has no independent creation receipt and is never removed.
+    A destination that appears during cloning also leaves the staged copy for inspection.
     ``same_clone``: the source is already inside this managed clone, so there is nothing to clone or fetch.
     """
     q = shlex.quote
     clone_steps = [] if same_clone else [
         'if [ ! -e "$dest" ]; then',
-        '  rm -rf "$tmp"',
+        '  test ! -e "$tmp" && test ! -L "$tmp" || { echo "checkpoint staging already exists; creation is unproven" >&2; exit 3; }',
         '  git clone --quiet --no-checkout --no-hardlinks "$src" "$tmp"',
         '  url=$(git -C "$src" config --get remote.origin.url || true)',
         '  case "$url" in https://*|http://*|ssh://*|git@*) url=$(printf %s "$url" | sed -E "s#^(https?://)[^/@]*@#\\1#");; *) url="";; esac',
         '  if [ -n "$url" ]; then git -C "$tmp" remote set-url origin "$url"; else git -C "$tmp" remote remove origin; fi',
         '  git -C "$tmp" config batc.managed-clone true',
         '  git -C "$tmp" config batc.source "$src"',
-        '  if [ -e "$dest" ]; then rm -rf "$tmp"; else mv "$tmp" "$dest"; fi',
+        '  test ! -e "$dest" && test ! -L "$dest" || { echo "checkpoint destination appeared; staging retained" >&2; exit 3; }',
+        '  mv "$tmp" "$dest"',
         "fi",
     ]
     source_check = [] if same_clone else [

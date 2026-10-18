@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Checkpoint preparation preserves an existing staging file, directory or link
+  when its creation is unproven. If the destination appears during cloning, keep
+  both paths for inspection instead of deleting the staged copy.
+
 - Read-only manual-session observation can prove 2–64 serial native inputs from complete same-epoch replay and exact counters. Public receipts retain only bounded counts and digests; gaps, overlap and incomplete retention stay unknown. Original single-input receipts remain compatible, and no session control or work acceptance is inferred.
 - A factual refresh no longer drops an Overview assessment button press. Returning
   to a mobile work board retains the requested reading position through its loading
