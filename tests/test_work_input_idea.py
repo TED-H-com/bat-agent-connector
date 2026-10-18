@@ -38,6 +38,9 @@ async def test_defer_cancels_before_saving_sourced_idea_and_replays_original_key
     await settle_operations(ops)
     result = ops.get(op_id)
     assert result['status'] == 'succeeded', result
+    # Cancellation and Idea persistence only touch the central journal, even
+    # though their source points to a Work that originally ran on a BAT host.
+    assert 'git_execution' not in result['external_refs']['admission_binding']
     original = await follow._get_op(w, source)
     assert original['input_receipt']['state'] == 'cancelled'
     assert original['params']['text'] == words

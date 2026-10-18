@@ -279,6 +279,7 @@ JOURNAL_ONLY_ACTIONS = frozenset({
     "pm.work.bind",
     "pm.work_batch.evidence.record",
     "pm.work_batch.start",
+    "pm.work_input.defer",
     "pm.work_package.create",
     "pm.work_profile.save",
     "pm.workload.capture",
@@ -440,4 +441,3 @@ def require_execution(host=None):
     for name in names:
         if name not in locations or locations[name] is None or locations[name] != runner._require_current(name):
             raise NeedsAttention("GIT_EXECUTION_LOCATION_CHANGED", "Original Git execution location changed")
-
