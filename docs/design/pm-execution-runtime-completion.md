@@ -1,7 +1,7 @@
 # Original batch-turn completion and manual quiescence
 
-This is the contract for the M4 joined-flow integration under development. It
-does not claim installed BAT or live-model acceptance. The first supported
+This contract covers original batch-turn completion and bounded read-only manual
+observation. It does not claim installed BAT or live-model acceptance. The first supported
 managed path is an explicitly selected W38 batch child. A standalone handoff
 without an original explicit result-evidence selection remains unproven; a
 matching newest review or branch is not a substitute.
@@ -62,12 +62,12 @@ catalogue must retain the original BAT workspace/profile relation. A downgrade
 to reader prevents a new observation but does not alter an already saved,
 source-authorized historical receipt.
 
-The bounded supported case is one independently completed native input in a
+The original bounded profile is one independently completed native input in a
 currently authenticated session: `bat_input_state_v1`, exactly one received input,
 zero pending inputs, the same SDK/input epoch, and complete contiguous replay
 from sequence zero through the current cursor. The final metadata and replay
 must still agree. Retained messages without original terminal replay, an initial
-gap, multiple historical inputs, ambiguous scope or missing native input identity
+gap, multiple historical inputs under that original profile, ambiguous scope or missing native input identity
 remain unknown. A later input or stale/incomplete inventory invalidates current
 quiescence.
 
@@ -76,6 +76,68 @@ ownership, does not clear registry capacity, and cannot declare work or quality
 accepted. The manual session/tab and its worktree remain untouched. Workload may
 exclude only this positively observed current session activity, while evaluating
 all other work, delivery, policy and source commitments independently.
+
+New admissions may select the separate `pm_manual_serial_inputs_v1` private
+origin when authenticated current inventory reports 2–64 received inputs. The
+request still selects only the original explicit link and its opaque identity
+digest; callers cannot supply a proof or provider identity. An old pending
+operation without this frozen profile is never upgraded. Single-input origin,
+completion bytes, digest and original-key recovery remain unchanged.
+
+The serial reducer examines every event from replay sequence zero, within the
+existing 2 MiB / 4096-event / 256-page bounds. Replay epoch and native input epoch
+are distinct identities; neither may change. It requires strictly alternating
+user inputs and unique native completed turns on the same SDK. Each turn must
+have actual status evidence containing the original input epoch and the exact
+received ordinal; pending counters greater than one are unsupported. Completed
+pair count must equal authenticated `received`, with final `pending=0`. It
+retains normal native terminal/message validation; a last assistant message,
+last terminal or count equality alone is insufficient. Final empty delta, exact
+metadata and original scope/current authority are rechecked before recording.
+
+These are observed read points, not an atomic remote snapshot or a lease on a
+human session. The final scope read precedes the final native metadata read;
+there is no provider await between that metadata validation and the local
+receipt transaction. This catches inputs or SDK changes during the scope read.
+Pinned BAT metadata and replay have no shared workspace/profile generation:
+an authenticated workspace save can move a tab during the final metadata read
+without changing its native SDK or counter. Repeating separate reads cannot
+eliminate this limitation. The historical receipt alone therefore cannot prove
+current workload quiescence. Its consumer requires a complete authenticated
+inventory scan begun after the receipt, with the exact original workspace,
+profile, SDK and input counter; a moved tab fails even if its new workspace is
+also in the allowed policy. Future human activity still requires fresh
+observation. Neither profile freezes or controls that activity.
+
+This is supported by the ordinary Rust Codex producer in BAT
+[`c397fd7`](https://github.com/TED-H-com/better-agent-terminal/blob/c397fd7a36593ed0fb57a0a4c5cc005f09149466/src-tauri/src/codex_app_server.rs#L637):
+metadata includes `inputState`; `send_message` emits user echo then metadata
+(lines 5912–5920), and native completion emits metadata then the original
+SDK/turn identity (lines 8314–8350). Tests reproduce this source order, including
+the initial system announcement and optional worktree-information event; these
+announcements grant no ownership. The local `local-<session>-<n>` turn fallback
+is rejected by this profile. Claude SDK completed events lack the required
+native turn ID and remain unsupported. Bare audited upstream `b7419892` does not
+imply the later input-counter capability. No provider code or human session is
+changed by this observer.
+
+Received counters include refused, queued and injected attempts, not only
+successful model turns. Missing or reused IDs, overlapping inputs, missing
+counter status, changed ordinal/epoch, abort/error, noncontiguous or truncated
+history and unaccounted input remain unknown. The producer's ten-minute bounded
+replay retention means many long-lived manual sessions cannot satisfy this
+profile. The observer neither resets those counters nor resumes/stops sessions.
+
+The new public schema is `pm_manual_serial_inputs_quiescence_v1`, with status
+`current_serial_inputs_quiescent`. It retains the explicit source IDs, counter,
+cursor, event/origin/document digests and recorded timestamp. Only
+`completed_turn_count` (2–64, equal to received) and `turns_digest` are added;
+there is no singular `native_turn_id` or public `turns` array. Complete per-turn
+pairings and replay bytes remain in private steps. Nested public counters and
+cursors are projected by an explicit whitelist. Ownership remains
+`manual_read_only`, work acceptance `not_evaluated`, process death unproven, and
+no reservation is released. Later input invalidates current workload
+applicability while preserving the immutable historical receipt.
 
 ## Public evidence and source withdrawal
 
@@ -131,6 +193,11 @@ omitted. Supported availability reasons are
 not derive IDs or accept a pasted proof. The advertised action catalog remains
 the capability gate on older servers. The existing operation endpoint and
 original durable key provide admission and result recovery.
+For new serial observations, `available` means current non-stale native identity,
+2–64 received inputs, zero pending and no active interaction allow an observation
+attempt; it does not claim replay coverage or completed turns. Zero or more than
+64 inputs keep `manual_multiple_inputs_unsupported`; missing identity or active
+input keep their existing reasons. One input continues to select the old profile.
 
 Each ordinary execution attempt may have `runtime_completion` containing only
 `observation_operation_id`, `execution_operation_id`, `document_digest`,
@@ -140,13 +207,9 @@ not inferred from this display. Receipts expose an explicit schema projection,
 including nested input counters and replay cursor; unknown private diagnostics
 are not public fields.
 
-The bounded manual profile intentionally does not support ordinary multi-input
-human sessions yet. A future extension must prove all native inputs/unique
-terminals in the complete same-epoch bounded replay against the authenticated
-received counter, zero pending inputs and current final native state. A last
-assistant message, last terminal alone, or an incomplete retained window cannot
-satisfy that contract. This is an actual remaining daily-workflow limitation,
-not evidence that every manual ended session is covered.
+The serial profile covers only the positively proven subset above. Queued,
+interleaved, injected or incomplete retained histories remain a daily-workflow
+limitation; this is not evidence that every ended manual session is covered.
 
 Source lineage also contains authorization dependencies. During the exact
 synchronous `pm.repair.reserve` callback, the service may disregard that same

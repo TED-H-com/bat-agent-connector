@@ -40,9 +40,15 @@ export function runtimeFixture(){
     }
     return base.dispatch(input);
   };
-  const complete=()=>{const operation=[...state.ops.values()][0];operation.status='succeeded';operation.result={schema:'pm_manual_single_input_quiescence_v1',workspace_id:workspaceId,
+  const complete=(count=1)=>{const operation=[...state.ops.values()][0];operation.status='succeeded';operation.result={schema:'pm_manual_single_input_quiescence_v1',workspace_id:workspaceId,
     work_item_id:workId(1),link_id:operation.params.link_id,observation_operation_id:operation.operation_id,document_digest:'e'.repeat(64),recorded_at:1791705700,
-    runtime_status:'current_single_input_quiescent',process_death_proven:false,ownership:'manual_read_only',work_acceptance:'not_evaluated'};};
+    host:'fixture-host',session_id:'manual-session-'+operation.params.link_id,sdk_session_id:'sdk-manual-original',native_turn_id:'native-turn-1',
+    origin_digest:'1'.repeat(64),event_digest:'2'.repeat(64),event_count:count*4,
+    input_state:{schema:'bat_input_state_v1',epoch:'a'.repeat(32),received:count,pending:0},completion_cursor:{epoch:'original-replay',seq:count*4},
+    runtime_status:'current_single_input_quiescent',process_death_proven:false,ownership:'manual_read_only',work_acceptance:'not_evaluated'};
+    if(count!==1){delete operation.result.native_turn_id;Object.assign(operation.result,{schema:'pm_manual_serial_inputs_quiescence_v1',
+      runtime_status:'current_serial_inputs_quiescent',completed_turn_count:count,turns_digest:'3'.repeat(64)});}
+  };
   return {base,board,card,state,dispatch,complete};
 }
 export async function mountRuntime(page:any,native:boolean,f:ReturnType<typeof runtimeFixture>){

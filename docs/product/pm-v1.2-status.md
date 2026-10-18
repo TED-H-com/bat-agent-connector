@@ -93,7 +93,7 @@ M5 保留[歷史來源](progress-2026-10-12.md)（M4 已隨 #116 合併至主線
 
 ## 後續實作與發布界線
 
-後續 W24 工作區 PM 路線選擇由 [#302](https://github.com/TED-H-com/bat-agent-connector/pull/302) 提供；W45 人工序列輸入觀察 [#303](https://github.com/TED-H-com/bat-agent-connector/pull/303) 為待合併候選。兩項均不在本次固定 0.2.10／0.1.6 套件內；本段不宣稱已安裝或實機通過。
+後續 W24 工作區 PM 路線選擇由 [#302](https://github.com/TED-H-com/bat-agent-connector/pull/302) 提供；W45 人工序列輸入觀察由 [#303](https://github.com/TED-H-com/bat-agent-connector/pull/303) 提供。兩項均不在本次固定 0.2.10／0.1.6 套件內；本段不宣稱已安裝或實機通過。
 
 ## 工作與剩餘範圍
 
@@ -148,7 +148,7 @@ M5 保留[歷史來源](progress-2026-10-12.md)（M4 已隨 #116 合併至主線
 | W42 | P1 | Idea 到 Review 真實驗收 | M4 755f126：真實磁碟 Git／驗證器及 mock providers 的會員案例，兩個 Python 版本完整 joined 通過；真人驗收另列。 |
 | W43 | P0 | ProjectLifecycle 與 Idea 長期停留 | 主線：生命周期及有固定政策／基準／完整新鮮工作量證據的 Maintain gate；階段名稱不授權效果。 |
 | W44 | P0 | ReleaseBaseline 與發布 receipt | 主線：明確 release／已驗證部署基準與原通道／commit／receipt；完整 registry adapter 待做。 |
-| W45 | P0 | 閒置與 workload coverage | 主線已有中央工作量、來源涵蓋、M4 原完成與人工單次觀察；#303 人工序列輸入觀察為待合併候選，不在本次 0.2.10 套件，真實人工序列另驗。 |
+| W45 | P0 | 閒置與 workload coverage | 主線已有中央工作量、來源涵蓋、M4 原完成與人工單次觀察；#303 增量補 2–64 次嚴格循序唯讀觀察，須完整 replay 與當前 inventory；[契約](../design/pm-execution-runtime-completion.md)。不在固定 0.2.10 套件，真實人工序列另驗。 |
 | W46 | P1 | Maintainer profile 與政策執行 | 主線 #113：採用政策內的自有 repair、驗證／PR／交付上限、原完成與基準更新；M4 #116 完整串接及最終 CI 已通過；真實維護驗收另列。 |
 | W47 | P1 | 依賴 Issue PR 維護來源 | 主線：有界 GitHub PR／checks／Actions、明確 Issue／Dependabot／alert 來源與固定 findings，#132 已合併 [固定 commit 相依清冊](../design/pm-dependencies.md)、宣告／撤回、CI hints 和有界 impact。#133 已合併矩陣／相依圖；安裝版／原生及實機驗收仍待執行。 |
 | W48 | P0 | 維護排程與恢復 | 主線：有界到期檢查、週 Review、窗去重／漏跑合併、原 owner 憑證、容量／期限及原 children 查回。 |
