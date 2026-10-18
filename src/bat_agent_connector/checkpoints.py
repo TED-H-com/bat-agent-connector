@@ -191,9 +191,15 @@ def started_from(db, host: str, session_id: str) -> dict | None:
 def source_state_script(root: str) -> str:
     """HEAD and the count of changed paths, without taking or rewriting the index lock."""
     q = shlex.quote(root)
+    # POSIX sh reports only the last pipeline command's exit status. Require a
+    # completion marker emitted after successful Git status, while streaming the
+    # rows rather than saving an unbounded status listing in a shell variable.
     return ("set -eu; "
             f"head=$(git --no-optional-locks -C {q} rev-parse --verify HEAD); "
-            f"n=$(git --no-optional-locks -C {q} status --porcelain --untracked-files=normal | wc -l | tr -d ' '); "
+            f"n=$( (git --no-optional-locks -C {q} status --porcelain --untracked-files=normal "
+            "&& printf '__BATC_GIT_STATUS_OK__\\n') | "
+            "awk '$0 == \"__BATC_GIT_STATUS_OK__\" { ok=1; next } { n++ } "
+            "END { if (!ok) exit 1; print n+0 }'); "
             "printf '%s %s\n' \"$head\" \"$n\"")
 
 

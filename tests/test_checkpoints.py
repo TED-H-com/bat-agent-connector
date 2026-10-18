@@ -558,6 +558,22 @@ async def test_preview_source_moved_and_unobserved_changes(daemon, mock, human):
     await daemon.inventory.close()
 
 
+async def test_failed_git_status_stays_unknown_in_preview_and_saved_checkpoint(daemon, mock, human):
+    index = human / ".git/index"
+    broken = b"unreadable index fixture\n"
+    index.write_bytes(broken)
+    try:
+        assert (await checkpoints.preview(daemon.ops, "h1", MANUAL))["dirty"] is None
+        cp = await make_checkpoint(daemon)
+        assert cp["dirty"] is None
+        text = checkpoints.first_prompt(cp, worktree="/w", branch="b", instructions="x")
+        assert "were not observed" in text
+        assert index.read_bytes() == broken and bat_writes(mock) == []
+    finally:
+        await daemon.fleet.close()
+        await daemon.inventory.close()
+
+
 async def test_a_replay_after_the_agent_committed_does_not_recheck_the_moved_head(daemon, mock, human, monkeypatch):
     from bat_agent_connector import service
     from bat_agent_connector.errors import InvokeTimeout

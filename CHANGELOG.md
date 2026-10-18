@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- A failed checkpoint source-status read stays unknown in previews, saved
+  checkpoints and continuation context, instead of becoming a zero-change count.
+  Successful status output remains streamed and the source index is not rewritten.
+
 - Native PM preflight reports distinguish a timed-out version check, launch or
   protocol read from a rejected isolation boundary, retaining the original
   stage and cleanup evidence without changing deadlines or retrying a model.
