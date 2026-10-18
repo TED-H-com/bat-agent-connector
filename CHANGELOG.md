@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Mobile Work, Session and PM Discussion composers share keyboard viewport handling,
+  keep drafts through resize and pinch zoom, and retain reachable send controls.
+  Discussions keep list/detail navigation in phone landscape as well as portrait.
+
 - Returning from the background or browser page cache pauses new sends until the
   shared event reader checks current continuity and settles affected sources.
   Existing drafts and acknowledged operations retain their original identities;

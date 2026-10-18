@@ -15,7 +15,7 @@ for (const locale of ['en', 'zh-TW']) {
     await expect(page.locator('[data-discussion-panel]')).toBeHidden();
     await expect(page.locator('[data-pm-plan-proposals]')).toBeHidden();
     if (width === 1440) expect((await page.locator('.pd-transcript').boundingBox())!.width).toBeGreaterThanOrEqual(760);
-    await expect(page.locator('[data-discussion-back]')).toBeVisible({visible: width < 800});
+    await expect(page.locator('[data-discussion-back]')).toBeVisible({visible: width < 1000});
     const chip = page.locator('.pd-thread-header [data-discussion-context]');
     await chip.click(); await expect(page.getByRole('tab', {name: zh ? '脈絡' : 'Context', exact: true})).toBeFocused();
     if (width === 1440) for (const panelWidth of [1000, 1440]) {

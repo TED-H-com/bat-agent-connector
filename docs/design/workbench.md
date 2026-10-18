@@ -225,6 +225,25 @@ exercise scrolling. They contain no live Fleet or account data.
 | List, zh-TW, 390×844 | — | [Full-screen list](workbench-evidence/ec11-mobile/list-phone-zh-TW.png) |
 | Results, English, 768×844 | — | [Full-width sheet](workbench-evidence/ec11-mobile/results-tablet-en.png) |
 
-The remaining EC-1.1 mobile requirements (including discussion sheets, foreground
-recovery and device acceptance) remain open.
+Discussion sheet Back/Forward is merged in #287. Foreground recovery is tracked
+in #288. Physical-device acceptance remains open.
 See [K extensions](../product/workbench-ux-acceptance.md#ec-11-追加情境沿原-k-編號).
+
+### Keyboard viewport evidence
+
+The shared viewport observer constrains Work, Session and Discussion input to the
+visible area without replacing their composers. Queue receipts and transcript
+content remain scrollable. Phone landscape keeps Discussion list/detail navigation
+through 999px. Pinch zoom and desktop resize restore ordinary layout.
+
+| View | Before (foreground branch `775201bf`) | Current source |
+| --- | --- | --- |
+| Discussion, English desktop 1440×844 | [Before](workbench-evidence/ec11-keyboard/discussion-before-en-1440.png) | [After](workbench-evidence/ec11-keyboard/discussion-after-en-1440.png) |
+| Discussion, zh-TW phone 390×844 | [Before](workbench-evidence/ec11-keyboard/discussion-before-zh-TW-390.png) | [450px visual viewport, 36px offset](workbench-evidence/ec11-keyboard/discussion-keyboard-zh-TW-390.png) |
+| Work, zh-TW landscape 844×390 | — | [260px visual viewport](workbench-evidence/ec11-keyboard/work-keyboard-zh-TW-844.png) |
+
+All images use synthetic fixtures. The blank lower region is outside the simulated
+visual viewport; no OS keyboard is pictured. Chromium viewport events, Back, resize,
+unchanged input nodes, queued receipts and zero unintended writes are checked.
+Actual iPhone Safari, Android keyboard/IME, lockscreen and Tauri acceptance remain
+separate. Desktop sidebar and existing operation/source authority are unchanged.

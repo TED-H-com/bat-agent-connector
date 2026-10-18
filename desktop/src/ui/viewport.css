@@ -1,0 +1,55 @@
+/* The keyboard changes the available reading area, never the composer or its draft. */
+@media (max-width: 999px) {
+  body.mobile-keyboard:has(main.session-view, [data-discussion-route=detail]) > .top {
+    position: fixed; top: var(--workspace-visible-top); inset-inline: 0;
+  }
+  body.mobile-keyboard main.session-view,
+  body.mobile-keyboard main:has([data-discussion-route=detail]) {
+    position: fixed; inset-inline: 0; top: calc(var(--workspace-visible-top) + 48px);
+    height: calc(var(--workspace-visible-height) - 48px); min-height: 0; overflow: clip;
+  }
+  body.mobile-keyboard main.session-view { padding: var(--space-2) var(--space-3); }
+  body.mobile-keyboard .workspace-session-heading { max-height: 44px; overflow: auto; margin: 0; }
+  body.mobile-keyboard .workspace-session-heading .workspace-session-meta { display: none; }
+  body.mobile-keyboard .wc-view-bar { display: none; }
+  body.mobile-keyboard .session-workspace :is(.conversation, .conversation-scroll) { min-height: 0; height: auto; }
+  body.mobile-keyboard .session-workspace .conversation { overflow: clip; }
+  body.mobile-keyboard .session-workspace .workspace-composer { max-height: none; margin-top: var(--space-1); }
+  body.mobile-keyboard .workspace-composer textarea { height: 52px; min-height: 52px; }
+  body.mobile-keyboard .workspace-conversation:has(> .work-next:not([hidden])) > .conversation { flex-shrink: 1; }
+  body.mobile-keyboard .work-next {
+    display: flex; flex-direction: column; flex: none; min-height: 0; height: min(240px, 100%);
+    padding: var(--space-2); margin-block: var(--space-1); overflow: auto;
+  }
+  body.mobile-keyboard .work-next > :is(header, [data-follow-up-form], [data-follow-up-status], [data-follow-up-note]) { flex: none; }
+  body.mobile-keyboard .work-next-list { flex: 1 1 auto; min-height: 0; overflow: auto; }
+  body.mobile-keyboard .work-next form { padding: 0; border: 0; }
+  body.mobile-keyboard .work-next-field { margin-top: var(--space-1); padding-top: 0; border-top: 0; }
+  body.mobile-keyboard .work-next-list:has(> .ui-empty) { display: none; }
+  body.mobile-keyboard .work-next:has(.work-next-list > .ui-empty) { height: auto; }
+  body.mobile-keyboard .work-next textarea { height: 52px; min-height: 52px; margin-top: 0; }
+  body.mobile-keyboard .work-next :is(.ui-meta, .actions) { margin-block: var(--space-1) 0; }
+  body.mobile-keyboard main:has([data-discussion-route=detail]) :is(.pm-shell, .pm-main, [data-pm-region=discussions]) {
+    height: 100%; min-height: 0;
+  }
+  body.mobile-keyboard main:has([data-discussion-route=detail]) .pm-main { padding: var(--space-2); }
+  body.mobile-keyboard main:has([data-discussion-route=detail]) .pm-main > .ui-page-header { display: none; }
+  body.mobile-keyboard [data-discussions][data-discussion-route=detail] { height: 100%; min-height: 0; overflow: hidden; }
+  body.mobile-keyboard [data-discussions] .pd-thread-header { padding: var(--space-1) var(--space-2); max-height: 68px; overflow: auto; flex: none; }
+  body.mobile-keyboard [data-discussions] .pd-transcript { min-height: 0; overflow: auto; padding-block: var(--space-1); }
+  body.mobile-keyboard [data-discussions] .pd-composer { padding: var(--space-2); flex: none; }
+  body.mobile-keyboard .pd-composer textarea { height: 52px; min-height: 52px; }
+  body.mobile-keyboard .pd-composer-row { margin-top: var(--space-1); }
+  body.mobile-keyboard :is(.workspace-composer, .pd-composer, .work-next) button { min-height: 44px; }
+  body.mobile-keyboard .pd-panel-overlay {
+    top: var(--workspace-visible-top); height: var(--workspace-visible-height); max-height: var(--workspace-visible-height); bottom: auto;
+  }
+}
+@media (max-width: 999px) and (max-height: 450px) {
+  body.mobile-keyboard main.session-view { padding-block: var(--space-1); }
+  body.mobile-keyboard .workspace-session-heading .session-back { display: none; }
+  body.mobile-keyboard .workspace-session-heading h1 { font-size: var(--fs-section); }
+  body.mobile-keyboard .work-next { margin-block: 0; padding-block: var(--space-1); }
+  body.mobile-keyboard .work-next textarea { height: 44px; min-height: 44px; }
+  body.mobile-keyboard .work-next-field { margin-top: 0; }
+}

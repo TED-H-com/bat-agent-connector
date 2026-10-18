@@ -1,3 +1,4 @@
+import {installViewport, resizeViewport} from './viewport-fixture.ts';
 import { test, expect } from '@playwright/test';
 import { workspaceFixture, mountWorkspace, workspaceRoute } from './workspace-fixture.ts';
 
@@ -167,62 +168,16 @@ test.describe('Workspace Layout Controls', () => {
 
   test('visualViewport keyboard adaptation without treating pinch zoom as keyboard', async ({ page }) => {
     const f = workspaceFixture('en');
+    await installViewport(page);
     await mountWorkspace(page, false, f);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/dashboard/' + workspaceRoute);
-
-    // Initial state: not mobile keyboard
-    expect(await page.evaluate(() => document.body.classList.contains('mobile-keyboard'))).toBe(false);
-
-    // Simulate virtual keyboard: visualViewport scale = 1, height = 450 (innerHeight is 844)
-    await page.evaluate(() => {
-      // Mock visualViewport resize
-      const mockVV = {
-        scale: 1,
-        height: 450,
-        width: 390,
-        offsetTop: 0,
-        addEventListener: window.visualViewport?.addEventListener?.bind(window.visualViewport),
-        removeEventListener: window.visualViewport?.removeEventListener?.bind(window.visualViewport),
-      };
-      Object.defineProperty(window, 'visualViewport', { value: mockVV, configurable: true });
-      window.dispatchEvent(new Event('resize'));
-    });
-
-    // Check that keyboard mode adapts
-    await page.evaluate(() => {
-      // Trigger visualViewport resize handler via dispatching resize on window
-      const vv = window.visualViewport;
-      if (vv && vv.scale === 1 && vv.height < window.innerHeight - 80) {
-        document.body.classList.add('mobile-keyboard');
-        document.documentElement.style.setProperty('--workspace-visible-height', `${vv.height}px`);
-      }
-    });
-
-    expect(await page.evaluate(() => document.body.classList.contains('mobile-keyboard'))).toBe(true);
-    expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--workspace-visible-height').trim())).toBe('450px');
-
-    // Simulate pinch-zoom: scale = 1.6, height = 450
-    // Must NOT treat pinch zoom as keyboard!
-    await page.evaluate(() => {
-      const mockVV = {
-        scale: 1.6,
-        height: 450,
-        width: 243,
-        offsetTop: 0,
-      };
-      Object.defineProperty(window, 'visualViewport', { value: mockVV, configurable: true });
-      // Apply layout logic
-      const vv = window.visualViewport;
-      const isPinchZoom = Math.abs(vv.scale - 1) > 0.05;
-      if (isPinchZoom) {
-        // Ignored! Keyboard class must not be added
-        document.body.classList.remove('mobile-keyboard');
-        document.documentElement.style.removeProperty('--workspace-visible-height');
-      }
-    });
-
-    expect(await page.evaluate(() => document.body.classList.contains('mobile-keyboard'))).toBe(false);
+    await expect(page.locator('#workspace-message-input textarea')).toBeVisible();
+    await expect(page.locator('body')).not.toHaveClass(/mobile-keyboard/);
+    await resizeViewport(page, {height: 450});
+    await expect(page.locator('body')).toHaveClass(/mobile-keyboard/);
+    await resizeViewport(page, {height: 450, scale: 1.6});
+    await expect(page.locator('body')).not.toHaveClass(/mobile-keyboard/);
     expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--workspace-visible-height').trim())).toBe('');
   });
 });

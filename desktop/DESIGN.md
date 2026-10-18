@@ -484,9 +484,9 @@ view when `pm_overview` is absent.
 ## Discussions
 
 Discussions uses a 280px searchable thread list and a conversation with its composer
-pinned below the scrolling transcript. Below 800px, the list route shows only the
+pinned below the scrolling transcript. Below 1000px, the list route shows only the
 list; a thread or `/discussions/new` replaces it, and Back returns to the list.
-At 800px and wider the list and detail remain side by side. The Discussion info panel (Context / Inputs / Plan) starts closed
+At 1000px and wider the list and detail remain side by side. The Discussion info panel (Context / Inputs / Plan) starts closed
 for a plain thread at every width. One bound context chip or the Context icon opens it
 and returns focus on close. A non-inline reviewable proposal or original proposal recovery
 opens Plan; inline conversation proposals keep the panel closed so review stays in the conversation. An original input request opens Inputs. Explicit open/close and tab choices
@@ -1397,3 +1397,19 @@ unchanged in API data, CLI arguments and technical Details. zh-TW UI uses 代理
 工作樹 consistently, including PM and MCP workers. BAT, Connector, Codex, Claude,
 Git, GitHub, MCP and Task Service remain product or protocol names. JSON keys,
 credential placeholders and CLI syntax remain literal technical examples.
+
+### Mobile keyboard and viewport continuity (EC-1.1)
+
+One application observer reads visualViewport for Session, Work and Discussion.
+Below 1000px, a reduction of more than 80px at scale 1 constrains the conversation
+to the visible height and offset. Pinch zoom, absent viewport support and desktop
+width restore ordinary layout. The observer does not scroll the window or remount
+the composer. Work retains its input target, original operation key and IME guard.
+
+The keyboard view compacts headings and keeps input and send controls in the visible
+area. Discussion retains its title and Back; the shared workspace control remains
+reachable. Queue receipts and transcripts use their own scrolling regions. Closing
+the keyboard restores the full heading, perspectives and page navigation.
+Tests dispatch browser viewport events before asserting real control geometry,
+node identity, drafts and zero writes; they never apply product classes themselves.
+These are simulated keyboard checks, not physical Safari/IME/lockscreen acceptance.

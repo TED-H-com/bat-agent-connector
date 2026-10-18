@@ -28,6 +28,7 @@ import {ApiError, errorPresentation} from "./error-presentation.js";
 import {managedControl, fleetAvailability} from "./transport/index.ts";
 import {restoreBrowserSession, browserSessionToken, forgetBrowserSession} from "./transport/index.ts";
 import {setupSidebarResizer, setupMobileSessionLayout} from "./workspace-layout.js";
+import {observeViewport} from './ui/viewport.js';
 import {attentionView} from "./attention.js";
 import {parsePullRequest} from "./delivery-input.js";
 import {sessionLabelsPanel, validLabels} from "./session-labels.js";
@@ -4782,6 +4783,7 @@ async function route() {
 }
 
 async function start() {
+  observeViewport();
   window.addEventListener("hashchange", route);
   document.addEventListener('visibilitychange', foregroundChanged);
   window.addEventListener('pageshow', event => {if (event.persisted) foregroundChanged();});

@@ -52187,48 +52187,17 @@ function setupMobileSessionLayout({ head, composer, textarea, t, guard, infoRow 
 	const unbindArea = (node) => {
 		node?.removeEventListener("input", onTextareaInput);
 		node?.removeEventListener("change", onTextareaInput);
-		node?.removeEventListener("focusin", onFocusIn);
-		node?.removeEventListener("focusout", onFocusOut);
 	};
 	const bindArea = (node) => {
 		node?.addEventListener("input", onTextareaInput);
 		node?.addEventListener("change", onTextareaInput);
-		node?.addEventListener("focusin", onFocusIn);
-		node?.addEventListener("focusout", onFocusOut);
 	};
 	if (boundRow) {
 		if (!boundRow.contains(composerToggle)) boundRow.append(composerToggle);
 	} else if (!boundComposer.contains(composerToggle)) boundComposer.prepend(composerToggle);
-	const updateViewport = () => {
-		if (!alive()) return;
-		const isMob = isMobileLayout();
-		const vv = window.visualViewport;
-		if (!isMob || !vv) {
-			document.body.classList.remove("mobile-keyboard");
-			document.documentElement.style.removeProperty("--workspace-visible-height");
-			return;
-		}
-		if (Math.abs(vv.scale - 1) > .05) {
-			document.body.classList.remove("mobile-keyboard");
-			document.documentElement.style.removeProperty("--workspace-visible-height");
-			return;
-		}
-		const isKeyboard = vv.height < window.innerHeight - 80;
-		document.body.classList.toggle("mobile-keyboard", isKeyboard);
-		if (isKeyboard) {
-			document.documentElement.style.setProperty("--workspace-visible-height", `${vv.height}px`);
-			if (window.scrollY || vv.offsetTop) window.scrollTo(0, 0);
-		} else document.documentElement.style.removeProperty("--workspace-visible-height");
-	};
-	const onFocusIn = () => requestAnimationFrame(updateViewport);
-	const onFocusOut = () => requestAnimationFrame(updateViewport);
-	window.visualViewport?.addEventListener("resize", updateViewport);
-	window.visualViewport?.addEventListener("scroll", updateViewport);
-	window.addEventListener("resize", updateViewport);
 	bindArea(boundArea);
 	updateInfo();
 	renderComposerToggle();
-	updateViewport();
 	return {
 		infoToggle,
 		composerToggle,
@@ -52257,18 +52226,43 @@ function setupMobileSessionLayout({ head, composer, textarea, t, guard, infoRow 
 		},
 		dispose() {
 			isDisposed = true;
-			window.visualViewport?.removeEventListener("resize", updateViewport);
-			window.visualViewport?.removeEventListener("scroll", updateViewport);
-			window.removeEventListener("resize", updateViewport);
 			unbindArea(boundArea);
 			infoToggle.remove();
 			composerToggle.remove();
 			head.classList.remove("workspace-info-collapsed");
 			boundComposer?.classList.remove("workspace-composer-collapsed");
 			composer.classList.remove("workspace-composer-collapsed");
-			document.body.classList.remove("mobile-keyboard");
-			document.documentElement.style.removeProperty("--workspace-visible-height");
 		}
+	};
+}
+//#endregion
+//#region src/ui/viewport.js
+function observeViewport() {
+	const viewport = window.visualViewport;
+	const root = document.documentElement;
+	const clear = () => {
+		document.body.classList.remove("mobile-keyboard");
+		root.style.removeProperty("--workspace-visible-height");
+		root.style.removeProperty("--workspace-visible-top");
+	};
+	const update = () => {
+		if (!viewport || window.innerWidth >= 1e3 || !Number.isFinite(viewport.height) || viewport.height <= 0 || !Number.isFinite(viewport.scale) || Math.abs(viewport.scale - 1) > .05 || viewport.height >= window.innerHeight - 80) {
+			clear();
+			return;
+		}
+		root.style.setProperty("--workspace-visible-height", `${viewport.height}px`);
+		root.style.setProperty("--workspace-visible-top", `${Math.max(0, viewport.offsetTop || 0)}px`);
+		document.body.classList.add("mobile-keyboard");
+	};
+	viewport?.addEventListener("resize", update);
+	viewport?.addEventListener("scroll", update);
+	window.addEventListener("resize", update);
+	update();
+	return () => {
+		viewport?.removeEventListener("resize", update);
+		viewport?.removeEventListener("scroll", update);
+		window.removeEventListener("resize", update);
+		clear();
 	};
 }
 //#endregion
@@ -69865,6 +69859,7 @@ async function route() {
 	state.viewReady = true;
 }
 async function start() {
+	observeViewport();
 	window.addEventListener("hashchange", route);
 	document.addEventListener("visibilitychange", foregroundChanged);
 	window.addEventListener("pageshow", (event) => {
