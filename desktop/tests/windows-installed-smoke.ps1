@@ -12,9 +12,7 @@ $configRoot = Join-Path ([Environment]::GetFolderPath('ApplicationData')) $confi
 $dataRoot = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) $config.identifier
 $registryRoot = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
 function Get-Registration {
-    if (-not (Test-Path -LiteralPath $registryRoot)) { return }
-    @(Get-ChildItem $registryRoot | ForEach-Object { Get-ItemProperty $_.PSPath } |
-        Where-Object { $_.PSObject.Properties['DisplayName'] -and $_.DisplayName -eq $config.productName })
+    Get-FixtureRegistration $registryRoot $config.productName
 }
 foreach ($path in @($configRoot, $dataRoot)) {
     if (Test-Path -LiteralPath $path) { throw "Refusing existing app state: $path" }

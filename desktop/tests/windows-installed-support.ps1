@@ -124,3 +124,20 @@ function Remove-FixturePath {
         }
     }
 }
+function Get-FixtureRegistration {
+    param([string]$RegistryRoot, [string]$ProductName,
+        [scriptblock]$Enumerate = { param($Root) Get-ChildItem -LiteralPath $Root -ErrorAction Stop },
+        [scriptblock]$Read = { param($Path) Get-ItemProperty -LiteralPath $Path -ErrorAction Stop })
+    # NSIS removes its registration asynchronously. Enumeration is a snapshot:
+    # a key can disappear before its properties are read. Only absence is normal;
+    # access denial and every other provider failure must still fail the fixture.
+    try { $keys = @(& $Enumerate $RegistryRoot) }
+    catch [System.Management.Automation.ItemNotFoundException] { return }
+    foreach ($key in $keys) {
+        try { $properties = & $Read $key.PSPath }
+        catch [System.Management.Automation.ItemNotFoundException] { continue }
+        if ($properties.PSObject.Properties['DisplayName'] -and $properties.DisplayName -eq $ProductName) {
+            $properties
+        }
+    }
+}
