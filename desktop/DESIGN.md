@@ -15,6 +15,12 @@ readable; closing it restores focus without remounting the composer. At less tha
 800px the Results sheet fills the viewport. Work/Lineage/Live keep the selected
 identity, conversation nodes and original composer. The item purpose and observed
 activity precede details; the session's Interrupt action lives in More.
+Explicitly opened Discussion info also consumes one Back entry before leaving the
+thread. Forward restores the same selected tab and reading position only after
+the current workspace, thread and context sources remain readable. The retained
+body and composer keep their drafts across sheet closure and responsive changes.
+Automatic panel synchronization adds no history entry; withdrawal invalidates its
+entry without navigating. History holds only an opaque presentation marker.
 When a discussion was opened from an execution, keep its existing return link
 visible at every width. A wide-screen discussion list cannot restore that Work
 and Attempt selection; ordinary discussion-list back links remain mobile-only.

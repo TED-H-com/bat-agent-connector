@@ -12537,10 +12537,10 @@ function sheetHistory({ show, hide, canRestore = () => true }) {
 	const key = "batcSheet";
 	let disposed = false, visible = false;
 	const owned = () => location.href === url && history.state?.[key] === id;
-	const reveal = () => {
+	const reveal = (restoring = false) => {
 		if (!visible) {
 			visible = true;
-			show();
+			show({ restoring });
 		}
 	};
 	const conceal = () => {
@@ -12551,7 +12551,7 @@ function sheetHistory({ show, hide, canRestore = () => true }) {
 	};
 	function pop() {
 		if (disposed) return;
-		if (owned() && canRestore()) reveal();
+		if (owned() && canRestore()) reveal(true);
 		else conceal();
 	}
 	window.addEventListener("popstate", pop);
@@ -19756,7 +19756,7 @@ function discussionFeedback({ t, request, node, eligible }) {
 		}));
 	}
 }
-function discussionPanel({ t, namespace, workspaceId, threadId = "new", panes, onSelect = () => {} }) {
+function discussionPanel({ t, namespace, workspaceId, threadId = "new", panes, onSelect = () => {}, canRestore = () => false }) {
 	const state = viewState(namespace, workspaceId, "discussion-panel." + threadId);
 	if (!Object.hasOwn(panes, state.tab)) state.tab = "context";
 	const home = h$1("aside", {
@@ -19766,8 +19766,11 @@ function discussionPanel({ t, namespace, workspaceId, threadId = "new", panes, o
 		class: "pd-panel",
 		"data-discussion-panel": ""
 	});
-	let overlay = null, opener = null, panelFocus = null, disposed = false;
+	let overlay = null, opener = null, panelFocus = null, navigation = null, disposed = false, scroll = 0;
 	const media = matchMedia("(min-width: 1200px)");
+	home.addEventListener("scroll", () => {
+		if (media.matches && overlay) scroll = home.scrollTop;
+	});
 	const select = (key) => {
 		if (!Object.hasOwn(panes, key)) return;
 		state.tab = key;
@@ -19815,7 +19818,16 @@ function discussionPanel({ t, namespace, workspaceId, threadId = "new", panes, o
 			state.explicit = true;
 			state.open = false;
 		}
+		if (!explicit) {
+			navigation?.dispose();
+			navigation = null;
+		}
 		overlay?.close();
+	}
+	function conceal() {
+		if (!overlay) return;
+		scroll = media.matches ? home.scrollTop : overlay.body.scrollTop;
+		overlay.close();
 	}
 	function open(key = "context", { explicit = true, returnFocus, focus = explicit } = {}) {
 		if (disposed) return;
@@ -19824,6 +19836,20 @@ function discussionPanel({ t, namespace, workspaceId, threadId = "new", panes, o
 		if (returnFocus) opener = returnFocus;
 		select(key);
 		controls.setValue(key);
+		if (explicit) {
+			navigation ??= sheetHistory({
+				show: ({ restoring }) => reveal(true, restoring),
+				hide: conceal,
+				canRestore: () => !disposed && home.isConnected && canRestore()
+			});
+			navigation.open();
+			if (focus) queueMicrotask(() => {
+				if (overlay) controls.querySelector("[aria-selected=true]")?.focus({ preventScroll: true });
+			});
+		} else reveal(focus);
+	}
+	function reveal(focus, restoring = false) {
+		const savedScroll = scroll;
 		if (!overlay) {
 			home.hidden = false;
 			overlay = inspector({
@@ -19839,10 +19865,15 @@ function discussionPanel({ t, namespace, workspaceId, threadId = "new", panes, o
 						state.explicit = true;
 					}
 					onSelect(null);
+					navigation?.close();
 				}
 			});
 			overlay.addEventListener("focusin", (event) => {
 				panelFocus = event.target;
+			});
+			const scroller = overlay.body;
+			scroller.addEventListener("scroll", () => {
+				if (!media.matches && overlay?.body === scroller) scroll = scroller.scrollTop;
 			});
 			overlay.classList.add("pd-panel-overlay");
 			overlay.body.append(body);
@@ -19855,8 +19886,16 @@ function discussionPanel({ t, namespace, workspaceId, threadId = "new", panes, o
 			}
 			trigger.setAttribute("aria-expanded", "true");
 		}
-		onSelect(key);
-		if (focus) queueMicrotask(() => controls.querySelector("[aria-selected=true]")?.focus());
+		state.open = true;
+		onSelect(state.tab);
+		const panel = overlay;
+		if (focus) queueMicrotask(() => {
+			if (overlay === panel) controls.querySelector("[aria-selected=true]")?.focus({ preventScroll: true });
+		});
+		if (restoring) requestAnimationFrame(() => {
+			if (overlay !== panel) return;
+			(media.matches ? home : panel.body).scrollTop = savedScroll;
+		});
 	}
 	media.addEventListener("change", locate);
 	return {
@@ -19885,7 +19924,7 @@ function discussionPanel({ t, namespace, workspaceId, threadId = "new", panes, o
 		dispose() {
 			disposed = true;
 			media.removeEventListener("change", locate);
-			overlay?.close();
+			close();
 		}
 	};
 }
@@ -46832,7 +46871,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	} catch {}
 	const staleSections = new Set(), activationReads = new Map(), maskedSources = new Map();
 	let discussionTools = null, boundContext = null, panelContext = null, renameForm = null, threadSearch = null, titleView = null;
-	let draftSourceUnavailable = false;
+	let draftSourceUnavailable = false, contextSequence = 0, settledContextSequence = 0;
+	const canRestoreDiscussion = () => !disposed && loaded && !refreshing && contextSequence === settledContextSequence && workspace?.workspace_id === workspaceId && (threadId === "new" ? !draftSourceUnavailable : threadData?.thread?.workspace_id === workspaceId && threadData.thread.thread_id === threadId && !(threadData.thread.context || []).some((ref) => ref.available === false));
 	async function draftSourceRefs(refs = launch.refs, reads = new Map()) {
 		const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 		const read = (path) => {
@@ -48895,6 +48935,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				namespace,
 				workspaceId,
 				threadId,
+				canRestore: canRestoreDiscussion,
 				panes: {
 					context: contextPane,
 					inputs: h("section", { "data-discussion-tab": "inputs" }, information),
@@ -49267,6 +49308,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		const ticket = ++sequence;
 		refreshing = true;
 		refresh.disabled = true;
+		const contextTicket = ++contextSequence;
 		assessmentSources?.withdraw();
 		if (!event) {
 			invalidateSections();
@@ -49460,6 +49502,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						namespace,
 						workspaceId,
 						threadId,
+						canRestore: canRestoreDiscussion,
 						panes: { context: contextDraft }
 					});
 					if (threadId === "new") discussionTools = draftPanel;
@@ -49566,6 +49609,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			await refreshNames();
 			alive();
 			if (ticket !== sequence) return;
+			settledContextSequence = contextTicket;
 			updateForms();
 			if (initialReadComplete) {
 				proposalReview?.recheck();
@@ -49722,7 +49766,6 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			settleReadComplete();
 		}
 	}
-	let contextSequence = 0;
 	async function refreshDiscussionSources() {
 		const ticket = ++contextSequence, generation = sequence;
 		assessmentSources?.withdraw();
@@ -49778,6 +49821,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				renderThreadRows(page);
 				publishContext();
 			}
+			settledContextSequence = ticket;
 			content.hidden = false;
 		} catch (error) {
 			alive();
