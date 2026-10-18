@@ -5,6 +5,10 @@
 - Read-only manual-session observation can prove 2–64 serial native inputs from complete same-epoch replay and exact counters. Public receipts retain only bounded counts and digests; gaps, overlap and incomplete retention stay unknown. Original single-input receipts remain compatible, and no session control or work acceptance is inferred.
 
 - Persist each workspace’s bounded PM analysis runtime through the existing durable operation. New discussion analysis, proposals, reviews, Overview assessments and continuation summaries use the saved choice; pending requests retain their original receipt, and a changed choice fences queued work before it starts. Active or unresolved PM analysis prevents switching.
+- Opening PM request details focuses the original analysis recovery control even
+  when workspace runtime settings contain another form. Background resolution
+  reads retain the draft, caret and focus while gating submission; changed or
+  withdrawn sources still require fresh authorization and baseline review.
 
 - Preparing a PM Overview assessment survives an overlapping factual refresh.
   Source withdrawal and leaving the workspace still discard the pending read;
