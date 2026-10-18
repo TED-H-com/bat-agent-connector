@@ -220,3 +220,154 @@ def test_verify_only_runs_no_uv_and_does_not_create_directories(tmp_path, monkey
         return '{"status": "verified_installation", "writes": false}'
     assert bootstrap.install(args, home=home, download=download, run=run)["writes"] is False
     assert {str(p): (p.stat().st_mtime_ns, p.stat().st_size) for p in home.rglob("*")} == before
+
+
+@pytest.fixture
+def legacy(installation):
+    home, root, source, candidate, inspect, finalize = installation
+    tool = home / '.local/share/uv/tools/bat-agent-connector'
+    package = tool / 'lib/python3.13/site-packages/bat_agent_connector'
+    shutil.copytree(source / 'src/bat_agent_connector', package)
+    metadata = package.parent / 'bat_agent_connector-0.2.7.dist-info'
+    metadata.mkdir()
+    (metadata / 'direct_url.json').write_text(json.dumps({'vcs_info': {'vcs': 'git', 'commit_id': candidate['commit']}}))
+    (metadata / 'METADATA').write_text('\nVersion: 0.2.7\n')
+    files.ensure_private_directory(home / '.local/bin')
+    for name in installer.COMMANDS:
+        files.atomic_write(tool / 'bin' / name, b'fixture')
+        (home / '.local/bin' / name).symlink_to(tool / 'bin' / name)
+    skill = home / '.agents/skills/bat-agent-connector/SKILL.md'
+    files.atomic_write(skill, SKILL)
+    receipt = home / '.config/bat-agent-connector/install-receipt-connector.json'
+    doc = {'format': 1, 'repository': bootstrap.REPOSITORY, 'commit': candidate['commit'],
+           'package_version': '0.2.7', 'canonical_sha256': hashlib.sha256(SKILL).hexdigest(),
+           'executable': str(tool / 'bin/batc'), 'bundles': [{'adapter': 'generic', 'path': str(skill)}],
+           'installed_proof': {'package_path': str(package), 'python_source_sha256': installer.source_digest(package),
+                               'packaged_workflow_sha256': hashlib.sha256(SKILL).hexdigest()}}
+    files.atomic_write(receipt, json.dumps(doc).encode())
+    return installation, tool, package, skill, receipt
+
+
+def test_adoption_enrollment_and_restore(legacy):
+    installation, tool, package, skill, receipt = legacy
+    home, root, source, candidate, inspect, finalize = installation
+    before = receipt.read_bytes()
+    adoption = bootstrap.verify_adoption(home, candidate)
+    summary = finalize(adoption=adoption)
+    assert receipt.read_bytes() == before and package.exists()
+    assert installer.restore_adopted(root, home=home)['status'] == 'restored_adopted'
+    assert (home / '.local/bin/batc').resolve() == tool / 'bin/batc'
+    installer.adoption_links(home, root, adoption)
+    u = updater.Updater(home, inspect=inspect, find_release=lambda channel: candidate)
+    assert u.enroll(Path(summary['receipt']), 'preview')['installation_matches_state']
+    with pytest.raises(ValueError, match='adoption_'):
+        installer.restore_adopted(root, home=home)
+
+
+@pytest.mark.parametrize('change,code', [
+    ('package', 'source_changed'), ('foreign', 'entrypoint_changed'), ('regular', 'entrypoint_changed'),
+    ('skill', 'skill_changed'), ('outside', 'location_mismatch'), ('downgrade', 'downgrade_refused'),
+    ('identity', 'identity_mismatch'), ('types', 'receipt_invalid'),
+])
+def test_adoption_refusals(legacy, change, code):
+    installation, tool, package, skill, receipt = legacy
+    home, root, source, candidate, inspect, finalize = installation
+    link = home / '.local/bin/batc'
+    if change == 'package':
+        (package / '__init__.py').write_text('modified')
+    elif change in ('foreign', 'regular'):
+        link.unlink()
+        if change == 'foreign':
+            link.symlink_to(root / 'bin/batc')
+        else:
+            link.write_text('custom')
+    elif change == 'skill':
+        skill.write_text('custom')
+    elif change in ('outside', 'types'):
+        doc = json.loads(receipt.read_bytes())
+        doc['installed_proof']['package_path'] = str(root) if change == 'outside' else []
+        receipt.write_text(json.dumps(doc))
+    elif change == 'identity':
+        next(package.parent.glob('*.dist-info/direct_url.json')).write_text('{}')
+    elif change == 'downgrade':
+        candidate = {**candidate, 'version': '0.2.6'}
+    with pytest.raises(ValueError, match=code):
+        bootstrap.verify_adoption(home, candidate)
+    assert not (root / 'rollout-receipt.json').exists()
+
+
+def test_adoption_swap_failure_restores_links(legacy, monkeypatch):
+    installation, tool, package, skill, receipt = legacy
+    home, root, source, candidate, inspect, finalize = installation
+    adoption = bootstrap.verify_adoption(home, candidate)
+    original = installer.swap_link
+    calls = []
+    def swap(path, target):
+        calls.append(path)
+        if len(calls) == 2:
+            raise OSError('fixture failure')
+        original(path, target)
+    monkeypatch.setattr(installer, 'swap_link', swap)
+    with pytest.raises(ValueError, match='adoption_swap_failed'):
+        finalize(adoption=adoption)
+    for name in installer.COMMANDS:
+        assert (home / '.local/bin' / name).resolve() == tool / 'bin' / name
+    assert skill.read_bytes() == SKILL
+    assert not (root / 'rollout-receipt.json').exists()
+
+
+def test_restore_refuses_changed_link(legacy):
+    installation, tool, package, skill, receipt = legacy
+    home, root, source, candidate, inspect, finalize = installation
+    finalize(adoption=bootstrap.verify_adoption(home, candidate))
+    link = home / '.local/bin/batc'
+    link.unlink()
+    link.symlink_to(tool / 'bin/batc')
+    with pytest.raises(ValueError, match='entrypoint_changed'):
+        installer.restore_adopted(root, home=home)
+    assert (home / '.local/bin/batc-update').readlink() == root / 'bin/batc-update'
+
+
+def test_bootstrap_adoption_uses_verified_install_and_can_upgrade(legacy, monkeypatch):
+    installation, tool, package, skill, receipt = legacy
+    home, root, source, candidate, inspect, finalize = installation
+    skill.chmod(0o644)
+    skill.parent.chmod(0o755)
+    args = options(adopt_existing=True)
+    args.root = home / '.local/share/bat-agent-connector/releases/new'
+    item, raw, download = transport()
+    monkeypatch.setattr(bootstrap.shutil, 'which', lambda name: '/usr/bin/' + name)
+    def run(arguments, **kwargs):
+        if 'rev-parse' in arguments:
+            return candidate['commit']
+        if 'bat_agent_connector.installer' in arguments:
+            adoption = json.loads(arguments[arguments.index('--adoption') + 1])
+            new_root = Path(arguments[arguments.index('bat_agent_connector.installer') + 1])
+            proof = make_package(new_root, candidate)
+            source_path = Path(arguments[arguments.index('--source') + 1])
+            shutil.copytree(source / 'src/bat_agent_connector', source_path / 'src/bat_agent_connector')
+            files.atomic_write(source_path / 'skills/bat-agent-connector/SKILL.md', SKILL)
+            return json.dumps(installer.finalize(new_root, candidate, source=source_path, home=home,
+                inspect=lambda *a, **kw: proof, command=lambda *a, **kw: candidate['version'],
+                identity=lambda: {'version': candidate['version'], 'commit': candidate['commit'], 'source': 'vcs'},
+                adoption=adoption))
+        return ''
+    result = bootstrap.install(args, home=home, download=download, run=run)
+    proof = {"package": str(args.root / "tools/bat-agent-connector/lib/python3.13/site-packages/bat_agent_connector"),
+             "skill_sha256": candidate["skill_sha256"]}
+    from bat_agent_connector.update_install import digest_files
+    proof.update(files=digest_files(package_files(Path(proof["package"]))),
+                 python_files=digest_files(package_files(Path(proof["package"]), python_only=True)))
+    u = updater.Updater(home, inspect=lambda *a, **kw: proof,
+                        find_release=lambda channel: candidate)
+    assert u.enroll(Path(result['receipt']), 'preview')['installation_matches_state']
+
+
+def test_adoption_version_policy(legacy):
+    installation, tool, package, skill, receipt = legacy
+    home, root, source, candidate, inspect, finalize = installation
+    assert bootstrap.verify_adoption(home, {**candidate, 'version': '0.2.8'})
+    assert bootstrap.verify_adoption(home, {**candidate, 'version': '0.2.6'}, allow_downgrade=True)
+    files.atomic_write(home / '.local/share/bat-agent-connector/update/state.json', b'{}')
+    with pytest.raises(ValueError, match='already_update_managed'):
+        bootstrap.verify_adoption(home, candidate)

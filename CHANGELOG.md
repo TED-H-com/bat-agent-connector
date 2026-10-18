@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Adopt verified existing uv tool installations into managed Connector releases, with guarded restoration.
+
 - Add a pinned-tag Linux/macOS Connector installer that verifies release/source integrity and produces an updater enrollment receipt.
 
 - Read-only manual-session observation can prove 2–64 serial native inputs from complete same-epoch replay and exact counters. Public receipts retain only bounded counts and digests; gaps, overlap and incomplete retention stay unknown. Original single-input receipts remain compatible, and no session control or work acceptance is inferred.
