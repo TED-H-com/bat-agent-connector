@@ -42,9 +42,11 @@ export function overviewAssessment(options) {
   };
   const list=async before=>checkList(await api('GET',`${root}?limit=10${before?`&before=${encodeURIComponent(before)}`:''}`));
   async function latestCarrier() {
-    let before=null;const seen=new Set(),ticket=serial;
+    // A factual refresh can supersede another refresh, but not a person's
+    // explicit preparation. Withdrawal/disposal still invalidates this read.
+    let before=null;const seen=new Set(),ticket=epoch;
     for(let count=0;count<32;count++) {
-      const data=await list(before);if(!valid(ticket))throw Object.assign(Error(),{code:'PM_DISPOSED'});
+      const data=await list(before);alive();if(ticket!==epoch)throw Object.assign(Error(),{code:'PM_DISPOSED'});
       if(data.assessments.length)return data.assessments[0];
       if(!data.partial)return null;
       if(seen.has(data.next_cursor))throw mismatch();seen.add(data.next_cursor);before=data.next_cursor;
