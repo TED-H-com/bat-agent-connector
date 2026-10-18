@@ -1613,8 +1613,8 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             let roadmap_list = path.ends_with("/roadmap/revisions");
             let governance_list = path.ends_with("/governance");
             let register_list = path.ends_with("/register");
-            let external_history = path.split('/').nth(4) == Some("history")
-                && path.split('/').count() == 6;
+            let external_history =
+                path.split('/').nth(4) == Some("history") && path.split('/').count() == 6;
             let follow_up_list = path.ends_with("/follow-ups");
             let assessment_list = path.ends_with("/follow-up-assessments");
             let overview_assessment_list = path.ends_with("/overview-assessments");
@@ -1737,12 +1737,16 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                         && !value.ends_with('/')
                 }
                 "after" if external_history => {
-                    !value.is_empty() && value.len() <= 16
+                    !value.is_empty()
+                        && value.len() <= 16
                         && value.bytes().all(|b| b.is_ascii_digit())
-                        && value.parse::<u64>().is_ok_and(|n| n <= 9_007_199_254_740_991)
+                        && value
+                            .parse::<u64>()
+                            .is_ok_and(|n| n <= 9_007_199_254_740_991)
                 }
                 "limit" if external_history => {
-                    !value.is_empty() && value.len() <= 3
+                    !value.is_empty()
+                        && value.len() <= 3
                         && value.bytes().all(|b| b.is_ascii_digit())
                         && value.parse::<u16>().is_ok_and(|n| (1..=100).contains(&n))
                 }
@@ -2524,11 +2528,33 @@ mod tests {
     #[test]
     fn external_history_accepts_only_bounded_read_pages() {
         let root = "/pm/workspaces/ws_11111111111111111111111111111111/history";
-        for suffix in ["", "/example", "/example?after=0&limit=100", "/example?after=9007199254740991"] {
-            assert!(validate_request(&get(&format!("{root}{suffix}"))).is_ok(), "{suffix}");
+        for suffix in [
+            "",
+            "/example",
+            "/example?after=0&limit=100",
+            "/example?after=9007199254740991",
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_ok(),
+                "{suffix}"
+            );
         }
-        for suffix in ["?after=0", "/example?path=/private", "/example?refresh=1", "/example?limit=101", "/example?after=9007199254740992", "/example?after=-1", "/example?after=1&after=2", "/example?before=1", "/example/messages", "/example?limit=0"] {
-            assert!(validate_request(&get(&format!("{root}{suffix}"))).is_err(), "{suffix}");
+        for suffix in [
+            "?after=0",
+            "/example?path=/private",
+            "/example?refresh=1",
+            "/example?limit=101",
+            "/example?after=9007199254740992",
+            "/example?after=-1",
+            "/example?after=1&after=2",
+            "/example?before=1",
+            "/example/messages",
+            "/example?limit=0",
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_err(),
+                "{suffix}"
+            );
         }
         let mut write = get(&format!("{root}/example"));
         write.method = "POST".into();
