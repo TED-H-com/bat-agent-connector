@@ -13,7 +13,8 @@ def test_missing_manifest_reports_only_registered_phase_and_storage(tmp_path):
     try:
         runtime._manifest(tmp_path / "private-directory")
     except FileNotFoundError as error:
-        assert runtime._failure_location(error) == {"phase": "manifest", "storage": "open"}
+        assert runtime._failure_location(error) == {
+            "phase": "manifest", "storage": "open" if sys.platform == "win32" else "directory_walk"}
     else:
         pytest.fail("missing manifest must still fail")
 
@@ -59,3 +60,27 @@ def test_insecure_root_keeps_the_existing_refusal_and_reports_directory_phase(tm
     assert failure["message"] == "ValueError: managed installation needs recovery"
     assert str(root) not in captured.out
     assert not list(root.iterdir())
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX pinned path walk")
+def test_missing_service_directory_is_not_misreported_as_launcher_lock(tmp_path):
+    with pytest.raises(FileNotFoundError) as caught:
+        runtime._running(tmp_path / "private-customer-directory")
+    assert runtime._failure_location(caught.value) == {
+        "phase": "service_lease", "storage": "directory_walk"}
+    assert "private-customer-directory" not in json.dumps(runtime._failure_location(caught.value))
+
+
+@pytest.mark.parametrize("name,label", [("launcher.lock", "launcher_lease"), ("task-daemon.lock", "service_lease")])
+def test_missing_fixed_lease_leaf_has_only_a_public_object_label(tmp_path, name, label):
+    import os
+
+    with pytest.raises(FileNotFoundError) as caught:
+        runtime.platform_files.open_private_file(tmp_path / name, os.O_RDONLY)
+    location = runtime._failure_location(caught.value)
+    assert location["phase"] == "unknown"
+    assert location["storage"] == "open"
+    # Windows supplies a full native filename; it remains unreported.
+    if sys.platform != "win32":
+        assert location["object"] == label
+    assert str(tmp_path) not in json.dumps(location)

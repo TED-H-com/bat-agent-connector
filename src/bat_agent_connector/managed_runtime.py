@@ -347,10 +347,24 @@ def _failure_location(error):
     while frame is not None:
         code = frame.tb_frame.f_code
         if code in phases:
-            result["phase"] = phases[code]
+            # The shared lock helper also opens the service lease. Preserve the
+            # more specific caller instead of misreporting it as launcher.lock.
+            phase = phases[code]
+            if phase != "launcher_lock" or result["phase"] != "service_lease":
+                result["phase"] = phase
         if code in storage:
             result["storage"] = storage[code]
+        if not platform_files.WINDOWS and code is platform_files._posix_dir.__code__:
+            result["storage"] = "directory_walk"
         frame = frame.tb_next
+    if result["storage"] == "open" and isinstance(error, OSError):
+        # Only fixed public leaf names become labels; arbitrary error filenames,
+        # including private parent components, never leave the native process.
+        leaf = getattr(error, "filename", None)
+        label = ({"launcher.lock": "launcher_lease", "task-daemon.lock": "service_lease"}.get(leaf)
+                 if isinstance(leaf, str) else None)
+        if label:
+            result["object"] = label
     return result
 
 

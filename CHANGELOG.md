@@ -22,6 +22,11 @@
   checkpoints and continuation context, instead of becoming a zero-change count.
   Successful status output remains streamed and the source index is not rewritten.
 
+- Checkpoint source status refuses repository filters, fsmonitor/hooks, config
+  includes, submodules and lazy-fetch configuration before reading dirt. Reads
+  discard inherited Git overrides, preserve the source index and report unknown
+  when the selected checkout cannot be verified.
+
 - Native PM preflight reports distinguish a timed-out version check, launch or
   protocol read from a rejected isolation boundary, retaining the original
   stage and cleanup evidence without changing deadlines or retrying a model.

@@ -74,8 +74,10 @@ def main() -> None:
                         "root", "launcher_lock", "prepare", "manifest", "service_lease", "spawn",
                         "endpoint", "verify", "ensure", "serve", "stop", "unknown"} else "unknown",
                     "storage": location.get("storage") if location.get("storage") in {
-                        "directory", "open", "read", "write", "lock", "none"} else "unknown",
+                        "directory", "directory_walk", "open", "read", "write", "lock", "none"} else "unknown",
                 } if isinstance(location, dict) else {"phase": "unknown", "storage": "unknown"}
+                if isinstance(location, dict) and location.get("object") in {"launcher_lease", "service_lease"}:
+                    details["location"]["object"] = location["object"]
             except (ValueError, TypeError):
                 details = {"error": "INVALID_RUNTIME_REPLY"}
             raise AssertionError(f"Packaged runtime {action} failed ({result.returncode}): {details}")
