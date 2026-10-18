@@ -12,8 +12,16 @@ from types import SimpleNamespace
 import pytest
 
 from bat_agent_connector import local_git_process as process
+from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.checkpoints import _LOCKED_CHECK
-from bat_agent_connector.operations import AmbiguousOutcome, NeedsAttention, StepFailed
+from bat_agent_connector.operations import (
+    ActionDef,
+    AmbiguousOutcome,
+    NeedsAttention,
+    OperationService,
+    StepFailed,
+)
+from bat_agent_connector.task_journal import Journal
 from bat_agent_connector.task_verifier import _group_alive
 
 pytestmark = pytest.mark.skipif(sys.platform != 'linux', reason='Linux process-group prerequisite')
@@ -25,8 +33,8 @@ def python(source):
 
 async def wait_file(path):
     for _ in range(500):
-        if path.exists():
-            return path.read_text()
+        if path.exists() and (value := path.read_text()):
+            return value
         await asyncio.sleep(.01)
     raise AssertionError('Owned helper did not reach its fixture barrier')
 
@@ -210,3 +218,51 @@ async def test_repeated_cancellation_still_joins_the_owned_cleanup(monkeypatch, 
         await asyncio.gather(task, return_exceptions=True)
         for proc, readers in owned:
             await stop(proc, readers)
+
+
+@pytest.mark.parametrize('ending', ['nonzero', 'cancel'])
+async def test_original_durable_receipt_recovers_without_repeating_effect(tmp_path, ending):
+    journal = Journal(tmp_path / 'operations.db')
+    ops = OperationService(journal)
+    principal = Principal('fixture-operator', frozenset({'observe', 'operate'}))
+    receipt = tmp_path / 'receipt.json'
+    sends = []
+    async def handler(ctx):
+        async def effect():
+            sends.append(ctx.operation_id)
+            source = (f'import os,json,pathlib,time; p=pathlib.Path({str(receipt)!r}); '
+                      'p.write_text(json.dumps({"saved":True,"group":os.getpgrp()})); '
+                      + ('raise SystemExit(7)' if ending == 'nonzero' else 'time.sleep(30)'))
+            return await process.run(python(source), 10)
+        async def reconcile(request):
+            assert request == {'intent': 'original'}
+            return json.loads(receipt.read_text())
+        return await ctx.step('git-effect', effect, request={'intent': 'original'}, reconcile=reconcile)
+    ops.register(ActionDef('fixture.git', 'operate', 'Fixed local fixture effect', handler))
+    envelope = {'action': 'fixture.git', 'target': {}, 'idempotency_key': 'original-local-key'}
+    original, _ = ops.create(principal, **envelope)
+    worker = asyncio.create_task(ops._execute(original['operation_id']))
+    try:
+        result = json.loads(await wait_file(receipt))
+        if ending == 'cancel':
+            worker.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await worker
+        else:
+            await worker
+        pending = ops.get(original['operation_id'])
+        assert pending['status'] == ('running' if ending == 'cancel' else 'uncertain')
+        assert pending['steps'][0]['status'] == ('started' if ending == 'cancel' else 'uncertain')
+        assert not _group_alive(result['group'])
+        replay, fresh = ops.create(principal, **envelope)
+        assert not fresh and replay['operation_id'] == original['operation_id']
+        await ops._execute(original['operation_id'])
+        recovered = ops.get(original['operation_id'])
+        assert recovered['status'] == 'succeeded' and recovered['result'] == result
+        assert recovered['idempotency_key'] == 'original-local-key'
+        assert sends == [original['operation_id']]
+    finally:
+        if not worker.done():
+            worker.cancel()
+        await asyncio.gather(worker, return_exceptions=True)
+        journal.close()
