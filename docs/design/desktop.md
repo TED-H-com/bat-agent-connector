@@ -386,3 +386,10 @@ list/default, and deletes the fixture even on failure. It verifies real create, 
 a separate process, replacement, malformed replacement refusal and deletion. Shared bridge
 tests cover verification-before-save, cancellation and configuration changes. Interactive
 secure-field entry and signed-app Keychain access across upgrades remain user acceptance.
+
+
+The packaged launcher's failure receipt distinguishes the launcher lease from the
+service lease, and a POSIX ancestor-path walk from opening its leaf. Only the two
+fixed public lease filenames may become object labels; private paths, arbitrary
+exception text and tracebacks remain excluded. These labels diagnose a refusal;
+they do not retry a missing file or establish successful native installation.
