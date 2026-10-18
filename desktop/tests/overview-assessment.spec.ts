@@ -105,6 +105,20 @@ for(const locale of ['en','zh-TW'])for(const width of [1440,768,390])test(`expli
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
 
+test('a factual refresh between pointer down and up preserves the assessment action',async({page})=>{
+  const x=assessmentFixture();await x.mount(page);
+  const assess=page.locator('[data-overview-assessment-prepare]');await expect(assess).toBeEnabled();
+  await assess.scrollIntoViewIfNeeded();
+  const rect=await assess.boundingBox();expect(rect).not.toBeNull();
+  await page.mouse.move(rect!.x+rect!.width/2,rect!.y+rect!.height/2);await page.mouse.down();
+  x.state.holdList=true;
+  await page.locator('[data-pm-refresh]').evaluate((node:HTMLElement)=>node.click());
+  await expect.poll(()=>Boolean(x.state.releaseList)).toBe(true);
+  await page.mouse.up();x.state.releaseList!();
+  await expect(page.locator('[data-pm-action="pm.overview.assess"] button[type=submit]')).toBeEnabled();
+  expect(x.state.writes).toEqual([]);expect(x.state.previews).toBe(1);
+});
+
 for(const native of [false,true])for(const withdrawn of [false,true])test(`assessment carrier read survives only ordinary refresh: native=${native} withdrawn=${withdrawn}`,async({page})=>{
   const x=assessmentFixture();await x.mount(page,native);
   const card=page.locator('[data-overview-assessment]');await expect(card).toContainText('Keep account recovery in scope');
