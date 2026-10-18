@@ -17,6 +17,7 @@ LOOP_ACTIONS = frozenset({
     "pm.run.analyze",
     "pm.run.bat.analyze",
     "pm.conversation.propose",
+    "pm.continuation.prepare",
     "pm.conversation.adopt",
     "pm.plan.draft",
     "pm.plan.adopt",
@@ -36,6 +37,7 @@ LOOP_ACTIONS = frozenset({
 })
 
 _DISCUSSION = frozenset({
+    "pm.continuation.prepare",
     "pm.thread.create",
     "pm.thread.rename",
     "pm.message.append",
@@ -644,7 +646,7 @@ def _pure_scopes(operation, verb):
         found.append("manage")
     if action == "pm.work_package.create":
         found.extend(("observe", "manage"))
-    if action in {"pm.run.analyze", "pm.run.bat.analyze", "pm.conversation.propose", "pm.conversation.adopt"}:
+    if action in {"pm.run.analyze", "pm.run.bat.analyze", "pm.conversation.propose", "pm.conversation.adopt", "pm.continuation.prepare"}:
         found.extend(("observe", "manage", "start"))
     if action in {"pm.plan.draft", "pm.plan.adopt"}:
         found.append("manage")

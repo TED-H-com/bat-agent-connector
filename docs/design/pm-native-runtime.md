@@ -9,6 +9,12 @@ writer admission, durable receipts, reply import and recovery.
 
 ## Discussion composer
 
+An explicit [continuation brief](pm-continuation-brief.md) preserves a versioned
+summary in the existing run receipts. Later ordinary analysis can reuse its
+readable interpretation and newer messages within the context budget; current
+input dispositions, original references, as-of time and omissions remain clear.
+Preparing or reading the brief does not adopt a plan or authorize coding work.
+
 An existing discussion offers **Send to PM** for ordinary analysis and **Save
 note only** for `pm.message.append`. **Make a plan**, when advertised, retains
 `pm.conversation.propose`; sending an ordinary request does not adopt a plan or

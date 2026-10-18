@@ -179,6 +179,7 @@ HOST_EFFECT_ACTIONS = frozenset({
     "integration.preview",
     "pm.conversation.adopt",
     "pm.conversation.propose",
+    "pm.continuation.prepare",
     "pm.dependencies.capture",
     "pm.execution.runtime.observe",
     "pm.execution.verify",

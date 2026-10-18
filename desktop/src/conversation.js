@@ -74,6 +74,10 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
   // Pinned changes only when the reader scrolls; layout changes re-pin instead of unpinning.
   let pinned = true, unseen = 0, userLabel = null, last = null, resizing = false;
   const alive = () => {if (disposed) return false; try {guard(); return true;} catch {return false;}};
+  // A queued scroll event may run after controls change the viewport height.
+  // Remember our applied position so that event cannot impersonate a reader scroll.
+  let scrollPosition = 0;
+  const setPosition = value => {viewport.scrollTop = value; scrollPosition = viewport.scrollTop;};
   const atBottom = () => viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 48;
   const visible = () => {
     if (document.visibilityState !== "visible") return [];
@@ -97,7 +101,7 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
     availability(remember, busy ? t("conversation_saving") : !visible().some(row => row.reading) ? t("conversation_no_position") : "");
     availability(older, busy ? t("conversation_saving") : "");
   };
-  const follow = () => {pinned = true; unseen = 0; viewport.scrollTop = viewport.scrollHeight; indicator();};
+  const follow = () => {pinned = true; unseen = 0; setPosition(viewport.scrollHeight); indicator();};
   const run = async (action, summary = t("conversation_save_failed"), isSave = true) => {
     if (!alive() || busy) return;
     busy = true; status.replaceChildren(); indicator();
@@ -120,7 +124,11 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
       if (alive()) indicator();
     }
   };
-  const onScroll = () => {if (initialized && !resizing) pinned = atBottom(); indicator();};
+  const onScroll = () => {
+    if (initialized && !resizing && viewport.scrollTop !== scrollPosition) pinned = atBottom();
+    scrollPosition = viewport.scrollTop;
+    indicator();
+  };
   viewport.addEventListener("scroll", onScroll, {passive: true});
   viewport.addEventListener("focusin", () => requestAnimationFrame(onScroll));
   window.addEventListener("scroll", indicator, {passive: true});
@@ -128,14 +136,14 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
     resizing = true;
     requestAnimationFrame(() => {
       if (!alive()) return;
-      if (pinned && initialized) viewport.scrollTop = viewport.scrollHeight;
+      if (pinned && initialized) setPosition(viewport.scrollHeight);
       requestAnimationFrame(() => {resizing = false; indicator();});
     });
   };
   window.addEventListener("resize", onResize);
   // A growing composer or a narrower window shrinks the transcript without a scroll event.
   const resized = typeof ResizeObserver === "function" ? new ResizeObserver(() => {
-    if (alive() && pinned && initialized) viewport.scrollTop = viewport.scrollHeight;
+    if (alive() && pinned && initialized) setPosition(viewport.scrollHeight);
   }) : null;
   resized?.observe(viewport);
   const copy = async text => {
@@ -271,19 +279,19 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
     while (position) {const old = position; position = old.nextSibling; old.remove();}
     if (!next.size) viewport.replaceChildren(emptyState({icon: "message-square", title: t("no_messages")}));
     if (initialized && !followNow && added) unseen += added;
-    if (followNow) {viewport.scrollTop = viewport.scrollHeight; pinned = true; unseen = 0; notice.hidden = true;}
-    else if (savedScroll) {viewport.scrollTop = memory.scrollTop; notice.hidden = true;}
-    else if (anchor && next.has(anchor[0])) viewport.scrollTop += next.get(anchor[0]).node.getBoundingClientRect().top - viewport.getBoundingClientRect().top - offset;
-    else {viewport.scrollTop = scrollTop; if (anchor) notice.hidden = false;}
+    if (followNow) {setPosition(viewport.scrollHeight); pinned = true; unseen = 0; notice.hidden = true;}
+    else if (savedScroll) {setPosition(memory.scrollTop); notice.hidden = true;}
+    else if (anchor && next.has(anchor[0])) setPosition(viewport.scrollTop + next.get(anchor[0]).node.getBoundingClientRect().top - viewport.getBoundingClientRect().top - offset);
+    else {setPosition(scrollTop); if (anchor) notice.hidden = false;}
     rows = next;
     if (state?.restore) {
       const row = [...rows.values()].find(row => row.id === state.restore.message_id);
       if (row) {
-        viewport.scrollTop += row.node.getBoundingClientRect().top - viewport.getBoundingClientRect().top - state.restore.offset;
+        setPosition(viewport.scrollTop + row.node.getBoundingClientRect().top - viewport.getBoundingClientRect().top - state.restore.offset);
         notice.hidden = false; notice.textContent = t("conversation_restored");
       } else {notice.hidden = false; notice.textContent = t("message_anchor_missing");}
     }
-    if (state?.latest) {viewport.scrollTop = viewport.scrollHeight; notice.hidden = true; viewport.focus({preventScroll: true});}
+    if (state?.latest) {setPosition(viewport.scrollHeight); notice.hidden = true; viewport.focus({preventScroll: true});}
     const more = state?.next_offset != null;
     if (readingActions && state) {
       reading = state.reading; olderWindow = Boolean(state.olderWindow);
@@ -295,7 +303,8 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
       progress.textContent = summary.line;
       progress.title = [summary.detail, t("conversation_count_note")].filter(Boolean).join(" ");
     } else caption.textContent = countCaption(next.size, more);
-    if (!initialized || followNow || savedScroll || state?.latest || state?.restore) pinned = atBottom() || followNow;
+    if (!initialized || followNow || savedScroll || state?.latest || state?.restore || state?.preserve)
+      pinned = atBottom() || followNow && !state?.restore && !state?.preserve;
     initialized = true; indicator();
   };
   // A failed read draws its state in the transcript. Rows already shown stay, marked as not updated.

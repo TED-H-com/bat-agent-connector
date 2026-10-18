@@ -1,3 +1,4 @@
+import {continuationBrief} from './pm-continuation.js';
 import {workbenchEnabled} from './workbench-mode.js';
 import {operationStatusLabel} from './global-labels.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
@@ -603,7 +604,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   let replyRuns = [], replyPartial = false;
   let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null,
     sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = '', earlier = null, historyCursor = null, historyExpanded = false,
-    packages = null, packageSignature = '', revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, proposalReview = null, discussionHint = null, assessmentSources = null;
+    packages = null, packageSignature = '', revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, proposalReview = null, discussionHint = null, assessmentSources = null, continuation = null;
   lifecycle = workspaceId && caps()?.features?.pm_workspaces?.lifecycle?.version === 1
     ? workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted:()=>loaded&&workspace?.membership?.role==='owner',form,input,labelled,errorBox,onChange:()=>{updateForms();publishContext();}}) : null;
   if(lifecycle&&!threadId)body.insertBefore(lifecycle.element,content);
@@ -1165,7 +1166,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   };
   // Discarded forms leave the registry immediately; temporarily detached forms
   // rejoin and derive the current gates synchronously on reconnection.
-  const updateForms = () => {for (const value of forms) value.update();};
+  const updateForms = () => {for (const value of forms) value.update(); continuation?.update();};
   const offOnline = onOnline(() => {try {alive(); updateForms();} catch { /* a retired view keeps its original intent */ }});
   const timestamp = value => typeof value === 'number' ? value * 1000 : value;
   const time = value => timeStamp(value, {empty:''});
@@ -1229,6 +1230,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         nativeAnalysis = pmNativeAnalysis({h, t, api, form, input, labelled, caps, namespace, errorBox, guard: alive,
           capability: () => pmCapabilities, thread: () => threadData, permitted, target, refresh: load});
       }
+      continuation = continuationBrief({h,t,form,input,labelled,caps,capability:()=>pmCapabilities,thread:()=>threadData,permitted,target,refresh:load,
+        onOpen:()=>discussionTools.open('context')});
+      column.querySelector('.pd-transcript').prepend(continuation.reader);
       if (caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1) {
         proposalReview = planProposals({h,t,api,alive,form,input,labelled,caps,namespace,workspaceId,threadId,
           thread:()=>threadData,permitted,refresh:load,errorBox, conversation: true, backLink, onRevision: id => {
@@ -1315,7 +1319,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       );
       assessmentSources?.dispose();
       assessmentSources = discussionAssessments({h,t,api,alive,workspaceId,threadId,namespace});
-      const contextPane = h('section', {'data-discussion-tab': 'context'}, panelContext, assessmentSources.element);
+      const contextPane = h('section', {'data-discussion-tab': 'context'}, panelContext, assessmentSources.element, continuation.tools);
       for (const node of [...column.querySelectorAll(':scope > .pm-package-preparation, :scope > .pm-packages')]) contextPane.append(node);
       if (nativeAnalysis) contextPane.append(h('details', {}, h('summary', {}, t('pd_analysis')), nativeAnalysis.box));
       const meetingThread = ['sprint_planning', 'sprint_review', 'retrospective', 'maintenance_review'].includes(thread.mode);
@@ -1715,6 +1719,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         alive(); if (ticket !== sequence) return;
       }
       nativeAnalysis?.update(runs?.runs || []);
+      continuation?.update(plans?.head || null);
       const stage = lifecycle?.phase?.(); phasePill.hidden = !stage;
       phasePill.textContent = stage && ['idea','planning','development','maintain','paused','closed'].includes(stage) ? t('ui_phase_' + stage) : '';
       publishContext(); brief?.setActive?.(workbench?.selected() === 'overview');
@@ -1727,7 +1732,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       await refreshNames(); alive(); if (ticket !== sequence) return;
       settledContextSequence = contextTicket;
       updateForms();
-      if (initialReadComplete) {proposalReview?.recheck(); nativeAnalysis?.recheck();}
+      if (initialReadComplete) {proposalReview?.recheck(); nativeAnalysis?.recheck(); continuation?.recheck();}
     } catch (error) {
       if (!retired(error) && ticket === sequence) {
         loaded = false; workspace = null; threadData = null; withdrawNames();
@@ -1758,7 +1763,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     if (titleView?.editing()) titleView.focus(titleSession.caret, titleSession.caretEnd);
     else content.querySelector('[data-discussion-composer]')?.focus();
   }, 0);
-  proposalReview?.recheck(); nativeAnalysis?.recheck();
+  proposalReview?.recheck(); nativeAnalysis?.recheck(); continuation?.recheck();
   if (firstMessagePending) setTimeout(() => {
     if (!disposed) {firstMessagePending = false; void noteForm.submit();}
   }, 0);

@@ -44,7 +44,7 @@ task_owned = task_owned_fixture
 
 async def test_allowlist_is_the_section_32_list():
     assert LOOP_ACTIONS == frozenset(pm_discussions.ACTIONS) | {
-        "pm.run.analyze", "pm.run.bat.analyze",
+        "pm.run.analyze", "pm.run.bat.analyze", "pm.continuation.prepare",
         "pm.conversation.propose", "pm.conversation.adopt", "pm.plan.draft", "pm.plan.adopt",
         "pm.work_package.create", "work.start", "session.send",
         "github.pr.publish", "github.pr.update", "pm.maintenance.repair",

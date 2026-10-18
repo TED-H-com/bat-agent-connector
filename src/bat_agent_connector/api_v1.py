@@ -171,6 +171,8 @@ class ApiV1:
         pm_follow_up.install(daemon.ops)
         pm_follow_up_analysis.install(daemon.ops)
         pm_conversation_proposals.install(daemon.ops)
+        from . import pm_continuation
+        pm_continuation.install(daemon.ops)
         pm_work_packages.install(daemon.ops)
         pm_spec_materialization.install(daemon.ops)
         pm_work_batches.install(daemon.ops)

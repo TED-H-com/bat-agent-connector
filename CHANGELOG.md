@@ -2,6 +2,15 @@
 
 ## Next release (unreleased)
 
+- Conversation pinning survives late session controls changing the available height.
+  Queued programmatic scroll events preserve the reader's existing follow choice;
+  readers who scrolled to earlier messages keep their position.
+
+- Discussions can explicitly prepare a versioned continuation brief with original
+  goals, decision facts, fixed references, coverage and up to two next steps.
+  Later PM turns reuse a readable brief within their existing context budget;
+  summaries do not adopt scope, accept delivery or replace original messages.
+
 - Saved Work profiles report known next-turn limits before starting, including the
   current BAT Codex limitation. Historical owned-session evidence stays separate
   from Work-targeted follow-up readiness; the added observation performs no probe.
