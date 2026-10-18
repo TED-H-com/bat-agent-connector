@@ -46,7 +46,7 @@ version is insufficient: `ensure` deliberately reuses a verified running core of
 the same runtime version. Development commits do not each need a version bump;
 release preparation fixes the next package identity before final validation.
 
-The published update candidate pairs core `0.2.8` with desktop `0.1.4`. Its packaged
+The published update candidate pairs core `0.2.9` with desktop `0.1.5`. Its packaged
 upgrade fixture builds the published core `0.2.6` from fixed source
 `f31e7964c627e4b6d3af2e2370e7a38c64a20e25` and compares the two actual payloads.
 Earlier `0.2.4` → `0.2.5` receipts remain historical evidence for their original
