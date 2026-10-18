@@ -49,6 +49,7 @@ const ACTIONS = {
   'pm.ahp.observe': 'action_pm_ahp_observe',
   'pm.backlog.revise': 'action_pm_backlog_revise',
   'pm.conversation.adopt': 'action_pm_conversation_adopt',
+  'pm.overview.assess': 'action_pm_overview_assess',
   'pm.continuation.prepare': 'action_pm_continuation_prepare',
   'pm.work_input.defer': 'action_pm_work_input_defer',
   'pm.conversation.propose': 'action_pm_conversation_propose',
