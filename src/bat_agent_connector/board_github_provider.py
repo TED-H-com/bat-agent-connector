@@ -36,6 +36,15 @@ def access_token(config):
         return config.token()
     except TokenUnavailable:
         pass
+    # A configured API endpoint must not implicitly borrow github.com's CLI
+    # credential. Custom endpoints need their explicitly configured token store.
+    try:
+        endpoint = urlsplit(config.api_url)
+        if (endpoint.scheme != 'https' or endpoint.hostname != 'api.github.com'
+                or endpoint.port not in (None, 443) or endpoint.username or endpoint.password):
+            return None
+    except ValueError:
+        return None
     try:
         executable = shutil.which('gh')
         if executable is None:
@@ -91,7 +100,7 @@ class BoardGitHubProvider:
             raise BoardGitHubError('unreachable') from None
 
     def _collect(self, repository, cached):
-        config = self.config
+        config = self.config() if callable(self.config) else self.config
         token = access_token(config)
         headers = {'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': config.api_version,
             'User-Agent': f'bat-agent-connector/{__version__}'}

@@ -1,4 +1,5 @@
 """GitHub board mapping, legacy adoption, durable API and background authorization."""
+import asyncio
 import uuid
 
 import pytest
@@ -7,7 +8,7 @@ from bat_agent_connector import api_auth, board_github, pm_evidence, pm_kanban
 from bat_agent_connector.board_github_provider import BoardGitHubError, normalize
 from bat_agent_connector.operations import OperationError
 from tests.operation_helpers import settle_operations
-from tests.test_api_v1 import http, token
+from tests.test_api_v1 import http, token, write_frames
 from tests.test_work_items import PERSON, VIEWER, act, get, item, project
 from tests.test_work_items import daemon as daemon
 from tests.test_work_items import served as served
@@ -286,3 +287,77 @@ async def test_long_valid_repository_keeps_child_operation_keys_bounded(daemon):
     result = (await sync(d, pid, repository=repo))['result']
     assert result['created'] == 1
     assert all(len(row[0]) <= 200 for row in d.ops.db.execute("SELECT idem_key FROM operations WHERE action='work_item.create'"))
+
+
+async def test_new_workspace_board_imports_open_work_before_closed_history(daemon):
+    d = daemon
+    ws = (await act(d, PERSON, 'pm.workspace.create', params={'name': 'Open work first'}))['result']['workspace']['workspace_id']
+    d.ops.context['board_github_provider'] = Provider([issue(1, state='closed'), issue(2)])
+    await act(d, PERSON, 'pm.github.import', {'workspace_id': ws}, {'repository': 'example/board'}, {'expected_revision': 0})
+    cards = pm_kanban.get_board(d.ops, PERSON, ws)['cards']
+    assert cards[0]['work']['external']['number'] == 2 and cards[0]['column'] == 'backlog'
+    assert cards[1]['work']['external']['number'] == 1 and cards[1]['column'] == 'github_done'
+
+
+async def test_http_adopts_snapshot_url_and_preserves_moves_until_github_closes(served, mock):
+    d, port = served
+    pid = await project(d)
+    iid = await item(d, pid, 'Seeded snapshot', goal='https://github.com/example/board/issues/1', state='waiting')
+    source = Provider([issue(1)])
+    d.ops.context['board_github_provider'] = source
+    auth = token(d, PERSON.actor, 'observe', 'manage')
+    async def submit(action, target, params, pre):
+        status, response = await http(port, 'POST', '/api/v1/operations', tok=auth,
+            body={'action': action, 'target': target, 'params': params, 'preconditions': pre},
+            headers={'Idempotency-Key': str(uuid.uuid4())})
+        assert status == 202, response
+        await settle_operations(d.ops)
+        op = d.ops.get(response['operation']['operation_id'])
+        assert op['status'] == 'succeeded', op
+        return op['result']
+    first = await submit('project.github.import', {'project_id': pid}, {'repository': 'example/board'}, {'expected_revision': 0})
+    assert first['created'] == 0 and first['adopted'] == 1
+    status, detail = await http(port, 'GET', f'/api/v1/work-items/{iid}', tok=auth)
+    assert status == 200 and detail['work_item']['state'] == 'waiting'
+    assert detail['work_item']['external']['node_id'] == 'I_node_1'
+    await submit('work_item.update', {'work_item_id': iid}, {'state': 'todo'}, {'expected_version': detail['work_item']['version']})
+    await submit('project.github.sync', {'project_id': pid}, {}, {'expected_revision': 1})
+    assert (await http(port, 'GET', f'/api/v1/work-items/{iid}', tok=auth))[1]['work_item']['state'] == 'todo'
+    repeat = await submit('project.github.sync', {'project_id': pid}, {}, {'expected_revision': 2})
+    assert repeat['created'] == repeat['adopted'] == repeat['updated'] == 0
+    source.values = [issue(1, state='closed')]
+    await submit('project.github.sync', {'project_id': pid}, {}, {'expected_revision': 3})
+    final = (await http(port, 'GET', f'/api/v1/work-items/{iid}', tok=auth))[1]['work_item']
+    assert final['state'] == 'done' and not final['completion']['approved']
+    assert final['title'] == 'Seeded snapshot'
+    project_view = (await http(port, 'GET', f'/api/v1/projects/{pid}', tok=auth))[1]
+    assert [row['work_item_id'] for row in project_view['work_items']] == [iid]
+    assert not write_frames(mock)
+
+
+async def test_cancel_during_github_read_never_applies_cards_or_enables_sync(daemon):
+    d = daemon
+    pid = await project(d)
+    class BlockedProvider(Provider):
+        def __init__(self):
+            super().__init__([issue(1)])
+            self.entered, self.release = asyncio.Event(), asyncio.Event()
+
+        async def collect(self, repo, cached):
+            self.entered.set()
+            await self.release.wait()
+            return await super().collect(repo, cached)
+    source = BlockedProvider()
+    d.ops.context['board_github_provider'] = source
+    op, _ = d.ops.create(PERSON, action='project.github.import', target={'project_id': pid},
+        params={'repository': 'example/board'}, preconditions={'expected_revision': 0}, idempotency_key=str(uuid.uuid4()))
+    await d.ops.run_due()
+    try:
+        await asyncio.wait_for(source.entered.wait(), 5)
+        d.ops.cancel(PERSON, op['operation_id'])
+    finally:
+        source.release.set()
+        await settle_operations(d.ops)
+    assert d.ops.get(op['operation_id'])['status'] == 'cancelled'
+    assert d.ops.db.execute('SELECT COUNT(*) FROM work_items').fetchone()[0] == 0
+    assert board_github.settings(d.ops.db, pid)['revision'] == 0

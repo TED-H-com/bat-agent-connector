@@ -52,7 +52,7 @@ def install(ops):
             principal TEXT NOT NULL, credential_id TEXT, last_sync REAL, next_sync REAL NOT NULL DEFAULT 0,
             status TEXT NOT NULL DEFAULT 'not_synced', failures INTEGER NOT NULL DEFAULT 0,
             authenticated INTEGER, pages TEXT NOT NULL DEFAULT '{}', operation_id TEXT)''')
-    ops.context['board_github_provider'] = BoardGitHubProvider(ops.context['github_config'])
+    ops.context['board_github_provider'] = BoardGitHubProvider(lambda: ops.context['github_config'])
     ops.context['board_github_lock'] = asyncio.Lock()
     for name, run, keys in (
         ('project.github.configure', configure, ('project_id',)),
@@ -232,7 +232,9 @@ def _legacy_index(db, pid):
 async def _apply(ctx, principal, pid, repo, wid, values, now):
     db, counts = ctx.service.db, {'created': 0, 'adopted': 0, 'updated': 0, 'conflicts': 0}
     legacy = _legacy_index(db, pid)
-    for value in values:
+    # New boards should show actionable work before historical Done cards.
+    # Existing item/order and association history are never reordered.
+    for value in sorted(values, key=lambda entry: entry['lane'] == 'done'):
         number = value['number']
         row = db.execute('''SELECT * FROM work_items WHERE project_id=? AND
             json_extract(github_external,'$.repository')=? AND json_extract(github_external,'$.number')=?''', (pid, repo, number)).fetchone()
@@ -295,6 +297,7 @@ async def sync(ctx):
         saved = ops.db.execute('SELECT result FROM management_applied WHERE operation_id=?', (ctx.operation_id,)).fetchone()
         if saved:
             return json.loads(saved[0])
+        ctx.check_cancel()
         principal = pm_workspace.admitted_principal(ctx)
         pid, repo, current, workspace = _check(ops, principal, ctx.op['action'], ctx.target, ctx.params, ctx.preconditions)
         row = ops.db.execute('SELECT * FROM board_github_sync WHERE project_id=?', (pid,)).fetchone() if pid else None
@@ -336,6 +339,7 @@ async def sync(ctx):
         # The provider traversal has completed before opening this transaction.
         # Only the fixed, non-suspending local action set above runs within it.
         with ops.journal.tx():
+            ctx.check_cancel()
             from .pm_lifecycle_gates import require_local
             from .pm_source_lineage import require_new_effect
             require_new_effect(ops, ctx.operation_id)

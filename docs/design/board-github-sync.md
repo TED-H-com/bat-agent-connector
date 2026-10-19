@@ -38,14 +38,17 @@ remote need an editable `owner/repo` binding.
 ## Provider and schedule
 
 The existing Connector token store wins; otherwise the Connector uses the local
-`gh auth token --hostname github.com` credential, or unauthenticated public reads.
+`gh auth token --hostname github.com` credential for the public GitHub API, or
+unauthenticated public reads. Custom API endpoints never borrow that CLI login;
+they require their explicitly configured token store.
 Credentials never reach UI, receipts, cache or logs. No redirects are followed.
 GitHub REST API version follows existing configuration. The [repository issues
 endpoint](https://docs.github.com/en/rest/issues/issues#list-repository-issues)
 includes draft and ordinary PRs. Identity uses its stable **issue** node ID for both
 issues and PRs, together with lowercased repository and issue number.
 
-First import includes open and closed history. Subsequent traversals use
+First import includes open and closed history. New cards and associations put open
+work first so the first page is actionable; existing order/history is preserved. Subsequent traversals use
 `If-None-Match` and persist each page's ETag and normalized identity/state/title/URL.
 Every cached page is revalidated, including pages after an unchanged first page;
 pagination never follows a provider-supplied URL. Normal polling is five minutes
@@ -73,6 +76,10 @@ provider I/O; the local transaction and operation receipt commit together. Each 
 item, state change and association uses its existing registered action and a real
 child operation linked to the import receipt. Only these fixed, non-suspending
 journal handlers run inside the batch transaction; provider I/O finishes before it.
+Cancellation is checked after waiting for the import slot and again before local
+mutation. A canceled read cannot create cards or enable a new schedule; completed
+receipts remain recoverable. Canceled scheduled intents retain their original key;
+manual sync or saving settings explicitly admits a new intent.
 
 ## Cards and migration
 

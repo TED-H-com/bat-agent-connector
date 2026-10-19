@@ -125,3 +125,31 @@ async def test_unchanged_full_last_page_discovers_new_successor(github):
     second = await client.collect('example/board', first['pages'])
     assert len(second['items']) == 101 and len(state['requests']) == 3
     assert 'page=2' in state['requests'][-1]['path']
+
+
+async def test_live_token_store_configuration_is_resolved_for_each_traversal(github, monkeypatch):
+    client, state = github
+    current = [client.config]
+    client.config = lambda: current[0]
+    seen = []
+    def token(config):
+        seen.append(config.token_ref)
+        return 'fixture-board-access' if config.token_ref else None
+    monkeypatch.setattr(provider, 'access_token', token)
+    first = await client.collect('example/board', {})
+    assert not first['authenticated']
+    current[0] = GitHubConfig(api_url=current[0].api_url, timeout_s=1, token_ref='env:BOARD_SYNC_TEST_ACCESS')
+    second = await client.collect('example/board', first['pages'])
+    assert second['authenticated']
+    assert seen == [None, 'env:BOARD_SYNC_TEST_ACCESS']
+    assert state['requests'][-1]['headers']['Authorization'] == 'Bearer fixture-board-access'
+
+
+@pytest.mark.parametrize('url', ['https://api.example.invalid', 'http://api.github.com',
+    'https://api.github.com:8443', 'https://api.github.com.evil.invalid', 'http://127.0.0.1:12345'])
+def test_custom_api_endpoints_never_borrow_github_com_cli_credentials(url, monkeypatch):
+    def forbidden(*args, **kwargs):
+        pytest.fail('A different API realm must not resolve github.com CLI credentials')
+    monkeypatch.setattr(provider.shutil, 'which', forbidden)
+    monkeypatch.setattr(provider.subprocess, 'run', forbidden)
+    assert provider.access_token(GitHubConfig(api_url=url)) is None
