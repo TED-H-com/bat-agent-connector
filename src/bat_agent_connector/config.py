@@ -755,16 +755,48 @@ def parse_config(data: dict, path: Path | None = None) -> Config:
                   path=path, human_name=human, relay_name=relay_name)
 
 
+def _merge_config(target: dict, source: dict) -> None:
+    """Tables merge recursively; scalars and arrays replace earlier values."""
+    for key, value in source.items():
+        if isinstance(value, dict) and isinstance(target.get(key), dict):
+            _merge_config(target[key], value)
+        else:
+            target[key] = value
+
+
 def load_config(path: str | Path | None = None) -> Config:
     p = Path(path).expanduser() if path else default_config_path()
-    if not p.exists():
+    overlay = p.parent / "hosts.d"
+    try:
+        fragments = sorted(
+            (f for f in overlay.iterdir() if not f.name.startswith(".") and f.suffix == ".toml"),
+            key=lambda f: f.name,
+        ) if overlay.exists() else []
+    except OSError:
+        raise ConfigError(f"cannot list config fragments: {overlay}") from None
+    files = ([p] if os.path.lexists(p) else []) + fragments
+    if not files:
         raise ConfigError(
             f"config not found: {p} (run `batc import-bat` or copy examples/hosts.example.toml)"
         )
-    try:
-        data = tomllib.loads(p.read_text())
-    except (OSError, tomllib.TOMLDecodeError) as e:
-        raise ConfigError(f"cannot parse {p}: {e}") from None
+    data: dict = {}
+    host_files: dict[str, Path] = {}
+    for source in files:
+        try:
+            # Keep base-file compatibility; overlays use the hardened private-file reader.
+            content = source.read_text() if source == p else read_private(source, 1024 * 1024)
+            fragment = tomllib.loads(content)
+        except (OSError, ValueError):
+            # Parser and OS exception messages may contain configuration values.
+            raise ConfigError(f"cannot read or parse {source}: check TOML and private file permissions/type") from None
+        hosts = fragment.get("hosts", {})
+        if not isinstance(hosts, dict):
+            raise ConfigError(f"hosts must be a table in {source}")
+        for name in hosts:
+            if name in host_files:
+                raise ConfigError(f"host {name!r} is defined in both {host_files[name]} and {source}")
+            host_files[name] = source
+        _merge_config(data, fragment)
     return parse_config(data, p)
 
 

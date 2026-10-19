@@ -1,6 +1,9 @@
 # bat-agent-connector host config. Copy to ~/.config/bat-agent-connector/hosts.toml
 # (or generate it with `batc import-bat`). Never put token VALUES in this file.
 
+# Optional private hosts.d/*.toml beside hosts.toml load in filename order (chmod 600).
+# Tables merge; scalars/arrays replace. Each host must be defined in only one file.
+
 [client]
 label = "BAT Agent Connector"          # how this client appears on the host
 human_name = "the user"                # name used in relayed messages and NEED-<NAME> status markers

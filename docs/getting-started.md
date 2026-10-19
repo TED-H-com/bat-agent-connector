@@ -277,6 +277,8 @@ A development checkout can instead use `uv sync --locked --extra dev`, with `uv 
 
 ### 3. Configure BAT access
 
+Linux operators can use the optional [user SSH tunnels and token-file provisioning helpers](../contrib/linux/README.md) with existing trusted SSH aliases and Bitwarden or command sources.
+
 If this host has the BAT desktop client's profiles:
 
 ```bash
@@ -285,6 +287,8 @@ batc hosts
 ```
 
 Import writes `~/.config/bat-agent-connector/hosts.toml` with writes disabled. It stores the endpoint, pinned TLS fingerprint and a **token reference**, not the token value. `batc hosts` probes configured hosts; a successful probe does not prove Git access or deployment readiness.
+
+Keep shared defaults in a public `hosts.toml` and private host definitions in untracked `hosts.d/90-private.toml` beside the effective config file (selected by `BATC_CONFIG`, or `BATC_CONFIG_DIR` when unset); the base file may be absent if fragments exist. Non-hidden `*.toml` fragments load in lexical filename order: tables merge recursively, while later scalars and arrays replace earlier values; defining a host in multiple files is an error. Fragments must be private regular files, not symlinks, owned by the current user where supported, with no group/other permissions on POSIX (`chmod 600`); use only `token_ref`, never token values. `batc import-bat` continues to write only `hosts.toml`.
 
 For a different profile location, use `batc import-bat --profiles-dir /path/to/profiles`. Preview generated configuration with `--output -`. Do not add `--force` merely to bypass an existing configuration.
 
