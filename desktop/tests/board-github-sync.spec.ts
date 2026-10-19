@@ -37,8 +37,8 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test(`
     }
     if (path === `/pm/workspaces/${ids.workspaceId}`) result.data.workspace.membership.role = 'owner';
     if (path.endsWith('/kanban')) {
-      result.data.cards = imported ? result.data.cards.slice(0, 1) : [];
-      if (imported) {result.data.cards[0].work.title = 'Imported GitHub issue'; result.data.cards[0].work.external = {repository: 'example/board', number: 1, kind: 'issue', url: 'https://github.com/example/board/issues/1'};}
+      result.data.cards = imported ? [result.data.cards.find((card: any) => card.column === 'backlog')] : [];
+      if (imported) {result.data.cards[0].binding.requirement_ids = []; result.data.cards[0].work.title = 'Imported GitHub issue'; result.data.cards[0].work.external = {repository: 'example/board', number: 1, kind: 'issue', url: 'https://github.com/example/board/issues/1'};}
       result.data.next_cursor = null; result.data.wip = {count: 0, unknown: 0, cards: result.data.cards.length, scope: 'returned_page'};
     }
     return result;
@@ -55,6 +55,7 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test(`
   await page.screenshot({path: `${shots}/empty-${locale}-${native ? 'ipc' : 'http'}.png`, fullPage: true});
   await panel.getByRole('button', {name: locale === 'en' ? 'Import from GitHub' : '從 GitHub 匯入', exact: true}).click();
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(1);
+  await expect(page.locator('[data-pm-kanban-column="backlog"] [data-pm-kanban-work]')).toHaveCount(1);
   await expect(page.locator('[data-github-card-link]')).toHaveAttribute('href', 'https://github.com/example/board/issues/1');
   await expect(panel.locator('[data-github-sync-status]')).toContainText(locale === 'en' ? 'Up to date' : '已與 GitHub 同步');
   await panel.getByRole('button', {name: locale === 'en' ? 'Sync now' : '立即同步', exact: true}).click();
