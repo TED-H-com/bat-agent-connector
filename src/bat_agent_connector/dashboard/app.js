@@ -19,6 +19,14 @@ var __exportAll = (all, no_symbols) => {
 	return target;
 };
 //#endregion
+//#region src/managed-recovery.js
+function managedRecoveryKey(code) {
+	if (!code) return null;
+	if (code === "MANAGED_RECOVERING") return "managed_service_recovering";
+	if (code === "MANAGED_RECOVERY_IDENTITY_CHANGED") return "managed_service_identity";
+	return "managed_service_retry";
+}
+//#endregion
 //#region src/workbench-mode.js
 var workbenchEnabled = () => new URLSearchParams(location.search).get("workbench") === "1";
 //#endregion
@@ -9203,6 +9211,9 @@ var STRINGS = {
 		...maintenanceObservationStrings["zh-TW"],
 		...maintenanceFindingStrings["zh-TW"],
 		...findingNameStrings["zh-TW"],
+		managed_service_recovering: "正在重新啟動本機背景服務…",
+		managed_service_retry: "本機背景服務無法恢復，稍後會自動重試。既有資料已保留；請查看連線詳細資料。",
+		managed_service_identity: "本機服務身分已變更，已停止自動恢復。請在設定中檢查連線；既有資料已保留。",
 		managed_recovery_title: "本機背景服務尚未就緒",
 		managed_recovery_help: "既有資料與背景工作會保留。若舊版本仍有工作，先讓它完成，再結束並重新開啟桌面程式。此次啟動錯誤列在下方，也可以展開「加入既有的 Connector」設定連線。",
 		...instructionReceiptStrings["zh-TW"],
@@ -10859,6 +10870,9 @@ var STRINGS = {
 		...maintenanceObservationStrings.en,
 		...maintenanceFindingStrings.en,
 		...findingNameStrings.en,
+		managed_service_recovering: "Restarting the local background service…",
+		managed_service_retry: "The local background service could not recover. It will retry automatically. Existing data is retained; see connection details.",
+		managed_service_identity: "The local service identity changed. Automatic recovery has stopped. Review the connection in Settings; existing data is retained.",
 		managed_recovery_title: "Local background service is not ready",
 		managed_recovery_help: "Existing data and background work are retained. If an older version still has work, let it finish, then quit and reopen the desktop app. The startup error appears below. You can also join another Connector.",
 		...instructionReceiptStrings["en-US"],
@@ -64092,6 +64106,8 @@ async function openDiagnostics() {
 	});
 }
 async function activate(caps, endpoint = location.origin, reset = false) {
+	const scopeEndpoint = nativeDesktop && caps.actor === state.caps?.actor && caps.desktop_identity && state.caps?.desktop_identity && caps.desktop_identity.server_id === state.caps.desktop_identity.server_id && caps.desktop_identity.principal_id === state.caps.desktop_identity.principal_id ? state.scopeEndpoint || state.endpoint || endpoint : endpoint;
+	state.scopeEndpoint = scopeEndpoint;
 	withdrawDiagnostics();
 	recentErrors.clear();
 	state.epoch++;
@@ -64113,7 +64129,7 @@ async function activate(caps, endpoint = location.origin, reset = false) {
 		const sync = bootstrap.sync;
 		if (sync?.version !== 1 || !sync.server_id || !sync.principal_id || !Number.isSafeInteger(sync.checkpoint?.cursor) || sync.checkpoint.cursor < 0 || !sync.checkpoint.token || bootstrap.capabilities?.actor !== caps.actor || caps.desktop_identity && (caps.desktop_identity.server_id !== sync.server_id || caps.desktop_identity.principal_id !== sync.principal_id)) throw new Error("Invalid central bootstrap identity");
 		state.caps = bootstrap.capabilities;
-		state.namespace = storageScope(endpoint, caps.actor, sync.server_id, sync.principal_id);
+		state.namespace = storageScope(scopeEndpoint, caps.actor, sync.server_id, sync.principal_id);
 		state.sync = sync.checkpoint;
 		if (!reset) try {
 			const saved = JSON.parse(localStorage.getItem(`batc.sync.${state.namespace}`));
@@ -65076,9 +65092,30 @@ function paintConnection(waiting = false, paused = false) {
 		offline: "down",
 		reconnecting: "reconnecting"
 	}[status];
-	live.textContent = t("ui_" + status);
+	live.textContent = t(managedRecoveryKey(state.managedRecovery) || "ui_" + status);
+	let detail = document.getElementById("managed-recovery-details");
+	if (state.managedRecovery && !detail) {
+		detail = h("details", { id: "managed-recovery-details" }, h("summary", {}, t("connection_details")), h("code"));
+		live.after(detail);
+	}
+	if (detail) {
+		detail.hidden = !state.managedRecovery;
+		detail.querySelector("summary").textContent = t("connection_details");
+		detail.querySelector("code").textContent = state.managedRecovery || "";
+	}
 	live.title = t(paused ? "sync_actions_paused" : waiting ? "sync_waiting" : status === "connected" ? "desktop_polling" : "offline_actions_paused");
 	for (const paint of [...connectionPainters]) paint();
+}
+var managedStatusAt = 0;
+async function refreshManagedRecovery() {
+	if (!nativeDesktop || Date.now() - managedStatusAt < 3e3) return;
+	managedStatusAt = Date.now();
+	try {
+		const status = await nativeStatus();
+		state.managedRecovery = status.managed_recovery || null;
+		if (status.configuration_source === "managed" && status.endpoint) state.endpoint = status.endpoint;
+		paintConnection();
+	} catch {}
 }
 var foregroundVersion = 0;
 var wakeEventPoll = null;
@@ -65103,6 +65140,7 @@ function foregroundChanged() {
 }
 async function streamEvents() {
 	for (;;) {
+		await refreshManagedRecovery();
 		if (state.nativeBusy || !state.token || !state.viewReady || document.visibilityState === "hidden") {
 			paintConnection(true);
 			await waitForEventPoll(1e3);
@@ -68795,7 +68833,7 @@ function connectionFacts() {
 	const eventCell = h("dd");
 	const dl = h("dl", { class: "kv global-connection-facts" }, h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"), h("dt", {}, t("global_state")), stateCell, h("dt", {}, t("global_last_event")), eventCell, h("dt", {}, t("connection_access")), connectionAccess());
 	const render = () => {
-		const key = !state.token ? "ui_offline" : state.pollHealth === "connected" ? "ui_connected" : state.pollHealth === "initial" && state.online ? "ui_connected" : "ui_reconnecting";
+		const key = managedRecoveryKey(state.managedRecovery) || (!state.token ? "ui_offline" : state.pollHealth === "connected" ? "ui_connected" : state.pollHealth === "initial" && state.online ? "ui_connected" : "ui_reconnecting");
 		const tone = key === "ui_connected" ? "ok" : key === "ui_reconnecting" ? "warn" : "neutral";
 		stateCell.replaceChildren(h("span", { class: `ui-pill tone-${tone}` }, t(key)));
 		eventCell.replaceChildren(state.lastEventAt ? when(state.lastEventAt) : t("global_no_event"));

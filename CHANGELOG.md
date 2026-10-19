@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Recover a dead local managed Connector in Dashboard without restarting the app, retaining the installation identity and original operation keys. Windows background Connector and native Fleet supervisor launches request job breakaway when permitted, with a bounded lifetime warning when the launching job prevents it. Recovery failures and identity changes have English and zh-TW status messages.
+
 - Fix Windows SSH tunnel launches failing with OWNER_UNPROVEN by constructing native paths and comparing executable paths independently of separator spelling and ASCII case.
 
 - Adopt verified existing uv tool installations into managed Connector releases, with guarded restoration.

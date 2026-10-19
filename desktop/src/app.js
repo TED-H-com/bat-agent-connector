@@ -1,3 +1,4 @@
+import {managedRecoveryKey} from "./managed-recovery.js";
 import {workbenchEnabled} from './workbench-mode.js';
 import {workbenchViews} from './workbench-views.js';
 import {settingsAgents} from './settings-agents.js';
@@ -115,6 +116,11 @@ async function openDiagnostics() {
   }});
 }
 async function activate(caps, endpoint = location.origin, reset = false) {
+  const sameIdentity = nativeDesktop && caps.actor === state.caps?.actor && caps.desktop_identity && state.caps?.desktop_identity
+    && caps.desktop_identity.server_id === state.caps.desktop_identity.server_id
+    && caps.desktop_identity.principal_id === state.caps.desktop_identity.principal_id;
+  const scopeEndpoint = sameIdentity ? state.scopeEndpoint || state.endpoint || endpoint : endpoint;
+  state.scopeEndpoint = scopeEndpoint;
   withdrawDiagnostics(); recentErrors.clear();
   state.epoch++;
   state.observations = new Map();
@@ -131,7 +137,7 @@ async function activate(caps, endpoint = location.origin, reset = false) {
       bootstrap.capabilities?.actor !== caps.actor ||
       (caps.desktop_identity && (caps.desktop_identity.server_id !== sync.server_id || caps.desktop_identity.principal_id !== sync.principal_id))) throw new Error("Invalid central bootstrap identity");
     state.caps = bootstrap.capabilities;
-    state.namespace = storageScope(endpoint, caps.actor, sync.server_id, sync.principal_id);
+    state.namespace = storageScope(scopeEndpoint, caps.actor, sync.server_id, sync.principal_id);
     state.sync = sync.checkpoint;
     if (!reset) {
       try {
@@ -783,9 +789,31 @@ function paintConnection(waiting = false, paused = false) {
   const status = !state.token ? 'offline' : state.pollHealth === 'connected' ? 'connected' : 'reconnecting';
   live.dataset.connection = status;
   live.className = 'live ' + ({connected: 'ok', offline: 'down', reconnecting: 'reconnecting'}[status]);
-  live.textContent = t('ui_' + status);
+  const recoveryKey = managedRecoveryKey(state.managedRecovery);
+  live.textContent = t(recoveryKey || 'ui_' + status);
+  let detail = document.getElementById('managed-recovery-details');
+  if (state.managedRecovery && !detail) {
+    detail = h('details', {id: 'managed-recovery-details'}, h('summary', {}, t('connection_details')), h('code'));
+    live.after(detail);
+  }
+  if (detail) {
+    detail.hidden = !state.managedRecovery;
+    detail.querySelector('summary').textContent = t('connection_details');
+    detail.querySelector('code').textContent = state.managedRecovery || '';
+  }
   live.title = t(paused ? 'sync_actions_paused' : waiting ? 'sync_waiting' : status === 'connected' ? 'desktop_polling' : 'offline_actions_paused');
   for (const paint of [...connectionPainters]) paint();
+}
+let managedStatusAt = 0;
+async function refreshManagedRecovery() {
+  if (!nativeDesktop || Date.now() - managedStatusAt < 3000) return;
+  managedStatusAt = Date.now();
+  try {
+    const status = await nativeStatus();
+    state.managedRecovery = status.managed_recovery || null;
+    if (status.configuration_source === 'managed' && status.endpoint) state.endpoint = status.endpoint;
+    paintConnection();
+  } catch { /* Existing transport health remains authoritative if native IPC fails. */ }
 }
 let foregroundVersion = 0, wakeEventPoll = null;
 function waitForEventPoll(ms) {
@@ -804,6 +832,7 @@ function foregroundChanged() {
 }
 async function streamEvents() {
   for (;;) {
+    await refreshManagedRecovery();
     if (state.nativeBusy || !state.token || !state.viewReady || document.visibilityState === 'hidden') {
       paintConnection(true);
       await waitForEventPoll(1000); continue;
@@ -3178,7 +3207,7 @@ function connectionFacts() {
     h("dt", {}, t("global_last_event")), eventCell,
     h("dt", {}, t("connection_access")), connectionAccess());
   const render = () => {
-    const key = !state.token ? "ui_offline" : state.pollHealth === "connected" ? "ui_connected" : state.pollHealth === "initial" && state.online ? "ui_connected" : "ui_reconnecting";
+    const key = managedRecoveryKey(state.managedRecovery) || (!state.token ? "ui_offline" : state.pollHealth === "connected" ? "ui_connected" : state.pollHealth === "initial" && state.online ? "ui_connected" : "ui_reconnecting");
     const tone = key === "ui_connected" ? "ok" : key === "ui_reconnecting" ? "warn" : "neutral";
     stateCell.replaceChildren(h("span", {class: `ui-pill tone-${tone}`}, t(key)));
     eventCell.replaceChildren(state.lastEventAt ? when(state.lastEventAt) : t("global_no_event"));

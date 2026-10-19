@@ -22,7 +22,7 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from . import __version__, api_auth, dashboard_sync, platform_files
+from . import __version__, api_auth, dashboard_sync, detached_process, platform_files
 from .platform_files import (
     atomic_write,
     ensure_private_directory,
@@ -162,7 +162,7 @@ def _spawn(root):
         options["start_new_session"] = True
     with os.fdopen(open_private_file(root / "service.log", os.O_WRONLY | os.O_CREAT | os.O_TRUNC), "wb") as log:
         options["stderr"] = log
-        return subprocess.Popen(_service_command(root), **options)  # noqa: S603 - fixed bundled self executable
+        return detached_process.spawn(_service_command(root), windows=os.name == "nt", **options)
 
 
 def _check_upgrade(previous):
