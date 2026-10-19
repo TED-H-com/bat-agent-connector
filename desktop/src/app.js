@@ -116,11 +116,6 @@ async function openDiagnostics() {
   }});
 }
 async function activate(caps, endpoint = location.origin, reset = false) {
-  const sameIdentity = nativeDesktop && caps.actor === state.caps?.actor && caps.desktop_identity && state.caps?.desktop_identity
-    && caps.desktop_identity.server_id === state.caps.desktop_identity.server_id
-    && caps.desktop_identity.principal_id === state.caps.desktop_identity.principal_id;
-  const scopeEndpoint = sameIdentity ? state.scopeEndpoint || state.endpoint || endpoint : endpoint;
-  state.scopeEndpoint = scopeEndpoint;
   withdrawDiagnostics(); recentErrors.clear();
   state.epoch++;
   state.observations = new Map();
@@ -137,6 +132,13 @@ async function activate(caps, endpoint = location.origin, reset = false) {
       bootstrap.capabilities?.actor !== caps.actor ||
       (caps.desktop_identity && (caps.desktop_identity.server_id !== sync.server_id || caps.desktop_identity.principal_id !== sync.principal_id))) throw new Error("Invalid central bootstrap identity");
     state.caps = bootstrap.capabilities;
+    // Central capabilities do not carry native-only desktop_identity. Compare
+    // verified bootstrap identities before retaining a recovered port's scope.
+    const previous = state.scopeIdentity;
+    const sameIdentity = nativeDesktop && previous?.actor === caps.actor
+      && previous.server_id === sync.server_id && previous.principal_id === sync.principal_id;
+    const scopeEndpoint = sameIdentity ? previous.endpoint : endpoint;
+    state.scopeIdentity = {actor: caps.actor, server_id: sync.server_id, principal_id: sync.principal_id, endpoint: scopeEndpoint};
     state.namespace = storageScope(scopeEndpoint, caps.actor, sync.server_id, sync.principal_id);
     state.sync = sync.checkpoint;
     if (!reset) {
@@ -148,6 +150,7 @@ async function activate(caps, endpoint = location.origin, reset = false) {
     }
     state.lastEvent = state.sync.cursor;
   } else {
+    state.scopeIdentity = null;
     state.namespace = storageScope(endpoint, caps.actor);
     // A legacy central has no continuity proof; always read current views after reconnect.
     state.lastEvent = 0;
@@ -163,6 +166,7 @@ function disconnect() {
   if (state.token === browserSessionToken) forgetBrowserSession()?.catch(() => {});
   withdrawDiagnostics(); recentErrors.clear();
   state.epoch++; clearToken(); state.token = null; state.caps = null; state.lastEvent = 0; state.lastEventAt = 0;
+  state.scopeIdentity = null;
   state.online = false; state.viewReady = false; state.sync = null;
 }
 

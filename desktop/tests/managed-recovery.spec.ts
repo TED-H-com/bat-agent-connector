@@ -6,7 +6,9 @@ for (const locale of ['en-US', 'zh-TW']) test(`native recovery status and same-i
   await page.addInitScript(() => {
     const caps = {actor: 'fixture-operator', scopes: ['observe', 'operate'], features: {}, hosts: [], actions: [],
       desktop_identity: {server_id: 'fixture-server', principal_id: 'fixture-principal'}};
-    const fixture = {code: null as string | null, rebind: 0, endpoint: 'http://127.0.0.1:41001/', writes: 0};
+    // Bridge verifies central bootstrap but does not inject desktop_identity.
+    const centralCaps = {...caps, desktop_identity: undefined};
+    const fixture = {code: null as string | null, rebind: 0, reset: false, endpoint: 'http://127.0.0.1:41001/', writes: 0};
     Object.assign(window, {isTauri: true, __recovery: fixture, __TAURI_INTERNALS__: {invoke: async (command: string, args: any) => {
       if (command === 'native_status') return {endpoint: fixture.endpoint, configuration_source: 'managed',
         managed_recovery: fixture.code, managed_rebind: fixture.rebind, credential_available: true, connected: true, error: null};
@@ -15,13 +17,17 @@ for (const locale of ['en-US', 'zh-TW']) test(`native recovery status and same-i
       if (command === 'connector_request') {
         const {method, path} = args.input;
         if (method === 'POST') fixture.writes++;
-        if (path === '/bootstrap') return {status: 200, data: {capabilities: caps,
+        if (path === '/bootstrap') return {status: 200, data: {capabilities: centralCaps,
           sync: {version: 1, ...caps.desktop_identity, checkpoint: {cursor: 0, token: 'fixture-proof'}}}};
         if (path === '/projects') return {status: 200, data: {projects: fixture.rebind
           ? [{project_id: 'proj-recovered', name: 'Recovered project', children: []}] : []}};
         if (path === '/projects/proj-recovered') return {status: 200, data: {work: [], work_items: []}};
         if (path.startsWith('/events')) {
           if (fixture.code) throw 'fixture transport unavailable';
+          if (fixture.reset) {
+            fixture.reset = false;
+            return {status: 409, data: {error: {code: 'EVENT_CURSOR_RESET', reason: 'retention', resnapshot: true, preserve_drafts: true}}};
+          }
           return {status: 200, data: {events: [], next_cursor: 0, head_cursor: 0, has_more: false,
             sync: {checkpoint: {cursor: 0, token: 'fixture-proof'}}}};
         }
@@ -35,7 +41,7 @@ for (const locale of ['en-US', 'zh-TW']) test(`native recovery status and same-i
   await page.goto('/dashboard/#/session/demo/session-1');
   const draft = page.locator('textarea').first();
   await draft.fill('Retain this exact draft across local recovery');
-  const storageBefore = await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('batc.sync.') || key.startsWith('batc.key.')).sort());
+  const storageBefore = await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.startsWith('batc.sync.') || key.startsWith('batc.key.')).sort());
   for (const [code, text] of [
     ['MANAGED_RECOVERING', locale === 'zh-TW' ? '正在重新啟動本機背景服務…' : 'Restarting the local background service…'],
     ['MANAGED_RUNTIME_START_TIMEOUT', locale === 'zh-TW' ? '本機背景服務無法恢復' : 'The local background service could not recover.'],
@@ -52,9 +58,12 @@ for (const locale of ['en-US', 'zh-TW']) test(`native recovery status and same-i
   await page.evaluate(() => { Object.assign((window as any).__recovery, {code: null, rebind: 1, endpoint: 'http://127.0.0.1:41002/'}); });
   await expect(page.locator('#managed-recovery-details')).toBeHidden({timeout: 10000});
   await expect(page.locator('#live')).toHaveAttribute('data-connection', 'connected', {timeout: 10000});
+  await page.evaluate(() => { (window as any).__recovery.reset = true; });
+  await expect.poll(() => page.evaluate(() => (window as any).__recovery.reset)).toBe(false);
+  await expect(page.locator('#live')).toHaveAttribute('data-connection', 'connected', {timeout: 10000});
   await expect(draft).toHaveValue('Retain this exact draft across local recovery');
   await expect(page.locator('.workspace-tree').getByText('Recovered project', {exact: true})).toBeVisible();
   expect(await page.evaluate(() => (window as any).__recovery.writes)).toBe(0);
-  expect(await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('batc.sync.') || key.startsWith('batc.key.')).sort())).toEqual(storageBefore);
+  expect(await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.startsWith('batc.sync.') || key.startsWith('batc.key.')).sort())).toEqual(storageBefore);
   await context.close();
 });

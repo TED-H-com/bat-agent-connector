@@ -64113,8 +64113,6 @@ async function openDiagnostics() {
 	});
 }
 async function activate(caps, endpoint = location.origin, reset = false) {
-	const scopeEndpoint = nativeDesktop && caps.actor === state.caps?.actor && caps.desktop_identity && state.caps?.desktop_identity && caps.desktop_identity.server_id === state.caps.desktop_identity.server_id && caps.desktop_identity.principal_id === state.caps.desktop_identity.principal_id ? state.scopeEndpoint || state.endpoint || endpoint : endpoint;
-	state.scopeEndpoint = scopeEndpoint;
 	withdrawDiagnostics();
 	recentErrors.clear();
 	state.epoch++;
@@ -64136,6 +64134,14 @@ async function activate(caps, endpoint = location.origin, reset = false) {
 		const sync = bootstrap.sync;
 		if (sync?.version !== 1 || !sync.server_id || !sync.principal_id || !Number.isSafeInteger(sync.checkpoint?.cursor) || sync.checkpoint.cursor < 0 || !sync.checkpoint.token || bootstrap.capabilities?.actor !== caps.actor || caps.desktop_identity && (caps.desktop_identity.server_id !== sync.server_id || caps.desktop_identity.principal_id !== sync.principal_id)) throw new Error("Invalid central bootstrap identity");
 		state.caps = bootstrap.capabilities;
+		const previous = state.scopeIdentity;
+		const scopeEndpoint = nativeDesktop && previous?.actor === caps.actor && previous.server_id === sync.server_id && previous.principal_id === sync.principal_id ? previous.endpoint : endpoint;
+		state.scopeIdentity = {
+			actor: caps.actor,
+			server_id: sync.server_id,
+			principal_id: sync.principal_id,
+			endpoint: scopeEndpoint
+		};
 		state.namespace = storageScope(scopeEndpoint, caps.actor, sync.server_id, sync.principal_id);
 		state.sync = sync.checkpoint;
 		if (!reset) try {
@@ -64144,6 +64150,7 @@ async function activate(caps, endpoint = location.origin, reset = false) {
 		} catch {}
 		state.lastEvent = state.sync.cursor;
 	} else {
+		state.scopeIdentity = null;
 		state.namespace = storageScope(endpoint, caps.actor);
 		state.lastEvent = 0;
 	}
@@ -64164,6 +64171,7 @@ function disconnect() {
 	state.caps = null;
 	state.lastEvent = 0;
 	state.lastEventAt = 0;
+	state.scopeIdentity = null;
 	state.online = false;
 	state.viewReady = false;
 	state.sync = null;
