@@ -1,9 +1,9 @@
 # PM v1.2 開發狀態
 
-已合併主線 `b44a83ab`（#276–278、#282、#285、#287–301，2026 年 10 月 18 日）支援建立 Work、採用並開始已審閱計畫、對同一工作追加第二句、讀取固定成果與差異、執行已設定驗證、從同一成果發布 PR，以及選兩份既有評估帶入 PM 討論。工作設定檔、readiness 與 API／MCP 對等也已納入。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；安裝與真實 BAT／模型驗收仍須另有證據。
+已合併發布來源 `14c62830`（截至 #314，2026 年 10 月 19 日）支援建立 Work、採用並開始已審閱計畫、對同一工作追加第二句、讀取固定成果與差異、執行已設定驗證、從同一成果發布 PR，以及選兩份既有評估帶入 PM 討論。工作設定檔、readiness 與 API／MCP 對等也已納入。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；安裝與真實 BAT／模型驗收仍須另有證據。
 
 完整範圍仍依 [PM v1.2](pm-v1.2-plan.md)、[v1.3](v1.3-closed-loop-plan.md) 與 [EC-1.1](experience-convergence.md)。Python Connector／Task Service 是唯一中央權威，Web／Tauri 共用 `desktop/src`。
-[10 月 18 日進度報告](progress-2026-10-18-delivery.md)列出主線整合、檢查及仍欠的交付證據。
+[最新發布與接續狀態](implementation-status.md#2026-10-19-發布與接續狀態)區分 0.2.12 發布與歷史安裝回執；[10 月 18 日進度報告](progress-2026-10-18-delivery.md)保留前次交付證據。
 
 ## EC-1.1 接續
 
@@ -24,9 +24,9 @@ Roadmap 與 Brief 使用同一份固定的需求與完成定義評估。遺失�
 
 | 層級 | 狀態 |
 | --- | --- |
-| 發布（published） | `v0.2.10-preview.20261018`，固定來源 `b44a83ab`；Connector 0.2.10／desktop 0.1.6，六個套件附 manifest 與 SHA-256。 |
-| 主線（merged） | #276–278、#282、#285、#287–301 已合併；套件固定於 `b44a83ab`。#282 加入 Connector 自動更新與初次載入權限修正，原提交與檢查紀錄保留。 |
-| 安裝／原生（installed/native） | 七台 Connector 已更新至 0.2.10、啟用 preview 每小時更新並讀回排程成功；三台支援的 Linux 圖形主機安裝 desktop 0.1.6。既有 MCP 程序保留。前版原生診斷與啟動失敗分別保留，一般登入桌面及完整實機驗收仍待完成。 |
+| 發布（published） | `v0.2.12`，固定來源 `14c62830`；Connector 0.2.12／desktop 0.1.8。前版 `v0.2.11` 固定於 `d7876d64`；兩版發布及其回執分開保留。 |
+| 主線（merged） | 截至 #314；#306 已整合工作區 PM runtime 與人工序列輸入觀察，#309–313 補安裝／設定／automation，#314 修正 Windows SSH 路徑比對。原 Work loop 與 Connector 自動更新已合併，不重做。 |
+| 安裝／原生（installed/native） | 歷史讀回為七台 Connector 0.2.10、三台 Linux desktop 0.1.6，既有 MCP 程序保留。本次更新未取得 0.2.11／0.2.12 的逐主機新回執，不能把發布版本當作目前安裝版本。前版原生失敗及一般登入驗收缺口仍保留。 |
 | 實機（live-tested） | 本輪沒有真實 BAT／provider／模型完整驗收回執；軟體部署與綠燈 CI 不代替實機驗收。 |
 
 ### 主線現在的操作

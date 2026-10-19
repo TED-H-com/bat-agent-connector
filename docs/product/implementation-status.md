@@ -1,5 +1,31 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-10-19 發布與接續狀態
+
+已發布 [v0.2.12](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.12)：
+Connector **0.2.12**／desktop **0.1.8**，固定來源
+`14c62830240148b14a4d28a9c428f7f8b5ba8bf3`（#314）。
+此版修正 Windows SSH executable 路徑分隔符比對；該來源的
+[後端 CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/39201873778) 與
+[桌面 CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/39201873842) 已通過。
+
+前一正式版 [v0.2.11](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.11)
+固定於 `d7876d64966e7e558a9232af58758568372106c7`，包含 #306 的工作區 PM runtime、
+人工序列輸入唯讀觀察與接續讀取修正，以及 #309–313 的設定分片、automation facade、
+固定 tag 安裝與既有 uv tool 安裝納管。#305／#307 的修正經 #306 整合，沒有另行合併。
+
+發布不代表每台已安裝或完成一般登入驗收。下方 0.2.10／0.1.6 的部署讀回保留為
+10 月 18 日歷史證據；本次文件更新沒有新一輪逐主機安裝回執。Classic 仍為預設。
+真 BAT／模型兩輪、實體手機、一般登入 Tauri、Native／AHP 路線及 PM v1.2 剩餘範圍
+仍按原 E／UX／R／V／K 編號接續，不重做已合併 Work loop。
+
+完整測試另依精確來源記錄：[#283 最新補記](https://github.com/TED-H-com/bat-agent-connector/issues/283#issuecomment-6262388027)
+確認 `0bf36674` 的 Python 3.13／3.10 各 7218 passed、60 skipped，
+`2c2b3a8f` 的 Python 3.13 為 7311 passed、60 skipped；後者 3.10 原紀錄未完成。
+原停滯、失敗與未完成紀錄保留，不能移用為本版完整本機測試或根因已修復的證據。
+#308 的暫存路徑保留修正、#315 的路線喚醒及 #316 的本機服務復原均不在上述發布來源內；
+各候選的整合與驗證狀態以其 PR 為準。以下日期段落保留較早快照。
+
 ## 2026-10-18 PM 判讀與外部歷史交付
 
 #300／#301 已合併，發布來源 `b44a83abc7d548747983298b8290ab1d544898d6`，Connector 0.2.10／desktop 0.1.6。

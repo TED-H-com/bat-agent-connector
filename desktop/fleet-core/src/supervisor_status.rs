@@ -95,7 +95,12 @@ impl Entry {
         }
         if selected {
             if let Some((code, layer)) = failure {
-                row.level = "down".into();
+                row.level = if code == "TAILSCALE_WAKING" {
+                    "degraded"
+                } else {
+                    "down"
+                }
+                .into();
                 row.code = Some(code.into());
                 row.blocking = Some(layer);
                 row.layers = Layers::default();

@@ -14,6 +14,27 @@ fallback; selection does not prove that its future tunnel or BAT protocol is rea
 The Connector's single configured SSH alias is an explicitly `configured` route;
 no alias means no tunnel route, rather than inventing one.
 
+If status identifies exactly one peer at the configured tailnet IP but direct proof
+is missing, selection reserves a wake and returns without waiting for it. The native
+supervisor starts an owned background `tailscale ping --c 3 --timeout 2s <IP>` sequence
+with a separate five-second absolute deadline, independent of `direct_probe_ms` and
+the two-second selection window. MagicDNS names are never used. Unknown, ambiguous
+or malformed status never authorizes wake traffic. Ping/DERP success alone never
+authorizes a direct route: completion notifies the supervisor to re-run selection
+immediately, using fresh status and TCP evidence instead of waiting fifteen seconds.
+
+The per-host policy retains one wake reservation/task across supervisor cycles, and
+an exponential cooldown after each sequence: 5, 10, 20, 40 and at most 60 seconds.
+A direct observation resets the failure exponent. Selection/configuration generation
+changes and supervisor shutdown abort the wake; shutdown joins it. Policy drop also
+aborts it. Cancellation preserves the charged cooldown and stale selection workers
+cannot queue a wake after invalidation. No policy lock is held across a probe await,
+and independent hosts do not share a serial wake queue. The shared native adapter
+coalesces simultaneous aliases for the same IP into one ping process; each alias
+waits for completion and then checks its own fresh status/TCP evidence. Pending/reserved and running
+wakes publish `TAILSCALE_WAKING`; wake transitions interrupt the regular one-second
+native idle wait. Final unavailability remains `ROUTE_UNAVAILABLE`.
+
 Two intentional corrections to historical Kit behavior are part of this port:
 
 - Direct-only hosts and no-Cloudflare fallback do not bypass genuine-direct proof.
@@ -60,10 +81,14 @@ No alias, endpoint, Tailscale payload or process output is serialized as status.
 The injectable probe boundary has no global lock or serial host queue. Independent host
 selection futures can run concurrently. Direct and LAN checks share a finite total
 selection deadline; each TCP or local status call is also bounded by the inventory's
-probe budget. Cancelling an attempt drops TCP sockets and terminates only the owned
-status child via its retained process object, never a PID lookup or process-tree search.
+probe budget. Wakes have a separate five-second limit. Cancelling a selection drops
+its TCP sockets and status child; cancelling the policy-owned wake drops its ping
+child. Termination uses only the retained process object, never a PID lookup or
+process-tree search.
 The native status adapter uses a fixed absolute, canonical trusted Tailscale executable
-with exactly `status --json`, cleared environment, null stdin/stderr and bounded stdout.
+with fixed `status --json` or IP-only ping arguments, cleared environment, null
+stdin/stderr and bounded status stdout (ping stdout is discarded). Windows retains
+only SystemRoot/WINDIR and uses CREATE_NO_WINDOW for both commands.
 It never searches PATH or accepts a command from the WebView. Runtime installation-path
 trust and configuration revalidation remain prerequisites; path validation is not a
 binary-signature attestation or an atomic defense against an installer replacing files.

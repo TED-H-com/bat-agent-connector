@@ -203,3 +203,19 @@ test("delayed settings status cannot mount Fleet into a later route", async ({pa
   await expect(page.getByRole("region", {name: "Local Fleet connections"})).toHaveCount(0);
   expect(await page.evaluate(() => (window as any).__fleet.availabilityReads)).toBe(0);
 });
+
+test('Fleet preserves unmapped blocking reasons and native diagnostic codes', async ({page}) => {
+  await setup(page);
+  for (const native of [false, true]) {
+    await page.evaluate((native: boolean) => {
+      const row = (window as any).__fleet.doc.readiness.hosts[0];
+      Object.assign(row, {level: 'down', code: native ? 'OWNER_UNPROVEN' : null, blocking: native ? 'auth' : 'OWNER_UNPROVEN'});
+    }, native);
+    await page.getByRole('button', {name: 'Read status', exact: true}).click();
+    const status = page.locator('[data-fleet-route-status]');
+    await expect(status.getByText('Details: OWNER_UNPROVEN', {exact: true})).toBeVisible();
+    await status.locator('summary').click();
+    await expect(status.locator('code').filter({hasText: 'OWNER_UNPROVEN'})).toBeVisible();
+    if (native) await expect(status.locator('code').filter({hasText: 'auth'})).toBeVisible();
+  }
+});

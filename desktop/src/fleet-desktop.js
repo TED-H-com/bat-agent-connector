@@ -1,3 +1,4 @@
+import {fleetStatus} from "./fleet-status.js";
 import {fleetControl, fleetRequest} from "./transport/index.ts";
 
 export async function mountFleetDesktop(main, {h, t}) {
@@ -157,7 +158,7 @@ export async function mountFleetDesktop(main, {h, t}) {
       h("div",{class:"actions"},button("start","fleet_start",()=>run(async()=>{await fleetRequest({action:"ensure_monitor",expected_configuration_binding:binding});await read();},false,"start"),!canEnable()||!!draft||snapshot.monitor.state!=="stopped"),
         button("quit","fleet_quit",()=>run(async()=>{await fleetRequest({action:"quit_owned",expected_configuration_binding:binding,expected_monitor_epoch:snapshot.monitor.epoch});await read();},false,"quit"),!canEnable()||!!draft||!snapshot.monitor.controllable)),
       h("h3",{},t("fleet_connections")),
-      h("div",{class:"fleet-options"},...snapshot.configuration.connections.map(row=>h("div",{class:"row"},h("div",{class:"grow"},checkbox("connections",row.name,row.label)),h("span",{class:"chip"},t("fleet_"+(ready.get(row.name)?.level||"unavailable")))))) ,
+      h("div",{class:"fleet-options"},...snapshot.configuration.connections.map(row=>h("div",{class:"row"},h("div",{class:"grow"},checkbox("connections",row.name,row.label),fleetStatus(ready.get(row.name), {h, t})),h("span",{class:"chip"},t("fleet_"+(ready.get(row.name)?.level||"unavailable")))))) ,
       h("h3",{},t("fleet_windows_title")),
       h("div",{class:"fleet-options"},...snapshot.profiles.map(row=>h("div",{class:"row"},checkbox("profiles",row.id,label(row.id)))),
         h("div",{class:"row"},checkbox("dashboard","dashboard",t("fleet_dashboard_choice")))),

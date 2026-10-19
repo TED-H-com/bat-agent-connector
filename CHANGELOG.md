@@ -4,6 +4,11 @@
 
 - Recover a dead local managed Connector in Dashboard without restarting the app, retaining the installation identity and original operation keys. Windows background Connector and native Fleet supervisor launches request job breakaway when permitted, with a bounded lifetime warning when the launching job prevents it. Recovery failures and identity changes have English and zh-TW status messages.
 
+- Fleet wakes uniquely identified idle Tailscale peers by their configured IP before
+  declaring a route unavailable, with a separate bounded background wake window,
+  a capped cooldown and localized
+  connection status in English and Traditional Chinese.
+
 - Fix Windows SSH tunnel launches failing with OWNER_UNPROVEN by constructing native paths and comparing executable paths independently of separator spelling and ASCII case.
 
 - Adopt verified existing uv tool installations into managed Connector releases, with guarded restoration.
