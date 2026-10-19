@@ -75,7 +75,14 @@ fn fixture() -> (Temporary, PathBuf) {
 }
 fn mode(path: &Path, value: &str) {
     let dir = path.parent().unwrap();
-    for file in ["started", "finished", "argv-ok", "ping-ok", "awakened"] {
+    for file in [
+        "started",
+        "finished",
+        "argv-ok",
+        "ping-ok",
+        "ping-count",
+        "awakened",
+    ] {
         let _ = std::fs::remove_file(dir.join(file));
     }
     std::fs::write(dir.join("mode"), value).unwrap();
@@ -220,4 +227,26 @@ async fn native_wake_uses_fixed_ip_command_environment_and_kills_on_timeout_or_c
         assert!(!dir.join("finished").exists());
         assert!(!dir.join("awakened").exists());
     }
+}
+
+#[tokio::test]
+async fn aliases_for_the_same_peer_share_one_owned_native_ping_and_release_after_completion() {
+    let (_temp, path) = fixture();
+    let probe = NativeRouteProbe::new(Some(&path)).unwrap();
+    mode(&path, "ping_hang");
+    let end = Deadline::now() + Duration::from_secs(3);
+    let (first, joined) = tokio::join!(
+        probe.tailscale_wake("100.64.0.1", end),
+        probe.tailscale_wake("100.64.0.1", end),
+    );
+    assert!(first);
+    assert!(!joined, "a joined ping never returns direct-path evidence");
+    let count = path.parent().unwrap().join("ping-count");
+    assert_eq!(std::fs::read_to_string(&count).unwrap().lines().count(), 1);
+    assert!(
+        probe
+            .tailscale_wake("100.64.0.1", Deadline::now() + Duration::from_secs(3))
+            .await
+    );
+    assert_eq!(std::fs::read_to_string(&count).unwrap().lines().count(), 2);
 }

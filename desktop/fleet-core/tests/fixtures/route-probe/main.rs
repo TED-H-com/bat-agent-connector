@@ -21,6 +21,8 @@ fn main() {
             && args[4] == "2s"
             && args[5] == "100.64.0.1" && allowed;
         fs::write(directory.join("ping-ok"), if valid { "yes" } else { "no" }).unwrap();
+        fs::OpenOptions::new().create(true).append(true).open(directory.join("ping-count"))
+            .unwrap().write_all(b"ping\n").unwrap();
         fs::write(directory.join("started"), "yes").unwrap();
         let mode = fs::read_to_string(directory.join("mode")).unwrap();
         if mode == "ping_hang" {

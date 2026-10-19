@@ -29,7 +29,9 @@ A direct observation resets the failure exponent. Selection/configuration genera
 changes and supervisor shutdown abort the wake; shutdown joins it. Policy drop also
 aborts it. Cancellation preserves the charged cooldown and stale selection workers
 cannot queue a wake after invalidation. No policy lock is held across a probe await,
-and independent hosts do not share a serial wake queue. Pending/reserved and running
+and independent hosts do not share a serial wake queue. The shared native adapter
+coalesces simultaneous aliases for the same IP into one ping process; each alias
+waits for completion and then checks its own fresh status/TCP evidence. Pending/reserved and running
 wakes publish `TAILSCALE_WAKING`; wake transitions interrupt the regular one-second
 native idle wait. Final unavailability remains `ROUTE_UNAVAILABLE`.
 

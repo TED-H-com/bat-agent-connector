@@ -5,19 +5,24 @@ use crate::{
     Result,
 };
 use std::{
+    collections::HashMap,
+    net::IpAddr,
     path::{Path, PathBuf},
     process::Stdio,
+    sync::Mutex,
 };
 use tokio::{
     io::AsyncReadExt,
     net::TcpStream,
     process::Command,
+    sync::watch,
     time::{timeout_at, Instant},
 };
 use zeroize::Zeroizing;
 
 pub struct NativeRouteProbe {
     tailscale: Option<PathBuf>,
+    wakes: Mutex<HashMap<IpAddr, watch::Receiver<bool>>>,
 }
 impl NativeRouteProbe {
     /// Path comes from trusted native installation discovery/configuration.
@@ -57,7 +62,23 @@ impl NativeRouteProbe {
                 Ok(canonical)
             })
             .transpose()?;
-        Ok(Self { tailscale })
+        Ok(Self {
+            tailscale,
+            wakes: Mutex::default(),
+        })
+    }
+}
+/// The native adapter is shared by every host policy. Aliases targeting the
+/// same peer join its existing wake instead of spawning a second ping process.
+struct PeerWake<'a> {
+    peers: &'a Mutex<HashMap<IpAddr, watch::Receiver<bool>>>,
+    ip: IpAddr,
+    done: watch::Sender<bool>,
+}
+impl Drop for PeerWake<'_> {
+    fn drop(&mut self) {
+        self.peers.lock().unwrap().remove(&self.ip);
+        let _ = self.done.send(true);
     }
 }
 impl NativeRouteProbe {
@@ -134,6 +155,31 @@ impl RouteProbe for NativeRouteProbe {
             if ip.parse::<std::net::IpAddr>().is_err() || Instant::now() >= deadline {
                 return false;
             }
+            let address = ip.parse::<IpAddr>().unwrap();
+            let (mut pending, owned) = {
+                let mut peers = self.wakes.lock().unwrap();
+                if let Some(existing) = peers.get(&address) {
+                    (Some(existing.clone()), None)
+                } else {
+                    let (done, receiver) = watch::channel(false);
+                    peers.insert(address, receiver);
+                    (
+                        None,
+                        Some(PeerWake {
+                            peers: &self.wakes,
+                            ip: address,
+                            done,
+                        }),
+                    )
+                }
+            };
+            if let Some(pending) = &mut pending {
+                let _ = timeout_at(deadline, pending.wait_for(|done| *done)).await;
+                // Every alias rechecks status itself; shared ping success is
+                // deliberately not exported as direct-path evidence.
+                return false;
+            }
+            let _owned = owned;
             let Some(mut command) = self.command() else {
                 return false;
             };
