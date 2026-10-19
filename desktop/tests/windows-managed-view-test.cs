@@ -57,7 +57,7 @@ internal static class ManagedViewProbeTests
                     state.Observe(property => {
                         if (property == failed) throw error;
                         if (property == AutomationElement.ControlTypeProperty) return ControlType.Button;
-                        return "Connected to your local Connector";
+                        return "Ready to set up";
                     });
                     Check(!state.WebContent && !state.Authenticated && !state.SaveEnabled, "Unavailable node left partial evidence");
                     Observe(state, ControlType.Text, "Get ready to work", null);
@@ -79,14 +79,14 @@ internal static class ManagedViewProbeTests
         foreach (object absent in new object[] { null, AutomationElement.NotSupported })
         {
             var state = new ManagedViewProbe.Readiness();
-            Observe(state, absent, "Connected to your local Connector", true);
+            Observe(state, absent, "Ready to set up", true);
             Observe(state, ControlType.Text, absent, true);
-            Observe(state, ControlType.Button, "Verify and save host", absent);
+            Observe(state, ControlType.Button, "Set up automatically", absent);
             Check(!state.WebContent && !state.Authenticated && !state.SaveEnabled, "Absent property became readiness evidence");
         }
         foreach (string[] labels in new string[][] {
-            new string[] { "Connected to your local Connector", "Get ready to work", "Configured: 0 hosts, 0 repositories", "Verify and save host" },
-            new string[] { "已連線至本機 Connector", "準備開始工作", "已設定 0 台主機、0 個儲存庫", "驗證並儲存主機" } })
+            new string[] { "Ready to set up", "Get ready to work", "Ready to set up", "Set up automatically" },
+            new string[] { "可以開始設定了", "準備開始工作", "可以開始設定了", "自動設定" } })
         {
             var state = new ManagedViewProbe.Readiness();
             Observe(state, ControlType.Document, null, null);

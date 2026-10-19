@@ -76,7 +76,9 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
   const element = h('section', {'data-pm-resources': '', class: 'pm-agents'}, toolbar, status, layout);
 
   function finite(value) {return typeof value === 'number' && Number.isFinite(value) ? value : null;}
-  function cssEscape(value) {return window.CSS?.escape ? CSS.escape(String(value)) : String(value).replace(/"/g, '\\"');}
+  function focusTarget(value) {
+    return Array.from(layout.querySelectorAll('[data-focus-key]')).find(node => node.getAttribute('data-focus-key') === value);
+  }
   function cliOf(row) {
     const adapter = typeof row?.adapter === 'string' ? row.adapter : '';
     return adapter.split('-')[0] || '';
@@ -472,8 +474,8 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
       table.scrollLeft = preference.scroll || 0;
       table.addEventListener('scroll', () => {preference.scroll = table.scrollLeft;}, {passive: true});
     }
-    if (focusKey) layout.querySelector(`[data-focus-key="${cssEscape(focusKey)}"]`)?.focus({preventScroll: true});
-    else if (focusRow && document.activeElement === document.body) layout.querySelector(`[data-resource-row="${cssEscape(focusRow)}"]`)?.focus({preventScroll: true});
+    if (focusKey) focusTarget(focusKey)?.focus({preventScroll: true});
+    else if (focusRow && document.activeElement === document.body) stageRow(focusRow)?.focus({preventScroll: true});
   }
   function reasonBits(code) {
     if (typeof code === 'string' && Object.hasOwn(reasonLabels, code)) return {text: reasonLabel(t, code), raw: ''};
@@ -547,7 +549,9 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
     fillInspector(row);
     layout.append(panel);
   }
-  function stageRow(id) {return id ? layout.querySelector(`[data-resource-row="${cssEscape(id)}"]`) : null;}
+  function stageRow(id) {
+    return id ? Array.from(layout.querySelectorAll('[data-resource-row]')).find(node => node.getAttribute('data-resource-row') === id) : null;
+  }
   function clearInspector() {
     if (!inspectorPanel) return;
     const panel = inspectorPanel;

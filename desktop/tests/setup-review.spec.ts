@@ -1,5 +1,5 @@
 import {test, expect, type Page} from '@playwright/test';
-import {managedSetupFixture} from './managed-setup-fixture.ts';
+import {managedSetupFixture, openSetupAdvanced} from './managed-setup-fixture.ts';
 
 const connectionUrl = `ws://127.0.0.1?token=synthetic-bat-secret&fp=${'ab'.repeat(32)}`;
 const field = (page: Page, name: string) => page.locator(`[data-setup-field=${name}]`);
@@ -15,7 +15,7 @@ for (const locale of ['en', 'zh-TW']) test.describe(`${locale} setup review`, ()
   test.use({locale});
   for (const native of [false, true]) {
     test(`paste confirms safe values and clears on manual edits or another paste (${native ? 'native' : 'web'})`, async ({page}) => {
-      const state = await managedSetupFixture(page, native, locale); await page.goto('/dashboard/');
+      const state = await managedSetupFixture(page, native, locale); await page.goto('/dashboard/'); await openSetupAdvanced(page);
       const feedback = page.locator('[data-setup-paste-read]');
       await expect(feedback).toBeHidden(); await paste(page, connectionUrl);
       await expect(field(page, 'connection_url')).toHaveValue('');
@@ -42,7 +42,7 @@ for (const locale of ['en', 'zh-TW']) test.describe(`${locale} setup review`, ()
     });
 
     test(`one page Refresh reloads status while preserving the credential and draft (${native ? 'native' : 'web'})`, async ({page}) => {
-      const state = await managedSetupFixture(page, native, locale); await page.goto('/dashboard/#/settings');
+      const state = await managedSetupFixture(page, native, locale); await page.goto('/dashboard/#/settings'); await openSetupAdvanced(page);
       await paste(page, connectionUrl); await field(page, 'host').fill('my-local');
       const refresh = page.locator('#main').getByRole('button', {name: locale === 'en' ? 'Refresh' : '重新整理', exact: true});
       await expect(refresh).toHaveCount(1);
@@ -61,7 +61,7 @@ for (const locale of ['en', 'zh-TW']) test.describe(`${locale} setup review`, ()
 
   for (const width of [1440, 1000, 390]) test(`connected actions, receipt and step spacing at ${width}`, async ({page}) => {
     await page.setViewportSize({width, height: 900});
-    const state = await managedSetupFixture(page, false, locale); await page.goto('/dashboard/');
+    const state = await managedSetupFixture(page, false, locale); await page.goto('/dashboard/'); await openSetupAdvanced(page);
     const panel = page.locator('[data-managed-setup]');
     const firstGap = await panel.evaluate(node => {
       const step = node.querySelector('[data-setup-connect]')!;
@@ -83,7 +83,7 @@ for (const locale of ['en', 'zh-TW']) test.describe(`${locale} setup review`, ()
         return (rect.top + rect.bottom) / 2;
       });
       return {betweenSteps: step.nextElementSibling!.getBoundingClientRect().top - step.getBoundingClientRect().bottom,
-        afterActions: step.getBoundingClientRect().top - node.querySelector('[data-setup-actions]')!.getBoundingClientRect().bottom,
+        afterActions: node.querySelector('[data-setup-advanced]')!.getBoundingClientRect().top - node.querySelector('[data-setup-actions]')!.getBoundingClientRect().bottom,
         centerGaps: [centers[1] - centers[0], centers[2] - centers[1]]};
     });
     expect(laterGaps.betweenSteps).toBe(0); expect(laterGaps.afterActions).toBe(16);
@@ -98,7 +98,7 @@ for (const locale of ['en', 'zh-TW']) test.describe(`${locale} setup review`, ()
 
   for (const width of [1440, 1000, 390]) test(`pasted and refused setup keeps space only after the action at ${width}`, async ({page}) => {
     await page.setViewportSize({width, height: 900});
-    const state = await managedSetupFixture(page, false, locale); await page.goto('/dashboard/');
+    const state = await managedSetupFixture(page, false, locale); await page.goto('/dashboard/'); await openSetupAdvanced(page);
     const panel = page.locator('[data-managed-setup]'); await paste(page, connectionUrl);
     const gaps = () => panel.evaluate(node => {
       const step = node.querySelector('[data-setup-connect]')!;
@@ -119,7 +119,7 @@ for (const locale of ['en', 'zh-TW']) test.describe(`${locale} setup review`, ()
   });
 
   test('configured counts distinguish singular and plural without changing zh-TW', async ({page}) => {
-    const state = await managedSetupFixture(page, false, locale); await page.goto('/dashboard/');
+    const state = await managedSetupFixture(page, false, locale); await page.goto('/dashboard/'); await openSetupAdvanced(page);
     const panel = page.locator('[data-managed-setup]');
     await expect(panel).toContainText(locale === 'en' ? 'Configured: 0 hosts, 0 repositories' : '已設定 0 台主機、0 個儲存庫');
     state.saved = true; state.repositories = [{repository: 'fixture/one'}];
@@ -134,7 +134,7 @@ for (const locale of ['en', 'zh-TW']) test.describe(`${locale} setup review`, ()
   test('a proven identity refusal explains the valid Host ID and allows correcting it', async ({page}) => {
     const state = await managedSetupFixture(page, false, locale);
     state.refused = true; state.refusalCode = 'HOST_IDENTITY_CHANGED'; state.refusalStatus = 409;
-    await page.goto('/dashboard/'); await paste(page, connectionUrl);
+    await page.goto('/dashboard/'); await openSetupAdvanced(page); await paste(page, connectionUrl);
     await page.locator('[data-setup-host] button[type=submit]').click();
     await expect(field(page, 'host')).toHaveValue('local'); await expect(field(page, 'host')).toBeEditable();
     await expect(page.locator('[data-setup-error=host]')).toHaveText(locale === 'en'

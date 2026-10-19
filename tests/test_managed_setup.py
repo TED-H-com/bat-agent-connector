@@ -464,7 +464,7 @@ async def test_local_setup_preserves_aliases_uses_one_composite_and_replays_orig
     state = setup.state(daemon, principal)
     assert state["hosts"][0]["git"] == "local"
     assert state["hosts"][0]["git_status"]["reason"] == "local_git_not_enabled"
-    assert state["hosts"][0]["connected"] is False  # probe closed; transport readiness is separate
+    assert state["hosts"][0]["connected"] is None  # no inventory result yet; a closed socket is not failure
     calls = len(mock.auth_frames)
     assert create(installed, "setup.host", {"host": "fixture"}, params, revision=before)["operation_id"] == operation["operation_id"]
     with pytest.raises(OperationError) as error:
@@ -570,3 +570,49 @@ async def test_setup_local_confirmation_is_bound_to_original_installation(instal
         assert (root / "config" / "hosts.toml").read_bytes() == original_config
     else:
         assert len(mock.auth_frames) == calls
+
+
+async def test_setup_uses_observed_connectivity_after_read_only_socket_closes(installed, mock):
+    """Opening sessions succeeds even when neither pool retains an idle socket."""
+    daemon, principal, _ = installed
+    result = await settle(installed, create(installed, "setup.host", {"host": "fixture"},
+                                           host_params(daemon, principal, mock)))
+    assert result["status"] == "succeeded"
+    await daemon.inventory._refresh_scheduled("fixture")
+    assert daemon.inventory.hosts()[0]["reachable"] is True
+    assert not daemon.fleet._clients
+    assert not daemon.inventory.fleet.client("fixture").connected
+    before = len(mock.auth_frames)
+    host = setup.state(daemon, principal)["hosts"][0]
+    assert host["connected"] is True
+    assert host["connection_status"] == "connected"
+    assert host["connection_checked_at"] is not None
+    assert len(mock.auth_frames) == before  # Reading Setup does not launch another probe.
+
+
+@pytest.mark.parametrize("condition,expected", [("never", "checking"), ("failed", "unreachable"),
+    ("stale_success", "checking"), ("stale_failure", "checking"), ("changed_binding", "checking"),
+    ("active_writer", "connected")])
+async def test_setup_connectivity_requires_current_recent_evidence(installed, mock, condition, expected):
+    daemon, principal, _ = installed
+    result = await settle(installed, create(installed, "setup.host", {"host": "fixture"},
+                                           host_params(daemon, principal, mock)))
+    assert result["status"] == "succeeded"
+    if condition != "never":
+        await daemon.inventory._refresh_scheduled("fixture")
+        if condition in {"failed", "stale_failure"}:
+            daemon.inventory._record_failure("fixture", time.time(), ConnectionError("synthetic unreachable"))
+        if condition.startswith("stale_"):
+            with daemon.journal.tx():
+                daemon.journal.db.execute("UPDATE hosts_observed SET last_attempt_at=? WHERE host=?",
+                    (time.time() - daemon.inventory.settings.stale_after_s - 1, "fixture"))
+        if condition == "changed_binding":
+            with daemon.journal.tx():
+                daemon.journal.db.execute("UPDATE discovery_latest SET binding=? WHERE host=?", ("old-binding", "fixture"))
+        if condition == "active_writer":
+            daemon.inventory._record_failure("fixture", time.time(), ConnectionError("older check failed"))
+            await daemon.fleet.client("fixture").connect()
+    host = setup.state(daemon, principal)["hosts"][0]
+    assert host["connection_status"] == expected
+    assert host["connected"] is (None if expected == "checking" else expected == "connected")
+    assert "synthetic unreachable" not in json.dumps(host)

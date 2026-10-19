@@ -1,8 +1,9 @@
 // Shared chrome for Pending, Operations, Settings and the signed-out card.
+import {locale} from './i18n.js';
 import {iconButton} from './ui/components.js';
 
 export function setupGuide() {
-  const zh = (typeof navigator !== 'undefined' ? navigator.language || '' : '').toLowerCase().startsWith('zh');
+  const zh = locale === 'zh-TW';
   return zh
     ? 'https://github.com/TED-H-com/bat-agent-connector/blob/main/docs/getting-started.zh-TW.md'
     : 'https://github.com/TED-H-com/bat-agent-connector/blob/main/docs/getting-started.md';

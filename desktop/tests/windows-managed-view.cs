@@ -104,11 +104,11 @@ internal static class ManagedViewProbe
             // Commit evidence only after every needed property of this node was
             // read. A disappearing button must not contribute even its label.
             if (type == ControlType.Document) { WebContent = true; return; }
-            if (label == "Connected to your local Connector" || label == "已連線至本機 Connector") Authenticated = true;
+            if (label == "Ready to set up" || label == "可以開始設定了") Authenticated = true;
             if (label == "Get ready to work" || label == "準備開始工作") Setup = true;
-            if (label == "Configured: 0 hosts, 0 repositories" || label == "已設定 0 台主機、0 個儲存庫") ConfigurationLoaded = true;
+            if (label == "Ready to set up" || label == "可以開始設定了") ConfigurationLoaded = true;
             if (type == ControlType.Button && enabled &&
-                (label == "Verify and save host" || label == "驗證並儲存主機")) SaveEnabled = true;
+                (label == "Set up automatically" || label == "自動設定")) SaveEnabled = true;
         }
 
         internal string ToJson(bool bounded)

@@ -113,3 +113,15 @@ test('global pages and manual session expose records without write controls', as
   await expect(page.locator('#main')).toContainText('read-only');
   await expect(page.locator('#main form button[type=submit]:enabled')).toHaveCount(0);
 });
+
+
+test('Settings language switch stays inside the localized public tour', async ({page}) => {
+  await page.goto('/demo/?lang=en#/settings');
+  await page.locator('[data-language-switch]').getByRole('button', {name: '繁體中文', exact: true}).click();
+  await expect(page).toHaveURL(/lang=zh-TW#\/settings$/);
+  await expect(page.locator('#demo-bar')).toContainText('合成資料');
+  await expect(page.locator('[data-language-switch]').getByRole('button', {name: '繁體中文', exact: true})).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('[data-language-switch]').getByRole('button', {name: 'English', exact: true}).click();
+  await expect(page).toHaveURL(/lang=en#\/settings$/);
+  await expect(page.locator('#demo-bar')).toContainText('Sample data');
+});

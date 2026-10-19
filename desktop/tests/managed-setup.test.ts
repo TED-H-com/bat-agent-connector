@@ -32,3 +32,12 @@ test('explicit protocol-default BAT ports survive URL normalization', () => {
   assert.equal(parseBatConnectionUrl(`ws://localhost:80?token=synthetic-secret&fp=${fingerprint}`)?.endpoint, 'wss://localhost:80');
   assert.equal(validSetupEndpoint('wss://localhost:443/'), true);
 });
+
+test('an absent legacy socket is unknown reachability, while explicit observation states are preserved', async () => {
+  const {setupConnectionStatus} = await import('../src/managed-setup.js');
+  assert.equal(setupConnectionStatus({connected: false}), 'checking');
+  assert.equal(setupConnectionStatus({}), 'checking');
+  assert.equal(setupConnectionStatus({connected: true}), 'connected');
+  for (const status of ['connected', 'checking', 'unreachable'])
+    assert.equal(setupConnectionStatus({connected: false, connection_status: status}), status);
+});

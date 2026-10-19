@@ -172,18 +172,40 @@ def _busy(daemon, operation_id=""):
     return daemon.journal.db.execute("SELECT 1 FROM tasks WHERE state NOT IN ('done','failed') LIMIT 1").fetchone() is not None
 
 
+def _connection_state(daemon, name, host):
+    """A missing/closed write socket is not a failed connectivity check.
+
+    Inventory owns the read-only observations used by sessions, and deliberately
+    closes its sockets between scans. Only current, recent evidence can claim a
+    connection result. Setup GET stays read-only and never starts a second probe.
+    """
+    client = daemon.fleet._clients.get(name)
+    if client and client.connected and (client.host.url, client.host.fingerprint, client.host.profile_id) == (host.url, host.fingerprint, host.profile_id):
+        return {"connected": True, "connection_status": "connected", "connection_checked_at": None}
+    inventory = daemon.inventory
+    observed_host = inventory.config.hosts.get(name)
+    same_source = observed_host and (observed_host.url, observed_host.fingerprint, observed_host.profile_id) == (host.url, host.fingerprint, host.profile_id)
+    row = daemon.journal.db.execute("""SELECT h.reachable,h.last_attempt_at FROM hosts_observed h
+        JOIN discovery_latest d ON d.host=h.host AND d.profile_id=? AND d.binding=?
+        WHERE h.host=?""", (host.profile_id, inventory._binding(name), name)).fetchone() if same_source else None
+    checked = row["last_attempt_at"] if row else None
+    recent = checked is not None and 0 <= time.time() - checked <= inventory.settings.stale_after_s
+    status = ("connected" if row["reachable"] else "unreachable") if recent else "checking"
+    return {"connected": None if status == "checking" else status == "connected",
+            "connection_status": status, "connection_checked_at": checked}
+
+
 def state(daemon, principal):
     _installation(daemon, principal)
     _, _, document, revision = _configuration(daemon)
     profiles, profiles_error = _profiles(document)
     hosts = []
     for name, host in daemon.fleet.config.hosts.items():
-        client = daemon.fleet._clients.get(name)
         hosts.append({"name": name, "url": host.url, "fingerprint": host.fingerprint,
             "git": host.git, "git_status": daemon.ops.context["git_runner"].status(name),
             "profile_id": host.profile_id, "writes": host.writes, "orchestrate": host.orchestrate,
             "shared_clone_worktrees": host.shared_clone_worktrees,
-            "managed_roots": list(host.managed_roots), "connected": bool(client and client.connected),
+            "managed_roots": list(host.managed_roots), **_connection_state(daemon, name, host),
             "token_available": host.token_available(),
             "ssh_alias": document.get("managed_setup", {}).get("ssh_hosts", {}).get(name)})
     repos = [{"repository": repo.repository, "bindings": [{"host": host, "workspace_id": workspace}
