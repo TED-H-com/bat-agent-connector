@@ -148,6 +148,8 @@ export async function mountFleetDesktop(main, {h, t}) {
       "data-fleet-action": action, onclick: () => { if (busy || blocked) return; fn(); }}, t(text));
     const fields = [
       h("p", {"data-fleet-current-backend": true}, t("delivery_fleet_current_backend", {backend: t(["rust", "powershell"].includes(snapshot.backend) ? "fleet_backend_" + snapshot.backend : "obs_unknown")})),
+      snapshot.launch_warning === "FLEET_SESSION_LIFETIME" ? h("div", {class: "note", "data-fleet-lifetime": ""},
+        h("p", {}, t("fleet_session_lifetime")), h("details", {}, h("summary", {}, t("connection_details")), h("code", {}, snapshot.launch_warning))) : null,
       snapshot.backend === "powershell" ? h("p", {class: "note"}, t("delivery_fleet_legacy_default")) : null,
       h("p", {}, t("fleet_monitor_"+snapshot.monitor.state), " · ", t("fleet_"+snapshot.readiness.state)),
       snapshot.monitor.state === "running" && !snapshot.monitor.controllable ? h("p",{class:"note"},t("fleet_other_owner")):null,

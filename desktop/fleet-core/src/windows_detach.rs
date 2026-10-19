@@ -1,6 +1,14 @@
 //! Background children must leave a permitted launching job, not merely hide their console.
 use std::io;
 
+#[cfg(windows)]
+static SESSION_LIFETIME: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(windows)]
+pub fn lifetime_warning() -> bool {
+    SESSION_LIFETIME.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 const BREAKAWAY: u32 = 0x01000000;
 
 #[cfg(windows)]
@@ -56,11 +64,17 @@ fn spawn_with<T>(
 #[cfg(windows)]
 pub fn spawn(command: &mut std::process::Command, flags: u32) -> io::Result<std::process::Child> {
     use std::os::windows::process::CommandExt;
+    SESSION_LIFETIME.store(false, std::sync::atomic::Ordering::Relaxed);
     spawn_with(
         allows_breakaway(),
         flags,
         |flags| command.creation_flags(flags).spawn(),
-        || eprintln!("FLEET_SESSION_LIFETIME: supervisor may stop when the launching session ends"),
+        || {
+            SESSION_LIFETIME.store(true, std::sync::atomic::Ordering::Relaxed);
+            eprintln!(
+                "FLEET_SESSION_LIFETIME: supervisor may stop when the launching session ends"
+            );
+        },
     )
 }
 

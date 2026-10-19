@@ -96,6 +96,11 @@ fn overview(c: &Context) -> Result<Value> {
         safe(desktop_preferences::load(&c.roaming).map_err(|_| "LOGIN_PREFERENCES_INVALID")?)?;
     value["pending_migration"] = json!(pending);
     value["control_version"] = json!(1);
+    value["launch_warning"] = if bat_fleet_core::windows_detach::lifetime_warning() {
+        json!("FLEET_SESSION_LIFETIME")
+    } else {
+        Value::Null
+    };
     Ok(value)
 }
 fn ensure(c: &Context, launcher: &LauncherMutex, ticket: &Ticket) -> Result<()> {

@@ -91,7 +91,8 @@ The Connector and native Fleet supervisor query the launching job and request
 policy keeps the existing flags; native access-denied refusal of the breakaway
 creation retries once without that flag. Each affected launch emits only one fixed
 lifetime diagnostic, with no paths, tokens or exception text. Connector warnings
-are written to its private `service.log`; Fleet warnings use native stderr. A
+are written to its private `service.log`; Fleet records the current launch warning
+in native memory, exposes it in the localized Fleet view and also emits native stderr. A
 restrictive enclosing job can still end the background child, so detachment cannot
 promise survival against a policy that forbids it. POSIX retains `start_new_session`.
 
