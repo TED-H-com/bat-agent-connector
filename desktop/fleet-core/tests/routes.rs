@@ -560,3 +560,204 @@ async fn preference_update_preserves_fast_failure_counts_and_alias_demotion() {
         Err("ROUTE_CONFIGURATION_CHANGED")
     ));
 }
+
+struct WakeProbe {
+    before: Value,
+    after: Value,
+    pings: Mutex<Vec<(String, Instant)>>,
+    hang: bool,
+}
+impl WakeProbe {
+    fn idle(recovers: bool) -> Self {
+        let before = json!({"Peer":{"id":{"TailscaleIPs":["100.64.0.1"],"HostName":"old-name","DNSName":"renamed.example.invalid","Online":true,"CurAddr":"","Relay":"fixture"}}});
+        let mut after = before.clone();
+        if recovers {
+            after["Peer"]["id"]["CurAddr"] = json!("203.0.113.1:22");
+        }
+        Self {
+            before,
+            after,
+            pings: Mutex::default(),
+            hang: false,
+        }
+    }
+    fn count(&self) -> usize {
+        self.pings.lock().unwrap().len()
+    }
+}
+impl RouteProbe for WakeProbe {
+    fn tailscale_direct<'a>(&'a self, _: &'a str, _: Instant) -> ProbeFuture<'a> {
+        panic!("selection must use peer identity evidence")
+    }
+    fn tailscale_peer<'a>(&'a self, ip: &'a str, _: Instant) -> PeerFuture<'a> {
+        Box::pin(async move {
+            let doc = if self.count() == 0 {
+                &self.before
+            } else {
+                &self.after
+            };
+            tailscale_peer(&serde_json::to_vec(doc).unwrap(), ip)
+        })
+    }
+    fn tailscale_wake<'a>(&'a self, ip: &'a str, deadline: Instant) -> ProbeFuture<'a> {
+        Box::pin(async move {
+            self.pings.lock().unwrap().push((ip.into(), deadline));
+            if self.hang {
+                std::future::pending().await
+            } else {
+                true
+            }
+        })
+    }
+    fn tcp<'a>(&'a self, _: &'a Endpoint, _: Instant) -> ProbeFuture<'a> {
+        Box::pin(async { true })
+    }
+}
+async fn wake_select(
+    routes: &Routes,
+    policy: &HostPolicy,
+    probe: &WakeProbe,
+    budget: Duration,
+) -> Result<RouteChoice, &'static str> {
+    select(routes, policy, probe, generation(), 0, budget).await
+}
+#[tokio::test(start_paused = true)]
+async fn idle_peer_recovers_after_ip_wake_and_still_requires_direct_evidence() {
+    let routes = routes(&["direct"]);
+    let policy = HostPolicy::new(&routes, generation());
+    let probe = WakeProbe::idle(true);
+    let choice = wake_select(&routes, &policy, &probe, Duration::from_secs(2))
+        .await
+        .ok()
+        .unwrap();
+    assert_eq!(choice.kind(), RouteKind::Direct);
+    assert_eq!(probe.count(), 1);
+    assert_eq!(probe.pings.lock().unwrap()[0].0, "100.64.0.1");
+    assert!(!policy.waking());
+}
+#[tokio::test(start_paused = true)]
+async fn failed_wakes_are_bounded_and_rate_limited_across_cycles_with_capped_backoff() {
+    let routes = routes(&["direct"]);
+    let policy = HostPolicy::new(&routes, generation());
+    let probe = WakeProbe::idle(false);
+    for (cycle, delay) in [5, 10, 20, 40, 60, 60].into_iter().enumerate() {
+        let start = Instant::now();
+        assert!(matches!(
+            wake_select(&routes, &policy, &probe, Duration::from_secs(2)).await,
+            Err("ROUTE_UNAVAILABLE")
+        ));
+        assert_eq!(probe.count(), 3 * (cycle + 1));
+        let pings = probe.pings.lock().unwrap().clone();
+        let batch = &pings[3 * cycle..];
+        assert!(batch[1].1 > batch[0].1);
+        assert!(batch[2].1 > batch[1].1);
+        assert!(Instant::now() - start <= Duration::from_millis(600));
+        assert!(!policy.waking());
+        // Concurrent selection and supervisor cycles share the same reservation.
+        assert!(
+            wake_select(&routes, &policy, &probe, Duration::from_secs(2))
+                .await
+                .is_err()
+        );
+        assert_eq!(probe.count(), 3 * (cycle + 1));
+        tokio::time::sleep_until(start + Duration::from_secs(delay) - Duration::from_millis(1))
+            .await;
+        assert!(
+            wake_select(&routes, &policy, &probe, Duration::from_secs(2))
+                .await
+                .is_err()
+        );
+        assert_eq!(probe.count(), 3 * (cycle + 1));
+        tokio::time::sleep(Duration::from_millis(1)).await;
+    }
+}
+#[tokio::test(start_paused = true)]
+async fn wake_deadlines_fit_probe_and_selection_budgets_even_when_ping_ignores_deadline() {
+    for budget in [Duration::from_millis(40), Duration::from_secs(2)] {
+        let routes = routes(&["direct"]);
+        let policy = HostPolicy::new(&routes, generation());
+        let mut probe = WakeProbe::idle(false);
+        probe.hang = true;
+        let start = Instant::now();
+        assert!(matches!(
+            wake_select(&routes, &policy, &probe, budget).await,
+            Err("ROUTE_UNAVAILABLE")
+        ));
+        let elapsed = Instant::now() - start;
+        assert!(elapsed <= budget.min(Duration::from_millis(600)));
+        assert!((1..=3).contains(&probe.count()));
+        for (_, deadline) in probe.pings.lock().unwrap().iter() {
+            assert!(*deadline <= start + budget.min(Duration::from_millis(600)));
+        }
+        assert!(!policy.waking());
+    }
+}
+#[tokio::test(start_paused = true)]
+async fn unknown_ambiguous_malformed_and_non_ip_peers_never_get_pinged() {
+    let routes = routes(&["direct"]);
+    for kind in ["unknown", "ambiguous", "malformed"] {
+        let policy = HostPolicy::new(&routes, generation());
+        let mut probe = WakeProbe::idle(true);
+        match kind {
+            "unknown" => probe.before["Peer"]["id"]["TailscaleIPs"] = json!(["100.64.0.2"]),
+            "ambiguous" => probe.before["Peer"]["other"] = probe.before["Peer"]["id"].clone(),
+            _ => probe.before = Value::Null,
+        }
+        assert!(matches!(
+            wake_select(&routes, &policy, &probe, Duration::from_secs(2)).await,
+            Err("ROUTE_UNAVAILABLE")
+        ));
+        assert_eq!(probe.count(), 0);
+    }
+    for ip in ["renamed.example.invalid", "old-name"] {
+        let doc = json!({"Peer":{"id":{"TailscaleIPs":[ip],"Online":true,"CurAddr":""}}});
+        assert_eq!(
+            tailscale_peer(&serde_json::to_vec(&doc).unwrap(), ip),
+            TailscalePeer::Unknown
+        );
+    }
+    let ip = "fd7a:115c:a1e0::1";
+    let doc = json!({"Peer":{"id":{"TailscaleIPs":[ip],"Online":true,"CurAddr":""}}});
+    assert_eq!(
+        tailscale_peer(&serde_json::to_vec(&doc).unwrap(), ip),
+        TailscalePeer::Idle
+    );
+}
+#[tokio::test(start_paused = true)]
+async fn cancelling_wake_clears_progress_keeps_cooldown_and_does_not_block_another_host() {
+    let routes = routes(&["direct"]);
+    let policy = HostPolicy::new(&routes, generation());
+    let mut probe = WakeProbe::idle(false);
+    probe.hang = true;
+    let mut pending = Box::pin(wake_select(
+        &routes,
+        &policy,
+        &probe,
+        Duration::from_secs(2),
+    ));
+    tokio::select! {biased; _ = &mut pending => panic!("wake must be pending"), _ = tokio::task::yield_now() => ()}
+    assert!(policy.waking());
+    assert_eq!(probe.count(), 1);
+    let other_policy = HostPolicy::new(&routes, generation());
+    let fast = WakeProbe::idle(true);
+    assert!(
+        wake_select(&routes, &other_policy, &fast, Duration::from_secs(2))
+            .await
+            .is_ok()
+    );
+    // A second request for this policy cannot generate another ping while active.
+    assert!(
+        wake_select(&routes, &policy, &probe, Duration::from_secs(2))
+            .await
+            .is_err()
+    );
+    assert_eq!(probe.count(), 1);
+    drop(pending);
+    assert!(!policy.waking());
+    assert!(
+        wake_select(&routes, &policy, &probe, Duration::from_secs(2))
+            .await
+            .is_err()
+    );
+    assert_eq!(probe.count(), 1);
+}

@@ -21,7 +21,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use tokio::task::JoinHandle;
+use tokio::{sync::Notify, task::JoinHandle};
 
 /// Native configuration only. These paths are never accepted from a WebView.
 pub struct Options {
@@ -99,6 +99,7 @@ pub struct Supervisor<E: Effects, F: ProbeFactory, R: RouteProbe> {
     effects: E,
     probes: F,
     route_probe: Arc<R>,
+    route_progress: Arc<Notify>,
     configuration: Configuration,
     store: Store,
     selection: Snapshot,
@@ -170,6 +171,7 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
             effects,
             probes,
             route_probe,
+            route_progress: Arc::default(),
             configuration,
             store,
             selection,
@@ -183,6 +185,11 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
         };
         out.add_hosts()?;
         Ok(out)
+    }
+    /// Wake transitions interrupt the native idle wait, so short wake attempts
+    /// are published without polling every host more frequently.
+    pub async fn route_progress(&self) {
+        self.route_progress.notified().await;
     }
     pub fn epoch(&self) -> &str {
         self.lease.epoch()
@@ -207,7 +214,8 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                 self.generation,
             );
             let routes = Routes::from_inventory(&self.configuration.inventory, name)?;
-            let policy = HostPolicy::new(&routes, generation.clone());
+            let mut policy = HostPolicy::new(&routes, generation.clone());
+            policy.notify_wakes(self.route_progress.clone());
             self.hosts.insert(
                 name.into(),
                 Host {
@@ -814,7 +822,11 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                     h.observation.as_ref(),
                     &h.generation,
                     now,
-                    h.failure,
+                    if h.policy.waking() {
+                        Some(("TAILSCALE_WAKING", Layer::Tunnel))
+                    } else {
+                        h.failure
+                    },
                 )
             })
             .collect::<Result<Vec<_>>>()?;
@@ -900,7 +912,11 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                     None,
                     &h.generation,
                     now,
-                    h.failure,
+                    if h.policy.waking() {
+                        Some(("TAILSCALE_WAKING", Layer::Tunnel))
+                    } else {
+                        h.failure
+                    },
                 )
             })
             .collect::<Result<Vec<_>>>()?;

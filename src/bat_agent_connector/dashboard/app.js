@@ -10266,6 +10266,10 @@ var STRINGS = {
 		fleet_use_current: "使用目前選擇",
 		fleet_start: "啟動連線監控",
 		fleet_quit: "停止本機連線監控",
+		fleet_tailscale_waking: "正在喚醒 Tailscale 連線…",
+		fleet_route_unavailable: "目前無法透過 Tailscale 連到這台主機。請確認主機在 Tailscale 上為上線狀態；系統會自動重試。",
+		fleet_probe_pending: "正在檢查連線…",
+		fleet_status_details: "詳細資料",
 		fleet_monitor_running: "監控執行中",
 		fleet_monitor_stopped: "監控已停止",
 		fleet_ready: "就緒",
@@ -11923,6 +11927,10 @@ var STRINGS = {
 		fleet_use_current: "Use current selection",
 		fleet_start: "Start connection monitor",
 		fleet_quit: "Stop local connection monitor",
+		fleet_tailscale_waking: "Waking the Tailscale connection…",
+		fleet_route_unavailable: "Tailscale can't reach this host right now. Make sure the host is online in Tailscale; retrying automatically.",
+		fleet_probe_pending: "Checking the connection…",
+		fleet_status_details: "Details",
 		fleet_monitor_running: "Monitor running",
 		fleet_monitor_stopped: "Monitor stopped",
 		fleet_ready: "Ready",
@@ -57672,7 +57680,26 @@ function nativeAttachments({ h, t, guard, canWrite, draftId, onReceipt, onDiscar
 	};
 }
 //#endregion
+//#region src/fleet-status.js
+function fleetStatusKey(code) {
+	return {
+		TAILSCALE_WAKING: "fleet_tailscale_waking",
+		ROUTE_UNAVAILABLE: "fleet_route_unavailable",
+		PROBE_PENDING: "fleet_probe_pending"
+	}[code];
+}
+function fleetStatus(row, { h, t }) {
+	const key = fleetStatusKey(row?.code);
+	if (!key) return null;
+	return h("div", {
+		class: "muted",
+		"data-fleet-route-status": true
+	}, h("span", { role: "status" }, t(key)), h("details", {}, h("summary", {}, t("fleet_status_details")), h("code", {}, row.code)));
+}
+var init_fleet_status = __esmMin((() => {}));
+//#endregion
 //#region \0vite/preload-helper.js
+init_fleet_status();
 var scriptRel = (function detectScriptRel() {
 	const relList = typeof document !== "undefined" && document.createElement("link").relList;
 	return relList && relList.supports && relList.supports("modulepreload") ? "modulepreload" : "preload";
@@ -58071,7 +58098,10 @@ async function mountFleetDesktop(main, { h, t }) {
 				await read();
 			}, false, "quit"), !canEnable() || !!draft || !snapshot.monitor.controllable)),
 			h("h3", {}, t("fleet_connections")),
-			h("div", { class: "fleet-options" }, ...snapshot.configuration.connections.map((row) => h("div", { class: "row" }, h("div", { class: "grow" }, checkbox("connections", row.name, row.label)), h("span", { class: "chip" }, t("fleet_" + (ready.get(row.name)?.level || "unavailable")))))),
+			h("div", { class: "fleet-options" }, ...snapshot.configuration.connections.map((row) => h("div", { class: "row" }, h("div", { class: "grow" }, checkbox("connections", row.name, row.label), fleetStatus(ready.get(row.name), {
+				h,
+				t
+			})), h("span", { class: "chip" }, t("fleet_" + (ready.get(row.name)?.level || "unavailable")))))),
 			h("h3", {}, t("fleet_windows_title")),
 			h("div", { class: "fleet-options" }, ...snapshot.profiles.map((row) => h("div", { class: "row" }, checkbox("profiles", row.id, label(row.id)))), h("div", { class: "row" }, checkbox("dashboard", "dashboard", t("fleet_dashboard_choice")))),
 			h("p", { class: "muted" }, t("fleet_selection_help")),
@@ -58449,6 +58479,7 @@ var init_fleet_bootstrap = __esmMin((() => {
 }));
 //#endregion
 //#region src/fleet.js
+init_fleet_status();
 init_transport();
 async function mountFleet(main, { h, t }) {
 	if (!main.isConnected) return () => {};
@@ -58538,7 +58569,10 @@ async function mountFleet(main, { h, t }) {
 				}
 			});
 			const observed = ready.get(entry.name);
-			return h("div", { class: "row" }, h("label", { class: "grow fleet-choice" }, input, " ", entry.label), h("span", { class: "chip" }, t("fleet_" + (observed?.level || "unavailable"))), observed?.blocking ? h("span", { class: "muted" }, observed.blocking) : null);
+			return h("div", { class: "row" }, h("label", { class: "grow fleet-choice" }, input, " ", entry.label), h("span", { class: "chip" }, t("fleet_" + (observed?.level || "unavailable"))), fleetStatus(observed, {
+				h,
+				t
+			}));
 		});
 		content.replaceChildren(...[
 			h("p", {}, t("fleet_monitor_" + snapshot.monitor.state), " · ", t("fleet_" + snapshot.readiness.state)),

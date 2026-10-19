@@ -7,8 +7,17 @@ use crate::{
 };
 use serde::Serialize;
 use serde_json::Value;
-use std::{collections::HashMap, future::Future, pin::Pin, time::Duration};
-use tokio::time::{timeout_at, Instant};
+use std::{
+    collections::HashMap,
+    future::Future,
+    pin::Pin,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
+use tokio::{
+    sync::Notify,
+    time::{timeout_at, Instant},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -88,31 +97,97 @@ pub type ProbeFuture<'a> = Pin<Box<dyn Future<Output = bool> + Send + 'a>>;
 /// the passed absolute deadline; the selector additionally bounds the whole call.
 pub trait RouteProbe: Sync {
     fn tailscale_direct<'a>(&'a self, ip: &'a str, deadline: Instant) -> ProbeFuture<'a>;
+    /// Implementations without peer identity evidence never authorize wake traffic.
+    fn tailscale_peer<'a>(&'a self, ip: &'a str, deadline: Instant) -> PeerFuture<'a> {
+        Box::pin(async move {
+            if self.tailscale_direct(ip, deadline).await {
+                TailscalePeer::Direct
+            } else {
+                TailscalePeer::Unknown
+            }
+        })
+    }
+    fn tailscale_wake<'a>(&'a self, _ip: &'a str, _deadline: Instant) -> ProbeFuture<'a> {
+        Box::pin(async { false })
+    }
     fn tcp<'a>(&'a self, endpoint: &'a Endpoint, deadline: Instant) -> ProbeFuture<'a>;
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TailscalePeer {
+    Unknown,
+    Idle,
+    Direct,
+}
+pub type PeerFuture<'a> = Pin<Box<dyn Future<Output = TailscalePeer> + Send + 'a>>;
 /// Strict local Tailscale evidence. Duplicate/case/escape variants fail closed;
 /// multiple peers claiming the target IP are ambiguous rather than first-wins.
-pub fn tailscale_direct(bytes: &[u8], ip: &str) -> bool {
+pub fn tailscale_peer(bytes: &[u8], ip: &str) -> TailscalePeer {
+    // Only literal tailnet addresses may be woken, never a mutable MagicDNS name.
+    if ip.parse::<std::net::IpAddr>().is_err() {
+        return TailscalePeer::Unknown;
+    }
     let Ok(value) = strict_json::parse(bytes, 1024 * 1024) else {
-        return false;
+        return TailscalePeer::Unknown;
     };
     let Some(peers) = value.get("Peer").and_then(Value::as_object) else {
-        return false;
+        return TailscalePeer::Unknown;
     };
-    let matched: Vec<_> = peers
-        .values()
-        .filter(|peer| {
-            peer.get("TailscaleIPs")
-                .and_then(Value::as_array)
-                .is_some_and(|ips| ips.iter().any(|v| v.as_str() == Some(ip)))
-        })
-        .collect();
-    matched.len() == 1
-        && matched[0].get("Online") == Some(&Value::Bool(true))
-        && matched[0]
+    let mut matched = peers.values().filter(|peer| {
+        peer.get("TailscaleIPs")
+            .and_then(Value::as_array)
+            .is_some_and(|ips| ips.iter().any(|v| v.as_str() == Some(ip)))
+    });
+    let Some(peer) = matched.next() else {
+        return TailscalePeer::Unknown;
+    };
+    if matched.next().is_some() {
+        return TailscalePeer::Unknown;
+    }
+    if peer.get("Online") == Some(&Value::Bool(true))
+        && peer
             .get("CurAddr")
             .and_then(Value::as_str)
             .is_some_and(|v| !v.trim().is_empty())
+    {
+        TailscalePeer::Direct
+    } else {
+        TailscalePeer::Idle
+    }
+}
+pub fn tailscale_direct(bytes: &[u8], ip: &str) -> bool {
+    tailscale_peer(bytes, ip) == TailscalePeer::Direct
+}
+
+#[derive(Default)]
+struct WakeBackoff {
+    failures: u8,
+    next: Option<Instant>,
+    active: bool,
+}
+/// Reservation is charged before traffic. Cancellation retains cooldown and always
+/// clears presentation state. No policy lock is held across an await.
+struct WakeAttempt(Arc<Mutex<WakeBackoff>>, Arc<Notify>);
+impl WakeAttempt {
+    fn reserve(state: &Arc<Mutex<WakeBackoff>>, progress: &Arc<Notify>) -> Option<Self> {
+        let mut wake = state.lock().unwrap();
+        if wake.active || wake.next.is_some_and(|next| Instant::now() < next) {
+            return None;
+        }
+        wake.active = true;
+        wake.next = Some(Instant::now() + Duration::from_secs((5 << wake.failures.min(4)).min(60)));
+        wake.failures = wake.failures.saturating_add(1);
+        progress.notify_one();
+        Some(Self(state.clone(), progress.clone()))
+    }
+    fn recovered(&self) {
+        self.0.lock().unwrap().failures = 0;
+    }
+}
+impl Drop for WakeAttempt {
+    fn drop(&mut self) {
+        self.0.lock().unwrap().active = false;
+        self.1.notify_one();
+    }
 }
 #[derive(Default)]
 struct Failures {
@@ -142,6 +217,8 @@ pub struct HostPolicy {
     aliases: HashMap<String, Failures>,
     active: Option<Active>,
     recovery: Option<Recovery>,
+    wake: Arc<Mutex<WakeBackoff>>,
+    wake_progress: Arc<Notify>,
 }
 #[derive(Debug, PartialEq, Eq)]
 pub enum Exit {
@@ -167,7 +244,15 @@ impl HostPolicy {
                 .collect(),
             active: None,
             recovery: None,
+            wake: Arc::default(),
+            wake_progress: Arc::default(),
         }
+    }
+    pub(crate) fn notify_wakes(&mut self, progress: Arc<Notify>) {
+        self.wake_progress = progress;
+    }
+    pub fn waking(&self) -> bool {
+        self.wake.lock().unwrap().active
     }
     fn blocked(&self, alias: &str, now: u64) -> bool {
         self.aliases
@@ -353,6 +438,8 @@ pub struct SelectionRequest {
     generation: ProbeGeneration,
     observed_ms: u64,
     blocked: Vec<String>,
+    wake: Arc<Mutex<WakeBackoff>>,
+    wake_progress: Arc<Notify>,
 }
 impl SelectionRequest {
     pub fn new(
@@ -373,6 +460,8 @@ impl SelectionRequest {
             policy_revision: policy.revision,
             generation,
             observed_ms,
+            wake: policy.wake.clone(),
+            wake_progress: policy.wake_progress.clone(),
             blocked: routes
                 .routes
                 .iter()
@@ -380,6 +469,53 @@ impl SelectionRequest {
                 .map(|r| r.alias.clone())
                 .collect(),
         })
+    }
+    async fn direct<P: RouteProbe>(&self, probe: &P, ip: &str, until: Instant) -> bool {
+        let status = |end| async move {
+            timeout_at(end, probe.tailscale_peer(ip, end))
+                .await
+                .unwrap_or(TailscalePeer::Unknown)
+        };
+        // Preserve the existing status deadline. Once an idle peer is known,
+        // reserve half the remaining time for readback and subsequent attempts.
+        let slice =
+            |end: Instant| Instant::now() + end.saturating_duration_since(Instant::now()) / 2;
+        match status(until).await {
+            TailscalePeer::Direct => {
+                self.wake.lock().unwrap().failures = 0;
+                return true;
+            }
+            TailscalePeer::Unknown => return false,
+            TailscalePeer::Idle => (),
+        }
+        let Some(wake) = WakeAttempt::reserve(&self.wake, &self.wake_progress) else {
+            return false;
+        };
+        for attempt in 0..3 {
+            if attempt > 0 {
+                let delay = Duration::from_millis(50 << attempt);
+                if Instant::now() + delay >= until {
+                    break;
+                }
+                tokio::time::sleep(delay).await;
+            }
+            if Instant::now() >= until {
+                break;
+            }
+            let ping_end = slice(until);
+            // Ping success (including DERP) is never direct-path evidence. Always
+            // re-read status; command failure may still have generated wake traffic.
+            let _ = timeout_at(ping_end, probe.tailscale_wake(ip, ping_end)).await;
+            match status(slice(until)).await {
+                TailscalePeer::Direct => {
+                    wake.recovered();
+                    return true;
+                }
+                TailscalePeer::Unknown => break,
+                TailscalePeer::Idle => (),
+            }
+        }
+        false
     }
     /// No policy borrow or host-global lock across await. Cancellation drops this
     /// request and the owned probe resources; it does not mutate recovery state.
@@ -399,8 +535,9 @@ impl SelectionRequest {
                 async {
                     let Some(route) = direct else { return false };
                     let endpoint = route.probe.as_ref().unwrap();
-                    if !probe
-                        .tailscale_direct(
+                    if !self
+                        .direct(
+                            probe,
                             &endpoint.address,
                             deadline(total, self.routes.probe_budget),
                         )

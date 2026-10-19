@@ -14,6 +14,20 @@ fallback; selection does not prove that its future tunnel or BAT protocol is rea
 The Connector's single configured SSH alias is an explicitly `configured` route;
 no alias means no tunnel route, rather than inventing one.
 
+If status identifies exactly one peer at the configured tailnet IP but direct proof
+is missing, selection sends up to three `tailscale ping --c 1 --timeout <bounded> <IP>`
+commands, then rechecks status after each. MagicDNS names are never used. Unknown,
+ambiguous or malformed status never authorizes wake traffic; ping/DERP success alone
+never authorizes a direct route. Wake, readback and increasing 100/200 ms retry delays
+share the existing direct probe and total selection deadlines. The per-host policy
+retains an atomic wake reservation across supervisor cycles and selection-generation
+changes: cooldown grows from 5 to 10, 20, 40 and at most 60 seconds. A direct observation
+resets the failure exponent; cancellation retains the charged cooldown. Independent
+hosts and LAN probes do not wait on a shared lock or serial wake queue. Pending wake
+status is `TAILSCALE_WAKING`; wake transitions notify the native monitor to publish
+progress without waiting for its regular one-second tick. Final unavailability
+remains `ROUTE_UNAVAILABLE`.
+
 Two intentional corrections to historical Kit behavior are part of this port:
 
 - Direct-only hosts and no-Cloudflare fallback do not bypass genuine-direct proof.
@@ -61,9 +75,11 @@ The injectable probe boundary has no global lock or serial host queue. Independe
 selection futures can run concurrently. Direct and LAN checks share a finite total
 selection deadline; each TCP or local status call is also bounded by the inventory's
 probe budget. Cancelling an attempt drops TCP sockets and terminates only the owned
-status child via its retained process object, never a PID lookup or process-tree search.
+status or ping child via its retained process object, never a PID lookup or process-tree search.
 The native status adapter uses a fixed absolute, canonical trusted Tailscale executable
-with exactly `status --json`, cleared environment, null stdin/stderr and bounded stdout.
+with fixed `status --json` or IP-only ping arguments, cleared environment, null
+stdin/stderr and bounded status stdout (ping stdout is discarded). Windows retains
+only SystemRoot/WINDIR and uses CREATE_NO_WINDOW for both commands.
 It never searches PATH or accepts a command from the WebView. Runtime installation-path
 trust and configuration revalidation remain prerequisites; path validation is not a
 binary-signature attestation or an atomic defense against an installer replacing files.

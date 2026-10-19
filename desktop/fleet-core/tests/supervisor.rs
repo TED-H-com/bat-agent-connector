@@ -1315,3 +1315,46 @@ async fn powershell_sparse_layers_remain_false_and_strict_validation_is_preserve
     doc["schema_version"] = json!(2);
     assert!(Status::parse(&serde_json::to_vec(&doc).unwrap(), &config, r.epoch(), 1100).is_err());
 }
+
+struct WakingRoutes;
+impl RouteProbe for WakingRoutes {
+    fn tailscale_direct<'a>(&'a self, _: &'a str, _: Instant) -> ProbeFuture<'a> {
+        Box::pin(async { false })
+    }
+    fn tailscale_peer<'a>(
+        &'a self,
+        _: &'a str,
+        _: Instant,
+    ) -> bat_fleet_core::route::PeerFuture<'a> {
+        Box::pin(async { bat_fleet_core::route::TailscalePeer::Idle })
+    }
+    fn tailscale_wake<'a>(&'a self, _: &'a str, _: Instant) -> ProbeFuture<'a> {
+        Box::pin(std::future::pending())
+    }
+    fn tcp<'a>(
+        &'a self,
+        _: &'a bat_fleet_core::inventory::Endpoint,
+        _: Instant,
+    ) -> ProbeFuture<'a> {
+        Box::pin(async { false })
+    }
+}
+#[tokio::test(start_paused = true)]
+async fn wake_transition_interrupts_native_idle_wait_and_publishes_safe_pending_status() {
+    let (_fixture, _shared, mut runtime) = fixture_with_routes(Arc::new(WakingRoutes));
+    runtime.tick(1000).await.unwrap();
+    let start = Instant::now();
+    runtime.route_progress().await;
+    assert_eq!(
+        Instant::now(),
+        start,
+        "wake notification must precede the one-second native idle wait"
+    );
+    let status = runtime.tick(1001).await.unwrap();
+    assert!(status
+        .entries
+        .iter()
+        .any(|row| row.code.as_deref() == Some("TAILSCALE_WAKING") && row.level == "degraded"));
+    assert!(!serde_json::to_string(&status).unwrap().contains("100.64."));
+    runtime.shutdown(1002).await.unwrap();
+}

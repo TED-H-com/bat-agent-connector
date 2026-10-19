@@ -16,6 +16,21 @@ fn main() {
             .iter()
             .any(|name| key.to_string_lossy().eq_ignore_ascii_case(name))
     });
+    if args.first().is_some_and(|arg| arg == "ping") {
+        let valid = args.len() == 6 && args[1..4] == ["--c", "1", "--timeout"]
+            && args[4].strip_suffix("ms").and_then(|s| s.parse::<u64>().ok())
+                .is_some_and(|ms| (1..=1000).contains(&ms))
+            && args[5] == "100.64.0.1" && allowed;
+        fs::write(directory.join("ping-ok"), if valid { "yes" } else { "no" }).unwrap();
+        fs::write(directory.join("started"), "yes").unwrap();
+        let mode = fs::read_to_string(directory.join("mode")).unwrap();
+        if mode == "ping_hang" {
+            std::thread::sleep(Duration::from_millis(800));
+            fs::write(directory.join("finished"), "bad").unwrap();
+        }
+        fs::write(directory.join("awakened"), "yes").unwrap();
+        return;
+    }
     fs::write(
         directory.join("argv-ok"),
         if args == ["status", "--json"] && allowed {
@@ -51,6 +66,10 @@ fn main() {
         }
         "exit_nonzero" => std::process::exit(3),
         _ => (),
+    }
+    if mode == "idle" && !directory.join("awakened").exists() {
+        println!("{{\"Peer\":{{\"fixture\":{{\"TailscaleIPs\":[\"100.64.0.1\"],\"HostName\":\"old-name\",\"Online\":true,\"CurAddr\":\"\"}}}}}}");
+        return;
     }
     println!("{{\"Peer\":{{\"fixture\":{{\"TailscaleIPs\":[\"100.64.0.1\"],\"Online\":true,\"CurAddr\":\"203.0.113.1:1234\"}}}}}}");
 }

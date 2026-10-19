@@ -1,7 +1,7 @@
-//! Native readonly probe adapter. Fixed trusted executable; never PATH/IPC commands.
+//! Native route probe adapter. Fixed trusted executable; never PATH/IPC commands.
 use crate::{
     inventory::Endpoint,
-    route::{tailscale_direct, ProbeFuture, RouteProbe},
+    route::{tailscale_peer, PeerFuture, ProbeFuture, RouteProbe, TailscalePeer},
     Result,
 };
 use std::{
@@ -60,37 +60,46 @@ impl NativeRouteProbe {
         Ok(Self { tailscale })
     }
 }
-impl RouteProbe for NativeRouteProbe {
-    fn tailscale_direct<'a>(&'a self, ip: &'a str, deadline: Instant) -> ProbeFuture<'a> {
-        Box::pin(async move {
-            let Some(path) = &self.tailscale else {
-                return false;
-            };
-            if Instant::now() >= deadline || !path.is_file() {
-                return false;
-            }
-            let mut command = Command::new(path);
-            command
-                .args(["status", "--json"])
-                .env_clear()
-                .stdin(Stdio::null())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::null())
-                .kill_on_drop(true);
-            #[cfg(windows)]
-            {
-                command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-                for key in ["SystemRoot", "WINDIR"] {
-                    if let Some(value) = std::env::var_os(key) {
-                        command.env(key, value);
-                    }
+impl NativeRouteProbe {
+    /// All commands share executable trust, process isolation and cancellation.
+    fn command(&self) -> Option<Command> {
+        let path = self.tailscale.as_ref().filter(|path| path.is_file())?;
+        let mut command = Command::new(path);
+        command
+            .env_clear()
+            .stdin(Stdio::null())
+            .stderr(Stdio::null())
+            .kill_on_drop(true);
+        #[cfg(windows)]
+        {
+            command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+            for key in ["SystemRoot", "WINDIR"] {
+                if let Some(value) = std::env::var_os(key) {
+                    command.env(key, value);
                 }
             }
+        }
+        Some(command)
+    }
+}
+impl RouteProbe for NativeRouteProbe {
+    fn tailscale_direct<'a>(&'a self, ip: &'a str, deadline: Instant) -> ProbeFuture<'a> {
+        Box::pin(async move { self.tailscale_peer(ip, deadline).await == TailscalePeer::Direct })
+    }
+    fn tailscale_peer<'a>(&'a self, ip: &'a str, deadline: Instant) -> PeerFuture<'a> {
+        Box::pin(async move {
+            if Instant::now() >= deadline {
+                return TailscalePeer::Unknown;
+            }
+            let Some(mut command) = self.command() else {
+                return TailscalePeer::Unknown;
+            };
+            command.args(["status", "--json"]).stdout(Stdio::piped());
             let Ok(mut child) = command.spawn() else {
-                return false;
+                return TailscalePeer::Unknown;
             };
             let Some(stdout) = child.stdout.take() else {
-                return false;
+                return TailscalePeer::Unknown;
             };
             let attempt = async {
                 let mut bytes = Zeroizing::new(Vec::new());
@@ -101,16 +110,46 @@ impl RouteProbe for NativeRouteProbe {
                     .is_err()
                     || bytes.len() > 1024 * 1024
                 {
-                    return false;
+                    return TailscalePeer::Unknown;
                 }
-                let Ok(status) = child.wait().await else {
-                    return false;
-                };
-                status.success() && tailscale_direct(&bytes, ip)
+                match child.wait().await {
+                    Ok(status) if status.success() => tailscale_peer(&bytes, ip),
+                    _ => TailscalePeer::Unknown,
+                }
             };
-            // On timeout/cancellation/error before wait completes, dropping child
-            // requests termination through its retained OS process object only.
-            timeout_at(deadline, attempt).await.unwrap_or(false) && Instant::now() < deadline
+            // Dropping this future terminates only its retained child process.
+            let peer = timeout_at(deadline, attempt)
+                .await
+                .unwrap_or(TailscalePeer::Unknown);
+            if Instant::now() < deadline {
+                peer
+            } else {
+                TailscalePeer::Unknown
+            }
+        })
+    }
+    fn tailscale_wake<'a>(&'a self, ip: &'a str, deadline: Instant) -> ProbeFuture<'a> {
+        Box::pin(async move {
+            // Defense in depth: the selector additionally requires unique status evidence.
+            if ip.parse::<std::net::IpAddr>().is_err() || Instant::now() >= deadline {
+                return false;
+            }
+            let Some(mut command) = self.command() else {
+                return false;
+            };
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return false;
+            }
+            let bounded = format!("{}ms", remaining.as_millis().clamp(1, 1000));
+            command
+                .args(["ping", "--c", "1", "--timeout", &bounded, ip])
+                .stdout(Stdio::null());
+            let Ok(mut child) = command.spawn() else {
+                return false;
+            };
+            matches!(timeout_at(deadline, child.wait()).await, Ok(Ok(status)) if status.success())
+                && Instant::now() < deadline
         })
     }
     fn tcp<'a>(&'a self, endpoint: &'a Endpoint, deadline: Instant) -> ProbeFuture<'a> {
