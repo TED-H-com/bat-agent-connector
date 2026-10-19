@@ -7,8 +7,17 @@ use crate::{
 };
 use serde::Serialize;
 use serde_json::Value;
-use std::{collections::HashMap, future::Future, pin::Pin, time::Duration};
-use tokio::time::{timeout_at, Instant};
+use std::{
+    collections::HashMap,
+    future::Future,
+    pin::Pin,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
+use tokio::{
+    sync::Notify,
+    time::{timeout_at, Instant},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -88,31 +97,99 @@ pub type ProbeFuture<'a> = Pin<Box<dyn Future<Output = bool> + Send + 'a>>;
 /// the passed absolute deadline; the selector additionally bounds the whole call.
 pub trait RouteProbe: Sync {
     fn tailscale_direct<'a>(&'a self, ip: &'a str, deadline: Instant) -> ProbeFuture<'a>;
+    /// Implementations without peer identity evidence never authorize wake traffic.
+    fn tailscale_peer<'a>(&'a self, ip: &'a str, deadline: Instant) -> PeerFuture<'a> {
+        Box::pin(async move {
+            if self.tailscale_direct(ip, deadline).await {
+                TailscalePeer::Direct
+            } else {
+                TailscalePeer::Unknown
+            }
+        })
+    }
+    fn tailscale_wake<'a>(&'a self, _ip: &'a str, _deadline: Instant) -> ProbeFuture<'a> {
+        Box::pin(async { false })
+    }
     fn tcp<'a>(&'a self, endpoint: &'a Endpoint, deadline: Instant) -> ProbeFuture<'a>;
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TailscalePeer {
+    Unknown,
+    Idle,
+    Direct,
+}
+pub type PeerFuture<'a> = Pin<Box<dyn Future<Output = TailscalePeer> + Send + 'a>>;
 /// Strict local Tailscale evidence. Duplicate/case/escape variants fail closed;
 /// multiple peers claiming the target IP are ambiguous rather than first-wins.
-pub fn tailscale_direct(bytes: &[u8], ip: &str) -> bool {
+pub fn tailscale_peer(bytes: &[u8], ip: &str) -> TailscalePeer {
+    // Only literal tailnet addresses may be woken, never a mutable MagicDNS name.
+    if ip.parse::<std::net::IpAddr>().is_err() {
+        return TailscalePeer::Unknown;
+    }
     let Ok(value) = strict_json::parse(bytes, 1024 * 1024) else {
-        return false;
+        return TailscalePeer::Unknown;
     };
     let Some(peers) = value.get("Peer").and_then(Value::as_object) else {
-        return false;
+        return TailscalePeer::Unknown;
     };
-    let matched: Vec<_> = peers
-        .values()
-        .filter(|peer| {
-            peer.get("TailscaleIPs")
-                .and_then(Value::as_array)
-                .is_some_and(|ips| ips.iter().any(|v| v.as_str() == Some(ip)))
-        })
-        .collect();
-    matched.len() == 1
-        && matched[0].get("Online") == Some(&Value::Bool(true))
-        && matched[0]
+    let mut matched = peers.values().filter(|peer| {
+        peer.get("TailscaleIPs")
+            .and_then(Value::as_array)
+            .is_some_and(|ips| ips.iter().any(|v| v.as_str() == Some(ip)))
+    });
+    let Some(peer) = matched.next() else {
+        return TailscalePeer::Unknown;
+    };
+    if matched.next().is_some() {
+        return TailscalePeer::Unknown;
+    }
+    if peer.get("Online") == Some(&Value::Bool(true))
+        && peer
             .get("CurAddr")
             .and_then(Value::as_str)
             .is_some_and(|v| !v.trim().is_empty())
+    {
+        TailscalePeer::Direct
+    } else {
+        TailscalePeer::Idle
+    }
+}
+pub fn tailscale_direct(bytes: &[u8], ip: &str) -> bool {
+    tailscale_peer(bytes, ip) == TailscalePeer::Direct
+}
+
+#[derive(Default)]
+struct WakeBackoff {
+    failures: u8,
+    next: Option<Instant>,
+    active: bool,
+    pending: Option<String>,
+    handle: Option<tokio::task::JoinHandle<()>>,
+    completed: bool,
+    epoch: u128,
+}
+/// Owned by the background task, not the short selection future. Cancellation
+/// keeps the charged cooldown and releases the reservation when the task drops.
+struct WakeAttempt {
+    state: Arc<Mutex<WakeBackoff>>,
+    progress: Arc<Notify>,
+    epoch: u128,
+    cooldown: Duration,
+}
+impl Drop for WakeAttempt {
+    fn drop(&mut self) {
+        let mut wake = self.state.lock().unwrap();
+        wake.active = false;
+        wake.completed = wake.epoch == self.epoch;
+        if wake.completed {
+            wake.next = if wake.failures == 0 {
+                None
+            } else {
+                Some(Instant::now() + self.cooldown)
+            };
+        }
+        self.progress.notify_one();
+    }
 }
 #[derive(Default)]
 struct Failures {
@@ -142,6 +219,8 @@ pub struct HostPolicy {
     aliases: HashMap<String, Failures>,
     active: Option<Active>,
     recovery: Option<Recovery>,
+    wake: Arc<Mutex<WakeBackoff>>,
+    wake_progress: Arc<Notify>,
 }
 #[derive(Debug, PartialEq, Eq)]
 pub enum Exit {
@@ -167,6 +246,63 @@ impl HostPolicy {
                 .collect(),
             active: None,
             recovery: None,
+            wake: Arc::default(),
+            wake_progress: Arc::default(),
+        }
+    }
+    pub(crate) fn notify_wakes(&mut self, progress: Arc<Notify>) {
+        self.wake_progress = progress;
+    }
+    pub fn waking(&self) -> bool {
+        self.wake.lock().unwrap().active
+    }
+    /// Native callers retain the trusted probe for an independently bounded wake.
+    /// No selection borrow, route deadline or host-global lock spans this task.
+    pub fn start_wake<P: RouteProbe + Send + 'static>(&self, probe: Arc<P>) {
+        let mut wake = self.wake.lock().unwrap();
+        let Some(ip) = wake.pending.take() else {
+            return;
+        };
+        let reservation = WakeAttempt {
+            state: self.wake.clone(),
+            progress: self.wake_progress.clone(),
+            epoch: wake.epoch,
+            cooldown: Duration::from_secs((5 << wake.failures.saturating_sub(1).min(4)).min(60)),
+        };
+        let until = Instant::now() + Duration::from_secs(5);
+        wake.handle = Some(tokio::spawn(async move {
+            let _reservation = reservation;
+            // The native ping retries three times. Even an uncooperative probe
+            // cannot outlive this window; dropping it kills its retained child.
+            let _ = timeout_at(until, probe.tailscale_wake(&ip, until)).await;
+        }));
+    }
+    pub async fn wake_progress(&self) {
+        self.wake_progress.notified().await;
+    }
+    pub(crate) fn take_wake_completion(&self) -> bool {
+        std::mem::take(&mut self.wake.lock().unwrap().completed)
+    }
+    fn invalidate_wake(&self) {
+        let mut wake = self.wake.lock().unwrap();
+        wake.epoch = rand::random();
+        wake.pending = None;
+        wake.completed = false;
+        if let Some(handle) = &wake.handle {
+            handle.abort();
+            if handle.is_finished() {
+                wake.active = false;
+            }
+        } else {
+            wake.active = false;
+        }
+    }
+    /// Abort and join before replacing policy inputs or shutting down the owner.
+    pub async fn stop_wake(&self) {
+        self.invalidate_wake();
+        let handle = self.wake.lock().unwrap().handle.take();
+        if let Some(handle) = handle {
+            let _ = handle.await;
         }
     }
     fn blocked(&self, alias: &str, now: u64) -> bool {
@@ -195,6 +331,7 @@ impl HostPolicy {
                 .revision
                 .checked_add(1)
                 .ok_or("ROUTE_COUNTER_EXHAUSTED")?;
+            self.invalidate_wake();
             self.generation = next;
         }
         Ok(())
@@ -307,6 +444,11 @@ impl HostPolicy {
         Ok(Exit::FastFailure)
     }
 }
+impl Drop for HostPolicy {
+    fn drop(&mut self) {
+        self.invalidate_wake();
+    }
+}
 /// The alias can cross only a native call boundary, after freshness revalidation.
 pub struct RouteChoice {
     policy_instance: u128,
@@ -353,6 +495,9 @@ pub struct SelectionRequest {
     generation: ProbeGeneration,
     observed_ms: u64,
     blocked: Vec<String>,
+    wake_epoch: u128,
+    wake: Arc<Mutex<WakeBackoff>>,
+    wake_progress: Arc<Notify>,
 }
 impl SelectionRequest {
     pub fn new(
@@ -373,6 +518,9 @@ impl SelectionRequest {
             policy_revision: policy.revision,
             generation,
             observed_ms,
+            wake_epoch: policy.wake.lock().unwrap().epoch,
+            wake: policy.wake.clone(),
+            wake_progress: policy.wake_progress.clone(),
             blocked: routes
                 .routes
                 .iter()
@@ -381,8 +529,38 @@ impl SelectionRequest {
                 .collect(),
         })
     }
+    async fn direct<P: RouteProbe>(&self, probe: &P, ip: &str, until: Instant) -> bool {
+        let peer = timeout_at(until, probe.tailscale_peer(ip, until))
+            .await
+            .unwrap_or(TailscalePeer::Unknown);
+        let mut wake = self.wake.lock().unwrap();
+        if wake.epoch != self.wake_epoch {
+            return false;
+        }
+        match peer {
+            TailscalePeer::Direct => {
+                wake.failures = 0;
+                wake.next = None;
+                true
+            }
+            TailscalePeer::Idle => {
+                if !wake.active && !wake.next.is_some_and(|next| Instant::now() < next) {
+                    wake.active = true;
+                    wake.pending = Some(ip.into());
+                    wake.next = Some(
+                        Instant::now() + Duration::from_secs((5 << wake.failures.min(4)).min(60)),
+                    );
+                    wake.failures = wake.failures.saturating_add(1);
+                    self.wake_progress.notify_one();
+                }
+                false
+            }
+            TailscalePeer::Unknown => false,
+        }
+    }
     /// No policy borrow or host-global lock across await. Cancellation drops this
-    /// request and the owned probe resources; it does not mutate recovery state.
+    /// request and its status/TCP resources. Wake intent belongs to the policy;
+    /// only its native owner may start the separately bounded background task.
     pub async fn run<P: RouteProbe>(self, probe: &P, budget: Duration) -> Result<RouteChoice> {
         if budget.is_zero() || budget > Duration::from_secs(30) {
             return Err("ROUTE_BUDGET_INVALID");
@@ -399,8 +577,9 @@ impl SelectionRequest {
                 async {
                     let Some(route) = direct else { return false };
                     let endpoint = route.probe.as_ref().unwrap();
-                    if !probe
-                        .tailscale_direct(
+                    if !self
+                        .direct(
+                            probe,
                             &endpoint.address,
                             deadline(total, self.routes.probe_budget),
                         )
@@ -442,7 +621,13 @@ impl SelectionRequest {
             .iter()
             .find(|r| !self.blocked.contains(&r.alias))
             .or_else(|| eligible.first())
-            .ok_or("ROUTE_UNAVAILABLE")?;
+            .ok_or_else(|| {
+                if self.wake.lock().unwrap().active {
+                    "TAILSCALE_WAKING"
+                } else {
+                    "ROUTE_UNAVAILABLE"
+                }
+            })?;
         Ok(RouteChoice {
             policy_instance: self.policy_instance,
             name: self.routes.name.clone(),
@@ -454,7 +639,9 @@ impl SelectionRequest {
         })
     }
 }
-/// Convenience wrapper for callers that do not need an owned background request.
+/// Convenience wrapper for callers that do not need an owned selection request.
+/// TAILSCALE_WAKING reserves a separate wake: the native owner must call
+/// HostPolicy::start_wake with its retained probe, then reselect on wake_progress.
 pub async fn select<P: RouteProbe>(
     routes: &Routes,
     policy: &HostPolicy,
