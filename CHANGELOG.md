@@ -6,6 +6,20 @@
   when its creation is unproven. If the destination appears during cloning, keep
   both paths for inspection instead of deleting the staged copy.
 
+- Fix Windows SSH tunnel launches failing with OWNER_UNPROVEN by constructing native paths and comparing executable paths independently of separator spelling and ASCII case.
+
+- Adopt verified existing uv tool installations into managed Connector releases, with guarded restoration.
+
+- Add a pinned-tag Linux/macOS Connector installer that verifies release/source integrity and produces an updater enrollment receipt.
+
+- Add optional Linux user SSH tunnel units, loopback validation and pluggable Bitwarden/command token-file provisioning helpers.
+
+- Allow automation `open_fleet` callers to set Fleet actor, read-only mode and idle timeout.
+
+- Add a stable `automation` Python facade for external housekeeping sweeps, with managed Fleet lifetime and unchanged action safety gates.
+
+- Load optional private `hosts.d/*.toml` overlays in filename order, with recursive table merging and duplicate-host refusal.
+
 - Read-only manual-session observation can prove 2–64 serial native inputs from complete same-epoch replay and exact counters. Public receipts retain only bounded counts and digests; gaps, overlap and incomplete retention stay unknown. Original single-input receipts remain compatible, and no session control or work acceptance is inferred.
 - A factual refresh no longer drops an Overview assessment button press. Returning
   to a mobile work board retains the requested reading position through its loading

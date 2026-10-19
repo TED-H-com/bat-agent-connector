@@ -4,7 +4,7 @@
 
 ## Choose the matching candidate package
 
-Start with the [published preview](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.6-preview.20261017), pinned to `f31e7964`: Connector 0.2.6 and desktop 0.1.2, with a source manifest and SHA-256 checksums. For later candidates, select a successful platform job from the [main desktop workflow](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) and match its exact source and installation-fixture records.
+The latest published preview is [v0.2.10-preview.20261018](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.10-preview.20261018): Connector 0.2.10 and desktop 0.1.6, with a source manifest and SHA-256 checksums. Choose newer published previews from the [releases page](https://github.com/TED-H-com/bat-agent-connector/releases), matching the tag, manifest and platform package; prereleases may not appear under GitHub's “Latest” label. Installation fixtures and CI are separate from native or live acceptance.
 
 | Platform | Artifact | Package |
 | --- | --- | --- |
@@ -230,6 +230,42 @@ Do not use a BAT remote token in the Dashboard API login field.
 
 ### 2. Install Connector
 
+For the operator/CLI path on Linux or macOS, install `uv`, Git and Python 3.10+
+first. The verified installer resolves an explicit release tag, checks its manifest
+and SHA256SUMS, installs the manifest's fixed commit with locked dependencies,
+and verifies source files, VCS identity, canonical skill and `batc --version`.
+It creates a private version directory under
+`~/.local/share/bat-agent-connector/releases/<commit>` and prints its
+`rollout-receipt.json` for [update enrollment](connector-updates.md).
+
+For an existing uv tool installation, see [adoption and restoration](connector-updates.md#adopting-an-existing-uv-tool-installation).
+
+The installer is new unreleased tooling: **v0.2.10 predates these scripts**.
+Once a release containing both installer scripts and the installer module is
+published, replace `INSTALLER_RELEASE_TAG` below with that exact published tag
+in both places (never `main`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/INSTALLER_RELEASE_TAG/scripts/install.sh | sh -s -- --tag INSTALLER_RELEASE_TAG
+```
+
+Add `~/.local/bin` to PATH. `--dry-run` verifies release metadata without writes;
+`--verify-only` verifies an existing installation and its receipt without writes.
+`--channel-check stable` refuses previews (default: `preview`).
+`--root /absolute/private/version-directory` selects a new version directory.
+Root requires `--allow-root`. Existing entrypoints/skills and update-managed
+installations are refused; configuration, credentials and device identity are
+never overwritten. Failed installs retain their private directory for inspection;
+they do not issue a successful rollout receipt. Use a new empty root for a retry.
+
+On Linux, `--enable-updates` also enrolls and schedules the user systemd timer.
+Otherwise run the printed `batc-update enable --channel preview --receipt ...`
+and `batc-update schedule` commands yourself. macOS supports installation and
+verification; the current automatic updater requires Linux.
+GitHub HTTPS/release authority is the trust boundary; checksums are not an
+independent signature. The bootstrap optionally uses `GH_TOKEN` for the release
+API only and never prints it.
+
 Install with `uv` on the central host. Until a formal release is selected, pin a reviewed commit instead of silently following changing `main`. Replace `REVIEWED_COMMIT` with the reviewed source commit matching your chosen desktop / service deployment:
 
 ```bash
@@ -241,6 +277,8 @@ A development checkout can instead use `uv sync --locked --extra dev`, with `uv 
 
 ### 3. Configure BAT access
 
+Linux operators can use the optional [user SSH tunnels and token-file provisioning helpers](../contrib/linux/README.md) with existing trusted SSH aliases and Bitwarden or command sources.
+
 If this host has the BAT desktop client's profiles:
 
 ```bash
@@ -249,6 +287,8 @@ batc hosts
 ```
 
 Import writes `~/.config/bat-agent-connector/hosts.toml` with writes disabled. It stores the endpoint, pinned TLS fingerprint and a **token reference**, not the token value. `batc hosts` probes configured hosts; a successful probe does not prove Git access or deployment readiness.
+
+Keep shared defaults in a public `hosts.toml` and private host definitions in untracked `hosts.d/90-private.toml` beside the effective config file (selected by `BATC_CONFIG`, or `BATC_CONFIG_DIR` when unset); the base file may be absent if fragments exist. Non-hidden `*.toml` fragments load in lexical filename order: tables merge recursively, while later scalars and arrays replace earlier values; defining a host in multiple files is an error. Fragments must be private regular files, not symlinks, owned by the current user where supported, with no group/other permissions on POSIX (`chmod 600`); use only `token_ref`, never token values. `batc import-bat` continues to write only `hosts.toml`.
 
 For a different profile location, use `batc import-bat --profiles-dir /path/to/profiles`. Preview generated configuration with `--output -`. Do not add `--force` merely to bypass an existing configuration.
 

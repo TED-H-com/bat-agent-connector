@@ -4,8 +4,12 @@ Connector **0.2.10** includes automatic updates (introduced in 0.2.7). Start wit
 [published preview](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.10-preview.20261018)
 and its matching source manifest and checksums.
 
-For an existing per-user Linux installation, an operator first installs a release
-containing `batc-update` and retains its `rollout-receipt.json`. Enrollment verifies
+The [verified operator installer](getting-started.md#2-install-connector)
+produces `rollout-receipt.json` in its private version directory after verifying
+the real installation. Use a published tag containing the installer (the current
+v0.2.10 preview predates it); the plain `uv tool install` alternative does not
+produce an enrollment receipt. On Linux retain this receipt and use its printed
+absolute path below. `--enable-updates` runs enrollment and scheduling for you. Enrollment verifies
 the receipt, installed source, canonical skill and the published release channel.
 It refuses unknown/customized installations rather than replacing their files.
 
@@ -38,10 +42,45 @@ last outcome. A changed or uncertain pointer is not reported as a known installe
 version. Configuration, credentials, user checkouts and operation journals are
 outside the package switch. See the [contract](design/connector-updates.md).
 
+## Adopting an existing uv tool installation
+
+Use a published tag containing the verified installer. Adoption checks
+`~/.config/bat-agent-connector/install-receipt-connector.json` against the default
+`~/.local/share/uv/tools/bat-agent-connector` environment, VCS metadata, Python
+sources, packaged skill, generic skill and three owned entrypoint symlinks.
+Customized, missing, foreign or already update-managed installations are refused.
+
+```bash
+python3 scripts/install_connector.py --tag <published-tag> --adopt-existing --enable-updates
+```
+
+The version may be the same or newer; an older version requires explicit
+`--allow-downgrade`. The normal verified installation goes into a new managed root.
+Checks precede replacing links and the generic skill; a failed swap restores
+already replaced links. The old uv environment and receipt remain untouched.
+`adoption-record.json` retains previous link targets, commit, version, skill digest
+and timestamps; `adopted-SKILL.md` retains the previous skill. Without
+`--enable-updates`, use the printed receipt enrollment commands.
+
+Before enrollment, restore using the retained installer:
+
+```bash
+python3 scripts/install_connector.py --restore-adopted /path/to/managed-release-root
+```
+
+Every current entrypoint must still point directly at that root and the skill must
+still match it. Restoration refuses changed links, including updater-managed links
+after enrollment; use updater rollback for managed updates. Running processes and
+application configuration remain unchanged.
+
+既有 uv tool 安裝可用 `--adopt-existing` 驗證並接管；保留原環境與收據。
+自行修改或已納入更新管理的安裝會被拒絕。啟用更新前可用
+`--restore-adopted` 還原；啟用後請沿既有更新回退流程操作。
+
 ## 發布與使用邊界
 
 Connector 自 0.2.7 起提供 Linux 使用者層級自動更新，目前已發布預覽版為 0.2.10。
-由管理者先安裝含 `batc-update` 的已發布套件，保留部署收據，再用上方指令
+驗證安裝器會產生 `rollout-receipt.json`；需選擇含安裝器的已發布 tag（0.2.10 尚未包含）。保留收據，再用上方指令
 選擇 `preview` 或 `stable` 並啟用排程。未知或被自行修改的安裝不會被接管。
 
 每小時自動檢查，最多錯開 15 分鐘。無人登入的主機需確認使用者 systemd

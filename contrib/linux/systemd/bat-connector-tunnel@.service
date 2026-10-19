@@ -1,0 +1,17 @@
+[Unit]
+Description=BAT Connector SSH tunnel (%i)
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/bat-agent-connector/tunnels/%i.env
+ExecStartPre=%h/.local/bin/batc-tunnel-check %h/.config/bat-agent-connector/tunnels/%i.env
+ExecStart=/usr/bin/ssh -N -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -L ${BATC_TUNNEL_LOCAL}:${BATC_TUNNEL_REMOTE} -- ${BATC_TUNNEL_SSH_ALIAS}
+Restart=always
+RestartSec=15s
+NoNewPrivileges=yes
+PrivateTmp=yes
+UMask=0077
+
+[Install]
+WantedBy=default.target
