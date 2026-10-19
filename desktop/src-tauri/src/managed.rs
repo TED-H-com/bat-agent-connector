@@ -47,12 +47,18 @@ impl Launch {
         if self.protocol != 1 || self.runtime_version != version {
             return Err("MANAGED_RUNTIME_PROTOCOL_MISMATCH".into());
         }
-        let url = self.config().validate()?;
+        let url = self
+            .config()
+            .validate()
+            .map_err(|_| "MANAGED_RUNTIME_ENDPOINT_INVALID")?;
         if url.scheme() != "http" || url.host_str() != Some("127.0.0.1") {
             return Err("MANAGED_RUNTIME_ENDPOINT_INVALID".into());
         }
-        self.identity().validate()?;
+        self.identity()
+            .validate()
+            .map_err(|_| "MANAGED_RUNTIME_IDENTITY_INVALID")?;
         credentials::validate_token(&self.token)
+            .map_err(|_| "MANAGED_RUNTIME_CREDENTIAL_INVALID".into())
     }
     pub fn config(&self) -> bridge::Config {
         bridge::Config {
@@ -149,6 +155,31 @@ impl Managed {
         }
     }
 
+    pub fn recover(&self) -> Result<Launch, String> {
+        if self.status.mode != "managed" || !self.status.ready {
+            return Err("MANAGED_RECOVERY_UNAVAILABLE".into());
+        }
+        let _guard = self
+            .serial
+            .try_lock()
+            .map_err(|_| "MANAGED_RECOVERY_BUSY")?;
+        let bytes = self.request("ensure")?;
+        let launch: Launch =
+            serde_json::from_slice(&bytes).map_err(|_| "MANAGED_RUNTIME_REPLY_INVALID")?;
+        launch.validate(
+            self.status
+                .runtime_version
+                .as_deref()
+                .ok_or("MANAGED_RUNTIME_UNAVAILABLE")?,
+        )?;
+        if Some(&launch.server_id) != self.status.server_id.as_ref()
+            || Some(&launch.principal_id) != self.status.principal_id.as_ref()
+        {
+            return Err("MANAGED_RECOVERY_IDENTITY_CHANGED".into());
+        }
+        Ok(launch)
+    }
+
     pub fn status(&self) -> Status {
         let mut status = self.status.clone();
         match crate::managed_login::enabled() {
@@ -232,6 +263,7 @@ impl Managed {
                 .map_err(|_| "MANAGED_RUNTIME_PIPE_FAILED");
             let _ = sender.send(result);
         });
+        let deadline = std::time::Instant::now() + Duration::from_secs(60);
         let reply = receiver.recv_timeout(Duration::from_secs(60));
         if reply.is_err() {
             let _ = child.kill(); // only the launcher handle we created, never a PID from disk.
@@ -239,7 +271,20 @@ impl Managed {
             return Err("MANAGED_RUNTIME_START_TIMEOUT".into());
         }
         let bytes = reply.unwrap().map_err(str::to_string)?;
-        let result = child.wait().map_err(|_| "MANAGED_RUNTIME_START_FAILED")?;
+        let result = loop {
+            if let Some(status) = child
+                .try_wait()
+                .map_err(|_| "MANAGED_RUNTIME_START_FAILED")?
+            {
+                break status;
+            }
+            if std::time::Instant::now() >= deadline {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err("MANAGED_RUNTIME_START_TIMEOUT".into());
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        };
         if !result.success() || bytes.len() as u64 > MAX_REPLY {
             return Err("MANAGED_RUNTIME_START_FAILED".into());
         }

@@ -99,7 +99,8 @@ impl Platform for WindowsLaunch<'_> {
         command.envs(crate::monitor_launch::environment(std::env::vars_os()));
         self.verify().map_err(|_| SpawnFailure::NotStarted)?;
         drop(mutex);
-        let child = command.spawn().map_err(|_| SpawnFailure::NotStarted)?;
+        let child = crate::windows_detach::spawn(&mut command, CREATE_NO_WINDOW)
+            .map_err(|_| SpawnFailure::NotStarted)?;
         self.child = Some(child);
         // Never force-kill a monitor that might already own tunnels. Incomplete evidence keeps intent.
         let held = WindowsProcess::from_child(self.child.as_ref().unwrap())

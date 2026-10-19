@@ -4,6 +4,8 @@ export const nativeDesktop = isTauri();
 export interface ConnectorResponse { status: number; data: any }
 export interface NativeStatus {
   configuration_source?: "managed" | "external";
+  managed_recovery?: string | null;
+  managed_rebind?: number | null;
   updates?: boolean; diagnostics_save?: boolean; app_build?: {version: string; commit: string | null};
   endpoint: string | null; error: string | null; credential_available: boolean;
   expected_actor?: string; credential_source?: "launch_environment" | "windows_credential_manager" | null;

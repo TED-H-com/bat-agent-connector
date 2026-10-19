@@ -36,6 +36,8 @@ pub mod unconfigured;
 pub mod windows;
 #[cfg(windows)]
 pub mod windows_bootstrap;
+#[cfg(any(windows, test))]
+pub mod windows_detach;
 #[cfg(windows)]
 pub mod windows_launcher;
 #[cfg(any(windows, test))]

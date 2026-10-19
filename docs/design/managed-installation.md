@@ -57,6 +57,55 @@ Expired/revoked credentials, invalid manifests, changed identity or missing read
 
 Explicit desktop Quit follows the existing Fleet shutdown guards and leaves the independent central service running. Stopping the managed service is separate and requires its own verified owner and safe-stop checks.
 
+## Recovery after the service exits
+
+The managed Dashboard checks local endpoint reachability with a two-second read
+bound. After at least ten seconds of failed reads, it reuses the existing serialized
+`Managed::request("ensure")` path with a sixty-second launcher deadline. Failed
+recovery backs off for 15, 30, then at most once per 60 seconds. Launcher and service
+kernel leases still decide ownership; no PID from disk is killed.
+
+Before rebinding, the Launch reply must pass the startup protocol, bundled runtime
+version, literal loopback endpoint and credential checks. Its server, principal and
+actor must match the original binding, and ordinary capabilities/bootstrap reads
+must verify the same identity. A successful rebind advances the bridge generation,
+invalidating in-flight responses and file scopes. A native recovery counter triggers
+fresh navigation/shell reads even when restart produces no event; failed views
+retry through the existing deferred-render guards. Failed initial managed reads
+remain eligible for native recovery; an explicit Disconnect disables it. It retains existing drafts,
+event checkpoints and operation keys, and never resends an application mutation.
+Disconnect, credential removal or switching configuration cancels a pending rebind.
+External-central connections never use this recovery loop, provision a local
+service or transfer a local credential to another endpoint. Recovery errors appear
+as short English/zh-TW status labels and visible recovery explanations, with a
+fixed diagnostic code in connection details;
+a changed identity stops automatic recovery until the connection is reviewed.
+
+### Windows job objects
+
+Console detachment (`DETACHED_PROCESS` / `CREATE_NEW_PROCESS_GROUP`, or the Fleet
+supervisor's `CREATE_NO_WINDOW`) does not escape a Windows Job Object. A job with
+`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` can terminate its inherited children when the
+launching session closes. This explains a possible external termination without a
+Python exception; it is a cause hypothesis, not a live-host diagnosis.
+
+The Connector and native Fleet supervisor query the launching job and request
+`CREATE_BREAKAWAY_FROM_JOB` (`0x01000000`) when `BREAKAWAY_OK` or
+`SILENT_BREAKAWAY_OK` permits it (also harmless outside a job). Unknown/restrictive
+policy keeps the existing flags; native access-denied refusal of the breakaway
+creation retries once without that flag. Each affected launch emits only one fixed
+lifetime diagnostic, with no paths, tokens or exception text. Connector warnings
+are written to its private `service.log`; Fleet records the current launch warning
+in native memory, exposes it in the localized Fleet view and also emits native stderr. A
+restrictive enclosing job can still end the background child, so detachment cannot
+promise survival against a policy that forbids it. POSIX retains `start_new_session`.
+
+References: Microsoft [Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects),
+[Nested Jobs](https://learn.microsoft.com/en-us/windows/win32/procthread/nested-jobs)
+and [process creation flags](https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags).
+Nested parent jobs may still constrain breakaway; creation refusal is handled
+without changing their policy, bypassing ownership checks or spawning duplicates.
+
 ## Evidence and delivery boundary
 
 Candidate source and fixture locations:

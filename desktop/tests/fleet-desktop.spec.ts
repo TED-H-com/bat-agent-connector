@@ -197,6 +197,21 @@ test('automatic login readback retains fixed original preview and does not auto-
  await setup(page);await page.evaluate(()=>{const e=(window as any).__fleet;e.doc.login_launch={configuration_binding:e.doc.configuration.binding,preview_id:'5'.repeat(32),summary:{launch_id:'5'.repeat(32),profiles:['profile-1'],dashboard:true,opens_bat:true},state:'attention',code:'BAT_READINESS_PENDING'}});await refresh(page);await expect(page.getByRole('button',{name:'Retry original launch'})).toBeVisible();expect(await calls(page,'preview_launch')).toHaveLength(0);expect(await calls(page,'launch')).toHaveLength(0);expect(await calls(page,'launch_status')).toContainEqual({action:'launch_status',launch_id:'5'.repeat(32)});
 });
 
+for (const locale of ['en-US','zh-TW']) test(`restricted launching job has a localized Fleet warning (${locale})`, async ({browser}) => {
+ const context=await browser.newContext({locale}),page=await context.newPage();
+ await setup(page);
+ await page.evaluate(()=>{(window as any).__fleet.doc.launch_warning='FLEET_SESSION_LIFETIME';});
+ await page.locator('[data-fleet-action="refresh"]').click();
+ const warning=page.locator('[data-fleet-lifetime]');
+ await expect(warning.locator('p')).toHaveText(locale==='zh-TW'
+   ?'啟動環境不允許背景連線監控獨立執行。關閉啟動工作階段時，本機連線可能中斷。'
+   :'The launching environment prevents the connection monitor from running independently. Local connections may stop when the launching session ends.');
+ await warning.locator('summary').click();
+ await expect(warning.locator('code')).toHaveText('FLEET_SESSION_LIFETIME');
+ expect(await calls(page,'ensure_monitor')).toHaveLength(0);
+ await context.close();
+});
+
 for (const locale of ['en-US', 'zh-TW']) test(`Tailscale wake and automatic retry status keeps codes in details ${locale}`, async ({browser}) => {
  const context = await browser.newContext({locale, viewport: {width: 390, height: 900}});
  const page = await context.newPage();
