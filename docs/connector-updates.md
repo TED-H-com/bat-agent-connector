@@ -4,8 +4,12 @@ Connector **0.2.10** includes automatic updates (introduced in 0.2.7). Start wit
 [published preview](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.10-preview.20261018)
 and its matching source manifest and checksums.
 
-For an existing per-user Linux installation, an operator first installs a release
-containing `batc-update` and retains its `rollout-receipt.json`. Enrollment verifies
+The [verified operator installer](getting-started.md#2-install-connector)
+produces `rollout-receipt.json` in its private version directory after verifying
+the real installation. Use a published tag containing the installer (the current
+v0.2.10 preview predates it); the plain `uv tool install` alternative does not
+produce an enrollment receipt. On Linux retain this receipt and use its printed
+absolute path below. `--enable-updates` runs enrollment and scheduling for you. Enrollment verifies
 the receipt, installed source, canonical skill and the published release channel.
 It refuses unknown/customized installations rather than replacing their files.
 
@@ -41,7 +45,7 @@ outside the package switch. See the [contract](design/connector-updates.md).
 ## 發布與使用邊界
 
 Connector 自 0.2.7 起提供 Linux 使用者層級自動更新，目前已發布預覽版為 0.2.10。
-由管理者先安裝含 `batc-update` 的已發布套件，保留部署收據，再用上方指令
+驗證安裝器會產生 `rollout-receipt.json`；需選擇含安裝器的已發布 tag（0.2.10 尚未包含）。保留收據，再用上方指令
 選擇 `preview` 或 `stable` 並啟用排程。未知或被自行修改的安裝不會被接管。
 
 每小時自動檢查，最多錯開 15 分鐘。無人登入的主機需確認使用者 systemd

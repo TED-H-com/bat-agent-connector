@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Add a pinned-tag Linux/macOS Connector installer that verifies release/source integrity and produces an updater enrollment receipt.
+
 - Add optional Linux user SSH tunnel units, loopback validation and pluggable Bitwarden/command token-file provisioning helpers.
 
 - Allow automation `open_fleet` callers to set Fleet actor, read-only mode and idle timeout.
