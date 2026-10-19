@@ -9213,8 +9213,11 @@ var STRINGS = {
 		...findingNameStrings["zh-TW"],
 		fleet_session_lifetime: "啟動環境不允許背景連線監控獨立執行。關閉啟動工作階段時，本機連線可能中斷。",
 		managed_service_recovering: "正在重新啟動本機背景服務…",
-		managed_service_retry: "本機背景服務無法恢復，稍後會自動重試。既有資料已保留；請查看連線詳細資料。",
-		managed_service_identity: "本機服務身分已變更，已停止自動恢復。請在設定中檢查連線；既有資料已保留。",
+		managed_service_recovering_help: "正在重新啟動桌面的本機背景服務。既有工作與資料會保留。",
+		managed_service_retry: "本機背景服務恢復失敗",
+		managed_service_retry_help: "本機背景服務無法恢復，稍後會自動重試。既有資料已保留；請查看連線詳細資料。",
+		managed_service_identity: "本機服務身分已變更",
+		managed_service_identity_help: "本機服務身分已變更，已停止自動恢復。請在設定中檢查連線；既有資料已保留。",
 		managed_recovery_title: "本機背景服務尚未就緒",
 		managed_recovery_help: "既有資料與背景工作會保留。若舊版本仍有工作，先讓它完成，再結束並重新開啟桌面程式。此次啟動錯誤列在下方，也可以展開「加入既有的 Connector」設定連線。",
 		...instructionReceiptStrings["zh-TW"],
@@ -10872,9 +10875,12 @@ var STRINGS = {
 		...maintenanceFindingStrings.en,
 		...findingNameStrings.en,
 		fleet_session_lifetime: "The launching environment prevents the connection monitor from running independently. Local connections may stop when the launching session ends.",
-		managed_service_recovering: "Restarting the local background service…",
-		managed_service_retry: "The local background service could not recover. It will retry automatically. Existing data is retained; see connection details.",
-		managed_service_identity: "The local service identity changed. Automatic recovery has stopped. Review the connection in Settings; existing data is retained.",
+		managed_service_recovering: "Restarting local service…",
+		managed_service_recovering_help: "This Dashboard is restarting its local background service. Existing work and data are retained.",
+		managed_service_retry: "Local service recovery failed",
+		managed_service_retry_help: "The local background service could not recover. It will retry automatically. Existing data is retained; see connection details.",
+		managed_service_identity: "Local service identity changed",
+		managed_service_identity_help: "The local service identity changed. Automatic recovery has stopped. Review the connection in Settings; existing data is retained.",
 		managed_recovery_title: "Local background service is not ready",
 		managed_recovery_help: "Existing data and background work are retained. If an older version still has work, let it finish, then quit and reopen the desktop app. The startup error appears below. You can also join another Connector.",
 		...instructionReceiptStrings["en-US"],
@@ -65107,18 +65113,24 @@ function paintConnection(waiting = false, paused = false) {
 		offline: "down",
 		reconnecting: "reconnecting"
 	}[status];
-	live.textContent = t(managedRecoveryKey(state.managedRecovery) || "ui_" + status);
-	let detail = document.getElementById("managed-recovery-details");
-	if (state.managedRecovery && !detail) {
-		detail = h("details", { id: "managed-recovery-details" }, h("summary", {}, t("connection_details")), h("code"));
-		live.after(detail);
+	const recoveryKey = managedRecoveryKey(state.managedRecovery);
+	live.textContent = t(recoveryKey || "ui_" + status);
+	let notice = document.getElementById("managed-recovery-notice");
+	if (state.managedRecovery && !notice) {
+		notice = h("aside", {
+			id: "managed-recovery-notice",
+			class: "panel",
+			role: "status"
+		}, h("p"), h("details", { id: "managed-recovery-details" }, h("summary", {}, t("connection_details")), h("code")));
+		live.closest("header").after(notice);
 	}
-	if (detail) {
-		detail.hidden = !state.managedRecovery;
-		detail.querySelector("summary").textContent = t("connection_details");
-		detail.querySelector("code").textContent = state.managedRecovery || "";
+	if (notice) {
+		notice.hidden = !state.managedRecovery;
+		notice.querySelector("p").textContent = recoveryKey ? t(recoveryKey + "_help") : "";
+		notice.querySelector("summary").textContent = t("connection_details");
+		notice.querySelector("code").textContent = state.managedRecovery || "";
 	}
-	live.title = t(paused ? "sync_actions_paused" : waiting ? "sync_waiting" : status === "connected" ? "desktop_polling" : "offline_actions_paused");
+	live.title = recoveryKey ? t(recoveryKey + "_help") : t(paused ? "sync_actions_paused" : waiting ? "sync_waiting" : status === "connected" ? "desktop_polling" : "offline_actions_paused");
 	for (const paint of [...connectionPainters]) paint();
 }
 var managedStatusAt = 0;
@@ -65134,7 +65146,11 @@ async function refreshManagedRecovery() {
 		paintConnection();
 		if (status.configuration_source === "managed" && Number.isSafeInteger(status.managed_rebind) && status.managed_rebind > (state.managedRebind || 0)) {
 			state.managedRebind = status.managed_rebind;
-			if (!state.token || state.nativeBusy) return;
+			if (state.nativeBusy) return;
+			if (!state.token) {
+				if (status.connected) await nativeTransition("recover");
+				return;
+			}
 			await Promise.allSettled([workspaceNav?.refresh(), shell?.refresh()]);
 			if (epoch !== state.epoch) return;
 			if (!state.viewReady || document.getElementById("main").querySelector("[data-api-error]")) {
@@ -69279,7 +69295,7 @@ async function nativeTransition(kind, config = null) {
 					await activate(caps, status.endpoint);
 				} catch (error) {
 					if (attempt === state.nativeAttempt) {
-						await nativeDisconnect();
+						if (kind !== "recover") await nativeDisconnect();
 						disconnect();
 					}
 					throw error;
@@ -71684,8 +71700,10 @@ async function start() {
 	if (nativeDesktop) {
 		clearToken();
 		const attempt = ++state.nativeAttempt;
+		let startupManaged = false;
 		try {
 			const status = await nativeStatus();
+			startupManaged = status.configuration_source === "managed";
 			if (!status.error && status.credential_available) {
 				state.nativeBusy = true;
 				route().catch(() => {});
@@ -71699,7 +71717,7 @@ async function start() {
 			if (attempt === state.nativeAttempt) {
 				disconnect();
 				state.connectionError = error;
-				await nativeDisconnect().catch(() => {});
+				if (!startupManaged) await nativeDisconnect().catch(() => {});
 			}
 		} finally {
 			if (attempt === state.nativeAttempt) state.nativeBusy = false;
