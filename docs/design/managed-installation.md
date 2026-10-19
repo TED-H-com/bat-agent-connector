@@ -69,7 +69,9 @@ Before rebinding, the Launch reply must pass the startup protocol, bundled runti
 version, literal loopback endpoint and credential checks. Its server, principal and
 actor must match the original binding, and ordinary capabilities/bootstrap reads
 must verify the same identity. A successful rebind advances the bridge generation,
-invalidating in-flight responses and file scopes. It retains existing drafts,
+invalidating in-flight responses and file scopes. A native recovery counter triggers
+fresh navigation/shell reads even when restart produces no event; failed views
+retry through the existing deferred-render guards. It retains existing drafts,
 event checkpoints and operation keys, and never resends an application mutation.
 Disconnect, credential removal or switching configuration cancels a pending rebind.
 External-central connections never use this recovery loop, provision a local

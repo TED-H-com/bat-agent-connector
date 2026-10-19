@@ -808,11 +808,26 @@ let managedStatusAt = 0;
 async function refreshManagedRecovery() {
   if (!nativeDesktop || Date.now() - managedStatusAt < 3000) return;
   managedStatusAt = Date.now();
+  const epoch = state.epoch;
   try {
     const status = await nativeStatus();
+    if (epoch !== state.epoch) return;
     state.managedRecovery = status.managed_recovery || null;
     if (status.configuration_source === 'managed' && status.endpoint) state.endpoint = status.endpoint;
     paintConnection();
+    if (status.configuration_source === 'managed' && Number.isSafeInteger(status.managed_rebind)
+      && status.managed_rebind > (state.managedRebind || 0)) {
+      state.managedRebind = status.managed_rebind;
+      if (!state.token || state.nativeBusy) return;
+      // A restart need not create an event. Recover navigation reads without
+      // remounting an active form or inventing a server event/checkpoint.
+      await Promise.allSettled([workspaceNav?.refresh(), shell?.refresh()]);
+      if (epoch !== state.epoch) return;
+      if (!state.viewReady || document.getElementById('main').querySelector('[data-api-error]')) {
+        if (editing || typing()) idleReload = route;
+        else await route();
+      }
+    }
   } catch { /* Existing transport health remains authoritative if native IPC fails. */ }
 }
 let foregroundVersion = 0, wakeEventPoll = null;

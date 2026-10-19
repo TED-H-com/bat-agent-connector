@@ -52805,6 +52805,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 	refresh().catch(() => {});
 	return {
 		box,
+		refresh,
 		setWorkspace(id, source, all = false) {
 			if (pmWorkspace === id && bindingSource === source && globalTree === all) return;
 			pmWorkspace = id;
@@ -65116,11 +65117,23 @@ var managedStatusAt = 0;
 async function refreshManagedRecovery() {
 	if (!nativeDesktop || Date.now() - managedStatusAt < 3e3) return;
 	managedStatusAt = Date.now();
+	const epoch = state.epoch;
 	try {
 		const status = await nativeStatus();
+		if (epoch !== state.epoch) return;
 		state.managedRecovery = status.managed_recovery || null;
 		if (status.configuration_source === "managed" && status.endpoint) state.endpoint = status.endpoint;
 		paintConnection();
+		if (status.configuration_source === "managed" && Number.isSafeInteger(status.managed_rebind) && status.managed_rebind > (state.managedRebind || 0)) {
+			state.managedRebind = status.managed_rebind;
+			if (!state.token || state.nativeBusy) return;
+			await Promise.allSettled([workspaceNav?.refresh(), shell?.refresh()]);
+			if (epoch !== state.epoch) return;
+			if (!state.viewReady || document.getElementById("main").querySelector("[data-api-error]")) {
+				if (editing || typing()) idleReload = route;
+				else await route();
+			}
+		}
 	} catch {}
 }
 var foregroundVersion = 0;

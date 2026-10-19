@@ -513,6 +513,7 @@ pub struct NativeStatus {
     pub configuration_file: Option<String>,
     pub connected: bool,
     pub managed_recovery: Option<String>,
+    pub managed_rebind: Option<u64>,
 }
 
 // Never serialized: credential identity remains native-only even for identical actor/scopes.
@@ -532,6 +533,7 @@ struct ConnectionState {
     generation: u64,
     managed: bool,
     recovery_enabled: bool,
+    managed_rebind: u64,
     recovery_error: Option<String>,
     config: Result<Config, String>,
     environment: Option<Zeroizing<String>>,
@@ -647,6 +649,7 @@ impl Bridge {
                 generation: 0,
                 managed: false,
                 recovery_enabled: false,
+                managed_rebind: 0,
                 recovery_error: None,
                 config,
                 environment,
@@ -711,6 +714,7 @@ impl Bridge {
                 .map(|p| p.to_string_lossy().into_owned()),
             connected: state.active.is_some(),
             managed_recovery: state.recovery_error.clone(),
+            managed_rebind: state.managed.then_some(state.managed_rebind),
         }
     }
     // No bearer on the liveness read. Any HTTP response is reachable: authentication,
@@ -815,6 +819,7 @@ impl Bridge {
             return Err("MANAGED_RECOVERY_CANCELLED".into());
         }
         state.generation += 1;
+        state.managed_rebind += 1;
         state.config = Ok(config.clone());
         state.environment = Some(launch.token.clone());
         state.active = Some(Active {
@@ -4468,6 +4473,7 @@ mod tests {
             .unwrap();
         assert_eq!(bridge.status().endpoint.as_deref(), Some(endpoint.as_str()));
         assert!(bridge.status().connected);
+        assert_eq!(bridge.status().managed_rebind, Some(1));
         assert!(bridge.state.lock().unwrap().generation > old_generation);
         bridge
             .request(get("/events?after=0&limit=100"))
