@@ -15,18 +15,23 @@ The Connector's single configured SSH alias is an explicitly `configured` route;
 no alias means no tunnel route, rather than inventing one.
 
 If status identifies exactly one peer at the configured tailnet IP but direct proof
-is missing, selection sends up to three `tailscale ping --c 1 --timeout <bounded> <IP>`
-commands, then rechecks status after each. MagicDNS names are never used. Unknown,
-ambiguous or malformed status never authorizes wake traffic; ping/DERP success alone
-never authorizes a direct route. Wake, readback and increasing 100/200 ms retry delays
-share the existing direct probe and total selection deadlines. The per-host policy
-retains an atomic wake reservation across supervisor cycles and selection-generation
-changes: cooldown grows from 5 to 10, 20, 40 and at most 60 seconds. A direct observation
-resets the failure exponent; cancellation retains the charged cooldown. Independent
-hosts and LAN probes do not wait on a shared lock or serial wake queue. Pending wake
-status is `TAILSCALE_WAKING`; wake transitions notify the native monitor to publish
-progress without waiting for its regular one-second tick. Final unavailability
-remains `ROUTE_UNAVAILABLE`.
+is missing, selection reserves a wake and returns without waiting for it. The native
+supervisor starts an owned background `tailscale ping --c 3 --timeout 2s <IP>` sequence
+with a separate five-second absolute deadline, independent of `direct_probe_ms` and
+the two-second selection window. MagicDNS names are never used. Unknown, ambiguous
+or malformed status never authorizes wake traffic. Ping/DERP success alone never
+authorizes a direct route: completion notifies the supervisor to re-run selection
+immediately, using fresh status and TCP evidence instead of waiting fifteen seconds.
+
+The per-host policy retains one wake reservation/task across supervisor cycles, and
+an exponential cooldown after each sequence: 5, 10, 20, 40 and at most 60 seconds.
+A direct observation resets the failure exponent. Selection/configuration generation
+changes and supervisor shutdown abort the wake; shutdown joins it. Policy drop also
+aborts it. Cancellation preserves the charged cooldown and stale selection workers
+cannot queue a wake after invalidation. No policy lock is held across a probe await,
+and independent hosts do not share a serial wake queue. Pending/reserved and running
+wakes publish `TAILSCALE_WAKING`; wake transitions interrupt the regular one-second
+native idle wait. Final unavailability remains `ROUTE_UNAVAILABLE`.
 
 Two intentional corrections to historical Kit behavior are part of this port:
 
@@ -74,8 +79,10 @@ No alias, endpoint, Tailscale payload or process output is serialized as status.
 The injectable probe boundary has no global lock or serial host queue. Independent host
 selection futures can run concurrently. Direct and LAN checks share a finite total
 selection deadline; each TCP or local status call is also bounded by the inventory's
-probe budget. Cancelling an attempt drops TCP sockets and terminates only the owned
-status or ping child via its retained process object, never a PID lookup or process-tree search.
+probe budget. Wakes have a separate five-second limit. Cancelling a selection drops
+its TCP sockets and status child; cancelling the policy-owned wake drops its ping
+child. Termination uses only the retained process object, never a PID lookup or
+process-tree search.
 The native status adapter uses a fixed absolute, canonical trusted Tailscale executable
 with fixed `status --json` or IP-only ping arguments, cleared environment, null
 stdin/stderr and bounded status stdout (ping stdout is discarded). Windows retains

@@ -3,7 +3,8 @@
 ## Next release (unreleased)
 
 - Fleet wakes uniquely identified idle Tailscale peers by their configured IP before
-  declaring a route unavailable, with bounded retries, a capped cooldown and localized
+  declaring a route unavailable, with a separate bounded background wake window,
+  a capped cooldown and localized
   connection status in English and Traditional Chinese.
 
 - Fix Windows SSH tunnel launches failing with OWNER_UNPROVEN by constructing native paths and comparing executable paths independently of separator spelling and ASCII case.

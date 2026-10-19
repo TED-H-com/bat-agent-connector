@@ -219,3 +219,20 @@ for (const locale of ['en-US', 'zh-TW']) test(`Tailscale wake and automatic retr
  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
  await context.close();
 });
+
+test('desktop Fleet preserves unmapped blocking reasons and native diagnostic codes', async ({page}) => {
+ await setup(page);
+ const region = page.locator('.fleet-desktop');
+ for (const native of [false, true]) {
+  await page.evaluate((native: boolean) => {
+   const row = (window as any).__fleet.doc.readiness.hosts[0];
+   Object.assign(row, {level: 'down', code: native ? 'OWNER_UNPROVEN' : null, blocking: native ? 'tls' : 'OWNER_UNPROVEN'});
+  }, native);
+  await region.getByRole('button', {name: 'Read status', exact: true}).click();
+  const status = region.locator('[data-fleet-route-status]');
+  await expect(status.getByText('Details: OWNER_UNPROVEN', {exact: true})).toBeVisible();
+  await status.locator('summary').click();
+  await expect(status.locator('code').filter({hasText: 'OWNER_UNPROVEN'})).toBeVisible();
+  if (native) await expect(status.locator('code').filter({hasText: 'tls'})).toBeVisible();
+ }
+});

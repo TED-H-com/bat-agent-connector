@@ -141,9 +141,8 @@ impl RouteProbe for NativeRouteProbe {
             if remaining.is_zero() {
                 return false;
             }
-            let bounded = format!("{}ms", remaining.as_millis().clamp(1, 1000));
             command
-                .args(["ping", "--c", "1", "--timeout", &bounded, ip])
+                .args(["ping", "--c", "3", "--timeout", "2s", ip])
                 .stdout(Stdio::null());
             let Ok(mut child) = command.spawn() else {
                 return false;

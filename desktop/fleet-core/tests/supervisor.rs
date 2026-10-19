@@ -1316,45 +1316,82 @@ async fn powershell_sparse_layers_remain_false_and_strict_validation_is_preserve
     assert!(Status::parse(&serde_json::to_vec(&doc).unwrap(), &config, r.epoch(), 1100).is_err());
 }
 
-struct WakingRoutes;
+struct WakingRoutes(std::sync::atomic::AtomicBool);
 impl RouteProbe for WakingRoutes {
     fn tailscale_direct<'a>(&'a self, _: &'a str, _: Instant) -> ProbeFuture<'a> {
         Box::pin(async { false })
     }
     fn tailscale_peer<'a>(
         &'a self,
-        _: &'a str,
+        ip: &'a str,
         _: Instant,
     ) -> bat_fleet_core::route::PeerFuture<'a> {
-        Box::pin(async { bat_fleet_core::route::TailscalePeer::Idle })
+        Box::pin(async move {
+            use bat_fleet_core::route::TailscalePeer;
+            if ip != "100.64.0.1" {
+                TailscalePeer::Unknown
+            } else if self.0.load(std::sync::atomic::Ordering::SeqCst) {
+                TailscalePeer::Direct
+            } else {
+                TailscalePeer::Idle
+            }
+        })
     }
     fn tailscale_wake<'a>(&'a self, _: &'a str, _: Instant) -> ProbeFuture<'a> {
-        Box::pin(std::future::pending())
+        Box::pin(async move {
+            tokio::time::sleep(Duration::from_millis(1500)).await;
+            self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+            true
+        })
     }
     fn tcp<'a>(
         &'a self,
-        _: &'a bat_fleet_core::inventory::Endpoint,
+        ep: &'a bat_fleet_core::inventory::Endpoint,
         _: Instant,
     ) -> ProbeFuture<'a> {
-        Box::pin(async { false })
+        Box::pin(async move { ep.address == "100.64.0.1" })
     }
 }
 #[tokio::test(start_paused = true)]
-async fn wake_transition_interrupts_native_idle_wait_and_publishes_safe_pending_status() {
-    let (_fixture, _shared, mut runtime) = fixture_with_routes(Arc::new(WakingRoutes));
+async fn wake_progress_publishes_pending_and_completion_reselects_without_fifteen_second_wait() {
+    let (fixture, shared, mut runtime) = fixture_with_routes(Arc::new(WakingRoutes(false.into())));
+    let path = fixture.0.join("kit/fleet-inventory.json");
+    let mut doc: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert_eq!(doc["direct_probe_ms"], 600);
+    doc["hosts"][0]["routes"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|route| route["kind"] == "direct");
+    doc["hosts"][0]["provision_route"] = json!("direct");
+    std::fs::write(&path, serde_json::to_vec(&doc).unwrap()).unwrap();
     runtime.tick(1000).await.unwrap();
     let start = Instant::now();
     runtime.route_progress().await;
-    assert_eq!(
-        Instant::now(),
-        start,
-        "wake notification must precede the one-second native idle wait"
-    );
+    assert_eq!(Instant::now(), start);
     let status = runtime.tick(1001).await.unwrap();
-    assert!(status
+    let row = status
         .entries
         .iter()
-        .any(|row| row.code.as_deref() == Some("TAILSCALE_WAKING") && row.level == "degraded"));
+        .find(|row| row.name == "node-1")
+        .unwrap();
+    assert_eq!(row.code.as_deref(), Some("TAILSCALE_WAKING"));
+    assert_eq!(row.level, "degraded");
+    assert!(!shared
+        .lock()
+        .unwrap()
+        .launches
+        .contains(&"node-1".to_owned()));
     assert!(!serde_json::to_string(&status).unwrap().contains("100.64."));
-    runtime.shutdown(1002).await.unwrap();
+    runtime.route_progress().await;
+    assert_eq!(Instant::now() - start, Duration::from_millis(1500));
+    runtime.tick(2501).await.unwrap();
+    tokio::task::yield_now().await;
+    runtime.tick(2502).await.unwrap();
+    assert!(shared
+        .lock()
+        .unwrap()
+        .launches
+        .contains(&"node-1".to_owned()));
+    runtime.shutdown(2503).await.unwrap();
 }

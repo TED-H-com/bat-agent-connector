@@ -18,10 +18,18 @@ test('Fleet wake, retry and pending messages are localized with raw codes only i
       const view = fleetStatus({code}, {h, t});
       assert.deepEqual(view.children, [
         h('span', {role: 'status'}, t(key)),
-        h('details', {}, h('summary', {}, t('fleet_status_details')), h('code', {}, code)),
+        h('details', {}, h('summary', {}, t('fleet_status_details')), h('code', {}, code), null),
       ]);
     }
-    assert.equal(fleetStatus({code: 'OTHER_CODE'}, {h, t}), null);
+    for (const row of [{code: 'OWNER_UNPROVEN', blocking: 'tunnel'}, {blocking: 'OWNER_UNPROVEN'}, {blocking: 'tls'}]) {
+      const reason = row.code || row.blocking;
+      const view = fleetStatus(row, {h, t});
+      const details = view.children[1] as ReturnType<typeof h>;
+      assert.deepEqual(details.children[0], h('summary', {}, `${t('fleet_status_details')}: ${reason}`));
+      assert.deepEqual(details.children[1], h('code', {}, reason));
+      if (row.code) assert.deepEqual(details.children[2], h('code', {}, row.blocking));
+    }
+    assert.ok(fleetStatus({blocking: 'PROBE_PENDING'}, {h, t}));
     assert.equal(fleetStatus(null, {h, t}), null);
   }
 });

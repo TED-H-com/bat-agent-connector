@@ -90,6 +90,7 @@ impl<C> Host<C> {
         if let Some(worker) = self.worker.take() {
             worker.cancel().await;
         }
+        self.policy.stop_wake().await;
         self.observation = None;
         self.next_probe = 0;
     }
@@ -755,6 +756,12 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                 },
             }
         }
+        host.policy.start_wake(self.route_probe.clone());
+        if host.policy.take_wake_completion() {
+            // A fresh status/TCP observation, never the ping result, decides
+            // whether the direct route is eligible after wake completion.
+            host.next_probe = 0;
+        }
         let bat_probes = self
             .hosts
             .values()
@@ -765,7 +772,7 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
             .values()
             .filter(|h| h.kind == ProbeKind::Bat && matches!(h.worker, Some(Work::Route(_))))
             .count();
-        if host.worker.is_none() && now >= host.next_probe {
+        if host.worker.is_none() && now >= host.next_probe && !host.policy.waking() {
             if host.owned.is_some() {
                 if host.kind == ProbeKind::Bat && bat_probes >= 3 {
                     return Ok(());

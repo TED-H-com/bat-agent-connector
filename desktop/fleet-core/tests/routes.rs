@@ -564,8 +564,17 @@ async fn preference_update_preserves_fast_failure_counts_and_alias_demotion() {
 struct WakeProbe {
     before: Value,
     after: Value,
-    pings: Mutex<Vec<(String, Instant)>>,
+    pings: std::sync::Arc<Mutex<Vec<(String, Instant)>>>,
+    ready: std::sync::atomic::AtomicBool,
+    active: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    delay: Duration,
     hang: bool,
+}
+struct RunningWake(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+impl Drop for RunningWake {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+    }
 }
 impl WakeProbe {
     fn idle(recovers: bool) -> Self {
@@ -577,7 +586,10 @@ impl WakeProbe {
         Self {
             before,
             after,
-            pings: Mutex::default(),
+            pings: Default::default(),
+            ready: false.into(),
+            active: Default::default(),
+            delay: Duration::ZERO,
             hang: false,
         }
     }
@@ -591,10 +603,10 @@ impl RouteProbe for WakeProbe {
     }
     fn tailscale_peer<'a>(&'a self, ip: &'a str, _: Instant) -> PeerFuture<'a> {
         Box::pin(async move {
-            let doc = if self.count() == 0 {
-                &self.before
-            } else {
+            let doc = if self.ready.load(std::sync::atomic::Ordering::SeqCst) {
                 &self.after
+            } else {
+                &self.before
             };
             tailscale_peer(&serde_json::to_vec(doc).unwrap(), ip)
         })
@@ -602,11 +614,15 @@ impl RouteProbe for WakeProbe {
     fn tailscale_wake<'a>(&'a self, ip: &'a str, deadline: Instant) -> ProbeFuture<'a> {
         Box::pin(async move {
             self.pings.lock().unwrap().push((ip.into(), deadline));
+            self.active
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let _running = RunningWake(self.active.clone());
             if self.hang {
-                std::future::pending().await
-            } else {
-                true
+                std::future::pending::<()>().await;
             }
+            tokio::time::sleep(self.delay).await;
+            self.ready.store(true, std::sync::atomic::Ordering::SeqCst);
+            true
         })
     }
     fn tcp<'a>(&'a self, _: &'a Endpoint, _: Instant) -> ProbeFuture<'a> {
@@ -616,16 +632,41 @@ impl RouteProbe for WakeProbe {
 async fn wake_select(
     routes: &Routes,
     policy: &HostPolicy,
-    probe: &WakeProbe,
+    probe: &std::sync::Arc<WakeProbe>,
     budget: Duration,
 ) -> Result<RouteChoice, &'static str> {
-    select(routes, policy, probe, generation(), 0, budget).await
+    let result = select(routes, policy, probe.as_ref(), generation(), 0, budget).await;
+    policy.start_wake(probe.clone());
+    result
+}
+async fn finish_wake(policy: &HostPolicy) {
+    while policy.waking() {
+        policy.wake_progress().await;
+    }
 }
 #[tokio::test(start_paused = true)]
-async fn idle_peer_recovers_after_ip_wake_and_still_requires_direct_evidence() {
+async fn six_hundred_ms_probe_does_not_cancel_fifteen_hundred_ms_ip_wake() {
+    // The inventory fixture sets direct_probe_ms=600, just like a small deployment budget.
     let routes = routes(&["direct"]);
     let policy = HostPolicy::new(&routes, generation());
-    let probe = WakeProbe::idle(true);
+    let mut probe = WakeProbe::idle(true);
+    probe.delay = Duration::from_millis(1500);
+    let probe = std::sync::Arc::new(probe);
+    let start = Instant::now();
+    assert!(matches!(
+        wake_select(&routes, &policy, &probe, Duration::from_secs(2)).await,
+        Err("TAILSCALE_WAKING")
+    ));
+    assert!(Instant::now() - start < Duration::from_millis(600));
+    assert!(policy.waking());
+    tokio::time::sleep(Duration::from_millis(650)).await;
+    assert_eq!(probe.active.load(std::sync::atomic::Ordering::SeqCst), 1);
+    assert!(matches!(
+        wake_select(&routes, &policy, &probe, Duration::from_secs(2)).await,
+        Err("TAILSCALE_WAKING")
+    ));
+    finish_wake(&policy).await;
+    assert!(Instant::now() - start >= Duration::from_millis(1500));
     let choice = wake_select(&routes, &policy, &probe, Duration::from_secs(2))
         .await
         .ok()
@@ -636,60 +677,62 @@ async fn idle_peer_recovers_after_ip_wake_and_still_requires_direct_evidence() {
     assert!(!policy.waking());
 }
 #[tokio::test(start_paused = true)]
-async fn failed_wakes_are_bounded_and_rate_limited_across_cycles_with_capped_backoff() {
+async fn failed_wakes_are_rate_limited_across_cycles_with_capped_backoff() {
     let routes = routes(&["direct"]);
     let policy = HostPolicy::new(&routes, generation());
-    let probe = WakeProbe::idle(false);
+    let probe = std::sync::Arc::new(WakeProbe::idle(false));
     for (cycle, delay) in [5, 10, 20, 40, 60, 60].into_iter().enumerate() {
-        let start = Instant::now();
+        assert!(matches!(
+            wake_select(&routes, &policy, &probe, Duration::from_secs(2)).await,
+            Err("TAILSCALE_WAKING")
+        ));
+        finish_wake(&policy).await;
+        let finished = Instant::now();
+        assert_eq!(probe.count(), cycle + 1);
+        // Ping success without fresh direct evidence remains unavailable.
         assert!(matches!(
             wake_select(&routes, &policy, &probe, Duration::from_secs(2)).await,
             Err("ROUTE_UNAVAILABLE")
         ));
-        assert_eq!(probe.count(), 3 * (cycle + 1));
-        let pings = probe.pings.lock().unwrap().clone();
-        let batch = &pings[3 * cycle..];
-        assert!(batch[1].1 > batch[0].1);
-        assert!(batch[2].1 > batch[1].1);
-        assert!(Instant::now() - start <= Duration::from_millis(600));
-        assert!(!policy.waking());
-        // Concurrent selection and supervisor cycles share the same reservation.
-        assert!(
-            wake_select(&routes, &policy, &probe, Duration::from_secs(2))
-                .await
-                .is_err()
-        );
-        assert_eq!(probe.count(), 3 * (cycle + 1));
-        tokio::time::sleep_until(start + Duration::from_secs(delay) - Duration::from_millis(1))
+        tokio::time::sleep_until(finished + Duration::from_secs(delay) - Duration::from_millis(1))
             .await;
         assert!(
             wake_select(&routes, &policy, &probe, Duration::from_secs(2))
                 .await
                 .is_err()
         );
-        assert_eq!(probe.count(), 3 * (cycle + 1));
+        assert_eq!(probe.count(), cycle + 1);
         tokio::time::sleep(Duration::from_millis(1)).await;
     }
 }
 #[tokio::test(start_paused = true)]
-async fn wake_deadlines_fit_probe_and_selection_budgets_even_when_ping_ignores_deadline() {
+async fn wake_has_its_own_five_second_deadline_independent_of_selection_budget() {
     for budget in [Duration::from_millis(40), Duration::from_secs(2)] {
         let routes = routes(&["direct"]);
         let policy = HostPolicy::new(&routes, generation());
         let mut probe = WakeProbe::idle(false);
         probe.hang = true;
+        let probe = std::sync::Arc::new(probe);
         let start = Instant::now();
+        assert!(matches!(
+            wake_select(&routes, &policy, &probe, budget).await,
+            Err("TAILSCALE_WAKING")
+        ));
+        assert!(Instant::now() - start < budget);
+        tokio::time::sleep(Duration::from_millis(650)).await;
+        assert!(policy.waking());
+        finish_wake(&policy).await;
+        assert_eq!(Instant::now() - start, Duration::from_secs(5));
+        assert_eq!(probe.count(), 1);
+        assert_eq!(probe.active.load(std::sync::atomic::Ordering::SeqCst), 0);
+        assert_eq!(
+            probe.pings.lock().unwrap()[0].1,
+            start + Duration::from_secs(5)
+        );
         assert!(matches!(
             wake_select(&routes, &policy, &probe, budget).await,
             Err("ROUTE_UNAVAILABLE")
         ));
-        let elapsed = Instant::now() - start;
-        assert!(elapsed <= budget.min(Duration::from_millis(600)));
-        assert!((1..=3).contains(&probe.count()));
-        for (_, deadline) in probe.pings.lock().unwrap().iter() {
-            assert!(*deadline <= start + budget.min(Duration::from_millis(600)));
-        }
-        assert!(!policy.waking());
     }
 }
 #[tokio::test(start_paused = true)]
@@ -703,6 +746,7 @@ async fn unknown_ambiguous_malformed_and_non_ip_peers_never_get_pinged() {
             "ambiguous" => probe.before["Peer"]["other"] = probe.before["Peer"]["id"].clone(),
             _ => probe.before = Value::Null,
         }
+        let probe = std::sync::Arc::new(probe);
         assert!(matches!(
             wake_select(&routes, &policy, &probe, Duration::from_secs(2)).await,
             Err("ROUTE_UNAVAILABLE")
@@ -724,40 +768,133 @@ async fn unknown_ambiguous_malformed_and_non_ip_peers_never_get_pinged() {
     );
 }
 #[tokio::test(start_paused = true)]
-async fn cancelling_wake_clears_progress_keeps_cooldown_and_does_not_block_another_host() {
+async fn generation_change_cancels_owned_wake_and_rejects_stale_selection_intents() {
+    let routes = routes(&["direct"]);
+    let mut policy = HostPolicy::new(&routes, generation());
+    let mut probe = WakeProbe::idle(false);
+    probe.hang = true;
+    let probe = std::sync::Arc::new(probe);
+    let stale = SelectionRequest::new(&routes, &policy, generation(), 0).unwrap();
+    assert!(
+        wake_select(&routes, &policy, &probe, Duration::from_secs(2))
+            .await
+            .is_err()
+    );
+    tokio::task::yield_now().await;
+    assert_eq!(probe.active.load(std::sync::atomic::Ordering::SeqCst), 1);
+    let mut next = generation();
+    next.generation += 1;
+    policy
+        .update_selection_generation(&generation(), next.clone())
+        .unwrap();
+    tokio::task::yield_now().await;
+    assert!(!policy.waking());
+    assert_eq!(probe.active.load(std::sync::atomic::Ordering::SeqCst), 0);
+    assert!(matches!(
+        stale.run(probe.as_ref(), Duration::from_secs(2)).await,
+        Err("ROUTE_UNAVAILABLE")
+    ));
+    assert!(select(
+        &routes,
+        &policy,
+        probe.as_ref(),
+        next,
+        0,
+        Duration::from_secs(2)
+    )
+    .await
+    .is_err());
+    policy.start_wake(probe.clone());
+    assert_eq!(probe.count(), 1, "cancellation retains cooldown");
+}
+#[tokio::test(start_paused = true)]
+async fn owned_wake_does_not_block_another_host_and_stop_or_policy_drop_cancels_it() {
     let routes = routes(&["direct"]);
     let policy = HostPolicy::new(&routes, generation());
     let mut probe = WakeProbe::idle(false);
     probe.hang = true;
-    let mut pending = Box::pin(wake_select(
-        &routes,
-        &policy,
-        &probe,
-        Duration::from_secs(2),
-    ));
-    tokio::select! {biased; _ = &mut pending => panic!("wake must be pending"), _ = tokio::task::yield_now() => ()}
-    assert!(policy.waking());
-    assert_eq!(probe.count(), 1);
-    let other_policy = HostPolicy::new(&routes, generation());
-    let fast = WakeProbe::idle(true);
+    let probe = std::sync::Arc::new(probe);
     assert!(
-        wake_select(&routes, &other_policy, &fast, Duration::from_secs(2))
+        wake_select(&routes, &policy, &probe, Duration::from_secs(2))
+            .await
+            .is_err()
+    );
+    tokio::task::yield_now().await;
+    let other = HostPolicy::new(&routes, generation());
+    let fast = std::sync::Arc::new(WakeProbe::idle(true));
+    assert!(wake_select(&routes, &other, &fast, Duration::from_secs(2))
+        .await
+        .is_err());
+    finish_wake(&other).await;
+    assert!(wake_select(&routes, &other, &fast, Duration::from_secs(2))
+        .await
+        .is_ok());
+    assert!(policy.waking());
+    assert!(
+        wake_select(&routes, &policy, &probe, Duration::from_secs(2))
+            .await
+            .is_err()
+    );
+    assert_eq!(probe.count(), 1);
+    policy.stop_wake().await;
+    assert_eq!(probe.active.load(std::sync::atomic::Ordering::SeqCst), 0);
+    assert!(!policy.waking());
+    let dropped = HostPolicy::new(&routes, generation());
+    assert!(
+        wake_select(&routes, &dropped, &probe, Duration::from_secs(2))
+            .await
+            .is_err()
+    );
+    tokio::task::yield_now().await;
+    assert_eq!(probe.active.load(std::sync::atomic::Ordering::SeqCst), 1);
+    drop(dropped);
+    tokio::task::yield_now().await;
+    assert_eq!(probe.active.load(std::sync::atomic::Ordering::SeqCst), 0);
+}
+
+#[tokio::test(start_paused = true)]
+async fn direct_observation_resets_cooldown_and_unstarted_generation_intent_is_cancelled() {
+    let routes = routes(&["direct"]);
+    let mut policy = HostPolicy::new(&routes, generation());
+    let probe = std::sync::Arc::new(WakeProbe::idle(true));
+    assert!(
+        wake_select(&routes, &policy, &probe, Duration::from_secs(2))
+            .await
+            .is_err()
+    );
+    finish_wake(&policy).await;
+    assert!(
+        wake_select(&routes, &policy, &probe, Duration::from_secs(2))
             .await
             .is_ok()
     );
-    // A second request for this policy cannot generate another ping while active.
-    assert!(
-        wake_select(&routes, &policy, &probe, Duration::from_secs(2))
-            .await
-            .is_err()
+    probe
+        .ready
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+    // Direct evidence resets the previous cooldown, so a newly idle path can wake.
+    assert!(matches!(
+        select(
+            &routes,
+            &policy,
+            probe.as_ref(),
+            generation(),
+            0,
+            Duration::from_secs(2)
+        )
+        .await,
+        Err("TAILSCALE_WAKING")
+    ));
+    let mut next = generation();
+    next.generation += 1;
+    policy
+        .update_selection_generation(&generation(), next)
+        .unwrap();
+    policy.start_wake(probe.clone());
+    tokio::task::yield_now().await;
+    assert_eq!(
+        probe.count(),
+        1,
+        "an unstarted stale intent must never ping"
     );
-    assert_eq!(probe.count(), 1);
-    drop(pending);
     assert!(!policy.waking());
-    assert!(
-        wake_select(&routes, &policy, &probe, Duration::from_secs(2))
-            .await
-            .is_err()
-    );
-    assert_eq!(probe.count(), 1);
 }

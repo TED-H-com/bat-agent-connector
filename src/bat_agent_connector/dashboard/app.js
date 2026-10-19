@@ -57689,12 +57689,13 @@ function fleetStatusKey(code) {
 	}[code];
 }
 function fleetStatus(row, { h, t }) {
-	const key = fleetStatusKey(row?.code);
-	if (!key) return null;
+	const reason = [row?.code, row?.blocking].find((value) => typeof value === "string" && value.length);
+	if (!reason) return null;
+	const key = fleetStatusKey(reason);
 	return h("div", {
 		class: "muted",
 		"data-fleet-route-status": true
-	}, h("span", { role: "status" }, t(key)), h("details", {}, h("summary", {}, t("fleet_status_details")), h("code", {}, row.code)));
+	}, key ? h("span", { role: "status" }, t(key)) : null, h("details", {}, h("summary", {}, key ? t("fleet_status_details") : `${t("fleet_status_details")}: ${reason}`), h("code", {}, reason), row?.blocking && row.blocking !== reason ? h("code", {}, row.blocking) : null));
 }
 var init_fleet_status = __esmMin((() => {}));
 //#endregion

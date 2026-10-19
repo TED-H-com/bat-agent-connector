@@ -17,9 +17,8 @@ fn main() {
             .any(|name| key.to_string_lossy().eq_ignore_ascii_case(name))
     });
     if args.first().is_some_and(|arg| arg == "ping") {
-        let valid = args.len() == 6 && args[1..4] == ["--c", "1", "--timeout"]
-            && args[4].strip_suffix("ms").and_then(|s| s.parse::<u64>().ok())
-                .is_some_and(|ms| (1..=1000).contains(&ms))
+        let valid = args.len() == 6 && args[1..4] == ["--c", "3", "--timeout"]
+            && args[4] == "2s"
             && args[5] == "100.64.0.1" && allowed;
         fs::write(directory.join("ping-ok"), if valid { "yes" } else { "no" }).unwrap();
         fs::write(directory.join("started"), "yes").unwrap();
