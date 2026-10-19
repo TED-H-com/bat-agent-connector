@@ -1,3 +1,4 @@
+import {boardGitHubText, boardGitHubLink} from './board-github.js';
 import {timeStamp} from './ui/stamps.js';
 import {h} from './ui/dom.js';
 import {discussLink, inspector, statusPill, disclosure, agentMark, contextChip, menu, iconButton, button, inlineError} from './ui/components.js';
@@ -8,9 +9,9 @@ import {sessionHref} from './session-navigation.js';
 import {qualityFact} from './pm-quality-projections.js';
 import {runtimeCompletion, runtimeReceipt} from './pm-runtime-completion.js';
 
-export const workStatus = card => ({backlog: 'not_started', in_progress: 'in_progress', waiting: 'waiting', review: 'in_review', accepted: 'done', archived: 'historical'})[typeof card?.column === 'string' ? card.column : ''] || 'unknown';
+export const workStatus = card => ({backlog: 'not_started', in_progress: 'in_progress', waiting: 'waiting', review: 'in_review', accepted: 'done', github_done: 'done', archived: 'historical'})[typeof card?.column === 'string' ? card.column : ''] || 'unknown';
 // Content approval is a management fact, not proof of delivery or passing DoD.
-export const workStatusLabel = (t, card) => card?.column === 'accepted' ? t('wv_content_approved') : t('ui_status_' + workStatus(card));
+export const workStatusLabel = (t, card) => card?.column === 'github_done' ? boardGitHubText('bgh_done') : card?.column === 'accepted' ? t('wv_content_approved') : t('ui_status_' + workStatus(card));
 export function workStatusPill(t, card) {
   const pill = statusPill(workStatus(card));
   pill.textContent = workStatusLabel(t, card);
@@ -177,6 +178,8 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
         href: sessionHref({host: session.host, sessionId: session.session_id, from}),
       }, firstLabel(session.title, t('wv_session'))), ' ', session.api_access === 'managed' && session.provenance === 'connector_managed' ? null : statusPill('read_only')));
       if (!workAgents(source).length) state.append(paragraph(t('wv_agent'), ' · ', unknown()));
+      const external = boardGitHubLink(card.work.external);
+      if (external) state.append(paragraph(h('a', {href: external.url, target: '_blank', rel: 'noopener noreferrer'}, `${external.repository} · ${external.label}`)));
       if (workHref(card.binding)) state.append(h('a', {href: workHref(card.binding)}, t('wv_work_details')));
       if (source.errors?.some(row => row.kind === 'session')) state.append(paragraph(t('wv_session_unavailable')));
       if (card.quality?.selected_assessment) result.append(qualityFact({h, t, fact: card.quality, current: true}));

@@ -254,9 +254,12 @@ def _card(ops, principal, wid, binding, now):
     archived = bool(item["archived"] or project["archived"])
     column = ("archived" if archived else "accepted" if completion["approved"] else "review" if completion["pending"]
               else {"todo": "backlog", "doing": "in_progress", "waiting": "waiting", "done": "review"}[item["state"]])
+    external = item.get('external')
+    if not archived and not completion['approved'] and external and external.get('board_lane') == 'done' and external['state'] in ('closed', 'merged'):
+        column = 'github_done'
     capture = pm_evidence.latest_capture(ops, principal, wid, item["work_item_id"])["capture"]
     return {"work_item_id": item["work_item_id"], "binding": {k: binding[k] for k in _BINDING_FIELDS},
-            "work": {k: item[k] for k in _WORK_FIELDS}, "column": column, "completion": completion,
+            "work": {**{k: item[k] for k in _WORK_FIELDS}, "external": external}, "column": column, "completion": completion,
             "project_archived": bool(project["archived"]), "flow": _flow(ops, principal, wid, item, completion, now),
             "execution": {**_Execution(ops, principal, wid).collect(item["work_item_id"]),
                 "manual_observation_sources": manual_sources(ops, principal, wid, item["work_item_id"])},

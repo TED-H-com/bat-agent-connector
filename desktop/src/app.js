@@ -1,4 +1,5 @@
 import {managedRecoveryKey} from "./managed-recovery.js";
+import {boardGitHubPanel} from './board-github.js';
 import {workbenchEnabled} from './workbench-mode.js';
 import {workbenchViews} from './workbench-views.js';
 import {settingsAgents} from './settings-agents.js';
@@ -3852,7 +3853,11 @@ async function viewProject(main, pid) {
   const itemCard = sectionCard({title: t("work_items"), actions: [filter], body: h("div", {class: "or-item-list"}, create.actions, create.box, items, archived)});
   itemCard.dataset.projectItemCard = ""; itemCard.hidden = true; create.box.hidden = true;
   const note = manageNote(); if (note) note.hidden = true;
-  main.append(note || "", out, head, work, itemCard);
+  const github = boardGitHubPanel({t, api, alive: () => assertView(connection), caps: () => state.caps,
+    form: options => pmDurableForm({h, t, api, caps: () => state.caps, namespace: connection.namespace,
+      guard: () => assertView(connection), errorBox, ...options}),
+    permitted: () => may('manage'), projectId: pid, onSaved: () => render()});
+  main.append(note || "", out, head, github.element, work, itemCard);
   const rememberEditors = () => {
     if (currentEditor && !currentEditor.drawer.box.hidden) draft = currentEditor.values();
     for (const [id, editor] of workEditors) if (!editor.drawer.box.hidden)
@@ -3896,6 +3901,7 @@ async function viewProject(main, pid) {
     rememberEditors(); workEditors = new Map();
     freshPage();
     const p = data.project;
+    await github.refresh(data);
     if (note) note.hidden = false;
     itemCard.hidden = false;
     const mayCreate = may("manage") && !p.archived && state.caps?.actions?.find(row => row.action === "work_item.create")?.allowed !== false;
@@ -3992,7 +3998,8 @@ async function viewProject(main, pid) {
   };
   showArchived.onchange = () => render();
   await render();
-  return liveReload(render, ["project", "work_item", "operation", "task", "execution", "session", "integration"], prepare);
+  const off = liveReload(render, ["project", "work_item", "operation", "task", "execution", "session", "integration"], prepare);
+  return () => {off?.(); github.dispose();};
 }
 
 function linkTarget(l) {

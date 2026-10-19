@@ -1227,7 +1227,7 @@ class TaskDaemon:
         if host not in {"127.0.0.1", "::1", "localhost"}:
             raise ValueError("task service only binds loopback")
         self.acquire_owner()
-        worker = pusher = reaper = operations = metadata_reads = deployment_reads = inventory = usage_reads = history_reads = None
+        worker = pusher = reaper = operations = metadata_reads = deployment_reads = inventory = usage_reads = history_reads = board_reads = None
         try:
             server = await asyncio.start_server(self._handle, host, port)
             address = "[::1]" if host == "::1" else host
@@ -1237,6 +1237,8 @@ class TaskDaemon:
             pusher = asyncio.create_task(self._push_loop())
             reaper = asyncio.create_task(self._artifact_reap_loop())
             operations = asyncio.create_task(self.ops.loop())
+            from . import board_github
+            board_reads = asyncio.create_task(board_github.loop(self.ops))
             metadata_reads = asyncio.create_task(self.reconcile_metadata())
             deployment_reads = asyncio.create_task(self.reconcile_deployments())
             inventory = asyncio.create_task(self.inventory.loop())
@@ -1245,7 +1247,7 @@ class TaskDaemon:
             async with server:
                 await server.serve_forever()
         finally:
-            for background in (worker, pusher, reaper, operations, metadata_reads, deployment_reads, inventory, usage_reads, history_reads):
+            for background in (worker, pusher, reaper, operations, metadata_reads, deployment_reads, inventory, usage_reads, history_reads, board_reads):
                 if background is not None:
                     background.cancel()
                     await asyncio.gather(background, return_exceptions=True)

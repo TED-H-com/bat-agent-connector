@@ -206,6 +206,7 @@ def _item(row) -> dict:
             "pinned": bool(row["pinned"]), "archived": row["archived_at"] is not None,
             "archived_at": row["archived_at"], "archived_by": row["archived_by"], "version": row["version"],
             "created_by": row["created_by"], "created_at": row["created_at"], "updated_at": row["updated_at"]}
+    item['external'] = json.loads(row['github_external']) if 'github_external' in row.keys() and row['github_external'] else None
     return item
 
 
@@ -763,6 +764,13 @@ def _admit_item_update(ops, principal, target, params, pre) -> None:
     _check_item_update(ops, target, params, pre)
 
 
+def _manual_state(db, item):
+    if item.get('external'):
+        external = {**item['external'], 'manual': True, 'board_lane': None}
+        db.execute('UPDATE work_items SET github_external=? WHERE work_item_id=?',
+                   (json.dumps(external), item['work_item_id']))
+
+
 async def _run_item_update(ctx: OpContext) -> dict:
     actor = ctx.op["actor"]
 
@@ -799,6 +807,7 @@ async def _run_item_update(ctx: OpContext) -> dict:
         if fields:
             _event(ctx, "work_item", wid, "work_item.updated", {"fields": fields})
         if "state" in changes:
+            _manual_state(db, item)
             _event(ctx, "work_item", wid, "work_item.state", {"from": item["state"], "to": changes["state"]})
         return {"work_item_id": wid, "version": item["version"] + 1, "changed": True, "fields": sorted(changes),
                 "completion": completion(after)}
@@ -911,6 +920,7 @@ async def _run_approve(ctx: OpContext) -> dict:
         if completion(item)["approved"]:
             return {"work_item_id": item["work_item_id"], "version": item["version"], "fingerprint": fp,
                     "approved_by": item["approved_by"], "changed": False}
+        _manual_state(db, item)
         claimed = item["done_by"] if item["state"] == "done" else actor
         db.execute("""UPDATE work_items SET state='done',done_by=?,done_at=COALESCE(?,done_at),approved_fingerprint=?,
             approved_by=?,approved_at=?,continued_steps=NULL,version=version+1,updated_at=? WHERE work_item_id=?""",
@@ -926,6 +936,7 @@ async def _run_continue(ctx: OpContext) -> dict:
     def change(db, now):
         item = _check_decide(ctx.service, ctx.target, ctx.params, ctx.preconditions)
         _undecided(item)
+        _manual_state(db, item)
         state = "doing" if item["state"] == "done" else item["state"]
         db.execute("""UPDATE work_items SET state=?,done_by=CASE WHEN ?='done' THEN NULL ELSE done_by END,
             done_at=CASE WHEN ?='done' THEN NULL ELSE done_at END,approved_fingerprint=NULL,approved_by=NULL,
@@ -1053,6 +1064,9 @@ def project_get(db, project_id: str, *, include_archived: bool = False, ops=None
            "sub_projects": [{"project_id": p["project_id"], "name": p["name"], "pinned": p["pinned"]}
                             for p in children],
            "work_items": _tree(items, _item_scope(project_id), db, "work_item_id", present)}
+    if ops is not None:
+        from .board_github import settings
+        out['github_sync'] = settings(db, project_id, ops)
     if projection == 'navigation':
         out['projection'] = 'navigation'
     if ops is not None:

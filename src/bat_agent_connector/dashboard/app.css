@@ -1449,6 +1449,19 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-board-facts { position: relative; }
 .pm-board-facts > .sr-only { position: absolute; left: 0; top: 0; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (max-width: 799px) { .pm-board-open { min-height: 44px; } }
+[data-board-github] { padding: var(--space-3); }
+[data-board-github] h3 { margin: 0 0 var(--space-2); }
+[data-board-github] .capture-fields { align-items: end; }
+[data-board-github] .capture-fields .capture-choice { display: flex; justify-content: flex-start; align-items: center; flex: 0 0 auto; align-self: end; margin: 0; }
+[data-board-github] .capture-choice input[type=checkbox] { display: inline-block; width: auto; margin: 0; }
+[data-board-github] form { margin-bottom: var(--space-2); }
+[data-board-github] p:empty { display: none; }
+[data-board-github] details { color: var(--muted); font-size: var(--fs-small); }
+@media (max-width: 600px) {
+  [data-board-github] .capture-fields label { flex-basis: 100%; }
+  [data-board-github] .capture-fields .capture-choice { flex-basis: 100%; }
+  [data-board-github] button { min-height: 44px; }
+}
 .dep-view { min-width: 0; display: grid; gap: var(--space-3); }
 .dep-view > * { min-width: 0; }
 .dep-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }

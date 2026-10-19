@@ -5,6 +5,10 @@ import {t} from './i18n.js';
 import {reasonLabel} from './ui/ui-strings.js';
 
 const ACTIONS = {
+  'pm.github.import': 'bgh_action_import',
+  'project.github.import': 'bgh_action_import',
+  'project.github.configure': 'bgh_action_configure',
+  'project.github.sync': 'bgh_action_sync',
   'checkpoint.continue': 'action_checkpoint_continue',
   'checkpoint.continue.revalidate': 'action_checkpoint_revalidate',
   'artifact.upload': 'action_artifact_upload',
