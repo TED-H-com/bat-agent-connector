@@ -47,12 +47,18 @@ impl Launch {
         if self.protocol != 1 || self.runtime_version != version {
             return Err("MANAGED_RUNTIME_PROTOCOL_MISMATCH".into());
         }
-        let url = self.config().validate()?;
+        let url = self
+            .config()
+            .validate()
+            .map_err(|_| "MANAGED_RUNTIME_ENDPOINT_INVALID")?;
         if url.scheme() != "http" || url.host_str() != Some("127.0.0.1") {
             return Err("MANAGED_RUNTIME_ENDPOINT_INVALID".into());
         }
-        self.identity().validate()?;
+        self.identity()
+            .validate()
+            .map_err(|_| "MANAGED_RUNTIME_IDENTITY_INVALID")?;
         credentials::validate_token(&self.token)
+            .map_err(|_| "MANAGED_RUNTIME_CREDENTIAL_INVALID".into())
     }
     pub fn config(&self) -> bridge::Config {
         bridge::Config {

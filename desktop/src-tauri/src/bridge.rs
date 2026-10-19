@@ -780,7 +780,7 @@ impl Bridge {
         generation: u64,
         launch: crate::managed::Launch,
     ) -> Result<(), String> {
-        let config = normalize(launch.config())?;
+        let config = normalize(launch.config()).map_err(|_| "MANAGED_RUNTIME_ENDPOINT_INVALID")?;
         let expected = {
             let state = self.state.lock().unwrap();
             if !state.managed || !state.recovery_enabled || state.generation != generation {
