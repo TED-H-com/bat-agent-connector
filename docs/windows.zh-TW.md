@@ -36,6 +36,10 @@ runtime 或資料後端。
 
 需要 Tailscale 登入時，從面板開啟已安裝的 Tailscale 程式，在該程式登入後刷新。可保留登入選擇器或檢視已保存啟動選項。未指定 `backend` 時沿用 **PowerShell**；既有 PowerShell 安裝切換 Rust 須使用明確遷移流程，先證明舊 owner 已停止。
 
+Rust Fleet 監控會以設定的 Tailscale IP 自動喚醒已知的閒置節點，並限制重試次數及設定冷卻時間。
+面板會顯示喚醒進度；主機仍無法連線時會自動重試。展開「詳細資料」可查看診斷代碼。
+未知或無法唯一識別的節點不會收到喚醒探測。
+
 「登入電腦時啟動」會啟動自有 managed 安裝與已選 Windows Fleet 登入流程。「在瀏覽器開啟 Dashboard」使用本機認證交接。關窗後中央背景工作繼續；明確「退出 Dashboard」會依正常停止條件處理已證明持有的 Fleet monitor，不結束中央任務或人工 BAT sessions。
 
 「進階：加入既有中央」經原生確認與獨立憑證登錄後，改變目前 client 連線；原本機背景工作保留。已配置的遠端 bootstrap 用固定 SSH recipe 查詢／啟動指定中央，不會任意安裝服務，也不因連線失敗另造資料庫。

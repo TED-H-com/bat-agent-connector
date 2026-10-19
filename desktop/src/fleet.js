@@ -1,3 +1,4 @@
+import {fleetStatus} from "./fleet-status.js";
 import {iconButton} from './ui/components.js';
 import {fleetAvailability, fleetRequest} from "./transport/index.ts";
 
@@ -64,7 +65,7 @@ export async function mountFleet(main, {h, t}) {
       const observed = ready.get(entry.name);
       return h("div", {class: "row"}, h("label", {class: "grow fleet-choice"}, input, " ", entry.label),
         h("span", {class: "chip"}, t("fleet_" + (observed?.level || "unavailable"))),
-        observed?.blocking ? h("span", {class: "muted"}, observed.blocking) : null);
+        fleetStatus(observed, {h, t}));
     });
     content.replaceChildren(...[h("p", {}, t("fleet_monitor_" + snapshot.monitor.state), " · ",
       t("fleet_" + snapshot.readiness.state)),

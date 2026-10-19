@@ -205,7 +205,10 @@ pub fn run(
                 }
                 _ => (), // Fixed local evidence remains; drift/read failures are retried, never forced.
             }
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            tokio::select! {
+                _ = tokio::time::sleep(Duration::from_secs(1)) => (),
+                _ = supervisor.route_progress() => (),
+            }
         }
     })
 }
