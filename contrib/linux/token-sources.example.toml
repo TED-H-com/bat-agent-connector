@@ -1,0 +1,14 @@
+[example-host]
+target = "~/.config/bat-agent-connector/tokens/example-host.token"
+backend = "bitwarden"
+item = "example-bat-token"
+
+[example-build]
+target = "~/.config/bat-agent-connector/tokens/example-build.token"
+backend = "bws"
+id = "replace-with-secret-id"
+
+[example-hook]
+target = "~/.config/bat-agent-connector/tokens/example-hook.token"
+backend = "command"
+argv = ["/path/to/trusted-token-helper", "example-host"]

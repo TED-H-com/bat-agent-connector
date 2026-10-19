@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+"""Validate the deliberately simple KEY=value tunnel EnvironmentFile format."""
+import ipaddress
+import re
+import sys
+from pathlib import Path
+
+KEYS = {"BATC_TUNNEL_SSH_ALIAS", "BATC_TUNNEL_LOCAL", "BATC_TUNNEL_REMOTE"}
+
+
+def endpoint(value, local=False):
+    match = re.fullmatch(r"(\[[0-9A-Fa-f:]+\]|[A-Za-z0-9._-]+):([0-9]+)", value)
+    if not match or not 1 <= int(match[2]) <= 65535:
+        raise ValueError("endpoint must be host:port (bracket IPv6), port 1–65535")
+    host = match[1].strip("[]")
+    if local:
+        address = ipaddress.ip_address(host)
+        if not address.is_loopback or (address.version == 6 and address != ipaddress.ip_address("::1")):
+            raise ValueError("LOCAL must use 127.0.0.0/8 or ::1")
+    elif host.startswith("-") or ".." in host:
+        raise ValueError("REMOTE host is invalid")
+    elif match[1].startswith("["):
+        ipaddress.IPv6Address(host)
+
+
+def main():
+    try:
+        if len(sys.argv) != 2:
+            raise ValueError("usage: batc-tunnel-check ENV_FILE")
+        values = {}
+        for line in Path(sys.argv[1]).read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            key, sep, value = line.partition("=")
+            if not sep or key not in KEYS or key in values:
+                raise ValueError("expected each supported KEY=value exactly once")
+            values[key] = value
+        if values.keys() != KEYS:
+            raise ValueError("missing required BATC_TUNNEL_* key")
+        alias = values["BATC_TUNNEL_SSH_ALIAS"]
+        if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", alias):
+            raise ValueError("SSH_ALIAS must be a trusted alias without whitespace or leading '-' ")
+        endpoint(values["BATC_TUNNEL_LOCAL"], local=True)
+        endpoint(values["BATC_TUNNEL_REMOTE"])
+    except (OSError, ValueError) as exc:
+        print(f"tunnel-check: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
