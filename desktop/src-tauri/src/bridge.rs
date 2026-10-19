@@ -512,6 +512,8 @@ pub struct NativeStatus {
     pub configuration_source: &'static str,
     pub configuration_file: Option<String>,
     pub connected: bool,
+    pub managed_recovery: Option<String>,
+    pub managed_rebind: Option<u64>,
 }
 
 // Never serialized: credential identity remains native-only even for identical actor/scopes.
@@ -530,6 +532,9 @@ struct Active {
 struct ConnectionState {
     generation: u64,
     managed: bool,
+    recovery_enabled: bool,
+    managed_rebind: u64,
+    recovery_error: Option<String>,
     config: Result<Config, String>,
     environment: Option<Zeroizing<String>>,
     environment_identity: Option<Identity>,
@@ -620,6 +625,7 @@ impl Bridge {
             let mut state = bridge.state.lock().unwrap();
             state.environment_identity = Some(identity);
             state.managed = true;
+            state.recovery_enabled = true;
         }
         bridge
     }
@@ -642,6 +648,9 @@ impl Bridge {
             state: Mutex::new(ConnectionState {
                 generation: 0,
                 managed: false,
+                recovery_enabled: false,
+                managed_rebind: 0,
+                recovery_error: None,
                 config,
                 environment,
                 environment_identity: None,
@@ -704,10 +713,132 @@ impl Bridge {
                 .as_ref()
                 .map(|p| p.to_string_lossy().into_owned()),
             connected: state.active.is_some(),
+            managed_recovery: state.recovery_error.clone(),
+            managed_rebind: state.managed.then_some(state.managed_rebind),
         }
     }
+    // No bearer on the liveness read. Any HTTP response is reachable: authentication,
+    // protocol and identity failures must not provision a service.
+    pub async fn managed_probe(&self) -> Option<(u64, bool)> {
+        let (generation, config) = {
+            let state = self.state.lock().unwrap();
+            if !state.managed
+                || !state.recovery_enabled
+                || state.environment_identity.is_none()
+                || state.environment.is_none()
+            {
+                return None;
+            }
+            (state.generation, state.config.as_ref().ok()?.clone())
+        };
+        let url = config.validate().ok()?.join("api/v1/capabilities").ok()?;
+        let reachable = self
+            .client
+            .get(url)
+            .timeout(Duration::from_secs(2))
+            .send()
+            .await
+            .is_ok();
+        self.unchanged(generation).ok()?;
+        Some((generation, reachable))
+    }
+
+    pub fn recovery_state(&self, generation: u64, error: Option<String>) {
+        let mut state = self.state.lock().unwrap();
+        if state.generation == generation && state.managed && state.recovery_enabled {
+            if error.as_deref() == Some("MANAGED_RECOVERY_IDENTITY_CHANGED") {
+                state.active = None;
+                state.generation += 1;
+                state.recovery_enabled = false;
+            }
+            state.recovery_error = error;
+        }
+    }
+
+    pub async fn recover_managed(
+        &self,
+        generation: u64,
+        managed: Arc<crate::managed::Managed>,
+    ) -> Result<(), String> {
+        // Keep configuration setup/enrollment serialized with ensure and verification.
+        let _guard = self
+            .connecting
+            .try_lock()
+            .map_err(|_| "MANAGED_RECOVERY_BUSY")?;
+        {
+            let state = self.state.lock().unwrap();
+            if !state.managed || !state.recovery_enabled || state.generation != generation
+                || self.configuration_file.as_ref().is_some_and(|path|
+                    !matches!(path.symlink_metadata(), Err(error) if error.kind() == std::io::ErrorKind::NotFound)) {
+                return Err("MANAGED_RECOVERY_CANCELLED".into());
+            }
+        }
+        let launch = tauri::async_runtime::spawn_blocking(move || managed.recover())
+            .await
+            .map_err(|_| "MANAGED_RECOVERY_FAILED")??;
+        self.rebind_managed(generation, launch).await
+    }
+
+    pub async fn rebind_managed(
+        &self,
+        generation: u64,
+        launch: crate::managed::Launch,
+    ) -> Result<(), String> {
+        let config = normalize(launch.config()).map_err(|_| "MANAGED_RUNTIME_ENDPOINT_INVALID")?;
+        let expected = {
+            let state = self.state.lock().unwrap();
+            if !state.managed || !state.recovery_enabled || state.generation != generation {
+                return Err("MANAGED_RECOVERY_CANCELLED".into());
+            }
+            let identity = state
+                .environment_identity
+                .clone()
+                .ok_or("MANAGED_RECOVERY_IDENTITY_CHANGED")?;
+            if identity != launch.identity()
+                || state.config.as_ref().ok().map(|c| &c.expected_actor)
+                    != Some(&config.expected_actor)
+            {
+                return Err("MANAGED_RECOVERY_IDENTITY_CHANGED".into());
+            }
+            identity
+        };
+        // Same bootstrap/capabilities verification as connect; do not publish a candidate
+        // endpoint or credential until both reads prove the original personal identity.
+        let (_, identity) = self
+            .verify(&config, &launch.token, Some(&expected), generation)
+            .await
+            .map_err(|error| {
+                if error.contains("Saved backend or principal identity changed") {
+                    "MANAGED_RECOVERY_IDENTITY_CHANGED"
+                } else {
+                    "MANAGED_RECOVERY_VERIFICATION_FAILED"
+                }
+            })?;
+        let mut state = self.state.lock().unwrap();
+        if !state.managed || !state.recovery_enabled || state.generation != generation {
+            return Err("MANAGED_RECOVERY_CANCELLED".into());
+        }
+        state.generation += 1;
+        state.managed_rebind += 1;
+        state.config = Ok(config.clone());
+        state.environment = Some(launch.token.clone());
+        state.active = Some(Active {
+            config: config.clone(),
+            record: Record {
+                version: 1,
+                binding: binding(&config),
+                identity,
+                token: launch.token,
+            },
+        });
+        state.recovery_error = None;
+        Ok(())
+    }
+
     pub fn disconnect(&self) {
         let mut state = self.state.lock().unwrap();
+        state.recovery_enabled = false;
+        state.recovery_error = None;
         state.generation += 1;
         state.active = None;
     }
@@ -820,6 +951,8 @@ impl Bridge {
             saved?;
             state.generation += 1;
             state.managed = false;
+            state.recovery_enabled = false;
+            state.recovery_error = None;
             state.config = Ok(config);
             state.environment = None;
             state.environment_identity = None;
@@ -831,6 +964,8 @@ impl Bridge {
         let mut state = self.state.lock().unwrap();
         let config = state.config.as_ref().map_err(Clone::clone)?;
         self.vault.remove(&binding(config))?;
+        state.recovery_enabled = false;
+        state.recovery_error = None;
         state.generation += 1;
         state.active = None;
         state.environment = None;
@@ -877,6 +1012,8 @@ impl Bridge {
         if state.environment.is_some() {
             state.environment_identity = Some(identity.clone());
         }
+        state.recovery_enabled = state.managed;
+        state.recovery_error = None;
         state.active = Some(Active {
             record: Record {
                 version: 1,
@@ -4295,6 +4432,175 @@ mod tests {
     fn json_response(body: &str) -> String {
         format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body)
     }
+    fn recovery_launch(
+        endpoint: &str,
+        server_id: &str,
+        principal_id: &str,
+    ) -> crate::managed::Launch {
+        serde_json::from_value(serde_json::json!({
+            "protocol": 1, "runtime_version": "fixture-1", "endpoint": endpoint,
+            "actor": "fixture-operator", "token": "replacement-fixture-token",
+            "server_id": server_id, "principal_id": principal_id,
+        }))
+        .unwrap()
+    }
+    fn recovery_bridge() -> Bridge {
+        Bridge::managed(
+            Path::new("unused-fixture-config"),
+            config("http://127.0.0.1:9/"),
+            Zeroizing::new("old-fixture-token".into()),
+            Identity {
+                server_id: "fixture-server".into(),
+                principal_id: "fixture-principal".into(),
+            },
+        )
+    }
+    #[tokio::test]
+    async fn managed_recovery_rebinds_endpoint_and_token_only_after_identity_verification() {
+        let (endpoint, requests, handle) = server(vec![
+            json_response(CAPS),
+            bootstrap_response("fixture-server", "fixture-principal"),
+            json_response("{\"events\":[]}"),
+        ]);
+        let bridge = recovery_bridge();
+        let old_generation = bridge.state.lock().unwrap().generation;
+        bridge
+            .rebind_managed(
+                old_generation,
+                recovery_launch(&endpoint, "fixture-server", "fixture-principal"),
+            )
+            .await
+            .unwrap();
+        assert_eq!(bridge.status().endpoint.as_deref(), Some(endpoint.as_str()));
+        assert!(bridge.status().connected);
+        assert_eq!(bridge.status().managed_rebind, Some(1));
+        assert!(bridge.state.lock().unwrap().generation > old_generation);
+        bridge
+            .request(get("/events?after=0&limit=100"))
+            .await
+            .unwrap();
+        for _ in 0..3 {
+            let request = requests.recv().unwrap();
+            assert!(request.contains("Bearer replacement-fixture-token"));
+            assert!(!request.contains("old-fixture-token"));
+            assert!(request.starts_with("GET "));
+        }
+        handle.join().unwrap();
+    }
+    #[tokio::test]
+    async fn managed_recovery_refuses_changed_launch_identity_before_any_network() {
+        for (server_id, principal_id) in [
+            ("another-server", "fixture-principal"),
+            ("fixture-server", "another-principal"),
+        ] {
+            let bridge = recovery_bridge();
+            let error = bridge
+                .rebind_managed(
+                    0,
+                    recovery_launch("http://127.0.0.1:1/", server_id, principal_id),
+                )
+                .await
+                .unwrap_err();
+            assert_eq!(error, "MANAGED_RECOVERY_IDENTITY_CHANGED");
+            assert_eq!(
+                bridge.status().endpoint.as_deref(),
+                Some("http://127.0.0.1:9/")
+            );
+            assert!(!bridge.status().connected);
+        }
+    }
+    #[tokio::test]
+    async fn managed_recovery_refuses_changed_live_bootstrap_identity() {
+        let (endpoint, _, handle) = server(vec![
+            json_response(CAPS),
+            bootstrap_response("another-server", "fixture-principal"),
+        ]);
+        let bridge = recovery_bridge();
+        assert_eq!(
+            bridge
+                .rebind_managed(
+                    0,
+                    recovery_launch(&endpoint, "fixture-server", "fixture-principal")
+                )
+                .await
+                .unwrap_err(),
+            "MANAGED_RECOVERY_IDENTITY_CHANGED"
+        );
+        assert_eq!(
+            bridge.status().endpoint.as_deref(),
+            Some("http://127.0.0.1:9/")
+        );
+        assert!(!bridge.status().connected);
+        handle.join().unwrap();
+    }
+    #[tokio::test]
+    async fn external_mode_and_explicit_disconnect_never_probe_or_rebind() {
+        let external = Bridge::new(
+            Ok(config("http://127.0.0.1:9/")),
+            Zeroizing::new("fixture-token".into()),
+        );
+        assert!(external.managed_probe().await.is_none());
+        assert_eq!(
+            external
+                .rebind_managed(
+                    0,
+                    recovery_launch("http://127.0.0.1:1/", "fixture-server", "fixture-principal")
+                )
+                .await
+                .unwrap_err(),
+            "MANAGED_RECOVERY_CANCELLED"
+        );
+        let managed = recovery_bridge();
+        managed.disconnect();
+        assert!(managed.managed_probe().await.is_none());
+        assert_eq!(
+            managed
+                .rebind_managed(
+                    0,
+                    recovery_launch("http://127.0.0.1:1/", "fixture-server", "fixture-principal")
+                )
+                .await
+                .unwrap_err(),
+            "MANAGED_RECOVERY_CANCELLED"
+        );
+    }
+    #[tokio::test]
+    async fn identity_failure_stops_probes_and_fences_in_flight_reads() {
+        let bridge = recovery_bridge();
+        bridge.recovery_state(0, Some("MANAGED_RECOVERY_IDENTITY_CHANGED".into()));
+        assert!(bridge.managed_probe().await.is_none());
+        assert!(bridge.unchanged(0).is_err());
+        assert!(!bridge.status().connected);
+        assert_eq!(
+            bridge.status().managed_recovery.as_deref(),
+            Some("MANAGED_RECOVERY_IDENTITY_CHANGED")
+        );
+    }
+
+    #[tokio::test]
+    async fn failed_recovery_candidate_preserves_original_binding_and_reports_bounded_details() {
+        let bridge = recovery_bridge();
+        assert_eq!(
+            bridge
+                .rebind_managed(
+                    0,
+                    recovery_launch("http://127.0.0.1:1/", "fixture-server", "fixture-principal")
+                )
+                .await
+                .unwrap_err(),
+            "MANAGED_RECOVERY_VERIFICATION_FAILED"
+        );
+        bridge.recovery_state(0, Some("MANAGED_RECOVERY_VERIFICATION_FAILED".into()));
+        assert_eq!(
+            bridge.status().managed_recovery.as_deref(),
+            Some("MANAGED_RECOVERY_VERIFICATION_FAILED")
+        );
+        assert_eq!(
+            bridge.status().endpoint.as_deref(),
+            Some("http://127.0.0.1:9/")
+        );
+    }
+
     const CAPS: &str = r#"{"actor":"fixture-operator","api_version":1,"contract_version":"2026-10-08","scopes":["observe","operate"]}"#;
 
     fn bootstrap_response(server_id: &str, principal_id: &str) -> String {

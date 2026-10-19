@@ -199,3 +199,23 @@ def test_interrupted_upgrade_recovers_original_installation(versioned_installati
     assert recovered["runtime_version"] == "1.1.0" and len(children) == 2
     assert {k: recovered[k] for k in ("actor", "token", "server_id", "principal_id")} == {
         k: original[k] for k in ("actor", "token", "server_id", "principal_id")}
+
+
+def test_ensure_restarts_dead_service_with_new_endpoint_and_original_identity(installation):
+    root, children = installation
+    first = runtime.ensure(root, timeout=15)
+    # Terminate only our fixture child, never a PID from the endpoint pointer.
+    children[0].terminate()
+    children[0].wait(timeout=10)
+    # Occupy the old port so the OS cannot coincidentally reuse it for port=0.
+    from urllib.parse import urlsplit
+    with socket.socket() as occupied:
+        occupied.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        occupied.bind(("127.0.0.1", urlsplit(first["endpoint"]).port))
+        occupied.listen()
+        recovered = runtime.ensure(root, timeout=15)
+    assert len(children) == 2
+    assert recovered["endpoint"] != first["endpoint"]
+    for key in ("server_id", "principal_id", "actor", "token", "runtime_version"):
+        assert recovered[key] == first[key]
+    assert runtime._request(recovered["endpoint"], "/api/v1/bootstrap", token=recovered["token"])["sync"]["server_id"] == first["server_id"]

@@ -289,7 +289,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     return pendingEventRead;
   });
   refresh().catch(() => {});
-  return {box, setWorkspace(id, source, all = false) {
+  return {box, refresh, setWorkspace(id, source, all = false) {
     if (pmWorkspace === id && bindingSource === source && globalTree === all) return;
     pmWorkspace = id; bindingSource = source; globalTree = all; contextVersion++; catalogRows = null; catalogKnown = false;
     roots = []; bindingKnown = false; bindingPartial = false; projects.clear(); sessionRows.replaceChildren(); sessionsLoaded = false; status.replaceChildren();

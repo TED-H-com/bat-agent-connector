@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Recover a dead local managed Connector in Dashboard without restarting the app, retaining the installation identity and original operation keys. Windows background Connector and native Fleet supervisor launches request job breakaway when permitted, with a bounded lifetime warning when the launching job prevents it. Recovery failures and identity changes have English and zh-TW status messages.
+
 - Fleet wakes uniquely identified idle Tailscale peers by their configured IP before
   declaring a route unavailable, with a separate bounded background wake window,
   a capped cooldown and localized
