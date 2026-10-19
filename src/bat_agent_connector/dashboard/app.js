@@ -9297,6 +9297,29 @@ var STRINGS = {
 		connection_scope_deploy: "部署",
 		connection_scope_integrate: "整合",
 		connection_scope_merge: "合併",
+		setup_waiting: "可以開始設定了",
+		setup_connection_connected: "已連線",
+		setup_connection_checking: "確認連線中…",
+		setup_connection_unreachable: "目前無法連線",
+		setup_connection_action: "請確認 BAT 已開啟，再按「重新整理」。",
+		setup_connection_checking_help: "目前還沒有最新的連線結果，請稍後重新整理。",
+		setup_language: "顯示語言",
+		setup_language_en: "English",
+		setup_language_zh: "繁體中文",
+		setup_advanced: "進階設定",
+		setup_automatic: "自動設定",
+		setup_simple_help: "我們會幫你連接 BAT，完成基本設定。其他選項可以之後再調整。",
+		setup_checking: "正在確認連線，請稍候…",
+		setup_saving: "正在儲存設定，快好了…",
+		setup_ready: "設定完成，可以開始使用了。",
+		setup_loading: "正在準備設定…",
+		setup_copy_help: "請在 BAT 開啟「設定 → 遠端 → 遠端存取」，複製連線網址後貼到下方。如果尚未啟動，請先按「啟動伺服器」。",
+		setup_copy_label: "貼上從 BAT 複製的連線網址",
+		setup_continue: "繼續設定",
+		setup_choose_connection: "找到多個已儲存的連線。請選擇要使用的連線，再按「自動設定」。",
+		setup_connection_choice: "要使用的連線",
+		setup_choose_placeholder: "請選擇連線",
+		setup_failed_operation: "設定尚未完成，請查看詳細資料。",
 		setup_title: "準備開始工作",
 		setup_unsaved: "有未儲存設定",
 		setup_resume_help: "可稍後繼續。非機密草稿會保留；帳號授權與主機信任仍須由你確認。",
@@ -10953,6 +10976,29 @@ var STRINGS = {
 		connection_scope_deploy: "Deploy",
 		connection_scope_integrate: "Integrate",
 		connection_scope_merge: "Merge",
+		setup_waiting: "Ready to set up",
+		setup_connection_connected: "Connected",
+		setup_connection_checking: "Checking…",
+		setup_connection_unreachable: "Can’t reach this connection",
+		setup_connection_action: "Make sure BAT is open, then select Refresh.",
+		setup_connection_checking_help: "There’s no recent connection result yet. Refresh in a moment.",
+		setup_language: "Language",
+		setup_language_en: "English",
+		setup_language_zh: "繁體中文",
+		setup_advanced: "Advanced",
+		setup_automatic: "Set up automatically",
+		setup_simple_help: "We’ll help you connect to BAT and get things ready. You can adjust other options later.",
+		setup_checking: "Checking your connection. Please wait…",
+		setup_saving: "Saving your settings. Almost there…",
+		setup_ready: "Setup is complete. You’re ready to go.",
+		setup_loading: "Getting setup ready…",
+		setup_copy_help: "In BAT, open Settings → Remote → Remote Access, copy the connection URL and paste it below. If it is not running, choose Start Server first.",
+		setup_copy_label: "Paste the connection link copied from BAT",
+		setup_continue: "Continue setup",
+		setup_choose_connection: "More than one saved connection was found. Choose the one you want, then select Set up automatically.",
+		setup_connection_choice: "Connection to use",
+		setup_choose_placeholder: "Choose a connection",
+		setup_failed_operation: "Setup hasn’t finished. See details for more information.",
 		setup_title: "Get ready to work",
 		setup_unsaved: "Unsaved settings",
 		setup_resume_help: "Continue later without losing non-secret drafts. You still confirm account authorization and host trust.",
@@ -12482,7 +12528,26 @@ var STRINGS = {
 		integration_PUSH_UNPROVEN: "The PR branch is at its old head, but the composed commit exists on GitHub: an earlier push may have landed and been set back. Nothing is pushed again; check the PR, then cancel and preview again."
 	}
 };
-var locale = (globalThis.navigator?.language || "en").toLowerCase().startsWith("zh") ? "zh-TW" : "en";
+function detectLocale(language = globalThis.navigator?.language || "en") {
+	return /^zh-(?:tw|hk|mo|hant)(?:-|$)/i.test(language) ? "zh-TW" : "en";
+}
+function initialLocale(storage, language = globalThis.navigator?.language) {
+	try {
+		const saved = (storage === void 0 ? globalThis.localStorage : storage)?.getItem("batc.lang");
+		if (saved === "en" || saved === "zh-TW") return saved;
+	} catch {}
+	return detectLocale(language);
+}
+var locale = initialLocale();
+if (globalThis.document) document.documentElement.lang = locale;
+function setLocale(value) {
+	if (!["en", "zh-TW"].includes(value)) return;
+	try {
+		globalThis.localStorage?.setItem("batc.lang", value);
+	} catch {}
+	locale = value;
+	if (globalThis.document) document.documentElement.lang = value;
+}
 function t(key, vars = {}) {
 	return (STRINGS[locale][key] ?? STRINGS["zh-TW"][key] ?? key).replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ""));
 }
@@ -14122,7 +14187,7 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 //#endregion
 //#region src/global-screens.js
 function setupGuide() {
-	return (typeof navigator !== "undefined" ? navigator.language || "" : "").toLowerCase().startsWith("zh") ? "https://github.com/TED-H-com/bat-agent-connector/blob/main/docs/getting-started.zh-TW.md" : "https://github.com/TED-H-com/bat-agent-connector/blob/main/docs/getting-started.md";
+	return locale === "zh-TW" ? "https://github.com/TED-H-com/bat-agent-connector/blob/main/docs/getting-started.zh-TW.md" : "https://github.com/TED-H-com/bat-agent-connector/blob/main/docs/getting-started.md";
 }
 function inboxRow({ h, key, title, href, meta, pill, action, detailsLabel, onOpen }) {
 	const article = h("article", {
@@ -52877,6 +52942,13 @@ function validSetupEndpoint(value) {
 	}
 }
 var validSetupHostId = (value) => /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(value);
+function setupConnectionStatus(host) {
+	return [
+		"connected",
+		"checking",
+		"unreachable"
+	].includes(host.connection_status) ? host.connection_status : host.connected === true ? "connected" : "checking";
+}
 function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButton, onConfigured, caps }) {
 	const key = `batc.managed.setup.${namespace}`;
 	let saved = {}, snapshot = null, busy = false, disposed = false, operation = null, readSerial = 0, readReady = false, hostDisclosureReady = false;
@@ -53246,10 +53318,139 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		"data-setup-connect": ""
 	}, h("summary", {}, t("setup_host_title")), hostForm);
 	const operationReceipt = h("div", { "data-setup-receipt": "" });
+	const connectionStatus = h("div", { "data-setup-host-status": "" });
+	const automaticStatus = h("p", {
+		role: "status",
+		"data-setup-progress": ""
+	}, t("setup_loading"));
+	const automaticButton = h("button", {
+		type: "button",
+		class: "primary setup-automatic",
+		disabled: true,
+		onclick: () => automatic().catch(showError)
+	}, t("setup_automatic"));
+	const connectionChoice = h("select", { "aria-label": t("setup_connection_choice") });
+	connectionChoice.addEventListener("change", () => {
+		if (!alive() || busy || saved.intent) return;
+		saved.import_profile_id = "";
+		try {
+			persist();
+		} catch (error) {
+			showError(error);
+		}
+	});
+	const choiceField = h("label", {
+		class: "setup-field",
+		hidden: true
+	}, t("setup_choose_connection"), connectionChoice);
+	const copyInput = h("input", {
+		type: "password",
+		autocomplete: "off",
+		maxlength: 8192,
+		"aria-label": t("setup_copy_label"),
+		"aria-describedby": "setup-copy-help setup-copy-error"
+	});
+	const copyError = h("p", {
+		id: "setup-copy-error",
+		class: "error",
+		role: "alert",
+		hidden: true
+	});
+	const copyForm = h("form", {
+		hidden: true,
+		"data-setup-copy": "",
+		onsubmit: (event) => {
+			event.preventDefault();
+			const parsed = parseBatConnectionUrl(copyInput.value);
+			copyInput.value = "";
+			copyError.hidden = !!parsed;
+			copyError.textContent = parsed ? "" : t("setup_invalid_connection_url");
+			if (!parsed || !alive() || busy || saved.intent || !readReady) return;
+			try {
+				applyConnection(parsed);
+				run("host", true);
+			} catch (error) {
+				showError(error);
+			}
+		}
+	}, h("p", { id: "setup-copy-help" }, t("setup_copy_help")), h("label", { class: "setup-field" }, t("setup_copy_label"), copyInput), copyError, h("button", {
+		type: "submit",
+		class: "primary"
+	}, t("setup_continue")));
+	const simple = h("div", { "data-setup-simple": "" }, h("p", {}, t("setup_simple_help")), choiceField, automaticButton, copyForm);
+	const advanced = h("details", { "data-setup-advanced": "" }, h("summary", {}, t("setup_advanced")), hostDisclosure, h("details", {}, h("summary", {}, t("setup_repository_title")), repoForm), h("details", {}, h("summary", {}, t("setup_verification_title")), verificationForm));
 	const box = h("section", {
 		class: "panel ui-section-card managed-setup",
 		"data-managed-setup": ""
-	}, h("header", {}, h("h2", {}, t("setup_title"), " ", unsaved)), summary, actions, message, receipt, hostDisclosure, h("details", {}, h("summary", {}, t("setup_repository_title")), repoForm), h("details", {}, h("summary", {}, t("setup_verification_title")), verificationForm), h("details", { "data-setup-details": "" }, h("summary", {}, t("global_details")), operationReceipt, h("p", {}, t("setup_resume_help"))));
+	}, h("header", {}, h("h2", {}, t("setup_title"), " ", unsaved)), simple, automaticStatus, connectionStatus, actions, message, receipt, advanced, h("details", { "data-setup-details": "" }, h("summary", {}, t("global_details")), summary, operationReceipt, h("p", {}, t("setup_resume_help"))));
+	function defaultHost() {
+		if (fields.get("host").value || saved.intent) return;
+		const names = new Set((snapshot?.hosts || []).map((row) => row.name));
+		let base = "bat";
+		try {
+			if ([
+				"127.0.0.1",
+				"[::1]",
+				"localhost"
+			].includes(new URL(fields.get("url").value).hostname.toLowerCase())) base = "local";
+		} catch {}
+		let name = base, suffix = 2;
+		while (names.has(name)) name = `${base}-${suffix++}`;
+		fields.get("host").value = saved.host = name;
+	}
+	function applyConnection(parsed) {
+		fields.get("connection_url").value = "";
+		for (const [name, value] of Object.entries({
+			url: parsed.endpoint,
+			fingerprint: parsed.fingerprint,
+			bat_secret: parsed.token
+		})) {
+			fields.get(name).value = value;
+			fieldError(name, null);
+			if (name !== "bat_secret") saved[name] = value;
+		}
+		defaultHost();
+		stagedSecrets.delete("host");
+		saved.import_profile_id = "";
+		profile.value = "";
+		manual.open = false;
+		fieldHint("bat_secret", t("setup_token_hint"));
+		pasteRead.textContent = t("setup_connection_url_read", {
+			host: parsed.endpoint.slice(6),
+			fingerprint: `${parsed.fingerprint.slice(0, 4)}…${parsed.fingerprint.slice(-4)}`
+		});
+		pasteRead.hidden = false;
+		persist();
+		unsaved.hidden = false;
+	}
+	async function automatic() {
+		if (!alive() || busy || !readReady || !snapshot || snapshot.busy || saved.intent || !allowed("host")) return;
+		const profiles = (snapshot.profiles || []).filter((row) => row.token_available);
+		const selected = profiles.find((row) => row.id === connectionChoice.value) || (profiles.length === 1 ? profiles[0] : null);
+		if (!fields.get("bat_secret").value && !usableSecret("host") && !saved.import_profile_id) {
+			if (!selected) {
+				if (profiles.length > 1) {
+					choiceField.hidden = false;
+					connectionChoice.focus();
+				} else {
+					copyForm.hidden = false;
+					automaticButton.hidden = true;
+					copyInput.focus();
+				}
+				return;
+			}
+			saved.import_profile_id = selected.id;
+			profile.value = selected.id;
+			for (const name of [
+				"url",
+				"fingerprint",
+				"profile_id"
+			]) fields.get(name).value = saved[name] = selected[name] || "";
+		}
+		defaultHost();
+		persist();
+		await run("host", true);
+	}
 	function suggestLocal() {
 		if (!snapshot || snapshot.hosts?.length !== 0 || fields.get("host").value) return;
 		try {
@@ -53277,29 +53478,8 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		}
 		node.value = "";
 		fieldError("connection_url", null);
-		for (const [name, value] of Object.entries({
-			url: parsed.endpoint,
-			fingerprint: parsed.fingerprint,
-			bat_secret: parsed.token
-		})) {
-			fields.get(name).value = value;
-			fieldError(name, null);
-			if (name !== "bat_secret") saved[name] = value;
-		}
-		stagedSecrets.delete("host");
-		saved.import_profile_id = "";
-		profile.value = "";
-		manual.open = false;
-		fieldHint("bat_secret", t("setup_token_hint"));
-		pasteRead.textContent = t("setup_connection_url_read", {
-			host: parsed.endpoint.slice(6),
-			fingerprint: `${parsed.fingerprint.slice(0, 4)}…${parsed.fingerprint.slice(-4)}`
-		});
-		pasteRead.hidden = false;
 		try {
-			suggestLocal();
-			persist();
-			unsaved.hidden = false;
+			applyConnection(parsed);
 		} catch (error) {
 			showError(error);
 		}
@@ -53321,7 +53501,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		stagedSecrets.delete(kind);
 		return null;
 	};
-	function validateHost(only) {
+	function validateHost(only, defaults = false) {
 		const value = (name) => fields.get(name).value.trim(), faults = {};
 		if (fields.get("connection_url").value) faults.connection_url = "setup_invalid_connection_url";
 		if (!value("host")) faults.host = "setup_required";
@@ -53334,7 +53514,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		const token = fields.get("bat_secret").value;
 		if (token && (token.length < 8 || token.length > 4096 || /[^\x21-\x7e]/.test(token))) faults.bat_secret = "error_code_INVALID_SECRET";
 		else if (!token && !usableSecret("host") && !saved.import_profile_id && !snapshot?.hosts?.some((host) => host.name === value("host") && host.token_available)) faults.bat_secret = "error_code_CREDENTIAL_REQUIRED";
-		if (fields.get("orchestrate").checked && !value("managed_roots")) faults.managed_roots = "error_code_MANAGED_ROOT_REQUIRED";
+		if (!defaults && fields.get("orchestrate").checked && !value("managed_roots")) faults.managed_roots = "error_code_MANAGED_ROOT_REQUIRED";
 		const names = [
 			"connection_url",
 			"host",
@@ -53350,7 +53530,10 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}
 	function showError(error, options) {
 		if (alive()) {
+			const codeKey = `error_code_${error?.code}`;
+			const summary = error?.code && t(codeKey) !== codeKey ? t(codeKey) : [t("setup_verification_invalid"), t("setup_receipt_mismatch")].includes(error?.message) ? error.message : t("error_generic");
 			message.replaceChildren(errorBox(error, {
+				summary,
 				...options,
 				within: message
 			}));
@@ -53376,6 +53559,12 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			}
 			scope.hidden = !!allowed(kind);
 		}
+		automaticButton.disabled = !!locked || !allowed("host");
+		for (const field of copyForm.querySelectorAll("input,button")) field.disabled = !!locked || !allowed("host");
+		connectionChoice.disabled = !!locked || !allowed("host");
+		simple.hidden = !!snapshot?.hosts?.length;
+		automaticStatus.textContent = busy ? t("setup_checking") : operation?.status === "succeeded" && operation.action === "setup.host" || snapshot?.hosts?.some((row) => setupConnectionStatus(row) === "connected") ? t("setup_ready") : operation && !terminal() ? t("setup_saving") : operation && terminal() ? t("setup_failed_operation") : snapshot?.hosts?.length ? "" : !readReady ? t("setup_loading") : t("setup_waiting");
+		automaticStatus.hidden = !automaticStatus.textContent;
 		const base = saved.verification_base;
 		const stale = base && base.revision !== snapshot?.revision;
 		verificationNotice.hidden = !stale;
@@ -53430,9 +53619,9 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			if (alive()) update();
 		}
 	}
-	async function run(kind) {
+	async function run(kind, defaults = false) {
 		const form = kind === "host" ? hostForm : kind === "repository" ? repoForm : verificationForm;
-		if (!alive() || busy || composing.size || !snapshot || !readReady || snapshot.busy || saved.intent || !allowed(kind) || kind === "host" && !validateHost() || !form.reportValidity()) return;
+		if (!alive() || busy || composing.size || !snapshot || !readReady || snapshot.busy || saved.intent || !allowed(kind) || kind === "host" && !validateHost(void 0, defaults) || !form.reportValidity()) return;
 		busy = true;
 		update();
 		message.replaceChildren();
@@ -53440,7 +53629,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			if (kind === "verification" && saved.verification_base && (!validVerification(saved.verification_base) || !/^[0-9a-f]{64}$/.test(saved.verification_base.revision))) throw Error(t("setup_verification_invalid"));
 			persist();
 			const value = (name) => fields.get(name).value.trim();
-			const checked = (name) => fields.get(name).checked;
+			const checked = (name) => !defaults && fields.get(name).checked;
 			const tokenField = kind === "verification" ? null : fields.get(kind === "host" ? "bat_secret" : "github_secret");
 			let secretRef = usableSecret(kind);
 			if (tokenField?.value) {
@@ -53467,8 +53656,8 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				writes: checked("writes"),
 				orchestrate: checked("orchestrate"),
 				shared_clone_worktrees: checked("shared_clone_worktrees"),
-				managed_roots: value("managed_roots").split(/\r?\n|;/).map((item) => item.trim()).filter(Boolean),
-				...value("ssh_alias") ? { ssh_alias: value("ssh_alias") } : {}
+				managed_roots: defaults ? [] : value("managed_roots").split(/\r?\n|;/).map((item) => item.trim()).filter(Boolean),
+				...!defaults && value("ssh_alias") ? { ssh_alias: value("ssh_alias") } : {}
 			} : kind === "repository" ? {
 				host: value("repository_host"),
 				workspace_id: value("workspace_id"),
@@ -53495,6 +53684,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				}
 			};
 			persist();
+			automaticStatus.textContent = t("setup_saving");
 			await sendOriginal();
 			await refresh();
 		} catch (error) {
@@ -53586,6 +53776,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				if ([403, 404].includes(error.status)) {
 					snapshot = null;
 					summary.replaceChildren();
+					connectionStatus.replaceChildren();
 					verificationCommands.replaceChildren();
 					profile.replaceChildren();
 					profileField.hidden = true;
@@ -53621,14 +53812,23 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			onclick: () => fillVerification(project)
 		}, t("setup_verification_edit", { project })))));
 		const hosts = result.hosts?.length || 0, repositories = result.repositories?.length || 0;
+		connectionStatus.replaceChildren(...(result.hosts || []).map((row) => {
+			const status = setupConnectionStatus(row);
+			return h("div", { "data-setup-host-state": status }, h("p", {}, h("strong", {}, row.name), " · ", t(`setup_connection_${status}`)), status === "connected" ? null : h("p", { class: "muted" }, t(status === "unreachable" ? "setup_connection_action" : "setup_connection_checking_help")));
+		}));
 		summary.replaceChildren(h("p", {}, t("setup_counts", {
 			hosts,
 			repositories,
 			hostLabel: t(hosts === 1 ? "setup_count_host_one" : "setup_count_host_many"),
 			repositoryLabel: t(repositories === 1 ? "setup_count_repository_one" : "setup_count_repository_many")
-		})), ...(result.hosts || []).map((row) => h("p", {}, h("strong", {}, row.name), " · ", t(row.connected ? "setup_connected" : "setup_unverified"), " · ", row.url)), ...[result.busy ? h("p", { class: "note warn" }, t("setup_busy")) : null].filter(Boolean));
+		})), ...(result.hosts || []).map((row) => h("p", {}, h("strong", {}, row.name), " · ", row.url)), ...[result.busy ? h("p", { class: "note warn" }, t("setup_busy")) : null].filter(Boolean));
 		profile.replaceChildren(h("option", { value: "" }, t("setup_manual_profile")), ...(result.profiles || []).map((row) => h("option", { value: row.id }, row.name || row.id)));
 		profile.value = saved.import_profile_id || "";
+		const choice = connectionChoice.value;
+		const usableProfiles = (result.profiles || []).filter((row) => row.token_available);
+		connectionChoice.replaceChildren(h("option", { value: "" }, t("setup_choose_placeholder")), ...usableProfiles.map((row) => h("option", { value: row.id }, row.name || row.id)));
+		connectionChoice.value = usableProfiles.some((row) => row.id === choice) ? choice : "";
+		choiceField.hidden = usableProfiles.length <= 1;
 		profileField.hidden = !(result.profiles?.length || result.profiles_error);
 		profile.hidden = profileField.hidden;
 		profilesError.hidden = !result.profiles_error;
@@ -53648,6 +53848,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			}
 		},
 		dispose() {
+			copyInput.value = "";
 			disposed = true;
 			stagedSecrets.clear();
 			for (const name of [
@@ -68840,6 +69041,23 @@ async function fleetTailscale(root, guard) {
 	} catch {}
 	return () => {};
 }
+function languageSwitch() {
+	return h("div", {
+		class: "setup-language",
+		role: "group",
+		"aria-label": t("setup_language"),
+		"data-language-switch": ""
+	}, h("span", {}, t("setup_language")), ...[["en", "setup_language_en"], ["zh-TW", "setup_language_zh"]].map(([value, label]) => h("button", {
+		type: "button",
+		class: "secondary",
+		"aria-pressed": locale === value ? "true" : "false",
+		onclick: () => {
+			if (locale === value) return;
+			setLocale(value);
+			route();
+		}
+	}, t(label))));
+}
 function openSettings(main, { exclusive = false, refreshButton } = {}) {
 	const memory = viewState(state.namespace || "", "", "settings");
 	const params = new URLSearchParams(location.hash.split("?")[1] || "");
@@ -68903,7 +69121,7 @@ function openSettings(main, { exclusive = false, refreshButton } = {}) {
 		desktopBuild = status.app_build;
 		if (frame.root.isConnected) frame.panel("about").querySelector("[data-build-line]").textContent = buildLine(clientIdentity(diagnosticsClient()), t);
 	}).catch(() => {});
-	main.append(frame.root);
+	main.append(languageSwitch(), frame.root);
 	const back = connectionReturn(params.get("from"));
 	if (back) frame.panel("connection").append(h("a", {
 		href: back.href,
@@ -68991,6 +69209,7 @@ function viewBrowserSignedOut(main) {
 			body: h("p", {}, t("token_help"))
 		}), info)
 	});
+	root.querySelector(".global-first-card").prepend(languageSwitch());
 	main.append(root);
 }
 function viewSettings(main) {
@@ -69038,7 +69257,10 @@ async function viewManagedSettings(main) {
 			state.caps = caps;
 		}
 	});
-	frame.panel("connection").append(...!state.caps.hosts?.length ? [setup.box, local] : [local, setup.box]);
+	if (!state.caps.hosts?.length) {
+		setup.box.querySelector("[data-setup-advanced]").append(local);
+		frame.panel("connection").append(setup.box);
+	} else frame.panel("connection").append(local, setup.box);
 	await setup.load();
 	try {
 		guard();
@@ -69145,7 +69367,7 @@ async function viewManagedSettings(main) {
 				frame.panel("desktop").append(h("details", {
 					class: "panel",
 					"data-managed-join": ""
-				}, h("summary", {}, t("managed_join_existing")), form));
+				}, h("summary", {}, t("setup_advanced")), h("h3", {}, t("managed_join_existing")), form));
 				frame.show("desktop");
 			}
 		} catch (error) {
@@ -69353,7 +69575,7 @@ async function viewNativeSettings(main) {
 				});
 			} }, h("p", {}, t("desktop_setup_help")), h("div", { class: "capture-fields" }, h("label", {}, t("desktop_endpoint"), endpoint), h("label", {}, t("desktop_expected_actor"), actor)), h("p", { class: "muted" }, t("desktop_setup_origin")), h("div", { class: "actions" }, review));
 			if (status.configuration_source === "managed" && status.error) {
-				setup.append(h("h3", {}, t("managed_recovery_title")), h("p", {}, t("managed_recovery_help")), h("details", {}, h("summary", {}, t("managed_join_existing")), form));
+				setup.append(h("h3", {}, t("managed_recovery_title")), h("p", {}, t("managed_recovery_help")), h("details", {}, h("summary", {}, t("setup_advanced")), h("h3", {}, t("managed_join_existing")), form));
 				introduction.hidden = true;
 			} else setup.append(form);
 			connectionDetails.append(h("div", { class: "actions" }, reload));

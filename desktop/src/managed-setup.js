@@ -29,6 +29,11 @@ export function validSetupEndpoint(value) {
   } catch {return false;}
 }
 export const validSetupHostId = value => /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(value);
+// Legacy servers report a socket bool; false alone cannot prove failed reachability.
+export function setupConnectionStatus(host) {
+  return ['connected', 'checking', 'unreachable'].includes(host.connection_status) ? host.connection_status
+    : host.connected === true ? 'connected' : 'checking';
+}
 // Guided configuration of the owned central. Secrets stay in input memory until staged.
 // Durable operations retain their exact request/key; reopening never starts a new intent.
 export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refreshButton, onConfigured, caps}) {
@@ -220,13 +225,83 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   const actions = h('div', {class: 'actions', hidden: true, 'data-setup-actions': ''}, sessions, retry, next);
   const hostDisclosure = h('details', {open: true, 'data-setup-connect': ''}, h('summary', {}, t('setup_host_title')), hostForm);
   const operationReceipt = h('div', {'data-setup-receipt': ''});
-  const box = h("section", {class: "panel ui-section-card managed-setup", "data-managed-setup": ""},
-    h('header', {}, h("h2", {}, t("setup_title"), " ", unsaved)), summary,
-    actions, message, receipt,
+  const connectionStatus = h('div', {'data-setup-host-status': ''});
+  const automaticStatus = h('p', {role: 'status', 'data-setup-progress': ''}, t('setup_loading'));
+  const automaticButton = h('button', {type: 'button', class: 'primary setup-automatic', disabled: true,
+    onclick: () => automatic().catch(showError)}, t('setup_automatic'));
+  const connectionChoice = h('select', {'aria-label': t('setup_connection_choice')});
+  connectionChoice.addEventListener('change', () => {
+    if (!alive() || busy || saved.intent) return;
+    saved.import_profile_id = '';
+    try {persist();} catch (error) {showError(error);}
+  });
+  const choiceField = h('label', {class: 'setup-field', hidden: true}, t('setup_choose_connection'), connectionChoice);
+  const copyInput = h('input', {type: 'password', autocomplete: 'off', maxlength: 8192,
+    'aria-label': t('setup_copy_label'), 'aria-describedby': 'setup-copy-help setup-copy-error'});
+  const copyError = h('p', {id: 'setup-copy-error', class: 'error', role: 'alert', hidden: true});
+  const copyForm = h('form', {hidden: true, 'data-setup-copy': '', onsubmit: event => {
+    event.preventDefault();
+    const parsed = parseBatConnectionUrl(copyInput.value);
+    copyInput.value = ''; // A secret-bearing link is never kept or echoed, even on error.
+    copyError.hidden = !!parsed;
+    copyError.textContent = parsed ? '' : t('setup_invalid_connection_url');
+    if (!parsed || !alive() || busy || saved.intent || !readReady) return;
+    try {applyConnection(parsed); void run('host', true);} catch (error) {showError(error);}
+  }}, h('p', {id: 'setup-copy-help'}, t('setup_copy_help')),
+    h('label', {class: 'setup-field'}, t('setup_copy_label'), copyInput), copyError,
+    h('button', {type: 'submit', class: 'primary'}, t('setup_continue')));
+  const simple = h('div', {'data-setup-simple': ''}, h('p', {}, t('setup_simple_help')),
+    choiceField, automaticButton, copyForm);
+  const advanced = h('details', {'data-setup-advanced': ''}, h('summary', {}, t('setup_advanced')),
     hostDisclosure,
     h("details", {}, h("summary", {}, t("setup_repository_title")), repoForm),
-    h("details", {}, h("summary", {}, t("setup_verification_title")), verificationForm),
-    h('details', {'data-setup-details': ''}, h('summary', {}, t('global_details')), operationReceipt, h('p', {}, t('setup_resume_help'))));
+    h("details", {}, h("summary", {}, t("setup_verification_title")), verificationForm));
+  const box = h("section", {class: "panel ui-section-card managed-setup", "data-managed-setup": ""},
+    h('header', {}, h("h2", {}, t("setup_title"), " ", unsaved)),
+    simple, automaticStatus, connectionStatus, actions, message, receipt,
+    advanced,
+    h('details', {'data-setup-details': ''}, h('summary', {}, t('global_details')), summary,
+      operationReceipt, h('p', {}, t('setup_resume_help'))));
+  function defaultHost() {
+    if (fields.get('host').value || saved.intent) return;
+    const names = new Set((snapshot?.hosts || []).map(row => row.name));
+    let base = 'bat';
+    try {if (['127.0.0.1', '[::1]', 'localhost'].includes(new URL(fields.get('url').value).hostname.toLowerCase())) base = 'local';} catch { /* manual validation owns malformed endpoints */ }
+    let name = base, suffix = 2;
+    while (names.has(name)) name = `${base}-${suffix++}`;
+    fields.get('host').value = saved.host = name;
+  }
+  function applyConnection(parsed) {
+    fields.get('connection_url').value = '';
+    for (const [name, value] of Object.entries({url: parsed.endpoint, fingerprint: parsed.fingerprint, bat_secret: parsed.token})) {
+      fields.get(name).value = value; fieldError(name, null);
+      if (name !== 'bat_secret') saved[name] = value;
+    }
+    defaultHost();
+    stagedSecrets.delete('host'); saved.import_profile_id = ''; profile.value = ''; manual.open = false;
+    fieldHint('bat_secret', t('setup_token_hint'));
+    pasteRead.textContent = t('setup_connection_url_read', {host: parsed.endpoint.slice('wss://'.length),
+      fingerprint: `${parsed.fingerprint.slice(0, 4)}…${parsed.fingerprint.slice(-4)}`});
+    pasteRead.hidden = false;
+    persist(); unsaved.hidden = false;
+  }
+  async function automatic() {
+    if (!alive() || busy || !readReady || !snapshot || snapshot.busy || saved.intent || !allowed('host')) return;
+    // Only reuse an existing explicitly configured, credential-bearing profile.
+    // Multiple profiles require a person's choice; never guess a server or trust pin.
+    const profiles = (snapshot.profiles || []).filter(row => row.token_available);
+    const selected = profiles.find(row => row.id === connectionChoice.value) || (profiles.length === 1 ? profiles[0] : null);
+    if (!fields.get('bat_secret').value && !usableSecret('host') && !saved.import_profile_id) {
+      if (!selected) {
+        if (profiles.length > 1) {choiceField.hidden = false; connectionChoice.focus();}
+        else {copyForm.hidden = false; automaticButton.hidden = true; copyInput.focus();}
+        return;
+      }
+      saved.import_profile_id = selected.id; profile.value = selected.id;
+      for (const name of ['url', 'fingerprint', 'profile_id']) fields.get(name).value = saved[name] = selected[name] || '';
+    }
+    defaultHost(); persist(); await run('host', true);
+  }
   function suggestLocal() {
     if (!snapshot || snapshot.hosts?.length !== 0 || fields.get('host').value) return;
     try {
@@ -242,16 +317,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     const parsed = parseBatConnectionUrl(node.value);
     if (!parsed) {if (reportError) fieldError('connection_url', 'setup_invalid_connection_url'); return;}
     node.value = ''; fieldError('connection_url', null);
-    for (const [name, value] of Object.entries({url: parsed.endpoint, fingerprint: parsed.fingerprint, bat_secret: parsed.token})) {
-      fields.get(name).value = value; fieldError(name, null);
-      if (name !== 'bat_secret') saved[name] = value;
-    }
-    stagedSecrets.delete('host'); saved.import_profile_id = ''; profile.value = ''; manual.open = false;
-    fieldHint('bat_secret', t('setup_token_hint'));
-    pasteRead.textContent = t('setup_connection_url_read', {host: parsed.endpoint.slice('wss://'.length),
-      fingerprint: `${parsed.fingerprint.slice(0, 4)}…${parsed.fingerprint.slice(-4)}`});
-    pasteRead.hidden = false;
-    try {suggestLocal(); persist(); unsaved.hidden = false;} catch (error) {showError(error);}
+    try {applyConnection(parsed);} catch (error) {showError(error);}
   }
   fields.get('connection_url').addEventListener('input', () => consumeConnectionUrl(false));
   for (const event of ['change', 'blur']) fields.get('connection_url').addEventListener(event, () => consumeConnectionUrl());
@@ -266,7 +332,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     if (secret && secret.expiresAt > Date.now()) return secret.ref;
     stagedSecrets.delete(kind); return null;
   };
-  function validateHost(only) {
+  function validateHost(only, defaults = false) {
     const value = name => fields.get(name).value.trim(), faults = {};
     if (fields.get('connection_url').value) faults.connection_url = 'setup_invalid_connection_url';
     if (!value('host')) faults.host = 'setup_required';
@@ -280,13 +346,18 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     if (token && (token.length < 8 || token.length > 4096 || /[^\x21-\x7e]/.test(token))) faults.bat_secret = 'error_code_INVALID_SECRET';
     else if (!token && !usableSecret('host') && !saved.import_profile_id &&
         !snapshot?.hosts?.some(host => host.name === value('host') && host.token_available)) faults.bat_secret = 'error_code_CREDENTIAL_REQUIRED';
-    if (fields.get('orchestrate').checked && !value('managed_roots')) faults.managed_roots = 'error_code_MANAGED_ROOT_REQUIRED';
+    if (!defaults && fields.get('orchestrate').checked && !value('managed_roots')) faults.managed_roots = 'error_code_MANAGED_ROOT_REQUIRED';
     const names = ['connection_url', 'host', 'url', 'fingerprint', 'profile_id', 'bat_secret', 'managed_roots'];
     for (const name of only ? [only] : names) fieldError(name, faults[name]);
     if (!only && Object.keys(faults).length) focusField(names.find(name => faults[name]));
     return !Object.keys(faults).length;
   }
-  function showError(error, options) {if (alive()) {message.replaceChildren(errorBox(error, {...options, within:message})); update();}}
+  function showError(error, options) {if (alive()) {
+    const codeKey = `error_code_${error?.code}`;
+    const summary = error?.code && t(codeKey) !== codeKey ? t(codeKey)
+      : [t('setup_verification_invalid'), t('setup_receipt_mismatch')].includes(error?.message) ? error.message : t('error_generic');
+    message.replaceChildren(errorBox(error, {summary, ...options, within:message})); update();
+  }}
   function update() {
     if (!alive()) return;
     const locked = busy || !snapshot || !readReady || !!saved.intent || snapshot.busy;
@@ -296,6 +367,15 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       if (!scope) {scope = h("p", {class: "note", "data-setup-scope": ""}, t("setup_scope_required")); form.prepend(scope);}
       scope.hidden = !!allowed(kind);
     }
+    automaticButton.disabled = !!locked || !allowed('host');
+    for (const field of copyForm.querySelectorAll('input,button')) field.disabled = !!locked || !allowed('host');
+    connectionChoice.disabled = !!locked || !allowed('host');
+    simple.hidden = !!snapshot?.hosts?.length;
+    automaticStatus.textContent = busy ? t('setup_checking')
+      : operation?.status === 'succeeded' && operation.action === 'setup.host' || snapshot?.hosts?.some(row => setupConnectionStatus(row) === 'connected') ? t('setup_ready')
+      : operation && !terminal() ? t('setup_saving') : operation && terminal() ? t('setup_failed_operation')
+      : snapshot?.hosts?.length ? '' : !readReady ? t('setup_loading') : t('setup_waiting');
+    automaticStatus.hidden = !automaticStatus.textContent;
     const base = saved.verification_base;
     const stale = base && base.revision !== snapshot?.revision;
     verificationNotice.hidden = !stale;
@@ -340,10 +420,10 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     catch (error) {handleSubmissionError(error, saved.intent?.request.action.split('.')[1]);}
     finally {busy = false; if (alive()) update();}
   }
-  async function run(kind) {
+  async function run(kind, defaults = false) {
     const form = kind === "host" ? hostForm : kind === "repository" ? repoForm : verificationForm;
     if (!alive() || busy || composing.size || !snapshot || !readReady || snapshot.busy || saved.intent || !allowed(kind) ||
-        kind === 'host' && !validateHost() || !form.reportValidity()) return;
+        kind === 'host' && !validateHost(undefined, defaults) || !form.reportValidity()) return;
     busy = true; update(); message.replaceChildren();
     try {
       if (kind === "verification" && saved.verification_base &&
@@ -351,7 +431,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
         throw Error(t("setup_verification_invalid"));
       persist(); // refuse to submit an intent that cannot survive reload
       const value = name => fields.get(name).value.trim();
-      const checked = name => fields.get(name).checked;
+      const checked = name => !defaults && fields.get(name).checked;
       const tokenField = kind === "verification" ? null : fields.get(kind === "host" ? "bat_secret" : "github_secret");
       let secretRef = usableSecret(kind);
       if (tokenField?.value) {
@@ -364,8 +444,8 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       const params = kind === "host" ? {...(imported ? {import_profile_id: imported} :
         {url: value("url"), fingerprint: value("fingerprint"), profile_id: value("profile_id") || "default"}),
         writes: checked("writes"), orchestrate: checked("orchestrate"), shared_clone_worktrees: checked("shared_clone_worktrees"),
-        managed_roots: value("managed_roots").split(/\r?\n|;/).map(item => item.trim()).filter(Boolean),
-        ...(value("ssh_alias") ? {ssh_alias: value("ssh_alias")} : {})}
+        managed_roots: defaults ? [] : value("managed_roots").split(/\r?\n|;/).map(item => item.trim()).filter(Boolean),
+        ...(!defaults && value("ssh_alias") ? {ssh_alias: value("ssh_alias")} : {})}
         : kind === "repository" ? {host: value("repository_host"), workspace_id: value("workspace_id"), remote_url: value("remote_url"),
           allow_integrate: checked("allow_integrate"), allow_merge: checked("allow_merge"), allow_pr_update: checked("allow_pr_update")}
         : {commands: {...(saved.verification_base || snapshot.verification).commands,
@@ -376,7 +456,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       saved.intent = {key: crypto.randomUUID(), request: {action: `setup.${kind}`,
         target: kind === "host" ? {host: value("host")} : kind === "repository" ? {repository: value("repository")} : {}, params,
         preconditions: {config_revision: kind === "verification" ? saved.verification_base?.revision || snapshot.revision : snapshot.revision}}};
-      persist(); await sendOriginal(); await refresh();
+      persist(); automaticStatus.textContent = t('setup_saving'); await sendOriginal(); await refresh();
     } catch (error) {
       handleSubmissionError(error, kind);
     }
@@ -426,7 +506,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       if (alive() && serial === readSerial) {
         readReady = false;
         if ([403, 404].includes(error.status)) {
-          snapshot = null; summary.replaceChildren(); verificationCommands.replaceChildren(); profile.replaceChildren();
+          snapshot = null; summary.replaceChildren(); connectionStatus.replaceChildren(); verificationCommands.replaceChildren(); profile.replaceChildren();
           profileField.hidden = true; profilesError.hidden = true;
         }
         update();
@@ -449,16 +529,27 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       h("details", {}, h("summary", {}, project), h("pre", {class: "pre"}, argv.join("\n")),
         h("button", {type: "button", class: "mini", onclick: () => fillVerification(project)}, t("setup_verification_edit", {project})))));
     const hosts = result.hosts?.length || 0, repositories = result.repositories?.length || 0;
+    connectionStatus.replaceChildren(...(result.hosts || []).map(row => {
+      const status = setupConnectionStatus(row);
+      return h('div', {'data-setup-host-state': status}, h('p', {}, h('strong', {}, row.name), ' · ', t(`setup_connection_${status}`)),
+        status === 'connected' ? null : h('p', {class: 'muted'}, t(status === 'unreachable' ? 'setup_connection_action' : 'setup_connection_checking_help')));
+    }));
     summary.replaceChildren(h("p", {}, t("setup_counts", {hosts, repositories,
       hostLabel: t(hosts === 1 ? 'setup_count_host_one' : 'setup_count_host_many'),
       repositoryLabel: t(repositories === 1 ? 'setup_count_repository_one' : 'setup_count_repository_many')})),
       ...(result.hosts || []).map(row => h("p", {}, h("strong", {}, row.name), " · ",
-        t(row.connected ? "setup_connected" : "setup_unverified"), " · ", row.url)),
+        row.url)),
       ...[result.busy ? h("p", {class: "note warn"}, t("setup_busy")) : null].filter(Boolean),
       );
     profile.replaceChildren(h("option", {value: ""}, t("setup_manual_profile")),
       ...(result.profiles || []).map(row => h("option", {value: row.id}, row.name || row.id)));
     profile.value = saved.import_profile_id || "";
+    const choice = connectionChoice.value;
+    const usableProfiles = (result.profiles || []).filter(row => row.token_available);
+    connectionChoice.replaceChildren(h('option', {value: ''}, t('setup_choose_placeholder')),
+      ...usableProfiles.map(row => h('option', {value: row.id}, row.name || row.id)));
+    connectionChoice.value = usableProfiles.some(row => row.id === choice) ? choice : '';
+    choiceField.hidden = usableProfiles.length <= 1;
     profileField.hidden = !(result.profiles?.length || result.profiles_error);
     profile.hidden = profileField.hidden;
     profilesError.hidden = !result.profiles_error;
@@ -469,5 +560,5 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   }
   return {box, reload: () => refresh().catch(showError),
     async load() {try {await refresh(); if (saved.intent?.operation_id) await recover();} catch (error) {showError(error);}},
-    dispose() {disposed = true; stagedSecrets.clear(); for (const name of ['connection_url', "bat_secret", "github_secret"]) fields.get(name).value = "";}};
+    dispose() {copyInput.value = ""; disposed = true; stagedSecrets.clear(); for (const name of ['connection_url', "bat_secret", "github_secret"]) fields.get(name).value = "";}};
 }

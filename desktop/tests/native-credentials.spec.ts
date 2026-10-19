@@ -98,7 +98,7 @@ test('managed startup failure remains visible beside advanced external setup', a
   await expectErrorDetails(page, 'MANAGED_RUNTIME_START_FAILED');
   await expect(page.locator('[data-native-setup] input')).toHaveCount(2);
   await expect(page.locator('[data-native-setup] input').first()).toBeHidden();
-  await page.getByText('Join another Connector', {exact: true}).click();
+  await page.locator('[data-native-setup] details > summary').filter({hasText: 'Advanced'}).click();
   await expect(page.locator('[data-native-setup] input').first()).toBeVisible();
   const calls = await page.evaluate(() => (window as any).__credentialFixture.calls);
   expect(calls.some((call: any) => ['connector_setup_configuration', 'connector_enroll', 'connector_connect'].includes(call.command))).toBe(false);

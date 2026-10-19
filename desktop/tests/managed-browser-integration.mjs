@@ -40,6 +40,7 @@ try {
   await page.reload();
   await page.locator("body.has-workspace").waitFor();
   await page.goto(first.endpoint + "/dashboard/#/settings");
+  await page.locator("[data-setup-advanced] > summary").click();
   await page.getByRole("heading", {name: "Connected to your local Connector"}).waitFor();
   await page.getByRole("button", {name: "Disconnect", exact: true}).click();
   await page.waitForFunction(() => !document.body.classList.contains("has-workspace"));

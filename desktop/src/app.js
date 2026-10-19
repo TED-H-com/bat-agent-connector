@@ -45,7 +45,7 @@ import {instructionReceiptPanel} from "./instruction-receipts.js";
 import {createRecordDisclosure} from "./create-record.js";
 // BAT Dashboard: a client of /api/v1 only. Every change is an operation with an Idempotency-Key; text from
 // sessions is always set with textContent (never parsed as HTML).
-import { t, locale } from "./i18n.js";
+import { t, locale, setLocale } from "./i18n.js";
 import {timeStamp, timeText, timeLabel, startTimeTicker} from "./ui/stamps.js";
 import { connectorRequest, connectorUploadArtifact, nativeDiagnosticsSave, nativeDesktop, nativeFileSupport, nativeStatus, nativeConnect, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal } from "./transport/index.ts";
 import { nativeAttachments } from "./native-files.js";
@@ -3207,6 +3207,15 @@ async function fleetTailscale(root, guard) {
   } catch { /* The Fleet panel owns its availability error. */ }
   return () => {};
 }
+function languageSwitch() {
+  return h('div', {class: 'setup-language', role: 'group', 'aria-label': t('setup_language'), 'data-language-switch': ''},
+    h('span', {}, t('setup_language')),
+    ...[['en', 'setup_language_en'], ['zh-TW', 'setup_language_zh']].map(([value, label]) =>
+      h('button', {type: 'button', class: 'secondary', 'aria-pressed': locale === value ? 'true' : 'false', onclick: () => {
+        if (locale === value) return;
+        setLocale(value); void route();
+      }}, t(label))));
+}
 function openSettings(main, {exclusive = false, refreshButton} = {}) {
   const memory = viewState(state.namespace || "", "", "settings");
   const params = new URLSearchParams(location.hash.split("?")[1] || "");
@@ -3233,7 +3242,7 @@ function openSettings(main, {exclusive = false, refreshButton} = {}) {
     desktopBuild=status.app_build;
     if(frame.root.isConnected)frame.panel('about').querySelector('[data-build-line]').textContent=buildLine(clientIdentity(diagnosticsClient()),t);
   }).catch(()=>{});
-  main.append(frame.root);
+  main.append(languageSwitch(), frame.root);
   const back=connectionReturn(params.get('from'));
   if(back)frame.panel('connection').append(h('a',{href:back.href,'data-connection-return':''},t(back.label)));
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
@@ -3282,6 +3291,7 @@ function viewBrowserSignedOut(main) {
       h("a", {class: "global-quiet-link", href: setupGuide()}, t("global_setup_guide"))),
     disclosure({label: t("global_details"), body: h("p", {}, t("token_help"))}), info);
   const root = firstRunCard({h, t, body: form});
+  root.querySelector('.global-first-card').prepend(languageSwitch());
   main.append(root);
 }
 function viewSettings(main) {
@@ -3306,7 +3316,10 @@ async function viewManagedSettings(main) {
       h("p", {class: "muted"}, t("managed_locations_work"))))}), status);
   const setup = managedSetupPanel({h, t, api, guard, namespace: state.namespace, errorBox, refreshButton, caps: () => state.caps,
     onConfigured: async () => {const caps = await api("GET", "/capabilities"); guard(); state.caps = caps;}});
-  frame.panel("connection").append(...(!state.caps.hosts?.length ? [setup.box, local] : [local, setup.box]));
+  if (!state.caps.hosts?.length) {
+    setup.box.querySelector('[data-setup-advanced]').append(local);
+    frame.panel('connection').append(setup.box);
+  } else frame.panel('connection').append(local, setup.box);
   await setup.load();
   try {guard();} catch (error) {
     setup.dispose();
@@ -3349,7 +3362,7 @@ async function viewManagedSettings(main) {
         }}, h("p", {class: "muted"}, t("managed_join_help")),
           h("div", {class: "capture-fields"}, h("label", {}, t("desktop_endpoint"), endpoint),
             h("label", {}, t("desktop_expected_actor"), actor)), review);
-        frame.panel("desktop").append(h("details", {class: "panel", "data-managed-join": ""}, h("summary", {}, t("managed_join_existing")), form));
+        frame.panel("desktop").append(h("details", {class: "panel", "data-managed-join": ""}, h("summary", {}, t("setup_advanced")), h("h3", {}, t("managed_join_existing")), form));
         frame.show("desktop");
       }
     } catch (error) {if (connection.generation === generation) status.append(errorBox(error, {within:status}));}
@@ -3488,7 +3501,7 @@ async function viewNativeSettings(main) {
         h("p", {class: "muted"}, t("desktop_setup_origin")), h("div", {class: "actions"}, review));
       if (status.configuration_source === "managed" && status.error) {
         setup.append(h("h3", {}, t("managed_recovery_title")), h("p", {}, t("managed_recovery_help")),
-          h("details", {}, h("summary", {}, t("managed_join_existing")), form));
+          h("details", {}, h("summary", {}, t("setup_advanced")), h("h3", {}, t("managed_join_existing")), form));
         introduction.hidden = true;
       } else setup.append(form);
       // Keep configuration recovery accessible without making it compete with the first step.

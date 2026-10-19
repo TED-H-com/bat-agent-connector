@@ -149,6 +149,19 @@ export const STRINGS = {
     connection_scope_deploy: "部署",
     connection_scope_integrate: "整合",
     connection_scope_merge: "合併",
+    setup_waiting: "可以開始設定了",
+    setup_connection_connected: "已連線", setup_connection_checking: "確認連線中…", setup_connection_unreachable: "目前無法連線",
+    setup_connection_action: "請確認 BAT 已開啟，再按「重新整理」。", setup_connection_checking_help: "目前還沒有最新的連線結果，請稍後重新整理。",
+    setup_language: "顯示語言", setup_language_en: "English", setup_language_zh: "繁體中文",
+    setup_advanced: "進階設定", setup_automatic: "自動設定",
+    setup_simple_help: "我們會幫你連接 BAT，完成基本設定。其他選項可以之後再調整。",
+    setup_checking: "正在確認連線，請稍候…", setup_saving: "正在儲存設定，快好了…",
+    setup_ready: "設定完成，可以開始使用了。", setup_loading: "正在準備設定…",
+    setup_copy_help: "請在 BAT 開啟「設定 → 遠端 → 遠端存取」，複製連線網址後貼到下方。如果尚未啟動，請先按「啟動伺服器」。",
+    setup_copy_label: "貼上從 BAT 複製的連線網址", setup_continue: "繼續設定",
+    setup_choose_connection: "找到多個已儲存的連線。請選擇要使用的連線，再按「自動設定」。",
+    setup_connection_choice: "要使用的連線", setup_choose_placeholder: "請選擇連線",
+    setup_failed_operation: "設定尚未完成，請查看詳細資料。",
     setup_title: "準備開始工作", setup_unsaved: "有未儲存設定", setup_resume_help: "可稍後繼續。非機密草稿會保留；帳號授權與主機信任仍須由你確認。",
     setup_host_title: "1. 連線至 BAT", setup_host_help: "選取已有的 BAT 連線設定檔，或填入要連線的主機。先確認主機，再選擇可執行的工作。",
     setup_profile: "BAT 連線設定檔", setup_manual_profile: "手動輸入", setup_host_name: "主機代號", setup_host_url: "BAT 連線位址",
@@ -1183,6 +1196,19 @@ export const STRINGS = {
     connection_scope_deploy: "Deploy",
     connection_scope_integrate: "Integrate",
     connection_scope_merge: "Merge",
+    setup_waiting: "Ready to set up",
+    setup_connection_connected: "Connected", setup_connection_checking: "Checking…", setup_connection_unreachable: "Can’t reach this connection",
+    setup_connection_action: "Make sure BAT is open, then select Refresh.", setup_connection_checking_help: "There’s no recent connection result yet. Refresh in a moment.",
+    setup_language: "Language", setup_language_en: "English", setup_language_zh: "繁體中文",
+    setup_advanced: "Advanced", setup_automatic: "Set up automatically",
+    setup_simple_help: "We’ll help you connect to BAT and get things ready. You can adjust other options later.",
+    setup_checking: "Checking your connection. Please wait…", setup_saving: "Saving your settings. Almost there…",
+    setup_ready: "Setup is complete. You’re ready to go.", setup_loading: "Getting setup ready…",
+    setup_copy_help: "In BAT, open Settings → Remote → Remote Access, copy the connection URL and paste it below. If it is not running, choose Start Server first.",
+    setup_copy_label: "Paste the connection link copied from BAT", setup_continue: "Continue setup",
+    setup_choose_connection: "More than one saved connection was found. Choose the one you want, then select Set up automatically.",
+    setup_connection_choice: "Connection to use", setup_choose_placeholder: "Choose a connection",
+    setup_failed_operation: "Setup hasn’t finished. See details for more information.",
     setup_title: "Get ready to work", setup_unsaved: "Unsaved settings", setup_resume_help: "Continue later without losing non-secret drafts. You still confirm account authorization and host trust.",
     setup_host_title: "1. Connect BAT", setup_host_help: "Choose an existing BAT connection profile or enter a host. Verify the host, then choose which work it may run.",
     setup_profile: "BAT connection profile", setup_manual_profile: "Enter manually", setup_host_name: "Host ID", setup_host_url: "BAT endpoint",
@@ -2118,7 +2144,25 @@ export const STRINGS = {
   },
 };
 
-export const locale = (globalThis.navigator?.language || "en").toLowerCase().startsWith("zh") ? "zh-TW" : "en";
+// An explicit choice wins on subsequent launches, including OS locale changes.
+export function detectLocale(language = globalThis.navigator?.language || 'en') {
+  return /^zh-(?:tw|hk|mo|hant)(?:-|$)/i.test(language) ? 'zh-TW' : 'en';
+}
+export function initialLocale(storage, language = globalThis.navigator?.language) {
+  try {
+    const saved = (storage === undefined ? globalThis.localStorage : storage)?.getItem('batc.lang');
+    if (saved === 'en' || saved === 'zh-TW') return saved;
+  } catch { /* OS language still works when storage is unavailable. */ }
+  return detectLocale(language);
+}
+export let locale = initialLocale();
+if (globalThis.document) document.documentElement.lang = locale;
+export function setLocale(value) {
+  if (!['en', 'zh-TW'].includes(value)) return;
+  try {globalThis.localStorage?.setItem('batc.lang', value);} catch { /* session choice */ }
+  locale = value;
+  if (globalThis.document) document.documentElement.lang = value;
+}
 
 export function t(key, vars = {}) {
   const text = STRINGS[locale][key] ?? STRINGS["zh-TW"][key] ?? key;
