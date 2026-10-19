@@ -21601,8 +21601,8 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 	function finite(value) {
 		return typeof value === "number" && Number.isFinite(value) ? value : null;
 	}
-	function cssEscape(value) {
-		return window.CSS?.escape ? CSS.escape(String(value)) : String(value).replace(/"/g, "\\\"");
+	function focusTarget(value) {
+		return Array.from(layout.querySelectorAll("[data-focus-key]")).find((node) => node.getAttribute("data-focus-key") === value);
 	}
 	function cliOf(row) {
 		return (typeof row?.adapter === "string" ? row.adapter : "").split("-")[0] || "";
@@ -22179,8 +22179,8 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 				preference.scroll = table.scrollLeft;
 			}, { passive: true });
 		}
-		if (focusKey) layout.querySelector(`[data-focus-key="${cssEscape(focusKey)}"]`)?.focus({ preventScroll: true });
-		else if (focusRow && document.activeElement === document.body) layout.querySelector(`[data-resource-row="${cssEscape(focusRow)}"]`)?.focus({ preventScroll: true });
+		if (focusKey) focusTarget(focusKey)?.focus({ preventScroll: true });
+		else if (focusRow && document.activeElement === document.body) stageRow(focusRow)?.focus({ preventScroll: true });
 	}
 	function reasonBits(code) {
 		if (typeof code === "string" && Object.hasOwn(reasonLabels, code)) return {
@@ -22275,7 +22275,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		layout.append(panel);
 	}
 	function stageRow(id) {
-		return id ? layout.querySelector(`[data-resource-row="${cssEscape(id)}"]`) : null;
+		return id ? Array.from(layout.querySelectorAll("[data-resource-row]")).find((node) => node.getAttribute("data-resource-row") === id) : null;
 	}
 	function clearInspector() {
 		if (!inspectorPanel) return;
