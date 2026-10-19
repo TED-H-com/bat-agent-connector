@@ -150,7 +150,7 @@ A lost reply does not prove an action failed. Recover the original operation and
 | Use the product | [First use](docs/getting-started.md) · [Windows Fleet](docs/windows.md) |
 | Understand progress | [Progress report](docs/product/progress-2026-10-17.md) · [PM status](docs/product/pm-v1.2-status.md) · [Implementation history](docs/product/implementation-status.md) |
 | Continue development | [Documentation handoff](docs/handoff/2026-10-14-docs-ux-v2.md) · [Adopted plan](docs/product/pm-v1.2-plan.md) · [Architecture decisions](docs/product/realignment-v2.md) |
-| Integrate an agent | [Agent skills](docs/agent-skills.md) · [API](docs/design/api-v1.md) · [Protocol](docs/PROTOCOL.md) |
+| Integrate an agent | [Agent skills](docs/agent-skills.md) · [Automation API](docs/automation-api.md) · [API](docs/design/api-v1.md) · [Protocol](docs/PROTOCOL.md) |
 | Follow results | [Artifacts](docs/design/artifacts.md) · [Delivery](docs/design/delivery.md) · [Cleanup](docs/design/cleanup.md) |
 
 ```bash
