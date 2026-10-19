@@ -1,6 +1,8 @@
 import {test, expect} from "@playwright/test";
 import {readFileSync} from "node:fs";
+import {fleetDiagnosticsTests} from './fleet-diagnostics';
 const fixture = JSON.parse(readFileSync(new URL("./fixtures/fleet-status.json", import.meta.url), "utf8")).result;
+fleetDiagnosticsTests(setup, false);
 
 async function setup(page: any, options: any = {}) {
   if (options.clock) await page.clock.install();
@@ -212,9 +214,9 @@ test('Fleet preserves unmapped blocking reasons and native diagnostic codes', as
       Object.assign(row, {level: 'down', code: native ? 'OWNER_UNPROVEN' : null, blocking: native ? 'auth' : 'OWNER_UNPROVEN'});
     }, native);
     await page.getByRole('button', {name: 'Read status', exact: true}).click();
-    const status = page.locator('[data-fleet-route-status]');
-    await expect(status.getByText('Details: OWNER_UNPROVEN', {exact: true})).toBeVisible();
-    await status.locator('summary').click();
+    const status = page.locator('[data-fleet-diagnosis="node-1"]');
+    await expect(status.getByText('The background connection outcome is unconfirmed', {exact: true})).toBeVisible();
+    if (!native) await status.locator('summary').click();
     await expect(status.locator('code').filter({hasText: 'OWNER_UNPROVEN'})).toBeVisible();
     if (native) await expect(status.locator('code').filter({hasText: 'auth'})).toBeVisible();
   }

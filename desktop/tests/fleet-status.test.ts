@@ -1,35 +1,70 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {fleetStatus, fleetStatusKey} from '../src/fleet-status.js';
+import {fleetDiagnosis, fleetStatus} from '../src/fleet-status.js';
 import {STRINGS} from '../src/i18n.js';
+import {readFileSync} from 'node:fs';
 
-test('Fleet wake, retry and pending messages are localized with raw codes only in details', () => {
-  for (const locale of ['en', 'zh-TW']) {
-    const strings = STRINGS[locale];
-    const t = (key: string) => strings[key];
+const fixture = JSON.parse(readFileSync(new URL('./fixtures/fleet-status.json', import.meta.url), 'utf8')).result;
+const diagnose = (snapshot: any, readable = true, row = snapshot.readiness.hosts[0], kind = 'host') =>
+  fleetDiagnosis(row, {snapshot, readable, name: row?.name || 'node-1', kind});
+
+test('cached success is withdrawn on failed reads, stale evidence, stopped monitors and changed selection', () => {
+  assert.equal(diagnose(fixture).state, 'ready');
+  assert.equal(diagnose(fixture, false).state, 'unavailable');
+  for (const [change, state] of [
+    [(doc: any) => {doc.readiness.state = 'stale';}, 'stale'],
+    [(doc: any) => {doc.readiness.hosts[0].stale = true;}, 'stale'],
+    [(doc: any) => {doc.monitor.state = 'stopped';}, 'stopped'],
+    [(doc: any) => {doc.selection.applied_revision = 'old';}, 'checking'],
+    [(doc: any) => {doc.readiness.hosts[0].selected = false;}, 'checking'],
+    [(doc: any) => {doc.selection.connections = [];}, 'off'],
+  ] as const) {
+    const doc = structuredClone(fixture); change(doc);
+    const result = diagnose(doc);
+    assert.equal(result.state, state);
+    assert.ok(result.steps.every(step => step.state === 'unchecked'));
+  }
+  assert.equal(diagnose(fixture, true, null).state, 'checking');
+});
+
+test('identity failures leave downstream service and workspace unchecked even with contradictory flags', () => {
+  const doc = structuredClone(fixture);
+  Object.assign(doc.readiness.hosts[0], {code: 'BAT_AUTH_REFUSED', blocking: 'auth'});
+  const result = diagnose(doc);
+  assert.equal(result.state, 'identity');
+  assert.deepEqual(result.steps.map(step => step.state), ['passed', 'attention', 'unchecked', 'unchecked']);
+  doc.readiness.hosts[0].blocking = null;
+  assert.deepEqual(diagnose(doc).steps.map(step => step.state), ['passed', 'attention', 'unchecked', 'unchecked']);
+});
+
+test('BAT requires complete evidence; Connector never claims a BAT workspace or execution capability', () => {
+  for (const field of ['tunnel', 'tls', 'auth', 'bat', 'workspace']) {
+    const doc = structuredClone(fixture);
+    delete doc.readiness.hosts[0].layers[field];
+    assert.equal(diagnose(doc).state, 'checking');
+  }
+  const result = diagnose(fixture, true, fixture.readiness.connector, 'connector');
+  assert.equal(result.state, 'ready');
+  assert.deepEqual(result.steps.map(step => step.id), ['network', 'identity', 'service']);
+  assert.equal(result.steps[1].state, 'unchecked'); // Legacy connector has no auth layer.
+});
+
+test('errors have bilingual next steps, with raw diagnostic codes confined to details', () => {
+  const examples = {TAILSCALE_WAKING: 'waking', ROUTE_UNAVAILABLE: 'network', TLS_IDENTITY_MISMATCH: 'trust',
+    BAT_AUTH_REFUSED: 'identity', CONNECTOR_SCOPE_MISSING: 'identity', BAT_VERSION_UNSUPPORTED: 'version',
+    BAT_PROTOCOL_INVALID: 'service', WORKSPACE_BINDING_MISMATCH: 'workspace', INVENTORY_INVALID: 'configuration',
+    OWNER_UNPROVEN: 'ownership', STOP_UNCONFIRMED: 'ownership', PROBE_TIMEOUT: 'timeout', PROBE_PENDING: 'checking',
+    PROBE_STALE: 'stale', NEW_UNKNOWN_CODE: 'unknown', constructor: 'unknown'};
+  for (const locale of ['en', 'zh-TW']) for (const [code, expected] of Object.entries(examples)) {
+    const row = {...fixture.readiness.hosts[0], code};
+    assert.equal(diagnose(fixture, true, row).state, expected);
+    const t = (key: string) => {assert.ok(STRINGS[locale][key], key); return STRINGS[locale][key];};
     const h = (tag: string, attrs: unknown, ...children: unknown[]) => ({tag, attrs, children});
-    for (const code of ['TAILSCALE_WAKING', 'ROUTE_UNAVAILABLE', 'PROBE_PENDING']) {
-      const key = fleetStatusKey(code);
-      assert.ok(key);
-      assert.ok(t(key));
-      assert.ok(t('fleet_status_details'));
-      assert.ok(!t(key).includes(code));
-      assert.equal(/[\u3400-\u9fff]/u.test(t(key)), locale === 'zh-TW');
-      const view = fleetStatus({code}, {h, t});
-      assert.deepEqual(view.children, [
-        h('span', {role: 'status'}, t(key)),
-        h('details', {}, h('summary', {}, t('fleet_status_details')), h('code', {}, code), null),
-      ]);
-    }
-    for (const row of [{code: 'OWNER_UNPROVEN', blocking: 'tunnel'}, {blocking: 'OWNER_UNPROVEN'}, {blocking: 'tls'}]) {
-      const reason = row.code || row.blocking;
-      const view = fleetStatus(row, {h, t});
-      const details = view.children[1] as ReturnType<typeof h>;
-      assert.deepEqual(details.children[0], h('summary', {}, `${t('fleet_status_details')}: ${reason}`));
-      assert.deepEqual(details.children[1], h('code', {}, reason));
-      if (row.code) assert.deepEqual(details.children[2], h('code', {}, row.blocking));
-    }
-    assert.ok(fleetStatus({blocking: 'PROBE_PENDING'}, {h, t}));
-    assert.equal(fleetStatus(null, {h, t}), null);
+    const view = fleetStatus(row, {h, t, snapshot: fixture, readable: true, entry: fixture.configuration.connections[0], detailsState: new Map()});
+    const text = JSON.stringify(view.children.slice(0, 2));
+    assert.ok(!text.includes(code));
+    assert.equal(/[\u3400-\u9fff]/u.test(text), locale === 'zh-TW');
+    assert.ok(JSON.stringify(view.children[2]).includes(code));
+    if (code === 'ROUTE_UNAVAILABLE') assert.ok(!text.includes('Tailscale'));
   }
 });
