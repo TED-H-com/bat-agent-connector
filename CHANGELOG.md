@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Adopt verified existing uv tool installations into managed Connector releases, with guarded restoration.
+
 - Add a pinned-tag Linux/macOS Connector installer that verifies release/source integrity and produces an updater enrollment receipt.
 
 - Add optional Linux user SSH tunnel units, loopback validation and pluggable Bitwarden/command token-file provisioning helpers.

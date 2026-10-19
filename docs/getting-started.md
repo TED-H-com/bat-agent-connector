@@ -238,6 +238,8 @@ It creates a private version directory under
 `~/.local/share/bat-agent-connector/releases/<commit>` and prints its
 `rollout-receipt.json` for [update enrollment](connector-updates.md).
 
+For an existing uv tool installation, see [adoption and restoration](connector-updates.md#adopting-an-existing-uv-tool-installation).
+
 The installer is new unreleased tooling: **v0.2.10 predates these scripts**.
 Once a release containing both installer scripts and the installer module is
 published, replace `INSTALLER_RELEASE_TAG` below with that exact published tag

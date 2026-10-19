@@ -123,6 +123,77 @@ def private_directory(path):
     require(path.stat().st_uid == os.getuid() and not path.stat().st_mode & 0o077, "directory_not_private")
 
 
+def verify_adoption(home, release, *, allow_downgrade=False):
+    """Read only fixed legacy locations; receipt paths never grant ownership."""
+    state = home / ".local/share/bat-agent-connector/update/state.json"
+    require(not state.exists() and not state.is_symlink(), "already_update_managed")
+    tool = home / ".local/share/uv/tools/bat-agent-connector"
+    receipt = home / ".config/bat-agent-connector/install-receipt-connector.json"
+    try:
+        require(not receipt.is_symlink() and receipt.stat().st_size <= 1024 * 1024,
+                "adoption_receipt_invalid")
+        doc = json.loads(receipt.read_bytes())
+        require(isinstance(doc, dict) and type(doc.get("format")) is int and doc["format"] == 1
+                and doc.get("repository") in (REPOSITORY, REPOSITORY + ".git"), "adoption_receipt_invalid")
+        for key, pattern in (("commit", r"[0-9a-f]{40}"),
+                             ("package_version", r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"),
+                             ("canonical_sha256", r"[0-9a-f]{64}")):
+            require(isinstance(doc.get(key), str) and re.fullmatch(pattern, doc[key]), "adoption_receipt_invalid")
+        proof = doc.get("installed_proof")
+        require(isinstance(proof, dict) and all(isinstance(proof.get(k), str) for k in
+                ("package_path", "python_source_sha256", "packaged_workflow_sha256")), "adoption_receipt_invalid")
+        require(isinstance(doc.get("executable"), str) and isinstance(doc.get("bundles"), list)
+                and all(isinstance(b, dict) and isinstance(b.get("adapter"), str)
+                        and isinstance(b.get("path"), str)
+                        and ("sha256" not in b or isinstance(b["sha256"], str)) for b in doc["bundles"]),
+                "adoption_receipt_invalid")
+        require(tool.resolve() == tool.absolute(), "adoption_tool_linked")
+        package = Path(proof["package_path"])
+        require(package.is_absolute() and package.is_relative_to(tool / "lib")
+                and package.resolve() == package and package.name == "bat_agent_connector",
+                "adoption_package_location_mismatch")
+        digest = hashlib.sha256()
+        count = 0
+        for item in sorted(package.rglob("*")):
+            require(not item.is_symlink(), "adoption_package_linked")
+            relative = item.relative_to(package)
+            if item.suffix == ".py" and "__pycache__" not in relative.parts and relative.parts[0] != "skill":
+                require(item.is_file() and item.stat().st_size <= 20 * 1024 * 1024, "adoption_package_invalid")
+                digest.update(relative.as_posix().encode() + b"\0" + hashlib.sha256(item.read_bytes()).digest())
+                count += 1
+        require(count and digest.hexdigest() == proof["python_source_sha256"], "adoption_source_changed")
+        canonical_path = package / "skill/SKILL.md"
+        require(not canonical_path.is_symlink(), "adoption_skill_changed")
+        canonical = canonical_path.read_bytes()
+        sha = hashlib.sha256(canonical).hexdigest()
+        require(sha == doc["canonical_sha256"] == proof["packaged_workflow_sha256"], "adoption_skill_changed")
+        skill = home / ".agents/skills/bat-agent-connector/SKILL.md"
+        require(not skill.is_symlink() and skill.read_bytes() == canonical, "adoption_skill_changed")
+        links = {}
+        for name in ("batc", "bat-agent-connector-mcp", "batc-update"):
+            path = home / ".local/bin" / name
+            require(path.is_symlink() and path.lstat().st_uid == os.getuid()
+                    and path.resolve() == tool / "bin" / name and path.is_file(), "adoption_entrypoint_changed")
+            links[name] = os.readlink(path)
+        distributions = list(package.parent.glob("bat_agent_connector-*.dist-info"))
+        require(len(distributions) == 1, "adoption_identity_mismatch")
+        metadata = distributions[0]
+        require(metadata.resolve() == metadata and not (metadata / "direct_url.json").is_symlink()
+                and not (metadata / "METADATA").is_symlink(), "adoption_identity_mismatch")
+        vcs = json.loads((metadata / "direct_url.json").read_bytes())
+        require(isinstance(vcs, dict) and isinstance(vcs.get("vcs_info"), dict)
+                and vcs["vcs_info"].get("vcs") == "git"
+                and vcs["vcs_info"].get("commit_id") == doc["commit"]
+                and "\nVersion: " + doc["package_version"] + "\n" in (metadata / "METADATA").read_text(),
+                "adoption_identity_mismatch")
+        require(allow_downgrade or tuple(map(int, release["version"].split("."))) >=
+                tuple(map(int, doc["package_version"].split("."))), "adoption_downgrade_refused")
+        return {"links": links, "commit": doc["commit"], "version": doc["package_version"],
+                "skill_sha256": sha, "package": str(package), "source_sha256": digest.hexdigest()}
+    except (OSError, KeyError, TypeError, AttributeError) as exc:
+        raise InstallError("adoption_installation_invalid") from exc
+
+
 def install(args, *, home=None, download=fetch, run=command):
     home = Path.home() if home is None else Path(home)
     require(sys.platform.startswith("linux") or sys.platform == "darwin", "unsupported_platform")
@@ -132,6 +203,7 @@ def install(args, *, home=None, download=fetch, run=command):
     require(args.verify_only or not (state.exists() or state.is_symlink()), "already_update_managed")
     release = resolve(args.tag, args.channel_check, download)
     root = (args.root or home / ".local/share/bat-agent-connector/releases" / release["commit"]).absolute()
+    adoption = verify_adoption(home, release, allow_downgrade=getattr(args, "allow_downgrade", False)) if getattr(args, "adopt_existing", False) else None
     if args.dry_run:
         return {"status": "verified_release", "release": release, "writes": False}
     uv = shutil.which("uv")
@@ -168,8 +240,12 @@ def install(args, *, home=None, download=fetch, run=command):
              "--output-file", str(constraints)], env=env, cwd=source)
         run([uv, "tool", "install", "--python", "3.13", "--constraints", str(constraints),
              "git+" + REPOSITORY + "@" + release["commit"]], env=env)
+        if adoption:
+            require(verify_adoption(home, release, allow_downgrade=getattr(args, "allow_downgrade", False)) == adoption,
+                    "adoption_installation_changed")
         result = json.loads(run([str(python), "-I", "-m", "bat_agent_connector.installer", str(root),
-                                 json.dumps(release), "--source", str(source)], env=env))
+                                 json.dumps(release), "--source", str(source),
+                                 *(["--adoption", json.dumps(adoption)] if adoption else [])], env=env))
     receipt = root / "rollout-receipt.json"
     if args.enable_updates:
         run([str(root / "bin/batc-update"), "enable", "--channel", args.channel_check,
@@ -181,7 +257,10 @@ def install(args, *, home=None, download=fetch, run=command):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tag", required=True)
+    parser.add_argument("--tag")
+    parser.add_argument("--adopt-existing", action="store_true")
+    parser.add_argument("--allow-downgrade", action="store_true")
+    parser.add_argument("--restore-adopted", type=Path)
     parser.add_argument("--channel-check", choices=("stable", "preview"), default="preview")
     parser.add_argument("--root", type=Path, help="New private version directory; does not relocate user configuration")
     parser.add_argument("--dry-run", action="store_true", help="Verify release metadata only; no writes")
@@ -192,6 +271,15 @@ def main(argv=None):
     try:
         require(sys.version_info >= (3, 10), "python_310_required")
         require(not (args.dry_run and args.verify_only), "choose_one_verification_mode")
+        if args.restore_adopted:
+            require(not (args.tag or args.adopt_existing or args.enable_updates or args.verify_only or args.dry_run), "restore_options_conflict")
+            root = args.restore_adopted.absolute()
+            python = root / "tools/bat-agent-connector/bin/python"
+            print(readonly_command([str(python), "-I", "-B", "-m", "bat_agent_connector.installer",
+                                    str(root), "{}", "--restore-adopted"], env={"HOME": str(Path.home()), "PATH": os.environ.get("PATH", "/usr/bin:/bin")}))
+            return 0
+        require(args.tag, "release_tag_required")
+        require(not (args.adopt_existing and args.verify_only), "adoption_options_conflict")
         result = install(args)
         print(json.dumps(result, sort_keys=True))
         if result.get("receipt") and not args.verify_only:

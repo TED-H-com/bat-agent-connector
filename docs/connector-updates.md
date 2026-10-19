@@ -42,6 +42,41 @@ last outcome. A changed or uncertain pointer is not reported as a known installe
 version. Configuration, credentials, user checkouts and operation journals are
 outside the package switch. See the [contract](design/connector-updates.md).
 
+## Adopting an existing uv tool installation
+
+Use a published tag containing the verified installer. Adoption checks
+`~/.config/bat-agent-connector/install-receipt-connector.json` against the default
+`~/.local/share/uv/tools/bat-agent-connector` environment, VCS metadata, Python
+sources, packaged skill, generic skill and three owned entrypoint symlinks.
+Customized, missing, foreign or already update-managed installations are refused.
+
+```bash
+python3 scripts/install_connector.py --tag <published-tag> --adopt-existing --enable-updates
+```
+
+The version may be the same or newer; an older version requires explicit
+`--allow-downgrade`. The normal verified installation goes into a new managed root.
+Checks precede replacing links and the generic skill; a failed swap restores
+already replaced links. The old uv environment and receipt remain untouched.
+`adoption-record.json` retains previous link targets, commit, version, skill digest
+and timestamps; `adopted-SKILL.md` retains the previous skill. Without
+`--enable-updates`, use the printed receipt enrollment commands.
+
+Before enrollment, restore using the retained installer:
+
+```bash
+python3 scripts/install_connector.py --restore-adopted /path/to/managed-release-root
+```
+
+Every current entrypoint must still point directly at that root and the skill must
+still match it. Restoration refuses changed links, including updater-managed links
+after enrollment; use updater rollback for managed updates. Running processes and
+application configuration remain unchanged.
+
+既有 uv tool 安裝可用 `--adopt-existing` 驗證並接管；保留原環境與收據。
+自行修改或已納入更新管理的安裝會被拒絕。啟用更新前可用
+`--restore-adopted` 還原；啟用後請沿既有更新回退流程操作。
+
 ## 發布與使用邊界
 
 Connector 自 0.2.7 起提供 Linux 使用者層級自動更新，目前已發布預覽版為 0.2.10。
