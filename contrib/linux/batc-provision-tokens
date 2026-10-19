@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+"""Provision private token files from explicit, trusted sources; Python 3.11+."""
+import argparse
+import json
+import os
+import stat
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+LIMIT = 65536
+
+
+class ProvisionError(Exception):
+    pass
+
+
+def fetch(entry):
+    backend = entry.get("backend")
+    if backend == "bitwarden":
+        if not os.environ.get("BW_SESSION"):
+            raise ProvisionError("set BW_SESSION in the environment after unlocking bw")
+        argv = ["bw", "get", "password", entry["item"]]
+    elif backend == "bws":
+        if not os.environ.get("BWS_ACCESS_TOKEN"):
+            raise ProvisionError("set BWS_ACCESS_TOKEN in the environment")
+        argv = ["bws", "secret", "get", entry["id"], "--output", "json"]
+    elif backend == "command":
+        argv = entry["argv"]
+    else:
+        raise ProvisionError("unsupported backend")
+    if not isinstance(argv, list) or not argv or not all(isinstance(a, str) and a for a in argv):
+        raise ProvisionError("backend requires a nonempty argv list of strings")
+    # Never forward backend output or exceptions: either may contain the secret.
+    try:
+        # The operator explicitly selects this backend/argv in a trusted spec.
+        result = subprocess.run(  # noqa: S603
+            argv, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=60,
+        )
+        if result.returncode:
+            raise ProvisionError("backend command failed")
+        value = result.stdout
+        if backend == "bws":
+            value = json.loads(value)["value"]
+            if not isinstance(value, str):
+                raise ValueError
+            value = value.encode("utf-8")
+        value = value.removesuffix(b"\n")
+        value.decode("utf-8")
+    except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired):
+        raise ProvisionError("backend execution or response failed") from None
+    if not value or len(value) > LIMIT:
+        raise ProvisionError("token must contain 1–65536 bytes")
+    return value
+
+
+def write_token(target, value):
+    # Create all missing parents privately; leave existing directory modes alone.
+    missing = []
+    parent = target.parent
+    while not parent.exists():
+        missing.append(parent)
+        parent = parent.parent
+    for parent in reversed(missing):
+        parent.mkdir(mode=0o700)
+    if target.is_symlink() or (target.exists() and not stat.S_ISREG(target.stat().st_mode)):
+        raise ProvisionError("target must be a regular file, never a symlink")
+    temporary = None
+    try:
+        fd, temporary = tempfile.mkstemp(prefix=".batc-token-", dir=target.parent)
+        with os.fdopen(fd, "wb") as stream:
+            os.fchmod(stream.fileno(), 0o600)
+            stream.write(value)
+            stream.flush()
+            os.fsync(stream.fileno())
+        if target.is_symlink():
+            raise ProvisionError("symlink target refused")
+        os.replace(temporary, target)
+    finally:
+        if temporary is not None:
+            Path(temporary).unlink(missing_ok=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--spec", type=Path, default=Path("~/.config/bat-agent-connector/token-sources.toml"))
+    parser.add_argument("--only", metavar="HOST")
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+    try:
+        import tomllib
+    except ImportError:
+        print("provision-tokens: Python 3.11+ required (stdlib tomllib)", file=sys.stderr)
+        return 1
+    try:
+        with args.spec.expanduser().open("rb") as stream:
+            entries = tomllib.load(stream)
+        if args.only and args.only not in entries:
+            raise ValueError
+    except (OSError, ValueError):
+        print("provision-tokens: cannot read spec or unknown --only host", file=sys.stderr)
+        return 1
+    failed = False
+    for host, entry in entries.items():
+        if args.only and host != args.only:
+            continue
+        try:
+            target = Path(entry["target"]).expanduser()
+            backend = entry["backend"]
+            label = f"{host!r} target={str(target)!r} backend={backend!r}"
+            if args.dry_run:
+                print(f"{label} dry-run")
+                continue
+            if target.is_symlink():
+                raise ProvisionError("symlink target refused")
+            write_token(target, fetch(entry))
+            print(f"{label} ok")
+        except ProvisionError as exc:
+            print(f"{host!r} fail: {exc}", file=sys.stderr)
+            failed = True
+        except (OSError, ValueError, KeyError, TypeError):
+            print(f"{host!r} fail: invalid entry or file operation failed", file=sys.stderr)
+            failed = True
+    return int(failed)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

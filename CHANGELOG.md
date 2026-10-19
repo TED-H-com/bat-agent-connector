@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Add optional Linux user SSH tunnel units, loopback validation and pluggable Bitwarden/command token-file provisioning helpers.
+
 - Allow automation `open_fleet` callers to set Fleet actor, read-only mode and idle timeout.
 
 - Add a stable `automation` Python facade for external housekeeping sweeps, with managed Fleet lifetime and unchanged action safety gates.
