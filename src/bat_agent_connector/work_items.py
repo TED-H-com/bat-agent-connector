@@ -1064,7 +1064,7 @@ def project_get(db, project_id: str, *, include_archived: bool = False, ops=None
            "sub_projects": [{"project_id": p["project_id"], "name": p["name"], "pinned": p["pinned"]}
                             for p in children],
            "work_items": _tree(items, _item_scope(project_id), db, "work_item_id", present)}
-    if ops is not None:
+    if ops is not None and 'project.github.sync' in ops.actions:
         from .board_github import settings
         out['github_sync'] = settings(db, project_id, ops)
     if projection == 'navigation':

@@ -180,7 +180,8 @@ async def _local_action(ctx, principal, suffix, action, target, params, pre=None
     if action not in {'project.create', 'pm.project.bind', 'work_item.create', 'work_item.update', 'pm.work.bind'}:
         raise ValueError('Only registered local board actions may join the transaction')
     op, _ = ctx.service.create(principal, action=action, target=target, params=params,
-        preconditions=pre or {}, idempotency_key=f'board.github.{ctx.operation_id}.{suffix}', entry=ctx.op['entry'])
+        preconditions=pre or {},
+        idempotency_key=f'board.github.{ctx.operation_id}.{hashlib.sha256(suffix.encode()).hexdigest()}', entry=ctx.op['entry'])
     ctx.service._merge_refs(op['operation_id'], {'board_github_import_operation_id': ctx.operation_id})
     if op['status'] != 'succeeded':
         await ctx.service._execute(op['operation_id'])

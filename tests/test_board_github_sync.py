@@ -274,3 +274,15 @@ async def test_registered_child_receipts_local_steps_and_manual_continue(daemon)
     await sync(d, pid)
     assert get(d, iid)['state'] == 'doing'
     assert next(c for c in pm_kanban.get_board(d.ops, PERSON, ws)['cards'] if c['work_item_id'] == iid)['column'] == 'in_progress'
+
+
+async def test_long_valid_repository_keeps_child_operation_keys_bounded(daemon):
+    d = daemon
+    pid = await project(d)
+    repo = 'a' * 39 + '/' + 'b' * 100
+    value = issue(1)
+    value['html_url'] = f'https://github.com/{repo}/issues/1'
+    d.ops.context['board_github_provider'] = Provider([value])
+    result = (await sync(d, pid, repository=repo))['result']
+    assert result['created'] == 1
+    assert all(len(row[0]) <= 200 for row in d.ops.db.execute("SELECT idem_key FROM operations WHERE action='work_item.create'"))

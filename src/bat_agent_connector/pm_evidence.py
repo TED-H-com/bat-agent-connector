@@ -582,7 +582,8 @@ def list_projects(ops, principal, workspace_id, *, after=0, limit=50):
     rows = ops.db.execute("SELECT * FROM pm_project_bindings WHERE workspace_id=? AND sequence>? ORDER BY sequence LIMIT ?",
                           (workspace_id, after, limit + 1)).fetchall()
     from .board_github import workspace_settings
-    return {"github_sync": workspace_settings(ops, principal, workspace_id), "version": 1, "workspace_id": workspace_id, "bindings": [dict(row) for row in rows[:limit]],
+    github = {'github_sync': workspace_settings(ops, principal, workspace_id)} if 'project.github.sync' in ops.actions else {}
+    return {**github, "version": 1, "workspace_id": workspace_id, "bindings": [dict(row) for row in rows[:limit]],
             "next_cursor": rows[limit - 1]["sequence"] if len(rows) > limit else None}
 
 
