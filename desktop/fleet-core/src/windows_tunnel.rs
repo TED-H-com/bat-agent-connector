@@ -26,7 +26,8 @@ pub fn system_ssh() -> Result<PathBuf> {
         return Err("SSH_UNAVAILABLE");
     }
     let path = PathBuf::from(String::from_utf16(&buffer[..count]).map_err(|_| "SSH_UNAVAILABLE")?)
-        .join("OpenSSH/ssh.exe");
+        .join("OpenSSH")
+        .join("ssh.exe");
     if !path.is_absolute() {
         return Err("SSH_UNAVAILABLE");
     }
@@ -203,7 +204,9 @@ mod tests {
     fn system_path_and_occupied_listener_are_fixed_and_read_only() {
         let path = system_ssh().unwrap();
         assert!(path.is_absolute());
-        assert!(path.ends_with("OpenSSH/ssh.exe"));
+        let rendered = path.to_str().unwrap();
+        assert!(!rendered.contains('/'));
+        assert!(rendered.ends_with(r"\OpenSSH\ssh.exe"));
         let unused_listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let SocketAddr::V4(unused) = unused_listener.local_addr().unwrap() else {
             panic!()

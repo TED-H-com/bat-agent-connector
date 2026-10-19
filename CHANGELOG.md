@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Fix Windows SSH tunnel launches failing with OWNER_UNPROVEN by constructing native paths and comparing executable paths independently of separator spelling and ASCII case.
+
 - Adopt verified existing uv tool installations into managed Connector releases, with guarded restoration.
 
 - Add a pinned-tag Linux/macOS Connector installer that verifies release/source integrity and produces an updater enrollment receipt.

@@ -270,9 +270,10 @@ pub fn launch<P: Platform>(
         let first = child.snapshot()?;
         if first.arguments != plan.arguments
             || first.login != parent.login
-            || !first
-                .executable
-                .eq_ignore_ascii_case(platform.executable().to_str().ok_or("OWNER_UNPROVEN")?)
+            || !windows_executable_eq(
+                &first.executable,
+                platform.executable().to_str().ok_or("OWNER_UNPROVEN")?,
+            )
         {
             return Err("OWNER_UNPROVEN");
         }
@@ -306,6 +307,34 @@ pub fn launch<P: Platform>(
                 remove_exact(&intent_path, &intent)?;
             }
             Err(error)
+        }
+    }
+}
+
+/// Compare Windows image paths, allowing only separator spelling and ASCII case differences.
+/// Do not resolve aliases, dot components or links when proving executable identity.
+pub(crate) fn windows_executable_eq(actual: &str, expected: &str) -> bool {
+    actual
+        .replace('/', "\\")
+        .eq_ignore_ascii_case(&expected.replace('/', "\\"))
+}
+
+#[cfg(test)]
+mod executable_path_tests {
+    use super::windows_executable_eq;
+
+    #[test]
+    fn windows_image_paths_allow_separators_and_ascii_case_only() {
+        let expected = r"C:\Windows\System32\OpenSSH\ssh.exe";
+        let mixed = r"C:\Windows\system32\OpenSSH/ssh.exe";
+        assert!(windows_executable_eq(mixed, expected));
+        assert!(windows_executable_eq(expected, mixed));
+        for different in [
+            r"C:\Windows\System32\OpenSSH\scp.exe",
+            r"C:\Windows\System32\Other\ssh.exe",
+            r"C:\Windows\System32\OpenSSH\..\OpenSSH\ssh.exe",
+        ] {
+            assert!(!windows_executable_eq(different, expected));
         }
     }
 }
