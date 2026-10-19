@@ -791,17 +791,19 @@ function paintConnection(waiting = false, paused = false) {
   live.className = 'live ' + ({connected: 'ok', offline: 'down', reconnecting: 'reconnecting'}[status]);
   const recoveryKey = managedRecoveryKey(state.managedRecovery);
   live.textContent = t(recoveryKey || 'ui_' + status);
-  let detail = document.getElementById('managed-recovery-details');
-  if (state.managedRecovery && !detail) {
-    detail = h('details', {id: 'managed-recovery-details'}, h('summary', {}, t('connection_details')), h('code'));
-    live.after(detail);
+  let notice = document.getElementById('managed-recovery-notice');
+  if (state.managedRecovery && !notice) {
+    notice = h('aside', {id: 'managed-recovery-notice', class: 'panel', role: 'status'}, h('p'),
+      h('details', {id: 'managed-recovery-details'}, h('summary', {}, t('connection_details')), h('code')));
+    live.closest('header').after(notice);
   }
-  if (detail) {
-    detail.hidden = !state.managedRecovery;
-    detail.querySelector('summary').textContent = t('connection_details');
-    detail.querySelector('code').textContent = state.managedRecovery || '';
+  if (notice) {
+    notice.hidden = !state.managedRecovery;
+    notice.querySelector('p').textContent = recoveryKey ? t(recoveryKey + '_help') : '';
+    notice.querySelector('summary').textContent = t('connection_details');
+    notice.querySelector('code').textContent = state.managedRecovery || '';
   }
-  live.title = t(paused ? 'sync_actions_paused' : waiting ? 'sync_waiting' : status === 'connected' ? 'desktop_polling' : 'offline_actions_paused');
+  live.title = recoveryKey ? t(recoveryKey + '_help') : t(paused ? 'sync_actions_paused' : waiting ? 'sync_waiting' : status === 'connected' ? 'desktop_polling' : 'offline_actions_paused');
   for (const paint of [...connectionPainters]) paint();
 }
 let managedStatusAt = 0;
@@ -818,7 +820,11 @@ async function refreshManagedRecovery() {
     if (status.configuration_source === 'managed' && Number.isSafeInteger(status.managed_rebind)
       && status.managed_rebind > (state.managedRebind || 0)) {
       state.managedRebind = status.managed_rebind;
-      if (!state.token || state.nativeBusy) return;
+      if (state.nativeBusy) return;
+      if (!state.token) {
+        if (status.connected) await nativeTransition('recover');
+        return;
+      }
       // A restart need not create an event. Recover navigation reads without
       // remounting an active form or inventing a server event/checkpoint.
       await Promise.allSettled([workspaceNav?.refresh(), shell?.refresh()]);
@@ -3439,7 +3445,7 @@ async function nativeTransition(kind, config = null) {
         state.token = "native-credential";
         // A new verified credential never reuses the old backend/principal namespace.
         try { await activate(caps, status.endpoint); }
-        catch (error) { if (attempt === state.nativeAttempt) { await nativeDisconnect(); disconnect(); } throw error; }
+        catch (error) { if (attempt === state.nativeAttempt) { if (kind !== "recover") await nativeDisconnect(); disconnect(); } throw error; }
         if (kind === "connect" && attempt === state.nativeAttempt) location.hash = "#/home";
       }
     }
@@ -4834,8 +4840,10 @@ async function start() {
   if (nativeDesktop) {
     clearToken(); // discard obsolete browser credentials if an older build ever stored them
     const attempt = ++state.nativeAttempt;
+    let startupManaged = false;
     try {
       const status = await nativeStatus();
+      startupManaged = status.configuration_source === "managed";
       if (!status.error && status.credential_available) {
         state.nativeBusy = true;
         // Render recovery controls while network verification is pending. A slow central must
@@ -4850,7 +4858,9 @@ async function start() {
     } catch (error) {
       if (attempt === state.nativeAttempt) {
         disconnect(); state.connectionError = error;
-        await nativeDisconnect().catch(() => {});
+        // A failed initial read is not an explicit Disconnect. Keep the already
+        // prepared managed installation eligible for bounded native recovery.
+        if (!startupManaged) await nativeDisconnect().catch(() => {});
       }
     } finally { if (attempt === state.nativeAttempt) state.nativeBusy = false; }
   } else {

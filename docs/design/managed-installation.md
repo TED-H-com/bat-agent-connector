@@ -71,12 +71,14 @@ actor must match the original binding, and ordinary capabilities/bootstrap reads
 must verify the same identity. A successful rebind advances the bridge generation,
 invalidating in-flight responses and file scopes. A native recovery counter triggers
 fresh navigation/shell reads even when restart produces no event; failed views
-retry through the existing deferred-render guards. It retains existing drafts,
+retry through the existing deferred-render guards. Failed initial managed reads
+remain eligible for native recovery; an explicit Disconnect disables it. It retains existing drafts,
 event checkpoints and operation keys, and never resends an application mutation.
 Disconnect, credential removal or switching configuration cancels a pending rebind.
 External-central connections never use this recovery loop, provision a local
 service or transfer a local credential to another endpoint. Recovery errors appear
-as localized English/zh-TW states with a fixed diagnostic code in connection details;
+as short English/zh-TW status labels and visible recovery explanations, with a
+fixed diagnostic code in connection details;
 a changed identity stops automatic recovery until the connection is reviewed.
 
 ### Windows job objects

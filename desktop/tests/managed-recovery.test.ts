@@ -14,6 +14,9 @@ for (const locale of ['en', 'zh-TW'] as const) test(`${locale}: local recovery u
     assert.equal(typeof text, 'string');
     assert.ok(!text.includes(code));
     assert.equal(/[\u4e00-\u9fff]/.test(text), locale === 'zh-TW');
+    const help = STRINGS[locale][(key + '_help') as keyof typeof STRINGS[typeof locale]];
+    assert.ok(help && !help.includes(code));
+    assert.equal(/[\u4e00-\u9fff]/.test(help), locale === 'zh-TW');
   }
   assert.equal(managedRecoveryKey(null), null);
 });
