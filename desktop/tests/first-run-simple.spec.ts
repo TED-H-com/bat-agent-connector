@@ -65,6 +65,7 @@ for (const language of ['zh-TW', 'zh-Hant', 'zh-HK', 'zh-MO', 'zh-CN', 'en-US'])
   const zh = ['zh-TW', 'zh-Hant', 'zh-HK', 'zh-MO'].includes(language);
   const switcher = page.locator('[data-language-switch]');
   await expect(page.getByRole('button', {name: zh ? '自動設定' : 'Set up automatically', exact: true})).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('batc.lang'))).toBe(zh ? 'zh-TW' : 'en');
   await switcher.getByRole('button', {name: zh ? 'English' : '繁體中文', exact: true}).click();
   await expect(page.getByRole('button', {name: zh ? 'Set up automatically' : '自動設定', exact: true})).toBeVisible();
   await page.reload();

@@ -4796,6 +4796,8 @@ async function route() {
 }
 
 async function start() {
+  // Keep the first OS-derived choice too, before any setup interaction.
+  setLocale(locale);
   observeViewport();
   window.addEventListener("hashchange", route);
   document.addEventListener('visibilitychange', foregroundChanged);

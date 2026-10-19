@@ -71857,6 +71857,7 @@ async function route() {
 	state.viewReady = true;
 }
 async function start() {
+	setLocale(locale);
 	observeViewport();
 	window.addEventListener("hashchange", route);
 	document.addEventListener("visibilitychange", foregroundChanged);
