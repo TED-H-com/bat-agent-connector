@@ -133,7 +133,7 @@ pub fn route(
                 .created_filetime
                 .is_some_and(|birth| birth != actual.created_filetime)
             || actual.login != owner.process.login
-            || !actual.executable.eq_ignore_ascii_case(ssh_executable)
+            || !crate::tunnel::windows_executable_eq(&actual.executable, ssh_executable)
             || actual.arguments != plan.arguments()
             || record
                 .origin
