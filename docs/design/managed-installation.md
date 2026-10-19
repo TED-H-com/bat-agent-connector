@@ -73,6 +73,11 @@ invalidating in-flight responses and file scopes. A native recovery counter trig
 fresh navigation/shell reads even when restart produces no event; failed views
 retry through the existing deferred-render guards. It retains existing drafts,
 event checkpoints and operation keys, and never resends an application mutation.
+The shared frontend retains that storage namespace by comparing the verified
+bootstrap server, principal and actor, including after an event-cursor reset.
+Central capabilities do not contain native-only `desktop_identity`; missing that
+field is not evidence of an account change. A different verified identity or an
+explicit disconnect does not inherit the previous endpoint scope.
 Disconnect, credential removal or switching configuration cancels a pending rebind.
 External-central connections never use this recovery loop, provision a local
 service or transfer a local credential to another endpoint. Recovery errors appear
