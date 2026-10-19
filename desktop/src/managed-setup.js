@@ -34,6 +34,22 @@ export function setupConnectionStatus(host) {
   return ['connected', 'checking', 'unreachable'].includes(host.connection_status) ? host.connection_status
     : host.connected === true ? 'connected' : 'checking';
 }
+// Keep native HTML constraints, but use the chosen UI language for their messages.
+export function setupFormValidity(form, t) {
+  const invalid = Array.from(form.elements).find(node => node.willValidate && !node.validity.valid);
+  if (!invalid) return form.reportValidity();
+  if (!invalid.validity.customError) {
+    invalid.setCustomValidity(t(invalid.validity.valueMissing ? 'setup_required' : 'error_code_INVALID_PARAMS'));
+    invalid.setAttribute('aria-invalid', 'true');
+    invalid.addEventListener('input', () => {
+      invalid.setCustomValidity(''); invalid.setAttribute('aria-invalid', 'false');
+    }, {once: true});
+  }
+  for (let parent = invalid.parentElement; parent; parent = parent.parentElement)
+    if (parent.tagName === 'DETAILS') parent.open = true;
+  invalid.reportValidity();
+  return false;
+}
 // Guided configuration of the owned central. Secrets stay in input memory until staged.
 // Durable operations retain their exact request/key; reopening never starts a new intent.
 export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refreshButton, onConfigured, caps}) {
@@ -171,7 +187,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       h("div", {class: "capture-fields"}, input("managed_roots", "setup_managed_roots"), input("ssh_alias", "setup_ssh_alias")),
       h("p", {class: "muted"}, t("setup_roots_help"))),
     h("button", {type: "submit", class: "primary"}, t("setup_save_host")));
-  const repoForm = h("form", {"data-setup-repository": "", onsubmit: event => {event.preventDefault(); run("repository");}},
+  const repoForm = h("form", {novalidate: true, "data-setup-repository": "", onsubmit: event => {event.preventDefault(); run("repository");}},
     h("h3", {}, t("setup_repository_title")), h("p", {class: "muted"}, t("setup_repository_help")),
     h("div", {class: "capture-fields"}, input("repository", "setup_repository", {required: true, placeholder: "owner/repository"}),
       input("repository_host", "setup_host_name", {required: true}), input("workspace_id", "setup_workspace_id", {required: true}),
@@ -189,7 +205,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     saved.verification_base = null;
     fillVerification(fields.get("verification_project").value.trim());
   }}, t("setup_verification_reload"));
-  const verificationForm = h("form", {"data-setup-verification": "", onsubmit: event => {event.preventDefault(); run("verification");}},
+  const verificationForm = h("form", {novalidate: true, "data-setup-verification": "", onsubmit: event => {event.preventDefault(); run("verification");}},
     h("h3", {}, t("setup_verification_title")), h("p", {class: "muted"}, t("setup_verification_help")),
     verificationNotice, verificationCommands,
     h("div", {class: "capture-fields"}, input("verification_project", "setup_verification_project", {required: true, maxlength: 256}),
@@ -438,7 +454,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   async function run(kind, defaults = false) {
     const form = kind === "host" ? hostForm : kind === "repository" ? repoForm : verificationForm;
     if (!alive() || busy || composing.size || !snapshot || !readReady || snapshot.busy || saved.intent || !allowed(kind) ||
-        kind === 'host' && !validateHost(undefined, defaults) || !form.reportValidity()) return;
+        kind === 'host' && !validateHost(undefined, defaults) || !setupFormValidity(form, t)) return;
     busy = true; update(); message.replaceChildren();
     try {
       if (kind === "verification" && saved.verification_base &&

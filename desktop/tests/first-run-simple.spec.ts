@@ -19,6 +19,11 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test.d
       import_profile_id: 'profile-demo', writes: false, orchestrate: false, shared_clone_worktrees: false, managed_roots: []}});
     await page.reload(); await expect(page.locator('[data-setup-simple]')).toBeHidden();
     expect(state.posts).toHaveLength(1); // Existing installs never re-run setup.
+    await page.goto('/dashboard/#/settings');
+    await page.locator('[data-language-switch]').getByRole('button', {name: locale === 'en' ? '繁體中文' : 'English', exact: true}).click();
+    await expect(page.locator('.workspace-nav-heading strong')).toHaveText(locale === 'en' ? '專案' : 'Projects');
+    await expect(page.locator('[data-setup-simple]')).toBeHidden();
+    expect(state.posts).toHaveLength(1);
   });
   test('missing profiles use only a masked BAT link, clear invalid input, and keep secrets out of storage', async ({page}) => {
     const state = await managedSetupFixture(page, native, locale); state.hasProfiles = false;
@@ -68,6 +73,7 @@ for (const language of ['zh-TW', 'zh-Hant', 'zh-HK', 'zh-MO', 'zh-CN', 'en-US'])
   expect(await page.evaluate(() => localStorage.getItem('batc.lang'))).toBe(zh ? 'zh-TW' : 'en');
   await switcher.getByRole('button', {name: zh ? 'English' : '繁體中文', exact: true}).click();
   await expect(page.getByRole('button', {name: zh ? 'Set up automatically' : '自動設定', exact: true})).toBeVisible();
+  await expect(page.locator('.workspace-nav-heading strong')).toHaveText(zh ? 'Projects' : '專案');
   await page.reload();
   await expect(switcher.getByRole('button', {name: zh ? 'English' : '繁體中文', exact: true})).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('html')).toHaveAttribute('lang', zh ? 'en' : 'zh-TW');
@@ -89,5 +95,25 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test(`
   await expect(status).toContainText(locale === 'en' ? 'Make sure BAT is open, then select Refresh.' : '請確認 BAT 已開啟，再按「重新整理」。');
   state.connectionStatus = 'connected'; await refresh.click();
   await expect(status.locator('.muted')).toHaveCount(0);
+  expect(state.posts).toEqual([]); expect(state.staged).toEqual([]);
+});
+
+test('managed setup validation uses the chosen language even with an English browser', async ({page}) => {
+  const state = await managedSetupFixture(page, false, 'zh-TW');
+  await page.goto('/dashboard/');
+  await page.locator('[data-setup-advanced] > summary').click();
+  const form = page.locator('[data-setup-repository]');
+  await form.locator('xpath=..').locator(':scope > summary').click();
+  await form.locator('button[type=submit]').click();
+  expect(await form.locator('[data-setup-field=repository]').evaluate((node: HTMLInputElement) => node.validationMessage)).toBe('請填寫此欄位。');
+  const verification = page.locator('[data-setup-verification]');
+  await verification.locator('xpath=..').locator(':scope > summary').click();
+  await verification.locator('button[type=submit]').click();
+  expect(await verification.locator('[data-setup-field=verification_project]').evaluate((node: HTMLInputElement) => node.validationMessage)).toBe('請填寫此欄位。');
+  await verification.locator('[data-setup-field=verification_project]').fill('demo');
+  await verification.locator('[data-setup-field=verification_executable]').fill('python');
+  await verification.locator('[data-setup-field=verification_timeout]').fill('0');
+  await verification.locator('button[type=submit]').click();
+  expect(await verification.locator('[data-setup-field=verification_timeout]').evaluate((node: HTMLInputElement) => node.validationMessage)).toBe('輸入內容不符合要求，請檢查欄位。');
   expect(state.posts).toEqual([]); expect(state.staged).toEqual([]);
 });

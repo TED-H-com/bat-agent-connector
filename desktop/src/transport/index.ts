@@ -1,4 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import {locale} from "../i18n.js";
 
 export const nativeDesktop = isTauri();
 export interface ConnectorResponse { status: number; data: any }
@@ -65,13 +66,14 @@ export const nativeConnect = () => invoke<any>("connector_connect");
 export const managedControl = (input: {action: "status" | "open_browser"} | {action: "set_login"; enabled: boolean}) =>
   invoke<any>("managed_control", {input});
 export const nativeDisconnect = () => invoke<void>("connector_disconnect");
+const nativeDialogLocale = () => locale === "zh-TW" ? "zh-TW" : "en-US";
 export const nativeEnroll = () => invoke<any | null>("connector_enroll", {
-  locale: navigator.language.toLowerCase().startsWith("zh") ? "zh-TW" : "en-US"
+  locale: nativeDialogLocale()
 });
 export const nativeReloadConfiguration = () => invoke<NativeStatus>("connector_reload_configuration");
 export const nativeSetupConfiguration = (config: {endpoint: string; expected_actor: string; contract_version: string}) =>
   invoke<NativeStatus | null>("connector_setup_configuration", {config,
-    locale: navigator.language.toLowerCase().startsWith("zh") ? "zh-TW" : "en-US"});
+    locale: nativeDialogLocale()});
 export const nativeForgetCredential = () => invoke<void>("connector_forget_credential");
 export const openExternal = (url: string) => invoke<void>("open_external", { url });
 export const fleetAvailability = () => invoke<{configured: boolean; platform_supported: boolean; native_controls?: boolean; bootstrap_controls?: boolean; error?: string}>("fleet_availability");
