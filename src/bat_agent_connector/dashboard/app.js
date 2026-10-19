@@ -1560,6 +1560,16 @@ var init_ui_strings = __esmMin((() => {
 			ui_issues: "Issues & changes",
 			ui_agents: "Agents",
 			ui_board: "Board",
+			ui_daily_navigation: "Everyday work",
+			ui_more_management: "More project tools",
+			ui_nav_overview: "Goals, progress and next steps",
+			ui_nav_discussions: "Ask questions and share ideas",
+			ui_nav_board: "Follow work and open results",
+			ui_nav_issues: "Track problems and decisions",
+			ui_nav_requirements: "What needs to be delivered",
+			ui_nav_schedule: "Dates and milestones",
+			ui_nav_dependencies: "What a change could affect",
+			ui_nav_agents: "Available tools and usage",
 			ui_project: "Project",
 			sync_actions_paused: "Source refresh failed; actions paused until fresh records arrive.",
 			ui_work_item: "Work item",
@@ -1634,6 +1644,16 @@ var init_ui_strings = __esmMin((() => {
 			ui_issues: "問題與變更",
 			ui_agents: "代理資源",
 			ui_board: "工作看板",
+			ui_daily_navigation: "日常使用",
+			ui_more_management: "更多專案工具",
+			ui_nav_overview: "看目標、進度與下一步",
+			ui_nav_discussions: "提問、說想法、一起討論",
+			ui_nav_board: "看工作進度與成果",
+			ui_nav_issues: "追蹤問題與需要的決定",
+			ui_nav_requirements: "確認要交付哪些內容",
+			ui_nav_schedule: "看日期與重要進度",
+			ui_nav_dependencies: "了解修改會影響什麼",
+			ui_nav_agents: "看可用工具與用量",
 			ui_project: "專案",
 			sync_actions_paused: "資料更新失敗；取得最新紀錄前暫停操作。",
 			ui_work_item: "工作項目",
@@ -15327,6 +15347,46 @@ function projectViews({ h, t, namespace, workspaceId, groups, view, onSelect = (
 	};
 }
 //#endregion
+//#region src/project-navigation.js
+var dailyViews = [
+	"overview",
+	"discussions",
+	"board",
+	"issues"
+];
+function projectNavigation({ t, namespace, workspaceId, views, current, discussionCount }) {
+	const preference = viewState(namespace, workspaceId, "project-navigation");
+	const entry = (id) => h$1("button", {
+		type: "button",
+		class: "ui-button ghost",
+		"data-pm-view": id,
+		"aria-current": current === id ? "page" : "false",
+		onclick: () => {
+			location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${id}`;
+		}
+	}, icon(viewIcons[id], { size: 20 }), h$1("span", { class: "shell-view-copy" }, h$1("span", {}, t("ui_" + id)), h$1("span", { class: "shell-view-hint" }, t("ui_nav_" + id))), id === "discussions" ? discussionCount : null);
+	const primary = dailyViews.filter((id) => views.includes(id));
+	const secondary = views.filter((id) => !dailyViews.includes(id));
+	if (preference.current !== current && secondary.includes(current)) preference.expanded = true;
+	preference.current = current;
+	const nav = h$1("nav", {
+		class: "pm-project-views",
+		"aria-label": t("wb_navigation")
+	}, ...primary.map(entry));
+	if (secondary.length) {
+		const fold = h$1("details", {
+			class: "shell-management",
+			"data-project-management": "",
+			open: Boolean(preference.expanded)
+		}, h$1("summary", {}, icon("chevron-right", { size: 20 }), t("ui_more_management")), h$1("div", { class: "shell-management-views" }, ...secondary.map(entry)));
+		fold.addEventListener("toggle", () => {
+			if (fold.isConnected) preference.expanded = fold.open;
+		});
+		nav.append(fold);
+	}
+	return nav;
+}
+//#endregion
 //#region src/shell.js
 init_i18n();
 function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, errorBox }) {
@@ -15578,6 +15638,8 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		renderSignature = signature;
 		for (const control of menus) control.dispose();
 		menus = [];
+		const focusedView = projectNav.contains(document.activeElement) ? document.activeElement.dataset.pmView : null;
+		const focusedManagement = projectNav.contains(document.activeElement) && document.activeElement.matches("summary");
 		workspaceBlock.replaceChildren();
 		projectNav.replaceChildren();
 		crumb.replaceChildren();
@@ -15640,28 +15702,24 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 				class: "ui-pill tone-neutral",
 				"data-shell-phase": ""
 			}, phase));
-			projectNav.append(h$1("h2", { class: "shell-nav-label" }, t("ui_project")), h$1("nav", {
-				class: "pm-project-views",
-				"aria-label": t("wb_navigation")
-			}, ...views.map((id) => h$1("button", {
-				type: "button",
-				class: "ui-button ghost",
-				"data-pm-view": id,
-				"aria-current": currentRoute === "pm" && currentView === id ? "page" : "false",
-				onclick: () => {
-					location.hash = `#/pm/${workspace.workspace_id}/${id}`;
-				}
-			}, icon(viewIcons[id], { size: 20 }), h$1("span", {}, t("ui_" + id)), id === "discussions" && threadCount !== null ? h$1("span", {
-				class: "shell-count",
-				title: t(threadMore ? "ui_threads_loaded" : threadCount === 1 ? "ui_thread_count" : "ui_threads_count", {
-					n: threadCount,
-					more: threadMore ? "+" : ""
-				}),
-				"aria-label": t(threadMore ? "ui_threads_loaded" : threadCount === 1 ? "ui_thread_count" : "ui_threads_count", {
-					n: threadCount,
-					more: threadMore ? "+" : ""
-				})
-			}, String(threadCount) + (threadMore ? "+" : "")) : null))));
+			projectNav.append(h$1("h2", { class: "shell-nav-label" }, t("ui_daily_navigation")), projectNavigation({
+				t,
+				namespace,
+				workspaceId: workspace.workspace_id,
+				views,
+				current: currentRoute === "pm" ? currentView : "",
+				discussionCount: threadCount !== null ? h$1("span", {
+					class: "shell-count",
+					title: t(threadMore ? "ui_threads_loaded" : threadCount === 1 ? "ui_thread_count" : "ui_threads_count", {
+						n: threadCount,
+						more: threadMore ? "+" : ""
+					}),
+					"aria-label": t(threadMore ? "ui_threads_loaded" : threadCount === 1 ? "ui_thread_count" : "ui_threads_count", {
+						n: threadCount,
+						more: threadMore ? "+" : ""
+					})
+				}, String(threadCount) + (threadMore ? "+" : "")) : null
+			}));
 			crumb.append(h$1("a", {
 				class: "shell-crumb-workspace",
 				href: `#/pm/${encodeURIComponent(workspace.workspace_id)}/overview`,
@@ -15732,6 +15790,10 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		}, workspace?.name || routeTitle));
 		workspaceBlock.hidden = !workspaceBlock.children.length;
 		projectNav.hidden = candidate || !projectNav.children.length;
+		if (!projectNav.hidden && (media.matches || !scrim.hidden)) {
+			const focus = focusedView ? [...projectNav.querySelectorAll("[data-pm-view]")].find((node) => node.dataset.pmView === focusedView) : focusedManagement ? projectNav.querySelector("summary") : null;
+			if (focus?.getClientRects().length) focus.focus({ preventScroll: true });
+		}
 	}
 	let threadCount = null, threadMore = false;
 	function update(context) {

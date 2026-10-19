@@ -1,3 +1,4 @@
+import {revealPmView} from './pm-navigation.ts';
 import {expect, test, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture, demoRoute} from './demo/index.ts';
@@ -31,9 +32,8 @@ async function boot(page: Page, dispatch: (input: {path: string, method?: string
   await expect.poll(() => page.locator('[data-pm-view]').count()).toBeGreaterThan(0);
 }
 
-async function openAgents(page: Page, width: number) {
-  const entry = page.locator('[data-pm-view="agents"]');
-  if (width < 1000 && !await entry.isVisible()) await page.locator('#workspace-menu').click();
+async function openAgents(page: Page, _width: number) {
+  const entry = await revealPmView(page, 'agents');
   await entry.click();
   await expect(page.locator('[data-resource-row]')).toHaveCount(3);
 }
@@ -207,7 +207,7 @@ test('filter, period and selection survive leaving the view', async ({browser, b
   await page.getByRole('radio', {name: '30d', exact: true}).click();
   await expect.poll(() => fixture.reads.length).toBeGreaterThan(before);
   await page.locator('[data-pm-view="overview"]').click();
-  await page.locator('[data-pm-view="agents"]').click();
+  await (await revealPmView(page, 'agents')).click();
   await expect(page.getByRole('radio', {name: '30d', exact: true})).toHaveAttribute('aria-checked', 'true');
   await expect(page.locator('[data-resource-filter]')).toHaveValue('role\u0000reviewer');
   await expect(page.locator('[data-resource-row]')).toHaveCount(1);
@@ -542,8 +542,7 @@ for (const scheme of ['light', 'dark'] as const) {
 }
 
 async function goView(page: Page, view: string) {
-  const entry = page.locator(`[data-pm-view="${view}"]`);
-  if (!await entry.isVisible()) await page.locator('#workspace-menu').click();
+  const entry = await revealPmView(page, view);
   await entry.click();
 }
 

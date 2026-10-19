@@ -1,4 +1,4 @@
-import {openPmPanel} from './pm-navigation.ts';
+import {openPmPanel, revealPmView} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {mountConversation} from './conversation-fixture.ts';
@@ -30,7 +30,7 @@ async function awaitBackgroundRead(page:any,f:ReturnType<typeof deliveryOrderFix
 for(const native of [false,true])test.describe(native?'native workbench':'web workbench',()=>{
   test('identical delivery reads in a different completion order preserve the reading row, position and focus',async({page})=>{
     const f=deliveryOrderFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
-    await page.locator('[data-pm-view="requirements"]').click();
+    await (await revealPmView(page, 'requirements')).click();
     const row=rtm(page).locator('[data-rtm-requirement="membership.recovery"]');
     const toggle=rtm(page).locator('[data-rtm-toggle="membership.recovery"]');
     await expect(row).toBeVisible();await expect(page.locator('[data-pm-refresh]')).toBeEnabled();
@@ -130,7 +130,7 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
   });
   test('RTM uses exact revisions, distinct work and an Issue with two PRs and three attempts',async({page})=>{
     const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
-    await page.locator('[data-pm-view="requirements"]').click();await expect(page.locator('[data-pm-work-meta]')).toContainText('2 loaded');
+    await (await revealPmView(page, 'requirements')).click();await expect(page.locator('[data-pm-work-meta]')).toContainText('2 loaded');
     await rtm(page).getByRole('button',{name:'Expand Members can sign in',exact:true}).click();
     await rtm(page).getByRole('button',{name:'Expand Members can recover access',exact:true}).click();
     await expect(rtm(page).locator(`[data-rtm-work="${workId(1)}"]`)).toHaveCount(2);
@@ -142,11 +142,11 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
     await expect(detail).toContainText('Historical deployment');await expect(detail).toContainText('product-owner');
     await expect(rtm(page).locator('[data-rtm-requirement="membership.login"]')).toContainText('Unknown');
     await page.locator('[data-pm-view="overview"]').click();await expect(charter(page)).toBeVisible();
-    await page.locator('[data-pm-view="requirements"]').click();await expect(detail).toBeVisible();
+    await (await revealPmView(page, 'requirements')).click();await expect(detail).toBeVisible();
     expect(f.state.writes).toHaveLength(0);expect(f.base.state.writes).toHaveLength(0);
   });
   test('RTM clears private rows and details when the work catalogue is withdrawn',async({page})=>{
-    const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await page.locator('[data-pm-view="requirements"]').click();
+    const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await (await revealPmView(page, 'requirements')).click();
     await rtm(page).getByRole('button',{name:'Expand Members can sign in',exact:true}).click();await rtm(page).getByRole('button',{name:'Member login',exact:true}).click();
     await expect(rtm(page).locator('[data-rtm-detail]')).toContainText('PR #10');
     f.state.denyWork=true;await page.locator('[data-pm-refresh]').click();
@@ -157,7 +157,7 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
   });
   test('pagination rereads earlier receipts and retains unassigned Issues',async({page})=>{
     const f=workbenchFixture();f.state.deliveryPageSize=1;f.state.issuePageSize=1;
-    await mountConversation(page,native,f.dispatch);await page.goto(route);await page.locator('[data-pm-view="requirements"]').click();
+    await mountConversation(page,native,f.dispatch);await page.goto(route);await (await revealPmView(page, 'requirements')).click();
     await expect(rtm(page)).toContainText('outside the loaded range');
     await rtm(page).getByRole('button',{name:'More issue links',exact:true}).click();
     await expect(rtm(page).locator('[data-rtm-unassigned-issue]')).toContainText('Unassigned export request');
@@ -169,7 +169,7 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
     await expect(rtm(page).locator('[data-rtm-detail]')).not.toContainText('PR #10');
   });
   test('a late work response cannot restore details after sources are withdrawn',async({page})=>{
-    const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await page.locator('[data-pm-view="requirements"]').click();
+    const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await (await revealPmView(page, 'requirements')).click();
     await rtm(page).getByRole('button',{name:'Expand Members can sign in',exact:true}).click();
     let release:()=>void=()=>{};f.state.heldDetail=new Promise<void>(resolve=>release=resolve);
     await rtm(page).getByRole('button',{name:'Member login',exact:true}).click();
@@ -181,7 +181,7 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
   });
   test('keyboard expansion and detail close keep a usable focus target',async({page})=>{
     const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
-    const nav=page.locator('[data-pm-view="requirements"]');await nav.focus();await page.keyboard.press('Enter');
+    const nav=await revealPmView(page, 'requirements');await nav.focus();await page.keyboard.press('Enter');
     const toggle=rtm(page).locator('[data-rtm-toggle="membership.login"]');await toggle.focus();await page.keyboard.press('Enter');
     await expect(toggle).toBeFocused();await expect(toggle).toHaveAttribute('aria-expanded','true');
     const work=rtm(page).getByRole('button',{name:'Member login',exact:true});await work.focus();await page.keyboard.press('Enter');
@@ -191,7 +191,7 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
   test('unchanged background reads preserve the open plan, reading rows and detail focus',async({page})=>{
     const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
     await charter(page).locator('[data-charter-plan] > summary').click();
-    await page.locator('[data-pm-view="requirements"]').click();
+    await (await revealPmView(page, 'requirements')).click();
     await rtm(page).getByRole('button',{name:'Expand Members can sign in',exact:true}).click();
     await rtm(page).getByRole('button',{name:'Member login',exact:true}).click();
     const heading=rtm(page).locator('[data-rtm-detail] > header > .ui-icon-button');await expect(heading).toBeFocused();
@@ -218,7 +218,7 @@ for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`workb
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   const out=process.env.BATC_WORKBENCH_SCREENSHOTS;if(out){await mkdir(out,{recursive:true});await page.screenshot({path:`${out}/charter-${locale}-${width}.png`,fullPage:true});}
   if(width<1000)await page.locator('#workspace-menu').click();
-  await page.locator('[data-pm-view="requirements"]').click();await expect(rtm(page).locator('[data-rtm-requirement]')).toHaveCount(2);
+  await (await revealPmView(page, 'requirements')).click();await expect(rtm(page).locator('[data-rtm-requirement]')).toHaveCount(2);
   const row=rtm(page).locator('[data-rtm-requirement]').first();await (width<800?row:row.getByRole('button')).click();await rtm(page).locator('[data-rtm-work] [data-rtm-select]').first().click();
   await expect(rtm(page).locator('[data-rtm-pr]')).toHaveCount(2);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
