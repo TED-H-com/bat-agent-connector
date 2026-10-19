@@ -29,6 +29,9 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test.d
     await expect(input).toHaveValue(''); await expect(copy.locator('[role=alert]')).toHaveText(locale === 'en' ? 'This is not a BAT connection URL' : '這不是 BAT 連線網址');
     expect(state.posts).toEqual([]); expect(state.staged).toEqual([]);
     await input.fill(`ws://demo.example:9876?token=synthetic-bat-secret&fp=${'ab'.repeat(32)}`);
+    await expect(input).toHaveValue('');
+    await expect(copy.locator('[role=status]')).toBeVisible();
+    expect(state.staged).toEqual([]);
     await copy.locator('button').click(); await expect(page.locator('[data-setup-sessions]')).toBeVisible();
     expect(state.posts).toHaveLength(1); expect(state.staged).toHaveLength(1);
     expect(state.posts[0].body.params.url).toBe('wss://demo.example:9876');

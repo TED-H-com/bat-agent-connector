@@ -9204,7 +9204,7 @@ var STRINGS = {
 		...maintenanceFindingStrings["zh-TW"],
 		...findingNameStrings["zh-TW"],
 		managed_recovery_title: "本機背景服務尚未就緒",
-		managed_recovery_help: "既有資料與背景工作會保留。若舊版本仍有工作，先讓它完成，再結束並重新開啟桌面程式。此次啟動錯誤列在下方，也可以展開「加入既有的 Connector」設定連線。",
+		managed_recovery_help: "既有資料與背景工作會保留。若舊版本仍有工作，先讓它完成，再結束並重新開啟桌面程式。此次啟動錯誤列在下方，也可以展開「進階設定」，加入其他 Connector。",
 		...instructionReceiptStrings["zh-TW"],
 		repair_title: "建立修復工作",
 		repair_help: "選擇歸屬專案，讀取這次失敗的固定證據，再建立或查回修復工作。派工前仍會讓你核對目的地與版本。",
@@ -9297,6 +9297,7 @@ var STRINGS = {
 		connection_scope_deploy: "部署",
 		connection_scope_integrate: "整合",
 		connection_scope_merge: "合併",
+		setup_link_ready: "已收到連線資料，請按「繼續設定」。",
 		setup_waiting: "可以開始設定了",
 		setup_connection_connected: "已連線",
 		setup_connection_checking: "確認連線中…",
@@ -10883,7 +10884,7 @@ var STRINGS = {
 		...maintenanceFindingStrings.en,
 		...findingNameStrings.en,
 		managed_recovery_title: "Local background service is not ready",
-		managed_recovery_help: "Existing data and background work are retained. If an older version still has work, let it finish, then quit and reopen the desktop app. The startup error appears below. You can also join another Connector.",
+		managed_recovery_help: "Existing data and background work are retained. If an older version still has work, let it finish, then quit and reopen the desktop app. The startup error appears below. You can also expand Advanced to join another Connector.",
 		...instructionReceiptStrings["en-US"],
 		repair_title: "Create repair work",
 		repair_help: "Choose a project and read fixed evidence from this failure. Create or recover repair work, then review its destination and version before starting it.",
@@ -10976,6 +10977,7 @@ var STRINGS = {
 		connection_scope_deploy: "Deploy",
 		connection_scope_integrate: "Integrate",
 		connection_scope_merge: "Merge",
+		setup_link_ready: "Connection details are ready. Select Continue setup.",
 		setup_waiting: "Ready to set up",
 		setup_connection_connected: "Connected",
 		setup_connection_checking: "Checking…",
@@ -53356,24 +53358,46 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		role: "alert",
 		hidden: true
 	});
+	const copyRead = h("p", {
+		role: "status",
+		hidden: true
+	}, t("setup_link_ready"));
+	let copyReady = false;
+	function splitCopy() {
+		if (!alive() || busy || saved.intent || !readReady || !copyInput.value) return;
+		const parsed = parseBatConnectionUrl(copyInput.value);
+		if (!parsed) return;
+		copyInput.value = "";
+		try {
+			applyConnection(parsed);
+			copyReady = true;
+			copyRead.hidden = false;
+		} catch (error) {
+			showError(error);
+		}
+	}
+	copyInput.addEventListener("input", (event) => {
+		copyReady = false;
+		copyRead.hidden = true;
+		copyError.hidden = true;
+		if (!event.isComposing) splitCopy();
+	});
+	copyInput.addEventListener("compositionend", splitCopy);
 	const copyForm = h("form", {
 		hidden: true,
 		"data-setup-copy": "",
 		onsubmit: (event) => {
 			event.preventDefault();
-			const parsed = parseBatConnectionUrl(copyInput.value);
+			splitCopy();
 			copyInput.value = "";
-			copyError.hidden = !!parsed;
-			copyError.textContent = parsed ? "" : t("setup_invalid_connection_url");
-			if (!parsed || !alive() || busy || saved.intent || !readReady) return;
-			try {
-				applyConnection(parsed);
-				run("host", true);
-			} catch (error) {
-				showError(error);
-			}
+			copyError.hidden = copyReady;
+			copyError.textContent = copyReady ? "" : t("setup_invalid_connection_url");
+			if (!copyReady || !alive() || busy || saved.intent || !readReady) return;
+			copyReady = false;
+			copyRead.hidden = true;
+			run("host", true);
 		}
-	}, h("p", { id: "setup-copy-help" }, t("setup_copy_help")), h("label", { class: "setup-field" }, t("setup_copy_label"), copyInput), copyError, h("button", {
+	}, h("p", { id: "setup-copy-help" }, t("setup_copy_help")), h("label", { class: "setup-field" }, t("setup_copy_label"), copyInput), copyError, copyRead, h("button", {
 		type: "submit",
 		class: "primary"
 	}, t("setup_continue")));
@@ -53563,6 +53587,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		for (const field of copyForm.querySelectorAll("input,button")) field.disabled = !!locked || !allowed("host");
 		connectionChoice.disabled = !!locked || !allowed("host");
 		simple.hidden = !!snapshot?.hosts?.length;
+		connectionStatus.hidden = !readReady;
 		automaticStatus.textContent = busy ? t("setup_checking") : operation?.status === "succeeded" && operation.action === "setup.host" || snapshot?.hosts?.some((row) => setupConnectionStatus(row) === "connected") ? t("setup_ready") : operation && !terminal() ? t("setup_saving") : operation && terminal() ? t("setup_failed_operation") : snapshot?.hosts?.length ? "" : !readReady ? t("setup_loading") : t("setup_waiting");
 		automaticStatus.hidden = !automaticStatus.textContent;
 		const base = saved.verification_base;

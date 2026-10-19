@@ -239,16 +239,30 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   const copyInput = h('input', {type: 'password', autocomplete: 'off', maxlength: 8192,
     'aria-label': t('setup_copy_label'), 'aria-describedby': 'setup-copy-help setup-copy-error'});
   const copyError = h('p', {id: 'setup-copy-error', class: 'error', role: 'alert', hidden: true});
-  const copyForm = h('form', {hidden: true, 'data-setup-copy': '', onsubmit: event => {
-    event.preventDefault();
+  const copyRead = h('p', {role: 'status', hidden: true}, t('setup_link_ready'));
+  let copyReady = false;
+  function splitCopy() {
+    if (!alive() || busy || saved.intent || !readReady || !copyInput.value) return;
     const parsed = parseBatConnectionUrl(copyInput.value);
-    copyInput.value = ''; // A secret-bearing link is never kept or echoed, even on error.
-    copyError.hidden = !!parsed;
-    copyError.textContent = parsed ? '' : t('setup_invalid_connection_url');
-    if (!parsed || !alive() || busy || saved.intent || !readReady) return;
-    try {applyConnection(parsed); void run('host', true);} catch (error) {showError(error);}
+    if (!parsed) return;
+    copyInput.value = ''; // Split immediately, just like the existing advanced paste field.
+    try {applyConnection(parsed); copyReady = true; copyRead.hidden = false;}
+    catch (error) {showError(error);}
+  }
+  copyInput.addEventListener('input', event => {
+    copyReady = false; copyRead.hidden = true; copyError.hidden = true;
+    if (!event.isComposing) splitCopy();
+  });
+  copyInput.addEventListener('compositionend', splitCopy);
+  const copyForm = h('form', {hidden: true, 'data-setup-copy': '', onsubmit: event => {
+    event.preventDefault(); splitCopy();
+    copyInput.value = ''; // Invalid links are cleared too, without echoing them.
+    copyError.hidden = copyReady;
+    copyError.textContent = copyReady ? '' : t('setup_invalid_connection_url');
+    if (!copyReady || !alive() || busy || saved.intent || !readReady) return;
+    copyReady = false; copyRead.hidden = true; void run('host', true);
   }}, h('p', {id: 'setup-copy-help'}, t('setup_copy_help')),
-    h('label', {class: 'setup-field'}, t('setup_copy_label'), copyInput), copyError,
+    h('label', {class: 'setup-field'}, t('setup_copy_label'), copyInput), copyError, copyRead,
     h('button', {type: 'submit', class: 'primary'}, t('setup_continue')));
   const simple = h('div', {'data-setup-simple': ''}, h('p', {}, t('setup_simple_help')),
     choiceField, automaticButton, copyForm);
@@ -371,6 +385,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     for (const field of copyForm.querySelectorAll('input,button')) field.disabled = !!locked || !allowed('host');
     connectionChoice.disabled = !!locked || !allowed('host');
     simple.hidden = !!snapshot?.hosts?.length;
+    connectionStatus.hidden = !readReady;
     automaticStatus.textContent = busy ? t('setup_checking')
       : operation?.status === 'succeeded' && operation.action === 'setup.host' || snapshot?.hosts?.some(row => setupConnectionStatus(row) === 'connected') ? t('setup_ready')
       : operation && !terminal() ? t('setup_saving') : operation && terminal() ? t('setup_failed_operation')
