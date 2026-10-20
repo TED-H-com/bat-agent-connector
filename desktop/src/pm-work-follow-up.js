@@ -1,8 +1,9 @@
 import {locale} from './i18n.js';
 import {clientActionReason} from './central-service-status.js';
 import {pmDurableForm} from './pm-workspace.js';
-import {button, emptyState, statusPill} from './ui/components.js';
+import {button, emptyState} from './ui/components.js';
 import {mountWorkInputIdea} from './pm-work-input-idea.js';
+import {workFollowUpDecision} from './pm-work-follow-up-decision.js';
 
 const WORKSPACE_ID = /^ws_[0-9a-f]{32}$/;
 const WORK_ITEM_ID = /^wi_[0-9a-f]{20}$/;
@@ -103,10 +104,9 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
     formHost.replaceChildren();
     try {onField(null, null);} catch { /* the host reports its own binding */ }
   }
-  function composerAllowed() {
-    return !reading && admissionReady && Boolean(sendOffer) && resultSettled && managed() && !suspended
-      && caps()?.scopes?.includes('operate')
-      && caps()?.actions?.some(row => row.action === 'session.send' && row.allowed === true);
+  function sendDecision() {
+    return workFollowUpDecision({reading, admissionReady, resultSettled, sendOffer, blockedReason,
+      stopped, suspended, disposed, managed: managed(), capabilitiesLoaded: Boolean(caps()), connected: canSend()});
   }
   function dropUnconfirmedPins() {
     const visible = new Set(pageItems.map(row => row.operation_id));
@@ -132,20 +132,18 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
     resultSettled = true;
     sendOffer = offerSend(result);
     const blocked = Array.isArray(result.blocked_actions) ? result.blocked_actions.find(row => row?.action === 'session.send') : null;
-    blockedReason = sendOffer ? '' : blocked?.reason || '';
+    blockedReason = typeof blocked?.reason === 'string' ? blocked.reason : '';
     return true;
   }
   function syncComposer() {
     if (stopped || disposed) return;
-    const allowed = composerAllowed();
-    const showReadOnly = !reading && !allowed && resultSettled && admissionReady
-      && (blockedReason === 'missing_scope' || blockedReason === 'not_writer_member' || !caps()?.scopes?.includes('operate'));
-    pill.replaceChildren(...(showReadOnly ? [statusPill('read_only')] : []));
-    const reason = blockedReason === 'codex_uncorrelated_turn_boundary' ? t('loop_next_codex')
-      : blockedReason === 'not_controller' ? t('loop_next_not_controller') : '';
-    note.replaceChildren(...(reason ? [h('p', {class: 'work-next-note'}, reason)] : []));
-    if (!allowed) {
-      if (reading && composer) {composer.update(); paint(); return;}
+    const decision = sendDecision();
+    pill.replaceChildren(...(decision.pillKey ? [h('span', {class: 'ui-pill tone-review'}, t(decision.pillKey))] : []));
+    note.replaceChildren(...(decision.messageKey ? [h('p', {class: 'work-next-note', 'data-reason-source': decision.source},
+      t(decision.messageKey), decision.showCode ? [' ', h('code', {}, decision.reason)] : null,
+      decision.nextStepKey ? [' ', t(decision.nextStepKey)] : null)] : []));
+    if (!decision.allowed && decision.reason !== 'connection') {
+      if (composer && ['admission_pending', 'capabilities_pending'].includes(decision.reason)) {composer.update(); paint(); return;}
       if (composer) clearComposer();
       paint();
       return;
@@ -166,8 +164,13 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
       params: values => ({text: values.text.trim(), schedule: 'after_current'}),
       // Preconditions are captured only when a new request is authorized.
       preconditions: () => attemptId ? {expected_attempt_id: attemptId} : {},
-      permitted: () => managed() && !stopped && !suspended,
-      canSend: () => !reading && admissionReady && field.value.trim().length > 0
+      permitted: mutationsAllowed,
+      // Known IDs are read, even while admission for a new instruction is pending.
+      recoverPermitted: () => sendDecision().canReadReceipt,
+      // Readiness pauses sending, while the existing draft keeps its focus.
+      // The durable form still freezes an admitted intent or an in-flight POST.
+      keepEditable: () => sendDecision().source === 'client',
+      canSend: () => mutationsAllowed() && field.value.trim().length > 0
         && field.value.trim().length <= 20000 && canSend(),
       requiredScope: 'operate',
       label: 'loop_next_send',
@@ -258,11 +261,7 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
     }
   }
   function mutationsAllowed() {
-    if (reading || !admissionReady || !sendOffer) return false;
-    if (['not_controller', 'codex_uncorrelated_turn_boundary', 'not_writer_member', 'missing_scope'].includes(blockedReason)) return false;
-    return managed() && !stopped && !suspended
-      && caps()?.scopes?.includes('operate')
-      && caps()?.actions?.some(row => row.action === 'session.send' && row.allowed === true);
+    return sendDecision().allowed;
   }
   function rowActions(receipt) {
     if (!mutationsAllowed()) return [];

@@ -1,3 +1,4 @@
+import {runtimeStale} from './state/sessions.js';
 // An explicit projection. Never spread server/client objects into an export.
 const code = value => typeof value === 'string' && /^[A-Z][A-Z0-9_]{0,79}$/.test(value) ? value : null;
 const reason = value => typeof value === 'string' && /^[a-z][a-z0-9_]{0,79}$/.test(value) ? value : null;
@@ -84,9 +85,24 @@ export function scrubDiagnostics(text) {
 }
 export function sessionFacts(session) {
   return {loaded: bool(session.loaded), streaming: bool(session.streaming),
-    unknown_activity: ![true,false].includes(session.streaming), stale: session.stale === true || session.fields_stale === true ? true : bool(session.stale ?? session.fields_stale),
+    unknown_activity: ![true,false].includes(session.streaming), stale: runtimeStale(session) ? true
+      : [session.stale, session.fields_stale, session.state?.evidence?.activity?.stale].some(value => typeof value === 'boolean') ? false : null,
     pending: session.pending !== undefined ? session.pending != null : bool(session.pending_interaction),
     history_reasons: Array.isArray(session.reading?.incomplete_reasons) ? [...new Set(session.reading.incomplete_reasons.map(reason).filter(Boolean))] : null};
+}
+// One classification for every source; read/decision time is client evidence.
+export function diagnosticsSource(read) {
+  const result = {status:'not_attempted', http_status:null, code:null, read_at:time(read?.at)};
+  if (!read || read.attempted === false) return result;
+  if (read.offered === false) return {...result, status:'not_offered'};
+  if (read.permitted === false) return {...result, status:'not_permitted'};
+  if (read.error) {
+    const status = read.error.status;
+    const http = Number.isInteger(status) && status >= 100 && status <= 599 ? status : null;
+    return {...result, status:'failed', http_status:http, code:code(read.error.code) || (http ? 'HTTP_ERROR' : 'NETWORK_ERROR')};
+  }
+  if (read.discarded) return {...result, status:'failed', code:'SOURCE_ACCESS_CHANGED'};
+  return read.completed === true ? {...result, status:'available'} : result;
 }
 export function buildDiagnostics(input) {
   const hosts = Array.isArray(input.hosts) ? [...input.hosts].sort((a,b) => String(a.host).localeCompare(String(b.host), 'en')) : [];
@@ -95,10 +111,13 @@ export function buildDiagnostics(input) {
   const count = key => sessions?.length === 0 ? 0 : sessions?.some(s => typeof s[key] === 'boolean') ? sessions.filter(s => s[key] === true).length : null;
   const history = sessions?.some(s => s.history_reasons !== null) ? Object.create(null) : null;
   if (history) for (const session of sessions) for (const why of session.history_reasons || []) history[why] = (history[why] || 0) + 1;
-  const sources = Object.fromEntries(['capabilities','hosts','operations','managed_setup','observation'].map(key => [key,
-    select(input.sources?.[key], ['available','not_available']) || 'not_available']));
+  const sourceReads = Object.fromEntries(['capabilities','hosts','operations','managed_setup','observation'].map(key => [key,
+    diagnosticsSource(input.sourceReads?.[key])]));
+  // Additive v1 compatibility: old consumers retain their binary source map.
+  const sources = Object.fromEntries(Object.entries(sourceReads).map(([key, read]) => [key,
+    read.status === 'available' ? 'available' : 'not_available']));
   const bundle = {schema:'batc.diagnostics.v1', exported_at: time(input.exportedAt),
-    client: clientIdentity(input), sources,
+    client: clientIdentity(input), sources, source_reads:sourceReads,
     hosts: hosts.map((host,i) => {
       const policy = input.caps?.hosts?.find(h => h.host === host.host) || {};
       const policyFlags = flags(host.policy || policy, ['enabled','writes','orchestrate','shared_clone_worktrees','managed_roots_configured','ssh_configured','checkpoint_available']);
@@ -107,6 +126,7 @@ export function buildDiagnostics(input) {
       if(policyFlags.ssh_configured === null && setupHost && (typeof setupHost.ssh_alias === 'string' || setupHost.ssh_alias === null)) policyFlags.ssh_configured = Boolean(setupHost.ssh_alias);
       const discovery = Array.isArray(host.discovery) && policy.profile_id != null ? host.discovery.find(scan => scan.profile_id === policy.profile_id) : null;
       return {alias:`host-${i+1}`, connection_state: select(host.connection_state, ['connected','disconnected','reconnecting','never_connected','stale']) || (host.reachable === true ? 'reachable' : host.reachable === false ? 'unreachable' : 'unknown'),
+        last_attempt_at:time(host.last_attempt_at), last_success_at:time(host.last_success_at),
         stale: bool(host.stale), stale_reason: reason(host.stale_reason), last_error_code: code(host.last_error?.code ?? discovery?.error_code),
         bat: {status: select(host.bat?.status,['ready','unavailable','unknown']), version: version(host.bat?.version ?? host.server_version), protocol: select(host.bat?.protocol, protocols),
           capabilities: flags(host.bat?.capabilities ?? discovery?.authority?.capabilities, ['claude','codex','terminal','git'])},

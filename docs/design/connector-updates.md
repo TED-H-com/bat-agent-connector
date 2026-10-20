@@ -54,6 +54,19 @@ Rollback selects only a previously verified updater-managed installation in the
 same compatibility epoch. It disables automatic application until explicitly
 re-enabled, and changes only the package pointer. It never restores or downgrades
 business databases, credentials, host configuration or operation journals.
+Before any journal DDL or migration, the Connector refuses a recorded data step
+greater than its `LATEST_DATA_STEP` with `JOURNAL_NEWER_DATA_STEP`; reopen that
+journal with the newer Connector. A read-only preflight also prevents a refused
+open from checkpointing a newer writer's WAL into the main database.
+Refusal happens before the service binds, so
+there is no `/api/v1` error response: CLI startup exits 1 with the diagnostic
+on stderr, and a supervised service records the startup failure in its log.
+The managed launcher carries this same bounded diagnostic to the desktop's
+existing startup-error surface, with English and Traditional Chinese guidance;
+other startup failures retain their existing private diagnostic handling.
+Every new data step must bump the update compatibility epoch together with the
+step, so the updater never offers a rollback across it. The journal fence is
+the last line of defense for older or manually selected packages.
 Pre-enrollment deployment backups remain available to the operator separately.
 
 ## Bounds and recovery

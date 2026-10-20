@@ -91,23 +91,27 @@ async function openDiagnostics() {
       try {desktopBuild=(await nativeStatus()).app_build;} catch { /* Build remains explicitly unknown. */ }
     }
     let caps=null;
-    try {caps=await api('GET','/capabilities');} catch { /* Current caller only; no credential fallback. */ }
+    const read=async(path,scope=null,offered=true,attempted=true)=>{
+      const permitted=!scope || !!caps?.scopes?.includes(scope);
+      if(!attempted || !offered || !permitted)return {attempted,offered,permitted,at:new Date().toISOString()};
+      try {return {data:await api('GET',path),completed:true,at:new Date().toISOString()};}
+      catch(error){return {error:{status:error.status,code:error.code},at:new Date().toISOString()};}
+    };
+    const capabilities=await read('/capabilities');caps=capabilities.data;
     if(epoch!==state.epoch)throw Error('Connection changed');
     if(!caps?.scopes?.includes('observe'))withdrawDiagnostics();
     const revision=diagnosticRevision;
-    const read=async(path,scope)=>{
-      if(!caps?.scopes?.includes(scope))return null;
-      try {const data=await api('GET',path);return revision===diagnosticRevision?data:null;} catch{return null;}
-    };
-    let [hosts,operations,setup]=await Promise.all([
-      read('/hosts','observe'),read('/operations?limit=50','observe'),
-      caps?.managed_installation?read('/managed/setup','manage'):null]);
+    const [hostsRead,operationsRead,setupRead,observationRead]=await Promise.all([
+      read('/hosts','observe',true,!!caps),read('/operations?limit=50','observe',true,!!caps),
+      read('/managed/setup','manage',!!caps?.managed_installation,!!caps),read(null,null,false)]);
     if(epoch!==state.epoch)throw Error('Connection changed');
-    if(revision!==diagnosticRevision)hosts=operations=setup=null;
+    const discarded=revision!==diagnosticRevision;
+    const hosts=discarded?null:hostsRead.data, operations=discarded?null:operationsRead.data, setup=discarded?null:setupRead.data;
     return buildDiagnostics({...diagnosticsClient(caps), exportedAt:new Date().toISOString(),
       hosts:hosts?.hosts, operations:operations?.operations, setup,
       sessions:hosts && caps?.scopes?.includes('observe') && diagnosticSessionsRead ? [...diagnosticSessions.values()] : null,
-      recentErrors:recentErrors.entries(), sources:{capabilities:caps?'available':'not_available',hosts:hosts?'available':'not_available',operations:operations?'available':'not_available',managed_setup:setup?'available':'not_available'}});
+      recentErrors:recentErrors.entries(), sourceReads:{capabilities,hosts:{...hostsRead,discarded},operations:{...operationsRead,discarded},
+        managed_setup:{...setupRead,discarded},observation:observationRead}});
   },save:async(content,filename)=>{
     if(epoch!==state.epoch)throw Error('Connection changed');
     if(nativeDesktop)return nativeDiagnosticsSave({content,filename,locale});
@@ -3591,7 +3595,8 @@ async function viewNativeSettings(main) {
     if (status.configuration_file) technicalDetails.append(h("dt", {}, t("desktop_configuration_file")), h("dd", {}, status.configuration_file));
     if (status.credential_source) row("desktop_credential_source", t("desktop_source_" + status.credential_source));
     if (state.caps) details.append(h("dt", {}, t("connection_access")), connectionAccess());
-    if (status.error && (!status.configuration_setup || status.configuration_source === "managed")) info.append(errorBox(new Error(status.error), {summary: t("desktop_status_error"), within:info}));
+    if (status.error && (!status.configuration_setup || status.configuration_source === "managed")) info.append(errorBox(new Error(status.error), {
+      summary: t(status.error.startsWith('JOURNAL_NEWER_DATA_STEP:') ? 'managed_newer_journal' : 'desktop_status_error'), within:info}));
     else if (!status.credential_available && !status.configuration_setup) info.append(h("p", {}, t("desktop_credential_missing")));
     platform.textContent = status.enrollment_supported === true ? t("desktop_enrollment_help")
       : status.enrollment_supported === false ? t("desktop_enrollment_unsupported") : "";

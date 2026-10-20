@@ -2,12 +2,188 @@
 
 from __future__ import annotations
 
+import errno
 import multiprocessing
 import os
+import time
+from types import SimpleNamespace
 
 import pytest
 
 from bat_agent_connector import platform_files as files
+
+
+def _replace_open(monkeypatch, opening):
+    # Scope syscall injection to this module, not every stdlib user in pytest.
+    monkeypatch.setattr(files, "os", SimpleNamespace(**{**vars(os), "open": opening}))
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX openat create-race regression")
+@pytest.mark.parametrize("name", ["launcher.lock", "task-daemon.lock"])
+def test_concurrent_creator_does_not_report_missing_private_lease(tmp_path, monkeypatch, name):
+    path = tmp_path / name
+    attempts, winner = [], []
+
+    def opening(leaf, flags, mode=0o777, *, dir_fd=None):
+        if leaf == name and dir_fd is not None:
+            attempts.append(flags)
+            if flags & os.O_CREAT and not winner:
+                # Another creator publishes the same private inode. The old
+                # nonexclusive O_CREAT call then receives the observed ENOENT;
+                # an exclusive create instead receives the ordinary EEXIST.
+                fd = os.open(leaf, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                             0o600, dir_fd=dir_fd)
+                try:
+                    os.write(fd, b"existing lease")
+                    winner.append(os.fstat(fd).st_ino)
+                finally:
+                    os.close(fd)
+                if not flags & os.O_EXCL:
+                    raise FileNotFoundError(errno.ENOENT, "concurrent nonexclusive create", leaf)
+        return os.open(leaf, flags, mode, dir_fd=dir_fd)
+
+    _replace_open(monkeypatch, opening)
+    fd = files.open_private_file(path, os.O_RDWR | os.O_CREAT)
+    try:
+        assert os.fstat(fd).st_ino == winner[0] == path.stat().st_ino
+        assert os.read(fd, 100) == b"existing lease"
+        assert all(not flags & os.O_CREAT or flags & os.O_EXCL for flags in attempts)
+        assert len(attempts) == 3  # missing open, lost exclusive create, existing open
+        files.lock(fd, blocking=False)
+        files.unlock(fd)
+    finally:
+        os.close(fd)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX openat create-race regression")
+def test_unsettled_private_creation_is_bounded_and_has_its_own_error(tmp_path, monkeypatch):
+    attempts = []
+
+    def opening(leaf, flags, mode=0o777, *, dir_fd=None):
+        if leaf == "launcher.lock":
+            attempts.append(flags)
+            if flags & os.O_CREAT:
+                raise FileExistsError(errno.EEXIST, "another creator won", leaf)
+            raise FileNotFoundError(errno.ENOENT, "leaf disappeared", leaf)
+        return os.open(leaf, flags, mode, dir_fd=dir_fd)
+
+    _replace_open(monkeypatch, opening)
+    with pytest.raises(files.PrivateFileCreateRaceError, match="open/create race did not settle") as caught:
+        files.open_private_file(tmp_path / "launcher.lock", os.O_RDWR | os.O_CREAT)
+    assert caught.value.errno == errno.EAGAIN
+    assert caught.value.filename == "launcher.lock"
+    assert len(attempts) == 16  # Eight lookup/create pairs, never an unbounded retry.
+    assert not (tmp_path / "launcher.lock").exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX flag and mode checks")
+def test_exclusive_creation_and_read_only_missing_still_refuse(tmp_path):
+    path = tmp_path / "private"
+    files.atomic_write(path, b"preserve")
+    with pytest.raises(FileExistsError):
+        files.open_private_file(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_TRUNC)
+    with pytest.raises(FileNotFoundError):
+        files.open_private_file(tmp_path / "missing", os.O_RDONLY)
+    assert path.read_bytes() == b"preserve"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX no-follow and private mode checks")
+@pytest.mark.parametrize("invalid", ["symlink", "hardlink", "public", "foreign_owner"])
+def test_concurrent_winner_is_validated_before_truncation(tmp_path, monkeypatch, invalid):
+    name, path = "service.log", tmp_path / "service.log"
+    victim = tmp_path / "victim"
+    victim.write_bytes(b"preserve")
+    victim.chmod(0o600)
+    raced = []
+
+    def opening(leaf, flags, mode=0o777, *, dir_fd=None):
+        if leaf == name and flags & os.O_CREAT and not raced:
+            raced.append(True)
+            if invalid == "symlink":
+                path.symlink_to(victim)
+            elif invalid == "hardlink":
+                os.link(victim, path)
+            else:
+                path.write_bytes(b"preserve")
+                path.chmod(0o644 if invalid == "public" else 0o600)
+        return os.open(leaf, flags, mode, dir_fd=dir_fd)
+
+    _replace_open(monkeypatch, opening)
+    if invalid == "foreign_owner":
+        def foreign_stat(fd):
+            info = os.fstat(fd)
+            return SimpleNamespace(st_mode=info.st_mode, st_uid=os.getuid() + 1, st_nlink=info.st_nlink)
+
+        monkeypatch.setattr(files.os, "fstat", foreign_stat)
+    with pytest.raises((ValueError, OSError)):
+        files.open_private_file(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
+    assert raced
+    assert path.read_bytes() == victim.read_bytes() == b"preserve"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX openat error propagation")
+@pytest.mark.parametrize("code", [errno.EACCES, errno.EIO, errno.ENOENT])
+def test_exclusive_create_errors_are_not_hidden_by_retries(tmp_path, monkeypatch, code):
+    attempts = []
+
+    def opening(leaf, flags, mode=0o777, *, dir_fd=None):
+        if leaf == "new.lock":
+            attempts.append(flags)
+            if flags & os.O_CREAT:
+                raise OSError(code, "persistent create failure", leaf)
+        return os.open(leaf, flags, mode, dir_fd=dir_fd)
+
+    _replace_open(monkeypatch, opening)
+    with pytest.raises(OSError) as caught:
+        files.open_private_file(tmp_path / "new.lock", os.O_RDWR | os.O_CREAT)
+    assert caught.value.errno == code
+    assert len(attempts) == 2
+
+
+def _create_and_increment(path, barrier, result):
+    barrier.wait(timeout=10)
+    fd = files.open_private_file(path, os.O_RDWR | os.O_CREAT)
+    try:
+        files.lock(fd)
+        try:
+            count = int(os.read(fd, 100) or b"0")
+            os.lseek(fd, 0, os.SEEK_SET)
+            os.write(fd, str(count + 1).encode())
+            info = os.fstat(fd)
+            result.put((info.st_dev, info.st_ino))
+        finally:
+            files.unlock(fd)
+    finally:
+        os.close(fd)
+
+
+def test_simultaneous_first_creators_share_one_lock_inode(tmp_path):
+    root = tmp_path / "owned"
+    files.ensure_private_directory(root)
+    path = root / "new.lock"
+    context = multiprocessing.get_context("spawn")
+    barrier, result = context.Barrier(5), context.Queue()
+    processes = [context.Process(target=_create_and_increment, args=(path, barrier, result)) for _ in range(4)]
+    deadline = time.monotonic() + 20
+    try:
+        for process in processes:
+            process.start()
+        barrier.wait(timeout=10)
+        identities = [result.get(timeout=max(0, deadline - time.monotonic())) for _ in processes]
+        for process in processes:
+            process.join(timeout=max(0, deadline - time.monotonic()))
+            assert process.exitcode == 0
+        assert len(set(identities)) == 1
+        assert path.read_bytes() == b"4"
+        files.check_private(path)
+    finally:
+        for process in processes:
+            if process.pid is not None and process.is_alive():
+                process.terminate()
+            if process.pid is not None:
+                process.join(timeout=5)
+        result.close()
+        result.join_thread()
 
 
 def _contender(path, result):

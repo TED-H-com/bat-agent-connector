@@ -9,6 +9,42 @@ telemetry, credentials fallback or central mutation is introduced.
 All OS templates for managed desktop and standalone installations are included;
 the client's OS does not establish the Connector's OS or actual state directory.
 
+## Source reads and compatibility
+
+`batc.diagnostics.v1` evolves additively. Existing `sources` entries retain the
+`available` / `not_available` strings for old consumers. The additional
+`source_reads` map covers `capabilities`, `hosts`, `operations`, `managed_setup`
+and `observation`. Each entry contains `status`, `http_status`, `code` and
+`read_at`; the binary map is derived from this same classification. Readers may
+ignore additional fields. Changing existing field types or enum meanings requires
+a new schema string.
+
+| Status | Meaning |
+| --- | --- |
+| `available` | The read completed and its data passed the current revision fence. |
+| `not_permitted` | Current capabilities lack the required scope; no request is made. |
+| `not_offered` | This installation does not provide the source; no request is made. |
+| `failed` | The attempted read failed, or its data was discarded after access changed. |
+| `not_attempted` | No read was recorded, or failed capabilities prevented deciding whether to read it. |
+
+`read_at` is the client time when a read completed or a decision to skip it was
+made; it is null if no read or decision was recorded. It is not a host observation
+time. Failed reads retain their HTTP status (null for transport failures) and
+validated error code, with `HTTP_ERROR` / `NETWORK_ERROR` fallbacks. A successful
+read discarded by the withdrawal fence has code `SOURCE_ACCESS_CHANGED` and null
+HTTP status; an original refusal keeps its own status and code. Other statuses
+have null HTTP status and code. Server free-text messages are never selected.
+
+Without a successful capabilities read, dependent sources are `not_attempted`,
+not inferred to lack scope. A non-managed installation's setup source is
+`not_offered`; a managed installation without `manage` is `not_permitted`.
+The absent observation status endpoint is `not_offered` and is never probed.
+Each anonymous host additionally retains `last_attempt_at` and `last_success_at`
+through the existing timestamp validator; absent or invalid times stay null.
+Neither `read_at` nor `exported_at` replaces those observations. Unknown counts
+remain null, while counts from a known empty page can remain zero. All additional
+fields pass the unchanged serialized scrubber as the final gate.
+
 The report referenced an observation status endpoint and host `bat`/`policy`
 fields that this base does not supply. This branch has no `/v1/observation/status`;
 its source stays unavailable. `/hosts` supplies reachability, stale reasons and

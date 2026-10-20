@@ -256,6 +256,25 @@ function parseDiscussRefs(query) {
 	};
 }
 //#endregion
+//#region src/result-sources-strings.js
+var resultSourcesStrings;
+var init_result_sources_strings = __esmMin((() => {
+	resultSourcesStrings = {
+		en: {
+			results_waiting_observed: "waiting for you in this observation",
+			results_pending_observed: "{count} pending in this observation",
+			results_observation_stale: "observation is stale",
+			results_observation_gone: "session no longer seen"
+		},
+		"zh-TW": {
+			results_waiting_observed: "此份觀察記錄有待回覆事項",
+			results_pending_observed: "此份觀察記錄有 {count} 項待處理事項",
+			results_observation_stale: "觀察已過期",
+			results_observation_gone: "未再看到此工作階段"
+		}
+	};
+}));
+//#endregion
 //#region src/pm-external-history-strings.js
 var externalHistoryStrings;
 var init_pm_external_history_strings = __esmMin((() => {
@@ -615,6 +634,21 @@ var init_workbench_strings = __esmMin((() => {
 			wc_latest: "Last observed",
 			wc_queue_unknown: "Current queue position is not available. Open input receipts for recorded submissions.",
 			wc_no_live: "No current execution confirmed by this observation.",
+			wc_facets_observed: "At this observation: {facets}",
+			wc_activity_streaming: "Output is arriving",
+			wc_activity_not_streaming: "No output is arriving",
+			wc_activity_unknown: "Output activity is unknown",
+			wc_attention_asking_you: "Waiting for you",
+			wc_attention_needs_you: "Needs your attention",
+			wc_attention_failed: "Failure reported",
+			wc_attention_none: "No attention state reported",
+			wc_observation_stale: "Observation is stale",
+			wc_observation_gone: "Session no longer seen",
+			wc_observation_missing: "Session missing from enumeration",
+			wc_lifecycle_active: "Session reported active",
+			wc_lifecycle_ended: "Session reported ended",
+			wc_lifecycle_unknown: "Session lifecycle unknown",
+			wc_wait_observed: "This observation recorded a request for you.",
 			wc_running: "Output is arriving. Follow the conversation or review the available results.",
 			wc_wait: "An answer or decision is needed. Open Work to read the question.",
 			wc_stale: "This observation is out of date. Current execution is unknown.",
@@ -661,6 +695,21 @@ var init_workbench_strings = __esmMin((() => {
 			wc_latest: "最近觀察",
 			wc_queue_unknown: "目前無法取得即時排隊位置。已送出的要求可在輸入回執中查看。",
 			wc_no_live: "這份觀察未確認目前有工作正在執行。",
+			wc_facets_observed: "此份觀察：{facets}",
+			wc_activity_streaming: "正在收到輸出",
+			wc_activity_not_streaming: "目前沒有輸出",
+			wc_activity_unknown: "輸出活動未知",
+			wc_attention_asking_you: "等待您回覆",
+			wc_attention_needs_you: "需要您處理",
+			wc_attention_failed: "已回報失敗",
+			wc_attention_none: "未回報需處理的狀態",
+			wc_observation_stale: "觀察已過期",
+			wc_observation_gone: "未再看到此工作階段",
+			wc_observation_missing: "列舉中缺少此工作階段",
+			wc_lifecycle_active: "工作階段記錄為活動中",
+			wc_lifecycle_ended: "工作階段記錄為已結束",
+			wc_lifecycle_unknown: "工作階段生命週期未知",
+			wc_wait_observed: "這份觀察記錄有事項等待您回覆。",
 			wc_running: "正在收到輸出。可閱讀對話或檢視目前成果。",
 			wc_wait: "有問題或決定需要回覆。切回工作查看原問題。",
 			wc_stale: "這份觀察已過期，目前執行情況未知。",
@@ -837,6 +886,17 @@ var init_diagnostics_strings = __esmMin((() => {
 			diag_operations_unavailable: "Operations not available",
 			diag_hosts_unavailable: "Hosts not available",
 			diag_sample: "Session counts cover client reads only. Operation counts cover the loaded page.",
+			diag_source_capabilities: "Capabilities",
+			diag_source_hosts: "Hosts",
+			diag_source_operations: "Operations",
+			diag_source_managed_setup: "Managed setup",
+			diag_source_observation: "Observation",
+			diag_source_available: "Available",
+			diag_source_not_permitted: "Required scope missing",
+			diag_source_not_offered: "Not offered by this installation",
+			diag_source_failed: "Read failed",
+			diag_source_not_attempted: "Not attempted",
+			diag_source_checked: "Client checked at {time}",
 			diag_unavailable: "Not available",
 			diag_loading: "Preparing preview…",
 			diag_json: "Full JSON",
@@ -874,6 +934,17 @@ var init_diagnostics_strings = __esmMin((() => {
 			diag_operations_unavailable: "無法取得操作資料",
 			diag_hosts_unavailable: "無法取得主機資料",
 			diag_sample: "工作階段僅計算介面已讀取的資料；操作僅計算已載入的頁面。",
+			diag_source_capabilities: "能力資料",
+			diag_source_hosts: "主機",
+			diag_source_operations: "操作",
+			diag_source_managed_setup: "受管設定",
+			diag_source_observation: "觀察資料",
+			diag_source_available: "可取得",
+			diag_source_not_permitted: "缺少所需權限",
+			diag_source_not_offered: "此安裝未提供",
+			diag_source_failed: "讀取失敗",
+			diag_source_not_attempted: "尚未嘗試讀取",
+			diag_source_checked: "介面檢查時間：{time}",
 			diag_unavailable: "無法取得",
 			diag_loading: "正在準備預覽…",
 			diag_json: "完整 JSON",
@@ -9328,6 +9399,18 @@ var init_pm_work_follow_up_strings = __esmMin((() => {
 			loop_next_blocked_link: "開啟未確認的指令",
 			loop_next_codex: "這個 Codex 工作階段無法排入下一步。",
 			loop_next_not_controller: "你不是這項工作的控制者。",
+			loop_next_codex_step: "請查看本輪結果，並向工作區擁有者詢問支援的工作階段。",
+			loop_next_controller_step: "請這項工作的控制者代為送出。",
+			loop_next_member_blocked: "你在這個工作區的成員權限不允許寫入。",
+			loop_next_member_step: "請向工作區擁有者申請寫入權限。",
+			loop_next_scope_blocked: "這組憑證沒有操作權限。",
+			loop_next_scope_step: "請使用具備操作權限的憑證重新連線。",
+			loop_next_blocked_unknown: "伺服器已阻擋下一步。",
+			loop_next_refresh_step: "請重新整理，或詢問工作區擁有者。",
+			loop_next_no_offer: "這次嘗試目前沒有提供下一步。",
+			loop_next_scope_readonly: "API 唯讀",
+			loop_next_member_readonly: "工作區唯讀",
+			loop_next_blocked: "無法送出",
 			loop_next_err_unknown: "這一步無法送出。",
 			loop_next_err_PM_WORK_SESSION_NOT_MANAGED: "這個工作階段不是由你控制的受管工作階段。",
 			loop_next_err_READ_ONLY: "這個工作階段是唯讀的。",
@@ -9382,6 +9465,18 @@ var init_pm_work_follow_up_strings = __esmMin((() => {
 			loop_next_blocked_link: "Open the unconfirmed instruction",
 			loop_next_codex: "A next step is not available for this Codex session.",
 			loop_next_not_controller: "You are not this work's controller.",
+			loop_next_codex_step: "Review the current result. Ask the workspace owner about a supported session.",
+			loop_next_controller_step: "Ask the work’s controller to send it.",
+			loop_next_member_blocked: "Your workspace membership does not allow writing.",
+			loop_next_member_step: "Ask a workspace owner for write access.",
+			loop_next_scope_blocked: "This credential does not have operate scope.",
+			loop_next_scope_step: "Reconnect with a credential that has operate scope.",
+			loop_next_blocked_unknown: "The server blocked the next step.",
+			loop_next_refresh_step: "Refresh, or ask the workspace owner.",
+			loop_next_no_offer: "This attempt does not currently offer a next step.",
+			loop_next_scope_readonly: "API read-only",
+			loop_next_member_readonly: "Workspace read-only",
+			loop_next_blocked: "Cannot send",
 			loop_next_err_unknown: "This step could not be sent.",
 			loop_next_err_PM_WORK_SESSION_NOT_MANAGED: "This session is not a managed session you control.",
 			loop_next_err_READ_ONLY: "This session is read-only.",
@@ -9679,6 +9774,7 @@ function t(key, vars = {}) {
 }
 var STRINGS, locale;
 var init_i18n = __esmMin((() => {
+	init_result_sources_strings();
 	init_pm_external_history_strings();
 	init_pm_adopt_start_strings();
 	init_pm_work_profile_strings();
@@ -9719,6 +9815,7 @@ var init_i18n = __esmMin((() => {
 		"zh-TW": {
 			...FLEET_STRINGS["zh-TW"],
 			...workbenchStrings$1["zh-TW"],
+			...resultSourcesStrings["zh-TW"],
 			...externalHistoryStrings["zh-TW"],
 			...diagnosticsStrings["zh-TW"],
 			...workStartStrings["zh-TW"],
@@ -9754,6 +9851,7 @@ var init_i18n = __esmMin((() => {
 			...findingNameStrings["zh-TW"],
 			fleet_session_lifetime: "啟動環境不允許背景連線監控獨立執行。關閉啟動工作階段時，本機連線可能中斷。",
 			managed_service_recovering: "正在重新啟動本機背景服務…",
+			managed_newer_journal: "這份紀錄需要較新的 Connector。請使用較新的 Connector 重新開啟，既有資料已保留。",
 			managed_service_recovering_help: "正在重新啟動桌面的本機背景服務。既有工作與資料會保留。",
 			managed_service_retry: "本機背景服務恢復失敗",
 			managed_service_retry_help: "本機背景服務無法恢復，稍後會自動重試。既有資料已保留；請查看連線詳細資料。",
@@ -9870,6 +9968,8 @@ var init_i18n = __esmMin((() => {
 			setup_saving: "正在儲存設定，快好了…",
 			setup_ready: "設定完成，可以開始使用了。",
 			setup_loading: "正在準備設定…",
+			setup_verified_saved: "Connector 已驗證連線並儲存設定：{host} · {time}。",
+			setup_connection_checked: "連線觀察時間：{time}",
 			setup_copy_help: "請在 BAT 開啟「設定 → 遠端 → 遠端存取」，複製連線網址後貼到下方。如果尚未啟動，請先按「啟動伺服器」。",
 			setup_copy_label: "貼上從 BAT 複製的連線網址",
 			setup_continue: "繼續設定",
@@ -11408,6 +11508,7 @@ var init_i18n = __esmMin((() => {
 		en: {
 			...FLEET_STRINGS.en,
 			...workbenchStrings$1.en,
+			...resultSourcesStrings.en,
 			...externalHistoryStrings.en,
 			...diagnosticsStrings.en,
 			...workStartStrings.en,
@@ -11443,6 +11544,7 @@ var init_i18n = __esmMin((() => {
 			...findingNameStrings.en,
 			fleet_session_lifetime: "The launching environment prevents the connection monitor from running independently. Local connections may stop when the launching session ends.",
 			managed_service_recovering: "Restarting local service…",
+			managed_newer_journal: "These records need a newer Connector. Reopen with the newer Connector; existing data is preserved.",
 			managed_service_recovering_help: "This Dashboard is restarting its local background service. Existing work and data are retained.",
 			managed_service_retry: "Local service recovery failed",
 			managed_service_retry_help: "The local background service could not recover. It will retry automatically. Existing data is retained; see connection details.",
@@ -11559,6 +11661,8 @@ var init_i18n = __esmMin((() => {
 			setup_saving: "Saving your settings. Almost there…",
 			setup_ready: "Setup is complete. You’re ready to go.",
 			setup_loading: "Getting setup ready…",
+			setup_verified_saved: "Connector verified the connection and saved the configuration for {host} at {time}.",
+			setup_connection_checked: "Connection observed at {time}",
 			setup_copy_help: "In BAT, open Settings → Remote → Remote Access, copy the connection URL and paste it below. If it is not running, choose Start Server first.",
 			setup_copy_label: "Paste the connection link copied from BAT",
 			setup_continue: "Continue setup",
@@ -14405,51 +14509,69 @@ function matchesSession(session, query) {
 function runtimeStale(session) {
 	return Boolean(session.stale || session.fields_stale || session.state?.evidence?.activity?.stale);
 }
+function sessionFacets(session) {
+	const source = session || {}, pending = source.pending;
+	const managedStatus = source.api_access === "managed" ? source.status || source.state?.status : null;
+	const attention = pending?.kind === "permission" || pending?.kind === "ask_user" ? "asking_you" : pending ? "needs_you" : ["failed", "error"].includes(managedStatus) ? "failed" : [
+		"needs_ted",
+		"needs_you",
+		"needs_attention",
+		"waiting_permission",
+		"awaiting_approval",
+		"uncertain",
+		"blocked"
+	].includes(managedStatus) ? "needs_you" : "none";
+	const staleness = {
+		runtime: runtimeStale(source),
+		gone: Boolean(source.gone_at) || source.state?.enumeration === "gone",
+		missing: source.state?.enumeration === "missing"
+	};
+	const lifecycle = source.state?.lifecycle || "unknown";
+	return {
+		activity: Object.values(staleness).some(Boolean) ? "unknown" : lifecycle === "ended" ? "not_streaming" : source.streaming === true ? "streaming" : source.streaming === false ? "not_streaming" : "unknown",
+		attention,
+		staleness,
+		lifecycle,
+		pendingKind: pending?.kind,
+		hasPending: Boolean(pending),
+		notLoaded: source.loaded === false || source.state?.loading === "not_loaded"
+	};
+}
 function sessionActivity(session) {
-	if (session.pending) return {
-		key: "pending_" + session.pending.kind,
+	const facets = sessionFacets(session);
+	if (facets.hasPending) return {
+		key: "pending_" + facets.pendingKind,
 		tone: "stale"
 	};
-	if (session.api_access === "managed") {
-		const st = session.status || session.state?.status;
-		if (st === "failed" || st === "error") return {
-			key: "op_failed",
-			tone: "bad"
-		};
-		if ([
-			"needs_ted",
-			"needs_you",
-			"needs_attention",
-			"waiting_permission",
-			"awaiting_approval",
-			"uncertain",
-			"blocked"
-		].includes(st)) return {
-			key: "workspace_needs_you",
-			tone: "stale"
-		};
-	}
-	if (session.state?.lifecycle === "ended") return {
+	if (facets.attention === "failed") return {
+		key: "op_failed",
+		tone: "bad"
+	};
+	if (facets.attention === "needs_you") return {
+		key: "workspace_needs_you",
+		tone: "stale"
+	};
+	if (facets.lifecycle === "ended") return {
 		key: "obs_value_ended",
 		tone: ""
 	};
-	if (session.gone_at || ["gone", "missing"].includes(session.state?.enumeration)) return {
+	if (facets.staleness.gone || facets.staleness.missing) return {
 		key: "sessions_not_seen",
 		tone: "stale"
 	};
-	if (runtimeStale(session)) return {
+	if (facets.staleness.runtime) return {
 		key: "sessions_stale",
 		tone: "stale"
 	};
-	if (session.streaming === true) return {
+	if (facets.activity === "streaming") return {
 		key: "obs_value_streaming",
 		tone: "info"
 	};
-	if (session.streaming === false) return {
+	if (facets.activity === "not_streaming") return {
 		key: "obs_value_not_streaming",
 		tone: ""
 	};
-	if (session.loaded === false || session.state?.loading === "not_loaded") return {
+	if (facets.notLoaded) return {
 		key: "sessions_not_loaded",
 		tone: ""
 	};
@@ -14459,25 +14581,10 @@ function sessionActivity(session) {
 	};
 }
 function sessionStatus(session) {
-	if (!session) return null;
-	const kind = session.pending?.kind;
-	if (kind === "permission" || kind === "ask_user") return "asking_you";
-	if (session.pending) return "needs_you";
-	if (session.api_access === "managed") {
-		const st = session.status || session.state?.status;
-		if (st === "failed" || st === "error") return "failed";
-		if ([
-			"needs_ted",
-			"needs_you",
-			"needs_attention",
-			"waiting_permission",
-			"awaiting_approval",
-			"uncertain",
-			"blocked"
-		].includes(st)) return "needs_you";
-	}
-	if (session.gone_at || ["gone", "missing"].includes(session.state?.enumeration) || runtimeStale(session)) return "stale";
-	if (session.state?.lifecycle !== "ended" && session.streaming === true) return "running";
+	const facets = sessionFacets(session);
+	if (facets.attention !== "none") return facets.attention;
+	if (Object.values(facets.staleness).some(Boolean)) return "stale";
+	if (facets.activity === "streaming") return "running";
 	return null;
 }
 function sessionPill(session) {
@@ -14511,9 +14618,8 @@ function workbenchProjection(data, record = null) {
 	if (!session?.host || !session?.session_id) return null;
 	const source = `/sessions/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}`;
 	const href = "#/session/" + [session.host, session.session_id].map(encodeURIComponent).join("/");
-	const stale = runtimeStale(session) || Boolean(session.gone_at) || ["gone", "missing"].includes(session.state?.enumeration);
-	const pill = sessionPill(session);
-	const state = stale ? "stale" : pill?.status === "failed" ? "failed" : session.pending ? "wait" : session.state?.lifecycle !== "ended" && session.streaming === true ? "running" : session.streaming === false ? "idle" : "unknown";
+	const facets = sessionFacets(session), status = sessionStatus(session), pill = sessionPill(session);
+	const state = ["asking_you", "needs_you"].includes(status) ? "wait" : status || (facets.activity === "not_streaming" && facets.lifecycle !== "ended" ? "idle" : "unknown");
 	const edges = [];
 	for (const item of data.work_items || []) {
 		if (!item.work_item_id) continue;
@@ -14573,6 +14679,7 @@ function workbenchProjection(data, record = null) {
 		observedAt: session.observed_at,
 		state,
 		pill,
+		facets,
 		managed: session.api_access === "managed" && session.provenance === "connector_managed",
 		edges: [...new Map(edges.map((edge) => [edge.key, edge])).values()]
 	};
@@ -14665,12 +14772,26 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 		panel.body.append(kind, name, link, h$1("details", {}, h$1("summary", {}, t("wc_source")), source, id));
 		main.append(panel);
 	}
+	const staleObservation = () => Object.values(projection.facets.staleness).some(Boolean);
+	const summaryKey = () => projection.state === "wait" && staleObservation() ? "wc_wait_observed" : "wc_" + projection.state;
+	function facetLine() {
+		const { activity, attention, staleness, lifecycle } = projection.facets;
+		const facts = [t("wc_activity_" + activity), t("wc_attention_" + attention)];
+		if (staleness.runtime) facts.push(t("wc_observation_stale"));
+		if (staleness.gone) facts.push(t("wc_observation_gone"));
+		if (staleness.missing) facts.push(t("wc_observation_missing"));
+		facts.push(t("wc_lifecycle_" + (["active", "ended"].includes(lifecycle) ? lifecycle : "unknown")));
+		return t("wc_facets_observed", { facets: facts.join(" · ") });
+	}
 	function card() {
 		return h$1("article", { class: "wc-live-card" }, h$1("h3", {}, projection.title || t("session_untitled")), h$1("p", { class: "ui-meta" }, [
 			projection.host,
 			projection.runtime,
 			projection.model
-		].filter(Boolean).join(" · ")), h$1("p", {}, t("wc_" + projection.state)), h$1("p", { class: "ui-meta" }, t("wc_latest"), " · ", timeStamp(projection.observedAt, { empty: t("obs_unknown") })), button({
+		].filter(Boolean).join(" · ")), h$1("p", {}, t(summaryKey())), h$1("p", {
+			class: "ui-meta",
+			"data-runtime-facets": ""
+		}, facetLine()), h$1("p", { class: "ui-meta" }, t("wc_latest"), " · ", timeStamp(projection.observedAt, { empty: t("obs_unknown") })), button({
 			label: t("wc_work"),
 			size: "sm",
 			"data-live-work": "",
@@ -14690,7 +14811,7 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 			projection.runtime,
 			projection.host
 		].filter(Boolean).join(" · ");
-		summary.textContent = t("wc_" + projection.state);
+		summary.textContent = t(summaryKey());
 		const focused = lineage.contains(document.activeElement) ? document.activeElement?.dataset.edge : null;
 		const liveFocused = live.contains(document.activeElement) && document.activeElement?.hasAttribute("data-live-work");
 		const edges = projection.edges.slice(0, 30);
@@ -15361,10 +15482,50 @@ function sessionFacts(session) {
 		loaded: bool(session.loaded),
 		streaming: bool(session.streaming),
 		unknown_activity: ![true, false].includes(session.streaming),
-		stale: session.stale === true || session.fields_stale === true ? true : bool(session.stale ?? session.fields_stale),
+		stale: runtimeStale(session) ? true : [
+			session.stale,
+			session.fields_stale,
+			session.state?.evidence?.activity?.stale
+		].some((value) => typeof value === "boolean") ? false : null,
 		pending: session.pending !== void 0 ? session.pending != null : bool(session.pending_interaction),
 		history_reasons: Array.isArray(session.reading?.incomplete_reasons) ? [...new Set(session.reading.incomplete_reasons.map(reason).filter(Boolean))] : null
 	};
+}
+function diagnosticsSource(read) {
+	const result = {
+		status: "not_attempted",
+		http_status: null,
+		code: null,
+		read_at: time(read?.at)
+	};
+	if (!read || read.attempted === false) return result;
+	if (read.offered === false) return {
+		...result,
+		status: "not_offered"
+	};
+	if (read.permitted === false) return {
+		...result,
+		status: "not_permitted"
+	};
+	if (read.error) {
+		const status = read.error.status;
+		const http = Number.isInteger(status) && status >= 100 && status <= 599 ? status : null;
+		return {
+			...result,
+			status: "failed",
+			http_status: http,
+			code: code(read.error.code) || (http ? "HTTP_ERROR" : "NETWORK_ERROR")
+		};
+	}
+	if (read.discarded) return {
+		...result,
+		status: "failed",
+		code: "SOURCE_ACCESS_CHANGED"
+	};
+	return read.completed === true ? {
+		...result,
+		status: "available"
+	} : result;
 }
 function buildDiagnostics(input) {
 	const hosts = Array.isArray(input.hosts) ? [...input.hosts].sort((a, b) => String(a.host).localeCompare(String(b.host), "en")) : [];
@@ -15373,18 +15534,20 @@ function buildDiagnostics(input) {
 	const count = (key) => sessions?.length === 0 ? 0 : sessions?.some((s) => typeof s[key] === "boolean") ? sessions.filter((s) => s[key] === true).length : null;
 	const history = sessions?.some((s) => s.history_reasons !== null) ? Object.create(null) : null;
 	if (history) for (const session of sessions) for (const why of session.history_reasons || []) history[why] = (history[why] || 0) + 1;
-	const sources = Object.fromEntries([
+	const sourceReads = Object.fromEntries([
 		"capabilities",
 		"hosts",
 		"operations",
 		"managed_setup",
 		"observation"
-	].map((key) => [key, select(input.sources?.[key], ["available", "not_available"]) || "not_available"]));
+	].map((key) => [key, diagnosticsSource(input.sourceReads?.[key])]));
+	const sources = Object.fromEntries(Object.entries(sourceReads).map(([key, read]) => [key, read.status === "available" ? "available" : "not_available"]));
 	const bundle = {
 		schema: "batc.diagnostics.v1",
 		exported_at: time(input.exportedAt),
 		client: clientIdentity(input),
 		sources,
+		source_reads: sourceReads,
 		hosts: hosts.map((host, i) => {
 			const policy = input.caps?.hosts?.find((h) => h.host === host.host) || {};
 			const policyFlags = flags(host.policy || policy, [
@@ -15409,6 +15572,8 @@ function buildDiagnostics(input) {
 					"never_connected",
 					"stale"
 				]) || (host.reachable === true ? "reachable" : host.reachable === false ? "unreachable" : "unknown"),
+				last_attempt_at: time(host.last_attempt_at),
+				last_success_at: time(host.last_success_at),
 				stale: bool(host.stale),
 				stale_reason: reason(host.stale_reason),
 				last_error_code: code(host.last_error?.code ?? discovery?.error_code),
@@ -15603,7 +15768,7 @@ function diagnosticsDialog({ h, t, load, save, onClose }) {
 		if (current !== serial || !dialog.isConnected) return;
 		content = JSON.stringify(bundle, null, 2) + "\n";
 		filename = "batc-diagnostics-" + bundle.exported_at.slice(0, 10).replaceAll("-", "") + "-" + bundle.exported_at.slice(11, 16).replace(":", "") + ".json";
-		summary.append(h("div", {}, h("p", {}, buildLine(bundle.client, t)), bundle.sources.hosts === "not_available" ? h("p", {}, t("diag_hosts_unavailable")) : null, ...bundle.hosts.map((host) => h("p", {}, `${host.alias} · ${t("diag_" + (host.connection_state === "unknown" ? "state_unknown" : host.connection_state))}${host.stale === true && host.connection_state !== "stale" ? " · " + t("diag_stale") : ""}`)), h("p", {}, t("diag_counts", {
+		summary.append(h("div", {}, h("p", {}, buildLine(bundle.client, t)), ...Object.entries(bundle.source_reads).map(([source, read]) => h("p", { "data-diagnostics-source": source }, t("diag_source_" + source), " · ", t("diag_source_" + read.status), read.http_status == null ? null : ` · HTTP ${read.http_status}`, read.code ? [" · ", h("code", {}, read.code)] : null, read.read_at ? [" · ", timeLabel(t, "diag_source_checked", { time: timeStamp(read.read_at) })] : null)), bundle.sources.hosts === "not_available" ? h("p", {}, t("diag_hosts_unavailable")) : null, ...bundle.hosts.map((host) => h("p", {}, `${host.alias} · ${t("diag_" + (host.connection_state === "unknown" ? "state_unknown" : host.connection_state))}${host.stale === true && host.connection_state !== "stale" ? " · " + t("diag_stale") : ""}`)), h("p", {}, t("diag_counts", {
 			errors: t(bundle.recent_errors.length === 1 ? "diag_errors_one" : "diag_errors_many", { count: bundle.recent_errors.length }),
 			operations: bundle.operations === null ? t("diag_operations_unavailable") : t(bundle.operations.length === 1 ? "diag_operations_one" : "diag_operations_many", { count: bundle.operations.length })
 		})), h("p", { class: "muted" }, t("diag_sample"))));
@@ -52649,6 +52814,79 @@ function mountWorkInputIdea({ h, t, api, caps, guard, namespace, workspaceId, wo
 	};
 }
 //#endregion
+//#region src/pm-work-follow-up-decision.js
+var serverReasons = {
+	codex_uncorrelated_turn_boundary: [
+		"loop_next_codex",
+		"loop_next_codex_step",
+		"loop_next_blocked"
+	],
+	not_controller: [
+		"loop_next_not_controller",
+		"loop_next_controller_step",
+		"loop_next_blocked"
+	],
+	not_writer_member: [
+		"loop_next_member_blocked",
+		"loop_next_member_step",
+		"loop_next_member_readonly"
+	],
+	missing_scope: [
+		"loop_next_scope_blocked",
+		"loop_next_scope_step",
+		"loop_next_scope_readonly"
+	]
+};
+function workFollowUpDecision({ stopped = false, disposed = false, suspended = false, capabilitiesLoaded, reading, admissionReady, resultSettled, blockedReason = "", sendOffer, managed, connected }) {
+	const canReadReceipt = Boolean(capabilitiesLoaded && managed && !stopped && !disposed && !suspended);
+	const client = (reason, messageKey = "", nextStepKey = "") => ({
+		allowed: false,
+		source: "client",
+		reason,
+		messageKey,
+		nextStepKey,
+		pillKey: "",
+		showCode: false,
+		canReadReceipt
+	});
+	if (stopped || disposed) return client("stopped");
+	if (suspended) return client("suspended");
+	if (!capabilitiesLoaded) return client("capabilities_pending");
+	if (reading || !resultSettled) return client("admission_pending");
+	if (!admissionReady) return client("admission_unavailable");
+	if (blockedReason) {
+		const known = Object.hasOwn(serverReasons, blockedReason);
+		const [messageKey, nextStepKey, pillKey] = known ? serverReasons[blockedReason] : [
+			"loop_next_blocked_unknown",
+			"loop_next_refresh_step",
+			"loop_next_blocked"
+		];
+		return {
+			allowed: false,
+			source: "server",
+			reason: blockedReason,
+			messageKey,
+			nextStepKey,
+			pillKey,
+			showCode: !known,
+			canReadReceipt
+		};
+	}
+	if (!sendOffer) return client("no_send_offer", "loop_next_no_offer", "loop_next_refresh_step");
+	if (!managed) return client("unmanaged", "loop_next_err_PM_WORK_SESSION_NOT_MANAGED", "loop_next_refresh_step");
+	if (!connected) return client("connection");
+	return {
+		allowed: true,
+		source: "server",
+		reason: "",
+		messageKey: "",
+		nextStepKey: "",
+		pillKey: "",
+		showCode: false,
+		canReadReceipt
+	};
+}
+//#endregion
 //#region src/pm-work-follow-up.js
 init_i18n();
 var WORKSPACE_ID = /^ws_[0-9a-f]{32}$/;
@@ -52772,8 +53010,20 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 			onField(null, null);
 		} catch {}
 	}
-	function composerAllowed() {
-		return !reading && admissionReady && Boolean(sendOffer) && resultSettled && managed() && !suspended && caps()?.scopes?.includes("operate") && caps()?.actions?.some((row) => row.action === "session.send" && row.allowed === true);
+	function sendDecision() {
+		return workFollowUpDecision({
+			reading,
+			admissionReady,
+			resultSettled,
+			sendOffer,
+			blockedReason,
+			stopped,
+			suspended,
+			disposed,
+			managed: managed(),
+			capabilitiesLoaded: Boolean(caps()),
+			connected: canSend()
+		});
 	}
 	function dropUnconfirmedPins() {
 		const visible = new Set(pageItems.map((row) => row.operation_id));
@@ -52796,18 +53046,19 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		resultSettled = true;
 		sendOffer = offerSend(result);
 		const blocked = Array.isArray(result.blocked_actions) ? result.blocked_actions.find((row) => row?.action === "session.send") : null;
-		blockedReason = sendOffer ? "" : blocked?.reason || "";
+		blockedReason = typeof blocked?.reason === "string" ? blocked.reason : "";
 		return true;
 	}
 	function syncComposer() {
 		if (stopped || disposed) return;
-		const allowed = composerAllowed();
-		const showReadOnly = !reading && !allowed && resultSettled && admissionReady && (blockedReason === "missing_scope" || blockedReason === "not_writer_member" || !caps()?.scopes?.includes("operate"));
-		pill.replaceChildren(...showReadOnly ? [statusPill("read_only")] : []);
-		const reason = blockedReason === "codex_uncorrelated_turn_boundary" ? t("loop_next_codex") : blockedReason === "not_controller" ? t("loop_next_not_controller") : "";
-		note.replaceChildren(...reason ? [h("p", { class: "work-next-note" }, reason)] : []);
-		if (!allowed) {
-			if (reading && composer) {
+		const decision = sendDecision();
+		pill.replaceChildren(...decision.pillKey ? [h("span", { class: "ui-pill tone-review" }, t(decision.pillKey))] : []);
+		note.replaceChildren(...decision.messageKey ? [h("p", {
+			class: "work-next-note",
+			"data-reason-source": decision.source
+		}, t(decision.messageKey), decision.showCode ? [" ", h("code", {}, decision.reason)] : null, decision.nextStepKey ? [" ", t(decision.nextStepKey)] : null)] : []);
+		if (!decision.allowed && decision.reason !== "connection") {
+			if (composer && ["admission_pending", "capabilities_pending"].includes(decision.reason)) {
 				composer.update();
 				paint();
 				return;
@@ -52858,8 +53109,10 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 				schedule: "after_current"
 			}),
 			preconditions: () => attemptId ? { expected_attempt_id: attemptId } : {},
-			permitted: () => managed() && !stopped && !suspended,
-			canSend: () => !reading && admissionReady && field.value.trim().length > 0 && field.value.trim().length <= 2e4 && canSend(),
+			permitted: mutationsAllowed,
+			recoverPermitted: () => sendDecision().canReadReceipt,
+			keepEditable: () => sendDecision().source === "client",
+			canSend: () => mutationsAllowed() && field.value.trim().length > 0 && field.value.trim().length <= 2e4 && canSend(),
 			requiredScope: "operate",
 			label: "loop_next_send",
 			releaseAfterAcknowledgement: true,
@@ -52955,14 +53208,7 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		}
 	}
 	function mutationsAllowed() {
-		if (reading || !admissionReady || !sendOffer) return false;
-		if ([
-			"not_controller",
-			"codex_uncorrelated_turn_boundary",
-			"not_writer_member",
-			"missing_scope"
-		].includes(blockedReason)) return false;
-		return managed() && !stopped && !suspended && caps()?.scopes?.includes("operate") && caps()?.actions?.some((row) => row.action === "session.send" && row.allowed === true);
+		return sendDecision().allowed;
 	}
 	function rowActions(receipt) {
 		if (!mutationsAllowed()) return [];
@@ -53898,6 +54144,24 @@ function setupConnectionStatus(host) {
 		"unreachable"
 	].includes(host.connection_status) ? host.connection_status : host.connected === true ? "connected" : "checking";
 }
+function setupStatusLine({ busy = false, operation = null, hosts = [], readReady = false }) {
+	if (busy) return { key: "setup_checking" };
+	if (operation?.status === "succeeded" && operation.action === "setup.host") {
+		const host = hosts.find((row) => row.name === operation.target?.host);
+		if (readReady && host && setupConnectionStatus(host) === "connected") return { key: "setup_ready" };
+		return {
+			key: "setup_verified_saved",
+			verifiedAt: operation.updated_at
+		};
+	}
+	if (readReady && hosts.length && hosts.every((row) => setupConnectionStatus(row) === "connected")) return { key: "setup_ready" };
+	if (operation) return { key: [
+		"succeeded",
+		"failed",
+		"cancelled"
+	].includes(operation.status) ? "setup_failed_operation" : "setup_saving" };
+	return { key: !readReady ? "setup_loading" : hosts.length ? "" : "setup_waiting" };
+}
 function setupFormValidity(form, t) {
 	const invalid = Array.from(form.elements).find((node) => node.willValidate && !node.validity.valid);
 	if (!invalid) return form.reportValidity();
@@ -54552,7 +54816,16 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		connectionChoice.disabled = !!locked || !allowed("host");
 		simple.hidden = !!snapshot?.hosts?.length;
 		connectionStatus.hidden = !readReady;
-		automaticStatus.textContent = busy ? t("setup_checking") : operation?.status === "succeeded" && operation.action === "setup.host" || snapshot?.hosts?.some((row) => setupConnectionStatus(row) === "connected") ? t("setup_ready") : operation && !terminal() ? t("setup_saving") : operation && terminal() ? t("setup_failed_operation") : snapshot?.hosts?.length ? "" : !readReady ? t("setup_loading") : t("setup_waiting");
+		const status = setupStatusLine({
+			busy,
+			operation,
+			hosts: snapshot?.hosts || [],
+			readReady
+		});
+		automaticStatus.replaceChildren(status.key === "setup_verified_saved" ? timeLabel(t, status.key, {
+			host: operation.target.host,
+			time: timeStamp(status.verifiedAt)
+		}) : status.key ? t(status.key) : "");
 		automaticStatus.hidden = !automaticStatus.textContent;
 		const base = saved.verification_base;
 		const stale = base && base.revision !== snapshot?.revision;
@@ -54803,7 +55076,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		const hosts = result.hosts?.length || 0, repositories = result.repositories?.length || 0;
 		connectionStatus.replaceChildren(...(result.hosts || []).map((row) => {
 			const status = setupConnectionStatus(row);
-			return h("div", { "data-setup-host-state": status }, h("p", {}, h("strong", {}, row.name), " · ", t(`setup_connection_${status}`)), status === "connected" ? null : h("p", { class: "muted" }, t(status === "unreachable" ? "setup_connection_action" : "setup_connection_checking_help")));
+			return h("div", { "data-setup-host-state": status }, h("p", {}, h("strong", {}, row.name), " · ", t(`setup_connection_${status}`)), row.connection_checked_at == null ? null : h("p", { class: "muted" }, timeLabel(t, "setup_connection_checked", { time: timeStamp(row.connection_checked_at) })), status === "connected" ? null : h("p", { class: "muted" }, t(status === "unreachable" ? "setup_connection_action" : "setup_connection_checking_help")));
 		}));
 		summary.replaceChildren(h("p", {}, t("setup_counts", {
 			hosts,
@@ -57496,6 +57769,17 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 var itemHref = (item) => `#/item/${encodeURIComponent(item.work_item_id)}`;
 var artifactHref = (artifact) => `#/artifact-review/artifact/${encodeURIComponent(artifact.artifact_id)}/${artifact.revision}`;
 var date = (value) => timeStamp(value);
+function resultSourceFacets(observation) {
+	const source = observation || {};
+	const pending = typeof source.pending === "number" ? source.pending > 0 ? { kind: "other" } : null : source.pending;
+	return sessionFacets({
+		streaming: source.status === "available" ? source.streaming : null,
+		pending,
+		stale: source.stale,
+		fields_stale: source.fields_stale,
+		gone_at: source.gone_at
+	});
+}
 function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents, errorBox }) {
 	let doc = null, serial = 0, children = [], refreshing = null, pressed = null;
 	const warning = h("div", { "data-child-warning": "" }), status = h("p", {
@@ -57534,10 +57818,24 @@ function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents
 			const row = h("div", { class: "panel" }, linkTarget(link));
 			if (link.note) row.append(h("p", { class: "muted" }, link.note));
 			const observation = link.observation;
-			if (observation) row.append(h("p", { class: "muted" }, t("results_activity", {
-				state: observation.status !== "available" || observation.stale || observation.fields_stale || observation.gone_at ? t("obs_unknown") : observation.streaming === true ? t("results_streaming") : observation.pending && typeof observation.pending === "object" ? t("results_waiting") : typeof observation.pending === "number" && observation.pending > 0 ? t("results_pending", { count: observation.pending }) : observation.streaming === false && (observation.pending === null || observation.pending === 0) ? t("results_no_activity") : t("obs_unknown"),
-				time: date(observation.observed_at)
-			})));
+			if (observation) {
+				const facets = resultSourceFacets(observation);
+				const facts = [t({
+					streaming: "results_streaming",
+					not_streaming: "results_no_activity",
+					unknown: "obs_unknown"
+				}[facets.activity])];
+				if (facets.attention !== "none") facts.push(t(typeof observation.pending === "number" ? "results_pending_observed" : "results_waiting_observed", { count: observation.pending }));
+				if (facets.staleness.runtime) facts.push(t("results_observation_stale"));
+				if (facets.staleness.gone || facets.staleness.missing) facts.push(t("results_observation_gone"));
+				row.append(h("p", {
+					class: "muted",
+					"data-result-runtime-facets": ""
+				}, timeLabel(t, "results_activity", {
+					state: facts.join(" · "),
+					time: date(observation.observed_at)
+				})));
+			}
 			for (const receipt of link.delivered_to || []) row.append(h("p", { class: "note ok" }, t("results_delivered"), " ", h("a", {
 				href: `https://github.com/${receipt.repository}/pull/${receipt.pull_number}`,
 				target: "_blank",
@@ -65535,28 +65833,44 @@ async function openDiagnostics() {
 				desktopBuild = (await nativeStatus()).app_build;
 			} catch {}
 			let caps = null;
-			try {
-				caps = await api("GET", "/capabilities");
-			} catch {}
+			const read = async (path, scope = null, offered = true, attempted = true) => {
+				const permitted = !scope || !!caps?.scopes?.includes(scope);
+				if (!attempted || !offered || !permitted) return {
+					attempted,
+					offered,
+					permitted,
+					at: new Date().toISOString()
+				};
+				try {
+					return {
+						data: await api("GET", path),
+						completed: true,
+						at: new Date().toISOString()
+					};
+				} catch (error) {
+					return {
+						error: {
+							status: error.status,
+							code: error.code
+						},
+						at: new Date().toISOString()
+					};
+				}
+			};
+			const capabilities = await read("/capabilities");
+			caps = capabilities.data;
 			if (epoch !== state.epoch) throw Error("Connection changed");
 			if (!caps?.scopes?.includes("observe")) withdrawDiagnostics();
 			const revision = diagnosticRevision;
-			const read = async (path, scope) => {
-				if (!caps?.scopes?.includes(scope)) return null;
-				try {
-					const data = await api("GET", path);
-					return revision === diagnosticRevision ? data : null;
-				} catch {
-					return null;
-				}
-			};
-			let [hosts, operations, setup] = await Promise.all([
-				read("/hosts", "observe"),
-				read("/operations?limit=50", "observe"),
-				caps?.managed_installation ? read("/managed/setup", "manage") : null
+			const [hostsRead, operationsRead, setupRead, observationRead] = await Promise.all([
+				read("/hosts", "observe", true, !!caps),
+				read("/operations?limit=50", "observe", true, !!caps),
+				read("/managed/setup", "manage", !!caps?.managed_installation, !!caps),
+				read(null, null, false)
 			]);
 			if (epoch !== state.epoch) throw Error("Connection changed");
-			if (revision !== diagnosticRevision) hosts = operations = setup = null;
+			const discarded = revision !== diagnosticRevision;
+			const hosts = discarded ? null : hostsRead.data, operations = discarded ? null : operationsRead.data, setup = discarded ? null : setupRead.data;
 			return buildDiagnostics({
 				...diagnosticsClient(caps),
 				exportedAt: new Date().toISOString(),
@@ -65565,11 +65879,21 @@ async function openDiagnostics() {
 				setup,
 				sessions: hosts && caps?.scopes?.includes("observe") && diagnosticSessionsRead ? [...diagnosticSessions.values()] : null,
 				recentErrors: recentErrors.entries(),
-				sources: {
-					capabilities: caps ? "available" : "not_available",
-					hosts: hosts ? "available" : "not_available",
-					operations: operations ? "available" : "not_available",
-					managed_setup: setup ? "available" : "not_available"
+				sourceReads: {
+					capabilities,
+					hosts: {
+						...hostsRead,
+						discarded
+					},
+					operations: {
+						...operationsRead,
+						discarded
+					},
+					managed_setup: {
+						...setupRead,
+						discarded
+					},
+					observation: observationRead
 				}
 			});
 		},
@@ -70977,7 +71301,7 @@ async function viewNativeSettings(main) {
 		if (status.credential_source) row("desktop_credential_source", t("desktop_source_" + status.credential_source));
 		if (state.caps) details.append(h("dt", {}, t("connection_access")), connectionAccess());
 		if (status.error && (!status.configuration_setup || status.configuration_source === "managed")) info.append(errorBox(new Error(status.error), {
-			summary: t("desktop_status_error"),
+			summary: t(status.error.startsWith("JOURNAL_NEWER_DATA_STEP:") ? "managed_newer_journal" : "desktop_status_error"),
 			within: info
 		}));
 		else if (!status.credential_available && !status.configuration_setup) info.append(h("p", {}, t("desktop_credential_missing")));

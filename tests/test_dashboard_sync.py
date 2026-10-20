@@ -11,10 +11,11 @@ import pytest
 
 from bat_agent_connector import api_auth, dashboard_sync
 from bat_agent_connector.api_v1 import ApiV1
-from bat_agent_connector.task_journal import Journal
+from bat_agent_connector.task_journal import LATEST_DATA_STEP, Journal
 from tests.test_api_v1 import daemon as api_daemon
 from tests.test_api_v1 import http, token
 from tests.test_api_v1 import served as api_served
+from tests.test_journal_compatibility import snapshot as journal_snapshot
 
 daemon = api_daemon
 served = api_served
@@ -31,15 +32,22 @@ def replay(j, sync, principal=VIEWER, **kwargs):
     return dashboard_sync.event_page(j, principal, cp["cursor"], token=cp["token"], **kwargs)
 
 
-def test_b05_sync_identity_survives_restart_without_consuming_a_data_step(tmp_path):
+@pytest.mark.parametrize("version", [LATEST_DATA_STEP, 17])
+def test_b05_sync_identity_survives_restart_without_consuming_a_data_step(tmp_path, version):
     path = tmp_path / "journal.db"
     j = Journal(path)
     append(j, 1)
     first = dashboard_sync.checkpoint(j, VIEWER)
-    j.db.execute("PRAGMA user_version=17")
+    j.db.execute(f"PRAGMA user_version={version}")
     j.close()
+    if version > LATEST_DATA_STEP:
+        before = journal_snapshot(path)
+        with pytest.raises(ValueError, match="JOURNAL_NEWER_DATA_STEP"):
+            Journal(path)
+        assert journal_snapshot(path) == before
+        return
     j = Journal(path)
-    assert j.db.execute("PRAGMA user_version").fetchone()[0] == 17
+    assert j.db.execute("PRAGMA user_version").fetchone()[0] == version
     assert dashboard_sync.checkpoint(j, VIEWER) == first
     assert replay(j, first)["events"] == []
     j.close()

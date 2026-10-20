@@ -590,6 +590,45 @@ async def test_setup_uses_observed_connectivity_after_read_only_socket_closes(in
     assert len(mock.auth_frames) == before  # Reading Setup does not launch another probe.
 
 
+@pytest.fixture
+async def setup_evidence(installed, mock, monkeypatch):
+    """Real saved setup and inventory; only BAT's TLS/WebSocket peer is a double."""
+    daemon, principal, root = installed
+    profiles = root / "profiles"
+    profiles.mkdir()
+    (profiles / "index.json").write_text('{"profiles": []}')
+    monkeypatch.setattr(setup, "_profile_directory", lambda _document: profiles)
+    operation = await settle(installed, create(installed, "setup.host", {"host": "fixture"},
+        host_params(daemon, principal, mock)))
+    assert operation["status"] == "succeeded"
+    await daemon.inventory._refresh_scheduled("fixture")
+    connected = setup.state(daemon, principal)
+    await mock.stop()
+    await daemon.inventory._refresh_scheduled("fixture")
+    unreachable = setup.state(daemon, principal)
+    with daemon.journal.tx():
+        daemon.journal.db.execute("UPDATE hosts_observed SET last_attempt_at=? WHERE host=?",
+            (time.time() - daemon.inventory.settings.stale_after_s - 1, "fixture"))
+    checking = setup.state(daemon, principal)
+    # This is the same receipt in all three snapshots, not three successful setups.
+    assert daemon.ops.get(operation["operation_id"]) == operation
+    return {"operation": operation, "states": {"unreachable": unreachable, "checking": checking, "connected": connected}}
+
+
+async def test_past_setup_success_does_not_establish_present_connectivity(setup_evidence):
+    operation = setup_evidence["operation"]
+    assert operation["result"]["configured"] and operation["result"]["connected"]
+    assert operation["updated_at"] >= operation["created_at"]
+    for condition, document in setup_evidence["states"].items():
+        host = document["hosts"][0]
+        assert host["name"] == operation["target"]["host"]
+        assert host["connection_status"] == condition
+        assert host["connected"] is (None if condition == "checking" else condition == "connected")
+        assert isinstance(host["connection_checked_at"], float)
+        assert (host["connection_checked_at"] < operation["updated_at"]) is (condition == "checking")
+        assert document["revision"] == operation["result"]["revision"]
+
+
 @pytest.mark.parametrize("condition,expected", [("never", "checking"), ("failed", "unreachable"),
     ("stale_success", "checking"), ("stale_failure", "checking"), ("changed_binding", "checking"),
     ("active_writer", "connected")])
