@@ -129,6 +129,13 @@ is refused whole; list scans omit whole rows while preserving their signed
 whole entries and explicit scope/verification/cost coverage. Reads create no
 operations and contact no provider or BAT host.
 
+Within one synchronous snapshot, sibling source readers reuse a completed
+batch-source proof by full principal, workspace, original operation and verified
+intent digest. Membership and intent integrity are checked on every call. The
+existing memo keeps conditional proofs private to the exact traversal guard,
+discards errors/refusals and ends before writes or awaits. This does not cache
+current execution authority, cancellation, deadline, capacity or retry eligibility.
+
 Tests use temporary real Git and fake existing transports. Mixed independent /
 blocked entries, duplicate selection, exact-key recovery, native result identity,
 late source withdrawal, pause/deadline between child admission and final frame,

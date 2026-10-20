@@ -151,8 +151,7 @@ async def _run(ctx):
         # This synchronous page/receipt guard expands the same historical
         # graph through several readers. Share completed reads only until it
         # returns, before the caller writes or awaits the provider.
-        from . import pm_read_cache
-        with baselines._snapshot(ctx.service.db), pm_read_cache.scope(ctx.service.db, principal):
+        with pm_source_reads.scope(ctx.service.db, principal):
             return checked_sources()
 
     def checked_sources():

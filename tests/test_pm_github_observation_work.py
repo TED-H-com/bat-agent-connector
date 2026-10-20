@@ -1,0 +1,114 @@
+"""Count original-source work in real observer frames, independently of clocks."""
+import copy
+import sqlite3
+import time
+from types import SimpleNamespace
+
+import pytest
+
+from bat_agent_connector import operations, pm_lifecycle_gates, task_journal
+from bat_agent_connector import pm_maintenance_policy as policies
+from bat_agent_connector import pm_release_baselines as baselines
+from bat_agent_connector.operations import OpContext
+from tests import test_pm_github_observation as github
+from tests import test_pm_release_baselines as releases
+from tests.test_pm_github_observation import base_ops, ops, release_ops, workload_ops  # noqa: F401
+
+
+class PagesChecked(Exception):
+    """Stop the focused prefix before publishing a fabricated traversal."""
+
+
+async def baseline_history(ops, monkeypatch, count):  # noqa: F811
+    data = await github.prepared(ops, monkeypatch)
+    active = policies.active_record(ops, github.OWNER, data['workspace_id'])
+    first = baselines._record(ops.db, data['workspace_id'], active['baseline_id'])
+    original = ops.get(first['operation_id'])
+    for _ in range(count - 1):
+        await releases.execute(ops, releases.request(ops, original['target'],
+            original['params']['project_binding_id'], branch='support/1.x'))
+    head = baselines._head(ops.db, data['workspace_id'])
+    await releases.execute(ops, {'action': policies.ACTION, 'target': {'workspace_id': data['workspace_id']},
+        'params': {'policy': copy.deepcopy(active['policy']), 'rationale': 'Maintain the newest original release'},
+        'preconditions': {'expected_policy_revision': active['version'],
+            'expected_previous_policy_id': active['policy_id'], 'expected_baseline_id': head['baseline_id'],
+            'expected_lifecycle_revision': 0}, 'idempotency_key': 'adopt-history'})
+    return data
+
+
+async def test_observer_bounds_repeated_baseline_sources_per_fresh_page_frame(ops, monkeypatch):  # noqa: F811
+    count = 8
+    data = await baseline_history(ops, monkeypatch, count)
+    project = baselines._project
+    expanded, frames = [], []
+
+    def source(*args, **kwargs):
+        expanded.append(args[2])
+        return project(*args, **kwargs)
+
+    async def prefix(traversal):
+        check = traversal.check
+
+        def measured():
+            expanded.clear()
+            result = check()
+            frames.append(len(expanded))
+            # These baselines all refer to the same published source and
+            # project binding. Their chain metadata still needs verification,
+            # but the identical complete source context needs proving once in
+            # this snapshot. Every next frame must prove it afresh.
+            return result
+
+        traversal.check = measured
+        for _ in range(3):
+            await traversal.read(1, traversal.root, None, 'repository')
+        raise PagesChecked
+
+    monkeypatch.setattr(baselines, '_project', source)
+    monkeypatch.setattr(github.provider.Traversal, 'collect', prefix)
+    for history in (0, 64):
+        # Admitted operations are real durable requests, unrelated to the
+        # historical baseline proof. They must not multiply each page's work.
+        for _ in range(history):
+            ops.create(github.OWNER, **github.request(ops, data))
+        op = ops.create(github.OWNER, **github.request(ops, data))[0]
+        with pytest.raises(PagesChecked):
+            await github.observation._run(OpContext(ops, op))
+    assert len(frames) == 24
+    assert frames == [1] * 24, frames
+    assert len(set(frames)) == 1
+    assert len(ops.context['github'].reads) == 6
+    assert ops.db.execute('SELECT COUNT(*) FROM pm_github_observations').fetchone()[0] == 0
+
+
+async def test_observer_source_reuse_preserves_every_durable_byte(ops, monkeypatch, tmp_path):  # noqa: F811
+    data = await baseline_history(ops, monkeypatch, 8)
+    github.populate(ops.context['github'])
+    op = ops.create(github.OWNER, **github.request(ops, data))[0]
+    # Only module-local clocks are fixed. Restore the same admitted journal to
+    # compare identical IDs and timestamps, including all step/event envelopes.
+    clock = SimpleNamespace(time=lambda: github.NOW, monotonic=time.monotonic)
+    monkeypatch.setattr(operations, 'time', clock)
+    monkeypatch.setattr(task_journal, 'time', clock)
+    monkeypatch.setattr(pm_lifecycle_gates, 'time', clock)
+    legacy = getattr(baselines, '_access_context_sources', baselines._access_context)
+    snapshot = sqlite3.connect(tmp_path / 'admitted.sqlite')
+    try:
+        ops.db.backup(snapshot)
+        with monkeypatch.context() as reference:
+            reference.setattr(baselines, '_access_context', legacy)
+            await ops._execute(op['operation_id'])
+        before = '\n'.join(ops.db.iterdump()).encode()
+        result = ops.get(op['operation_id'])
+        assert result['status'] == 'succeeded' and result['result']['coverage_status'] == 'complete'
+        reads = len(ops.context['github'].reads)
+        snapshot.backup(ops.db)
+        await ops._execute(op['operation_id'])
+        after = '\n'.join(ops.db.iterdump()).encode()
+        different = next((i for i, (left, right) in enumerate(zip(before, after)) if left != right), 0)
+        assert after == before, (before[max(0, different - 100):different + 100],
+            after[max(0, different - 100):different + 100])
+        assert ops.get(op['operation_id']) == result
+        assert len(ops.context['github'].reads) == 2 * reads
+    finally:
+        snapshot.close()

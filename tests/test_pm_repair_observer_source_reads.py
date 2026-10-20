@@ -1,15 +1,17 @@
 """A real private observation frame reuses sources, never current authority."""
 import asyncio
+import copy
 from types import SimpleNamespace
 
 import pytest
 
-from bat_agent_connector import pm_access, pm_workspace
+from bat_agent_connector import pm_access, pm_source_reads, pm_workspace
+from bat_agent_connector import pm_execution_runtime as runtime
 from bat_agent_connector import pm_github_observation as observations
 from bat_agent_connector import pm_maintenance_repair_delivery as delivery
 from bat_agent_connector import pm_maintenance_repairs as repairs
 from bat_agent_connector import pm_workload as workload
-from bat_agent_connector.operations import OpContext, OperationError
+from bat_agent_connector.operations import OpContext, OperationError, StepFailed
 from tests import pm_joined_maintenance_helpers as maintenance
 from tests.pm_joined_lifecycle_helpers import OWNER
 from tests.test_pm_joined_lifecycle import bat_world, daemon, joined, world  # noqa: F401
@@ -126,6 +128,104 @@ async def check_frame(w, parent, observer, monkeypatch, record_property):
         assert not any(pm_access.event_visible(ops.db, OWNER, event) for event in events)
     assert frame() == new
     assert not ops.db.execute('SELECT 1 FROM operation_steps WHERE operation_id=?', (observer['operation_id'],)).fetchone()
+    check_shared_batch_receipts(w, monkeypatch)
+    await check_next_page(w, parent, observer, monkeypatch)
+
+
+def check_shared_batch_receipts(w, monkeypatch):
+    """Sibling runtime proofs share the same original batch and fixed receipts."""
+    ops = w['d'].ops
+    child = ops.get(w['ledger'].references['execution_ids'][0])
+    parent, _ = runtime.relation(ops, child)
+    package, reader = runtime.batches.pm_package_handoff._package, runtime.observer
+    packages, receipts = [], []
+
+    def package_read(*args, **kwargs):
+        packages.append(args[2]['package_id'])
+        return package(*args, **kwargs)
+
+    def receipt_read(service, selected):
+        if selected['operation_id'] == child['operation_id']:
+            receipts.append(selected['operation_id'])
+        return reader(service, selected)
+
+    with monkeypatch.context() as counted:
+        counted.setattr(runtime.batches.pm_package_handoff, '_package', package_read)
+        counted.setattr(runtime, 'observer', receipt_read)
+        with pm_source_reads.scope(ops.db, OWNER):
+            runtime.batches._access(ops, OWNER, parent)
+            packages.clear()
+            for _ in range(2):
+                runtime.batches._access(ops, OWNER, parent)
+            batch_reads = len(packages)
+            first = runtime.proof(ops, OWNER, child)
+            receipts.clear()
+            proofs = [first, *(runtime.proof(ops, OWNER, child) for _ in range(2))]
+    assert proofs[0] is not None and proofs[0] == proofs[1] == proofs[2]
+    assert (batch_reads, len(receipts)) == (0, 0)
+
+
+async def check_next_page(w, parent, observer, monkeypatch):
+    """The actual next-page handler must refuse before another provider GET."""
+    ops, wid = w['d'].ops, w['workspace_id']
+    active = repairs.policies.active_record(ops, OWNER, wid)
+    deadline = repairs._record_for(ops, parent)['deadline_at']
+    provider = ops.context['github']
+    bounded_get = provider.bounded_get
+    reads = []
+
+    async def counted(*args, **kwargs):
+        reads.append(args[0])
+        return await bounded_get(*args, **kwargs)
+
+    async def scope_change():
+        policy = copy.deepcopy(active['policy'])
+        policy['allowed_paths'].append('docs')
+        changed = ops.create(OWNER, action=repairs.policies.ACTION, target={'workspace_id': wid},
+            params={'policy': policy, 'rationale': 'Change the currently adopted repository scope'},
+            preconditions={'expected_policy_revision': active['version'], 'expected_previous_policy_id': active['policy_id'],
+                'expected_baseline_id': active['baseline_id'],
+                'expected_lifecycle_revision': observer['preconditions']['expected_lifecycle_revision']},
+            idempotency_key='scope-change-between-pages')[0]
+        await ops._execute(changed['operation_id'])
+        assert ops.get(changed['operation_id'])['status'] == 'succeeded'
+
+    for variant, code in (
+        ('scope', 'PM_WORKLOAD_CONTEXT_CHANGED'),
+        ('authority', 'PM_MAINTENANCE_AUTHORITY_UNAVAILABLE'),
+        ('cancel', 'PM_REPAIR_STOPPED'),
+        ('deadline', 'PM_REPAIR_DEADLINE'),
+    ):
+        reads.clear()
+
+        async def prefix(traversal):
+            await traversal.read(1, traversal.root, None, 'repository')
+            assert len(reads) == 1 and traversal.pages == 1
+            await asyncio.sleep(0)
+            if variant == 'scope':
+                await scope_change()
+            elif variant == 'authority':
+                ops.db.execute('UPDATE api_principals SET revoked_at=1 WHERE actor=?', (OWNER.actor,))
+            elif variant == 'cancel':
+                ops.db.execute('UPDATE operations SET cancel_requested=1 WHERE operation_id=?',
+                    (parent['operation_id'],))
+            else:
+                page.setattr(repairs, 'time', SimpleNamespace(time=lambda: deadline + 1))
+            with pytest.raises((OperationError, StepFailed)) as denied:
+                await traversal.read(1, traversal.root, None, 'repository')
+            assert denied.value.code == code
+            assert len(reads) == 1 and traversal.pages == 1
+            raise FrameChecked
+
+        with journal_change(ops.db), monkeypatch.context() as page:
+            page.setattr(provider, 'bounded_get', counted)
+            page.setattr(observations.provider.Traversal, 'collect', prefix)
+            # The same admitted child and its first original receipt are used
+            # for each isolated durable-state mutation; none may publish.
+            with pytest.raises(FrameChecked):
+                await observations._run(OpContext(ops, observer))
+        assert not ops.db.execute('SELECT 1 FROM pm_github_observations WHERE operation_id=?',
+            (observer['operation_id'],)).fetchone()
 
 
 async def test_original_observer_frame_bounds_repeated_sources_and_rechecks_authority(joined, mock, monkeypatch, record_property):  # noqa: F811

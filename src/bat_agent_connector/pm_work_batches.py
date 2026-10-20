@@ -11,6 +11,7 @@ from . import (
     controller_authority,
     pm_lifecycle_gates,
     pm_package_handoff,
+    pm_read_cache,
     pm_requirement_acceptance,
     pm_source_lineage,
     pm_spec_format,
@@ -255,6 +256,16 @@ def _batch(ops, wid, bid):
 def _access(ops, principal, op):
     wid, intent = op['target']['workspace_id'], _intent(op)
     _member(ops, principal, wid)
+    # _intent has verified these exact source bytes against their digest.
+    # Sibling runtime readers need one completed batch-source proof in this
+    # snapshot, not another expansion of every package and evidence root.
+    digest = op['external_refs']['admission_binding']['work_batch_intent_digest']
+    return pm_read_cache.remember(_access, (principal, wid, op.get('operation_id'), digest),
+        lambda: _access_sources(ops, principal, op, intent), cache_errors=False, db=ops.db)
+
+
+def _access_sources(ops, principal, op, intent):
+    wid = op['target']['workspace_id']
     for entry in intent['entries']:
         pm_package_handoff._package(ops, principal, entry['handoff']['params']['pm_package_ref'])
         for ref in entry['handoff']['params'].get('artifacts', []):

@@ -132,6 +132,15 @@ unchanged.
 
 ## Read and visibility contract
 
+Within one synchronous immutable snapshot, repeated original-source contexts
+reuse the existing read memo by full principal, workspace and the exact
+plan/work/evidence/Git/DoD inputs consumed by that predicate. Raw immutable
+package metadata is decoded and verified once, with isolated document copies
+for every caller. Context proofs stay private to their traversal guard; errors
+and traversal refusals are not saved. Writes or a new frame require fresh
+proofs. Current configuration, lifecycle, membership at each new frame and
+execution eligibility retain their existing checks.
+
 `get_package(ops, principal, workspace_id, package_id)` returns
 `{version,workspace_id,package}`. The package contains sequence, identifiers,
 previous package, document digest, actor, timestamp, operation and full document.

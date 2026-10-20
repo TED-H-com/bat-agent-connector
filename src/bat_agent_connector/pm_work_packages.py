@@ -15,6 +15,7 @@ import time
 from . import (
     pm_evidence,
     pm_plans,
+    pm_read_cache,
     pm_runs,
     pm_spec_sources,
     pm_sprints,
@@ -85,6 +86,7 @@ def _member(ops, principal, wid, *, write=False):
     return pm_workspace.require_member(ops.db, principal, wid, write=write)
 
 
+@pm_read_cache.memoized(guard_independent=True, freeze=pm_read_cache.json_snapshot, thaw=json.loads)
 def _record(db, wid, package_id):
     if not isinstance(package_id, str) or not PACKAGE.fullmatch(package_id):
         raise _bad("PM_PACKAGE_NOT_FOUND", "Work package not found", 404)
@@ -150,6 +152,16 @@ def _evidence(ops, principal, wid, refs):
 
 
 def _access_context(ops, principal, wid, context):
+    # Several original-source readers can reach this same adopted plan/work
+    # context. An ancestry pointer or code-configuration digest is not read by
+    # this historical predicate; current configuration stays in the caller.
+    selected = {key: context[key] for key in (
+        'server_id', 'plan_ref', 'work_ref', 'evidence_refs', 'git_binding', 'dod_ref') if key in context}
+    return pm_read_cache.remember(_access_context, (principal, wid, selected),
+        lambda: _access_context_sources(ops, principal, wid, context), cache_errors=False, db=ops.db)
+
+
+def _access_context_sources(ops, principal, wid, context):
     workspace = _member(ops, principal, wid)
     if workspace["server_id"] != context["server_id"]:
         raise _bad("PM_PACKAGE_SOURCE_UNAVAILABLE", "The original workspace identity is unavailable", 404)

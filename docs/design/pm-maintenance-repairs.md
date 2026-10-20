@@ -12,6 +12,17 @@ Scopes end before any provider await or journal mutation, and every subsequent
 page/effect obtains a fresh scope. Credential identity, source withdrawal and
 the existing cycle/depth/node bounds remain unchanged.
 
+The observer's complete page/receipt guard owns that source scope, including
+both parent readers and its current-policy comparison. Baseline ancestry still
+verifies every immutable record and previous pointer. Identical publication
+contexts within the same snapshot reuse the existing read memo by full principal,
+workspace, decision mode and every source input (server, project binding,
+repository, selected source, commit, channel and deployment receipt). Revision
+and ancestry fields do not multiply an otherwise identical source proof.
+Conditional proofs stay private to their exact traversal guard; refusals and
+errors are not saved. No current authority, cancellation, deadline, lifecycle
+eligibility or complete final-frame result is memoized.
+
 Within that synchronous snapshot, complete repair-source decisions may be reused
 by canonical original operation ID and the full principal/credential identity.
 Every call still checks membership and the original target/admission context;

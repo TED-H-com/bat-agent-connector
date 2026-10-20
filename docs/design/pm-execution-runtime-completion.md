@@ -39,6 +39,14 @@ after the last replay page. The saved original completion receipt replays before
 new admission checks, preserving historical evidence after pause or withdrawal;
 public reads remain gated by the full original source chain.
 
+Repeated historical completion-proof reads may share the existing synchronous
+snapshot memo. Its key includes the full principal and every consumed child
+identity, visibility input, private batch claim and controller binding. Only
+completed receipts are retained, each caller receives an isolated JSON value,
+and conditional proofs cannot escape their traversal guard. Errors, refusals
+and incomplete results are not retained. Native replay, current authority and
+the final candidate frame still execute their existing live checks.
+
 The completion fact means `runtime_status: original_turn_completed` and
 `process_death_proven: false`. It cannot grant process ownership, assert that a
 shared app-server exited, publish a release or upgrade verification into quality.

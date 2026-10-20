@@ -146,6 +146,19 @@ class _Reader:
 
 
 def _access_context(ops, principal, wid, intent, *, decide=False):
+    # Baseline/policy ancestry can reach the same publication context many
+    # times. Only these inputs are read below; a previous-baseline pointer or
+    # adoption revision does not create another deployment-source proof.
+    # The existing snapshot memo keeps credential, write, owner, traversal
+    # guard and refusal barriers. It never survives this synchronous read.
+    context = {key: intent[key] for key in (
+        'server_id', 'project_binding', 'repository', 'source', 'repository_id',
+        'commit_sha', 'channel', 'deployment_receipt') if key in intent}
+    return pm_read_cache.remember(_access_context, (principal, wid, context, decide),
+        lambda: _access_context_sources(ops, principal, wid, intent, decide=decide), cache_errors=False, db=ops.db)
+
+
+def _access_context_sources(ops, principal, wid, intent, *, decide=False):
     # Source visibility is not an extra API scope: manage-only owners must be
     # able to receive/replay their admitted action. Standalone reads enforce
     # observe in their public entry before invoking this shared source policy.
