@@ -138,6 +138,12 @@ def _bounded(value):
 
 
 async def _run(ctx):
+    from .pm_source_history import operation
+    with operation(ctx.service.db, ctx.operation_id):
+        return await _observe(ctx)
+
+
+async def _observe(ctx):
     name = 'pm.github.record'
     saved = ctx.service.db.execute('SELECT status FROM operation_steps WHERE operation_id=? AND name=?',
         (ctx.operation_id, name)).fetchone()

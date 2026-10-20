@@ -1,11 +1,12 @@
 """A real private observation frame reuses sources, never current authority."""
 import asyncio
 import copy
+import sqlite3
 from types import SimpleNamespace
 
 import pytest
 
-from bat_agent_connector import pm_access, pm_read_cache, pm_source_reads, pm_workspace
+from bat_agent_connector import pm_access, pm_read_cache, pm_source_history, pm_source_reads, pm_workspace
 from bat_agent_connector import pm_execution_runtime as runtime
 from bat_agent_connector import pm_github_observation as observations
 from bat_agent_connector import pm_maintenance_repair_delivery as delivery
@@ -56,7 +57,7 @@ def prior_guard(ops, parent, *, scopes=repairs.REQUIRED):
     return live
 
 
-async def check_frame(w, parent, observer, monkeypatch, record_property):
+async def check_frame(w, parent, observer, monkeypatch, record_property, tmp_path):
     ops, wid = w['d'].ops, w['workspace_id']
     def frame():
         return delivery.require_child(ops, observer)
@@ -129,7 +130,7 @@ async def check_frame(w, parent, observer, monkeypatch, record_property):
     assert frame() == new
     assert not ops.db.execute('SELECT 1 FROM operation_steps WHERE operation_id=?', (observer['operation_id'],)).fetchone()
     check_shared_batch_receipts(w, monkeypatch)
-    await check_next_page(w, parent, observer, monkeypatch)
+    await check_next_page(w, parent, observer, monkeypatch, tmp_path)
 
 
 def check_shared_batch_receipts(w, monkeypatch):
@@ -180,7 +181,7 @@ def check_shared_batch_receipts(w, monkeypatch):
     assert expanded == []
 
 
-async def check_next_page(w, parent, observer, monkeypatch):
+async def check_next_page(w, parent, observer, monkeypatch, tmp_path):
     """The actual next-page handler must refuse before another provider GET."""
     ops, wid = w['d'].ops, w['workspace_id']
     active = repairs.policies.active_record(ops, OWNER, wid)
@@ -205,45 +206,69 @@ async def check_next_page(w, parent, observer, monkeypatch):
         await ops._execute(changed['operation_id'])
         assert ops.get(changed['operation_id'])['status'] == 'succeeded'
 
-    for variant, code in (
-        ('scope', 'PM_WORKLOAD_CONTEXT_CHANGED'),
-        ('authority', 'PM_MAINTENANCE_AUTHORITY_UNAVAILABLE'),
-        ('cancel', 'PM_REPAIR_STOPPED'),
-        ('deadline', 'PM_REPAIR_DEADLINE'),
-    ):
-        reads.clear()
+    assert not ops.db.in_transaction
+    snapshot = sqlite3.connect(tmp_path / 'observer-admitted.sqlite')
+    ops.db.backup(snapshot)
+    seed = pm_source_history.seed
+    served = []
 
-        async def prefix(traversal):
-            await traversal.read(1, traversal.root, None, 'repository')
-            assert len(reads) == 1 and traversal.pages == 1
-            await asyncio.sleep(0)
-            if variant == 'scope':
-                await scope_change()
-            elif variant == 'authority':
-                ops.db.execute('UPDATE api_principals SET revoked_at=1 WHERE actor=?', (OWNER.actor,))
-            elif variant == 'cancel':
-                ops.db.execute('UPDATE operations SET cancel_requested=1 WHERE operation_id=?',
-                    (parent['operation_id'],))
-            else:
-                page.setattr(repairs, 'time', SimpleNamespace(time=lambda: deadline + 1))
-            with pytest.raises((OperationError, StepFailed)) as denied:
+    def versioned(*args, **kwargs):
+        result = seed(*args, **kwargs)
+        if result:
+            served.append(len(result))
+        return result
+
+    try:
+        for variant, code in (
+            ('scope', 'PM_WORKLOAD_CONTEXT_CHANGED'),
+            ('authority', 'PM_MAINTENANCE_AUTHORITY_UNAVAILABLE'),
+            ('cancel', 'PM_REPAIR_STOPPED'),
+            ('deadline', 'PM_REPAIR_DEADLINE'),
+        ):
+            reads.clear()
+            served.clear()
+
+            async def prefix(traversal):
                 await traversal.read(1, traversal.root, None, 'repository')
-            assert denied.value.code == code
-            assert len(reads) == 1 and traversal.pages == 1
-            raise FrameChecked
+                assert len(reads) == 1 and traversal.pages == 1
+                assert not ops.db.in_transaction
+                if pm_source_history._CURRENT.get() is not None:
+                    assert served
+                await asyncio.sleep(0)
+                if variant == 'scope':
+                    await scope_change()
+                elif variant == 'authority':
+                    ops.db.execute('UPDATE api_principals SET revoked_at=1 WHERE actor=?', (OWNER.actor,))
+                elif variant == 'cancel':
+                    ops.db.execute('UPDATE operations SET cancel_requested=1 WHERE operation_id=?',
+                        (parent['operation_id'],))
+                else:
+                    page.setattr(repairs, 'time', SimpleNamespace(time=lambda: deadline + 1))
+                with pytest.raises((OperationError, StepFailed)) as denied:
+                    await traversal.read(1, traversal.root, None, 'repository')
+                assert denied.value.code == code
+                assert len(reads) == 1 and traversal.pages == 1
+                raise FrameChecked
 
-        with journal_change(ops.db), monkeypatch.context() as page:
-            page.setattr(provider, 'bounded_get', counted)
-            page.setattr(observations.provider.Traversal, 'collect', prefix)
-            # The same admitted child and its first original receipt are used
-            # for each isolated durable-state mutation; none may publish.
-            with pytest.raises(FrameChecked):
-                await observations._run(OpContext(ops, observer))
-        assert not ops.db.execute('SELECT 1 FROM pm_github_observations WHERE operation_id=?',
-            (observer['operation_id'],)).fetchone()
+            snapshot.backup(ops.db)
+            with monkeypatch.context() as page:
+                page.setattr(pm_source_history, 'seed', versioned)
+                page.setattr(provider, 'bounded_get', counted)
+                page.setattr(observations.provider.Traversal, 'collect', prefix)
+                # The same admitted child and its first original receipt are used
+                # for each isolated durable-state mutation; none may publish.
+                with pytest.raises(FrameChecked):
+                    await observations._run(OpContext(ops, observer))
+            snapshot.backup(ops.db)
+            assert not ops.db.execute('SELECT 1 FROM pm_github_observations WHERE operation_id=?',
+                (observer['operation_id'],)).fetchone()
+    finally:
+        if not ops.db.in_transaction:
+            snapshot.backup(ops.db)
+        snapshot.close()
 
 
-async def test_original_observer_frame_bounds_repeated_sources_and_rechecks_authority(joined, mock, monkeypatch, record_property):  # noqa: F811
+async def test_original_observer_frame_bounds_repeated_sources_and_rechecks_authority(joined, mock, monkeypatch, record_property, tmp_path):  # noqa: F811
     advance, checked = maintenance.advance, []
     async def stop_at_observer(w, parent, rounds=3):
         for _ in range(rounds):
@@ -252,7 +277,7 @@ async def test_original_observer_frame_bounds_repeated_sources_and_rechecks_auth
             if rows:
                 observer = delivery._child(w['d'].ops, parent, rows[-1])
                 assert observer['status'] == 'accepted'
-                await check_frame(w, parent, observer, monkeypatch, record_property)
+                await check_frame(w, parent, observer, monkeypatch, record_property, tmp_path)
                 checked.append(observer['operation_id'])
                 raise FrameChecked
         return parent

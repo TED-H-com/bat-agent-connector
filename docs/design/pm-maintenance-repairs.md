@@ -23,6 +23,28 @@ Conditional proofs stay private to their exact traversal guard; refusals and
 errors are not saved. No current authority, cancellation, deadline, lifecycle
 eligibility or complete final-frame result is memoized.
 
+During one GitHub observation, completed historical source booleans may cross
+frames only after proving their SQLite version unchanged. Operation-owned TEMP
+triggers track changes on this connection; `data_version` tracks commits on other
+connections, and both main/TEMP schema versions protect the tracked write surface.
+Only that observer's registered page/start receipts, their lifecycle admissions
+and audit projections are excluded; they cannot alter its historical sources.
+Changes to its request, status, authority or cancellation are still tracked.
+The version is read before opening a fresh source transaction and checked after
+its WAL anchor, so a racing commit cannot label an old proof with a new version.
+The caller's existing transaction remains on the original cold-read path.
+
+Only completed, unrefused typed historical booleans are retained, under full
+principal/credential identity and the existing source bounds. Partial grants,
+mutable documents and current/final eligibility results never enter this memo.
+Every frame still executes its live policy, scope, parent, authority, cancellation
+and deadline checks. Unknown tracking surfaces (attached databases, TEMP shadow
+tables or virtual tables) retain cold reads. No transaction spans a provider await;
+the tracker, callbacks and bounded memo are discarded when the operation ends.
+There are no persistent schema changes, user_version allocations, new actions/scopes or receipt changes.
+SQLite defines the [connection-local version counter](https://sqlite.org/pragma.html#pragma_data_version)
+and [TEMP triggers on main tables](https://sqlite.org/lang_createtrigger.html#temp_triggers_on_non_temp_tables).
+
 Within that synchronous snapshot, complete repair-source decisions may be reused
 by canonical original operation ID and the full principal/credential identity.
 Every call still checks membership and the original target/admission context;
@@ -163,8 +185,9 @@ unchanged for that traversal only. Conditional answers never enter the outer
 request memo; nested guards cannot reuse or populate the parent memo. The private
 memo is discarded before leaving the guard, and writes, transaction changes, different
 principals and inherited tasks/threads retain the shared read-cache barriers.
-No memo spans an await or a new provider frame. Those frames still recheck the
-complete current original source chain, owner, scopes, policy and deadline.
+No conditional memo spans an await or a new provider frame. Those frames still
+prove the original source chain from the current snapshot or its unchanged
+tracked version, and recheck owner, scopes, policy and deadline.
 The M4 completed-source reader retains its bounded DAG tracking around this
 private memo. Raw `guard_independent` metadata loaded here is stored only in the
 private scope at its exact guard depth, discarded on exit and inaccessible to

@@ -1,7 +1,9 @@
 """Bounded boolean reuse inside one synchronous original-source read.
 
 This extracts the conversation reader's existing recursion guard. Completed
-positives may join one immutable request/step snapshot; no state survives it or
+positives may join one immutable request/step snapshot. The GitHub observer may
+carry completed historical booleans to another fresh snapshot only with its
+operation-local SQLite version proof. No transaction or partial guard crosses
 an await. Live/current/effect checks remain outside this interface. Predicates
 must be synchronous, read-only functions.
 """
@@ -14,7 +16,7 @@ import uuid
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-from . import pm_read_cache
+from . import pm_read_cache, pm_source_history
 from .operations import OperationError
 
 MAX_DEPTH = 64
@@ -75,12 +77,16 @@ copied asynchronous context invalidates reuse rather than granting access.
                 raise _changed()
             return
     owned = not db.in_transaction
+    # Only a fresh transaction can establish a versioned cross-frame proof.
+    # A caller's older transaction remains on the original cold-read path.
+    history = (pm_source_history.before(db, (MAX_DEPTH, MAX_NODES)) if owned else
+        parent.get('history') if parent and parent['db'] is db else None)
     if owned:
         db.execute('BEGIN')
     anchor = 'pm_source_read_' + uuid.uuid4().hex
     db.execute('SAVEPOINT ' + anchor)
     state = {'db': db, 'identity': identity, 'owner': _owner(), 'open': True,
-        'yielded': False, 'changes': db.total_changes, 'active': set(), 'memo': {}, 'visibility': {},
+        'yielded': False, 'changes': db.total_changes, 'active': set(), 'memo': {}, 'visibility': {}, 'history': history,
         'remembering': False, 'local_only': set(), 'refused': set(), 'guarded_visibility': {},
         'guard_contexts': {}, 'partial_sources': {}, 'repair_walks': set(), 'repair_completed': set(), 'repair_generation': None,
         'scope_depth': parent['scope_depth'] + 1 if parent and parent['open'] else 1,
@@ -89,6 +95,7 @@ copied asynchronous context invalidates reuse rather than granting access.
     try:
         # Establish the WAL read point before any nested source predicate.
         db.execute('SELECT name FROM sqlite_schema LIMIT 1').fetchone()
+        state['memo'].update(pm_source_history.seed(history, principal))
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -101,6 +108,8 @@ copied asynchronous context invalidates reuse rather than granting access.
             yield state
             if not _valid(state):
                 raise _changed()
+            if not pm_read_cache.is_guarded():
+                pm_source_history.save(history, principal, state, MAX_NODES)
         try:
             db.execute('RELEASE ' + anchor)
         except sqlite3.OperationalError:
@@ -111,6 +120,7 @@ copied asynchronous context invalidates reuse rather than granting access.
         if owned:
             db.execute('COMMIT')
     except BaseException:
+        pm_source_history.reject(history)
         original_transaction = anchor is None
         if anchor is not None:
             try:

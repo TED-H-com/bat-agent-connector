@@ -30,6 +30,38 @@ class PagesChecked(Exception):
     """Stop the focused prefix before publishing a fabricated traversal."""
 
 
+async def test_observer_reuses_completed_history_only_while_durable_sources_are_unchanged(ops, monkeypatch):  # noqa: F811
+    data = await baseline_history(ops, monkeypatch, 2)
+    source, expanded, checked = baselines._project, [], []
+
+    def project(*args, **kwargs):
+        expanded.append(1)
+        return source(*args, **kwargs)
+
+    async def prefix(traversal):
+        check = traversal.check
+        def counted():
+            checked.append(1)
+            return check()
+        traversal.check = counted
+        for _ in range(3):
+            await traversal.read(1, traversal.root, None, 'repository')
+        raise PagesChecked
+
+    monkeypatch.setattr(baselines, '_project', project)
+    monkeypatch.setattr(github.provider.Traversal, 'collect', prefix)
+    op = ops.create(github.OWNER, **github.request(ops, data))[0]
+    with pytest.raises(PagesChecked):
+        await github.observation._run(OpContext(ops, op))
+    assert len(checked) == 12  # Every pre/post GET and receipt guard still executes.
+    # One initial proof plus the three journal gates per page, whose caller's
+    # transaction is deliberately ineligible for reuse across frames. Fresh page
+    # snapshots can prove that their completed historical sources are unchanged.
+    assert len(expanded) <= 10, len(expanded)
+    assert len(ops.context['github'].reads) == 3
+    assert ops.db.execute('SELECT COUNT(*) FROM pm_github_observations').fetchone()[0] == 0
+
+
 async def baseline_history(ops, monkeypatch, count):  # noqa: F811
     data = await github.prepared(ops, monkeypatch)
     active = policies.active_record(ops, github.OWNER, data['workspace_id'])
@@ -66,8 +98,8 @@ async def test_observer_bounds_repeated_baseline_sources_per_fresh_page_frame(op
             frames.append(len(expanded))
             # These baselines all refer to the same published source and
             # project binding. Their chain metadata still needs verification,
-            # but the identical complete source context needs proving once in
-            # this snapshot. Every next frame must prove it afresh.
+            # but a versioned fresh snapshot may reuse the completed context.
+            # Existing caller transactions still prove it afresh.
             return result
 
         traversal.check = measured
@@ -86,8 +118,7 @@ async def test_observer_bounds_repeated_baseline_sources_per_fresh_page_frame(op
         with pytest.raises(PagesChecked):
             await github.observation._run(OpContext(ops, op))
     assert len(frames) == 24
-    assert frames == [1] * 24, frames
-    assert len(set(frames)) == 1
+    assert frames == [0, 0, 0, 1] * 6, frames
     assert len(ops.context['github'].reads) == 6
     assert ops.db.execute('SELECT COUNT(*) FROM pm_github_observations').fetchone()[0] == 0
 
