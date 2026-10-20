@@ -13,7 +13,7 @@ async function expectConnectedIdentity(page: Page) {
 }
 
 for (const locale of ['en-US', 'zh-TW']) for (const width of [1440, 390]) {
-  test(`Connector connection wording ${locale} ${width}`, async ({browser}) => {
+  test(`Connector connection wording ${locale} ${width}`, async ({browser}, testInfo) => {
     const context = await browser.newContext({locale, colorScheme: 'light', viewport: {width, height: width === 390 ? 844 : 900}});
     const page = await context.newPage(), errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
@@ -25,7 +25,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [1440, 390]) {
       : 'The Connector address and expected identity come from local configuration. Credentials stay in the native app, outside this page.');
     expect(await connection.innerText()).not.toMatch(/\bcentral\b|中央/i);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    const folder = process.env.POLISH_COPY_SCREENSHOTS || `${process.env.TMPDIR || '/tmp'}/polish-copy-shots`;
+    const folder = process.env.POLISH_COPY_SCREENSHOTS || testInfo.outputPath('screenshots');
     await mkdir(folder, {recursive: true});
     await page.screenshot({path: `${folder}/connection-${locale}-${width}.png`, fullPage: true});
     expect(await page.evaluate(() => (window as any).__credentialFixture.calls.filter((call: any) =>

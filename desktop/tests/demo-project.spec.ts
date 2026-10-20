@@ -15,15 +15,13 @@ const cases = [
 
 type Demo = ReturnType<typeof demoFixture>;
 
-function shotDir() {
-  return process.env.BATC_DEMO_SCREENSHOT_DIR || `${process.env.TMPDIR || '/tmp'}/demo-fixture-shots`;
-}
-
 async function shot(page: Page, name: string) {
+  const testInfo = test.info();
   if (process.env.BATC_DEMO_SCREENSHOTS !== '1') return;
-  mkdirSync(shotDir(), {recursive: true});
   const fullPage = await page.locator('[aria-modal="true"]:visible').count() === 0;
-  await page.screenshot({path: `${shotDir()}/${name}.png`, fullPage, animations: 'disabled'});
+  const directory = process.env.BATC_DEMO_SCREENSHOT_DIR || testInfo.outputPath('screenshots');
+  mkdirSync(directory, {recursive: true});
+  await page.screenshot({path: `${directory}/${name}.png`, fullPage, animations: 'disabled'});
 }
 
 // The rail is still `.workspace-nav` (a drawer below 1000px). Scan it with the page.

@@ -1,4 +1,3 @@
-import {mkdirSync} from 'node:fs';
 import {test, expect, type Page} from '@playwright/test';
 import {conversationFixture, mountConversation} from './conversation-fixture.ts';
 
@@ -43,11 +42,10 @@ function fixture(zh: boolean) {
 }
 
 async function capture(page: Page, enabled: boolean, name: string) {
+  const testInfo = test.info();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
   if (!enabled) return;
-  const shots = `${process.env.TMPDIR || '/tmp'}/shots`;
-  mkdirSync(shots, {recursive: true});
-  await page.screenshot({path: `${shots}/fix1-after-${name}.png`, animations: 'disabled'});
+  await page.screenshot({path: testInfo.outputPath(`fix1-after-${name}.png`), animations: 'disabled'});
 }
 
 for (const native of [false, true]) for (const locale of ['en', 'zh-TW'] as const) for (const width of [1440, 390]) {

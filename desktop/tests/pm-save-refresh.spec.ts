@@ -1,11 +1,10 @@
-import {mkdirSync} from 'node:fs';
 import {test, expect} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {pmFixture, pmRoute, workspaceId, threadId} from './pm-fixture.ts';
 import {openThreadTab, openPmPanel} from './pm-navigation.ts';
 
 for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) {
-  test(`a background lifecycle read does not lose a plan save (${native ? 'IPC' : 'Web'} ${locale} ${width})`, async ({browser, baseURL}) => {
+  test(`a background lifecycle read does not lose a plan save (${native ? 'IPC' : 'Web'} ${locale} ${width})`, async ({browser, baseURL}, testInfo) => {
     const zh = locale === 'zh-TW', context = await browser.newContext({baseURL, locale,
       viewport: {width, height: width === 390 ? 844 : 900}});
     const page = await context.newPage(), f = pmFixture(), errors: string[] = [];
@@ -51,8 +50,7 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) for (c
     const screenshot = async (state: string) => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       if (native) return;
-      const shots = `${process.env.TMPDIR || '/tmp'}/shots`; mkdirSync(shots, {recursive: true});
-      await page.screenshot({path: `${shots}/fix4-${state}-${zh ? 'zh' : 'en'}-${width}.png`, animations: 'disabled'});
+      await page.screenshot({path: testInfo.outputPath(`fix4-${state}-${zh ? 'zh' : 'en'}-${width}.png`), animations: 'disabled'});
     };
     try {
       await mountConversation(page, native, dispatch); await page.goto(pmRoute); await openThreadTab(page, 'plan');
