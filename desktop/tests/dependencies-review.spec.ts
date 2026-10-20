@@ -1,3 +1,4 @@
+import {revealPmView} from './pm-navigation.ts';
 import {mkdirSync} from 'node:fs';
 import {expect, test, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
@@ -45,9 +46,7 @@ async function mount(page: Page, options: {locale?: 'en' | 'zh-TW', manage?: boo
   };
   await mountConversation(page, false, dispatch);
   await page.goto(demoRoute());
-  const entry = page.locator('[data-pm-view="dependencies"]');
-  await expect(entry).toBeAttached();
-  if (!await entry.isVisible()) await page.locator('#workspace-menu').click();
+  const entry = await revealPmView(page, 'dependencies');
   const read = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/dependencies'));
   await entry.click();
   await (await read).finished();
@@ -69,7 +68,7 @@ test(`loading has its own status until dependency history settles ${locale}`, as
     return fixture.dispatch(input);
   });
   await page.goto(demoRoute());
-  await page.locator('[data-pm-view="dependencies"]').click();
+  await (await revealPmView(page, 'dependencies')).click();
   await expect.poll(() => held).toBe(true);
   const panel = page.locator('[data-dep-view]');
   const shot = async (state: string) => {

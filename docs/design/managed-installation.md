@@ -180,20 +180,27 @@ requests, after backing up both old and new data. This change supplies no tool
 for that selection or import; copying draft text alone must not replay a pending
 request. Do not clear storage or guess a source from its port or cursor.
 
-The namespace audit covers these existing families uniformly:
+The namespace audit covers these durable families uniformly (names below omit
+`batc.`); memory-only consumers use the same verified namespace:
 
-| Stored state | Key families after `batc.` |
+| Stored state | Storage family / scope |
 | --- | --- |
 | Drafts, original operation IDs/keys and sync proof | `draft`, `key`, `sync` |
 | PM forms, intents, handoffs, exact Work/Attempt navigation | `pm.<scope>.*`, nested `pm.*-selection`, `pm.*-navigation`, `pm.governance.selection`, `pm.verifier` |
 | Setup, create, repair, capture and work controls | `managed.setup`, `create`, `repair`, `capture`, `task-control`, `start`, `orchestrate`, `published`, `dispatch` |
 | Resource forms, approvals and cleanup | `labels`, `session-bat`, `permissions`, `artifact-review`, `model-preferences`, `project-skills`, `approvals`, `cleanup.draft`, `cleanup.pending`, `cleanup.intent` |
 | Tab preferences | `tree`, `sessions`, `attention`, `composer-shortcut` |
+| In-memory view selection and navigation folds | `viewState(namespace, workspaceId, view)` and `pm-workbench` maps, including `project-navigation`; no durable keys to copy |
 
-`ui/view-state.js`, `pm-workbench.js` and workbench perspectives use the same new namespace in their
+`ui/view-state.js`, `pm-workbench.js`, project navigation and workbench perspectives use the same new namespace in their
 bounded in-memory maps; they have no durable data to migrate. Language, layout,
 unscoped delivery filters and independently bound native Fleet preferences keep
-their existing keys. Migration does not turn retained native file handles into
+their existing keys. Fleet's `desktop.fleet.selection` and `desktop.fleet.controls`
+remain scoped by native configuration binding; `desktop.fleet.bootstrap.original`
+retains its native request/recipe identity. Fleet diagnostic and advanced-panel
+folds are in-memory state reset when that binding changes. None derives from
+`state.namespace` or belongs in the managed migration copy set.
+Migration does not turn retained native file handles into
 valid handles for a different credential; existing native checks still apply.
 
 `tests/fixtures/managed-bootstrap.json` is produced and drift-checked by

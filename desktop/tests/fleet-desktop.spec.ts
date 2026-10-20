@@ -1,6 +1,8 @@
 import {test, expect} from '@playwright/test';
 import {readFileSync} from 'node:fs';
-const fixture=JSON.parse(readFileSync(new URL('./fixtures/fleet-status.json',import.meta.url),'utf8')).result;
+import {fleetDiagnosticsTests} from './fleet-diagnostics';
+const fixture=JSON.parse(readFileSync(new URL('./fixtures/fleet-status.golden.json',import.meta.url),'utf8'));
+fleetDiagnosticsTests(setup, true);
 async function setup(page:any,options:any={}) {
  if(options.clock)await page.clock.install();
  await page.addInitScript(({doc,options}:any)=>{
@@ -13,10 +15,11 @@ async function setup(page:any,options:any={}) {
   if(command==='fleet_availability')return {configured:true,platform_supported:true,native_controls:true};
   if(!['fleet_control','fleet_request'].includes(command))throw new Error('Unexpected '+command);
   const input=structuredClone(args.input);env.calls.push(input);
+  if(env.failReceipt===input.action)throw new Error('Fixture receipt unavailable');
   if(env.hold===input.action)await new Promise<void>(resolve=>{env.release=resolve;});
   let result:any={};
   switch(input.action){
-   case 'overview':return structuredClone(env.doc);
+   case 'overview':if(env.failReads)throw new Error('Fixture status unavailable');return structuredClone(env.doc);
    case 'preview_choices':env.choices=input.choices;result={preview_id:'2'.repeat(32),summary:{choices:input.choices,added_connections:input.choices.profiles.includes('profile-2')?['node-2']:[]}};break;
    case 'apply_choices':Object.assign(env.doc.selection,env.choices,{revision:'e'.repeat(64)});result=env.doc;break;
    case 'save_login':env.doc.login={show_picker:input.show_picker,revision:'a'.repeat(64)};result=env.doc.login;break;
@@ -36,7 +39,7 @@ async function setup(page:any,options:any={}) {
   if(env.lose===input.action){env.lose=null;throw new Error('Fixture lost reply');}return structuredClone(result);
  }}});
  },{doc:fixture,options});
- await page.goto('/dashboard/#/settings');await page.getByRole('link',{name:/^(Fleet|機群)$/}).click();await expect(page.locator('[data-fleet-choice="dashboard:dashboard"]')).toBeVisible();
+ await page.goto('/dashboard/#/settings');await page.getByRole('link',{name:/^(Fleet|機群)$/}).click();if(!options.failReads)await expect(page.locator('[data-fleet-choice="dashboard:dashboard"]')).toBeVisible();
 }
 const calls=(page:any,action:string)=>page.evaluate((a:string)=>(window as any).__fleet.calls.filter((c:any)=>c.action===a),action);
 const refresh=(page:any)=>page.getByRole('button',{name:'Read status',exact:true}).first().click();
@@ -53,6 +56,22 @@ test('login picker save never changes Fleet selection or launches',async({page})
  await setup(page);await page.locator('[data-fleet-login="picker"]').uncheck();await expect.poll(()=>calls(page,'save_login')).toEqual([{action:'save_login',expected_revision:'f'.repeat(64),show_picker:false}]);expect(await calls(page,'apply_choices')).toHaveLength(0);expect(await calls(page,'launch')).toHaveLength(0);
 });
 async function launch(page:any){await page.getByRole('button',{name:'Review launch',exact:true}).click();await page.getByRole('button',{name:'Open saved selection',exact:true}).click();}
+for (const action of ['launch_status', 'migration_status']) test(`a failed ${action} read does not withdraw fresh machine evidence`, async ({page}) => {
+ await setup(page, {clock: true, lose: action === 'launch_status' ? 'launch' : 'apply_migration'});
+ if (action === 'launch_status') await launch(page);
+ else {
+  await page.locator('[data-fleet-advanced="settings"]').click();
+  await page.getByRole('combobox', {name: 'Connection monitor and startup'}).selectOption('rust');
+  await page.getByRole('button', {name: 'Review monitor and startup', exact: true}).click();
+  await page.getByRole('button', {name: 'Apply reviewed transition', exact: true}).click();
+ }
+ await page.evaluate(action => {(window as any).__fleet.failReceipt = action;}, action);
+ await refresh(page);
+ await expect(page.locator('[data-fleet-diagnosis="node-1"]')).toHaveAttribute('data-fleet-state', 'ready');
+ await expect(page.locator('.fleet-desktop [role="status"]')).toContainText('Fixture receipt unavailable');
+ expect(await calls(page, action === 'launch_status' ? 'launch' : 'apply_migration')).toHaveLength(1);
+ expect(await calls(page, 'advance_migration')).toHaveLength(0);
+});
 test('lost BAT reply retains original ID; reload never launches automatically',async({page})=>{
  await setup(page,{lose:'launch'});await launch(page);await refresh(page);expect(await calls(page,'launch')).toEqual([{action:'launch',preview_id:'3'.repeat(32)}]);await expect(page.getByRole('button',{name:'New launch review'})).toBeVisible();await page.reload();await expect(page.getByRole('button',{name:'Read status',exact:true}).first()).toBeVisible();expect(await calls(page,'launch')).toHaveLength(0);expect(await calls(page,'preview_launch')).toHaveLength(0);
 });
@@ -60,7 +79,22 @@ test('wrong-profile receipt cannot release an uncertain launch',async({page})=>{
  await setup(page,{lose:'launch'});await launch(page);await page.evaluate(()=>{(window as any).__fleet.wrongReceipt=true});await refresh(page);await expect(page.getByRole('button',{name:'New launch review'})).toHaveCount(0);expect(await calls(page,'launch')).toHaveLength(1);
 });
 test('migration draft survives refresh and recovery uses original receipt',async({page})=>{
- await setup(page,{lose:'apply_migration'});await page.getByRole('combobox',{name:'Connection monitor and startup'}).selectOption('rust');await page.locator('[data-fleet-autostart="enabled"]').check();await refresh(page);await page.getByRole('button',{name:'Review monitor and startup',exact:true}).click();await expect.poll(()=>calls(page,'preview_migration')).toEqual([{action:'preview_migration',backend:'rust',autostart:true}]);await page.getByRole('button',{name:'Apply reviewed transition',exact:true}).click();await refresh(page);expect(await calls(page,'apply_migration')).toHaveLength(1);expect(await calls(page,'advance_migration')).toHaveLength(0);await page.getByRole('button',{name:'Continue original transition',exact:true}).click();await expect.poll(()=>calls(page,'advance_migration')).toEqual([{action:'advance_migration',migration_id:'4'.repeat(32)}]);await expect(page.getByRole('button',{name:'Restore original settings',exact:true})).toBeVisible();
+ await setup(page,{lose:'apply_migration'});await page.locator('[data-fleet-advanced="settings"]').click();await page.getByRole('combobox',{name:'Connection monitor and startup'}).selectOption('rust');await page.locator('[data-fleet-autostart="enabled"]').check();await refresh(page);await page.getByRole('button',{name:'Review monitor and startup',exact:true}).click();await expect.poll(()=>calls(page,'preview_migration')).toEqual([{action:'preview_migration',backend:'rust',autostart:true}]);await page.getByRole('button',{name:'Apply reviewed transition',exact:true}).click();await refresh(page);expect(await calls(page,'apply_migration')).toHaveLength(1);expect(await calls(page,'advance_migration')).toHaveLength(0);await page.getByRole('button',{name:'Continue original transition',exact:true}).click();await expect.poll(()=>calls(page,'advance_migration')).toEqual([{action:'advance_migration',migration_id:'4'.repeat(32)}]);await expect(page.getByRole('button',{name:'Restore original settings',exact:true})).toBeVisible();
+});
+test('advanced connection settings stay folded until needed and keep their state across reads', async ({page}) => {
+ await setup(page, {clock: true});
+ const backend = page.locator('[data-fleet-backend="choice"]');
+ const summary = page.locator('[data-fleet-advanced="settings"]');
+ await expect(backend).not.toBeVisible();
+ await summary.click();
+ await expect(backend).toBeVisible();
+ await page.clock.fastForward(5000);
+ await expect(summary).toBeFocused();
+ await expect(backend).toBeVisible();
+ await summary.click();
+ await page.clock.fastForward(5000);
+ await expect(backend).not.toBeVisible();
+ expect(await calls(page, 'apply_migration')).toHaveLength(0);
 });
 test('changed owner blocks stale draft; new configuration has separate draft',async({page})=>{
  await setup(page);await page.locator('[data-fleet-choice="dashboard:dashboard"]').uncheck();await page.evaluate(()=>{(window as any).__fleet.doc.monitor.epoch='b'.repeat(32)});await refresh(page);await expect(page.getByRole('button',{name:'Review choices',exact:true})).toBeDisabled();await page.evaluate(()=>{(window as any).__fleet.doc.configuration.binding='e'.repeat(64)});await refresh(page);await expect(page.locator('[data-fleet-choice="dashboard:dashboard"]')).toBeChecked();expect(await calls(page,'apply_choices')).toHaveLength(0);
@@ -155,6 +189,7 @@ test('refresh keeps focus and ignores a second press',async({page})=>{
 
 test('a held read gives Use current, a profile and the backend no new effect',async({page})=>{
  await setup(page,{clock:true});
+ await page.locator('[data-fleet-advanced="settings"]').click();
  const region=page.getByRole('region',{name:'Local Fleet and windows'});
  await page.locator('[data-fleet-choice="profiles:profile-2"]').check();
  const stored=()=>page.evaluate((key:string)=>sessionStorage.getItem(key),controlsKey);
@@ -220,34 +255,33 @@ for (const locale of ['en-US', 'zh-TW']) test(`Tailscale wake and automatic retr
  const refreshStatus = () => region.getByRole('button', {name: locale === 'zh-TW' ? '重新讀取狀態' : 'Read status', exact: true}).click();
  await page.evaluate(() => {
   const row = (window as any).__fleet.doc.readiness.hosts[0];
-  Object.assign(row, {code: 'TAILSCALE_WAKING', level: 'degraded', blocking: 'tunnel'});
+  Object.assign(row, {code: 'TAILSCALE_WAKING', level: 'degraded', blocking: 'tunnel', layers: {tunnel: false, tls: false, bat: false, workspace: false}});
  });
  await refreshStatus();
- await expect(region.getByRole('status', {name: ''}).filter({hasText: locale === 'zh-TW' ? '正在喚醒 Tailscale 連線…' : 'Waking the Tailscale connection…'})).toBeVisible();
+ await expect(region.getByText(locale === 'zh-TW' ? '正在喚醒 Tailscale 連線' : 'Waking the Tailscale connection', {exact: true})).toBeVisible();
  await expect(region.getByText('TAILSCALE_WAKING', {exact: true})).not.toBeVisible();
- await page.evaluate(() => { (window as any).__fleet.doc.readiness.hosts[0].code = 'ROUTE_UNAVAILABLE'; });
+ await page.evaluate(() => { Object.assign((window as any).__fleet.doc.readiness.hosts[0], {code: 'ROUTE_UNAVAILABLE', level: 'down'}); });
  await refreshStatus();
- await expect(region.locator('[data-fleet-route-status] [role="status"]')).toContainText(locale === 'zh-TW' ? '系統會自動重試' : 'retrying automatically');
+ await expect(region.locator('[data-fleet-diagnosis="node-1"]')).toContainText(locale === 'zh-TW' ? '已設定的網路連線可用' : 'configured network connection is available');
  await expect(region.getByText('ROUTE_UNAVAILABLE', {exact: true})).not.toBeVisible();
- await region.getByText(locale === 'zh-TW' ? '詳細資料' : 'Details', {exact: true}).click();
+ await region.locator('[data-fleet-details="node-1"]').click();
  await expect(region.getByText('ROUTE_UNAVAILABLE', {exact: true})).toBeVisible();
  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
  await context.close();
 });
 
-test('desktop Fleet preserves unmapped blocking reasons and native diagnostic codes', async ({page}) => {
- await setup(page);
- const region = page.locator('.fleet-desktop');
- for (const native of [false, true]) {
-  await page.evaluate((native: boolean) => {
-   const row = (window as any).__fleet.doc.readiness.hosts[0];
-   Object.assign(row, {level: 'down', code: native ? 'OWNER_UNPROVEN' : null, blocking: native ? 'tls' : 'OWNER_UNPROVEN'});
-  }, native);
+test('desktop Fleet preserves native ownership codes in their real tunnel layer', async ({page}) => {
+  await setup(page);
+  const region = page.locator('.fleet-desktop');
+  await page.evaluate(() => {
+    const row = (window as any).__fleet.doc.readiness.hosts[0];
+    Object.assign(row, {level: 'down', code: 'OWNER_UNPROVEN', blocking: 'tunnel',
+      layers: {tunnel: false, tls: false, bat: false, workspace: false}});
+  });
   await region.getByRole('button', {name: 'Read status', exact: true}).click();
-  const status = region.locator('[data-fleet-route-status]');
-  await expect(status.getByText('Details: OWNER_UNPROVEN', {exact: true})).toBeVisible();
+  const status = page.locator('[data-fleet-diagnosis="node-1"]');
+  await expect(status.getByText('The background connection outcome is unconfirmed', {exact: true})).toBeVisible();
   await status.locator('summary').click();
   await expect(status.locator('code').filter({hasText: 'OWNER_UNPROVEN'})).toBeVisible();
-  if (native) await expect(status.locator('code').filter({hasText: 'tls'})).toBeVisible();
- }
+  await expect(status.locator('code').filter({hasText: 'tunnel'})).toBeVisible();
 });

@@ -2,18 +2,20 @@
 
 [Product overview](../README.md) · **English** · [繁體中文](getting-started.zh-TW.md)
 
-## Choose the matching candidate package
+## Choose the matching package
 
-The latest published preview is [v0.2.10-preview.20261018](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.10-preview.20261018): Connector 0.2.10 and desktop 0.1.6, with a source manifest and SHA-256 checksums. Choose newer published previews from the [releases page](https://github.com/TED-H-com/bat-agent-connector/releases), matching the tag, manifest and platform package; prereleases may not appear under GitHub's “Latest” label. Installation fixtures and CI are separate from native or live acceptance.
+As checked on October 19, 2026, the published package is [v0.2.12](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.12): Connector **0.2.12** and desktop **0.1.8**, from `14c62830240148b14a4d28a9c428f7f8b5ba8bf3`. Download the matching asset with `release-manifest.json` and `SHA256SUMS`. For later packages, match their own tag, manifest and source; installation fixtures and CI are separate from native or live acceptance.
 
-| Platform | Artifact | Package |
+This package predates the route wake-up, managed-service recovery and first-run/status fixes in #315, #316 and #319. Reinstalling this same package does not add those fixes. See [delivery status](product/implementation-status.md) for source versus released/installed evidence. The first-launch steps below describe the published package; newer main-source UI is not an installed update.
+
+| Platform | Release asset | Package |
 | --- | --- | --- |
-| Windows x64 | `desktop-Windows-unsigned` | NSIS `.exe` |
-| Mac Apple Silicon | `desktop-macOS-arm64-validation` | `.dmg` |
-| Mac Intel | `desktop-macOS-x64-validation` | `.dmg` |
-| Linux | `desktop-Linux-unsigned` | `.deb` |
+| Windows x64 | `better-agent-dashboard_0.1.8_windows_x64.exe` | NSIS `.exe` |
+| Mac Apple Silicon | `better-agent-dashboard_0.1.8_macos_arm64.dmg` | `.dmg` |
+| Mac Intel | `better-agent-dashboard_0.1.8_macos_x64.dmg` | `.dmg` |
+| Linux | `better-agent-dashboard_0.1.8_linux_amd64.deb` | `.deb` |
 
-The artifact names above identify later CI candidates. For this published preview, use the matching platform asset on the release page. GitHub Actions artifacts may require sign-in and expire. Windows validation packages are unsigned; Mac bundles use ad-hoc signing. Formal signing, Mac notarization, production update channels and a Linux persistent native credential vault are outside this delivery. No new stable release is claimed here.
+Use the platform asset on the release page. Separate GitHub Actions candidates may require sign-in and expire. Windows packages are unsigned; Mac bundles use ad-hoc signing. Formal signing, Mac notarization, production update channels and a Linux persistent native credential vault are outside this delivery. GitHub's release label does not establish real-device stability.
 
 ## First launch: your local Connector
 
@@ -240,13 +242,11 @@ It creates a private version directory under
 
 For an existing uv tool installation, see [adoption and restoration](connector-updates.md#adopting-an-existing-uv-tool-installation).
 
-The installer is new unreleased tooling: **v0.2.10 predates these scripts**.
-Once a release containing both installer scripts and the installer module is
-published, replace `INSTALLER_RELEASE_TAG` below with that exact published tag
-in both places (never `main`):
+The installer scripts and module are included in the published **v0.2.12** source.
+Pin the same published tag for both the bootstrap and the installation (never `main`):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/INSTALLER_RELEASE_TAG/scripts/install.sh | sh -s -- --tag INSTALLER_RELEASE_TAG
+curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.12/scripts/install.sh | sh -s -- --tag v0.2.12
 ```
 
 Add `~/.local/bin` to PATH. `--dry-run` verifies release metadata without writes;

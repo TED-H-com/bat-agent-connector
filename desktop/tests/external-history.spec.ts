@@ -1,3 +1,4 @@
+import {revealPmView} from './pm-navigation.ts';
 import {test, expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {mountConversation} from './conversation-fixture.ts';
@@ -33,12 +34,12 @@ const area=(page:any)=>page.locator('[data-external-history]'),detail=(page:any)
 async function open(page:any,native:boolean,f:any){
   await mountConversation(page,native,f.dispatch);await page.goto(route);
   if((page.viewportSize()?.width||1440)<1000)await page.locator('#workspace-menu').click();
-  await page.locator('[data-pm-view="agents"]').click();await expect(area(page).locator('[data-history-source]')).toHaveCount(f.state.rows.length);
+  await (await revealPmView(page, 'agents')).click();await expect(area(page).locator('[data-history-source]')).toHaveCount(f.state.rows.length);
 }
 for(const native of [false,true]){
  test(`shared read-only history pages ${native?'IPC':'HTTP'}`,async({page})=>{
   const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await expect(page.locator('[data-pm-charter]')).toBeVisible();expect(f.state.reads).toEqual([]);
-  await page.locator('[data-pm-view="agents"]').click();await area(page).locator('[data-history-source]').click();await expect(detail(page).locator('[data-history-entry]')).toHaveCount(2);await expect(detail(page).locator('[data-history-entry]').first()).toBeVisible();
+  await (await revealPmView(page, 'agents')).click();await area(page).locator('[data-history-source]').click();await expect(detail(page).locator('[data-history-entry]')).toHaveCount(2);await expect(detail(page).locator('[data-history-entry]').first()).toBeVisible();
   await detail(page).getByRole('button',{name:'Read more',exact:true}).click();await expect(detail(page).locator('[data-history-entry]')).toHaveCount(3);
   await expect(detail(page)).toContainText('<img src=x');await expect(detail(page).locator('img')).toHaveCount(0);await expect(detail(page)).toContainText('Partial history');
   expect(f.state.writes).toEqual([]);await expect(detail(page).getByRole('button',{name:/Send|Start|Resume session/})).toHaveCount(0);
@@ -67,7 +68,7 @@ test('unavailable source hides plaintext and empty grants have a useful state',a
  await detail(page).getByRole('button',{name:'Close',exact:true}).click();f.state.rows=[];await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(area(page)).toContainText('No conversation histories are shared');
 });
 test('older server does not receive history reads',async({page})=>{
- const f=fixture();f.state.supported=false;await mountConversation(page,false,f.dispatch);await page.goto(route);await page.locator('[data-pm-view="agents"]').click();await expect(page.locator('[data-pm-resources]')).toBeVisible();await expect(area(page)).toHaveCount(0);expect(f.state.reads).toEqual([]);
+ const f=fixture();f.state.supported=false;await mountConversation(page,false,f.dispatch);await page.goto(route);await (await revealPmView(page, 'agents')).click();await expect(page.locator('[data-pm-resources]')).toBeVisible();await expect(area(page)).toHaveCount(0);expect(f.state.reads).toEqual([]);
 });
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`external history layout ${locale} ${width}`,async({browser,baseURL})=>{
  const context=await browser.newContext({baseURL,locale,viewport:{width,height:900},colorScheme:'light'}),page=await context.newPage(),f=fixture();const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await open(page,false,f);
