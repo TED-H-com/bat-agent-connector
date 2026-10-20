@@ -8484,6 +8484,7 @@ var init_pm_strings = __esmMin((() => {
 			pm_receipt_mismatch: "The receipt does not match the original request. Its key and draft have been preserved.",
 			pm_damaged: "The saved request cannot be validated. It has been preserved; no replacement will be sent.",
 			pm_action_unavailable: "This action is currently unavailable. Your draft and original request are preserved.",
+			pm_click_interrupted: "The action was unavailable during this click. Your original request is preserved. Review the current state, then check the original request.",
 			pm_stale: "Could not confirm the current version. Your draft is preserved. Refresh and review before another change.",
 			pm_scope_mismatch: "The response does not belong to the selected workspace and discussion.",
 			pm_partial: "This is a bounded view; older records or additional candidates may not be included.",
@@ -8875,6 +8876,7 @@ var init_pm_strings = __esmMin((() => {
 			pm_receipt_mismatch: "回執與原請求不一致。已保留原 key 與草稿。",
 			pm_damaged: "無法驗證已存請求。原資料仍保留，不會另送一筆。",
 			pm_action_unavailable: "目前無法執行這項操作。草稿與原請求仍保留。",
+			pm_click_interrupted: "這次點擊期間無法執行這項操作。原請求仍保留；請檢視目前狀態，再查回原請求。",
 			pm_stale: "目前無法確認最新版本。草稿仍保留；請重新整理並檢視後，再進行變更。",
 			pm_scope_mismatch: "回應不屬於選定的工作區與討論。",
 			pm_partial: "目前只顯示部分紀錄；較早的內容或其他候選想法可能未列入。",
@@ -49245,6 +49247,26 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		type: "submit",
 		class: "ui-button primary"
 	}, t(label));
+	let pressing = false;
+	const releasePress = () => {
+		pressing = false;
+		document.removeEventListener("pointerup", releasePress, true);
+		document.removeEventListener("pointercancel", releasePress, true);
+	};
+	const explainBlockedPress = () => {
+		if (!disposed && form.isConnected && saved.intent && !busy && !damaged && (!allowed() || !sendReady()) && !status.querySelector("[data-pm-click-interrupted]")) status.append(h("p", {
+			class: "muted",
+			"data-pm-click-interrupted": ""
+		}, t("pm_click_interrupted")));
+	};
+	button.addEventListener("pointerdown", (event) => {
+		if (event.button !== 0) return;
+		releasePress();
+		pressing = true;
+		explainBlockedPress();
+		document.addEventListener("pointerup", releasePress, true);
+		document.addEventListener("pointercancel", releasePress, true);
+	});
 	button.addEventListener("click", (event) => {
 		if (busy || initialChecking && (busy || receiptTimer !== null)) event.preventDefault();
 	});
@@ -49309,6 +49331,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		button.textContent = t(saved.intent && !autoChecking ? "pm_check_original" : label);
 		reset.hidden = inFlight || !terminal() && !saved.intent?.initialAdmissionRefused;
 		reset.disabled = busy || !allowed();
+		if (pressing) explainBlockedPress();
 		if (hadFocus && (button.hidden || button.disabled)) {
 			if (!reset.hidden && !reset.disabled) reset.focus();
 			else if (document.activeElement === document.body || document.activeElement === button) {
@@ -49336,6 +49359,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		let firstAttempt = stagedHere;
 		stagedHere = false;
 		if (firstAttempt) initialChecking = true;
+		let requestStarted = false;
 		try {
 			guard();
 			busy = true;
@@ -49380,6 +49404,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				}
 				collected = true;
 			};
+			requestStarted = true;
 			const data = intent.operation_id ? await api("GET", `/operations/${intent.operation_id}`, void 0, void 0, collectReceipt) : await api("POST", "/operations?wait=3", intent.request, intent.key, collectReceipt);
 			collectReceipt(data);
 			guard();
@@ -49452,6 +49477,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			try {
 				guard();
 			} catch {
+				if (!automatic && !requestStarted && form.isConnected) status.replaceChildren(h("p", { class: "muted" }, t("pm_stale")));
 				return;
 			}
 			if (!retiredView(error)) {
@@ -49555,6 +49581,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			disposed = true;
 			receiptPolling = false;
 			initialChecking = false;
+			releasePress();
 			stopTimer();
 			unsubscribe();
 			onConnectionChange(false);
