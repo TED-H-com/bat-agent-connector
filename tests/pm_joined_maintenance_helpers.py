@@ -45,11 +45,13 @@ REPAIR_COMMAND = (sys.executable, '-B', '-c',
 
 
 async def advance(w, parent, rounds=3):
-    """Wait for each captured attempt wave, keeping its existing 60-second bound.
+    """Wait for captured workers and their receipts, with a 60-second stall guard.
 
     Publication and its later observation are different registered operations.
-    Newly admitted children wait for the next bounded scheduler iteration; they
-    cannot inherit a nearly exhausted deadline from a completed earlier child.
+    CPU contention during source checks can make a progressing wave exceed
+    60 seconds on a loaded host. That bound prevents a hung test; it is not a
+    product latency assertion. Each worker must make its own persisted progress.
+    Newly admitted children wait for the next scheduler iteration.
     Failures join this service's workers before fixture journal teardown.
     """
     ops = w['d'].ops
@@ -61,9 +63,27 @@ async def advance(w, parent, rounds=3):
             active = tuple((oid, task) for oid, task in ops._active.items() if not task.done())
             if not active:
                 continue
-            _, pending = await asyncio.wait([task for _, task in active],
-                timeout=max(0, 60 - (time.monotonic() - started)))
-            assert not pending, 'Repair attempt wave did not settle within 60s\n' + worker_details(ops)
+            def progress(oid):
+                return tuple(tuple(row) for row in ops.db.execute(
+                    'SELECT seq,status FROM operation_steps WHERE operation_id=? ORDER BY seq', (oid,)))
+
+            receipts = {oid: progress(oid) for oid, _ in active}
+            changed = dict.fromkeys(receipts, started)
+            pending = {task for _, task in active}
+            while pending:
+                remaining = min(60 - (time.monotonic() - changed[oid])
+                    for oid, task in active if task in pending)
+                _, pending = await asyncio.wait(pending, timeout=max(0, min(1, remaining)))
+                now = time.monotonic()
+                for oid, task in active:
+                    if task not in pending:
+                        continue
+                    current = progress(oid)
+                    if current != receipts[oid]:
+                        receipts[oid], changed[oid] = current, now
+                    assert now - changed[oid] < 60, (
+                        'Repair attempt wave did not settle within 60s without persisted progress\n'
+                        + worker_details(ops))
             outcomes = []
             for oid, task in active:
                 task.result()  # Persisted status alone does not prove the worker finished.
