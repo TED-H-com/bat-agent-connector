@@ -12,12 +12,8 @@ from pathlib import Path
 
 import pytest
 
+from scripts.validate_connector_update import copy_fixture_source
 from tests.fixture_vcs_install import install_fixture_candidate
-
-try:
-    import tomllib
-except ImportError:
-    import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 GOLDEN = Path(__file__).parent / "fixtures" / "managed-runtime-identity.json"
@@ -53,33 +49,12 @@ def run(args, *, env, cwd=None):
     return result.stdout.strip()
 
 
-def package_inputs(source):
-    """Copy declared build inputs, including every wheel force-include."""
-    document = tomllib.loads((ROOT / "pyproject.toml").read_text())
-    project = document["project"]
-    wheel = document["tool"]["hatch"]["build"]["targets"]["wheel"]
-    readme = project["readme"]
-    inputs = {"pyproject.toml", readme if isinstance(readme, str) else readme["file"]}
-    inputs.update(wheel["packages"])
-    inputs.update(wheel.get("force-include", {}))
-    for pattern in project.get("license-files", []):
-        inputs.update(str(path.relative_to(ROOT)) for path in ROOT.glob(pattern))
-    for name in sorted(inputs):
-        target = source / name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if (ROOT / name).is_dir():
-            shutil.copytree(ROOT / name, target, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-        else:
-            shutil.copyfile(ROOT / name, target)
-    return wheel["packages"][0]
-
-
 @pytest.fixture(scope="module")
 def packages(tmp_path_factory):
     scratch = tmp_path_factory.mktemp("managed-vcs-packages")
     source = scratch / "source"
     source.mkdir()
-    package = package_inputs(source)
+    copy_fixture_source(ROOT, source)
     # The cache supplies dependencies only; golden identity comes from the fixture packages.
     env = {key: os.environ[key] for key in ("PATH", "SystemRoot", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR", "LANG", "LC_ALL", "UV_CACHE_DIR")
            if key in os.environ}
@@ -92,7 +67,7 @@ def packages(tmp_path_factory):
     installed = {}
     for candidate in ("a", "b"):
         if candidate == "b":
-            path = source / package / "__init__.py"
+            path = source / "src/bat_agent_connector/__init__.py"
             path.write_text(path.read_text() + "\n# Fixture candidate B, with the same package version.\n")
         run([git, "-C", str(source), "add", "."], env=env)
         run([git, "-C", str(source), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
@@ -111,7 +86,13 @@ def packages(tmp_path_factory):
             env=env, cwd=scratch)))
         direct = json.loads(metadata.read_text())
         assert direct["vcs_info"]["commit_id"] == sha
-        installed[candidate] = {"python": str(interpreter), "commit": sha, "metadata": metadata, "identity": identity}
+        build_info = Path(json.loads(run([str(interpreter), "-I", "-c",
+            "import json;from pathlib import Path;from bat_agent_connector import build_identity;"
+            "print(json.dumps(str(Path(build_identity.__file__).with_name('build-info.json'))))"],
+            env=env, cwd=scratch)))
+        assert json.loads(build_info.read_text())["commit"] == sha
+        installed[candidate] = {"python": str(interpreter), "commit": sha, "metadata": metadata,
+                                "build_info": build_info, "identity": identity}
     assert installed["a"]["commit"] != installed["b"]["commit"]
     assert installed["a"]["identity"]["version"] == installed["b"]["identity"]["version"]
     empty_path = scratch / "empty-path"
@@ -170,6 +151,28 @@ print(json.dumps(runtime.ensure(sys.argv[1], timeout=15)))
                           env=env, cwd=root.parent))
 
 
+@contextmanager
+def missing_provenance(package):
+    """An install without either VCS metadata or embedded build attribution."""
+    originals = {path: path.read_bytes() for path in (package["metadata"], package["build_info"])}
+    for path in originals:
+        assert path.stat().st_nlink == 1, "Fixture installs must use UV_LINK_MODE=copy"
+
+    def restore():
+        for path, content in originals.items():
+            # Restoring twice must also create fresh inodes, never truncate an
+            # installed file that could have been linked to a package cache.
+            path.unlink(missing_ok=True)
+            path.write_bytes(content)
+
+    try:
+        for path in originals:
+            path.unlink()
+        yield restore
+    finally:
+        restore()
+
+
 @pytest.fixture(scope="module")
 def observed(packages):
     scratch, installed, env = packages
@@ -184,24 +187,16 @@ def observed(packages):
         for field in ("endpoint", "actor", "server_id", "principal_id", "token", "runtime_version"):
             assert same[field] == different[field] == first["launch"][field]
         observations.update(same=same, differs=different)
-        path = installed["b"]["metadata"]
-        original = path.read_bytes()
-        try:
-            path.unlink()
+        # An unattributed launcher cannot identify its own installed build.
+        with missing_provenance(installed["b"]):
             observations["unknown_bundled"] = ensure(installed["b"], root, env)
-        finally:
-            path.write_bytes(original)
         observations["older_service"] = ensure(installed["b"], root, env, older=True)
-    path = installed["a"]["metadata"]
-    original = path.read_bytes()
-    try:
-        path.unlink()
+    # A service started without attribution keeps that unknown loaded snapshot,
+    # even when an installation repair restores provenance while it is running.
+    with missing_provenance(installed["a"]) as restore:
         with owner(packages, "unknown-installation") as (root, _first):
-            # The owner's unknown startup identity stays unknown after metadata reappears.
-            path.write_bytes(original)
+            restore()
             observations["unknown_running"] = ensure(installed["b"], root, env)
-    finally:
-        path.write_bytes(original)
     return observations
 
 
