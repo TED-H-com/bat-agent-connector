@@ -1,5 +1,5 @@
 import {runtimeStale} from './state/sessions.js';
-import {frontendBuild as loadedFrontendBuild} from './frontend-identity.js';
+import {frontendBuild as loadedFrontendBuild, frontendDigest} from './frontend-identity.js';
 
 // An explicit projection. Never spread server/client objects into an export.
 const code = value => typeof value === 'string' && /^[A-Z][A-Z0-9_]{0,79}$/.test(value) ? value : null;
@@ -44,8 +44,8 @@ export function errorRing(limit = 50) {
 export function clientIdentity({caps, appBuild, frontendBuild = loadedFrontendBuild, desktop = false, os = 'unknown', locale = 'en', width = 0}) {
   return {app_version: desktop ? version(appBuild?.version) : null,
     app_commit: desktop ? commit(appBuild?.commit) : null,
-    frontend_digest: typeof frontendBuild?.frontend_digest === 'string' && frontendBuild.frontend_digest.length === 64 && /^[a-f0-9]{64}$/.test(frontendBuild.frontend_digest)
-      ? frontendBuild.frontend_digest : null,
+    frontend_digest: frontendDigest(frontendBuild?.frontend_digest),
+    served_frontend_digest: frontendDigest(caps?.frontend?.digest),
     connector_version: version(caps?.build?.version ?? caps?.connector), connector_commit: commit(caps?.build?.commit),
     connector_source: select(caps?.build?.source, ['vcs','package','bundled']), api_version: Number.isInteger(caps?.api_version) ? caps.api_version : null,
     contract_version: contractVersion(caps?.contract_version),
@@ -54,9 +54,13 @@ export function clientIdentity({caps, appBuild, frontendBuild = loadedFrontendBu
 }
 export function buildLine(client, t) {
   const unknown = t('diag_unknown');
-  const frontend = t('diag_frontend_build', {digest: client.frontend_digest || unknown});
+  const frontend = client.platform !== 'desktop' || client.frontend_digest
+    ? t('diag_frontend_build', {digest: client.frontend_digest?.slice(0,12) || unknown}) : null;
   const connector = t('diag_connector_build', {version: client.connector_version || unknown, commit: client.connector_commit?.slice(0,7) || unknown, source: client.connector_source || unknown});
-  return (client.platform === 'desktop' ? t('diag_desktop_build', {version: client.app_version || unknown, commit: client.app_commit?.slice(0,7) || unknown}) + ' · ' : '') + frontend + ' · ' + connector;
+  const desktop = client.platform === 'desktop' ? t('diag_desktop_build', {version: client.app_version || unknown, commit: client.app_commit?.slice(0,7) || unknown}) : null;
+  const line = [desktop, frontend, connector].filter(Boolean).join(' · ');
+  return client.platform === 'browser' && client.frontend_digest && client.served_frontend_digest && client.frontend_digest !== client.served_frontend_digest
+    ? line + ' · ' + t('diag_frontend_stale') : line;
 }
 const APP = 'io.betteragent.dashboard';
 export function logLocations(os, managed) {

@@ -184,14 +184,43 @@ test('frontend digest accepts only a complete lowercase SHA-256 and never falls 
  for(const frontend_digest of [null,'a'.repeat(40),'A'.repeat(64),'a'.repeat(64)+'\n','https://fixture.example/']){
   const client=clientIdentity({frontendBuild:{frontend_digest},caps:bootstrap.capabilities});
   assert.equal(client.frontend_digest,null);assert.equal(client.app_version,null);assert.equal(client.app_commit,null);
+  assert.equal(clientIdentity({caps:{...bootstrap.capabilities,frontend:{digest:frontend_digest}}}).served_frontend_digest,null);
  }
 });
 for(const lang of ['en','zh-TW'])test(`component build line orders frontend before Connector with source (${lang})`,()=>{
  const t=(key,vars={})=>diagnosticsStrings[lang][key].replace(/\{(\w+)\}/g,(_,k)=>vars[k]??'');
  const frontendBuild={frontend_digest:'a'.repeat(64)};
  const browser=buildLine(clientIdentity({frontendBuild,caps:bootstrap.capabilities}),t);
- assert.ok(browser.includes(frontendBuild.frontend_digest));assert.ok(browser.indexOf('Frontend')<browser.indexOf('Connector'));
+ const label=lang==='en'?'Frontend':'前端';assert.ok(browser.includes(frontendBuild.frontend_digest.slice(0,12)));assert.ok(!browser.includes(frontendBuild.frontend_digest));assert.ok(browser.indexOf(label)<browser.indexOf('Connector'));
  assert.ok(browser.includes(bootstrap.capabilities.build.version));assert.ok(browser.includes(bootstrap.capabilities.build.source));
  const desktop=buildLine(clientIdentity({desktop:true,appBuild:{version:'0.1.1',commit:'b'.repeat(40)},frontendBuild,caps:bootstrap.capabilities}),t);
- assert.ok(desktop.includes('0.1.1'));assert.ok(desktop.indexOf('0.1.1')<desktop.indexOf('Frontend'));
+ assert.ok(desktop.includes('0.1.1'));assert.ok(desktop.indexOf('0.1.1')<desktop.indexOf(label));
+});
+
+
+test('placeholder imports stay unknown and native omits the Frontend segment',()=>{
+ const browser=clientIdentity({caps:bootstrap.capabilities});assert.equal(browser.frontend_digest,null);
+ const native=clientIdentity({desktop:true,appBuild:{version:'0.1.1',commit:'b'.repeat(40)},caps:bootstrap.capabilities});
+ assert.equal(native.frontend_digest,null);
+ for(const lang of ['en','zh-TW']){
+  const t=(key,vars={})=>diagnosticsStrings[lang][key].replace(/\{(\w+)\}/g,(_,k)=>vars[k]??'');
+  assert.ok(!buildLine(native,t).includes(lang==='en'?'Frontend':'前端'));
+  assert.ok(buildLine(browser,t).includes(diagnosticsStrings[lang].diag_unknown));
+ }
+});
+for(const lang of ['en','zh-TW'])test(`loaded and served identities remain separate with a stale sentence (${lang})`,()=>{
+ const frontendBuild={frontend_digest:'a'.repeat(64)},caps=structuredClone(bootstrap.capabilities);
+ caps.frontend={digest:'b'.repeat(64)};
+ const client=clientIdentity({frontendBuild,caps});
+ assert.equal(client.frontend_digest,'a'.repeat(64));assert.equal(client.served_frontend_digest,'b'.repeat(64));
+ const out=buildDiagnostics({frontendBuild,caps});assert.equal(out.client.frontend_digest,client.frontend_digest);assert.equal(out.client.served_frontend_digest,client.served_frontend_digest);
+ const t=(key,vars={})=>diagnosticsStrings[lang][key].replace(/\{(\w+)\}/g,(_,k)=>vars[k]??'');
+ assert.ok(diagnosticsStrings[lang].diag_frontend_stale);
+ assert.ok(buildLine(client,t).includes(t('diag_frontend_stale')));
+ for(const digest of [frontendBuild.frontend_digest,null,'bad']){
+  const current=clientIdentity({frontendBuild,caps:{...caps,frontend:{digest}}});
+  assert.ok(!buildLine(current,t).includes(t('diag_frontend_stale')));
+ }
+ const native=clientIdentity({desktop:true,caps});assert.ok(!buildLine(native,t).includes(t('diag_frontend_stale')));
+ assert.ok(!buildLine(clientIdentity({caps}),t).includes(t('diag_frontend_stale')));
 });

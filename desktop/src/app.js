@@ -3320,10 +3320,14 @@ function openSettings(main, {exclusive = false, refreshButton} = {}) {
     h('p', {'data-build-line':''}, buildLine(clientIdentity(diagnosticsClient()),t)),
     h('div',{class:'actions'},button({label:t('diag_export'),onClick:openDiagnostics,'data-export-diagnostics':''}),
       h("a", {href: setupGuide()}, t("global_setup_guide")))));
-  if(nativeDesktop)nativeStatus().then(status=>{
-    desktopBuild=status.app_build;
-    if(frame.root.isConnected)frame.panel('about').querySelector('[data-build-line]').textContent=buildLine(clientIdentity(diagnosticsClient()),t);
-  }).catch(()=>{});
+  const identityEpoch = state.epoch;
+  let buildCaps = state.caps;
+  const paintBuild = () => {
+    if(frame.root.isConnected && identityEpoch === state.epoch)
+      frame.panel('about').querySelector('[data-build-line]').textContent=buildLine(clientIdentity(diagnosticsClient(buildCaps)),t);
+  };
+  if(state.token)api('GET','/capabilities').then(caps=>{buildCaps=caps;paintBuild();}).catch(()=>{});
+  if(nativeDesktop)nativeStatus().then(status=>{desktopBuild=status.app_build;paintBuild();}).catch(()=>{});
   main.append(languageSwitch(), frame.root);
   const back=connectionReturn(params.get('from'));
   if(back)frame.panel('connection').append(h('a',{href:back.href,'data-connection-return':''},t(back.label)));

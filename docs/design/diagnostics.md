@@ -102,30 +102,43 @@ version comes from `CARGO_PKG_VERSION`. Missing commit means unknown in both
 locales. Connector identity comes only from capabilities and identifies the service,
 not the UI loaded in a window.
 
-The loaded UI embeds `frontend_digest`, a lowercase SHA-256 source digest, through
-the existing Vite build. About and the diagnostics summary show Frontend before
-Connector (version, commit and source); Desktop additionally shows its native
-`appBuild` first. `batc.diagnostics.v1` adds `client.frontend_digest`. Browser
-`app_version` and `app_commit` are null: they no longer alias Connector fields.
-Native values still come from `appBuild`. A direct source import without Vite has
-no built digest and reports unknown. A loaded tab keeps its embedded digest when
-the Connector changes. This identifies build inputs, not a readable release name,
-freshness, a signed artifact, native abilities or the health of Connector/BAT.
+## Served frontend identity
 
-Inputs are every regular file recursively under `desktop/src/`, plus
-`desktop/index.html`, `desktop/package.json`, `desktop/package-lock.json`,
-`desktop/tsconfig.json`, `desktop/vite.config.ts`,
-`desktop/scripts/frontend-build.mjs` and `desktop/scripts/browser-assets.mjs`.
-Paths are desktop-relative with `/` separators, sorted by UTF-8 byte order.
-SHA-256 starts with the UTF-8 bytes `batc.frontend.v1` and a NUL; for each file it
-hashes the decimal UTF-8 path-byte length, `:`, the path, NUL, decimal content-byte
-length, NUL, then the exact file bytes. File names and byte lengths frame additions,
-removals and contents unambiguously. Tests/docs, generated output, Git metadata,
-timestamps, absolute paths, environment and `node_modules` are excluded; the
-lockfile records dependency inputs. This is not an attestation of the installed
-toolchain. `BATC_BUILD_COMMIT` never enters the browser identity or bundle; native
-`appBuild` retains its existing optional commit. Generated files are not inputs,
-so committed browser assets remain reproducible without a commit-SHA cycle.
+Connector identifies the UI it serves, separately from its own `build`. On every
+`app.js` or capabilities read it reads the exact stored bytes of the four
+`DASHBOARD_FILES`: `app.css`, `app.js`, `i18n.js`, `index.html`, in that sorted
+order. SHA-256 starts with UTF-8 `batc.frontend.files.v1` and a NUL. For each file
+it hashes decimal UTF-8 name-byte length, `:`, name, NUL, decimal content-byte
+length, NUL, then the exact stored bytes. This includes the placeholder, not the
+transformed response, and can be verified from a wheel or checkout. There is no
+process cache: an in-place upgrade changes the next read's identity.
+
+The committed JS has one fixed, non-hex 64-byte placeholder. When serving `app.js`,
+Connector replaces it with the digest from that same file-set read, preserving
+byte length for GET and HEAD. If the slot is missing or repeated, the file is
+served unchanged and identity is unknown. The other three files are served
+unchanged. This binds identity to the loaded module without a separate identity
+fetch; a loaded tab retains it across later capabilities reads. Reads are not an
+atomic snapshot of a multi-file upgrade, nor an attestation of toolchain, signature
+or release order. The withdrawn build-time source digest made independent
+frontend merges change a shared literal; no aggregate digest is now committed.
+
+Capabilities adds `frontend: {digest}` for the files served at read time.
+`batc.diagnostics.v1` adds `client.frontend_digest` (loaded) and
+`client.served_frontend_digest` (capabilities). Both are validated lowercase
+64-character hex or null; exports retain all 64 characters. About and the summary
+show 12 characters, followed by Connector version, commit and source. When both
+browser identities are known and differ, they explain that the page is older
+than the UI now served and that reloading loads it. This is a mismatch signal,
+not proof of version ordering. Settings reads capabilities again when opened;
+export uses its own fresh capabilities read. Neither replaces loaded identity.
+
+Browser `app_version` and `app_commit` are null, never aliases of Connector.
+Native values still come from `appBuild`, displayed first as Desktop. Native and
+dev leave the placeholder unchanged and report null. Native omits the Frontend
+segment when null; browser always shows it, with unknown when null. No native
+hash algorithm or browser build commit is added. These identities do not prove
+native abilities, reachability, or a readable release name.
 
 ## Save boundary
 
