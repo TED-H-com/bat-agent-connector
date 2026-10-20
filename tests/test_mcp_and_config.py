@@ -41,7 +41,9 @@ def in_place_packages(tmp_path_factory):
     env = {"HOME": str(home), "PATH": os.environ["PATH"], "LANG": "C.UTF-8", "TMPDIR": str(temporary),
            "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_TERMINAL_PROMPT": "0",
            "UV_NO_CONFIG": "true", "UV_PYTHON_DOWNLOADS": "never",
-           "UV_CACHE_DIR": str(Path.home() / ".cache/uv")}
+           # Each installed version owns its files, independently of the cache.
+           "UV_LINK_MODE": "copy",
+           "UV_CACHE_DIR": os.environ.get("UV_CACHE_DIR", str(Path.home() / ".cache/uv"))}
     uv, git = shutil.which("uv"), shutil.which("git")
     assert uv and git, "Real package fixture requires uv and Git"
 

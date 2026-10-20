@@ -18,6 +18,9 @@ def _build_env(directory, commit=None):
     scratch = directory / "scratch"
     scratch.mkdir(exist_ok=True)
     env["TMPDIR"] = str(scratch)
+    # Snapshot/tamper tests write installed files in place. Never share their
+    # inodes with uv's cache or another install of the session wheel.
+    env["UV_LINK_MODE"] = "copy"
     if commit is not None:
         env["BATC_BUILD_COMMIT"] = commit
     return env
