@@ -57,9 +57,11 @@ def _build_commit(root):
 
 class BuildProvenanceHook(BuildHookInterface):
     def initialize(self, version, build_data):
+        if version == "editable":
+            return  # Imports use src/; do not create a second partial package.
         root = Path(self.root).resolve()
-        # Stage outside the source tree so building cannot dirty the checkout or
-        # leave provenance behind for a later, different candidate.
+        # Stage in the build output, never in the source package, so no
+        # provenance is left there for a later, different candidate.
         self._staging = TemporaryDirectory(prefix=".batc-provenance-", dir=self.directory)
         info = Path(self._staging.name) / "build-info.json"
         info.write_text(json.dumps({"commit": _build_commit(root)}) + "\n", encoding="utf-8")
@@ -67,6 +69,14 @@ class BuildProvenanceHook(BuildHookInterface):
         build_data["force_include"][str(info)] = f"{package}/build-info.json"
         if self.target_name == "sdist":
             build_data["force_include"][str(root / "hatch_build.py")] = "hatch_build.py"
+        else:
+            # Keep the canonical workflow in distributed wheels. A static wheel
+            # force-include also applies to editable wheels and creates a partial
+            # package beside their src/ import path.
+            build_data["force_include"][str(root / "skills/bat-agent-connector/SKILL.md")] = (
+                "bat_agent_connector/skill/SKILL.md"
+            )
 
     def finalize(self, version, build_data, artifact_path):
-        self._staging.cleanup()
+        if version != "editable":
+            self._staging.cleanup()

@@ -117,6 +117,11 @@ an archive without it. This commit identifies the build's declared source
 candidate; it does not prove that the wheel's bytes match a published release.
 Release manifests and their verification remain separate.
 
+Editable builds skip provenance and workflow file copies: their imports resolve
+to `src/`, without a partial `bat_agent_connector/` in site-packages. The existing
+distribution-path guard keeps their build identity unknown. Normal Python
+bytecode caches may be created; source and provenance files are not modified.
+
 ## Save boundary
 
 Browsers use a Blob download and report only that the download started. Native

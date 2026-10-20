@@ -149,6 +149,9 @@ def test_offline_wheel_keeps_candidate_commit(clean_wheel, tmp_path):
     with zipfile.ZipFile(wheel) as archive:
         assert archive.namelist().count("bat_agent_connector/build-info.json") == 1
         assert json.loads(archive.read("bat_agent_connector/build-info.json")) == {"commit": head}
+        assert archive.read("bat_agent_connector/skill/SKILL.md") == (
+            repo / "skills/bat-agent-connector/SKILL.md"
+        ).read_bytes()
     assert not (repo / "src/bat_agent_connector/build-info.json").exists()
     assert _command(["git", "status", "--porcelain"], cwd=repo, env=_build_env(directory)) == ""
 
@@ -260,9 +263,14 @@ def test_sdist_preserves_provenance_without_borrowing_an_enclosing_checkout(tmp_
         names = archive.getnames()
         assert sum(name.endswith("src/bat_agent_connector/build-info.json") for name in names) == 1
         assert any(name.endswith("hatch_build.py") for name in names)
+        assert any(name.endswith("skills/bat-agent-connector/SKILL.md") for name in names)
     # First exercise the real frontend's sdist extraction, then extract the same
     # producer archive under an unrelated Git checkout. Neither may relabel it.
     wheel = _build(sdist, tmp_path)
+    with zipfile.ZipFile(wheel) as archive:
+        assert archive.read("bat_agent_connector/skill/SKILL.md") == (
+            repo / "skills/bat-agent-connector/SKILL.md"
+        ).read_bytes()
     assert _installed_identity(wheel, tmp_path) == {
         "version": __version__, "commit": None if dirty else head, "source": "package"}
     foreign = tmp_path / "foreign-checkout"
