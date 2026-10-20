@@ -6,12 +6,13 @@ import os
 import selectors
 import shutil
 import subprocess
-import sys
 import time
 from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
+
+from tests.fixture_vcs_install import install_fixture_candidate
 
 try:
     import tomllib
@@ -84,8 +85,9 @@ def packages(tmp_path_factory):
            if key in os.environ}
     env.update(UV_NO_CONFIG="1", GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
                GIT_AUTHOR_DATE="2026-01-01T00:00:00+00:00", GIT_COMMITTER_DATE="2026-01-01T00:00:00+00:00")
-    git, uv = shutil.which("git"), shutil.which("uv")
-    assert git and uv
+    env.setdefault("UV_CACHE_DIR", str(scratch / "cache"))
+    git = shutil.which("git")
+    assert git
     run([git, "init", "--quiet", str(source)], env=env)
     installed = {}
     for candidate in ("a", "b"):
@@ -96,11 +98,8 @@ def packages(tmp_path_factory):
         run([git, "-C", str(source), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
              "-c", "commit.gpgsign=false", "-c", f"core.hooksPath={os.devnull}", "commit", "--quiet", "-m", candidate], env=env)
         sha = run([git, "-C", str(source), "rev-parse", "HEAD"], env=env)
-        tool_root = scratch / ("tools-" + candidate)
-        install_env = {**env, "UV_TOOL_DIR": str(tool_root), "UV_TOOL_BIN_DIR": str(scratch / ("bin-" + candidate))}
-        run([uv, "tool", "install", "--offline", "--python", sys.executable,
-             "git+" + source.as_uri() + "@" + sha], env=install_env, cwd=scratch)
-        interpreter = tool_root / "bat-agent-connector" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        interpreter = install_fixture_candidate(source, sha, scratch / ("environment-" + candidate),
+                                                env=env, lock_root=ROOT)
         identity = json.loads(run([str(interpreter), "-I", "-c",
             "import json;from bat_agent_connector.build_identity import build_identity;print(json.dumps(build_identity()))"],
             env=env, cwd=scratch))
