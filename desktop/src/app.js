@@ -1,4 +1,4 @@
-import {managedRecoveryKey} from "./managed-recovery.js";
+import {centralServiceStatus} from "./central-service-status.js";
 import {workbenchEnabled} from './workbench-mode.js';
 import {workbenchViews} from './workbench-views.js';
 import {settingsAgents} from './settings-agents.js';
@@ -791,11 +791,17 @@ function updateOnline(value) {
 const connectionPainters = new Set();
 function paintConnection(waiting = false, paused = false) {
   const live = document.getElementById('live');
-  const status = !state.token ? 'offline' : state.pollHealth === 'connected' ? 'connected' : 'reconnecting';
+  const {key, tone, connection: status, recoveryKey} = centralServiceStatus(state);
   live.dataset.connection = status;
-  live.className = 'live ' + ({connected: 'ok', offline: 'down', reconnecting: 'reconnecting'}[status]);
-  const recoveryKey = managedRecoveryKey(state.managedRecovery);
-  live.textContent = t(recoveryKey || 'ui_' + status);
+  live.className = 'live tone-' + tone;
+  live.replaceChildren(h('span', {class: 'central-service-state'}, t(key)));
+  const scoped = t('ui_central_status', {status: t(key)});
+  live.setAttribute('aria-label', scoped);
+  const central = document.getElementById('central-service-status');
+  central.title = scoped;
+  central.querySelector('.central-service-scope').replaceChildren(
+    h('span', {class: 'central-service-scope-full'}, t('ui_central_scope')),
+    h('span', {class: 'central-service-scope-short'}, t('ui_central_scope_short')));
   let notice = document.getElementById('managed-recovery-notice');
   if (state.managedRecovery && !notice) {
     notice = h('aside', {id: 'managed-recovery-notice', class: 'panel', role: 'status'}, h('p'),
@@ -808,7 +814,8 @@ function paintConnection(waiting = false, paused = false) {
     notice.querySelector('summary').textContent = t('connection_details');
     notice.querySelector('code').textContent = state.managedRecovery || '';
   }
-  live.title = recoveryKey ? t(recoveryKey + '_help') : t(paused ? 'sync_actions_paused' : waiting ? 'sync_waiting' : status === 'connected' ? 'desktop_polling' : 'offline_actions_paused');
+  const help = recoveryKey ? t(recoveryKey + '_help') : t(paused ? 'sync_actions_paused' : waiting ? 'sync_waiting' : status === 'connected' ? 'desktop_polling' : 'offline_actions_paused');
+  live.title = scoped + ' — ' + help;
   for (const paint of [...connectionPainters]) paint();
 }
 let managedStatusAt = 0;
@@ -3233,8 +3240,7 @@ function connectionFacts() {
     h("dt", {}, t("global_last_event")), eventCell,
     h("dt", {}, t("connection_access")), connectionAccess());
   const render = () => {
-    const key = managedRecoveryKey(state.managedRecovery) || (!state.token ? "ui_offline" : state.pollHealth === "connected" ? "ui_connected" : state.pollHealth === "initial" && state.online ? "ui_connected" : "ui_reconnecting");
-    const tone = key === "ui_connected" ? "ok" : key === "ui_reconnecting" ? "warn" : "neutral";
+    const {key, tone} = centralServiceStatus(state);
     stateCell.replaceChildren(h("span", {class: `ui-pill tone-${tone}`}, t(key)));
     eventCell.replaceChildren(state.lastEventAt ? when(state.lastEventAt) : t("global_no_event"));
   };

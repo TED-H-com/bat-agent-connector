@@ -115,7 +115,7 @@ test('topbar uses connection states and opens Connection', async ({page}) => {
   await page.locator('#live').click(); await expect(page).toHaveURL(/#\/settings$/);
   await page.getByRole('button',{name:'Disconnect',exact:true}).click();
   await expect(page.locator('#live')).toHaveAttribute('data-connection','offline');
-  await expect(page.locator('#live')).toHaveText('Offline');
+  await expect(page.locator('#live')).toHaveText('Not connected');
 });
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`shell layout ${locale} ${width}`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width,height:900},colorScheme:'light'}),page=await context.newPage(),f=fixture(),errors:string[]=[];

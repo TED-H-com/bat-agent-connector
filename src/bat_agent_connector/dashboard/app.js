@@ -27,6 +27,19 @@ function managedRecoveryKey(code) {
 	return "managed_service_retry";
 }
 //#endregion
+//#region src/central-service-status.js
+function centralServiceStatus({ token, pollHealth, online, managedRecovery }) {
+	const connection = !token ? "offline" : pollHealth === "connected" || pollHealth === "initial" && online ? "connected" : "reconnecting";
+	const recoveryKey = managedRecoveryKey(managedRecovery);
+	const key = recoveryKey || (!token ? "ui_not_connected" : connection === "connected" ? "ui_connected" : pollHealth === "initial" ? "ui_connecting" : "ui_reconnecting");
+	return {
+		key,
+		tone: key === "ui_connected" ? "ok" : key === "ui_reconnecting" ? "warn" : "neutral",
+		connection,
+		recoveryKey
+	};
+}
+//#endregion
 //#region src/workbench-mode.js
 var workbenchEnabled = () => new URLSearchParams(location.search).get("workbench") === "1";
 //#endregion
@@ -1580,9 +1593,13 @@ var init_ui_strings = __esmMin((() => {
 			ui_settings: "Settings",
 			ui_pending: "Pending",
 			ui_connected: "Connected",
-			ui_offline: "Offline",
+			ui_not_connected: "Not connected",
+			ui_connecting: "Connecting",
 			ui_reconnecting: "Reconnecting",
 			ui_workspace: "Workspace",
+			ui_central_scope: "Central service:",
+			ui_central_scope_short: "Central:",
+			ui_central_status: "Central service: {status}",
 			ui_switch_workspace: "Switch workspace",
 			ui_new_workspace: "New workspace",
 			ui_report: "Report",
@@ -1664,9 +1681,13 @@ var init_ui_strings = __esmMin((() => {
 			ui_settings: "設定",
 			ui_pending: "待處理",
 			ui_connected: "已連線",
-			ui_offline: "離線",
+			ui_not_connected: "未連線",
+			ui_connecting: "確認中",
 			ui_reconnecting: "重新連線中",
 			ui_workspace: "工作空間",
+			ui_central_scope: "中央服務：",
+			ui_central_scope_short: "中央：",
+			ui_central_status: "中央服務：{status}",
 			ui_switch_workspace: "切換工作空間",
 			ui_new_workspace: "新增工作空間",
 			ui_report: "報告",
@@ -15664,7 +15685,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		"aria-label": t("ui_pending"),
 		title: t("ui_pending")
 	}, icon("inbox"), pendingCounts[0]);
-	const right = h$1("div", { class: "shell-top-actions" }, pending, document.getElementById("live"));
+	const right = h$1("div", { class: "shell-top-actions" }, pending, document.getElementById("central-service-status"));
 	top.append(right);
 	const layoutUrl = new URL(location.href);
 	layoutUrl.searchParams.set("workbench", candidate ? "0" : "1");
@@ -16027,7 +16048,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			document.removeEventListener("keydown", keydown, true);
 			media.removeEventListener("change", resize);
 			scrim.remove();
-			top.append(document.getElementById("live"));
+			top.append(document.getElementById("central-service-status"));
 			right.remove();
 			listLink.remove();
 			creator = null;
@@ -66102,15 +66123,15 @@ function updateOnline(value) {
 var connectionPainters = new Set();
 function paintConnection(waiting = false, paused = false) {
 	const live = document.getElementById("live");
-	const status = !state.token ? "offline" : state.pollHealth === "connected" ? "connected" : "reconnecting";
+	const { key, tone, connection: status, recoveryKey } = centralServiceStatus(state);
 	live.dataset.connection = status;
-	live.className = "live " + {
-		connected: "ok",
-		offline: "down",
-		reconnecting: "reconnecting"
-	}[status];
-	const recoveryKey = managedRecoveryKey(state.managedRecovery);
-	live.textContent = t(recoveryKey || "ui_" + status);
+	live.className = "live tone-" + tone;
+	live.replaceChildren(h("span", { class: "central-service-state" }, t(key)));
+	const scoped = t("ui_central_status", { status: t(key) });
+	live.setAttribute("aria-label", scoped);
+	const central = document.getElementById("central-service-status");
+	central.title = scoped;
+	central.querySelector(".central-service-scope").replaceChildren(h("span", { class: "central-service-scope-full" }, t("ui_central_scope")), h("span", { class: "central-service-scope-short" }, t("ui_central_scope_short")));
 	let notice = document.getElementById("managed-recovery-notice");
 	if (state.managedRecovery && !notice) {
 		notice = h("aside", {
@@ -66126,7 +66147,8 @@ function paintConnection(waiting = false, paused = false) {
 		notice.querySelector("summary").textContent = t("connection_details");
 		notice.querySelector("code").textContent = state.managedRecovery || "";
 	}
-	live.title = recoveryKey ? t(recoveryKey + "_help") : t(paused ? "sync_actions_paused" : waiting ? "sync_waiting" : status === "connected" ? "desktop_polling" : "offline_actions_paused");
+	const help = recoveryKey ? t(recoveryKey + "_help") : t(paused ? "sync_actions_paused" : waiting ? "sync_waiting" : status === "connected" ? "desktop_polling" : "offline_actions_paused");
+	live.title = scoped + " — " + help;
 	for (const paint of [...connectionPainters]) paint();
 }
 var managedStatusAt = 0;
@@ -69872,8 +69894,7 @@ function connectionFacts() {
 	const eventCell = h("dd");
 	const dl = h("dl", { class: "kv global-connection-facts" }, h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"), h("dt", {}, t("global_state")), stateCell, h("dt", {}, t("global_last_event")), eventCell, h("dt", {}, t("connection_access")), connectionAccess());
 	const render = () => {
-		const key = managedRecoveryKey(state.managedRecovery) || (!state.token ? "ui_offline" : state.pollHealth === "connected" ? "ui_connected" : state.pollHealth === "initial" && state.online ? "ui_connected" : "ui_reconnecting");
-		const tone = key === "ui_connected" ? "ok" : key === "ui_reconnecting" ? "warn" : "neutral";
+		const { key, tone } = centralServiceStatus(state);
 		stateCell.replaceChildren(h("span", { class: `ui-pill tone-${tone}` }, t(key)));
 		eventCell.replaceChildren(state.lastEventAt ? when(state.lastEventAt) : t("global_no_event"));
 	};
