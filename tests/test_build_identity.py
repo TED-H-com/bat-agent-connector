@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 from bat_agent_connector import __version__, build_identity
-from bat_agent_connector.update_install import verify_source_package
+from bat_agent_connector.update_install import digest_files, package_files, verify_source_package
 from bat_agent_connector.update_release import UpdateError
 from scripts.validate_connector_update import copy_fixture_source
 
@@ -161,6 +161,8 @@ def test_update_source_verification_accepts_only_producer_provenance(clean_wheel
     assert _installed_identity(wheel, tmp_path)["commit"] == head
     package = next((tmp_path / "installed/lib").glob("python*/site-packages/bat_agent_connector"))
     info = package / "build-info.json"
+    original_files = package_files(package)
+    assert "build-info.json" in original_files
     # Mutate a real hook-produced record only for rejection cases; no metadata
     # fixture stands in for the producer.
     if tamper == "wrong-commit":
@@ -182,6 +184,8 @@ def test_update_source_verification_accepts_only_producer_provenance(clean_wheel
         target = tmp_path / "original-build-info.json"
         info.rename(target)
         info.symlink_to(target)
+    if tamper in {"wrong-commit", "malformed", "extra-field"}:
+        assert digest_files(package_files(package)) != digest_files(original_files)
     if tamper is None:
         verify_source_package(repo / "src/bat_agent_connector", package, head)
     else:

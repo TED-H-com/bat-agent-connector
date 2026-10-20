@@ -94,7 +94,18 @@ def digest_files(values):
 
 
 def verify_source_package(source, package, commit):
-    require(package_files(source) == package_files(package), "installed_source_mismatch")
+    expected, actual = package_files(source), package_files(package)
+    if "build-info.json" in actual:
+        try:
+            info = json.loads((package / "build-info.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            info = None
+        require(info == {"commit": commit}, "installed_identity_mismatch")
+        if "build-info.json" not in expected:
+            # This one generated file has no tracked source counterpart. It
+            # remains in the installed proof digest, including on repeat stage.
+            actual.pop("build-info.json")
+    require(expected == actual, "installed_source_mismatch")
 
 
 def prepare_tool_paths(root):

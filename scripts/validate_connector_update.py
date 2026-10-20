@@ -171,25 +171,14 @@ def validate(parent):
         help_text = run([str(root / "bin/batc-update"), "--help"], env=env)
         assert "rollback" in help_text and "schedule" in help_text
 
-        # Bootstrap a deployment receipt using the same source digest algorithm
-        # as the existing Fleet installer. All links/data belong to this fixture.
-        for name in ("batc", "bat-agent-connector-mcp"):
-            (home / ".local/bin" / name).symlink_to(root / "bin" / name)
-        files.atomic_write(home / ".agents/skills/bat-agent-connector/SKILL.md",
-                           (source / "skills/bat-agent-connector/SKILL.md").read_bytes())
-        legacy = hashlib.sha256()
-        for path in sorted((source / "src/bat_agent_connector").rglob("*.py")):
-            legacy.update(path.relative_to(source / "src/bat_agent_connector").as_posix().encode()
-                          + b"\0" + hashlib.sha256(path.read_bytes()).digest())
-        receipt = root / "rollout-receipt.json"
-        files.atomic_write(receipt, json.dumps({
-            "release": {"repository": REPOSITORY + ".git", "commit": sha, "package_version": __version__,
-                        "canonical_sha256": candidate["skill_sha256"]},
-            "build_identity": {"version": __version__, "commit": sha, "source": "vcs"},
-            "installed_proof": {"package_path": proof["package"], "python_source_sha256": legacy.hexdigest(),
-                                "packaged_workflow_sha256": candidate["skill_sha256"]},
-            "entrypoints": {name: str((root / "bin" / name).resolve()) for name in ("batc", "bat-agent-connector-mcp")},
-        }).encode())
+        # Use the real installed bootstrap verifier and receipt producer too.
+        # A second hand-written source comparison/digest would hide regressions.
+        bootstrap = json.loads(run([
+            str(root / "tools/bat-agent-connector/bin/python"), "-I", "-B", "-m",
+            "bat_agent_connector.installer", str(root), json.dumps(candidate), "--source", str(source),
+        ], env={**env, "TMPDIR": str(scratch)}))
+        assert bootstrap["build_identity"] == build_identities[0]["identity"]
+        receipt = Path(bootstrap["receipt"])
         feed = [candidate]
         def install(path, release, *, home):
             return stage(path, release, home=home, command=command)
@@ -263,7 +252,8 @@ def validate(parent):
                 "repeat_stage_reused_verified_environment": True, "fixture_resources_removed": True,
                 "upgrade_fixture_commit": next_sha, "upgrade_fixture_version": next_version,
                 "real_upgrade_and_rollback": True, "loaded_interpreter_unchanged": True,
-                "journal_unchanged": True, "build_identities": build_identities}
+                "journal_unchanged": True, "build_identities": build_identities,
+                "receipt_from_installed_verifier": True}
 
 
 def main():
