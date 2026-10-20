@@ -136,3 +136,41 @@ for(const native of [false,true])test(`workspace choice routes continuation whil
   await tools.locator('button[type=submit]').click();await expect.poll(()=>x.state.writes.length).toBe(2);
   expect(x.state.writes[1]).toEqual(original);expect(x.f.discussion.writes).toEqual([]);
 });
+
+for(const locale of ['en','zh-TW']) for(const native of [false,true]) for(const first of ['thread','plans'] as const)
+test(`continuation refresh keeps the same frozen brief with ${first} first ${locale} ${native?'IPC':'HTTP'}`,async({page})=>{
+  const x=fixture(locale), root=`/pm/workspaces/${x.f.ids.workspaceId}`;
+  const paths={thread:root+'/threads/'+x.f.ids.threadIdea,plans:root+'/plans'};
+  let release!:()=>void;
+  const firstRead=new Promise<void>(resolve=>{release=resolve;});
+  const initial=new Set(Object.values(paths)), order:string[]=[];
+  const briefs:any[]=[];
+  await page.addInitScript(value=>Object.defineProperty(navigator,'language',{get:()=>value}),locale);
+  await mountConversation(page,native,async input=>{
+    const path=new URL(input.path,'http://fixture').pathname;
+    const initialRead=initial.delete(path);
+    // Hold the other initial response until the selected producer has returned.
+    // No timer or browser scheduling can choose the snapshot's plan metadata.
+    if(initialRead && path!==paths[first])await firstRead;
+    const value=await x.dispatch(input);
+    if(path===paths.thread)briefs.push(structuredClone(value.data.continuation_brief));
+    if(initialRead){order.push(path);if(path===paths[first])release();}
+    return value;
+  });
+  await page.goto(`/dashboard/#/pm/${x.f.ids.workspaceId}/discussions/${x.f.ids.threadIdea}`);
+  const composer=page.locator('[data-discussion-composer]');await expect(composer).toBeEnabled();
+  expect(order[0]).toBe(paths[first]);
+  await composer.fill('Keep this discussion draft.');
+  const reader=page.locator('[data-continuation-brief]');
+  await reader.locator(':scope > details > summary').click();
+  const detail=reader.locator(':scope > details'), original=await detail.elementHandle();
+  x.detail.thread.version++;
+  const refresh=page.getByRole('button',{name:locale==='en'?'Refresh':'重新整理',exact:true});
+  await refresh.click();await expect(refresh).toBeEnabled();
+  await expect(reader).toContainText(locale==='en'?'New discussion or plan changes':'尚未納入新增討論或計畫變更');
+  expect(await detail.evaluate((node,old)=>node===old,original)).toBe(true);
+  await expect(detail).toHaveAttribute('open','');
+  expect(briefs).toHaveLength(2);expect(briefs[1]).toEqual(briefs[0]);
+  await expect(composer).toHaveValue('Keep this discussion draft.');
+  expect(x.state.writes).toEqual([]);expect(x.f.discussion.writes).toEqual([]);
+});
