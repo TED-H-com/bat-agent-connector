@@ -278,8 +278,20 @@ which must be at most 60 seconds including cleanup. The source harness can test
 two actual source revisions locally; distinct frozen binaries remain CI evidence
 for their exact platform/head. The POSIX host-script producer has Linux evidence;
 macOS publication continuity remains unproven pending successful native CI. Its
-seed log, fixture setup stages and 40-second thread dump are preserved on failure
-without extending the 45-second readiness wait or the 60-second case budget.
+seed log, fixture setup stages and 40-second thread dump are preserved on failure.
+A test-only audit plugin records monotonic child-start and fixture start/end
+events without replacing subprocess or socket functions. Encoded host requests
+are identified by phase instead of copying their payload; environment values are
+omitted, and the same log redactor is used before printing and uploading.
+
+The seed-readiness ceiling is 50 seconds. macOS CI showed progress after the
+40-second dump but missed the old 45-second readiness deadline.
+The Linux producer body took about 1.59 seconds; doubling that and rounding up to
+a five-second window gives five extra seconds (45 + 5 = 50). The original
+60-second provider window and whole-case budget, including cleanup, remain.
+This bounds the old producer without extending the current core's recovery
+limits. Pytest's `--setup-show` prints fixture completion; the explicit timeline
+is needed to locate a slow child. A successful macOS run is still required.
 macOS retains the existing packaged workspace/identity/busy checks. Windows also
 keeps those checks; its publication path and real OS-vault continuity remain open
 acceptance items.

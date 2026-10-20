@@ -26,6 +26,12 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+# macOS ff633ea3 progressed beyond old fixture setup after the 40s stack dump,
+# but missed 45s readiness. Linux's body-to-ready was 1.59s: double it,
+# round up to a 5s window, then add to 45s => 50s. Only seed readiness changes;
+# the provider window and the whole case (including cleanup) still have 60s.
+SEED_READINESS_TIMEOUT_S = 50
+
 
 def package(resources, directory):
     manifest = json.loads((resources / 'manifest.json').read_text())
@@ -278,7 +284,7 @@ existing packaged workspace/identity checks; its publication path remains open.
         seeded = subprocess.Popen(seed_command, cwd=previous_source, env=seed_env,  # noqa: S603 - fixed source producer
             stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
     try:
-        until = time.monotonic() + 45
+        until = time.monotonic() + SEED_READINESS_TIMEOUT_S
         while not output.exists():
             assert seeded.poll() is None, 'Original source producer exited before readiness'
             assert time.monotonic() < until, 'Original source producer did not become ready'

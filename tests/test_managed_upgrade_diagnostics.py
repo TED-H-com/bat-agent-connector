@@ -52,7 +52,7 @@ def test_publication_failure_preserves_redacted_seed_and_core_logs(tmp_path, mon
             (root / 'publication-seed.json').write_text('{"handlers": {}, "effects": {}}')
         return Seed()
 
-    ticks = iter([0, 0, 46])
+    ticks = iter([0, 0, fixture['SEED_READINESS_TIMEOUT_S'] + 1])
     monkeypatch.setitem(scope, 'time', SimpleNamespace(monotonic=lambda: next(ticks), sleep=lambda _: None))
     redactor = scope['fixture_log_text'].__globals__
     monkeypatch.setitem(redactor, '__file__', str(script))
