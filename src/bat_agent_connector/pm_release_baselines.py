@@ -155,7 +155,7 @@ def _access_context(ops, principal, wid, intent, *, decide=False):
     context = {key: intent[key] for key in (
         'server_id', 'project_binding', 'repository', 'source', 'repository_id',
         'commit_sha', 'channel', 'deployment_receipt') if key in intent}
-    key = pm_read_cache._key((wid, context, decide))
+    key = sources.digest([wid, context, decide])
     with scope(ops.db, principal) as state:
         def visible():
             _access_context_sources(ops, principal, wid, intent, decide=decide)

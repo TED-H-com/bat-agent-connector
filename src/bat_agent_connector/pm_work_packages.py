@@ -158,7 +158,7 @@ def _access_context(ops, principal, wid, context):
     # this historical predicate; current configuration stays in the caller.
     selected = {key: context[key] for key in (
         'server_id', 'plan_ref', 'work_ref', 'evidence_refs', 'git_binding', 'dod_ref') if key in context}
-    key = pm_read_cache._key((wid, selected))
+    key = _digest([wid, selected])
     with scope(ops.db, principal) as state:
         def visible():
             _access_context_sources(ops, principal, wid, context)

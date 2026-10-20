@@ -103,6 +103,26 @@ async def test_completed_baseline_context_joins_later_private_guard(ops, monkeyp
     assert len(expanded) == 2  # One complete proof per fresh durable snapshot.
 
 
+async def test_completed_context_lookup_does_not_expand_its_frozen_identity(ops, monkeypatch):  # noqa: F811
+    data = await baseline_history(ops, monkeypatch, 2)
+    wid = data['workspace_id']
+    context = baselines._record(ops.db, wid, baselines._head(ops.db, wid)['baseline_id'])['document']['intent']
+    key, expanded = pm_read_cache._key, []
+
+    def counted(value):
+        expanded.append(1)
+        return key(value)
+
+    with pm_source_reads.scope(ops.db, github.OWNER):
+        baselines._access_context(ops, github.OWNER, wid, context)
+        with monkeypatch.context() as lookup:
+            lookup.setattr(pm_read_cache, '_key', counted)
+            baselines._access_context(ops, github.OWNER, wid, context)
+    # Context bytes still require a digest; the generic memo must not then
+    # recursively expand that already verified identity on every lookup.
+    assert len(expanded) <= 8, len(expanded)
+
+
 async def test_observer_source_reuse_preserves_every_durable_byte(ops, monkeypatch, tmp_path):  # noqa: F811
     data = await baseline_history(ops, monkeypatch, 8)
     github.populate(ops.context['github'])

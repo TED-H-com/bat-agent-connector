@@ -137,12 +137,11 @@ def require_sources(ops, principal, wid, proof):
 def _dependencies(ops, principal, downstream_package, references, *, current):
     if current:
         return _dependency_sources(ops, principal, downstream_package, references, current=True)
-    from . import pm_read_cache
     from .pm_source_reads import check, scope
     try:
         doc = downstream_package['document']
-        key = pm_read_cache._key((downstream_package['workspace_id'], doc['requirements'],
-            doc['context']['plan_ref'], references))
+        key = evidence.digest([downstream_package['workspace_id'], doc['requirements'],
+            doc['context']['plan_ref'], references])
     except (KeyError, TypeError, ValueError, RecursionError):
         # Preserve the original validation and errors for malformed identities.
         return _dependency_sources(ops, principal, downstream_package, references, current=False)
