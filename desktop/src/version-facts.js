@@ -1,7 +1,11 @@
 // All surfaces render the same explicit projection, including unknown rows.
 export function versionFactText(row, t) {
-  const values = [row.version, row.commit, row.digest].filter(Boolean);
-  return values.length ? values.join(' · ') : t('diag_unknown');
+  const unknown=t('diag_unknown');
+  if(['desktop','connector','bundled_runtime','running_runtime'].includes(row.id))
+    return t('diag_version_number',{version:row.version||unknown})+' · '+t('diag_version_commit',{commit:row.commit||unknown});
+  if(['loaded_ui','served_ui'].includes(row.id))return t('diag_version_digest',{digest:row.digest||unknown});
+  if(['adapter_bat_observed','bat_observed'].includes(row.id))return t('diag_version_commit',{commit:row.commit||unknown});
+  return t('diag_version_number',{version:row.version||unknown});
 }
 export function versionFacts({h, t, projection}) {
   const rows=projection.rows.filter(row=>projection.platform==='desktop'||!['desktop','desktop_update'].includes(row.id));

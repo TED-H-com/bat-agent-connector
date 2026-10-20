@@ -1,5 +1,6 @@
 export const diagnosticsStrings = {
   en: {
+    diag_version_number:'Version: {version}', diag_version_commit:'Commit: {commit}', diag_version_digest:'Digest: {digest}',
     diag_version_run_updated:'Past run updated at {time}',
     diag_version_adapter_bat_observed:'Codex revision in the read BAT PM run', diag_version_bat_observed:'BAT revision in the read PM run',
     diag_version_source_pm_run_provenance:'Source: immutable PM run provenance', diag_version_period_run:'Past run; not a current installation observation',
@@ -45,6 +46,7 @@ export const diagnosticsStrings = {
     diag_connected:'Connected', diag_disconnected:'Disconnected', diag_reconnecting:'Reconnecting', diag_never_connected:'Never connected', diag_stale:'Stale', diag_reachable:'Reachable', diag_unreachable:'Unreachable', diag_state_unknown:'Unknown',
   },
   'zh-TW': {
+    diag_version_number:'版本：{version}', diag_version_commit:'Commit：{commit}', diag_version_digest:'摘要：{digest}',
     diag_version_run_updated:'過去執行記錄的更新時間：{time}',
     diag_version_adapter_bat_observed:'已讀取 BAT PM 執行的 Codex 版本', diag_version_bat_observed:'已讀取 PM 執行的 BAT 版本',
     diag_version_source_pm_run_provenance:'來源：不可變的 PM 執行來源記錄', diag_version_period_run:'過去的執行；不是目前安裝的觀察',

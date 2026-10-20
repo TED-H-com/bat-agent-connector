@@ -9,9 +9,12 @@ export const time = value => {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
 };
 const buildSource = value => ['vcs','package','bundled'].includes(value) ? value : null;
-const fact = (id, value, source, at, period, extra = {}) => ({id,
-  version:version(value?.version), commit:commit(value?.commit), digest:digest(value?.digest),
-  source, observed_at:time(at), period, build_source:buildSource(value?.source), ...extra});
+const fact = (id, value, source, at, period, extra = {}) => {
+  const selected={version:version(value?.version),commit:commit(value?.commit),digest:digest(value?.digest)};
+  const observed_at=time(at), observed=Object.values(selected).some(Boolean)||observed_at!==null;
+  return {id,...selected,source:observed?source:'not_reported',observed_at,
+    period:observed?period:'unknown',build_source:buildSource(value?.source),...extra};
+};
 export function versionProjection(input = {}) {
   const caps = input.online === false ? null : input.caps;
   const managed = input.managedRuntime;

@@ -892,6 +892,9 @@ var diagnosticsStrings;
 var init_diagnostics_strings = __esmMin((() => {
 	diagnosticsStrings = {
 		en: {
+			diag_version_number: "Version: {version}",
+			diag_version_commit: "Commit: {commit}",
+			diag_version_digest: "Digest: {digest}",
 			diag_version_run_updated: "Past run updated at {time}",
 			diag_version_adapter_bat_observed: "Codex revision in the read BAT PM run",
 			diag_version_bat_observed: "BAT revision in the read PM run",
@@ -972,6 +975,9 @@ var init_diagnostics_strings = __esmMin((() => {
 			diag_state_unknown: "Unknown"
 		},
 		"zh-TW": {
+			diag_version_number: "版本：{version}",
+			diag_version_commit: "Commit：{commit}",
+			diag_version_digest: "摘要：{digest}",
 			diag_version_run_updated: "過去執行記錄的更新時間：{time}",
 			diag_version_adapter_bat_observed: "已讀取 BAT PM 執行的 Codex 版本",
 			diag_version_bat_observed: "已讀取 PM 執行的 BAT 版本",
@@ -15447,17 +15453,23 @@ var buildSource = (value) => [
 	"package",
 	"bundled"
 ].includes(value) ? value : null;
-var fact$1 = (id, value, source, at, period, extra = {}) => ({
-	id,
-	version: version$2(value?.version),
-	commit: commit(value?.commit),
-	digest: digest$10(value?.digest),
-	source,
-	observed_at: time(at),
-	period,
-	build_source: buildSource(value?.source),
-	...extra
-});
+var fact$1 = (id, value, source, at, period, extra = {}) => {
+	const selected = {
+		version: version$2(value?.version),
+		commit: commit(value?.commit),
+		digest: digest$10(value?.digest)
+	};
+	const observed_at = time(at), observed = Object.values(selected).some(Boolean) || observed_at !== null;
+	return {
+		id,
+		...selected,
+		source: observed ? source : "not_reported",
+		observed_at,
+		period: observed ? period : "unknown",
+		build_source: buildSource(value?.source),
+		...extra
+	};
+};
 function versionProjection(input = {}) {
 	const caps = input.online === false ? null : input.caps;
 	const managed = input.managedRuntime;
@@ -15814,12 +15826,16 @@ function buildDiagnostics(input) {
 //#endregion
 //#region src/version-facts.js
 function versionFactText(row, t) {
-	const values = [
-		row.version,
-		row.commit,
-		row.digest
-	].filter(Boolean);
-	return values.length ? values.join(" · ") : t("diag_unknown");
+	const unknown = t("diag_unknown");
+	if ([
+		"desktop",
+		"connector",
+		"bundled_runtime",
+		"running_runtime"
+	].includes(row.id)) return t("diag_version_number", { version: row.version || unknown }) + " · " + t("diag_version_commit", { commit: row.commit || unknown });
+	if (["loaded_ui", "served_ui"].includes(row.id)) return t("diag_version_digest", { digest: row.digest || unknown });
+	if (["adapter_bat_observed", "bat_observed"].includes(row.id)) return t("diag_version_commit", { commit: row.commit || unknown });
+	return t("diag_version_number", { version: row.version || unknown });
 }
 function versionFacts({ h, t, projection }) {
 	const rows = projection.rows.filter((row) => projection.platform === "desktop" || !["desktop", "desktop_update"].includes(row.id));

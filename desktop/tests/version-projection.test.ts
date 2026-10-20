@@ -42,6 +42,12 @@ test('browser export cannot identify a Desktop app by borrowing the Connector bu
   assert.equal(row(out,'desktop').version,null);
   assert.equal(out.client.connector_version,bootstrap.capabilities.build.version);
 });
+test('unread rows do not claim that a load, launch or successful read occurred', () => {
+  for(const row of buildDiagnostics({}).versions.rows){
+    assert.equal(row.source,'not_reported');assert.equal(row.period,'unknown');
+    assert.equal(row.observed_at,null);
+  }
+});
 for(const locale of ['en','zh-TW']) test(`projection renders the same build line and facts in ${locale}`, () => {
   const bundle=buildDiagnostics(input('differs'));
   const t=(key,vars={})=>diagnosticsStrings[locale][key]?.replace(/\{(\w+)\}/g,(_,k)=>vars[k]??'') ?? key;
@@ -54,6 +60,13 @@ for(const locale of ['en','zh-TW']) test(`projection renders the same build line
       assert.equal(typeof diagnosticsStrings[locale][key], 'string', key);
     for(const fact of [value.version,value.commit,value.digest].filter(Boolean))assert.ok(versionFactText(value,t).includes(fact));
   }
+});
+for(const locale of ['en','zh-TW']) test(`a known runtime version cannot hide its unknown commit in ${locale}`, () => {
+  const bundle=buildDiagnostics(input('unknown_running'));
+  const t=(key,vars={})=>diagnosticsStrings[locale][key]?.replace(/\{(\w+)\}/g,(_,k)=>vars[k]??'') ?? key;
+  const text=versionFactText(row(bundle,'running_runtime'),t);
+  assert.ok(text.includes(runtime.unknown_running.running_runtime.version));
+  assert.ok(text.includes(diagnosticsStrings[locale].diag_unknown));
 });
 test('real adapter installation producer supplies a requirement, never an observed version', () => {
   const bundle=buildDiagnostics({...input('differs'),adapterRead:{document:adapter.native.installation,at}});
