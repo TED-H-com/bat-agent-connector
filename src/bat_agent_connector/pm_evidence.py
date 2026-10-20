@@ -523,7 +523,8 @@ class _Collector:
         self.add("work_claim", item["work_item_id"], item["updated_at"],
                  {**_fields(item, ("work_item_id", "project_id", "version", "state", "done_by", "done_at", "approved_by", "approved_at")),
                   "content_fingerprint": work_items.fingerprint(item), "completion": work_items.completion(item),
-                  "authority": "recorded_work_claim_and_approval"})
+                  "authority": "recorded_work_claim_and_approval",
+                  **({"source_lane": work_items.source_lane(item), "github_source": work_items.github_observation(item)} if item.get("external") else {})})
         rows = self.db.execute("SELECT * FROM work_item_links WHERE work_item_id=? AND removed_at IS NULL ORDER BY link_id LIMIT ?",
                                (item["work_item_id"], MAX_LINKS + 1)).fetchall()
         self.coverage["truncated"] |= len(rows) > MAX_LINKS

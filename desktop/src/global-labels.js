@@ -167,6 +167,9 @@ const OPERATION_STATUS = {
 };
 
 const WORK_STATUS = {
+  github_closed: 'github_closed',
+  github_completed: 'github_completed',
+  github_done: 'github_done',
   todo: 'not_started',
   doing: 'in_progress',
   waiting: 'waiting',

@@ -100,7 +100,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
       if (!own && !children.length) return [];
       const href = current ? sessionHref({host: current.source.host, sessionId: current.source.session_id, ...current.context})
         : `#/item/${encodeURIComponent(item.work_item_id)}`;
-      const itemActivity = {key: 'wi_state_' + (item.completion?.display_state || item.state), tone: item.completion?.pending ? 'stale' : ''};
+      const itemActivity = {key: 'wi_state_' + (item.display_state || item.completion?.display_state || item.state), tone: item.completion?.pending ? 'stale' : ''};
       const row = link(href, item.title, current && !item.completion?.pending ? workActivity(current.source) : itemActivity, current?.source.reading);
       row.dataset.workItem = item.work_item_id;
       row.dataset.workOperations = linked.map(({source}) => source.id).join(',');

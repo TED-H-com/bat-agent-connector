@@ -331,6 +331,7 @@ class Projection:
         return accepted, reviewing, deliveries
 
     def progress(self, plan, work, blocked, accepted, reviewing):
+        from . import work_items
         if plan is None:
             return None, {}
         counts = {key: 0 for key in ('accepted', 'in_review', 'in_progress', 'blocked', 'not_started')}
@@ -338,7 +339,8 @@ class Projection:
         for req in plan['document']['requirements']:
             rid = req['id']
             items = [v['work'] for v in work.values() if v['binding']['plan_revision_id'] == plan['revision_id']
-                and rid in v['binding']['requirement_ids']]
+                and rid in v['binding']['requirement_ids']
+                and work_items.source_lane(v['work']) not in work_items.GITHUB_CLOSED_LANES]
             state = ('blocked' if rid in blocked else 'accepted' if rid in accepted else
                 'in_review' if rid in reviewing or any(w['state'] == 'done' for w in items) else
                 'in_progress' if any(w['state'] in {'doing', 'waiting'} for w in items) else 'not_started')

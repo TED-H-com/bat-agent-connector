@@ -283,6 +283,7 @@ def _brief(document):
             text = f"Integration {fact['delivery']}; PR state remains unknown"
             deliveries.append(_item(kind, text, fact["delivery"], source, fact))
         elif kind == "work_claim":
+            state = fact.get("source_lane") or state
             text = f"Work state recorded as {state}" + ('; quality unassessed' if quality is None else '')
             deliveries.append(_item(kind, text, state or "unknown", source, fact))
         elif kind == 'quality_assessment':

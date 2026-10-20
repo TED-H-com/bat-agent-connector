@@ -1219,6 +1219,21 @@ function reasonLabel(t, reason) {
 var statusVocabulary, phaseVocabulary, phaseStrings, uiStrings, reasonLabels;
 var init_ui_strings = __esmMin((() => {
 	statusVocabulary = Object.freeze({
+		github_closed: {
+			en: "Closed (not completed)",
+			"zh-TW": "已關閉（未完成）",
+			tone: "neutral"
+		},
+		github_completed: {
+			en: "Completed · GitHub",
+			"zh-TW": "完成議題 · GitHub",
+			tone: "neutral"
+		},
+		github_done: {
+			en: "Done · GitHub",
+			"zh-TW": "完成 · GitHub",
+			tone: "neutral"
+		},
 		not_started: {
 			en: "Not started",
 			"zh-TW": "未開始",
@@ -1603,6 +1618,7 @@ var init_ui_strings = __esmMin((() => {
 		terminal_time_unrecorded: ["End time not recorded", "尚無結束時間紀錄"],
 		state_time_unrecorded: ["State time not recorded", "尚無狀態時間紀錄"],
 		multiple_explicit_parents: ["Linked to several parents", "已連結多個上層項目"],
+		github_source_closed_is_not_delivery: ["GitHub closure does not prove delivery", "GitHub 關閉不代表已有交付證據"],
 		attempt_finished_is_not_work_completion: ["Attempt finished; work completion unknown", "執行嘗試已結束，工作是否完成仍未知"],
 		inconsistent_dates: ["End precedes start; end omitted", "結束早於開始，已省略結束日期"],
 		mapping_page_truncated: ["Some issues were not loaded", "部分議題尚未載入"],
@@ -10612,6 +10628,9 @@ var init_i18n = __esmMin((() => {
 			link_session: "工作階段",
 			link_checkpoint: "檢查點",
 			link_operation: "操作",
+			wi_state_github_closed: "已關閉（未完成）",
+			wi_state_github_completed: "完成議題 · GitHub",
+			wi_state_github_done: "完成 · GitHub",
 			link_task: "任務",
 			link_pull_request: "PR",
 			link_github_source: "GitHub 主要來源",
@@ -12305,6 +12324,9 @@ var init_i18n = __esmMin((() => {
 			new_step: "New step",
 			link_session: "Session",
 			link_checkpoint: "Checkpoint",
+			wi_state_github_closed: "Closed (not completed)",
+			wi_state_github_completed: "Completed · GitHub",
+			wi_state_github_done: "Done · GitHub",
 			link_operation: "Operation",
 			link_task: "Task",
 			link_pull_request: "PR",
@@ -14586,7 +14608,8 @@ function workbenchProjection(data, record = null) {
 		id: item?.work_item_id || JSON.stringify([session.host, session.session_id]),
 		title: item?.title || session.title,
 		goal: item?.goal || item?.request || "",
-		recordState: item?.completion?.display_state || item?.state || null,
+		recordState: item?.display_state || item?.completion?.display_state || item?.state || null,
+		external: item?.external || null,
 		href: item ? "#/item/" + encodeURIComponent(item.work_item_id) : href,
 		source,
 		host: session.host,
@@ -14607,6 +14630,11 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 	const summary = h$1("p", {
 		class: "wc-summary",
 		"data-workbench-summary": ""
+	});
+	const source = h$1("p", {
+		class: "ui-meta",
+		hidden: true,
+		"data-workbench-github": ""
 	});
 	const goal = h$1("p", {
 		class: "wc-goal",
@@ -14642,7 +14670,7 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 	});
 	controls.dataset.workbenchViews = "";
 	const bar = h$1("div", { class: "wc-view-bar" }, controls);
-	head.append(goal, responsibility, summary);
+	head.append(goal, responsibility, summary, source);
 	head.before(bar);
 	work.after(lineage, live, evidence);
 	function select(value) {
@@ -14705,6 +14733,13 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 	}
 	function paint() {
 		if (!projection) return;
+		const github = boardGitHubLink(projection.external);
+		source.replaceChildren(...github ? [h$1("a", {
+			href: github.url,
+			target: "_blank",
+			rel: "noopener noreferrer"
+		}, github.label)] : []);
+		source.hidden = !github;
 		goal.textContent = projection.goal;
 		goal.hidden = !projection.goal;
 		responsibility.textContent = [
@@ -14751,6 +14786,8 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 			projection = null;
 			signature = "";
 			panel?.close();
+			source.replaceChildren();
+			source.hidden = true;
 			goal.textContent = "";
 			goal.hidden = true;
 			responsibility.textContent = "";
@@ -14761,6 +14798,8 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 			projection = null;
 			signature = "";
 			panel?.close();
+			source.replaceChildren();
+			source.hidden = true;
 			goal.textContent = "";
 			goal.hidden = true;
 			responsibility.textContent = "";
@@ -16569,6 +16608,9 @@ var OPERATION_STATUS = {
 	cancelled: "historical"
 };
 var WORK_STATUS = {
+	github_closed: "github_closed",
+	github_completed: "github_completed",
+	github_done: "github_done",
 	todo: "not_started",
 	doing: "in_progress",
 	waiting: "waiting",
@@ -42786,6 +42828,11 @@ var scheduleFirstLine = (row) => scheduleTitle(row).split(/\r?\n/)[0];
 init_i18n();
 init_ui_strings();
 function rowStatus(row, data) {
+	if ([
+		"github_closed",
+		"github_completed",
+		"github_done"
+	].includes(row.refs?.source_lane)) return h$1("span", {}, statusPill(row.refs.source_lane), ...["merged", "deployed"].includes(row.status) ? [" ", statusPill(row.status)] : []);
 	return notObserved(row, data) ? h$1("span", { class: "ui-pill tone-neutral" }, t("sched_not_observed")) : statusPill(row.status);
 }
 function dateRange(span) {
@@ -53272,7 +53319,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 				...current.context
 			}) : `#/item/${encodeURIComponent(item.work_item_id)}`;
 			const itemActivity = {
-				key: "wi_state_" + (item.completion?.display_state || item.state),
+				key: "wi_state_" + (item.display_state || item.completion?.display_state || item.state),
 				tone: item.completion?.pending ? "stale" : ""
 			};
 			const row = link(href, item.title, current && !item.completion?.pending ? workActivity(current.source) : itemActivity, current?.source.reading);
@@ -71633,14 +71680,14 @@ function workItemRow(w, open) {
 		title,
 		href,
 		meta,
-		pill: statusPill(workStatusKey(w.completion?.display_state)),
+		pill: statusPill(workStatusKey(w.display_state || w.completion?.display_state)),
 		action: h("a", {
 			class: "ui-button secondary ui-sm",
 			href
 		}, t("global_review")),
 		detailsLabel: t("global_details_for", { title }),
 		onOpen: () => open?.(key, title, [
-			statusPill(workStatusKey(w.completion?.display_state)),
+			statusPill(workStatusKey(w.display_state || w.completion?.display_state)),
 			meta ? h("p", {}, meta) : null,
 			w.completion?.pending ? h("p", {}, t("needs_decision")) : null,
 			disclosure({

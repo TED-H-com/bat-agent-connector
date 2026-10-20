@@ -1,5 +1,8 @@
 // One vocabulary for evidence states; callers choose a key, never translate an enum ad hoc.
 export const statusVocabulary = Object.freeze({
+  github_closed: {en: 'Closed (not completed)', 'zh-TW': '已關閉（未完成）', tone: 'neutral'},
+  github_completed: {en: 'Completed · GitHub', 'zh-TW': '完成議題 · GitHub', tone: 'neutral'},
+  github_done: {en: 'Done · GitHub', 'zh-TW': '完成 · GitHub', tone: 'neutral'},
   not_started: {en: 'Not started', 'zh-TW': '未開始', tone: 'neutral'},
   in_progress: {en: 'In progress', 'zh-TW': '進行中', tone: 'info'},
   waiting: {en: 'Waiting', 'zh-TW': '等待中', tone: 'warn'},
@@ -157,6 +160,7 @@ export const reasonLabels = Object.freeze({
   terminal_time_unrecorded: ['End time not recorded', '尚無結束時間紀錄'],
   state_time_unrecorded: ['State time not recorded', '尚無狀態時間紀錄'],
   multiple_explicit_parents: ['Linked to several parents', '已連結多個上層項目'],
+  github_source_closed_is_not_delivery: ['GitHub closure does not prove delivery', 'GitHub 關閉不代表已有交付證據'],
   attempt_finished_is_not_work_completion: ['Attempt finished; work completion unknown', '執行嘗試已結束，工作是否完成仍未知'],
   inconsistent_dates: ['End precedes start; end omitted', '結束早於開始，已省略結束日期'],
   mapping_page_truncated: ['Some issues were not loaded', '部分議題尚未載入'],

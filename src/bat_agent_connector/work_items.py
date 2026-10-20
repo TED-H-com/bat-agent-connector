@@ -98,6 +98,33 @@ def completion(item: dict) -> dict:
             "approved_at": item["approved_at"] if approved else None}
 
 
+GITHUB_CLOSED_LANES = frozenset({'github_closed', 'github_completed', 'github_done'})
+
+
+def source_lane(item: dict) -> str | None:
+    """Display-only source stage; genuine local claims/approval and archives win."""
+    external = item.get('external')
+    if not external or item.get('archived'):
+        return None
+    claim = item.get('completion') or completion(item)
+    if claim['approved'] or claim['pending']:
+        return None
+    lane = external.get('board_lane')
+    return lane if lane in (*GITHUB_CLOSED_LANES, 'todo', 'doing') else None
+
+
+def display_state(item: dict) -> str:
+    return source_lane(item) or (item.get('completion') or completion(item))['display_state']
+
+
+def github_observation(item: dict) -> dict | None:
+    external = item.get('external')
+    if not external:
+        return None
+    return {key: external[key] for key in ('source', 'repository', 'repository_id', 'number', 'node_id',
+        'url', 'kind', 'state', 'state_reason', 'draft', 'availability') if key in external}
+
+
 # ------------------------------------------------------------------ input checks
 def _one_line(value, field: str, limit: int) -> str:
     if not isinstance(value, str):
@@ -213,6 +240,8 @@ def _item(row) -> dict:
 def _public(item: dict) -> dict:
     out = {k: v for k, v in item.items() if k not in {"approved_fingerprint", "continued_steps"}}
     out["completion"] = completion(item)
+    if item.get("external"):
+        out.update(display_state=display_state(item), source_lane=source_lane(item))
     return out
 
 
@@ -1011,7 +1040,8 @@ def _counts(items: list[dict]) -> dict:
     for x in items:
         c = completion(x)
         out["total"] += 1
-        out[c["display_state"]] += 1
+        stage = display_state(x)
+        out[stage] = out.get(stage, 0) + 1
         out["pending"] += int(c["pending"])
     return out
 
@@ -1047,7 +1077,8 @@ def _project_path(db, project: dict) -> list[dict]:
 
 def _navigation_item(item):
     state = completion(item)
-    return {**{key: item[key] for key in ('work_item_id', 'project_id', 'parent_id', 'derived_from',
+    source = {'display_state': display_state(item), 'source_lane': source_lane(item), 'external': github_observation(item)} if item.get('external') else {}
+    return {**source, **{key: item[key] for key in ('work_item_id', 'project_id', 'parent_id', 'derived_from',
             'title', 'state', 'pinned', 'archived', 'version', 'updated_at')},
         'completion': {key: state[key] for key in ('display_state', 'pending', 'approved')},
         'step_summary': {'total': len(item['steps']), 'done': sum(step['done'] for step in item['steps']),
@@ -1100,7 +1131,7 @@ def work_items_list(db, *, project_id: str | None = None, state: str | None = No
     limit = max(1, min(LIST_MAX, int(limit)))
     if unread is not None and (type(unread) is not bool or not principal_id):
         raise _bad("INVALID_FILTER", "unread must be a boolean with an authenticated reading identity")
-    if state is not None and state not in (*STATES, "awaiting_approval"):
+    if state is not None and state not in (*STATES, "awaiting_approval", *GITHUB_CLOSED_LANES):
         raise _bad("INVALID_FILTER", f"unknown state {state!r}")
     sql = """SELECT w.*, p.name AS project_name FROM work_items w JOIN projects p ON p.project_id=w.project_id
         WHERE 1=1"""
@@ -1109,10 +1140,6 @@ def work_items_list(db, *, project_id: str | None = None, state: str | None = No
         sql += " AND w.archived_at IS NULL AND p.archived_at IS NULL"
     if project_id:
         sql, args = sql + " AND w.project_id=?", [*args, project_id]
-    if state in STATES and state != "done":
-        sql, args = sql + " AND w.state=?", [*args, state]
-    elif state in ("done", "awaiting_approval"):
-        sql += " AND w.state='done'"
     if cursor:
         at, wid = _cursor(cursor)
         sql += " AND (w.updated_at<? OR (w.updated_at=? AND w.work_item_id>?))"
@@ -1122,7 +1149,7 @@ def work_items_list(db, *, project_id: str | None = None, state: str | None = No
     for r in db.execute(sql, args):  # completion is computed, so filter it here, then page
         x = _public(_item(r))
         c = x["completion"]
-        if (pending is not None and c["pending"] != pending) or (state and c["display_state"] != state):
+        if (pending is not None and c["pending"] != pending) or (state and x.get("display_state", c["display_state"]) != state):
             continue
         if principal_id:
             from .work_item_reads import reading

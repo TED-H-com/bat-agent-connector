@@ -146,6 +146,20 @@ subject to its normal bounded coverage. Closed history begins in local `todo`,
 so it supplies no started-work or completion-claim WIP evidence. Source lanes
 supply no cycle time, delivery acceptance or requirement completion.
 
+Every PM reader uses the same display-only source lane. A subsequent closure of
+locally `doing`/`waiting` work leaves that local record intact but removes it from
+WIP, active age and waiting metrics. Overview excludes it from active requirement
+progress; without other work or acceptance evidence the requirement remains
+`not_started`. The schedule returns `unknown` with the GitHub observation in refs
+and a source label, never an invented delivery date or completion. Independently
+recorded delivery lineage and session attempts remain visible. Fixed evidence
+captures save the source observation; brief exports use that saved lane in both
+locales, without joining current GitHub state. MCP lists, project counts,
+navigation and the Work view expose `display_state`/`source_lane` separately from
+the unchanged local `state` and `completion`; list state filters use the display
+lane. Genuine local completion claims, human approval and archives take priority
+over a source lane. Runtime activity remains separate in the Work view.
+
 The shared UI provides editable binding, import/sync, persistent opt-in (on by
 default for the first import), save settings and plain English/zh-TW status for no
 repository, not imported, no open issues, unreachable, rate limited, authorization
@@ -165,6 +179,13 @@ Closed history is a separate unchecked option. Existing durable form drafts and 
   delivery links. Do not automatically repair pre-existing human completion claims.
 - Exclude unscoped automatic source-only bindings from planned-work progress.
   Actual local work and plan associations retain the existing PM contracts.
+- Treat source closure as inactive for WIP and active requirement progress;
+  without independent acceptance, show no requirement completion. Keep schedule
+  delivery status unknown unless delivery lineage supports it; display the source
+  lane alongside independent delivery status when available.
+- Keep genuine local claims, approval and archived status ahead of the source
+  display lane. Save source observations in new evidence captures without
+  rewriting older captures or briefs.
 
 This increment covers the GitHub source semantics within E04/E09 and the existing
 A01–A40 backlog. It changes no R0–R5 acceptance claim and does not complete E00–E11

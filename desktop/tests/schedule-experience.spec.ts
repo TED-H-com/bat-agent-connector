@@ -43,6 +43,21 @@ async function start(page: Page, locale = 'en', options: {native?: boolean; with
   return {...fixture, state, calls, writes};
 }
 function item(page: Page, id: string) {return page.locator(`.schedule-chart [data-schedule-select="${id}"]`);}
+for (const locale of ['en', 'zh-TW']) test(`schedule distinguishes source closure from delivery ${locale}`, async ({page}) => {
+  await page.addInitScript(locale => Object.defineProperty(navigator, 'language', {value: locale}), locale);
+  const f = await start(page, locale, {mutate(data) {
+    const row = [...data.rows, ...data.unscheduled].find(row => row.kind === 'work');
+    row.status = 'unknown'; row.actual = null;
+    row.refs.source_lane = 'github_closed';
+    row.refs.github_source = {source: 'github', repository: 'example/board', repository_id: 1,
+      number: 1, node_id: 'PR_1', url: 'https://github.com/example/board/pull/1', kind: 'pull_request',
+      state: 'closed', state_reason: null, draft: false, availability: 'current'};
+  }});
+  const row = page.locator('[data-schedule-select^="work:"]').first(); await row.click();
+  await expect(page.locator('[data-schedule-inspector] [data-schedule-section=status]')).toContainText(
+    locale === 'en' ? 'Closed (not completed)' : '已關閉（未完成）');
+  expect(f.writes).toEqual([]);
+});
 async function noOverflow(page: Page) {expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);}
 async function shot(page: Page, name: string) {
   if (!process.env.BATC_SCHEDULE_SCREENSHOTS) return;

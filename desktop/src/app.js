@@ -4317,11 +4317,11 @@ function workItemRow(w, open) {
     w.reading?.unread ? t("reading_unread") : ""]);
   return inboxRow({
     h, key, title, href, meta,
-    pill: statusPill(workStatusKey(w.completion?.display_state)),
+    pill: statusPill(workStatusKey(w.display_state || w.completion?.display_state)),
     action: h("a", {class: "ui-button secondary ui-sm", href}, t("global_review")),
     detailsLabel: t("global_details_for", {title}),
     onOpen: () => open?.(key, title, [
-      statusPill(workStatusKey(w.completion?.display_state)),
+      statusPill(workStatusKey(w.display_state || w.completion?.display_state)),
       meta ? h("p", {}, meta) : null,
       w.completion?.pending ? h("p", {}, t("needs_decision")) : null,
       disclosure({label: t("global_details"), body: h("dl", {class: "kv"},

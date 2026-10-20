@@ -1121,14 +1121,17 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
     async def project_get(project_id: str, include_archived: bool = False, projection: str = "full") -> dict[str, Any]:
         """One project and its work item tree. Each work item carries version (pass it as
         preconditions.expected_version to work_item.update) and completion (display_state, pending,
-        fingerprint). projection="navigation" returns compact item summaries; read full details before editing or approval."""
+        fingerprint). GitHub-sourced items also expose display_state/source_lane separately from local state and completion.
+        projection="navigation" returns compact item summaries; read full details before editing or approval."""
         return await daemon("project_get", project_id=project_id, include_archived=include_archived, projection=projection)
 
     async def work_items_list(project_id: str | None = None, state: str | None = None,
                               pending: bool | None = None, limit: int = 50,
                               cursor: str | None = None, unread: bool | None = None) -> dict[str, Any]:
         """Work items across projects, most recently changed first. state: todo, doing, waiting,
-        awaiting_approval (claimed done, not yet accepted by a person) or done (accepted); pending=true lists
+        awaiting_approval (claimed done, not yet accepted by a person), done (accepted), or source-only
+        github_closed, github_completed, github_done. state filters the display lane; local state and completion
+        remain separate. pending=true lists
         the ones waiting for a person's decision. unread filters work-item versions not marked read by this
         effective principal; it is independent of completion. Pass next_cursor as cursor for the next page."""
         return await daemon("work_items_list", project_id=project_id, state=state, pending=pending, limit=limit,
