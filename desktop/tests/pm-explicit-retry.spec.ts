@@ -33,7 +33,9 @@ async function mountForm(page: Page, locale: string) {
       if(state.held)await state.held;
       const original=state.writes.find(row=>row.method==='POST');
       return {operation:{operation_id:'op_'+'8'.repeat(32),actor:caps.actor,idempotency_key:method==='GET'?original.key:key,
-        ...(method==='GET'?original.body:body),status:state.mode==='pending'?'running':'succeeded',result:null}};
+        ...(method==='GET'?original.body:body),status:state.mode==='pending'?'running':'succeeded',
+        result:state.mode==='pending'?null:{workspace_id:target.workspace_id,record_id:target.record_id,
+          revision_id:'pmgrev_'+'8'.repeat(32),version:2,deduplicated:false,input_applied:true,execution_authorized:false}}};
     };
     const reason = h('textarea',{'aria-label':t('pcp_resolve_rationale'),required:true});reason.value='Preserve the reviewed original request';
     const options = win.retryOptions = {h,t,api,caps:()=>caps,guard,namespace:'explicit-retry',action:'pm.governance.revise',target,
