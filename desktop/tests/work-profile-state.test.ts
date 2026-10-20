@@ -1,7 +1,14 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {workProfileStrings} from '../src/pm-work-profile-strings.js';
 const golden=JSON.parse(readFileSync(new URL('../../tests/fixtures/work-profile-readiness.json',import.meta.url),'utf8'));
+
+test('unverified configuration describes current readiness beside a past successful execution',()=>{
+  assert.ok(golden.cases.owned_execution.states.last_verified_execution.verified);
+  assert.match(workProfileStrings.en.wpf_reason_configured_unverified,/current .* unverified/);
+  assert.match(workProfileStrings['zh-TW'].wpf_reason_configured_unverified,/目前.*尚未驗證/);
+});
 
 test('each producer state keeps its current value and its own past verification',async()=>{
   const {profileStateFacts}=await import('../src/pm-work-profile-state.js');
