@@ -1,0 +1,21 @@
+{
+  "installation": {
+    "native_analysis": {
+      "adapter": "codex-native-linux",
+      "contract": "codex-pm-linux-v1",
+      "required_version": "0.160.0",
+      "execution_scope": "frozen_context_only",
+      "execution_location": "connector_service",
+      "eligible_for_preflight": false,
+      "options_confirmed": false,
+      "version_verification": "per_run",
+      "auth_validity": "unverified",
+      "model_execution_verified": false,
+      "auth_file_readable": false,
+      "reason": "PM_NATIVE_EXECUTABLE_UNAVAILABLE",
+      "action_registered": true
+    },
+    "workspace_required": true
+  },
+  "older_executable_error": "PM_NATIVE_VERSION_UNSUPPORTED"
+}
