@@ -1,3 +1,4 @@
+import {pmAvailability, renderPmAvailability} from './pm-availability.js';
 // One reviewed central intent; proposal text never becomes authority by itself.
 import {discussionFeedback, discussionSettingsHref} from './pm-discussions.js';
 import {iconButton, statusPill, button, disclosure, sectionCard, emptyState} from './ui/components.js';
@@ -26,7 +27,7 @@ function validRequirements(values,included){
   const ids=new Set(values.map(row=>row.id));return ids.size===values.length&&values.every(row=>included.has(row.source_key)
     &&refs(row.acceptance_keys,included)&&['must','should','could','unresolved'].includes(row.priority)&&refs(row.depends_on,ids,0))&&!cyclic(values);
 }
-export function planProposals({h,t,api,alive,form,input,labelled,caps,namespace='',workspaceId,threadId,thread,permitted,refresh:refreshParent,errorBox,conversation=false,backLink=()=>null,onFollowUp=()=>{},onAnswer=()=>{},onRevision=()=>{},onActivity=()=>{}}) {
+export function planProposals({h,t,api,alive,form,input,labelled,caps,namespace='',workspaceId,threadId,thread,permitted,refresh:refreshParent,errorBox,capabilityError=()=>null,conversation=false,backLink=()=>null,onFollowUp=()=>{},onAnswer=()=>{},onRevision=()=>{},onActivity=()=>{}}) {
   const base=`/pm/workspaces/${encodeURIComponent(workspaceId)}`,endpoint=base+'/conversation-proposals',target={workspace_id:workspaceId,thread_id:threadId};
   let head=null,capability=null,rows=[],cursor=null,active=null,ticket=0,loading=false,refreshAgain=false,queuedPreferred=null,inFlight=null,ready=false,prepare,adopt,preferredId=null,latestId=null;
   let compound=null;
@@ -152,7 +153,15 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,namespace=
     if(composerNode){
       ask.disabled=!prepare.canSubmit();
       ask.textContent=t(prepare.locked()&&!prepare.initialChecking?.()?'pm_check_original':'pd_ask');
-      connection.hidden=runtime.eligible();ask.hidden=!runtime.eligible()&&!prepare.locked();
+      const action=capability?.structured_analysis?.actions?.[PROPOSE];
+      const descriptors=action?.adapters ? action.adapters.filter(row=>row.adapter===runtime.field.value) : [capability?.native_analysis];
+      const availability=pmAvailability({caps:caps(),document:capability,readError:capabilityError(),checked:true,descriptors});
+      renderPmAvailability(connection,{h,t,setupHref:discussionSettingsHref(),state:availability});
+      // Installation hints explain availability; existing request gates still
+      // own the affordance and final admission, including legacy descriptors.
+      const mayAsk=runtime.eligible()&&writing()&&caps()?.scopes?.includes('start')
+        &&caps()?.actions?.some(row=>row.action===PROPOSE&&row.allowed===true);
+      ask.hidden=!mayAsk&&!prepare.locked();
       discussionFeedback({t,request:prepare,node:working,eligible:runtime.eligible()});
     }
     for(const element of content.querySelectorAll('input,textarea,select,button'))element.disabled=locked;
@@ -315,15 +324,15 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,namespace=
   }
   async function loadMore(){if(cursor===null||loading)return;loading=true;const own=ticket;updateControls();try{const result=await api('GET',`${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=${cursor}&limit=20`);alive();if(own!==ticket)return;page(result,true);}catch(error){if(own===ticket){withdraw();notice.replaceChildren(errorBox(error, {within:notice}));box.hidden=false;}}finally{loading=false;updateControls();}}
   function withdraw(){ticket++;refreshAgain=false;queuedPreferred=null;visible=false;active=head=latestId=null;rows=[];cursor=null;rendered='';candidateFields=[];requirementFields=[];picker.replaceChildren(h('option',{value:''},t('pcp_choose')));detail.replaceChildren();content.replaceChildren();notice.replaceChildren();more.hidden=true;reviewButton=null;resolution?.withdraw();compound?.withdraw();prepare?.update();adopt?.update();}
-  function composer(textarea,{connectionNotice=true}={}){
+  function composer(textarea,{showAvailability=true}={}){
     ask=actionButton({type:'button',class:'secondary','data-discussion-ask':'',onclick:()=>{
       if(adopt.replaceable())adopt.edit();
       if(!prepare.locked())prepare.set('purpose',textarea.value.trim()||thread()?.messages?.at(-1)?.content||thread()?.thread?.title||t('pd_ask'));
       void prepare.submit();
     }},t('pd_ask'));
-    connection=h('p',{class:'muted'},h('span',{},t('pd_not_connected')),' · ',h('a',{href:discussionSettingsHref()},t('pd_setup')));
+    connection=h('div',{'data-pm-proposal-availability':''});
     working=h('p',{'data-discussion-working':'',role:'status',class:'muted'});
-    composerNode=h('div',{class:'pd-ask'},ask,...(connectionNotice?[connection]:[]),working);
+    composerNode=h('div',{class:'pd-ask'},ask,...(showAvailability?[connection]:[]),working);
     clock=setInterval(()=>{if(composerNode.isConnected&&prepare.checking()&&['running','accepted','queued','pending'].includes(prepare.operation()?.status))updateControls();},1000);
     updateControls();return composerNode;
   }

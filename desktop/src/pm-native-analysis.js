@@ -1,10 +1,11 @@
+import {pmAvailability, renderPmAvailability} from './pm-availability.js';
 import {timeStamp} from './ui/stamps.js';
 import {discussionFeedback, discussionSettingsHref} from './pm-discussions.js';
 import {agentMark} from './ui/components.js';
 import {pmContextBundle} from './pm-context-bundle.js';
 import {workspaceAdapter,workspaceAdapterAllows,workspaceAdapterChoice} from './pm-workspace-adapter.js';
 // A native turn consumes a frozen central snapshot; the client never starts a local agent.
-export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capability, thread, permitted, target, refresh, namespace, guard, errorBox}) {
+export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capability, capabilityError = () => null, thread, permitted, target, refresh, namespace, guard, errorBox}) {
   const specs = [
     {key: 'native_analysis', adapter: 'codex-native-linux', action: 'pm.run.analyze', label: 'pm_analysis_local'},
     {key: 'bat_analysis', adapter: 'bat-pm-linux-v1', action: 'pm.run.bat.analyze', label: 'pm_analysis_bat'},
@@ -97,7 +98,7 @@ export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capabi
       ask.disabled = !request?.canSubmit() || !request?.locked() && (!content || content.length > 4000);
       limit.hidden = request?.locked() || content.length <= 4000;
       requestDetails.hidden = !request?.operation() && !request?.box.querySelector(':scope > [role=status] .error');
-      connection.hidden = mayReply;
+      renderPmAvailability(connection, {h, t, setupHref: discussionSettingsHref(), state: pmAvailability({caps: caps(), document: capability(), readError: capabilityError(), checked: true, descriptors: [descriptor]})});
       discussionFeedback({t, request, node: working, eligible: mayReply});
     }
     const source = thread() && selected === 'bat_analysis' && advertised(active) ? descriptor?.selected_binding : null;
@@ -131,7 +132,7 @@ export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capabi
       }
       void request.submit();
     }}, t('pd_send_pm'));
-    connection = h('p', {class: 'muted'}, h('span', {}, t('pd_reply_unavailable')), ' · ', h('a', {href: discussionSettingsHref()}, t('pd_setup')));
+    connection = h('div', {'data-pm-reply-availability': ''});
     working = h('p', {class: 'muted', role: 'status', 'data-discussion-reply-working': ''});
     limit = h('p', {class: 'muted', hidden: true}, t('pd_reply_limit'));
     requestDetails = h('button', {type: 'button', class: 'ui-button ghost ui-sm', hidden: true, 'data-discussion-reply-details': '', onclick: onDetails}, t('pd_details'));

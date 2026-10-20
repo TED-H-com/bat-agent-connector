@@ -8,6 +8,28 @@ session. It currently selects the fixed `codex-native-linux` runtime contract;
 [the native runtime contract](pm-native-runtime.md) defines its actual isolation
 and pinned protocol boundary.
 
+## Availability reasons
+
+`pmAvailability` projects existing global PM features/scopes and workspace or
+installation analysis descriptors. Settings Agents, discussion replies and plan
+proposal composers share this reason mapping. A missing reply element is never
+connection evidence; Connector connection state remains owned by
+`centralServiceStatus`.
+
+Unsupported PM and missing View scope have separate explanations and next steps.
+Failed capability reads retain the existing localized error presentation and
+code. Unchecked means a check has not run; a completed read with no usable
+descriptor is unknown, while an in-flight check is checking. Known installation
+reasons reuse `eligibilityReasons`; an unexplained `authorized: false` stays a
+generic refusal rather than an invented membership or credential diagnosis.
+
+Settings keeps its existing descriptor set and any-installation ready predicate.
+Ready is an installation hint, not model execution evidence or permission for a
+specific request. This mapping does not choose a workspace route or change the
+existing runtime, durable-request or final server admission gates. The choice
+between an any-installation summary and a workspace-selected-route summary
+remains the separate I01/C02 product decision.
+
 ## Admission and context
 
 The original caller needs `observe`, `manage`, and `start`, plus current write

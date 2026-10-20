@@ -94,7 +94,7 @@ export function discussionTitle({t, field, form, value, local = false, resume = 
 }
 
 export const discussionSettingsHref = () => '#/settings?section=agents&from=' + encodeURIComponent(location.hash);
-export function discussionComposer({t, form, analysis, reply, details, draft = false, pmReady = false}) {
+export function discussionComposer({t, form, analysis, reply, details, draft = false, pmReady = false, availability = null}) {
   const actions = form.box.querySelector(':scope > .actions');
   const status = h('div', {class: 'pd-composer-status'}, form.box.querySelector(':scope > [role=status]'));
   const receipt = form.box.querySelector(':scope > .pm-receipt');
@@ -104,7 +104,7 @@ export function discussionComposer({t, form, analysis, reply, details, draft = f
     actions.append(analysis.querySelector('[data-discussion-ask]'));
     status.append(analysis);
   } else if (draft && pmReady) status.append(h('p', {class: 'muted', 'data-discussion-draft-ready': ''}, t('pd_draft_ready')));
-  else if (!reply) status.append(h('p', {class: 'muted', 'data-discussion-pm-unavailable': ''}, h('span', {}, t('pd_not_connected')), ' ', h('a', {href: discussionSettingsHref()}, t('pd_setup'))));
+  else if (availability) status.append(availability);
   if (reply) {
     actions.querySelector('button[type=submit]').classList.replace('primary', 'secondary');
     actions.prepend(reply.querySelector('[data-discussion-reply]'));

@@ -661,6 +661,13 @@ var init_work_paths_strings = __esmMin((() => {
 			agents_preflight: "Installation checks passed; each run still checks permissions and runtime readiness",
 			agents_not_checked: "Eligibility is unknown; check again or follow PM setup",
 			agents_pm_docs: "PM setup",
+			agents_unknown_status: "Unknown",
+			agents_unknown: "PM availability is unknown. Refresh, or ask the Connector operator.",
+			agents_checking: "Checking",
+			agents_checking_help: "Reading PM availability from Connector.",
+			agents_failed: "Check failed",
+			agents_read_failed: "PM availability could not be read. Try again, or ask the Connector operator.",
+			agents_authorization: "Connector has not authorized this PM action. Refresh, or ask the workspace owner.",
 			agents_platform: "Local PM supports Linux; use a Linux Connector or configure BAT analysis",
 			agents_executable: "Codex or bwrap is missing; install both on the Connector host",
 			agents_auth: "Codex is not signed in; sign in on the Connector host",
@@ -717,6 +724,13 @@ var init_work_paths_strings = __esmMin((() => {
 			agents_preflight: "安裝檢查已通過；每次執行仍會檢查權限與執行環境",
 			agents_not_checked: "尚無法確認資格；請重新檢查或參閱 PM 設定",
 			agents_pm_docs: "PM 設定",
+			agents_unknown_status: "未知",
+			agents_unknown: "PM 可用性未知。請重新整理，或詢問 Connector 管理員。",
+			agents_checking: "檢查中",
+			agents_checking_help: "正在向 Connector 讀取 PM 可用性。",
+			agents_failed: "檢查失敗",
+			agents_read_failed: "無法讀取 PM 可用性。請重試，或詢問 Connector 管理員。",
+			agents_authorization: "Connector 未授權這項 PM 操作。請重新整理，或詢問工作區擁有者。",
 			agents_platform: "本機 PM 目前只支援 Linux；請使用 Linux Connector 或設定 BAT 分析",
 			agents_executable: "找不到 Codex 或 bwrap；請在 Connector 主機安裝兩者",
 			agents_auth: "Codex 尚未登入；請在 Connector 主機登入",
@@ -8232,6 +8246,8 @@ var init_pm_strings = __esmMin((() => {
 			pm_back_projects: "Projects and work →",
 			pm_intro: "Keep ideas, evidence and a planning draft together.",
 			pm_refresh: "Refresh",
+			pm_availability_unsupported: "PM workspaces are not supported by this Connector. Use a compatible Connector version.",
+			pm_availability_observe: "PM workspaces need View access. Reconnect with a credential that has View access.",
 			pm_unavailable: "This Connector does not provide PM workspaces for this account.",
 			pm_no_workspaces: "No PM workspaces yet.",
 			pm_start_title: "A place to work through an idea",
@@ -8620,6 +8636,8 @@ var init_pm_strings = __esmMin((() => {
 			pm_back_projects: "專案與工作 →",
 			pm_intro: "將想法、依據與規劃草稿放在同一處。",
 			pm_refresh: "重新整理",
+			pm_availability_unsupported: "此 Connector 不支援 PM 工作區。請使用相容版本的 Connector。",
+			pm_availability_observe: "PM 工作區需要檢視權限。請使用具備檢視權限的憑證重新連線。",
 			pm_unavailable: "此 Connector 未向目前帳號提供 PM 工作區。",
 			pm_no_workspaces: "尚無 PM 工作區。",
 			pm_start_title: "從一個想法開始討論",
@@ -14915,7 +14933,7 @@ function connectionReturn(value) {
 	};
 }
 //#endregion
-//#region src/settings-agents.js
+//#region src/pm-availability.js
 var eligibilityReasons = {
 	PM_NATIVE_PLATFORM_UNSUPPORTED: "agents_platform",
 	PM_NATIVE_EXECUTABLE_UNAVAILABLE: "agents_executable",
@@ -14934,6 +14952,80 @@ var eligibilityReasons = {
 	HOST_READ_ONLY: "agents_tier",
 	START_WORKTREE_REQUIRED: "agents_start_worktree"
 };
+function pmAvailability({ caps, document, readError = null, checked = document != null, checking = false, kind = "analysis", descriptors } = {}) {
+	const result = (state, reason, messageKey, statusKey = "agents_unavailable", code = "") => ({
+		state,
+		reason,
+		messageKey,
+		statusKey,
+		code,
+		ready: state === "ready",
+		error: null,
+		failures: []
+	});
+	if (readError) return {
+		...result("failed", "read_failed", "agents_read_failed", "agents_failed"),
+		error: readError
+	};
+	if (!caps) return result("unknown", "capabilities_unknown", "agents_unknown", "agents_unknown_status");
+	const feature = caps.features?.pm_workspaces;
+	if (feature?.version !== 1) return result("unsupported", "pm_unsupported", "pm_availability_unsupported");
+	if (!Array.isArray(caps.scopes)) return result("unknown", "scopes_unknown", "agents_unknown", "agents_unknown_status");
+	if (!caps.scopes.includes("observe")) return result("missing_scope", "observe_scope", "pm_availability_observe");
+	if (kind === "workspace") return result("ready", "workspace_supported", "agents_preflight", "agents_ready");
+	if (checking) return result("checking", "checking", "agents_checking_help", "agents_checking");
+	if (!checked) return result("not_checked", "not_checked", "agents_not_checked", "agents_unchecked");
+	const rows = (descriptors || [document?.native_analysis, document?.bat_analysis]).filter((value) => value && typeof value.eligible_for_preflight === "boolean");
+	if (!rows.length) {
+		if (!feature.native_analysis && !feature.bat_analysis && !feature.installation_eligibility) return result("unsupported", "analysis_unsupported", "agents_action");
+		return result("unknown", "eligibility_unknown", "agents_unknown", "agents_unknown_status");
+	}
+	const permitted = [
+		"observe",
+		"manage",
+		"start"
+	].every((scope) => caps.scopes.includes(scope));
+	const failures = rows.map((value) => {
+		if (value.action_registered === false) return result("unregistered", "action_unavailable", eligibilityReasons.action_unavailable);
+		if (value.reason) return result("ineligible", value.reason, Object.hasOwn(eligibilityReasons, value.reason) ? eligibilityReasons[value.reason] : "agents_unknown", "agents_unavailable", value.reason);
+		if (!permitted) return result("missing_scope", "analysis_scope", "agents_scope");
+		if (value.authorized === false) return result("unauthorized", "authorization_unexplained", "agents_authorization");
+		return result("unknown", "eligibility_unknown", "agents_unknown", "agents_unknown_status");
+	});
+	return {
+		...rows.some((value) => value.eligible_for_preflight === true && value.action_registered === true && value.authorized !== false) && permitted ? result("ready", "installation_hint", "agents_preflight", "agents_ready") : failures[0],
+		failures
+	};
+}
+var painted = new WeakMap();
+function renderPmAvailability(node, { h, t, state, includeReady = false, includeMessage = true, setupHref = "" }) {
+	const error = state.error ? errorPresentation(state.error, t) : null;
+	const signature = JSON.stringify([
+		state.state,
+		t(state.messageKey),
+		state.code,
+		error,
+		includeReady,
+		includeMessage,
+		setupHref,
+		t("pd_setup")
+	]);
+	if (painted.get(node) === signature) return node;
+	painted.set(node, signature);
+	node.dataset.pmAvailability = state.state;
+	node.hidden = state.ready && !includeReady;
+	const children = includeMessage ? [h("p", { class: "muted" }, t(state.messageKey))] : [];
+	if (error) children.push(h("div", {
+		class: "error",
+		role: "alert"
+	}, h("p", {}, error.summary), error.code ? h("code", {}, error.code) : null, error.message ? h("details", {}, h("summary", {}, t("global_details")), h("p", {}, error.message)) : null));
+	else if (state.code && state.messageKey === "agents_unknown") children.push(h("code", {}, state.code));
+	if (!state.ready && setupHref) children.push(h("a", { href: setupHref }, t("pd_setup")));
+	node.replaceChildren(...children);
+	return node;
+}
+//#endregion
+//#region src/settings-agents.js
 function settingsAgents({ h, t, api, caps, guard, from }) {
 	const heading = h("h2", {
 		id: "settings-agents-heading",
@@ -14961,50 +15053,60 @@ function settingsAgents({ h, t, api, caps, guard, from }) {
 			return false;
 		}
 	};
-	const notChecked = () => {
-		status.textContent = t("agents_unchecked");
-		status.className = "ui-pill tone-neutral";
-		reason.textContent = t("agents_not_checked");
-		codes.replaceChildren();
-		technical.hidden = true;
+	const failure = h("div", { "data-pm-eligibility-error": "" });
+	const paintState = (state, descriptors = [], bat = null) => {
+		status.textContent = t(state.statusKey);
+		status.className = `ui-pill tone-${state.ready ? "info" : "neutral"}`;
+		reason.textContent = t(state.messageKey);
+		renderPmAvailability(failure, {
+			h,
+			t,
+			state,
+			includeMessage: false
+		});
+		codes.replaceChildren(...descriptors.flatMap((value) => value.reason ? [h("p", {}, t(value === bat ? "agents_bat" : "agents_native"), ": ", h("code", {}, value.reason))] : []));
+		if (!state.ready && state.failures.length > 1) codes.prepend(h("p", {}, t(state.failures[1].messageKey)));
+		technical.hidden = !codes.childElementCount;
 	};
 	const paint = (doc) => {
-		const native = doc?.native_analysis, bat = workspaceId ? doc?.bat_analysis : null;
-		const descriptors = [native, bat].filter((value) => value && typeof value.eligible_for_preflight === "boolean");
-		if (!descriptors.length) {
-			notChecked();
-			return;
-		}
-		const permitted = [
-			"observe",
-			"manage",
-			"start"
-		].every((scope) => caps()?.scopes?.includes(scope));
-		const ready = descriptors.some((value) => value.eligible_for_preflight === true && value.action_registered === true && value.authorized !== false) && permitted;
-		status.textContent = t(ready ? "agents_ready" : "agents_unavailable");
-		status.className = `ui-pill tone-${ready ? "info" : "neutral"}`;
-		const failures = descriptors.map((value) => value.action_registered === false ? "agents_action" : value.reason ? eligibilityReasons[value.reason] || (value === bat ? "agents_bat_unknown" : "agents_installation") : !permitted || value.authorized === false ? "agents_scope" : "agents_installation");
-		reason.textContent = t(ready ? "agents_preflight" : failures[0]);
-		codes.replaceChildren(...descriptors.flatMap((value) => value.reason ? [h("p", {}, t(value === bat ? "agents_bat" : "agents_native"), ": ", h("code", {}, value.reason))] : []));
-		if (!ready && descriptors.length > 1) codes.prepend(h("p", {}, t(failures[1])));
-		technical.hidden = !codes.childElementCount;
+		const descriptors = [doc?.native_analysis, workspaceId ? doc?.bat_analysis : null].filter((value) => value && typeof value.eligible_for_preflight === "boolean");
+		paintState(pmAvailability({
+			caps: caps(),
+			document: doc,
+			descriptors,
+			checked: true
+		}), descriptors, workspaceId ? doc?.bat_analysis : null);
 	};
 	let busy = false;
 	const load = async () => {
 		if (busy) return;
 		busy = true;
 		const mine = ++ticket;
-		notChecked();
+		paintState(pmAvailability({
+			caps: caps(),
+			checking: true
+		}));
 		check.setAttribute("aria-disabled", "true");
 		status.setAttribute("aria-busy", "true");
 		const features = caps()?.features?.pm_workspaces;
 		const endpoint = workspaceId && (features?.native_analysis || features?.bat_analysis || features?.installation_eligibility) ? `/pm/workspaces/${workspaceId}/capabilities` : features?.installation_eligibility ? "/pm/installation-capabilities" : null;
 		try {
-			if (!endpoint) return;
+			if (!endpoint) {
+				paintState(pmAvailability({
+					caps: caps(),
+					checked: true,
+					document: null
+				}));
+				return;
+			}
 			const doc = await api("GET", endpoint);
 			if (current(mine)) paint(doc);
-		} catch {
-			if (current(mine)) notChecked();
+		} catch (error) {
+			if (current(mine)) paintState(pmAvailability({
+				caps: caps(),
+				readError: error,
+				checked: true
+			}));
 		} finally {
 			if (mine === ticket) busy = false;
 			if (current(mine)) {
@@ -15023,7 +15125,7 @@ function settingsAgents({ h, t, api, caps, guard, from }) {
 	const pm = h("section", {
 		class: "settings-agent-group",
 		"data-settings-pm-agent": ""
-	}, h("div", { class: "settings-agent-heading" }, h("h3", {}, t("agents_pm")), status, check), h("p", {}, t("agents_pm_help")), h("p", {}, reason, " ", h("a", { href: setupGuide() + "#pm-agent-setup" }, t("agents_pm_docs"))), technical);
+	}, h("div", { class: "settings-agent-heading" }, h("h3", {}, t("agents_pm")), status, check), h("p", {}, t("agents_pm_help")), h("p", {}, reason, " ", h("a", { href: setupGuide() + "#pm-agent-setup" }, t("agents_pm_docs"))), failure, technical);
 	const config = JSON.stringify({ mcpServers: { bat: {
 		command: "bat-agent-connector-mcp",
 		args: ["--principal-only"],
@@ -15065,7 +15167,10 @@ function settingsAgents({ h, t, api, caps, guard, from }) {
 		href: safeFrom,
 		"data-agents-back": ""
 	}, t("agents_back")) : null, pm, mcp);
-	notChecked();
+	paintState(pmAvailability({
+		caps: caps(),
+		checked: false
+	}));
 	return {
 		root,
 		heading,
@@ -21195,7 +21300,7 @@ function discussionTitle({ t, field, form, value, local = false, resume = false,
 	};
 }
 var discussionSettingsHref = () => "#/settings?section=agents&from=" + encodeURIComponent(location.hash);
-function discussionComposer({ t, form, analysis, reply, details, draft = false, pmReady = false }) {
+function discussionComposer({ t, form, analysis, reply, details, draft = false, pmReady = false, availability = null }) {
 	const actions = form.box.querySelector(":scope > .actions");
 	const status = h$1("div", { class: "pd-composer-status" }, form.box.querySelector(":scope > [role=status]"));
 	const receipt = form.box.querySelector(":scope > .pm-receipt");
@@ -21212,10 +21317,7 @@ function discussionComposer({ t, form, analysis, reply, details, draft = false, 
 		class: "muted",
 		"data-discussion-draft-ready": ""
 	}, t("pd_draft_ready")));
-	else if (!reply) status.append(h$1("p", {
-		class: "muted",
-		"data-discussion-pm-unavailable": ""
-	}, h$1("span", {}, t("pd_not_connected")), " ", h$1("a", { href: discussionSettingsHref() }, t("pd_setup"))));
+	else if (availability) status.append(availability);
 	if (reply) {
 		actions.querySelector("button[type=submit]").classList.replace("primary", "secondary");
 		actions.prepend(reply.querySelector("[data-discussion-reply]"));
@@ -30162,7 +30264,7 @@ function validRequirements(values, included) {
 		"unresolved"
 	].includes(row.priority) && refs$1(row.depends_on, ids, 0)) && !cyclic(values);
 }
-function planProposals({ h, t, api, alive, form, input, labelled, caps, namespace = "", workspaceId, threadId, thread, permitted, refresh: refreshParent, errorBox, conversation = false, backLink = () => null, onFollowUp = () => {}, onAnswer = () => {}, onRevision = () => {}, onActivity = () => {} }) {
+function planProposals({ h, t, api, alive, form, input, labelled, caps, namespace = "", workspaceId, threadId, thread, permitted, refresh: refreshParent, errorBox, capabilityError = () => null, conversation = false, backLink = () => null, onFollowUp = () => {}, onAnswer = () => {}, onRevision = () => {}, onActivity = () => {} }) {
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, endpoint = base + "/conversation-proposals", target = {
 		workspace_id: workspaceId,
 		thread_id: threadId
@@ -30485,8 +30587,23 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 		if (composerNode) {
 			ask.disabled = !prepare.canSubmit();
 			ask.textContent = t(prepare.locked() && !prepare.initialChecking?.() ? "pm_check_original" : "pd_ask");
-			connection.hidden = runtime.eligible();
-			ask.hidden = !runtime.eligible() && !prepare.locked();
+			const action = capability?.structured_analysis?.actions?.[PROPOSE];
+			const descriptors = action?.adapters ? action.adapters.filter((row) => row.adapter === runtime.field.value) : [capability?.native_analysis];
+			const availability = pmAvailability({
+				caps: caps(),
+				document: capability,
+				readError: capabilityError(),
+				checked: true,
+				descriptors
+			});
+			renderPmAvailability(connection, {
+				h,
+				t,
+				setupHref: discussionSettingsHref(),
+				state: availability
+			});
+			const mayAsk = runtime.eligible() && writing() && caps()?.scopes?.includes("start") && caps()?.actions?.some((row) => row.action === PROPOSE && row.allowed === true);
+			ask.hidden = !mayAsk && !prepare.locked();
 			discussionFeedback({
 				t,
 				request: prepare,
@@ -31063,7 +31180,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 		prepare?.update();
 		adopt?.update();
 	}
-	function composer(textarea, { connectionNotice = true } = {}) {
+	function composer(textarea, { showAvailability = true } = {}) {
 		ask = actionButton({
 			type: "button",
 			class: "secondary",
@@ -31074,13 +31191,13 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 				prepare.submit();
 			}
 		}, t("pd_ask"));
-		connection = h("p", { class: "muted" }, h("span", {}, t("pd_not_connected")), " · ", h("a", { href: discussionSettingsHref() }, t("pd_setup")));
+		connection = h("div", { "data-pm-proposal-availability": "" });
 		working = h("p", {
 			"data-discussion-working": "",
 			role: "status",
 			class: "muted"
 		});
-		composerNode = h("div", { class: "pd-ask" }, ask, ...connectionNotice ? [connection] : [], working);
+		composerNode = h("div", { class: "pd-ask" }, ask, ...showAvailability ? [connection] : [], working);
 		clock = setInterval(() => {
 			if (composerNode.isConnected && prepare.checking() && [
 				"running",
@@ -35307,7 +35424,7 @@ function pmContextBundle({ h, t, api, guard, caps, target, thread, errorBox }) {
 }
 //#endregion
 //#region src/pm-native-analysis.js
-function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, thread, permitted, target, refresh, namespace, guard, errorBox }) {
+function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, capabilityError = () => null, thread, permitted, target, refresh, namespace, guard, errorBox }) {
 	const specs = [{
 		key: "native_analysis",
 		adapter: "codex-native-linux",
@@ -35474,7 +35591,18 @@ function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, 
 			ask.disabled = !request?.canSubmit() || !request?.locked() && (!content || content.length > 4e3);
 			limit.hidden = request?.locked() || content.length <= 4e3;
 			requestDetails.hidden = !request?.operation() && !request?.box.querySelector(":scope > [role=status] .error");
-			connection.hidden = mayReply;
+			renderPmAvailability(connection, {
+				h,
+				t,
+				setupHref: discussionSettingsHref(),
+				state: pmAvailability({
+					caps: caps(),
+					document: capability(),
+					readError: capabilityError(),
+					checked: true,
+					descriptors: [descriptor]
+				})
+			});
 			discussionFeedback({
 				t,
 				request,
@@ -35529,7 +35657,7 @@ function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, 
 					request.submit();
 				}
 			}, t("pd_send_pm"));
-			connection = h("p", { class: "muted" }, h("span", {}, t("pd_reply_unavailable")), " · ", h("a", { href: discussionSettingsHref() }, t("pd_setup")));
+			connection = h("div", { "data-pm-reply-availability": "" });
 			working = h("p", {
 				class: "muted",
 				role: "status",
@@ -48690,7 +48818,10 @@ if (!customElements.get(formConnectionTag)) customElements.define(formConnection
 		this.#changed(false);
 	}
 });
-var pmAvailable = (caps) => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes("observe");
+var pmAvailable = (caps) => pmAvailability({
+	caps,
+	kind: "workspace"
+}).ready;
 function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, keepEditable = () => false, savedText = "pm_saved", pendingText = "pm_pending", releaseAfterAcknowledgement = false, acknowledgedText = "", onAcknowledged = () => {}, acknowledgeStatus = null }) {
 	const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
 	let saved = {
@@ -49130,7 +49261,14 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 }
 async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, canSend = () => true, onOnline = () => () => {}, onContext = () => {}, openCreate = false }) {
 	if (!pmAvailable(caps())) {
-		main.append(h("p", {}, t("pm_unavailable")));
+		main.append(renderPmAvailability(h("div"), {
+			h,
+			t,
+			state: pmAvailability({
+				caps: caps(),
+				kind: "workspace"
+			})
+		}));
 		return;
 	}
 	if (workspaceId && threadId) rememberProjectView(namespace, workspaceId, "discussions");
@@ -49538,7 +49676,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		});
 	}
 	let replyRuns = [], replyPartial = false;
-	let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null, sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = "", earlier = null, historyCursor = null, historyExpanded = false, packages = null, packageSignature = "", revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, proposalReview = null, discussionHint = null, assessmentSources = null, continuation = null;
+	let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null, sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = "", earlier = null, historyCursor = null, historyExpanded = false, packages = null, packageSignature = "", revisions = null, pmCapabilities = null, pmCapabilitiesError = null, availabilityNode = null, worktreeChoice = null, nativeAnalysis = null, proposalReview = null, discussionHint = null, assessmentSources = null, continuation = null;
 	lifecycle = workspaceId && caps()?.features?.pm_workspaces?.lifecycle?.version === 1 ? workspaceLifecycle({
 		h,
 		t,
@@ -50803,9 +50941,23 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const updateSourceControls = () => {
 		for (const checkbox of facts?.querySelectorAll("input[type=checkbox]") || []) checkbox.disabled = Boolean(selectedSourcesForm()?.locked()) || !canSelectSources();
 	};
+	const updateAvailability = () => {
+		if (availabilityNode) renderPmAvailability(availabilityNode, {
+			h,
+			t,
+			setupHref: discussionSettingsHref(),
+			state: pmAvailability({
+				caps: caps(),
+				document: pmCapabilities,
+				readError: pmCapabilitiesError,
+				checked: true
+			})
+		});
+	};
 	const updateForms = () => {
 		for (const value of forms) value.update();
 		continuation?.update();
+		updateAvailability();
 	};
 	const offOnline = onOnline(() => {
 		try {
@@ -50949,6 +51101,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				errorBox,
 				guard: alive,
 				capability: () => pmCapabilities,
+				capabilityError: () => pmCapabilitiesError,
 				thread: () => threadData,
 				permitted,
 				target,
@@ -50982,6 +51135,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					namespace,
 					workspaceId,
 					threadId,
+					capabilityError: () => pmCapabilitiesError,
 					thread: () => threadData,
 					permitted,
 					refresh: load,
@@ -51280,11 +51434,15 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				}
 			});
 			column.querySelector(".pd-header-main").append(discussionTools.trigger);
+			availabilityNode = h("div", { "data-discussion-pm-unavailable": "" });
+			updateAvailability();
+			const standaloneAvailability = !caps()?.features?.pm_workspaces?.native_analysis && !caps()?.features?.pm_workspaces?.bat_analysis;
 			const composer = discussionComposer({
 				t,
 				form: noteForm,
 				details: threadDetails,
-				analysis: proposalReview?.composer(text, { connectionNotice: !nativeAnalysis }),
+				availability: standaloneAvailability ? availabilityNode : null,
+				analysis: proposalReview?.composer(text, { showAvailability: standaloneAvailability }),
 				reply: nativeAnalysis?.composer(text, (purpose) => {
 					if (!noteForm.locked() && noteForm.values().content.trim() === purpose) noteForm.set("content", "");
 				}, () => {
@@ -51637,6 +51795,15 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		refreshing = true;
 		refresh.disabled = true;
 		const contextTicket = ++contextSequence;
+		let capabilityReadError = null;
+		const readCapabilities = async () => {
+			try {
+				return await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`);
+			} catch (error) {
+				capabilityReadError = error;
+				throw error;
+			}
+		};
 		assessmentSources?.withdraw();
 		if (!event) {
 			invalidateSections();
@@ -51669,7 +51836,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					threadId && threadId !== "new" && (caps()?.features?.pm_workspaces?.context_packages || caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis) ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/runs?thread_id=${encodeURIComponent(threadId)}&limit=20`) : Promise.resolve(null),
 					threadId && threadId !== "new" && caps()?.features?.pm_workspaces?.plan_drafting ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans?limit=20`) : Promise.resolve(null),
 					threadId && threadId !== "new" && caps()?.features?.pm_workspaces?.plan_drafting ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans/accepted`) : Promise.resolve(null),
-					threadId && threadId !== "new" && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis) ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`) : Promise.resolve(null),
+					threadId && threadId !== "new" && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis) ? readCapabilities() : Promise.resolve(null),
 					threadId === "new" ? draftSourceRefs() : Promise.resolve(null)
 				]);
 				alive();
@@ -51702,6 +51869,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			if (detail && detail.workspace?.workspace_id !== workspaceId || data && (data.thread?.workspace_id !== workspaceId || data.thread?.thread_id !== threadId)) throw Error(t("pm_scope_mismatch"));
 			workspace = detail?.workspace || null;
 			pmCapabilities = workspaceCaps;
+			pmCapabilitiesError = null;
 			loaded = true;
 			status.replaceChildren();
 			draftSourceUnavailable = Boolean(draftRefs?.some((ref) => ref.available === false));
@@ -51818,7 +51986,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					}) : null;
 					if (titleDraft) titleView = titleDraft;
 					if (threadId === "new" && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis)) {
-						workspaceCaps = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`);
+						workspaceCaps = await readCapabilities();
 						alive();
 						if (ticket !== sequence) return;
 						pmCapabilities = workspaceCaps;
@@ -51843,7 +52011,17 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						t,
 						form: create,
 						draft: true,
-						pmReady
+						pmReady,
+						availability: renderPmAvailability(h("div", { "data-discussion-pm-unavailable": "" }), {
+							h,
+							t,
+							setupHref: discussionSettingsHref(),
+							state: pmAvailability({
+								caps: caps(),
+								document: pmCapabilities,
+								checked: true
+							})
+						})
 					})), draftPanel.home));
 				}
 			}
@@ -51948,6 +52126,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			}
 		} catch (error) {
 			if (!retiredView(error) && ticket === sequence) {
+				if (capabilityReadError) {
+					pmCapabilitiesError = capabilityReadError;
+					pmCapabilities = null;
+				}
 				loaded = false;
 				workspace = null;
 				threadData = null;
@@ -51983,7 +52165,15 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				publishContext();
 				for (const section of sourceSections()) section.hidden = true;
 				updateForms();
-				status.replaceChildren(errorBox(error, {
+				status.replaceChildren(capabilityReadError ? renderPmAvailability(h("div"), {
+					h,
+					t,
+					state: pmAvailability({
+						caps: caps(),
+						readError: capabilityReadError,
+						checked: true
+					})
+				}) : errorBox(error, {
 					summary: t("pm_stale"),
 					within: status
 				}));
