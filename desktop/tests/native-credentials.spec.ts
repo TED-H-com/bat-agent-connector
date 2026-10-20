@@ -98,7 +98,7 @@ test('managed startup failure remains visible beside advanced external setup', a
   await expectErrorDetails(page, 'MANAGED_RUNTIME_START_FAILED');
   await expect(page.locator('[data-native-setup] input')).toHaveCount(2);
   await expect(page.locator('[data-native-setup] input').first()).toBeHidden();
-  await page.getByText('Join another Connector', {exact: true}).click();
+  await page.locator('[data-native-setup] details > summary').filter({hasText: 'Advanced'}).click();
   await expect(page.locator('[data-native-setup] input').first()).toBeVisible();
   const calls = await page.evaluate(() => (window as any).__credentialFixture.calls);
   expect(calls.some((call: any) => ['connector_setup_configuration', 'connector_enroll', 'connector_connect'].includes(call.command))).toBe(false);
@@ -359,3 +359,23 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
     await context.close();
   });
 }
+
+test('native setup keeps its draft and localizes required-field errors after a language change', async ({page}) => {
+  await setup(page, {setup: true});
+  const form = page.locator('[data-native-setup] form');
+  await form.locator('input').first().fill('https://central.example');
+  await page.locator('[data-language-switch]').getByRole('button', {name: '繁體中文', exact: true}).click();
+  await expect(form.locator('input').first()).toHaveValue('https://central.example');
+  await form.locator('button[type=submit]').click();
+  expect(await form.locator('input').nth(1).evaluate((node: HTMLInputElement) => node.validationMessage)).toBe('請填寫此欄位。');
+  await form.locator('input').nth(1).fill('viewer');
+  expect(await form.locator('input').nth(1).evaluate((node: HTMLInputElement) => node.validationMessage)).toBe('');
+  const calls = await page.evaluate(() => (window as any).__credentialFixture.calls);
+  expect(calls.some((call: any) => ['connector_setup_configuration', 'connector_enroll', 'connector_connect'].includes(call.command))).toBe(false);
+  await form.locator('button[type=submit]').click();
+  await expect.poll(() => page.evaluate(() => (window as any).__credentialFixture.calls.filter((call: any) => call.command === 'connector_setup_configuration').length)).toBe(1);
+  expect(await page.evaluate(() => (window as any).__credentialFixture.calls.find((call: any) => call.command === 'connector_setup_configuration').args.locale)).toBe('zh-TW');
+  await page.getByRole('button', {name: '新增憑證', exact: true}).click();
+  expect(await page.evaluate(() => (window as any).__credentialFixture.calls.find((call: any) => call.command === 'connector_enroll').args.locale)).toBe('zh-TW');
+  await expect(page.locator('input[type=password]')).toHaveCount(0);
+});

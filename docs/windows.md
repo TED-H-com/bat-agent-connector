@@ -36,6 +36,11 @@ In Connection settings, inspect the current backend and choose **connections**, 
 
 For Tailscale sign-in, open the installed Tailscale app from its panel, sign in there, then refresh status. Keep the login picker or review the saved launch choices. An omitted `backend` retains **PowerShell** compatibility; changing an existing PowerShell installation to Rust requires the explicit migration flow that proves the previous owner stopped.
 
+For a known idle Tailscale peer, the Rust Fleet monitor automatically wakes the
+connection using the configured Tailscale IP, with bounded retries and a cooldown.
+The panel shows wake progress and retries automatically if the host remains unreachable;
+expand Details for the diagnostic code. Unknown or ambiguous peers are never pinged.
+
 **Start when I sign in** starts the owned managed installation and the selected Windows Fleet login flow. **Open Dashboard in browser** uses authenticated local handoff. Closing the window leaves background central work running. Explicit **Quit Dashboard** follows the normal shutdown guards for the proven local Fleet monitor; it does not stop central tasks or manual BAT sessions.
 
 **Advanced: join an existing central** changes the selected client binding after native confirmation and separate credential enrollment. Existing local background work remains. A configured remote bootstrap uses a fixed SSH recipe to query/start that central; it does not install an arbitrary service or create another database after failure.

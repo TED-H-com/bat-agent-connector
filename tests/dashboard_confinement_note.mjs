@@ -26,8 +26,7 @@ for (const [, names, path] of i18nSource.matchAll(/^import\s+\{([^}]+)\}\s+from\
   }
 }
 const i18n = i18nSource
-  .replace(/^import .*;\n/gm, "").replace(/^export (?=const (?:locale|STRINGS)\b)/gm, "")
-  .replace("export function t", "function t");
+  .replace(/^import .*;\n/gm, "").replace(/^export (?=(?:const|let|function)\b)/gm, "");
 
 class FixtureNode {
   constructor() { this.textContent = ""; this.events = {}; }
@@ -40,7 +39,7 @@ class FixtureNode {
 function render(language, effect, agent, declared = true) {
   const context = vm.createContext({
     navigator: { language }, Node: FixtureNode, nativeDesktop: false, errorRing, ...translations,
-    document: { createElement: () => new FixtureNode(), createTextNode: () => new FixtureNode(), addEventListener() {} },
+    document: { documentElement: {}, createElement: () => new FixtureNode(), createTextNode: () => new FixtureNode(), addEventListener() {} },
   });
   vm.runInContext(dom + "\n" + i18n + "\n" + app + "\nglobalThis.fixture = { state, confinementNote, t };", context);
   const { state, confinementNote, t } = context.fixture;

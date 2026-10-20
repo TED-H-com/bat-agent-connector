@@ -26,6 +26,23 @@ function fixture(){
 const resources=(page:any)=>page.locator('[data-pm-resources]');
 async function open(page:any,native:boolean,f:any){await mountConversation(page,native,f.dispatch);await page.goto(route);if((page.viewportSize()?.width||1440)<1000)await page.locator('#workspace-menu').click();await page.locator('[data-pm-view="agents"]').click();await expect(resources(page).locator('[data-resource-row]')).toHaveCount(3);}
 
+for(const locale of ['en','zh-TW'])for(const native of [false,true])test(`resource focus handles literal quotes and backslashes ${locale} ${native?'native':'web'}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale,viewport:{width:1440,height:900}}),page=await context.newPage(),f=fixture();
+  f.state.data.rows[0].source_id='quoted"source\\';
+  await page.addInitScript(()=>Object.defineProperty(CSS,'escape',{value:undefined}));
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
+  await page.clock.install();
+  await open(page,native,f);const rows=resources(page).locator('[data-resource-row]');
+  const index=await rows.evaluateAll(nodes=>nodes.findIndex(node=>node.getAttribute('data-resource-row')==='quoted"source\\'));
+  expect(index).toBeGreaterThanOrEqual(0);const select=rows.nth(index);
+  await select.click();await expect(resources(page).locator('[data-resource-detail]')).toBeVisible();
+  await select.focus();f.state.data.rows[0].metrics.total.value=1001;await page.clock.fastForward(61000);
+  await expect(resources(page).locator('[data-resource-detail]')).toContainText('1,001');
+  await expect(select).toBeFocused();
+  await resources(page).getByRole('button',{name:locale==='en'?'Close':'關閉',exact:true}).click();
+  await expect(select).toBeFocused();expect(errors).toEqual([]);await context.close();
+});
+
 for(const native of [false,true])test.describe(native?'native resources':'web resources',()=>{
   test('lazy resource read, distinct model evidence, missing counters and quota',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await expect(page.locator('[data-pm-charter]')).toBeVisible();expect(f.state.reads).toHaveLength(0);

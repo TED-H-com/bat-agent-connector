@@ -621,6 +621,11 @@ for (const lang of ['en', 'zh-TW'] as const) {
     await expect(page.locator('.workspace-conversation textarea:visible')).toHaveCount(1);
     await expect(page.getByRole('button', {name: allow, exact: true})).toBeVisible();
     await expect(page.getByRole('button', {name: deny, exact: true})).toBeVisible();
+    // Rendering precedes the completed snapshot's sync checkpoint. Let that
+    // checkpoint commit before navigation invalidates the in-flight view.
+    await expect.poll(() => page.evaluate(() =>
+      Object.keys(localStorage).some(key => key.startsWith('batc.sync.')),
+    )).toBe(true);
     await page.evaluate(id => { location.hash = '#/pm/' + id + '/discussions'; }, WS);
     await page.evaluate(() => {
       const key = Object.keys(localStorage).find(item => item.startsWith('batc.sync.'));

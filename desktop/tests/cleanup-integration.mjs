@@ -62,8 +62,9 @@ try {
   assert.equal(writes.length, 1);
   assert.equal(writes[0].action, "cleanup.apply");
   // The same receipt has a localized title; its technical action ID stays exact.
-  await page.addInitScript(() => Object.defineProperty(navigator, "language", {value: "zh-TW"}));
-  await page.reload();
+  await page.goto(origin + "/dashboard/#/settings");
+  await page.locator('[data-language-switch]').getByRole('button', {name: '繁體中文', exact: true}).click();
+  await page.goto(origin + "/dashboard/" + href);
   await expect(page.getByRole("heading", {name: "套用清理", exact: true})).toBeVisible();
   await expect(page.locator("dt").filter({hasText: /^動作 ID$/}).locator("+ dd code")).toHaveText("cleanup.apply");
   assert.equal(writes.length, 1);

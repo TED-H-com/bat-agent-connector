@@ -74,6 +74,7 @@ test('creation layout', async ({browser, baseURL}, testInfo) => {
         await page.goto('/dashboard/#/'+route);
         if (name === 'project') await page.locator('[data-project-new]').click();
         if (name === 'item') await page.locator('[data-project-work-create]').click();
+        if (name === 'locations') await page.locator('[data-setup-advanced] > summary').click();
         const details = page.locator(name === 'locations' ? '[data-connection-card] > details' : '[data-create-advanced]');
         await details.locator('summary').click();
         await expect(details).toHaveAttribute('open','');

@@ -155,7 +155,9 @@ export async function mount(page: Page, fixture: ReturnType<typeof governanceFix
     const file = new URL(route.request().url()).pathname.slice('/__governance_src/'.length);
     let source: string;
     if (file === 'transport.js') source = stripTypeScriptTypes(await readFile(new URL('../src/transport/index.ts', import.meta.url), 'utf8'))
-      .replace('@tauri-apps/api/core', './tauri-core.js');
+      .replace('@tauri-apps/api/core', './tauri-core.js')
+      // This harness flattens transport/index.ts; retain its real locale dependency.
+      .replace('../i18n.js', '/src/i18n.js');
     else if (file === 'tauri-core.js') source = await readFile(new URL('../node_modules/@tauri-apps/api/core.js', import.meta.url), 'utf8');
     else if (file === 'external/tslib/tslib.es6.js') source = await readFile(new URL('../node_modules/@tauri-apps/api/external/tslib/tslib.es6.js', import.meta.url), 'utf8');
     else source = await readFile(new URL('../src/' + path.basename(file), import.meta.url), 'utf8');

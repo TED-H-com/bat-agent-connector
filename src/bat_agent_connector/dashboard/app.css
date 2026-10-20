@@ -601,7 +601,7 @@ input[type="checkbox"] { min-height: 0; padding: 0; flex-shrink: 0; vertical-ali
 .managed-setup .setup-field { display: grid; align-content: start; gap: var(--space-1); }
 .managed-setup .capture-fields { gap: var(--space-3); margin-block: var(--space-3); }
 .managed-setup [data-setup-profile] { margin-block: var(--space-3); }
-.managed-setup > [data-setup-connect][open],
+.managed-setup [data-setup-connect][open],
 .managed-setup [data-setup-actions] { margin-bottom: var(--space-4); }
 .managed-setup [data-setup-actions] > * { flex-shrink: 0; white-space: nowrap; }
 .connection-controls { align-items: end; }
@@ -2592,6 +2592,17 @@ body.pm-mode #main { padding: 0; }
 .global-ops .ui-data-table th[data-column=action] { width: 22%; }
 .global-ops .ui-data-table th[data-column=target] { width: 28%; }
 @container ui-table (max-width: 900px) { .global-ops .ui-data-table th[data-column=action] { width: 50%; } }
+
+.setup-language { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-4); }
+.setup-language > span { color: var(--text-2); }
+.setup-language button { min-height: 44px; }
+.setup-language [aria-pressed="true"] { border-color: var(--accent); font-weight: 600; }
+.managed-setup .setup-automatic { display: block; width: 100%; min-height: 48px; margin-block: var(--space-4); }
+.managed-setup [data-setup-copy] { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-3); }
+.managed-setup [data-setup-copy][hidden] { display: none; }
+.managed-setup [data-setup-advanced] { margin-top: var(--space-4); }
+.managed-setup [data-setup-advanced] > summary { min-height: 44px; }
+.managed-setup [data-setup-progress]:empty { display: none; }
 [data-observed-resource].panel {
   background: transparent; border: 0; border-radius: 0; padding: 0; box-shadow: none;
 }

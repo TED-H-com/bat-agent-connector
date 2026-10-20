@@ -1,5 +1,5 @@
 import {test, expect} from '@playwright/test';
-import {readFileSync,mkdirSync} from 'node:fs';
+import {readFileSync} from 'node:fs';
 const fixture=JSON.parse(readFileSync(new URL('./fixtures/fleet-status.json',import.meta.url),'utf8')).result;
 async function setup(page:any,options:any={}) {
  if(options.clock)await page.clock.install();
@@ -40,8 +40,8 @@ async function setup(page:any,options:any={}) {
 }
 const calls=(page:any,action:string)=>page.evaluate((a:string)=>(window as any).__fleet.calls.filter((c:any)=>c.action===a),action);
 const refresh=(page:any)=>page.getByRole('button',{name:'Read status',exact:true}).first().click();
-for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`native Fleet organization ${locale} ${width}`,async({browser})=>{
- const context=await browser.newContext({locale,viewport:{width,height:900}}),page=await context.newPage();const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await setup(page);await expect(page.locator('[data-fleet-login="picker"]')).toBeChecked();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);mkdirSync('/tmp/bac-fleet-native-after',{recursive:true});await page.screenshot({path:`/tmp/bac-fleet-native-after/fleet-${locale}-${width}.png`,fullPage:true});await context.close();
+for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`native Fleet organization ${locale} ${width}`,async({browser},testInfo)=>{
+ const context=await browser.newContext({locale,viewport:{width,height:900}}),page=await context.newPage();const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await setup(page);await expect(page.locator('[data-fleet-login="picker"]')).toBeChecked();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);await page.screenshot({path:testInfo.outputPath(`fleet-${locale}-${width}.png`),fullPage:true});await context.close();
 });
 test('independent choices require prerequisite review; cancel writes nothing',async({page})=>{
  await setup(page);await page.locator('[data-fleet-choice="connections:node-2"]').uncheck();await page.locator('[data-fleet-choice="profiles:profile-2"]').check();await page.locator('[data-fleet-choice="dashboard:dashboard"]').uncheck();await page.getByRole('button',{name:'Review choices',exact:true}).click();await expect.poll(()=>calls(page,'preview_choices')).toHaveLength(1);expect((await calls(page,'preview_choices'))[0].choices).toMatchObject({profiles:['profile-1','profile-2'],dashboard:false});expect(await calls(page,'apply_choices')).toHaveLength(0);await page.getByRole('button',{name:'Use current selection',exact:true}).click();expect(await calls(page,'apply_choices')).toHaveLength(0);await expect(page.locator('[data-fleet-choice="dashboard:dashboard"]')).toBeChecked();
@@ -210,4 +210,44 @@ for (const locale of ['en-US','zh-TW']) test(`restricted launching job has a loc
  await expect(warning.locator('code')).toHaveText('FLEET_SESSION_LIFETIME');
  expect(await calls(page,'ensure_monitor')).toHaveLength(0);
  await context.close();
+});
+
+for (const locale of ['en-US', 'zh-TW']) test(`Tailscale wake and automatic retry status keeps codes in details ${locale}`, async ({browser}) => {
+ const context = await browser.newContext({locale, viewport: {width: 390, height: 900}});
+ const page = await context.newPage();
+ await setup(page);
+ const region = page.locator('.fleet-desktop');
+ const refreshStatus = () => region.getByRole('button', {name: locale === 'zh-TW' ? '重新讀取狀態' : 'Read status', exact: true}).click();
+ await page.evaluate(() => {
+  const row = (window as any).__fleet.doc.readiness.hosts[0];
+  Object.assign(row, {code: 'TAILSCALE_WAKING', level: 'degraded', blocking: 'tunnel'});
+ });
+ await refreshStatus();
+ await expect(region.getByRole('status', {name: ''}).filter({hasText: locale === 'zh-TW' ? '正在喚醒 Tailscale 連線…' : 'Waking the Tailscale connection…'})).toBeVisible();
+ await expect(region.getByText('TAILSCALE_WAKING', {exact: true})).not.toBeVisible();
+ await page.evaluate(() => { (window as any).__fleet.doc.readiness.hosts[0].code = 'ROUTE_UNAVAILABLE'; });
+ await refreshStatus();
+ await expect(region.locator('[data-fleet-route-status] [role="status"]')).toContainText(locale === 'zh-TW' ? '系統會自動重試' : 'retrying automatically');
+ await expect(region.getByText('ROUTE_UNAVAILABLE', {exact: true})).not.toBeVisible();
+ await region.getByText(locale === 'zh-TW' ? '詳細資料' : 'Details', {exact: true}).click();
+ await expect(region.getByText('ROUTE_UNAVAILABLE', {exact: true})).toBeVisible();
+ expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+ await context.close();
+});
+
+test('desktop Fleet preserves unmapped blocking reasons and native diagnostic codes', async ({page}) => {
+ await setup(page);
+ const region = page.locator('.fleet-desktop');
+ for (const native of [false, true]) {
+  await page.evaluate((native: boolean) => {
+   const row = (window as any).__fleet.doc.readiness.hosts[0];
+   Object.assign(row, {level: 'down', code: native ? 'OWNER_UNPROVEN' : null, blocking: native ? 'tls' : 'OWNER_UNPROVEN'});
+  }, native);
+  await region.getByRole('button', {name: 'Read status', exact: true}).click();
+  const status = region.locator('[data-fleet-route-status]');
+  await expect(status.getByText('Details: OWNER_UNPROVEN', {exact: true})).toBeVisible();
+  await status.locator('summary').click();
+  await expect(status.locator('code').filter({hasText: 'OWNER_UNPROVEN'})).toBeVisible();
+  if (native) await expect(status.locator('code').filter({hasText: 'tls'})).toBeVisible();
+ }
 });

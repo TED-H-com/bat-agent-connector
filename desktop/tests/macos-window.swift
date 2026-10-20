@@ -38,10 +38,10 @@ func managedView(_ pid: pid_t) -> [String: Bool] {
             let labels = [attribute(kAXTitleAttribute), attribute(kAXDescriptionAttribute),
                           role == "AXStaticText" ? attribute(kAXValueAttribute) : nil].compactMap { $0 as? String }
             for label in labels {
-                if ["Connected to your local Connector", "已連線至本機 Connector"].contains(label) { result["authenticated"] = true }
+                if ["Ready to set up", "可以開始設定了"].contains(label) { result["authenticated"] = true }
                 if ["Get ready to work", "準備開始工作"].contains(label) { result["setup"] = true }
-                if ["Configured: 0 hosts, 0 repositories", "已設定 0 台主機、0 個儲存庫"].contains(label) { result["configurationLoaded"] = true }
-                if role == "AXButton" && ["Verify and save host", "驗證並儲存主機"].contains(label),
+                if ["Ready to set up", "可以開始設定了"].contains(label) { result["configurationLoaded"] = true }
+                if role == "AXButton" && ["Set up automatically", "自動設定"].contains(label),
                    (attribute(kAXEnabledAttribute) as? Bool) == true { result["saveEnabled"] = true }
             }
         }

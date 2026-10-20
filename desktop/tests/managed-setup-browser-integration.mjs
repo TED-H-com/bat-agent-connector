@@ -84,6 +84,7 @@ try {
   await page.waitForURL(first.endpoint + "/dashboard/**");
   await page.goto(first.endpoint + "/dashboard/#/settings");
   const form = page.locator("[data-setup-host]");
+  await page.locator("[data-setup-advanced] > summary").click();
   await expect(form).toBeVisible();
   const session = await page.evaluate(async () => (await fetch("/api/v1/browser-session")).json());
   assert.equal(session.principal_id, first.principal_id);
