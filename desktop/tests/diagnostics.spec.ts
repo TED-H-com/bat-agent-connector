@@ -4,13 +4,13 @@ import {readFileSync} from 'node:fs';
 import {diagnosticsFixture} from './diagnostics-fixture.ts';
 const bootstrap=JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-bootstrap.json',import.meta.url),'utf8'));
 const about=(page,locale)=>page.locator('#settings-tab-about');
-const open=async(page,locale)=>{await page.goto('/dashboard/#/settings');await about(page,locale).click();await page.locator('[data-export-diagnostics]').click();await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');};
+const open=async(page,locale,beforeExport=()=>{})=>{await page.goto('/dashboard/#/settings');await about(page,locale).click();beforeExport();await page.locator('[data-export-diagnostics]').click();await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');};
 for(const locale of ['en','zh-TW'])test.describe(locale,()=>{
  test.use({locale});
  test('export separates a refused source from missing manage scope',async({page})=>{
   const state=await diagnosticsFixture(page);state.producer.bootstrap=structuredClone(bootstrap);state.operationsStatus=403;
   const posts:string[]=[];page.on('request',request=>{if(request.method()==='POST')posts.push(request.url());});
-  await open(page,locale);
+  let before=0;await open(page,locale,()=>{before=state.reads.length;});
   const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
   expect(bundle.source_reads?.operations?.status).toBe('failed');
   expect(bundle.source_reads.operations).toMatchObject({http_status:403,code:'FORBIDDEN'});
@@ -27,7 +27,8 @@ for(const locale of ['en','zh-TW'])test.describe(locale,()=>{
   const downloadPromise=page.waitForEvent('download');
   await page.getByRole('dialog').getByRole('button',{name:locale==='en'?'Save':'儲存',exact:true}).click();
   const download=await downloadPromise;expect(JSON.parse(await readFile((await download.path())!,'utf8'))).toEqual(bundle);
-  expect(posts).toEqual([]);expect(state.reads.some(path=>path.startsWith('/managed/setup'))).toBe(false);
+  // Settings has its own setup read; only the export is scope-gated here.
+  expect(posts).toEqual([]);expect(state.reads.slice(before).some(path=>path.startsWith('/managed/setup'))).toBe(false);
  });
  for(const native of [false,true])for(const known of [false,true])test(`${native?'desktop':'browser'} build identity ${known?'known':'unknown'}`,async({page})=>{
   await diagnosticsFixture(page,native,known);await page.goto('/dashboard/#/settings');await about(page,locale).click();
