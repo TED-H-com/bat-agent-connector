@@ -10,7 +10,7 @@ import tempfile
 from contextlib import closing, contextmanager
 from pathlib import Path
 
-from . import __version__, platform_files
+from . import platform_files
 from .build_identity import build_identity
 from .task_journal import LATEST_DATA_STEP
 from .update_install import digest_files, package_files
@@ -24,12 +24,12 @@ def declaration(*, journal_max=LATEST_DATA_STEP, newer_journal_fence=True,
     No in-flight action/step compatibility has been certified by this declaration.
     Knowing an action's name is not evidence that its earlier effects can reconcile.
     """
-    return {"format": 1, "version": __version__, "journal_max": journal_max,
+    return {"format": 1, "journal_max": journal_max,
             "newer_journal_fence": newer_journal_fence, "operation_support": list(operation_support),
             "enrollment_formats": list(enrollment_formats), "enrollment_epochs": list(enrollment_epochs)}
 
 
-def _valid(doc, version):
+def _valid(doc):
     def integers(values):
         return isinstance(values, list) and all(type(v) is int and 0 <= v <= 2147483647 for v in values)
 
@@ -37,7 +37,7 @@ def _valid(doc, version):
         return isinstance(values, list) and all(isinstance(v, str) and 0 < len(v) <= 200 for v in values)
 
     if not (isinstance(doc, dict) and type(doc.get("format")) is int and doc["format"] == 1
-            and doc.get("version") == version and type(doc.get("journal_max")) is int
+            and type(doc.get("journal_max")) is int
             and 0 <= doc["journal_max"] <= 2147483647 and type(doc.get("newer_journal_fence")) is bool
             and integers(doc.get("enrollment_formats")) and integers(doc.get("enrollment_epochs"))
             and isinstance(doc.get("operation_support"), list)):
@@ -90,7 +90,7 @@ def _previous(record):
         raw = _declaration_bytes(package / "compatibility.json")
         require(hashlib.sha256(raw).hexdigest() == inventory["compatibility.json"], "declaration_changed")
         doc = json.loads(raw)
-        require(_valid(doc, identity["version"]), "declaration_invalid")
+        require(_valid(doc), "declaration_invalid")
     except (OSError, ValueError, TypeError, RecursionError):
         return identity, None, "PREVIOUS_DECLARATION_UNREADABLE_OR_INVALID"
     return identity, doc, None
@@ -208,7 +208,9 @@ def preview(state, *, journal, observed_at):
     fact("newer_journal_fence", fence, "unknown" if fence is None else ("compatible" if fence else "incompatible"),
          unavailable if fence is None else ("NEWER_JOURNAL_FENCE_DECLARED" if fence else "NEWER_JOURNAL_FENCE_ABSENT"))
     fact("in_flight", in_flight, "unknown", journal_reason if in_flight is None else unavailable)
-    if in_flight is not None and support:
+    if in_flight is not None and not in_flight["counts"] and not in_flight["steps"]:
+        fact("in_flight", in_flight, "compatible", "NO_IN_FLIGHT_WORK")
+    elif in_flight is not None and support:
         declared = {item["kind"]: item for item in support["operation_support"]}
         supported = all(row["status"] in declared.get(row["kind"], {}).get("statuses", [])
                         for row in in_flight["counts"])

@@ -92,8 +92,10 @@ its own `compatibility.json`, read without executing code and checked against
 its saved package digest. A missing, malformed, unreadable or changed declaration
 cannot establish support. Existing releases through 0.2.12 have no declaration;
 version numbers and source-code text searches are not substitutes. The new file
-ships with subsequent builds; a freshness test compares it with the declaration
-producer, current `LATEST_DATA_STEP`, package version and updater epoch.
+ships with subsequent builds; a freshness test compares its format and support
+facts with the producer, current `LATEST_DATA_STEP`, fence, updater epoch and
+supported enrollment formats. Package version remains owned by package metadata
+and `__init__.py`; the declaration's digest already binds it to its build.
 
 `compatible` means all observed facts are known and compatible with the verified
 declarations. `incompatible` means at least one known fact conflicts, even when
@@ -106,6 +108,8 @@ unknown. External BAT/profile/keychain credentials are not inspected. The
 shipped declaration certifies no in-flight actions yet; their support remains
 unknown, including legacy task/command work. Parameterized test declarations
 exercise lower data-step maxima, missing fences and future support separately.
+An empty work set has reason `NO_IN_FLIGHT_WORK`; `IN_FLIGHT_SUPPORT_DECLARED`
+means existing rows and every recorded step are covered by the declaration.
 
 Even `compatible` does not prove every rollback effect will succeed: observation
 can become stale, external systems can change, and declarations do not execute

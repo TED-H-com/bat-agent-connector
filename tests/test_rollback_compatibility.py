@@ -165,10 +165,19 @@ async def test_declared_current_step_and_fence_with_no_in_flight_work_is_compati
     assert preview["facts"]["journal"]["value"] == {
         "recorded_data_step": LATEST_DATA_STEP, "declared_max": LATEST_DATA_STEP + extra_steps}
     assert preview["facts"]["in_flight"]["value"]["counts"] == []
+    assert preview["facts"]["in_flight"]["reason"] == "NO_IN_FLIGHT_WORK"
     for fact in preview["facts"].values():
         assert fact["compatibility"] == "compatible"
         assert fact["reason"] and fact["observed_at"]
         assert fact["build"]["commit"] == state["previous"]
+
+
+async def test_nothing_in_flight_needs_no_previous_support_declaration(produced):
+    service, _, journal, *_ = produced
+    preview = preview_unchanged(service, journal)
+    assert preview["verdict"] == "unknown"
+    assert preview["facts"]["in_flight"]["compatibility"] == "compatible"
+    assert preview["facts"]["in_flight"]["reason"] == "NO_IN_FLIGHT_WORK"
 
 
 @pytest.mark.parametrize("parameters,fact,reason", [
@@ -255,6 +264,20 @@ def test_shipped_declaration_matches_current_producer():
     assert json.loads(path.read_text()) == rollback_compatibility.declaration()
 
 
+def test_declaration_has_support_facts_without_a_duplicate_product_version():
+    from bat_agent_connector import rollback_compatibility
+    from bat_agent_connector.update_release import EPOCH
+
+    path = Path(rollback_compatibility.__file__).with_name("compatibility.json")
+    for doc in (json.loads(path.read_text()), rollback_compatibility.declaration()):
+        assert "version" not in doc
+        assert doc["format"] == 1
+        assert doc["journal_max"] == LATEST_DATA_STEP
+        assert doc["newer_journal_fence"] is True
+        assert doc["enrollment_epochs"] == [EPOCH]
+        assert doc["enrollment_formats"] == [1]
+
+
 async def test_missing_journal_is_unknown_and_never_created(deployment):
     service, state = deployment
     declare_previous(service, state)
@@ -302,7 +325,9 @@ async def test_explicit_future_operation_declaration_is_checked_for_each_step(pr
         {"name": "receipt", "statuses": ["succeeded"]}, {"name": "send", "statuses": ["uncertain"]}]}]
     declare_previous(service, state, operation_support=parameters)
     original = ops.get(pending["operation_id"])
-    assert preview_unchanged(service, journal)["verdict"] == "compatible"
+    preview = preview_unchanged(service, journal)
+    assert preview["verdict"] == "compatible"
+    assert preview["facts"]["in_flight"]["reason"] == "IN_FLIGHT_SUPPORT_DECLARED"
     parameters[0]["steps"].pop()
     declare_previous(service, state, operation_support=parameters)
     assert preview_unchanged(service, journal)["verdict"] == "unknown"

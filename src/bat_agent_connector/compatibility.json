@@ -1,6 +1,5 @@
 {
   "format": 1,
-  "version": "0.2.12",
   "journal_max": 3,
   "newer_journal_fence": true,
   "operation_support": [],
