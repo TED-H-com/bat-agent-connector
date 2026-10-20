@@ -3756,14 +3756,14 @@ function holdRender(fromEvent, opensAtStart) {
 document.addEventListener("focusout", () => setTimeout(() => {
   if (!editing && !typing() && idleReload) { const fn = idleReload; idleReload = null; fn(); }
 }, 0));
-function liveReload(fn, kinds, prepare = null) {
+function liveReload(fn, kinds, prepare = null, holding = () => editing || typing()) {
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   const later = debounceRefresh(async () => {
     let preparedAt = 0;
     const prepareNow = async () => {if (prepare) {await prepare(); preparedAt = Date.now();}};
     await prepareNow();
     for (;;) {
-      while (editing || typing()) {
+      while (holding()) {
         assertView(connection); await sleep(100);
         // The held checkpoint also holds the next event page. Keep safety evidence current
         // while an editor stays open, so a later parent archive does not wait for that page.
@@ -3773,7 +3773,7 @@ function liveReload(fn, kinds, prepare = null) {
       const opened = drawerOpens;
       await fn(true);
       assertView(connection);
-      if (!editing && !typing() && drawerOpens === opened) return;
+      if (!holding() && drawerOpens === opened) return;
     }
   }, 500);
   return onEvents(ev => { if (typeof kinds === "function" ? kinds(ev) : kinds.includes(ev.resource_type)) return later(); });
@@ -4263,7 +4263,11 @@ async function viewWorkItem(main, wid) {
   const offRepair = repair ? onEvents(event => {
     if (event.resource_type === "operation" || observationAffected("work_item", wid, event)) return repair.refresh();
   }) : null;
-  const off = liveReload(render, event => observationAffected("work_item", wid, event), refreshSafety);
+  // In a linked Work, this details panel shares the page with the instruction
+  // composer. Its safety read must settle without waiting for that other editor
+  // to blur; renderNow still defers presentation while the person is typing.
+  const off = liveReload(render, event => observationAffected("work_item", wid, event), refreshSafety,
+    () => editing || (typing() && main.contains(document.activeElement)));
   return () => {off?.(); offRepair?.(); repair?.dispose(); results?.dispose();};
 }
 

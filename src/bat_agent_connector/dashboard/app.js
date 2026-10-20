@@ -53160,8 +53160,18 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 			errorBox,
 			extra: h("div", { class: "pm-fields work-next-field" }, field, hint)
 		});
+		const submitButton = composer.box.querySelector("button[type=submit]");
+		let buttonActivation = false;
+		submitButton.addEventListener("click", () => {
+			buttonActivation = true;
+			setTimeout(() => {
+				buttonActivation = false;
+			}, 0);
+		}, true);
 		composer.box.addEventListener("submit", (event) => {
-			if (composing || performance.now() - composeEnded < 50) {
+			const explicit = buttonActivation && event.submitter === submitButton;
+			buttonActivation = false;
+			if (composing || !explicit && performance.now() - composeEnded < 50) {
 				event.preventDefault();
 				event.stopImmediatePropagation();
 			}
@@ -71598,7 +71608,7 @@ document.addEventListener("focusout", () => setTimeout(() => {
 		fn();
 	}
 }, 0));
-function liveReload(fn, kinds, prepare = null) {
+function liveReload(fn, kinds, prepare = null, holding = () => editing || typing()) {
 	const connection = {
 		epoch: state.epoch,
 		namespace: state.namespace,
@@ -71614,7 +71624,7 @@ function liveReload(fn, kinds, prepare = null) {
 		};
 		await prepareNow();
 		for (;;) {
-			while (editing || typing()) {
+			while (holding()) {
 				assertView(connection);
 				await sleep(100);
 				if (prepare && Date.now() - preparedAt >= 1e3) await prepareNow();
@@ -71623,7 +71633,7 @@ function liveReload(fn, kinds, prepare = null) {
 			const opened = drawerOpens;
 			await fn(true);
 			assertView(connection);
-			if (!editing && !typing() && drawerOpens === opened) return;
+			if (!holding() && drawerOpens === opened) return;
 		}
 	}, 500);
 	return onEvents((ev) => {
@@ -72445,7 +72455,7 @@ async function viewWorkItem(main, wid) {
 	const offRepair = repair ? onEvents((event) => {
 		if (event.resource_type === "operation" || observationAffected("work_item", wid, event)) return repair.refresh();
 	}) : null;
-	const off = liveReload(render, (event) => observationAffected("work_item", wid, event), refreshSafety);
+	const off = liveReload(render, (event) => observationAffected("work_item", wid, event), refreshSafety, () => editing || typing() && main.contains(document.activeElement));
 	return () => {
 		off?.();
 		offRepair?.();
