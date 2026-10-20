@@ -6,7 +6,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from bat_agent_connector import operations, pm_lifecycle_gates, pm_read_cache, pm_source_reads, task_journal
+from bat_agent_connector import (
+    operations,
+    pm_lifecycle_gates,
+    pm_read_cache,
+    pm_source_lineage,
+    pm_source_reads,
+    task_journal,
+)
 from bat_agent_connector import pm_execution_runtime as runtime
 from bat_agent_connector import pm_maintenance_policy as policies
 from bat_agent_connector import pm_release_baselines as baselines
@@ -121,6 +128,39 @@ async def test_completed_context_lookup_does_not_expand_its_frozen_identity(ops,
     # Context bytes still require a digest; the generic memo must not then
     # recursively expand that already verified identity on every lookup.
     assert len(expanded) <= 8, len(expanded)
+
+
+@pytest.mark.parametrize('withdraw', [False, True])
+async def test_local_effect_and_callback_share_only_unchanged_source_work(ops, monkeypatch, withdraw):  # noqa: F811
+    data = await github.prepared(ops, monkeypatch)
+    operation = ops.create(github.OWNER, **github.request(ops, data))[0]
+    context = OpContext(ops, operation)
+    guard, proofs, checks = pm_source_lineage.require_new_effect, [], []
+
+    def source():
+        proofs.append(1)
+        return ops.db.execute('SELECT 1 FROM pm_workspace_members WHERE workspace_id=? AND actor=?',
+            (data['workspace_id'], github.OWNER.actor)).fetchone() is not None
+
+    def check():
+        checks.append(1)
+        return pm_source_reads.check(ops.db, github.OWNER, 'test.local_sources', data['workspace_id'], source)
+
+    def required(service, oid):
+        guard(service, oid)
+        assert check()
+
+    def local():
+        if withdraw:
+            ops.db.execute('DELETE FROM pm_workspace_members WHERE workspace_id=? AND actor=?',
+                (data['workspace_id'], github.OWNER.actor))
+        return {'visible': check()}
+
+    monkeypatch.setattr(pm_source_lineage, 'require_new_effect', required)
+    assert context.effect('test.local_sources', local) == {'visible': not withdraw}
+    assert len(checks) == 3  # Admission, local transaction guard and callback all run.
+    assert len(proofs) == (3 if withdraw else 2)
+    assert context.effect('test.local_sources', lambda: pytest.fail('Receipt replay must not repeat the callback')) == {'visible': not withdraw}
 
 
 async def test_observer_source_reuse_preserves_every_durable_byte(ops, monkeypatch, tmp_path):  # noqa: F811
