@@ -52301,6 +52301,7 @@ var serverReasons = {
 	]
 };
 function workFollowUpDecision({ stopped = false, disposed = false, suspended = false, capabilitiesLoaded, reading, admissionReady, resultSettled, blockedReason = "", sendOffer, managed, connected }) {
+	const canReadReceipt = Boolean(capabilitiesLoaded && managed && !stopped && !disposed && !suspended);
 	const client = (reason, messageKey = "", nextStepKey = "") => ({
 		allowed: false,
 		source: "client",
@@ -52308,12 +52309,14 @@ function workFollowUpDecision({ stopped = false, disposed = false, suspended = f
 		messageKey,
 		nextStepKey,
 		pillKey: "",
-		showCode: false
+		showCode: false,
+		canReadReceipt
 	});
 	if (stopped || disposed) return client("stopped");
 	if (suspended) return client("suspended");
 	if (!capabilitiesLoaded) return client("capabilities_pending");
-	if (reading || !admissionReady || !resultSettled) return client("admission_pending");
+	if (reading || !resultSettled) return client("admission_pending");
+	if (!admissionReady) return client("admission_unavailable");
 	if (blockedReason) {
 		const known = Object.hasOwn(serverReasons, blockedReason);
 		const [messageKey, nextStepKey, pillKey] = known ? serverReasons[blockedReason] : [
@@ -52328,7 +52331,8 @@ function workFollowUpDecision({ stopped = false, disposed = false, suspended = f
 			messageKey,
 			nextStepKey,
 			pillKey,
-			showCode: !known
+			showCode: !known,
+			canReadReceipt
 		};
 	}
 	if (!sendOffer) return client("no_send_offer", "loop_next_no_offer", "loop_next_refresh_step");
@@ -52341,7 +52345,8 @@ function workFollowUpDecision({ stopped = false, disposed = false, suspended = f
 		messageKey: "",
 		nextStepKey: "",
 		pillKey: "",
-		showCode: false
+		showCode: false,
+		canReadReceipt
 	};
 }
 //#endregion
@@ -52516,11 +52521,7 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 			"data-reason-source": decision.source
 		}, t(decision.messageKey), decision.showCode ? [" ", h("code", {}, decision.reason)] : null, decision.nextStepKey ? [" ", t(decision.nextStepKey)] : null)] : []);
 		if (!decision.allowed && decision.reason !== "connection") {
-			if (composer && [
-				"admission_pending",
-				"connection",
-				"capabilities_pending"
-			].includes(decision.reason)) {
+			if (composer && ["admission_pending", "capabilities_pending"].includes(decision.reason)) {
 				composer.update();
 				paint();
 				return;
@@ -52572,7 +52573,9 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 			}),
 			preconditions: () => attemptId ? { expected_attempt_id: attemptId } : {},
 			permitted: mutationsAllowed,
-			canSend: () => !reading && admissionReady && field.value.trim().length > 0 && field.value.trim().length <= 2e4 && canSend(),
+			recoverPermitted: () => sendDecision().canReadReceipt,
+			keepEditable: () => sendDecision().source === "client",
+			canSend: () => mutationsAllowed() && field.value.trim().length > 0 && field.value.trim().length <= 2e4 && canSend(),
 			requiredScope: "operate",
 			label: "loop_next_send",
 			releaseAfterAcknowledgement: true,

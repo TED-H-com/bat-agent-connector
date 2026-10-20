@@ -143,7 +143,7 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
       t(decision.messageKey), decision.showCode ? [' ', h('code', {}, decision.reason)] : null,
       decision.nextStepKey ? [' ', t(decision.nextStepKey)] : null)] : []));
     if (!decision.allowed && decision.reason !== 'connection') {
-      if (composer && ['admission_pending', 'connection', 'capabilities_pending'].includes(decision.reason)) {composer.update(); paint(); return;}
+      if (composer && ['admission_pending', 'capabilities_pending'].includes(decision.reason)) {composer.update(); paint(); return;}
       if (composer) clearComposer();
       paint();
       return;
@@ -165,7 +165,12 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
       // Preconditions are captured only when a new request is authorized.
       preconditions: () => attemptId ? {expected_attempt_id: attemptId} : {},
       permitted: mutationsAllowed,
-      canSend: () => !reading && admissionReady && field.value.trim().length > 0
+      // Known IDs are read, even while admission for a new instruction is pending.
+      recoverPermitted: () => sendDecision().canReadReceipt,
+      // Readiness pauses sending, while the existing draft keeps its focus.
+      // The durable form still freezes an admitted intent or an in-flight POST.
+      keepEditable: () => sendDecision().source === 'client',
+      canSend: () => mutationsAllowed() && field.value.trim().length > 0
         && field.value.trim().length <= 20000 && canSend(),
       requiredScope: 'operate',
       label: 'loop_next_send',

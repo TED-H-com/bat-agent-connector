@@ -30,7 +30,7 @@ test('client gates never acquire a fabricated server reason', async () => {
   const {workFollowUpDecision} = await import(decisionModule);
   for (const [facts, reason] of [
     [{connected: false}, 'connection'], [{reading: true}, 'admission_pending'],
-    [{admissionReady: false}, 'admission_pending'], [{resultSettled: false}, 'admission_pending'],
+    [{admissionReady: false}, 'admission_unavailable'], [{resultSettled: false}, 'admission_pending'],
     [{stopped: true}, 'stopped'], [{disposed: true}, 'stopped'], [{suspended: true}, 'suspended'],
     [{capabilitiesLoaded: false}, 'capabilities_pending'], [{managed: false}, 'unmanaged'],
     [{sendOffer: null}, 'no_send_offer'],
@@ -51,6 +51,16 @@ test('new decision copy and next steps exist in both locales', () => {
       'loop_next_refresh_step', 'loop_next_no_offer', 'loop_next_scope_readonly', 'loop_next_member_readonly', 'loop_next_blocked']) {
       assert.ok(workFollowUpStrings[lang][key]?.trim(), `${lang}: ${key}`);
     }
+  }
+});
+
+test('an admission reread pauses new sends without losing original receipt recovery', async () => {
+  const {workFollowUpDecision} = await import(decisionModule);
+  const checking = workFollowUpDecision({...ready, reading: true, admissionReady: false});
+  assert.equal(checking.allowed, false);
+  assert.equal(checking.canReadReceipt, true);
+  for (const gate of [{stopped: true}, {suspended: true}, {disposed: true}, {managed: false}, {capabilitiesLoaded: false}]) {
+    assert.equal(workFollowUpDecision({...ready, ...gate}).canReadReceipt, false);
   }
 });
 
