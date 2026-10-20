@@ -9792,6 +9792,8 @@ var init_i18n = __esmMin((() => {
 			setup_saving: "正在儲存設定，快好了…",
 			setup_ready: "設定完成，可以開始使用了。",
 			setup_loading: "正在準備設定…",
+			setup_verified_saved: "Connector 已驗證連線並儲存設定：{host} · {time}。",
+			setup_connection_checked: "連線觀察時間：{time}",
 			setup_copy_help: "請在 BAT 開啟「設定 → 遠端 → 遠端存取」，複製連線網址後貼到下方。如果尚未啟動，請先按「啟動伺服器」。",
 			setup_copy_label: "貼上從 BAT 複製的連線網址",
 			setup_continue: "繼續設定",
@@ -11481,6 +11483,8 @@ var init_i18n = __esmMin((() => {
 			setup_saving: "Saving your settings. Almost there…",
 			setup_ready: "Setup is complete. You’re ready to go.",
 			setup_loading: "Getting setup ready…",
+			setup_verified_saved: "Connector verified the connection and saved the configuration for {host} at {time}.",
+			setup_connection_checked: "Connection observed at {time}",
 			setup_copy_help: "In BAT, open Settings → Remote → Remote Access, copy the connection URL and paste it below. If it is not running, choose Start Server first.",
 			setup_copy_label: "Paste the connection link copied from BAT",
 			setup_continue: "Continue setup",
@@ -53607,6 +53611,24 @@ function setupConnectionStatus(host) {
 		"unreachable"
 	].includes(host.connection_status) ? host.connection_status : host.connected === true ? "connected" : "checking";
 }
+function setupStatusLine({ busy = false, operation = null, hosts = [], readReady = false }) {
+	if (busy) return { key: "setup_checking" };
+	if (operation?.status === "succeeded" && operation.action === "setup.host") {
+		const host = hosts.find((row) => row.name === operation.target?.host);
+		if (readReady && host && setupConnectionStatus(host) === "connected") return { key: "setup_ready" };
+		return {
+			key: "setup_verified_saved",
+			verifiedAt: operation.updated_at
+		};
+	}
+	if (readReady && hosts.length && hosts.every((row) => setupConnectionStatus(row) === "connected")) return { key: "setup_ready" };
+	if (operation) return { key: [
+		"succeeded",
+		"failed",
+		"cancelled"
+	].includes(operation.status) ? "setup_failed_operation" : "setup_saving" };
+	return { key: !readReady ? "setup_loading" : hosts.length ? "" : "setup_waiting" };
+}
 function setupFormValidity(form, t) {
 	const invalid = Array.from(form.elements).find((node) => node.willValidate && !node.validity.valid);
 	if (!invalid) return form.reportValidity();
@@ -54261,7 +54283,16 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		connectionChoice.disabled = !!locked || !allowed("host");
 		simple.hidden = !!snapshot?.hosts?.length;
 		connectionStatus.hidden = !readReady;
-		automaticStatus.textContent = busy ? t("setup_checking") : operation?.status === "succeeded" && operation.action === "setup.host" || snapshot?.hosts?.some((row) => setupConnectionStatus(row) === "connected") ? t("setup_ready") : operation && !terminal() ? t("setup_saving") : operation && terminal() ? t("setup_failed_operation") : snapshot?.hosts?.length ? "" : !readReady ? t("setup_loading") : t("setup_waiting");
+		const status = setupStatusLine({
+			busy,
+			operation,
+			hosts: snapshot?.hosts || [],
+			readReady
+		});
+		automaticStatus.replaceChildren(status.key === "setup_verified_saved" ? timeLabel(t, status.key, {
+			host: operation.target.host,
+			time: timeStamp(status.verifiedAt)
+		}) : status.key ? t(status.key) : "");
 		automaticStatus.hidden = !automaticStatus.textContent;
 		const base = saved.verification_base;
 		const stale = base && base.revision !== snapshot?.revision;
@@ -54512,7 +54543,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		const hosts = result.hosts?.length || 0, repositories = result.repositories?.length || 0;
 		connectionStatus.replaceChildren(...(result.hosts || []).map((row) => {
 			const status = setupConnectionStatus(row);
-			return h("div", { "data-setup-host-state": status }, h("p", {}, h("strong", {}, row.name), " · ", t(`setup_connection_${status}`)), status === "connected" ? null : h("p", { class: "muted" }, t(status === "unreachable" ? "setup_connection_action" : "setup_connection_checking_help")));
+			return h("div", { "data-setup-host-state": status }, h("p", {}, h("strong", {}, row.name), " · ", t(`setup_connection_${status}`)), row.connection_checked_at == null ? null : h("p", { class: "muted" }, timeLabel(t, "setup_connection_checked", { time: timeStamp(row.connection_checked_at) })), status === "connected" ? null : h("p", { class: "muted" }, t(status === "unreachable" ? "setup_connection_action" : "setup_connection_checking_help")));
 		}));
 		summary.replaceChildren(h("p", {}, t("setup_counts", {
 			hosts,
