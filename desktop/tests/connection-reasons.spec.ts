@@ -32,6 +32,35 @@ async function abortNetwork(page: Page, failed: () => boolean) {
 
 for (const locale of ['en-US', 'zh-TW']) {
   const copy = STRINGS[locale === 'zh-TW' ? 'zh-TW' : 'en'];
+  test(`successful poll time does not wait for view refresh success ${locale}`, async ({browser}) => {
+    const context = await browser.newContext({locale}), page = await context.newPage();
+    const fixture = conversationFixture();
+    let fail = false, answeredAt = 0, refreshFailed = false, release!: () => void;
+    const pending = new Promise<void>(resolve => {release = resolve;});
+    await mountConversation(page, false, async input => {
+      const path = new URL(input.path, 'http://fixture').pathname;
+      if (path === '/events' && fail) {
+        if (answeredAt) await pending;
+        else answeredAt = Date.now();
+      }
+      if (path.endsWith('/messages') && fail) refreshFailed = true;
+      return fixture.dispatch(input);
+    });
+    try {
+      await page.goto('/dashboard/#/session/demo/session-1');
+      await expect(page.locator('.msg')).toHaveCount(12);
+      fail = fixture.data.fail = true; fixture.data.cursor = 1;
+      await expect.poll(() => refreshFailed).toBe(true);
+      const name = copy.ui_connector_status.replace('{status}', copy.ui_connected);
+      await expect(page.locator('#live')).toHaveText(copy.ui_connected);
+      await expect(page.locator('#live')).toHaveAttribute('title', `${name} — ${copy.sync_actions_paused}`);
+      await page.evaluate(() => {location.hash = '#/settings';});
+      const at = await page.locator('[data-last-successful-poll]').getAttribute('data-observed-at');
+      expect(Date.parse(at!)).toBeGreaterThanOrEqual(answeredAt);
+      await expect(page.locator('[data-last-event]')).toHaveAttribute('data-observed-at', '');
+    } finally {release(); await context.close();}
+  });
+
   for (const native of [false, true]) for (const width of [390, 1440]) for (const failure of ['forbidden', 'service', 'network'] as const) {
     test(`managed heading makes no static connection claim ${failure} ${locale} ${width} ${native ? 'IPC' : 'HTTP'}`, async ({browser}, info) => {
       const context = await browser.newContext({locale, viewport: {width, height: 1000}}), page = await context.newPage();

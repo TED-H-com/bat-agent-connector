@@ -894,12 +894,14 @@ async function streamEvents() {
     }
     const epoch = state.epoch, view = generation, foreground = foregroundVersion;
     let cycle, pollSucceeded = false;
+    const previousPoll = state.lastPoll;
     try {
       const before = state.lastEvent;
       const checkpoint = state.sync ? `&checkpoint=${encodeURIComponent(state.sync.token)}` : "";
       const page = await api("GET", `/events?after=${before}&limit=100${checkpoint}`);
       if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
-      pollSucceeded = true; state.pollHealth = 'connected'; paintConnection(true);
+      pollSucceeded = true; state.pollHealth = 'connected';
+      state.lastPoll = {at: Date.now(), namespace: state.namespace}; paintConnection(true);
       if (view !== generation || !state.viewReady) continue;
       cycle = {error: null}; state.refreshCycle = cycle;
       // A deferred render is not a connection failure: keep version-checked form saves usable.
@@ -917,7 +919,6 @@ async function streamEvents() {
       }
       if (cursor !== state.lastEvent) state.lastEventAt = Date.now();
       state.lastEvent = cursor;
-      state.lastPoll = {at: Date.now(), namespace: state.namespace};
       saveCursor();
       state.refreshCycle = null;
       updateOnline(true);
@@ -928,6 +929,7 @@ async function streamEvents() {
       // A successful HTTP page followed by a failed view refresh still proves
       // transport health. Invalid event/checkpoint data is a poll response error.
       if (!pollSucceeded || !cycle?.error) {
+        if (pollSucceeded) state.lastPoll = previousPoll;
         state.pollHealth = pollFailure(error, Date.now()); paintConnection();
       }
       if (view !== generation) continue;

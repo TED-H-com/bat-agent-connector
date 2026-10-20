@@ -66345,12 +66345,17 @@ async function streamEvents() {
 		}
 		const epoch = state.epoch, view = generation, foreground = foregroundVersion;
 		let cycle, pollSucceeded = false;
+		const previousPoll = state.lastPoll;
 		try {
 			const before = state.lastEvent;
 			const page = await api("GET", `/events?after=${before}&limit=100${state.sync ? `&checkpoint=${encodeURIComponent(state.sync.token)}` : ""}`);
 			if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
 			pollSucceeded = true;
 			state.pollHealth = "connected";
+			state.lastPoll = {
+				at: Date.now(),
+				namespace: state.namespace
+			};
 			paintConnection(true);
 			if (view !== generation || !state.viewReady) continue;
 			cycle = { error: null };
@@ -66369,10 +66374,6 @@ async function streamEvents() {
 			}
 			if (cursor !== state.lastEvent) state.lastEventAt = Date.now();
 			state.lastEvent = cursor;
-			state.lastPoll = {
-				at: Date.now(),
-				namespace: state.namespace
-			};
 			saveCursor();
 			state.refreshCycle = null;
 			updateOnline(true);
@@ -66381,6 +66382,7 @@ async function streamEvents() {
 		} catch (error) {
 			if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
 			if (!pollSucceeded || !cycle?.error) {
+				if (pollSucceeded) state.lastPoll = previousPoll;
 				state.pollHealth = pollFailure(error, Date.now());
 				paintConnection();
 			}
