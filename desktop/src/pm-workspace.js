@@ -338,7 +338,10 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
           try {persist();} catch { /* keep the frozen original in memory */ }
         }
         const handled = onError(error);
-        if (!handled) status.replaceChildren(errorBox(error, error.code === 'VERSION_CONFLICT' ? {summary: t('pm_stale'), within: status} : {within: status}));
+        // This original request/receipt has its own outcome. Its failed reply
+        // must not fail an unrelated event-source read running at the same time.
+        if (!handled) status.replaceChildren(errorBox(error, {within: status, sourceRefresh: false,
+          ...(error.code === 'VERSION_CONFLICT' ? {summary: t('pm_stale')} : {})}));
       }
     } finally {
       busy = false; update();

@@ -6,7 +6,7 @@ import {STRINGS} from '../src/i18n.js';
 
 // Component-level tests: real durableForm, DOM, error renderer and ApiError;
 // only its API and authority/time interleavings are controlled by the fixture.
-async function mountForm(page: Page, locale: string) {
+async function mountForm(page: Page, locale: string, activeRefresh = false) {
   const f = governanceFixture();
   const record = f.state.records[0];
   const document = record.revision.document;
@@ -18,13 +18,14 @@ async function mountForm(page: Page, locale: string) {
   });
   await unavailableBriefTransport(page,'__retry_src');
   await page.goto('/ui-components.html');
-  await page.evaluate(async ({locale,caps,target,params}) => {
+  await page.evaluate(async ({locale,caps,target,params,activeRefresh}) => {
     const {h} = await import('/__retry_src/ui/dom.js');
     const {t,setLocale} = await import('/__retry_src/i18n.js');setLocale(locale);
     const {ApiError} = await import('/__retry_src/error-presentation.js');
     const {createErrorBox} = await import('/__retry_src/test-error-box.js');
     const {pmDurableForm} = await import('/__retry_src/pm-workspace.js');
     const win = window as any;
+    win.eventRefresh = {error:null};
     const state = win.retryState = {writes:[] as any[],guardCode:null as string|null,sendReady:true,permitted:true,mode:'lost',held:null as any,resolve:null as any};
     const guard = () => {if(state.guardCode)throw new ApiError(0,state.guardCode,'View changed during refresh');};
     const api = async (method:string,path:string,body:any,key:string) => {
@@ -40,10 +41,11 @@ async function mountForm(page: Page, locale: string) {
     const reason = h('textarea',{'aria-label':t('pcp_resolve_rationale'),required:true});reason.value='Preserve the reviewed original request';
     const options = win.retryOptions = {h,t,api,caps:()=>caps,guard,namespace:'explicit-retry',action:'pm.governance.revise',target,
       fields:{rationale:reason},params:values=>({...params,rationale:values.rationale}),preconditions:()=>({expected_version:1}),
-      permitted:()=>state.permitted,canSend:()=>state.sendReady,onSaved:()=>{},label:'pcp_resolve_issue',extra:reason,errorBox:createErrorBox(h,t,locale)};
+      permitted:()=>state.permitted,canSend:()=>state.sendReady,onSaved:()=>{},label:'pcp_resolve_issue',extra:reason,
+      errorBox:createErrorBox(h,t,locale,{refreshCycle:activeRefresh?win.eventRefresh:null})};
     const ui = win.retryForm = pmDurableForm(options);
     document.getElementById('fixture')!.append(ui.box);
-  }, {locale,caps:f.config().caps,target:{workspace_id:workspaceId,record_id:record.record.record_id},params});
+  }, {locale,caps:f.config().caps,target:{workspace_id:workspaceId,record_id:record.record.record_id},params,activeRefresh});
   const form = page.locator('[data-pm-action="pm.governance.revise"]');
   await form.locator('button[type=submit]').click();
   await expect(form).toContainText(STRINGS[locale].error_code_NETWORK_ERROR);
@@ -54,6 +56,27 @@ async function mountForm(page: Page, locale: string) {
 }
 
 for(const locale of ['en','zh-TW']) {
+  test(`a lost operation reply does not fail a concurrent source refresh ${locale}`,async({page})=>{
+    const form=await mountForm(page,locale,true);
+    expect(await page.evaluate(()=>(window as any).eventRefresh.error)).toBeNull();
+    const original=await page.evaluate(()=>(window as any).retryState.writes[0]);
+    await page.evaluate(()=>{(window as any).retryState.mode='success';});
+    await form.getByRole('button',{name:STRINGS[locale].pm_check_original,exact:true}).click();
+    await expect(form.locator('[data-pm-saved]')).toBeVisible();
+    const writes=await page.evaluate(()=>(window as any).retryState.writes);
+    expect(writes).toHaveLength(2);expect(writes[1]).toEqual(original);
+  });
+  test(`an actual source read error still fails its refresh ${locale}`,async({page})=>{
+    const form=await mountForm(page,locale,true);
+    await page.evaluate(async()=>{
+      const w=window as any,{ApiError}=await import('/__retry_src/error-presentation.js');
+      w.eventRefresh.error=null;
+      w.retryOptions.errorBox(new ApiError(503,'UNAVAILABLE','Source read unavailable'));
+    });
+    expect(await page.evaluate(()=>(window as any).eventRefresh.error.code)).toBe('UNAVAILABLE');
+    await expect(form).toContainText(STRINGS[locale].error_code_NETWORK_ERROR);
+    expect(await page.evaluate(()=>(window as any).retryState.writes.length)).toBe(1);
+  });
   for(const code of ['VIEW_CHANGED','CONNECTION_CHANGED'])test(`an explicit retry explains a ${code} guard refusal ${locale}`,async({page})=>{
     const form = await mountForm(page,locale);
     const before=await page.evaluate(()=>Object.fromEntries(Object.entries(localStorage).filter(([key])=>key.startsWith('batc.pm.explicit-retry.'))));

@@ -125,7 +125,8 @@ export function instrumentPmGates(source) {
     && node.init.properties.some(property => property.key?.name === 'refreshCycle'), 'app state');
   insert(state.parents.at(-1).end, 'window.__pmGateTrace.observeState(state);');
   const errorBox = named('errorBox');
-  insert(errorBox.body.start + 1, `window.__pmGateTrace.error('errorBox',e,{cycleActive:Boolean(state.refreshCycle)});`);
+  const refreshContext = source.slice(errorBox.start,errorBox.body.start).includes('sourceRefresh') ? 'sourceRefresh' : 'true';
+  insert(errorBox.body.start + 1, `window.__pmGateTrace.error('errorBox',e,{cycleActive:Boolean(state.refreshCycle),sourceRefresh:${refreshContext}});`);
   const stream = named('streamEvents');
   const pollCatch = within(stream, node => node.type === 'CatchClause' && node.param?.name === 'error')[0].node;
   insert(pollCatch.body.start + 1, `window.__pmGateTrace.error('events.catch',error,{pollSucceeded,cycleError:Boolean(cycle?.error)});`);
