@@ -330,6 +330,16 @@ class Updater:
             self.reconcile(state)
             return self.status(state)
 
+    def rollback_preview(self, *, journal=None):
+        from .config import default_journal_path
+        from .rollback_compatibility import preview
+        # No updater lease/reconciliation: even creating a lease is a mutation.
+        # Do not resolve symlinks: the snapshot reader must still refuse them.
+        path = (Path(journal) if journal is not None else default_journal_path()).absolute()
+        result = preview(self.read(), journal=path, observed_at=timestamp())
+        result["journal"] = {"path": str(path), "source": "explicit" if journal is not None else "default"}
+        return result
+
     def schedule(self):
         with self.locked():
             state = self.read()
@@ -369,9 +379,14 @@ def main(argv=None):
     enable = commands.add_parser("enable", help="Enroll a deployment or resume automatic updates")
     enable.add_argument("--receipt", type=Path)
     enable.add_argument("--channel", choices=("stable", "preview"))
-    for name in ("status", "check", "run", "disable", "rollback", "schedule"):
+    for name in ("status", "check", "run", "disable", "schedule"):
         commands.add_parser(name)
+    rollback = commands.add_parser("rollback")
+    rollback.add_argument("--preview", action="store_true", help="Read compatibility evidence without activation")
+    rollback.add_argument("--journal", type=Path, help="Journal to observe (only with --preview)")
     args = parser.parse_args(argv)
+    if args.action == "rollback" and args.journal is not None and not args.preview:
+        parser.error("--journal requires --preview")
     try:
         updater = Updater()
         if args.action == "enable":
@@ -387,6 +402,8 @@ def main(argv=None):
             result = {"available": updater.find_release(state["channel"]), **updater.status(state)}
         elif args.action == "run":
             result = updater.apply()
+        elif args.action == "rollback" and args.preview:
+            result = updater.rollback_preview(journal=args.journal)
         else:
             result = getattr(updater, args.action)()
         print(json.dumps(result, sort_keys=True))

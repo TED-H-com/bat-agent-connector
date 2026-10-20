@@ -94,14 +94,74 @@ existing disclosure. A detached caller that constructs its own Details passes
 Capabilities adds `build: {version, commit, source}`. Git installs use installed
 PEP 610 `direct_url.json` (`vcs_info.commit_id`) only when the distribution's package
 directory resolves to the running package's directory; a different site-packages
-copy cannot identify a checkout on `PYTHONPATH`. Plain packages and editable local
-checkouts without matching VCS metadata have a null commit. A frozen runtime reads only
+copy cannot identify a checkout on `PYTHONPATH`. Wheels read their packaged
+`bat_agent_connector/build-info.json` with `source: package`; conflicting embedded
+and VCS commits produce an unknown commit with `source: vcs`. Packages without
+provenance and editable local checkouts without matching VCS metadata have a null
+commit. A frozen runtime reads only
 its packaged `build-info.json`. No runtime Git process is invoked. The packaging
 job supplies `BATC_BUILD_COMMIT` to PyInstaller and Rust `option_env!`; native
 version comes from `CARGO_PKG_VERSION`. Missing commit means unknown in both
-locales. Browser assets use the serving Connector build and remain reproducible.
+locales. Connector identity comes only from capabilities and identifies the service,
+not the UI loaded in a window.
 The Python build is captured once at module initialization, alongside the loaded
 version; later in-place metadata changes cannot identify that running process.
+
+The Hatch build hook accepts a full 40-hex `BATC_BUILD_COMMIT` (normalized to
+lowercase). In a clean Git checkout it must equal HEAD; a mismatch is unknown.
+Without a valid override, the hook uses that clean checkout's HEAD.
+Dirty tracked inputs always produce an unknown commit, including with an override.
+Outside any checkout, without `PKG-INFO`, an explicit override can identify an
+exported source candidate: there is no independent checkout identity to contradict
+it. This remains a build-time declaration, never a guessed Git identity.
+An sdist carries that attribution into a wheel without consulting an enclosing
+checkout; a conflicting override makes it unknown. No provenance is guessed from
+an archive without it. This commit identifies the build's declared source
+candidate; it does not prove that the wheel's bytes match a published release.
+Release manifests and their verification remain separate.
+
+Editable builds skip provenance and workflow file copies: their imports resolve
+to `src/`, without a partial `bat_agent_connector/` in site-packages. The existing
+distribution-path guard keeps their build identity unknown. Normal Python
+bytecode caches may be created; source and provenance files are not modified.
+
+## Served frontend identity
+
+Connector identifies the UI it serves, separately from its own `build`. On every
+`app.js` or capabilities read it reads the exact stored bytes of the four
+`DASHBOARD_FILES`: `app.css`, `app.js`, `i18n.js`, `index.html`, in that sorted
+order. SHA-256 starts with UTF-8 `batc.frontend.files.v1` and a NUL. For each file
+it hashes decimal UTF-8 name-byte length, `:`, name, NUL, decimal content-byte
+length, NUL, then the exact stored bytes. This includes the placeholder, not the
+transformed response, and can be verified from a wheel or checkout. There is no
+process cache: an in-place upgrade changes the next read's identity.
+
+The committed JS has one fixed, non-hex 64-byte placeholder. When serving `app.js`,
+Connector replaces it with the digest from that same file-set read, preserving
+byte length for GET and HEAD. If the slot is missing or repeated, the file is
+served unchanged and identity is unknown. The other three files are served
+unchanged. This binds identity to the loaded module without a separate identity
+fetch; a loaded tab retains it across later capabilities reads. Reads are not an
+atomic snapshot of a multi-file upgrade, nor an attestation of toolchain, signature
+or release order. The withdrawn build-time source digest made independent
+frontend merges change a shared literal; no aggregate digest is now committed.
+
+Capabilities adds `frontend: {digest}` for the files served at read time.
+`batc.diagnostics.v1` adds `client.frontend_digest` (loaded) and
+`client.served_frontend_digest` (capabilities). Both are validated lowercase
+64-character hex or null; exports retain all 64 characters. About and the summary
+show 12 characters, followed by Connector version, commit and source. When both
+browser identities are known and differ, they explain that the page differs
+from the UI now served and that reloading loads it. This is a mismatch signal,
+not proof of version ordering. Settings reads capabilities again when opened;
+export uses its own fresh capabilities read. Neither replaces loaded identity.
+
+Browser `app_version` and `app_commit` are null, never aliases of Connector.
+Native values still come from `appBuild`, displayed first as Desktop. Native and
+dev leave the placeholder unchanged and report null. Native omits the Frontend
+segment when null; browser always shows it, with unknown when null. No native
+hash algorithm or browser build commit is added. These identities do not prove
+native abilities, reachability, or a readable release name.
 
 ## Save boundary
 

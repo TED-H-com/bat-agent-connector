@@ -1,5 +1,5 @@
 import {centralServiceStatus, clientActionGate, pollFailure} from "./central-service-status.js";
-import {workbenchEnabled} from './workbench-mode.js';
+import {layoutDecision} from './workbench-mode.js';
 import {workbenchViews} from './workbench-views.js';
 import {settingsAgents} from './settings-agents.js';
 import {actionAllowed, mayStartSession, checkpointReason, dispatchExplanation, connectionReturn} from './work-paths.js';
@@ -70,6 +70,8 @@ import {renderDeliveryWork, renderObservedResource, unavailableProject} from "./
 import {observedText} from "./observed-resource-strings.js";
 
 const TOKEN_KEY = "batc.dashboard.token";
+const isWorkbench = layoutDecision.layout === 'workbench';
+
 const state = { token: null, caps: null, lastEvent: 0, lastEventAt: 0, lastPoll: null, listeners: new Set(), namespace: "", scopeIdentity: null, epoch: 0, online: false, pollHealth: 'initial', viewReady: false, sync: null, endpoint: "", connectionError: null, nativeBusy: false, nativeAttempt: 0, connectionNotice: null, refreshCycle: null };
 const recentErrors = errorRing();
 const diagnosticSessions = new Map();
@@ -1568,12 +1570,12 @@ function sessionPullHref(target) {
 async function viewSession(main, host, sid, context = null) {
   const params = new URLSearchParams(location.hash.split("?")[1] || "");
   let fromQuery = params.get("from") || "";
-  let workRecord = workbenchEnabled() ? context?.workRecord : null;
+  let workRecord = isWorkbench ? context?.workRecord : null;
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   const path = `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(sid)}`;
   const requestedWork = workSessionContext(params);
   const workContextReadable = workFollowUpAvailable(state.caps) || state.caps?.features?.pm_workspaces?.work_start?.version === 1;
-  const workContext = workbenchEnabled() && workContextReadable && requestedWork ? requestedWork : null;
+  const workContext = isWorkbench && workContextReadable && requestedWork ? requestedWork : null;
   let selectedAttempt = null;
   if (workContext) {
     try {
@@ -1728,12 +1730,12 @@ async function viewSession(main, host, sid, context = null) {
   const details = disclosure({label: t("session_details_session"), body: metadata, key: `session-details:${connection.namespace}:${host}:${sid}`});
   details.classList.add("workspace-evidence");
   details.dataset.sessionDetails = "";
-  const results = inspector({title: t("session_results"), dock: true, overlay: workbenchEnabled(),
-    historyNavigation: workbenchEnabled(), canReopen: () => !disposed && !withdrawn && readReady, returnFocus: () => openResults});
-  const openResults = workbenchEnabled() ? button({variant: "secondary", icon: "panel-right", label: t("session_results"), onClick: () => results.open()})
+  const results = inspector({title: t("session_results"), dock: true, overlay: isWorkbench,
+    historyNavigation: isWorkbench, canReopen: () => !disposed && !withdrawn && readReady, returnFocus: () => openResults});
+  const openResults = isWorkbench ? button({variant: "secondary", icon: "panel-right", label: t("session_results"), onClick: () => results.open()})
     : iconButton({icon: "inbox", label: t("session_results"), onClick: () => results.open()});
   const wide = matchMedia("(min-width: 1200px)");
-  const syncWide = () => {openResults.hidden = !workbenchEnabled() && wide.matches || Boolean(withdrawn);};
+  const syncWide = () => {openResults.hidden = !isWorkbench && wide.matches || Boolean(withdrawn);};
   syncWide(); wide.addEventListener("change", syncWide);
   const sessionSection = (name, title, body, action = null) => h("section", {class: "session-section"},
     h("div", {class: "session-section-head"}, h("h3", {class: "session-section-title"}, icon(name, {size: 16}), title), action), body);
@@ -1743,15 +1745,15 @@ async function viewSession(main, host, sid, context = null) {
   syncChanges();
   const overflow = menu({button: iconButton({icon: "more-horizontal", label: t("ui_more")}),
     items: [
-      ...(workbenchEnabled() ? [{key: "interrupt", label: t("interrupt"), content: stop}] : []),
+      ...(isWorkbench ? [{key: "interrupt", label: t("interrupt"), content: stop}] : []),
       {key: "discuss", label: t("ui_discuss"), href: "#", icon: "message-square"},
       {key: "copy-title", label: t("bat_menu_title"), icon: "clipboard", title: t("bat_browser"), onSelect: () => batHandoff?.copyTitle()},
       {key: "copy-id", label: t("bat_menu_id"), icon: "clipboard", title: t("bat_browser"), onSelect: () => batHandoff?.copyId()},
       {key: "open-bat", label: t("bat_open"), icon: "external-link", title: t("bat_browser"), disabled: !nativeDesktop, onSelect: () => batHandoff?.open()},
       {key: "shortcut", label: t("composer_shortcut"), content: shortcut.box},
     ]});
-  if (workbenchEnabled()) {stop.setAttribute('role', 'menuitem'); stop.addEventListener('click', () => overflow.close());}
-  const header = pageHeader({title: titleNode, mark: markSlot, pill: pillSlot, meta, actions: workbenchEnabled() ? [openResults] : [stop, openResults], overflow});
+  if (isWorkbench) {stop.setAttribute('role', 'menuitem'); stop.addEventListener('click', () => overflow.close());}
+  const header = pageHeader({title: titleNode, mark: markSlot, pill: pillSlot, meta, actions: isWorkbench ? [openResults] : [stop, openResults], overflow});
   head.append(backSlot, header);
   const resultSourceAvailable = () => !disposed && !withdrawn && readReady
     && row?.provenance === 'connector_managed' && row?.api_access === 'managed';
@@ -1764,7 +1766,7 @@ async function viewSession(main, host, sid, context = null) {
     recoverPermitted: () => resultSourceAvailable() && (options.recoverPermitted || options.permitted)(),
     canSend: () => state.online && !state.nativeBusy && state.viewReady,
   });
-  const workResultTools = workbenchEnabled() && Boolean(workContext);
+  const workResultTools = isWorkbench && Boolean(workContext);
   const sessionTools = h('div', {}, workResultTools ? context?.itemBox : null,
     sessionSection("list-checks", t("checkpoints"), cps.box, cps.action),
     sessionSection("check", t("session_delivery"), result),
@@ -1800,7 +1802,7 @@ async function viewSession(main, host, sid, context = null) {
   const followWorkspace = workContext?.workspaceId || "";
   const followWorkId = workRecord?.work_item?.work_item_id || "";
   let mobileLayout = null;
-  const followUp = workbenchEnabled() && followWorkspace && /^wi_[0-9a-f]{20}$/.test(followWorkId) && workFollowUpAvailable(state.caps)
+  const followUp = isWorkbench && followWorkspace && /^wi_[0-9a-f]{20}$/.test(followWorkId) && workFollowUpAvailable(state.caps)
     ? mountWorkFollowUp({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
       namespace: connection.namespace, workspaceId: followWorkspace, workItemId: followWorkId, selectedAttemptId: selectedAttempt.attempt_id, errorBox,
       canSend: () => state.online && !state.nativeBusy && state.viewReady,
@@ -1823,7 +1825,7 @@ async function viewSession(main, host, sid, context = null) {
   const workspaceNode = h("div", {class: "workspace-session session-workspace", "data-session-view": ""}, lane, results);
   const withdrawnSlot = h("div", {class: "session-withdrawn"});
   main.append(head, workspaceNode);
-  const perspectives = workbenchEnabled() ? workbenchViews({main, head, work: workspaceNode, results, namespace: connection.namespace,
+  const perspectives = isWorkbench ? workbenchViews({main, head, work: workspaceNode, results, namespace: connection.namespace,
     workspace: sessionWorkspace || host, host, sessionId: sid, workId: workRecord?.work_item?.work_item_id, t}) : null;
   const originHref = () => {
     const view = originView(), workspaceId = sessionWorkspace;
@@ -2235,7 +2237,7 @@ async function viewSession(main, host, sid, context = null) {
     // Late reads for the withdrawn session must not paint again.
     ++observationRequest; ++deliveryTicket; ++messageRequest; cps.clear(); deliveryKnown.clear();
     state.observations?.delete(`session:${host}/${sid}`);
-    if (first && !results.hidden && (!wide.matches || workbenchEnabled())) results.close();
+    if (first && !results.hidden && (!wide.matches || isWorkbench)) results.close();
     conversation.clear(); pending.replaceChildren(); pendingIdentity = undefined; status.replaceChildren(); readError = null;
     deliveryPills.replaceChildren(); result.replaceChildren(); metadata.replaceChildren();
     sourcesPanel?.dispose(); sourcesPanel = null; sourcesBody.replaceChildren(sourcesEmpty());
@@ -3337,10 +3339,14 @@ function openSettings(main, {exclusive = false, refreshButton} = {}) {
     h('p', {'data-build-line':''}, buildLine(clientIdentity(diagnosticsClient()),t)),
     h('div',{class:'actions'},button({label:t('diag_export'),onClick:openDiagnostics,'data-export-diagnostics':''}),
       h("a", {href: setupGuide()}, t("global_setup_guide")))));
-  if(nativeDesktop)nativeStatus().then(status=>{
-    desktopBuild=status.app_build;
-    if(frame.root.isConnected)frame.panel('about').querySelector('[data-build-line]').textContent=buildLine(clientIdentity(diagnosticsClient()),t);
-  }).catch(()=>{});
+  const identityEpoch = state.epoch;
+  let buildCaps = state.caps;
+  const paintBuild = () => {
+    if(frame.root.isConnected && identityEpoch === state.epoch)
+      frame.panel('about').querySelector('[data-build-line]').textContent=buildLine(clientIdentity(diagnosticsClient(buildCaps)),t);
+  };
+  if(state.token)api('GET','/capabilities').then(caps=>{buildCaps=caps;paintBuild();}).catch(()=>{});
+  if(nativeDesktop)nativeStatus().then(status=>{desktopBuild=status.app_build;paintBuild();}).catch(()=>{});
   main.append(languageSwitch(), frame.root);
   const back=connectionReturn(params.get('from'));
   if(back)frame.panel('connection').append(h('a',{href:back.href,'data-connection-return':''},t(back.label)));
@@ -4867,7 +4873,7 @@ async function route() {
     teardown = off || null;
     return;
   }
-  const views = { 'work-list': workbenchEnabled() ? () => {} : viewSessions, pm: viewPmWorkspace, home: viewHome, projects: viewProjects, project: viewProject, item: viewLinkedWorkItem, sessions: viewSessions,
+  const views = { 'work-list': isWorkbench ? () => {} : viewSessions, pm: viewPmWorkspace, home: viewHome, projects: viewProjects, project: viewProject, item: viewLinkedWorkItem, sessions: viewSessions,
     cleanup: viewCleanup, approvals: viewApprovals, delivery: viewDelivery, operations: viewOperations, session: viewSession, start: viewStart, published: viewPublished, orchestrate: viewOrchestration, op: viewOperation, settings: viewSettings,
     "artifact-review": viewArtifactReview, work: viewProjectWork, dispatch: viewProjectDispatch,
     host: viewHostDiscovery, task: viewTask,

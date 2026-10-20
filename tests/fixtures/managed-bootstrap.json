@@ -34,6 +34,9 @@
       "source": "package"
     },
     "hosts": [],
+    "frontend": {
+      "digest": null
+    },
     "artifacts": {
       "limits": {
         "max_file_bytes": 16777216,
