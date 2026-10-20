@@ -21,7 +21,7 @@ def effective_route(choice, native, bat, scopes):
     """
     permitted = all(scope in scopes for scope in SCOPES)
     rows = []
-    for adapter, descriptor in zip(ADAPTERS, (native, bat)):
+    for adapter, descriptor in zip(ADAPTERS, (native, bat), strict=True):
         value = descriptor if isinstance(descriptor, dict) else {}
         if not permitted:
             reason = 'scope_required'
