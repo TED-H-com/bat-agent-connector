@@ -1,8 +1,5 @@
 // One vocabulary for evidence states; callers choose a key, never translate an enum ad hoc.
 export const statusVocabulary = Object.freeze({
-  github_closed: {en: 'Closed (not completed)', 'zh-TW': '已關閉（未完成）', tone: 'neutral'},
-  github_completed: {en: 'Completed · GitHub', 'zh-TW': '完成議題 · GitHub', tone: 'neutral'},
-  github_done: {en: 'Done · GitHub', 'zh-TW': '完成 · GitHub', tone: 'neutral'},
   not_started: {en: 'Not started', 'zh-TW': '未開始', tone: 'neutral'},
   in_progress: {en: 'In progress', 'zh-TW': '進行中', tone: 'info'},
   waiting: {en: 'Waiting', 'zh-TW': '等待中', tone: 'warn'},
@@ -13,6 +10,10 @@ export const statusVocabulary = Object.freeze({
   merged: {en: 'Merged', 'zh-TW': '已合併', tone: 'ok'},
   deployed: {en: 'Deployed', 'zh-TW': '已部署', tone: 'ok'},
   rolled_back: {en: 'Rolled back', 'zh-TW': '已回復', tone: 'warn'},
+  // Display-only source observations, separate from work and delivery states.
+  github_closed: {en: 'Closed (not completed)', 'zh-TW': '已關閉（未完成）', tone: 'neutral'},
+  github_completed: {en: 'Completed · GitHub', 'zh-TW': '完成議題 · GitHub', tone: 'neutral'},
+  github_done: {en: 'Done · GitHub', 'zh-TW': '完成 · GitHub', tone: 'neutral'},
   unconfirmed: {en: 'Unconfirmed', 'zh-TW': '待確認', tone: 'neutral'},
   unknown: {en: 'Unknown', 'zh-TW': '未知', tone: 'neutral'},
   not_assessed: {en: 'Not assessed', 'zh-TW': '未評估', tone: 'neutral'},

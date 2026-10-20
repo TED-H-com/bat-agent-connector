@@ -1219,21 +1219,6 @@ function reasonLabel(t, reason) {
 var statusVocabulary, phaseVocabulary, phaseStrings, uiStrings, reasonLabels;
 var init_ui_strings = __esmMin((() => {
 	statusVocabulary = Object.freeze({
-		github_closed: {
-			en: "Closed (not completed)",
-			"zh-TW": "已關閉（未完成）",
-			tone: "neutral"
-		},
-		github_completed: {
-			en: "Completed · GitHub",
-			"zh-TW": "完成議題 · GitHub",
-			tone: "neutral"
-		},
-		github_done: {
-			en: "Done · GitHub",
-			"zh-TW": "完成 · GitHub",
-			tone: "neutral"
-		},
 		not_started: {
 			en: "Not started",
 			"zh-TW": "未開始",
@@ -1283,6 +1268,21 @@ var init_ui_strings = __esmMin((() => {
 			en: "Rolled back",
 			"zh-TW": "已回復",
 			tone: "warn"
+		},
+		github_closed: {
+			en: "Closed (not completed)",
+			"zh-TW": "已關閉（未完成）",
+			tone: "neutral"
+		},
+		github_completed: {
+			en: "Completed · GitHub",
+			"zh-TW": "完成議題 · GitHub",
+			tone: "neutral"
+		},
+		github_done: {
+			en: "Done · GitHub",
+			"zh-TW": "完成 · GitHub",
+			tone: "neutral"
 		},
 		unconfirmed: {
 			en: "Unconfirmed",
