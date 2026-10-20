@@ -10,11 +10,12 @@ pub fn valid(value: &str) -> bool {
 }
 
 #[cfg(test)]
-fn from_frontmatter(skill: &str) -> &str {
-    let header = skill
+fn from_frontmatter(skill: &str) -> String {
+    let normalized = skill.replace("\r\n", "\n");
+    let header = normalized
         .strip_prefix("---\n")
         .and_then(|text| text.split_once("\n---\n"))
-        .expect("canonical skill must have LF frontmatter")
+        .expect("canonical skill must have frontmatter")
         .0;
     let values: Vec<_> = header
         .lines()
@@ -29,11 +30,17 @@ fn from_frontmatter(skill: &str) -> &str {
         .strip_prefix("  workflow_version: \"")
         .and_then(|value| value.strip_suffix('"'))
         .expect("canonical workflow_version must be an indented quoted value")
+        .to_owned()
 }
 
 #[cfg(test)]
 pub(crate) fn canonical() -> &'static str {
-    from_frontmatter(include_str!("../../../skills/bat-agent-connector/SKILL.md"))
+    static VALUE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    VALUE
+        .get_or_init(|| {
+            from_frontmatter(include_str!("../../../skills/bat-agent-connector/SKILL.md"))
+        })
+        .as_str()
 }
 
 #[cfg(test)]
