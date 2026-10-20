@@ -1,4 +1,5 @@
 import {test, expect} from '@playwright/test';
+import {mkdir} from 'node:fs/promises';
 import {orchestrationFixture, openOrchestration, chooseTarget, fillOrchestration, operationId, childId} from './orchestration-fixture';
 const primary = (form: any) => form.locator('button.primary');
 for (const locale of ['en-US', 'zh-TW']) for (const width of [1440, 390]) {
@@ -16,7 +17,9 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [1440, 390]) {
     await expect(target).toHaveValue('managed-exact');
     expect(await form.innerText()).not.toMatch(/\bcentral\b|中央/i);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.screenshot({path: testInfo.outputPath(`orchestration-${locale}-${width}.png`), fullPage: true});
+    const folder = process.env.POLISH_COPY_SCREENSHOTS || testInfo.outputPath('screenshots');
+    await mkdir(folder, {recursive: true});
+    await page.screenshot({path: `${folder}/orchestration-${locale}-${width}.png`, fullPage: true});
     expect(state.posts).toEqual([]); expect(state.errors).toEqual([]);
     await context.close();
   });

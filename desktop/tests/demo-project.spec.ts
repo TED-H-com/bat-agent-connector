@@ -1,5 +1,6 @@
 import {UNCERTAIN_OPERATION} from './demo/global.ts';
 import {openPmPanel, openThreadTab, revealPmView} from './pm-navigation.ts';
+import {mkdirSync} from 'node:fs';
 import {expect, test, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture, demoRoute} from './demo/index.ts';
@@ -18,7 +19,9 @@ async function shot(page: Page, name: string) {
   const testInfo = test.info();
   if (process.env.BATC_DEMO_SCREENSHOTS !== '1') return;
   const fullPage = await page.locator('[aria-modal="true"]:visible').count() === 0;
-  await page.screenshot({path: testInfo.outputPath(`${name}.png`), fullPage, animations: 'disabled'});
+  const directory = process.env.BATC_DEMO_SCREENSHOT_DIR || testInfo.outputPath('screenshots');
+  mkdirSync(directory, {recursive: true});
+  await page.screenshot({path: `${directory}/${name}.png`, fullPage, animations: 'disabled'});
 }
 
 // The rail is still `.workspace-nav` (a drawer below 1000px). Scan it with the page.

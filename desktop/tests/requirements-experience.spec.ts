@@ -1,4 +1,5 @@
 import {test, expect} from '@playwright/test';
+import {mkdir} from 'node:fs/promises';
 import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture} from './demo/index.ts';
 import {parseDiscussRefs} from '../src/pm-discuss-link.js';
@@ -37,7 +38,9 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
     await expect(emailRow.locator('[data-column=blocker]')).toBeVisible();
     await expect(emailRow.locator('.pm-requirement-milestone').first()).toHaveAttribute('title', /.+/);
   }
-  await page.screenshot({path: testInfo.outputPath(`requirements-${locale}-${width}.png`), fullPage: true});
+  const out = process.env.BATC_WORK_VIEW_SCREENSHOTS || testInfo.outputPath('screenshots');
+  await mkdir(out, {recursive: true});
+  await page.screenshot({path: `${out}/requirements-${locale}-${width}.png`, fullPage: true});
   const search = rtm.locator('input[type=search]'); await search.fill('#41');
   await expect(rtm.locator('[data-rtm-requirement]')).toHaveCount(1);
   const toggle = rtm.locator(width < 800 ? `[data-rtm-requirement="${ids.requirements.email}"]` : `[data-rtm-toggle="${ids.requirements.email}"]`); await toggle.focus(); await page.keyboard.press('Enter');
@@ -69,7 +72,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
     })).toBe(true);
   }
   await tableFits(page);
-  await page.screenshot({path: testInfo.outputPath(`requirements-inspector-${locale}-${width}.png`), fullPage: false});
+  await page.screenshot({path: `${out}/requirements-inspector-${locale}-${width}.png`, fullPage: false});
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(await page.locator('body').innerText()).not.toMatch(/\b(?:undefined|null|NaN|wv_\w+)\b/);
   await page.keyboard.press('Escape'); await expect(select).toBeFocused();
@@ -104,7 +107,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   await expect(rtm.locator('.pm-requirement-group')).toHaveCount(3);
   await grouping.selectOption('phase'); await expect(rtm.locator('.pm-requirement-group')).toHaveText(locale === 'en' ? 'Phase not recorded' : '尚無階段紀錄');
   await grouping.selectOption('none');
-  if (width === 1440) {await page.emulateMedia({colorScheme: 'dark'}); await page.screenshot({path: testInfo.outputPath(`requirements-dark-${locale}-1440.png`), fullPage: true});}
+  if (width === 1440) {await page.emulateMedia({colorScheme: 'dark'}); await page.screenshot({path: `${out}/requirements-dark-${locale}-1440.png`, fullPage: true});}
   expect(errors).toEqual([]); await context.close();
 });
 

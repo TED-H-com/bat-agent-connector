@@ -1,3 +1,4 @@
+import {mkdirSync} from 'node:fs';
 import {expect, test, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture} from './demo/index.ts';
@@ -34,7 +35,9 @@ async function shot(page: Page, name: string) {
   const testInfo = test.info();
   if (process.env.BATC_GLOBAL_SHOTS !== '1') return;
   await page.evaluate(() => {if (document.activeElement instanceof HTMLElement) document.activeElement.blur();});
-  await page.screenshot({path: testInfo.outputPath(`${name}.png`), fullPage: true});
+  const directory = process.env.BATC_GLOBAL_SHOTS_DIR || testInfo.outputPath('screenshots');
+  mkdirSync(directory, {recursive: true});
+  await page.screenshot({path: `${directory}/${name}.png`, fullPage: true});
 }
 
 async function expectNoOverflow(page: Page) {

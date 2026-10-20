@@ -300,6 +300,8 @@ for (const locale of locales) {
   test(`issues register layout (${locale})`, async ({browser, baseURL}, testInfo) => {
     test.setTimeout(60_000);
     const {page, context, errors, copy} = await boot(browser, baseURL, locale, 1440);
+    const directory = process.env.BATC_ISSUES_SHOTS_DIR || testInfo.outputPath('screenshots');
+    mkdirSync(directory, {recursive: true});
     await openView(page, 'issues');
     await expect(page.locator('[data-reg-summary]')).toBeVisible();
     for (const width of [1440, 390, 768]) {
@@ -312,17 +314,17 @@ for (const locale of locales) {
         await expect(page.locator('[data-pm-register] tbody tr').first()).toBeVisible();
       }
       await expectNoOverflow(page);
-      await page.screenshot({path: testInfo.outputPath(`issues-${locale}-${width}.png`), fullPage: true});
+      await page.screenshot({path: `${directory}/issues-${locale}-${width}.png`, fullPage: true});
       if (width === 1440) {
         await page.locator(`[data-row-key="${copy.rows.finding}"]`).click();
         await expect(page.locator('[data-reg-inspector]')).toBeVisible();
         await expect(page.locator('[data-reg-timeline] [data-reg-step]').nth(0)).toHaveAttribute('data-reg-step', 'finding');
-        await page.screenshot({path: testInfo.outputPath(`issues-${locale}-1440-finding.png`)});
+        await page.screenshot({path: `${directory}/issues-${locale}-1440-finding.png`});
         await page.keyboard.press('Escape');
         await expect(page.locator('[data-reg-inspector]')).toHaveCount(0);
         await page.locator(`[data-row-key="${copy.rows.decision}"]`).click();
         await expect(page.locator('[data-reg-step="decision"]')).toBeVisible();
-        await page.screenshot({path: testInfo.outputPath(`issues-${locale}-1440-decision.png`)});
+        await page.screenshot({path: `${directory}/issues-${locale}-1440-decision.png`});
         await page.keyboard.press('Escape');
         await expect(page.locator('[data-reg-inspector]')).toHaveCount(0);
       }
@@ -330,7 +332,7 @@ for (const locale of locales) {
         await page.locator(`[data-row-key="${copy.rows.finding}"]`).click();
         await expect(page.locator('[data-reg-inspector]')).toBeVisible();
         await expectNoOverflow(page);
-        await page.screenshot({path: testInfo.outputPath(`issues-${locale}-390-inspector.png`)});
+        await page.screenshot({path: `${directory}/issues-${locale}-390-inspector.png`});
         await page.keyboard.press('Escape');
         await expect(page.locator('[data-reg-inspector]')).toHaveCount(0);
       }
@@ -339,7 +341,7 @@ for (const locale of locales) {
         await expect(page.locator('[data-reg-summary]')).toBeVisible();
         await expect(page.locator('[data-reg-trends]')).toContainText(copy.zh ? '趨勢' : 'Trends');
         await expectNoOverflow(page);
-        await page.screenshot({path: testInfo.outputPath(`issues-${locale}-768-trends.png`), fullPage: true});
+        await page.screenshot({path: `${directory}/issues-${locale}-768-trends.png`, fullPage: true});
         await page.locator('[data-reg-trends] > summary').click();
         await expect(page.locator('[data-reg-summary]')).toBeHidden();
         await page.locator('[data-reg-more]').click();
@@ -353,7 +355,7 @@ for (const locale of locales) {
           return Boolean(fold && fold.contains(document.activeElement));
         })).toBe(true);
         await expectNoOverflow(page);
-        await page.screenshot({path: testInfo.outputPath(`issues-${locale}-768-revise.png`), fullPage: true});
+        await page.screenshot({path: `${directory}/issues-${locale}-768-revise.png`, fullPage: true});
       }
     }
     await expectNoJunk(page);
@@ -681,7 +683,9 @@ test('issues register dark layout', async ({browser, baseURL}, testInfo) => {
   await openView(page, 'issues');
   await expect(page.locator('[data-reg-summary]')).toBeVisible();
   await expectNoOverflow(page);
-  await page.screenshot({path: testInfo.outputPath(`issues-en-1440-dark.png`), fullPage: true});
+  const directory = process.env.BATC_ISSUES_SHOTS_DIR || testInfo.outputPath('screenshots');
+  mkdirSync(directory, {recursive: true});
+  await page.screenshot({path: `${directory}/issues-en-1440-dark.png`, fullPage: true});
   expect(errors.filter(line => !line.startsWith('Failed to load resource:'))).toEqual([]);
   await context.close();
 });

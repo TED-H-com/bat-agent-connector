@@ -1,7 +1,7 @@
 import {expectErrorDetails, expectClientError} from './api-error-assertions.ts';
 import {test,expect,type Page} from '@playwright/test';
 import {createHash} from 'node:crypto';
-import {readFile} from 'node:fs/promises';
+import {readFile,mkdir} from 'node:fs/promises';
 const captureId='op_'+'a'.repeat(32),acceptId='op_'+'b'.repeat(32),executionId='op_'+'c'.repeat(32),artifactId='art_'+'d'.repeat(32);
 const taskId='11111111-2222-4333-8444-555555555555',ref={artifact_id:artifactId,revision:1,digest:'e'.repeat(64)},selector={execution_operation_id:executionId};
 const source={host:'demo',session_id:'managed-session',root:'/managed/work',repository_root:'/managed/work',provenance:'connector_managed',selector,lineage:{kind:'execution_operation',execution_operation_id:executionId}};
@@ -73,7 +73,9 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [1440, 390]) {
   await expect(execution).toHaveValue(JSON.stringify(selector));
   expect(await capture.innerText()).not.toMatch(/\bcentral\b|中央/i);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  await page.screenshot({path:testInfo.outputPath(`artifact-review-${locale}-${width}.png`),fullPage:true});
+  const folder = process.env.POLISH_COPY_SCREENSHOTS || testInfo.outputPath('screenshots');
+  await mkdir(folder, {recursive: true});
+  await page.screenshot({path:`${folder}/artifact-review-${locale}-${width}.png`,fullPage:true});
   expect(state.writes).toEqual([]);expect(state.errors).toEqual([]);await context.close();
  });
 }
