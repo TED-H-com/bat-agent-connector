@@ -156,6 +156,24 @@ def test_offline_wheel_keeps_candidate_commit(clean_wheel, tmp_path):
     assert _command(["git", "status", "--porcelain"], cwd=repo, env=_build_env(directory)) == ""
 
 
+def test_loaded_wheel_snapshot_keeps_embedded_provenance_after_metadata_changes(clean_wheel, tmp_path):
+    _, _, head, wheel = clean_wheel
+    assert _installed_identity(wheel, tmp_path)["commit"] == head
+    # Mutate only a real hook-produced file after import, before the first call.
+    # The resolver must read it afresh; the loaded identity must keep its snapshot.
+    script = """
+import json
+from pathlib import Path
+from bat_agent_connector import build_identity as identity
+Path(identity.__file__).with_name('build-info.json').write_text(json.dumps({'commit': None}))
+print(json.dumps({'loaded': identity.build_identity(), 'read': identity._read_build_identity()}))
+"""
+    observed = json.loads(_command([str(tmp_path / "installed/bin/python"), "-I", "-c", script],
+                                  cwd=tmp_path, env=_build_env(tmp_path)))
+    assert observed["loaded"] == {"version": __version__, "commit": head, "source": "package"}
+    assert observed["read"] == {"version": __version__, "commit": None, "source": "package"}
+
+
 @pytest.mark.parametrize("tamper", [None, "wrong-commit", "malformed", "extra-field", "extra-file", "source-file", "symlink"])
 def test_update_source_verification_accepts_only_producer_provenance(clean_wheel, tmp_path, tamper):
     _, repo, head, wheel = clean_wheel
