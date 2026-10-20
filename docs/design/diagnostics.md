@@ -94,12 +94,24 @@ existing disclosure. A detached caller that constructs its own Details passes
 Capabilities adds `build: {version, commit, source}`. Git installs use installed
 PEP 610 `direct_url.json` (`vcs_info.commit_id`) only when the distribution's package
 directory resolves to the running package's directory; a different site-packages
-copy cannot identify a checkout on `PYTHONPATH`. Plain packages and editable local
-checkouts without matching VCS metadata have a null commit. A frozen runtime reads only
+copy cannot identify a checkout on `PYTHONPATH`. Wheels read their packaged
+`bat_agent_connector/build-info.json` with `source: package`; conflicting embedded
+and VCS commits produce an unknown commit with `source: vcs`. Packages without
+provenance and editable local checkouts without matching VCS metadata have a null
+commit. A frozen runtime reads only
 its packaged `build-info.json`. No runtime Git process is invoked. The packaging
 job supplies `BATC_BUILD_COMMIT` to PyInstaller and Rust `option_env!`; native
 version comes from `CARGO_PKG_VERSION`. Missing commit means unknown in both
 locales. Browser assets use the serving Connector build and remain reproducible.
+
+The Hatch build hook embeds a full 40-hex `BATC_BUILD_COMMIT` (normalized to
+lowercase), otherwise the HEAD of a Git checkout with a clean tracked tree.
+Dirty tracked inputs always produce an unknown commit, including with an override.
+An sdist carries that attribution into a wheel without consulting an enclosing
+checkout; a conflicting override makes it unknown. No provenance is guessed from
+an archive without it. This commit identifies the build's declared source
+candidate; it does not prove that the wheel's bytes match a published release.
+Release manifests and their verification remain separate.
 
 ## Save boundary
 
