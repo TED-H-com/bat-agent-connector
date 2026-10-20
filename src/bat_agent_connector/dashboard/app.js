@@ -52475,7 +52475,7 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 	let reading = false, admissionReady = false;
 	let pageItems = [], nextCursor = null, hasMore = false, filtered = false, listSettled = false;
 	const pinned = new Map(), announced = new Set(), cancelDenied = new Set();
-	let composer = null, composing = false, focusAfter = null;
+	let composer = null, composing = false, composeEnded = -Infinity, focusAfter = null;
 	let sawList = false;
 	const idea = mountWorkInputIdea({
 		h,
@@ -52613,6 +52613,7 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		});
 		field.addEventListener("compositionend", () => {
 			composing = false;
+			composeEnded = performance.now();
 		});
 		field.addEventListener("input", () => composer?.update());
 		const hint = h("p", {
@@ -52651,8 +52652,18 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 			errorBox,
 			extra: h("div", { class: "pm-fields work-next-field" }, field, hint)
 		});
+		const submitButton = composer.box.querySelector("button[type=submit]");
+		let buttonActivation = false;
+		submitButton.addEventListener("click", () => {
+			buttonActivation = true;
+			queueMicrotask(() => {
+				buttonActivation = false;
+			});
+		}, true);
 		composer.box.addEventListener("submit", (event) => {
-			if (composing) {
+			const explicit = buttonActivation && event.submitter === submitButton;
+			buttonActivation = false;
+			if (composing || !explicit && performance.now() - composeEnded < 50) {
 				event.preventDefault();
 				event.stopImmediatePropagation();
 			}

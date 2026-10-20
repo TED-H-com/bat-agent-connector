@@ -75,7 +75,7 @@ for (const native of [false, true]) for (const lang of ['en', 'zh-TW']) for (con
         attempts.push({method: request.method(), path: url.pathname.slice('/api/v1'.length) + url.search, body: request.postDataJSON(), idempotency_key: request.headers()['idempotency-key']});
       });
       page.on('requestfailed', request => failures.push({url: request.url(), error: request.failure()?.errorText}));
-      const operationPosts = () => attempts.filter(row => row.method === 'POST' && new URL(row.path, 'http://fixture').pathname === '/operations');
+      const posts = () => attempts.filter(row => row.method === 'POST');
       try {
         await openWork(page, f, lang);
         if (native) {
@@ -142,7 +142,7 @@ for (const native of [false, true]) for (const lang of ['en', 'zh-TW']) for (con
           expect(await snapshot(field)).toEqual(before);
           expect(await result.evaluate((node, old) => node === old, originalResult)).toBe(true);
           await expect(selectedResult).toHaveAttribute('href', originalHref!);
-          expect(operationPosts()).toEqual([]);
+          expect(posts()).toEqual([]);
           expect(f.follow.items).toEqual([]); // Local text is not a server receipt.
           await expect(page.locator('[data-follow-up-ack], [data-follow-up-receipt]')).toHaveCount(0);
         };
@@ -151,7 +151,7 @@ for (const native of [false, true]) for (const lang of ['en', 'zh-TW']) for (con
             node.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true, isComposing: true, keyCode: 229}));
             node.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true, keyCode: 229}));
           });
-          expect(operationPosts()).toEqual([]);
+          expect(posts()).toEqual([]);
         };
         holding = true;
         if (scenario === 'ime') await field.dispatchEvent('compositionstart', {data: '第三句'});
@@ -214,6 +214,11 @@ for (const native of [false, true]) for (const lang of ['en', 'zh-TW']) for (con
           const afterEnd = await field.evaluate((node: HTMLTextAreaElement) => {
             node.dispatchEvent(new CompositionEvent('compositionend', {bubbles: true, data: '第三句'}));
             node.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true}));
+            const form = node.closest('form')!, submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+            // The existing implicit-submit backstop applies even if the browser
+            // identifies the default button, without a button activation.
+            form.requestSubmit();
+            form.requestSubmit(submit);
             const observed = {
               focused: document.activeElement === node,
               value: node.value,
@@ -222,16 +227,17 @@ for (const native of [false, true]) for (const lang of ['en', 'zh-TW']) for (con
               readerTop: document.querySelector('main.session-view')!.scrollTop,
               stored: Object.entries(localStorage).filter(([key]) => key.startsWith('batc.pm.') && key.includes('.session.send.')),
             };
-            node.closest('form')!.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+            submit.click();
             return observed;
           });
           // No intent was created by the trailing Enter; all bytes and focus
           // were still original immediately before explicit button activation.
           expect(afterEnd).toEqual(before);
         } else await send.click();
-        await expect.poll(() => operationPosts().length).toBe(1);
+        await expect.poll(() => posts().length).toBe(1);
         const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), before.stored[0][0]);
-        const sent = operationPosts()[0];
+        const sent = posts()[0];
+        expect(new URL(sent.path, 'http://fixture').pathname).toBe('/operations');
         expect(sent.idempotency_key).toBe(saved.intent.key);
         expect(sent.body).toEqual(saved.intent.request);
         expect(sent.body.target).toEqual({workspace_id: WS, work_item_id: WI});
@@ -239,7 +245,7 @@ for (const native of [false, true]) for (const lang of ['en', 'zh-TW']) for (con
         expect(sent.body.params).toEqual({text: draft.trim(), schedule: 'after_current'});
         post.release();
         await expect(page.locator('[data-follow-up-receipt]')).toHaveCount(1);
-        expect(operationPosts()).toHaveLength(1);
+        expect(posts()).toHaveLength(1);
         expect(f.follow.posts).toHaveLength(1);
         expect(f.follow.errors).toEqual([]);
       } finally {
