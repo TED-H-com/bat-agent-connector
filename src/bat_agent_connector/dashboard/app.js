@@ -771,6 +771,17 @@ var init_diagnostics_strings = __esmMin((() => {
 			diag_operations_unavailable: "Operations not available",
 			diag_hosts_unavailable: "Hosts not available",
 			diag_sample: "Session counts cover client reads only. Operation counts cover the loaded page.",
+			diag_source_capabilities: "Capabilities",
+			diag_source_hosts: "Hosts",
+			diag_source_operations: "Operations",
+			diag_source_managed_setup: "Managed setup",
+			diag_source_observation: "Observation",
+			diag_source_available: "Available",
+			diag_source_not_permitted: "Required scope missing",
+			diag_source_not_offered: "Not offered by this installation",
+			diag_source_failed: "Read failed",
+			diag_source_not_attempted: "Not attempted",
+			diag_source_checked: "Client checked at {time}",
 			diag_unavailable: "Not available",
 			diag_loading: "Preparing preview…",
 			diag_json: "Full JSON",
@@ -808,6 +819,17 @@ var init_diagnostics_strings = __esmMin((() => {
 			diag_operations_unavailable: "無法取得操作資料",
 			diag_hosts_unavailable: "無法取得主機資料",
 			diag_sample: "工作階段僅計算介面已讀取的資料；操作僅計算已載入的頁面。",
+			diag_source_capabilities: "能力資料",
+			diag_source_hosts: "主機",
+			diag_source_operations: "操作",
+			diag_source_managed_setup: "受管設定",
+			diag_source_observation: "觀察資料",
+			diag_source_available: "可取得",
+			diag_source_not_permitted: "缺少所需權限",
+			diag_source_not_offered: "此安裝未提供",
+			diag_source_failed: "讀取失敗",
+			diag_source_not_attempted: "尚未嘗試讀取",
+			diag_source_checked: "介面檢查時間：{time}",
 			diag_unavailable: "無法取得",
 			diag_loading: "正在準備預覽…",
 			diag_json: "完整 JSON",
@@ -15205,6 +15227,42 @@ function sessionFacts(session) {
 		history_reasons: Array.isArray(session.reading?.incomplete_reasons) ? [...new Set(session.reading.incomplete_reasons.map(reason).filter(Boolean))] : null
 	};
 }
+function diagnosticsSource(read) {
+	const result = {
+		status: "not_attempted",
+		http_status: null,
+		code: null,
+		read_at: time(read?.at)
+	};
+	if (!read || read.attempted === false) return result;
+	if (read.offered === false) return {
+		...result,
+		status: "not_offered"
+	};
+	if (read.permitted === false) return {
+		...result,
+		status: "not_permitted"
+	};
+	if (read.error) {
+		const status = read.error.status;
+		const http = Number.isInteger(status) && status >= 100 && status <= 599 ? status : null;
+		return {
+			...result,
+			status: "failed",
+			http_status: http,
+			code: code(read.error.code) || (http ? "HTTP_ERROR" : "NETWORK_ERROR")
+		};
+	}
+	if (read.discarded) return {
+		...result,
+		status: "failed",
+		code: "SOURCE_ACCESS_CHANGED"
+	};
+	return read.completed === true ? {
+		...result,
+		status: "available"
+	} : result;
+}
 function buildDiagnostics(input) {
 	const hosts = Array.isArray(input.hosts) ? [...input.hosts].sort((a, b) => String(a.host).localeCompare(String(b.host), "en")) : [];
 	const flags = (source, keys) => Object.fromEntries(keys.map((key) => [key, bool(source?.[key])]));
@@ -15212,18 +15270,20 @@ function buildDiagnostics(input) {
 	const count = (key) => sessions?.length === 0 ? 0 : sessions?.some((s) => typeof s[key] === "boolean") ? sessions.filter((s) => s[key] === true).length : null;
 	const history = sessions?.some((s) => s.history_reasons !== null) ? Object.create(null) : null;
 	if (history) for (const session of sessions) for (const why of session.history_reasons || []) history[why] = (history[why] || 0) + 1;
-	const sources = Object.fromEntries([
+	const sourceReads = Object.fromEntries([
 		"capabilities",
 		"hosts",
 		"operations",
 		"managed_setup",
 		"observation"
-	].map((key) => [key, select(input.sources?.[key], ["available", "not_available"]) || "not_available"]));
+	].map((key) => [key, diagnosticsSource(input.sourceReads?.[key])]));
+	const sources = Object.fromEntries(Object.entries(sourceReads).map(([key, read]) => [key, read.status === "available" ? "available" : "not_available"]));
 	const bundle = {
 		schema: "batc.diagnostics.v1",
 		exported_at: time(input.exportedAt),
 		client: clientIdentity(input),
 		sources,
+		source_reads: sourceReads,
 		hosts: hosts.map((host, i) => {
 			const policy = input.caps?.hosts?.find((h) => h.host === host.host) || {};
 			const policyFlags = flags(host.policy || policy, [
@@ -15248,6 +15308,8 @@ function buildDiagnostics(input) {
 					"never_connected",
 					"stale"
 				]) || (host.reachable === true ? "reachable" : host.reachable === false ? "unreachable" : "unknown"),
+				last_attempt_at: time(host.last_attempt_at),
+				last_success_at: time(host.last_success_at),
 				stale: bool(host.stale),
 				stale_reason: reason(host.stale_reason),
 				last_error_code: code(host.last_error?.code ?? discovery?.error_code),
@@ -15442,7 +15504,7 @@ function diagnosticsDialog({ h, t, load, save, onClose }) {
 		if (current !== serial || !dialog.isConnected) return;
 		content = JSON.stringify(bundle, null, 2) + "\n";
 		filename = "batc-diagnostics-" + bundle.exported_at.slice(0, 10).replaceAll("-", "") + "-" + bundle.exported_at.slice(11, 16).replace(":", "") + ".json";
-		summary.append(h("div", {}, h("p", {}, buildLine(bundle.client, t)), bundle.sources.hosts === "not_available" ? h("p", {}, t("diag_hosts_unavailable")) : null, ...bundle.hosts.map((host) => h("p", {}, `${host.alias} · ${t("diag_" + (host.connection_state === "unknown" ? "state_unknown" : host.connection_state))}${host.stale === true && host.connection_state !== "stale" ? " · " + t("diag_stale") : ""}`)), h("p", {}, t("diag_counts", {
+		summary.append(h("div", {}, h("p", {}, buildLine(bundle.client, t)), ...Object.entries(bundle.source_reads).map(([source, read]) => h("p", { "data-diagnostics-source": source }, t("diag_source_" + source), " · ", t("diag_source_" + read.status), read.http_status == null ? null : ` · HTTP ${read.http_status}`, read.code ? [" · ", h("code", {}, read.code)] : null, read.read_at ? [" · ", timeLabel(t, "diag_source_checked", { time: timeStamp(read.read_at) })] : null)), bundle.sources.hosts === "not_available" ? h("p", {}, t("diag_hosts_unavailable")) : null, ...bundle.hosts.map((host) => h("p", {}, `${host.alias} · ${t("diag_" + (host.connection_state === "unknown" ? "state_unknown" : host.connection_state))}${host.stale === true && host.connection_state !== "stale" ? " · " + t("diag_stale") : ""}`)), h("p", {}, t("diag_counts", {
 			errors: t(bundle.recent_errors.length === 1 ? "diag_errors_one" : "diag_errors_many", { count: bundle.recent_errors.length }),
 			operations: bundle.operations === null ? t("diag_operations_unavailable") : t(bundle.operations.length === 1 ? "diag_operations_one" : "diag_operations_many", { count: bundle.operations.length })
 		})), h("p", { class: "muted" }, t("diag_sample"))));
@@ -65275,28 +65337,44 @@ async function openDiagnostics() {
 				desktopBuild = (await nativeStatus()).app_build;
 			} catch {}
 			let caps = null;
-			try {
-				caps = await api("GET", "/capabilities");
-			} catch {}
+			const read = async (path, scope = null, offered = true, attempted = true) => {
+				const permitted = !scope || !!caps?.scopes?.includes(scope);
+				if (!attempted || !offered || !permitted) return {
+					attempted,
+					offered,
+					permitted,
+					at: new Date().toISOString()
+				};
+				try {
+					return {
+						data: await api("GET", path),
+						completed: true,
+						at: new Date().toISOString()
+					};
+				} catch (error) {
+					return {
+						error: {
+							status: error.status,
+							code: error.code
+						},
+						at: new Date().toISOString()
+					};
+				}
+			};
+			const capabilities = await read("/capabilities");
+			caps = capabilities.data;
 			if (epoch !== state.epoch) throw Error("Connection changed");
 			if (!caps?.scopes?.includes("observe")) withdrawDiagnostics();
 			const revision = diagnosticRevision;
-			const read = async (path, scope) => {
-				if (!caps?.scopes?.includes(scope)) return null;
-				try {
-					const data = await api("GET", path);
-					return revision === diagnosticRevision ? data : null;
-				} catch {
-					return null;
-				}
-			};
-			let [hosts, operations, setup] = await Promise.all([
-				read("/hosts", "observe"),
-				read("/operations?limit=50", "observe"),
-				caps?.managed_installation ? read("/managed/setup", "manage") : null
+			const [hostsRead, operationsRead, setupRead, observationRead] = await Promise.all([
+				read("/hosts", "observe", true, !!caps),
+				read("/operations?limit=50", "observe", true, !!caps),
+				read("/managed/setup", "manage", !!caps?.managed_installation, !!caps),
+				read(null, null, false)
 			]);
 			if (epoch !== state.epoch) throw Error("Connection changed");
-			if (revision !== diagnosticRevision) hosts = operations = setup = null;
+			const discarded = revision !== diagnosticRevision;
+			const hosts = discarded ? null : hostsRead.data, operations = discarded ? null : operationsRead.data, setup = discarded ? null : setupRead.data;
 			return buildDiagnostics({
 				...diagnosticsClient(caps),
 				exportedAt: new Date().toISOString(),
@@ -65305,11 +65383,21 @@ async function openDiagnostics() {
 				setup,
 				sessions: hosts && caps?.scopes?.includes("observe") && diagnosticSessionsRead ? [...diagnosticSessions.values()] : null,
 				recentErrors: recentErrors.entries(),
-				sources: {
-					capabilities: caps ? "available" : "not_available",
-					hosts: hosts ? "available" : "not_available",
-					operations: operations ? "available" : "not_available",
-					managed_setup: setup ? "available" : "not_available"
+				sourceReads: {
+					capabilities,
+					hosts: {
+						...hostsRead,
+						discarded
+					},
+					operations: {
+						...operationsRead,
+						discarded
+					},
+					managed_setup: {
+						...setupRead,
+						discarded
+					},
+					observation: observationRead
 				}
 			});
 		},
