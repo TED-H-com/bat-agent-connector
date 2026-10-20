@@ -29,6 +29,12 @@ compares installed Python files and the canonical skill with that source. It
 also verifies installed package metadata, VCS commit and command availability.
 No branch tip, mutable checkout or unpublished Git object is an update source.
 
+The shared installer/updater source verifier accepts the wheel's generated
+`build-info.json` only with the producer's commit-only schema and the exact
+candidate SHA. That validated file can lack a tracked source counterpart; all
+other source files still match individually. The installed proof digest includes
+the generated file, so later changes are detected on verification and reuse.
+
 ## Installation ownership and activation
 
 Enrollment requires the existing deployment receipt, matching installed source,

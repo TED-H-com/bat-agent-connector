@@ -1,11 +1,19 @@
 import importlib.util
 import json
+import shutil
+import sys
+import tarfile
+import time
+import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from bat_agent_connector import __version__, build_identity
+from bat_agent_connector.update_install import digest_files, package_files, verify_source_package
+from bat_agent_connector.update_release import UpdateError
+from tests.package_build import _build, _build_env, _command, _source_repo
 
 
 @pytest.mark.parametrize("doc,source,commit", [
@@ -57,6 +65,299 @@ def test_bundled_provenance(monkeypatch, tmp_path):
     assert build_identity._read_build_identity()["source"] == "bundled"
 
 
+def _installed_identity(artifact, directory, *, frozen=False, shadow=None, commit=None):
+    """An offline, dependency-free install; the resolver itself only needs stdlib."""
+    env = _build_env(directory, commit)
+    target = directory / "installed"
+    _command(["uv", "venv", "--python", sys.executable, "--no-python-downloads", str(target)],
+             cwd=directory, env=env)
+    python = target / "bin" / "python"
+    started = time.perf_counter()
+    _command(["uv", "pip", "install", "--python", str(python), "--offline", "--no-deps", str(artifact)],
+             cwd=directory, env=env)
+    if str(artifact).startswith("git+"):
+        print(f"REAL VCS BUILD+INSTALL: {time.perf_counter() - started:.3f}s", flush=True)
+    script = (
+        "import json, subprocess, sys; "
+        + (f"sys.path.insert(0, {str(shadow)!r}); " if shadow else "")
+        + ("sys.frozen = True; " if frozen else "")
+        + "from bat_agent_connector.build_identity import build_identity; "
+        "subprocess.run = lambda *a, **kw: (_ for _ in ()).throw(AssertionError('runtime process')); "
+        "print(json.dumps(build_identity()))"
+    )
+    # Isolated mode and an unrelated cwd keep the build checkout off sys.path.
+    return json.loads(_command([str(python), "-I", "-c", script], cwd=directory, env=env))
+
+
+def test_offline_wheel_keeps_candidate_commit(clean_wheel, tmp_path):
+    directory, repo, head, wheel = clean_wheel
+    assert _installed_identity(wheel, tmp_path) == {
+        "version": __version__, "commit": head, "source": "package"}
+    with zipfile.ZipFile(wheel) as archive:
+        assert archive.namelist().count("bat_agent_connector/build-info.json") == 1
+        assert json.loads(archive.read("bat_agent_connector/build-info.json")) == {"commit": head}
+        assert archive.read("bat_agent_connector/skill/SKILL.md") == (
+            repo / "skills/bat-agent-connector/SKILL.md"
+        ).read_bytes()
+    assert not (repo / "src/bat_agent_connector/build-info.json").exists()
+    assert _command(["git", "status", "--porcelain"], cwd=repo, env=_build_env(directory)) == ""
+
+
+def test_loaded_wheel_snapshot_keeps_embedded_provenance_after_metadata_changes(clean_wheel, tmp_path):
+    _, _, head, wheel = clean_wheel
+    assert _installed_identity(wheel, tmp_path)["commit"] == head
+    # Mutate only a real hook-produced file after import, before the first call.
+    # The resolver must read it afresh; the loaded identity must keep its snapshot.
+    script = """
+import json
+from pathlib import Path
+from bat_agent_connector import build_identity as identity
+Path(identity.__file__).with_name('build-info.json').write_text(json.dumps({'commit': None}))
+print(json.dumps({'loaded': identity.build_identity(), 'read': identity._read_build_identity()}))
+"""
+    observed = json.loads(_command([str(tmp_path / "installed/bin/python"), "-I", "-c", script],
+                                  cwd=tmp_path, env=_build_env(tmp_path)))
+    assert observed["loaded"] == {"version": __version__, "commit": head, "source": "package"}
+    assert observed["read"] == {"version": __version__, "commit": None, "source": "package"}
+
+
+@pytest.mark.parametrize("tamper", [None, "wrong-commit", "malformed", "extra-field", "extra-file", "source-file", "symlink"])
+def test_update_source_verification_accepts_only_producer_provenance(clean_wheel, tmp_path, tamper):
+    _, repo, head, wheel = clean_wheel
+    assert _installed_identity(wheel, tmp_path)["commit"] == head
+    package = next((tmp_path / "installed/lib").glob("python*/site-packages/bat_agent_connector"))
+    info = package / "build-info.json"
+    original_files = package_files(package)
+    assert "build-info.json" in original_files
+    # Mutate a real hook-produced record only for rejection cases; no metadata
+    # fixture stands in for the producer.
+    if tamper == "wrong-commit":
+        doc = json.loads(info.read_text())
+        doc["commit"] = "0" * 40
+        info.write_text(json.dumps(doc))
+    elif tamper == "malformed":
+        info.write_text("{")
+    elif tamper == "extra-field":
+        doc = json.loads(info.read_text())
+        doc["unexpected"] = True
+        info.write_text(json.dumps(doc))
+    elif tamper == "extra-file":
+        (package / "unexpected.json").write_text("{}")
+    elif tamper == "source-file":
+        with (package / "__init__.py").open("a") as stream:
+            stream.write("\n# Changed after installation\n")
+    elif tamper == "symlink":
+        target = tmp_path / "original-build-info.json"
+        info.rename(target)
+        info.symlink_to(target)
+    if tamper in {"wrong-commit", "malformed", "extra-field"}:
+        assert digest_files(package_files(package)) != digest_files(original_files)
+    if tamper is None:
+        verify_source_package(repo / "src/bat_agent_connector", package, head)
+    else:
+        code = "installed_identity_mismatch" if tamper in {"wrong-commit", "malformed", "extra-field"} else (
+            "package_symlink_refused" if tamper == "symlink" else "installed_source_mismatch")
+        with pytest.raises(UpdateError, match=code):
+            verify_source_package(repo / "src/bat_agent_connector", package, head)
+
+
+@pytest.mark.parametrize("mode,override", [
+    ("dirty", None), ("override", "HEAD"), ("malformed", "not-a-commit"),
+    ("too-long", "b" * 64), ("no-git", None), ("archive-override", "b" * 40),
+    ("staged", None), ("deleted", None), ("dirty-override", "b" * 40),
+])
+def test_wheel_build_commit_sources(tmp_path, mode, override):
+    repo, head = _source_repo(tmp_path, mode)
+    if mode == "override":
+        override = head.upper()  # A valid, matching override is normalized.
+    if mode in {"dirty", "staged", "dirty-override"}:
+        with (repo / "README.md").open("a") as stream:
+            stream.write("\nA tracked change after the candidate commit.\n")
+    if mode == "staged":
+        _command(["git", "add", "README.md"], cwd=repo, env=_build_env(tmp_path))
+    if mode == "deleted":
+        (repo / "src/bat_agent_connector/cli.py").unlink()
+    if mode in {"no-git", "archive-override"}:
+        shutil.rmtree(repo / ".git")
+    wheel = _build(repo, tmp_path, commit=override)
+    expected = {"dirty": None, "staged": None, "deleted": None, "dirty-override": None,
+                "no-git": None, "override": head,
+                "archive-override": "b" * 40}.get(mode, head)
+    assert _installed_identity(wheel, tmp_path) == {
+        "version": __version__, "commit": expected, "source": "package"}
+
+
+def test_clean_checkout_rejects_mismatching_override(tmp_path):
+    repo, head = _source_repo(tmp_path, "mismatching candidate override")
+    override = "b" * 40 if head != "b" * 40 else "c" * 40
+    wheel = _build(repo, tmp_path, commit=override)
+    with zipfile.ZipFile(wheel) as archive:
+        assert json.loads(archive.read("bat_agent_connector/build-info.json")) == {"commit": None}
+    assert _installed_identity(wheel, tmp_path) == {
+        "version": __version__, "commit": None, "source": "package"}
+
+
+@pytest.mark.parametrize("dirty", [False, True])
+def test_editable_install_keeps_source_and_package_resolution(tmp_path, dirty):
+    repo, _ = _source_repo(tmp_path, f"editable dirty={dirty}")
+    if dirty:
+        with (repo / "README.md").open("a") as stream:
+            stream.write("\nAn existing local edit.\n")
+    env = _build_env(tmp_path)
+    before_status = _command(["git", "status", "--porcelain"], cwd=repo, env=env)
+
+    def source_files():
+        # Normal Python import caches are not source or provenance writes.
+        return {str(path.relative_to(repo)): path.read_bytes() for path in repo.rglob("*")
+                if path.is_file() and ".git" not in path.relative_to(repo).parts
+                and "__pycache__" not in path.parts}
+
+    before_files = source_files()
+    target = tmp_path / "editable-env"
+    _command(["uv", "venv", "--python", sys.executable, "--no-python-downloads", str(target)],
+             cwd=tmp_path, env=env)
+    python = target / "bin" / "python"
+    _command(["uv", "pip", "install", "--python", str(python), "--offline", "--no-deps",
+              "--editable", str(repo)], cwd=tmp_path, env=env)
+    script = """
+import json
+import subprocess
+import sysconfig
+from importlib import metadata
+from pathlib import Path
+import bat_agent_connector
+from bat_agent_connector.build_identity import build_identity
+subprocess.run = lambda *a, **kw: (_ for _ in ()).throw(AssertionError('runtime process'))
+site = Path(sysconfig.get_path('purelib'))
+package = site / 'bat_agent_connector'
+distribution = metadata.distribution('bat-agent-connector')
+print(json.dumps({
+    'identity': build_identity(),
+    'import_path': str(Path(bat_agent_connector.__file__).resolve()),
+    'distribution_package': str(Path(distribution.locate_file('bat_agent_connector')).resolve()),
+    'site_package': str(package),
+    'package_files': sorted(str(p.relative_to(site)) for p in package.rglob('*')),
+    'package_directory_exists': package.exists(),
+    'direct_url': json.loads(distribution.read_text('direct_url.json')),
+    'pth_files': {p.name: p.read_text() for p in site.glob('*bat_agent_connector*.pth')},
+}))
+"""
+    facts = json.loads(_command([str(python), "-I", "-c", script], cwd=tmp_path, env=env))
+    facts["status_before"] = before_status
+    facts["status_after"] = _command(["git", "status", "--porcelain"], cwd=repo, env=env)
+    facts["bytecode_caches"] = sorted(str(p.relative_to(repo)) for p in repo.rglob("__pycache__"))
+    print("REAL EDITABLE " + json.dumps(facts, sort_keys=True), flush=True)
+    assert facts["identity"] == {"version": __version__, "commit": None, "source": "package"}
+    assert facts["import_path"] == str(repo / "src/bat_agent_connector/__init__.py")
+    assert facts["distribution_package"] != str(repo / "src/bat_agent_connector")
+    assert facts["direct_url"]["dir_info"]["editable"] is True
+    assert facts["status_after"] == before_status == ("M README.md" if dirty else "")
+    assert source_files() == before_files
+    assert not (repo / "src/bat_agent_connector/build-info.json").exists()
+    assert facts["package_files"] == []
+    assert facts["package_directory_exists"] is False
+
+
+@pytest.mark.parametrize("dirty", [False, True])
+def test_sdist_preserves_provenance_without_borrowing_an_enclosing_checkout(tmp_path, dirty):
+    repo, head = _source_repo(tmp_path, f"sdist dirty={dirty}")
+    if dirty:
+        (repo / "README.md").write_text("Changed tracked content\n")
+    sdist = _build(repo, tmp_path, "sdist")
+    with tarfile.open(sdist) as archive:
+        names = archive.getnames()
+        assert sum(name.endswith("src/bat_agent_connector/build-info.json") for name in names) == 1
+        assert any(name.endswith("hatch_build.py") for name in names)
+        assert any(name.endswith("skills/bat-agent-connector/SKILL.md") for name in names)
+    # First exercise the real frontend's sdist extraction, then extract the same
+    # producer archive under an unrelated Git checkout. Neither may relabel it.
+    wheel = _build(sdist, tmp_path)
+    with zipfile.ZipFile(wheel) as archive:
+        assert archive.read("bat_agent_connector/skill/SKILL.md") == (
+            repo / "skills/bat-agent-connector/SKILL.md"
+        ).read_bytes()
+    assert _installed_identity(wheel, tmp_path) == {
+        "version": __version__, "commit": None if dirty else head, "source": "package"}
+    foreign = tmp_path / "foreign-checkout"
+    foreign.mkdir()
+    (foreign / "marker").write_text("Unrelated repository\n")
+    env = _build_env(tmp_path)
+    for args in (["git", "init", "-q"], ["git", "add", "marker"],
+                 ["git", "-c", "user.name=Build Fixture", "-c", "user.email=build@example.invalid",
+                  "commit", "-qm", "unrelated candidate"]):
+        _command(args, cwd=foreign, env=env)
+    with tarfile.open(sdist) as archive:
+        # Owned producer output only; require regular files/directories contained
+        # in the extraction root on both supported Python versions.
+        for member in archive.getmembers():
+            assert member.isfile() or member.isdir()
+            assert (foreign / member.name).resolve().is_relative_to(foreign.resolve())
+        archive.extractall(foreign, **({"filter": "data"} if hasattr(tarfile, "data_filter") else {}))
+    extracted = next(foreign.glob("bat_agent_connector-*"))
+    nested = tmp_path / "nested-build"
+    nested.mkdir()
+    nested_wheel = _build(extracted, nested)
+    assert _installed_identity(nested_wheel, nested) == {
+        "version": __version__, "commit": None if dirty else head, "source": "package"}
+
+
+def test_frozen_resolver_reads_real_build_metadata(clean_wheel, tmp_path):
+    _, _, head, wheel = clean_wheel
+    assert _installed_identity(wheel, tmp_path, frozen=True) == {
+        "version": __version__, "commit": head, "source": "bundled"}
+
+
+def test_sdist_cannot_be_relabelled_by_a_different_override(clean_wheel, tmp_path):
+    _, repo, _, _ = clean_wheel
+    sdist = _build(repo, tmp_path, "sdist")
+    wheel = _build(sdist, tmp_path, commit="b" * 40)
+    assert _installed_identity(wheel, tmp_path) == {
+        "version": __version__, "commit": None, "source": "package"}
+
+
+def test_embedded_identity_cannot_identify_a_different_copy(clean_wheel, tmp_path):
+    _, _, _, wheel = clean_wheel
+    shadow = tmp_path / "different-copy"
+    with zipfile.ZipFile(wheel) as archive:
+        for name in archive.namelist():
+            if name.startswith("bat_agent_connector/"):
+                archive.extract(name, shadow)
+    # The other copy has real embedded metadata too. The installed distribution
+    # (whose dist-info is deliberately not copied) still must not identify code
+    # imported from that different package path.
+    assert _installed_identity(wheel, tmp_path, shadow=shadow) == {
+        "version": __version__, "commit": None, "source": "package"}
+
+
+@pytest.mark.parametrize("conflict", [False, True])
+def test_real_vcs_install_reconciles_embedded_identity(tmp_path, conflict):
+    repo, head = _source_repo(tmp_path, f"VCS conflict={conflict}")
+    source_commit = head
+    if conflict:
+        # Preserve a real producer's sdist provenance in a later Git snapshot.
+        # This creates two known, different identities without hand-written
+        # metadata or relying on the now-rejected checkout override mismatch.
+        sdist = _build(repo, tmp_path, "sdist")
+        with tarfile.open(sdist) as archive:
+            prefix = archive.getnames()[0].split("/")[0]
+            for relative in ("PKG-INFO", "src/bat_agent_connector/build-info.json"):
+                (repo / relative).write_bytes(archive.extractfile(f"{prefix}/{relative}").read())
+        env = _build_env(tmp_path)
+        _command(["git", "add", "PKG-INFO", "src/bat_agent_connector/build-info.json"], cwd=repo, env=env)
+        _command(["git", "-c", "user.name=Build Fixture", "-c", "user.email=build@example.invalid",
+                  "commit", "-qm", "version the producer's sdist export"], cwd=repo, env=env)
+        head = _command(["git", "rev-parse", "HEAD"], cwd=repo, env=env)
+        assert head != source_commit
+    # uv, not the fixture, writes PEP 610 direct_url.json. Any embedded metadata
+    # must likewise come from the actual Hatch build, including the conflict.
+    identity = _installed_identity(f"git+{repo.as_uri()}@{head}", tmp_path)
+    site = next((tmp_path / "installed/lib").glob("python*/site-packages"))
+    assert json.loads((site / "bat_agent_connector/build-info.json").read_text()) == {"commit": source_commit}
+    direct_url = next(site.glob("bat_agent_connector-*.dist-info/direct_url.json"))
+    assert json.loads(direct_url.read_text())["vcs_info"]["commit_id"] == head
+    assert identity == {"version": __version__, "commit": None if conflict else head, "source": "vcs"}
+
+
 def test_loaded_identity_returns_copies_and_keeps_its_original_provenance(monkeypatch):
     original = build_identity.build_identity()
     monkeypatch.setattr(build_identity, "_read_build_identity", lambda: pytest.fail("read installation after startup"))
@@ -78,3 +379,27 @@ def test_unknown_loaded_commit_stays_unknown_when_metadata_later_appears(monkeyp
     distribution.read_text = lambda file: json.dumps({"vcs_info": {"vcs": "git", "commit_id": "a" * 40}})
     assert loaded._read_build_identity()["commit"] == "a" * 40
     assert loaded.build_identity() == original
+
+
+@pytest.mark.parametrize("relative", ["build-info.json", "__init__.py"])
+def test_mutable_installs_do_not_share_files_with_each_other_or_the_cache(clean_wheel, tmp_path, relative):
+    _, _, head, wheel = clean_wheel
+    expected = {"version": __version__, "commit": head, "source": "package"}
+    environments = []
+    for name in ("first", "second"):
+        directory = tmp_path / name
+        directory.mkdir()
+        assert _installed_identity(wheel, directory) == expected
+        environments.append(next((directory / "installed/lib").glob("python*/site-packages/bat_agent_connector")))
+    first, second = (package / relative for package in environments)
+    original = first.read_bytes()
+    assert first.stat().st_nlink == second.stat().st_nlink == 1
+    assert not first.samefile(second)
+    # Mutate real producer output exactly as the snapshot/tamper cases do.
+    first.write_bytes(b'{"commit": null}' if relative == "build-info.json" else original + b"\n# changed\n")
+    assert second.read_bytes() == original
+    third = tmp_path / "third"
+    third.mkdir()
+    assert _installed_identity(wheel, third) == expected
+    installed = next((third / "installed/lib").glob("python*/site-packages/bat_agent_connector"))
+    assert (installed / relative).read_bytes() == original

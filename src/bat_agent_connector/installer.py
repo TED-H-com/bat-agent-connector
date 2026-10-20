@@ -16,7 +16,7 @@ from pathlib import Path
 
 from . import platform_files as files
 from .build_identity import build_identity
-from .update_install import clean_env, installed, package_files, run
+from .update_install import clean_env, installed, package_files, run, verify_source_package
 from .update_release import REPOSITORY, UpdateError, require
 
 COMMANDS = ("batc", "bat-agent-connector-mcp", "batc-update")
@@ -138,8 +138,7 @@ def finalize(root, release, *, source=None, home=None, verify_only=False,
         require(json.loads(files.read_private(receipt)) == doc, "install_receipt_mismatch")
         return {"status": "verified_installation", "receipt": str(receipt), "writes": False}
     require(source is not None, "source_checkout_required")
-    require(package_files(Path(source) / "src/bat_agent_connector") == package_files(package),
-            "installed_source_mismatch")
+    verify_source_package(Path(source) / "src/bat_agent_connector", package, release["commit"])
     require((Path(source) / "skills/bat-agent-connector/SKILL.md").read_bytes() == canonical,
             "source_skill_mismatch")
     version_text = command([str(root / "bin/batc"), "--version"], env=clean_env(home))
