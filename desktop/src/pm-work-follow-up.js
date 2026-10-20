@@ -186,7 +186,8 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
     let buttonActivation = false;
     submitButton.addEventListener('click', () => {
       buttonActivation = true;
-      queueMicrotask(() => {buttonActivation = false;});
+      // A trusted click can flush microtasks before its default form submit.
+      setTimeout(() => {buttonActivation = false;}, 0);
     }, true);
     composer.box.addEventListener('submit', event => {
       // Keep the IME backstop for implicit submits. Only this button activation

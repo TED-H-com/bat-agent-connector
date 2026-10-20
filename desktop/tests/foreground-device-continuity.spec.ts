@@ -42,8 +42,8 @@ async function snapshot(field: Locator) {
   }));
 }
 
-// Full matrix: no thinning. Both engine transports and both locales see each
-// lifecycle condition in portrait and touch-sized landscape, including reflow.
+// No thinning: the required 40 cases plus eight trusted-pointer IME cases.
+// Both transports/locales see every condition in portrait and landscape, with reflow.
 for (const native of [false, true]) for (const lang of ['en', 'zh-TW']) for (const viewport of [{width: 390, height: 844}, {width: 844, height: 390}]) {
   test.describe(`${native ? 'IPC' : 'HTTP'} ${lang} ${viewport.width}x${viewport.height}`, () => {
     test.use({locale: lang === 'en' ? 'en-US' : lang, viewport});
@@ -214,24 +214,24 @@ for (const native of [false, true]) for (const lang of ['en', 'zh-TW']) for (con
           // the trailing Enter, without discarding this explicit button click.
           const afterEnd = await field.evaluate((node: HTMLTextAreaElement, pointer) => {
             const end = () => {
-            node.dispatchEvent(new CompositionEvent('compositionend', {bubbles: true, data: '第三句'}));
-            node.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true}));
-            const form = node.closest('form')!, submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
-            // The existing implicit-submit backstop applies even if the browser
-            // identifies the default button, without a button activation.
-            form.requestSubmit();
-            form.requestSubmit(submit);
-            const observed = {
-              focused: document.activeElement === node,
-              value: node.value,
-              selection: [node.selectionStart, node.selectionEnd, node.selectionDirection],
-              scrollY: window.scrollY, scrollTop: node.scrollTop,
-              readerTop: document.querySelector('main.session-view')!.scrollTop,
-              stored: Object.entries(localStorage).filter(([key]) => key.startsWith('batc.pm.') && key.includes('.session.send.')),
-            };
-            if (pointer) (window as any).__continuityAfterEnd = observed;
-            else submit.click();
-            return observed;
+              node.dispatchEvent(new CompositionEvent('compositionend', {bubbles: true, data: '第三句'}));
+              node.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true}));
+              const form = node.closest('form')!, submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+              // The existing implicit-submit backstop applies even if the browser
+              // identifies the default button, without a button activation.
+              form.requestSubmit();
+              form.requestSubmit(submit);
+              const observed = {
+                focused: document.activeElement === node,
+                value: node.value,
+                selection: [node.selectionStart, node.selectionEnd, node.selectionDirection],
+                scrollY: window.scrollY, scrollTop: node.scrollTop,
+                readerTop: document.querySelector('main.session-view')!.scrollTop,
+                stored: Object.entries(localStorage).filter(([key]) => key.startsWith('batc.pm.') && key.includes('.session.send.')),
+              };
+              if (pointer) (window as any).__continuityAfterEnd = observed;
+              else submit.click();
+              return observed;
             };
             if (pointer) {
               node.closest('form')!.querySelector('button[type="submit"]')!.addEventListener('pointerdown', end, {once: true});

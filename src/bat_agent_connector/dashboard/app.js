@@ -52656,9 +52656,9 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		let buttonActivation = false;
 		submitButton.addEventListener("click", () => {
 			buttonActivation = true;
-			queueMicrotask(() => {
+			setTimeout(() => {
 				buttonActivation = false;
-			});
+			}, 0);
 		}, true);
 		composer.box.addEventListener("submit", (event) => {
 			const explicit = buttonActivation && event.submitter === submitButton;
