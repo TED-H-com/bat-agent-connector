@@ -25,6 +25,7 @@ async def test_pm_availability_producer_golden(served, monkeypatch, tmp_path, mo
     (native / "auth.json").write_text("{}", encoding="utf-8")  # fake readable auth, never model proof
     executable = {"present": True}
     # Replace module-owned dependencies, never globally patch stdlib classes.
+    monkeypatch.setattr(pm_native_runtime, "sys", SimpleNamespace(platform="linux"))
     monkeypatch.setattr(pm_native_runtime, "shutil", SimpleNamespace(which=lambda _: "/fixture/tool" if executable["present"] else None))
     monkeypatch.setattr(pm_native_runtime, "_host_paths", lambda: (tmp_path, native))
     monkeypatch.setattr(pm_native_runtime, "_check_host_config", lambda: None)

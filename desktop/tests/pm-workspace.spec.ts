@@ -102,7 +102,7 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
     await expect(page.locator('.pm-notes')).toContainText('Keep literal <script>notes</script>');
     await expect(note.getByLabel('Message the PM…',{exact:true})).toHaveValue('');
     await page.reload();await expect(page.locator('.pm-notes')).toContainText('Keep literal <script>notes</script>');
-    await expect(page.getByText('Messages are saved. The PM is not connected and will not reply.',{exact:true})).toBeVisible();
+    await expect(page.getByText('PM analysis is unavailable in this Connector; install a compatible version',{exact:true})).toBeVisible();
     await expect(page.locator('.pm-note time').first()).toHaveAttribute('datetime','2026-10-11T12:00:00.000Z');
     expect(f.state.writes.map(input=>input.body.action)).toEqual(['pm.message.append']);
     expect(await page.locator('.pm-notes script').count()).toBe(0);

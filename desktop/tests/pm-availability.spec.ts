@@ -47,7 +47,12 @@ for (const lang of ['en','zh-TW'] as const) for (const width of [390,1440]) {
             caps.scopes = source.capabilities.scopes;
             caps.actions = [...caps.actions.filter((row:any) => !source.capabilities.actions.some((actual:any) => row.action === actual.action)), ...source.capabilities.actions];
             if (name === 'unsupported') delete caps.features.pm_workspaces;
-            else caps.features.pm_workspaces = structuredClone(source.capabilities.features.pm_workspaces);
+            else {
+              // Copy only this journey's global feature inputs from the producer;
+              // unrelated PM tools retain the existing fixture's advertisement.
+              for (const key of ['version','native_analysis','bat_analysis','installation_eligibility','conversation_proposals','plan_drafting','plan_adoption'])
+                caps.features.pm_workspaces[key] = structuredClone(source.capabilities.features.pm_workspaces[key]);
+            }
           }
           return response;
         };
@@ -63,6 +68,9 @@ for (const lang of ['en','zh-TW'] as const) for (const width of [390,1440]) {
           if (errors[name]) {
             await expect(settings.locator('code')).toContainText(errors[name].code);
             await expect(page.locator('[data-pm-eligibility]')).not.toHaveText(workPathsStrings[lang].agents_unchecked);
+            await page.locator('[data-pm-eligibility-check]').click();
+            await expect(settings.locator('code')).toContainText(errors[name].code);
+            await expect(settings).toContainText(expected(name,lang));
           }
           await noGuess(page);
         }
