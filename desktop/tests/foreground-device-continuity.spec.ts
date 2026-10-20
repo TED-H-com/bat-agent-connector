@@ -9,7 +9,7 @@ test.describe.configure({mode: 'parallel'});
 
 const newerAttempt = 'att_' + 'c'.repeat(32);
 const draft = '  尚未送出的第三句 — unsent draft\n' + Array.from({length: 36}, (_, i) => `第 ${i + 1} 行：keep this text unchanged.`).join('\n') + '\n  ';
-const scenarios = ['bfcache', 'offline', 'ime', 'newer-attempt', 'sequence'] as const;
+const scenarios = ['bfcache', 'offline', 'ime', 'ime-pointer', 'newer-attempt', 'sequence'] as const;
 
 function deferred() {
   let release!: () => void;
@@ -49,6 +49,7 @@ for (const native of [false, true]) for (const lang of ['en', 'zh-TW']) for (con
     test.use({locale: lang === 'en' ? 'en-US' : lang, viewport});
     for (const scenario of scenarios) test(`${scenario}: preserves the mobile draft, focus and original Attempt`, async ({page, context}, testInfo) => {
       const f = followUpFixture(lang, {native});
+      const ime = scenario === 'ime' || scenario === 'ime-pointer';
       // Repeat existing message shapes to make reading position and textarea
       // scrolling meaningful without inline styles (the production CSP applies).
       f.data.messages = Array.from({length: 60}, (_, i) => ({...f.data.messages[i % 2], id: `message-${i}`}));
@@ -154,7 +155,7 @@ for (const native of [false, true]) for (const lang of ['en', 'zh-TW']) for (con
           expect(posts()).toEqual([]);
         };
         holding = true;
-        if (scenario === 'ime') await field.dispatchEvent('compositionstart', {data: '第三句'});
+        if (ime) await field.dispatchEvent('compositionstart', {data: '第三句'});
         if (scenario === 'bfcache') await transition(page, 'pagehide');
         else await visibility(page, 'hidden');
         if (scenario !== 'bfcache') await expect(send).toBeDisabled();
@@ -184,7 +185,7 @@ for (const native of [false, true]) for (const lang of ['en', 'zh-TW']) for (con
         else await visibility(page, 'visible');
         if (scenario === 'sequence') await transition(page, 'pageshow');
         await expect(send).toBeDisabled();
-        if (scenario === 'ime') await composingEnter();
+        if (ime) await composingEnter();
         await expect.poll(() => eventReads).toBeGreaterThan(0);
         await unchanged();
         events.release();
@@ -196,7 +197,7 @@ for (const native of [false, true]) for (const lang of ['en', 'zh-TW']) for (con
         await expect(page.locator('#live')).toHaveAttribute('data-connection', 'connected');
         await frame(page);
         await unchanged();
-        if (scenario === 'ime') await composingEnter();
+        if (ime) await composingEnter();
         if (scenario === 'newer-attempt' || scenario === 'sequence') {
           expect(f.follow.latest).toBe(newerAttempt);
           const inputReads = requests.filter(row => row.path.includes(`/work/${WI}/inputs`));
@@ -207,11 +208,12 @@ for (const native of [false, true]) for (const lang of ['en', 'zh-TW']) for (con
         // Hold admission and compare the very first persisted intent to the sole
         // request, including its original target and selected-Attempt precondition.
         f.follow.holdPost = post.promise;
-        if (scenario === 'ime') {
+        if (ime) {
           // Deliberately activate Send in the same task as compositionend. A
           // person can tap it immediately; the keyboard grace period must block
           // the trailing Enter, without discarding this explicit button click.
-          const afterEnd = await field.evaluate((node: HTMLTextAreaElement) => {
+          const afterEnd = await field.evaluate((node: HTMLTextAreaElement, pointer) => {
+            const end = () => {
             node.dispatchEvent(new CompositionEvent('compositionend', {bubbles: true, data: '第三句'}));
             node.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true}));
             const form = node.closest('form')!, submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
@@ -227,12 +229,26 @@ for (const native of [false, true]) for (const lang of ['en', 'zh-TW']) for (con
               readerTop: document.querySelector('main.session-view')!.scrollTop,
               stored: Object.entries(localStorage).filter(([key]) => key.startsWith('batc.pm.') && key.includes('.session.send.')),
             };
-            submit.click();
+            if (pointer) (window as any).__continuityAfterEnd = observed;
+            else submit.click();
             return observed;
-          });
+            };
+            if (pointer) {
+              node.closest('form')!.querySelector('button[type="submit"]')!.addEventListener('pointerdown', end, {once: true});
+              return null;
+            }
+            return end();
+          }, scenario === 'ime-pointer');
           // No intent was created by the trailing Enter; all bytes and focus
           // were still original immediately before explicit button activation.
-          expect(afterEnd).toEqual(before);
+          if (scenario === 'ime-pointer') {
+            // Also exercise a real Playwright pointer click, whose default form
+            // activation runs outside evaluate's JavaScript stack. Scrolling to
+            // the button now belongs to the person's explicit Send gesture.
+            await send.click();
+            const observed = await page.evaluate(() => (window as any).__continuityAfterEnd);
+            for (const key of ['focused', 'value', 'selection', 'stored']) expect(observed[key]).toEqual(before[key]);
+          } else expect(afterEnd).toEqual(before);
         } else await send.click();
         await expect.poll(() => posts().length).toBe(1);
         const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), before.stored[0][0]);
