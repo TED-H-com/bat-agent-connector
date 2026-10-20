@@ -1,10 +1,35 @@
 import {test,expect} from '@playwright/test';
 import {readFile,mkdir} from 'node:fs/promises';
+import {readFileSync} from 'node:fs';
 import {diagnosticsFixture} from './diagnostics-fixture.ts';
+const bootstrap=JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-bootstrap.json',import.meta.url),'utf8'));
 const about=(page,locale)=>page.locator('#settings-tab-about');
-const open=async(page,locale)=>{await page.goto('/dashboard/#/settings');await about(page,locale).click();await page.locator('[data-export-diagnostics]').click();await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');};
+const open=async(page,locale,beforeExport=()=>{})=>{await page.goto('/dashboard/#/settings');await about(page,locale).click();beforeExport();await page.locator('[data-export-diagnostics]').click();await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');};
 for(const locale of ['en','zh-TW'])test.describe(locale,()=>{
  test.use({locale});
+ test('export separates a refused source from missing manage scope',async({page})=>{
+  const state=await diagnosticsFixture(page);state.producer.bootstrap=structuredClone(bootstrap);state.operationsStatus=403;
+  const posts:string[]=[];page.on('request',request=>{if(request.method()==='POST')posts.push(request.url());});
+  let before=0;await open(page,locale,()=>{before=state.reads.length;});
+  const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
+  expect(bundle.source_reads?.operations?.status).toBe('failed');
+  expect(bundle.source_reads.operations).toMatchObject({http_status:403,code:'FORBIDDEN'});
+  expect(bundle.source_reads.managed_setup.status).toBe('not_permitted');
+  expect(bundle.source_reads.capabilities.status).toBe('available');expect(bundle.source_reads.observation.status).toBe('not_offered');
+  for(const source of Object.values(bundle.source_reads) as any[])expect(Number.isFinite(Date.parse(source.read_at))).toBe(true);
+  const summary=page.locator('[data-diagnostics-summary]');
+  await expect(summary.locator('[data-diagnostics-source=operations]')).toContainText(locale==='en'?'Read failed':'讀取失敗');
+  await expect(summary.locator('[data-diagnostics-source=managed_setup]')).toContainText(locale==='en'?'Required scope missing':'缺少所需權限');
+  await expect(summary.locator('[data-diagnostics-source=operations]')).toBeVisible();
+  await expect(summary.locator('[data-diagnostics-source=managed_setup]')).toBeVisible();
+  expect(bundle.sessions.sampled).toBeNull();expect(bundle.operations).toBeNull();
+  expect(JSON.stringify(bundle)).not.toMatch(/private-box|batc_secret|private prompt|secret@example|192\.0\.2\.8/);
+  const downloadPromise=page.waitForEvent('download');
+  await page.getByRole('dialog').getByRole('button',{name:locale==='en'?'Save':'儲存',exact:true}).click();
+  const download=await downloadPromise;expect(JSON.parse(await readFile((await download.path())!,'utf8'))).toEqual(bundle);
+  // Settings has its own setup read; only the export is scope-gated here.
+  expect(posts).toEqual([]);expect(state.reads.slice(before).some(path=>path.startsWith('/managed/setup'))).toBe(false);
+ });
  for(const native of [false,true])for(const known of [false,true])test(`${native?'desktop':'browser'} build identity ${known?'known':'unknown'}`,async({page})=>{
   await diagnosticsFixture(page,native,known);await page.goto('/dashboard/#/settings');await about(page,locale).click();
   const line=page.locator('[data-build-line]');await expect(line).toContainText('Connector 0.2.5');

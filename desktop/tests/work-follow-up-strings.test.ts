@@ -3,6 +3,67 @@ import {test} from 'node:test';
 import {workFollowUpStrings} from '../src/pm-work-follow-up-strings.js';
 import {STRINGS} from '../src/i18n.js';
 
+// Import lazily so the failing-first run still checks the existing string table.
+const decisionModule = '../src/pm-work-follow-up-decision.js';
+const ready = {reading: false, admissionReady: true, resultSettled: true,
+  capabilitiesLoaded: true, managed: true, connected: true, sendOffer: {action: 'session.send'}};
+
+test('one follow-up decision preserves every server reason and its next step', async () => {
+  const {workFollowUpDecision} = await import(decisionModule);
+  for (const reason of ['codex_uncorrelated_turn_boundary', 'not_controller', 'not_writer_member', 'missing_scope', 'future_reason_example']) {
+    // A blocked result takes precedence over a cached offer or session capability.
+    const result = workFollowUpDecision({...ready, blockedReason: reason});
+    assert.equal(result.allowed, false);
+    assert.equal(result.source, 'server');
+    assert.equal(result.reason, reason);
+    assert.equal(result.showCode, reason === 'future_reason_example');
+    assert.equal(result.pillKey === 'loop_next_scope_readonly', reason === 'missing_scope');
+    for (const lang of ['en', 'zh-TW']) {
+      for (const key of [result.messageKey, result.nextStepKey, result.pillKey]) {
+        assert.ok(workFollowUpStrings[lang][key]?.trim(), `${lang}: ${key}`);
+      }
+    }
+  }
+});
+
+test('client gates never acquire a fabricated server reason', async () => {
+  const {workFollowUpDecision} = await import(decisionModule);
+  for (const [facts, reason] of [
+    [{connected: false}, 'connection'], [{reading: true}, 'admission_pending'],
+    [{admissionReady: false}, 'admission_unavailable'], [{resultSettled: false}, 'admission_pending'],
+    [{stopped: true}, 'stopped'], [{disposed: true}, 'stopped'], [{suspended: true}, 'suspended'],
+    [{capabilitiesLoaded: false}, 'capabilities_pending'], [{managed: false}, 'unmanaged'],
+    [{sendOffer: null}, 'no_send_offer'],
+  ]) {
+    const result = workFollowUpDecision({...ready, ...facts});
+    assert.equal(result.allowed, false);
+    assert.equal(result.source, 'client');
+    assert.equal(result.reason, reason);
+    assert.equal(result.showCode, false);
+  }
+  assert.equal(workFollowUpDecision(ready).allowed, true);
+});
+
+test('new decision copy and next steps exist in both locales', () => {
+  for (const lang of ['en', 'zh-TW']) {
+    for (const key of ['loop_next_codex_step', 'loop_next_controller_step', 'loop_next_member_blocked',
+      'loop_next_member_step', 'loop_next_scope_blocked', 'loop_next_scope_step', 'loop_next_blocked_unknown',
+      'loop_next_refresh_step', 'loop_next_no_offer', 'loop_next_scope_readonly', 'loop_next_member_readonly', 'loop_next_blocked']) {
+      assert.ok(workFollowUpStrings[lang][key]?.trim(), `${lang}: ${key}`);
+    }
+  }
+});
+
+test('an admission reread pauses new sends without losing original receipt recovery', async () => {
+  const {workFollowUpDecision} = await import(decisionModule);
+  const checking = workFollowUpDecision({...ready, reading: true, admissionReady: false});
+  assert.equal(checking.allowed, false);
+  assert.equal(checking.canReadReceipt, true);
+  for (const gate of [{stopped: true}, {suspended: true}, {disposed: true}, {managed: false}, {capabilitiesLoaded: false}]) {
+    assert.equal(workFollowUpDecision({...ready, ...gate}).canReadReceipt, false);
+  }
+});
+
 test('every loop_next string exists in both en and zh-TW and is registered', () => {
   const zhKeys = Object.keys(workFollowUpStrings['zh-TW']);
   const enKeys = Object.keys(workFollowUpStrings.en);

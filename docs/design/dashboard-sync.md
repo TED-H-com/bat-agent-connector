@@ -66,7 +66,7 @@ authority：重啟與該 journal 的備份保留 UUID，新 journal 使用新 UU
 principal_id 綁 actor、scopes、admin，不綁 bearer secret；同一 actor 的不同權限不能共用 cache。
 
 PM workspace membership 的變動另外綁在 checkpoint 的 `access_id` digest，不改
-`server_id`／`principal_id` 或本地草稿 namespace。每個 actor 的 membership INSERT、role UPDATE、
+`server_id`／`principal_id`。每個 actor 的 membership INSERT、role UPDATE、
 DELETE 在同一交易更新 `api_sync_pm_access` generation；generation 保留在移除會員之後，也不依賴
 事件 retention 或牆上時間。即使兩次輪詢間先撤權再授權，舊 checkpoint 仍須重新取得快照。
 Digest 同時涵蓋該 actor 所有 workspace 的目前 ID／role，包含來源 workspace，兼顧既有會員資料的
@@ -77,9 +77,9 @@ Access 不符回 `EVENT_CURSOR_RESET`／`access_changed`，JSON polling 與已�
 目前來源權限過濾，不因通知需求放行。升級前沒有 `access_id` 的合法 token 會安全地要求一次快照。
 其他 actor 的 membership 變更與無效／回滾的修改，不讓該使用者的 checkpoint 無限重設。
 
-Client 收到 access reset 時必須立即隱藏舊來源與暫停操作；不能因仍在輸入而延後撤權處理。
-重新讀取後，沿用同一身份的未提交草稿、原 request／idempotency key 與 operation IDs，依最新授權
-顯示可讀資料。不把保留草稿視為仍能使用被撤銷的來源或繼續原操作的授權。
+Client 的 resnapshot、檢視失效化與草稿保留規則見
+[共用 managed resnapshot 契約](two-service-isolation.md#managed-crashrebind-followed-by-a-producer-reset-m07m08)。
+保留草稿不授予使用被撤銷來源或繼續原操作的權限。
 
 Token 用該 journal 的 key 驗 HMAC，只證明續接資料，不授予 observe 或其他權限。每次請求仍先驗
 bearer。Token 包含 identity、cursor 與該位置最近 event 的內容 digest；每一頁更新 anchor，所以還原
@@ -100,13 +100,12 @@ HTTP 在串流 headers 之前的 reset 回 409：
 | reason | 意義 |
 |---|---|
 | server_changed／principal_changed | journal authority 或 effective principal 不符 |
-| access_changed | PM membership 可見範圍／角色改變，或舊 token 未綁存取版本；身份與草稿分區不變 |
+| access_changed | PM membership 可見範圍／角色改變，或舊 token 未綁存取版本 |
 | cursor_ahead／cursor_expired | cursor 超過目前 head，或缺少必須 replay 的歷史 |
 | history_changed | checkpoint 的 event anchor 已不存在或內容改變 |
 | checkpoint_invalid／checkpoint_cursor_mismatch | token 格式／signature 錯誤，或 after 與 token 不成對 |
 | identity_unavailable | 服務沒有可證明的 identity metadata |
 
-Client reset 必須清掉該區觀測 cache、重新 bootstrap，保留該身份區的未提交 drafts 與 operation IDs。
 負數／格式錯誤 cursor 仍為 422 INVALID_REQUEST。沒有 token 回 401，沒有 observe 回 403。
 
 ## 測試與修改範圍

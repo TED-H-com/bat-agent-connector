@@ -4458,8 +4458,8 @@ mod tests {
     #[tokio::test]
     async fn managed_recovery_rebinds_endpoint_and_token_only_after_identity_verification() {
         let (endpoint, requests, handle) = server(vec![
-            json_response(CAPS),
-            bootstrap_response("fixture-server", "fixture-principal"),
+            json_response(&capabilities("fixture-server", "fixture-principal", true)),
+            managed_bootstrap_response("fixture-server", "fixture-principal"),
             json_response("{\"events\":[]}"),
         ]);
         let bridge = recovery_bridge();
@@ -4512,8 +4512,8 @@ mod tests {
     #[tokio::test]
     async fn managed_recovery_refuses_changed_live_bootstrap_identity() {
         let (endpoint, _, handle) = server(vec![
-            json_response(CAPS),
-            bootstrap_response("another-server", "fixture-principal"),
+            json_response(&capabilities("another-server", "fixture-principal", true)),
+            managed_bootstrap_response("another-server", "fixture-principal"),
         ]);
         let bridge = recovery_bridge();
         assert_eq!(
@@ -4601,14 +4601,64 @@ mod tests {
         );
     }
 
-    const CAPS: &str = r#"{"actor":"fixture-operator","api_version":1,"contract_version":"2026-10-08","scopes":["observe","operate"]}"#;
+    // Producer-pinned by tests/test_api_v1_bootstrap_golden.py. Capabilities
+    // uses the same handler as bootstrap.capabilities (ApiV1.bootstrap).
+    fn bootstrap_document(server_id: &str, principal_id: &str, managed: bool) -> Value {
+        let mut value: Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/managed-bootstrap.json"
+        ))
+        .unwrap();
+        let identity = serde_json::json!({"server_id": server_id, "principal_id": principal_id});
+        value["sync"]["server_id"] = identity["server_id"].clone();
+        value["sync"]["principal_id"] = identity["principal_id"].clone();
+        value["capabilities"]["identity"] = identity.clone();
+        value["capabilities"]["desktop_identity"] = identity;
+        if !managed {
+            // Exactly the external derivation in the Python producer golden test.
+            let caps = value["capabilities"].as_object_mut().unwrap();
+            caps.remove("desktop_identity");
+            caps.remove("managed_installation");
+        }
+        value
+    }
+
+    fn capabilities(server_id: &str, principal_id: &str, managed: bool) -> String {
+        bootstrap_document(server_id, principal_id, managed)["capabilities"].to_string()
+    }
+
+    fn actor_document(actor: &str) -> Value {
+        let mut value = bootstrap_document("fixture", "other-principal", false);
+        value["capabilities"]["actor"] = Value::String(actor.into());
+        value
+    }
 
     fn bootstrap_response(server_id: &str, principal_id: &str) -> String {
-        json_response(
-            &serde_json::json!({"capabilities": serde_json::from_str::<Value>(CAPS).unwrap(),
-            "sync": {"version": 1, "server_id":server_id, "principal_id":principal_id}})
-            .to_string(),
-        )
+        json_response(&bootstrap_document(server_id, principal_id, false).to_string())
+    }
+
+    fn managed_bootstrap_response(server_id: &str, principal_id: &str) -> String {
+        json_response(&bootstrap_document(server_id, principal_id, true).to_string())
+    }
+
+    #[test]
+    fn identity_variants_retain_the_complete_producer_contract() {
+        for managed in [true, false] {
+            let value = bootstrap_document("changed-server", "changed-principal", managed);
+            let caps = &value["capabilities"];
+            assert_eq!(value["sync"]["server_id"], caps["identity"]["server_id"]);
+            assert_eq!(
+                value["sync"]["principal_id"],
+                caps["identity"]["principal_id"]
+            );
+            assert_eq!(caps.get("desktop_identity").is_some(), managed);
+            assert_eq!(caps.get("managed_installation").is_some(), managed);
+            if managed {
+                assert_eq!(caps["desktop_identity"], caps["identity"]);
+            }
+            assert!(value["sync"]["checkpoint"]["token"].is_string());
+            assert!(value["snapshot"].is_object());
+            assert!(caps["features"].is_object());
+        }
     }
 
     #[tokio::test]
@@ -4627,7 +4677,7 @@ mod tests {
         target.set_nonblocking(true).unwrap();
         let redirect=format!("HTTP/1.1 302 Found\r\nLocation: http://{}/never\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",target.local_addr().unwrap());
         let (endpoint, received, server) = server(vec![
-            json_response(CAPS),
+            json_response(&capabilities("fixture-server", "fixture-principal", false)),
             bootstrap_response("fixture-server", "fixture-principal"),
             redirect,
         ]);
@@ -4690,9 +4740,9 @@ mod tests {
         let (send, receive) = mpsc::channel();
         let worker = thread::spawn(move || {
             for reply in [
-                json_response(CAPS),
+                json_response(&capabilities("fixture", "principal", false)),
                 bootstrap_response("fixture", "principal"),
-                json_response(CAPS),
+                json_response(&capabilities("fixture", "principal", false)),
                 bootstrap_response("fixture", "principal"),
                 json_response(r#"{"operation":{"status":"running"}}"#),
             ] {
@@ -4762,9 +4812,9 @@ mod tests {
         target.set_nonblocking(true).unwrap();
         let redirect = format!("HTTP/1.1 307 Temporary Redirect\r\nLocation: http://{}/capture\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", target.local_addr().unwrap());
         let (endpoint, requests, worker) = server(vec![
-            json_response(CAPS),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
-            json_response(CAPS),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
             redirect,
         ]);
@@ -5160,8 +5210,9 @@ mod tests {
 
     #[tokio::test]
     async fn contract_mismatch_cannot_unlock_operations() {
+        // An unsupported contract must be refused before any operation is unlocked.
         let (endpoint, received, handle) = server(vec![json_response(
-            &CAPS.replace("2026-10-08", "unsupported"),
+            &capabilities("fixture", "principal", false).replace("2026-10-08", "unsupported"),
         )]);
         let bridge = Bridge::new(
             Ok(config(&endpoint)),
@@ -5178,8 +5229,9 @@ mod tests {
 
     #[tokio::test]
     async fn wrong_identity_cannot_unlock_operations() {
+        // A valid document for another actor must not unlock this binding.
         let (endpoint, received, handle) = server(vec![json_response(
-            &CAPS.replace("fixture-operator", "other-actor"),
+            &actor_document("other-actor")["capabilities"].to_string(),
         )]);
         let bridge = Bridge::new(
             Ok(config(&endpoint)),
@@ -5198,9 +5250,9 @@ mod tests {
     #[tokio::test]
     async fn native_credentials_and_original_operation_envelope_reach_only_the_fixed_central() {
         let (endpoint, received, handle) = server(vec![
-            json_response(CAPS),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
-            json_response(CAPS),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
             json_response(r#"{"operation":{"operation_id":"op_fixture","status":"accepted"}}"#),
         ]);
@@ -5257,12 +5309,12 @@ mod tests {
             serde_json::json!({"contract":"pm-work-attempt-result/v1","workspace_id":ws,"attempt_id":att,"identity":{"work_item_id":wi}}),
         ];
         let mut responses = vec![
-            json_response(CAPS),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
         ];
         responses.extend(views.iter().map(|view| json_response(&view.to_string())));
         responses.extend([
-            json_response(CAPS),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
             json_response(r#"{"operation":{"operation_id":"op_fixture","status":"queued"}}"#),
         ]);
@@ -5408,9 +5460,9 @@ mod tests {
     #[tokio::test]
     async fn enrollment_is_verified_before_persistence_and_survives_native_restart() {
         let (endpoint, requests, server) = server(vec![
-            json_response(CAPS),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
-            json_response(CAPS),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
         ]);
         let vault = Arc::new(MockVault::default());
@@ -5442,11 +5494,12 @@ mod tests {
 
     #[tokio::test]
     async fn cancelled_invalid_or_unsavable_replacement_keeps_old_record_and_connection() {
+        // A rejected replacement identity must preserve the original credential and connection.
         let (endpoint, _, server) = server(vec![
-            json_response(CAPS),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
-            json_response(&CAPS.replace("fixture-operator", "wrong-actor")),
-            json_response(CAPS),
+            json_response(&actor_document("wrong-actor")["capabilities"].to_string()),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
         ]);
         let vault = Arc::new(MockVault::default());
@@ -5501,12 +5554,12 @@ mod tests {
             let mut replies = vec![];
             if !on_reconnect {
                 replies.extend([
-                    json_response(CAPS),
+                    json_response(&capabilities("fixture", "principal", false)),
                     bootstrap_response("fixture", "principal"),
                 ]);
             }
             replies.extend([
-                json_response(CAPS),
+                json_response(&capabilities("replacement", "principal", false)),
                 bootstrap_response("replacement", "principal"),
             ]);
             let (endpoint, requests, server) = server(replies);
@@ -5542,10 +5595,14 @@ mod tests {
     #[tokio::test]
     async fn bootstrap_principal_mismatch_and_contract_missing_cannot_enroll() {
         for response in [
-            bootstrap_response("fixture", "principal").replace("fixture-operator", "wrong-actor"),
+            json_response(&actor_document("wrong-actor").to_string()),
+            // Keep this document minimal to exercise missing contract and identity fields.
             json_response(r#"{"capabilities":{},"sync":{"version":1}}"#),
         ] {
-            let (endpoint, _, server) = server(vec![json_response(CAPS), response]);
+            let (endpoint, _, server) = server(vec![
+                json_response(&capabilities("fixture", "principal", false)),
+                response,
+            ]);
             let vault = Arc::new(MockVault::default());
             *vault.answer.lock().unwrap() = Some("synthetic-token".into());
             let bridge = credential_bridge(&endpoint, vault.clone());
@@ -5589,7 +5646,7 @@ mod tests {
     #[tokio::test]
     async fn forget_failure_preserves_connection_and_success_cannot_fall_back_to_environment() {
         let (endpoint, _, server) = server(vec![
-            json_response(CAPS),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
         ]);
         let vault = Arc::new(MockVault::default());
@@ -5846,9 +5903,9 @@ mod tests {
     #[tokio::test]
     async fn launch_credential_keeps_first_backend_identity_across_disconnect() {
         let (endpoint, requests, server) = server(vec![
-            json_response(CAPS),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
-            json_response(CAPS),
+            json_response(&capabilities("different-server", "principal", false)),
             bootstrap_response("different-server", "principal"),
         ]);
         let mut bridge = Bridge::new(
@@ -5884,7 +5941,9 @@ mod tests {
             assert!(count > 0);
             started.send(()).unwrap();
             wait.recv_timeout(Duration::from_secs(5)).unwrap();
-            socket.write_all(json_response(CAPS).as_bytes()).unwrap();
+            socket
+                .write_all(json_response(&capabilities("fixture", "principal", false)).as_bytes())
+                .unwrap();
             listener.set_nonblocking(true).unwrap();
             listener
         });

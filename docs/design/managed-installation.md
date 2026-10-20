@@ -24,6 +24,8 @@ Setup now uses an authenticated active write connection or existing inventory ev
 
 `GET /managed/setup` adds per-host `connection_status` and `connection_checked_at`. `connected` is `null` for unknown reachability. No schema, migration, permission or token-handling changes are introduced. Status is a recent observation, not a continuous network guarantee. Configured installs retain IDs, history, non-secret drafts and original operation keys and never automatically repeat setup.
 
+A succeeded `setup.host` receipt is evidence of that operation's verification and saved configuration at its `updated_at` completion time. When its target host's current row is checking, unreachable or absent, Setup shows that past evidence and time instead of the ready message. Each host row supplies its own current state, observation time when available, and next step. The existing ready copy remains when the receipt's target host is currently connected; without a host receipt, every displayed host must be connected to show it. An unrelated connected host cannot override the configured host's state. This readout makes no additional claim about starting Work and never resubmits setup.
+
 ## First-run visual evidence
 
 Synthetic shared-browser fixtures, identical data and light theme, 1440×900 and 390×844. These are not installed Windows or live BAT acceptance. Before captures use the original `origin/main` UI; after captures use this implementation. Every PNG is under 90 KB.
@@ -100,10 +102,9 @@ must verify the same identity. A successful rebind advances the bridge generatio
 invalidating in-flight responses and file scopes. A native recovery counter triggers
 fresh navigation/shell reads even when restart produces no event; failed views
 retry through the existing deferred-render guards. Failed initial managed reads
-remain eligible for native recovery; an explicit Disconnect disables it. It retains existing drafts,
-event checkpoints and operation keys, and never resends an application mutation.
-Managed `/capabilities` and `/bootstrap` both include `desktop_identity`. A managed
-cursor reset already retained the scope before this namespace correction. An
+remain eligible for native recovery; an explicit Disconnect disables it. Client state
+across recovery/reset follows the [shared managed resnapshot contract](two-service-isolation.md#managed-crashrebind-followed-by-a-producer-reset-m07m08).
+Managed `/capabilities` and `/bootstrap` both include `desktop_identity`. An
 external central may omit that field from bootstrap; the native bridge still
 checks the bootstrap server/principal against its verified credential identity.
 Missing the optional field alone is not evidence of an account change.
