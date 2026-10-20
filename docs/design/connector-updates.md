@@ -81,7 +81,7 @@ Every preview reports the absolute source journal path in `journal.path`, even
 when it cannot be read; `journal.source` is `explicit` for `--journal` or
 `default` for the shared default. This is the selected original file, not the
 temporary snapshot, and does not certify that it belongs to a running deployment.
-Ordinary rollback and managed Desktop downgrade refusal are unchanged. Preview
+Preview leaves ordinary rollback and managed Desktop downgrade refusal intact. It
 is separate from `status` so existing status readers keep their output contract.
 It does not acquire/create an updater lease, reconcile activation, invoke an
 installer, send operations, or restart a running process. It creates only a
@@ -123,15 +123,15 @@ Today, every real enrolled installation previews `unknown` even when its journal
 and fence facts are compatible: it has unversioned credentials or a retained
 rollout receipt. A known incompatibility still takes precedence. Versioned
 credential and receipt formats, with declared reader support, are needed to make
-`compatible` reachable for these deployments; versioning those formats is not
-part of this PR. If O07 refused `unknown`, it would refuse rollback on every
-current installation with these otherwise-compatible facts.
+`compatible` reachable for these deployments. Versioning those formats is
+separate work. A rollback policy that refused `unknown` would refuse rollback
+on every current installation with these otherwise-compatible facts.
 
 Even `compatible` does not prove every rollback effect will succeed: observation
 can become stale, external systems can change, and declarations do not execute
-the old reconciler. Whether rollback should refuse incompatible or unknown
-evidence, or offer force, remains owner decision O07. Preview does not enforce
-such a policy or change automatic update/downgrade rules.
+the old reconciler. Whether rollback refuses `incompatible` or `unknown`
+evidence, or offers force, is an owner decision that has not been made. Preview
+does not enforce such a policy or change automatic update/downgrade rules.
 
 ## Bounds and recovery
 
