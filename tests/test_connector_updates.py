@@ -419,7 +419,8 @@ def test_command_timeout_output_limit_and_clean_environment(tmp_path, monkeypatc
         run([sys.executable, "-c", "raise SystemExit(4)"], env=env)
 
 
-def test_interrupted_updater_reaps_its_installer_and_descendant(tmp_path):
+@pytest.mark.parametrize("ignored_sigint", [False, True])
+def test_interrupted_updater_reaps_its_installer_and_descendant(tmp_path, ignored_sigint):
     # Signal a separate updater process, never pytest or a live installation.
     ready = tmp_path / "ready.json"
     child_code = """
@@ -436,15 +437,24 @@ ready.with_suffix(".tmp").replace(ready)
 time.sleep(60)
 """
     runner_code = """
-import sys
+import signal, sys
 from pathlib import Path
 from bat_agent_connector.update_install import clean_env, run
+signal.signal(signal.SIGINT, signal.default_int_handler)
 try:
     run([sys.executable, '-c', sys.argv[2], sys.argv[3]], env=clean_env(Path(sys.argv[1])))
 except KeyboardInterrupt:
     raise SystemExit(130)
 """
-    runner = subprocess.Popen([sys.executable, "-c", runner_code, str(tmp_path), child_code, str(ready)],
+    # Bash background jobs (including local parallel shards) inherit SIGINT
+    # ignored. Reproduce that state without changing pytest's signal handlers.
+    launcher_code = """
+import os, signal, sys
+signal.signal(signal.SIGINT, signal.SIG_IGN if sys.argv[1] == 'True' else signal.default_int_handler)
+os.execv(sys.executable, [sys.executable, '-c', *sys.argv[2:]])
+"""
+    runner = subprocess.Popen([sys.executable, "-c", launcher_code, str(ignored_sigint), runner_code,
+                               str(tmp_path), child_code, str(ready)],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     owned = []
     try:
@@ -454,6 +464,8 @@ except KeyboardInterrupt:
             time.sleep(0.02)
         owned = json.loads(ready.read_text())
         runner.send_signal(signal.SIGINT)
+        # Readiness proves the interrupt handler is installed. This bound only
+        # protects the suite from a hung runner; production keeps its 5s grace.
         assert runner.wait(timeout=10) == 130
         for pid in owned:
             with pytest.raises(ProcessLookupError):

@@ -147,3 +147,51 @@ async def test_settle_requires_worker_completion_after_persisted_outcome(ops, mo
     assert finalized == ["succeeded"]
     assert not ops._active
     assert ops.get(op["operation_id"])["result"] == {"accepted": True}
+
+
+@pytest.mark.parametrize("stalled_sibling", [False, True])
+async def test_advance_waits_for_persisted_progress_across_a_slow_wave(ops, monkeypatch, stalled_sibling):
+    """A delayed scheduler can see new receipts after the wave's original bound."""
+    elapsed = [0]
+    release, recorded = asyncio.Event(), asyncio.Event()
+
+    async def run(ctx):
+        for index in range(2):
+            await release.wait()
+            release.clear()
+            ctx.effect(f"receipt.{index}", lambda: {"accepted": True})
+            recorded.set()
+        return {"accepted": True}
+
+    async def delayed_wait(tasks, *, timeout):
+        # Simulate descheduling across a deadline while the provider records
+        # a real receipt. No global clock or asyncio function is replaced.
+        release.set()
+        await recorded.wait()
+        recorded.clear()
+        elapsed[0] += 61
+        return await asyncio.wait(tasks, timeout=0)
+
+    ops.register(ActionDef("fixture.progress", "operate", "Synthetic receipts", run))
+    op, _ = ops.create(CALLER, action="fixture.progress", target={}, params={}, idempotency_key="original")
+    if stalled_sibling:
+        async def stalled(ctx):
+            await asyncio.Event().wait()
+        ops.register(ActionDef("fixture.stalled", "operate", "Synthetic stalled worker", stalled))
+        sibling, _ = ops.create(CALLER, action="fixture.stalled", target={}, params={}, idempotency_key="stalled")
+    monkeypatch.setattr(maintenance, "time", SimpleNamespace(monotonic=lambda: elapsed[0]))
+    monkeypatch.setattr(maintenance, "asyncio", SimpleNamespace(wait=delayed_wait))
+    if stalled_sibling:
+        with pytest.raises(AssertionError, match=sibling["operation_id"]):
+            await maintenance.advance({"d": SimpleNamespace(ops=ops)}, op, rounds=1)
+        assert elapsed[0] == 61
+        assert not ops._active
+        assert ops.get(op["operation_id"])["steps"][0]["status"] == "succeeded"
+        assert ops.get(sibling["operation_id"])["status"] == "running"
+        return
+    outcome = await maintenance.advance({"d": SimpleNamespace(ops=ops)}, op, rounds=1)
+    assert elapsed[0] == 122
+    assert outcome["status"] == "succeeded" and outcome["result"] == {"accepted": True}
+    assert [(step["name"], step["status"]) for step in outcome["steps"]] == [
+        ("receipt.0", "succeeded"), ("receipt.1", "succeeded")]
+    assert not ops._active

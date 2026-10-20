@@ -22,8 +22,11 @@ workers before the fixture can close their journal. This leaves original durable
 operation IDs, keys and uncertain step receipts available for normal reconciliation;
 it does not call the product's operation-cancel action or rerun a test.
 
-Captured-wave helpers such as joined maintenance's `advance` keep their existing
-per-wave deadlines. Use `tests.operation_helpers.worker_details` before stopping
+Joined maintenance's `advance` waits for each captured worker to finish, using
+recorded step/receipt progress and a 60-second per-worker stall guard. A progressing
+wave can exceed 60 seconds under local load; this is a test hang bound, not a
+product runtime promise. Product provider/deadline limits remain unchanged.
+Use `tests.operation_helpers.worker_details` before stopping
 workers to preserve the suspended await chain, and `stop_workers` on failure or
 caller cancellation to join all pending workers belonging to that service while
 its journal is still open. Workers admitted during a wave also need this cleanup.
