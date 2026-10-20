@@ -3,15 +3,22 @@ import assert from 'node:assert/strict';
 import {centralServiceStatus} from '../src/central-service-status.js';
 
 test('credentials and authenticated bootstrap/poll observations settle central status', () => {
-  for (const token of [null, '', 'credential']) for (const pollHealth of ['initial', 'connected', 'reconnecting']) {
+  for (const token of [null, '']) for (const pollHealth of ['initial', 'connected', 'reconnecting']) {
     for (const online of [false, true]) {
-      const connected = pollHealth === 'connected' || (pollHealth === 'initial' && online);
-      const expected = !token ? {key: 'ui_not_connected', tone: 'neutral', connection: 'offline'}
-        : connected ? {key: 'ui_connected', tone: 'ok', connection: 'connected'}
-        : pollHealth === 'initial' ? {key: 'ui_connecting', tone: 'neutral', connection: 'reconnecting'}
-        : {key: 'ui_reconnecting', tone: 'warn', connection: 'reconnecting'};
-      assert.deepEqual(centralServiceStatus({token, pollHealth, online}), {...expected, recoveryKey: null});
+      assert.deepEqual(centralServiceStatus({token, pollHealth, online}),
+        {key: 'ui_not_connected', tone: 'neutral', connection: 'offline', recoveryKey: null});
     }
+  }
+  for (const [pollHealth, online, key, tone, connection] of [
+    ['initial', false, 'ui_connecting', 'neutral', 'reconnecting'],
+    ['initial', true, 'ui_connected', 'ok', 'connected'],
+    ['connected', false, 'ui_connected', 'ok', 'connected'],
+    ['connected', true, 'ui_connected', 'ok', 'connected'],
+    ['reconnecting', false, 'ui_reconnecting', 'warn', 'reconnecting'],
+    ['reconnecting', true, 'ui_reconnecting', 'warn', 'reconnecting'],
+  ]) {
+    assert.deepEqual(centralServiceStatus({token: 'credential', pollHealth, online}),
+      {key, tone, connection, recoveryKey: null});
   }
 });
 
