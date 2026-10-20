@@ -12,6 +12,9 @@ from types import SimpleNamespace
 import pytest
 
 from bat_agent_connector import __version__, build_identity
+from bat_agent_connector.update_install import verify_source_package
+from bat_agent_connector.update_release import UpdateError
+from scripts.validate_connector_update import copy_fixture_source
 
 
 @pytest.mark.parametrize("doc,source,commit", [
@@ -87,11 +90,7 @@ def _source_repo(directory, label):
     root = Path(__file__).resolve().parents[1]
     repo = directory / "source"
     repo.mkdir()
-    for name in (".gitignore", "pyproject.toml", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "hatch_build.py"):
-        if (root / name).exists():
-            shutil.copy2(root / name, repo / name)
-    for name in ("src", "skills"):
-        shutil.copytree(root / name, repo / name, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    copy_fixture_source(root, repo)
     env = _build_env(directory)
     for args in (["git", "init", "-q"], ["git", "add", "."],
                  ["git", "-c", "user.name=Build Fixture", "-c", "user.email=build@example.invalid",
@@ -154,6 +153,42 @@ def test_offline_wheel_keeps_candidate_commit(clean_wheel, tmp_path):
         ).read_bytes()
     assert not (repo / "src/bat_agent_connector/build-info.json").exists()
     assert _command(["git", "status", "--porcelain"], cwd=repo, env=_build_env(directory)) == ""
+
+
+@pytest.mark.parametrize("tamper", [None, "wrong-commit", "malformed", "extra-field", "extra-file", "source-file", "symlink"])
+def test_update_source_verification_accepts_only_producer_provenance(clean_wheel, tmp_path, tamper):
+    _, repo, head, wheel = clean_wheel
+    assert _installed_identity(wheel, tmp_path)["commit"] == head
+    package = next((tmp_path / "installed/lib").glob("python*/site-packages/bat_agent_connector"))
+    info = package / "build-info.json"
+    # Mutate a real hook-produced record only for rejection cases; no metadata
+    # fixture stands in for the producer.
+    if tamper == "wrong-commit":
+        doc = json.loads(info.read_text())
+        doc["commit"] = "0" * 40
+        info.write_text(json.dumps(doc))
+    elif tamper == "malformed":
+        info.write_text("{")
+    elif tamper == "extra-field":
+        doc = json.loads(info.read_text())
+        doc["unexpected"] = True
+        info.write_text(json.dumps(doc))
+    elif tamper == "extra-file":
+        (package / "unexpected.json").write_text("{}")
+    elif tamper == "source-file":
+        with (package / "__init__.py").open("a") as stream:
+            stream.write("\n# Changed after installation\n")
+    elif tamper == "symlink":
+        target = tmp_path / "original-build-info.json"
+        info.rename(target)
+        info.symlink_to(target)
+    if tamper is None:
+        verify_source_package(repo / "src/bat_agent_connector", package, head)
+    else:
+        code = "installed_identity_mismatch" if tamper in {"wrong-commit", "malformed", "extra-field"} else (
+            "package_symlink_refused" if tamper == "symlink" else "installed_source_mismatch")
+        with pytest.raises(UpdateError, match=code):
+            verify_source_package(repo / "src/bat_agent_connector", package, head)
 
 
 @pytest.mark.parametrize("mode,override", [

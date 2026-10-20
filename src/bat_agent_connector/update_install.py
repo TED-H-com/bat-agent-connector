@@ -93,6 +93,10 @@ def digest_files(values):
     return digest.hexdigest()
 
 
+def verify_source_package(source, package, commit):
+    require(package_files(source) == package_files(package), "installed_source_mismatch")
+
+
 def prepare_tool_paths(root):
     """A partial uv attempt cannot redirect the next install outside its root."""
     for name in ("tools", "bin"):
@@ -220,8 +224,7 @@ def stage(root, release, *, home, command=run):
                  "git+" + source.as_uri() + "@" + actual], env=env)
         packages = list((root / "tools/bat-agent-connector").glob("lib/python*/site-packages/bat_agent_connector"))
         require(len(packages) == 1, "installed_package_missing")
-        require(package_files(source / "src/bat_agent_connector") == package_files(packages[0]),
-                "installed_source_mismatch")
+        verify_source_package(source / "src/bat_agent_connector", packages[0], actual)
         proof = installed(root, release, home=home, command=command)
         files.atomic_write(root / "skill/SKILL.md", canonical.read_bytes())
         files.atomic_write(ready, json.dumps(proof, sort_keys=True).encode())
