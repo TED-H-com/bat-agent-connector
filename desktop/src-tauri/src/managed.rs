@@ -30,6 +30,26 @@ struct Manifest {
     size: u64,
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct RuntimeIdentity {
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub commit: Option<String>,
+    #[serde(default)]
+    pub build_source: Option<String>,
+    pub source: String,
+    pub observed_at: f64,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeDifference {
+    Same,
+    Differs,
+    Unknown,
+}
+
 // No Debug / Serialize: this value contains a bearer credential.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -41,6 +61,12 @@ pub struct Launch {
     pub principal_id: String,
     pub token: Zeroizing<String>,
     pub runtime_version: String,
+    #[serde(default)]
+    pub bundled_runtime: Option<RuntimeIdentity>,
+    #[serde(default)]
+    pub running_runtime: Option<RuntimeIdentity>,
+    #[serde(default)]
+    pub runtime_difference: Option<RuntimeDifference>,
 }
 impl Launch {
     fn validate(&self, version: &str) -> Result<(), String> {
@@ -75,9 +101,9 @@ impl Launch {
     }
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Status {
-    pub mode: &'static str,
+    pub mode: String,
     pub ready: bool,
     pub background: bool,
     pub runtime_version: Option<String>,
@@ -85,6 +111,39 @@ pub struct Status {
     pub principal_id: Option<String>,
     pub error: Option<String>,
     pub login_enabled: bool,
+    #[serde(default)]
+    pub bundled_runtime: Option<RuntimeIdentity>,
+    #[serde(default)]
+    pub running_runtime: Option<RuntimeIdentity>,
+    #[serde(default)]
+    pub runtime_difference: Option<RuntimeDifference>,
+}
+
+#[derive(Clone, Default)]
+struct RuntimeFacts {
+    bundled: Option<RuntimeIdentity>,
+    running: Option<RuntimeIdentity>,
+    difference: Option<RuntimeDifference>,
+}
+
+impl RuntimeFacts {
+    fn from_launch(launch: &Launch) -> Self {
+        Self {
+            bundled: launch.bundled_runtime.clone(),
+            running: launch.running_runtime.clone(),
+            difference: Some(
+                launch
+                    .runtime_difference
+                    .unwrap_or(RuntimeDifference::Unknown),
+            ),
+        }
+    }
+
+    fn apply(&self, status: &mut Status) {
+        status.bundled_runtime = self.bundled.clone();
+        status.running_runtime = self.running.clone();
+        status.runtime_difference = self.difference;
+    }
 }
 
 pub struct Managed {
@@ -92,6 +151,7 @@ pub struct Managed {
     data_dir: PathBuf,
     status: Status,
     pub serial: Mutex<()>,
+    runtime_facts: Mutex<RuntimeFacts>,
 }
 
 impl Managed {
@@ -100,7 +160,7 @@ impl Managed {
             executable: None,
             data_dir: app_data.join("managed-central"),
             status: Status {
-                mode: "managed",
+                mode: "managed".into(),
                 ready: false,
                 background: true,
                 runtime_version: None,
@@ -108,15 +168,19 @@ impl Managed {
                 principal_id: None,
                 error: None,
                 login_enabled: false,
+                bundled_runtime: None,
+                running_runtime: None,
+                runtime_difference: None,
             },
             serial: Mutex::new(()),
+            runtime_facts: Mutex::new(RuntimeFacts::default()),
         };
         // An advanced central always remains the selected client binding. Only an
         // already saved installation can additionally recover its background service;
         // a remote connection failure never provisions a second journal.
         match fs::symlink_metadata(config.join("central.json")) {
             Ok(_) => {
-                state.status.mode = "external";
+                state.status.mode = "external".into();
                 state.status.background = false;
                 match fs::symlink_metadata(state.data_dir.join("installation.json")) {
                     Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => {
@@ -144,6 +208,7 @@ impl Managed {
             state.status.ready = true;
             state.status.server_id = Some(launch.server_id.clone());
             state.status.principal_id = Some(launch.principal_id.clone());
+            state.remember_runtime(&launch);
             Ok::<_, String>(launch)
         })();
         match result {
@@ -177,11 +242,22 @@ impl Managed {
         {
             return Err("MANAGED_RECOVERY_IDENTITY_CHANGED".into());
         }
+        self.remember_runtime(&launch);
         Ok(launch)
+    }
+
+    // Identification is observational: it never changes reuse/readiness gates.
+    fn remember_runtime(&self, launch: &Launch) {
+        if let Ok(mut facts) = self.runtime_facts.lock() {
+            *facts = RuntimeFacts::from_launch(launch);
+        }
     }
 
     pub fn status(&self) -> Status {
         let mut status = self.status.clone();
+        if let Ok(facts) = self.runtime_facts.lock() {
+            facts.apply(&mut status);
+        }
         match crate::managed_login::enabled() {
             Ok(enabled) => status.login_enabled = enabled,
             Err(error) => status.error = Some(error),
@@ -470,6 +546,91 @@ fn materialize(resources: &Path, app_data: &Path) -> Result<(PathBuf, String), S
 mod tests {
     use super::*;
 
+    fn identity_golden() -> serde_json::Value {
+        // Generated by real same-version VCS installs and Python _verify().
+        serde_json::from_str(include_str!(
+            "../../../tests/fixtures/managed-runtime-identity.json"
+        ))
+        .unwrap()
+    }
+
+    fn identity_status() -> Status {
+        Status {
+            mode: "managed".into(),
+            ready: true,
+            background: true,
+            runtime_version: None,
+            server_id: None,
+            principal_id: None,
+            error: None,
+            login_enabled: false,
+            bundled_runtime: None,
+            running_runtime: None,
+            runtime_difference: None,
+        }
+    }
+
+    #[test]
+    fn launch_and_status_preserve_python_runtime_identity_facts() {
+        for reply in identity_golden().as_object().unwrap().values() {
+            let launch: Launch = serde_json::from_value(reply.clone()).unwrap();
+            let mut status = identity_status();
+            RuntimeFacts::from_launch(&launch).apply(&mut status);
+            let serialized = serde_json::to_value(&status).unwrap();
+            for field in ["bundled_runtime", "running_runtime", "runtime_difference"] {
+                assert_eq!(serialized[field], reply[field], "{field}");
+            }
+            let restored: Status = serde_json::from_value(serialized).unwrap();
+            assert_eq!(restored.running_runtime, status.running_runtime);
+            assert_eq!(restored.bundled_runtime, status.bundled_runtime);
+            assert_eq!(restored.runtime_difference, status.runtime_difference);
+            // Availability is independent of a same-version build difference.
+            assert!(restored.ready);
+        }
+    }
+
+    #[test]
+    fn old_launch_and_status_without_identity_fields_still_parse() {
+        let mut reply = identity_golden()["same"].clone();
+        let mut old_status = serde_json::to_value(identity_status()).unwrap();
+        for field in ["bundled_runtime", "running_runtime", "runtime_difference"] {
+            reply.as_object_mut().unwrap().remove(field);
+            old_status.as_object_mut().unwrap().remove(field);
+        }
+        let launch: Launch = serde_json::from_value(reply.clone()).unwrap();
+        assert!(launch.bundled_runtime.is_none());
+        assert!(launch.running_runtime.is_none());
+        assert!(launch.runtime_difference.is_none());
+        let mut status: Status = serde_json::from_value(old_status).unwrap();
+        assert!(status.bundled_runtime.is_none());
+        assert!(status.running_runtime.is_none());
+        assert!(status.runtime_difference.is_none());
+        RuntimeFacts::from_launch(&launch).apply(&mut status);
+        assert_eq!(status.runtime_difference, Some(RuntimeDifference::Unknown));
+        reply["unexpected"] = serde_json::json!(true);
+        assert!(serde_json::from_value::<Launch>(reply).is_err());
+    }
+
+    #[test]
+    fn refreshed_runtime_facts_replace_the_previous_observation() {
+        let golden = identity_golden();
+        let managed = Managed {
+            executable: None,
+            data_dir: PathBuf::new(),
+            status: identity_status(),
+            serial: Mutex::new(()),
+            runtime_facts: Mutex::new(RuntimeFacts::default()),
+        };
+        for name in ["same", "differs", "unknown_running"] {
+            let launch: Launch = serde_json::from_value(golden[name].clone()).unwrap();
+            managed.remember_runtime(&launch);
+            let mut status = managed.status.clone();
+            managed.runtime_facts.lock().unwrap().apply(&mut status);
+            assert_eq!(status.runtime_difference, launch.runtime_difference);
+            assert_eq!(status.running_runtime, launch.running_runtime);
+        }
+    }
+
     fn fixture(root: &Path, bytes: &[u8]) -> PathBuf {
         let resources = root.join("resources");
         fs::create_dir_all(&resources).unwrap();
@@ -614,6 +775,9 @@ mod tests {
             principal_id: "fixture-principal".into(),
             token: Zeroizing::new("fixture-token".into()),
             runtime_version: "fixture-1".into(),
+            bundled_runtime: None,
+            running_runtime: None,
+            runtime_difference: None,
         };
         reply.validate("fixture-1").unwrap();
         assert!(reply.validate("other-version").is_err());

@@ -12,6 +12,15 @@ import pytest
 from bat_agent_connector import managed_runtime as runtime
 
 
+def stable_launch(reply):
+    # Each verification is a fresh observation; every pre-existing launch field
+    # and every new identity fact must still compare equal, except these clocks.
+    value = json.loads(json.dumps(reply))
+    for field in ("bundled_runtime", "running_runtime"):
+        value[field].pop("observed_at")
+    return value
+
+
 @pytest.fixture
 def installation(tmp_path, monkeypatch):
     root = tmp_path / "installed"
@@ -39,7 +48,9 @@ def test_installed_runtime_reuses_identity_and_recovers_after_restart(installati
     root, children = installation
     first = runtime.ensure(root, timeout=15)
     second = runtime.ensure(root, timeout=5)
-    assert first == second and len(children) == 1
+    assert stable_launch(first) == stable_launch(second) and len(children) == 1
+    for field in ("bundled_runtime", "running_runtime"):
+        assert second[field]["observed_at"] >= first[field]["observed_at"]
     assert first["token"].startswith("batc_")
     assert first["actor"].startswith("desktop-")
     # Service continues independently of launcher/client; its ordinary API is authoritative.
@@ -127,7 +138,7 @@ def test_new_package_upgrades_owned_idle_service_preserving_identity_and_history
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as workers:
         replies = list(workers.map(lambda _: runtime.ensure(root, timeout=15), range(3)))
     upgraded = replies[0]
-    assert all(reply == upgraded for reply in replies)
+    assert all(stable_launch(reply) == stable_launch(upgraded) for reply in replies)
     assert upgraded["runtime_version"] == "1.1.0"
     assert len(children) == 2
     children[0].wait(timeout=10)
@@ -135,7 +146,7 @@ def test_new_package_upgrades_owned_idle_service_preserving_identity_and_history
         k: original[k] for k in ("actor", "token", "server_id", "principal_id")}
     with sqlite3.connect(root / "state" / "tasks.sqlite3") as db:
         assert db.execute("SELECT seq FROM api_events WHERE resource_id='saved-event'").fetchone()[0] == sequence
-    assert runtime.ensure(root, timeout=5) == upgraded and len(children) == 2
+    assert stable_launch(runtime.ensure(root, timeout=5)) == stable_launch(upgraded) and len(children) == 2
 
 
 def test_busy_upgrade_preserves_original_owner_and_uncertain_operation(versioned_installation, monkeypatch):
@@ -153,7 +164,7 @@ def test_busy_upgrade_preserves_original_owner_and_uncertain_operation(versioned
     with pytest.raises(ValueError, match="busy"):
         runtime.ensure(root, timeout=5)
     assert len(children) == 1 and children[0].poll() is None
-    assert runtime._verify(root, runtime._manifest(root)) == original
+    assert stable_launch(runtime._verify(root, runtime._manifest(root))) == stable_launch(original)
     with sqlite3.connect(root / "state" / "tasks.sqlite3") as db:
         assert db.execute("SELECT status,idem_key FROM operations WHERE operation_id='uncertain-fixture'").fetchone() == (
             "uncertain", "original-key")
@@ -166,7 +177,7 @@ def test_older_package_never_downgrades_a_running_service(versioned_installation
     with pytest.raises(ValueError, match="newer"):
         runtime.ensure(root, timeout=5)
     assert len(children) == 1 and children[0].poll() is None
-    assert runtime._verify(root, runtime._manifest(root)) == original
+    assert stable_launch(runtime._verify(root, runtime._manifest(root))) == stable_launch(original)
 
 
 def test_older_package_never_downgrades_a_stopped_installation(versioned_installation, monkeypatch):
