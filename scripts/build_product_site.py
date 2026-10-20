@@ -76,8 +76,8 @@ release_note = (
     '<div class="release-note">'
     + bi("Development preview", "開發預覽", "strong")
     + bi(
-        "Screenshots pin merged main at 265026d4c1fc2bc04a9aaa727d566c1a2906b256, through #205 on October 16, 2026. They show the synthetic Dashboard in Development: Needs attention, a four-section live charter, an unadopted discussion proposal, twelve register records, and a manual session whose host is not set up for managed work. The gallery does not open Start work or the Result section. Gallery images do not establish installation or live acceptance. Match the package to its source before installing.",
-        "截圖固定於已合併主線的 265026d4c1fc2bc04a9aaa727d566c1a2906b256，包含 2026 年 10 月 16 日的 #205。畫面是開發階段的合成 Dashboard：需要關注、四段即時專案章程、一份尚未採用的討論提案、十二筆登記，以及人工工作階段寫明此主機尚未設定受管工作。圖庫沒有打開「開始工作」或成果區。圖庫不代表安裝或實機驗收；安裝前請核對套件來源。",
+        "Screenshots pin merged main at 14c62830240148b14a4d28a9c428f7f8b5ba8bf3, through #314 on October 19, 2026. They show the synthetic Dashboard in Development: Needs attention, a four-section live charter, an unadopted discussion proposal, twelve register records, and a manual session whose host is not set up for managed work. The gallery does not open Start work or the Result section. Gallery images do not establish installation or live acceptance. Match the package to its source before installing.",
+        "截圖固定於已合併主線的 14c62830240148b14a4d28a9c428f7f8b5ba8bf3，包含 2026 年 10 月 19 日的 #314。畫面是開發階段的合成 Dashboard：需要關注、四段即時專案章程、一份尚未採用的討論提案、十二筆登記，以及人工工作階段寫明此主機尚未設定受管工作。圖庫沒有打開「開始工作」或成果區。圖庫不代表安裝或實機驗收；安裝前請核對套件來源。",
     )
     + link("#status", "Current scope", "目前範圍")
     + "</div>"
@@ -438,8 +438,8 @@ for en, zh, d, dz in [
     (
         "Match the package",
         "核對套件",
-        "Download Connector 0.2.10 / desktop 0.1.6 from the published preview. Check its source manifest and SHA-256 checksums.",
-        "下載已發布的 Connector 0.2.10／desktop 0.1.6 預覽版，核對來源清單與 SHA-256 校驗碼。",
+        "Download Connector 0.2.12 / desktop 0.1.8 from the published release. Check its source manifest and SHA-256 checksums.",
+        "下載已發布的 Connector 0.2.12／desktop 0.1.8，核對來源清單與 SHA-256 校驗碼。",
     ),
     (
         "Connect your environment",
@@ -459,8 +459,8 @@ parts.append(
     '</ol><div class="install-current">'
     + bi("Validate the version you use", "驗證你實際使用的版本", "h3")
     + bi(
-        "Advanced users can explicitly join an existing central. The published preview includes fixed source and checksum records. These are development validation builds, not a stable signed update channel. Closing the UI leaves central work running.",
-        "進階使用者可明確加入既有中央。已發布預覽版附有固定來源與校驗紀錄。這些是開發驗證包，尚非穩定的簽章更新通道；關閉 UI 仍保留中央工作。",
+        "Advanced users can explicitly join an existing central. The published release includes fixed source and checksum records. These are development validation builds, not a stable signed update channel. Closing the UI leaves central work running.",
+        "進階使用者可明確加入既有中央。已發布版本附有固定來源與校驗紀錄。這些是開發驗證包，尚非穩定的簽章更新通道；關閉 UI 仍保留中央工作。",
         "p",
     )
     + '<div class="actions">'
@@ -472,9 +472,9 @@ parts.append(
         "button light lang-zh",
     )
     + link(
-        repo + "/releases/tag/v0.2.10-preview.20261018",
-        "Download published preview →",
-        "下載已發布預覽版 →",
+        repo + "/releases/tag/v0.2.12",
+        "Download published release →",
+        "下載已發布版本 →",
         "text-link",
     )
     + doc("docs/connector-updates.md", "Connector automatic updates", "Connector 自動更新", "text-link")
@@ -597,8 +597,8 @@ for label, lz, en, zh in [
     (
         "Merged workspace",
         "已合併工作台",
-        "Merged main at b44a83ab (#276–278, #282, #285, #287–301, October 18, 2026) connects reviewed plans to Work, queued follow-ups, fixed Results, verification and PR delivery. Workbench provides mobile navigation and foreground recovery; profiles show route limits before start. PM can discuss two fixed assessments, save continuation briefs and explicitly assess the Overview. Resources reads separately authorized local Codex/Claude histories. Lists load summaries first; unsent instructions can return to Idea. Core UI actions share HTTP/MCP contracts. Classic remains the default. Integration fixtures use real Connector and disk Git with mock BAT/providers; live BAT/model and physical-device acceptance remain separate.",
-        "已合併主線 b44a83ab（#276–278、#282、#285、#287–301，2026 年 10 月 18 日）接通計畫採用、建立工作、持久第二句、固定成果、驗證與 PR 交付。Workbench 提供手機導航與前景恢復，profile 在開始前顯示路線限制。PM 可討論兩份固定評估、保存接續摘要，並依明確要求判讀總覽；資源頁可讀取另行授權的本機 Codex／Claude 對話。清單先載入摘要，未送指令可留成 Idea；核心 UI 操作共用 HTTP／MCP 契約。Classic 仍為預設。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；真 BAT／模型及實體裝置仍需另行驗收。",
+        "Merged main at 14c62830 (through #314, October 19, 2026) connects reviewed plans to Work, queued follow-ups, fixed Results, verification and PR delivery. Workbench provides mobile navigation and foreground recovery; profiles show route limits before start. PM can discuss two fixed assessments, save continuation briefs and explicitly assess the Overview. Resources reads separately authorized local Codex/Claude histories. Lists load summaries first; unsent instructions can return to Idea. Core UI actions share HTTP/MCP contracts. Classic remains the default. Integration fixtures use real Connector and disk Git with mock BAT/providers; live BAT/model and physical-device acceptance remain separate.",
+        "已合併主線 14c62830（截至 #314，2026 年 10 月 19 日）接通計畫採用、建立工作、持久第二句、固定成果、驗證與 PR 交付。Workbench 提供手機導航與前景恢復，profile 在開始前顯示路線限制。PM 可討論兩份固定評估、保存接續摘要，並依明確要求判讀總覽；資源頁可讀取另行授權的本機 Codex／Claude 對話。清單先載入摘要，未送指令可留成 Idea；核心 UI 操作共用 HTTP／MCP 契約。Classic 仍為預設。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；真 BAT／模型及實體裝置仍需另行驗收。",
     ),
     (
         "Still ahead",
@@ -616,7 +616,7 @@ for label, lz, en, zh in [
     parts.append("<div>" + bi(label, lz, "dt") + bi(en, zh, "dd") + "</div>")
 parts.append(
     '</dl><div class="evidence-links">'
-    + doc("docs/product/progress-2026-10-17.md", "Progress and evidence ↗", "進度與證據 ↗", "")
+    + doc("docs/product/implementation-status.md", "Progress and evidence ↗", "進度與證據 ↗", "")
     + doc("docs/product/pm-v1.2-plan.md", "Adopted plan ↗", "已採用計畫 ↗", "")
     + link(repo + "/actions?query=branch%3Amain", "Current main checks ↗", "目前 main 檢查 ↗")
     + "</div></section>"
@@ -650,7 +650,7 @@ for i, (en, zh, d, dz, path, zpath) in enumerate(
             "進度報告",
             "Merged, candidate, tested and remaining scope.",
             "已合併、候選、已驗證及剩餘範圍。",
-            "docs/product/progress-2026-10-17.md",
+            "docs/product/implementation-status.md",
             None,
         ),
         (
