@@ -101,9 +101,9 @@ impl Launch {
     }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Serialize)]
 pub struct Status {
-    pub mode: String,
+    pub mode: &'static str,
     pub ready: bool,
     pub background: bool,
     pub runtime_version: Option<String>,
@@ -111,11 +111,8 @@ pub struct Status {
     pub principal_id: Option<String>,
     pub error: Option<String>,
     pub login_enabled: bool,
-    #[serde(default)]
     pub bundled_runtime: Option<RuntimeIdentity>,
-    #[serde(default)]
     pub running_runtime: Option<RuntimeIdentity>,
-    #[serde(default)]
     pub runtime_difference: Option<RuntimeDifference>,
 }
 
@@ -160,7 +157,7 @@ impl Managed {
             executable: None,
             data_dir: app_data.join("managed-central"),
             status: Status {
-                mode: "managed".into(),
+                mode: "managed",
                 ready: false,
                 background: true,
                 runtime_version: None,
@@ -180,7 +177,7 @@ impl Managed {
         // a remote connection failure never provisions a second journal.
         match fs::symlink_metadata(config.join("central.json")) {
             Ok(_) => {
-                state.status.mode = "external".into();
+                state.status.mode = "external";
                 state.status.background = false;
                 match fs::symlink_metadata(state.data_dir.join("installation.json")) {
                     Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => {
@@ -556,7 +553,7 @@ mod tests {
 
     fn identity_status() -> Status {
         Status {
-            mode: "managed".into(),
+            mode: "managed",
             ready: true,
             background: true,
             runtime_version: None,
@@ -580,33 +577,25 @@ mod tests {
             for field in ["bundled_runtime", "running_runtime", "runtime_difference"] {
                 assert_eq!(serialized[field], reply[field], "{field}");
             }
-            let restored: Status = serde_json::from_value(serialized).unwrap();
-            assert_eq!(restored.running_runtime, status.running_runtime);
-            assert_eq!(restored.bundled_runtime, status.bundled_runtime);
-            assert_eq!(restored.runtime_difference, status.runtime_difference);
             // Availability is independent of a same-version build difference.
-            assert!(restored.ready);
+            assert!(status.ready);
         }
     }
 
     #[test]
-    fn old_launch_and_status_without_identity_fields_still_parse() {
+    fn old_launch_without_identity_fields_still_parses() {
         let mut reply = identity_golden()["same"].clone();
-        let mut old_status = serde_json::to_value(identity_status()).unwrap();
         for field in ["bundled_runtime", "running_runtime", "runtime_difference"] {
             reply.as_object_mut().unwrap().remove(field);
-            old_status.as_object_mut().unwrap().remove(field);
         }
         let launch: Launch = serde_json::from_value(reply.clone()).unwrap();
         assert!(launch.bundled_runtime.is_none());
         assert!(launch.running_runtime.is_none());
         assert!(launch.runtime_difference.is_none());
-        let mut status: Status = serde_json::from_value(old_status).unwrap();
-        assert!(status.bundled_runtime.is_none());
-        assert!(status.running_runtime.is_none());
-        assert!(status.runtime_difference.is_none());
-        RuntimeFacts::from_launch(&launch).apply(&mut status);
-        assert_eq!(status.runtime_difference, Some(RuntimeDifference::Unknown));
+        assert_eq!(
+            RuntimeFacts::from_launch(&launch).difference,
+            Some(RuntimeDifference::Unknown)
+        );
         reply["unexpected"] = serde_json::json!(true);
         assert!(serde_json::from_value::<Launch>(reply).is_err());
     }
