@@ -43,7 +43,20 @@ def read_page(source, cursor, parser, *, decoder=None):
     candidate = source.path.lstat()
     if not stat.S_ISREG(candidate.st_mode):
         raise UsageInvalid("unsafe_file")
-    fd = os.open(source.path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    if os.open in os.supports_dir_fd and hasattr(os, "O_NOFOLLOW"):
+        # Resolve each parent without following symlinks, including a concurrent swap.
+        directory = os.open(source.path.anchor, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            for part in source.path.parts[1:-1]:
+                child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory)
+                os.close(directory)
+                directory = child
+            fd = os.open(source.path.name, flags, dir_fd=directory)
+        finally:
+            os.close(directory)
+    else:
+        fd = os.open(source.path, flags)
     with os.fdopen(fd, "rb") as stream:
         info = os.fstat(stream.fileno())
         identity = [info.st_dev, info.st_ino]
@@ -99,9 +112,9 @@ def read_page(source, cursor, parser, *, decoder=None):
         stream.seek(max(0, end - 256))
         anchor = _hash(stream.read(min(256, end)))
         latest = os.fstat(stream.fileno())
-        path_info = source.path.stat()
+        path_info = source.path.lstat()
         stream.seek(0)
-        if (latest.st_size < end or [path_info.st_dev, path_info.st_ino] != identity
+        if (not stat.S_ISREG(path_info.st_mode) or latest.st_size < end or [path_info.st_dev, path_info.st_ino] != identity
                 or _hash(stream.read(initial_prefix_len)) != initial_prefix
                 or (latest.st_size == info.st_size and latest.st_mtime_ns != info.st_mtime_ns)):
             raise UsageInvalid("source_changed")
@@ -111,10 +124,17 @@ def read_page(source, cursor, parser, *, decoder=None):
 
 
 class UsageCollector:
-    def __init__(self, journal, config):
+    def __init__(self, journal, config, remote=None):
         self.journal, self.config = journal, config
+        self.remote = remote
         self._lock = asyncio.Lock()
         schema(journal)
+
+    def binding(self, source):
+        if source.host is None:
+            return source.binding
+        alias = self.remote.binding(source.host) if self.remote else None
+        return _hash(json.dumps([source.binding, alias]).encode())
 
     async def collect_once(self):
         async with self._lock:
@@ -125,14 +145,22 @@ class UsageCollector:
                 if not db.execute("SELECT 1 FROM pm_workspaces WHERE workspace_id=?", (source.workspace_id,)).fetchone():
                     continue
                 row = db.execute("SELECT * FROM resource_usage_sources WHERE source_id=?", (source.source_id,)).fetchone()
-                if row and row["binding"] != source.binding:
+                binding = self.binding(source)
+                if row and row["binding"] != binding:
                     # Changing a binding cannot transfer historical facts into another workspace.
                     continue
                 cursor, parser = (json.loads(row["cursor"]), json.loads(row["parser"])) if row else ({}, {})
                 try:
                     # Coverage is this instant, before the read, not the later commit clock.
                     started = now()
-                    page = await asyncio.to_thread(read_page, source, cursor, parser)
+                    remote = self.remote
+                    transport_binding = remote.binding(source.host) if source.host and remote else None
+                    if source.host:
+                        if remote is None:
+                            raise UsageInvalid("host_unreachable")
+                        page = await remote.read(source, cursor, parser)
+                    else:
+                        page = await asyncio.to_thread(read_page, source, cursor, parser)
                     if row and row["quota"] and page["quota"]:
                         old_rate = json.loads(row["quota"])
                         if page["quota"]["observed_at"] < old_rate["observed_at"]:
@@ -145,9 +173,14 @@ class UsageCollector:
                     error = "source_unavailable"
                 if not self.journal.owner_valid() or source not in self.config.sources:
                     return
+                if source.host and (self.remote is not remote or remote and remote.binding(source.host) != transport_binding):
+                    return
                 with self.journal.tx():
+                    current = db.execute("SELECT binding FROM resource_usage_sources WHERE source_id=?", (source.source_id,)).fetchone()
+                    if current and current["binding"] != binding:
+                        continue
                     db.execute("INSERT OR IGNORE INTO resource_usage_sources VALUES(?,?,?,?,?,?,?,?)",
-                               (source.source_id, source.binding, "{}", "{}", None, None, None, "pending"))
+                               (source.source_id, binding, "{}", "{}", None, None, None, "pending"))
                     at = now()
                     if error:
                         db.execute("UPDATE resource_usage_sources SET status=?,checked_at=? WHERE source_id=?",

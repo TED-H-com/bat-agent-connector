@@ -1,4 +1,4 @@
-"""Current-authority resource projection over explicit local usage bindings."""
+"""Current-authority resource projection over explicit host-local usage bindings."""
 from __future__ import annotations
 
 import bisect
@@ -23,7 +23,7 @@ _AFTER_LAST_TIMESTAMP = "9999-12-31T99"
 
 def capabilities():
     return {"version": 1, "adapters": list(ADAPTERS), "collection": "explicit_local_files",
-            "recurring": True, "remote_collection": False, "forecast": False, "dispatch": False,
+            "recurring": True, "remote_collection": True, "remote_hosts": {"transport": "ssh_pull", "helper_version": 1}, "forecast": False, "dispatch": False,
             "buckets": {"granularity": "day"}}
 
 
@@ -205,7 +205,7 @@ def _series(db, source, start, end, zone, days, stored_status, coverage_at, sett
         day_rows.append({"date": day.isoformat(), "tokens": _tokens(slots[day.isoformat()], complete),
                          "complete": complete})
     return {"source_id": source.source_id, "adapter": source.adapter, "cli": source.adapter.split("-", 1)[0],
-            "days": day_rows}
+            "host": source.host, "days": day_rows}
 
 
 def _metrics(db, source_id, start, end):
@@ -258,7 +258,7 @@ def read(ops, principal, workspace_id, *, since=None, until=None, tz=None, bucke
         stored = ops.db.execute("SELECT * FROM resource_usage_sources WHERE source_id=?", (source.source_id,)).fetchone()
         stored_status = stored["status"] if stored else "pending"
         status = stored_status
-        same = stored and stored["binding"] == source.binding
+        same = stored and stored["binding"] == collector.binding(source)
         if stored and not same:
             status = "binding_changed"
         last_poll = stored["successful_at"] if same else None
@@ -267,7 +267,8 @@ def read(ops, principal, workspace_id, *, since=None, until=None, tz=None, bucke
             status = "stale"
         usable = same and status in {"current", "catching_up", "stale"}
         row = {"source_id": source.source_id, "adapter": source.adapter, "role": source.role,
-               "host_id": server_id(ops.db), "host_kind": "central_local", "status": status,
+               "host_id": source.host or server_id(ops.db), "host": source.host,
+               "host_kind": "fleet_host" if source.host else "central_local", "status": status,
                "checked_at": stored["checked_at"] if same else None, "successful_at": last_poll,
                "quota_pool": source.quota_pool, "capacity": None, "forecast": None,
                "metrics": None, "observations": None, "configurations": [], "calls": None}
@@ -304,7 +305,8 @@ def read(ops, principal, workspace_id, *, since=None, until=None, tz=None, bucke
     payload = {"workspace_id": workspace_id, "as_of": at.isoformat(timespec="milliseconds"),
                "window": {"since": start, "until": end}, "interval_s": collector.config.interval_s,
                "rows": rows, "quota_pools": list(pools.values()), "capabilities": capabilities(),
-               "coverage": "configured_local_files_only", "forecast": {"status": "insufficient_evidence"}}
+               "coverage": "configured_host_local_files_only" if any(s.host for s in collector.config.sources
+                    if s.workspace_id == workspace_id) else "configured_local_files_only", "forecast": {"status": "insufficient_evidence"}}
     if want:
         payload["buckets"] = {"granularity": "day", "tz": zone_name, "series": series}
     return payload

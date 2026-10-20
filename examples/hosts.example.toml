@@ -94,3 +94,16 @@ timeout_s = 3.0
 # model = "jev-latest"
 # base_url = "https://api.typesafe.ai"
 # api_key_env = "TYPESAFE_API_KEY"
+
+# Optional host-local usage collection (configured Fleet host + existing SSH alias).
+# See docs/design/remote-usage-collection.md. No discovery or new listener.
+# [managed_setup.ssh_hosts]
+# workstation = "example-workstation-ssh"
+#
+# [[usage.sources]]
+# source_id = "worker-coding"
+# workspace_id = "ws_11111111111111111111111111111111"
+# host = "workstation"
+# adapter = "codex-rollout-v1"
+# path = "/srv/example-observations/coding.jsonl"
+# session_id = "example-session"

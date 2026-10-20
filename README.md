@@ -126,9 +126,9 @@ flowchart TB
 | --- | --- |
 | Merged baseline | Desktop/central foundation; PM discussions and plan adoption; engineering packages and bounded dispatch; verification, requirement acceptance and dependency evidence; policy-bounded maintenance repairs; BAT proposals/Follow-up; AHP read-only observation. #132 adds central Overview, discussion context and renames, register, Schedule, Dependencies and daily resource buckets. #134 adds adopted goals, recent decisions and the guided close of a resolved issue. |
 | Merged workspace | Merged main at `14c62830` (through #314, October 19, 2026) connects reviewed plans to Work, queued follow-ups, fixed Results, verification and PR delivery. Workbench provides mobile navigation and foreground recovery; profiles show route limits before start. PM can discuss two fixed assessments, save continuation briefs and explicitly assess the Overview. Resources reads separately authorized local Codex/Claude histories. Lists load summaries first; unsent instructions can return to Idea. Core UI actions share HTTP/MCP contracts. Classic remains the default. Integration fixtures use real Connector and disk Git with mock BAT/providers; live BAT/model and physical-device acceptance remain separate. |
-| Remaining PM v1.2 | General native coding adapter, AHP create-own/write support, remaining document views and presentations, wider CLI support, remote usage collection and delivery-efficiency attribution. |
+| Remaining PM v1.2 | General native coding adapter, AHP create-own/write support, remaining document views and presentations, wider CLI support and delivery-efficiency attribution. |
 
-Local Codex/Claude usage collection exists; the redesign's Agents view adds sourced daily trends and reported quota windows.
+Central-local and [remote host-local Codex/Claude usage collection](docs/design/remote-usage-collection.md) exist; the redesign's Agents view adds sourced daily trends and reported quota windows.
 Remote collection and delivery-efficiency attribution remain planned.
 Missing usage stays unknown; observed tokens, API price estimates and subscription quota are different measures.
 No usage-driven model policy is active. [Progress and priorities](docs/product/implementation-status.md).

@@ -1883,6 +1883,7 @@ var init_ui_strings = __esmMin((() => {
 		incomplete: ["Sources incomplete", "來源不完整"],
 		not_assessed: ["Not assessed", "未評估"],
 		unknown: ["Unknown", "未知"],
+		configured_host_local_files_only: ["Connected host-local files", "已連接的各主機本機檔案"],
 		configured_local_files_only: ["Connected local files", "已連接的本機檔案"],
 		insufficient_evidence: ["Not enough evidence", "證據不足"],
 		binding_changed: ["Binding changed", "綁定已變更"],
@@ -5107,7 +5108,7 @@ var init_pm_resources_strings = __esmMin((() => {
 			res_empty: "No usage sources are connected to this workspace.",
 			res_no_match: "No sources match this filter.",
 			res_unknown: "Unknown",
-			res_local: "Connector host · local files",
+			res_local: "Configured hosts · local files",
 			res_observations: "Usage observations",
 			res_calls: "Messages",
 			res_current: "Up to date",
@@ -5131,8 +5132,8 @@ var init_pm_resources_strings = __esmMin((() => {
 			res_partial: "{count} observed · incomplete coverage",
 			res_codex_units: "Input includes cache; output includes reasoning. Total adds input and output once. Model context records describe the requested model.",
 			res_claude_units: "Input excludes cache. Total adds input, cache read, cache write and output once. Repeated fragments of one message are counted once.",
-			res_scope: "Only explicitly connected local files are included. These observations do not establish complete project cost, execution capacity or accepted delivery performance.",
-			res_setup: "A Connector administrator can connect a versioned CLI source to this workspace. Other hosts and unconnected sessions are outside this view.",
+			res_scope: "Only explicitly connected host-local files are included. These observations do not establish complete project cost, execution capacity or accepted delivery performance.",
+			res_setup: "A Connector administrator can connect a versioned CLI source to this workspace. Unconnected hosts and sessions are outside this view.",
 			res_forecast: "Remaining usage estimate: insufficient comparable accepted-work evidence.",
 			res_quota_unknown: "No current quota balance was provided.",
 			res_quota_scope: "Pools use explicit operator bindings. Each limit is shown once; balances are never added. Reports expire after five minutes or at reset.",
@@ -5215,7 +5216,7 @@ var init_pm_resources_strings = __esmMin((() => {
 			res_empty: "此工作區尚未連接用量來源。",
 			res_no_match: "沒有符合篩選條件的來源。",
 			res_unknown: "未知",
-			res_local: "Connector 主機 · 本機檔案",
+			res_local: "已設定的主機 · 本機檔案",
 			res_observations: "用量觀測筆數",
 			res_calls: "訊息數",
 			res_current: "最新",
@@ -5239,8 +5240,8 @@ var init_pm_resources_strings = __esmMin((() => {
 			res_partial: "已觀測 {count}・涵蓋不完整",
 			res_codex_units: "輸入已包含快取，輸出已包含推理；總量僅將輸入與輸出各加一次。模型脈絡紀錄代表要求的模型。",
 			res_claude_units: "輸入不含快取；總量將輸入、快取讀取、快取寫入與輸出各加一次。同一訊息的重複片段只計一次。",
-			res_scope: "只涵蓋已明確連接的本機檔案。這些觀測尚不能代表完整專案成本、執行容量或已驗收交付表現。",
-			res_setup: "Connector 管理者可將具名版本的 CLI 來源連接到此工作區。其他主機與未連接的工作階段不在此頁涵蓋範圍。",
+			res_scope: "只涵蓋已明確連接的各主機本機檔案。這些觀測尚不能代表完整專案成本、執行容量或已驗收交付表現。",
+			res_setup: "Connector 管理者可將具名版本的 CLI 來源連接到此工作區。未連接的主機與工作階段不在此頁涵蓋範圍。",
 			res_forecast: "剩餘耗量預估：可比較的已驗收工作證據不足。",
 			res_quota_unknown: "來源未提供目前可用的配額餘額。",
 			res_quota_scope: "配額池依管理者明確綁定，各限制只顯示一次，不相加餘額。回報超過五分鐘或到達重設時間即失效。",
@@ -21786,6 +21787,7 @@ var STATUS_KEY = {
 	current: "res_current",
 	catching_up: "res_catching_up",
 	pending: "res_pending",
+	host_unreachable: "res_unavailable",
 	source_unavailable: "res_unavailable",
 	unavailable: "res_unavailable",
 	error: "res_error",
@@ -21795,6 +21797,7 @@ var STATUS_TONE = {
 	current: "ok",
 	catching_up: "info",
 	pending: "warn",
+	host_unreachable: "neutral",
 	source_unavailable: "neutral",
 	unavailable: "neutral",
 	error: "bad",
@@ -21804,6 +21807,7 @@ var SOURCE_KIND = {
 	catching_up: "catching_up",
 	stale: "stale",
 	pending: "pending",
+	host_unreachable: "unavailable",
 	source_unavailable: "unavailable",
 	unavailable: "unavailable",
 	error: "error",
@@ -21914,7 +21918,11 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		return t("ui_status_unknown");
 	}
 	function sourceName(row) {
-		return [isReadable(row) ? cliName(cliOf(row)) : "", row.role ? roleLabel(row.role) : ""].filter(Boolean).join(" · ") || t("res_unnamed");
+		return [
+			isReadable(row) ? cliName(cliOf(row)) : "",
+			row.role ? roleLabel(row.role) : "",
+			row.host
+		].filter(Boolean).join(" · ") || t("res_unnamed");
 	}
 	function effortLabel(value) {
 		if (value === "low" || value === "medium" || value === "high") return t("res_effort_" + value);

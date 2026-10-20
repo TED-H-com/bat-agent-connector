@@ -317,3 +317,10 @@ step 2 之後；backfilled snapshot 的 occurred_at=null，原事件不改寫。
 - Part B：其餘 legacy writes 的 operations、no-key sentinel／讀取投影、完整結果與外部 steps 拆分。Task controls 與 A07 共用 gate 已在 Part A 完成。
 - `import-bat --output PATH --force` 是 owner 啟動前的本機 config 安裝指令，僅寫指定設定檔，保留現有路徑。
 - operation cancel/resume 已授權且 evented，不新增其 control operations；api-token issue/revoke 只改 connector 資料、不觸及 BAT/Git/provider，也不新增 operation。
+
+Remote resource usage keeps `features.pm_resources.version=1`, advertises
+`remote_collection=true` and `remote_hosts={transport:"ssh_pull",helper_version:1}`.
+Resource rows add `host` (configured Fleet host or null), use `host_kind=fleet_host`
+and `host_id=host` for remote sources, and retain central server IDs for local rows.
+Daily bucket series add `host`. `host_unreachable` withholds metrics and series;
+see [remote usage collection](remote-usage-collection.md) for limits and privacy.

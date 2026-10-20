@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Collect explicitly configured Codex/Claude usage on Fleet hosts through the pinned SSH helper, with metrics-only replies, atomic catch-up cursors and per-host resource labels. Unreachable usage stays unknown.
+
 - Recover a dead local managed Connector in Dashboard without restarting the app, retaining the installation identity and original operation keys. Windows background Connector and native Fleet supervisor launches request job breakaway when permitted, with a bounded lifetime warning when the launching job prevents it. Recovery failures and identity changes have English and zh-TW status messages.
 
 - Fleet wakes uniquely identified idle Tailscale peers by their configured IP before

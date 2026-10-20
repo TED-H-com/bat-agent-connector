@@ -205,6 +205,7 @@ export const reasonLabels = Object.freeze({
   missing: ['Not recorded', '尚無紀錄'], context_changed: ['Context changed', '來源已變動'], stale: ['Stale', '過期'],
   stopped: ['Stopped', '已停止'], disabled: ['Disabled', '已停用'], incomplete: ['Sources incomplete', '來源不完整'],
   not_assessed: ['Not assessed', '未評估'], unknown: ['Unknown', '未知'],
+  configured_host_local_files_only: ['Connected host-local files', '已連接的各主機本機檔案'],
   configured_local_files_only: ['Connected local files', '已連接的本機檔案'],
   insufficient_evidence: ['Not enough evidence', '證據不足'],
   binding_changed: ['Binding changed', '綁定已變更'],

@@ -268,7 +268,9 @@ class TaskDaemon:
         self.inventory.after_refresh.append(self.result_collector.after_refresh)
         self.ops.context["attempt_result_collector"] = self.result_collector
         from .usage_collector import UsageCollector
-        self.usage_collector = UsageCollector(self.journal, config.usage)
+        from .usage_host import UsageHost
+        self.usage_collector = UsageCollector(self.journal, config.usage,
+            UsageHost(self.adapter.verifier.settings.ssh_hosts))
         self.ops.context["usage_collector"] = self.usage_collector
         from .session_history import HistoryCollector
         self.history_collector = HistoryCollector(self.journal, config.session_history)
