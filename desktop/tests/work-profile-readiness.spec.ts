@@ -1,6 +1,7 @@
 import {mountProfilePicker} from './work-profile-picker-fixture.ts';
-import {effectiveGolden,effectiveExpected,mountEffectiveGate} from './pm-effective-route-fixture.ts';
+import {effectiveGolden,effectiveExpected,effectiveReasonKeys,mountEffectiveGate} from './pm-effective-route-fixture.ts';
 import {pmEffectiveRouteStrings} from '../src/pm-effective-route-strings.js';
+import {STRINGS} from '../src/i18n.js';
 import {openPmSection} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
@@ -25,8 +26,12 @@ for(const locale of ['en-US','zh-TW'])test.describe(`${locale} effective PM prof
       await expect(facts.getByText(readyText,{exact:true})).toHaveCount(expected.ready?1:0);
       const line=facts.locator('[data-work-profile-pm]');
       await expect(line).toHaveAttribute('data-pm-effective-ready',String(expected.ready));
-      if(expected.adapter)await expect(line).toContainText(expected.adapter);
-      if(expected.reason)await expect(line).toContainText(expected.reason);
+      if(expected.adapter){await expect(line).toContainText(expected.adapter);expect(gate.adapter).toBe(expected.adapter);}
+      if(expected.reason){await expect(line).toContainText(expected.reason);expect(gate.reason).toContain(expected.reason);}
+      for(const key of effectiveReasonKeys[name]){
+        const message=STRINGS[locale==='en-US'?'en':'zh-TW'][key];
+        await expect(line).toContainText(message);expect(gate.reason).toContain(message);
+      }
       if(name==='unset_blocked')for(const code of ['PM_NATIVE_PLATFORM_UNSUPPORTED','PM_WORKTREE_REQUIRED'])await expect(line).toContainText(code);
       if(name==='choice_unreadable')expect(gate.reason).toContain(pmEffectiveRouteStrings[locale==='en-US'?'en':'zh-TW'].pm_effective_sources);
       expect(posts).toEqual([]);

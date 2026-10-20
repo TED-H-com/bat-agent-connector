@@ -12,6 +12,11 @@ export const effectiveExpected={
   choice_unreadable:{ready:false,adapter:null,reason:'original_sources_unavailable'},
   scope_missing:{ready:false,adapter:'codex-native-linux',reason:'scope_required'},
 };
+export const effectiveReasonKeys={
+  saved_bat_blocked:['agents_worktree'],saved_native_ready:[],saved_native_blocked:['agents_platform'],
+  unset_native_ready:[],unset_blocked:['agents_platform','agents_worktree'],
+  choice_unreadable:['pm_effective_sources'],scope_missing:['agents_scope'],
+};
 
 // Mount the actual structured gate with the producer's saved choice/descriptors.
 export async function mountEffectiveGate(page:any,row:any,locale:string){
