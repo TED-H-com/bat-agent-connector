@@ -80,6 +80,11 @@ for sending to resume, then requires an explicit retry with the original key and
 envelope. A known original operation ID remains readable without another POST.
 Neither reconnect nor event refresh automatically reposts an unknown admission.
 
+A source reread can temporarily disable an original-request control. Moving focus
+to its status must preserve the reading pane's scroll position, so a pointer
+press and release still reach the same retained button after the gate settles.
+The original key, envelope and submission gates remain unchanged.
+
 The recovery helper selects the stable adoption form. A `has` filter is relative
 to its candidate: passing a proposal-scoped role locator to a Details filter looks
 for another proposals container inside Details and never matches. Revealing and

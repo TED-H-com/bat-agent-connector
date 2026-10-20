@@ -48696,7 +48696,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			if (!reset.hidden && !reset.disabled) reset.focus();
 			else if (document.activeElement === document.body || document.activeElement === button) {
 				status.tabIndex = -1;
-				status.focus();
+				status.focus({ preventScroll: true });
 			}
 		} else if (hadResetFocus && reset.hidden && !button.hidden && !button.disabled) button.focus();
 		onStateChange();
