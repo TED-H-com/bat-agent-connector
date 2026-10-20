@@ -262,6 +262,26 @@ kills an owner to upgrade. Passing output includes both binary digests and clean
 This supplements clean-profile installation evidence; it does not establish an
 in-place app installer upgrade or acceptance of an operator's existing data.
 
+The publication extension uses the earlier checkout's own Python source and
+test doubles to produce a real Work/Attempt/Result and a GitHub REST 201 receipt
+in the earlier core's owned journal. Only the outer completion is interrupted;
+receipt rows are not synthesized. That producer releases its journal while its
+FakeGitHub/MockBat peers remain alive. The current core's ordinary `serve` child
+then opens the same data, and `ensure` verifies its ownership and identity. The
+original key resolves the same operation without a second creation call or push;
+immutable Work/Attempt/Result and creation-receipt rows, original events, Result
+API content and manual checkout bytes are checked.
+Only fixture-owned process handles are terminated for fault-case teardown.
+
+The receipt records the old producer version/source hashes and the added time,
+which must be at most 60 seconds including cleanup. The source harness can test
+two actual source revisions locally; distinct frozen binaries remain CI evidence
+for their exact platform/head. The POSIX host-script producer runs on Linux and
+macOS native jobs. Windows keeps the existing workspace/identity/busy checks;
+its publication path and real OS-vault continuity remain open acceptance items.
+This is upgrade evidence: managed downgrade refusal remains unchanged, and the
+separate plain-updater rollback cases cannot stand in for a managed rollback.
+
 The owner explicitly excluded formal signing, Mac notarization, production update channels and Linux persistent native credential enrollment from this delivery. Full human execution of the 46-item real-environment acceptance matrix is user-owned and is not an outstanding agent task. Exclusion does not mean these capabilities or checks were completed. Unknown native BAT merge acknowledgements preserve original work under the [merge contract](worktree-merge.md); its separate human-adjudication API is not a delivery gate.
 
 See [first use](../getting-started.md), [implementation status](../product/implementation-status.md), [acceptance reference](../product/acceptance-v2.md) and [shared frontend lifecycle](shared-frontend.md).
