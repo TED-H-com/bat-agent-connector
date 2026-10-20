@@ -1,5 +1,6 @@
 import {mountProfilePicker} from './work-profile-picker-fixture.ts';
 import {effectiveGolden,effectiveExpected,mountEffectiveGate} from './pm-effective-route-fixture.ts';
+import {pmEffectiveRouteStrings} from '../src/pm-effective-route-strings.js';
 import {openPmSection} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
@@ -27,6 +28,7 @@ for(const locale of ['en-US','zh-TW'])test.describe(`${locale} effective PM prof
       if(expected.adapter)await expect(line).toContainText(expected.adapter);
       if(expected.reason)await expect(line).toContainText(expected.reason);
       if(name==='unset_blocked')for(const code of ['PM_NATIVE_PLATFORM_UNSUPPORTED','PM_WORKTREE_REQUIRED'])await expect(line).toContainText(code);
+      if(name==='choice_unreadable')expect(gate.reason).toContain(pmEffectiveRouteStrings[locale==='en-US'?'en':'zh-TW'].pm_effective_sources);
       expect(posts).toEqual([]);
       expect(await page.evaluate(()=>(window as any).__csp)).toEqual([]);
     });

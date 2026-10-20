@@ -25,7 +25,7 @@ export async function mountEffectiveGate(page:any,row:any,locale:string){
     const request={locked:()=>false,set:(_key,value)=>{runtime.field.value=value;},update:()=>runtime.update(request)};
     runtime.update(request);
     (document.getElementById('fixture')||document.getElementById('main'))!.append(runtime.box);
-    return {ready:runtime.eligible(),adapter:runtime.field.value};
+    return {ready:runtime.eligible(),adapter:runtime.field.value,reason:runtime.box.querySelector('[data-structured-analysis-reason]')!.textContent};
   },{row,locale});
 }
 

@@ -74,7 +74,9 @@ async def test_pm_effective_route_matches_producer_golden(pm, mock, tmp_path, mo
         assert before == (len(mock.invokes), len(write_frames(mock)), len(w["runner"].scripts), ops.db.total_changes)
         # Copy producer fields only; unrelated capabilities and worktree paths
         # are outside this golden's consumer input projection.
-        cases[name] = {"capabilities": {"features": {"pm_workspaces": caps["features"]["pm_workspaces"]},
+        feature = caps["features"]["pm_workspaces"]
+        cases[name] = {"capabilities": {"features": {"pm_workspaces": {key: feature[key] for key in
+            ("version", "native_analysis", "bat_analysis", "installation_eligibility", "workspace_adapter", "work_profiles")}},
             "scopes": caps["scopes"], "actions": [row for row in caps["actions"] if row["action"] in
                 {"pm.run.analyze", "pm.run.bat.analyze", "pm.conversation.propose"}]},
             "workspace": {key: workspace[key] for key in ("workspace_id", "native_analysis", "bat_analysis",
@@ -129,11 +131,17 @@ async def test_pm_effective_route_matches_producer_golden(pm, mock, tmp_path, mo
         GOLDEN.write_text(raw, encoding="utf-8")
     # C02 fails here on the stacked base, before relying on any new facet field.
     assert bundle["saved_bat_blocked"]["readiness"]["pm_analysis"]["pm_ready"] is False
+    assert bundle["saved_bat_blocked"]["workspace"]["native_analysis"]["authorized"] is True
+    assert bundle["saved_native_blocked"]["workspace"]["bat_analysis"]["eligible_for_preflight"] is True
     for name, (ready, adapter, reason, source) in CASES.items():
         row = bundle[name]
         facet = row["workspace"]["effective_pm_route"]
         assert facet == row["readiness"]["pm_analysis"]["effective_pm_route"]
         assert (facet["ready"], facet["adapter"], facet["reason"], facet["choice_source"]) == (ready, adapter, reason, source)
         assert row["readiness"]["pm_analysis"]["pm_ready"] is ready
+        assert facet["version"] == 1 and facet["scope"] == "workspace_selected_route"
+        assert facet["choice_ref"] == (row["workspace"]["workspace_adapter"]["choice_ref"] if source == "saved" else None)
         assert facet["model_execution_verified"] is False and facet["execution_authorized"] is False
+    assert [row["reason"] for row in bundle["unset_blocked"]["workspace"]["effective_pm_route"]["adapters"]] == [
+        "PM_NATIVE_PLATFORM_UNSUPPORTED", "PM_WORKTREE_REQUIRED"]
     assert bundle == json.loads(GOLDEN.read_text(encoding="utf-8"))

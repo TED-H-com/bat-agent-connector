@@ -125,6 +125,30 @@
           "options_confirmed": false,
           "auth_validity": "unverified",
           "model_execution_verified": false
+        },
+        "effective_pm_route": {
+          "version": 1,
+          "scope": "workspace_selected_route",
+          "choice_source": "unset",
+          "adapter": null,
+          "choice_ref": null,
+          "ready": false,
+          "reason": "scope_required",
+          "eligible_adapters": [],
+          "adapters": [
+            {
+              "adapter": "codex-native-linux",
+              "ready": false,
+              "reason": "scope_required"
+            },
+            {
+              "adapter": "bat-pm-linux-v1",
+              "ready": false,
+              "reason": "scope_required"
+            }
+          ],
+          "model_execution_verified": false,
+          "execution_authorized": false
         }
       }
     },
@@ -262,6 +286,30 @@
           "options_confirmed": false,
           "auth_validity": "unverified",
           "model_execution_verified": false
+        },
+        "effective_pm_route": {
+          "version": 1,
+          "scope": "workspace_selected_route",
+          "choice_source": "unset",
+          "adapter": null,
+          "choice_ref": null,
+          "ready": false,
+          "reason": "scope_required",
+          "eligible_adapters": [],
+          "adapters": [
+            {
+              "adapter": "codex-native-linux",
+              "ready": false,
+              "reason": "scope_required"
+            },
+            {
+              "adapter": "bat-pm-linux-v1",
+              "ready": false,
+              "reason": "scope_required"
+            }
+          ],
+          "model_execution_verified": false,
+          "execution_authorized": false
         }
       }
     },
@@ -407,6 +455,30 @@
           "options_confirmed": false,
           "auth_validity": "unverified",
           "model_execution_verified": false
+        },
+        "effective_pm_route": {
+          "version": 1,
+          "scope": "workspace_selected_route",
+          "choice_source": "unset",
+          "adapter": null,
+          "choice_ref": null,
+          "ready": false,
+          "reason": "scope_required",
+          "eligible_adapters": [],
+          "adapters": [
+            {
+              "adapter": "codex-native-linux",
+              "ready": false,
+              "reason": "scope_required"
+            },
+            {
+              "adapter": "bat-pm-linux-v1",
+              "ready": false,
+              "reason": "scope_required"
+            }
+          ],
+          "model_execution_verified": false,
+          "execution_authorized": false
         }
       }
     },
@@ -544,6 +616,30 @@
           "options_confirmed": false,
           "auth_validity": "unverified",
           "model_execution_verified": false
+        },
+        "effective_pm_route": {
+          "version": 1,
+          "scope": "workspace_selected_route",
+          "choice_source": "unset",
+          "adapter": null,
+          "choice_ref": null,
+          "ready": false,
+          "reason": "scope_required",
+          "eligible_adapters": [],
+          "adapters": [
+            {
+              "adapter": "codex-native-linux",
+              "ready": false,
+              "reason": "scope_required"
+            },
+            {
+              "adapter": "bat-pm-linux-v1",
+              "ready": false,
+              "reason": "scope_required"
+            }
+          ],
+          "model_execution_verified": false,
+          "execution_authorized": false
         }
       }
     },
@@ -684,6 +780,30 @@
           "options_confirmed": false,
           "auth_validity": "unverified",
           "model_execution_verified": false
+        },
+        "effective_pm_route": {
+          "version": 1,
+          "scope": "workspace_selected_route",
+          "choice_source": "unset",
+          "adapter": null,
+          "choice_ref": null,
+          "ready": false,
+          "reason": "scope_required",
+          "eligible_adapters": [],
+          "adapters": [
+            {
+              "adapter": "codex-native-linux",
+              "ready": false,
+              "reason": "scope_required"
+            },
+            {
+              "adapter": "bat-pm-linux-v1",
+              "ready": false,
+              "reason": "scope_required"
+            }
+          ],
+          "model_execution_verified": false,
+          "execution_authorized": false
         }
       }
     },
@@ -844,6 +964,30 @@
           "options_confirmed": false,
           "auth_validity": "unverified",
           "model_execution_verified": false
+        },
+        "effective_pm_route": {
+          "version": 1,
+          "scope": "workspace_selected_route",
+          "choice_source": "unset",
+          "adapter": null,
+          "choice_ref": null,
+          "ready": false,
+          "reason": "scope_required",
+          "eligible_adapters": [],
+          "adapters": [
+            {
+              "adapter": "codex-native-linux",
+              "ready": false,
+              "reason": "scope_required"
+            },
+            {
+              "adapter": "bat-pm-linux-v1",
+              "ready": false,
+              "reason": "scope_required"
+            }
+          ],
+          "model_execution_verified": false,
+          "execution_authorized": false
         }
       }
     },
@@ -989,6 +1133,30 @@
           "options_confirmed": false,
           "auth_validity": "unverified",
           "model_execution_verified": false
+        },
+        "effective_pm_route": {
+          "version": 1,
+          "scope": "workspace_selected_route",
+          "choice_source": "unset",
+          "adapter": null,
+          "choice_ref": null,
+          "ready": false,
+          "reason": "scope_required",
+          "eligible_adapters": [],
+          "adapters": [
+            {
+              "adapter": "codex-native-linux",
+              "ready": false,
+              "reason": "scope_required"
+            },
+            {
+              "adapter": "bat-pm-linux-v1",
+              "ready": false,
+              "reason": "scope_required"
+            }
+          ],
+          "model_execution_verified": false,
+          "execution_authorized": false
         }
       }
     }

@@ -5150,6 +5150,35 @@ var init_pm_discussions_strings = __esmMin((() => {
 	};
 }));
 //#endregion
+//#region src/pm-effective-route-strings.js
+var pmEffectiveRouteStrings;
+var init_pm_effective_route_strings = __esmMin((() => {
+	pmEffectiveRouteStrings = {
+		en: {
+			pm_effective_saved: "Workspace PM route: ",
+			pm_effective_unset: "No PM route is saved. You may choose an eligible adapter.",
+			pm_effective_available: "Eligible adapters:",
+			pm_effective_unreadable: "The saved PM route cannot be read.",
+			pm_effective_sources: "Refresh, or ask the workspace owner to restore access to the original PM sources.",
+			pm_effective_unknown: "The workspace PM route could not be verified. Refresh, or use a compatible Connector version.",
+			pm_effective_ready: "This workspace route is eligible for preflight.",
+			pm_effective_blocked: "This workspace route is not eligible for preflight.",
+			pm_effective_boundary: "Model execution is unverified; each request still checks admission."
+		},
+		"zh-TW": {
+			pm_effective_saved: "工作區 PM 路線：",
+			pm_effective_unset: "尚未儲存 PM 路線，可選擇符合預檢條件的介接器。",
+			pm_effective_available: "符合預檢條件的介接器：",
+			pm_effective_unreadable: "無法讀取已儲存的 PM 路線。",
+			pm_effective_sources: "請重新整理，或請工作區擁有者恢復原始 PM 來源的存取權。",
+			pm_effective_unknown: "無法確認工作區的 PM 路線。請重新整理，或使用相容版本的 Connector。",
+			pm_effective_ready: "這個工作區路線符合預檢條件。",
+			pm_effective_blocked: "這個工作區路線尚未符合預檢條件。",
+			pm_effective_boundary: "模型執行尚未驗證；每次要求仍會檢查准入條件。"
+		}
+	};
+}));
+//#endregion
 //#region src/pm-resources-strings.js
 var resourceStrings;
 var init_pm_resources_strings = __esmMin((() => {
@@ -7958,6 +7987,7 @@ var init_pm_meetings_strings = __esmMin((() => {
 var pmStrings;
 var init_pm_strings = __esmMin((() => {
 	init_pm_discussions_strings();
+	init_pm_effective_route_strings();
 	init_pm_resources_strings();
 	init_pm_workbench_strings();
 	init_pm_plan_proposal_strings();
@@ -7976,6 +8006,7 @@ var init_pm_strings = __esmMin((() => {
 	init_pm_meetings_strings();
 	pmStrings = {
 		en: {
+			...pmEffectiveRouteStrings.en,
 			...workbenchStrings.en,
 			...resourceStrings.en,
 			...pmPlanProposalStrings.en,
@@ -8366,6 +8397,7 @@ var init_pm_strings = __esmMin((() => {
 			pm_slot_quality: "Quality"
 		},
 		"zh-TW": {
+			...pmEffectiveRouteStrings["zh-TW"],
 			...workbenchStrings["zh-TW"],
 			...resourceStrings["zh-TW"],
 			...pmPlanProposalStrings["zh-TW"],
@@ -20555,6 +20587,48 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	};
 }
 //#endregion
+//#region src/pm-effective-route.js
+var hasEffectivePmRoute = (document) => document != null && Object.hasOwn(document, "effective_pm_route");
+var effectivePmRoute = (document) => document?.effective_pm_route?.version === 1 && document.effective_pm_route.scope === "workspace_selected_route" ? document.effective_pm_route : null;
+function workspacePmReady(document) {
+	if (hasEffectivePmRoute(document)) return effectivePmRoute(document)?.ready === true;
+	return Boolean(document?.structured_analysis?.version === 1 ? (document.structured_analysis.actions?.["pm.conversation.propose"]?.adapters || []).some((row) => ["codex-native-linux", "bat-pm-linux-v1"].includes(row.adapter) && row.action_registered === true && row.authorized === true && row.eligible_for_preflight === true) : document?.native_analysis?.authorized !== false && document?.native_analysis?.eligible_for_preflight === true || document?.bat_analysis?.authorized !== false && document?.bat_analysis?.eligible_for_preflight === true);
+}
+var routeReasons = {
+	scope_required: "agents_scope",
+	authorization_required: "agents_authorization",
+	original_sources_unavailable: "pm_effective_sources"
+};
+var pmRouteReasonKey = (code) => Object.hasOwn(routeReasons, code) ? routeReasons[code] : Object.hasOwn(eligibilityReasons, code) ? eligibilityReasons[code] : "agents_unknown";
+var safeCode = (value) => typeof value === "string" && /^[A-Za-z][A-Za-z0-9_-]{0,79}$/.test(value) ? value : "";
+var adapterKey = (adapter) => adapter === "codex-native-linux" ? "pm_analysis_local" : adapter === "bat-pm-linux-v1" ? "pm_analysis_bat" : null;
+function renderEffectivePmRoute(node, { h, t, document, readyKey = "pm_effective_ready" }) {
+	const facet = effectivePmRoute(document);
+	node.dataset.pmEffectiveReady = String(facet?.ready === true);
+	if (!facet) {
+		node.replaceChildren(h("p", {}, t("pm_effective_unknown")));
+		return node;
+	}
+	const label = (adapter) => h("span", {}, t(adapterKey(adapter) || "pm_effective_unknown"), " · ", h("code", {}, safeCode(adapter)));
+	const parts = [h("p", {}, t(facet.choice_source === "saved" ? "pm_effective_saved" : facet.choice_source === "unset" ? "pm_effective_unset" : "pm_effective_unreadable"), ...facet.adapter ? [label(facet.adapter)] : [])];
+	const ref = facet.choice_ref;
+	if (ref && Number.isSafeInteger(ref.version) && ref.version > 0) {
+		const link = typeof ref.operation_id === "string" && /^op_[0-9a-f]{32}$/.test(ref.operation_id) ? h("a", { href: `#/op/${ref.operation_id}` }, t("pm_operation")) : null;
+		parts.push(h("p", {}, t("pm_choice_revision") + " " + ref.version, " · ", link));
+	}
+	parts.push(h("p", {}, t(facet.ready === true ? readyKey : "pm_effective_blocked")));
+	if (facet.choice_source === "unset" && facet.ready === true) parts.push(h("p", {}, t("pm_effective_available"), " ", ...(facet.eligible_adapters || []).map(label)));
+	if (facet.ready !== true) {
+		const aggregate = facet.choice_source === "unset" && facet.reason === "no_eligible_adapter";
+		if (aggregate) parts.push(h("code", {}, facet.reason));
+		const reasons = aggregate ? facet.adapters || [] : [{ reason: facet.reason }];
+		for (const row of reasons) parts.push(h("p", {}, ...row.adapter ? [label(row.adapter), " · "] : [], t(pmRouteReasonKey(row.reason)), " · ", h("code", {}, safeCode(row.reason))));
+	}
+	parts.push(h("p", { class: "muted" }, t("pm_effective_boundary")));
+	node.replaceChildren(...parts);
+	return node;
+}
+//#endregion
 //#region src/pm-external-history.js
 function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox }) {
 	const root = `/pm/workspaces/${encodeURIComponent(workspaceId)}/history`;
@@ -20882,7 +20956,7 @@ function structuredAnalysis({ h, t, labelled, action, capability, legacyEligible
 		"data-pm-default": NATIVE
 	}, h("option", { value: NATIVE }, t("pm_analysis_local")), h("option", { value: BAT }, t("pm_analysis_bat")));
 	field.value = NATIVE;
-	const choice = labelled("pm_analysis_adapter", field), reason = h("p", {
+	const choice = labelled("pm_analysis_adapter", field), reason = h("div", {
 		class: "muted",
 		"data-structured-analysis-reason": ""
 	}), binding = h("p", { class: "muted pm-note-text" });
@@ -20918,7 +20992,12 @@ function structuredAnalysis({ h, t, labelled, action, capability, legacyEligible
 			PM_NATIVE_AUTH_UNAVAILABLE: "pm_native_auth",
 			PM_NATIVE_HOME_UNAVAILABLE: "pm_native_auth"
 		}[code] || "pm_native_unavailable";
-		reason.textContent = t(key);
+		if (effectivePmRoute(capability())?.ready === false) renderEffectivePmRoute(reason, {
+			h,
+			t,
+			document: capability()
+		});
+		else reason.replaceChildren(t(key));
 		const source = field.value === BAT && selected?.selected_binding;
 		binding.hidden = !source;
 		binding.textContent = source ? `${t("pm_analysis_selected_binding")} ${source.host} / ${source.workspace_id} / ${source.repository}` : "";
@@ -39450,7 +39529,12 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		facts.replaceChildren(h$1("h4", {}, t("wpf_coding")), ...readAt === null ? [] : [h$1("p", { "data-work-profile-read-at": "" }, timeLabel(t, "wpf_read_at", { time: timeStamp(readAt) }))], h$1("p", {
 			class: "muted",
 			"data-work-profile-next-turn": ""
-		}, h$1("strong", {}, t("wpf_next_turn") + " · "), t(nextKey)), h$1("p", { class: "muted" }, t("wpf_locked")), list, ...data.states.can_start_own.value !== "ready" ? [h$1("p", { class: "muted" }, t("wpf_unverified"))] : [], ...gap ? [h$1("div", { "data-work-profile-gap": "" }, ...details)] : [], h$1("h4", {}, t("wpf_pm")), h$1("p", {}, t(data.pm_analysis?.pm_ready === true ? "wpf_pm_preflight" : "wpf_pm_unverified")));
+		}, h$1("strong", {}, t("wpf_next_turn") + " · "), t(nextKey)), h$1("p", { class: "muted" }, t("wpf_locked")), list, ...data.states.can_start_own.value !== "ready" ? [h$1("p", { class: "muted" }, t("wpf_unverified"))] : [], ...gap ? [h$1("div", { "data-work-profile-gap": "" }, ...details)] : [], h$1("h4", {}, t("wpf_pm")), hasEffectivePmRoute(data.pm_analysis) ? renderEffectivePmRoute(h$1("div", { "data-work-profile-pm": "" }), {
+			h: h$1,
+			t,
+			document: data.pm_analysis,
+			readyKey: "wpf_pm_preflight"
+		}) : h$1("p", {}, t(data.pm_analysis?.pm_ready === true ? "wpf_pm_preflight" : "wpf_pm_unverified")));
 		const gapName = states$1.find((name) => data.states[name].value !== "ready");
 		announcement.textContent = [`${t("wpf_next_turn")}: ${t(nextKey)}`, gapName ? `${t("wpf_" + gapName)}: ${t("wpf_" + data.states[gapName].value)}. ${t("wpf_unverified")}` : ""].filter(Boolean).join(" ");
 		verified = {
@@ -52016,7 +52100,23 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						if (ticket !== sequence) return;
 						pmCapabilities = workspaceCaps;
 					}
-					const pmReady = Boolean(threadId === "new" && (workspaceCaps?.structured_analysis?.version === 1 ? (workspaceCaps.structured_analysis.actions?.["pm.conversation.propose"]?.adapters || []).some((row) => ["codex-native-linux", "bat-pm-linux-v1"].includes(row.adapter) && row.action_registered === true && row.authorized === true && row.eligible_for_preflight === true) : workspaceCaps?.native_analysis?.authorized !== false && workspaceCaps?.native_analysis?.eligible_for_preflight === true || workspaceCaps?.bat_analysis?.authorized !== false && workspaceCaps?.bat_analysis?.eligible_for_preflight === true));
+					const pmReady = threadId === "new" && workspacePmReady(workspaceCaps);
+					const draftAvailability = h("div", { "data-discussion-pm-unavailable": "" });
+					if (hasEffectivePmRoute(workspaceCaps)) renderEffectivePmRoute(draftAvailability, {
+						h,
+						t,
+						document: workspaceCaps
+					});
+					else renderPmAvailability(draftAvailability, {
+						h,
+						t,
+						setupHref: discussionSettingsHref(),
+						state: pmAvailability({
+							caps: caps(),
+							document: pmCapabilities,
+							checked: true
+						})
+					});
 					const contextDraft = h("section", { "data-discussion-tab": "context" }, ...discussionContext(t, draftRefs || launch.refs, { title: launch.title }));
 					const draftPanel = discussionPanel({
 						t,
@@ -52037,16 +52137,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						form: create,
 						draft: true,
 						pmReady,
-						availability: renderPmAvailability(h("div", { "data-discussion-pm-unavailable": "" }), {
-							h,
-							t,
-							setupHref: discussionSettingsHref(),
-							state: pmAvailability({
-								caps: caps(),
-								document: pmCapabilities,
-								checked: true
-							})
-						})
+						availability: draftAvailability
 					})), draftPanel.home));
 				}
 			}
