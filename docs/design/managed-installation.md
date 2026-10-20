@@ -49,6 +49,14 @@ The translation regression checks explicit English/zh-TW entries and variables f
 
 - The persistent installation manifest binds runtime version, data location, installation actor, server ID and principal ID. Reopening and concurrent clients recover that installation.
 - Central uses kernel file leases, not an occupied port, stale PID or matching path, to enforce a single owner. The endpoint pointer is checked against the owned database, then a challenge verifies the live service before any bearer is sent.
+- Concurrent first clients open an existing POSIX lease without `O_CREAT`, or
+  create it with `O_CREAT | O_EXCL` after `ENOENT`. A losing creator reopens the
+  existing inode; it never replaces or unlinks another client's lease. The shared
+  private-file helper bounds this lookup/create reconciliation to eight pairs and
+  reports `PrivateFileCreateRaceError` (`EAGAIN`) if the leaf keeps changing.
+  Other create errors propagate. Every open keeps `O_NOFOLLOW`, ownership, private
+  mode and single-link checks; truncation still waits for validation. This is
+  file-creation reconciliation, not a retry of `ensure` or application effects.
 - Windows uses private ACLs, verified handles, reparse rejection and native locking. POSIX uses private owned directories/files and process locks. These protections also cover journal, token and atomic configuration publication.
 - The package pins its compressed runtime and executable digests. Installation does not download and execute an unversioned script. The frozen runtime starts without Python or uv on the user's PATH.
 - Browser handoff is short-lived and single-use. The resulting session uses an HttpOnly SameSite cookie plus origin/CSRF checks; this is not a public unauthenticated hosting mode.

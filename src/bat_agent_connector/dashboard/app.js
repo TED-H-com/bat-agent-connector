@@ -28,13 +28,36 @@ function managedRecoveryKey(code) {
 }
 //#endregion
 //#region src/central-service-status.js
+function pollFailure(error, at) {
+	const status = Number.isFinite(error.status) ? error.status : 200;
+	const code = error.code || "INVALID_EVENT_PAGE";
+	return {
+		kind: code === "EVENT_CURSOR_RESET" ? "continuity" : status === 401 || status === 403 ? "refused" : status >= 500 ? "service_error" : status === 0 ? "transport" : "invalid_response",
+		status,
+		code,
+		at
+	};
+}
+var pollKeys = {
+	transport: "ui_reconnecting",
+	refused: "ui_connection_refused",
+	service_error: "ui_service_error",
+	invalid_response: "ui_invalid_response",
+	continuity: "ui_connecting"
+};
+var pollReasons = {
+	ui_reconnecting: "reconnecting",
+	ui_connection_refused: "refused",
+	ui_service_error: "service_error",
+	ui_invalid_response: "invalid_response"
+};
 function centralServiceStatus({ token, pollHealth, online, managedRecovery }) {
 	const connection = !token ? "offline" : pollHealth === "connected" || pollHealth === "initial" && online ? "connected" : "reconnecting";
 	const recoveryKey = managedRecoveryKey(managedRecovery);
-	const key = recoveryKey || (!token ? "ui_not_connected" : connection === "connected" ? "ui_connected" : pollHealth === "initial" ? "ui_connecting" : "ui_reconnecting");
+	const key = recoveryKey || (!token ? "ui_not_connected" : connection === "connected" ? "ui_connected" : pollHealth === "initial" ? "ui_connecting" : pollKeys[pollHealth?.kind] || (pollHealth === "reconnecting" ? "ui_reconnecting" : "ui_connecting"));
 	return {
 		key,
-		tone: key === "ui_connected" ? "ok" : key === "ui_reconnecting" ? "warn" : "neutral",
+		tone: key === "ui_connected" ? "ok" : pollReasons[key] ? "warn" : "neutral",
 		connection,
 		recoveryKey
 	};
@@ -48,13 +71,13 @@ function clientActionGate(facts, requirements) {
 	const key = centralServiceStatus(facts).key;
 	return {
 		allowed: false,
-		reason: requirements.post && !facts.token || key === "ui_not_connected" ? "not_connected" : requirements.post && facts.nativeBusy ? "connection_changing" : requirements.supported && !facts.attachmentsSupported ? "attachments_unavailable" : requirements.manage && !facts.manageAllowed ? "manage_required" : requirements.uploads && !facts.uploadsAllowed ? "uploads_not_allowed" : !facts.online && key === "ui_reconnecting" ? "reconnecting" : !facts.online && key === "ui_connecting" ? "connecting" : !facts.viewReady || key === "ui_connected" ? "view_not_ready" : "connecting"
+		reason: requirements.post && !facts.token || key === "ui_not_connected" ? "not_connected" : requirements.post && facts.nativeBusy ? "connection_changing" : requirements.supported && !facts.attachmentsSupported ? "attachments_unavailable" : requirements.manage && !facts.manageAllowed ? "manage_required" : requirements.uploads && !facts.uploadsAllowed ? "uploads_not_allowed" : !facts.online && pollReasons[key] ? pollReasons[key] : !facts.online && key === "ui_connecting" ? "connecting" : !facts.viewReady || key === "ui_connected" ? "view_not_ready" : "connecting"
 	};
 }
 var clientReasons = [
 	"not_connected",
 	"connecting",
-	"reconnecting",
+	...Object.values(pollReasons),
 	"connection_changing",
 	"view_not_ready",
 	"manage_required",
@@ -66,7 +89,17 @@ var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}
 var clientActionReason = (code) => clientReasons.find((reason) => clientActionCode(reason) === code) || null;
 //#endregion
 //#region src/workbench-mode.js
-var workbenchEnabled = () => new URLSearchParams(location.search).get("workbench") === "1";
+function decideLayout({ search = "", policy } = {}) {
+	const requested = new URLSearchParams(search).get("workbench");
+	const blocked = requested === "1" && policy?.allowWorkbench === false;
+	return Object.freeze({
+		layout: requested === "1" && !blocked ? "workbench" : "classic",
+		source: blocked ? "policy" : requested === null ? "default" : "url",
+		status: "preview",
+		reason: blocked ? "policy_disabled" : requested !== null && !["0", "1"].includes(requested) ? "unrecognized_workbench_value" : null
+	});
+}
+var layoutDecision = decideLayout({ search: globalThis.location?.search || "" });
 //#endregion
 //#region src/ui/dom.js
 function place(node, method, ...children) {
@@ -255,6 +288,25 @@ function parseDiscussRefs(query) {
 		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
 	};
 }
+//#endregion
+//#region src/result-sources-strings.js
+var resultSourcesStrings;
+var init_result_sources_strings = __esmMin((() => {
+	resultSourcesStrings = {
+		en: {
+			results_waiting_observed: "waiting for you in this observation",
+			results_pending_observed: "{count} pending in this observation",
+			results_observation_stale: "observation is stale",
+			results_observation_gone: "session no longer seen"
+		},
+		"zh-TW": {
+			results_waiting_observed: "此份觀察記錄有待回覆事項",
+			results_pending_observed: "此份觀察記錄有 {count} 項待處理事項",
+			results_observation_stale: "觀察已過期",
+			results_observation_gone: "未再看到此工作階段"
+		}
+	};
+}));
 //#endregion
 //#region src/pm-external-history-strings.js
 var externalHistoryStrings;
@@ -476,6 +528,32 @@ var init_pm_work_profile_strings = __esmMin((() => {
 			wpf_git_changed: "The Git execution location changed. This check does not suggest another location.",
 			wpf_local_git: "Local Git is not available. Use an SSH host already configured on the Linux BAT.",
 			wpf_observation_only: "This check uses the last observation and does not contact the host.",
+			wpf_gap_observation: "Connector is waiting for the next observation.",
+			wpf_reason_absent: "No reason code reported",
+			wpf_read_at: "Read at {time}",
+			wpf_last_verified: "Last verified {time}",
+			wpf_last_verified_unknown: "Last verified at an unknown time",
+			wpf_last_success: "Last successful observation {time}",
+			wpf_reason_REPOSITORY_NOT_BOUND: "This repository is not bound to the saved workspace.",
+			wpf_reason_host_unknown: "Connector has no configuration for this host.",
+			wpf_reason_configured_unverified: "Connector has saved this profile; current execution readiness is unverified.",
+			wpf_reason_DISCOVERY_SCOPE_CHANGED: "The observation scope changed; earlier discovery does not verify this scope.",
+			wpf_reason_SOURCE_UNAVAILABLE: "The stored discovery source was unavailable.",
+			wpf_reason_CREDENTIAL_REQUIRED: "Connector cannot find the credential for this connection.",
+			wpf_reason_unauthorized: "The usage provider reported that sign-in was refused.",
+			wpf_reason_auth_validity_unverified: "Current sign-in has not been verified.",
+			wpf_reason_local_git_not_enabled: "Local Git execution is not enabled.",
+			wpf_reason_local_git_platform_unsupported: "Local Git execution is not supported on this platform.",
+			wpf_reason_local_git_tools_missing: "Required local Git tools are missing.",
+			wpf_reason_git_execution_location_changed: "The Git execution location changed; earlier evidence does not verify it.",
+			wpf_reason_ssh_alias_missing: "Connector has no SSH alias configured for this host.",
+			wpf_reason_REPOSITORY_HOST_UNAVAILABLE: "Managed work permissions or dedicated roots are not configured.",
+			wpf_reason_never_observed: "Connector has no observation for this host. This check does not contact the host.",
+			wpf_reason_host_unreachable: "The last observation failed. This Connector check does not contact the host.",
+			wpf_reason_host_not_refreshed: "There is no recent observation. This Connector check does not contact the host.",
+			wpf_reason_action_unavailable: "Connector has not registered this action.",
+			wpf_reason_no_owned_session_verified: "No current owned session has been verified.",
+			wpf_reason_execution_not_verified: "No owned execution has been verified.",
 			wpf_action_unavailable: "This action is not available on this connection.",
 			wpf_return_work: "Back to work",
 			wpf_return_published: "Back to published",
@@ -519,6 +597,32 @@ var init_pm_work_profile_strings = __esmMin((() => {
 			wpf_git_changed: "Git 執行位置已變更。這次檢查不建議改換執行位置。",
 			wpf_local_git: "本機 Git 不可用。請改用 Linux BAT 上已經設定好的 SSH 主機。",
 			wpf_observation_only: "這次檢查使用上次觀察結果，不會連絡主機。",
+			wpf_gap_observation: "Connector 正在等候下一次觀察結果。",
+			wpf_reason_absent: "未回報原因代碼",
+			wpf_read_at: "讀取時間：{time}",
+			wpf_last_verified: "上次驗證：{time}",
+			wpf_last_verified_unknown: "上次驗證時間未知",
+			wpf_last_success: "上次成功觀察：{time}",
+			wpf_reason_REPOSITORY_NOT_BOUND: "這個儲存庫尚未綁定至已存工作區。",
+			wpf_reason_host_unknown: "Connector 尚未設定這台主機。",
+			wpf_reason_configured_unverified: "Connector 已儲存這份設定檔，目前的執行就緒尚未驗證。",
+			wpf_reason_DISCOVERY_SCOPE_CHANGED: "觀察範圍已變更，先前的發現結果不能驗證這個範圍。",
+			wpf_reason_SOURCE_UNAVAILABLE: "先前的發現來源無法使用。",
+			wpf_reason_CREDENTIAL_REQUIRED: "Connector 找不到這次連線所需的憑證。",
+			wpf_reason_unauthorized: "用量來源回報登入遭到拒絕。",
+			wpf_reason_auth_validity_unverified: "目前的登入狀態尚未驗證。",
+			wpf_reason_local_git_not_enabled: "尚未啟用本機 Git 執行。",
+			wpf_reason_local_git_platform_unsupported: "這個平台不支援本機 Git 執行。",
+			wpf_reason_local_git_tools_missing: "缺少必要的本機 Git 工具。",
+			wpf_reason_git_execution_location_changed: "Git 執行位置已變更，先前的證據不能驗證目前位置。",
+			wpf_reason_ssh_alias_missing: "Connector 尚未設定這台主機的 SSH 別名。",
+			wpf_reason_REPOSITORY_HOST_UNAVAILABLE: "尚未設定受管工作權限或專用目錄。",
+			wpf_reason_never_observed: "Connector 還沒有這台主機的觀察結果。這次檢查不會連絡主機。",
+			wpf_reason_host_unreachable: "上次觀察失敗。Connector 這次檢查不會連絡主機。",
+			wpf_reason_host_not_refreshed: "目前沒有近期觀察結果。Connector 這次檢查不會連絡主機。",
+			wpf_reason_action_unavailable: "Connector 尚未註冊這個動作。",
+			wpf_reason_no_owned_session_verified: "尚未驗證目前可用的自有工作階段。",
+			wpf_reason_execution_not_verified: "尚未驗證自有工作的執行。",
 			wpf_action_unavailable: "這次連線沒有這個動作。",
 			wpf_return_work: "返回工作",
 			wpf_return_published: "返回已發布",
@@ -563,6 +667,21 @@ var init_workbench_strings = __esmMin((() => {
 			wc_latest: "Last observed",
 			wc_queue_unknown: "Current queue position is not available. Open input receipts for recorded submissions.",
 			wc_no_live: "No current execution confirmed by this observation.",
+			wc_facets_observed: "At this observation: {facets}",
+			wc_activity_streaming: "Output is arriving",
+			wc_activity_not_streaming: "No output is arriving",
+			wc_activity_unknown: "Output activity is unknown",
+			wc_attention_asking_you: "Waiting for you",
+			wc_attention_needs_you: "Needs your attention",
+			wc_attention_failed: "Failure reported",
+			wc_attention_none: "No attention state reported",
+			wc_observation_stale: "Observation is stale",
+			wc_observation_gone: "Session no longer seen",
+			wc_observation_missing: "Session missing from enumeration",
+			wc_lifecycle_active: "Session reported active",
+			wc_lifecycle_ended: "Session reported ended",
+			wc_lifecycle_unknown: "Session lifecycle unknown",
+			wc_wait_observed: "This observation recorded a request for you.",
 			wc_running: "Output is arriving. Follow the conversation or review the available results.",
 			wc_wait: "An answer or decision is needed. Open Work to read the question.",
 			wc_stale: "This observation is out of date. Current execution is unknown.",
@@ -609,6 +728,21 @@ var init_workbench_strings = __esmMin((() => {
 			wc_latest: "最近觀察",
 			wc_queue_unknown: "目前無法取得即時排隊位置。已送出的要求可在輸入回執中查看。",
 			wc_no_live: "這份觀察未確認目前有工作正在執行。",
+			wc_facets_observed: "此份觀察：{facets}",
+			wc_activity_streaming: "正在收到輸出",
+			wc_activity_not_streaming: "目前沒有輸出",
+			wc_activity_unknown: "輸出活動未知",
+			wc_attention_asking_you: "等待您回覆",
+			wc_attention_needs_you: "需要您處理",
+			wc_attention_failed: "已回報失敗",
+			wc_attention_none: "未回報需處理的狀態",
+			wc_observation_stale: "觀察已過期",
+			wc_observation_gone: "未再看到此工作階段",
+			wc_observation_missing: "列舉中缺少此工作階段",
+			wc_lifecycle_active: "工作階段記錄為活動中",
+			wc_lifecycle_ended: "工作階段記錄為已結束",
+			wc_lifecycle_unknown: "工作階段生命週期未知",
+			wc_wait_observed: "這份觀察記錄有事項等待您回覆。",
 			wc_running: "正在收到輸出。可閱讀對話或檢視目前成果。",
 			wc_wait: "有問題或決定需要回覆。切回工作查看原問題。",
 			wc_stale: "這份觀察已過期，目前執行情況未知。",
@@ -774,8 +908,10 @@ var init_diagnostics_strings = __esmMin((() => {
 			diag_copy: "Copy",
 			diag_close: "Close",
 			diag_unknown: "unknown",
-			diag_connector_build: "Connector {version} ({commit})",
+			diag_connector_build: "Connector {version} ({commit}) · source: {source}",
 			diag_desktop_build: "Desktop {version} ({commit})",
+			diag_frontend_build: "Frontend SHA-256 {digest}",
+			diag_frontend_stale: "This page differs from the UI Connector now serves. Reload this page to load that UI.",
 			diag_privacy: "Redacted preview. Saving and copying stay on this device.",
 			diag_counts: "{errors} · {operations}",
 			diag_errors_one: "1 recent error",
@@ -822,8 +958,10 @@ var init_diagnostics_strings = __esmMin((() => {
 			diag_copy: "複製",
 			diag_close: "關閉",
 			diag_unknown: "未知",
-			diag_connector_build: "Connector {version}（{commit}）",
+			diag_connector_build: "Connector {version}（{commit}）· 來源：{source}",
 			diag_desktop_build: "桌面版 {version}（{commit}）",
+			diag_frontend_build: "前端 SHA-256 {digest}",
+			diag_frontend_stale: "此頁面與 Connector 目前提供的介面不同。重新載入此頁面即可載入該介面。",
 			diag_privacy: "預覽已去識別化。儲存與複製都只在這台裝置上進行。",
 			diag_counts: "{errors} · {operations}",
 			diag_errors_one: "最近 1 筆錯誤",
@@ -1662,6 +1800,14 @@ var init_ui_strings = __esmMin((() => {
 			ui_connector_status: "Connector: {status}",
 			ui_not_connected_help: "This window has no Connector session. Go to Settings → Connection and select Connect.",
 			ui_connecting_help: "Connector has not answered yet; actions are paused until it responds.",
+			ui_local_connector: "Local Connector",
+			ui_last_poll: "Last successful poll",
+			ui_connection_refused: "Access refused",
+			ui_service_error: "Service unavailable",
+			ui_invalid_response: "Invalid response",
+			error_code_CLIENT_ACTION_REFUSED: "Connector refused this window’s access; actions are paused. Reconnect in Settings → Connection. If access is still refused, ask the Connector administrator to restore access.",
+			error_code_CLIENT_ACTION_SERVICE_ERROR: "Connector answered with a service error; actions are paused. Wait for the service to recover, then try again.",
+			error_code_CLIENT_ACTION_INVALID_RESPONSE: "Connector returned an invalid event response; actions are paused. Wait for a valid refresh. If this continues, ask the Connector administrator to check the service.",
 			error_code_CLIENT_ACTION_NOT_CONNECTED: "This action needs a Connector session in this window. Connect in Settings → Connection, then try again.",
 			error_code_CLIENT_ACTION_CONNECTING: "This action is waiting for the Connector connection check. Wait for it to finish, then try again.",
 			error_code_CLIENT_ACTION_RECONNECTING: "This action is paused because this window cannot reach Connector. Wait for reconnection, then try again.",
@@ -1759,6 +1905,14 @@ var init_ui_strings = __esmMin((() => {
 			ui_connector_status: "Connector：{status}",
 			ui_not_connected_help: "這個視窗尚未建立 Connector 連線。請前往「設定 → 連線」，按「連線」。",
 			ui_connecting_help: "Connector 尚未回應；回應前暫停操作。",
+			ui_local_connector: "本機 Connector",
+			ui_last_poll: "上次成功輪詢",
+			ui_connection_refused: "存取遭拒",
+			ui_service_error: "服務暫不可用",
+			ui_invalid_response: "回應無效",
+			error_code_CLIENT_ACTION_REFUSED: "Connector 拒絕此視窗的存取，已暫停操作。請到「設定 → 連線」重新連線；若仍遭拒，請 Connector 管理員恢復存取權限。",
+			error_code_CLIENT_ACTION_SERVICE_ERROR: "Connector 已回應服務錯誤，已暫停操作。請等候服務恢復後再試。",
+			error_code_CLIENT_ACTION_INVALID_RESPONSE: "Connector 傳回的事件回應無效，已暫停操作。請等候有效的資料更新；若持續發生，請 Connector 管理員檢查服務。",
 			error_code_CLIENT_ACTION_NOT_CONNECTED: "此操作需要這個視窗的 Connector 連線。請前往「設定 → 連線」按「連線」，再試一次。",
 			error_code_CLIENT_ACTION_CONNECTING: "此操作正在等待 Connector 連線檢查。請等檢查完成後再試一次。",
 			error_code_CLIENT_ACTION_RECONNECTING: "這個視窗目前無法連線至 Connector，已暫停操作。請等重新連線後再試一次。",
@@ -5120,6 +5274,35 @@ var init_pm_discussions_strings = __esmMin((() => {
 	};
 }));
 //#endregion
+//#region src/pm-effective-route-strings.js
+var pmEffectiveRouteStrings;
+var init_pm_effective_route_strings = __esmMin((() => {
+	pmEffectiveRouteStrings = {
+		en: {
+			pm_effective_saved: "Workspace PM route: ",
+			pm_effective_unset: "No PM route is saved. You may choose an eligible adapter.",
+			pm_effective_available: "Eligible adapters:",
+			pm_effective_unreadable: "The saved PM route cannot be read.",
+			pm_effective_sources: "Refresh, or ask the workspace owner to restore access to the original PM sources.",
+			pm_effective_unknown: "The workspace PM route could not be verified. Refresh, or use a compatible Connector version.",
+			pm_effective_ready: "This workspace route is eligible for preflight.",
+			pm_effective_blocked: "This workspace route is not eligible for preflight.",
+			pm_effective_boundary: "Model execution is unverified; each request still checks admission."
+		},
+		"zh-TW": {
+			pm_effective_saved: "工作區 PM 路線：",
+			pm_effective_unset: "尚未儲存 PM 路線，可選擇符合預檢條件的介接器。",
+			pm_effective_available: "符合預檢條件的介接器：",
+			pm_effective_unreadable: "無法讀取已儲存的 PM 路線。",
+			pm_effective_sources: "請重新整理，或請工作區擁有者恢復原始 PM 來源的存取權。",
+			pm_effective_unknown: "無法確認工作區的 PM 路線。請重新整理，或使用相容版本的 Connector。",
+			pm_effective_ready: "這個工作區路線符合預檢條件。",
+			pm_effective_blocked: "這個工作區路線尚未符合預檢條件。",
+			pm_effective_boundary: "模型執行尚未驗證；每次要求仍會檢查准入條件。"
+		}
+	};
+}));
+//#endregion
 //#region src/pm-resources-strings.js
 var resourceStrings;
 var init_pm_resources_strings = __esmMin((() => {
@@ -7928,6 +8111,7 @@ var init_pm_meetings_strings = __esmMin((() => {
 var pmStrings;
 var init_pm_strings = __esmMin((() => {
 	init_pm_discussions_strings();
+	init_pm_effective_route_strings();
 	init_pm_resources_strings();
 	init_pm_workbench_strings();
 	init_pm_plan_proposal_strings();
@@ -7946,6 +8130,7 @@ var init_pm_strings = __esmMin((() => {
 	init_pm_meetings_strings();
 	pmStrings = {
 		en: {
+			...pmEffectiveRouteStrings.en,
 			...workbenchStrings.en,
 			...resourceStrings.en,
 			...pmPlanProposalStrings.en,
@@ -8336,6 +8521,7 @@ var init_pm_strings = __esmMin((() => {
 			pm_slot_quality: "Quality"
 		},
 		"zh-TW": {
+			...pmEffectiveRouteStrings["zh-TW"],
 			...workbenchStrings["zh-TW"],
 			...resourceStrings["zh-TW"],
 			...pmPlanProposalStrings["zh-TW"],
@@ -9641,6 +9827,7 @@ function t(key, vars = {}) {
 }
 var STRINGS, locale;
 var init_i18n = __esmMin((() => {
+	init_result_sources_strings();
 	init_pm_external_history_strings();
 	init_pm_adopt_start_strings();
 	init_pm_work_profile_strings();
@@ -9681,6 +9868,7 @@ var init_i18n = __esmMin((() => {
 		"zh-TW": {
 			...FLEET_STRINGS["zh-TW"],
 			...workbenchStrings$1["zh-TW"],
+			...resultSourcesStrings["zh-TW"],
 			...externalHistoryStrings["zh-TW"],
 			...diagnosticsStrings["zh-TW"],
 			...workStartStrings["zh-TW"],
@@ -9716,6 +9904,7 @@ var init_i18n = __esmMin((() => {
 			...findingNameStrings["zh-TW"],
 			fleet_session_lifetime: "啟動環境不允許背景連線監控獨立執行。關閉啟動工作階段時，本機連線可能中斷。",
 			managed_service_recovering: "正在重新啟動本機背景服務…",
+			managed_newer_journal: "這份紀錄需要較新的 Connector。請使用較新的 Connector 重新開啟，既有資料已保留。",
 			managed_service_recovering_help: "正在重新啟動桌面的本機背景服務。既有工作與資料會保留。",
 			managed_service_retry: "本機背景服務恢復失敗",
 			managed_service_retry_help: "本機背景服務無法恢復，稍後會自動重試。既有資料已保留；請查看連線詳細資料。",
@@ -9904,7 +10093,6 @@ var init_i18n = __esmMin((() => {
 			managed_background_help: "Connector 在背景持續運作。關閉這個畫面不會停止工作。",
 			managed_open_browser: "在瀏覽器開啟 Dashboard",
 			managed_start_login: "登入電腦時啟動",
-			managed_browser_connected: "已連線至本機 Connector",
 			managed_browser_help: "此瀏覽器沿用桌面的個人身分。登出後，可從桌面選單重新開啟 Dashboard。",
 			delivery_list_prs: "瀏覽 Pull Requests",
 			delivery_no_prs: "找不到 PR。",
@@ -11372,6 +11560,7 @@ var init_i18n = __esmMin((() => {
 		en: {
 			...FLEET_STRINGS.en,
 			...workbenchStrings$1.en,
+			...resultSourcesStrings.en,
 			...externalHistoryStrings.en,
 			...diagnosticsStrings.en,
 			...workStartStrings.en,
@@ -11407,6 +11596,7 @@ var init_i18n = __esmMin((() => {
 			...findingNameStrings.en,
 			fleet_session_lifetime: "The launching environment prevents the connection monitor from running independently. Local connections may stop when the launching session ends.",
 			managed_service_recovering: "Restarting local service…",
+			managed_newer_journal: "These records need a newer Connector. Reopen with the newer Connector; existing data is preserved.",
 			managed_service_recovering_help: "This Dashboard is restarting its local background service. Existing work and data are retained.",
 			managed_service_retry: "Local service recovery failed",
 			managed_service_retry_help: "The local background service could not recover. It will retry automatically. Existing data is retained; see connection details.",
@@ -11595,7 +11785,6 @@ var init_i18n = __esmMin((() => {
 			managed_background_help: "Connector keeps running in the background. Closing this view does not stop work.",
 			managed_open_browser: "Open Dashboard in browser",
 			managed_start_login: "Start when I sign in",
-			managed_browser_connected: "Connected to your local Connector",
 			managed_browser_help: "This browser uses your desktop identity. After signing out, reopen Dashboard from the desktop menu.",
 			workspace_navigation: "Projects and work",
 			workspace_search: "Search loaded projects and work",
@@ -14371,51 +14560,69 @@ function matchesSession(session, query) {
 function runtimeStale(session) {
 	return Boolean(session.stale || session.fields_stale || session.state?.evidence?.activity?.stale);
 }
+function sessionFacets(session) {
+	const source = session || {}, pending = source.pending;
+	const managedStatus = source.api_access === "managed" ? source.status || source.state?.status : null;
+	const attention = pending?.kind === "permission" || pending?.kind === "ask_user" ? "asking_you" : pending ? "needs_you" : ["failed", "error"].includes(managedStatus) ? "failed" : [
+		"needs_ted",
+		"needs_you",
+		"needs_attention",
+		"waiting_permission",
+		"awaiting_approval",
+		"uncertain",
+		"blocked"
+	].includes(managedStatus) ? "needs_you" : "none";
+	const staleness = {
+		runtime: runtimeStale(source),
+		gone: Boolean(source.gone_at) || source.state?.enumeration === "gone",
+		missing: source.state?.enumeration === "missing"
+	};
+	const lifecycle = source.state?.lifecycle || "unknown";
+	return {
+		activity: Object.values(staleness).some(Boolean) ? "unknown" : lifecycle === "ended" ? "not_streaming" : source.streaming === true ? "streaming" : source.streaming === false ? "not_streaming" : "unknown",
+		attention,
+		staleness,
+		lifecycle,
+		pendingKind: pending?.kind,
+		hasPending: Boolean(pending),
+		notLoaded: source.loaded === false || source.state?.loading === "not_loaded"
+	};
+}
 function sessionActivity(session) {
-	if (session.pending) return {
-		key: "pending_" + session.pending.kind,
+	const facets = sessionFacets(session);
+	if (facets.hasPending) return {
+		key: "pending_" + facets.pendingKind,
 		tone: "stale"
 	};
-	if (session.api_access === "managed") {
-		const st = session.status || session.state?.status;
-		if (st === "failed" || st === "error") return {
-			key: "op_failed",
-			tone: "bad"
-		};
-		if ([
-			"needs_ted",
-			"needs_you",
-			"needs_attention",
-			"waiting_permission",
-			"awaiting_approval",
-			"uncertain",
-			"blocked"
-		].includes(st)) return {
-			key: "workspace_needs_you",
-			tone: "stale"
-		};
-	}
-	if (session.state?.lifecycle === "ended") return {
+	if (facets.attention === "failed") return {
+		key: "op_failed",
+		tone: "bad"
+	};
+	if (facets.attention === "needs_you") return {
+		key: "workspace_needs_you",
+		tone: "stale"
+	};
+	if (facets.lifecycle === "ended") return {
 		key: "obs_value_ended",
 		tone: ""
 	};
-	if (session.gone_at || ["gone", "missing"].includes(session.state?.enumeration)) return {
+	if (facets.staleness.gone || facets.staleness.missing) return {
 		key: "sessions_not_seen",
 		tone: "stale"
 	};
-	if (runtimeStale(session)) return {
+	if (facets.staleness.runtime) return {
 		key: "sessions_stale",
 		tone: "stale"
 	};
-	if (session.streaming === true) return {
+	if (facets.activity === "streaming") return {
 		key: "obs_value_streaming",
 		tone: "info"
 	};
-	if (session.streaming === false) return {
+	if (facets.activity === "not_streaming") return {
 		key: "obs_value_not_streaming",
 		tone: ""
 	};
-	if (session.loaded === false || session.state?.loading === "not_loaded") return {
+	if (facets.notLoaded) return {
 		key: "sessions_not_loaded",
 		tone: ""
 	};
@@ -14425,25 +14632,10 @@ function sessionActivity(session) {
 	};
 }
 function sessionStatus(session) {
-	if (!session) return null;
-	const kind = session.pending?.kind;
-	if (kind === "permission" || kind === "ask_user") return "asking_you";
-	if (session.pending) return "needs_you";
-	if (session.api_access === "managed") {
-		const st = session.status || session.state?.status;
-		if (st === "failed" || st === "error") return "failed";
-		if ([
-			"needs_ted",
-			"needs_you",
-			"needs_attention",
-			"waiting_permission",
-			"awaiting_approval",
-			"uncertain",
-			"blocked"
-		].includes(st)) return "needs_you";
-	}
-	if (session.gone_at || ["gone", "missing"].includes(session.state?.enumeration) || runtimeStale(session)) return "stale";
-	if (session.state?.lifecycle !== "ended" && session.streaming === true) return "running";
+	const facets = sessionFacets(session);
+	if (facets.attention !== "none") return facets.attention;
+	if (Object.values(facets.staleness).some(Boolean)) return "stale";
+	if (facets.activity === "streaming") return "running";
 	return null;
 }
 function sessionPill(session) {
@@ -14477,9 +14669,8 @@ function workbenchProjection(data, record = null) {
 	if (!session?.host || !session?.session_id) return null;
 	const source = `/sessions/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}`;
 	const href = "#/session/" + [session.host, session.session_id].map(encodeURIComponent).join("/");
-	const stale = runtimeStale(session) || Boolean(session.gone_at) || ["gone", "missing"].includes(session.state?.enumeration);
-	const pill = sessionPill(session);
-	const state = stale ? "stale" : pill?.status === "failed" ? "failed" : session.pending ? "wait" : session.state?.lifecycle !== "ended" && session.streaming === true ? "running" : session.streaming === false ? "idle" : "unknown";
+	const facets = sessionFacets(session), status = sessionStatus(session), pill = sessionPill(session);
+	const state = ["asking_you", "needs_you"].includes(status) ? "wait" : status || (facets.activity === "not_streaming" && facets.lifecycle !== "ended" ? "idle" : "unknown");
 	const edges = [];
 	for (const item of data.work_items || []) {
 		if (!item.work_item_id) continue;
@@ -14539,6 +14730,7 @@ function workbenchProjection(data, record = null) {
 		observedAt: session.observed_at,
 		state,
 		pill,
+		facets,
 		managed: session.api_access === "managed" && session.provenance === "connector_managed",
 		edges: [...new Map(edges.map((edge) => [edge.key, edge])).values()]
 	};
@@ -14631,12 +14823,26 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 		panel.body.append(kind, name, link, h$1("details", {}, h$1("summary", {}, t("wc_source")), source, id));
 		main.append(panel);
 	}
+	const staleObservation = () => Object.values(projection.facets.staleness).some(Boolean);
+	const summaryKey = () => projection.state === "wait" && staleObservation() ? "wc_wait_observed" : "wc_" + projection.state;
+	function facetLine() {
+		const { activity, attention, staleness, lifecycle } = projection.facets;
+		const facts = [t("wc_activity_" + activity), t("wc_attention_" + attention)];
+		if (staleness.runtime) facts.push(t("wc_observation_stale"));
+		if (staleness.gone) facts.push(t("wc_observation_gone"));
+		if (staleness.missing) facts.push(t("wc_observation_missing"));
+		facts.push(t("wc_lifecycle_" + (["active", "ended"].includes(lifecycle) ? lifecycle : "unknown")));
+		return t("wc_facets_observed", { facets: facts.join(" · ") });
+	}
 	function card() {
 		return h$1("article", { class: "wc-live-card" }, h$1("h3", {}, projection.title || t("session_untitled")), h$1("p", { class: "ui-meta" }, [
 			projection.host,
 			projection.runtime,
 			projection.model
-		].filter(Boolean).join(" · ")), h$1("p", {}, t("wc_" + projection.state)), h$1("p", { class: "ui-meta" }, t("wc_latest"), " · ", timeStamp(projection.observedAt, { empty: t("obs_unknown") })), button({
+		].filter(Boolean).join(" · ")), h$1("p", {}, t(summaryKey())), h$1("p", {
+			class: "ui-meta",
+			"data-runtime-facets": ""
+		}, facetLine()), h$1("p", { class: "ui-meta" }, t("wc_latest"), " · ", timeStamp(projection.observedAt, { empty: t("obs_unknown") })), button({
 			label: t("wc_work"),
 			size: "sm",
 			"data-live-work": "",
@@ -14656,7 +14862,7 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 			projection.runtime,
 			projection.host
 		].filter(Boolean).join(" · ");
-		summary.textContent = t("wc_" + projection.state);
+		summary.textContent = t(summaryKey());
 		const focused = lineage.contains(document.activeElement) ? document.activeElement?.dataset.edge : null;
 		const liveFocused = live.contains(document.activeElement) && document.activeElement?.hasAttribute("data-live-work");
 		const edges = projection.edges.slice(0, 30);
@@ -15178,6 +15384,10 @@ function settingsAgents({ h, t, api, caps, guard, from }) {
 	};
 }
 //#endregion
+//#region src/frontend-identity.js
+var frontendDigest = (value) => typeof value === "string" && value.length === 64 && /^[a-f0-9]{64}$/.test(value) ? value : null;
+var frontendBuild = Object.freeze({ frontend_digest: frontendDigest("__BATC_FRONTEND_DIGEST_PLACEHOLDER______________________________") });
+//#endregion
 //#region src/diagnostics.js
 var code = (value) => typeof value === "string" && /^[A-Z][A-Z0-9_]{0,79}$/.test(value) ? value : null;
 var reason = (value) => typeof value === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(value) ? value : null;
@@ -15249,10 +15459,12 @@ function errorRing(limit = 50) {
 		}
 	};
 }
-function clientIdentity({ caps, appBuild, desktop = false, os = "unknown", locale = "en", width = 0 }) {
+function clientIdentity({ caps, appBuild, frontendBuild: frontendBuild$1 = frontendBuild, desktop = false, os = "unknown", locale = "en", width = 0 }) {
 	return {
-		app_version: desktop ? version$2(appBuild?.version) : version$2(caps?.build?.version ?? caps?.connector),
-		app_commit: desktop ? commit(appBuild?.commit) : commit(caps?.build?.commit),
+		app_version: desktop ? version$2(appBuild?.version) : null,
+		app_commit: desktop ? commit(appBuild?.commit) : null,
+		frontend_digest: frontendDigest(frontendBuild$1?.frontend_digest),
+		served_frontend_digest: frontendDigest(caps?.frontend?.digest),
 		connector_version: version$2(caps?.build?.version ?? caps?.connector),
 		connector_commit: commit(caps?.build?.commit),
 		connector_source: select(caps?.build?.source, [
@@ -15274,14 +15486,21 @@ function clientIdentity({ caps, appBuild, desktop = false, os = "unknown", local
 }
 function buildLine(client, t) {
 	const unknown = t("diag_unknown");
+	const frontend = client.platform !== "desktop" || client.frontend_digest ? t("diag_frontend_build", { digest: client.frontend_digest?.slice(0, 12) || unknown }) : null;
 	const connector = t("diag_connector_build", {
 		version: client.connector_version || unknown,
-		commit: client.connector_commit?.slice(0, 7) || unknown
+		commit: client.connector_commit?.slice(0, 7) || unknown,
+		source: client.connector_source || unknown
 	});
-	return client.platform === "desktop" ? t("diag_desktop_build", {
-		version: client.app_version || unknown,
-		commit: client.app_commit?.slice(0, 7) || unknown
-	}) + " · " + connector : connector;
+	const line = [
+		client.platform === "desktop" ? t("diag_desktop_build", {
+			version: client.app_version || unknown,
+			commit: client.app_commit?.slice(0, 7) || unknown
+		}) : null,
+		frontend,
+		connector
+	].filter(Boolean).join(" · ");
+	return client.platform === "browser" && client.frontend_digest && client.served_frontend_digest && client.frontend_digest !== client.served_frontend_digest ? line + " · " + t("diag_frontend_stale") : line;
 }
 var APP = "io.betteragent.dashboard";
 function logLocations(os, managed) {
@@ -15327,7 +15546,11 @@ function sessionFacts(session) {
 		loaded: bool(session.loaded),
 		streaming: bool(session.streaming),
 		unknown_activity: ![true, false].includes(session.streaming),
-		stale: session.stale === true || session.fields_stale === true ? true : bool(session.stale ?? session.fields_stale),
+		stale: runtimeStale(session) ? true : [
+			session.stale,
+			session.fields_stale,
+			session.state?.evidence?.activity?.stale
+		].some((value) => typeof value === "boolean") ? false : null,
 		pending: session.pending !== void 0 ? session.pending != null : bool(session.pending_interaction),
 		history_reasons: Array.isArray(session.reading?.incomplete_reasons) ? [...new Set(session.reading.incomplete_reasons.map(reason).filter(Boolean))] : null
 	};
@@ -15789,7 +16012,13 @@ function projectNavigation({ t, namespace, workspaceId, views, current, discussi
 //#region src/shell.js
 init_i18n();
 function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, errorBox }) {
-	const candidate = workbenchEnabled();
+	const candidate = layoutDecision.layout === "workbench";
+	Object.assign(document.body.dataset, {
+		layout: layoutDecision.layout,
+		layoutSource: layoutDecision.source,
+		layoutStatus: layoutDecision.status,
+		layoutReason: layoutDecision.reason || ""
+	});
 	const aside = navigation.box, main = document.getElementById("main"), top = document.querySelector(".top");
 	const toggle = document.getElementById("workspace-menu"), crumb = document.getElementById("nav");
 	const workspaceBlock = h$1("div", { class: "shell-workspace-block" }), projectNav = h$1("div", { class: "shell-project-nav" });
@@ -17455,14 +17684,14 @@ function createWorkPublish({ h, t, form, namespace, caps, errorBox }) {
 var ACTION$5 = "pm.execution.verify";
 var sha$5 = /^[0-9a-f]{40}$/;
 var digest$9 = /^[0-9a-f]{64}$/;
-var operation$1 = /^op_[0-9a-f]{32}$/;
+var operation$2 = /^op_[0-9a-f]{32}$/;
 function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspace, caps, form, labelled, errorBox, namespace, onSaved, onConfiguration = () => {}, onUnavailable = () => {}, fixedResult = null, allowedAction = () => true }) {
 	let sources = [], selected = "", generation = 0, ready = false, configuration = null, editor = null;
 	const navigation = `batc.pm.verifier.${namespace}.${workspaceId}`;
 	if (fixedResult) selected = fixedResult.execution_operation_id;
 	else try {
 		const value = localStorage.getItem(navigation);
-		if (operation$1.test(value || "")) selected = value;
+		if (operation$2.test(value || "")) selected = value;
 	} catch {}
 	const picker = h("select", { "aria-label": t("pmq_verify_execution") }), status = h("div", { role: "status" }), factBody = h("div"), holder = h("div"), notes = h("div");
 	const facts = h("details", {}, h("summary", {}, t("pmq_details")), factBody);
@@ -17862,7 +18091,7 @@ var RECORD$2 = "pm.quality.review.record";
 var REVOKE = "pm.quality.review.revoke";
 var sha$4 = /^[0-9a-f]{40}$/;
 var digest$8 = /^[0-9a-f]{64}$/;
-var operation = /^op_[0-9a-f]{32}$/;
+var operation$1 = /^op_[0-9a-f]{32}$/;
 var reviewId = /^pmqr_[0-9a-f]{32}$/;
 var ordered$1 = (value) => Array.isArray(value) ? value.map(ordered$1) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, ordered$1(value[key])])) : value;
 var same$10 = (a, b) => JSON.stringify(ordered$1(a)) === JSON.stringify(ordered$1(b));
@@ -18017,7 +18246,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		throw Error(t("pmq_history_bound"));
 	}
 	function checkReview(row) {
-		if (row?.workspace_id !== workspaceId || row.work_item_id !== workId || !reviewId.test(row.review_id) || !operation.test(row.operation_id) || !Number.isSafeInteger(row.version) || row.version < 1 || !digest$8.test(row.context_digest) || !Array.isArray(row.context?.criteria) || !Array.isArray(row.history) || !Array.isArray(row.applicability_reasons) || typeof row.qualified !== "boolean" || !sha$4.test(row.context?.native_result?.candidate_commit) || !operation.test(row.context?.execution_operation_id) || !row.original_outcome || row.assessment && (!operation.test(row.assessment.operation_id) || !digest$8.test(row.assessment.document_digest) || !Number.isSafeInteger(row.assessment.version) || !Array.isArray(row.assessment.document?.criteria)) || row.qualified && !row.assessment) throw error();
+		if (row?.workspace_id !== workspaceId || row.work_item_id !== workId || !reviewId.test(row.review_id) || !operation$1.test(row.operation_id) || !Number.isSafeInteger(row.version) || row.version < 1 || !digest$8.test(row.context_digest) || !Array.isArray(row.context?.criteria) || !Array.isArray(row.history) || !Array.isArray(row.applicability_reasons) || typeof row.qualified !== "boolean" || !sha$4.test(row.context?.native_result?.candidate_commit) || !operation$1.test(row.context?.execution_operation_id) || !row.original_outcome || row.assessment && (!operation$1.test(row.assessment.operation_id) || !digest$8.test(row.assessment.document_digest) || !Number.isSafeInteger(row.assessment.version) || !Array.isArray(row.assessment.document?.criteria)) || row.qualified && !row.assessment) throw error();
 		return row;
 	}
 	function packageFor(id) {
@@ -18558,7 +18787,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				});
 			}
 			for (const delivery of deliveries) for (const source of delivery.integration?.sources || []) {
-				if (source.source_kind !== "execution" || source.status !== "delivered" || !sha$4.test(source.delivered_sha) || !operation.test(source.source_id)) continue;
+				if (source.source_kind !== "execution" || source.status !== "delivered" || !sha$4.test(source.delivered_sha) || !operation$1.test(source.source_id)) continue;
 				for (const observation of observations) {
 					if (!digest$8.test(observation.document_digest)) throw error();
 					proofs.push({
@@ -20593,6 +20822,48 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	};
 }
 //#endregion
+//#region src/pm-effective-route.js
+var hasEffectivePmRoute = (document) => document != null && Object.hasOwn(document, "effective_pm_route");
+var effectivePmRoute = (document) => document?.effective_pm_route?.version === 1 && document.effective_pm_route.scope === "workspace_selected_route" ? document.effective_pm_route : null;
+function workspacePmReady(document) {
+	if (hasEffectivePmRoute(document)) return effectivePmRoute(document)?.ready === true;
+	return Boolean(document?.structured_analysis?.version === 1 ? (document.structured_analysis.actions?.["pm.conversation.propose"]?.adapters || []).some((row) => ["codex-native-linux", "bat-pm-linux-v1"].includes(row.adapter) && row.action_registered === true && row.authorized === true && row.eligible_for_preflight === true) : document?.native_analysis?.authorized !== false && document?.native_analysis?.eligible_for_preflight === true || document?.bat_analysis?.authorized !== false && document?.bat_analysis?.eligible_for_preflight === true);
+}
+var routeReasons = {
+	scope_required: "agents_scope",
+	authorization_required: "agents_authorization",
+	original_sources_unavailable: "pm_effective_sources"
+};
+var pmRouteReasonKey = (code) => Object.hasOwn(routeReasons, code) ? routeReasons[code] : Object.hasOwn(eligibilityReasons, code) ? eligibilityReasons[code] : "agents_unknown";
+var safeCode = (value) => typeof value === "string" && /^[A-Za-z][A-Za-z0-9_-]{0,79}$/.test(value) ? value : "";
+var adapterKey = (adapter) => adapter === "codex-native-linux" ? "pm_analysis_local" : adapter === "bat-pm-linux-v1" ? "pm_analysis_bat" : null;
+function renderEffectivePmRoute(node, { h, t, document, readyKey = "pm_effective_ready" }) {
+	const facet = effectivePmRoute(document);
+	node.dataset.pmEffectiveReady = String(facet?.ready === true);
+	if (!facet) {
+		node.replaceChildren(h("p", {}, t("pm_effective_unknown")));
+		return node;
+	}
+	const label = (adapter) => h("span", {}, t(adapterKey(adapter) || "pm_effective_unknown"), " · ", h("code", {}, safeCode(adapter)));
+	const parts = [h("p", {}, t(facet.choice_source === "saved" ? "pm_effective_saved" : facet.choice_source === "unset" ? "pm_effective_unset" : "pm_effective_unreadable"), ...facet.adapter ? [label(facet.adapter)] : [])];
+	const ref = facet.choice_ref;
+	if (ref && Number.isSafeInteger(ref.version) && ref.version > 0) {
+		const link = typeof ref.operation_id === "string" && /^op_[0-9a-f]{32}$/.test(ref.operation_id) ? h("a", { href: `#/op/${ref.operation_id}` }, t("pm_operation")) : null;
+		parts.push(h("p", {}, t("pm_choice_revision") + " " + ref.version, " · ", link));
+	}
+	parts.push(h("p", {}, t(facet.ready === true ? readyKey : "pm_effective_blocked")));
+	if (facet.choice_source === "unset" && facet.ready === true) parts.push(h("p", {}, t("pm_effective_available"), " ", ...(facet.eligible_adapters || []).map(label)));
+	if (facet.ready !== true) {
+		const aggregate = facet.choice_source === "unset" && facet.reason === "no_eligible_adapter";
+		if (aggregate) parts.push(h("code", {}, facet.reason));
+		const reasons = aggregate ? facet.adapters || [] : [{ reason: facet.reason }];
+		for (const row of reasons) parts.push(h("p", {}, ...row.adapter ? [label(row.adapter), " · "] : [], t(pmRouteReasonKey(row.reason)), " · ", h("code", {}, safeCode(row.reason))));
+	}
+	parts.push(h("p", { class: "muted" }, t("pm_effective_boundary")));
+	node.replaceChildren(...parts);
+	return node;
+}
+//#endregion
 //#region src/pm-external-history.js
 function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox }) {
 	const root = `/pm/workspaces/${encodeURIComponent(workspaceId)}/history`;
@@ -20920,7 +21191,7 @@ function structuredAnalysis({ h, t, labelled, action, capability, legacyEligible
 		"data-pm-default": NATIVE
 	}, h("option", { value: NATIVE }, t("pm_analysis_local")), h("option", { value: BAT }, t("pm_analysis_bat")));
 	field.value = NATIVE;
-	const choice = labelled("pm_analysis_adapter", field), reason = h("p", {
+	const choice = labelled("pm_analysis_adapter", field), reason = h("div", {
 		class: "muted",
 		"data-structured-analysis-reason": ""
 	}), binding = h("p", { class: "muted pm-note-text" });
@@ -20956,7 +21227,12 @@ function structuredAnalysis({ h, t, labelled, action, capability, legacyEligible
 			PM_NATIVE_AUTH_UNAVAILABLE: "pm_native_auth",
 			PM_NATIVE_HOME_UNAVAILABLE: "pm_native_auth"
 		}[code] || "pm_native_unavailable";
-		reason.textContent = t(key);
+		if (effectivePmRoute(capability())?.ready === false) renderEffectivePmRoute(reason, {
+			h,
+			t,
+			document: capability()
+		});
+		else reason.replaceChildren(t(key));
 		const source = field.value === BAT && selected?.selected_binding;
 		binding.hidden = !source;
 		binding.textContent = source ? `${t("pm_analysis_selected_binding")} ${source.host} / ${source.workspace_id} / ${source.repository}` : "";
@@ -39275,6 +39551,56 @@ function kanbanObservation({ h, t, api, alive, workspaceId, workId, caps, permit
 	};
 }
 //#endregion
+//#region src/pm-work-profile-state.js
+var values$1 = new Set([
+	"ready",
+	"missing",
+	"unknown",
+	"unavailable"
+]);
+var reasons = new Set([
+	"REPOSITORY_NOT_BOUND",
+	"host_unknown",
+	"configured_unverified",
+	"DISCOVERY_SCOPE_CHANGED",
+	"SOURCE_UNAVAILABLE",
+	"CREDENTIAL_REQUIRED",
+	"unauthorized",
+	"auth_validity_unverified",
+	"local_git_not_enabled",
+	"local_git_platform_unsupported",
+	"local_git_tools_missing",
+	"git_execution_location_changed",
+	"ssh_alias_missing",
+	"REPOSITORY_HOST_UNAVAILABLE",
+	"never_observed",
+	"host_unreachable",
+	"host_not_refreshed",
+	"action_unavailable",
+	"no_owned_session_verified",
+	"execution_not_verified"
+]);
+var operation = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
+var valueKey = (value) => "wpf_" + (values$1.has(value) ? value : "unknown");
+var profileTimestamp = (value) => typeof value === "number" && Number.isFinite(value) && value > 0 && value < 253402300800 ? value : null;
+function profileStateFacts(state) {
+	const reason = typeof state?.reason === "string" && /^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(state.reason) ? state.reason : null;
+	const past = state?.verified && typeof state.verified === "object" && !Array.isArray(state.verified) ? state.verified : null;
+	const pastAt = profileTimestamp(past?.observed_at), lastSuccessAt = profileTimestamp(state?.evidence_ref?.last_success_at);
+	return {
+		valueKey: valueKey(state?.value),
+		reasonKey: reasons.has(reason) ? "wpf_reason_" + reason : "wpf_unverified",
+		reasonCode: reason,
+		operationId: operation(state?.evidence_ref?.operation_id),
+		lastSuccessAt: lastSuccessAt === pastAt ? null : lastSuccessAt,
+		past: past ? {
+			valueKey: valueKey(past.value),
+			at: pastAt,
+			operationId: operation(past.evidence_ref?.operation_id)
+		} : null
+	};
+}
+//#endregion
 //#region src/pm-work-profile-picker.js
 var identity = (value) => typeof value === "string" && /^wpf_[0-9a-f]{32}$/.test(value);
 var states$1 = [
@@ -39396,12 +39722,23 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 			else if (next.state === "unavailable" && next.reason === "action_unavailable") nextKey = "wpf_action_unavailable";
 			else if (next.state === "requires_attempt" && next.reason === "owned_attempt_required") nextKey = "wpf_next_attempt";
 		}
-		const list = h$1("dl", { class: "pm-work-profile-states" });
+		const list = h$1("dl", { class: "pm-work-profile-states" }), shownTimes = new Set();
 		for (const name of states$1) {
-			const state = data.states[name], value = h$1("dd", {}, t("wpf_" + state.value));
+			const state = profileStateFacts(data.states[name]);
+			const value = h$1("dd", { "data-work-profile-state": name }, h$1("p", { "data-work-profile-value": "" }, t(state.valueKey)), h$1("p", { "data-work-profile-reason": "" }, t(state.reasonKey), " · ", h$1("code", {}, state.reasonCode || t("wpf_reason_absent"))));
 			list.append(h$1("dt", {}, t("wpf_" + name)), value);
-			const op = state.evidence_ref?.operation_id;
-			if (name === "last_verified_execution" && /^op_[0-9a-f]{32}$/.test(op)) value.append(" · ", h$1("a", { href: `#/op/${op}` }, t("pm_operation")));
+			const operationLink = (op) => h$1("a", { href: `#/op/${op}` }, t("pm_operation"));
+			if (state.operationId) value.append(h$1("p", {}, operationLink(state.operationId)));
+			if (state.lastSuccessAt !== null) {
+				value.append(h$1("p", { "data-work-profile-last-success": "" }, timeLabel(t, "wpf_last_success", { time: timeStamp(state.lastSuccessAt) })));
+				shownTimes.add(state.lastSuccessAt);
+			}
+			if (state.past) {
+				if (state.past.at !== null) shownTimes.add(state.past.at);
+				const past = h$1("div", { "data-work-profile-past": "" }, h$1("p", {}, state.past.at === null ? t("wpf_last_verified_unknown") : timeLabel(t, "wpf_last_verified", { time: timeStamp(state.past.at) }), " · ", t(state.past.valueKey)));
+				if (state.past.operationId && state.past.operationId !== state.operationId) past.append(h$1("p", {}, operationLink(state.past.operationId)));
+				value.append(past);
+			}
 		}
 		const gap = data.smallest_gap, details = [];
 		if (gap) {
@@ -39417,15 +39754,22 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 					}
 				}, t(action === "setup.host" ? "wpf_setup_host" : "wpf_setup_repository")));
 			} else {
-				const key = gap.reason === "git_execution_location_changed" ? "wpf_git_changed" : gap.reason?.startsWith("local_git_") ? "wpf_local_git" : ["host_unreachable", "host_not_refreshed"].includes(gap.reason) ? "wpf_observation_only" : gap.reason === "action_unavailable" ? "wpf_action_unavailable" : "wpf_unverified";
+				const key = gap.reason === "git_execution_location_changed" ? "wpf_git_changed" : gap.reason?.startsWith("local_git_") ? "wpf_local_git" : ["host_unreachable", "host_not_refreshed"].includes(gap.reason) ? "wpf_gap_observation" : gap.reason === "action_unavailable" ? "wpf_action_unavailable" : "wpf_unverified";
 				details.push(h$1("p", { class: "muted" }, t(key)));
 			}
-			if (typeof gap.last_success_at === "number" && Number.isFinite(gap.last_success_at) && gap.last_success_at > 0) details.push(timeStamp(gap.last_success_at));
+			const gapAt = profileTimestamp(gap.last_success_at);
+			if (gapAt !== null && !shownTimes.has(gapAt)) details.push(timeStamp(gapAt));
 		}
-		facts.replaceChildren(h$1("h4", {}, t("wpf_coding")), h$1("p", {
+		const readAt = profileTimestamp(data.observed_at);
+		facts.replaceChildren(h$1("h4", {}, t("wpf_coding")), ...readAt === null ? [] : [h$1("p", { "data-work-profile-read-at": "" }, timeLabel(t, "wpf_read_at", { time: timeStamp(readAt) }))], h$1("p", {
 			class: "muted",
 			"data-work-profile-next-turn": ""
-		}, h$1("strong", {}, t("wpf_next_turn") + " · "), t(nextKey)), h$1("p", { class: "muted" }, t("wpf_locked")), list, ...data.states.can_start_own.value !== "ready" ? [h$1("p", { class: "muted" }, t("wpf_unverified"))] : [], ...details, h$1("h4", {}, t("wpf_pm")), h$1("p", {}, t(data.pm_analysis?.pm_ready === true ? "wpf_pm_preflight" : "wpf_pm_unverified")));
+		}, h$1("strong", {}, t("wpf_next_turn") + " · "), t(nextKey)), h$1("p", { class: "muted" }, t("wpf_locked")), list, ...data.states.can_start_own.value !== "ready" ? [h$1("p", { class: "muted" }, t("wpf_unverified"))] : [], ...gap ? [h$1("div", { "data-work-profile-gap": "" }, ...details)] : [], h$1("h4", {}, t("wpf_pm")), hasEffectivePmRoute(data.pm_analysis) ? renderEffectivePmRoute(h$1("div", { "data-work-profile-pm": "" }), {
+			h: h$1,
+			t,
+			document: data.pm_analysis,
+			readyKey: "wpf_pm_preflight"
+		}) : h$1("p", {}, t(data.pm_analysis?.pm_ready === true ? "wpf_pm_preflight" : "wpf_pm_unverified")));
 		const gapName = states$1.find((name) => data.states[name].value !== "ready");
 		announcement.textContent = [`${t("wpf_next_turn")}: ${t(nextKey)}`, gapName ? `${t("wpf_" + gapName)}: ${t("wpf_" + data.states[gapName].value)}. ${t("wpf_unverified")}` : ""].filter(Boolean).join(" ");
 		verified = {
@@ -48803,6 +49147,7 @@ function pmWorktreeChoice({ h, t, api, alive, input, labelled, capability, scope
 //#region src/pm-workspace.js
 init_i18n();
 init_finding_name();
+var isWorkbench$2 = layoutDecision.layout === "workbench";
 var same$3 = (a, b) => a === b || a && b && typeof a === "object" && typeof b === "object" && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((key) => Object.hasOwn(b, key) && same$3(a[key], b[key]));
 var receiptSubscribers = new Map();
 var formConnectionTag = "batc-pm-form-connection";
@@ -49582,7 +49927,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		"data-pm-work-meta": "",
 		hidden: true
 	});
-	const management = workbenchEnabled() ? h("select", {
+	const management = isWorkbench$2 ? h("select", {
 		"aria-label": t("wc_management"),
 		"data-workbench-management": "",
 		hidden: true,
@@ -51991,7 +52336,23 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						if (ticket !== sequence) return;
 						pmCapabilities = workspaceCaps;
 					}
-					const pmReady = Boolean(threadId === "new" && (workspaceCaps?.structured_analysis?.version === 1 ? (workspaceCaps.structured_analysis.actions?.["pm.conversation.propose"]?.adapters || []).some((row) => ["codex-native-linux", "bat-pm-linux-v1"].includes(row.adapter) && row.action_registered === true && row.authorized === true && row.eligible_for_preflight === true) : workspaceCaps?.native_analysis?.authorized !== false && workspaceCaps?.native_analysis?.eligible_for_preflight === true || workspaceCaps?.bat_analysis?.authorized !== false && workspaceCaps?.bat_analysis?.eligible_for_preflight === true));
+					const pmReady = threadId === "new" && workspacePmReady(workspaceCaps);
+					const draftAvailability = h("div", { "data-discussion-pm-unavailable": "" });
+					if (hasEffectivePmRoute(workspaceCaps)) renderEffectivePmRoute(draftAvailability, {
+						h,
+						t,
+						document: workspaceCaps
+					});
+					else renderPmAvailability(draftAvailability, {
+						h,
+						t,
+						setupHref: discussionSettingsHref(),
+						state: pmAvailability({
+							caps: caps(),
+							document: pmCapabilities,
+							checked: true
+						})
+					});
 					const contextDraft = h("section", { "data-discussion-tab": "context" }, ...discussionContext(t, draftRefs || launch.refs, { title: launch.title }));
 					const draftPanel = discussionPanel({
 						t,
@@ -52012,16 +52373,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						form: create,
 						draft: true,
 						pmReady,
-						availability: renderPmAvailability(h("div", { "data-discussion-pm-unavailable": "" }), {
-							h,
-							t,
-							setupHref: discussionSettingsHref(),
-							state: pmAvailability({
-								caps: caps(),
-								document: pmCapabilities,
-								checked: true
-							})
-						})
+						availability: draftAvailability
 					})), draftPanel.home));
 				}
 			}
@@ -52842,8 +53194,18 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 			errorBox,
 			extra: h("div", { class: "pm-fields work-next-field" }, field, hint)
 		});
+		const submitButton = composer.box.querySelector("button[type=submit]");
+		let buttonActivation = false;
+		submitButton.addEventListener("click", () => {
+			buttonActivation = true;
+			setTimeout(() => {
+				buttonActivation = false;
+			}, 0);
+		}, true);
 		composer.box.addEventListener("submit", (event) => {
-			if (composing || performance.now() - composeEnded < 50) {
+			const explicit = buttonActivation && event.submitter === submitButton;
+			buttonActivation = false;
+			if (composing || !explicit && performance.now() - composeEnded < 50) {
 				event.preventDefault();
 				event.stopImmediatePropagation();
 			}
@@ -53362,6 +53724,7 @@ function observedText(t, key, values = {}) {
 }
 //#endregion
 //#region src/workspace-nav.js
+var isWorkbench$1 = layoutDecision.layout === "workbench";
 function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, caps = () => null }) {
 	const key = `batc.tree.${namespace}`;
 	let saved = [], hasPreference = false;
@@ -53479,7 +53842,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 	const selectedRow = (node) => node.getAttribute("href") === selected || node.dataset.workItem && node.dataset.workItem === selectedWork() || (node.dataset.workOperations || "").split(",").includes(selectedExecution());
 	const workIdentity = (item) => {
 		const value = item.work_identity;
-		if (!workbenchEnabled() || item.kind !== "execution" || item.id !== item.operation_id || !value || typeof item.host !== "string" || !item.host || typeof item.session_id !== "string" || !item.session_id) return null;
+		if (!isWorkbench$1 || item.kind !== "execution" || item.id !== item.operation_id || !value || typeof item.host !== "string" || !item.host || typeof item.session_id !== "string" || !item.session_id) return null;
 		const context = workSessionContext(new URLSearchParams({
 			workspace: value.workspace_id,
 			work: value.work_item_id,
@@ -53789,7 +54152,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 			refresh().catch(() => {});
 		},
 		select(hash) {
-			if (hash === "#/work-list" && workbenchEnabled()) return;
+			if (hash === "#/work-list" && isWorkbench$1) return;
 			selected = hash;
 			const [type, pid] = hash.replace(/^#\//, "").split("/");
 			if ([
@@ -57488,6 +57851,17 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 var itemHref = (item) => `#/item/${encodeURIComponent(item.work_item_id)}`;
 var artifactHref = (artifact) => `#/artifact-review/artifact/${encodeURIComponent(artifact.artifact_id)}/${artifact.revision}`;
 var date = (value) => timeStamp(value);
+function resultSourceFacets(observation) {
+	const source = observation || {};
+	const pending = typeof source.pending === "number" ? source.pending > 0 ? { kind: "other" } : null : source.pending;
+	return sessionFacets({
+		streaming: source.status === "available" ? source.streaming : null,
+		pending,
+		stale: source.stale,
+		fields_stale: source.fields_stale,
+		gone_at: source.gone_at
+	});
+}
 function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents, errorBox }) {
 	let doc = null, serial = 0, children = [], refreshing = null, pressed = null;
 	const warning = h("div", { "data-child-warning": "" }), status = h("p", {
@@ -57526,10 +57900,24 @@ function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents
 			const row = h("div", { class: "panel" }, linkTarget(link));
 			if (link.note) row.append(h("p", { class: "muted" }, link.note));
 			const observation = link.observation;
-			if (observation) row.append(h("p", { class: "muted" }, t("results_activity", {
-				state: observation.status !== "available" || observation.stale || observation.fields_stale || observation.gone_at ? t("obs_unknown") : observation.streaming === true ? t("results_streaming") : observation.pending && typeof observation.pending === "object" ? t("results_waiting") : typeof observation.pending === "number" && observation.pending > 0 ? t("results_pending", { count: observation.pending }) : observation.streaming === false && (observation.pending === null || observation.pending === 0) ? t("results_no_activity") : t("obs_unknown"),
-				time: date(observation.observed_at)
-			})));
+			if (observation) {
+				const facets = resultSourceFacets(observation);
+				const facts = [t({
+					streaming: "results_streaming",
+					not_streaming: "results_no_activity",
+					unknown: "obs_unknown"
+				}[facets.activity])];
+				if (facets.attention !== "none") facts.push(t(typeof observation.pending === "number" ? "results_pending_observed" : "results_waiting_observed", { count: observation.pending }));
+				if (facets.staleness.runtime) facts.push(t("results_observation_stale"));
+				if (facets.staleness.gone || facets.staleness.missing) facts.push(t("results_observation_gone"));
+				row.append(h("p", {
+					class: "muted",
+					"data-result-runtime-facets": ""
+				}, timeLabel(t, "results_activity", {
+					state: facts.join(" · "),
+					time: date(observation.observed_at)
+				})));
+			}
 			for (const receipt of link.delivered_to || []) row.append(h("p", { class: "note ok" }, t("results_delivered"), " ", h("a", {
 				href: `https://github.com/${receipt.repository}/pull/${receipt.pull_number}`,
 				target: "_blank",
@@ -65470,11 +65858,13 @@ function renderDeliveryWork(item, repositories = [], compact = false, { h, caps,
 init_transport();
 init_i18n();
 var TOKEN_KEY = "batc.dashboard.token";
+var isWorkbench = layoutDecision.layout === "workbench";
 var state = {
 	token: null,
 	caps: null,
 	lastEvent: 0,
 	lastEventAt: 0,
+	lastPoll: null,
 	listeners: new Set(),
 	namespace: "",
 	scopeIdentity: null,
@@ -66670,7 +67060,7 @@ function paintConnection(waiting = false, paused = false) {
 		notice.querySelector("summary").textContent = t("connection_details");
 		notice.querySelector("code").textContent = state.managedRecovery || "";
 	}
-	const helpKey = recoveryKey ? recoveryKey + "_help" : key === "ui_not_connected" ? "ui_not_connected_help" : key === "ui_connecting" ? "ui_connecting_help" : key === "ui_reconnecting" ? "offline_actions_paused" : paused ? "sync_actions_paused" : waiting ? "sync_waiting" : "desktop_polling";
+	const helpKey = recoveryKey ? recoveryKey + "_help" : key === "ui_not_connected" ? "ui_not_connected_help" : key === "ui_connecting" ? "ui_connecting_help" : key === "ui_reconnecting" ? "offline_actions_paused" : key === "ui_connection_refused" ? "error_code_CLIENT_ACTION_REFUSED" : key === "ui_service_error" ? "error_code_CLIENT_ACTION_SERVICE_ERROR" : key === "ui_invalid_response" ? "error_code_CLIENT_ACTION_INVALID_RESPONSE" : paused ? "sync_actions_paused" : waiting ? "sync_waiting" : "desktop_polling";
 	live.title = scoped + " — " + t(helpKey);
 	for (const paint of [...connectionPainters]) paint();
 }
@@ -66732,18 +67122,26 @@ async function streamEvents() {
 		}
 		const epoch = state.epoch, view = generation, foreground = foregroundVersion;
 		let cycle, pollSucceeded = false;
+		const previousPoll = state.lastPoll;
 		try {
 			const before = state.lastEvent;
 			const page = await api("GET", `/events?after=${before}&limit=100${state.sync ? `&checkpoint=${encodeURIComponent(state.sync.token)}` : ""}`);
 			if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
 			pollSucceeded = true;
 			state.pollHealth = "connected";
+			state.lastPoll = {
+				at: Date.now(),
+				namespace: state.namespace
+			};
 			paintConnection(true);
 			if (view !== generation || !state.viewReady) continue;
 			cycle = { error: null };
 			state.refreshCycle = cycle;
 			const cursor = await consumePageAsync(page, before, (ev) => {
-				return settleRefreshes([...state.listeners].map((fn) => Promise.resolve().then(() => fn(ev))));
+				return settleRefreshes([...state.listeners].map((fn) => Promise.resolve().then(() => fn(ev)))).catch((error) => {
+					cycle.error ||= error;
+					throw error;
+				});
 			});
 			if (epoch !== state.epoch || view !== generation || foreground !== foregroundVersion || !state.viewReady) continue;
 			if (cycle.error) throw cycle.error;
@@ -66760,8 +67158,9 @@ async function streamEvents() {
 			if (!page.has_more || cursor <= before) await waitForEventPoll(1e3);
 		} catch (error) {
 			if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
-			if (!pollSucceeded) {
-				state.pollHealth = "reconnecting";
+			if (!pollSucceeded || !cycle?.error) {
+				if (pollSucceeded) state.lastPoll = previousPoll;
+				state.pollHealth = pollFailure(error, Date.now());
 				paintConnection();
 			}
 			if (view !== generation) continue;
@@ -67720,7 +68119,7 @@ function sessionPullHref(target) {
 async function viewSession(main, host, sid, context = null) {
 	const params = new URLSearchParams(location.hash.split("?")[1] || "");
 	let fromQuery = params.get("from") || "";
-	let workRecord = workbenchEnabled() ? context?.workRecord : null;
+	let workRecord = isWorkbench ? context?.workRecord : null;
 	const connection = {
 		epoch: state.epoch,
 		namespace: state.namespace,
@@ -67729,7 +68128,7 @@ async function viewSession(main, host, sid, context = null) {
 	const path = `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(sid)}`;
 	const requestedWork = workSessionContext(params);
 	const workContextReadable = workFollowUpAvailable(state.caps) || state.caps?.features?.pm_workspaces?.work_start?.version === 1;
-	const workContext = workbenchEnabled() && workContextReadable && requestedWork ? requestedWork : null;
+	const workContext = isWorkbench && workContextReadable && requestedWork ? requestedWork : null;
 	let selectedAttempt = null;
 	if (workContext) try {
 		const selected = await readWorkSessionContext({
@@ -68061,12 +68460,12 @@ async function viewSession(main, host, sid, context = null) {
 	const results = inspector({
 		title: t("session_results"),
 		dock: true,
-		overlay: workbenchEnabled(),
-		historyNavigation: workbenchEnabled(),
+		overlay: isWorkbench,
+		historyNavigation: isWorkbench,
 		canReopen: () => !disposed && !withdrawn && readReady,
 		returnFocus: () => openResults
 	});
-	const openResults = workbenchEnabled() ? button({
+	const openResults = isWorkbench ? button({
 		variant: "secondary",
 		icon: "panel-right",
 		label: t("session_results"),
@@ -68078,7 +68477,7 @@ async function viewSession(main, host, sid, context = null) {
 	});
 	const wide = matchMedia("(min-width: 1200px)");
 	const syncWide = () => {
-		openResults.hidden = !workbenchEnabled() && wide.matches || Boolean(withdrawn);
+		openResults.hidden = !isWorkbench && wide.matches || Boolean(withdrawn);
 	};
 	syncWide();
 	wide.addEventListener("change", syncWide);
@@ -68095,7 +68494,7 @@ async function viewSession(main, host, sid, context = null) {
 			label: t("ui_more")
 		}),
 		items: [
-			...workbenchEnabled() ? [{
+			...isWorkbench ? [{
 				key: "interrupt",
 				label: t("interrupt"),
 				content: stop
@@ -68135,7 +68534,7 @@ async function viewSession(main, host, sid, context = null) {
 			}
 		]
 	});
-	if (workbenchEnabled()) {
+	if (isWorkbench) {
 		stop.setAttribute("role", "menuitem");
 		stop.addEventListener("click", () => overflow.close());
 	}
@@ -68144,7 +68543,7 @@ async function viewSession(main, host, sid, context = null) {
 		mark: markSlot,
 		pill: pillSlot,
 		meta,
-		actions: workbenchEnabled() ? [openResults] : [stop, openResults],
+		actions: isWorkbench ? [openResults] : [stop, openResults],
 		overflow
 	});
 	head.append(backSlot, header);
@@ -68164,7 +68563,7 @@ async function viewSession(main, host, sid, context = null) {
 		recoverPermitted: () => resultSourceAvailable() && (options.recoverPermitted || options.permitted)(),
 		canSend: () => state.online && !state.nativeBusy && state.viewReady
 	});
-	const workResultTools = workbenchEnabled() && Boolean(workContext);
+	const workResultTools = isWorkbench && Boolean(workContext);
 	const sessionTools = h("div", {}, workResultTools ? context?.itemBox : null, sessionSection("list-checks", t("checkpoints"), cps.box, cps.action), sessionSection("check", t("session_delivery"), result), sessionSection("inbox", t("session_sources"), sourcesBody), batSlot, permissionsSlot, labels.box, instructions?.box, observations.box, details);
 	const supporting = h("div", {}, sessionTools);
 	const toolsDisclosure = workResultTools ? disclosure({
@@ -68210,7 +68609,7 @@ async function viewSession(main, host, sid, context = null) {
 	const followWorkspace = workContext?.workspaceId || "";
 	const followWorkId = workRecord?.work_item?.work_item_id || "";
 	let mobileLayout = null;
-	const followUp = workbenchEnabled() && followWorkspace && /^wi_[0-9a-f]{20}$/.test(followWorkId) && workFollowUpAvailable(state.caps) ? mountWorkFollowUp({
+	const followUp = isWorkbench && followWorkspace && /^wi_[0-9a-f]{20}$/.test(followWorkId) && workFollowUpAvailable(state.caps) ? mountWorkFollowUp({
 		h,
 		t,
 		api,
@@ -68262,7 +68661,7 @@ async function viewSession(main, host, sid, context = null) {
 	}, lane, results);
 	const withdrawnSlot = h("div", { class: "session-withdrawn" });
 	main.append(head, workspaceNode);
-	const perspectives = workbenchEnabled() ? workbenchViews({
+	const perspectives = isWorkbench ? workbenchViews({
 		main,
 		head,
 		work: workspaceNode,
@@ -68889,7 +69288,7 @@ async function viewSession(main, host, sid, context = null) {
 		cps.clear();
 		deliveryKnown.clear();
 		state.observations?.delete(`session:${host}/${sid}`);
-		if (first && !results.hidden && (!wide.matches || workbenchEnabled())) results.close();
+		if (first && !results.hidden && (!wide.matches || isWorkbench)) results.close();
 		conversation.clear();
 		pending.replaceChildren();
 		pendingIdentity = void 0;
@@ -70397,12 +70796,17 @@ function fleetEmpty() {
 function connectionFacts() {
 	const endpoint = state.endpoint || (state.token ? location.origin : "");
 	const stateCell = h("dd");
-	const eventCell = h("dd");
-	const dl = h("dl", { class: "kv global-connection-facts" }, h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"), h("dt", {}, t("global_state")), stateCell, h("dt", {}, t("global_last_event")), eventCell, h("dt", {}, t("connection_access")), connectionAccess());
+	const eventCell = h("dd", { "data-last-event": "" });
+	const pollCell = h("dd", { "data-last-successful-poll": "" });
+	const dl = h("dl", { class: "kv global-connection-facts" }, h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"), h("dt", {}, t("global_state")), stateCell, h("dt", {}, t("global_last_event")), eventCell, h("dt", {}, t("ui_last_poll")), pollCell, h("dt", {}, t("connection_access")), connectionAccess());
 	const render = () => {
 		const { key, tone } = centralServiceStatus(state);
 		stateCell.replaceChildren(h("span", { class: `ui-pill tone-${tone}` }, t(key)));
 		eventCell.replaceChildren(state.lastEventAt ? when(state.lastEventAt) : t("global_no_event"));
+		eventCell.dataset.observedAt = state.lastEventAt ? new Date(state.lastEventAt).toISOString() : "";
+		const pollAt = state.lastPoll?.namespace === state.namespace ? state.lastPoll.at : 0;
+		pollCell.replaceChildren(pollAt ? when(pollAt) : "—");
+		pollCell.dataset.observedAt = pollAt ? new Date(pollAt).toISOString() : "";
 	};
 	render();
 	const paint = () => {
@@ -70520,9 +70924,18 @@ function openSettings(main, { exclusive = false, refreshButton } = {}) {
 		onClick: openDiagnostics,
 		"data-export-diagnostics": ""
 	}), h("a", { href: setupGuide() }, t("global_setup_guide")))));
+	const identityEpoch = state.epoch;
+	let buildCaps = state.caps;
+	const paintBuild = () => {
+		if (frame.root.isConnected && identityEpoch === state.epoch) frame.panel("about").querySelector("[data-build-line]").textContent = buildLine(clientIdentity(diagnosticsClient(buildCaps)), t);
+	};
+	if (state.token) api("GET", "/capabilities").then((caps) => {
+		buildCaps = caps;
+		paintBuild();
+	}).catch(() => {});
 	if (nativeDesktop) nativeStatus().then((status) => {
 		desktopBuild = status.app_build;
-		if (frame.root.isConnected) frame.panel("about").querySelector("[data-build-line]").textContent = buildLine(clientIdentity(diagnosticsClient()), t);
+		paintBuild();
 	}).catch(() => {});
 	main.append(languageSwitch(), frame.root);
 	const back = connectionReturn(params.get("from"));
@@ -70555,7 +70968,7 @@ function viewBrowserSettings(main) {
 	const frame = openSettings(main, { exclusive: true });
 	const managed = state.token === browserSessionToken;
 	const facts = connectionFacts();
-	frame.panel("connection").append(h("section", { class: "panel" }, facts, managed ? h("h2", {}, t("managed_browser_connected")) : null, disclosure({
+	frame.panel("connection").append(h("section", { class: "panel" }, facts, managed ? h("h2", {}, t("ui_local_connector")) : null, disclosure({
 		label: t("global_details"),
 		body: h("div", {}, connectionIdentity(), managed ? h("p", {}, t("managed_browser_help")) : null)
 	}), h("button", {
@@ -70641,7 +71054,7 @@ async function viewManagedSettings(main) {
 	const local = h("section", {
 		class: "panel",
 		"data-connection-card": ""
-	}, h("h2", {}, t("managed_browser_connected")), connectionFacts(), disclosure({
+	}, h("h2", {}, t("ui_local_connector")), connectionFacts(), disclosure({
 		label: t("global_details"),
 		body: h("div", {}, connectionIdentity(), h("p", {}, t("managed_background_help")), !nativeDesktop ? h("p", {}, t("managed_browser_help")) : null, h("div", { "data-managed-locations": "" }, h("h3", {}, t("managed_locations")), h("p", { class: "muted" }, t("managed_locations_central")), h("p", { class: "muted" }, t("managed_locations_work"))))
 	}), status);
@@ -70995,7 +71408,7 @@ async function viewNativeSettings(main) {
 		if (status.credential_source) row("desktop_credential_source", t("desktop_source_" + status.credential_source));
 		if (state.caps) details.append(h("dt", {}, t("connection_access")), connectionAccess());
 		if (status.error && (!status.configuration_setup || status.configuration_source === "managed")) info.append(errorBox(new Error(status.error), {
-			summary: t("desktop_status_error"),
+			summary: t(status.error.startsWith("JOURNAL_NEWER_DATA_STEP:") ? "managed_newer_journal" : "desktop_status_error"),
 			within: info
 		}));
 		else if (!status.credential_available && !status.configuration_setup) info.append(h("p", {}, t("desktop_credential_missing")));
@@ -71240,7 +71653,7 @@ document.addEventListener("focusout", () => setTimeout(() => {
 		fn();
 	}
 }, 0));
-function liveReload(fn, kinds, prepare = null) {
+function liveReload(fn, kinds, prepare = null, holding = () => editing || typing()) {
 	const connection = {
 		epoch: state.epoch,
 		namespace: state.namespace,
@@ -71256,7 +71669,7 @@ function liveReload(fn, kinds, prepare = null) {
 		};
 		await prepareNow();
 		for (;;) {
-			while (editing || typing()) {
+			while (holding()) {
 				assertView(connection);
 				await sleep(100);
 				if (prepare && Date.now() - preparedAt >= 1e3) await prepareNow();
@@ -71265,7 +71678,7 @@ function liveReload(fn, kinds, prepare = null) {
 			const opened = drawerOpens;
 			await fn(true);
 			assertView(connection);
-			if (!editing && !typing() && drawerOpens === opened) return;
+			if (!holding() && drawerOpens === opened) return;
 		}
 	}, 500);
 	return onEvents((ev) => {
@@ -72087,7 +72500,7 @@ async function viewWorkItem(main, wid) {
 	const offRepair = repair ? onEvents((event) => {
 		if (event.resource_type === "operation" || observationAffected("work_item", wid, event)) return repair.refresh();
 	}) : null;
-	const off = liveReload(render, (event) => observationAffected("work_item", wid, event), refreshSafety);
+	const off = liveReload(render, (event) => observationAffected("work_item", wid, event), refreshSafety, () => editing || typing() && main.contains(document.activeElement));
 	return () => {
 		off?.();
 		offRepair?.();
@@ -73157,7 +73570,7 @@ async function route() {
 		return;
 	}
 	const off = await ({
-		"work-list": workbenchEnabled() ? () => {} : viewSessions,
+		"work-list": isWorkbench ? () => {} : viewSessions,
 		pm: viewPmWorkspace,
 		home: viewHome,
 		projects: viewProjects,

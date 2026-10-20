@@ -1,7 +1,8 @@
 import {pmAvailability, renderPmAvailability} from './pm-availability.js';
+import {hasEffectivePmRoute,workspacePmReady,renderEffectivePmRoute} from './pm-effective-route.js';
 import {workspaceExternalHistory} from './pm-external-history.js';
 import {continuationBrief} from './pm-continuation.js';
-import {workbenchEnabled} from './workbench-mode.js';
+import {layoutDecision} from './workbench-mode.js';
 import {operationStatusLabel} from './global-labels.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
 import {discussionContext, discussionLabel, discussionPanel, discussionDom, discussionTitle, discussionComposer, discussionSettingsHref} from './pm-discussions.js';
@@ -51,6 +52,8 @@ import {planRevisions} from './pm-plans.js';
 import {pmWorktreeChoice} from './pm-worktree-choice.js';
 import {nativeRunState, pmDiscussionMessage, pmDiscussionRequest, pmNativeAnalysis} from './pm-native-analysis.js';
 import {retiredView as retired} from './pm-retired.js';
+const isWorkbench = layoutDecision.layout === 'workbench';
+
 const same = (a, b) => a === b || (a && b && typeof a === 'object' && typeof b === 'object'
   && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length
   && Object.keys(a).every(key => Object.hasOwn(b, key) && same(a[key], b[key])));
@@ -569,7 +572,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const phasePill = h('span', {class: 'ui-pill tone-neutral', hidden: true});
   const viewMeta = h('p', {class: 'ui-meta', 'data-pm-work-meta': '', hidden: true});
   // Stay hidden until publishContext fills it. An empty select is still in the tab order.
-  const management = workbenchEnabled() ? h('select', {'aria-label': t('wc_management'), 'data-workbench-management': '', hidden: true, onchange: event => {
+  const management = isWorkbench ? h('select', {'aria-label': t('wc_management'), 'data-workbench-management': '', hidden: true, onchange: event => {
     location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${event.target.value}`;
   }}) : null;
   const heading = pageHeader({title, pill: phasePill, meta: viewMeta, actions: [management, refresh].filter(Boolean)});
@@ -1694,10 +1697,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
             if (ticket !== sequence) return;
             pmCapabilities = workspaceCaps;
           }
-          const pmReady = Boolean(threadId === 'new' && (workspaceCaps?.structured_analysis?.version === 1
-            ? (workspaceCaps.structured_analysis.actions?.['pm.conversation.propose']?.adapters || []).some(row => ['codex-native-linux', 'bat-pm-linux-v1'].includes(row.adapter) && row.action_registered === true && row.authorized === true && row.eligible_for_preflight === true)
-            : workspaceCaps?.native_analysis?.authorized !== false && workspaceCaps?.native_analysis?.eligible_for_preflight === true
-              || workspaceCaps?.bat_analysis?.authorized !== false && workspaceCaps?.bat_analysis?.eligible_for_preflight === true));
+          const pmReady = threadId === 'new' && workspacePmReady(workspaceCaps);
+          const draftAvailability = h('div', {'data-discussion-pm-unavailable': ''});
+          if (hasEffectivePmRoute(workspaceCaps)) renderEffectivePmRoute(draftAvailability, {h, t, document: workspaceCaps});
+          else renderPmAvailability(draftAvailability, {h, t, setupHref: discussionSettingsHref(), state: pmAvailability({caps: caps(), document: pmCapabilities, checked: true})});
           const contextDraft = h('section', {'data-discussion-tab': 'context'}, ...discussionContext(t, draftRefs || launch.refs, {title: launch.title}));
           const draftPanel = discussionPanel({t, namespace, workspaceId, threadId, canRestore: canRestoreDiscussion, panes: {context: contextDraft}});
           if (threadId === 'new') discussionTools = draftPanel;
@@ -1707,7 +1710,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
             h('header', {class: 'pd-thread-header'}, h('div', {class: 'pd-header-main'}, h('div', {class: 'pd-heading'}, backLink(), titleDraft?.box || h('h2', {}, t('pd_new'))), draftPanel.trigger),
               h('div', {class: 'pd-thread-meta'}, h('span', {class: 'ui-pill tone-neutral'}, t('ui_status_draft')),
                 boundContext)),
-            h('div', {class: 'pd-transcript'}, emptyState({title:t('pd_notes_empty'),text:t('pd_empty')})), discussionComposer({t, form: create, draft: true, pmReady, availability: renderPmAvailability(h('div', {'data-discussion-pm-unavailable': ''}), {h, t, setupHref: discussionSettingsHref(), state: pmAvailability({caps: caps(), document: pmCapabilities, checked: true})})})),
+            h('div', {class: 'pd-transcript'}, emptyState({title:t('pd_notes_empty'),text:t('pd_empty')})), discussionComposer({t, form: create, draft: true, pmReady, availability: draftAvailability})),
             draftPanel.home));
 
 

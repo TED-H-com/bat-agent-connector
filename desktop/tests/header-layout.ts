@@ -5,6 +5,7 @@ export const headerFonts = ['DejaVu Sans', 'Noto Sans'] as const;
 
 export function headerStatusLabels(copy: Record<string, string>) {
   return ['ui_not_connected', 'ui_connecting', 'ui_connected', 'ui_reconnecting',
+    'ui_connection_refused', 'ui_service_error', 'ui_invalid_response',
     'managed_service_recovering', 'managed_service_retry', 'managed_service_identity'].map(key => copy[key]);
 }
 

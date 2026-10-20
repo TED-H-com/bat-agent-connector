@@ -11,6 +11,7 @@ import pytest
 from bat_agent_connector import installer, updater
 from bat_agent_connector import platform_files as files
 from bat_agent_connector.update_install import package_files
+from bat_agent_connector.update_release import EPOCH, UpdateError, manifest
 from scripts import install_connector as bootstrap
 from tests.test_connector_updates import SKILL, make_package, publication, release
 
@@ -69,8 +70,8 @@ def test_existing_entrypoint_preserved(installation):
     assert not (root / "rollout-receipt.json").exists()
 
 
-def transport(edit=None):
-    item, raw = publication()
+def transport(edit=None, *, candidate=None):
+    item, raw = publication(candidate)
     if edit:
         doc = json.loads(raw)
         edit(doc)
@@ -82,6 +83,50 @@ def transport(edit=None):
             return json.dumps(item).encode()
         return checksum.encode() if url.endswith("SHA256SUMS") else raw
     return item, raw, download
+
+
+@pytest.mark.parametrize("epoch", [EPOCH - 1, EPOCH, EPOCH + 1])
+def test_bootstrap_accepted_epoch_matches_updater_constant(epoch):
+    item, _raw, download = transport(lambda doc: doc["connector_update"].update(compatibility_epoch=epoch))
+    if epoch == EPOCH:
+        assert bootstrap.resolve(item["tag_name"], "preview", download)["epoch"] == EPOCH
+    else:
+        with pytest.raises(bootstrap.InstallError, match="manifest_update_incompatible"):
+            bootstrap.resolve(item["tag_name"], "preview", download)
+
+
+@pytest.mark.parametrize("edit,accepted", [
+    pytest.param(None, True, id="valid"),
+    pytest.param(lambda d: d.update(format=2), False, id="format"),
+    pytest.param(lambda d: d.update(repository="https://example.invalid"), False, id="repository"),
+    pytest.param(lambda d: d.update(release="v0.2.8"), False, id="release"),
+    pytest.param(lambda d: d.update(source_commit="main"), False, id="source_commit"),
+    pytest.param(lambda d: d["versions"].update(connector="0.02.7"), False, id="version_format"),
+    pytest.param(lambda d: d["versions"].update(connector="0.2.8"), False, id="version_tag"),
+    pytest.param(lambda d: d["connector_update"].update(protocol=2), False, id="protocol"),
+    pytest.param(lambda d: d["connector_update"].update(compatibility_epoch=EPOCH + 1), False, id="epoch"),
+    pytest.param(lambda d: d["connector_update"].update(python="3.10"), False, id="python"),
+    pytest.param(lambda d: d["connector_update"].update(canonical_skill_sha256="invalid"), False, id="skill_digest"),
+    pytest.param(lambda d: d["validation"].update(status="pending"), False, id="validation"),
+])
+def test_bootstrap_and_updater_agree_on_shared_manifest_fields(edit, accepted):
+    # Existing publication producer and transport keep both parser inputs identical.
+    # Bootstrap's minimum package version and asset/checksum transport policy are separate.
+    item, raw, download = transport(edit)
+    if accepted:
+        assert bootstrap.resolve(item["tag_name"], "preview", download) == manifest(item, raw)
+    else:
+        with pytest.raises(bootstrap.InstallError):
+            bootstrap.resolve(item["tag_name"], "preview", download)
+        with pytest.raises(UpdateError):
+            manifest(item, raw)
+
+
+def test_bootstrap_minimum_version_floor_is_an_intentional_difference():
+    item, raw, download = transport(candidate=release(ver="0.2.6"))
+    assert manifest(item, raw)["version"] == "0.2.6"
+    with pytest.raises(bootstrap.InstallError, match="updater_release_required"):
+        bootstrap.resolve(item["tag_name"], "preview", download)
 
 
 @pytest.mark.parametrize("edit", [

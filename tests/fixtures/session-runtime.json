@@ -1,0 +1,1045 @@
+{
+  "managed_blocked_runtime": {
+    "listed": {
+      "host": "fixture-host",
+      "session_id": "fixture-session",
+      "title": "Claude Agent",
+      "api_access": "managed",
+      "provenance": "connector_managed",
+      "loaded": true,
+      "streaming": false,
+      "pending": null,
+      "runtime_status": "blocked",
+      "stale": false,
+      "fields_stale": false,
+      "gone_at": null,
+      "observed_at": "2026-09-21T14:13:21Z",
+      "state": {
+        "connection": "connected",
+        "loading": "loaded",
+        "tab": "present",
+        "activity": "not_streaming",
+        "lifecycle": "unknown",
+        "enumeration": "present",
+        "freshness": "fresh",
+        "stale_reason": null,
+        "end_scope": null,
+        "evidence": {
+          "connection": {
+            "observed_at": "2026-09-21T14:13:21Z",
+            "source_ref": "hosts_observed:fixture-host",
+            "stale": false
+          },
+          "loading": {
+            "observed_at": "2026-09-21T14:13:21Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "tab": {
+            "observed_at": "2026-09-21T14:13:21Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "activity": {
+            "observed_at": "2026-09-21T14:13:21Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "lifecycle": {
+            "observed_at": null,
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "enumeration": {
+            "observed_at": "2026-09-21T14:13:21Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "freshness": {
+            "observed_at": "2026-09-21T14:13:21Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          }
+        }
+      }
+    },
+    "detail": {
+      "session": {
+        "host": "fixture-host",
+        "session_id": "fixture-session",
+        "title": "Claude Agent",
+        "api_access": "managed",
+        "provenance": "connector_managed",
+        "loaded": true,
+        "streaming": false,
+        "pending": null,
+        "runtime_status": "blocked",
+        "stale": false,
+        "fields_stale": false,
+        "gone_at": null,
+        "observed_at": "2026-09-21T14:13:21Z",
+        "state": {
+          "connection": "connected",
+          "loading": "loaded",
+          "tab": "present",
+          "activity": "not_streaming",
+          "lifecycle": "unknown",
+          "enumeration": "present",
+          "freshness": "fresh",
+          "stale_reason": null,
+          "end_scope": null,
+          "evidence": {
+            "connection": {
+              "observed_at": "2026-09-21T14:13:21Z",
+              "source_ref": "hosts_observed:fixture-host",
+              "stale": false
+            },
+            "loading": {
+              "observed_at": "2026-09-21T14:13:21Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "tab": {
+              "observed_at": "2026-09-21T14:13:21Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "activity": {
+              "observed_at": "2026-09-21T14:13:21Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "lifecycle": {
+              "observed_at": null,
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "enumeration": {
+              "observed_at": "2026-09-21T14:13:21Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "freshness": {
+              "observed_at": "2026-09-21T14:13:21Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            }
+          }
+        }
+      }
+    },
+    "observation": {
+      "status": "available",
+      "streaming": false,
+      "pending": null,
+      "observed_at": "2026-09-21T14:13:21Z",
+      "gone_at": null,
+      "stale": false,
+      "fields_stale": false,
+      "stale_reason": null
+    }
+  },
+  "ended_runtime": {
+    "listed": {
+      "host": "fixture-host",
+      "session_id": "fixture-session",
+      "title": "Claude Agent",
+      "api_access": "managed",
+      "provenance": "connector_managed",
+      "loaded": true,
+      "streaming": false,
+      "pending": null,
+      "runtime_status": "exited",
+      "stale": false,
+      "fields_stale": false,
+      "gone_at": null,
+      "observed_at": "2026-09-21T14:13:22Z",
+      "state": {
+        "connection": "connected",
+        "loading": "loaded",
+        "tab": "present",
+        "activity": "not_streaming",
+        "lifecycle": "unknown",
+        "enumeration": "present",
+        "freshness": "fresh",
+        "stale_reason": null,
+        "end_scope": null,
+        "evidence": {
+          "connection": {
+            "observed_at": "2026-09-21T14:13:22Z",
+            "source_ref": "hosts_observed:fixture-host",
+            "stale": false
+          },
+          "loading": {
+            "observed_at": "2026-09-21T14:13:22Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "tab": {
+            "observed_at": "2026-09-21T14:13:22Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "activity": {
+            "observed_at": "2026-09-21T14:13:22Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "lifecycle": {
+            "observed_at": null,
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "enumeration": {
+            "observed_at": "2026-09-21T14:13:22Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "freshness": {
+            "observed_at": "2026-09-21T14:13:22Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          }
+        }
+      }
+    },
+    "detail": {
+      "session": {
+        "host": "fixture-host",
+        "session_id": "fixture-session",
+        "title": "Claude Agent",
+        "api_access": "managed",
+        "provenance": "connector_managed",
+        "loaded": true,
+        "streaming": false,
+        "pending": null,
+        "runtime_status": "exited",
+        "stale": false,
+        "fields_stale": false,
+        "gone_at": null,
+        "observed_at": "2026-09-21T14:13:22Z",
+        "state": {
+          "connection": "connected",
+          "loading": "loaded",
+          "tab": "present",
+          "activity": "not_streaming",
+          "lifecycle": "unknown",
+          "enumeration": "present",
+          "freshness": "fresh",
+          "stale_reason": null,
+          "end_scope": null,
+          "evidence": {
+            "connection": {
+              "observed_at": "2026-09-21T14:13:22Z",
+              "source_ref": "hosts_observed:fixture-host",
+              "stale": false
+            },
+            "loading": {
+              "observed_at": "2026-09-21T14:13:22Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "tab": {
+              "observed_at": "2026-09-21T14:13:22Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "activity": {
+              "observed_at": "2026-09-21T14:13:22Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "lifecycle": {
+              "observed_at": null,
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "enumeration": {
+              "observed_at": "2026-09-21T14:13:22Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "freshness": {
+              "observed_at": "2026-09-21T14:13:22Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            }
+          }
+        }
+      }
+    },
+    "observation": {
+      "status": "available",
+      "streaming": false,
+      "pending": null,
+      "observed_at": "2026-09-21T14:13:22Z",
+      "gone_at": null,
+      "stale": false,
+      "fields_stale": false,
+      "stale_reason": null
+    }
+  },
+  "unknown_activity": {
+    "listed": {
+      "host": "fixture-host",
+      "session_id": "fixture-session",
+      "title": "Claude Agent",
+      "api_access": "managed",
+      "provenance": "connector_managed",
+      "loaded": true,
+      "streaming": null,
+      "pending": null,
+      "runtime_status": null,
+      "stale": false,
+      "fields_stale": false,
+      "gone_at": null,
+      "observed_at": "2026-09-21T14:13:23Z",
+      "state": {
+        "connection": "connected",
+        "loading": "loaded",
+        "tab": "present",
+        "activity": "unknown",
+        "lifecycle": "unknown",
+        "enumeration": "present",
+        "freshness": "fresh",
+        "stale_reason": null,
+        "end_scope": null,
+        "evidence": {
+          "connection": {
+            "observed_at": "2026-09-21T14:13:23Z",
+            "source_ref": "hosts_observed:fixture-host",
+            "stale": false
+          },
+          "loading": {
+            "observed_at": "2026-09-21T14:13:23Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "tab": {
+            "observed_at": "2026-09-21T14:13:23Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "activity": {
+            "observed_at": null,
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "lifecycle": {
+            "observed_at": null,
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "enumeration": {
+            "observed_at": "2026-09-21T14:13:23Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "freshness": {
+            "observed_at": "2026-09-21T14:13:23Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          }
+        }
+      }
+    },
+    "detail": {
+      "session": {
+        "host": "fixture-host",
+        "session_id": "fixture-session",
+        "title": "Claude Agent",
+        "api_access": "managed",
+        "provenance": "connector_managed",
+        "loaded": true,
+        "streaming": null,
+        "pending": null,
+        "runtime_status": null,
+        "stale": false,
+        "fields_stale": false,
+        "gone_at": null,
+        "observed_at": "2026-09-21T14:13:23Z",
+        "state": {
+          "connection": "connected",
+          "loading": "loaded",
+          "tab": "present",
+          "activity": "unknown",
+          "lifecycle": "unknown",
+          "enumeration": "present",
+          "freshness": "fresh",
+          "stale_reason": null,
+          "end_scope": null,
+          "evidence": {
+            "connection": {
+              "observed_at": "2026-09-21T14:13:23Z",
+              "source_ref": "hosts_observed:fixture-host",
+              "stale": false
+            },
+            "loading": {
+              "observed_at": "2026-09-21T14:13:23Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "tab": {
+              "observed_at": "2026-09-21T14:13:23Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "activity": {
+              "observed_at": null,
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "lifecycle": {
+              "observed_at": null,
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "enumeration": {
+              "observed_at": "2026-09-21T14:13:23Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "freshness": {
+              "observed_at": "2026-09-21T14:13:23Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            }
+          }
+        }
+      }
+    },
+    "observation": {
+      "status": "available",
+      "streaming": null,
+      "pending": null,
+      "observed_at": "2026-09-21T14:13:23Z",
+      "gone_at": null,
+      "stale": false,
+      "fields_stale": false,
+      "stale_reason": null
+    }
+  },
+  "streaming_pending_permission": {
+    "listed": {
+      "host": "fixture-host",
+      "session_id": "fixture-session",
+      "title": "Claude Agent",
+      "api_access": "managed",
+      "provenance": "connector_managed",
+      "loaded": true,
+      "streaming": true,
+      "pending": {
+        "kind": "permission",
+        "toolUseId": "fixture-permission",
+        "toolName": "Read",
+        "input_preview": "{}"
+      },
+      "runtime_status": "running",
+      "stale": false,
+      "fields_stale": false,
+      "gone_at": null,
+      "observed_at": "2026-09-21T14:13:24Z",
+      "state": {
+        "connection": "connected",
+        "loading": "loaded",
+        "tab": "present",
+        "activity": "streaming",
+        "lifecycle": "active",
+        "enumeration": "present",
+        "freshness": "fresh",
+        "stale_reason": null,
+        "end_scope": null,
+        "evidence": {
+          "connection": {
+            "observed_at": "2026-09-21T14:13:24Z",
+            "source_ref": "hosts_observed:fixture-host",
+            "stale": false
+          },
+          "loading": {
+            "observed_at": "2026-09-21T14:13:24Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "tab": {
+            "observed_at": "2026-09-21T14:13:24Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "activity": {
+            "observed_at": "2026-09-21T14:13:24Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "lifecycle": {
+            "observed_at": "2026-09-21T14:13:24Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "enumeration": {
+            "observed_at": "2026-09-21T14:13:24Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "freshness": {
+            "observed_at": "2026-09-21T14:13:24Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          }
+        }
+      }
+    },
+    "detail": {
+      "session": {
+        "host": "fixture-host",
+        "session_id": "fixture-session",
+        "title": "Claude Agent",
+        "api_access": "managed",
+        "provenance": "connector_managed",
+        "loaded": true,
+        "streaming": true,
+        "pending": {
+          "kind": "permission",
+          "toolUseId": "fixture-permission",
+          "toolName": "Read",
+          "input_preview": "{}"
+        },
+        "runtime_status": "running",
+        "stale": false,
+        "fields_stale": false,
+        "gone_at": null,
+        "observed_at": "2026-09-21T14:13:24Z",
+        "state": {
+          "connection": "connected",
+          "loading": "loaded",
+          "tab": "present",
+          "activity": "streaming",
+          "lifecycle": "active",
+          "enumeration": "present",
+          "freshness": "fresh",
+          "stale_reason": null,
+          "end_scope": null,
+          "evidence": {
+            "connection": {
+              "observed_at": "2026-09-21T14:13:24Z",
+              "source_ref": "hosts_observed:fixture-host",
+              "stale": false
+            },
+            "loading": {
+              "observed_at": "2026-09-21T14:13:24Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "tab": {
+              "observed_at": "2026-09-21T14:13:24Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "activity": {
+              "observed_at": "2026-09-21T14:13:24Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "lifecycle": {
+              "observed_at": "2026-09-21T14:13:24Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "enumeration": {
+              "observed_at": "2026-09-21T14:13:24Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "freshness": {
+              "observed_at": "2026-09-21T14:13:24Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            }
+          }
+        }
+      }
+    },
+    "observation": {
+      "status": "available",
+      "streaming": true,
+      "pending": {
+        "kind": "permission",
+        "toolUseId": "fixture-permission",
+        "toolName": "Read",
+        "input_preview": "{}"
+      },
+      "observed_at": "2026-09-21T14:13:24Z",
+      "gone_at": null,
+      "stale": false,
+      "fields_stale": false,
+      "stale_reason": null
+    }
+  },
+  "stale_pending": {
+    "listed": {
+      "host": "fixture-host",
+      "session_id": "fixture-session",
+      "title": "Claude Agent",
+      "api_access": "managed",
+      "provenance": "connector_managed",
+      "loaded": true,
+      "streaming": true,
+      "pending": {
+        "kind": "permission",
+        "toolUseId": "fixture-permission",
+        "toolName": "Read",
+        "input_preview": "{}"
+      },
+      "runtime_status": "running",
+      "stale": true,
+      "fields_stale": false,
+      "gone_at": null,
+      "observed_at": "2026-09-21T14:13:24Z",
+      "state": {
+        "connection": "not_connected",
+        "loading": "loaded",
+        "tab": "present",
+        "activity": "streaming",
+        "lifecycle": "active",
+        "enumeration": "present",
+        "freshness": "stale",
+        "stale_reason": "host_unreachable",
+        "end_scope": null,
+        "evidence": {
+          "connection": {
+            "observed_at": "2026-09-21T14:13:25Z",
+            "source_ref": "hosts_observed:fixture-host",
+            "stale": true
+          },
+          "loading": {
+            "observed_at": "2026-09-21T14:13:24Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": true
+          },
+          "tab": {
+            "observed_at": "2026-09-21T14:13:24Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": true
+          },
+          "activity": {
+            "observed_at": "2026-09-21T14:13:24Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": true
+          },
+          "lifecycle": {
+            "observed_at": "2026-09-21T14:13:24Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": true
+          },
+          "enumeration": {
+            "observed_at": "2026-09-21T14:13:24Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": true
+          },
+          "freshness": {
+            "observed_at": "2026-09-21T14:13:24Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": true
+          }
+        }
+      }
+    },
+    "detail": {
+      "session": {
+        "host": "fixture-host",
+        "session_id": "fixture-session",
+        "title": "Claude Agent",
+        "api_access": "managed",
+        "provenance": "connector_managed",
+        "loaded": true,
+        "streaming": true,
+        "pending": {
+          "kind": "permission",
+          "toolUseId": "fixture-permission",
+          "toolName": "Read",
+          "input_preview": "{}"
+        },
+        "runtime_status": "running",
+        "stale": true,
+        "fields_stale": false,
+        "gone_at": null,
+        "observed_at": "2026-09-21T14:13:24Z",
+        "state": {
+          "connection": "not_connected",
+          "loading": "loaded",
+          "tab": "present",
+          "activity": "streaming",
+          "lifecycle": "active",
+          "enumeration": "present",
+          "freshness": "stale",
+          "stale_reason": "host_unreachable",
+          "end_scope": null,
+          "evidence": {
+            "connection": {
+              "observed_at": "2026-09-21T14:13:25Z",
+              "source_ref": "hosts_observed:fixture-host",
+              "stale": true
+            },
+            "loading": {
+              "observed_at": "2026-09-21T14:13:24Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": true
+            },
+            "tab": {
+              "observed_at": "2026-09-21T14:13:24Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": true
+            },
+            "activity": {
+              "observed_at": "2026-09-21T14:13:24Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": true
+            },
+            "lifecycle": {
+              "observed_at": "2026-09-21T14:13:24Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": true
+            },
+            "enumeration": {
+              "observed_at": "2026-09-21T14:13:24Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": true
+            },
+            "freshness": {
+              "observed_at": "2026-09-21T14:13:24Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": true
+            }
+          }
+        }
+      }
+    },
+    "observation": {
+      "status": "available",
+      "streaming": true,
+      "pending": {
+        "kind": "permission",
+        "toolUseId": "fixture-permission",
+        "toolName": "Read",
+        "input_preview": "{}"
+      },
+      "observed_at": "2026-09-21T14:13:24Z",
+      "gone_at": null,
+      "stale": true,
+      "fields_stale": false,
+      "stale_reason": "host_unreachable"
+    }
+  },
+  "managed_pending": {
+    "listed": {
+      "host": "fixture-host",
+      "session_id": "fixture-session",
+      "title": "Claude Agent",
+      "api_access": "managed",
+      "provenance": "connector_managed",
+      "loaded": true,
+      "streaming": false,
+      "pending": {
+        "kind": "ask_user",
+        "toolUseId": "fixture-question",
+        "questions": [
+          {
+            "question": "Which result?",
+            "header": null,
+            "multiSelect": false,
+            "options": []
+          }
+        ]
+      },
+      "runtime_status": "blocked",
+      "stale": false,
+      "fields_stale": false,
+      "gone_at": null,
+      "observed_at": "2026-09-21T14:13:26Z",
+      "state": {
+        "connection": "connected",
+        "loading": "loaded",
+        "tab": "present",
+        "activity": "not_streaming",
+        "lifecycle": "unknown",
+        "enumeration": "present",
+        "freshness": "fresh",
+        "stale_reason": null,
+        "end_scope": null,
+        "evidence": {
+          "connection": {
+            "observed_at": "2026-09-21T14:13:26Z",
+            "source_ref": "hosts_observed:fixture-host",
+            "stale": false
+          },
+          "loading": {
+            "observed_at": "2026-09-21T14:13:26Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "tab": {
+            "observed_at": "2026-09-21T14:13:26Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "activity": {
+            "observed_at": "2026-09-21T14:13:26Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "lifecycle": {
+            "observed_at": null,
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "enumeration": {
+            "observed_at": "2026-09-21T14:13:26Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "freshness": {
+            "observed_at": "2026-09-21T14:13:26Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          }
+        }
+      }
+    },
+    "detail": {
+      "session": {
+        "host": "fixture-host",
+        "session_id": "fixture-session",
+        "title": "Claude Agent",
+        "api_access": "managed",
+        "provenance": "connector_managed",
+        "loaded": true,
+        "streaming": false,
+        "pending": {
+          "kind": "ask_user",
+          "toolUseId": "fixture-question",
+          "questions": [
+            {
+              "question": "Which result?",
+              "header": null,
+              "multiSelect": false,
+              "options": []
+            }
+          ]
+        },
+        "runtime_status": "blocked",
+        "stale": false,
+        "fields_stale": false,
+        "gone_at": null,
+        "observed_at": "2026-09-21T14:13:26Z",
+        "state": {
+          "connection": "connected",
+          "loading": "loaded",
+          "tab": "present",
+          "activity": "not_streaming",
+          "lifecycle": "unknown",
+          "enumeration": "present",
+          "freshness": "fresh",
+          "stale_reason": null,
+          "end_scope": null,
+          "evidence": {
+            "connection": {
+              "observed_at": "2026-09-21T14:13:26Z",
+              "source_ref": "hosts_observed:fixture-host",
+              "stale": false
+            },
+            "loading": {
+              "observed_at": "2026-09-21T14:13:26Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "tab": {
+              "observed_at": "2026-09-21T14:13:26Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "activity": {
+              "observed_at": "2026-09-21T14:13:26Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "lifecycle": {
+              "observed_at": null,
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "enumeration": {
+              "observed_at": "2026-09-21T14:13:26Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "freshness": {
+              "observed_at": "2026-09-21T14:13:26Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            }
+          }
+        }
+      }
+    },
+    "observation": {
+      "status": "available",
+      "streaming": false,
+      "pending": {
+        "kind": "ask_user",
+        "toolUseId": "fixture-question",
+        "questions": [
+          {
+            "question": "Which result?",
+            "header": null,
+            "multiSelect": false,
+            "options": []
+          }
+        ]
+      },
+      "observed_at": "2026-09-21T14:13:26Z",
+      "gone_at": null,
+      "stale": false,
+      "fields_stale": false,
+      "stale_reason": null
+    }
+  },
+  "stale_activity_evidence": {
+    "listed": {
+      "host": "fixture-host",
+      "session_id": "fixture-session",
+      "title": "Claude Agent",
+      "api_access": "managed",
+      "provenance": "connector_managed",
+      "loaded": true,
+      "streaming": true,
+      "pending": null,
+      "runtime_status": "running",
+      "stale": false,
+      "fields_stale": true,
+      "gone_at": null,
+      "observed_at": "2026-09-21T14:13:28Z",
+      "state": {
+        "connection": "connected",
+        "loading": "loaded",
+        "tab": "present",
+        "activity": "streaming",
+        "lifecycle": "active",
+        "enumeration": "present",
+        "freshness": "fresh",
+        "stale_reason": null,
+        "end_scope": null,
+        "evidence": {
+          "connection": {
+            "observed_at": "2026-09-21T14:13:28Z",
+            "source_ref": "hosts_observed:fixture-host",
+            "stale": false
+          },
+          "loading": {
+            "observed_at": "2026-09-21T14:13:27Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": true
+          },
+          "tab": {
+            "observed_at": "2026-09-21T14:13:28Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "activity": {
+            "observed_at": "2026-09-21T14:13:27Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": true
+          },
+          "lifecycle": {
+            "observed_at": "2026-09-21T14:13:28Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "enumeration": {
+            "observed_at": "2026-09-21T14:13:28Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          },
+          "freshness": {
+            "observed_at": "2026-09-21T14:13:28Z",
+            "source_ref": "sessions_observed:fixture-host/fixture-session",
+            "stale": false
+          }
+        }
+      }
+    },
+    "detail": {
+      "session": {
+        "host": "fixture-host",
+        "session_id": "fixture-session",
+        "title": "Claude Agent",
+        "api_access": "managed",
+        "provenance": "connector_managed",
+        "loaded": true,
+        "streaming": true,
+        "pending": null,
+        "runtime_status": "running",
+        "stale": false,
+        "fields_stale": true,
+        "gone_at": null,
+        "observed_at": "2026-09-21T14:13:28Z",
+        "state": {
+          "connection": "connected",
+          "loading": "loaded",
+          "tab": "present",
+          "activity": "streaming",
+          "lifecycle": "active",
+          "enumeration": "present",
+          "freshness": "fresh",
+          "stale_reason": null,
+          "end_scope": null,
+          "evidence": {
+            "connection": {
+              "observed_at": "2026-09-21T14:13:28Z",
+              "source_ref": "hosts_observed:fixture-host",
+              "stale": false
+            },
+            "loading": {
+              "observed_at": "2026-09-21T14:13:27Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": true
+            },
+            "tab": {
+              "observed_at": "2026-09-21T14:13:28Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "activity": {
+              "observed_at": "2026-09-21T14:13:27Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": true
+            },
+            "lifecycle": {
+              "observed_at": "2026-09-21T14:13:28Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "enumeration": {
+              "observed_at": "2026-09-21T14:13:28Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            },
+            "freshness": {
+              "observed_at": "2026-09-21T14:13:28Z",
+              "source_ref": "sessions_observed:fixture-host/fixture-session",
+              "stale": false
+            }
+          }
+        }
+      }
+    },
+    "observation": {
+      "status": "available",
+      "streaming": true,
+      "pending": null,
+      "observed_at": "2026-09-21T14:13:28Z",
+      "gone_at": null,
+      "stale": false,
+      "fields_stale": true,
+      "stale_reason": null
+    }
+  }
+}

@@ -182,8 +182,19 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
       errorBox,
       extra: h('div', {class: 'pm-fields work-next-field'}, field, hint),
     });
+    const submitButton = composer.box.querySelector('button[type=submit]');
+    let buttonActivation = false;
+    submitButton.addEventListener('click', () => {
+      buttonActivation = true;
+      // A trusted click can flush microtasks before its default form submit.
+      setTimeout(() => {buttonActivation = false;}, 0);
+    }, true);
     composer.box.addEventListener('submit', event => {
-      if (composing || performance.now() - composeEnded < 50) {
+      // Keep the IME backstop for implicit submits. Only this button activation
+      // may bypass the end grace period; composerShortcut already gates Enter.
+      const explicit = buttonActivation && event.submitter === submitButton;
+      buttonActivation = false;
+      if (composing || (!explicit && performance.now() - composeEnded < 50)) {
         event.preventDefault();
         event.stopImmediatePropagation();
       }

@@ -1,5 +1,5 @@
-import {centralServiceStatus, clientActionGate} from "./central-service-status.js";
-import {workbenchEnabled} from './workbench-mode.js';
+import {centralServiceStatus, clientActionGate, pollFailure} from "./central-service-status.js";
+import {layoutDecision} from './workbench-mode.js';
 import {workbenchViews} from './workbench-views.js';
 import {settingsAgents} from './settings-agents.js';
 import {actionAllowed, mayStartSession, checkpointReason, dispatchExplanation, connectionReturn} from './work-paths.js';
@@ -70,7 +70,9 @@ import {renderDeliveryWork, renderObservedResource, unavailableProject} from "./
 import {observedText} from "./observed-resource-strings.js";
 
 const TOKEN_KEY = "batc.dashboard.token";
-const state = { token: null, caps: null, lastEvent: 0, lastEventAt: 0, listeners: new Set(), namespace: "", scopeIdentity: null, epoch: 0, online: false, pollHealth: 'initial', viewReady: false, sync: null, endpoint: "", connectionError: null, nativeBusy: false, nativeAttempt: 0, connectionNotice: null, refreshCycle: null };
+const isWorkbench = layoutDecision.layout === 'workbench';
+
+const state = { token: null, caps: null, lastEvent: 0, lastEventAt: 0, lastPoll: null, listeners: new Set(), namespace: "", scopeIdentity: null, epoch: 0, online: false, pollHealth: 'initial', viewReady: false, sync: null, endpoint: "", connectionError: null, nativeBusy: false, nativeAttempt: 0, connectionNotice: null, refreshCycle: null };
 const recentErrors = errorRing();
 const diagnosticSessions = new Map();
 let diagnosticSessionsRead = false;
@@ -844,6 +846,9 @@ function paintConnection(waiting = false, paused = false) {
     : key === 'ui_not_connected' ? 'ui_not_connected_help'
     : key === 'ui_connecting' ? 'ui_connecting_help'
     : key === 'ui_reconnecting' ? 'offline_actions_paused'
+    : key === 'ui_connection_refused' ? 'error_code_CLIENT_ACTION_REFUSED'
+    : key === 'ui_service_error' ? 'error_code_CLIENT_ACTION_SERVICE_ERROR'
+    : key === 'ui_invalid_response' ? 'error_code_CLIENT_ACTION_INVALID_RESPONSE'
     : paused ? 'sync_actions_paused' : waiting ? 'sync_waiting' : 'desktop_polling';
   live.title = scoped + ' — ' + t(helpKey);
   for (const paint of [...connectionPainters]) paint();
@@ -902,18 +907,21 @@ async function streamEvents() {
     }
     const epoch = state.epoch, view = generation, foreground = foregroundVersion;
     let cycle, pollSucceeded = false;
+    const previousPoll = state.lastPoll;
     try {
       const before = state.lastEvent;
       const checkpoint = state.sync ? `&checkpoint=${encodeURIComponent(state.sync.token)}` : "";
       const page = await api("GET", `/events?after=${before}&limit=100${checkpoint}`);
       if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
-      pollSucceeded = true; state.pollHealth = 'connected'; paintConnection(true);
+      pollSucceeded = true; state.pollHealth = 'connected';
+      state.lastPoll = {at: Date.now(), namespace: state.namespace}; paintConnection(true);
       if (view !== generation || !state.viewReady) continue;
       cycle = {error: null}; state.refreshCycle = cycle;
       // A deferred render is not a connection failure: keep version-checked form saves usable.
       // Actual event/read failures below pause mutations until a successful replay.
       const cursor = await consumePageAsync(page, before, ev => {
-        return settleRefreshes([...state.listeners].map(fn => Promise.resolve().then(() => fn(ev))));
+        return settleRefreshes([...state.listeners].map(fn => Promise.resolve().then(() => fn(ev))))
+          .catch(error => {cycle.error ||= error; throw error;});
       });
       if (epoch !== state.epoch || view !== generation || foreground !== foregroundVersion || !state.viewReady) continue;
       if (cycle.error) throw cycle.error;
@@ -931,7 +939,12 @@ async function streamEvents() {
       if (!page.has_more || cursor <= before) await waitForEventPoll(1000);
     } catch (error) {
       if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
-      if (!pollSucceeded) {state.pollHealth = 'reconnecting'; paintConnection();}
+      // A successful HTTP page followed by a failed view refresh still proves
+      // transport health. Invalid event/checkpoint data is a poll response error.
+      if (!pollSucceeded || !cycle?.error) {
+        if (pollSucceeded) state.lastPoll = previousPoll;
+        state.pollHealth = pollFailure(error, Date.now()); paintConnection();
+      }
       if (view !== generation) continue;
       if (state.refreshCycle === cycle) state.refreshCycle = null;
       updateOnline(false);
@@ -1557,12 +1570,12 @@ function sessionPullHref(target) {
 async function viewSession(main, host, sid, context = null) {
   const params = new URLSearchParams(location.hash.split("?")[1] || "");
   let fromQuery = params.get("from") || "";
-  let workRecord = workbenchEnabled() ? context?.workRecord : null;
+  let workRecord = isWorkbench ? context?.workRecord : null;
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   const path = `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(sid)}`;
   const requestedWork = workSessionContext(params);
   const workContextReadable = workFollowUpAvailable(state.caps) || state.caps?.features?.pm_workspaces?.work_start?.version === 1;
-  const workContext = workbenchEnabled() && workContextReadable && requestedWork ? requestedWork : null;
+  const workContext = isWorkbench && workContextReadable && requestedWork ? requestedWork : null;
   let selectedAttempt = null;
   if (workContext) {
     try {
@@ -1717,12 +1730,12 @@ async function viewSession(main, host, sid, context = null) {
   const details = disclosure({label: t("session_details_session"), body: metadata, key: `session-details:${connection.namespace}:${host}:${sid}`});
   details.classList.add("workspace-evidence");
   details.dataset.sessionDetails = "";
-  const results = inspector({title: t("session_results"), dock: true, overlay: workbenchEnabled(),
-    historyNavigation: workbenchEnabled(), canReopen: () => !disposed && !withdrawn && readReady, returnFocus: () => openResults});
-  const openResults = workbenchEnabled() ? button({variant: "secondary", icon: "panel-right", label: t("session_results"), onClick: () => results.open()})
+  const results = inspector({title: t("session_results"), dock: true, overlay: isWorkbench,
+    historyNavigation: isWorkbench, canReopen: () => !disposed && !withdrawn && readReady, returnFocus: () => openResults});
+  const openResults = isWorkbench ? button({variant: "secondary", icon: "panel-right", label: t("session_results"), onClick: () => results.open()})
     : iconButton({icon: "inbox", label: t("session_results"), onClick: () => results.open()});
   const wide = matchMedia("(min-width: 1200px)");
-  const syncWide = () => {openResults.hidden = !workbenchEnabled() && wide.matches || Boolean(withdrawn);};
+  const syncWide = () => {openResults.hidden = !isWorkbench && wide.matches || Boolean(withdrawn);};
   syncWide(); wide.addEventListener("change", syncWide);
   const sessionSection = (name, title, body, action = null) => h("section", {class: "session-section"},
     h("div", {class: "session-section-head"}, h("h3", {class: "session-section-title"}, icon(name, {size: 16}), title), action), body);
@@ -1732,15 +1745,15 @@ async function viewSession(main, host, sid, context = null) {
   syncChanges();
   const overflow = menu({button: iconButton({icon: "more-horizontal", label: t("ui_more")}),
     items: [
-      ...(workbenchEnabled() ? [{key: "interrupt", label: t("interrupt"), content: stop}] : []),
+      ...(isWorkbench ? [{key: "interrupt", label: t("interrupt"), content: stop}] : []),
       {key: "discuss", label: t("ui_discuss"), href: "#", icon: "message-square"},
       {key: "copy-title", label: t("bat_menu_title"), icon: "clipboard", title: t("bat_browser"), onSelect: () => batHandoff?.copyTitle()},
       {key: "copy-id", label: t("bat_menu_id"), icon: "clipboard", title: t("bat_browser"), onSelect: () => batHandoff?.copyId()},
       {key: "open-bat", label: t("bat_open"), icon: "external-link", title: t("bat_browser"), disabled: !nativeDesktop, onSelect: () => batHandoff?.open()},
       {key: "shortcut", label: t("composer_shortcut"), content: shortcut.box},
     ]});
-  if (workbenchEnabled()) {stop.setAttribute('role', 'menuitem'); stop.addEventListener('click', () => overflow.close());}
-  const header = pageHeader({title: titleNode, mark: markSlot, pill: pillSlot, meta, actions: workbenchEnabled() ? [openResults] : [stop, openResults], overflow});
+  if (isWorkbench) {stop.setAttribute('role', 'menuitem'); stop.addEventListener('click', () => overflow.close());}
+  const header = pageHeader({title: titleNode, mark: markSlot, pill: pillSlot, meta, actions: isWorkbench ? [openResults] : [stop, openResults], overflow});
   head.append(backSlot, header);
   const resultSourceAvailable = () => !disposed && !withdrawn && readReady
     && row?.provenance === 'connector_managed' && row?.api_access === 'managed';
@@ -1753,7 +1766,7 @@ async function viewSession(main, host, sid, context = null) {
     recoverPermitted: () => resultSourceAvailable() && (options.recoverPermitted || options.permitted)(),
     canSend: () => state.online && !state.nativeBusy && state.viewReady,
   });
-  const workResultTools = workbenchEnabled() && Boolean(workContext);
+  const workResultTools = isWorkbench && Boolean(workContext);
   const sessionTools = h('div', {}, workResultTools ? context?.itemBox : null,
     sessionSection("list-checks", t("checkpoints"), cps.box, cps.action),
     sessionSection("check", t("session_delivery"), result),
@@ -1789,7 +1802,7 @@ async function viewSession(main, host, sid, context = null) {
   const followWorkspace = workContext?.workspaceId || "";
   const followWorkId = workRecord?.work_item?.work_item_id || "";
   let mobileLayout = null;
-  const followUp = workbenchEnabled() && followWorkspace && /^wi_[0-9a-f]{20}$/.test(followWorkId) && workFollowUpAvailable(state.caps)
+  const followUp = isWorkbench && followWorkspace && /^wi_[0-9a-f]{20}$/.test(followWorkId) && workFollowUpAvailable(state.caps)
     ? mountWorkFollowUp({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
       namespace: connection.namespace, workspaceId: followWorkspace, workItemId: followWorkId, selectedAttemptId: selectedAttempt.attempt_id, errorBox,
       canSend: () => state.online && !state.nativeBusy && state.viewReady,
@@ -1812,7 +1825,7 @@ async function viewSession(main, host, sid, context = null) {
   const workspaceNode = h("div", {class: "workspace-session session-workspace", "data-session-view": ""}, lane, results);
   const withdrawnSlot = h("div", {class: "session-withdrawn"});
   main.append(head, workspaceNode);
-  const perspectives = workbenchEnabled() ? workbenchViews({main, head, work: workspaceNode, results, namespace: connection.namespace,
+  const perspectives = isWorkbench ? workbenchViews({main, head, work: workspaceNode, results, namespace: connection.namespace,
     workspace: sessionWorkspace || host, host, sessionId: sid, workId: workRecord?.work_item?.work_item_id, t}) : null;
   const originHref = () => {
     const view = originView(), workspaceId = sessionWorkspace;
@@ -2224,7 +2237,7 @@ async function viewSession(main, host, sid, context = null) {
     // Late reads for the withdrawn session must not paint again.
     ++observationRequest; ++deliveryTicket; ++messageRequest; cps.clear(); deliveryKnown.clear();
     state.observations?.delete(`session:${host}/${sid}`);
-    if (first && !results.hidden && (!wide.matches || workbenchEnabled())) results.close();
+    if (first && !results.hidden && (!wide.matches || isWorkbench)) results.close();
     conversation.clear(); pending.replaceChildren(); pendingIdentity = undefined; status.replaceChildren(); readError = null;
     deliveryPills.replaceChildren(); result.replaceChildren(); metadata.replaceChildren();
     sourcesPanel?.dispose(); sourcesPanel = null; sourcesBody.replaceChildren(sourcesEmpty());
@@ -3254,16 +3267,22 @@ function fleetEmpty() {
 function connectionFacts() {
   const endpoint = state.endpoint || (state.token ? location.origin : "");
   const stateCell = h("dd");
-  const eventCell = h("dd");
+  const eventCell = h("dd", {'data-last-event': ''});
+  const pollCell = h("dd", {'data-last-successful-poll': ''});
   const dl = h("dl", {class: "kv global-connection-facts"},
     h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"),
     h("dt", {}, t("global_state")), stateCell,
     h("dt", {}, t("global_last_event")), eventCell,
+    h("dt", {}, t("ui_last_poll")), pollCell,
     h("dt", {}, t("connection_access")), connectionAccess());
   const render = () => {
     const {key, tone} = centralServiceStatus(state);
     stateCell.replaceChildren(h("span", {class: `ui-pill tone-${tone}`}, t(key)));
     eventCell.replaceChildren(state.lastEventAt ? when(state.lastEventAt) : t("global_no_event"));
+    eventCell.dataset.observedAt = state.lastEventAt ? new Date(state.lastEventAt).toISOString() : '';
+    const pollAt = state.lastPoll?.namespace === state.namespace ? state.lastPoll.at : 0;
+    pollCell.replaceChildren(pollAt ? when(pollAt) : '—');
+    pollCell.dataset.observedAt = pollAt ? new Date(pollAt).toISOString() : '';
   };
   render();
   const paint = () => {
@@ -3320,10 +3339,14 @@ function openSettings(main, {exclusive = false, refreshButton} = {}) {
     h('p', {'data-build-line':''}, buildLine(clientIdentity(diagnosticsClient()),t)),
     h('div',{class:'actions'},button({label:t('diag_export'),onClick:openDiagnostics,'data-export-diagnostics':''}),
       h("a", {href: setupGuide()}, t("global_setup_guide")))));
-  if(nativeDesktop)nativeStatus().then(status=>{
-    desktopBuild=status.app_build;
-    if(frame.root.isConnected)frame.panel('about').querySelector('[data-build-line]').textContent=buildLine(clientIdentity(diagnosticsClient()),t);
-  }).catch(()=>{});
+  const identityEpoch = state.epoch;
+  let buildCaps = state.caps;
+  const paintBuild = () => {
+    if(frame.root.isConnected && identityEpoch === state.epoch)
+      frame.panel('about').querySelector('[data-build-line]').textContent=buildLine(clientIdentity(diagnosticsClient(buildCaps)),t);
+  };
+  if(state.token)api('GET','/capabilities').then(caps=>{buildCaps=caps;paintBuild();}).catch(()=>{});
+  if(nativeDesktop)nativeStatus().then(status=>{desktopBuild=status.app_build;paintBuild();}).catch(()=>{});
   main.append(languageSwitch(), frame.root);
   const back=connectionReturn(params.get('from'));
   if(back)frame.panel('connection').append(h('a',{href:back.href,'data-connection-return':''},t(back.label)));
@@ -3340,7 +3363,7 @@ function viewBrowserSettings(main) {
   const facts = connectionFacts();
   frame.panel("connection").append(h("section", {class: "panel"},
     facts,
-    managed ? h("h2", {}, t("managed_browser_connected")) : null,
+    managed ? h("h2", {}, t("ui_local_connector")) : null,
     disclosure({label: t("global_details"), body: h('div', {}, connectionIdentity(), managed ? h("p", {}, t("managed_browser_help")) : null)}),
     h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect"))));
   frame.show("fleet");
@@ -3389,7 +3412,7 @@ async function viewManagedSettings(main) {
   const status = h("div", {role: "status"});
   const refreshButton = iconButton({icon: 'refresh-cw', label: t('global_refresh'), onClick: () => setup.reload()});
   const frame = openSettings(main, {exclusive: !nativeDesktop, refreshButton});
-  const local = h("section", {class: "panel", 'data-connection-card': ''}, h("h2", {}, t("managed_browser_connected")),
+  const local = h("section", {class: "panel", 'data-connection-card': ''}, h("h2", {}, t("ui_local_connector")),
     connectionFacts(),
     disclosure({label: t("global_details"), body: h('div', {}, connectionIdentity(),
       h("p", {}, t("managed_background_help")), !nativeDesktop ? h('p', {}, t('managed_browser_help')) : null,
@@ -3595,7 +3618,8 @@ async function viewNativeSettings(main) {
     if (status.configuration_file) technicalDetails.append(h("dt", {}, t("desktop_configuration_file")), h("dd", {}, status.configuration_file));
     if (status.credential_source) row("desktop_credential_source", t("desktop_source_" + status.credential_source));
     if (state.caps) details.append(h("dt", {}, t("connection_access")), connectionAccess());
-    if (status.error && (!status.configuration_setup || status.configuration_source === "managed")) info.append(errorBox(new Error(status.error), {summary: t("desktop_status_error"), within:info}));
+    if (status.error && (!status.configuration_setup || status.configuration_source === "managed")) info.append(errorBox(new Error(status.error), {
+      summary: t(status.error.startsWith('JOURNAL_NEWER_DATA_STEP:') ? 'managed_newer_journal' : 'desktop_status_error'), within:info}));
     else if (!status.credential_available && !status.configuration_setup) info.append(h("p", {}, t("desktop_credential_missing")));
     platform.textContent = status.enrollment_supported === true ? t("desktop_enrollment_help")
       : status.enrollment_supported === false ? t("desktop_enrollment_unsupported") : "";
@@ -3738,14 +3762,14 @@ function holdRender(fromEvent, opensAtStart) {
 document.addEventListener("focusout", () => setTimeout(() => {
   if (!editing && !typing() && idleReload) { const fn = idleReload; idleReload = null; fn(); }
 }, 0));
-function liveReload(fn, kinds, prepare = null) {
+function liveReload(fn, kinds, prepare = null, holding = () => editing || typing()) {
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   const later = debounceRefresh(async () => {
     let preparedAt = 0;
     const prepareNow = async () => {if (prepare) {await prepare(); preparedAt = Date.now();}};
     await prepareNow();
     for (;;) {
-      while (editing || typing()) {
+      while (holding()) {
         assertView(connection); await sleep(100);
         // The held checkpoint also holds the next event page. Keep safety evidence current
         // while an editor stays open, so a later parent archive does not wait for that page.
@@ -3755,7 +3779,7 @@ function liveReload(fn, kinds, prepare = null) {
       const opened = drawerOpens;
       await fn(true);
       assertView(connection);
-      if (!editing && !typing() && drawerOpens === opened) return;
+      if (!holding() && drawerOpens === opened) return;
     }
   }, 500);
   return onEvents(ev => { if (typeof kinds === "function" ? kinds(ev) : kinds.includes(ev.resource_type)) return later(); });
@@ -4245,7 +4269,11 @@ async function viewWorkItem(main, wid) {
   const offRepair = repair ? onEvents(event => {
     if (event.resource_type === "operation" || observationAffected("work_item", wid, event)) return repair.refresh();
   }) : null;
-  const off = liveReload(render, event => observationAffected("work_item", wid, event), refreshSafety);
+  // In a linked Work, this details panel shares the page with the instruction
+  // composer. Its safety read must settle without waiting for that other editor
+  // to blur; renderNow still defers presentation while the person is typing.
+  const off = liveReload(render, event => observationAffected("work_item", wid, event), refreshSafety,
+    () => editing || (typing() && main.contains(document.activeElement)));
   return () => {off?.(); offRepair?.(); repair?.dispose(); results?.dispose();};
 }
 
@@ -4845,7 +4873,7 @@ async function route() {
     teardown = off || null;
     return;
   }
-  const views = { 'work-list': workbenchEnabled() ? () => {} : viewSessions, pm: viewPmWorkspace, home: viewHome, projects: viewProjects, project: viewProject, item: viewLinkedWorkItem, sessions: viewSessions,
+  const views = { 'work-list': isWorkbench ? () => {} : viewSessions, pm: viewPmWorkspace, home: viewHome, projects: viewProjects, project: viewProject, item: viewLinkedWorkItem, sessions: viewSessions,
     cleanup: viewCleanup, approvals: viewApprovals, delivery: viewDelivery, operations: viewOperations, session: viewSession, start: viewStart, published: viewPublished, orchestrate: viewOrchestration, op: viewOperation, settings: viewSettings,
     "artifact-review": viewArtifactReview, work: viewProjectWork, dispatch: viewProjectDispatch,
     host: viewHostDiscovery, task: viewTask,

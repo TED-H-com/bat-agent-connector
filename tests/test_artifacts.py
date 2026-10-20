@@ -25,6 +25,7 @@ from tests.operation_helpers import settle_operations
 from tests.test_checkpoints import MANUAL, git
 from tests.test_checkpoints import daemon as checkpoint_daemon
 from tests.test_checkpoints import human as checkpoint_human
+from tests.test_journal_compatibility import snapshot as journal_snapshot
 
 PERSON = api_auth.Principal("artifact-person", frozenset({"observe", "manage", "start", "operate", "approve"}))
 
@@ -199,6 +200,12 @@ def test_artifact_migration_preserves_existing_journal_and_empty_manifests(tmp_p
         j.db.execute(f"DROP TABLE {table}")
     j.db.execute(f"PRAGMA user_version={version}")
     j.close()
+    if version > LATEST_DATA_STEP:
+        before = journal_snapshot(path)
+        with pytest.raises(ValueError, match="JOURNAL_NEWER_DATA_STEP"):
+            Journal(path)
+        assert journal_snapshot(path) == before
+        return
     j = Journal(path)
     assert j.get(task["task_id"])["original_words"] == "keep"
     assert j.api_events(0, 10) == before
