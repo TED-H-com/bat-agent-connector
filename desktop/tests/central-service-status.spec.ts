@@ -50,6 +50,8 @@ for (const locale of ['en-US', 'zh-TW']) {
         await expect(page.locator('#live')).toHaveText(disconnected);
         await expect(page.locator('#live')).toHaveAccessibleName(scoped);
         await expect(page.locator('#live')).toHaveAttribute('data-connection', 'offline');
+        await expect(page.locator('#live')).toHaveAttribute('title', new RegExp(scoped));
+        await expect(page.locator('.central-service-scope')).toBeVisible();
       } finally { await context.close(); }
     });
   }
