@@ -1,5 +1,6 @@
 import {test, expect, type Page} from '@playwright/test';
-import {readFileSync} from 'node:fs';
+import {readFileSync, writeFileSync} from 'node:fs';
+import {STRINGS} from '../src/i18n.js';
 import {conversationFixture, mountConversation} from './conversation-fixture';
 
 async function baselineAssets(page: Page) {
@@ -11,9 +12,53 @@ async function baselineAssets(page: Page) {
 }
 
 for (const locale of ['en-US', 'zh-TW']) {
+  const copy = STRINGS[locale === 'zh-TW' ? 'zh-TW' : 'en'];
   const connected = locale === 'zh-TW' ? '已連線' : 'Connected';
   const disconnected = locale === 'zh-TW' ? '未連線' : 'Not connected';
   const scoped = locale === 'zh-TW' ? 'Connector：未連線' : 'Connector: Not connected';
+
+  for (const [state, key, helpKey] of [
+    ['not-connected', 'ui_not_connected', 'ui_not_connected_help'],
+    ['connecting', 'ui_connecting', 'ui_connecting_help'],
+    ['connected', 'ui_connected', 'desktop_polling'],
+    ['reconnecting', 'ui_reconnecting', 'offline_actions_paused'],
+  ]) test(`complete Connector title follows ${state} evidence ${locale}`, async ({browser}, info) => {
+    const context = await browser.newContext({locale}), page = await context.newPage();
+    const fixture = conversationFixture();
+    let failed = false, release!: () => void;
+    const pending = new Promise<void>(resolve => { release = resolve; });
+    await mountConversation(page, false, async input => {
+      const path = new URL(input.path, 'http://fixture').pathname;
+      if (state === 'connecting' && path === '/capabilities') await pending;
+      return failed && path === '/events'
+        ? {status: 503, data: {error: {code: 'UNAVAILABLE', message: 'Events unavailable'}}}
+        : fixture.dispatch(input);
+    });
+    if (state === 'not-connected' || state === 'connecting') await page.addInitScript(() => sessionStorage.clear());
+    try {
+      await page.goto('/dashboard/#/settings');
+      if (state === 'connecting') {
+        await page.locator('.global-connect-form input[type=password]').fill('fixture-token');
+        await page.locator('.global-connect-form button[type=submit]').click();
+      } else if (state === 'reconnecting') {
+        await expect(page.locator('#live')).toHaveAttribute('data-connection', 'connected');
+        failed = true;
+      }
+      const live = page.locator('#live');
+      const name = copy.ui_connector_status.replace('{status}', copy[key]);
+      await expect(live).toHaveText(copy[key]);
+      await expect(live).toHaveAccessibleName(name);
+      const actual = {state, locale, title: await live.getAttribute('title'),
+        accessible_name: await live.getAttribute('aria-label')};
+      writeFileSync(info.outputPath(`title-${state}-${locale}.json`), JSON.stringify(actual, null, 2));
+      if (state === 'not-connected' || state === 'connecting')
+        await expect(live).not.toHaveAttribute('title', new RegExp(copy.offline_actions_paused));
+      await expect(live).toHaveAttribute('title', `${name} — ${copy[helpKey]}`);
+      // Capture the settled value, including polling help after the initial read.
+      actual.title = await live.getAttribute('title');
+      writeFileSync(info.outputPath(`title-${state}-${locale}.json`), JSON.stringify(actual, null, 2));
+    } finally { release(); await context.close(); }
+  });
 
   test(`failed poll after success agrees on both surfaces at 390px ${locale}`, async ({browser}) => {
     const context = await browser.newContext({locale, viewport: {width: 390, height: 844}}), page = await context.newPage();
@@ -52,7 +97,7 @@ for (const locale of ['en-US', 'zh-TW']) {
         await expect(page.locator('#live')).toHaveText(disconnected);
         await expect(page.locator('#live')).toHaveAccessibleName(scoped);
         await expect(page.locator('#live')).toHaveAttribute('data-connection', 'offline');
-        await expect(page.locator('#live')).toHaveAttribute('title', new RegExp(scoped));
+        await expect(page.locator('#live')).toHaveAttribute('title', `${scoped} — ${copy.ui_not_connected_help}`);
         await expect(page.locator('.central-service-scope')).toBeVisible();
       } finally { await context.close(); }
     });
@@ -103,7 +148,7 @@ for (const locale of ['en-US', 'zh-TW']) {
       await page.screenshot({path: info.outputPath(`central-fleet-${locale}-${width}.png`)});
       await expect.soft(page.locator('#live')).toHaveText(disconnected);
       await expect.soft(page.locator('#live')).toHaveAccessibleName(scoped);
-      await expect.soft(page.locator('#live')).toHaveAttribute('title', new RegExp(scoped));
+      await expect.soft(page.locator('#live')).toHaveAttribute('title', `${scoped} — ${copy.ui_not_connected_help}`);
       await expect.soft(page.locator('.central-service-scope')).toBeVisible();
       await expect(page.locator('.central-service-scope')).toHaveText(locale === 'zh-TW' ? 'Connector：' : 'Connector:');
       expect(await page.locator('.central-service-state').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);

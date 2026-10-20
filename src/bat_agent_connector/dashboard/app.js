@@ -1599,6 +1599,8 @@ var init_ui_strings = __esmMin((() => {
 			ui_workspace: "Workspace",
 			ui_connector_scope: "Connector:",
 			ui_connector_status: "Connector: {status}",
+			ui_not_connected_help: "This window has no Connector session. Go to Settings → Connection and select Connect.",
+			ui_connecting_help: "Connector has not answered yet; actions are paused until it responds.",
 			ui_switch_workspace: "Switch workspace",
 			ui_new_workspace: "New workspace",
 			ui_report: "Report",
@@ -1686,6 +1688,8 @@ var init_ui_strings = __esmMin((() => {
 			ui_workspace: "工作空間",
 			ui_connector_scope: "Connector：",
 			ui_connector_status: "Connector：{status}",
+			ui_not_connected_help: "這個視窗尚未建立 Connector 連線。請前往「設定 → 連線」，按「連線」。",
+			ui_connecting_help: "Connector 尚未回應；回應前暫停操作。",
 			ui_switch_workspace: "切換工作空間",
 			ui_new_workspace: "新增工作空間",
 			ui_report: "報告",
@@ -66145,8 +66149,8 @@ function paintConnection(waiting = false, paused = false) {
 		notice.querySelector("summary").textContent = t("connection_details");
 		notice.querySelector("code").textContent = state.managedRecovery || "";
 	}
-	const help = recoveryKey ? t(recoveryKey + "_help") : t(paused ? "sync_actions_paused" : waiting ? "sync_waiting" : status === "connected" ? "desktop_polling" : "offline_actions_paused");
-	live.title = scoped + " — " + help;
+	const helpKey = recoveryKey ? recoveryKey + "_help" : key === "ui_not_connected" ? "ui_not_connected_help" : key === "ui_connecting" ? "ui_connecting_help" : key === "ui_reconnecting" ? "offline_actions_paused" : paused ? "sync_actions_paused" : waiting ? "sync_waiting" : "desktop_polling";
+	live.title = scoped + " — " + t(helpKey);
 	for (const paint of [...connectionPainters]) paint();
 }
 var managedStatusAt = 0;

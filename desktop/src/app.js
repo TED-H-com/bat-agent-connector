@@ -812,8 +812,12 @@ function paintConnection(waiting = false, paused = false) {
     notice.querySelector('summary').textContent = t('connection_details');
     notice.querySelector('code').textContent = state.managedRecovery || '';
   }
-  const help = recoveryKey ? t(recoveryKey + '_help') : t(paused ? 'sync_actions_paused' : waiting ? 'sync_waiting' : status === 'connected' ? 'desktop_polling' : 'offline_actions_paused');
-  live.title = scoped + ' — ' + help;
+  const helpKey = recoveryKey ? recoveryKey + '_help'
+    : key === 'ui_not_connected' ? 'ui_not_connected_help'
+    : key === 'ui_connecting' ? 'ui_connecting_help'
+    : key === 'ui_reconnecting' ? 'offline_actions_paused'
+    : paused ? 'sync_actions_paused' : waiting ? 'sync_waiting' : 'desktop_polling';
+  live.title = scoped + ' — ' + t(helpKey);
   for (const paint of [...connectionPainters]) paint();
 }
 let managedStatusAt = 0;
