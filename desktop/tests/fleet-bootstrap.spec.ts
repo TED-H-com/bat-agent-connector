@@ -1,6 +1,6 @@
 import {test, expect} from '@playwright/test';
 import {readFileSync, mkdirSync} from 'node:fs';
-const fixture=JSON.parse(readFileSync(new URL('./fixtures/fleet-status.json',import.meta.url),'utf8')).result;
+const fixture=JSON.parse(readFileSync(new URL('./fixtures/fleet-status.golden.json',import.meta.url),'utf8'));
 const ID='1'.repeat(32), BINDING='a'.repeat(64);
 async function setup(page:any, options:any={}) {
  await page.addInitScript(({doc,options}:any)=>{

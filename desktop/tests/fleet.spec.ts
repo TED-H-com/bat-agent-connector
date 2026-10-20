@@ -1,7 +1,7 @@
 import {test, expect} from "@playwright/test";
 import {readFileSync} from "node:fs";
 import {fleetDiagnosticsTests} from './fleet-diagnostics';
-const fixture = JSON.parse(readFileSync(new URL("./fixtures/fleet-status.json", import.meta.url), "utf8")).result;
+const fixture = JSON.parse(readFileSync(new URL("./fixtures/fleet-status.golden.json", import.meta.url), "utf8"));
 fleetDiagnosticsTests(setup, false);
 
 async function setup(page: any, options: any = {}) {
@@ -206,18 +206,18 @@ test("delayed settings status cannot mount Fleet into a later route", async ({pa
   expect(await page.evaluate(() => (window as any).__fleet.availabilityReads)).toBe(0);
 });
 
-test('Fleet preserves unmapped blocking reasons and native diagnostic codes', async ({page}) => {
+test('Fleet preserves native ownership codes in their real tunnel layer', async ({page}) => {
   await setup(page);
-  for (const native of [false, true]) {
-    await page.evaluate((native: boolean) => {
-      const row = (window as any).__fleet.doc.readiness.hosts[0];
-      Object.assign(row, {level: 'down', code: native ? 'OWNER_UNPROVEN' : null, blocking: native ? 'auth' : 'OWNER_UNPROVEN'});
-    }, native);
-    await page.getByRole('button', {name: 'Read status', exact: true}).click();
-    const status = page.locator('[data-fleet-diagnosis="node-1"]');
-    await expect(status.getByText('The background connection outcome is unconfirmed', {exact: true})).toBeVisible();
-    if (!native) await status.locator('summary').click();
-    await expect(status.locator('code').filter({hasText: 'OWNER_UNPROVEN'})).toBeVisible();
-    if (native) await expect(status.locator('code').filter({hasText: 'auth'})).toBeVisible();
-  }
+  const region = page.locator('[aria-label="Local Fleet connections"]');
+  await page.evaluate(() => {
+    const row = (window as any).__fleet.doc.readiness.hosts[0];
+    Object.assign(row, {level: 'down', code: 'OWNER_UNPROVEN', blocking: 'tunnel',
+      layers: {tunnel: false, tls: false, bat: false, workspace: false}});
+  });
+  await region.getByRole('button', {name: 'Read status', exact: true}).click();
+  const status = page.locator('[data-fleet-diagnosis="node-1"]');
+  await expect(status.getByText('The background connection outcome is unconfirmed', {exact: true})).toBeVisible();
+  await status.locator('summary').click();
+  await expect(status.locator('code').filter({hasText: 'OWNER_UNPROVEN'})).toBeVisible();
+  await expect(status.locator('code').filter({hasText: 'tunnel'})).toBeVisible();
 });

@@ -1,7 +1,7 @@
 import {test, expect} from '@playwright/test';
 import {readFileSync} from 'node:fs';
 import {fleetDiagnosticsTests} from './fleet-diagnostics';
-const fixture=JSON.parse(readFileSync(new URL('./fixtures/fleet-status.json',import.meta.url),'utf8')).result;
+const fixture=JSON.parse(readFileSync(new URL('./fixtures/fleet-status.golden.json',import.meta.url),'utf8'));
 fleetDiagnosticsTests(setup, true);
 async function setup(page:any,options:any={}) {
  if(options.clock)await page.clock.install();
@@ -15,6 +15,7 @@ async function setup(page:any,options:any={}) {
   if(command==='fleet_availability')return {configured:true,platform_supported:true,native_controls:true};
   if(!['fleet_control','fleet_request'].includes(command))throw new Error('Unexpected '+command);
   const input=structuredClone(args.input);env.calls.push(input);
+  if(env.failReceipt===input.action)throw new Error('Fixture receipt unavailable');
   if(env.hold===input.action)await new Promise<void>(resolve=>{env.release=resolve;});
   let result:any={};
   switch(input.action){
@@ -55,6 +56,22 @@ test('login picker save never changes Fleet selection or launches',async({page})
  await setup(page);await page.locator('[data-fleet-login="picker"]').uncheck();await expect.poll(()=>calls(page,'save_login')).toEqual([{action:'save_login',expected_revision:'f'.repeat(64),show_picker:false}]);expect(await calls(page,'apply_choices')).toHaveLength(0);expect(await calls(page,'launch')).toHaveLength(0);
 });
 async function launch(page:any){await page.getByRole('button',{name:'Review launch',exact:true}).click();await page.getByRole('button',{name:'Open saved selection',exact:true}).click();}
+for (const action of ['launch_status', 'migration_status']) test(`a failed ${action} read does not withdraw fresh machine evidence`, async ({page}) => {
+ await setup(page, {clock: true, lose: action === 'launch_status' ? 'launch' : 'apply_migration'});
+ if (action === 'launch_status') await launch(page);
+ else {
+  await page.locator('[data-fleet-advanced="settings"]').click();
+  await page.getByRole('combobox', {name: 'Connection monitor and startup'}).selectOption('rust');
+  await page.getByRole('button', {name: 'Review monitor and startup', exact: true}).click();
+  await page.getByRole('button', {name: 'Apply reviewed transition', exact: true}).click();
+ }
+ await page.evaluate(action => {(window as any).__fleet.failReceipt = action;}, action);
+ await refresh(page);
+ await expect(page.locator('[data-fleet-diagnosis="node-1"]')).toHaveAttribute('data-fleet-state', 'ready');
+ await expect(page.locator('.fleet-desktop [role="status"]')).toContainText('Fixture receipt unavailable');
+ expect(await calls(page, action === 'launch_status' ? 'launch' : 'apply_migration')).toHaveLength(1);
+ expect(await calls(page, 'advance_migration')).toHaveLength(0);
+});
 test('lost BAT reply retains original ID; reload never launches automatically',async({page})=>{
  await setup(page,{lose:'launch'});await launch(page);await refresh(page);expect(await calls(page,'launch')).toEqual([{action:'launch',preview_id:'3'.repeat(32)}]);await expect(page.getByRole('button',{name:'New launch review'})).toBeVisible();await page.reload();await expect(page.getByRole('button',{name:'Read status',exact:true}).first()).toBeVisible();expect(await calls(page,'launch')).toHaveLength(0);expect(await calls(page,'preview_launch')).toHaveLength(0);
 });
@@ -238,12 +255,12 @@ for (const locale of ['en-US', 'zh-TW']) test(`Tailscale wake and automatic retr
  const refreshStatus = () => region.getByRole('button', {name: locale === 'zh-TW' ? '重新讀取狀態' : 'Read status', exact: true}).click();
  await page.evaluate(() => {
   const row = (window as any).__fleet.doc.readiness.hosts[0];
-  Object.assign(row, {code: 'TAILSCALE_WAKING', level: 'degraded', blocking: 'tunnel'});
+  Object.assign(row, {code: 'TAILSCALE_WAKING', level: 'degraded', blocking: 'tunnel', layers: {tunnel: false, tls: false, bat: false, workspace: false}});
  });
  await refreshStatus();
  await expect(region.getByText(locale === 'zh-TW' ? '正在喚醒 Tailscale 連線' : 'Waking the Tailscale connection', {exact: true})).toBeVisible();
  await expect(region.getByText('TAILSCALE_WAKING', {exact: true})).not.toBeVisible();
- await page.evaluate(() => { (window as any).__fleet.doc.readiness.hosts[0].code = 'ROUTE_UNAVAILABLE'; });
+ await page.evaluate(() => { Object.assign((window as any).__fleet.doc.readiness.hosts[0], {code: 'ROUTE_UNAVAILABLE', level: 'down'}); });
  await refreshStatus();
  await expect(region.locator('[data-fleet-diagnosis="node-1"]')).toContainText(locale === 'zh-TW' ? '已設定的網路連線可用' : 'configured network connection is available');
  await expect(region.getByText('ROUTE_UNAVAILABLE', {exact: true})).not.toBeVisible();
@@ -253,19 +270,18 @@ for (const locale of ['en-US', 'zh-TW']) test(`Tailscale wake and automatic retr
  await context.close();
 });
 
-test('desktop Fleet preserves unmapped blocking reasons and native diagnostic codes', async ({page}) => {
- await setup(page);
- const region = page.locator('.fleet-desktop');
- for (const native of [false, true]) {
-  await page.evaluate((native: boolean) => {
-   const row = (window as any).__fleet.doc.readiness.hosts[0];
-   Object.assign(row, {level: 'down', code: native ? 'OWNER_UNPROVEN' : null, blocking: native ? 'tls' : 'OWNER_UNPROVEN'});
-  }, native);
+test('desktop Fleet preserves native ownership codes in their real tunnel layer', async ({page}) => {
+  await setup(page);
+  const region = page.locator('.fleet-desktop');
+  await page.evaluate(() => {
+    const row = (window as any).__fleet.doc.readiness.hosts[0];
+    Object.assign(row, {level: 'down', code: 'OWNER_UNPROVEN', blocking: 'tunnel',
+      layers: {tunnel: false, tls: false, bat: false, workspace: false}});
+  });
   await region.getByRole('button', {name: 'Read status', exact: true}).click();
-  const status = region.locator('[data-fleet-diagnosis="node-1"]');
+  const status = page.locator('[data-fleet-diagnosis="node-1"]');
   await expect(status.getByText('The background connection outcome is unconfirmed', {exact: true})).toBeVisible();
-  if (!native) await status.locator('summary').click();
+  await status.locator('summary').click();
   await expect(status.locator('code').filter({hasText: 'OWNER_UNPROVEN'})).toBeVisible();
-  if (native) await expect(status.locator('code').filter({hasText: 'tls'})).toBeVisible();
- }
+  await expect(status.locator('code').filter({hasText: 'tunnel'})).toBeVisible();
 });

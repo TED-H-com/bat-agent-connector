@@ -9399,10 +9399,16 @@ var init_fleet_strings = __esmMin((() => {
 			fleet_check_help_stopped: "按「啟動連線監控」，恢復已選機器的連線檢查。",
 			fleet_check_title_checking: "正在確認連線",
 			fleet_check_help_checking: "請稍候，畫面會自動更新檢查結果。",
+			fleet_check_title_selection_pending: "等待背景監控套用連線選擇",
+			fleet_check_help_selection_pending: "已儲存新的選擇。請等背景監控套用後重新檢查，畫面會自動更新。",
 			fleet_check_title_waking: "正在喚醒 Tailscale 連線",
 			fleet_check_help_waking: "請稍候，喚醒後會繼續檢查 BAT 是否可用。",
 			fleet_check_title_network: "目前連不到這台機器",
 			fleet_check_help_network: "先確認這台機器已開機，且已設定的網路連線可用，再重新讀取狀態。",
+			fleet_check_title_local_endpoint: "這台電腦的連線埠已被占用",
+			fleet_check_help_local_endpoint: "請在這台電腦確認哪個程式正在使用設定的本機連線埠，核對擁有權後處理埠衝突。",
+			fleet_check_title_local_ssh: "這台電腦無法使用 SSH",
+			fleet_check_help_local_ssh: "請在這台電腦安裝或修復 Windows OpenSSH 用戶端，確認 ssh 可以執行，再啟動連線監控。",
 			fleet_check_title_trust: "無法確認連到的是正確機器",
 			fleet_check_help_trust: "請向機器管理者核對 BAT 的可信連線資料，再更新這台機器的連線設定。",
 			fleet_check_title_identity: "連線授權需要更新",
@@ -9419,7 +9425,7 @@ var init_fleet_strings = __esmMin((() => {
 			fleet_check_title_configuration: "機器設定尚未完成",
 			fleet_check_help_configuration: "請依機器加入指南核對既有設定，保留原資料後再修正。",
 			fleet_check_title_ownership: "背景連線的操作結果尚未確認",
-			fleet_check_help_ownership: "先重新讀取原結果，保留現有程序與紀錄，避免重複啟動。",
+			fleet_check_help_ownership: "保留現有程序與紀錄，核對原操作回執及程序擁有權。確認原程序已結束前，不要重複啟動或刪除紀錄。",
 			fleet_check_title_timeout: "這次檢查沒有及時回覆",
 			fleet_check_help_timeout: "稍候再重新讀取狀態，以確認這台機器是否已恢復。",
 			fleet_check_title_unknown: "需要進一步檢查",
@@ -9448,10 +9454,16 @@ var init_fleet_strings = __esmMin((() => {
 			fleet_check_help_stopped: "Choose Start connection monitor to resume checks for your selected machines.",
 			fleet_check_title_checking: "Checking the connection",
 			fleet_check_help_checking: "Please wait. The check results will update automatically.",
+			fleet_check_title_selection_pending: "Waiting for the monitor to apply connection choices",
+			fleet_check_help_selection_pending: "The new choices are saved. Wait for the background monitor to apply them and check the connections. Results update automatically.",
 			fleet_check_title_waking: "Waking the Tailscale connection",
 			fleet_check_help_waking: "Please wait. BAT availability will be checked after the connection wakes.",
 			fleet_check_title_network: "This machine cannot be reached",
 			fleet_check_help_network: "Check that the machine is on and its configured network connection is available, then read status again.",
+			fleet_check_title_local_endpoint: "The local connection port is already in use",
+			fleet_check_help_local_endpoint: "On this PC, identify the program using the configured local port and verify ownership before resolving the port conflict.",
+			fleet_check_title_local_ssh: "SSH is unavailable on this PC",
+			fleet_check_help_local_ssh: "Install or repair the Windows OpenSSH client on this PC, check that ssh can run, then start the connection monitor.",
 			fleet_check_title_trust: "The machine’s identity could not be verified",
 			fleet_check_help_trust: "Verify the trusted BAT connection details with the machine’s administrator before updating this connection.",
 			fleet_check_title_identity: "Connection authorization needs updating",
@@ -9468,7 +9480,7 @@ var init_fleet_strings = __esmMin((() => {
 			fleet_check_title_configuration: "Machine setup is incomplete",
 			fleet_check_help_configuration: "Review the existing settings with the machine setup guide, preserving the original data before correcting them.",
 			fleet_check_title_ownership: "The background connection outcome is unconfirmed",
-			fleet_check_help_ownership: "Read back the original result first. Keep existing processes and records to avoid duplicate starts.",
+			fleet_check_help_ownership: "Keep existing processes and records, and verify the original operation receipt and process ownership. Do not start another process or delete records until the original process is confirmed to have exited.",
 			fleet_check_title_timeout: "This check did not reply in time",
 			fleet_check_help_timeout: "Read status again shortly to check whether this machine has recovered.",
 			fleet_check_title_unknown: "Further checking is needed",
@@ -15463,10 +15475,15 @@ function projectNavigation({ t, namespace, workspaceId, views, current, discussi
 		class: "ui-button ghost",
 		"data-pm-view": id,
 		"aria-current": current === id ? "page" : "false",
+		"aria-describedby": `project-nav-${encodeURIComponent(workspaceId)}-${id}-hint`,
 		onclick: () => {
 			location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${id}`;
 		}
-	}, icon(viewIcons[id], { size: 20 }), h$1("span", { class: "shell-view-copy" }, h$1("span", {}, t("ui_" + id)), h$1("span", { class: "shell-view-hint" }, t("ui_nav_" + id))), id === "discussions" ? discussionCount : null);
+	}, icon(viewIcons[id], { size: 20 }), h$1("span", { class: "shell-view-copy" }, h$1("span", {}, t("ui_" + id)), h$1("span", {
+		class: "shell-view-hint",
+		"aria-hidden": "true",
+		id: `project-nav-${encodeURIComponent(workspaceId)}-${id}-hint`
+	}, t("ui_nav_" + id))), id === "discussions" ? discussionCount : null);
 	const primary = dailyViews.filter((id) => views.includes(id));
 	const secondary = views.filter((id) => !dailyViews.includes(id));
 	if (preference.current !== current && secondary.includes(current)) preference.expanded = true;
@@ -58365,16 +58382,18 @@ function nativeAttachments({ h, t, guard, canWrite, draftId, onReceipt, onDiscar
 }
 //#endregion
 //#region src/fleet-status.js
-function fleetDiagnosis(row, { snapshot, readable, kind = "host", name } = {}) {
+function fleetDiagnosis(row, { snapshot, readable, kind = "host" } = {}) {
 	const layers = row?.layers || {};
 	const reason = row?.code || row?.blocking;
 	let state;
 	if (!readable) state = "unavailable";
-	else if (!snapshot?.configuration.valid) state = "configuration";
-	else if (!snapshot.selection.connections.includes(name)) state = "off";
+	else if (row?.selected === false || row?.level === "off") state = "off";
+	else if (lookup(codeReason, reason) === "ownership") state = "ownership";
 	else if (snapshot.monitor.state === "stopped") state = "stopped";
-	else if (snapshot.monitor.state !== "running" || snapshot.readiness.state !== "fresh" || row?.stale || row?.blocking === "stale") state = "stale";
-	else if (snapshot.selection.applied_revision !== snapshot.selection.revision || !row || row.selected !== true) state = "checking";
+	else if (snapshot.monitor.state !== "running" || snapshot.readiness.state === "unavailable") state = "checking";
+	else if (snapshot.selection.applied_revision !== snapshot.selection.revision) state = "selection_pending";
+	else if (snapshot.readiness.state !== "fresh" || row?.stale || row?.blocking === "stale") state = "stale";
+	else if (!row || row.selected !== true) state = "checking";
 	else if (reason) state = lookup(codeReason, reason) || lookup(layerReason, row.blocking) || "unknown";
 	else if (row.level === "ready" && layers.tunnel === true && (kind === "connector" ? !["unknown", "refused"].includes(layers.auth) : layers.tls === true && layers.auth === "ok" && layers.bat === true && layers.workspace === true)) state = "ready";
 	else state = "checking";
@@ -58385,17 +58404,20 @@ function fleetDiagnosis(row, { snapshot, readable, kind = "host", name } = {}) {
 		"stopped",
 		"stale",
 		"checking",
+		"selection_pending",
 		"unknown",
 		"ownership"
 	].includes(state);
-	const blockedAt = lookup(layerStep, row?.blocking) || {
+	const blockedAt = (reason === "BAT_PROTOCOL_INVALID" ? "service" : lookup(layerStep, row?.blocking)) || {
 		network: "network",
 		waking: "network",
 		trust: "identity",
 		identity: "identity",
 		service: "service",
 		version: "service",
-		workspace: "workspace"
+		workspace: "workspace",
+		local_endpoint: "network",
+		local_ssh: "network"
 	}[state];
 	const steps = [
 		["network", layers.tunnel === true],
@@ -58471,6 +58493,11 @@ var init_fleet_status = __esmMin((() => {
 		INVENTORY_INVALID: "configuration",
 		OWNER_UNPROVEN: "ownership",
 		STOP_UNCONFIRMED: "ownership",
+		TUNNEL_START_UNSETTLED: "ownership",
+		TUNNEL_RECORD_CHANGED: "ownership",
+		OTHER_LOGIN_OWNER: "ownership",
+		ENDPOINT_IN_USE: "local_endpoint",
+		SSH_UNAVAILABLE: "local_ssh",
 		PROBE_PENDING: "checking",
 		PROBE_TIMEOUT: "timeout",
 		PROBE_STALE: "stale"
@@ -58748,24 +58775,32 @@ async function mountFleetDesktop(main, { h, t }) {
 			const value = await fleetControl({ action: "overview" });
 			if (!alive()) return;
 			accept(value);
-			if (launch?.attempted) {
-				const receipt = await fleetControl({
-					action: "launch_status",
-					launch_id: launch.preview_id
-				});
-				if (alive() && receipt) acceptLaunch(receipt);
-			}
-			if (migration?.accepted) {
-				const receipt = await fleetControl({
-					action: "migration_status",
-					migration_id: migration.preview_id
-				});
-				if (alive()) acceptMigration(receipt);
-			}
 		} catch (error) {
 			readable = false;
 			throw error;
 		}
+		const failures = [];
+		if (launch?.attempted) try {
+			const receipt = await fleetControl({
+				action: "launch_status",
+				launch_id: launch.preview_id
+			});
+			if (alive() && receipt) acceptLaunch(receipt);
+		} catch (error) {
+			if (alive()) launch.receipt = null;
+			failures.push(error);
+		}
+		if (migration?.accepted) try {
+			const receipt = await fleetControl({
+				action: "migration_status",
+				migration_id: migration.preview_id
+			});
+			if (alive()) acceptMigration(receipt);
+		} catch (error) {
+			if (alive()) migration.receipt = null;
+			failures.push(error);
+		}
+		if (failures.length) throw failures[0];
 	};
 	const reviewChoices = () => run(async () => {
 		const value = await fleetControl({

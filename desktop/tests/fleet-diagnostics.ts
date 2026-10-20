@@ -2,7 +2,8 @@ import {test, expect, type Page} from '@playwright/test';
 
 // Exercise both existing native IPC surfaces with the same user-visible failures.
 export function fleetDiagnosticsTests(setup: (page: Page, options?: any) => Promise<void>, native: boolean) {
-  const region = (page: Page) => page.locator(native ? '.fleet-desktop' : '[aria-label="Local Fleet connections"]');
+  const region = (page: Page) => page.locator(native ? '.fleet-desktop'
+    : 'section:is([aria-label="Local Fleet connections"], [aria-label="本機 Fleet 連線"])');
   const check = (page: Page) => region(page).getByRole('button', {name: 'Read status', exact: true}).first().click();
   const machine = (page: Page) => page.locator('[data-fleet-diagnosis="node-1"]');
   const selection = native ? '[data-fleet-choice="connections:node-2"]' : '[data-fleet-name="node-2"]';
@@ -45,23 +46,90 @@ export function fleetDiagnosticsTests(setup: (page: Page, options?: any) => Prom
 
   test('stopped monitoring and unapplied selection never present old ready rows as current', async ({page}) => {
     await setup(page, {clock: true});
-    await page.evaluate(() => {(window as any).__fleet.doc.monitor.state = 'stopped';});
+    await page.evaluate(() => {
+      const doc = (window as any).__fleet.doc;
+      (window as any).__fleet.previousReadiness = structuredClone(doc.readiness);
+      doc.monitor = {state: 'stopped', epoch: null, controllable: false};
+      doc.selection.applied_revision = null;
+      doc.readiness = {state: 'unavailable', observed_at: null, hosts: [], connector: null};
+    });
     await check(page);
     await expect(machine(page)).toHaveAttribute('data-fleet-state', 'stopped');
     await page.evaluate(() => {
       const doc = (window as any).__fleet.doc;
-      doc.monitor.state = 'running'; doc.selection.applied_revision = 'old';
+      doc.monitor = {state: 'running', epoch: 'a'.repeat(32), controllable: true};
+      doc.selection.applied_revision = 'e'.repeat(64);
+      doc.readiness = (window as any).__fleet.previousReadiness;
+      doc.readiness.state = 'stale';
+      for (const row of [...doc.readiness.hosts, doc.readiness.connector]) {
+        Object.assign(row, {level: 'degraded', code: 'PROBE_PENDING', observed_at: null,
+          blocking: row.name === 'connector' ? 'connector' : 'bat',
+          layers: {tunnel: false, tls: false, bat: false, workspace: false}});
+      }
     });
     await check(page);
-    await expect(machine(page)).toHaveAttribute('data-fleet-state', 'checking');
+    await expect(machine(page)).toHaveAttribute('data-fleet-state', 'selection_pending');
     await page.evaluate(() => {
       const doc = (window as any).__fleet.doc;
       doc.selection.applied_revision = doc.selection.revision; doc.readiness.state = 'stale';
+      for (const row of [...doc.readiness.hosts, doc.readiness.connector]) {
+        Object.assign(row, {stale: true, code: 'PROBE_STALE', blocking: 'stale'});
+      }
     });
     await check(page);
     await expect(machine(page)).toHaveAttribute('data-fleet-state', 'stale');
     await expect(region(page).locator('[data-check-state="passed"]')).toHaveCount(0);
     expect(await writes(page)).toEqual([]);
+  });
+
+  for (const locale of ['en-US', 'zh-TW']) test(`row evidence, local failures and monitor transitions ${locale}`, async ({browser}) => {
+    const context = await browser.newContext({locale});
+    const page = await context.newPage();
+    await setup(page, {clock: true});
+    const refresh = () => region(page).getByRole('button', {
+      name: locale === 'zh-TW' ? '重新讀取狀態' : 'Read status', exact: true,
+    }).first().click();
+    await page.evaluate(() => {
+      const doc = (window as any).__fleet.doc;
+      doc.selection.connections = doc.selection.connections.filter((name: string) => !['node-1', 'connector'].includes(name));
+      doc.configuration.valid = false; doc.configuration.issue_count = 1;
+      Object.assign(doc.readiness.hosts[1], {code: 'PROFILE_DRIFT', blocking: 'inventory', level: 'down',
+        layers: {tunnel: false, tls: false, bat: false, workspace: false}});
+    });
+    await refresh();
+    await expect(machine(page)).toHaveAttribute('data-fleet-state', 'ready');
+    await expect(page.locator('[data-fleet-diagnosis="connector"]')).toHaveAttribute('data-fleet-state', 'ready');
+    await expect(page.locator('[data-fleet-diagnosis="node-2"]')).toHaveAttribute('data-fleet-state', 'configuration');
+    await page.evaluate(() => {
+      const row = (window as any).__fleet.doc.readiness.connector;
+      Object.assign(row, {selected: false, level: 'off', observed_at: null,
+        layers: {tunnel: false, tls: false, bat: false, workspace: false}});
+    });
+    await refresh();
+    await expect(page.locator('[data-fleet-diagnosis="connector"]')).toHaveAttribute('data-fleet-state', 'off');
+    for (const [code, state] of Object.entries({TUNNEL_START_UNSETTLED: 'ownership',
+      TUNNEL_RECORD_CHANGED: 'ownership', OTHER_LOGIN_OWNER: 'ownership',
+      ENDPOINT_IN_USE: 'local_endpoint', SSH_UNAVAILABLE: 'local_ssh'})) {
+      await page.evaluate(code => {
+        Object.assign((window as any).__fleet.doc.readiness.hosts[0], {code, level: 'down', blocking: 'tunnel',
+          layers: {tunnel: false, tls: false, bat: false, workspace: false}});
+      }, code);
+      await refresh();
+      await expect(machine(page)).toHaveAttribute('data-fleet-state', state);
+      await expect(machine(page).locator('details')).not.toHaveAttribute('open', '');
+      await expect(machine(page).getByText(code, {exact: true})).not.toBeVisible();
+    }
+    await page.evaluate(() => {
+      const doc = (window as any).__fleet.doc;
+      doc.readiness = {state: 'unavailable', observed_at: null, hosts: [], connector: null};
+      doc.selection.applied_revision = null;
+    });
+    await refresh();
+    await expect(machine(page)).toHaveAttribute('data-fleet-state', 'checking');
+    await expect(machine(page)).toContainText(locale === 'zh-TW'
+      ? '請稍候，畫面會自動更新檢查結果。' : 'Please wait. The check results will update automatically.');
+    expect(await writes(page)).toEqual([]);
+    await context.close();
   });
 
   for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 1440]) {
@@ -71,10 +139,14 @@ export function fleetDiagnosticsTests(setup: (page: Page, options?: any) => Prom
       await setup(page, {clock: true});
       await page.evaluate(() => {
         const rows = (window as any).__fleet.doc.readiness.hosts;
-        Object.assign(rows[0], {code: 'BAT_AUTH_REFUSED', blocking: 'auth', level: 'down'});
-        Object.assign(rows[1], {code: 'WORKSPACE_BINDING_MISMATCH', blocking: 'workspace', level: 'down'});
-        Object.assign(rows[2], {code: 'ROUTE_UNAVAILABLE', blocking: 'tunnel', level: 'down'});
-        rows[3].stale = true;
+        Object.assign(rows[0], {code: 'BAT_AUTH_REFUSED', blocking: 'auth', level: 'down',
+          layers: {tunnel: true, tls: true, auth: 'refused', bat: false, workspace: false}});
+        Object.assign(rows[1], {code: 'WORKSPACE_BINDING_MISMATCH', blocking: 'workspace', level: 'down',
+          layers: {tunnel: true, tls: true, auth: 'ok', bat: true, workspace: false, version: '3.2.5'}});
+        Object.assign(rows[2], {code: 'ROUTE_UNAVAILABLE', blocking: 'tunnel', level: 'down',
+          layers: {tunnel: false, tls: false, bat: false, workspace: false}});
+        Object.assign(rows[3], {stale: true, level: 'degraded', code: 'PROBE_STALE', blocking: 'stale',
+          layers: {tunnel: false, tls: false, bat: false, workspace: false}});
       });
       await page.clock.fastForward(5000);
       await expect(machine(page)).toHaveAttribute('data-fleet-state', 'identity');

@@ -79,17 +79,26 @@ export async function mountFleetDesktop(main, {h, t}) {
   const read = async () => {
     try {
       const value = await fleetControl({action:"overview"}); if (!alive()) return; accept(value);
-      if (launch?.attempted) {
+    } catch (error) {readable = false; throw error;}
+    // Receipts and machine observations have independent read boundaries. A
+    // failed receipt lookup keeps its original ID pending without withdrawing
+    // a successfully read overview or skipping the other receipt lookup.
+    const failures = [];
+    if (launch?.attempted) {
+      try {
         const receipt = await fleetControl({action:"launch_status",launch_id:launch.preview_id});
         if (alive() && receipt) {
           acceptLaunch(receipt);
         }
-      }
-      if (migration?.accepted) {
+      } catch (error) {if (alive()) launch.receipt = null; failures.push(error);}
+    }
+    if (migration?.accepted) {
+      try {
         const receipt = await fleetControl({action:"migration_status",migration_id:migration.preview_id});
         if (alive()) acceptMigration(receipt);
-      }
-    } catch (error) {readable = false; throw error;}
+      } catch (error) {if (alive()) migration.receipt = null; failures.push(error);}
+    }
+    if (failures.length) throw failures[0];
   };
   const reviewChoices = () => run(async () => {
     const value = await fleetControl({action:"preview_choices", choices:choices(draft), configuration_binding:binding,

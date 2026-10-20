@@ -1,11 +1,11 @@
 # Product screenshots
 
 These sixteen unedited PNGs show the real shared browser frontend from merged main
-`265026d4c1fc2bc04a9aaa727d566c1a2906b256`, using the single membership demo project
+`14c62830240148b14a4d28a9c428f7f8b5ba8bf3`, using the single membership demo project
 in [`desktop/tests/demo/index.ts`](../../desktop/tests/demo/index.ts).
-This pin is merged main through #205 on 2026-10-16. It includes `work.start`, the Start work panel, fixed Result reads, and a read-only Result section in the Board's Work inspector (E03 part A). The public gallery does not show that panel: the synthetic demo does not advertise `work.start`, the Board inspector is closed, and the manual session says its host is not set up for managed work. The panel needs the `work.start` capability, a configured BAT host and a bound repository. Not merged: a second instruction to the same Work (P5), adopt-and-start in one step (P6), reading current changes and per-commit diffs on request (E03 part B), work profiles and readiness (E01), MCP/API loop parity (E10), and the closed loop end to end. No real BAT start, follow-up or Result has been observed.
+This is the published Connector 0.2.12 / desktop 0.1.8 source through #314 (2026-10-19). It includes the merged Work loop: start, adopt-and-start, a second instruction to the same Work, fixed Results and requested diffs, profiles/readiness, verification, PR delivery and API/MCP parity. This compact gallery shows existing PM views and a read-only manual session; it does not open Start work or the Work Result inspector. Those features require the configured capabilities, BAT host and bound repository. Native coding/AHP routes, full PM lifecycle work and real BAT/model/device acceptance remain separate open work.
 The development preview is shared-browser evidence; this refresh provides no installation or live acceptance evidence.
-The [progress report](../../docs/product/progress-2026-10-16.md) separates those states and lists every PR merged after `d66f032d`.
+The [current implementation status](../../docs/product/implementation-status.md) separates published source, historical installation receipts and pending acceptance.
 
 | Images (English / zh-TW) | Scene and state |
 | --- | --- |

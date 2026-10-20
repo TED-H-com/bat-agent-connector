@@ -9,9 +9,11 @@ export function projectNavigation({t, namespace, workspaceId, views, current, di
   const preference = viewState(namespace, workspaceId, 'project-navigation');
   const entry = id => h('button', {type: 'button', class: 'ui-button ghost', 'data-pm-view': id,
     'aria-current': current === id ? 'page' : 'false',
+    'aria-describedby': `project-nav-${encodeURIComponent(workspaceId)}-${id}-hint`,
     onclick: () => {location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${id}`;}},
   icon(viewIcons[id], {size: 20}), h('span', {class: 'shell-view-copy'},
-    h('span', {}, t('ui_' + id)), h('span', {class: 'shell-view-hint'}, t('ui_nav_' + id))),
+    h('span', {}, t('ui_' + id)), h('span', {class: 'shell-view-hint', 'aria-hidden': 'true',
+      id: `project-nav-${encodeURIComponent(workspaceId)}-${id}-hint`}, t('ui_nav_' + id))),
   id === 'discussions' ? discussionCount : null);
   const primary = dailyViews.filter(id => views.includes(id));
   const secondary = views.filter(id => !dailyViews.includes(id));

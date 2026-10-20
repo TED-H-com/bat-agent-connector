@@ -1,6 +1,7 @@
 import {test, expect} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture} from './demo/index.ts';
+import {STRINGS} from '../src/i18n.js';
 
 for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) for (const width of [390, 1440]) {
   test(`everyday navigation, keyboard access and complete management ${native ? 'native' : 'web'} ${locale} ${width}`, async ({browser, baseURL}, testInfo) => {
@@ -24,6 +25,13 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) for (c
     const summary = group.locator('summary');
     await summary.focus(); await page.keyboard.press('Enter');
     await expect(rail.locator('[data-pm-view]:visible')).toHaveCount(8);
+    for (const button of await rail.locator('[data-pm-view]').all()) {
+      const view = await button.getAttribute('data-pm-view');
+      const badge = button.locator('.shell-count');
+      const count = await badge.count() ? ` ${await badge.getAttribute('aria-label')}` : '';
+      await expect(button).toHaveAccessibleName(STRINGS[locale]['ui_' + view] + count);
+      await expect(button).toHaveAccessibleDescription(STRINGS[locale]['ui_nav_' + view]);
+    }
     await page.keyboard.press('Tab');
     await expect(rail.locator('[data-pm-view=requirements]')).toBeFocused();
     await page.keyboard.press('Enter');
