@@ -1,5 +1,4 @@
 import {test, expect, type Page} from '@playwright/test';
-import {mkdir} from 'node:fs/promises';
 const id = 'op_'+'a'.repeat(32), child = 'op_'+'b'.repeat(32), item = 'bapi_'+'c'.repeat(24);
 async function fixture(page: Page, native: boolean, options: any = {}) {
   const state = {actor: 'approval-person', server: 'approval-server', principal: 'approval-principal',
@@ -250,10 +249,10 @@ for (const native of [false, true]) {
   });
 }
 for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
-  test(`approval layout ${locale} ${width}`, async ({page}) => {
+  test(`approval layout ${locale} ${width}`, async ({page}, testInfo) => {
     await page.addInitScript(language => Object.defineProperty(navigator, 'language', {value: language}), locale);
     await page.setViewportSize({width, height: 1000}); await fixture(page, true, {truncated: true}); await open(page, locale);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await mkdir('/tmp/bac-approvals-ui', {recursive: true}); await page.screenshot({path: `/tmp/bac-approvals-ui/${locale}-${width}.png`, fullPage: true});
+    await page.screenshot({path: testInfo.outputPath(`${locale}-${width}.png`), fullPage: true});
   });
 }

@@ -1,4 +1,3 @@
-import {mkdirSync} from 'node:fs';
 import {expect, test, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture} from './demo/index.ts';
@@ -31,15 +30,11 @@ const text = {
 
 type Locale = keyof typeof text;
 
-function shotDir() {
-  return process.env.BATC_GLOBAL_SHOTS_DIR || `${process.env.TMPDIR || '/tmp'}/shots`;
-}
-
 async function shot(page: Page, name: string) {
+  const testInfo = test.info();
   if (process.env.BATC_GLOBAL_SHOTS !== '1') return;
   await page.evaluate(() => {if (document.activeElement instanceof HTMLElement) document.activeElement.blur();});
-  mkdirSync(shotDir(), {recursive: true});
-  await page.screenshot({path: `${shotDir()}/${name}.png`, fullPage: true});
+  await page.screenshot({path: testInfo.outputPath(`${name}.png`), fullPage: true});
 }
 
 async function expectNoOverflow(page: Page) {

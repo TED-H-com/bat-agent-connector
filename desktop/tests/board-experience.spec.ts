@@ -1,5 +1,4 @@
 import {test, expect, type Locator} from '@playwright/test';
-import {mkdir} from 'node:fs/promises';
 import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture} from './demo/index.ts';
 import {parseDiscussRefs} from '../src/pm-discuss-link.js';
@@ -13,7 +12,7 @@ async function expectMetaRows(board: Locator) {
   }))).toBe(true);
 }
 
-for (const locale of ['en', 'zh-TW']) for (const width of [1440, 1000, 768, 390]) test(`board filtering and inspector ${locale} ${width}`, async ({browser, baseURL}) => {
+for (const locale of ['en', 'zh-TW']) for (const width of [1440, 1000, 768, 390]) test(`board filtering and inspector ${locale} ${width}`, async ({browser, baseURL}, testInfo) => {
   const context = await browser.newContext({baseURL, locale, reducedMotion: 'reduce', viewport: {width, height: 900}}), page = await context.newPage();
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {if (message.type() === 'error') errors.push(message.text() + ' ' + message.location().url);});
@@ -65,8 +64,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 1000, 768, 390]
     await expect(pr).toHaveAccessibleName(`PR #${number} · example/membership · ${locale === 'en' ? 'Merged' : '已合併'}`);
     await expect(pr).toHaveCSS('text-overflow', 'ellipsis');
   }
-  const out = process.env.BATC_WORK_VIEW_SCREENSHOTS || `${process.env.TMPDIR || '/tmp'}/shots`; await mkdir(out, {recursive: true});
-  await page.screenshot({path: `${out}/board-${locale}-${width}.png`, fullPage: true});
+  await page.screenshot({path: testInfo.outputPath(`board-${locale}-${width}.png`), fullPage: true});
   await expect(board.getByLabel(locale === 'en' ? 'Agent' : '代理', {exact: true}).locator('option[value="codex"]')).toHaveText('Codex');
   await board.getByLabel(locale === 'en' ? 'Agent' : '代理', {exact: true}).selectOption('codex');
   await expect(board.locator('[data-pm-kanban-work]:visible')).toHaveCount(1);
@@ -112,7 +110,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 1000, 768, 390]
     await card.locator('[data-board-open]').focus(); await card.locator('[data-board-open]').press('Enter'); await expect.poll(fullyVisible).toBe(true);
     await expect(inspector.locator('[data-work-section=blocker]')).toContainText(locale === 'en' ? 'A linked task is blocked' : '連結的任務受阻');
   }
-  await page.screenshot({path: `${out}/board-inspector-${locale}-${width}.png`, fullPage: false});
+  await page.screenshot({path: testInfo.outputPath(`board-inspector-${locale}-${width}.png`), fullPage: false});
   await page.keyboard.press('Escape'); await expect(card.locator('[data-board-open]')).toBeFocused();
   await card.locator('[data-board-open]').click();
   await inspector.locator('[data-work-actions]').getByRole('button').click();
@@ -128,6 +126,6 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 1000, 768, 390]
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(await page.locator('body').innerText()).not.toMatch(/\b(?:undefined|null|NaN|wv_\w+)\b/);
-  if (width === 1440) {await page.emulateMedia({colorScheme: 'dark'}); await page.screenshot({path: `${out}/board-dark-${locale}-1440.png`, fullPage: true});}
+  if (width === 1440) {await page.emulateMedia({colorScheme: 'dark'}); await page.screenshot({path: testInfo.outputPath(`board-dark-${locale}-1440.png`), fullPage: true});}
   expect(errors).toEqual([]); await context.close();
 });

@@ -1,5 +1,4 @@
 import {test,expect} from '@playwright/test';
-import {mkdir} from 'node:fs/promises';
 import {labelsFixture,openLabels,target,opId} from './session-labels-fixture';
 for(const native of [false,true]){
  const name=native?'native':'browser';
@@ -111,12 +110,12 @@ test('loaded session search matches labels while preserving title and grouping',
  await expect(page.locator('.session-entry')).toContainText('Review the shared dashboard');await expect(page.locator('.session-entry')).toContainText('+1');
  await page.locator('#main input[type=search]').fill('not-loaded');await expect(page.locator('.session-entry')).toHaveCount(0);expect(state.posts).toHaveLength(0);
 });
-for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`labels layout ${locale} ${width}`,async({page})=>{
+for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`labels layout ${locale} ${width}`,async({page}, testInfo)=>{
  await page.addInitScript(language=>Object.defineProperty(navigator,'language',{value:language}),locale);
  await labelsFixture(page,false,{metadata:{version:1,labels:['待確認','介面整理']}});await page.setViewportSize({width,height:900});
  const panel=await openLabels(page);await panel.getByRole('textbox').fill('待確認\n介面整理');
  await expect(panel).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
- await mkdir('/tmp/bac-labels-after',{recursive:true});await page.screenshot({path:`/tmp/bac-labels-after/${locale}-${width}.png`,fullPage:true});
+ await page.screenshot({path:testInfo.outputPath(`${locale}-${width}.png`),fullPage:true});
 });
 
 for(const native of [false,true])test(`${native?'native':'browser'}: detached POST reply cannot read old session in a new view`,async({page})=>{

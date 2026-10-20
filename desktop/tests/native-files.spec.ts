@@ -1,5 +1,4 @@
 import {test, expect, type Page} from "@playwright/test";
-import {mkdir} from "node:fs/promises";
 const wid="wi_"+"d".repeat(20), oid="op_"+"a".repeat(32), aid="art_"+"b".repeat(32), digest="c".repeat(64);
 const ref={artifact_id:aid,revision:1,digest};
 async function fixture(page:Page) {
@@ -140,7 +139,7 @@ test("same-principal unavailable native receipt stays visible without retargetin
   expect(state.receipts[0].intent_key).toBe(original.intent_key);expect(state.calls.some(c=>c.command==="native_files_control"&&c.args.action==="cancel_upload")).toBe(false);expect(state.errors).toEqual([]);
 });
 
-for(const locale of ["en-US","zh-TW"])for(const width of [390,768,1440])test(`native transfers ${locale} ${width}px`,async({browser})=>{
+for(const locale of ["en-US","zh-TW"])for(const width of [390,768,1440])test(`native transfers ${locale} ${width}px`,async({browser}, testInfo)=>{
   const context=await browser.newContext({locale,viewport:{width,height:900}});const page=await context.newPage();
   try{
     const state=await fixture(page);await open(page,locale);await page.getByRole("button",{name:locale==="en-US"?"Choose files":"選擇檔案",exact:true}).click();
@@ -148,6 +147,6 @@ for(const locale of ["en-US","zh-TW"])for(const width of [390,768,1440])test(`na
     await page.locator(".attachments select").first().selectOption(aid+":1");await page.getByRole("button",{name:locale==="en-US"?"Add attachment":"加入附件",exact:true}).click();
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await page.evaluate(()=>scrollTo(0,0));await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
-    await mkdir("/tmp/bac-native-files-after",{recursive:true});await page.screenshot({path:`/tmp/bac-native-files-after/native-${locale}-${width}.png`,fullPage:true});expect(state.errors).toEqual([]);
+    await page.screenshot({path:testInfo.outputPath(`native-${locale}-${width}.png`),fullPage:true});expect(state.errors).toEqual([]);
   }finally{await context.close();}
 });

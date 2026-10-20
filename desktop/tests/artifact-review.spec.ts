@@ -1,7 +1,7 @@
 import {expectErrorDetails, expectClientError} from './api-error-assertions.ts';
 import {test,expect,type Page} from '@playwright/test';
 import {createHash} from 'node:crypto';
-import {readFile,mkdir} from 'node:fs/promises';
+import {readFile} from 'node:fs/promises';
 const captureId='op_'+'a'.repeat(32),acceptId='op_'+'b'.repeat(32),executionId='op_'+'c'.repeat(32),artifactId='art_'+'d'.repeat(32);
 const taskId='11111111-2222-4333-8444-555555555555',ref={artifact_id:artifactId,revision:1,digest:'e'.repeat(64)},selector={execution_operation_id:executionId};
 const source={host:'demo',session_id:'managed-session',root:'/managed/work',repository_root:'/managed/work',provenance:'connector_managed',selector,lineage:{kind:'execution_operation',execution_operation_id:executionId}};
@@ -62,7 +62,7 @@ async function contentFixture(page:Page,native:boolean,options:any={}){
 
 async function captureForm(page:Page){await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');const box=page.locator('[data-managed-capture]');await box.getByRole('combobox',{name:'Connector execution evidence'}).selectOption(JSON.stringify(selector));await box.getByRole('textbox',{name:'Relative file path'}).fill('result.txt');await box.getByRole('button',{name:'Preview source file',exact:true}).click();await expect(box).toContainText(ref.digest);await box.getByRole('checkbox').check();return box;}
 for (const locale of ['en-US', 'zh-TW']) for (const width of [1440, 390]) {
- test(`Connector execution evidence wording ${locale} ${width}`,async({browser})=>{
+ test(`Connector execution evidence wording ${locale} ${width}`,async({browser}, testInfo)=>{
   const context=await browser.newContext({locale,colorScheme:'light',viewport:{width,height:width===390?844:900}});
   const page=await context.newPage(),state=await fixture(page,false),zh=locale==='zh-TW';
   await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');
@@ -73,9 +73,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [1440, 390]) {
   await expect(execution).toHaveValue(JSON.stringify(selector));
   expect(await capture.innerText()).not.toMatch(/\bcentral\b|中央/i);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  const folder=process.env.POLISH_COPY_SCREENSHOTS||`${process.env.TMPDIR||'/tmp'}/polish-copy-shots`;
-  await mkdir(folder,{recursive:true});
-  await page.screenshot({path:`${folder}/artifact-review-${locale}-${width}.png`,fullPage:true});
+  await page.screenshot({path:testInfo.outputPath(`artifact-review-${locale}-${width}.png`),fullPage:true});
   expect(state.writes).toEqual([]);expect(state.errors).toEqual([]);await context.close();
  });
 }

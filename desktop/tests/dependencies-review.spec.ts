@@ -643,7 +643,7 @@ for (const locale of ['en', 'zh-TW'] as const) test.describe(`dependency clarity
 
 if (process.env.BATC_DEP_SHOTS === '1') for (const locale of ['en', 'zh-TW'] as const) {
   for (const variant of [{width: 1440, dark: false}, {width: 1000, dark: false}, {width: 768, dark: false}, {width: 390, dark: false}, {width: 1440, dark: true}]) {
-    test(`screenshots: ${locale} ${variant.width} ${variant.dark ? 'dark' : 'light'}`, async ({browser, baseURL}) => {
+    test(`screenshots: ${locale} ${variant.width} ${variant.dark ? 'dark' : 'light'}`, async ({browser, baseURL}, testInfo) => {
       const {width, dark} = variant;
       const context = await browser.newContext({baseURL, locale: locale === 'en' ? 'en-US' : 'zh-TW', viewport: {width, height: width === 390 ? 844 : width === 768 ? 1024 : 900}, reducedMotion: 'reduce'});
       const page = await context.newPage();
@@ -651,15 +651,13 @@ if (process.env.BATC_DEP_SHOTS === '1') for (const locale of ['en', 'zh-TW'] as 
       page.on('pageerror', error => errors.push(error.message));
       const harness = await mount(page, {locale});
       await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), dark ? 'dark' : 'light');
-      const directory = process.env.BATC_DEP_SHOT_DIR || `${process.env.TMPDIR || '/tmp'}/shots`;
-      mkdirSync(directory, {recursive: true});
       const shot = async (state: string) => {
         if (process.env.BATC_DEP_SHOT_STATE && state !== process.env.BATC_DEP_SHOT_STATE) return;
         expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
         const text = await page.locator('#main').innerText();
         expect(text).not.toMatch(/\b(?:undefined|null|NaN)\b|ui_reason_|dep_/);
         await page.evaluate(() => scrollTo(0, 0));
-        await page.screenshot({path: `${directory}/dep-${locale}-${width}-${dark ? 'dark' : 'light'}-${state}.png`, fullPage: true, animations: 'disabled'});
+        await page.screenshot({path: testInfo.outputPath(`dep-${locale}-${width}-${dark ? 'dark' : 'light'}-${state}.png`), fullPage: true, animations: 'disabled'});
       };
       await shot(width > 800 ? 'matrix' : 'list');
       await page.getByRole('radio', {name: locale === 'en' ? 'Graph' : '關係圖', exact: true}).click();

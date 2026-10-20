@@ -1,9 +1,8 @@
 import {test, expect} from '@playwright/test';
-import {mkdir} from 'node:fs/promises';
 import {orchestrationFixture, openOrchestration, chooseTarget, fillOrchestration, operationId, childId} from './orchestration-fixture';
 const primary = (form: any) => form.locator('button.primary');
 for (const locale of ['en-US', 'zh-TW']) for (const width of [1440, 390]) {
-  test(`Connector target and policy wording ${locale} ${width}`, async ({browser}) => {
+  test(`Connector target and policy wording ${locale} ${width}`, async ({browser}, testInfo) => {
     const context = await browser.newContext({locale, colorScheme: 'light', viewport: {width, height: width === 390 ? 844 : 900}});
     const page = await context.newPage(), state = await orchestrationFixture(page, false);
     const form = await openOrchestration(page, 'relay'), zh = locale === 'zh-TW';
@@ -17,9 +16,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [1440, 390]) {
     await expect(target).toHaveValue('managed-exact');
     expect(await form.innerText()).not.toMatch(/\bcentral\b|中央/i);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    const folder = process.env.POLISH_COPY_SCREENSHOTS || `${process.env.TMPDIR || '/tmp'}/polish-copy-shots`;
-    await mkdir(folder, {recursive: true});
-    await page.screenshot({path: `${folder}/orchestration-${locale}-${width}.png`, fullPage: true});
+    await page.screenshot({path: testInfo.outputPath(`orchestration-${locale}-${width}.png`), fullPage: true});
     expect(state.posts).toEqual([]); expect(state.errors).toEqual([]);
     await context.close();
   });
@@ -103,7 +100,7 @@ test('storage failure prevents first mutation and new principal cannot recover a
   await primary(form).click(); await expect(form).toContainText('Storage unavailable'); expect(state.posts).toEqual([]);
   state.principal = 'different-credential'; await page.reload(); await expect(form.getByRole('textbox')).toHaveValue(''); expect(state.posts).toEqual([]);
 });
-for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) for (const mode of ['relay', 'planner', 'items', 'failover']) test(`orchestration ${mode} ${locale} ${width}`, async ({browser}) => {
+for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) for (const mode of ['relay', 'planner', 'items', 'failover']) test(`orchestration ${mode} ${locale} ${width}`, async ({browser}, testInfo) => {
   const context = await browser.newContext({locale, viewport: {width, height: width === 390 ? 844 : 900}}), page = await context.newPage();
   const state = await orchestrationFixture(page, false); const form = await openOrchestration(page, mode);
   await form.locator('select').first().selectOption('demo'); await expect(form.locator('select').nth(1)).toBeEnabled();
@@ -111,8 +108,8 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) f
   if (mode === 'items') {await form.locator('.orch-item input').fill('登入流程 · Login'); await form.locator('textarea').fill('保留原始需求，新增驗證案例。\nPreserve the original requirements and add a focused regression.');}
   else await form.locator('textarea').fill('保留原始需求與已完成的工作。\nKeep the original requirements and completed work.');
   await form.locator('textarea').blur(); await page.evaluate(() => window.scrollTo(0, 0));
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); await mkdir('/tmp/bac-orchestration-after', {recursive: true});
-  await page.screenshot({path: `/tmp/bac-orchestration-after/${mode}-${locale}-${width}.png`, fullPage: true});
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({path: testInfo.outputPath(`${mode}-${locale}-${width}.png`), fullPage: true});
   expect(state.errors).toEqual([]); expect(state.posts).toEqual([]); await context.close();
 });
 test('cancelled parent cannot conceal an unknown child by preparing a replacement', async ({page}) => {

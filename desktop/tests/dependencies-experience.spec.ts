@@ -1,5 +1,4 @@
 import {revealPmView} from './pm-navigation.ts';
-import {mkdirSync} from 'node:fs';
 import {expect, test, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture, demoRoute} from './demo/index.ts';
@@ -9,14 +8,10 @@ import {parseDiscussRefs} from '../src/pm-discuss-link.js';
 const ids = dependencyFixtureIds;
 const files = ['api/pyproject.toml', 'api/uv.lock', 'api/constraints.txt', 'web/package.json', 'web/package-lock.json', 'web/vendor.lock', 'tools/broken.toml', 'vendor/closed'];
 
-function shotDir() {
-  return process.env.BATC_DEP_SHOT_DIR || `${process.env.TMPDIR || '/tmp'}/shots`;
-}
-
 async function shot(page: Page, name: string) {
+  const testInfo = test.info();
   if (process.env.BATC_DEP_SHOTS !== '1') return;
-  mkdirSync(shotDir(), {recursive: true});
-  await page.screenshot({path: `${shotDir()}/${name}.png`, fullPage: true, animations: 'disabled'});
+  await page.screenshot({path: testInfo.outputPath(`${name}.png`), fullPage: true, animations: 'disabled'});
 }
 
 async function expectNoOverflow(page: Page) {
