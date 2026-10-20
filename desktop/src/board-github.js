@@ -8,7 +8,8 @@ export function boardGitHubLink(external) {
       || !Number.isSafeInteger(external.number) || external.number < 1 || !['issue', 'pull_request'].includes(external.kind)) return null;
   const url = `https://github.com/${external.repository}/${external.kind === 'pull_request' ? 'pull' : 'issues'}/${external.number}`;
   if (external.url !== url) return null;
-  return {url, label: `${boardGitHubText(external.kind === 'pull_request' ? 'bgh_pr' : 'bgh_issue')} #${external.number}`, repository: external.repository};
+  const marker = external.availability === 'missing' ? 'bgh_missing_card' : external.draft ? 'bgh_draft' : external.state === 'closed' && (external.kind === 'pull_request' || external.state_reason !== 'completed') ? 'bgh_closed' : external.state === 'closed' && external.state_reason === 'completed' ? 'bgh_completed' : external.state === 'merged' ? 'bgh_done' : null;
+  return {url, label: `${boardGitHubText(external.kind === 'pull_request' ? 'bgh_pr' : 'bgh_issue')} #${external.number}${marker ? ' · ' + boardGitHubText(marker) : ''}`, repository: external.repository};
 }
 
 // All writes use the shared durable form: original key, receipt and draft recovery.
@@ -19,6 +20,8 @@ export function boardGitHubPanel({t, api, alive, caps, form, permitted, workspac
   let project = h('select', {'aria-label': bt('bgh_project')});
   let enabled = h('input', {type: 'hidden', value: 'true'});
   let toggle = h('input', {type: 'checkbox', checked: true});
+  let includeClosed = h('input', {type: 'hidden', value: 'false'});
+  let history = h('input', {type: 'checkbox'});
   const status = h('p', {role: 'status', class: 'muted', 'data-github-sync-status': ''});
   const controls = h('div'), description = h('p', {class: 'muted'}), stamp = h('p', {class: 'ui-meta'});
   const element = h('section', {class: 'panel', 'data-board-github': '', hidden: true},
@@ -39,29 +42,35 @@ export function boardGitHubPanel({t, api, alive, caps, form, permitted, workspac
     project = project.cloneNode(true); project.disabled = false; project.value = projectValue;
     enabled = enabled.cloneNode(true); enabled.disabled = false;
     toggle = toggle.cloneNode(true); toggle.disabled = false;
+    includeClosed = includeClosed.cloneNode(true); includeClosed.disabled = false;
+    history = history.cloneNode(true); history.disabled = false;
     current = projects.find(p => p.project_id === selected()) || null;
     repository.value = current?.repository || repository.value || '';
     toggle.checked = current?.revision ? current.enabled : true; enabled.value = String(toggle.checked);
     repository.dataset.pmDefault = repository.value; enabled.dataset.pmDefault = enabled.value;
-    const fields = {repository, enabled, ...(workspaceId ? {project_id: project} : {})};
+    history.checked = Boolean(current?.include_closed); includeClosed.value = String(history.checked);
+    includeClosed.dataset.pmDefault = includeClosed.value;
+    const fields = {repository, enabled, include_closed: includeClosed, ...(workspaceId ? {project_id: project} : {})};
     let importForm;
-    const saved = async result => {preferredProject = result.project_id || selected(); await refresh(null, true); await onSaved();};
+    const saved = async result => {preferredProject = result.project_id || selected(); await refresh(null, true); await onSaved();
+      if (['unreachable', 'rate_limited', 'auth_required', 'invalid_source', 'apply_failed', 'sync_failed', 'too_large', 'identity_conflict'].includes(result.status)) status.textContent = bt('bgh_' + result.status);};
     importForm = form({t: bt, action: workspaceId ? 'pm.github.import' : 'project.github.import',
       target: workspaceId ? {workspace_id: workspaceId} : {project_id: projectId}, fields,
-      params: values => ({repository: values.repository.trim(), enabled: values.enabled === 'true', ...(workspaceId ? {project_id: values.project_id || null} : {})}),
+      params: values => ({repository: values.repository.trim(), enabled: values.enabled === 'true', include_closed: values.include_closed === 'true', ...(workspaceId ? {project_id: values.project_id || null} : {})}),
       preconditions: () => ({expected_revision: current?.revision || 0}), permitted: () => loaded && permitted() && !forms.some(f => f !== importForm && f.locked()),
       recoverPermitted: permitted, label: current?.last_sync ? 'bgh_sync' : 'bgh_import',
       extra: h('div', {class: 'capture-fields'}, workspaceId ? h('label', {}, bt('bgh_project'), project) : null,
-        h('label', {}, bt('bgh_repo'), repository), h('label', {class: 'capture-choice'}, toggle, bt('bgh_keep')), enabled),
+        h('label', {}, bt('bgh_repo'), repository), h('label', {class: 'capture-choice'}, toggle, bt('bgh_keep')),
+        h('label', {class: 'capture-choice'}, history, bt('bgh_history')), enabled, includeClosed),
       onSaved: saved, savedText: 'bgh_checked'});
-    toggle.checked = enabled.value === 'true';
+    toggle.checked = enabled.value === 'true'; history.checked = includeClosed.value === 'true';
     current = projects.find(p => p.project_id === selected()) || null;
     forms.push(importForm);
     const save = h('div');
     if (current?.project_id) {
       const pid = current.project_id;
       const configForm = form({t: bt, action: 'project.github.configure', target: {project_id: pid}, fields: {},
-        params: () => ({repository: repository.value.trim(), enabled: toggle.checked}),
+        params: () => ({repository: repository.value.trim(), enabled: toggle.checked, include_closed: history.checked}),
         preconditions: () => ({expected_revision: current.revision}), permitted: () => loaded && permitted() && !importForm.locked(),
         recoverPermitted: permitted, label: 'bgh_save', extra: h('span'), savedText: 'bgh_saved',
         onSaved: saved});
@@ -69,6 +78,7 @@ export function boardGitHubPanel({t, api, alive, caps, form, permitted, workspac
       forms.push(configForm); save.append(configForm.box);
     }
     toggle.addEventListener('change', () => {enabled.value = String(toggle.checked); forms[0]?.changed();});
+    history.addEventListener('change', () => {includeClosed.value = String(history.checked); forms[0]?.changed();});
     project.addEventListener('change', () => {if (allowed()) {repository.value = ''; build();}});
     controls.replaceChildren(importForm.box, save); updateStatus();
     for (const f of forms) f.update();

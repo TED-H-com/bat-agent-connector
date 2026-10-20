@@ -587,18 +587,27 @@ def list_projects(ops, principal, workspace_id, *, after=0, limit=50):
             "next_cursor": rows[limit - 1]["sequence"] if len(rows) > limit else None}
 
 
-def list_work(ops, principal, workspace_id, *, project_id=None, after=0, limit=50):
+def list_work(ops, principal, workspace_id, *, project_id=None, after=0, limit=50, include_automatic=True):
     _member(ops, principal, workspace_id)
     _page(after, limit)
     if project_id is not None and (not isinstance(project_id, str) or not work_items.PROJECT_ID.fullmatch(project_id)):
         raise _bad("INVALID_PARAMS", "project_id must be a Connector project ID")
-    rows = ops.db.execute("""SELECT b.* FROM pm_work_bindings b WHERE workspace_id=? AND sequence>?
-        AND (? IS NULL OR project_id=?) AND NOT EXISTS(SELECT 1 FROM pm_work_bindings n WHERE n.workspace_id=b.workspace_id
-            AND n.work_item_id=b.work_item_id AND n.sequence>b.sequence) ORDER BY sequence LIMIT ?""",
-        (workspace_id, after, project_id, project_id, limit + 1)).fetchall()
+    rows = ops.db.execute("""SELECT b.*, CASE WHEN o.operation_id IS NULL THEN 'unknown'
+            WHEN json_extract(o.external_refs,'$.board_github_import_operation_id') IS NOT NULL THEN 'github_import'
+            ELSE 'explicit_owner_association' END AS association_basis
+        FROM pm_work_bindings b LEFT JOIN operations o ON o.operation_id=b.operation_id
+        WHERE b.workspace_id=? AND b.sequence>?
+        AND (? IS NULL OR b.project_id=?)
+        AND (? OR json_extract(o.external_refs,'$.board_github_import_operation_id') IS NULL OR b.plan_revision_id IS NOT NULL
+            OR EXISTS(SELECT 1 FROM work_items w WHERE w.work_item_id=b.work_item_id AND w.version<>b.work_version)
+            OR EXISTS(SELECT 1 FROM operations s WHERE s.action IN ('work.start','work.adopt_and_start')
+                AND json_extract(s.target,'$.workspace_id')=b.workspace_id AND json_extract(s.target,'$.work_item_id')=b.work_item_id))
+        AND NOT EXISTS(SELECT 1 FROM pm_work_bindings n WHERE n.workspace_id=b.workspace_id
+            AND n.work_item_id=b.work_item_id AND n.sequence>b.sequence) ORDER BY b.sequence LIMIT ?""",
+        (workspace_id, after, project_id, project_id, include_automatic, limit + 1)).fetchall()
     return {"version": 1, "workspace_id": workspace_id,
             "bindings": [{**dict(row), "requirement_ids": json.loads(row["requirement_ids"]),
-                          "association_basis": "explicit_owner_association", "execution_spec": "not_assigned"} for row in rows[:limit]],
+                          "execution_spec": "not_assigned"} for row in rows[:limit]],
             "next_cursor": rows[limit - 1]["sequence"] if len(rows) > limit else None}
 
 

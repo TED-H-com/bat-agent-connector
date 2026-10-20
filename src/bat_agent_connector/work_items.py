@@ -35,7 +35,7 @@ from .operations import ActionDef, OpContext, OperationError, OperationService
 PROJECT_ID = re.compile(r"prj_[0-9a-f]{20}")
 WORK_ITEM_ID = re.compile(r"wi_[0-9a-f]{20}")
 STATES = ("todo", "doing", "waiting", "done")
-LINK_KINDS = ("session", "checkpoint", "operation", "task", "pull_request")
+LINK_KINDS = ("session", "checkpoint", "operation", "task", "pull_request", "github_source")
 STARTS_SESSION = ("checkpoint.continue", "integration.handoff", "repository.continue")  # their result names the session they started
 NAME_MAX = {"project": 80, "work_item": 120}
 TEXT_MAX = 20_000
@@ -457,6 +457,10 @@ def _link_ref(ops: OperationService, kind, ref) -> str:
     elif kind == "task":
         if not _TASK.fullmatch(ref) or not db.execute("SELECT 1 FROM tasks WHERE task_id=?", (ref,)).fetchone():
             raise _bad("LINK_TARGET_NOT_FOUND", "no such task", 404)
+    elif kind == "github_source":
+        from .board_github import URL
+        if not URL.fullmatch(ref):
+            raise _bad("INVALID_PARAMS", "a github_source ref is a canonical GitHub issue or PR URL")
     elif not _PULL.fullmatch(ref):
         raise _bad("INVALID_PARAMS", "a pull_request ref is owner/name#number")
     return ref
@@ -492,6 +496,8 @@ def _link_summary(db, kind: str, ref: str) -> dict:
         row = db.execute("SELECT project,host,workspace,state,submitted_at FROM tasks WHERE task_id=?",
                          (ref,)).fetchone()
         return {"found": False} if row is None else {"found": True, **dict(row)}
+    if kind == "github_source":
+        return {"found": True, "url": ref, "source": "github"}
     m = _PULL.fullmatch(ref)
     return {"found": True, "repository": m.group(1), "number": int(m.group(2))} if m else {"found": False}
 

@@ -14,9 +14,9 @@ from tests.test_work_items import daemon as daemon
 from tests.test_work_items import served as served
 
 
-def issue(number, *, pr=False, state='open', merged=False, draft=False):
+def issue(number, *, pr=False, state='open', merged=False, draft=False, state_reason=None):
     value = {'number': number, 'node_id': f'I_node_{number}', 'title': f'GitHub #{number}', 'state': state,
-        'html_url': f'https://github.com/example/board/{"pull" if pr else "issues"}/{number}'}
+        'state_reason': state_reason, 'html_url': f'https://github.com/example/board/{"pull" if pr else "issues"}/{number}'}
     if pr:
         value['pull_request'] = {'merged_at': '2026-01-01T00:00:00Z' if merged else None}
         value['draft'] = draft
@@ -31,8 +31,14 @@ class Provider:
         self.calls.append((repo, cached))
         if self.failure:
             raise self.failure
-        return {'items': [normalize(repo, value) for value in self.values],
-            'pages': {'1': {'etag': '"fixture"', 'items': [], 'more': False}}, 'authenticated': False}
+        values = [normalize(repo, value) for value in self.values]
+        return {'items': values, 'repository': repo, 'repository_id': 123,
+            'pages': {'_repository': {'id': 123, 'node_id': 'R_fixture', 'full_name': repo},
+                '1': {'etag': '"fixture"', 'items': values, 'more': False}}, 'authenticated': False}
+
+
+async def source_link(d, iid, url):
+    await act(d, PERSON, 'work_item.link', {'work_item_id': iid}, {'kind': 'github_source', 'ref': url})
 
 
 async def sync(d, pid, **params):
@@ -42,14 +48,14 @@ async def sync(d, pid, **params):
 
 @pytest.mark.parametrize(('pr', 'state', 'merged', 'draft', 'lane'), [
     (False, 'open', False, False, 'todo'), (True, 'open', False, False, 'doing'),
-    (True, 'open', False, True, 'doing'), (False, 'closed', False, False, 'done'),
-    (True, 'closed', False, False, 'done'), (True, 'closed', True, False, 'done'),
+    (True, 'open', False, True, 'doing'), (False, 'closed', False, False, 'github_closed'),
+    (True, 'closed', False, False, 'github_closed'), (True, 'closed', True, False, 'github_done'),
 ])
 def test_mapping(pr, state, merged, draft, lane):
     assert normalize('example/board', issue(1, pr=pr, state=state, merged=merged, draft=draft))['lane'] == lane
 
 
-async def test_adopts_96_seeded_snapshot_cards_and_import_twice_creates_nothing(daemon):
+async def test_adopts_96_explicit_source_cards_and_import_twice_creates_nothing(daemon):
     d = daemon
     pid = await project(d, repositories=['example/board'])
     source = Provider([issue(n, pr=n > 70, draft=n % 3 == 0) for n in range(1, 97)])
@@ -57,13 +63,14 @@ async def test_adopts_96_seeded_snapshot_cards_and_import_twice_creates_nothing(
     original = []
     for value in source.values:
         n, url = value['number'], value['html_url']
-        # The snapshot used the ordinary project/item API, URL in descriptions
-        # or in the note of the established pull_request link, without new keys.
+        # Prose and delivery links are retained content; primary source links
+        # below provide the explicit identity required for safe adoption.
         iid = await item(d, pid, f'#{n} Snapshot title', state='doing' if n > 70 else 'todo',
             goal='' if n % 2 else f'Imported from GitHub: {url}', request=f'Original local notes {n}' if n % 2 == 0 else f'[GitHub]({url})')
         if n > 70:
             await act(d, PERSON, 'work_item.link', {'work_item_id': iid},
                 {'kind': 'pull_request', 'ref': f'example/board#{n}', 'note': url})
+        await source_link(d, iid, url)
         original.append(get(d, iid))
     first = await sync(d, pid)
     assert first['result']['created'] == 0 and first['result']['adopted'] == 96
@@ -75,7 +82,7 @@ async def test_adopts_96_seeded_snapshot_cards_and_import_twice_creates_nothing(
         after = get(d, before['work_item_id'])
         assert all(after[key] == before[key] for key in ('work_item_id', 'goal', 'title', 'request', 'state', 'created_at'))
         assert after['version'] == version
-        assert after['external']['key'] == f'example/board#{after["external"]["number"]}:{after["external"]["node_id"]}'
+        assert after['external']['key'] == f'123#{after["external"]["number"]}:{after["external"]["node_id"]}'
     assert board_github.settings(d.ops.db, pid)['enabled'] is True
     # Exact original operation recovery does not read GitHub again.
     saved = first['result']
@@ -85,7 +92,7 @@ async def test_adopts_96_seeded_snapshot_cards_and_import_twice_creates_nothing(
 async def test_preserves_manual_moves_edits_archives_and_closes_only_on_transition(daemon):
     d = daemon
     pid = await project(d)
-    source = Provider([issue(1)])
+    source = Provider([issue(1, pr=True)])
     d.ops.context['board_github_provider'] = source
     await sync(d, pid)
     iid = d.ops.db.execute('SELECT work_item_id FROM work_items').fetchone()[0]
@@ -99,7 +106,7 @@ async def test_preserves_manual_moves_edits_archives_and_closes_only_on_transiti
     assert get(d, iid)['state'] == 'todo'
     source.values[0] = issue(1, pr=True, state='closed', merged=True)
     await sync(d, pid)
-    assert get(d, iid)['state'] == 'done'
+    assert get(d, iid)['state'] == 'todo'
     assert get(d, iid)['title'] == 'My edited title'
     assert get(d, iid)['completion']['approved'] is False
     await move('doing')
@@ -121,8 +128,10 @@ async def test_legacy_manual_move_and_ambiguous_identity_are_preserved(daemon):
     d = daemon
     pid = await project(d)
     a = await item(d, pid, 'Local', goal='https://github.com/example/board/issues/1', state='waiting')
+    await source_link(d, a, 'https://github.com/example/board/issues/1')
     for _ in range(2):
-        await item(d, pid, 'Duplicate legacy', goal='https://github.com/example/board/issues/2')
+        duplicate = await item(d, pid, 'Duplicate legacy', goal='https://github.com/example/board/issues/2')
+        await source_link(d, duplicate, 'https://github.com/example/board/issues/2')
     d.ops.context['board_github_provider'] = Provider([issue(1), issue(2)])
     result = (await sync(d, pid))['result']
     assert result['created'] == 0 and result['adopted'] == 1 and result['conflicts'] == 1
@@ -177,7 +186,7 @@ async def test_workspace_http_import_links_board_and_exposes_same_project_api(se
     status, data = await http(port, 'GET', f'/api/v1/pm/workspaces/{ws}/projects', tok=auth)
     assert status == 200 and data['github_sync']['suggested_repository'] == 'example/board'
     body = {'action': 'pm.github.import', 'target': {'workspace_id': ws},
-        'params': {'repository': 'example/board', 'project_id': None}, 'preconditions': {'expected_revision': 0}}
+        'params': {'repository': 'example/board', 'project_id': None, 'include_closed': True}, 'preconditions': {'expected_revision': 0}}
     key = str(uuid.uuid4())
     status, response = await http(port, 'POST', '/api/v1/operations', tok=auth, body=body, headers={'Idempotency-Key': key})
     assert status == 202, response
@@ -236,7 +245,7 @@ async def test_http_rate_limit_and_toggle_keep_existing_cards(served):
     status, detail = await http(port, 'GET', f'/api/v1/projects/{pid}', tok=auth)
     assert status == 200 and detail['github_sync']['status'] == 'rate_limited'
     assert len(detail['work_items']) == 1
-    body.update(action='project.github.configure', params={'repository': 'example/board', 'enabled': False}, preconditions={'expected_revision': 2})
+    body.update(action='project.github.configure', params={'repository': 'example/board', 'enabled': False}, preconditions={'expected_revision': 1})
     status, _ = await http(port, 'POST', '/api/v1/operations', tok=auth, body=body, headers={'Idempotency-Key': str(uuid.uuid4())})
     assert status == 202
     await settle_operations(d.ops)
@@ -262,13 +271,13 @@ async def test_registered_child_receipts_local_steps_and_manual_continue(daemon)
     assert d.ops.get(binding['operation_id'])['action'] == 'pm.work.bind'
     await act(d, PERSON, 'work_item.update', {'work_item_id': iid}, {'steps': [{'text': 'Local acceptance', 'done': False}]},
         {'expected_version': get(d, iid)['version']})
-    source.values = [issue(1, state='closed'), issue(2)]
+    source.values = [issue(1, state='closed', state_reason='completed'), issue(2)]
     await sync(d, pid)
     closed = get(d, iid)
     assert not closed['steps'][0]['done'] and not closed['completion']['approved']
-    assert next(c for c in pm_kanban.get_board(d.ops, PERSON, ws)['cards'] if c['work_item_id'] == iid)['column'] == 'github_done'
+    assert next(c for c in pm_kanban.get_board(d.ops, PERSON, ws)['cards'] if c['work_item_id'] == iid)['column'] == 'github_completed'
     assert (await sync(d, pid))['result']['updated'] == 0
-    assert next(c for c in pm_kanban.get_board(d.ops, PERSON, ws)['cards'] if c['work_item_id'] == iid)['column'] == 'github_done'
+    assert next(c for c in pm_kanban.get_board(d.ops, PERSON, ws)['cards'] if c['work_item_id'] == iid)['column'] == 'github_completed'
     # Completing local work remains a separate explicit human action.
     await act(d, PERSON, 'work_item.approve', {'work_item_id': iid}, pre={'expected_fingerprint': closed['completion']['fingerprint']})
     await act(d, PERSON, 'work_item.continue', {'work_item_id': iid}, pre={'expected_fingerprint': get(d, iid)['completion']['fingerprint']})
@@ -293,16 +302,17 @@ async def test_new_workspace_board_imports_open_work_before_closed_history(daemo
     d = daemon
     ws = (await act(d, PERSON, 'pm.workspace.create', params={'name': 'Open work first'}))['result']['workspace']['workspace_id']
     d.ops.context['board_github_provider'] = Provider([issue(1, state='closed'), issue(2)])
-    await act(d, PERSON, 'pm.github.import', {'workspace_id': ws}, {'repository': 'example/board'}, {'expected_revision': 0})
+    await act(d, PERSON, 'pm.github.import', {'workspace_id': ws}, {'repository': 'example/board', 'include_closed': True}, {'expected_revision': 0})
     cards = pm_kanban.get_board(d.ops, PERSON, ws)['cards']
     assert cards[0]['work']['external']['number'] == 2 and cards[0]['column'] == 'backlog'
-    assert cards[1]['work']['external']['number'] == 1 and cards[1]['column'] == 'github_done'
+    assert cards[1]['work']['external']['number'] == 1 and cards[1]['column'] == 'github_closed'
 
 
 async def test_http_adopts_snapshot_url_and_preserves_moves_until_github_closes(served, mock):
     d, port = served
     pid = await project(d)
     iid = await item(d, pid, 'Seeded snapshot', goal='https://github.com/example/board/issues/1', state='waiting')
+    await source_link(d, iid, 'https://github.com/example/board/issues/1')
     source = Provider([issue(1)])
     d.ops.context['board_github_provider'] = source
     auth = token(d, PERSON.actor, 'observe', 'manage')
@@ -323,12 +333,12 @@ async def test_http_adopts_snapshot_url_and_preserves_moves_until_github_closes(
     await submit('work_item.update', {'work_item_id': iid}, {'state': 'todo'}, {'expected_version': detail['work_item']['version']})
     await submit('project.github.sync', {'project_id': pid}, {}, {'expected_revision': 1})
     assert (await http(port, 'GET', f'/api/v1/work-items/{iid}', tok=auth))[1]['work_item']['state'] == 'todo'
-    repeat = await submit('project.github.sync', {'project_id': pid}, {}, {'expected_revision': 2})
+    repeat = await submit('project.github.sync', {'project_id': pid}, {}, {'expected_revision': 1})
     assert repeat['created'] == repeat['adopted'] == repeat['updated'] == 0
     source.values = [issue(1, state='closed')]
-    await submit('project.github.sync', {'project_id': pid}, {}, {'expected_revision': 3})
+    await submit('project.github.sync', {'project_id': pid}, {}, {'expected_revision': 1})
     final = (await http(port, 'GET', f'/api/v1/work-items/{iid}', tok=auth))[1]['work_item']
-    assert final['state'] == 'done' and not final['completion']['approved']
+    assert final['state'] == 'todo' and not final['completion']['approved']
     assert final['title'] == 'Seeded snapshot'
     project_view = (await http(port, 'GET', f'/api/v1/projects/{pid}', tok=auth))[1]
     assert [row['work_item_id'] for row in project_view['work_items']] == [iid]

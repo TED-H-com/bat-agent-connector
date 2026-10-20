@@ -10,14 +10,14 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test(`
   page.on('pageerror', error => errors.push(error.message));
   let imported = false, revision = 0;
   const setting = () => ({project_id: ids.projectId, name: 'Example board', repository: 'example/board', workspace_id: ids.workspaceId,
-    revision, enabled: true, status: imported ? 'synced' : 'not_synced', last_sync: imported ? 1700000000 : null, authenticated: false});
+    revision, enabled: true, include_closed: false, last_error: null, status: imported ? 'synced' : 'not_synced', last_sync: imported ? 1700000000 : null, authenticated: false});
   const dispatch = async (input: any) => {
     if (input.method === 'POST') {
       writes.push(input);
       expect(input.body.action).toBe('pm.github.import'); expect(input.idempotency_key).toBeTruthy();
       expect(input.body.target).toEqual({workspace_id: ids.workspaceId});
       expect(input.body.preconditions).toEqual({expected_revision: revision});
-      expect(input.body.params.repository).toBe('example/board');
+      expect(input.body.params.repository).toBe('example/board'); expect(input.body.params.include_closed).toBe(false);
       imported = true; revision++;
       const id = 'op_' + revision.toString(16).padStart(32, '0');
       const operation = {...input.body, operation_id: id, actor: ids.actor, idempotency_key: input.idempotency_key, status: 'succeeded',
@@ -49,7 +49,8 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test(`
   const panel = page.locator('[data-board-github]');
   await expect(panel).toBeVisible();
   await expect(panel.locator('[data-github-sync-status]')).toContainText(locale === 'en' ? 'has not been imported' : '尚未匯入');
-  await expect(panel.getByRole('checkbox')).toBeChecked();
+  await expect(panel.getByRole('checkbox', {name: locale === 'en' ? 'Keep in sync' : '持續同步'})).toBeChecked();
+  await expect(panel.getByRole('checkbox', {name: locale === 'en' ? 'Include closed history' : '包含已關閉的歷史'})).not.toBeChecked();
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(0);
   const shots = `${process.env.BATC_WORK_VIEW_SCREENSHOTS || process.env.TMPDIR || '/tmp'}/board-github`; await mkdir(shots, {recursive: true});
   await page.screenshot({path: `${shots}/empty-${locale}-${native ? 'ipc' : 'http'}.png`, fullPage: true});
@@ -66,10 +67,11 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test(`
   await page.screenshot({path: `${shots}/imported-${locale}-${native ? 'ipc' : 'http'}.png`, fullPage: true});
 });
 
-for (const locale of ['en', 'zh-TW']) for (const state of ['no_repo', 'empty', 'rate_limited', 'unreachable']) test(`GitHub empty board explains ${state} ${locale}`, async ({page}) => {
+for (const locale of ['en', 'zh-TW']) for (const state of ['no_repo', 'empty', 'rate_limited', 'unreachable', 'missing', 'invalid_source', 'apply_failed', 'sync_failed', 'identity_conflict']) test(`GitHub empty board explains ${state} ${locale}`, async ({page}) => {
   const fixture = demoFixture({locale, managedSession: true}), {ids} = fixture;
   const text: Record<string, string[]> = {
     no_repo: ['Link a GitHub repository', '連結 GitHub 儲存庫'], empty: ['no open issues', '沒有開啟中的議題'],
+    missing: ['missing from GitHub', 'GitHub 來源已消失'], invalid_source: ['invalid source data', '來源資料無效'], apply_failed: ['could not be applied', '無法套用'], sync_failed: ['could not run', '無法執行'], identity_conflict: ['repository identity', '儲存庫身分'],
     rate_limited: ['limiting requests', '限制請求次數'], unreachable: ['could not be reached', '無法連線'],
   };
   await page.addInitScript(value => Object.defineProperty(navigator, 'language', {value}), locale);
@@ -91,4 +93,55 @@ for (const locale of ['en', 'zh-TW']) for (const state of ['no_repo', 'empty', '
   const panel = page.locator('[data-board-github]');
   await expect(panel.locator('[data-github-sync-status]')).toContainText(text[state][locale === 'en' ? 0 : 1]);
   await expect(panel.getByRole('button', {name: locale === 'en' ? 'Import from GitHub' : '從 GitHub 匯入', exact: true})).toBeVisible();
+});
+
+
+for (const locale of ['en', 'zh-TW']) for (const [column, en, zh] of [
+  ['github_closed', 'Closed (not completed)', '已關閉（未完成）'],
+  ['github_completed', 'Completed · GitHub', '完成議題 · GitHub'],
+  ['github_done', 'Done · GitHub', '完成 · GitHub'],
+]) test(`GitHub source lane ${column} ${locale}`, async ({page}) => {
+  const fixture = demoFixture({locale, managedSession: true}), {ids} = fixture;
+  await page.addInitScript(value => Object.defineProperty(navigator, 'language', {value}), locale);
+  await mountConversation(page, false, async (input: any) => {
+    expect(input.method).toBe('GET');
+    const result: any = await fixture.dispatch(input);
+    if (new URL(input.path, 'http://fixture').pathname.endsWith('/kanban')) {
+      const card = result.data.cards.find((row: any) => row.column === 'backlog');
+      card.column = column;
+      card.work.external = {repository: 'example/board', repository_id: 123, number: 1, node_id: 'I_node_1',
+        key: '123#1:I_node_1', kind: column === 'github_done' ? 'pull_request' : 'issue',
+        url: `https://github.com/example/board/${column === 'github_done' ? 'pull' : 'issues'}/1`, source: 'github',
+        state: column === 'github_done' ? 'merged' : 'closed', state_reason: column === 'github_completed' ? 'completed' : column === 'github_done' ? null : 'not_planned',
+        board_lane: column, applied_lane: 'todo', availability: 'current', manual: false, draft: false};
+      result.data.cards = [card]; result.data.next_cursor = null;
+    }
+    return result;
+  });
+  await page.goto(`/dashboard/#/pm/${ids.workspaceId}/board`);
+  await expect(page.locator(`[data-pm-kanban-column="${column}"]`)).toContainText(locale === 'en' ? en : zh);
+  await expect(page.locator('[data-github-card-link]')).toHaveCount(1);
+});
+
+
+for (const locale of ['en', 'zh-TW']) for (const missing of [false, true]) test(`GitHub draft and missing source are visible ${locale} ${missing}`, async ({page}) => {
+  const fixture = demoFixture({locale, managedSession: true}), {ids} = fixture;
+  await page.addInitScript(value => Object.defineProperty(navigator, 'language', {value}), locale);
+  await mountConversation(page, false, async (input: any) => {
+    expect(input.method).toBe('GET');
+    const result: any = await fixture.dispatch(input);
+    if (new URL(input.path, 'http://fixture').pathname.endsWith('/kanban')) {
+      const card = result.data.cards.find((row: any) => row.column === 'in_progress');
+      card.work.external = {repository: 'example/board', repository_id: 123, number: 1,
+        node_id: 'I_node_1', key: '123#1:I_node_1', kind: 'pull_request',
+        url: 'https://github.com/example/board/pull/1', source: 'github', state: 'open', state_reason: null,
+        applied_lane: 'doing', board_lane: 'doing', manual: false, draft: true, availability: missing ? 'missing' : 'current'};
+      result.data.cards = [card]; result.data.next_cursor = null;
+    }
+    return result;
+  });
+  await page.goto(`/dashboard/#/pm/${ids.workspaceId}/board`);
+  const links = page.locator('[data-github-card-link]');
+  await expect(links).toHaveCount(1);
+  await expect(links).toContainText(missing ? locale === 'en' ? 'Source missing' : '來源已消失' : locale === 'en' ? 'Draft' : '草稿');
 });

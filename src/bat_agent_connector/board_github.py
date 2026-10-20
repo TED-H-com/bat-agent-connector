@@ -46,12 +46,20 @@ def install(ops):
         ops.db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS work_items_github_identity ON work_items(
             project_id,json_extract(github_external,'$.repository'),json_extract(github_external,'$.number'))
             WHERE github_external IS NOT NULL''')
+        ops.db.execute("""CREATE INDEX IF NOT EXISTS work_items_github_node ON work_items(
+            project_id,json_extract(github_external,'$.node_id')) WHERE github_external IS NOT NULL""")
         ops.db.execute('''CREATE TABLE IF NOT EXISTS board_github_sync (
             project_id TEXT PRIMARY KEY REFERENCES projects(project_id), repository TEXT NOT NULL,
             workspace_id TEXT, revision INTEGER NOT NULL, enabled INTEGER NOT NULL,
             principal TEXT NOT NULL, credential_id TEXT, last_sync REAL, next_sync REAL NOT NULL DEFAULT 0,
             status TEXT NOT NULL DEFAULT 'not_synced', failures INTEGER NOT NULL DEFAULT 0,
             authenticated INTEGER, pages TEXT NOT NULL DEFAULT '{}', operation_id TEXT)''')
+    with ops.journal.tx():
+        columns = {r[1] for r in ops.db.execute('PRAGMA table_info(board_github_sync)')}
+        for name, ddl in (('include_closed', 'INTEGER NOT NULL DEFAULT 0'),
+                ('sync_generation', 'INTEGER NOT NULL DEFAULT 0'), ('last_error', 'TEXT')):
+            if name not in columns:
+                ops.db.execute(f'ALTER TABLE board_github_sync ADD COLUMN {name} {ddl}')
     ops.context['board_github_provider'] = BoardGitHubProvider(lambda: ops.context['github_config'])
     ops.context['board_github_lock'] = asyncio.Lock()
     for name, run, keys in (
@@ -68,8 +76,8 @@ def install(ops):
 def settings(db, pid, ops=None):
     row = db.execute('SELECT * FROM board_github_sync WHERE project_id=?', (pid,)).fetchone()
     if row:
-        return {k: row[k] for k in ('project_id', 'repository', 'workspace_id', 'revision', 'status', 'last_sync', 'next_sync')} | {
-            'enabled': bool(row['enabled']), 'authenticated': None if row['authenticated'] is None else bool(row['authenticated'])}
+        return {k: row[k] for k in ('project_id', 'repository', 'workspace_id', 'revision', 'status', 'last_sync', 'next_sync', 'last_error')} | {
+            'enabled': bool(row['enabled']), 'include_closed': bool(row['include_closed']), 'authenticated': None if row['authenticated'] is None else bool(row['authenticated'])}
     project = work_items._get_project(db, pid)
     values = list(project['repositories'])
     if ops is not None and project['task_project']:
@@ -77,7 +85,7 @@ def settings(db, pid, ops=None):
         if daemon is not None:
             values.append(daemon.adapter.verifier.settings.repo_urls.get(project['task_project']))
     return {'project_id': pid, 'repository': suggestion(values), 'workspace_id': None,
-        'revision': 0, 'enabled': False, 'status': 'not_synced', 'last_sync': None, 'next_sync': 0, 'authenticated': None}
+        'revision': 0, 'enabled': False, 'include_closed': False, 'status': 'not_synced', 'last_sync': None, 'next_sync': 0, 'authenticated': None, 'last_error': None}
 
 
 def workspace_settings(ops, principal, wid):
@@ -95,8 +103,8 @@ def _check(ops, principal, action, target, params, pre):
     imported = action == 'pm.github.import'
     if set(target) != ({'workspace_id'} if imported else {'project_id'}):
         raise OperationError('INVALID_TARGET', 'Supply the exact project or workspace', 422)
-    work_items._only(params, ('repository', 'enabled', 'project_id') if imported else
-        ('repository', 'enabled') if action.endswith(('configure', 'import')) else ())
+    work_items._only(params, ('repository', 'enabled', 'include_closed', 'project_id') if imported else
+        ('repository', 'enabled', 'include_closed') if action.endswith(('configure', 'import')) else ())
     pid = params.get('project_id') if imported else target['project_id']
     workspace = None
     if imported:
@@ -126,6 +134,8 @@ def _check(ops, principal, action, target, params, pre):
     repo = repository(params.get('repository', current['repository']))
     if 'enabled' in params and type(params['enabled']) is not bool:
         raise OperationError('INVALID_PARAMS', 'enabled must be true or false', 422)
+    if 'include_closed' in params and type(params['include_closed']) is not bool:
+        raise OperationError('INVALID_PARAMS', 'include_closed must be true or false', 422)
     return pid, repo, current, workspace
 
 
@@ -149,17 +159,23 @@ def authorize_existing(ops, principal, op, control):
 
 def _save(ctx, principal, pid, repo, current, wid, *, imported=False):
     enabled = ctx.params.get('enabled', True if imported and current['revision'] == 0 else current.get('enabled', False))
+    include_closed = ctx.params.get('include_closed', current.get('include_closed', False))
     credential = (ctx.admission_binding or {}).get('credential_id')
     changed_repo = repo != current.get('repository')
+    changed = (current['revision'] == 0 or changed_repo or wid != current.get('workspace_id')
+        or enabled != current.get('enabled', False) or include_closed != current.get('include_closed', False)
+        or ctx.op['action'].endswith('configure'))
     ctx.service.db.execute('''INSERT INTO board_github_sync(project_id,repository,workspace_id,revision,enabled,
-        principal,credential_id,status,next_sync,operation_id) VALUES(?,?,?,?,?,?,?,'not_synced',0,?)
+        principal,credential_id,status,next_sync,operation_id,include_closed) VALUES(?,?,?,?,?,?,?,'not_synced',0,?,?)
         ON CONFLICT(project_id) DO UPDATE SET repository=excluded.repository,workspace_id=excluded.workspace_id,
         revision=excluded.revision,enabled=excluded.enabled,principal=excluded.principal,credential_id=excluded.credential_id,
         status=CASE WHEN ? THEN 'not_synced' ELSE status END,
         last_sync=CASE WHEN ? THEN NULL ELSE last_sync END,
-        pages=CASE WHEN ? THEN '{}' ELSE pages END,operation_id=excluded.operation_id''',
-        (pid, repo, wid, current['revision'] + 1, int(enabled), json.dumps(pm_workspace.principal_binding(principal)),
-        credential, ctx.operation_id, changed_repo, changed_repo, changed_repo))
+        pages=CASE WHEN ? THEN '{}' ELSE pages END,operation_id=excluded.operation_id,include_closed=excluded.include_closed''',
+        (pid, repo, wid, current['revision'] + int(changed), int(enabled), json.dumps(pm_workspace.principal_binding(principal)),
+        credential, ctx.operation_id, int(include_closed), changed_repo, changed_repo, changed_repo))
+    if ctx.op['entry'] != 'scheduler':
+        ctx.service.db.execute('UPDATE board_github_sync SET sync_generation=sync_generation+1 WHERE project_id=?', (pid,))
 
 
 async def configure(ctx):
@@ -177,7 +193,7 @@ async def _local_action(ctx, principal, suffix, action, target, params, pre=None
     # async functions. They contain no suspension or provider I/O: the parent
     # transaction cannot be interleaved with another worker. Preserve ordinary
     # admission, controller/lifecycle gates, original keys and real receipts.
-    if action not in {'project.create', 'pm.project.bind', 'work_item.create', 'work_item.update', 'pm.work.bind'}:
+    if action not in {'project.create', 'pm.project.bind', 'work_item.create', 'pm.work.bind'}:
         raise ValueError('Only registered local board actions may join the transaction')
     op, _ = ctx.service.create(principal, action=action, target=target, params=params,
         preconditions=pre or {},
@@ -214,23 +230,20 @@ async def _associate(ctx, principal, wid, iid):
 
 def _legacy_index(db, pid):
     index = {}
-    for row in db.execute('SELECT * FROM work_items WHERE project_id=? AND github_external IS NULL', (pid,)):
-        values = [row[k] for k in ('title', 'goal', 'request', 'acceptance')]
-        values.extend((link['ref'] or '') + ' ' + (link['note'] or '') for link in db.execute(
-            'SELECT ref,note FROM work_item_links WHERE work_item_id=? AND removed_at IS NULL', (row['work_item_id'],)))
-        for value in values:
-            for match in URL.finditer(value):
-                key = (match[1].lower(), int(match[2]))
-                index.setdefault(key, set()).add(row['work_item_id'])
-        # Existing pull_request links use owner/repo#number, rather than a URL.
-        for link in db.execute("SELECT ref FROM work_item_links WHERE work_item_id=? AND kind='pull_request' AND removed_at IS NULL", (row['work_item_id'],)):
-            if match := work_items._PULL.fullmatch(link[0]):
-                index.setdefault((match[1].lower(), int(match[2])), set()).add(row['work_item_id'])
+    for row in db.execute('SELECT work_item_id FROM work_items WHERE project_id=? AND github_external IS NULL', (pid,)):
+        links = db.execute("SELECT ref FROM work_item_links WHERE work_item_id=? AND kind='github_source' AND removed_at IS NULL",
+            (row['work_item_id'],)).fetchall()
+        for link in links:
+            if match := URL.fullmatch(link['ref']):
+                candidates = index.setdefault((match[1].lower(), int(match[2])), set())
+                candidates.add(row['work_item_id'])
+                if len(links) != 1:
+                    candidates.add(None)  # conflicting primary identities are never guessed
     return index
 
 
-async def _apply(ctx, principal, pid, repo, wid, values, now):
-    db, counts = ctx.service.db, {'created': 0, 'adopted': 0, 'updated': 0, 'conflicts': 0}
+async def _apply(ctx, principal, pid, repo, wid, values, now, *, include_closed=False, repository_id=None):
+    db, counts = ctx.service.db, {'created': 0, 'adopted': 0, 'updated': 0, 'conflicts': 0, 'missing': 0}
     legacy = _legacy_index(db, pid)
     # New boards should show actionable work before historical Done cards.
     # Existing item/order and association history are never reordered.
@@ -238,6 +251,9 @@ async def _apply(ctx, principal, pid, repo, wid, values, now):
         number = value['number']
         row = db.execute('''SELECT * FROM work_items WHERE project_id=? AND
             json_extract(github_external,'$.repository')=? AND json_extract(github_external,'$.number')=?''', (pid, repo, number)).fetchone()
+        if row is None:
+            row = db.execute("SELECT * FROM work_items WHERE project_id=? AND json_extract(github_external,'$.node_id')=?",
+                (pid, value['node_id'])).fetchone()
         old = json.loads(row['github_external']) if row else None
         if old and old['node_id'] != value['node_id']:
             counts['conflicts'] += 1  # identity replacement never silently takes over an existing card
@@ -255,6 +271,8 @@ async def _apply(ctx, principal, pid, repo, wid, values, now):
                     continue
                 adopted = True
                 counts['adopted'] += 1
+        if row is None and value['state'] != 'open' and not include_closed:
+            continue
         if row is None:
             created = await _local_action(ctx, principal, f'create.{repo}.{number}', 'work_item.create',
                 {'project_id': pid}, {'title': value['title'], 'goal': value['url'],
@@ -269,19 +287,30 @@ async def _apply(ctx, principal, pid, repo, wid, values, now):
             manual = True
         transition = old is not None and old['state'] != value['state']
         board_lane = value['lane'] if not manual or transition and value['state'] != 'open' else None
+        if manual and old and not transition:
+            board_lane = old.get('board_lane')
         if row['archived_at'] is not None:
             board_lane = None
         external = {'repository': repo, 'number': number, 'node_id': value['node_id'],
-            'key': f'{repo}#{number}:{value["node_id"]}', 'url': value['url'], 'kind': value['kind'],
-            'source': 'github', 'state': value['state'], 'state_reason': value.get('state_reason'),
+            'key': old['key'] if old else f'{repository_id or repo}#{number}:{value["node_id"]}', 'url': value['url'], 'kind': value['kind'],
+            'source': 'github', 'repository_id': repository_id, 'availability': 'current', 'state': value['state'], 'state_reason': value.get('state_reason'),
             'draft': value.get('draft', False), 'applied_lane': row['state'], 'board_lane': board_lane, 'manual': manual}
         if old != external:
-            db.execute('UPDATE work_items SET github_external=?,version=version+1,updated_at=? WHERE work_item_id=?',
-                (json.dumps(external), now, iid))
+            db.execute('UPDATE work_items SET github_external=? WHERE work_item_id=?', (json.dumps(external), iid))
             counts['updated'] += 1
             work_items._event(ctx, 'work_item', iid, 'work_item.github.synced',
                 {'project_id': pid, 'source': 'github', 'state': value['state'], 'state_reason': value.get('state_reason')})
         await _associate(ctx, principal, wid, iid)
+    seen = {value['node_id'] for value in values}
+    for row in db.execute('SELECT * FROM work_items WHERE project_id=? AND github_external IS NOT NULL', (pid,)).fetchall():
+        external = json.loads(row['github_external'])
+        if (external['repository'] != repo and external.get('repository_id') != repository_id) or external['node_id'] in seen:
+            continue
+        counts['missing'] += 1
+        if external.get('availability') != 'missing':
+            external['availability'] = 'missing'
+            db.execute('UPDATE work_items SET github_external=? WHERE work_item_id=?', (json.dumps(external), row['work_item_id']))
+            work_items._event(ctx, 'work_item', row['work_item_id'], 'work_item.github.missing', {'project_id': pid, 'source': 'github'})
     return counts
 
 
@@ -295,7 +324,7 @@ async def sync(ctx):
         principal = pm_workspace.admitted_principal(ctx)
         pid, repo, current, workspace = _check(ops, principal, ctx.op['action'], ctx.target, ctx.params, ctx.preconditions)
         row = ops.db.execute('SELECT * FROM board_github_sync WHERE project_id=?', (pid,)).fetchone() if pid else None
-        if row and row['repository'] == repo and row['next_sync'] > time.time() and row['status'] in ('rate_limited', 'unreachable', 'auth_required', 'too_large'):
+        if row and row['repository'] == repo and row['next_sync'] > time.time() and row['status'] in ('rate_limited', 'unreachable', 'auth_required', 'too_large', 'invalid_source', 'apply_failed', 'sync_failed', 'identity_conflict'):
             return {'project_id': pid, 'status': row['status'], 'next_sync': row['next_sync'], 'deferred': True}
         cached = json.loads(row['pages']) if row and row['repository'] == repo else {}
         collected, failure = None, None
@@ -308,24 +337,29 @@ async def sync(ctx):
             # Membership, revision and lifecycle are checked again after the read.
             _, _, fresh, fresh_workspace = _check(ops, principal, ctx.op['action'], ctx.target, ctx.params, ctx.preconditions)
             wid = fresh_workspace['workspace_id'] if fresh_workspace else fresh['workspace_id']
+            if failure:
+                # Only an already authorized binding gets durable backoff. A
+                # failed import cannot create a binding or enable/reassign it.
+                if row and row['repository'] == repo:
+                    failures = row['failures'] + 1
+                    delay = max(failure.retry_after, min(3600, INTERVAL * 2 ** min(failures - 1, 4)))
+                    _failure(ops, pid, failure.code, failure.code, now=now, delay=delay)
+                return {'project_id': pid, 'status': failure.code,
+                    'github_sync': settings(db, pid) if pid else fresh}
             if pid is None:
                 pid = await _create_project(ctx, principal, workspace, repo)
             importing = ctx.op['action'].endswith('import') or not row or row['last_sync'] is None
             _save(ctx, principal, pid, repo, fresh, wid, imported=importing)
-            if failure:
-                failures = row['failures'] + 1 if row else 1
-                delay = max(failure.retry_after, min(3600, INTERVAL * 2 ** min(failures - 1, 4)))
-                db.execute('UPDATE board_github_sync SET status=?,failures=?,next_sync=? WHERE project_id=?',
-                    (failure.code, failures, now + delay + random.uniform(0, 30), pid))
-                result = {'project_id': pid, 'status': failure.code}
-            else:
-                counts = await _apply(ctx, principal, pid, repo, wid, collected['items'], now)
-                status = ('conflicts' if counts['conflicts'] else 'empty' if not collected['items'] else
-                    'no_open' if all(v['state'] in ('closed', 'merged') for v in collected['items']) else 'synced')
-                db.execute('''UPDATE board_github_sync SET status=?,last_sync=?,next_sync=?,failures=0,
-                    pages=?,authenticated=? WHERE project_id=?''',
-                    (status, now, now + INTERVAL + random.uniform(0, 30), json.dumps(collected['pages']), int(collected['authenticated']), pid))
-                result = {'project_id': pid, 'status': status, **counts}
+            source_repo = collected['repository']
+            counts = await _apply(ctx, principal, pid, source_repo, wid, collected['items'], now,
+                include_closed=ctx.params.get('include_closed', fresh.get('include_closed', False)),
+                repository_id=collected['repository_id'])
+            status = ('conflicts' if counts['conflicts'] else 'missing' if counts['missing'] else 'empty' if not collected['items'] else
+                'no_open' if all(v['state'] in ('closed', 'merged') for v in collected['items']) else 'synced')
+            db.execute('''UPDATE board_github_sync SET status=?,last_sync=?,next_sync=?,failures=0,
+                pages=?,authenticated=?,repository=?,sync_generation=sync_generation+1,last_error=NULL WHERE project_id=?''',
+                (status, now, now + INTERVAL + random.uniform(0, 30), json.dumps(collected['pages']), int(collected['authenticated']), source_repo, pid))
+            result = {'project_id': pid, 'status': status, **counts}
             work_items._event(ctx, 'project', pid, 'project.github.synced', result)
             if wid:
                 work_items._event(ctx, 'pm_evidence', wid, 'pm.github.imported', result)
@@ -339,7 +373,18 @@ async def sync(ctx):
             require_new_effect(ops, ctx.operation_id)
             require_local(ops.db, ctx.operation_id)
             now = time.time()
-            result = await change(ops.db, now)
+            original_pid = pid
+            try:
+                with ops.journal.tx():
+                    result = await change(ops.db, now)
+            except OperationError as exc:
+                pid = original_pid
+                if exc.code in ('VERSION_CONFLICT', 'FORBIDDEN', 'PM_WORKSPACE_NOT_FOUND'):
+                    raise
+                if row:
+                    _failure(ops, pid, 'apply_failed', exc.code, now=now)
+                result = {'project_id': pid, 'status': 'apply_failed', 'error_code': exc.code,
+                    'github_sync': settings(ops.db, pid) if pid else current}
             ops.db.execute('INSERT INTO management_applied(operation_id,result,applied_at) VALUES(?,?,?)',
                 (ctx.operation_id, json.dumps(result), now))
             return result
@@ -360,6 +405,25 @@ def scheduled_principal(ops, row):
     return api_auth.Principal(saved['actor'], frozenset(saved['scopes']), admin=saved['admin'], credential_id=row['credential_id'])
 
 
+def _failure(ops, pid, status, code, *, now=None, delay=None, disable=False):
+    row = ops.db.execute('SELECT failures,next_sync FROM board_github_sync WHERE project_id=?', (pid,)).fetchone()
+    if row is None:
+        return
+    now = time.time() if now is None else now
+    failures = row['failures'] + 1
+    delay = delay or min(3600, INTERVAL * 2 ** min(failures - 1, 4))
+    ops.db.execute("""UPDATE board_github_sync SET status=?,last_error=?,failures=?,next_sync=?,
+        sync_generation=sync_generation+1,enabled=CASE WHEN ? THEN 0 ELSE enabled END WHERE project_id=?""",
+        (status, code, failures, max(now + delay + random.uniform(0, 30), row['next_sync'] + 1), int(disable), pid))
+
+
+def _scheduled_failure(ops, pid, exc):
+    authorization = exc.status in (401, 403, 404) or exc.code in ('FORBIDDEN', 'UNAUTHORIZED', 'PM_MEMBERSHIP_REQUIRED', 'PM_WORKSPACE_NOT_FOUND')
+    lifecycle = exc.code.startswith('PM_LIFECYCLE_')
+    status = 'authorization_required' if authorization else 'lifecycle_stopped' if lifecycle else 'sync_failed'
+    _failure(ops, pid, status, exc.code, disable=authorization or lifecycle)
+
+
 async def tick(ops):
     for row in ops.db.execute('''SELECT s.* FROM board_github_sync s JOIN projects p USING(project_id)
             WHERE s.enabled=1 AND s.next_sync<=? AND p.archived_at IS NULL''', (time.time(),)).fetchall():
@@ -373,12 +437,18 @@ async def tick(ops):
         try:
             if principal is None:
                 raise OperationError('FORBIDDEN', 'Original sync authorization expired', 403)
-            ops.create(principal, action='project.github.sync', target=target, params={},
+            op, _ = ops.create(principal, action='project.github.sync', target=target, params={},
                 preconditions={'expected_revision': row['revision']},
-                idempotency_key=f'board.github.{row["project_id"]}.{row["revision"]}.{row["next_sync"]}', entry='scheduler')
-        except OperationError:
+                idempotency_key=f'board.github.{row["project_id"]}.{row["sync_generation"]}.{row["next_sync"]}', entry='scheduler')
+            if op['status'] == 'failed':
+                # A terminal refusal before the handler committed must retire its
+                # intent too. Cancelled intents deliberately retain their key.
+                with ops.journal.tx():
+                    _scheduled_failure(ops, row['project_id'], OperationError(op['error_code'] or 'BOARD_SYNC_FAILED',
+                        'Scheduled sync failed', 409))
+        except OperationError as exc:
             with ops.journal.tx():
-                ops.db.execute("UPDATE board_github_sync SET enabled=0,status='authorization_required' WHERE project_id=?", (row['project_id'],))
+                _scheduled_failure(ops, row['project_id'], exc)
 
 
 async def loop(ops):

@@ -212,7 +212,7 @@ class Projection:
     def work(self):
         from . import pm_evidence, work_items
         page = self.source('work', 'pm_work_bindings', lambda: pm_evidence.list_work(
-            self.ops, self.principal, self.wid, limit=SOURCE_LIMIT))
+            self.ops, self.principal, self.wid, limit=SOURCE_LIMIT, include_automatic=False))
         result = {}
         for binding in page['bindings'] if page else []:
             ref = {'kind': 'work_item', 'id': binding['work_item_id']}

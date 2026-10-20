@@ -1653,6 +1653,17 @@ var init_board_github_strings = __esmMin((() => {
 		en: {
 			bgh_issue: "Issue",
 			bgh_pr: "PR",
+			bgh_draft: "Draft",
+			bgh_closed: "Closed (not completed)",
+			bgh_completed: "Completed · GitHub",
+			bgh_missing_card: "Source missing",
+			bgh_history: "Include closed history",
+			bgh_missing: "Some sources are missing from GitHub. Their last observations are retained; no closure was inferred.",
+			bgh_invalid_source: "GitHub returned invalid source data. No partial changes were applied; sync will retry later.",
+			bgh_apply_failed: "GitHub data could not be applied. Your cards are safe; sync will retry later.",
+			bgh_sync_failed: "Automatic sync could not run. Your cards are safe; sync will retry later.",
+			bgh_lifecycle_stopped: "Automatic sync paused because the workspace lifecycle stopped new work. Reopen it and save settings to authorize sync again.",
+			bgh_identity_conflict: "The repository identity changed. Existing cards are preserved; check the repository binding.",
 			bgh_action_import: "Import GitHub board",
 			bgh_action_configure: "Configure GitHub board sync",
 			bgh_action_sync: "Sync GitHub board",
@@ -1667,8 +1678,8 @@ var init_board_github_strings = __esmMin((() => {
 			bgh_no_repo: "Link a GitHub repository to bring its issues and pull requests onto this board.",
 			bgh_not_synced: "This repository has not been imported yet. Import its issues and pull requests to get started.",
 			bgh_empty: "This repository has no open issues or pull requests to import.",
-			bgh_no_open: "This repository has no open issues or pull requests. Closed and merged cards stay in Done.",
-			bgh_synced: "Up to date with GitHub. Open issues go to To do, pull requests to Doing, and closed or merged items to Done.",
+			bgh_no_open: "This repository has no open issues or pull requests. Closed cards retain their source status.",
+			bgh_synced: "Up to date with GitHub. Open issues go to To do, pull requests to Doing, with separate source lanes for merged, completed and other closed items.",
 			bgh_rate_limited: "GitHub is limiting requests. Your cards are safe. Try syncing after the limit resets. Signing in with gh on the Connector can increase the public repository limit.",
 			bgh_unreachable: "GitHub could not be reached. Your cards are safe. Try syncing later.",
 			bgh_auth_required: "GitHub could not open this repository. Check its name and your GitHub access on the Connector (gh auth login or the existing token setting).",
@@ -1676,7 +1687,7 @@ var init_board_github_strings = __esmMin((() => {
 			bgh_too_large: "This repository exceeds the bounded import size. Existing cards are preserved; no partial import was applied.",
 			bgh_conflicts: "Some GitHub identities match more than one legacy card or have changed. Existing cards were preserved; review their GitHub links.",
 			bgh_public: "Using public GitHub access. GitHub allows fewer requests without signing in.",
-			bgh_help: "Sync runs about every five minutes while the Connector is running, even with this board closed. Your edits and manual lane moves are preserved; a later close or merge moves the card to Done. GitHub changes never approve work.",
+			bgh_help: "Sync runs about every five minutes while the Connector is running, even with this board closed. Your edits and manual lane moves are preserved; later closures use separate source lanes. Closed history is optional. GitHub changes never claim or approve local completion.",
 			bgh_checked: "GitHub check finished. See the sync status above.",
 			bgh_saved: "Settings saved",
 			bgh_done: "Done · GitHub",
@@ -1686,6 +1697,17 @@ var init_board_github_strings = __esmMin((() => {
 		"zh-TW": {
 			bgh_issue: "議題",
 			bgh_pr: "PR",
+			bgh_draft: "草稿",
+			bgh_closed: "已關閉（未完成）",
+			bgh_completed: "完成議題 · GitHub",
+			bgh_missing_card: "來源已消失",
+			bgh_history: "包含已關閉的歷史",
+			bgh_missing: "部分 GitHub 來源已消失。保留上次觀察，不會推定為已關閉。",
+			bgh_invalid_source: "GitHub 來源資料無效。本次未套用任何部分變更，稍後會重試同步。",
+			bgh_apply_failed: "無法套用 GitHub 資料。現有卡片會保留，稍後會重試同步。",
+			bgh_sync_failed: "自動同步無法執行。現有卡片會保留，稍後會重試同步。",
+			bgh_lifecycle_stopped: "工作區生命週期已停止新工作，自動同步已暫停。重新開啟工作區並儲存設定，才能重新授權同步。",
+			bgh_identity_conflict: "儲存庫身分已變更。現有卡片會保留，請檢查儲存庫綁定。",
 			bgh_action_import: "匯入 GitHub 看板",
 			bgh_action_configure: "設定 GitHub 看板同步",
 			bgh_action_sync: "同步 GitHub 看板",
@@ -1700,8 +1722,8 @@ var init_board_github_strings = __esmMin((() => {
 			bgh_no_repo: "連結 GitHub 儲存庫，即可將議題與 PR 匯入這個看板。",
 			bgh_not_synced: "這個儲存庫尚未匯入。匯入議題與 PR，即可開始使用看板。",
 			bgh_empty: "這個儲存庫目前沒有開啟中的議題或 PR 可匯入。",
-			bgh_no_open: "這個儲存庫目前沒有開啟中的議題或 PR。已關閉或合併的卡片會保留在「完成」。",
-			bgh_synced: "已與 GitHub 同步。開啟中的議題放入「待辦」，PR 放入「進行中」，已關閉或合併的項目放入「完成」。",
+			bgh_no_open: "這個儲存庫目前沒有開啟中的議題或 PR。已關閉的卡片會保留其來源狀態。",
+			bgh_synced: "已與 GitHub 同步。開啟中的議題放入「待辦」，PR 放入「進行中」，合併、完成議題與其他關閉項目各自顯示來源狀態。",
 			bgh_rate_limited: "GitHub 暫時限制請求次數。現有卡片會保留，請在限制解除後再次同步。在 Connector 以 gh 登入可提高公開儲存庫的請求額度。",
 			bgh_unreachable: "目前無法連線至 GitHub。現有卡片會保留，請稍後再次同步。",
 			bgh_auth_required: "GitHub 無法開啟這個儲存庫。請確認名稱，以及 Connector 上的 GitHub 存取權限（gh auth login 或既有權杖設定）。",
@@ -1709,7 +1731,7 @@ var init_board_github_strings = __esmMin((() => {
 			bgh_too_large: "這個儲存庫超過單次匯入的大小上限。現有卡片會保留，本次未套用不完整的匯入。",
 			bgh_conflicts: "部分 GitHub 身分對應到多張舊卡片，或身分已變更。現有卡片會保留，請檢查其 GitHub 連結。",
 			bgh_public: "目前使用 GitHub 公開存取，未登入時可用的請求額度較少。",
-			bgh_help: "Connector 執行時約每五分鐘同步一次，關閉看板後仍會繼續。文字編輯與手動移動會保留；GitHub 後續關閉或合併時，卡片才會移至「完成」。同步不會核可工作內容。",
+			bgh_help: "Connector 執行時約每五分鐘同步一次，關閉看板後仍會繼續。文字編輯與手動移動會保留；GitHub 後續關閉時，卡片使用各自的來源狀態欄。歷史匯入可自行選擇。同步不會回報本機工作完成或核可內容。",
 			bgh_checked: "已完成 GitHub 查核，請查看上方同步狀態。",
 			bgh_saved: "已儲存設定",
 			bgh_done: "完成 · GitHub",
@@ -10592,6 +10614,8 @@ var init_i18n = __esmMin((() => {
 			link_operation: "操作",
 			link_task: "任務",
 			link_pull_request: "PR",
+			link_github_source: "GitHub 主要來源",
+			link_ref_github_source: "https://github.com/owner/repo/issues/123",
 			link_ref_hint: "對象",
 			link_ref_session: "host/session_id",
 			link_ref_checkpoint: "cp_…",
@@ -12284,6 +12308,8 @@ var init_i18n = __esmMin((() => {
 			link_operation: "Operation",
 			link_task: "Task",
 			link_pull_request: "PR",
+			link_github_source: "Primary GitHub source",
+			link_ref_github_source: "https://github.com/owner/repo/issues/123",
 			link_ref_hint: "Target",
 			link_ref_session: "host/session_id",
 			link_ref_checkpoint: "cp_…",
@@ -12718,9 +12744,10 @@ function boardGitHubLink(external) {
 	if (!external || typeof external.repository !== "string" || !/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(external.repository) || !Number.isSafeInteger(external.number) || external.number < 1 || !["issue", "pull_request"].includes(external.kind)) return null;
 	const url = `https://github.com/${external.repository}/${external.kind === "pull_request" ? "pull" : "issues"}/${external.number}`;
 	if (external.url !== url) return null;
+	const marker = external.availability === "missing" ? "bgh_missing_card" : external.draft ? "bgh_draft" : external.state === "closed" && (external.kind === "pull_request" || external.state_reason !== "completed") ? "bgh_closed" : external.state === "closed" && external.state_reason === "completed" ? "bgh_completed" : external.state === "merged" ? "bgh_done" : null;
 	return {
 		url,
-		label: `${boardGitHubText(external.kind === "pull_request" ? "bgh_pr" : "bgh_issue")} #${external.number}`,
+		label: `${boardGitHubText(external.kind === "pull_request" ? "bgh_pr" : "bgh_issue")} #${external.number}${marker ? " · " + boardGitHubText(marker) : ""}`,
 		repository: external.repository
 	};
 }
@@ -12743,6 +12770,11 @@ function boardGitHubPanel({ t, api, alive, caps, form, permitted, workspaceId = 
 		type: "checkbox",
 		checked: true
 	});
+	let includeClosed = h$1("input", {
+		type: "hidden",
+		value: "false"
+	});
+	let history = h$1("input", { type: "checkbox" });
 	const status = h$1("p", {
 		role: "status",
 		class: "muted",
@@ -12776,15 +12808,23 @@ function boardGitHubPanel({ t, api, alive, caps, form, permitted, workspaceId = 
 		enabled.disabled = false;
 		toggle = toggle.cloneNode(true);
 		toggle.disabled = false;
+		includeClosed = includeClosed.cloneNode(true);
+		includeClosed.disabled = false;
+		history = history.cloneNode(true);
+		history.disabled = false;
 		current = projects.find((p) => p.project_id === selected()) || null;
 		repository.value = current?.repository || repository.value || "";
 		toggle.checked = current?.revision ? current.enabled : true;
 		enabled.value = String(toggle.checked);
 		repository.dataset.pmDefault = repository.value;
 		enabled.dataset.pmDefault = enabled.value;
+		history.checked = Boolean(current?.include_closed);
+		includeClosed.value = String(history.checked);
+		includeClosed.dataset.pmDefault = includeClosed.value;
 		const fields = {
 			repository,
 			enabled,
+			include_closed: includeClosed,
 			...workspaceId ? { project_id: project } : {}
 		};
 		let importForm;
@@ -12792,6 +12832,16 @@ function boardGitHubPanel({ t, api, alive, caps, form, permitted, workspaceId = 
 			preferredProject = result.project_id || selected();
 			await refresh(null, true);
 			await onSaved();
+			if ([
+				"unreachable",
+				"rate_limited",
+				"auth_required",
+				"invalid_source",
+				"apply_failed",
+				"sync_failed",
+				"too_large",
+				"identity_conflict"
+			].includes(result.status)) status.textContent = bt("bgh_" + result.status);
 		};
 		importForm = form({
 			t: bt,
@@ -12801,17 +12851,19 @@ function boardGitHubPanel({ t, api, alive, caps, form, permitted, workspaceId = 
 			params: (values) => ({
 				repository: values.repository.trim(),
 				enabled: values.enabled === "true",
+				include_closed: values.include_closed === "true",
 				...workspaceId ? { project_id: values.project_id || null } : {}
 			}),
 			preconditions: () => ({ expected_revision: current?.revision || 0 }),
 			permitted: () => loaded && permitted() && !forms.some((f) => f !== importForm && f.locked()),
 			recoverPermitted: permitted,
 			label: current?.last_sync ? "bgh_sync" : "bgh_import",
-			extra: h$1("div", { class: "capture-fields" }, workspaceId ? h$1("label", {}, bt("bgh_project"), project) : null, h$1("label", {}, bt("bgh_repo"), repository), h$1("label", { class: "capture-choice" }, toggle, bt("bgh_keep")), enabled),
+			extra: h$1("div", { class: "capture-fields" }, workspaceId ? h$1("label", {}, bt("bgh_project"), project) : null, h$1("label", {}, bt("bgh_repo"), repository), h$1("label", { class: "capture-choice" }, toggle, bt("bgh_keep")), h$1("label", { class: "capture-choice" }, history, bt("bgh_history")), enabled, includeClosed),
 			onSaved: saved,
 			savedText: "bgh_checked"
 		});
 		toggle.checked = enabled.value === "true";
+		history.checked = includeClosed.value === "true";
 		current = projects.find((p) => p.project_id === selected()) || null;
 		forms.push(importForm);
 		const save = h$1("div");
@@ -12824,7 +12876,8 @@ function boardGitHubPanel({ t, api, alive, caps, form, permitted, workspaceId = 
 				fields: {},
 				params: () => ({
 					repository: repository.value.trim(),
-					enabled: toggle.checked
+					enabled: toggle.checked,
+					include_closed: history.checked
 				}),
 				preconditions: () => ({ expected_revision: current.revision }),
 				permitted: () => loaded && permitted() && !importForm.locked(),
@@ -12840,6 +12893,10 @@ function boardGitHubPanel({ t, api, alive, caps, form, permitted, workspaceId = 
 		}
 		toggle.addEventListener("change", () => {
 			enabled.value = String(toggle.checked);
+			forms[0]?.changed();
+		});
+		history.addEventListener("change", () => {
+			includeClosed.value = String(history.checked);
 			forms[0]?.changed();
 		});
 		project.addEventListener("change", () => {
@@ -19774,9 +19831,19 @@ var workStatus = (card) => ({
 	review: "in_review",
 	accepted: "done",
 	github_done: "done",
+	github_closed: "historical",
+	github_completed: "historical",
 	archived: "historical"
 })[typeof card?.column === "string" ? card.column : ""] || "unknown";
-var workStatusLabel = (t, card) => card?.column === "github_done" ? boardGitHubText("bgh_done") : card?.column === "accepted" ? t("wv_content_approved") : t("ui_status_" + workStatus(card));
+var workStatusLabel = (t, card) => [
+	"github_done",
+	"github_closed",
+	"github_completed"
+].includes(card?.column) ? boardGitHubText({
+	github_done: "bgh_done",
+	github_closed: "bgh_closed",
+	github_completed: "bgh_completed"
+}[card.column]) : card?.column === "accepted" ? t("wv_content_approved") : t("ui_status_" + workStatus(card));
 function workStatusPill(t, card) {
 	const pill = statusPill(workStatus(card));
 	pill.textContent = workStatusLabel(t, card);
@@ -41019,6 +41086,8 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		return [
 			...columns,
 			"github_done",
+			"github_closed",
+			"github_completed",
 			"archived"
 		].includes(card.column) ? card.column : "unknown";
 	}
@@ -71167,7 +71236,8 @@ async function viewWorkItem(main, wid) {
 		"checkpoint",
 		"operation",
 		"task",
-		"pull_request"
+		"pull_request",
+		"github_source"
 	].map((k) => h("option", { value: k }, t("link_" + k))));
 	const ref = h("input", { placeholder: t("link_ref_hint") });
 	kind.onchange = () => {

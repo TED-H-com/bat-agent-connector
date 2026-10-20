@@ -13,12 +13,21 @@ from tests.test_board_github_sync import issue
 
 @pytest.fixture
 def github(monkeypatch):
-    state = {'requests': [], 'status': 200, 'headers': {}, 'next': True, 'pages': {1: [issue(1)], 2: [issue(2, pr=True, draft=True)]}}
+    state = {'metadata_requests': [], 'repository': {'id': 123, 'node_id': 'R_fixture', 'full_name': 'example/board'}, 'requests': [], 'status': 200, 'headers': {}, 'next': True, 'pages': {1: [issue(1)], 2: [issue(2, pr=True, draft=True)]}}
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass
 
         def do_GET(self):
+            if not urlsplit(self.path).path.endswith('/issues'):
+                state['metadata_requests'].append(self.path)
+                renamed = state.get('rename') and self.path.startswith('/repos/')
+                self.send_response(301 if renamed else 200)
+                if renamed:
+                    self.send_header('Location', f'http://127.0.0.1:{self.server.server_port}/repositories/123')
+                self.end_headers()
+                self.wfile.write(json.dumps(state['repository']).encode())
+                return
             query = parse_qs(urlsplit(self.path).query)
             page = int(query['page'][0])
             state['requests'].append({'path': self.path, 'headers': self.headers})
@@ -153,3 +162,17 @@ def test_custom_api_endpoints_never_borrow_github_com_cli_credentials(url, monke
     monkeypatch.setattr(provider.shutil, 'which', forbidden)
     monkeypatch.setattr(provider.subprocess, 'run', forbidden)
     assert provider.access_token(GitHubConfig(api_url=url)) is None
+
+
+async def test_repository_rename_uses_numeric_identity_without_following_redirect(github):
+    client, state = github
+    state['next'] = False
+    state['rename'] = True
+    state['repository']['full_name'] = 'example/renamed'
+    state['pages'][1][0]['html_url'] = 'https://github.com/example/renamed/issues/1'
+    first = await client.collect('example/board', {})
+    assert first['repository_id'] == 123 and first['repository'] == 'example/renamed'
+    assert state['metadata_requests'] == ['/repos/example/board', '/repositories/123']
+    assert state['requests'][0]['path'].startswith('/repos/example/renamed/issues?')
+    await client.collect('example/renamed', first['pages'])
+    assert state['metadata_requests'][-1] == '/repositories/123'

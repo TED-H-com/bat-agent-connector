@@ -4063,7 +4063,7 @@ async function viewWorkItem(main, wid) {
   let draft = null; // the edit form's values after a stale save, put back into the reloaded form
   // Fields made once and moved into each render: a re-render never throws away what is being typed.
   const newStep = h("input", { placeholder: t("new_step"), maxlength: 300 });
-  const kind = h("select", {}, ...["session", "checkpoint", "operation", "task", "pull_request"].map(k =>
+  const kind = h("select", {}, ...["session", "checkpoint", "operation", "task", "pull_request", "github_source"].map(k =>
     h("option", { value: k }, t("link_" + k))));
   const ref = h("input", { placeholder: t("link_ref_hint") });
   kind.onchange = () => { ref.placeholder = t("link_ref_" + kind.value); };

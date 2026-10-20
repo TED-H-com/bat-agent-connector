@@ -251,7 +251,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   const locked = lane => lane && (lane.matches(':hover') || lane.contains(document.activeElement));
   function laneKey(card) {
     if (group.value === 'milestone') return milestones.find(row => row.plan_revision_id === card.binding.plan_revision_id && row.requirement_ids?.some(id => card.binding.requirement_ids?.includes(id)))?.milestone_id || 'unassigned';
-    return [...columns, 'github_done', 'archived'].includes(card.column) ? card.column : 'unknown';
+    return [...columns, 'github_done', 'github_closed', 'github_completed', 'archived'].includes(card.column) ? card.column : 'unknown';
   }
   function renderColumns(force = false) {
     if (!page) return;

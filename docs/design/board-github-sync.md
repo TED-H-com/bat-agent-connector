@@ -9,12 +9,12 @@ not replace maintenance observations, issue mappings, execution or human approva
 
 All actions require `manage` and the ordinary operation idempotency key.
 `project.github.import` and `project.github.configure` target `{project_id}` and
-accept `{repository: "owner/repo", enabled?: boolean}`. `project.github.sync`
+accept `{repository: "owner/repo", enabled?: boolean, include_closed?: boolean}`. `project.github.sync`
 targets the same project with empty params. Each carries
 `preconditions: {expected_revision}` (initially zero).
 
 `pm.github.import` targets `{workspace_id}`, requires current workspace ownership,
-and accepts `{repository, enabled?, project_id?: null | "prj_…"}`. An existing
+and accepts `{repository, enabled?, include_closed?, project_id?: null | "prj_…"}`. An existing
 project must already be explicitly associated. With no selection it creates a
 central project and association, or resolves the single associated project for
 that repository. Imports also associate the cards with this workspace using the
@@ -45,9 +45,19 @@ Credentials never reach UI, receipts, cache or logs. No redirects are followed.
 GitHub REST API version follows existing configuration. The [repository issues
 endpoint](https://docs.github.com/en/rest/issues/issues#list-repository-issues)
 includes draft and ordinary PRs. Identity uses its stable **issue** node ID for both
-issues and PRs, together with lowercased repository and issue number.
+issues and PRs, together with numeric repository identity. Repository metadata is
+read before the issues traversal. Subsequent reads resolve `/repositories/{id}`;
+a named repository's 301 may supply only a same-origin numeric repository ID.
+The Connector constructs the fixed ID endpoint itself; it never follows a redirect
+URL. Renames/transfers update the canonical display name/URL while matching existing
+cards by issue node ID. Stable card keys, IDs and history survive those changes.
+Changing to another repository does not adopt unrelated node identities.
 
-First import includes open and closed history. New cards and associations put open
+First import creates only open items by default. `include_closed: true` explicitly
+opts into closed history and persists for later syncs; turning it off never deletes
+existing cards. Explicit primary links can still adopt already closed legacy cards,
+with their human lanes preserved. Traversals read all states so tracked closures
+and missing identities are distinguishable from an open-only response. New cards and associations put open
 work first so the first page is actionable; existing order/history is preserved. Subsequent traversals use
 `If-None-Match` and persist each page's ETag and normalized identity/state/title/URL.
 Every cached page is revalidated, including pages after an unchanged first page;
@@ -64,8 +74,11 @@ A traversal is bounded to 100 pages, 100 items per page, 2 MB per response and
 workers after timeout. Any failed/incomplete traversal applies **no partial cards
 or cache**; the previous successful cards remain. Provider state can change during
 pagination; this is eventual synchronization, not a transactional GitHub snapshot.
-Disappearing/transferred/inaccessible issues are retained, never inferred closed.
-Renamed repositories require editing the binding; old cards retain original keys.
+Items absent from a complete traversal retain their last source observation and
+local state with `availability: missing`; the project reports `missing`, not
+“up to date”. Reappearance clears that marker. Incomplete traversals change neither
+cards nor cache. A transfer outside the bound repository is missing until that
+source is explicitly imported; it is never inferred closed.
 
 Enabled schedules retain the original principal and credential identity, not its
 bearer. Revoked/expired API credentials, lost membership or lifecycle admission
@@ -73,9 +86,18 @@ stop automatic sync rather than borrowing a different principal. Configure/impor
 can explicitly authorize it again. Pending operations prevent another scheduled
 import. Settings edits and imports recheck revision, source and membership after
 provider I/O; the local transaction and operation receipt commit together. Each created project,
-item, state change and association uses its existing registered action and a real
+item and association uses its existing registered action and a real
 child operation linked to the import receipt. Only these fixed, non-suspending
 journal handlers run inside the batch transaction; provider I/O finishes before it.
+A failed first import creates no project, project binding or enabled schedule.
+Invalid source titles are rejected before mutation; other deterministic local
+refusals roll back the batch. Existing schedules record a visible failure code,
+backoff and a new sync generation so a terminal operation cannot trap the poller.
+Authorization and lifecycle refusals disable scheduling with distinct statuses; other admission errors use
+`sync_failed` with `last_error`. Config revision tracks configuration changes,
+while sync generation tracks polling intents. Ordinary polls do not invalidate
+settings drafts. Source metadata updates emit source events without changing the
+local work version, content fingerprint or update time, preserving start admission.
 Cancellation is checked after waiting for the import slot and again before local
 mutation. A canceled read cannot create cards or enable a new schedule; completed
 receipts remain recoverable. Canceled scheduled intents retain their original key;
@@ -100,18 +122,49 @@ clears the source lane override.
 An additive nullable `work_items.github_external` stores repository, number, issue
 node ID, stable key, URL, source state and move bookkeeping. A unique expression
 index enforces project/repository/number identity. A new idempotent settings table
-stores schedule, revision, authority and bounded page cache. No `user_version`,
+stores schedule, configuration revision, sync generation, history opt-in, failure code, authority and bounded page cache. A nonunique project/node index supports rename matching without rewriting pre-existing identities. No `user_version`,
 data step, historical copy, ID replacement, item deletion or Hub import is involved.
 Existing journals remain valid; legacy items have no external key until import.
 
-Legacy adoption scans goal/request/acceptance/title and active link refs/notes for
-canonical GitHub issue/PR URLs, plus existing `pull_request` refs. One unambiguous
-card is adopted without replacing its ID, text, links or chosen lane. Ambiguous
-legacy matches or changed node IDs are reported as conflicts; no new duplicate is
-created to work around them. The 96-card snapshot fixture explicitly proves first
-adoption and a second import with zero creates, adoptions or updates.
+Legacy adoption accepts exactly one active `github_source` primary link whose
+whole ref is a canonical `https://github.com/owner/repo/issues/N` or `/pull/N` URL.
+Fragments, queries and trailing prose are rejected. The registered `work_item.link`
+action creates/removes this explicit link kind; the existing UI offers it in both
+locales. Titles, descriptions, acceptance, notes and `pull_request` delivery links
+never establish source identity. Multiple candidates or multiple primary links
+are conflicts; no duplicate is created as a workaround. The 96-card fixture now
+records explicit primary links: the original prose-only snapshot is intentionally
+ineligible for automatic adoption under this stricter contract.
+
+Automatic workspace bindings reuse `pm.work.bind` child receipts and are labelled
+`association_basis: github_import`, derived from the parent operation reference (or `unknown` if its original receipt is unavailable).
+They never claim `explicit_owner_association`. Unscoped imported source-only cards
+are outside the Overview's planned-work scan; local edits, Work start intents and explicit plan associations remain
+subject to its normal bounded coverage. Closed history begins in local `todo`,
+so it supplies no started-work or completion-claim WIP evidence. Source lanes
+supply no cycle time, delivery acceptance or requirement completion.
 
 The shared UI provides editable binding, import/sync, persistent opt-in (on by
 default for the first import), save settings and plain English/zh-TW status for no
 repository, not imported, no open issues, unreachable, rate limited, authorization
-and conflicts. Existing durable form drafts and original operation keys are reused.
+conflicts, missing sources, invalid source data and local/scheduler failures.
+Closed history is a separate unchecked option. Existing durable form drafts and original operation keys are reused.
+
+## Conservative product choices for owner confirmation
+
+- Create open items only by default; closed history requires explicit opt-in.
+- Use “Closed (not completed) / 已關閉（未完成）” for unmerged PRs and every
+  issue closure except explicit `completed`, including unknown reasons.
+- Use “Completed · GitHub / 完成議題 · GitHub” for completed issues, distinct
+  from merged PR “Done · GitHub / 完成 · GitHub” and human content approval.
+- Preserve all local work states and approvals during synchronization; use source
+  lanes only. Adoption never changes a human lane, including closed imports.
+- Require one explicit primary source link; do not guess identity from prose or
+  delivery links. Do not automatically repair pre-existing human completion claims.
+- Exclude unscoped automatic source-only bindings from planned-work progress.
+  Actual local work and plan associations retain the existing PM contracts.
+
+This increment covers the GitHub source semantics within E04/E09 and the existing
+A01–A40 backlog. It changes no R0–R5 acceptance claim and does not complete E00–E11
+or the remaining v1.2 lifecycle work. Real BAT/model, native and physical-mobile
+acceptance remain separate from these fixtures.
