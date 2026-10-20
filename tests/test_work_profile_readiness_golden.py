@@ -6,8 +6,9 @@ import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
-from bat_agent_connector import platform_files, pm_work_profiles, product_preferences
+from bat_agent_connector import platform_files, pm_native_runtime, pm_work_profiles, product_preferences
 from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.host_git import HostGitRunner
 from tests import test_pm_work_profiles as profiles
@@ -19,7 +20,16 @@ world = profiles.world
 GOLDEN = Path(__file__).parent / "fixtures" / "work-profile-readiness.json"
 
 
-async def test_work_profile_readiness_matches_producer_golden(world, mock, tmp_path):
+async def test_work_profile_readiness_matches_producer_golden(world, mock, tmp_path, monkeypatch):
+    # Keep the real producer, with a fixed Linux installation lacking native tools
+    # and credentials. The developer's executables, auth and config are not inputs.
+    native_bin, native_home, native_config = (tmp_path / name for name in
+        ("native-bin", "native-home", "native-system-config"))
+    for directory in (native_bin, native_home, native_config):
+        directory.mkdir()
+    monkeypatch.setattr(pm_native_runtime, "sys", SimpleNamespace(platform="linux"))
+    monkeypatch.setattr(pm_native_runtime, "SYSTEM_CONFIG_ROOT", native_config)
+    monkeypatch.setenv("CODEX_HOME", str(native_home))
     daemon, port = world["d"], world["port"]
     ops = daemon.ops
     owner = Principal("profile-owner", frozenset({"observe", "manage"}))
@@ -54,8 +64,14 @@ async def test_work_profile_readiness_matches_producer_golden(world, mock, tmp_p
 
     async def capture(name):
         before = (len(mock.invokes), len(write_frames(mock)), ops.db.total_changes)
-        status, body = await http(port, "GET", base + "/" + ident + "/readiness", tok=auth)
+        # Only reads use the empty native PATH; the disk Git harness keeps its tools.
+        with monkeypatch.context() as native_inputs:
+            native_inputs.setenv("PATH", str(native_bin))
+            status, body = await http(port, "GET", base + "/" + ident + "/readiness", tok=auth)
         assert status == 200, body
+        native = body["pm_analysis"]["native_analysis"]
+        assert native["eligible_for_preflight"] is False and native["auth_file_readable"] is False
+        assert native["reason"] == "PM_NATIVE_EXECUTABLE_UNAVAILABLE"
         assert body["calls_bat"] is False
         assert before == (len(mock.invokes), len(write_frames(mock)), ops.db.total_changes)
         cases[name] = body
