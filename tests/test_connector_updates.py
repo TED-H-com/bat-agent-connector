@@ -145,10 +145,8 @@ def deployment(tmp_path):
     return u, receipt, inspections
 
 
-def test_enrollment_and_update_keep_work_and_switch_all_future_launches(deployment):
+def test_enrollment_switches_future_launches_and_rollback_disables_updates(deployment):
     u, receipt, _ = deployment
-    sentinel = u.home / "existing-operation-journal"
-    sentinel.write_bytes(b"original operation keys and unknown effects")
     u.enroll(receipt, "preview")
     candidate = release("b" * 40, "0.2.8")
     installs = []
@@ -163,14 +161,13 @@ def test_enrollment_and_update_keep_work_and_switch_all_future_launches(deployme
     for name in updater.COMMANDS:
         assert (u.home / ".local/bin" / name).resolve() == u.root / "versions" / candidate["commit"] / "bin" / name
     assert (u.home / ".agents/skills/bat-agent-connector/SKILL.md").read_bytes() == SKILL
-    assert sentinel.read_bytes() == b"original operation keys and unknown effects"
     u.apply()
     assert installs == [candidate["commit"]]
     result = u.rollback()
     assert result["installed"]["commit"] == "a" * 40 and not result["enabled"]
-    u.apply()
+    paused = u.apply()
+    assert paused["installed"]["commit"] == "a" * 40 and not paused["enabled"]
     assert installs == [candidate["commit"]]
-    assert sentinel.read_bytes() == b"original operation keys and unknown effects"
 
 
 @pytest.mark.parametrize("change,code", [

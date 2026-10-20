@@ -9,9 +9,18 @@ import threading
 import uuid as uuidlib
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from socketserver import TCPServer
 from urllib.parse import unquote
 
 TOKEN = "ghp_fake_" + "x" * 30  # gitleaks:allow (fake test token)
+
+
+class LoopbackHTTPServer(ThreadingHTTPServer):
+    def server_bind(self):
+        # HTTPServer resolves getfqdn(host), which can stall on macOS runners.
+        # This fake only needs its bound numeric address, never reverse DNS.
+        TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
 
 class FakeGitHub:
@@ -48,7 +57,7 @@ class FakeGitHub:
         self.script: list[tuple[str, str, int, dict, dict]] = []
         # (method, path regex): handle the request normally, then cut the reply body short, once
         self.truncate: list[tuple[str, str]] = []
-        self._server = ThreadingHTTPServer(("127.0.0.1", 0), self._handler())
+        self._server = LoopbackHTTPServer(("127.0.0.1", 0), self._handler())
         self.port = self._server.server_address[1]
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
 
