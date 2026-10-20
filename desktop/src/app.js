@@ -116,10 +116,13 @@ async function openDiagnostics() {
     setTimeout(()=>URL.revokeObjectURL(url),1000);return true;
   }});
 }
-async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource) {
+async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource, retainView = false) {
   withdrawDiagnostics(); recentErrors.clear();
-  state.epoch++;
-  state.observations = new Map();
+  const retained = retainView ? {namespace: state.namespace, ready: state.viewReady} : null;
+  // A same-identity resnapshot can retain an editing view and its guarded reads.
+  // A different namespace still invalidates every old callback before mounting.
+  if (!retained) state.epoch++;
+  if (!retained) state.observations = new Map();
   state.connectionError = null;
   state.online = false; state.pollHealth = 'initial'; state.viewReady = false;
   state.caps = caps; state.endpoint = endpoint; state.sync = null;
@@ -155,6 +158,10 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
     state.namespace = storageScope(endpoint, caps.actor);
     // A legacy central has no continuity proof; always read current views after reconnect.
     state.lastEvent = 0;
+  }
+  if (retained) {
+    if (state.namespace === retained.namespace) state.viewReady = retained.ready;
+    else {state.epoch++; state.observations = new Map();}
   }
   state.online = true;
 }
@@ -938,8 +945,9 @@ async function streamEvents() {
           document.getElementById("main").replaceChildren(h("p", {class: "muted"}, t("sync_waiting")));
         }
         try {
-          await activate(state.caps, state.endpoint, true);
-          // Keep open forms intact. Mutations wait until refreshed evidence is mounted.
+          await activate(state.caps, state.endpoint, true, state.scopeIdentity?.configurationSource, !accessChanged && (editing || typing()));
+          // Keep open forms and their same-identity guards intact. The event
+          // reader must remain ready to persist the refreshed checkpoint.
           if (!accessChanged && state.namespace === previous.namespace && (editing || typing())) idleReload = route;
           else await route();
         } catch { state.sync = previous.sync; state.viewReady = true; /* retry continuity proof */ }

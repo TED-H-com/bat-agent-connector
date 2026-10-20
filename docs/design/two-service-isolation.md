@@ -107,3 +107,46 @@ lookup, saved checkpoints and native transition invalidation; it does not replac
 real BAT/provider, Rust bridge, vault, managed/external restart, packaged WebView,
 real installation or R0–R5/A01–A40 acceptance. It contributes to E03/E04/E11 without
 closing unrelated v1.2 work. No source is globally merged or transported.
+
+## Managed crash/rebind followed by a producer reset (M07/M08)
+
+The managed proof (`npm run test:managed-recovery-reset`, the same harness with
+`--managed`) covers recovery on a new port with the same identity, a reset on the
+first event poll, and storage continuity through reload in en-US and zh-TW.
+Real parts are product `managed_runtime.ensure`/`serve`, HTTP/SQLite, bootstrap,
+checkpoints, registry actions with `settle_operations`, and the UI-created accepted
+operation and pending receipt. Only the harness-owned child may be killed; the old
+port is occupied before `ensure` recovers the installation.
+
+Stubs are native status/connect/recovery and credential IPC, MockBat, and paused
+`session.send` scheduling. Connector requests must pass unchanged to the current
+real endpoint; the client learns identity from real bootstrap. This proof does
+not establish installed native or real BAT/model acceptance.
+
+The first forwarded `/events` after recovery must return a producer-computed
+`EVENT_CURSOR_RESET` from `dashboard_sync.check`:
+
+- `cursor_expired` (`src/bat_agent_connector/dashboard_sync.py:141`): append an
+  event beyond the saved cursor while the child is stopped, then prune through
+  it so the existing deletion trigger advances the retention floor.
+- `access_changed` (`src/bat_agent_connector/dashboard_sync.py:136`): hold event
+  forwarding until a real `pm.workspace.member.set` change has settled, then
+  release the poll.
+
+Across recovery, reset and reload, every localStorage/sessionStorage entry must
+remain byte-identical except the current `batc.sync.<namespace>`, which must
+become the refreshed bootstrap checkpoint. Drafts, pending receipts and original
+operation keys stay in their original namespace. Recovery must not automatically
+POST; an explicit retry must reuse the original key and return the original
+operation.
+
+A same-identity resnapshot must keep an editing view's connection epoch and
+readiness so events continue to be read and the checkpoint is saved. When editing
+ends, the view must remount from fresh reads. A different namespace or
+`access_changed` must invalidate and remount; an access change must hide old facts
+and pause actions immediately, without waiting for editing to end.
+
+Rust identity tests must derive valid and identity-negative bootstrap/capabilities
+documents from the [producer golden](../../tests/fixtures/managed-bootstrap.json)
+with coherent identity fields; only malformed-input tests may keep hand-written
+documents.

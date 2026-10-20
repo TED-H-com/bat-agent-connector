@@ -1,6 +1,7 @@
 // M04: one client, two independent real TaskDaemon HTTP services/journals.
 // See docs/design/two-service-isolation.md for the native boundary and evidence.
 import assert from 'node:assert/strict';
+import {storageSnapshot, assertStoragePreserved} from './storage-snapshot.ts';
 import {spawn} from 'node:child_process';
 import {once} from 'node:events';
 import {mkdir, mkdtemp, rm, writeFile} from 'node:fs/promises';
@@ -11,6 +12,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {chromium, expect} from '@playwright/test';
 
 const backend = resolve('..'), started = performance.now();
+const managedMode = process.argv.includes('--managed');
 const temporaryParent = process.env.RUNNER_TEMP || process.env.TMPDIR || join(homedir(), 'agent-work/tmp');
 await mkdir(temporaryParent, {recursive: true});
 const scratch = await mkdtemp(join(temporaryParent, 'two-service-isolation-'));
@@ -42,7 +44,7 @@ async function fixture(label) {
     await Promise.race([stopped, delay(3000, undefined, {ref:false})]);
     if (child.exitCode === null && !child.signalCode) {child.kill('SIGTERM'); await stopped;}
   })();
-  children.push({stop});
+  children.push({stop, isStopped:() => child.exitCode !== null || Boolean(child.signalCode)});
   return {...await next(), control, stop};
 }
 
@@ -141,10 +143,18 @@ async function delivery(page, labels, repository, pr) {
 // and writes go unchanged to the selected real HTTP server, with its own token.
 async function nativeBridge(page, services, run, initial) {
   let selected = initial, next = initial, connected = false;
-  const status = () => ({endpoint:origin(selected) + '/', expected_actor:selected.actor, configuration_source:'external',
-    configuration_reload:true, configuration_setup:false, credential_available:true, credential_saved:true,
+  let recovering = false, rebind = 0, holdEvents = null, holdBootstrap = null;
+  const managed = initial.label === 'M', statuses = [], responses = [], attempts = [];
+  const gate = () => {let release; const promise = new Promise(resolve => {release = resolve;}); return {promise, release};};
+  const status = () => ({endpoint:origin(selected) + '/', expected_actor:selected.actor, configuration_source:managed ? 'managed' : 'external', managed_recovery:recovering ? 'MANAGED_RECOVERING' : null, managed_rebind:rebind,
+    configuration_reload:!managed, configuration_setup:managed, credential_available:true, credential_saved:!managed,
+    credential_source:managed ? 'launch_environment' : 'windows_credential_manager',
     enrollment_supported:false, connected, error:null});
   const http = async (service, input) => {
+    attempts.push({method:input.method, path:input.path, idempotency_key:input.idempotency_key || null});
+    if (managed && recovering) throw Error('Managed child transport unavailable');
+    if (input.path.startsWith('/events') && holdEvents) await holdEvents.promise;
+    if (input.path === '/bootstrap' && holdBootstrap) await holdBootstrap.promise;
     const url = origin(service) + '/api/v1' + input.path;
     const headers = {Authorization:`Bearer ${service.token}`, ...(input.body ? {'Content-Type':'application/json'} : {}),
       ...(input.idempotency_key ? {'Idempotency-Key':input.idempotency_key} : {})};
@@ -152,10 +162,12 @@ async function nativeBridge(page, services, run, initial) {
     const row = record(services, run, 'native-http', service, input.method, url, headers, body);
     const response = await fetch(url, {method:input.method, headers, body, redirect:'error'});
     row.status = response.status;
-    return {status:response.status, data:await response.json()};
+    const data = await response.json();
+    if (managed) responses.push({path:input.path, status:response.status, data});
+    return {status:response.status, data};
   };
   await page.exposeFunction('twoServiceInvoke', async (command, args) => {
-    if (command === 'native_status') return status();
+    if (command === 'native_status') {const value = status(); statuses.push(value); return value;}
     if (command === 'connector_connect') {
       const caps = await http(selected, {method:'GET', path:'/capabilities'});
       const bootstrap = await http(selected, {method:'GET', path:'/bootstrap'});
@@ -164,7 +176,7 @@ async function nativeBridge(page, services, run, initial) {
       const identity = {server_id:bootstrap.data.sync.server_id, principal_id:bootstrap.data.sync.principal_id};
       assert.equal(identity.server_id, selected.server_id); assert.equal(identity.principal_id, selected.principal_id);
       connected = true;
-      return {...caps.data, desktop_identity:identity};
+      return managed ? bootstrap.data.capabilities : {...caps.data, desktop_identity:identity};
     }
     if (command === 'connector_request') return http(selected, args.input);
     if (command === 'connector_disconnect') {connected = false; return;}
@@ -174,7 +186,13 @@ async function nativeBridge(page, services, run, initial) {
   });
   await page.addInitScript(() => Object.assign(window, {isTauri:true, __TAURI_INTERNALS__:{invoke:(command, args) => window.twoServiceInvoke(command, args)}}));
   await page.route('**/api/v1/**', () => {throw Error('Native Connector request bypassed IPC');});
-  return value => {next = value;}; // external edit of the fixed configuration, then UI reload
+  return Object.assign(value => {next = value;}, {
+    statuses, responses, attempts,
+    crash() {recovering = true;},
+    recover(port) {selected.port = port; recovering = false; rebind++;},
+    holdEvents() {holdEvents = gate();}, releaseEvents() {holdEvents?.release(); holdEvents = null;},
+    holdBootstrap() {holdBootstrap = gate();}, releaseBootstrap() {holdBootstrap?.release(); holdBootstrap = null;},
+  }); // external edit of the fixed configuration, then UI reload
 }
 
 async function pass(services, locale, native) {
@@ -327,9 +345,150 @@ async function pass(services, locale, native) {
   } finally {await context.close(); currentPage = null;}
 }
 
+async function managedPass(service, locale, reason) {
+  const run = `managed-${reason}-${locale}`, labels = texts(locale);
+  const context = await browser.newContext({locale, viewport:{width:1280, height:900}});
+  const page = currentPage = await context.newPage(), errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const bridge = await nativeBridge(page, [service], run, service);
+  let before, namespace;
+  const raw = async step => {
+    const storage = await storageSnapshot(page);
+    snapshots.push({run, step, namespace, ...storage});
+    return storage;
+  };
+  try {
+    // Page assets keep one browser origin while native transport changes ports.
+    await page.goto(origin(service) + '/dashboard/' + session);
+    await expect(composer(page)).toBeVisible();
+    const identity = bridge.responses.find(value => value.path === '/bootstrap').data;
+    namespace = ['managed', 'v1', identity.sync.server_id, identity.sync.principal_id, identity.capabilities.actor].map(encodeURIComponent).join(':');
+    const checkpointKey = `batc.sync.${namespace}`;
+    const pending = () => page.evaluate(namespace => Object.entries(localStorage)
+      .filter(([key]) => key.startsWith(`batc.key.${namespace}.send.`)).map(([storageKey, value]) => ({storageKey, raw:value, ...JSON.parse(value)})), namespace);
+    const sentText = `Real accepted instruction ${run}`;
+    await composer(page).fill(sentText);
+    await page.getByRole('button', {name:labels.send, exact:true}).click();
+    await expect.poll(async () => (await pending())[0]?.op || '').toMatch(/^op_/);
+    const original = (await pending())[0];
+    assert.equal((await service.control('report')).instructions.operations.find(value => value.operation_id === original.op).status, 'accepted');
+    const draft = `Unsent ${run}\n保留原始位元組 ✎`;
+    await composer(page).fill(draft);
+    const originalComposer = await composer(page).elementHandle();
+    await checkpoint(page, namespace, service);
+    // Other namespaces and unscoped bytes must survive too. These are storage
+    // sentinels, never substitute API facts/receipts/checkpoints.
+    await page.evaluate(() => {
+      localStorage.setItem('batc.draft.managed:v1:other:principal:actor.send.h1.other', 'Other namespace ✎');
+      localStorage.setItem('batc.draft..untouched', 'Empty namespace sentinel');
+      sessionStorage.setItem('batc.tree.managed:v1:other:principal:actor', '["other"]');
+      sessionStorage.setItem('batc.repo', 'example/retained-legacy');
+    });
+    before = await raw('before-crash');
+    const stale = before.localStorage.find(([key]) => key === checkpointKey)[1];
+    const oldPort = service.port, crashIndex = requests.length, crashAttempts = bridge.attempts.length;
+    bridge.crash();
+    const crash = await service.control('crash');
+    assert.equal(crash.occupied_port, oldPort);
+    await expect(page.locator('#live')).toContainText(locale === 'zh-TW' ? '正在重新啟動本機背景服務' : 'Restarting local service', {timeout:10000});
+    if (reason === 'cursor_expired') await service.control(reason);
+    bridge.holdEvents(); bridge.holdBootstrap();
+    const recovered = await service.control('recover');
+    assert.equal(recovered.same_identity_and_token, true);
+    assert.equal(recovered.children, 2);
+    assert.notEqual(recovered.port, oldPort);
+    bridge.recover(recovered.port);
+    if (reason === 'access_changed') {
+      const membership = await service.control(reason);
+      assert.equal(membership.status, 'succeeded');
+    }
+    const bootstrapCount = bridge.responses.filter(value => value.path === '/bootstrap').length;
+    bridge.releaseEvents();
+    await expect.poll(() => bridge.responses.filter(value => value.path.startsWith('/events') && new URL('http://fixture' + value.path).searchParams.get('checkpoint') === JSON.parse(stale).token && value.status === 409).length, {timeout:10000}).toBe(1);
+    const first = requests.slice(crashIndex).find(value => value.url.includes('/events'));
+    assert.equal(first.target_endpoint, origin(service));
+    assert.equal(first.status, 409, 'The first forwarded poll after recovery must reset');
+    const reset = bridge.responses.findLast(value => value.path.startsWith('/events'));
+    assert.equal(reset.data.error.code, 'EVENT_CURSOR_RESET');
+    assert.equal(reset.data.error.reason, reason);
+    if (reason === 'access_changed') {
+      await expect(composer(page)).toHaveCount(0);
+      assert.equal(await originalComposer.evaluate(node => node.isConnected), false);
+      await expect(page.locator('.message-body').filter({hasText:service.marker})).toHaveCount(0);
+    } else {
+      assert.equal(await originalComposer.evaluate(node => node.isConnected), true);
+      await expect(composer(page)).toHaveValue(draft);
+      await expect(page.locator('.message-body').filter({hasText:service.marker}).first()).toBeVisible();
+    }
+    assertStoragePreserved(before, await raw('reset-bootstrap-held'), checkpointKey);
+    bridge.releaseBootstrap();
+    await expect.poll(() => bridge.responses.filter(value => value.path === '/bootstrap').length).toBe(bootstrapCount + 1);
+    const refreshed = bridge.responses.findLast(value => value.path === '/bootstrap').data.sync.checkpoint;
+    await expect(composer(page)).toHaveValue(draft);
+    await expect(page.locator('.message-body').filter({hasText:service.marker}).first()).toBeVisible();
+    await expect(page.locator('#live')).toHaveAttribute('data-connection', 'connected', {timeout:10000});
+    await expect.poll(() => page.evaluate(key => localStorage.getItem(key), checkpointKey)).toBe(JSON.stringify(refreshed));
+    assert.notEqual(JSON.stringify(refreshed), stale);
+    if (reason !== 'access_changed') assert.equal(await originalComposer.evaluate(node => node.isConnected), true);
+    const after = await raw('reset-settled');
+    assertStoragePreserved(before, after, checkpointKey);
+    assert.deepEqual(await pending(), [original]);
+    assert.equal(requests.slice(crashIndex).filter(value => value.method === 'POST').length, 0, 'No writes during crash/recovery/reset');
+    assert.equal(bridge.attempts.slice(crashAttempts).filter(value => value.method === 'POST').length, 0, 'No POST attempts hidden by recovery IPC');
+    assert.ok(bridge.statuses.some(value => value.managed_rebind === 1 && value.endpoint === origin(service) + '/'));
+    // Preserve origin/storage while reloading; the old port is occupied. Serve
+    // only page assets from the current runtime. Connector traffic still uses IPC.
+    await page.route('**/dashboard/**', async route => {
+      const url = new URL(route.request().url());
+      await route.fulfill({response:await route.fetch({url:origin(service) + url.pathname + url.search})});
+    });
+    await page.reload();
+    await expect(composer(page)).toHaveValue(draft);
+    await checkpoint(page, namespace, service);
+    assertStoragePreserved(before, await raw('reloaded'), checkpointKey);
+    assert.deepEqual(await pending(), [original]);
+    await receipts(page, labels, original, sentText);
+    // This pending receipt has no resend control. Submitting the identical
+    // original composer request is the UI's explicit original-key retry path.
+    assert.equal(await page.locator(`[data-instruction-operation="${original.op}"] button`).count(), 0);
+    assert.equal(requests.slice(crashIndex).filter(value => value.method === 'POST').length, 0);
+    await composer(page).fill(sentText);
+    await page.getByRole('button', {name:labels.send, exact:true}).click();
+    await expect.poll(() => requests.filter(value => value.run === run && value.method === 'POST' && value.idempotency_key === original.key).length).toBe(2);
+    const sends = requests.filter(value => value.run === run && value.method === 'POST');
+    await expect.poll(() => sends[1].status).toBe(200);
+    assert.equal(sends[1].target_endpoint, origin(service));
+    assert.equal(sends[1].body, sends[0].body);
+    assert.deepEqual(await pending(), [original]);
+    const report = await service.control('report');
+    assert.equal(report.instructions.operations.length, 1);
+    assert.equal(report.instructions.operations[0].operation_id, original.op);
+    assert.deepEqual(report.sends, []);
+    assert.deepEqual(errors, []);
+    results.push({run, reason, oldPort, newPort:service.port, checkpointChanged:true, namespacesByteIdentical:true,
+      noPostsDuringRecovery:true, postAttemptsDuringRecovery:0, receiptResendControl:false, explicitComposerReplay:true});
+    console.log(`${run}: real crash/rebind → first-poll ${reason} → byte-exact storage → reload → original-key replay passed`);
+  } catch (error) {
+    await raw('failure');
+    await page.screenshot({path:join(evidence, `${run}-failure.png`), fullPage:true});
+    throw error;
+  } finally {
+    bridge.releaseEvents(); bridge.releaseBootstrap();
+    await context.close(); currentPage = null;
+  }
+}
+
 try {
   browser = await chromium.launch();
   for (const locale of locales) {
+    if (managedMode) {
+      for (const reason of ['cursor_expired', 'access_changed']) {
+        const service = await fixture('managed');
+        await managedPass(service, locale, reason);
+        await service.stop();
+      }
+      continue;
+    }
     const services = await Promise.all([fixture('A'), fixture('B')]);
     const [a, b] = services;
     assert.equal(a.actor, b.actor);
@@ -340,7 +499,7 @@ try {
     await pass(services, locale, true);
     await Promise.all(services.map(service => service.stop()));
   }
-  console.log(`Two-service isolation: ${results.length} full passes in ${((performance.now() - started) / 1000).toFixed(2)}s`);
+  console.log(`${managedMode ? 'Managed recovery/reset' : 'Two-service isolation'}: ${results.length} full passes in ${((performance.now() - started) / 1000).toFixed(2)}s`);
 } catch (error) {
   if (currentPage && !currentPage.isClosed()) await currentPage.screenshot({path:join(evidence, 'failure.png'), fullPage:true});
   throw error;
@@ -351,4 +510,6 @@ try {
   await browser?.close();
   await Promise.all(children.map(child => child.stop()));
   await rm(scratch, {recursive:true, force:true});
+  assert.ok(children.every(child => child.isStopped()), 'Every fixture and its owned runtime must stop');
+  await writeFile(join(evidence, 'cleanup.json'), JSON.stringify({fixtureProcessesStopped:children.length, scratchRemoved:true, runtimeChildrenJoined:true}, null, 2) + '\n');
 }

@@ -1,5 +1,6 @@
 import {test, expect, type Page} from '@playwright/test';
 import {readFileSync} from 'node:fs';
+import {storageSnapshot, assertStoragePreserved} from './storage-snapshot';
 
 // Generated and drift-checked by the real Python ApiV1.bootstrap handler.
 const bootstrap = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-bootstrap.json', import.meta.url), 'utf8'));
@@ -242,11 +243,14 @@ for (const locale of ['en-US', 'zh-TW']) {
     const page = await context.newPage();
     await setup(page, {source: 'external'});
     await page.locator('textarea').first().fill('External central draft');
+    await expect.poll(() => page.evaluate(() => Object.keys(localStorage).some(key => key.startsWith('batc.sync.')))).toBe(true);
+    const before = await storageSnapshot(page);
+    const checkpointKey = before.localStorage.find(([key]) => key.startsWith('batc.sync.'))![0];
     await page.evaluate(() => {(window as any).__storage.reset = true;});
     await expect.poll(() => page.evaluate(() => (window as any).__storage.bootstraps)).toBeGreaterThan(1);
     await expect(page.locator('textarea').first()).toHaveValue('External central draft');
     expect(await page.evaluate(() => (window as any).__storage.writes)).toBe(0);
-    expect(await page.evaluate(() => Object.keys(localStorage).some(key => key.includes('managed:v1:')))).toBe(false);
+    assertStoragePreserved(before, await storageSnapshot(page), checkpointKey);
     await context.close();
   });
 }

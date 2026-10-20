@@ -100,10 +100,9 @@ must verify the same identity. A successful rebind advances the bridge generatio
 invalidating in-flight responses and file scopes. A native recovery counter triggers
 fresh navigation/shell reads even when restart produces no event; failed views
 retry through the existing deferred-render guards. Failed initial managed reads
-remain eligible for native recovery; an explicit Disconnect disables it. It retains existing drafts,
-event checkpoints and operation keys, and never resends an application mutation.
-Managed `/capabilities` and `/bootstrap` both include `desktop_identity`. A managed
-cursor reset already retained the scope before this namespace correction. An
+remain eligible for native recovery; an explicit Disconnect disables it. Client state
+across recovery/reset follows the [shared managed resnapshot contract](two-service-isolation.md#managed-crashrebind-followed-by-a-producer-reset-m07m08).
+Managed `/capabilities` and `/bootstrap` both include `desktop_identity`. An
 external central may omit that field from bootstrap; the native bridge still
 checks the bootstrap server/principal against its verified credential identity.
 Missing the optional field alone is not evidence of an account change.
