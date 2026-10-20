@@ -69,6 +69,50 @@ step, so the updater never offers a rollback across it. The journal fence is
 the last line of defense for older or manually selected packages.
 Pre-enrollment deployment backups remain available to the operator separately.
 
+## Read-only rollback compatibility preview
+
+`batc-update rollback --preview` observes the configured local journal;
+`--journal /path/to/tasks.sqlite3` selects an explicit journal for the preview.
+Ordinary rollback and managed Desktop downgrade refusal are unchanged. Preview
+is separate from `status` so existing status readers keep their output contract.
+It does not acquire/create an updater lease, reconcile activation, invoke an
+installer, send operations, or restart a running process. It creates only a
+short-lived private temporary disk copy of the journal and WAL: original files
+are opened with `O_RDONLY`, and SQLite opens the copy with `mode=ro`. Opening the
+original with `mode=ro` alone could still update WAL shared-memory read marks.
+The copy excludes original shared memory; changed file generations, unreadable
+data, a recovery journal, or snapshots exceeding 128 MiB produce unknown facts.
+Temporary copies are removed when the read completes.
+
+Every fact has a value, compatibility classification, reason, evidence build,
+observer build and observation time. Journal data step, newer-journal fence,
+in-flight action/status and step counts, credential records and enrollment
+formats remain separate facts. The previous build's support comes only from
+its own `compatibility.json`, read without executing code and checked against
+its saved package digest. A missing, malformed, unreadable or changed declaration
+cannot establish support. Existing releases through 0.2.12 have no declaration;
+version numbers and source-code text searches are not substitutes. The new file
+ships with subsequent builds; a freshness test compares it with the declaration
+producer, current `LATEST_DATA_STEP`, package version and updater epoch.
+
+`compatible` means all observed facts are known and compatible with the verified
+declarations. `incompatible` means at least one known fact conflicts, even when
+other facts are unknown. Otherwise the verdict is `unknown`, never safe. An empty
+credential store is a known absence of records, not a known credential format.
+Present API-principal records, task capabilities and the local admin token have
+no independent format version and remain unknown. Updater state has format 1
+and an epoch; retained deployment receipts have no format version and remain
+unknown. External BAT/profile/keychain credentials are not inspected. The
+shipped declaration certifies no in-flight actions yet; their support remains
+unknown, including legacy task/command work. Parameterized test declarations
+exercise lower data-step maxima, missing fences and future support separately.
+
+Even `compatible` does not prove every rollback effect will succeed: observation
+can become stale, external systems can change, and declarations do not execute
+the old reconciler. Whether rollback should refuse incompatible or unknown
+evidence, or offer force, remains owner decision O07. Preview does not enforce
+such a policy or change automatic update/downgrade rules.
+
 ## Bounds and recovery
 
 Network responses, release enumeration and subprocess time are bounded. Only
