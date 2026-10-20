@@ -65,11 +65,12 @@ import { orchestrationPanel, orchestrationActions } from "./orchestration.js";
 import { repositoryStartPanel } from "./repository-start.js";
 import { mountArtifactReview, managedCaptureExecution } from "./artifact-review.js";
 import { consumePageAsync, settleRefreshes, storageScope } from "./state/events.ts";
+import {managedStorageScope, migrateManagedStorage} from './state/storage-identity.ts';
 import {renderDeliveryWork, renderObservedResource, unavailableProject} from "./observed-resource.js";
 import {observedText} from "./observed-resource-strings.js";
 
 const TOKEN_KEY = "batc.dashboard.token";
-const state = { token: null, caps: null, lastEvent: 0, lastEventAt: 0, listeners: new Set(), namespace: "", epoch: 0, online: false, pollHealth: 'initial', viewReady: false, sync: null, endpoint: "", connectionError: null, nativeBusy: false, nativeAttempt: 0, connectionNotice: null, refreshCycle: null };
+const state = { token: null, caps: null, lastEvent: 0, lastEventAt: 0, listeners: new Set(), namespace: "", scopeIdentity: null, epoch: 0, online: false, pollHealth: 'initial', viewReady: false, sync: null, endpoint: "", connectionError: null, nativeBusy: false, nativeAttempt: 0, connectionNotice: null, refreshCycle: null };
 const recentErrors = errorRing();
 const diagnosticSessions = new Map();
 let diagnosticSessionsRead = false;
@@ -115,12 +116,7 @@ async function openDiagnostics() {
     setTimeout(()=>URL.revokeObjectURL(url),1000);return true;
   }});
 }
-async function activate(caps, endpoint = location.origin, reset = false) {
-  const sameIdentity = nativeDesktop && caps.actor === state.caps?.actor && caps.desktop_identity && state.caps?.desktop_identity
-    && caps.desktop_identity.server_id === state.caps.desktop_identity.server_id
-    && caps.desktop_identity.principal_id === state.caps.desktop_identity.principal_id;
-  const scopeEndpoint = sameIdentity ? state.scopeEndpoint || state.endpoint || endpoint : endpoint;
-  state.scopeEndpoint = scopeEndpoint;
+async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource) {
   withdrawDiagnostics(); recentErrors.clear();
   state.epoch++;
   state.observations = new Map();
@@ -137,7 +133,14 @@ async function activate(caps, endpoint = location.origin, reset = false) {
       bootstrap.capabilities?.actor !== caps.actor ||
       (caps.desktop_identity && (caps.desktop_identity.server_id !== sync.server_id || caps.desktop_identity.principal_id !== sync.principal_id))) throw new Error("Invalid central bootstrap identity");
     state.caps = bootstrap.capabilities;
-    state.namespace = storageScope(scopeEndpoint, caps.actor, sync.server_id, sync.principal_id);
+    // Managed capabilities include desktop_identity; external centrals may omit
+    // it. The bridge verifies bootstrap in both cases. Only the native managed
+    // route treats a random loopback port as transport rather than storage identity.
+    const identity = {actor: caps.actor, server_id: sync.server_id, principal_id: sync.principal_id};
+    const managed = nativeDesktop && configurationSource === 'managed';
+    if (managed) migrateManagedStorage(identity, localStorage, sessionStorage);
+    state.scopeIdentity = {...identity, configurationSource};
+    state.namespace = managed ? managedStorageScope(identity) : storageScope(endpoint, caps.actor, sync.server_id, sync.principal_id);
     state.sync = sync.checkpoint;
     if (!reset) {
       try {
@@ -148,6 +151,7 @@ async function activate(caps, endpoint = location.origin, reset = false) {
     }
     state.lastEvent = state.sync.cursor;
   } else {
+    state.scopeIdentity = null;
     state.namespace = storageScope(endpoint, caps.actor);
     // A legacy central has no continuity proof; always read current views after reconnect.
     state.lastEvent = 0;
@@ -163,6 +167,7 @@ function disconnect() {
   if (state.token === browserSessionToken) forgetBrowserSession()?.catch(() => {});
   withdrawDiagnostics(); recentErrors.clear();
   state.epoch++; clearToken(); state.token = null; state.caps = null; state.lastEvent = 0; state.lastEventAt = 0;
+  state.scopeIdentity = null;
   state.online = false; state.viewReady = false; state.sync = null;
 }
 
@@ -3456,8 +3461,9 @@ async function nativeTransition(kind, config = null) {
         state.connectionNotice = t("desktop_enrollment_cancelled");
       } else {
         state.token = "native-credential";
-        // A new verified credential never reuses the old backend/principal namespace.
-        try { await activate(caps, status.endpoint); }
+        // Reuse storage only for this verified identity, including an explicitly
+        // reconnected managed account; a different backend/principal stays isolated.
+        try { await activate(caps, status.endpoint, false, status.configuration_source); }
         catch (error) { if (attempt === state.nativeAttempt) { if (kind !== "recover") await nativeDisconnect(); disconnect(); } throw error; }
         if (kind === "connect" && attempt === state.nativeAttempt) location.hash = "#/home";
       }
@@ -4867,7 +4873,7 @@ async function start() {
         const caps = await nativeConnect();
         if (attempt === state.nativeAttempt) {
           state.token = "native-credential";
-          await activate(caps, status.endpoint);
+          await activate(caps, status.endpoint, false, status.configuration_source);
         }
       }
     } catch (error) {
