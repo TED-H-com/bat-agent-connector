@@ -10,8 +10,9 @@ import pytest
 from bat_agent_connector import api_auth, deployment_store
 from bat_agent_connector.config import parse_config
 from bat_agent_connector.errors import ConfigError
-from bat_agent_connector.task_journal import Journal
+from bat_agent_connector.task_journal import LATEST_DATA_STEP, Journal
 from tests.legacy_deployment_fixture import legacy_deployment
+from tests.test_journal_compatibility import snapshot as journal_snapshot
 
 
 def recipe_config():
@@ -160,13 +161,21 @@ def test_delivery_data_step3_crash_rolls_back_whole(tmp_path, monkeypatch):
     j.close()
 
 
-def test_delivery_fresh_post_step2_journal_ends_at3_and_ddl_preserves_current_version(tmp_path):
+@pytest.mark.parametrize("version", [LATEST_DATA_STEP, 8])
+def test_delivery_fresh_post_step2_journal_ends_at3_and_ddl_preserves_current_version(tmp_path, version):
     path = tmp_path / "fresh.db"
     version2_database(path)
     j = Journal(path)
     assert j.db.execute("PRAGMA user_version").fetchone()[0] == 3
+    j.db.execute(f"PRAGMA user_version={version}")
     j.db.execute("DROP TABLE deployments")
     j.close()
+    if version > LATEST_DATA_STEP:
+        before = journal_snapshot(path)
+        with pytest.raises(ValueError, match="JOURNAL_NEWER_DATA_STEP"):
+            Journal(path)
+        assert journal_snapshot(path) == before
+        return
     j = Journal(path)
     assert j.db.execute("PRAGMA user_version").fetchone()[0] == 3
     assert j.db.execute("SELECT COUNT(*) FROM deployments").fetchone()[0] == 0

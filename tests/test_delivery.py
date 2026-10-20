@@ -16,6 +16,7 @@ from bat_agent_connector.task_daemon import TaskDaemon
 from tests.fakegithub import TOKEN, FakeGitHub
 from tests.fakeverifier import FakeVerifier
 from tests.operation_helpers import settle_operations
+from tests.test_journal_compatibility import snapshot as journal_snapshot
 
 HEAD = "a" * 40
 MERGED = "9" * 40
@@ -998,6 +999,12 @@ def test_part_a_preview_migration_reopens_without_data_change(tmp_path, version)
     schema_query = "SELECT name,type,sql FROM sqlite_master WHERE name IN (?,?,?,?) ORDER BY name"
     assert not j.db.execute(schema_query, tuple(expected)).fetchall()
     j.close()
+    if version > LATEST_DATA_STEP:
+        before = journal_snapshot(path)
+        with pytest.raises(ValueError, match="JOURNAL_NEWER_DATA_STEP"):
+            Journal(path)
+        assert journal_snapshot(path) == before
+        return
     j = Journal(path)
     assert j.db.execute("PRAGMA user_version").fetchone()[0] == max(version, LATEST_DATA_STEP)
     schema = j.db.execute(schema_query, tuple(expected)).fetchall()
