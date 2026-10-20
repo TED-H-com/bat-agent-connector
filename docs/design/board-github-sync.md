@@ -191,3 +191,7 @@ This increment covers the GitHub source semantics within E04/E09 and the existin
 A01–A40 backlog. It changes no R0–R5 acceptance claim and does not complete E00–E11
 or the remaining v1.2 lifecycle work. Real BAT/model, native and physical-mobile
 acceptance remain separate from these fixtures.
+
+Draft is an independent source marker: a closed Draft PR shows both its closure
+and Draft label in Board and Work. A missing observation continues to show only
+the missing marker instead of implying its previous source state is current.

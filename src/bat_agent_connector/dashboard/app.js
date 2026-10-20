@@ -12766,10 +12766,11 @@ function boardGitHubLink(external) {
 	if (!external || typeof external.repository !== "string" || !/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(external.repository) || !Number.isSafeInteger(external.number) || external.number < 1 || !["issue", "pull_request"].includes(external.kind)) return null;
 	const url = `https://github.com/${external.repository}/${external.kind === "pull_request" ? "pull" : "issues"}/${external.number}`;
 	if (external.url !== url) return null;
-	const marker = external.availability === "missing" ? "bgh_missing_card" : external.draft ? "bgh_draft" : external.state === "closed" && (external.kind === "pull_request" || external.state_reason !== "completed") ? "bgh_closed" : external.state === "closed" && external.state_reason === "completed" ? "bgh_completed" : external.state === "merged" ? "bgh_done" : null;
+	const stage = external.state === "closed" && (external.kind === "pull_request" || external.state_reason !== "completed") ? "bgh_closed" : external.state === "closed" && external.state_reason === "completed" ? "bgh_completed" : external.state === "merged" ? "bgh_done" : null;
+	const markers = external.availability === "missing" ? ["bgh_missing_card"] : [stage, external.draft ? "bgh_draft" : null].filter(Boolean);
 	return {
 		url,
-		label: `${boardGitHubText(external.kind === "pull_request" ? "bgh_pr" : "bgh_issue")} #${external.number}${marker ? " · " + boardGitHubText(marker) : ""}`,
+		label: [`${boardGitHubText(external.kind === "pull_request" ? "bgh_pr" : "bgh_issue")} #${external.number}`, ...markers.map((key) => boardGitHubText(key))].join(" · "),
 		repository: external.repository
 	};
 }

@@ -111,19 +111,20 @@ test('unknown activity, stale observations and manual sessions remain honest and
   expect(f.data.posts).toEqual([]);
 });
 
-for (const lang of ['en', 'zh-TW']) for (const native of [false, true]) test(`GitHub source closure remains separate from Work runtime ${lang} ${native}`, async ({page}) => {
+for (const lang of ['en', 'zh-TW']) for (const native of [false, true]) for (const draft of [false, true]) test(`GitHub source closure remains separate from Work runtime ${lang} ${native} draft=${draft}`, async ({page}) => {
   const f = workspaceFixture(lang); f.data.linkedItem = true;
   const item = f.fixture.data.items[0];
   Object.assign(item, {state: 'doing', display_state: 'github_closed', source_lane: 'github_closed',
     completion: {...item.completion, display_state: 'doing', pending: false, approved: false},
     external: {source: 'github', repository: 'example/board', repository_id: 1, number: 1, node_id: 'PR_1',
       url: 'https://github.com/example/board/pull/1', kind: 'pull_request', state: 'closed',
-      state_reason: null, draft: false, availability: 'current', board_lane: 'github_closed'}});
+      state_reason: null, draft, availability: 'current', board_lane: 'github_closed'}});
   await page.addInitScript(lang => Object.defineProperty(navigator, 'language', {value: lang}), lang);
   await mountWorkspace(page, native, f);
   await page.goto('/dashboard/?workbench=1#/item/' + item.work_item_id);
   const source = page.locator('[data-workbench-github]');
   await expect(source).toContainText(lang === 'en' ? 'Closed (not completed)' : '已關閉（未完成）');
+  if (draft) await expect(source).toContainText(lang === 'en' ? 'Draft' : '草稿');
   await expect(source.getByRole('link')).toHaveAttribute('href', item.external.url);
   await expect(page.locator('[data-workbench-summary]')).toContainText(lang === 'en' ? 'Output is arriving' : '正在收到輸出');
   expect(f.data.posts).toEqual([]);
