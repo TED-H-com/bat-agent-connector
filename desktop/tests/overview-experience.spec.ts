@@ -1,4 +1,3 @@
-import {mkdirSync} from 'node:fs';
 import {expect, test, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture, demoRoute} from './demo/index.ts';
@@ -73,7 +72,7 @@ async function burst(page: Page, f: ReturnType<typeof fixture>) {
   await expect.poll(() => f.state.reads.some(path => path.startsWith(`/events?after=${f.state.cursor}&`))).toBe(true);
 }
 
-for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`empty overview sources distinguish unknown from recorded absence ${locale} ${width}`, async ({browser, baseURL}) => {
+for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`empty overview sources distinguish unknown from recorded absence ${locale} ${width}`, async ({browser, baseURL}, testInfo) => {
   const context = await browser.newContext({baseURL, locale, colorScheme, viewport: {width, height: width === 390 ? 844 : 900}});
   const page = await context.newPage(), f = fixture(locale);
   Object.assign(f.state.data, {milestones: [], next_milestone: null, recent_deliveries: [], recent_deliveries_complete: false});
@@ -82,8 +81,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`emp
   f.state.data.unknown = [{field: 'milestones', reason: 'source_unavailable'}, {field: 'work', reason: 'source_incomplete'}];
   await boot(page, f); await page.evaluate(() => document.fonts.ready);
   if (process.env.BATC_OVERVIEW_SHOTS) {
-    const dir = `${process.env.TMPDIR}/shots`; mkdirSync(dir, {recursive: true});
-    await page.screenshot({path: `${dir}/${process.env.BATC_OVERVIEW_SHOTS}-${locale}-${width}-unknown.png`, fullPage: true, animations: 'disabled'});
+    await page.screenshot({path: testInfo.outputPath(`${process.env.BATC_OVERVIEW_SHOTS}-${locale}-${width}-unknown.png`), fullPage: true, animations: 'disabled'});
   }
   const milestones = root(page).getByRole('heading', {name: locale === 'en' ? 'Milestones' : '里程碑', exact: true}).locator('..').locator('..');
   const deliveries = root(page).locator('.pm-overview-side > section').last();
@@ -118,7 +116,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`emp
   expect(f.state.writes).toEqual([]); await context.close();
 });
 
-for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) for (const reading of ['focused', 'hovered', 'selected', 'visible']) test(`changed event burst holds the ${reading} attention row ${locale} ${width}`, async ({browser, baseURL}) => {
+for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) for (const reading of ['focused', 'hovered', 'selected', 'visible']) test(`changed event burst holds the ${reading} attention row ${locale} ${width}`, async ({browser, baseURL}, testInfo) => {
   const context = await browser.newContext({baseURL, locale, colorScheme, viewport: {width, height: width === 390 ? 844 : 900}});
   const page = await context.newPage(), f = fixture(locale);
   // Enough authorized rows to keep the passive anchor away from either scroll limit
@@ -155,8 +153,8 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) for (cons
   }
   const top = (await row.boundingBox())!.y, originalOrder = f.state.data.attention.map((item: any) => item.key);
   const scenario = reading === 'selected' ? 'selected' : 'passive';
-  const shots = ['visible', 'selected'].includes(reading) && process.env.BATC_OVERVIEW_SHOTS ? `${process.env.TMPDIR}/${reading === 'selected' ? 'fix3-shots' : 'follow-up-shots'}` : null;
-  if (shots) {mkdirSync(shots, {recursive: true}); await page.screenshot({path: `${shots}/${locale}-${width}-${scenario}-before.png`, animations: 'disabled'});}
+  const shots = ['visible', 'selected'].includes(reading) && process.env.BATC_OVERVIEW_SHOTS ? testInfo.outputPath('screenshots') : null;
+  if (shots) {await page.screenshot({path: testInfo.outputPath(`${locale}-${width}-${scenario}-before.png`), animations: 'disabled'});}
   f.state.data.attention[0].title = (locale === 'en' ? 'A revised dependency blocker needs a longer maintenance assessment and remediation description. ' : '相依套件阻礙已更新，需要更詳細的維護評估與修正說明。').repeat(5);
   f.state.data.attention.reverse(); f.state.data.progress.accepted = 2; f.state.data.progress.in_review = 2;
   await burst(page, f);
@@ -166,11 +164,11 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) for (cons
     .toEqual(reading === 'visible' ? f.state.data.attention.map((item: any) => item.key) : originalOrder);
   if (reading === 'focused') await expect(link).toBeFocused();
   expect(await page.evaluate(() => getSelection()?.toString())).toBe(selected);
-  if (shots) await page.screenshot({path: `${shots}/${locale}-${width}-${scenario}-after.png`, animations: 'disabled'});
+  if (shots) await page.screenshot({path: testInfo.outputPath(`${locale}-${width}-${scenario}-after.png`), animations: 'disabled'});
   expect(f.state.writes).toEqual([]); await context.close();
 });
 
-for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`a new top-severity blocker pushes rows down with the list's top in view ${locale} ${width}`, async ({browser, baseURL}) => {
+for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`a new top-severity blocker pushes rows down with the list's top in view ${locale} ${width}`, async ({browser, baseURL}, testInfo) => {
   const context = await browser.newContext({baseURL, locale, colorScheme, viewport: {width, height: width === 390 ? 844 : 900}});
   const page = await context.newPage(), f = fixture(locale); await boot(page, f); await page.evaluate(() => document.fonts.ready);
   const anchor = root(page).locator('[data-overview-row]').first();
@@ -182,8 +180,8 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`a n
   const heading = root(page).locator('[data-overview-attention]').locator('..').getByRole('heading');
   await expect(heading).toBeInViewport({ratio: 1});
   const top = (await anchor.boundingBox())!.y, anchorKey = await anchor.getAttribute('data-overview-row'), scroll = await page.evaluate(() => scrollY);
-  const shots = process.env.BATC_OVERVIEW_SHOTS ? `${process.env.TMPDIR}/fix2-shots` : null;
-  if (shots) {mkdirSync(shots, {recursive: true}); await page.screenshot({path: `${shots}/${locale}-${width}-top-before.png`, animations: 'disabled'});}
+  const shots = process.env.BATC_OVERVIEW_SHOTS ? testInfo.outputPath('screenshots') : null;
+  if (shots) {await page.screenshot({path: testInfo.outputPath(`${locale}-${width}-top-before.png`), animations: 'disabled'});}
   const blocker = {...f.state.data.attention[0], key: 'blocker:governance:new-critical', severity: 'critical', since: f.state.data.as_of - 10 * 86400,
     ref: {kind: 'governance', id: 'pmgov_' + 'c'.repeat(32)}, title: locale === 'en' ? 'New critical dependency blocker' : '新增的重大相依套件阻礙'};
   f.state.data.attention.unshift(blocker); f.state.data.attention_counts.blocker++;
@@ -197,7 +195,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`a n
   expect(Math.abs(previous.y - top - inserted.height)).toBeLessThanOrEqual(1);
   expect(await page.evaluate(() => scrollY)).toBe(scroll);
   await expect(heading).toBeInViewport({ratio: 1});
-  if (shots) await page.screenshot({path: `${shots}/${locale}-${width}-top-after.png`, animations: 'disabled'});
+  if (shots) await page.screenshot({path: testInfo.outputPath(`${locale}-${width}-top-after.png`), animations: 'disabled'});
   expect(f.state.writes).toEqual([]); await context.close();
 });
 
@@ -339,8 +337,7 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) {
     expect(empty.slice(0, 1).every(row => row.share === 0)).toBe(true);
     expect(empty[1]).toEqual({share: 1, color: 'rgba(0, 0, 0, 0)'});
     expect(await bar.evaluate(node => getComputedStyle(node).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
-    const dir = process.env.TMPDIR ? `${process.env.TMPDIR}/overview-polish` : testInfo.outputPath('overview-polish'); mkdirSync(dir, {recursive: true});
-    await page.screenshot({path: `${dir}/${locale}-${native ? 'native' : 'web'}-${colorScheme}-empty.png`, fullPage: true, animations: 'disabled'});
+    await page.screenshot({path: testInfo.outputPath(`${locale}-${native ? 'native' : 'web'}-${colorScheme}-empty.png`), fullPage: true, animations: 'disabled'});
     f.state.data.progress = {...f.state.data.progress, requirements: 4, in_progress: 1, blocked: 1};
     await refresh(page); await expect(metric(page, 'progress')).toContainText(locale === 'en' ? '0 of 4 accepted' : '4 項中 0 項已驗收');
     const started = await segments();
@@ -429,7 +426,7 @@ test('completed history distinguishes missing, incomplete, capped and empty sour
   expect(f.state.writes).toEqual([]);
 });
 
-for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test(`five-second project answer ${locale} ${width}`, async ({browser, baseURL}) => {
+for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test(`five-second project answer ${locale} ${width}`, async ({browser, baseURL}, testInfo) => {
   const context = await browser.newContext({baseURL, locale, viewport: {width, height: width === 390 ? 844 : 900}, colorScheme, reducedMotion: 'reduce'});
   const page = await context.newPage(), f = fixture(locale), errors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
@@ -464,27 +461,26 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
     for (const key of ['goal', 'progress', 'blocker', 'decision']) await expect(metric(page, key)).toBeInViewport({ratio: 1});
     await expect(root(page).locator('[data-overview-attention]')).toBeInViewport({ratio: 1});
   }
-  const dir = `${process.env.TMPDIR}/shots2`; mkdirSync(dir, {recursive: true});
-  await page.screenshot({path: `${dir}/overview-${locale}-${width}.png`, fullPage: true});
-  if (width === 1440) {await page.screenshot({path: `${dir}/overview-${locale}-${width}-fold.png`});}
+  await page.screenshot({path: testInfo.outputPath(`overview-${locale}-${width}.png`), fullPage: true});
+  if (width === 1440) {await page.screenshot({path: testInfo.outputPath(`overview-${locale}-${width}-fold.png`)});}
   if (width === 1440 && locale === 'en') {
-    await page.emulateMedia({colorScheme: 'dark'}); await page.screenshot({path: `${dir}/overview-en-1440-dark.png`, fullPage: true}); await page.emulateMedia({colorScheme});
+    await page.emulateMedia({colorScheme: 'dark'}); await page.screenshot({path: testInfo.outputPath(`overview-en-1440-dark.png`), fullPage: true}); await page.emulateMedia({colorScheme});
   }
   const details = root(page).locator(':scope > div > details'); await details.locator(':scope > summary').click();
   expect(await root(page).innerText()).not.toMatch(/\b(undefined|null|NaN|ov_\w+)\b/);
   await expect(details.locator('[data-overview-coverage]')).toContainText(locale === 'en' ? 'Plan · Complete' : '計畫 · 完整');
   await expect(details.locator('details')).not.toHaveAttribute('open', ''); await details.locator(':scope > summary').click();
-  if (width === 1440) {await page.emulateMedia({media: 'print'}); await page.screenshot({path: `${dir}/overview-${locale}-print-live.png`, fullPage: true}); await page.emulateMedia({media: 'screen'});}
+  if (width === 1440) {await page.emulateMedia({media: 'print'}); await page.screenshot({path: testInfo.outputPath(`overview-${locale}-print-live.png`), fullPage: true}); await page.emulateMedia({media: 'screen'});}
   f.state.reportPatch = saved => {saved.visibility.restricted = true; saved.coverage.work_truncated = true;};
   await report(page, f.ids.snap2); await expect(root(page).locator('.pm-overview-saved [data-status=partial]')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const arrows = root(page).locator('.pm-overview-report-arrows button'), first = (await arrows.nth(0).boundingBox())!, second = (await arrows.nth(1).boundingBox())!;
   expect(first.y).toBe(second.y);
-  await page.screenshot({path: `${dir}/overview-${locale}-${width}-saved-partial.png`, fullPage: true});
+  await page.screenshot({path: testInfo.outputPath(`overview-${locale}-${width}-saved-partial.png`), fullPage: true});
   await root(page).getByRole('button', {name: locale === 'en' ? 'Compare' : '比較', exact: true}).click();
   await expect(page.locator('.pm-charter-comparison')).toBeVisible();
-  await page.screenshot({path: `${dir}/overview-${locale}-${width}-compare.png`}); await page.keyboard.press('Escape');
-  if (width === 1440) {await page.emulateMedia({media: 'print'}); await page.screenshot({path: `${dir}/overview-${locale}-print-saved.png`, fullPage: true});}
+  await page.screenshot({path: testInfo.outputPath(`overview-${locale}-${width}-compare.png`)}); await page.keyboard.press('Escape');
+  if (width === 1440) {await page.emulateMedia({media: 'print'}); await page.screenshot({path: testInfo.outputPath(`overview-${locale}-print-saved.png`), fullPage: true});}
   expect(errors).toEqual([]); expect(f.state.writes).toEqual([]); await context.close();
 });
 

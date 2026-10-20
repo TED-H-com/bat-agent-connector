@@ -1,5 +1,4 @@
 import {test, expect, type Page} from '@playwright/test';
-import {mkdirSync} from 'node:fs';
 const sid = 'session-full-0123456789abcdef-0123456789abcdef';
 const title = 'Review complete project delivery and preserve original source instructions';
 const caps = {actor:'observer', scopes:['observe'],api_version:1,contract_version:'2026-10-08',hosts:[],features:{},actions:[]};
@@ -145,7 +144,7 @@ test('navigation while launch reply held preserves original for later readback',
  await expect(page.getByRole('button',{name:'Choose another profile',exact:true})).toBeVisible();
  expect(await calls(page,'launch')).toHaveLength(1);expect(await calls(page,'preview_profile')).toHaveLength(1);
 });
-for(const locale of ['en-US','zh-TW']) for(const width of [390,768,1440]) test(`session handoff ${locale} ${width}`,async({browser})=>{
+for(const locale of ['en-US','zh-TW']) for(const width of [390,768,1440]) test(`session handoff ${locale} ${width}`,async({browser}, testInfo)=>{
  const context=await browser.newContext({locale,viewport:{width,height:900}}),page=await context.newPage();await setup(page);
  await expect(page.locator('[data-session-view]')).toBeVisible();
  const more=locale==='zh-TW'?'更多操作':'More actions';
@@ -158,7 +157,7 @@ for(const locale of ['en-US','zh-TW']) for(const width of [390,768,1440]) test(`
  await page.locator('.session-bat').getByRole('button',{name:locale==='zh-TW'?'預覽所選 profile':'Review selected profile',exact:true}).click();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  for(const button of await page.locator('.session-bat button').all())expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
- mkdirSync('/tmp/bac-session-bat-after',{recursive:true});await page.screenshot({path:`/tmp/bac-session-bat-after/${locale}-${width}.png`,fullPage:true});await context.close();
+ await page.screenshot({path:testInfo.outputPath(`${locale}-${width}.png`),fullPage:true});await context.close();
 });
 
 const bat=(page:Page)=>page.locator('.session-bat');

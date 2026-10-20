@@ -643,7 +643,7 @@ for (const locale of ['en', 'zh-TW'] as const) test.describe(`dependency clarity
 
 if (process.env.BATC_DEP_SHOTS === '1') for (const locale of ['en', 'zh-TW'] as const) {
   for (const variant of [{width: 1440, dark: false}, {width: 1000, dark: false}, {width: 768, dark: false}, {width: 390, dark: false}, {width: 1440, dark: true}]) {
-    test(`screenshots: ${locale} ${variant.width} ${variant.dark ? 'dark' : 'light'}`, async ({browser, baseURL}) => {
+    test(`screenshots: ${locale} ${variant.width} ${variant.dark ? 'dark' : 'light'}`, async ({browser, baseURL}, testInfo) => {
       const {width, dark} = variant;
       const context = await browser.newContext({baseURL, locale: locale === 'en' ? 'en-US' : 'zh-TW', viewport: {width, height: width === 390 ? 844 : width === 768 ? 1024 : 900}, reducedMotion: 'reduce'});
       const page = await context.newPage();
@@ -651,7 +651,7 @@ if (process.env.BATC_DEP_SHOTS === '1') for (const locale of ['en', 'zh-TW'] as 
       page.on('pageerror', error => errors.push(error.message));
       const harness = await mount(page, {locale});
       await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), dark ? 'dark' : 'light');
-      const directory = process.env.BATC_DEP_SHOT_DIR || `${process.env.TMPDIR || '/tmp'}/shots`;
+      const directory = process.env.BATC_DEP_SHOT_DIR || testInfo.outputPath('screenshots');
       mkdirSync(directory, {recursive: true});
       const shot = async (state: string) => {
         if (process.env.BATC_DEP_SHOT_STATE && state !== process.env.BATC_DEP_SHOT_STATE) return;

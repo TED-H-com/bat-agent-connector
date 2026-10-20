@@ -1,5 +1,5 @@
 import {test,expect} from '@playwright/test';
-import {mkdirSync,readFileSync} from 'node:fs';
+import {readFileSync} from 'node:fs';
 const fleet=JSON.parse(readFileSync(new URL('./fixtures/fleet-status.json',import.meta.url),'utf8')).result;
 async function setup(page:any,options:any={}) {
  await page.addInitScript(({options,fleet}:any)=>{
@@ -80,8 +80,8 @@ test('failed read blocks fresh opening and returning to page rereads',async({pag
 test('focus during opening waits and never creates a second action',async({page})=>{
  await setup(page,{hold:true});await open(page);await page.evaluate(()=>window.dispatchEvent(new Event('focus')));expect(await calls(page,'open')).toHaveLength(1);await page.evaluate(()=>(window as any).__tailscale.release());await expect(panel(page).getByRole('button',{name:'Prepare another opening'})).toBeVisible();expect(await calls(page,'open')).toHaveLength(1);
 });
-for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`layout ${locale} ${width}`,async({browser})=>{
- const context=await browser.newContext({locale,viewport:{width,height:900}}),page=await context.newPage();const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await setup(page);await expect(panel(page).getByText(locale==='zh-TW'?'Tailscale 需要登入。':'Tailscale needs sign-in.',{exact:true})).toBeVisible();await panel(page).scrollIntoViewIfNeeded();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);mkdirSync('/tmp/bac-tailscale-after',{recursive:true});await page.screenshot({path:`/tmp/bac-tailscale-after/${locale}-${width}.png`,fullPage:true});await context.close();
+for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`layout ${locale} ${width}`,async({browser}, testInfo)=>{
+ const context=await browser.newContext({locale,viewport:{width,height:900}}),page=await context.newPage();const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await setup(page);await expect(panel(page).getByText(locale==='zh-TW'?'Tailscale 需要登入。':'Tailscale needs sign-in.',{exact:true})).toBeVisible();await panel(page).scrollIntoViewIfNeeded();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);await page.screenshot({path:testInfo.outputPath(`${locale}-${width}.png`),fullPage:true});await context.close();
 });
 
 test('a different local login scope never reuses the original opening ID',async({page})=>{

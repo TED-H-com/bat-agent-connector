@@ -116,7 +116,7 @@ test('invalid refreshed receipt freezes an earlier prepared draft',async({page})
  await expect(button(page,'Prepare fixed service request')).toBeDisabled();
  expect(await calls(page,'advance')).toHaveLength(0);
 });
-for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`bootstrap layout ${locale} ${width}`,async({browser},testInfo)=>{
+for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`bootstrap layout ${locale} ${width}`,async({browser}, testInfo)=>{
  const context=await browser.newContext({locale,viewport:{width,height:900}}),page=await context.newPage();
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await setup(page,{nativeOriginal:true,auto:true});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);

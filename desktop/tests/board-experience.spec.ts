@@ -13,7 +13,7 @@ async function expectMetaRows(board: Locator) {
   }))).toBe(true);
 }
 
-for (const locale of ['en', 'zh-TW']) for (const width of [1440, 1000, 768, 390]) test(`board filtering and inspector ${locale} ${width}`, async ({browser, baseURL}) => {
+for (const locale of ['en', 'zh-TW']) for (const width of [1440, 1000, 768, 390]) test(`board filtering and inspector ${locale} ${width}`, async ({browser, baseURL}, testInfo) => {
   const context = await browser.newContext({baseURL, locale, reducedMotion: 'reduce', viewport: {width, height: 900}}), page = await context.newPage();
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {if (message.type() === 'error') errors.push(message.text() + ' ' + message.location().url);});
@@ -65,7 +65,8 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 1000, 768, 390]
     await expect(pr).toHaveAccessibleName(`PR #${number} · example/membership · ${locale === 'en' ? 'Merged' : '已合併'}`);
     await expect(pr).toHaveCSS('text-overflow', 'ellipsis');
   }
-  const out = process.env.BATC_WORK_VIEW_SCREENSHOTS || `${process.env.TMPDIR || '/tmp'}/shots`; await mkdir(out, {recursive: true});
+  const out = process.env.BATC_WORK_VIEW_SCREENSHOTS || testInfo.outputPath('screenshots');
+  await mkdir(out, {recursive: true});
   await page.screenshot({path: `${out}/board-${locale}-${width}.png`, fullPage: true});
   await expect(board.getByLabel(locale === 'en' ? 'Agent' : '代理', {exact: true}).locator('option[value="codex"]')).toHaveText('Codex');
   await board.getByLabel(locale === 'en' ? 'Agent' : '代理', {exact: true}).selectOption('codex');
