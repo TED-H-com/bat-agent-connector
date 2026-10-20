@@ -160,16 +160,15 @@ def test_delivery_data_step3_crash_rolls_back_whole(tmp_path, monkeypatch):
     j.close()
 
 
-def test_delivery_fresh_post_step2_journal_ends_at3_and_ddl_preserves_other_versions(tmp_path):
+def test_delivery_fresh_post_step2_journal_ends_at3_and_ddl_preserves_current_version(tmp_path):
     path = tmp_path / "fresh.db"
     version2_database(path)
     j = Journal(path)
     assert j.db.execute("PRAGMA user_version").fetchone()[0] == 3
-    j.db.execute("PRAGMA user_version=8")
     j.db.execute("DROP TABLE deployments")
     j.close()
     j = Journal(path)
-    assert j.db.execute("PRAGMA user_version").fetchone()[0] == 8
+    assert j.db.execute("PRAGMA user_version").fetchone()[0] == 3
     assert j.db.execute("SELECT COUNT(*) FROM deployments").fetchone()[0] == 0
     j.close()
 

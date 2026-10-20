@@ -2,12 +2,14 @@
 
 import asyncio
 import hashlib
+import json
 import sqlite3
+import sys
 from contextlib import closing
 
 import pytest
 
-from bat_agent_connector import cli, registry
+from bat_agent_connector import cli, managed_runtime, registry
 from bat_agent_connector.config import parse_config
 from bat_agent_connector.task_daemon import TaskDaemon
 from bat_agent_connector.task_journal import LATEST_DATA_STEP, Journal
@@ -59,6 +61,26 @@ def test_journal_refuses_newer_step_without_any_committed_change(tmp_path, mode)
     finally:
         # Counts/schema/version also see committed WAL changes; main-file hash alone cannot.
         assert snapshot(path) == before
+
+
+@pytest.mark.parametrize("change", [
+    {"error": "UNKNOWN_FAILURE"}, {"recorded_data_step": True}, {"recorded_data_step": -1},
+    {"recorded_data_step": 2147483648}, {"supported_data_step": -1},
+])
+def test_managed_refusal_forwarding_rejects_unrecognized_diagnostics(tmp_path, change):
+    failure = {"protocol": 1, "error": "JOURNAL_NEWER_DATA_STEP", "recorded_data_step": 4,
+               "supported_data_step": LATEST_DATA_STEP, "message": "private-provider-diagnostic", **change}
+    managed_runtime.atomic_write(tmp_path / "service.log", json.dumps(failure).encode())
+    assert managed_runtime._journal_startup_failure(tmp_path) is None
+
+
+def test_managed_refusal_forwarding_never_copies_arbitrary_child_text(tmp_path):
+    failure = {"protocol": 1, "error": "JOURNAL_NEWER_DATA_STEP", "recorded_data_step": LATEST_DATA_STEP + 1,
+               "supported_data_step": LATEST_DATA_STEP, "message": "private-provider-diagnostic"}
+    managed_runtime.atomic_write(tmp_path / "service.log", json.dumps(failure).encode())
+    error = managed_runtime._journal_startup_failure(tmp_path)
+    assert_refusal(error)
+    assert "private-provider-diagnostic" not in str(error)
 
 
 @pytest.mark.parametrize("mode", ["WAL", "DELETE"])
@@ -125,3 +147,53 @@ def test_fresh_journal_still_initializes(tmp_path):
         assert journal.db.execute("PRAGMA synchronous").fetchone()[0] == 2
         assert journal.db.execute("PRAGMA foreign_keys").fetchone()[0] == 1
         assert journal.db.execute("SELECT COUNT(*) FROM tasks").fetchone()[0] == 0
+
+
+def test_newer_step_committed_in_wal_is_refused_without_another_commit(tmp_path):
+    path = tmp_path / "journal.db"
+    with closing(Journal(path)) as writer:
+        writer.db.execute(f"PRAGMA user_version={LATEST_DATA_STEP + 1}")
+        before = snapshot(path)
+        wal = path.with_name(path.name + "-wal")
+        wal_before = wal.read_bytes()
+        with pytest.raises(ValueError) as refused:
+            with closing(Journal(path)):
+                pass
+        assert_refusal(refused.value)
+        assert snapshot(path) == before
+        assert wal.read_bytes() == wal_before
+
+
+@pytest.mark.parametrize("command", ["serve", "ensure"])
+def test_managed_startup_preserves_the_specific_safe_refusal(tmp_path, monkeypatch, capsys, command):
+    root = tmp_path / "managed"
+    managed_runtime._prepare(root)
+    path = root / "state" / "tasks.sqlite3"
+    before = newer_journal(path, "WAL")
+    children = []
+    spawn = managed_runtime._spawn
+
+    def tracked_spawn(root):
+        child = spawn(root)
+        children.append(child)
+        return child
+
+    monkeypatch.setattr(managed_runtime, "_spawn", tracked_spawn)
+    monkeypatch.setattr(sys, "argv", ["managed-runtime", command, "--data-dir", str(root)])
+    try:
+        with pytest.raises(SystemExit) as refused:
+            managed_runtime.main()
+        assert refused.value.code == 1
+        output = capsys.readouterr()
+        failure = json.loads(output.err if command == "serve" else output.out)
+        assert failure["error"] == "JOURNAL_NEWER_DATA_STEP"
+        assert failure["recorded_data_step"] == LATEST_DATA_STEP + 1
+        assert failure["supported_data_step"] == LATEST_DATA_STEP
+        assert_refusal(failure["message"])
+        assert str(root) not in json.dumps(failure)
+    finally:
+        for child in children:
+            if child.poll() is None:
+                child.terminate()
+            child.wait(timeout=10)
+        assert snapshot(path) == before

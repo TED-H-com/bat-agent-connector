@@ -3580,7 +3580,8 @@ async function viewNativeSettings(main) {
     if (status.configuration_file) technicalDetails.append(h("dt", {}, t("desktop_configuration_file")), h("dd", {}, status.configuration_file));
     if (status.credential_source) row("desktop_credential_source", t("desktop_source_" + status.credential_source));
     if (state.caps) details.append(h("dt", {}, t("connection_access")), connectionAccess());
-    if (status.error && (!status.configuration_setup || status.configuration_source === "managed")) info.append(errorBox(new Error(status.error), {summary: t("desktop_status_error"), within:info}));
+    if (status.error && (!status.configuration_setup || status.configuration_source === "managed")) info.append(errorBox(new Error(status.error), {
+      summary: t(status.error.startsWith('JOURNAL_NEWER_DATA_STEP:') ? 'managed_newer_journal' : 'desktop_status_error'), within:info}));
     else if (!status.credential_available && !status.configuration_setup) info.append(h("p", {}, t("desktop_credential_missing")));
     platform.textContent = status.enrollment_supported === true ? t("desktop_enrollment_help")
       : status.enrollment_supported === false ? t("desktop_enrollment_unsupported") : "";

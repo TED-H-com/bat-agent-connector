@@ -9652,6 +9652,7 @@ var init_i18n = __esmMin((() => {
 			...findingNameStrings["zh-TW"],
 			fleet_session_lifetime: "啟動環境不允許背景連線監控獨立執行。關閉啟動工作階段時，本機連線可能中斷。",
 			managed_service_recovering: "正在重新啟動本機背景服務…",
+			managed_newer_journal: "這份紀錄需要較新的 Connector。請使用較新的 Connector 重新開啟，既有資料已保留。",
 			managed_service_recovering_help: "正在重新啟動桌面的本機背景服務。既有工作與資料會保留。",
 			managed_service_retry: "本機背景服務恢復失敗",
 			managed_service_retry_help: "本機背景服務無法恢復，稍後會自動重試。既有資料已保留；請查看連線詳細資料。",
@@ -11341,6 +11342,7 @@ var init_i18n = __esmMin((() => {
 			...findingNameStrings.en,
 			fleet_session_lifetime: "The launching environment prevents the connection monitor from running independently. Local connections may stop when the launching session ends.",
 			managed_service_recovering: "Restarting local service…",
+			managed_newer_journal: "These records need a newer Connector. Reopen with the newer Connector; existing data is preserved.",
 			managed_service_recovering_help: "This Dashboard is restarting its local background service. Existing work and data are retained.",
 			managed_service_retry: "Local service recovery failed",
 			managed_service_retry_help: "The local background service could not recover. It will retry automatically. Existing data is retained; see connection details.",
@@ -70569,7 +70571,7 @@ async function viewNativeSettings(main) {
 		if (status.credential_source) row("desktop_credential_source", t("desktop_source_" + status.credential_source));
 		if (state.caps) details.append(h("dt", {}, t("connection_access")), connectionAccess());
 		if (status.error && (!status.configuration_setup || status.configuration_source === "managed")) info.append(errorBox(new Error(status.error), {
-			summary: t("desktop_status_error"),
+			summary: t(status.error.startsWith("JOURNAL_NEWER_DATA_STEP:") ? "managed_newer_journal" : "desktop_status_error"),
 			within: info
 		}));
 		else if (!status.credential_available && !status.configuration_setup) info.append(h("p", {}, t("desktop_credential_missing")));
