@@ -145,3 +145,40 @@ for (const locale of ['en', 'zh-TW']) for (const missing of [false, true]) test(
   await expect(links).toHaveCount(1);
   await expect(links).toContainText(missing ? locale === 'en' ? 'Source missing' : '來源已消失' : locale === 'en' ? 'Draft' : '草稿');
 });
+
+for (const locale of ['en', 'zh-TW']) test(`Failed first import preserves GitHub choices ${locale}`, async ({page}) => {
+  const fixture = demoFixture({locale, managedSession: true}), {ids} = fixture;
+  let operation: any = null;
+  const setting = () => ({project_id: ids.projectId, name: 'Example board', repository: 'example/board', workspace_id: null,
+    revision: 0, enabled: false, include_closed: false, status: 'not_synced', last_sync: null, next_sync: 0, authenticated: null, last_error: null});
+  await page.addInitScript(value => Object.defineProperty(navigator, 'language', {value}), locale);
+  await mountConversation(page, false, async (input: any) => {
+    const path = new URL(input.path, 'http://fixture').pathname;
+    if (input.method === 'POST') {
+      expect(input.body.params.include_closed).toBe(true); expect(input.body.params.enabled).toBe(false);
+      operation = {...input.body, operation_id: 'op_' + 'd'.repeat(32), actor: ids.actor, idempotency_key: input.idempotency_key,
+        status: 'succeeded', result: {project_id: ids.projectId, status: 'unreachable', github_sync: setting()}};
+      return {status: 202, data: {operation}};
+    }
+    if (path.startsWith('/operations/')) return {status: 200, data: {operation}};
+    if (path.endsWith('/projects') && path.startsWith('/pm/')) return {status: 200, data: {
+      version: 1, workspace_id: ids.workspaceId, bindings: [], next_cursor: null,
+      github_sync: {projects: [setting()], suggested_repository: 'example/board'}}};
+    const result: any = await fixture.dispatch(input);
+    const caps = path === '/capabilities' ? result.data : path === '/bootstrap' ? result.data.capabilities : null;
+    if (caps) {caps.features.board_github_sync = {version: 1}; caps.scopes.push('manage');
+      caps.actions.push({action: 'pm.github.import', allowed: true, scope: 'manage'});}
+    if (path === `/pm/workspaces/${ids.workspaceId}`) result.data.workspace.membership.role = 'owner';
+    return result;
+  });
+  await page.goto(`/dashboard/#/pm/${ids.workspaceId}/board`);
+  const panel = page.locator('[data-board-github]');
+  const history = panel.getByRole('checkbox', {name: locale === 'en' ? 'Include closed history' : '包含已關閉的歷史'});
+  const keep = panel.getByRole('checkbox', {name: locale === 'en' ? 'Keep in sync' : '持續同步'});
+  await history.check(); await keep.uncheck();
+  await panel.getByRole('button', {name: locale === 'en' ? 'Import from GitHub' : '從 GitHub 匯入', exact: true}).click();
+  await expect(panel.locator('[data-github-sync-status]')).toContainText(locale === 'en' ? 'could not be reached' : '無法連線');
+  await expect(history).toBeChecked(); await expect(keep).not.toBeChecked();
+  await page.reload();
+  await expect(history).toBeChecked(); await expect(keep).not.toBeChecked();
+});

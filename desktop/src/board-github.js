@@ -51,9 +51,20 @@ export function boardGitHubPanel({t, api, alive, caps, form, permitted, workspac
     history.checked = Boolean(current?.include_closed); includeClosed.value = String(history.checked);
     includeClosed.dataset.pmDefault = includeClosed.value;
     const fields = {repository, enabled, include_closed: includeClosed, ...(workspaceId ? {project_id: project} : {})};
-    let importForm;
-    const saved = async result => {preferredProject = result.project_id || selected(); await refresh(null, true); await onSaved();
-      if (['unreachable', 'rate_limited', 'auth_required', 'invalid_source', 'apply_failed', 'sync_failed', 'too_large', 'identity_conflict'].includes(result.status)) status.textContent = bt('bgh_' + result.status);};
+    let importForm, submittedValues = null;
+    const refreshSaved = async result => {preferredProject = result.project_id || selected(); await refresh(null, true); await onSaved();};
+    const saved = async result => {
+      if (['unreachable', 'rate_limited', 'auth_required', 'invalid_source', 'apply_failed', 'sync_failed', 'too_large', 'identity_conflict'].includes(result.status)) {
+        for (const [name, input] of Object.entries(fields)) input.value = submittedValues?.[name] ?? input.value;
+        history.checked = includeClosed.value === 'true'; toggle.checked = enabled.value === 'true';
+        status.textContent = bt('bgh_' + result.status);
+        // The read has a terminal receipt, but its choices remain an unsent
+        // draft. Persist after the shared form has released its busy state.
+        setTimeout(() => {if (element.isConnected && forms.includes(importForm)) importForm.changed();}, 0);
+        return;
+      }
+      await refreshSaved(result);
+    };
     importForm = form({t: bt, action: workspaceId ? 'pm.github.import' : 'project.github.import',
       target: workspaceId ? {workspace_id: workspaceId} : {project_id: projectId}, fields,
       params: values => ({repository: values.repository.trim(), enabled: values.enabled === 'true', include_closed: values.include_closed === 'true', ...(workspaceId ? {project_id: values.project_id || null} : {})}),
@@ -62,6 +73,7 @@ export function boardGitHubPanel({t, api, alive, caps, form, permitted, workspac
       extra: h('div', {class: 'capture-fields'}, workspaceId ? h('label', {}, bt('bgh_project'), project) : null,
         h('label', {}, bt('bgh_repo'), repository), h('label', {class: 'capture-choice'}, toggle, bt('bgh_keep')),
         h('label', {class: 'capture-choice'}, history, bt('bgh_history')), enabled, includeClosed),
+      onBeforeSaved: (_result, values) => {submittedValues = {...values};},
       onSaved: saved, savedText: 'bgh_checked'});
     toggle.checked = enabled.value === 'true'; history.checked = includeClosed.value === 'true';
     current = projects.find(p => p.project_id === selected()) || null;
@@ -73,7 +85,7 @@ export function boardGitHubPanel({t, api, alive, caps, form, permitted, workspac
         params: () => ({repository: repository.value.trim(), enabled: toggle.checked, include_closed: history.checked}),
         preconditions: () => ({expected_revision: current.revision}), permitted: () => loaded && permitted() && !importForm.locked(),
         recoverPermitted: permitted, label: 'bgh_save', extra: h('span'), savedText: 'bgh_saved',
-        onSaved: saved});
+        onSaved: refreshSaved});
       configForm.box.querySelector('button[type=submit]').classList.replace('primary', 'secondary');
       forms.push(configForm); save.append(configForm.box);
     }

@@ -90,6 +90,8 @@ item and association uses its existing registered action and a real
 child operation linked to the import receipt. Only these fixed, non-suspending
 journal handlers run inside the batch transaction; provider I/O finishes before it.
 A failed first import creates no project, project binding or enabled schedule.
+Its repository/history/polling choices remain an unsent form draft, including
+after reload; the original terminal read receipt remains in operation history.
 Invalid source titles are rejected before mutation; other deterministic local
 refusals roll back the batch. Existing schedules record a visible failure code,
 backoff and a new sync generation so a terminal operation cannot trap the poller.

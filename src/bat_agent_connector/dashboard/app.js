@@ -12827,11 +12827,13 @@ function boardGitHubPanel({ t, api, alive, caps, form, permitted, workspaceId = 
 			include_closed: includeClosed,
 			...workspaceId ? { project_id: project } : {}
 		};
-		let importForm;
-		const saved = async (result) => {
+		let importForm, submittedValues = null;
+		const refreshSaved = async (result) => {
 			preferredProject = result.project_id || selected();
 			await refresh(null, true);
 			await onSaved();
+		};
+		const saved = async (result) => {
 			if ([
 				"unreachable",
 				"rate_limited",
@@ -12841,7 +12843,17 @@ function boardGitHubPanel({ t, api, alive, caps, form, permitted, workspaceId = 
 				"sync_failed",
 				"too_large",
 				"identity_conflict"
-			].includes(result.status)) status.textContent = bt("bgh_" + result.status);
+			].includes(result.status)) {
+				for (const [name, input] of Object.entries(fields)) input.value = submittedValues?.[name] ?? input.value;
+				history.checked = includeClosed.value === "true";
+				toggle.checked = enabled.value === "true";
+				status.textContent = bt("bgh_" + result.status);
+				setTimeout(() => {
+					if (element.isConnected && forms.includes(importForm)) importForm.changed();
+				}, 0);
+				return;
+			}
+			await refreshSaved(result);
 		};
 		importForm = form({
 			t: bt,
@@ -12859,6 +12871,9 @@ function boardGitHubPanel({ t, api, alive, caps, form, permitted, workspaceId = 
 			recoverPermitted: permitted,
 			label: current?.last_sync ? "bgh_sync" : "bgh_import",
 			extra: h$1("div", { class: "capture-fields" }, workspaceId ? h$1("label", {}, bt("bgh_project"), project) : null, h$1("label", {}, bt("bgh_repo"), repository), h$1("label", { class: "capture-choice" }, toggle, bt("bgh_keep")), h$1("label", { class: "capture-choice" }, history, bt("bgh_history")), enabled, includeClosed),
+			onBeforeSaved: (_result, values) => {
+				submittedValues = { ...values };
+			},
 			onSaved: saved,
 			savedText: "bgh_checked"
 		});
@@ -12885,7 +12900,7 @@ function boardGitHubPanel({ t, api, alive, caps, form, permitted, workspaceId = 
 				label: "bgh_save",
 				extra: h$1("span"),
 				savedText: "bgh_saved",
-				onSaved: saved
+				onSaved: refreshSaved
 			});
 			configForm.box.querySelector("button[type=submit]").classList.replace("primary", "secondary");
 			forms.push(configForm);
