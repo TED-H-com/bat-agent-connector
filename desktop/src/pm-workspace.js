@@ -197,7 +197,9 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
       if (!reset.hidden && !reset.disabled) reset.focus();
       else if (document.activeElement === document.body || document.activeElement === button) {
         status.tabIndex = -1;
-        status.focus();
+        // A background gate can disable a button during a pointer gesture. Keep
+        // its reading position so the eventual release still reaches that button.
+        status.focus({preventScroll: true});
       }
     } else if (hadResetFocus && reset.hidden && !button.hidden && !button.disabled) {
       button.focus();
