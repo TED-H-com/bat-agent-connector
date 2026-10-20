@@ -1,5 +1,5 @@
 import {test, expect} from '@playwright/test';
-import {readFileSync, mkdirSync} from 'node:fs';
+import {readFileSync} from 'node:fs';
 const fixture=JSON.parse(readFileSync(new URL('./fixtures/fleet-status.json',import.meta.url),'utf8')).result;
 const ID='1'.repeat(32), BINDING='a'.repeat(64);
 async function setup(page:any, options:any={}) {
@@ -116,9 +116,9 @@ test('invalid refreshed receipt freezes an earlier prepared draft',async({page})
  await expect(button(page,'Prepare fixed service request')).toBeDisabled();
  expect(await calls(page,'advance')).toHaveLength(0);
 });
-for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`bootstrap layout ${locale} ${width}`,async({browser})=>{
+for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`bootstrap layout ${locale} ${width}`,async({browser},testInfo)=>{
  const context=await browser.newContext({locale,viewport:{width,height:900}}),page=await context.newPage();
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await setup(page,{nativeOriginal:true,auto:true});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
- mkdirSync('/tmp/bac-bootstrap-desktop-after',{recursive:true});await page.screenshot({path:`/tmp/bac-bootstrap-desktop-after/bootstrap-${locale}-${width}.png`,fullPage:true});await context.close();
+ await page.screenshot({path:testInfo.outputPath(`bootstrap-${locale}-${width}.png`),fullPage:true});await context.close();
 });

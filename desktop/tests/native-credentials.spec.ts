@@ -157,7 +157,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
 }
 
 for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
-  test(`native credential recovery fits ${locale} ${width}`, async ({browser}) => {
+  test(`native credential recovery fits ${locale} ${width}`, async ({browser}, testInfo) => {
     const context = await browser.newContext({locale, viewport: {width, height: 900}});
     const page = await context.newPage(); const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
     await setup(page);
@@ -166,8 +166,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
     await expect(page.locator('input[type=password]')).toHaveCount(0);
     await expect(page.getByRole('button', {name: locale === 'en-US' ? 'Connect' : '連線', exact: true})).toBeDisabled();
     expect(await page.evaluate(() => (window as any).__credentialFixture.calls.filter((c: any) => c.command === 'connector_connect'))).toEqual([]);
-    await mkdir('/tmp/bac-credentials-after', {recursive: true});
-    await page.screenshot({path: `/tmp/bac-credentials-after/settings-${locale}-${width}.png`, fullPage: true});
+    await page.screenshot({path: testInfo.outputPath(`settings-${locale}-${width}.png`), fullPage: true});
     await add.click();
     await expectConnectedIdentity(page);
     expect(await page.evaluate(() => (window as any).__credentialFixture.calls.filter((c: any) => c.command === 'connector_enroll')))
