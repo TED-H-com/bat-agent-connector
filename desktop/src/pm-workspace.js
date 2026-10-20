@@ -2,7 +2,7 @@ import {pmAvailability, renderPmAvailability} from './pm-availability.js';
 import {hasEffectivePmRoute,workspacePmReady,renderEffectivePmRoute} from './pm-effective-route.js';
 import {workspaceExternalHistory} from './pm-external-history.js';
 import {continuationBrief} from './pm-continuation.js';
-import {workbenchEnabled} from './workbench-mode.js';
+import {layoutDecision} from './workbench-mode.js';
 import {operationStatusLabel} from './global-labels.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
 import {discussionContext, discussionLabel, discussionPanel, discussionDom, discussionTitle, discussionComposer, discussionSettingsHref} from './pm-discussions.js';
@@ -52,6 +52,8 @@ import {planRevisions} from './pm-plans.js';
 import {pmWorktreeChoice} from './pm-worktree-choice.js';
 import {nativeRunState, pmDiscussionMessage, pmDiscussionRequest, pmNativeAnalysis} from './pm-native-analysis.js';
 import {retiredView as retired} from './pm-retired.js';
+const isWorkbench = layoutDecision.layout === 'workbench';
+
 const same = (a, b) => a === b || (a && b && typeof a === 'object' && typeof b === 'object'
   && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length
   && Object.keys(a).every(key => Object.hasOwn(b, key) && same(a[key], b[key])));
@@ -570,7 +572,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const phasePill = h('span', {class: 'ui-pill tone-neutral', hidden: true});
   const viewMeta = h('p', {class: 'ui-meta', 'data-pm-work-meta': '', hidden: true});
   // Stay hidden until publishContext fills it. An empty select is still in the tab order.
-  const management = workbenchEnabled() ? h('select', {'aria-label': t('wc_management'), 'data-workbench-management': '', hidden: true, onchange: event => {
+  const management = isWorkbench ? h('select', {'aria-label': t('wc_management'), 'data-workbench-management': '', hidden: true, onchange: event => {
     location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${event.target.value}`;
   }}) : null;
   const heading = pageHeader({title, pill: phasePill, meta: viewMeta, actions: [management, refresh].filter(Boolean)});
