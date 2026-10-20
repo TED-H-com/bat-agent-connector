@@ -320,6 +320,23 @@ def test_runtime_manifest_golden_is_current(tmp_path):
     assert actual == json.loads((ROOT / "tests/fixtures/runtime-manifest.json").read_text())
 
 
+@pytest.mark.parametrize("component", ["readme", "site"])
+def test_source_receipt_version_must_come_from_candidate_metadata(candidates, tmp_path, component):
+    from scripts.release_identity import receipt, validate
+    a, _ = candidates()
+    source = tmp_path / "source"
+    env = _build_env(tmp_path)
+    _command(["git", "clone", "-q", "--no-hardlinks", str(a["source"]), str(source)], cwd=tmp_path, env=env)
+    metadata = source / "pyproject.toml"
+    metadata.write_text(metadata.read_text().replace(f'version = "{__version__}"', 'version = "999.0.0"', 1))
+    # The source files and Git HEAD still match A. The real receipt producer
+    # must not let unrelated, modified project metadata relabel their version.
+    claim = receipt(component, source)
+    assert claim["version"] == "999.0.0"
+    result = validate(a["sha"], [claim], source=a["source"], required=[component])
+    assert result["refusals"] == [{"component": component, "status": "differs", "reason": "DOCUMENT_VERSION_DIFFERS"}]
+
+
 def test_validation_only_reads_inputs_and_runs_fixed_local_git(candidates, monkeypatch):
     from scripts.release_identity import validate
     a, _ = candidates()

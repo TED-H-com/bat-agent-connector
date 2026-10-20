@@ -139,7 +139,8 @@ strict unknown-field rejection and accept the added optional field.
 Screenshot receipts reuse the capture-manifest reader and content checks,
 including listed PNG hashes, capture guarantees, the frontend Git tree and
 source-file hashes. README and static-site receipts cover their source bytes;
-their `version` comes from project metadata. They do not certify the readable
+their `version` comes from project metadata and must match candidate metadata.
+They do not certify the readable
 release captions or select a new published version. Screenshot `version` is its
 capture schema. These distinct version sources are not interchangeable.
 The static-site checker keeps capture/source integrity checks without a

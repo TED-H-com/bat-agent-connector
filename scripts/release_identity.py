@@ -254,6 +254,9 @@ def _check_source(component, artifact, source_files, candidate, source_repo):
         _require(doc["runtime_version"] == tomllib.loads(source_files["pyproject.toml"].decode())["project"]["version"],
                  "RUNTIME_VERSION_DIFFERS", "differs")
     elif component in {"readme", "site"}:
+        version = tomllib.loads((artifact / "pyproject.toml").read_text())["project"]["version"]
+        _require(version == tomllib.loads(source_files["pyproject.toml"].decode())["project"]["version"],
+                 "DOCUMENT_VERSION_DIFFERS", "differs")
         actual = _source_files(component, artifact)
         if component == "readme":
             expected = {name: source_files[name] for name in ("README.md", "README.zh-TW.md")}
