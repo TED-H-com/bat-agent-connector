@@ -18,6 +18,7 @@ mod managed_login;
 mod managed_recovery;
 mod tailscale_control;
 mod updates;
+mod workflow_version;
 
 use bridge::{Bridge, ConnectorRequest, ConnectorResponse, NativeStatus};
 use std::sync::Arc;

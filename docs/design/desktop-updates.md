@@ -10,6 +10,8 @@ version to equal the announced version. Only a newer Windows x64 NSIS version is
 The native adapter overrides endpoints, target and headers, disables proxy inheritance,
 limits redirects to GitHub asset origins and caps downloads at 128 MiB and 185 seconds.
 The feed also identifies API 1, contract `2026-10-08`, source SHA and canonical workflow.
+The feed generator and updater share the `workflow_version` validator: ASCII
+`YYYY-MM-DD.revision` (one or more revision digits), at most 64 characters, independent of the contract date.
 These feed metadata fields are descriptive; the signature binds artifact bytes and version,
 not the feed's source/workflow assertions. Release tooling derives those from the reviewed
 checkout. A corrupted or relabelled download never becomes installable.
@@ -45,7 +47,7 @@ invoked `desktop-signed-candidate` workflow only builds and uploads an updater-s
 candidate and runs the disposable hosted-runner NSIS/WebView install fixture; it never
 creates a release, publishes a feed, installs on an operator machine or restarts a live host.
 Its exact 40-character source SHA must already belong to main. Version comes from the
-committed Tauri config; canonical workflow comes from the same checkout's skill.
+committed Tauri config; canonical workflow comes from the same checkout's skill and is checked against that shared format.
 
 The repository owner supplies a `desktop-release` environment with an independently
 backed-up signing identity: public `DESKTOP_UPDATER_PUBLIC_KEY` variable and

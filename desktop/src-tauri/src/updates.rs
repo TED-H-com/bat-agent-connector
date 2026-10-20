@@ -11,6 +11,13 @@ use std::{
 };
 use tauri_plugin_updater::{Update, UpdaterExt};
 
+// Consume the real release verifier's output, not a second hand-written feed shape.
+#[cfg(test)]
+// The test-only real producer loads the same validator source a second time.
+#[allow(clippy::duplicate_mod)]
+#[path = "../examples/update_manifest.rs"]
+mod feed_producer;
+
 const FEED: &str = "https://github.com/TED-H-com/bat-agent-connector/releases/latest/download/dashboard-update.json";
 const TARGET: &str = "windows-x86_64-nsis";
 const MAX_DOWNLOAD: usize = 128 * 1024 * 1024;
@@ -128,8 +135,7 @@ fn metadata(update: &Update) -> Result<Candidate, String> {
         || meta.get("contract_version").and_then(|v| v.as_str()) != Some(CONTRACT)
         || source.len() != 40
         || !source.bytes().all(|b| b.is_ascii_hexdigit())
-        || workflow.len() > 64
-        || !workflow.starts_with("2026-10-08.")
+        || !crate::workflow_version::valid(workflow)
         || update.version.len() > 128
         || update.signature.len() > 8192
         || !safe_url(&update.download_url)
@@ -474,6 +480,25 @@ impl Updates {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn current_canonical_workflow_accepted() {
+        let workflow = crate::workflow_version::canonical();
+        let feed = feed_producer::tests::signed_feed(workflow);
+        let (updates, _directory, _peer) = download_fixture(false, Some("2.0.0")).await;
+        let mut pending = updates.pending.lock().unwrap();
+        let update = &mut pending.as_mut().unwrap().update;
+        update.download_url = feed["platforms"][TARGET]["url"]
+            .as_str()
+            .unwrap()
+            .parse()
+            .unwrap();
+        update.raw_json = feed;
+        let candidate =
+            metadata(update).expect("release producer's canonical workflow must be accepted");
+        assert_eq!(candidate.workflow_version, workflow);
+        assert_eq!(candidate.version, update.version);
+    }
 
     // The real updater verifies ephemeral signatures against a bounded loopback peer.
     // No private key, production feed request or installer invocation is involved.

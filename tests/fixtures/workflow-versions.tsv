@@ -1,0 +1,18 @@
+# Shared canonical workflow cases: verdict TAB literal value TAB label.
+# @canonical reads the real skill frontmatter; preserve value whitespace.
+accept	@canonical	canonical
+accept	2026-10-08.10	historical
+accept	2030-12-31.7	future
+accept	2026-10-18.11111111111111111111111111111111111111111111111111111	max_length
+reject	2026-10-18	missing_revision
+reject	2026-10-18.	trailing_dot
+reject	2026-10-18.x	non_digit_revision
+reject	v2026-10-18.2	leading_v
+reject	 2026-10-18.2	leading_whitespace
+reject	2026-10-18.2 	trailing_whitespace
+reject	 2026-10-18.2 	surrounding_whitespace
+reject	2026-10-18.111111111111111111111111111111111111111111111111111111	over_length
+reject	2026-10-18.١	non_ascii_digit
+reject	2026-1-18.2	short_month
+reject	2026-10-18.2.extra	extra_component
+reject		empty
