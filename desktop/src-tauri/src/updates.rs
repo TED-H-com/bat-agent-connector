@@ -13,6 +13,8 @@ use tauri_plugin_updater::{Update, UpdaterExt};
 
 // Consume the real release verifier's output, not a second hand-written feed shape.
 #[cfg(test)]
+// The test-only real producer loads the same validator source a second time.
+#[allow(clippy::duplicate_mod)]
 #[path = "../examples/update_manifest.rs"]
 mod feed_producer;
 
