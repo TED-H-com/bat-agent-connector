@@ -87,7 +87,7 @@ test('missing sources and unreported metrics stay unknown; reasons are optional'
 test('identity shows known and unknown commits in both languages',()=>{
  for(const lang of ['en','zh-TW']){
  const t=(key,vars={})=>diagnosticsStrings[lang][key].replace(/\{(\w+)\}/g,(_,k)=>vars[k]??'');
- const browser=clientIdentity({caps:fixture().caps});assert.equal(browser.app_commit,'a'.repeat(40));assert.ok(buildLine(browser,t).includes('aaaaaaa'));
+ const browser=clientIdentity({caps:fixture().caps});assert.equal(browser.app_commit,null);assert.equal(browser.connector_commit,'a'.repeat(40));assert.ok(buildLine(browser,t).includes('aaaaaaa'));
  const desktop=clientIdentity({desktop:true,appBuild:{version:'0.1.1',commit:null},caps:fixture().caps});assert.ok(buildLine(desktop,t).includes(diagnosticsStrings[lang].diag_unknown));assert.ok(buildLine(desktop,t).includes('0.1.1'));
  }
 });
@@ -158,4 +158,40 @@ test('source metadata passes the existing scrubber without carrying arbitrary er
  assert.deepEqual(out.source_reads?.hosts,{status:'failed',http_status:500,code:'HTTP_ERROR',read_at:null});
  assert.deepEqual(out.source_reads?.operations,expectedRead('failed',{code:'SOURCE_ACCESS_CHANGED'}));
  assert.ok(!JSON.stringify(out).match(/private-box|batc_planted_secret/));
+});
+
+
+test('loaded frontend A stays separate from producer Connector B in browser diagnostics',()=>{
+ const frontendBuild={frontend_digest:'a'.repeat(64)},caps=structuredClone(bootstrap.capabilities);
+ const client=clientIdentity({frontendBuild,caps});
+ assert.equal(client.frontend_digest,frontendBuild.frontend_digest);
+ assert.equal(client.connector_version,caps.build.version);assert.equal(client.connector_commit,caps.build.commit);
+ assert.equal(client.connector_source,caps.build.source);
+ assert.equal(client.app_version,null);assert.equal(client.app_commit,null);
+ assert.notEqual(client.frontend_digest,client.connector_commit);
+ const out=buildDiagnostics({frontendBuild,caps,exportedAt:at});
+ assert.equal(out.schema,'batc.diagnostics.v1');assert.deepEqual(out.client,client);
+});
+test('Desktop appBuild, frontend digest and producer Connector are three separate identities',()=>{
+ const frontendBuild={frontend_digest:'a'.repeat(64)},appBuild={version:'0.1.1',commit:'b'.repeat(40)};
+ const client=clientIdentity({desktop:true,frontendBuild,appBuild,caps:bootstrap.capabilities});
+ assert.equal(client.frontend_digest,frontendBuild.frontend_digest);
+ assert.equal(client.app_version,appBuild.version);assert.equal(client.app_commit,appBuild.commit);
+ assert.equal(client.connector_version,bootstrap.capabilities.build.version);
+ assert.equal(buildDiagnostics({desktop:true,frontendBuild,appBuild,caps:bootstrap.capabilities}).client.frontend_digest,frontendBuild.frontend_digest);
+});
+test('frontend digest accepts only a complete lowercase SHA-256 and never falls back to Connector',()=>{
+ for(const frontend_digest of [null,'a'.repeat(40),'A'.repeat(64),'a'.repeat(64)+'\n','https://fixture.example/']){
+  const client=clientIdentity({frontendBuild:{frontend_digest},caps:bootstrap.capabilities});
+  assert.equal(client.frontend_digest,null);assert.equal(client.app_version,null);assert.equal(client.app_commit,null);
+ }
+});
+for(const lang of ['en','zh-TW'])test(`component build line orders frontend before Connector with source (${lang})`,()=>{
+ const t=(key,vars={})=>diagnosticsStrings[lang][key].replace(/\{(\w+)\}/g,(_,k)=>vars[k]??'');
+ const frontendBuild={frontend_digest:'a'.repeat(64)};
+ const browser=buildLine(clientIdentity({frontendBuild,caps:bootstrap.capabilities}),t);
+ assert.ok(browser.includes(frontendBuild.frontend_digest));assert.ok(browser.indexOf('Frontend')<browser.indexOf('Connector'));
+ assert.ok(browser.includes(bootstrap.capabilities.build.version));assert.ok(browser.includes(bootstrap.capabilities.build.source));
+ const desktop=buildLine(clientIdentity({desktop:true,appBuild:{version:'0.1.1',commit:'b'.repeat(40)},frontendBuild,caps:bootstrap.capabilities}),t);
+ assert.ok(desktop.includes('0.1.1'));assert.ok(desktop.indexOf('0.1.1')<desktop.indexOf('Frontend'));
 });

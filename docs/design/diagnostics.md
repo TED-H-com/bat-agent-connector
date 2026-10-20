@@ -99,7 +99,33 @@ checkouts without matching VCS metadata have a null commit. A frozen runtime rea
 its packaged `build-info.json`. No runtime Git process is invoked. The packaging
 job supplies `BATC_BUILD_COMMIT` to PyInstaller and Rust `option_env!`; native
 version comes from `CARGO_PKG_VERSION`. Missing commit means unknown in both
-locales. Browser assets use the serving Connector build and remain reproducible.
+locales. Connector identity comes only from capabilities and identifies the service,
+not the UI loaded in a window.
+
+The loaded UI embeds `frontend_digest`, a lowercase SHA-256 source digest, through
+the existing Vite build. About and the diagnostics summary show Frontend before
+Connector (version, commit and source); Desktop additionally shows its native
+`appBuild` first. `batc.diagnostics.v1` adds `client.frontend_digest`. Browser
+`app_version` and `app_commit` are null: they no longer alias Connector fields.
+Native values still come from `appBuild`. A direct source import without Vite has
+no built digest and reports unknown. A loaded tab keeps its embedded digest when
+the Connector changes. This identifies build inputs, not a readable release name,
+freshness, a signed artifact, native abilities or the health of Connector/BAT.
+
+Inputs are every regular file recursively under `desktop/src/`, plus
+`desktop/index.html`, `desktop/package.json`, `desktop/package-lock.json`,
+`desktop/tsconfig.json`, `desktop/vite.config.ts`,
+`desktop/scripts/frontend-build.mjs` and `desktop/scripts/browser-assets.mjs`.
+Paths are desktop-relative with `/` separators, sorted by UTF-8 byte order.
+SHA-256 starts with the UTF-8 bytes `batc.frontend.v1` and a NUL; for each file it
+hashes the decimal UTF-8 path-byte length, `:`, the path, NUL, decimal content-byte
+length, NUL, then the exact file bytes. File names and byte lengths frame additions,
+removals and contents unambiguously. Tests/docs, generated output, Git metadata,
+timestamps, absolute paths, environment and `node_modules` are excluded; the
+lockfile records dependency inputs. This is not an attestation of the installed
+toolchain. `BATC_BUILD_COMMIT` never enters the browser identity or bundle; native
+`appBuild` retains its existing optional commit. Generated files are not inputs,
+so committed browser assets remain reproducible without a commit-SHA cycle.
 
 ## Save boundary
 

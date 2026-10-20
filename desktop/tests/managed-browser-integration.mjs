@@ -6,6 +6,9 @@ import {mkdtemp, rm} from "node:fs/promises";
 import {resolve, join} from "node:path";
 import {pathToFileURL} from "node:url";
 import {chromium} from "@playwright/test";
+import {STRINGS} from '../src/i18n.js';
+const locale = process.env.BATC_TEST_LOCALE || 'en-US';
+const copy = STRINGS[locale === 'zh-TW' ? 'zh-TW' : 'en'];
 const temporary = await mkdtemp(join(testScratchRoot(), "managed-browser-"));
 // Keep browser and child-process temporary files inside this owned directory.
 process.env.TMPDIR = process.env.TEMP = process.env.TMP = temporary;
@@ -21,7 +24,7 @@ let browser, active = false;
 try {
   const first = runtime("ensure"); active = true;
   browser = await chromium.launch();
-  const context = await browser.newContext({locale: "en-US"});
+  const context = await browser.newContext({locale});
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
   const errors = [];
@@ -42,8 +45,8 @@ try {
   await page.locator("body.has-workspace").waitFor();
   await page.goto(first.endpoint + "/dashboard/#/settings");
   await page.locator("[data-setup-advanced] > summary").click();
-  await page.getByRole("heading", {name: "Connected to your local Connector"}).waitFor();
-  await page.getByRole("button", {name: "Disconnect", exact: true}).click();
+  await page.getByRole("heading", {name: copy.managed_browser_connected}).waitFor();
+  await page.getByRole("button", {name: copy.disconnect, exact: true}).click();
   await page.waitForFunction(() => !document.body.classList.contains("has-workspace"));
   await page.reload();
   assert.equal(await page.locator("body.has-workspace").count(), 0);
@@ -53,7 +56,7 @@ try {
   const second = runtime("ensure"); active = true;
   assert.equal(second.server_id, first.server_id);
   assert.equal(second.principal_id, first.principal_id);
-  console.log("Managed browser: file POST, authenticated dashboard, reload, sign-out and service restart passed");
+  console.log(`Managed browser (${locale}): file POST, authenticated dashboard, reload, sign-out and service restart passed`);
 } finally {
   await browser?.close();
   if (active) runtime("stop");

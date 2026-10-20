@@ -875,8 +875,9 @@ var init_diagnostics_strings = __esmMin((() => {
 			diag_copy: "Copy",
 			diag_close: "Close",
 			diag_unknown: "unknown",
-			diag_connector_build: "Connector {version} ({commit})",
+			diag_connector_build: "Connector {version} ({commit}) · source: {source}",
 			diag_desktop_build: "Desktop {version} ({commit})",
+			diag_frontend_build: "Frontend SHA-256 {digest}",
 			diag_privacy: "Redacted preview. Saving and copying stay on this device.",
 			diag_counts: "{errors} · {operations}",
 			diag_errors_one: "1 recent error",
@@ -923,8 +924,9 @@ var init_diagnostics_strings = __esmMin((() => {
 			diag_copy: "複製",
 			diag_close: "關閉",
 			diag_unknown: "未知",
-			diag_connector_build: "Connector {version}（{commit}）",
+			diag_connector_build: "Connector {version}（{commit}）· 來源：{source}",
 			diag_desktop_build: "桌面版 {version}（{commit}）",
+			diag_frontend_build: "Frontend SHA-256 {digest}",
 			diag_privacy: "預覽已去識別化。儲存與複製都只在這台裝置上進行。",
 			diag_counts: "{errors} · {operations}",
 			diag_errors_one: "最近 1 筆錯誤",
@@ -15301,6 +15303,9 @@ function settingsAgents({ h, t, api, caps, guard, from }) {
 	};
 }
 //#endregion
+//#region src/frontend-identity.js
+var frontendBuild = Object.freeze({ frontend_digest: "753bbd77b8ad3382449abe9977bd9645b5a2fd63803b028d1f3335ea74a637d4" });
+//#endregion
 //#region src/diagnostics.js
 var code = (value) => typeof value === "string" && /^[A-Z][A-Z0-9_]{0,79}$/.test(value) ? value : null;
 var reason = (value) => typeof value === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(value) ? value : null;
@@ -15372,10 +15377,11 @@ function errorRing(limit = 50) {
 		}
 	};
 }
-function clientIdentity({ caps, appBuild, desktop = false, os = "unknown", locale = "en", width = 0 }) {
+function clientIdentity({ caps, appBuild, frontendBuild: frontendBuild$1 = frontendBuild, desktop = false, os = "unknown", locale = "en", width = 0 }) {
 	return {
-		app_version: desktop ? version$2(appBuild?.version) : version$2(caps?.build?.version ?? caps?.connector),
-		app_commit: desktop ? commit(appBuild?.commit) : commit(caps?.build?.commit),
+		app_version: desktop ? version$2(appBuild?.version) : null,
+		app_commit: desktop ? commit(appBuild?.commit) : null,
+		frontend_digest: typeof frontendBuild$1?.frontend_digest === "string" && frontendBuild$1.frontend_digest.length === 64 && /^[a-f0-9]{64}$/.test(frontendBuild$1.frontend_digest) ? frontendBuild$1.frontend_digest : null,
 		connector_version: version$2(caps?.build?.version ?? caps?.connector),
 		connector_commit: commit(caps?.build?.commit),
 		connector_source: select(caps?.build?.source, [
@@ -15397,14 +15403,16 @@ function clientIdentity({ caps, appBuild, desktop = false, os = "unknown", local
 }
 function buildLine(client, t) {
 	const unknown = t("diag_unknown");
+	const frontend = t("diag_frontend_build", { digest: client.frontend_digest || unknown });
 	const connector = t("diag_connector_build", {
 		version: client.connector_version || unknown,
-		commit: client.connector_commit?.slice(0, 7) || unknown
+		commit: client.connector_commit?.slice(0, 7) || unknown,
+		source: client.connector_source || unknown
 	});
-	return client.platform === "desktop" ? t("diag_desktop_build", {
+	return (client.platform === "desktop" ? t("diag_desktop_build", {
 		version: client.app_version || unknown,
 		commit: client.app_commit?.slice(0, 7) || unknown
-	}) + " · " + connector : connector;
+	}) + " · " : "") + frontend + " · " + connector;
 }
 var APP = "io.betteragent.dashboard";
 function logLocations(os, managed) {
