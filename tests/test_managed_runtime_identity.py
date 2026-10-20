@@ -13,6 +13,8 @@ from pathlib import Path
 
 import pytest
 
+from scripts.validate_connector_update import copy_fixture_source
+
 try:
     import tomllib
 except ImportError:
@@ -52,37 +54,20 @@ def run(args, *, env, cwd=None):
     return result.stdout.strip()
 
 
-def package_inputs(source):
-    """Copy declared build inputs, including every wheel force-include."""
-    document = tomllib.loads((ROOT / "pyproject.toml").read_text())
-    project = document["project"]
-    wheel = document["tool"]["hatch"]["build"]["targets"]["wheel"]
-    readme = project["readme"]
-    inputs = {"pyproject.toml", readme if isinstance(readme, str) else readme["file"]}
-    inputs.update(wheel["packages"])
-    inputs.update(wheel.get("force-include", {}))
-    for pattern in project.get("license-files", []):
-        inputs.update(str(path.relative_to(ROOT)) for path in ROOT.glob(pattern))
-    for name in sorted(inputs):
-        target = source / name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if (ROOT / name).is_dir():
-            shutil.copytree(ROOT / name, target, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-        else:
-            shutil.copyfile(ROOT / name, target)
-    return wheel["packages"][0]
-
-
 @pytest.fixture(scope="module")
 def packages(tmp_path_factory):
     scratch = tmp_path_factory.mktemp("managed-vcs-packages")
     source = scratch / "source"
     source.mkdir()
-    package = package_inputs(source)
+    copy_fixture_source(ROOT, source)
+    document = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    package = document["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"][0]
     # The cache supplies dependencies only; golden identity comes from the fixture packages.
     env = {key: os.environ[key] for key in ("PATH", "SystemRoot", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR", "LANG", "LC_ALL", "UV_CACHE_DIR")
            if key in os.environ}
     env.update(UV_NO_CONFIG="1", GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
+               # Provenance is temporarily removed below; installs own their files.
+               UV_LINK_MODE="copy",
                GIT_AUTHOR_DATE="2026-01-01T00:00:00+00:00", GIT_COMMITTER_DATE="2026-01-01T00:00:00+00:00")
     git, uv = shutil.which("git"), shutil.which("uv")
     assert git and uv
@@ -105,14 +90,22 @@ def packages(tmp_path_factory):
             "import json;from bat_agent_connector.build_identity import build_identity;print(json.dumps(build_identity()))"],
             env=env, cwd=scratch))
         assert identity["commit"] == sha and identity["source"] == "vcs"
-        metadata = Path(json.loads(run([str(interpreter), "-I", "-c",
-            "import json;from importlib.metadata import distribution;"
+        provenance = json.loads(run([str(interpreter), "-I", "-c",
+            "import json;from pathlib import Path;from importlib.metadata import distribution;"
+            "from bat_agent_connector import build_identity;"
             "d=distribution('bat-agent-connector');"
-            "print(json.dumps(str(next(d.locate_file(p) for p in d.files if str(p).endswith('.dist-info/direct_url.json')))))"],
-            env=env, cwd=scratch)))
+            "embedded=Path(build_identity.__file__).with_name('build-info.json');"
+            "print(json.dumps({'embedded':str(embedded),'commit':json.loads(embedded.read_text())['commit'],"
+            "'direct':str(next(d.locate_file(p) for p in d.files if str(p).endswith('.dist-info/direct_url.json')))}))"],
+            env=env, cwd=scratch))
+        metadata = Path(provenance["direct"])
         direct = json.loads(metadata.read_text())
         assert direct["vcs_info"]["commit_id"] == sha
-        installed[candidate] = {"python": str(interpreter), "commit": sha, "metadata": metadata, "identity": identity}
+        assert provenance["commit"] == sha
+        print("REAL MANAGED PACKAGE " + json.dumps({"identity": identity,
+            "embedded_commit": provenance["commit"], "direct_url_commit": direct["vcs_info"]["commit_id"]}))
+        installed[candidate] = {"python": str(interpreter), "commit": sha, "metadata": metadata,
+            "embedded": Path(provenance["embedded"]), "identity": identity}
     assert installed["a"]["commit"] != installed["b"]["commit"]
     assert installed["a"]["identity"]["version"] == installed["b"]["identity"]["version"]
     empty_path = scratch / "empty-path"
@@ -171,6 +164,23 @@ print(json.dumps(runtime.ensure(sys.argv[1], timeout=15)))
                           env=env, cwd=root.parent))
 
 
+@contextmanager
+def hidden_provenance(package):
+    # Both real build outputs can identify an installed package after I05.
+    # Restore original bytes by replacement; never mutate shared cache inodes.
+    original = {package[key]: package[key].read_bytes() for key in ("metadata", "embedded")}
+    def restore():
+        for path, content in original.items():
+            path.unlink(missing_ok=True)
+            path.write_bytes(content)
+    for path in original:
+        path.unlink()
+    try:
+        yield restore
+    finally:
+        restore()
+
+
 @pytest.fixture(scope="module")
 def observed(packages):
     scratch, installed, env = packages
@@ -185,24 +195,14 @@ def observed(packages):
         for field in ("endpoint", "actor", "server_id", "principal_id", "token", "runtime_version"):
             assert same[field] == different[field] == first["launch"][field]
         observations.update(same=same, differs=different)
-        path = installed["b"]["metadata"]
-        original = path.read_bytes()
-        try:
-            path.unlink()
+        with hidden_provenance(installed["b"]):
             observations["unknown_bundled"] = ensure(installed["b"], root, env)
-        finally:
-            path.write_bytes(original)
         observations["older_service"] = ensure(installed["b"], root, env, older=True)
-    path = installed["a"]["metadata"]
-    original = path.read_bytes()
-    try:
-        path.unlink()
+    with hidden_provenance(installed["a"]) as restore:
         with owner(packages, "unknown-installation") as (root, _first):
             # The owner's unknown startup identity stays unknown after metadata reappears.
-            path.write_bytes(original)
+            restore()
             observations["unknown_running"] = ensure(installed["b"], root, env)
-    finally:
-        path.write_bytes(original)
     return observations
 
 
