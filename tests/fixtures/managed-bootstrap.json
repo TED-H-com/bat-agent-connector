@@ -500,6 +500,30 @@
         "allowed": false
       },
       {
+        "action": "project.github.configure",
+        "scope": "manage",
+        "summary": "Import or synchronize a GitHub project board",
+        "allowed": false
+      },
+      {
+        "action": "project.github.import",
+        "scope": "manage",
+        "summary": "Import or synchronize a GitHub project board",
+        "allowed": false
+      },
+      {
+        "action": "project.github.sync",
+        "scope": "manage",
+        "summary": "Import or synchronize a GitHub project board",
+        "allowed": false
+      },
+      {
+        "action": "pm.github.import",
+        "scope": "manage",
+        "summary": "Import or synchronize a GitHub project board",
+        "allowed": false
+      },
+      {
         "action": "pm.snapshot.create",
         "scope": "manage",
         "summary": "Freeze sourced project context for a shared Brief and documents",
@@ -1211,6 +1235,7 @@
             "pm.execution.verify",
             "pm.follow_up.analyze",
             "pm.follow_up.prepare",
+            "pm.github.import",
             "pm.governance.decide",
             "pm.governance.record",
             "pm.governance.revise",
@@ -1832,6 +1857,10 @@
       "events_stream": true,
       "operations": true,
       "work_items": true,
+      "board_github_sync": {
+        "version": 1,
+        "interval_s": 300
+      },
       "github": false,
       "deploy": false,
       "deployment_history": true,
