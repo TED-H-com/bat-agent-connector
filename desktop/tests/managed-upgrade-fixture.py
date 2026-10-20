@@ -17,6 +17,7 @@ import os
 import re
 import runpy
 import signal
+import socket
 import sqlite3
 import subprocess
 import sys
@@ -208,7 +209,50 @@ def busy_refusal(previous, current, old_manifest, root, env):
         assert command(previous, data, env, action='stop')['stopped'] is True
 
 
+def fixture_log_text(text, root):
+    """Keep stacks/stages, never fixture credentials or machine identity."""
+    for name, value in os.environ.items():
+        if any(part in name for part in ('TOKEN', 'PASSWORD', 'SECRET')) and len(value) >= 4:
+            text = text.replace(value, '<credential>')
+    text = re.sub(r'\bbatc_[A-Za-z0-9_-]+', '<credential>', text)
+    text = re.sub(r'(?i)\bBearer\s+\S+', 'Bearer <credential>', text)
+    for path, label in ((root, '<fixture>'), (Path(__file__).resolve().parents[2], '<checkout>')):
+        text = text.replace(str(path), label)
+    text = re.sub(r'''/(?:Users|home)/[^/\s'"\]]+''', '<home>', text)
+    return text.replace(socket.gethostname(), '<runner>')
+
+
+def preserve_publication_logs(root):
+    directory = Path(__file__).resolve().parents[1] / 'test-results/packaged-core-upgrade'
+    directory.mkdir(parents=True, exist_ok=True)
+    seed = 'Seed log was not written; failure occurred before producer output.'
+    for name in ('publication-seed.log', 'publication-core.log'):
+        source = root / name
+        if not source.exists():
+            continue
+        # Bound both uploaded output and exception size, including a noisy crash.
+        with source.open('rb') as stream:
+            stream.seek(0, 2)
+            stream.seek(max(0, stream.tell() - 512 * 1024))
+            content = fixture_log_text(stream.read().decode(errors='replace'), root)
+        (directory / name).write_text(content)
+        if name == 'publication-seed.log':
+            seed = '\n'.join(content.splitlines()[-300:])
+    return seed
+
+
 def publication_upgrade(previous, current, previous_source, root, env, *, pytest_prefix=None):
+    try:
+        result = _publication_upgrade(previous, current, previous_source, root, env, pytest_prefix=pytest_prefix)
+    except Exception as error:
+        tail = preserve_publication_logs(root)
+        message = fixture_log_text(f'{type(error).__name__}: {error}', root)
+        raise AssertionError(f'{message}\nPublication seed log (last 300 lines):\n{tail}') from None
+    preserve_publication_logs(root)
+    return result
+
+
+def _publication_upgrade(previous, current, previous_source, root, env, *, pytest_prefix=None):
     """Real 201 producer -> distinct managed core, preserving the original journal.
 
     The producer loads the previous release's own Python source and test doubles.
@@ -233,9 +277,10 @@ existing packaged workspace/identity checks; its publication path remains open.
     seed_env = {**os.environ, 'PYTHONPATH': os.pathsep.join([str(previous_source / 'src'), str(previous_source)]), 'TMPDIR': str(root),
         'TMP': str(root), 'TEMP': str(root), 'BATC_UPGRADE_SEED_DATA': str(data),
         'BATC_UPGRADE_SEED_REPORT': str(output), 'BATC_UPGRADE_SEED_MODE': '1'}
-    seed_command = [*(pytest_prefix or [sys.executable, '-m', 'pytest']), '-q',
+    seed_command = [*(pytest_prefix or [sys.executable, '-m', 'pytest']), '-vv', '-s',
         str(Path(__file__).resolve()) + '::test_publication_seed', '--noconftest', '--import-mode=importlib',
         '--rootdir=' + str(previous_source), '--asyncio-mode=auto',
+        '-o', 'faulthandler_timeout=40',
         '--basetemp=' + str(root / 'publication-pytest')]
     seed_log = root / 'publication-seed.log'
     with seed_log.open('wb') as log:
@@ -244,7 +289,7 @@ existing packaged workspace/identity checks; its publication path remains open.
     try:
         until = time.monotonic() + 45
         while not output.exists():
-            assert seeded.poll() is None, seed_log.read_text(errors='replace')
+            assert seeded.poll() is None, 'Original source producer exited before readiness'
             assert time.monotonic() < until, 'Original source producer did not become ready'
             time.sleep(0.05)
         info = json.loads(output.read_text())
@@ -253,8 +298,9 @@ existing packaged workspace/identity checks; its publication path remains open.
         assert Path(info['producer_root']) == (previous_source / 'src').resolve()
         assert info['rows']['work_attempts'] and info['rows']['session_results']
         options = {'start_new_session': True}
-        child = subprocess.Popen([str(current), 'serve', '--data-dir', str(data)], env={**env, **info['provider_environment']},  # noqa: S603 - digest-verified fixture
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **options)
+        with (root / 'publication-core.log').open('wb') as log:
+            child = subprocess.Popen([str(current), 'serve', '--data-dir', str(data)], env={**env, **info['provider_environment']},  # noqa: S603 - digest-verified fixture
+                stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, **options)
         try:
             # Same child command ensure would spawn, held by our Popen handle so a
             # fault fixture can always reap it without adopting a PID from disk.
@@ -312,9 +358,12 @@ existing packaged workspace/identity checks; its publication path remains open.
         (root / 'publication-seed.release').write_text('finished\n')
         try:
             seeded.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            # Reap the owned process without replacing the original failure.
+            terminate_owned(seeded)
         finally:
             terminate_owned(seeded)
-    assert seeded.returncode == 0, seed_log.read_text(errors='replace')
+    assert seeded.returncode == 0, 'Original source producer failed during cleanup'
     effects = json.loads((root / 'publication-effects.json').read_text())
     assert effects == {'create_pull': 1, 'push': 1}
     result['seconds'] = round(time.monotonic() - started, 3)
@@ -349,9 +398,11 @@ if os.environ.get('BATC_UPGRADE_SEED_MODE') == '1':
             yield value
 
     async def test_publication_seed(start_ready, mock, monkeypatch):
+        print('[publication-seed] start_ready complete; entering Work/Result/publication producer', flush=True)
         helper = Path(__file__).resolve().parents[2] / 'tests/upgrade_continuity_helpers.py'
         producer = runpy.run_path(str(helper))['seed_publication']
         info = await producer(start_ready, mock, monkeypatch, Path(os.environ['BATC_UPGRADE_SEED_DATA']))
+        print('[publication-seed] original 201 receipt committed; releasing journal', flush=True)
         start_ready['server'].close()
         await start_ready['server'].wait_closed()
         daemon = start_ready['d']
@@ -362,6 +413,7 @@ if os.environ.get('BATC_UPGRADE_SEED_MODE') == '1':
         info['provider_environment'] = {name: os.environ[name] for name in ('BATC_TEST_TOKEN', 'REPO_FAKE_TOKEN')}
         output = Path(os.environ['BATC_UPGRADE_SEED_REPORT'])
         platform_files.atomic_write(output, json.dumps(info).encode())
+        print('[publication-seed] readiness written; providers remain alive', flush=True)
         # Keep the original FakeGitHub/MockBat alive through the new core's
         # recovery, so a duplicate REST call is observed across the switch.
         until = time.monotonic() + 60
