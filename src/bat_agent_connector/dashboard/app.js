@@ -64306,6 +64306,7 @@ function migrateManagedStorage(identity, local, session) {
 			value
 		}] : [];
 	}));
+	if (!copies.length) return;
 	const record = {
 		version: 1,
 		source,

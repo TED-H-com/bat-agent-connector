@@ -26,7 +26,7 @@ async function setup(page: Page, options: {source?: string; legacy?: boolean} = 
       // A durableForm envelope with its original Work/Attempt request. It is
       // retained as bytes here; this session view must never submit the PM form.
       localStorage.setItem(`batc.pm.${scope}.session.send.${JSON.stringify({workspace_id: 'ws_' + 'c'.repeat(32), work_item_id: 'wi_' + 'd'.repeat(20)})}`,
-        JSON.stringify({version: 1, values: {rationale: 'Keep this request'}, intent: {key: 'original-pm-key', operation_id: 'op_' + 'b'.repeat(32),
+        JSON.stringify({version: 1, values: {text: 'Keep this request'}, intent: {key: 'original-pm-key', operation_id: 'op_' + 'b'.repeat(32),
           request: {action: 'session.send', target: {workspace_id: 'ws_' + 'c'.repeat(32), work_item_id: 'wi_' + 'd'.repeat(20)},
             params: {text: 'Keep this request', schedule: 'after_current'}, preconditions: {expected_attempt_id: 'att_' + 'e'.repeat(32)}}}}));
       sessionStorage.setItem(`batc.tree.${scope}`, JSON.stringify(['fixture-workspace']));
@@ -90,7 +90,12 @@ for (const locale of ['en-US', 'zh-TW']) {
     const before = await page.evaluate(() => {
       const namespace = Object.keys(localStorage).find(key => key.startsWith('batc.sync.'))!.slice('batc.sync.'.length);
       localStorage.setItem(`batc.key.${namespace}.fixture-original`, JSON.stringify({key: 'original-fixture-key', op: 'op_' + 'a'.repeat(32)}));
-      localStorage.setItem(`batc.pm.${namespace}.fixture-request`, JSON.stringify({intent: {key: 'original-pm-key', operation_id: 'op_' + 'b'.repeat(32)}}));
+      const target = {workspace_id: 'ws_' + 'c'.repeat(32), work_item_id: 'wi_' + 'd'.repeat(20)};
+      const request = {action: 'session.send', target, params: {text: 'Keep this request', schedule: 'after_current'},
+        preconditions: {expected_attempt_id: 'att_' + 'e'.repeat(32)}};
+      localStorage.setItem(`batc.pm.${namespace}.session.send.${JSON.stringify(target)}`,
+        JSON.stringify({version: 1, values: {text: 'Keep this request'},
+          intent: {key: 'original-pm-key', operation_id: 'op_' + 'b'.repeat(32), request}}));
       return {namespace, entries: Object.entries(localStorage).sort()};
     });
     await changeIdentity(page, {endpoint: 'http://127.0.0.1:41002/'});

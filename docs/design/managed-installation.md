@@ -159,7 +159,7 @@ needs explicit recovery; automatic repair is not supported.
 Multiple matching old ports are **not** merged or ranked, even when their values
 look identical or one port only has orphan drafts/tab preferences without a
 checkpoint. Existing destination data, missing old checkpoint keys, legacy
-keys without server/principal proof, ambiguous namespace boundaries, non-loopback
+keys without server/principal proof, unrecognized legacy key envelopes, ambiguous namespace boundaries, non-loopback
 endpoints and different identities are left in place. These cases require explicit
 review/export of the retained data; there is no automatic picker or recovery UI in
 this change. Reverting to the old frontend can still read original old-port keys

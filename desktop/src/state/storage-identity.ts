@@ -73,6 +73,8 @@ export function migrateManagedStorage(identity: StorageIdentity, local: Storage,
     const destination = rebase(key, source, target), value = storage.getItem(key);
     return destination !== null && value !== null ? [{storage, destination, value}] : [];
   }));
+  // Unrecognized legacy key envelopes remain untouched, without a false receipt.
+  if (!copies.length) return;
   const record = {version: 1, source, target, status: 'copying'};
   // A crash can leave a partial copy. The durable marker makes a later startup
   // refuse that destination rather than read a draft without its operation key.

@@ -98,6 +98,7 @@ test('an existing destination in either storage area prevents every legacy copy'
 test('missing identity checkpoint, legacy identity, malformed and nonlocal endpoints stay untouched', () => {
   for (const source of [storageScope('http://127.0.0.1:41001/', identity.actor),
     storageScope('https://central.example/', identity.actor, identity.server_id, identity.principal_id),
+    storageScope('HTTP://127.0.0.1:41001/', identity.actor, identity.server_id, identity.principal_id),
     'malformed%:fixture-server:fixture-principal:fixture.operator']) {
     const {local, session} = stores(source);
     const before = [...local.values];
