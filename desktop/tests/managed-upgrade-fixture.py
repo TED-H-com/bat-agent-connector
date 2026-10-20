@@ -26,11 +26,11 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-# macOS ff633ea3 progressed beyond old fixture setup after the 40s stack dump,
-# but missed 45s readiness. Linux's body-to-ready was 1.59s: double it,
-# round up to a 5s window, then add to 45s => 50s. Only seed readiness changes;
-# the provider window and the whole case (including cleanup) still have 60s.
-SEED_READINESS_TIMEOUT_S = 50
+# macOS d6c8f319 spent 35.88s after the fake's reverse lookup. Removing that
+# dependency leaves 56.98 - 35.88 = 21.10s to producer entry, even retaining all
+# 13.63s of ready-fixture work. Restore 45s after fixing DNS and observer parsing;
+# faulthandler remains 40s, providers and the whole case remain bounded by 60s.
+SEED_READINESS_TIMEOUT_S = 45
 
 
 def package(resources, directory):
@@ -369,8 +369,9 @@ existing packaged workspace/identity checks; its publication path remains open.
 
 
 if os.environ.get('BATC_UPGRADE_SEED_MODE') == '1':
-    # Explicit pytest node only. PYTHONPATH/rootdir select the original release;
-    # --noconftest prevents this checkout's fixtures from replacing its producer.
+    # Explicit pytest node only. PYTHONPATH selects the original product source;
+    # pytest imports the supporting tests package from this checkout. The audit
+    # plugin records both origins; --noconftest disables automatic fixture loading.
     import pytest
     from managed_upgrade_observer import record
 

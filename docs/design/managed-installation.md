@@ -262,8 +262,8 @@ kills an owner to upgrade. Passing output includes both binary digests and clean
 This supplements clean-profile installation evidence; it does not establish an
 in-place app installer upgrade or acceptance of an operator's existing data.
 
-The publication extension uses the earlier checkout's own Python source and
-test doubles to produce a real Work/Attempt/Result and a GitHub REST 201 receipt
+The publication extension uses the earlier checkout's own Python product source
+with this checkout's supporting test fixtures to produce a real Work/Attempt/Result and a GitHub REST 201 receipt
 in the earlier core's owned journal. Only the outer completion is interrupted;
 receipt rows are not synthesized. That producer releases its journal while its
 FakeGitHub/MockBat peers remain alive. The current core's ordinary `serve` child
@@ -280,18 +280,28 @@ for their exact platform/head. The POSIX host-script producer has Linux evidence
 macOS publication continuity remains unproven pending successful native CI. Its
 seed log, fixture setup stages and 40-second thread dump are preserved on failure.
 A test-only audit plugin records monotonic child-start and fixture start/end
-events without replacing subprocess or socket functions. Encoded host requests
-are identified by phase instead of copying their payload; environment values are
-omitted, and the same log redactor is used before printing and uploading.
+events without replacing subprocess or socket functions. Large host arguments
+remain opaque (length and digest only); phase detection reads at most a 128-character
+plain-text prefix. The fixture's own host-call await records duration, and fixture
+setup samples at most twelve main-thread frame locations once per second. Import
+origins and reverse-lookup call stacks identify which checkout owns a slow fake.
+Environment values and frame locals are omitted; the same log redactor is used
+before printing and uploading.
 
-The seed-readiness ceiling is 50 seconds. macOS CI showed progress after the
-40-second dump but missed the old 45-second readiness deadline.
-The Linux producer body took about 1.59 seconds; doubling that and rounding up to
-a five-second window gives five extra seconds (45 + 5 = 50). The original
-60-second provider window and whole-case budget, including cleanup, remain.
-This bounds the old producer without extending the current core's recovery
-limits. Pytest's `--setup-show` prints fixture completion; the explicit timeline
-is needed to locate a slow child. A successful macOS run is still required.
+The seed-readiness ceiling is restored to 45 seconds. The macOS timeline on
+`d6c8f319` had a 35.88-second gap after the loopback reverse-lookup audit event.
+The real Linux source harness confirms the call originates in this checkout's
+FakeGitHub, through `HTTPServer.server_bind` and `socket.getfqdn`. Its test server
+now binds the numeric address without reverse DNS. The old macOS log contains no
+sample inside that gap, so the resolver's exact blocked frame and duration remain
+unproven on macOS. A separate dump proves the observer was parsing a large host
+script; that parsing is removed. Even retaining all 13.63 seconds of macOS
+ready-fixture work, subtracting the lookup gap puts producer entry at about
+21.10 seconds (56.98 - 35.88). The next native run must confirm the improvement;
+Linux timings cannot establish the remaining macOS process-start cost.
+The 40-second faulthandler timeout, 60-second provider window and whole-case
+budget, including cleanup, remain unchanged. Pytest's `--setup-show` prints fixture
+completion; the explicit timeline locates slow work.
 macOS retains the existing packaged workspace/identity/busy checks. Windows also
 keeps those checks; its publication path and real OS-vault continuity remain open
 acceptance items.
