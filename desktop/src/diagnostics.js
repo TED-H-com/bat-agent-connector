@@ -45,8 +45,13 @@ export function clientIdentity(input = {}, projection = versionProjection(input)
 export function buildLine(projection, t) {
   const client=projection.rows ? projectionBuild(projection) : projection;
   const unknown = t('diag_unknown');
-  const connector = t('diag_connector_build', {version: client.connector_version || unknown, commit: client.connector_commit?.slice(0,7) || unknown});
-  return client.platform === 'desktop' ? t('diag_desktop_build', {version: client.app_version || unknown, commit: client.app_commit?.slice(0,7) || unknown}) + ' · ' + connector : connector;
+  const frontend = client.platform !== 'desktop' || client.frontend_digest
+    ? t('diag_frontend_build', {digest: client.frontend_digest?.slice(0,12) || unknown}) : null;
+  const connector = t('diag_connector_build', {version: client.connector_version || unknown, commit: client.connector_commit?.slice(0,7) || unknown, source: client.connector_source || unknown});
+  const desktop = client.platform === 'desktop' ? t('diag_desktop_build', {version: client.app_version || unknown, commit: client.app_commit?.slice(0,7) || unknown}) : null;
+  const line = [desktop, frontend, connector].filter(Boolean).join(' · ');
+  return client.platform === 'browser' && client.frontend_digest && client.served_frontend_digest && client.frontend_digest !== client.served_frontend_digest
+    ? line + ' · ' + t('diag_frontend_stale') : line;
 }
 const APP = 'io.betteragent.dashboard';
 export function logLocations(os, managed) {

@@ -1,9 +1,14 @@
+import {frontendBuild as loadedFrontendBuild, frontendDigest} from './frontend-identity.js';
+
 // Session-only inputs. Callers supply completed reads, never persisted identities.
 // Each observation retains its own clock; reading a launch receipt is not a new
 // observation of the process that happens to be answering now.
 export const version = value => typeof value === 'string' && value === value.trim() && /^\d+(?:\.\d+){1,3}(?:-(?:alpha|beta|rc|dev)\.?\d{0,4})?$/i.test(value) ? value : null;
 export const commit = value => typeof value === 'string' && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value) && [40,64].includes(value.length) ? value : null;
-export const digest = value => typeof value === 'string' && value.length === 64 && /^[a-f0-9]{64}$/.test(value) ? value : null;
+export const digest = frontendDigest;
+// A client load clock, not a Connector observation or a release timestamp.
+// Keep it with the captured module identity across capabilities refreshes.
+const frontendLoadedAt = new Date().toISOString();
 export const time = value => {
   if(typeof value === 'number' && Number.isFinite(value) && value >= 0 && value < 253402300800) return new Date(value * 1000).toISOString();
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
@@ -20,9 +25,12 @@ export function versionProjection(input = {}) {
   const managed = input.managedRuntime;
   const descriptor = input.adapterRead?.document?.native_analysis;
   const run = input.adapterRunRead?.run;
+  const frontend = input.frontendBuild === undefined ? loadedFrontendBuild : input.frontendBuild;
+  const loadedAt = input.frontendLoadedAt === undefined && frontend === loadedFrontendBuild && digest(frontend?.frontend_digest)
+    ? frontendLoadedAt : input.frontendLoadedAt;
   const rows = [
     fact('desktop', input.desktop ? input.appBuild : null, 'native_app_build', input.nativeReadAt, 'loaded'),
-    fact('loaded_ui', {digest:input.frontendBuild?.frontend_digest}, 'loaded_ui', input.frontendLoadedAt, 'loaded'),
+    fact('loaded_ui', {digest:frontend?.frontend_digest}, 'loaded_ui', loadedAt, 'loaded'),
     fact('served_ui', {digest:caps?.frontend?.digest}, 'capabilities', caps ? input.capabilitiesReadAt : null, 'read'),
     fact('connector', caps ? {...caps.build,version:caps.build?.version ?? caps.connector} : null,
       'capabilities', caps ? input.capabilitiesReadAt : null, 'read'),
@@ -51,5 +59,6 @@ export function projectionBuild(projection) {
   const connector=versionRow(projection,'connector');
   const app=versionRow(projection,'desktop');
   return {platform:projection.platform,app_version:app.version,app_commit:app.commit,
+    frontend_digest:versionRow(projection,'loaded_ui').digest,served_frontend_digest:versionRow(projection,'served_ui').digest,
     connector_version:connector.version,connector_commit:connector.commit,connector_source:connector.build_source};
 }

@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {buildDiagnostics, buildLine} from '../src/diagnostics.js';
 import {diagnosticsStrings} from '../src/diagnostics-strings.js';
 import {versionFactText} from '../src/version-facts.js';
+import {frontendBuild} from '../src/frontend-identity.js';
 const golden = name => JSON.parse(readFileSync(new URL(`../../tests/fixtures/${name}.json`, import.meta.url), 'utf8'));
 const bootstrap = golden('managed-bootstrap'), runtime = golden('managed-runtime-identity');
 const adapter = golden('pm-version-facts');
@@ -11,6 +12,31 @@ const at = '2026-10-20T12:00:00.000Z';
 const input = name => ({caps:bootstrap.capabilities, managedRuntime:runtime[name], desktop:true,
   capabilitiesReadAt:at, managedReadAt:at, online:true, exportedAt:at});
 const row = (bundle, id) => bundle.versions?.rows.find(value => value.id === id);
+test('UI compatibility fields and rows share the producer digest and their own clocks', () => {
+  const loadedAt='2026-10-20T11:00:00.000Z';
+  const digest=bootstrap.capabilities.frontend.digest;
+  const value={...input('differs'),desktop:false,frontendBuild:{frontend_digest:digest},frontendLoadedAt:loadedAt};
+  const bundle=buildDiagnostics(value);
+  assert.equal(row(bundle,'loaded_ui').digest,digest);
+  assert.equal(row(bundle,'loaded_ui').source,'loaded_ui');
+  assert.equal(row(bundle,'loaded_ui').observed_at,loadedAt);
+  assert.equal(row(bundle,'served_ui').digest,digest);
+  assert.equal(row(bundle,'served_ui').source,'capabilities');
+  assert.equal(row(bundle,'served_ui').observed_at,at);
+  assert.equal(bundle.client.frontend_digest,digest);
+  assert.equal(bundle.client.served_frontend_digest,digest);
+  const offline=buildDiagnostics({...value,online:false});
+  assert.equal(row(offline,'loaded_ui').digest,digest);
+  assert.equal(offline.client.frontend_digest,digest);
+  assert.equal(row(offline,'served_ui').digest,null);
+  assert.equal(offline.client.served_frontend_digest,null);
+});
+test('default loaded UI is the module snapshot, never the capabilities digest', () => {
+  const bundle=buildDiagnostics(input('differs'));
+  assert.equal(bundle.client.frontend_digest,frontendBuild.frontend_digest);
+  assert.equal(row(bundle,'loaded_ui').digest,frontendBuild.frontend_digest);
+  assert.equal(bundle.client.served_frontend_digest,bootstrap.capabilities.frontend.digest);
+});
 for (const name of Object.keys(runtime)) test(`real managed producer keeps independent version observations: ${name}`, () => {
   const bundle = buildDiagnostics(input(name));
   for (const [id, field] of [['bundled_runtime','bundled_runtime'], ['running_runtime','running_runtime']]) {
