@@ -1,0 +1,169 @@
+{
+  "configuration": {
+    "valid": true,
+    "binding": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "connections": [
+      {
+        "name": "node-1",
+        "label": "Fixture 1",
+        "kind": "host"
+      },
+      {
+        "name": "node-2",
+        "label": "Fixture 2",
+        "kind": "host"
+      },
+      {
+        "name": "node-3",
+        "label": "Fixture 3",
+        "kind": "host"
+      },
+      {
+        "name": "node-4",
+        "label": "Fixture 4",
+        "kind": "host"
+      },
+      {
+        "name": "node-5",
+        "label": "Fixture 5",
+        "kind": "host"
+      },
+      {
+        "name": "connector",
+        "label": "Fixture Connector",
+        "kind": "connector"
+      }
+    ],
+    "issue_count": 0
+  },
+  "monitor": {
+    "state": "running",
+    "epoch": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "controllable": true
+  },
+  "selection": {
+    "revision": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "connections": [
+      "node-1",
+      "node-2",
+      "node-3",
+      "node-4",
+      "node-5",
+      "connector"
+    ],
+    "applied_revision": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "readiness": {
+    "state": "fresh",
+    "observed_at": "2026-10-08T12:00:00Z",
+    "hosts": [
+      {
+        "name": "node-1",
+        "label": "Fixture 1",
+        "selected": true,
+        "level": "ready",
+        "blocking": null,
+        "code": null,
+        "observed_at": "2026-10-08T12:00:00Z",
+        "stale": false,
+        "layers": {
+          "tunnel": true,
+          "tls": true,
+          "auth": "ok",
+          "bat": true,
+          "workspace": true,
+          "version": "3.2.5"
+        }
+      },
+      {
+        "name": "node-2",
+        "label": "Fixture 2",
+        "selected": true,
+        "level": "ready",
+        "blocking": null,
+        "code": null,
+        "observed_at": "2026-10-08T12:00:00Z",
+        "stale": false,
+        "layers": {
+          "tunnel": true,
+          "tls": true,
+          "auth": "ok",
+          "bat": true,
+          "workspace": true,
+          "version": "3.2.5"
+        }
+      },
+      {
+        "name": "node-3",
+        "label": "Fixture 3",
+        "selected": true,
+        "level": "ready",
+        "blocking": null,
+        "code": null,
+        "observed_at": "2026-10-08T12:00:00Z",
+        "stale": false,
+        "layers": {
+          "tunnel": true,
+          "tls": true,
+          "auth": "ok",
+          "bat": true,
+          "workspace": true,
+          "version": "3.2.5"
+        }
+      },
+      {
+        "name": "node-4",
+        "label": "Fixture 4",
+        "selected": true,
+        "level": "ready",
+        "blocking": null,
+        "code": null,
+        "observed_at": "2026-10-08T12:00:00Z",
+        "stale": false,
+        "layers": {
+          "tunnel": true,
+          "tls": true,
+          "auth": "ok",
+          "bat": true,
+          "workspace": true,
+          "version": "3.2.5"
+        }
+      },
+      {
+        "name": "node-5",
+        "label": "Fixture 5",
+        "selected": true,
+        "level": "ready",
+        "blocking": null,
+        "code": null,
+        "observed_at": "2026-10-08T12:00:00Z",
+        "stale": false,
+        "layers": {
+          "tunnel": true,
+          "tls": true,
+          "auth": "ok",
+          "bat": true,
+          "workspace": true,
+          "version": "3.2.5"
+        }
+      }
+    ],
+    "connector": {
+      "name": "connector",
+      "label": "Fixture Connector",
+      "selected": true,
+      "level": "ready",
+      "blocking": null,
+      "code": null,
+      "observed_at": "2026-10-08T12:00:00Z",
+      "stale": false,
+      "layers": {
+        "tunnel": true,
+        "tls": false,
+        "bat": false,
+        "workspace": false,
+        "auth": "ok"
+      }
+    }
+  }
+}

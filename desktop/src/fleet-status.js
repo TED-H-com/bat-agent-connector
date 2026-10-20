@@ -9,6 +9,8 @@ const codeReason = {
   BAT_PROTOCOL_INVALID: 'service', CONNECTOR_UNAVAILABLE: 'service', CONNECTOR_CAPABILITY_MISSING: 'service',
   WORKSPACE_UNREADABLE: 'workspace', WORKSPACE_INVALID: 'workspace', WORKSPACE_BINDING_MISMATCH: 'workspace',
   INVENTORY_INVALID: 'configuration', OWNER_UNPROVEN: 'ownership', STOP_UNCONFIRMED: 'ownership',
+  TUNNEL_START_UNSETTLED: 'ownership', TUNNEL_RECORD_CHANGED: 'ownership', OTHER_LOGIN_OWNER: 'ownership',
+  ENDPOINT_IN_USE: 'local_endpoint', SSH_UNAVAILABLE: 'local_ssh',
   PROBE_PENDING: 'checking', PROBE_TIMEOUT: 'timeout', PROBE_STALE: 'stale',
 };
 const layerReason = {inventory: 'configuration', tunnel: 'network', tls: 'trust', auth: 'identity',
@@ -17,28 +19,33 @@ const layerStep = {tunnel: 'network', tls: 'identity', auth: 'identity', bat: 's
   connector: 'service', contract: 'service', workspace: 'workspace'};
 const lookup = (table, key) => Object.hasOwn(table, key) ? table[key] : undefined;
 
-export function fleetDiagnosis(row, {snapshot, readable, kind = 'host', name} = {}) {
+export function fleetDiagnosis(row, {snapshot, readable, kind = 'host'} = {}) {
   const layers = row?.layers || {};
   const reason = row?.code || row?.blocking;
   let state;
   // Unsaved checkboxes are not evidence. Cached rows cannot stay green after
   // failed reads, stopped monitoring or unapplied selection changes.
   if (!readable) state = 'unavailable';
-  else if (!snapshot?.configuration.valid) state = 'configuration';
-  else if (!snapshot.selection.connections.includes(name)) state = 'off';
+  else if (row?.selected === false || row?.level === 'off') state = 'off';
+  // An unsettled process outcome survives selection/shutdown transitions.
+  else if (lookup(codeReason, reason) === 'ownership') state = 'ownership';
   else if (snapshot.monitor.state === 'stopped') state = 'stopped';
-  else if (snapshot.monitor.state !== 'running' || snapshot.readiness.state !== 'fresh'
+  else if (snapshot.monitor.state !== 'running' || snapshot.readiness.state === 'unavailable') state = 'checking';
+  else if (snapshot.selection.applied_revision !== snapshot.selection.revision) state = 'selection_pending';
+  else if (snapshot.readiness.state !== 'fresh'
     || row?.stale || row?.blocking === 'stale') state = 'stale';
-  else if (snapshot.selection.applied_revision !== snapshot.selection.revision || !row || row.selected !== true) state = 'checking';
+  else if (!row || row.selected !== true) state = 'checking';
   else if (reason) state = lookup(codeReason, reason) || lookup(layerReason, row.blocking) || 'unknown';
   else if (row.level === 'ready' && layers.tunnel === true
     && (kind === 'connector' ? !['unknown', 'refused'].includes(layers.auth)
       : layers.tls === true && layers.auth === 'ok' && layers.bat === true && layers.workspace === true)) state = 'ready';
   else state = 'checking';
 
-  const current = !['unavailable', 'configuration', 'off', 'stopped', 'stale', 'checking', 'unknown', 'ownership'].includes(state);
-  const blockedAt = lookup(layerStep, row?.blocking) || {network: 'network', waking: 'network', trust: 'identity',
-    identity: 'identity', service: 'service', version: 'service', workspace: 'workspace'}[state];
+  const current = !['unavailable', 'configuration', 'off', 'stopped', 'stale', 'checking', 'selection_pending', 'unknown', 'ownership'].includes(state);
+  // Malformed BAT protocol is a service failure even during authentication.
+  const blockedAt = (reason === 'BAT_PROTOCOL_INVALID' ? 'service' : lookup(layerStep, row?.blocking)) || {network: 'network', waking: 'network', trust: 'identity',
+    identity: 'identity', service: 'service', version: 'service', workspace: 'workspace',
+    local_endpoint: 'network', local_ssh: 'network'}[state];
   const steps = [
     ['network', layers.tunnel === true],
     ['identity', layers.auth === 'ok' && (kind === 'connector' || layers.tls === true)],
