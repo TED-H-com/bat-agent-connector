@@ -17,7 +17,7 @@ process.env.TMPDIR = process.env.TEMP = process.env.TMP = folder;
 let child, browser;
 try {
 const fixtureFile = path.join(folder, 'fixture.json');
-const output = process.env.BATC_BROWSER_OUTPUT || path.join(folder, 'screenshots');
+const output = process.env.BATC_BROWSER_OUTPUT || path.resolve('test-results/delivery');
 await fs.mkdir(output, {recursive: true});
 const {spawn} = await import('node:child_process');
 const python = path.join(backend, process.platform === 'win32' ? '.venv/Scripts/python.exe' : '.venv/bin/python');
