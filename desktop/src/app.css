@@ -12,8 +12,6 @@ nav { display: flex; gap: var(--space-1); flex-wrap: wrap; }
 nav a { padding: 6px 10px; border-radius: var(--r-sm); text-decoration: none; color: var(--muted); }
 nav a.on { background: var(--chip); color: var(--text); }
 .live { margin-left: auto; font-size: var(--fs-caption); color: var(--muted); }
-.live.ok::before { content: "● "; color: var(--ok); }
-.live.down::before { content: "● "; color: var(--bad); }
 main { max-width: 1100px; margin: 0 auto; padding: var(--space-4); }
 h1 { font-size: var(--fs-title); margin: var(--space-1) 0 var(--space-3); }
 h2 { font-size: var(--fs-section); margin: 18px 0 var(--space-2); }

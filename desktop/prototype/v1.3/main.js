@@ -1,4 +1,5 @@
 import './main.css';
+import {centralServiceStatus} from '../../src/central-service-status.js';
 import { h, place } from '../../src/ui/dom.js';
 import { pageHeader, sectionCard, iconButton, inspector, tabs, searchField, menu, trapFocus, statusPill } from '../../src/ui/components.js';
 import { icon } from '../../src/ui/icons.js';
@@ -826,6 +827,11 @@ export function renderApp() {
   document.body.classList.add('has-workspace');
   state.navDrawerOpen = false;
   const viewLabel = projectViewIds.includes(state.activeView) ? t('ui_' + state.activeView) : t('ui_work');
+  // This offline prototype has no transport. Its lost-reply scenario simulates
+  // a failed poll with the credential retained, using the real client's facts.
+  const central = centralServiceStatus({token: 'fixture-token', online: !state.disconnectedDuringStart,
+    pollHealth: state.disconnectedDuringStart ? 'reconnecting' : 'connected'});
+  const centralName = t('ui_connector_status', {status: t(central.key)});
   const shell = h('div', tid('product-shell'), h('header', {
     class: 'top'
   }, iconButton({
@@ -857,10 +863,11 @@ export function renderApp() {
     onclick: openDrawer
   }, t('projectName'))), h('div', {
     class: 'shell-top-actions'
-  }, pendingButton(), h('span', {
-    class: `live ${state.disconnectedDuringStart ? 'down' : 'ok'}`,
-    title: C.serverId
-  }, t(state.disconnectedDuringStart ? 'ui_offline' : 'ui_connected')))), h('div', {
+  }, pendingButton(), h('span', {class: 'central-service-status', title: centralName},
+    h('span', {class: 'central-service-scope', 'aria-hidden': 'true'}, t('ui_connector_scope')),
+    h('span', {class: `live tone-${central.tone}`, role: 'status', 'aria-label': centralName,
+      title: centralName, 'data-connection': central.connection},
+      h('span', {class: 'central-service-state'}, t(central.key)))))), h('div', {
     id: 'workspace'
   }, sidebar(), h('div', {
     class: 'shell-scrim',
