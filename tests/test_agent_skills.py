@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,7 @@ import pytest
 from bat_agent_connector.config import Config, HostConfig
 from bat_agent_connector.mcp_server import build_server
 from scripts import generate_agent_skills as generator
+from tests.test_build_identity import clean_wheel as clean_wheel
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -33,7 +35,7 @@ def run_generator(root, *args):
                           capture_output=True, text=True, check=False)
 
 
-def test_all_adapters_preserve_exact_canonical_workflow_and_digest():
+def test_all_adapters_preserve_exact_canonical_workflow_and_digest(clean_wheel):
     source = (ROOT / generator.SOURCE).read_bytes()
     body = source.decode().split("\n---\n", 1)[1]
     for relative, expected in generator.render(ROOT).items():
@@ -45,8 +47,9 @@ def test_all_adapters_preserve_exact_canonical_workflow_and_digest():
         assert f'canonical_source: "{generator.SOURCE.as_posix()}"' in text
         assert "GENERATED" in text
     # The generic package continues to ship this same file, not an adapter.
-    assert '"skills/bat-agent-connector/SKILL.md" = "bat_agent_connector/skill/SKILL.md"' in (
-        ROOT / "pyproject.toml").read_text()
+    _, _, _, wheel = clean_wheel
+    with zipfile.ZipFile(wheel) as archive:
+        assert archive.read("bat_agent_connector/skill/SKILL.md") == source
 
 
 def test_generation_is_deterministic_and_check_never_repairs_drift(bundle_repo):
