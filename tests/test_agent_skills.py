@@ -15,7 +15,6 @@ import pytest
 from bat_agent_connector.config import Config, HostConfig
 from bat_agent_connector.mcp_server import build_server
 from scripts import generate_agent_skills as generator
-from tests.test_build_identity import clean_wheel as clean_wheel
 
 ROOT = Path(__file__).resolve().parents[1]
 

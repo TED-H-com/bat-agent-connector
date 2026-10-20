@@ -1,8 +1,6 @@
 import importlib.util
 import json
-import os
 import shutil
-import subprocess
 import sys
 import tarfile
 import time
@@ -15,7 +13,7 @@ import pytest
 from bat_agent_connector import __version__, build_identity
 from bat_agent_connector.update_install import digest_files, package_files, verify_source_package
 from bat_agent_connector.update_release import UpdateError
-from scripts.validate_connector_update import copy_fixture_source
+from tests.package_build import _build, _build_env, _command, _source_repo
 
 
 @pytest.mark.parametrize("doc,source,commit", [
@@ -67,49 +65,6 @@ def test_bundled_provenance(monkeypatch, tmp_path):
     assert build_identity._read_build_identity()["source"] == "bundled"
 
 
-def _build_env(directory, commit=None):
-    env = dict(os.environ)
-    for key in ("PYTHONPATH", "PYTHONHOME", "BATC_BUILD_COMMIT", "GIT_DIR", "GIT_WORK_TREE",
-                "GIT_INDEX_FILE", "GIT_COMMON_DIR"):
-        env.pop(key, None)
-    scratch = directory / "scratch"
-    scratch.mkdir(exist_ok=True)
-    env["TMPDIR"] = str(scratch)
-    if commit is not None:
-        env["BATC_BUILD_COMMIT"] = commit
-    return env
-
-
-def _command(args, *, cwd, env):
-    result = subprocess.run(args, cwd=cwd, env=env, text=True, capture_output=True)
-    assert result.returncode == 0, f"{args!r}\n{result.stdout}\n{result.stderr}"
-    return result.stdout.strip()
-
-
-def _source_repo(directory, label):
-    """Copy the real build inputs, including the real hook when present."""
-    root = Path(__file__).resolve().parents[1]
-    repo = directory / "source"
-    repo.mkdir()
-    copy_fixture_source(root, repo)
-    env = _build_env(directory)
-    for args in (["git", "init", "-q"], ["git", "add", "."],
-                 ["git", "-c", "user.name=Build Fixture", "-c", "user.email=build@example.invalid",
-                  "commit", "-qm", label]):
-        _command(args, cwd=repo, env=env)
-    head = _command(["git", "rev-parse", "HEAD"], cwd=repo, env=env)
-    return repo, head
-
-
-def _build(source, directory, mode="wheel", commit=None):
-    out = directory / f"dist-{mode}"
-    started = time.perf_counter()
-    _command(["uv", "build", f"--{mode}", "--python", sys.executable, "--no-python-downloads",
-              "--out-dir", str(out), str(source)], cwd=directory, env=_build_env(directory, commit))
-    print(f"REAL BUILD {directory.name}/{mode}: {time.perf_counter() - started:.3f}s", flush=True)
-    return next(out.glob("*.whl" if mode == "wheel" else "*.tar.gz"))
-
-
 def _installed_identity(artifact, directory, *, frozen=False, shadow=None, commit=None):
     """An offline, dependency-free install; the resolver itself only needs stdlib."""
     env = _build_env(directory, commit)
@@ -132,14 +87,6 @@ def _installed_identity(artifact, directory, *, frozen=False, shadow=None, commi
     )
     # Isolated mode and an unrelated cwd keep the build checkout off sys.path.
     return json.loads(_command([str(python), "-I", "-c", script], cwd=directory, env=env))
-
-
-@pytest.fixture(scope="module")
-def clean_wheel(tmp_path_factory):
-    directory = tmp_path_factory.mktemp("clean-wheel")
-    repo, head = _source_repo(directory, "clean candidate")
-    wheel = _build(repo, directory)
-    return directory, repo, head, wheel
 
 
 def test_offline_wheel_keeps_candidate_commit(clean_wheel, tmp_path):
