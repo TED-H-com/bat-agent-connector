@@ -7,8 +7,11 @@ from types import SimpleNamespace
 import pytest
 
 from bat_agent_connector import operations, pm_lifecycle_gates, task_journal
+from bat_agent_connector import pm_execution_runtime as runtime
 from bat_agent_connector import pm_maintenance_policy as policies
 from bat_agent_connector import pm_release_baselines as baselines
+from bat_agent_connector import pm_work_batches as batches
+from bat_agent_connector import pm_work_packages as packages
 from bat_agent_connector.operations import OpContext
 from tests import test_pm_github_observation as github
 from tests import test_pm_release_baselines as releases
@@ -92,11 +95,21 @@ async def test_observer_source_reuse_preserves_every_durable_byte(ops, monkeypat
     monkeypatch.setattr(task_journal, 'time', clock)
     monkeypatch.setattr(pm_lifecycle_gates, 'time', clock)
     legacy = getattr(baselines, '_access_context_sources', baselines._access_context)
+
+    def batch_sources(reader, principal, operation):
+        intent = batches._intent(operation)
+        batches._member(reader, principal, operation['target']['workspace_id'])
+        return batches._access_sources(reader, principal, operation, intent)
+
     snapshot = sqlite3.connect(tmp_path / 'admitted.sqlite')
     try:
         ops.db.backup(snapshot)
         with monkeypatch.context() as reference:
             reference.setattr(baselines, '_access_context', legacy)
+            reference.setattr(packages, '_access_context', packages._access_context_sources)
+            reference.setattr(packages, '_record', packages._record.__wrapped__)
+            reference.setattr(batches, '_access', batch_sources)
+            reference.setattr(runtime, 'proof', runtime._proof_sources)
             await ops._execute(op['operation_id'])
         before = '\n'.join(ops.db.iterdump()).encode()
         result = ops.get(op['operation_id'])
