@@ -39,6 +39,31 @@ function centralServiceStatus({ token, pollHealth, online, managedRecovery }) {
 		recoveryKey
 	};
 }
+function clientActionGate(facts, requirements) {
+	const ready = requirements.post || requirements.attachment;
+	if (!(requirements.post && (!facts.token || facts.nativeBusy) || ready && (!facts.online || !facts.viewReady) || requirements.supported && !facts.attachmentsSupported || requirements.manage && !facts.manageAllowed || requirements.uploads && !facts.uploadsAllowed)) return {
+		allowed: true,
+		reason: null
+	};
+	const key = centralServiceStatus(facts).key;
+	return {
+		allowed: false,
+		reason: requirements.post && !facts.token || key === "ui_not_connected" ? "not_connected" : requirements.post && facts.nativeBusy ? "connection_changing" : requirements.supported && !facts.attachmentsSupported ? "attachments_unavailable" : requirements.manage && !facts.manageAllowed ? "manage_required" : requirements.uploads && !facts.uploadsAllowed ? "uploads_not_allowed" : !facts.online && key === "ui_reconnecting" ? "reconnecting" : !facts.online && key === "ui_connecting" ? "connecting" : !facts.viewReady || key === "ui_connected" ? "view_not_ready" : "connecting"
+	};
+}
+var clientReasons = [
+	"not_connected",
+	"connecting",
+	"reconnecting",
+	"connection_changing",
+	"view_not_ready",
+	"manage_required",
+	"attachments_unavailable",
+	"uploads_not_allowed"
+];
+var clientActionCode = (reason) => `CLIENT_ACTION_${reason.toUpperCase()}`;
+var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}`;
+var clientActionReason = (code) => clientReasons.find((reason) => clientActionCode(reason) === code) || null;
 //#endregion
 //#region src/workbench-mode.js
 var workbenchEnabled = () => new URLSearchParams(location.search).get("workbench") === "1";
@@ -1601,6 +1626,14 @@ var init_ui_strings = __esmMin((() => {
 			ui_connector_status: "Connector: {status}",
 			ui_not_connected_help: "This window has no Connector session. Go to Settings → Connection and select Connect.",
 			ui_connecting_help: "Connector has not answered yet; actions are paused until it responds.",
+			error_code_CLIENT_ACTION_NOT_CONNECTED: "This action needs a Connector session in this window. Connect in Settings → Connection, then try again.",
+			error_code_CLIENT_ACTION_CONNECTING: "This action is waiting for the Connector connection check. Wait for it to finish, then try again.",
+			error_code_CLIENT_ACTION_RECONNECTING: "This action is paused because this window cannot reach Connector. Wait for reconnection, then try again.",
+			error_code_CLIENT_ACTION_CONNECTION_CHANGING: "This window is changing its Connector connection. Wait for it to finish, then try this action again.",
+			error_code_CLIENT_ACTION_VIEW_NOT_READY: "This action needs fresh records from the current view. Wait for loading or refresh the view, then try again.",
+			error_code_CLIENT_ACTION_MANAGE_REQUIRED: "This attachment action needs Manage access. Ask the Connector administrator for Manage access, then try again.",
+			error_code_CLIENT_ACTION_ATTACHMENTS_UNAVAILABLE: "Attachments are unavailable on this connection. Ask the Connector administrator to check attachment support.",
+			error_code_CLIENT_ACTION_UPLOADS_NOT_ALLOWED: "Attachment uploads are not allowed on this connection. Ask the Connector administrator to allow uploads, then try again.",
 			ui_switch_workspace: "Switch workspace",
 			ui_new_workspace: "New workspace",
 			ui_report: "Report",
@@ -1690,6 +1723,14 @@ var init_ui_strings = __esmMin((() => {
 			ui_connector_status: "Connector：{status}",
 			ui_not_connected_help: "這個視窗尚未建立 Connector 連線。請前往「設定 → 連線」，按「連線」。",
 			ui_connecting_help: "Connector 尚未回應；回應前暫停操作。",
+			error_code_CLIENT_ACTION_NOT_CONNECTED: "此操作需要這個視窗的 Connector 連線。請前往「設定 → 連線」按「連線」，再試一次。",
+			error_code_CLIENT_ACTION_CONNECTING: "此操作正在等待 Connector 連線檢查。請等檢查完成後再試一次。",
+			error_code_CLIENT_ACTION_RECONNECTING: "這個視窗目前無法連線至 Connector，已暫停操作。請等重新連線後再試一次。",
+			error_code_CLIENT_ACTION_CONNECTION_CHANGING: "這個視窗正在變更 Connector 連線。請等變更完成後再執行此操作。",
+			error_code_CLIENT_ACTION_VIEW_NOT_READY: "此操作需要目前畫面的最新資料。請等待載入或重新整理畫面，再試一次。",
+			error_code_CLIENT_ACTION_MANAGE_REQUIRED: "此附件操作需要管理權限。請向 Connector 管理員申請管理權限，再試一次。",
+			error_code_CLIENT_ACTION_ATTACHMENTS_UNAVAILABLE: "目前連線無法使用附件。請聯絡 Connector 管理員確認附件支援。",
+			error_code_CLIENT_ACTION_UPLOADS_NOT_ALLOWED: "目前連線未允許附件上傳。請聯絡 Connector 管理員開放上傳，再試一次。",
 			ui_switch_workspace: "切換工作空間",
 			ui_new_workspace: "新增工作空間",
 			ui_report: "報告",
@@ -13297,6 +13338,27 @@ var ApiError = class extends Error {
 		this.localized = localized;
 	}
 };
+var clientActionError = (reason, t, status = 0) => new ApiError(status, clientActionCode(reason), t(clientActionMessageKey(reason)), { localized: true });
+var SESSION_ERROR_LINES = {
+	SESSION_BUSY: "session_err_busy",
+	PENDING_CHANGED: "session_err_changed",
+	NOT_FOUND: "session_err_gone",
+	PAYLOAD_TOO_LARGE: "session_err_too_large",
+	INTERNAL: "session_err_server",
+	FORBIDDEN: "session_err_forbidden"
+};
+function sessionErrorLine(error, t) {
+	const code = typeof error?.code === "string" ? error.code : "";
+	const clientReason = clientActionReason(code);
+	if (clientReason) return t(clientActionMessageKey(clientReason));
+	if (Object.hasOwn(SESSION_ERROR_LINES, code)) return t(SESSION_ERROR_LINES[code]);
+	if (error?.status === 403) return t("session_err_forbidden");
+	if (error?.status === 404 || error?.status === 410) return t("session_err_gone");
+	if (error?.status === 413) return t("session_err_too_large");
+	if (error?.status >= 500) return t("session_err_server");
+	if (error?.status === 0 && error?.code === "CENTRAL_OFFLINE") return t("offline_actions_paused");
+	return t("session_err_unknown");
+}
 function errorPresentation(error, t, { summary, fallback } = {}) {
 	const code = error?.code || "";
 	const message = error?.message || String(error);
@@ -16850,7 +16912,7 @@ function createWorkPublish({ h, t, form, namespace, caps, errorBox }) {
 		if (status === "needs_attention" || code === "UNCERTAIN_UNRESOLVED") return t("wpub_needs_attention");
 		if (HOST_CODES[code]) return t(HOST_CODES[code]);
 		if (SETUP_CODES.has(code)) return t(readCaps(caps)?.managed_installation ? "wpub_blocked_github_managed" : "wpub_blocked_github_plain");
-		if (!code || QUIET_CODES.has(code)) return "";
+		if (!code || clientActionReason(code) || QUIET_CODES.has(code)) return "";
 		if (status === "failed" || status === "cancelled" || error?.admissionRefused === true || error?.status) return t("error_generic");
 		return "";
 	}
@@ -52458,7 +52520,7 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		refresh();
 	}
 	function handleFormError(error) {
-		if (!error?.code || error.code === "NETWORK_ERROR" || error.code === "TIMEOUT" || error.code === "CENTRAL_OFFLINE") return false;
+		if (!error?.code || error.status === 0 && clientActionReason(error.code) || error.code === "NETWORK_ERROR" || error.code === "TIMEOUT" || error.code === "CENTRAL_OFFLINE") return false;
 		const formStatus = composer?.box.querySelector("[role=status]");
 		if (formStatus) showError(error, formStatus);
 		if (REKEY.has(error.code)) refresh();
@@ -58186,7 +58248,8 @@ function nativeAttachments({ h, t, guard, canWrite, draftId, onReceipt, onDiscar
 	};
 	const writable = () => {
 		live();
-		if (!canWrite()) throw new Error(t("offline_actions_paused"));
+		const gate = canWrite();
+		if (!gate.allowed) throw clientActionError(gate.reason, t);
 	};
 	const act = async (receipt, action) => {
 		try {
@@ -58217,7 +58280,7 @@ function nativeAttachments({ h, t, guard, canWrite, draftId, onReceipt, onDiscar
 				"cancelled"
 			].includes(r.stage) ? h("button", {
 				class: "secondary",
-				disabled: r.direction === "upload" && !canWrite(),
+				disabled: r.direction === "upload" && !canWrite().allowed,
 				onclick: () => act(r, "retry")
 			}, t(r.stage === "selected" ? "files_upload" : "files_retry")) : null, !active && r.direction === "upload" && r.stage !== "selected" && ![
 				"ready",
@@ -58232,7 +58295,7 @@ function nativeAttachments({ h, t, guard, canWrite, draftId, onReceipt, onDiscar
 				"cancelled"
 			].includes(r.operation_status) ? h("button", {
 				class: "secondary",
-				disabled: !canWrite(),
+				disabled: !canWrite().allowed,
 				onclick: () => act(r, "cancel_upload")
 			}, t("files_cancel")) : null, !active && (r.direction === "download" || r.stage === "selected" || [
 				"ready",
@@ -65363,8 +65426,11 @@ async function api(method, path, body, key, collectReceipt) {
 	}
 }
 async function apiRequest(method, path, body, key, collectReceipt) {
+	if (method === "POST") {
+		const gate = clientActionGate(state, { post: true });
+		if (!gate.allowed) throw clientActionError(gate.reason, t, state.token ? 0 : 401);
+	}
 	if (!state.token) throw new ApiError(401, "UNAUTHORIZED", t("need_token"), { localized: true });
-	if (method === "POST" && (state.nativeBusy || !state.online || !state.viewReady)) throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"), { localized: true });
 	const epoch = state.epoch;
 	let response;
 	try {
@@ -65537,6 +65603,20 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		class: "attachments",
 		hidden: !supported
 	}, nativeFiles ? h("div", { class: "actions" }, h("strong", {}, t("attachments")), choose) : h("label", {}, t("attachments"), choose), h("p", { class: "muted" }, t(nativeFiles ? "files_help" : "upload_on_choose")), rows, promptHint, status);
+	const attachmentGate = (requirements) => clientActionGate({
+		...state,
+		manageAllowed: may("manage"),
+		attachmentsSupported: supported,
+		uploadsAllowed: nativeUploadAllowed
+	}, requirements);
+	const refuseAttachment = (reason) => {
+		if (!supported) {
+			box.hidden = false;
+			for (const child of box.children) child.hidden = child !== status;
+		}
+		for (let parent = box.parentElement; parent; parent = parent.parentElement) if (parent.tagName === "DETAILS") parent.open = true;
+		fill(status, errorBox(clientActionError(reason, t), { within: status }));
+	};
 	const guard = (mounted = false) => {
 		assertView(connection);
 		if (mounted && !box.isConnected) throw new ApiError(0, "VIEW_CHANGED", "Attachment form changed during the request");
@@ -65655,7 +65735,11 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 			h,
 			t,
 			guard: () => guard(true),
-			canWrite: () => state.online && state.viewReady && may("manage") && nativeUploadAllowed,
+			canWrite: () => attachmentGate({
+				attachment: true,
+				manage: true,
+				uploads: true
+			}),
 			draftId: saved.native_draft,
 			onVisibility: render,
 			onDiscard: (id) => {
@@ -65763,7 +65847,8 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 			};
 			while (["accepted", "running"].includes(op.status)) op = await readNext();
 			if (op.status === "waiting_external") {
-				if (!state.online || !state.viewReady) throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"), { localized: true });
+				const gate = attachmentGate({ attachment: true });
+				if (!gate.allowed) throw clientActionError(gate.reason, t);
 				const epoch = state.epoch;
 				const response = await connectorUploadArtifact(op.operation_id, bytes, state.token);
 				guard(true);
@@ -65865,8 +65950,14 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		}
 		if (!imageCandidates.length) return;
 		e.preventDefault();
-		if (!supported || !may("manage") || nativeFiles && !nativeUploadAllowed || !state.online || !state.viewReady) {
-			fill(status, errorBox(new Error(t("offline_actions_paused")), { within: status }));
+		const gate = attachmentGate({
+			attachment: true,
+			supported: true,
+			manage: true,
+			uploads: nativeFiles
+		});
+		if (!gate.allowed) {
+			refuseAttachment(gate.reason);
 			return;
 		}
 		for (const file of imageCandidates) handleIncomingFile(file);
@@ -65891,8 +65982,13 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		if (text && text.classList) text.classList.remove("drag-over");
 		if (nativeFiles || !e.dataTransfer?.files?.length) return;
 		e.preventDefault();
-		if (!supported || !may("manage") || nativeFiles && !nativeUploadAllowed || !state.online || !state.viewReady) {
-			fill(status, errorBox(new Error(t("offline_actions_paused")), { within: status }));
+		const gate = attachmentGate({
+			attachment: true,
+			supported: true,
+			manage: true
+		});
+		if (!gate.allowed) {
+			refuseAttachment(gate.reason);
 			return;
 		}
 		for (const file of e.dataTransfer.files) handleIncomingFile(file);
@@ -67157,24 +67253,6 @@ async function viewHostDiscovery(main, host) {
 		repair?.dispose();
 	};
 }
-var SESSION_ERROR_LINES = {
-	SESSION_BUSY: "session_err_busy",
-	PENDING_CHANGED: "session_err_changed",
-	NOT_FOUND: "session_err_gone",
-	PAYLOAD_TOO_LARGE: "session_err_too_large",
-	INTERNAL: "session_err_server",
-	FORBIDDEN: "session_err_forbidden"
-};
-function sessionErrorLine(e) {
-	const code = typeof e?.code === "string" ? e.code : "";
-	if (Object.hasOwn(SESSION_ERROR_LINES, code)) return t(SESSION_ERROR_LINES[code]);
-	if (e?.status === 403) return t("session_err_forbidden");
-	if (e?.status === 404 || e?.status === 410) return t("session_err_gone");
-	if (e?.status === 413) return t("session_err_too_large");
-	if (e?.status >= 500) return t("session_err_server");
-	if (e?.status === 0 && e?.code === "CENTRAL_OFFLINE") return t("offline_actions_paused");
-	return t("session_err_unknown");
-}
 function sessionErrorDetails(e, { within, insideDetails = false } = {}) {
 	const code = typeof e?.code === "string" ? e.code : "";
 	const detail = [
@@ -67199,7 +67277,7 @@ function sessionErrorBox(e, action = null, options = {}) {
 		class: "session-error",
 		role: "alert",
 		"data-session-error": typeof e?.code === "string" ? e.code : ""
-	}, h("p", { class: "session-error-line" }, icon("circle-alert", { size: 16 }), h("span", {}, options.summary || sessionErrorLine(e)), action ? h("button", {
+	}, h("p", { class: "session-error-line" }, icon("circle-alert", { size: 16 }), h("span", {}, options.summary || sessionErrorLine(e, t)), action ? h("button", {
 		type: "button",
 		class: "session-error-action",
 		onclick: action.run
