@@ -46,6 +46,14 @@ mod tests {
     }
 
     #[test]
+    fn frontmatter_accepts_lf_and_crlf() {
+        let lf = "---\nmetadata:\n  workflow_version: \"2030-12-31.1\"\n---\n  workflow_version: \"2099-01-01.2\"\n";
+        let crlf = lf.replace('\n', "\r\n");
+        assert_eq!(from_frontmatter(lf), "2030-12-31.1");
+        assert_eq!(from_frontmatter(&crlf), from_frontmatter(lf));
+    }
+
+    #[test]
     fn shared_generator_cases() {
         for line in include_str!("../../../tests/fixtures/workflow-versions.tsv").lines() {
             if line.starts_with('#') || line.is_empty() {
@@ -55,6 +63,12 @@ mod tests {
                 .split_once('\t')
                 .expect("expected verdict TAB value TAB label");
             let (value, label) = rest.split_once('\t').expect("expected value TAB label");
+            assert!(
+                [expected, value, label]
+                    .iter()
+                    .all(|field| !field.contains('\r')),
+                "workflow case fields must not contain carriage returns"
+            );
             let value = if value == "@canonical" {
                 canonical()
             } else {
