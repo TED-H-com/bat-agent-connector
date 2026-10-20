@@ -5210,6 +5210,7 @@ mod tests {
 
     #[tokio::test]
     async fn contract_mismatch_cannot_unlock_operations() {
+        // An unsupported contract must be refused before any operation is unlocked.
         let (endpoint, received, handle) = server(vec![json_response(
             &capabilities("fixture", "principal", false).replace("2026-10-08", "unsupported"),
         )]);
@@ -5228,6 +5229,7 @@ mod tests {
 
     #[tokio::test]
     async fn wrong_identity_cannot_unlock_operations() {
+        // A valid document for another actor must not unlock this binding.
         let (endpoint, received, handle) = server(vec![json_response(
             &actor_document("other-actor")["capabilities"].to_string(),
         )]);
@@ -5492,6 +5494,7 @@ mod tests {
 
     #[tokio::test]
     async fn cancelled_invalid_or_unsavable_replacement_keeps_old_record_and_connection() {
+        // A rejected replacement identity must preserve the original credential and connection.
         let (endpoint, _, server) = server(vec![
             json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
@@ -5593,6 +5596,7 @@ mod tests {
     async fn bootstrap_principal_mismatch_and_contract_missing_cannot_enroll() {
         for response in [
             json_response(&actor_document("wrong-actor").to_string()),
+            // Keep this document minimal to exercise missing contract and identity fields.
             json_response(r#"{"capabilities":{},"sync":{"version":1}}"#),
         ] {
             let (endpoint, _, server) = server(vec![
