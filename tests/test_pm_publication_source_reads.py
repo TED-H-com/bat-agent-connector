@@ -177,9 +177,9 @@ async def check_publication(w, parent, published, monkeypatch, record_property):
 
 async def test_saved_publication_reuses_original_verifier_sources_without_losing_privacy(joined, mock, monkeypatch, record_property):  # noqa: F811
     advance, checked = maintenance.advance, []
-    async def stop_at_publication(w, parent, rounds=3):
+    async def stop_at_publication(w, parent, rounds=3, **wait_options):
         for _ in range(rounds):
-            parent = await advance(w, parent, rounds=1)
+            parent = await advance(w, parent, rounds=1, **wait_options)
             published = publication.child(w['d'].ops, parent)
             if published and published['status'] == 'succeeded':
                 await check_publication(w, parent, published, monkeypatch, record_property)
