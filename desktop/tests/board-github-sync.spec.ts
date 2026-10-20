@@ -149,6 +149,90 @@ for (const locale of ['en', 'zh-TW']) for (const missing of [false, true]) test(
   await expect(links).toContainText(missing ? locale === 'en' ? 'Source missing' : '來源已消失' : locale === 'en' ? 'Draft' : '草稿');
 });
 
+for (const locale of ['en', 'zh-TW']) test(`GitHub source lane evidence ${locale}`, async ({page}) => {
+  await page.setViewportSize({width: 1280, height: 900});
+  const fixture = demoFixture({locale, managedSession: true}), {ids} = fixture;
+  // Observations emitted by board_github_provider.normalize for synthetic
+  // closed sources. Local work stays todo; none is a human completion claim.
+  const observations = [
+    {number: 101, node_id: 'I_node_101', url: 'https://github.com/example/board/pull/101', title: 'Merged pull request',
+      kind: 'pull_request', state: 'merged', state_reason: null, draft: false, lane: 'github_done'},
+    {number: 102, node_id: 'I_node_102', url: 'https://github.com/example/board/issues/102', title: 'Completed issue',
+      kind: 'issue', state: 'closed', state_reason: 'completed', draft: false, lane: 'github_completed'},
+    {number: 103, node_id: 'I_node_103', url: 'https://github.com/example/board/pull/103', title: 'Closed without merge',
+      kind: 'pull_request', state: 'closed', state_reason: null, draft: false, lane: 'github_closed'},
+    {number: 104, node_id: 'I_node_104', url: 'https://github.com/example/board/pull/104', title: 'Closed draft pull request',
+      kind: 'pull_request', state: 'closed', state_reason: null, draft: true, lane: 'github_closed'},
+  ];
+  await page.addInitScript(value => Object.defineProperty(navigator, 'language', {value}), locale);
+  await mountConversation(page, false, async (input: any) => {
+    expect(input.method).toBe('GET');
+    const path = new URL(input.path, 'http://fixture').pathname;
+    if (path === `/pm/workspaces/${ids.workspaceId}/projects`) return {status: 200, data: {
+      version: 1, workspace_id: ids.workspaceId, bindings: [], next_cursor: null,
+      github_sync: {projects: [{project_id: ids.projectId, name: 'Example board', repository: 'example/board',
+        workspace_id: ids.workspaceId, revision: 1, enabled: true, include_closed: true, status: 'synced',
+        last_sync: 1700000000, next_sync: 1700000300, authenticated: false, last_error: null}], suggested_repository: 'example/board'}}};
+    const result: any = await fixture.dispatch(input);
+    if (path === `/pm/workspaces/${ids.workspaceId}/plans/accepted`) {
+      result.data.plan = null;
+      Object.assign(result.data.head, {version: 0, latest_revision_id: null, accepted_revision_id: null});
+    }
+    if (path === `/pm/workspaces/${ids.workspaceId}/roadmap`) {
+      Object.assign(result.data, {baseline: null, forecast: null, observation: null});
+      Object.assign(result.data.head, {version: 0, baseline_revision_id: null, forecast_revision_id: null, observation_revision_id: null});
+    }
+    const caps = path === '/capabilities' ? result.data : path === '/bootstrap' ? result.data.capabilities : null;
+    if (caps) {
+      caps.features.board_github_sync = {version: 1}; caps.scopes.push('manage');
+      caps.actions.push({action: 'pm.github.import', allowed: true, scope: 'manage'});
+    }
+    if (path === `/pm/workspaces/${ids.workspaceId}`) result.data.workspace.membership.role = 'owner';
+    if (path.endsWith('/kanban')) {
+      const template = result.data.cards.find((card: any) => card.column === 'backlog');
+      const identities = result.data.cards.filter((card: any) => !card.completion.approved && !card.completion.pending
+        && !card.execution.sessions.length && !card.execution.tasks.length && !card.execution.operations.length);
+      result.data.cards = observations.map(({title, lane, ...source}, index) => {
+        const card = structuredClone(template), identity = identities[index];
+        card.work_item_id = identity.work_item_id;
+        card.binding = {...identity.binding, plan_revision_id: null, requirement_ids: []};
+        card.work = {...card.work, work_item_id: identity.work_item_id, title,
+          external: {...source, repository: 'example/board', repository_id: 123, key: `123#${source.number}:${source.node_id}`,
+            source: 'github', availability: 'current', applied_lane: 'todo', board_lane: lane, manual: false}};
+        card.column = lane;
+        return card;
+      });
+      result.data.next_cursor = null;
+      result.data.wip = {...result.data.wip, count: 0, unknown: 0, cards: 4};
+    }
+    return result;
+  });
+  await page.goto(`/dashboard/#/pm/${ids.workspaceId}/board`);
+  await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(4);
+  const labels = locale === 'en' ? ['Done · GitHub', 'Completed · GitHub', 'Closed (not completed)']
+    : ['完成 · GitHub', '完成議題 · GitHub', '已關閉（未完成）'];
+  for (const [index, lane] of ['github_done', 'github_completed', 'github_closed'].entries()) {
+    await expect(page.locator(`[data-pm-kanban-column="${lane}"] .pm-board-lane-name`)).toHaveText(labels[index]);
+  }
+  // The existing milestone view gives these unassigned cards enough width to
+  // display the full source labels, including both closed and Draft markers.
+  const board = page.locator('[data-pm-kanban]');
+  await board.getByLabel(locale === 'en' ? 'Group by' : '分組方式', {exact: true}).selectOption('milestone');
+  const draft = locale === 'en' ? 'Draft' : '草稿';
+  for (const [number, label] of [[101, `PR #101 · ${labels[0]}`], [102, `${locale === 'en' ? 'Issue' : '議題'} #102 · ${labels[1]}`],
+    [103, `PR #103 · ${labels[2]}`], [104, `PR #104 · ${labels[2]} · ${draft}`]] as const) {
+    const link = page.locator(`[data-github-card-link][href$="/${number}"]`);
+    await expect(link).toBeVisible();
+    await expect(link).toHaveText(label);
+    await expect.poll(() => link.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+  }
+  if (process.env.BATC_WORK_VIEW_SCREENSHOTS) {
+    const shots = process.env.BATC_WORK_VIEW_SCREENSHOTS;
+    await mkdir(shots, {recursive: true});
+    await page.screenshot({path: `${shots}/source-lanes-${locale}.png`, fullPage: true});
+  }
+});
+
 for (const locale of ['en', 'zh-TW']) test(`Failed first import preserves GitHub choices ${locale}`, async ({page}) => {
   const fixture = demoFixture({locale, managedSession: true}), {ids} = fixture;
   let operation: any = null;
