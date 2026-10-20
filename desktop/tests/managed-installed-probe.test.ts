@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import {testScratchRoot} from './test-scratch.mjs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { probeManagedOnce, serviceFailure } from './managed-installed-probe.mjs';
 
 async function fixture(t: any) {
-  const root = await mkdtemp(join(tmpdir(), 'managed-probe-'));
+  const root = await mkdtemp(join(testScratchRoot(), 'managed-probe-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(join(root, 'managed-central/state'), { recursive: true });
   return root;

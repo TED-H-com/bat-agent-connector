@@ -3,7 +3,7 @@ import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
 import {delimiter, resolve} from 'node:path';
 import {mkdir, mkdtemp, rm} from 'node:fs/promises';
-import {homedir} from 'node:os';
+import {testScratchRoot} from './test-scratch.mjs';
 import assert from 'node:assert/strict';
 import {performance} from 'node:perf_hooks';
 import {chromium, expect as baseExpect} from '@playwright/test';
@@ -12,10 +12,9 @@ import {openPmSection, recoverOriginalAdoption} from './pm-navigation.ts';
 const expect = baseExpect.configure({timeout: 30000});
 const backend = resolve(process.env.BATC_PM_BACKEND || '..');
 const python = process.env.BATC_PM_PYTHON || resolve(backend, '.venv/bin/python');
-const scratch = resolve(homedir(), 'agent-work/tmp/pytest');
 const shots = resolve(process.env.BATC_WALKTHROUGH_SHOTS
   || (process.env.TMPDIR ? resolve(process.env.TMPDIR, 'shots') : 'test-results/walkthrough'));
-await mkdir(scratch, {recursive: true}); await mkdir(shots, {recursive: true});
+await mkdir(shots, {recursive: true});
 
 async function bounded(promise, milliseconds, message) {
   let timer;
@@ -45,7 +44,9 @@ async function walkthrough(locale, width, {lostAcknowledgement = false} = {}) {
   const mode = lostAcknowledgement ? 'lost_acknowledgement' : 'owner';
   const expectedAttempts = lostAcknowledgement ? 2 : 1;
   const prefix = lostAcknowledgement ? `${locale}-${width}-recovery` : `${locale}-${width}`;
-  const started = performance.now(), temporary = await mkdtemp(resolve(scratch, 'pm-walkthrough-run-'));
+  const started = performance.now(), temporary = await mkdtemp(resolve(testScratchRoot(), 'pm-walkthrough-run-'));
+  // Keep browser and child-process temporary files inside this owned directory.
+  process.env.TMPDIR = process.env.TEMP = process.env.TMP = temporary;
   let child, stopped, spawnError, output, browser, page, fixture, step = 'startup';
   const errors = [], failures = [], requests = [], responses = [], operationReplies = new Map(), reads = new Map(), pending = new Set(), inFlight = new Map();
   const dropped = new Set();

@@ -1,13 +1,14 @@
 // Real central + file POST navigation, HttpOnly/CSRF and restart continuity.
+import {testScratchRoot} from './test-scratch.mjs';
 import assert from "node:assert/strict";
 import {spawnSync} from "node:child_process";
-import {mkdtemp, mkdir, rm} from "node:fs/promises";
+import {mkdtemp, rm} from "node:fs/promises";
 import {resolve, join} from "node:path";
 import {pathToFileURL} from "node:url";
 import {chromium} from "@playwright/test";
-const temporaryRoot = process.env.BATC_TEST_TMP || resolve("../.test-tmp");
-await mkdir(temporaryRoot, {recursive: true, mode: 0o700});
-const temporary = await mkdtemp(join(temporaryRoot, "managed-browser-"));
+const temporary = await mkdtemp(join(testScratchRoot(), "managed-browser-"));
+// Keep browser and child-process temporary files inside this owned directory.
+process.env.TMPDIR = process.env.TEMP = process.env.TMP = temporary;
 const directory = join(temporary, "installation");
 const python = process.env.BATC_TEST_PYTHON || resolve(process.platform === "win32" ? "../.venv/Scripts/python.exe" : "../.venv/bin/python");
 function runtime(command) {

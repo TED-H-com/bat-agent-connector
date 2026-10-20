@@ -1,4 +1,5 @@
 // Packaged central with an empty PATH; development Python supplies only MockBAT.
+import {testScratchRoot} from './test-scratch.mjs';
 // No live host/provider writes. All tokens travel through anonymous pipes or HTTP.
 import assert from "node:assert/strict";
 import {spawn, spawnSync} from "node:child_process";
@@ -12,9 +13,9 @@ import {pathToFileURL} from "node:url";
 import {gunzipSync} from "node:zlib";
 import {chromium, expect} from "@playwright/test";
 
-const temporaryRoot = process.env.BATC_TEST_TMP || resolve("../.test-tmp");
-await mkdir(temporaryRoot, {recursive: true, mode: 0o700});
-const temporary = await mkdtemp(join(temporaryRoot, "managed-setup-browser-"));
+const temporary = await mkdtemp(join(testScratchRoot(), "managed-setup-browser-"));
+// Keep browser and child-process temporary files inside this owned directory.
+process.env.TMPDIR = process.env.TEMP = process.env.TMP = temporary;
 const directory = join(temporary, "installation");
 const python = process.env.BATC_TEST_PYTHON || resolve(process.platform === "win32" ? "../.venv/Scripts/python.exe" : "../.venv/bin/python");
 const packageDirectory = resolve(process.env.BATC_TEST_RUNTIME_PACKAGE || "managed-runtime");
