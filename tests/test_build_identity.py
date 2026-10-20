@@ -154,12 +154,14 @@ def test_offline_wheel_keeps_candidate_commit(clean_wheel, tmp_path):
 
 
 @pytest.mark.parametrize("mode,override", [
-    ("dirty", None), ("override", "B" * 40), ("malformed", "not-a-commit"),
+    ("dirty", None), ("override", "HEAD"), ("malformed", "not-a-commit"),
     ("too-long", "b" * 64), ("no-git", None), ("archive-override", "b" * 40),
     ("staged", None), ("deleted", None), ("dirty-override", "b" * 40),
 ])
 def test_wheel_build_commit_sources(tmp_path, mode, override):
     repo, head = _source_repo(tmp_path, mode)
+    if mode == "override":
+        override = head.upper()  # A valid, matching override is normalized.
     if mode in {"dirty", "staged", "dirty-override"}:
         with (repo / "README.md").open("a") as stream:
             stream.write("\nA tracked change after the candidate commit.\n")
@@ -171,10 +173,81 @@ def test_wheel_build_commit_sources(tmp_path, mode, override):
         shutil.rmtree(repo / ".git")
     wheel = _build(repo, tmp_path, commit=override)
     expected = {"dirty": None, "staged": None, "deleted": None, "dirty-override": None,
-                "no-git": None, "override": "b" * 40,
+                "no-git": None, "override": head,
                 "archive-override": "b" * 40}.get(mode, head)
     assert _installed_identity(wheel, tmp_path) == {
         "version": __version__, "commit": expected, "source": "package"}
+
+
+def test_clean_checkout_rejects_mismatching_override(tmp_path):
+    repo, head = _source_repo(tmp_path, "mismatching candidate override")
+    override = "b" * 40 if head != "b" * 40 else "c" * 40
+    wheel = _build(repo, tmp_path, commit=override)
+    with zipfile.ZipFile(wheel) as archive:
+        assert json.loads(archive.read("bat_agent_connector/build-info.json")) == {"commit": None}
+    assert _installed_identity(wheel, tmp_path) == {
+        "version": __version__, "commit": None, "source": "package"}
+
+
+@pytest.mark.parametrize("dirty", [False, True])
+def test_editable_install_keeps_source_and_package_resolution(tmp_path, dirty):
+    repo, _ = _source_repo(tmp_path, f"editable dirty={dirty}")
+    if dirty:
+        with (repo / "README.md").open("a") as stream:
+            stream.write("\nAn existing local edit.\n")
+    env = _build_env(tmp_path)
+    before_status = _command(["git", "status", "--porcelain"], cwd=repo, env=env)
+
+    def source_files():
+        # Normal Python import caches are not source or provenance writes.
+        return {str(path.relative_to(repo)): path.read_bytes() for path in repo.rglob("*")
+                if path.is_file() and ".git" not in path.relative_to(repo).parts
+                and "__pycache__" not in path.parts}
+
+    before_files = source_files()
+    target = tmp_path / "editable-env"
+    _command(["uv", "venv", "--python", sys.executable, "--no-python-downloads", str(target)],
+             cwd=tmp_path, env=env)
+    python = target / "bin" / "python"
+    _command(["uv", "pip", "install", "--python", str(python), "--offline", "--no-deps",
+              "--editable", str(repo)], cwd=tmp_path, env=env)
+    script = """
+import json
+import subprocess
+import sysconfig
+from importlib import metadata
+from pathlib import Path
+import bat_agent_connector
+from bat_agent_connector.build_identity import build_identity
+subprocess.run = lambda *a, **kw: (_ for _ in ()).throw(AssertionError('runtime process'))
+site = Path(sysconfig.get_path('purelib'))
+package = site / 'bat_agent_connector'
+distribution = metadata.distribution('bat-agent-connector')
+print(json.dumps({
+    'identity': build_identity(),
+    'import_path': str(Path(bat_agent_connector.__file__).resolve()),
+    'distribution_package': str(Path(distribution.locate_file('bat_agent_connector')).resolve()),
+    'site_package': str(package),
+    'package_files': sorted(str(p.relative_to(site)) for p in package.rglob('*')),
+    'package_directory_exists': package.exists(),
+    'direct_url': json.loads(distribution.read_text('direct_url.json')),
+    'pth_files': {p.name: p.read_text() for p in site.glob('*bat_agent_connector*.pth')},
+}))
+"""
+    facts = json.loads(_command([str(python), "-I", "-c", script], cwd=tmp_path, env=env))
+    facts["status_before"] = before_status
+    facts["status_after"] = _command(["git", "status", "--porcelain"], cwd=repo, env=env)
+    facts["bytecode_caches"] = sorted(str(p.relative_to(repo)) for p in repo.rglob("__pycache__"))
+    print("REAL EDITABLE " + json.dumps(facts, sort_keys=True), flush=True)
+    assert facts["identity"] == {"version": __version__, "commit": None, "source": "package"}
+    assert facts["import_path"] == str(repo / "src/bat_agent_connector/__init__.py")
+    assert facts["distribution_package"] != str(repo / "src/bat_agent_connector")
+    assert facts["direct_url"]["dir_info"]["editable"] is True
+    assert facts["status_after"] == before_status == ("M README.md" if dirty else "")
+    assert source_files() == before_files
+    assert not (repo / "src/bat_agent_connector/build-info.json").exists()
+    assert facts["package_files"] == []
+    assert facts["package_directory_exists"] is False
 
 
 @pytest.mark.parametrize("dirty", [False, True])
