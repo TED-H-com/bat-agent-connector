@@ -256,6 +256,25 @@ function parseDiscussRefs(query) {
 	};
 }
 //#endregion
+//#region src/result-sources-strings.js
+var resultSourcesStrings;
+var init_result_sources_strings = __esmMin((() => {
+	resultSourcesStrings = {
+		en: {
+			results_waiting_observed: "waiting for you in this observation",
+			results_pending_observed: "{count} pending in this observation",
+			results_observation_stale: "observation is stale",
+			results_observation_gone: "session no longer seen"
+		},
+		"zh-TW": {
+			results_waiting_observed: "此份觀察記錄有待回覆事項",
+			results_pending_observed: "此份觀察記錄有 {count} 項待處理事項",
+			results_observation_stale: "觀察已過期",
+			results_observation_gone: "未再看到此工作階段"
+		}
+	};
+}));
+//#endregion
 //#region src/pm-external-history-strings.js
 var externalHistoryStrings;
 var init_pm_external_history_strings = __esmMin((() => {
@@ -563,6 +582,21 @@ var init_workbench_strings = __esmMin((() => {
 			wc_latest: "Last observed",
 			wc_queue_unknown: "Current queue position is not available. Open input receipts for recorded submissions.",
 			wc_no_live: "No current execution confirmed by this observation.",
+			wc_facets_observed: "At this observation: {facets}",
+			wc_activity_streaming: "Output is arriving",
+			wc_activity_not_streaming: "No output is arriving",
+			wc_activity_unknown: "Output activity is unknown",
+			wc_attention_asking_you: "Waiting for you",
+			wc_attention_needs_you: "Needs your attention",
+			wc_attention_failed: "Failure reported",
+			wc_attention_none: "No attention state reported",
+			wc_observation_stale: "Observation is stale",
+			wc_observation_gone: "Session no longer seen",
+			wc_observation_missing: "Session missing from enumeration",
+			wc_lifecycle_active: "Session reported active",
+			wc_lifecycle_ended: "Session reported ended",
+			wc_lifecycle_unknown: "Session lifecycle unknown",
+			wc_wait_observed: "This observation recorded a request for you.",
 			wc_running: "Output is arriving. Follow the conversation or review the available results.",
 			wc_wait: "An answer or decision is needed. Open Work to read the question.",
 			wc_stale: "This observation is out of date. Current execution is unknown.",
@@ -609,6 +643,21 @@ var init_workbench_strings = __esmMin((() => {
 			wc_latest: "最近觀察",
 			wc_queue_unknown: "目前無法取得即時排隊位置。已送出的要求可在輸入回執中查看。",
 			wc_no_live: "這份觀察未確認目前有工作正在執行。",
+			wc_facets_observed: "此份觀察：{facets}",
+			wc_activity_streaming: "正在收到輸出",
+			wc_activity_not_streaming: "目前沒有輸出",
+			wc_activity_unknown: "輸出活動未知",
+			wc_attention_asking_you: "等待您回覆",
+			wc_attention_needs_you: "需要您處理",
+			wc_attention_failed: "已回報失敗",
+			wc_attention_none: "未回報需處理的狀態",
+			wc_observation_stale: "觀察已過期",
+			wc_observation_gone: "未再看到此工作階段",
+			wc_observation_missing: "列舉中缺少此工作階段",
+			wc_lifecycle_active: "工作階段記錄為活動中",
+			wc_lifecycle_ended: "工作階段記錄為已結束",
+			wc_lifecycle_unknown: "工作階段生命週期未知",
+			wc_wait_observed: "這份觀察記錄有事項等待您回覆。",
 			wc_running: "正在收到輸出。可閱讀對話或檢視目前成果。",
 			wc_wait: "有問題或決定需要回覆。切回工作查看原問題。",
 			wc_stale: "這份觀察已過期，目前執行情況未知。",
@@ -9641,6 +9690,7 @@ function t(key, vars = {}) {
 }
 var STRINGS, locale;
 var init_i18n = __esmMin((() => {
+	init_result_sources_strings();
 	init_pm_external_history_strings();
 	init_pm_adopt_start_strings();
 	init_pm_work_profile_strings();
@@ -9681,6 +9731,7 @@ var init_i18n = __esmMin((() => {
 		"zh-TW": {
 			...FLEET_STRINGS["zh-TW"],
 			...workbenchStrings$1["zh-TW"],
+			...resultSourcesStrings["zh-TW"],
 			...externalHistoryStrings["zh-TW"],
 			...diagnosticsStrings["zh-TW"],
 			...workStartStrings["zh-TW"],
@@ -11372,6 +11423,7 @@ var init_i18n = __esmMin((() => {
 		en: {
 			...FLEET_STRINGS.en,
 			...workbenchStrings$1.en,
+			...resultSourcesStrings.en,
 			...externalHistoryStrings.en,
 			...diagnosticsStrings.en,
 			...workStartStrings.en,
@@ -14371,51 +14423,69 @@ function matchesSession(session, query) {
 function runtimeStale(session) {
 	return Boolean(session.stale || session.fields_stale || session.state?.evidence?.activity?.stale);
 }
+function sessionFacets(session) {
+	const source = session || {}, pending = source.pending;
+	const managedStatus = source.api_access === "managed" ? source.status || source.state?.status : null;
+	const attention = pending?.kind === "permission" || pending?.kind === "ask_user" ? "asking_you" : pending ? "needs_you" : ["failed", "error"].includes(managedStatus) ? "failed" : [
+		"needs_ted",
+		"needs_you",
+		"needs_attention",
+		"waiting_permission",
+		"awaiting_approval",
+		"uncertain",
+		"blocked"
+	].includes(managedStatus) ? "needs_you" : "none";
+	const staleness = {
+		runtime: runtimeStale(source),
+		gone: Boolean(source.gone_at) || source.state?.enumeration === "gone",
+		missing: source.state?.enumeration === "missing"
+	};
+	const lifecycle = source.state?.lifecycle || "unknown";
+	return {
+		activity: Object.values(staleness).some(Boolean) ? "unknown" : lifecycle === "ended" ? "not_streaming" : source.streaming === true ? "streaming" : source.streaming === false ? "not_streaming" : "unknown",
+		attention,
+		staleness,
+		lifecycle,
+		pendingKind: pending?.kind,
+		hasPending: Boolean(pending),
+		notLoaded: source.loaded === false || source.state?.loading === "not_loaded"
+	};
+}
 function sessionActivity(session) {
-	if (session.pending) return {
-		key: "pending_" + session.pending.kind,
+	const facets = sessionFacets(session);
+	if (facets.hasPending) return {
+		key: "pending_" + facets.pendingKind,
 		tone: "stale"
 	};
-	if (session.api_access === "managed") {
-		const st = session.status || session.state?.status;
-		if (st === "failed" || st === "error") return {
-			key: "op_failed",
-			tone: "bad"
-		};
-		if ([
-			"needs_ted",
-			"needs_you",
-			"needs_attention",
-			"waiting_permission",
-			"awaiting_approval",
-			"uncertain",
-			"blocked"
-		].includes(st)) return {
-			key: "workspace_needs_you",
-			tone: "stale"
-		};
-	}
-	if (session.state?.lifecycle === "ended") return {
+	if (facets.attention === "failed") return {
+		key: "op_failed",
+		tone: "bad"
+	};
+	if (facets.attention === "needs_you") return {
+		key: "workspace_needs_you",
+		tone: "stale"
+	};
+	if (facets.lifecycle === "ended") return {
 		key: "obs_value_ended",
 		tone: ""
 	};
-	if (session.gone_at || ["gone", "missing"].includes(session.state?.enumeration)) return {
+	if (facets.staleness.gone || facets.staleness.missing) return {
 		key: "sessions_not_seen",
 		tone: "stale"
 	};
-	if (runtimeStale(session)) return {
+	if (facets.staleness.runtime) return {
 		key: "sessions_stale",
 		tone: "stale"
 	};
-	if (session.streaming === true) return {
+	if (facets.activity === "streaming") return {
 		key: "obs_value_streaming",
 		tone: "info"
 	};
-	if (session.streaming === false) return {
+	if (facets.activity === "not_streaming") return {
 		key: "obs_value_not_streaming",
 		tone: ""
 	};
-	if (session.loaded === false || session.state?.loading === "not_loaded") return {
+	if (facets.notLoaded) return {
 		key: "sessions_not_loaded",
 		tone: ""
 	};
@@ -14425,25 +14495,10 @@ function sessionActivity(session) {
 	};
 }
 function sessionStatus(session) {
-	if (!session) return null;
-	const kind = session.pending?.kind;
-	if (kind === "permission" || kind === "ask_user") return "asking_you";
-	if (session.pending) return "needs_you";
-	if (session.api_access === "managed") {
-		const st = session.status || session.state?.status;
-		if (st === "failed" || st === "error") return "failed";
-		if ([
-			"needs_ted",
-			"needs_you",
-			"needs_attention",
-			"waiting_permission",
-			"awaiting_approval",
-			"uncertain",
-			"blocked"
-		].includes(st)) return "needs_you";
-	}
-	if (session.gone_at || ["gone", "missing"].includes(session.state?.enumeration) || runtimeStale(session)) return "stale";
-	if (session.state?.lifecycle !== "ended" && session.streaming === true) return "running";
+	const facets = sessionFacets(session);
+	if (facets.attention !== "none") return facets.attention;
+	if (Object.values(facets.staleness).some(Boolean)) return "stale";
+	if (facets.activity === "streaming") return "running";
 	return null;
 }
 function sessionPill(session) {
@@ -14477,9 +14532,8 @@ function workbenchProjection(data, record = null) {
 	if (!session?.host || !session?.session_id) return null;
 	const source = `/sessions/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}`;
 	const href = "#/session/" + [session.host, session.session_id].map(encodeURIComponent).join("/");
-	const stale = runtimeStale(session) || Boolean(session.gone_at) || ["gone", "missing"].includes(session.state?.enumeration);
-	const pill = sessionPill(session);
-	const state = stale ? "stale" : pill?.status === "failed" ? "failed" : session.pending ? "wait" : session.state?.lifecycle !== "ended" && session.streaming === true ? "running" : session.streaming === false ? "idle" : "unknown";
+	const facets = sessionFacets(session), status = sessionStatus(session), pill = sessionPill(session);
+	const state = ["asking_you", "needs_you"].includes(status) ? "wait" : status || (facets.activity === "not_streaming" && facets.lifecycle !== "ended" ? "idle" : "unknown");
 	const edges = [];
 	for (const item of data.work_items || []) {
 		if (!item.work_item_id) continue;
@@ -14539,6 +14593,7 @@ function workbenchProjection(data, record = null) {
 		observedAt: session.observed_at,
 		state,
 		pill,
+		facets,
 		managed: session.api_access === "managed" && session.provenance === "connector_managed",
 		edges: [...new Map(edges.map((edge) => [edge.key, edge])).values()]
 	};
@@ -14631,12 +14686,26 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 		panel.body.append(kind, name, link, h$1("details", {}, h$1("summary", {}, t("wc_source")), source, id));
 		main.append(panel);
 	}
+	const staleObservation = () => Object.values(projection.facets.staleness).some(Boolean);
+	const summaryKey = () => projection.state === "wait" && staleObservation() ? "wc_wait_observed" : "wc_" + projection.state;
+	function facetLine() {
+		const { activity, attention, staleness, lifecycle } = projection.facets;
+		const facts = [t("wc_activity_" + activity), t("wc_attention_" + attention)];
+		if (staleness.runtime) facts.push(t("wc_observation_stale"));
+		if (staleness.gone) facts.push(t("wc_observation_gone"));
+		if (staleness.missing) facts.push(t("wc_observation_missing"));
+		facts.push(t("wc_lifecycle_" + (["active", "ended"].includes(lifecycle) ? lifecycle : "unknown")));
+		return t("wc_facets_observed", { facets: facts.join(" · ") });
+	}
 	function card() {
 		return h$1("article", { class: "wc-live-card" }, h$1("h3", {}, projection.title || t("session_untitled")), h$1("p", { class: "ui-meta" }, [
 			projection.host,
 			projection.runtime,
 			projection.model
-		].filter(Boolean).join(" · ")), h$1("p", {}, t("wc_" + projection.state)), h$1("p", { class: "ui-meta" }, t("wc_latest"), " · ", timeStamp(projection.observedAt, { empty: t("obs_unknown") })), button({
+		].filter(Boolean).join(" · ")), h$1("p", {}, t(summaryKey())), h$1("p", {
+			class: "ui-meta",
+			"data-runtime-facets": ""
+		}, facetLine()), h$1("p", { class: "ui-meta" }, t("wc_latest"), " · ", timeStamp(projection.observedAt, { empty: t("obs_unknown") })), button({
 			label: t("wc_work"),
 			size: "sm",
 			"data-live-work": "",
@@ -14656,7 +14725,7 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 			projection.runtime,
 			projection.host
 		].filter(Boolean).join(" · ");
-		summary.textContent = t("wc_" + projection.state);
+		summary.textContent = t(summaryKey());
 		const focused = lineage.contains(document.activeElement) ? document.activeElement?.dataset.edge : null;
 		const liveFocused = live.contains(document.activeElement) && document.activeElement?.hasAttribute("data-live-work");
 		const edges = projection.edges.slice(0, 30);
@@ -15327,7 +15396,11 @@ function sessionFacts(session) {
 		loaded: bool(session.loaded),
 		streaming: bool(session.streaming),
 		unknown_activity: ![true, false].includes(session.streaming),
-		stale: session.stale === true || session.fields_stale === true ? true : bool(session.stale ?? session.fields_stale),
+		stale: runtimeStale(session) ? true : [
+			session.stale,
+			session.fields_stale,
+			session.state?.evidence?.activity?.stale
+		].some((value) => typeof value === "boolean") ? false : null,
 		pending: session.pending !== void 0 ? session.pending != null : bool(session.pending_interaction),
 		history_reasons: Array.isArray(session.reading?.incomplete_reasons) ? [...new Set(session.reading.incomplete_reasons.map(reason).filter(Boolean))] : null
 	};
@@ -57488,6 +57561,17 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 var itemHref = (item) => `#/item/${encodeURIComponent(item.work_item_id)}`;
 var artifactHref = (artifact) => `#/artifact-review/artifact/${encodeURIComponent(artifact.artifact_id)}/${artifact.revision}`;
 var date = (value) => timeStamp(value);
+function resultSourceFacets(observation) {
+	const source = observation || {};
+	const pending = typeof source.pending === "number" ? source.pending > 0 ? { kind: "other" } : null : source.pending;
+	return sessionFacets({
+		streaming: source.status === "available" ? source.streaming : null,
+		pending,
+		stale: source.stale,
+		fields_stale: source.fields_stale,
+		gone_at: source.gone_at
+	});
+}
 function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents, errorBox }) {
 	let doc = null, serial = 0, children = [], refreshing = null, pressed = null;
 	const warning = h("div", { "data-child-warning": "" }), status = h("p", {
@@ -57526,10 +57610,24 @@ function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents
 			const row = h("div", { class: "panel" }, linkTarget(link));
 			if (link.note) row.append(h("p", { class: "muted" }, link.note));
 			const observation = link.observation;
-			if (observation) row.append(h("p", { class: "muted" }, t("results_activity", {
-				state: observation.status !== "available" || observation.stale || observation.fields_stale || observation.gone_at ? t("obs_unknown") : observation.streaming === true ? t("results_streaming") : observation.pending && typeof observation.pending === "object" ? t("results_waiting") : typeof observation.pending === "number" && observation.pending > 0 ? t("results_pending", { count: observation.pending }) : observation.streaming === false && (observation.pending === null || observation.pending === 0) ? t("results_no_activity") : t("obs_unknown"),
-				time: date(observation.observed_at)
-			})));
+			if (observation) {
+				const facets = resultSourceFacets(observation);
+				const facts = [t({
+					streaming: "results_streaming",
+					not_streaming: "results_no_activity",
+					unknown: "obs_unknown"
+				}[facets.activity])];
+				if (facets.attention !== "none") facts.push(t(typeof observation.pending === "number" ? "results_pending_observed" : "results_waiting_observed", { count: observation.pending }));
+				if (facets.staleness.runtime) facts.push(t("results_observation_stale"));
+				if (facets.staleness.gone || facets.staleness.missing) facts.push(t("results_observation_gone"));
+				row.append(h("p", {
+					class: "muted",
+					"data-result-runtime-facets": ""
+				}, timeLabel(t, "results_activity", {
+					state: facts.join(" · "),
+					time: date(observation.observed_at)
+				})));
+			}
 			for (const receipt of link.delivered_to || []) row.append(h("p", { class: "note ok" }, t("results_delivered"), " ", h("a", {
 				href: `https://github.com/${receipt.repository}/pull/${receipt.pull_number}`,
 				target: "_blank",

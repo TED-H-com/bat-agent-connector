@@ -838,3 +838,27 @@ for (const {lang, width} of featureMapMatrix) {
     }
   });
 }
+
+// Inventory cannot currently emit typed managed status without pending. Use its
+// closest real attention shape, managed_pending; legacy status inputs are pinned
+// separately in the pure tests rather than invented in an HTTP response.
+for(const lang of ['en','zh-TW'] as const)for(const width of [390,1440])for(const name of ['managed_pending','stale_pending','streaming_pending_permission']){
+  test(`runtime facets Waiting lane ${name} ${lang} ${width}`,async({browser,baseURL})=>{
+    const {runtimeCase,runtimeWords}=await import('./session-runtime-fixture.ts');
+    const {mountWorkspace}=await import('./workspace-fixture.ts');
+    const context=await browser.newContext({baseURL,locale:lang==='en'?'en-US':lang,viewport:{width,height:900}}),page=await context.newPage();
+    const f=workspaceFixture(lang),entry=runtimeCase(name),words=runtimeWords[lang];
+    Object.assign(f.data.session,entry.detail.session);
+    await mountWorkspace(page,false,f);await page.goto('/dashboard/?workbench=1'+workspaceRoute);
+    await page.locator('[data-workbench-views]').getByRole('tab',{name:words.live,exact:true}).click();
+    const live=page.locator('[data-workbench-live]'),waiting=live.locator('.wc-live-lane').filter({has:page.getByRole('heading',{name:words.waiting,exact:true})});
+    const card=waiting.locator('.wc-live-card');await expect(card).toHaveCount(1);
+    await expect(card.locator('[data-runtime-facets]')).toContainText(words.attention);
+    await expect(card.locator('time')).toHaveAttribute('datetime',new Date(entry.listed.observed_at).toISOString());
+    if(name==='stale_pending'){
+      await expect(card).toContainText(words.stale);await expect(card).toContainText(words.unknown);
+      await expect(card).toContainText(words.historical);await expect(live).not.toContainText(words.streaming);
+    }else await expect(card).toContainText(name==='managed_pending'?words.idle:words.streaming);
+    expect(f.data.posts).toEqual([]);await context.close();
+  });
+}

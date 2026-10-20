@@ -1,3 +1,4 @@
+import {runtimeStale} from './state/sessions.js';
 // An explicit projection. Never spread server/client objects into an export.
 const code = value => typeof value === 'string' && /^[A-Z][A-Z0-9_]{0,79}$/.test(value) ? value : null;
 const reason = value => typeof value === 'string' && /^[a-z][a-z0-9_]{0,79}$/.test(value) ? value : null;
@@ -84,7 +85,8 @@ export function scrubDiagnostics(text) {
 }
 export function sessionFacts(session) {
   return {loaded: bool(session.loaded), streaming: bool(session.streaming),
-    unknown_activity: ![true,false].includes(session.streaming), stale: session.stale === true || session.fields_stale === true ? true : bool(session.stale ?? session.fields_stale),
+    unknown_activity: ![true,false].includes(session.streaming), stale: runtimeStale(session) ? true
+      : [session.stale, session.fields_stale, session.state?.evidence?.activity?.stale].some(value => typeof value === 'boolean') ? false : null,
     pending: session.pending !== undefined ? session.pending != null : bool(session.pending_interaction),
     history_reasons: Array.isArray(session.reading?.incomplete_reasons) ? [...new Set(session.reading.incomplete_reasons.map(reason).filter(Boolean))] : null};
 }
