@@ -1,8 +1,10 @@
 import {test, expect, type Page} from '@playwright/test';
 import {managedSetupFixture, openSetupAdvanced} from './managed-setup-fixture.ts';
 import {STRINGS} from '../src/i18n.js';
+import {readFileSync} from 'node:fs';
+const setupEvidence = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-setup-evidence.json', import.meta.url), 'utf8'));
 for (const locale of ['en', 'zh-TW']) test.describe(locale + ' managed setup', () => {
-  test.use({locale});
+  test.use({locale: locale === 'en' ? 'en-US' : locale});
   const fixture = (page: Page, native: boolean) => managedSetupFixture(page, native, locale);
   const copy = (key: string, vars: Record<string, string> = {}) => STRINGS[locale][key].replace(/\{(\w+)\}/g, (_, name) => vars[name] || '');
 
@@ -13,6 +15,34 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale + ' managed setup', (
     if (!await details.evaluate(node => node.hasAttribute('open'))) await details.locator('summary').click();
     await expect(link).toBeVisible();
   }
+
+  for (const width of [390, 1440]) for (const condition of ['unreachable', 'checking', 'connected'])
+    test(`past setup evidence and current ${condition} at ${width}px`, async ({page}) => {
+      await page.setViewportSize({width, height: 900});
+      const posts: string[] = [];
+      page.on('request', request => {if (request.method() === 'POST') posts.push(request.url());});
+      const state = await managedSetupFixture(page, false, locale, {
+        state: setupEvidence.states[condition], operation: setupEvidence.operation});
+      await page.goto('/dashboard/#/settings'); await openSetupAdvanced(page);
+      await expectSetupOperation(page);
+      const panel = page.locator('[data-managed-setup]'), progress = panel.locator('[data-setup-progress]');
+      const host = panel.locator(`[data-setup-host-state="${condition}"]`);
+      await expect(host).toContainText(copy(`setup_connection_${condition}`));
+      if (condition === 'connected') await expect(progress).toHaveText(copy('setup_ready'));
+      else {
+        // Assert the original contradiction first, before checking new evidence copy.
+        await expect(progress).not.toHaveText(copy('setup_ready'));
+        await expect(panel).not.toContainText(copy('setup_ready'));
+        await expect(progress).toContainText(locale === 'zh-TW' ? 'Connector 已驗證連線並儲存設定' : 'Connector verified the connection and saved the configuration');
+        await expect(progress.locator('time')).toHaveAttribute('datetime', new Date(setupEvidence.operation.updated_at * 1000).toISOString());
+        await expect(progress.locator('time')).not.toHaveText('');
+        await expect(host).toContainText(copy(condition === 'unreachable' ? 'setup_connection_action' : 'setup_connection_checking_help'));
+      }
+      await expect(host.locator('time')).toHaveAttribute('datetime', new Date(setupEvidence.states[condition].hosts[0].connection_checked_at * 1000).toISOString());
+      await expect(host.locator('time')).not.toHaveText('');
+      await expect(panel.locator('[data-setup-operation]')).toHaveAttribute('href', `#/op/${setupEvidence.operation.operation_id}`);
+      expect(state.posts).toEqual([]); expect(state.staged).toEqual([]); expect(posts).toEqual([]);
+    });
 
   for (const native of [false,true]) test.describe(native?'Native setup':'Browser setup',()=>{
     test('first run guides setup, preserves non-secret draft, recovers the original key',async({page})=>{
