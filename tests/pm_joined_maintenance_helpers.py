@@ -28,7 +28,7 @@ from bat_agent_connector.operations import OperationError
 from bat_agent_connector.task_verifier import ObservedVerifier, VerificationSettings
 from tests import test_pm_execution_verification as verifier
 from tests import test_pm_member_lifecycle_acceptance as member
-from tests.operation_helpers import stop_workers, wait_operation_attempts
+from tests.operation_helpers import stop_workers, worker_details
 from tests.pm_joined_delivery_helpers import settle
 from tests.pm_joined_lifecycle_helpers import OWNER, assert_manual_preserved, engineering, execute
 from tests.test_checkpoints import git
@@ -63,8 +63,33 @@ async def advance(w, parent, rounds=3):
             active = tuple((oid, task) for oid, task in ops._active.items() if not task.done())
             if not active:
                 continue
-            outcomes = await wait_operation_attempts(ops, active, started=started, clock=time.monotonic,
-                wait=asyncio.wait, description='Repair attempt wave')
+            def progress(oid):
+                return tuple(tuple(row) for row in ops.db.execute(
+                    'SELECT seq,status FROM operation_steps WHERE operation_id=? ORDER BY seq', (oid,)))
+
+            receipts = {oid: progress(oid) for oid, _ in active}
+            changed = dict.fromkeys(receipts, started)
+            pending = {task for _, task in active}
+            while pending:
+                remaining = min(60 - (time.monotonic() - changed[oid])
+                    for oid, task in active if task in pending)
+                _, pending = await asyncio.wait(pending, timeout=max(0, min(1, remaining)))
+                now = time.monotonic()
+                for oid, task in active:
+                    if task not in pending:
+                        continue
+                    current = progress(oid)
+                    if current != receipts[oid]:
+                        receipts[oid], changed[oid] = current, now
+                    assert now - changed[oid] < 60, (
+                        'Repair attempt wave did not settle within 60s without persisted progress\n'
+                        + worker_details(ops))
+            outcomes = []
+            for oid, task in active:
+                task.result()  # Persisted status alone does not prove the worker finished.
+                outcome = ops.get(oid)
+                assert outcome['status'] not in {'accepted', 'running'}, outcome
+                outcomes.append((outcome['action'], outcome['status']))
             print('Repair attempt wave:', round(time.monotonic() - started, 3), outcomes, flush=True)
         result = ops.get(parent['operation_id'])
         assert result['error_code'] != 'INTERNAL', result

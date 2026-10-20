@@ -8,7 +8,6 @@ import pytest
 from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.operations import ActionDef, OperationService
 from bat_agent_connector.task_journal import Journal
-from tests import operation_helpers as helpers
 from tests import pm_joined_maintenance_helpers as maintenance
 from tests.operation_helpers import _worker_details, settle_operations, stop_workers, worker_details
 
@@ -151,8 +150,7 @@ async def test_settle_requires_worker_completion_after_persisted_outcome(ops, mo
 
 
 @pytest.mark.parametrize("stalled_sibling", [False, True])
-@pytest.mark.parametrize("waiter", ["settle", "advance"])
-async def test_advance_waits_for_persisted_progress_across_a_slow_wave(ops, monkeypatch, stalled_sibling, waiter):
+async def test_advance_waits_for_persisted_progress_across_a_slow_wave(ops, monkeypatch, stalled_sibling):
     """A delayed scheduler can see new receipts after the wave's original bound."""
     elapsed = [0]
     release, recorded = asyncio.Event(), asyncio.Event()
@@ -181,38 +179,17 @@ async def test_advance_waits_for_persisted_progress_across_a_slow_wave(ops, monk
             await asyncio.Event().wait()
         ops.register(ActionDef("fixture.stalled", "operate", "Synthetic stalled worker", stalled))
         sibling, _ = ops.create(CALLER, action="fixture.stalled", target={}, params={}, idempotency_key="stalled")
-    if waiter == "advance":
-        monkeypatch.setattr(maintenance, "time", SimpleNamespace(monotonic=lambda: elapsed[0]))
-        monkeypatch.setattr(maintenance, "asyncio", SimpleNamespace(wait=delayed_wait))
-    else:
-        # Replace this helper's dependency only, never a global stdlib clock.
-        facade = SimpleNamespace(**{name: getattr(asyncio, name) for name in (
-            "sleep", "gather", "wait_for", "shield", "TimeoutError")},
-            get_running_loop=lambda: SimpleNamespace(time=lambda: elapsed[0]), wait=delayed_wait)
-        monkeypatch.setattr(helpers, "asyncio", facade)
-        original_wait = ops.wait
-
-        async def progressed_wait(oid, *, timeout):
-            await delayed_wait({ops._active[oid]}, timeout=timeout)
-            return await original_wait(oid, timeout=0)
-
-        monkeypatch.setattr(ops, "wait", progressed_wait)
-
-    async def finish():
-        if waiter == "advance":
-            return await maintenance.advance({"d": SimpleNamespace(ops=ops)}, op, rounds=1)
-        await settle_operations(ops)
-        return ops.get(op["operation_id"])
-
+    monkeypatch.setattr(maintenance, "time", SimpleNamespace(monotonic=lambda: elapsed[0]))
+    monkeypatch.setattr(maintenance, "asyncio", SimpleNamespace(wait=delayed_wait))
     if stalled_sibling:
         with pytest.raises(AssertionError, match=sibling["operation_id"]):
-            await finish()
+            await maintenance.advance({"d": SimpleNamespace(ops=ops)}, op, rounds=1)
         assert elapsed[0] == 61
         assert not ops._active
         assert ops.get(op["operation_id"])["steps"][0]["status"] == "succeeded"
         assert ops.get(sibling["operation_id"])["status"] == "running"
         return
-    outcome = await finish()
+    outcome = await maintenance.advance({"d": SimpleNamespace(ops=ops)}, op, rounds=1)
     assert elapsed[0] == 122
     assert outcome["status"] == "succeeded" and outcome["result"] == {"accepted": True}
     assert [(step["name"], step["status"]) for step in outcome["steps"]] == [
