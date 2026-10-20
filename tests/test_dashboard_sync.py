@@ -75,6 +75,9 @@ def test_b02_restored_journal_detects_regression_and_divergent_reused_sequence(t
     shutil.copyfile(backup, path)
     j = Journal(path)
     assert dashboard_sync.identity(j, VIEWER)["server_id"] == original["server_id"]
+    restored = dashboard_sync.checkpoint(j, VIEWER)
+    assert restored["server_id"] == later["server_id"]
+    assert restored["checkpoint"]["cursor"] < later["checkpoint"]["cursor"]
     with pytest.raises(dashboard_sync.ResetRequired, match="cursor_ahead"):
         replay(j, later)
     append(j, "restored and diverged")

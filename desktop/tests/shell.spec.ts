@@ -3,7 +3,7 @@ import {mountConversation} from './conversation-fixture.ts';
 import {workbenchFixture, route, workspaceId, workId} from './pm-workbench-fixture.ts';
 import {workspaceFixture, workspaceProject, workspaceRoute} from './workspace-fixture.ts';
 import {threadId} from './pm-fixture.ts';
-import {openPmSection} from './pm-navigation.ts';
+import {openPmSection, revealPmView} from './pm-navigation.ts';
 function fixture() {
   const pm = workbenchFixture(), work = workspaceFixture();
   const state = {denyBindings: false, offline: false, bindingReads: 0, eventType: 'pm_thread'};
@@ -61,7 +61,7 @@ test('workspace remains selected through views and bound work; history and legac
   await page.evaluate(id => {location.hash = `#/pm/${id}`;}, workspaceId);
   await expect(page.locator('[data-pm-region=discussions]')).toBeVisible();
   await openPmSection(page, 'requirements'); await page.locator('.workspace-nav-footer a[href="#/settings"]').click();
-  await page.locator('[data-pm-view=requirements]').click(); await expect(context).toHaveAttribute('data-workspace-id', workspaceId);
+  await (await revealPmView(page, 'requirements')).click(); await expect(context).toHaveAttribute('data-workspace-id', workspaceId);
 });
 test('filters, expanded rows and selection survive other views and Settings without caching facts', async ({page}) => {
   const f = fixture(); await mountConversation(page, false, f.dispatch); await page.goto(route); await openPmSection(page,'requirements');
@@ -69,7 +69,7 @@ test('filters, expanded rows and selection survive other views and Settings with
   await page.locator('[data-rtm-toggle]').first().click(); await page.locator(`[data-rtm-select="${workId(1)}"]`).first().click();
   await openPmSection(page,'overview'); await openPmSection(page,'requirements');
   await expect(filter).toHaveValue('login'); await expect(page.locator('[data-work-inspector]')).toContainText('PR #10');
-  await page.locator('.workspace-nav-footer a[href="#/settings"]').click(); await page.locator('[data-pm-view=requirements]').click();
+  await page.locator('.workspace-nav-footer a[href="#/settings"]').click(); await (await revealPmView(page, 'requirements')).click();
   await expect(filter).toHaveValue('login'); await expect(page.locator('[data-work-inspector]')).toContainText('PR #10');
   f.pm.state.denyIssues = true; await page.locator('[data-pm-refresh]').click();
   await expect(page.locator('[data-work-inspector]')).toContainText('PR #10');

@@ -792,6 +792,19 @@ mod tests {
     fn fixture() -> Value {
         serde_json::from_str(include_str!("../../tests/fixtures/fleet-status.json")).unwrap()
     }
+    #[test]
+    fn sanitized_status_matches_shared_frontend_golden() {
+        // Context::status -> supervisor_status::Entry -> sanitize_result is the
+        // IPC boundary. The core test also verifies the producer's typed rows.
+        let golden: Value = serde_json::from_str(include_str!(
+            "../../tests/fixtures/fleet-status.golden.json"
+        ))
+        .unwrap();
+        assert_eq!(
+            sanitize_result(&fixture()["result"], "status").unwrap(),
+            golden
+        );
+    }
     fn contract() -> Value {
         serde_json::from_str(include_str!("../../tests/fixtures/fleet-contract.json")).unwrap()
     }

@@ -40,6 +40,8 @@ export async function settleRefreshes(pending: Promise<unknown>[]): Promise<void
   for (const result of results) if (result.status === "rejected") throw result.reason;
 }
 
+// Browser/external binding and legacy format. Native managed storage uses the
+// verified journal identity in storage-identity.ts, independent of runtime port.
 export function storageScope(endpoint: string, actor: string, server = "legacy", principal = actor): string {
   return [endpoint, server, principal, actor].map(encodeURIComponent).join(":");
 }

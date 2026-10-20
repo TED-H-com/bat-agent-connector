@@ -1409,6 +1409,16 @@ var init_ui_strings = __esmMin((() => {
 			ui_issues: "Issues & changes",
 			ui_agents: "Agents",
 			ui_board: "Board",
+			ui_daily_navigation: "Everyday work",
+			ui_more_management: "More project tools",
+			ui_nav_overview: "Goals, progress and next steps",
+			ui_nav_discussions: "Ask questions and share ideas",
+			ui_nav_board: "Follow work and open results",
+			ui_nav_issues: "Track problems and decisions",
+			ui_nav_requirements: "What needs to be delivered",
+			ui_nav_schedule: "Dates and milestones",
+			ui_nav_dependencies: "What a change could affect",
+			ui_nav_agents: "Available tools and usage",
 			ui_project: "Project",
 			sync_actions_paused: "Source refresh failed; actions paused until fresh records arrive.",
 			ui_work_item: "Work item",
@@ -1483,6 +1493,16 @@ var init_ui_strings = __esmMin((() => {
 			ui_issues: "問題與變更",
 			ui_agents: "代理資源",
 			ui_board: "工作看板",
+			ui_daily_navigation: "日常使用",
+			ui_more_management: "更多專案工具",
+			ui_nav_overview: "看目標、進度與下一步",
+			ui_nav_discussions: "提問、說想法、一起討論",
+			ui_nav_board: "看工作進度與成果",
+			ui_nav_issues: "追蹤問題與需要的決定",
+			ui_nav_requirements: "確認要交付哪些內容",
+			ui_nav_schedule: "看日期與重要進度",
+			ui_nav_dependencies: "了解修改會影響什麼",
+			ui_nav_agents: "看可用工具與用量",
 			ui_project: "專案",
 			sync_actions_paused: "資料更新失敗；取得最新紀錄前暫停操作。",
 			ui_work_item: "工作項目",
@@ -9300,6 +9320,123 @@ var init_pm_work_publish_strings = __esmMin((() => {
 	};
 }));
 //#endregion
+//#region src/fleet-strings.js
+var FLEET_STRINGS;
+var init_fleet_strings = __esmMin((() => {
+	FLEET_STRINGS = {
+		"zh-TW": {
+			fleet_check_advanced: "進階：開機自動連線與連線方式",
+			fleet_check_advanced_pending: "進階：檢視連線設定變更",
+			fleet_check_network: "網路",
+			fleet_check_identity: "身分",
+			fleet_check_service: "服務",
+			fleet_check_workspace: "工作區",
+			fleet_check_passed: "已確認",
+			fleet_check_attention: "需要處理",
+			fleet_check_unchecked: "尚未確認",
+			fleet_check_title_ready: "已連線",
+			fleet_check_help_ready_bat: "已確認 BAT 連線。要建立工作，請回到專案選擇執行設定。",
+			fleet_check_help_ready_connector: "已確認專案服務可讀取。可執行的操作仍依登入權限決定。",
+			fleet_check_title_unavailable: "目前讀不到連線狀態",
+			fleet_check_help_unavailable: "按「重新讀取狀態」查回目前結果。上一次的連線狀態已失效。",
+			fleet_check_title_stale: "需要重新確認連線",
+			fleet_check_help_stale: "按「重新讀取狀態」取得新結果，再繼續操作。",
+			fleet_check_title_off: "尚未啟用這台機器的連線",
+			fleet_check_help_off: "勾選這台機器並儲存，才能開始連線。",
+			fleet_check_title_stopped: "背景連線已停止",
+			fleet_check_help_stopped: "按「啟動連線監控」，恢復已選機器的連線檢查。",
+			fleet_check_title_checking: "正在確認連線",
+			fleet_check_help_checking: "請稍候，畫面會自動更新檢查結果。",
+			fleet_check_title_selection_pending: "等待背景監控套用連線選擇",
+			fleet_check_help_selection_pending: "已儲存新的選擇。請等背景監控套用後重新檢查，畫面會自動更新。",
+			fleet_check_title_waking: "正在喚醒 Tailscale 連線",
+			fleet_check_help_waking: "請稍候，喚醒後會繼續檢查 BAT 是否可用。",
+			fleet_check_title_network: "目前連不到這台機器",
+			fleet_check_help_network: "先確認這台機器已開機，且已設定的網路連線可用，再重新讀取狀態。",
+			fleet_check_title_local_endpoint: "這台電腦的連線埠已被占用",
+			fleet_check_help_local_endpoint: "請在這台電腦確認哪個程式正在使用設定的本機連線埠，核對擁有權後處理埠衝突。",
+			fleet_check_title_local_ssh: "這台電腦無法使用 SSH",
+			fleet_check_help_local_ssh: "請在這台電腦安裝或修復 Windows OpenSSH 用戶端，確認 ssh 可以執行，再啟動連線監控。",
+			fleet_check_title_trust: "無法確認連到的是正確機器",
+			fleet_check_help_trust: "請向機器管理者核對 BAT 的可信連線資料，再更新這台機器的連線設定。",
+			fleet_check_title_identity: "連線授權需要更新",
+			fleet_check_help_identity_bat: "在 BAT 使用這台機器提供的有效連結重新設定連線，再重新讀取狀態。",
+			fleet_check_help_identity_connector: "請機器管理者更新這條連線專用的唯讀授權，再重新讀取狀態。",
+			fleet_check_title_service: "服務尚未通過檢查",
+			fleet_check_help_service_bat: "在這台機器確認 BAT 遠端服務正常執行，再重新讀取狀態。",
+			fleet_check_help_service_connector: "在這台機器確認 Connector 正常執行，再重新讀取狀態。",
+			fleet_check_title_version: "服務版本不相容",
+			fleet_check_help_version_bat: "請機器管理者更新 BAT 至相容版本，再重新讀取狀態。",
+			fleet_check_help_version_connector: "請機器管理者核對 Dashboard 與 Connector 的版本，再更新至相容版本。",
+			fleet_check_title_workspace: "目前讀不到設定的工作區",
+			fleet_check_help_workspace: "在 BAT 確認這個工作區仍存在且允許存取，再重新讀取狀態。",
+			fleet_check_title_configuration: "機器設定尚未完成",
+			fleet_check_help_configuration: "請依機器加入指南核對既有設定，保留原資料後再修正。",
+			fleet_check_title_ownership: "背景連線的操作結果尚未確認",
+			fleet_check_help_ownership: "保留現有程序與紀錄，核對原操作回執及程序擁有權。確認原程序已結束前，不要重複啟動或刪除紀錄。",
+			fleet_check_title_timeout: "這次檢查沒有及時回覆",
+			fleet_check_help_timeout: "稍候再重新讀取狀態，以確認這台機器是否已恢復。",
+			fleet_check_title_unknown: "需要進一步檢查",
+			fleet_check_help_unknown: "先重新讀取狀態；若仍無法確認，展開詳細資料取得錯誤代碼。"
+		},
+		en: {
+			fleet_check_advanced: "Advanced: automatic connections and connection method",
+			fleet_check_advanced_pending: "Advanced: review connection setting changes",
+			fleet_check_network: "Network",
+			fleet_check_identity: "Identity",
+			fleet_check_service: "Service",
+			fleet_check_workspace: "Workspace",
+			fleet_check_passed: "Confirmed",
+			fleet_check_attention: "Needs attention",
+			fleet_check_unchecked: "Not yet confirmed",
+			fleet_check_title_ready: "Connected",
+			fleet_check_help_ready_bat: "The BAT connection is confirmed. To create work, choose an execution setup in your project.",
+			fleet_check_help_ready_connector: "The project service is readable. Available actions still depend on your sign-in permissions.",
+			fleet_check_title_unavailable: "Connection status is unavailable",
+			fleet_check_help_unavailable: "Choose Read status to retrieve the current result. The previous connection status is no longer current.",
+			fleet_check_title_stale: "The connection needs a fresh check",
+			fleet_check_help_stale: "Choose Read status to get a current result before continuing.",
+			fleet_check_title_off: "This connection is not enabled",
+			fleet_check_help_off: "Select this machine and save your choices to connect.",
+			fleet_check_title_stopped: "Background connections have stopped",
+			fleet_check_help_stopped: "Choose Start connection monitor to resume checks for your selected machines.",
+			fleet_check_title_checking: "Checking the connection",
+			fleet_check_help_checking: "Please wait. The check results will update automatically.",
+			fleet_check_title_selection_pending: "Waiting for the monitor to apply connection choices",
+			fleet_check_help_selection_pending: "The new choices are saved. Wait for the background monitor to apply them and check the connections. Results update automatically.",
+			fleet_check_title_waking: "Waking the Tailscale connection",
+			fleet_check_help_waking: "Please wait. BAT availability will be checked after the connection wakes.",
+			fleet_check_title_network: "This machine cannot be reached",
+			fleet_check_help_network: "Check that the machine is on and its configured network connection is available, then read status again.",
+			fleet_check_title_local_endpoint: "The local connection port is already in use",
+			fleet_check_help_local_endpoint: "On this PC, identify the program using the configured local port and verify ownership before resolving the port conflict.",
+			fleet_check_title_local_ssh: "SSH is unavailable on this PC",
+			fleet_check_help_local_ssh: "Install or repair the Windows OpenSSH client on this PC, check that ssh can run, then start the connection monitor.",
+			fleet_check_title_trust: "The machine’s identity could not be verified",
+			fleet_check_help_trust: "Verify the trusted BAT connection details with the machine’s administrator before updating this connection.",
+			fleet_check_title_identity: "Connection authorization needs updating",
+			fleet_check_help_identity_bat: "Set up this connection again in BAT using a valid link from this machine, then read status.",
+			fleet_check_help_identity_connector: "Ask the machine’s administrator to update this connection’s separate read-only authorization, then read status.",
+			fleet_check_title_service: "The service has not passed its check",
+			fleet_check_help_service_bat: "Check that the BAT remote service is running on this machine, then read status again.",
+			fleet_check_help_service_connector: "Check that Connector is running on this machine, then read status again.",
+			fleet_check_title_version: "The service version is incompatible",
+			fleet_check_help_version_bat: "Ask the machine’s administrator to update BAT to a compatible version, then read status.",
+			fleet_check_help_version_connector: "Ask the machine’s administrator to check the Dashboard and Connector versions and update them to compatible versions.",
+			fleet_check_title_workspace: "The configured workspace cannot be read",
+			fleet_check_help_workspace: "Check in BAT that the workspace still exists and allows access, then read status again.",
+			fleet_check_title_configuration: "Machine setup is incomplete",
+			fleet_check_help_configuration: "Review the existing settings with the machine setup guide, preserving the original data before correcting them.",
+			fleet_check_title_ownership: "The background connection outcome is unconfirmed",
+			fleet_check_help_ownership: "Keep existing processes and records, and verify the original operation receipt and process ownership. Do not start another process or delete records until the original process is confirmed to have exited.",
+			fleet_check_title_timeout: "This check did not reply in time",
+			fleet_check_help_timeout: "Read status again shortly to check whether this machine has recovered.",
+			fleet_check_title_unknown: "Further checking is needed",
+			fleet_check_help_unknown: "Read status again first. If it remains unconfirmed, open Details for the error code."
+		}
+	};
+}));
+//#endregion
 //#region src/i18n.js
 function detectLocale(language = globalThis.navigator?.language || "en") {
 	return /^zh-(?:tw|hk|mo|hant)(?:-|$)/i.test(language) ? "zh-TW" : "en";
@@ -9359,8 +9496,10 @@ var init_i18n = __esmMin((() => {
 	init_pm_work_result_strings();
 	init_pm_work_follow_up_strings();
 	init_pm_work_publish_strings();
+	init_fleet_strings();
 	STRINGS = {
 		"zh-TW": {
+			...FLEET_STRINGS["zh-TW"],
 			...workbenchStrings$1["zh-TW"],
 			...externalHistoryStrings["zh-TW"],
 			...diagnosticsStrings["zh-TW"],
@@ -10489,9 +10628,6 @@ var init_i18n = __esmMin((() => {
 			fleet_use_current: "使用目前選擇",
 			fleet_start: "啟動連線監控",
 			fleet_quit: "停止本機連線監控",
-			fleet_tailscale_waking: "正在喚醒 Tailscale 連線…",
-			fleet_route_unavailable: "目前無法透過 Tailscale 連到這台主機。請確認主機在 Tailscale 上為上線狀態；系統會自動重試。",
-			fleet_probe_pending: "正在檢查連線…",
 			fleet_status_details: "詳細資料",
 			fleet_monitor_running: "監控執行中",
 			fleet_monitor_stopped: "監控已停止",
@@ -11057,6 +11193,7 @@ var init_i18n = __esmMin((() => {
 			integration_PUSH_UNPROVEN: "PR 分支在舊的 head，但組合後的 commit 已在 GitHub 上：之前的推送可能落地後被改回。不會再推一次；請看一下 PR，再取消並重新預覽。"
 		},
 		en: {
+			...FLEET_STRINGS.en,
 			...workbenchStrings$1.en,
 			...externalHistoryStrings.en,
 			...diagnosticsStrings.en,
@@ -12186,9 +12323,6 @@ var init_i18n = __esmMin((() => {
 			fleet_use_current: "Use current selection",
 			fleet_start: "Start connection monitor",
 			fleet_quit: "Stop local connection monitor",
-			fleet_tailscale_waking: "Waking the Tailscale connection…",
-			fleet_route_unavailable: "Tailscale can't reach this host right now. Make sure the host is online in Tailscale; retrying automatically.",
-			fleet_probe_pending: "Checking the connection…",
 			fleet_status_details: "Details",
 			fleet_monitor_running: "Monitor running",
 			fleet_monitor_stopped: "Monitor stopped",
@@ -15710,6 +15844,51 @@ function projectViews({ h, t, namespace, workspaceId, groups, view, onSelect = (
 	};
 }
 //#endregion
+//#region src/project-navigation.js
+var dailyViews = [
+	"overview",
+	"discussions",
+	"board",
+	"issues"
+];
+function projectNavigation({ t, namespace, workspaceId, views, current, discussionCount }) {
+	const preference = viewState(namespace, workspaceId, "project-navigation");
+	const entry = (id) => h$1("button", {
+		type: "button",
+		class: "ui-button ghost",
+		"data-pm-view": id,
+		"aria-current": current === id ? "page" : "false",
+		"aria-describedby": `project-nav-${encodeURIComponent(workspaceId)}-${id}-hint`,
+		onclick: () => {
+			location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${id}`;
+		}
+	}, icon(viewIcons[id], { size: 20 }), h$1("span", { class: "shell-view-copy" }, h$1("span", {}, t("ui_" + id)), h$1("span", {
+		class: "shell-view-hint",
+		"aria-hidden": "true",
+		id: `project-nav-${encodeURIComponent(workspaceId)}-${id}-hint`
+	}, t("ui_nav_" + id))), id === "discussions" ? discussionCount : null);
+	const primary = dailyViews.filter((id) => views.includes(id));
+	const secondary = views.filter((id) => !dailyViews.includes(id));
+	if (preference.current !== current && secondary.includes(current)) preference.expanded = true;
+	preference.current = current;
+	const nav = h$1("nav", {
+		class: "pm-project-views",
+		"aria-label": t("wb_navigation")
+	}, ...primary.map(entry));
+	if (secondary.length) {
+		const fold = h$1("details", {
+			class: "shell-management",
+			"data-project-management": "",
+			open: Boolean(preference.expanded)
+		}, h$1("summary", {}, icon("chevron-right", { size: 20 }), t("ui_more_management")), h$1("div", { class: "shell-management-views" }, ...secondary.map(entry)));
+		fold.addEventListener("toggle", () => {
+			if (fold.isConnected) preference.expanded = fold.open;
+		});
+		nav.append(fold);
+	}
+	return nav;
+}
+//#endregion
 //#region src/shell.js
 init_i18n();
 function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, errorBox }) {
@@ -15961,6 +16140,8 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		renderSignature = signature;
 		for (const control of menus) control.dispose();
 		menus = [];
+		const focusedView = projectNav.contains(document.activeElement) ? document.activeElement.dataset.pmView : null;
+		const focusedManagement = projectNav.contains(document.activeElement) && document.activeElement.matches("summary");
 		workspaceBlock.replaceChildren();
 		projectNav.replaceChildren();
 		crumb.replaceChildren();
@@ -16023,28 +16204,24 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 				class: "ui-pill tone-neutral",
 				"data-shell-phase": ""
 			}, phase));
-			projectNav.append(h$1("h2", { class: "shell-nav-label" }, t("ui_project")), h$1("nav", {
-				class: "pm-project-views",
-				"aria-label": t("wb_navigation")
-			}, ...views.map((id) => h$1("button", {
-				type: "button",
-				class: "ui-button ghost",
-				"data-pm-view": id,
-				"aria-current": currentRoute === "pm" && currentView === id ? "page" : "false",
-				onclick: () => {
-					location.hash = `#/pm/${workspace.workspace_id}/${id}`;
-				}
-			}, icon(viewIcons[id], { size: 20 }), h$1("span", {}, t("ui_" + id)), id === "discussions" && threadCount !== null ? h$1("span", {
-				class: "shell-count",
-				title: t(threadMore ? "ui_threads_loaded" : threadCount === 1 ? "ui_thread_count" : "ui_threads_count", {
-					n: threadCount,
-					more: threadMore ? "+" : ""
-				}),
-				"aria-label": t(threadMore ? "ui_threads_loaded" : threadCount === 1 ? "ui_thread_count" : "ui_threads_count", {
-					n: threadCount,
-					more: threadMore ? "+" : ""
-				})
-			}, String(threadCount) + (threadMore ? "+" : "")) : null))));
+			projectNav.append(h$1("h2", { class: "shell-nav-label" }, t("ui_daily_navigation")), projectNavigation({
+				t,
+				namespace,
+				workspaceId: workspace.workspace_id,
+				views,
+				current: currentRoute === "pm" ? currentView : "",
+				discussionCount: threadCount !== null ? h$1("span", {
+					class: "shell-count",
+					title: t(threadMore ? "ui_threads_loaded" : threadCount === 1 ? "ui_thread_count" : "ui_threads_count", {
+						n: threadCount,
+						more: threadMore ? "+" : ""
+					}),
+					"aria-label": t(threadMore ? "ui_threads_loaded" : threadCount === 1 ? "ui_thread_count" : "ui_threads_count", {
+						n: threadCount,
+						more: threadMore ? "+" : ""
+					})
+				}, String(threadCount) + (threadMore ? "+" : "")) : null
+			}));
 			crumb.append(h$1("a", {
 				class: "shell-crumb-workspace",
 				href: `#/pm/${encodeURIComponent(workspace.workspace_id)}/overview`,
@@ -16115,6 +16292,10 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		}, workspace?.name || routeTitle));
 		workspaceBlock.hidden = !workspaceBlock.children.length;
 		projectNav.hidden = candidate || !projectNav.children.length;
+		if (!projectNav.hidden && (media.matches || !scrim.hidden)) {
+			const focus = focusedView ? [...projectNav.querySelectorAll("[data-pm-view]")].find((node) => node.dataset.pmView === focusedView) : focusedManagement ? projectNav.querySelector("summary") : null;
+			if (focus?.getClientRects().length) focus.focus({ preventScroll: true });
+		}
 	}
 	let threadCount = null, threadMore = false;
 	function update(context) {
@@ -58641,23 +58822,148 @@ function nativeAttachments({ h, t, guard, canWrite, draftId, onReceipt, onDiscar
 }
 //#endregion
 //#region src/fleet-status.js
-function fleetStatusKey(code) {
+function fleetDiagnosis(row, { snapshot, readable, kind = "host" } = {}) {
+	const layers = row?.layers || {};
+	const reason = row?.code || row?.blocking;
+	let state;
+	if (!readable) state = "unavailable";
+	else if (row?.selected === false || row?.level === "off") state = "off";
+	else if (lookup(codeReason, reason) === "ownership") state = "ownership";
+	else if (snapshot.monitor.state === "stopped") state = "stopped";
+	else if (snapshot.monitor.state !== "running" || snapshot.readiness.state === "unavailable") state = "checking";
+	else if (snapshot.selection.applied_revision !== snapshot.selection.revision) state = "selection_pending";
+	else if (snapshot.readiness.state !== "fresh" || row?.stale || row?.blocking === "stale") state = "stale";
+	else if (!row || row.selected !== true) state = "checking";
+	else if (reason) state = lookup(codeReason, reason) || lookup(layerReason, row.blocking) || "unknown";
+	else if (row.level === "ready" && layers.tunnel === true && (kind === "connector" ? !["unknown", "refused"].includes(layers.auth) : layers.tls === true && layers.auth === "ok" && layers.bat === true && layers.workspace === true)) state = "ready";
+	else state = "checking";
+	const current = ![
+		"unavailable",
+		"configuration",
+		"off",
+		"stopped",
+		"stale",
+		"checking",
+		"selection_pending",
+		"unknown",
+		"ownership"
+	].includes(state);
+	const blockedAt = (reason === "BAT_PROTOCOL_INVALID" ? "service" : lookup(layerStep, row?.blocking)) || {
+		network: "network",
+		waking: "network",
+		trust: "identity",
+		identity: "identity",
+		service: "service",
+		version: "service",
+		workspace: "workspace",
+		local_endpoint: "network",
+		local_ssh: "network"
+	}[state];
+	const steps = [
+		["network", layers.tunnel === true],
+		["identity", layers.auth === "ok" && (kind === "connector" || layers.tls === true)],
+		["service", kind === "connector" ? state === "ready" : layers.bat === true],
+		...kind === "connector" ? [] : [["workspace", layers.workspace === true]]
+	];
+	let blocked = false;
 	return {
-		TAILSCALE_WAKING: "fleet_tailscale_waking",
-		ROUTE_UNAVAILABLE: "fleet_route_unavailable",
-		PROBE_PENDING: "fleet_probe_pending"
-	}[code];
+		state,
+		kind,
+		steps: steps.map(([id, passed]) => {
+			if (id === blockedAt) blocked = true;
+			return {
+				id,
+				state: !current ? "unchecked" : blocked ? id === blockedAt && !["waking", "timeout"].includes(state) ? "attention" : "unchecked" : passed ? "passed" : "unchecked"
+			};
+		})
+	};
 }
-function fleetStatus(row, { h, t }) {
-	const reason = [row?.code, row?.blocking].find((value) => typeof value === "string" && value.length);
-	if (!reason) return null;
-	const key = fleetStatusKey(reason);
+function rememberFleetDetails(content, detailsState) {
+	for (const details of content.querySelectorAll("details[data-fleet-details-key]")) detailsState.set(details.dataset.fleetDetailsKey, details.open);
+}
+function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState }) {
+	const { state, kind, steps } = fleetDiagnosis(row, {
+		snapshot,
+		readable,
+		name: entry.name,
+		kind: entry.kind
+	});
+	const key = `${snapshot.configuration.binding}:machine:${entry.name}`;
+	const details = h("details", {
+		open: detailsState?.get(key) === true,
+		"data-fleet-details-key": key
+	}, h("summary", { "data-fleet-details": entry.name }, t("fleet_status_details")), h("dl", { class: "fleet-checks" }, ...steps.flatMap((step) => [h("dt", {}, t("fleet_check_" + step.id)), h("dd", {
+		"data-fleet-check": step.id,
+		"data-check-state": step.state
+	}, t("fleet_check_" + step.state))])), ...[row?.code, row?.blocking].filter((value, index, all) => value && all.indexOf(value) === index).map((value) => h("code", {}, value)));
+	const helpKey = [
+		"ready",
+		"identity",
+		"service",
+		"version"
+	].includes(state) ? `${state}_${kind === "connector" ? "connector" : "bat"}` : state;
 	return h("div", {
-		class: "muted",
-		"data-fleet-route-status": true
-	}, key ? h("span", { role: "status" }, t(key)) : null, h("details", {}, h("summary", {}, key ? t("fleet_status_details") : `${t("fleet_status_details")}: ${reason}`), h("code", {}, reason), row?.blocking && row.blocking !== reason ? h("code", {}, row.blocking) : null));
+		class: "fleet-diagnosis",
+		"data-fleet-diagnosis": entry.name,
+		"data-fleet-state": state
+	}, h("p", { class: "fleet-diagnosis-title" }, t("fleet_check_title_" + state)), h("p", { class: "muted" }, t("fleet_check_help_" + helpKey)), details);
 }
-var init_fleet_status = __esmMin((() => {}));
+var codeReason, layerReason, layerStep, lookup;
+var init_fleet_status = __esmMin((() => {
+	codeReason = {
+		TAILSCALE_WAKING: "waking",
+		ROUTE_UNAVAILABLE: "network",
+		TUNNEL_DOWN: "network",
+		TLS_PIN_MISSING: "trust",
+		TLS_IDENTITY_MISMATCH: "trust",
+		TLS_FAILED: "trust",
+		CREDENTIAL_MISSING: "identity",
+		CREDENTIAL_CHANGED: "identity",
+		BAT_AUTH_REFUSED: "identity",
+		CONNECTOR_AUTH_REFUSED: "identity",
+		CONNECTOR_SCOPE_MISSING: "identity",
+		BAT_VERSION_UNSUPPORTED: "version",
+		CONNECTOR_CONTRACT_UNSUPPORTED: "version",
+		BAT_PROTOCOL_INVALID: "service",
+		CONNECTOR_UNAVAILABLE: "service",
+		CONNECTOR_CAPABILITY_MISSING: "service",
+		WORKSPACE_UNREADABLE: "workspace",
+		WORKSPACE_INVALID: "workspace",
+		WORKSPACE_BINDING_MISMATCH: "workspace",
+		INVENTORY_INVALID: "configuration",
+		OWNER_UNPROVEN: "ownership",
+		STOP_UNCONFIRMED: "ownership",
+		TUNNEL_START_UNSETTLED: "ownership",
+		TUNNEL_RECORD_CHANGED: "ownership",
+		OTHER_LOGIN_OWNER: "ownership",
+		ENDPOINT_IN_USE: "local_endpoint",
+		SSH_UNAVAILABLE: "local_ssh",
+		PROBE_PENDING: "checking",
+		PROBE_TIMEOUT: "timeout",
+		PROBE_STALE: "stale"
+	};
+	layerReason = {
+		inventory: "configuration",
+		tunnel: "network",
+		tls: "trust",
+		auth: "identity",
+		bat: "service",
+		connector: "service",
+		contract: "version",
+		workspace: "workspace",
+		stale: "stale"
+	};
+	layerStep = {
+		tunnel: "network",
+		tls: "identity",
+		auth: "identity",
+		bat: "service",
+		connector: "service",
+		contract: "service",
+		workspace: "workspace"
+	};
+	lookup = (table, key) => Object.hasOwn(table, key) ? table[key] : void 0;
+}));
 //#endregion
 //#region \0vite/preload-helper.js
 init_fleet_status();
@@ -58769,6 +59075,7 @@ async function mountFleetDesktop(main, { h, t }) {
 	if (!main.isConnected) return () => {};
 	main.append(panel);
 	let disposed = false, busy = false, readable = false, snapshot, draft, binding, choicePreview, launch, migration, timer, pressed = null;
+	const detailsState = new Map();
 	let backend = "rust", autostart = false;
 	const alive = () => !disposed && panel.isConnected;
 	const key = () => `batc.desktop.fleet.controls.${binding}`;
@@ -58841,6 +59148,7 @@ async function mountFleetDesktop(main, { h, t }) {
 			binding = value.configuration.binding;
 			backend = value.backend;
 			draft = choicePreview = launch = migration = null;
+			detailsState.clear();
 			try {
 				const old = JSON.parse(sessionStorage.getItem(key()) || "null");
 				if (old?.draft && Array.isArray(old.draft.connections) && Array.isArray(old.draft.profiles) && [...old.draft.connections, ...old.draft.profiles].every((v) => typeof v === "string") && typeof old.draft.dashboard === "boolean") draft = old.draft;
@@ -58907,24 +59215,32 @@ async function mountFleetDesktop(main, { h, t }) {
 			const value = await fleetControl({ action: "overview" });
 			if (!alive()) return;
 			accept(value);
-			if (launch?.attempted) {
-				const receipt = await fleetControl({
-					action: "launch_status",
-					launch_id: launch.preview_id
-				});
-				if (alive() && receipt) acceptLaunch(receipt);
-			}
-			if (migration?.accepted) {
-				const receipt = await fleetControl({
-					action: "migration_status",
-					migration_id: migration.preview_id
-				});
-				if (alive()) acceptMigration(receipt);
-			}
 		} catch (error) {
 			readable = false;
 			throw error;
 		}
+		const failures = [];
+		if (launch?.attempted) try {
+			const receipt = await fleetControl({
+				action: "launch_status",
+				launch_id: launch.preview_id
+			});
+			if (alive() && receipt) acceptLaunch(receipt);
+		} catch (error) {
+			if (alive()) launch.receipt = null;
+			failures.push(error);
+		}
+		if (migration?.accepted) try {
+			const receipt = await fleetControl({
+				action: "migration_status",
+				migration_id: migration.preview_id
+			});
+			if (alive()) acceptMigration(receipt);
+		} catch (error) {
+			if (alive()) migration.receipt = null;
+			failures.push(error);
+		}
+		if (failures.length) throw failures[0];
 	};
 	const reviewChoices = () => run(async () => {
 		const value = await fleetControl({
@@ -58955,7 +59271,9 @@ async function mountFleetDesktop(main, { h, t }) {
 		"data-fleet-choice",
 		"data-fleet-login",
 		"data-fleet-autostart",
-		"data-fleet-backend"
+		"data-fleet-backend",
+		"data-fleet-details",
+		"data-fleet-advanced"
 	];
 	const focusKey = (node) => {
 		for (let current = node; current && current !== panel; current = current.parentElement) for (const attr of focusKeys) if (current.hasAttribute?.(attr)) return [attr, current.getAttribute(attr)];
@@ -58963,7 +59281,7 @@ async function mountFleetDesktop(main, { h, t }) {
 	};
 	const controlByKey = (key) => {
 		if (!key) return null;
-		for (const node of content.querySelectorAll("button, input, select")) if (node.getAttribute(key[0]) === key[1]) return node;
+		for (const node of content.querySelectorAll("button, input, select, summary")) if (node.getAttribute(key[0]) === key[1]) return node;
 		return null;
 	};
 	const groups = [
@@ -59003,7 +59321,17 @@ async function mountFleetDesktop(main, { h, t }) {
 		return message;
 	};
 	const render = () => {
-		if (!alive() || !snapshot) return;
+		if (!alive()) return;
+		rememberFleetDetails(content, detailsState);
+		if (!snapshot) {
+			content.replaceChildren(h("button", {
+				class: "secondary",
+				disabled: busy,
+				"data-fleet-action": "refresh",
+				onclick: () => run(read, false, "refresh")
+			}, t("fleet_refresh")));
+			return;
+		}
 		const previous = panel.contains(document.activeElement) ? focusKey(document.activeElement) : null;
 		const selected = draft || snapshot.selection, ready = new Map([...snapshot.readiness.hosts, snapshot.readiness.connector].filter(Boolean).map((row) => [row.name, row]));
 		const checkbox = (field, id, text) => {
@@ -59038,17 +59366,17 @@ async function mountFleetDesktop(main, { h, t }) {
 				fn();
 			}
 		}, t(text));
+		const advancedKey = `${binding}:advanced`;
+		if (migration && !detailsState.has(advancedKey)) detailsState.set(advancedKey, true);
 		const fields = [
-			h("p", { "data-fleet-current-backend": true }, t("delivery_fleet_current_backend", { backend: t(["rust", "powershell"].includes(snapshot.backend) ? "fleet_backend_" + snapshot.backend : "obs_unknown") })),
 			snapshot.launch_warning === "FLEET_SESSION_LIFETIME" ? h("div", {
 				class: "note",
 				"data-fleet-lifetime": ""
 			}, h("p", {}, t("fleet_session_lifetime")), h("details", {}, h("summary", {}, t("connection_details")), h("code", {}, snapshot.launch_warning))) : null,
-			snapshot.backend === "powershell" ? h("p", { class: "note" }, t("delivery_fleet_legacy_default")) : null,
-			h("p", {}, t("fleet_monitor_" + snapshot.monitor.state), " · ", t("fleet_" + snapshot.readiness.state)),
+			h("p", {}, readable ? t("fleet_monitor_" + snapshot.monitor.state) : t("fleet_check_title_unavailable")),
 			snapshot.monitor.state === "running" && !snapshot.monitor.controllable ? h("p", { class: "note" }, t("fleet_other_owner")) : null,
 			snapshot.login_launch ? h("p", { class: "note" }, t("fleet_login_" + snapshot.login_launch.state), snapshot.login_launch.code ? ` (${snapshot.login_launch.code})` : null) : null,
-			h("div", { class: "actions" }, button("start", "fleet_start", () => run(async () => {
+			h("div", { class: "actions" }, button("refresh", "fleet_refresh", () => run(read, false, "refresh")), button("start", "fleet_start", () => run(async () => {
 				await fleetRequest({
 					action: "ensure_monitor",
 					expected_configuration_binding: binding
@@ -59063,10 +59391,14 @@ async function mountFleetDesktop(main, { h, t }) {
 				await read();
 			}, false, "quit"), !canEnable() || !!draft || !snapshot.monitor.controllable)),
 			h("h3", {}, t("fleet_connections")),
-			h("div", { class: "fleet-options" }, ...snapshot.configuration.connections.map((row) => h("div", { class: "row" }, h("div", { class: "grow" }, checkbox("connections", row.name, row.label), fleetStatus(ready.get(row.name), {
+			h("div", { class: "fleet-options" }, ...snapshot.configuration.connections.map((row) => h("div", { class: "fleet-machine" }, checkbox("connections", row.name, row.label), fleetStatus(ready.get(row.name), {
 				h,
-				t
-			})), h("span", { class: "chip" }, t("fleet_" + (ready.get(row.name)?.level || "unavailable")))))),
+				t,
+				snapshot,
+				readable,
+				entry: row,
+				detailsState
+			})))),
 			h("h3", {}, t("fleet_windows_title")),
 			h("div", { class: "fleet-options" }, ...snapshot.profiles.map((row) => h("div", { class: "row" }, checkbox("profiles", row.id, label(row.id)))), h("div", { class: "row" }, checkbox("dashboard", "dashboard", t("fleet_dashboard_choice")))),
 			h("p", { class: "muted" }, t("fleet_selection_help")),
@@ -59084,7 +59416,7 @@ async function mountFleetDesktop(main, { h, t }) {
 				discardPreview();
 				save();
 				render();
-			}, !draft), button("refresh", "fleet_refresh", () => run(read, false, "refresh"))),
+			}, !draft)),
 			h("h3", {}, t("fleet_launch_title")),
 			h("p", { class: "muted" }, t("fleet_launch_help")),
 			launch ? h("p", { class: "note" }, launch.receipt ? t("fleet_launch_" + (launch.receipt.state === "prepared" ? "uncertain" : launch.receipt.state || "uncertain")) : t(launch.attempted ? "fleet_launch_uncertain" : "fleet_launch_review")) : null,
@@ -59142,9 +59474,11 @@ async function mountFleetDesktop(main, { h, t }) {
 					});
 				}
 			}), " ", t("fleet_login_picker")),
-			h("h3", {}, t("fleet_backend_title")),
-			h("p", { class: "muted" }, t("fleet_backend_help")),
-			h("div", { class: "actions" }, h("select", {
+			h("details", {
+				class: "fleet-advanced",
+				open: detailsState.get(advancedKey) === true,
+				"data-fleet-details-key": advancedKey
+			}, h("summary", { "data-fleet-advanced": "settings" }, t(migration ? "fleet_check_advanced_pending" : "fleet_check_advanced")), h("p", { "data-fleet-current-backend": true }, t("delivery_fleet_current_backend", { backend: t(["rust", "powershell"].includes(snapshot.backend) ? "fleet_backend_" + snapshot.backend : "obs_unknown") })), snapshot.backend === "powershell" ? h("p", { class: "note" }, t("delivery_fleet_legacy_default")) : null, h("h3", {}, t("fleet_backend_title")), h("p", { class: "muted" }, t("fleet_backend_help")), h("div", { class: "actions" }, h("select", {
 				value: backend,
 				"data-fleet-backend": "choice",
 				"aria-label": t("fleet_backend_title"),
@@ -59180,14 +59514,12 @@ async function mountFleetDesktop(main, { h, t }) {
 					}
 					autostart = event.target.checked;
 				}
-			}), " ", t("fleet_autostart"))),
-			migration ? h("p", { class: "note" }, migration.receipt ? t("fleet_migration_" + migration.receipt.phase) : t(migration.accepted ? "fleet_migration_unknown" : "fleet_migration_review", {
+			}), " ", t("fleet_autostart"))), migration ? h("p", { class: "note" }, migration.receipt ? t("fleet_migration_" + migration.receipt.phase) : t(migration.accepted ? "fleet_migration_unknown" : "fleet_migration_review", {
 				from: t("fleet_backend_" + migration.from),
 				to: t("fleet_backend_" + migration.to),
 				before: t(migration.autostart_before ? "fleet_enabled" : "fleet_disabled"),
 				after: t(migration.autostart ? "fleet_enabled" : "fleet_disabled")
-			})) : null,
-			h("div", { class: "actions" }, button("review-migration", "fleet_review_migration", () => run(async () => {
+			})) : null, h("div", { class: "actions" }, button("review-migration", "fleet_review_migration", () => run(async () => {
 				const value = await fleetControl({
 					action: "preview_migration",
 					backend,
@@ -59260,7 +59592,7 @@ async function mountFleetDesktop(main, { h, t }) {
 				});
 				if (alive()) acceptMigration(value);
 				await read();
-			}, false, "restore-migration"), !readable) : null)
+			}, false, "restore-migration"), !readable) : null))
 		];
 		content.replaceChildren(...fields.filter(Boolean));
 		if ([...content.querySelectorAll("button")].some((node) => node.getAttribute("aria-disabled") === "true")) message.setAttribute("aria-busy", "true");
@@ -59460,6 +59792,7 @@ async function mountFleet(main, { h, t }) {
 	main.append(panel);
 	let nativeCleanup, bootstrapCleanup;
 	let disposed = false, busy = false, readable = false, timer, snapshot, draft, binding, pressed = null;
+	const detailsState = new Map();
 	const alive = () => !disposed && panel.isConnected;
 	const key = () => `batc.desktop.fleet.selection.${binding}`;
 	const save = () => {
@@ -59472,14 +59805,18 @@ async function mountFleet(main, { h, t }) {
 	const changed = () => draft && (draft.revision !== snapshot.selection.revision || draft.epoch !== snapshot.monitor.epoch);
 	const canEdit = () => readable && snapshot?.configuration.valid && (snapshot.monitor.state === "stopped" || snapshot.monitor.controllable);
 	const gate = (blocked, action) => busy && action && pressed === action ? { "aria-disabled": "true" } : blocked ? { disabled: true } : busy ? { "aria-disabled": "true" } : {};
-	const focusKeys = ["data-fleet-action", "data-fleet-name"];
+	const focusKeys = [
+		"data-fleet-action",
+		"data-fleet-name",
+		"data-fleet-details"
+	];
 	const focusKey = (node) => {
 		for (let current = node; current && current !== panel; current = current.parentElement) for (const attr of focusKeys) if (current.hasAttribute?.(attr)) return [attr, current.getAttribute(attr)];
 		return null;
 	};
 	const controlByKey = (key) => {
 		if (!key) return null;
-		for (const node of content.querySelectorAll("button, input, select")) if (node.getAttribute(key[0]) === key[1]) return node;
+		for (const node of content.querySelectorAll("button, input, select, summary")) if (node.getAttribute(key[0]) === key[1]) return node;
 		return null;
 	};
 	const groups = [[
@@ -59499,7 +59836,17 @@ async function mountFleet(main, { h, t }) {
 		return message;
 	};
 	const render = () => {
-		if (!alive() || !snapshot) return;
+		if (!alive()) return;
+		rememberFleetDetails(content, detailsState);
+		if (!snapshot) {
+			content.replaceChildren(h("button", {
+				class: "secondary",
+				disabled: busy,
+				"data-fleet-action": "refresh",
+				onclick: () => read(true)
+			}, t("fleet_refresh")));
+			return;
+		}
 		const names = draft?.connections || snapshot.selection.connections;
 		const ready = new Map([...snapshot.readiness.hosts || [], snapshot.readiness.connector].filter(Boolean).map((row) => [row.name, row]));
 		const previous = panel.contains(document.activeElement) ? focusKey(document.activeElement) : null;
@@ -59534,15 +59881,29 @@ async function mountFleet(main, { h, t }) {
 				}
 			});
 			const observed = ready.get(entry.name);
-			return h("div", { class: "row" }, h("label", { class: "grow fleet-choice" }, input, " ", entry.label), h("span", { class: "chip" }, t("fleet_" + (observed?.level || "unavailable"))), fleetStatus(observed, {
+			return h("div", { class: "fleet-machine" }, h("label", { class: "fleet-choice" }, input, " ", entry.label), fleetStatus(observed, {
 				h,
-				t
+				t,
+				snapshot,
+				readable,
+				entry,
+				detailsState
 			}));
 		});
 		content.replaceChildren(...[
-			h("p", {}, t("fleet_monitor_" + snapshot.monitor.state), " · ", t("fleet_" + snapshot.readiness.state)),
+			h("p", {}, readable ? t("fleet_monitor_" + snapshot.monitor.state) : t("fleet_check_title_unavailable")),
 			!snapshot.configuration.valid ? h("p", { class: "error" }, t("fleet_invalid", { n: snapshot.configuration.issue_count })) : null,
 			snapshot.monitor.state === "running" && !snapshot.monitor.controllable ? h("p", { class: "note" }, t("fleet_other_owner")) : null,
+			h("div", { class: "actions" }, button({
+				icon: "refresh-cw",
+				label: t("fleet_refresh"),
+				...gate(false, "refresh"),
+				"data-fleet-action": "refresh",
+				onclick: () => {
+					if (busy) return;
+					read(true);
+				}
+			})),
 			...rows,
 			h("p", { class: "muted" }, t(snapshot.selection.applied_revision === snapshot.selection.revision ? "fleet_applied" : "fleet_waiting")),
 			changed() ? h("p", { class: "error" }, t("fleet_changed")) : h("span"),
@@ -59560,16 +59921,7 @@ async function mountFleet(main, { h, t }) {
 						expected_configuration_binding: binding
 					}, "apply");
 				}
-			}, t("fleet_apply")), iconButton({
-				icon: "refresh-cw",
-				label: t("fleet_refresh"),
-				...gate(false, "refresh"),
-				"data-fleet-action": "refresh",
-				onclick: () => {
-					if (busy) return;
-					read(true);
-				}
-			}), h("button", {
+			}, t("fleet_apply")), h("button", {
 				class: "secondary",
 				...gate(!readable || !draft, "use-current"),
 				"data-fleet-action": "use-current",
@@ -59617,6 +59969,7 @@ async function mountFleet(main, { h, t }) {
 		if (binding !== value.configuration.binding) {
 			binding = value.configuration.binding;
 			draft = null;
+			detailsState.clear();
 			try {
 				const old = JSON.parse(sessionStorage.getItem(key()) || "null");
 				if (old && Array.isArray(old.connections) && old.connections.every((x) => typeof x === "string") && typeof old.revision === "string") draft = old;
@@ -64670,6 +65023,111 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	};
 }
 //#endregion
+//#region src/state/storage-identity.ts
+function managedStorageScope(identity) {
+	return [
+		"managed",
+		"v1",
+		identity.server_id,
+		identity.principal_id,
+		identity.actor
+	].map(encodeURIComponent).join(":");
+}
+function keys(storage) {
+	return Array.from({ length: storage.length }, (_, index) => storage.key(index)).filter(Boolean);
+}
+function rebase(key, source, target) {
+	const prefix = key.match(/^(batc\.[a-z.-]+\.)(?=https?%3A%2F%2F|managed:v1:)/)?.[1];
+	if (!prefix) return null;
+	const rest = key.slice(prefix.length);
+	return rest === source || rest.startsWith(source + ".") ? prefix + target + rest.slice(source.length) : null;
+}
+function legacyIdentity(scope) {
+	try {
+		const parts = scope.split(":");
+		if (parts.length !== 4) return null;
+		const [endpoint, server_id, principal_id, actor] = parts.map(decodeURIComponent);
+		const url = new URL(endpoint);
+		if (url.protocol !== "http:" || ![
+			"127.0.0.1",
+			"localhost",
+			"[::1]"
+		].includes(url.hostname) || !url.port || url.username || url.password || url.pathname !== "/" || url.search || url.hash || scope !== storageScope(endpoint, actor, server_id, principal_id)) return null;
+		return {
+			server_id,
+			principal_id,
+			actor
+		};
+	} catch {
+		return null;
+	}
+}
+function migrateManagedStorage(identity, local, session) {
+	const target = managedStorageScope(identity), marker = `batc.storage-migration.${target}`;
+	const receipt = local.getItem(marker);
+	if (receipt !== null) {
+		const saved = JSON.parse(receipt);
+		if (saved?.version !== 1 || saved.target !== target || saved.status !== "complete") throw Error("Local storage migration is incomplete; original data is retained");
+		return;
+	}
+	const areas = [local, session], allKeys = areas.map(keys);
+	if (allKeys.some((list) => list.some((key) => rebase(key, target, target) !== null))) return;
+	const candidates = allKeys[0].filter((key) => key.startsWith("batc.sync.")).map((key) => key.slice(10));
+	const matching = candidates.filter((scope) => {
+		const old = legacyIdentity(scope);
+		return old?.server_id === identity.server_id && old.principal_id === identity.principal_id && old.actor === identity.actor;
+	});
+	if (matching.length !== 1) return;
+	const source = matching[0];
+	for (const key of allKeys.flat()) {
+		const endpoint = key.match(/^batc\.[a-z.-]+\.(https?%3A%2F%2F[^:]+):/)?.[1];
+		if (!endpoint) continue;
+		let possible;
+		try {
+			possible = storageScope(decodeURIComponent(endpoint), identity.actor, identity.server_id, identity.principal_id);
+		} catch {
+			continue;
+		}
+		if (possible !== source && legacyIdentity(possible) && rebase(key, possible, possible) !== null) return;
+	}
+	if (candidates.some((scope) => scope !== source && (scope.startsWith(source + ".") || source.startsWith(scope + ".")))) return;
+	const copies = areas.flatMap((storage, area) => allKeys[area].flatMap((key) => {
+		const destination = rebase(key, source, target), value = storage.getItem(key);
+		return destination !== null && value !== null ? [{
+			storage,
+			destination,
+			value
+		}] : [];
+	}));
+	if (!copies.length) return;
+	const record = {
+		version: 1,
+		source,
+		target,
+		status: "copying"
+	};
+	local.setItem(marker, JSON.stringify(record));
+	const written = [];
+	try {
+		for (const copy of copies) {
+			if (copy.storage.getItem(copy.destination) !== null) throw Error("Local storage migration destination changed");
+			copy.storage.setItem(copy.destination, copy.value);
+			written.push(copy);
+		}
+		local.setItem(marker, JSON.stringify({
+			...record,
+			status: "complete"
+		}));
+	} catch (error) {
+		for (const copy of written.reverse()) {
+			if (copy.storage.getItem(copy.destination) !== copy.value) throw Error("Local storage migration destination changed; original data is retained");
+			copy.storage.removeItem(copy.destination);
+		}
+		local.removeItem(marker);
+		throw error;
+	}
+}
+//#endregion
 //#region src/observed-resource.js
 init_i18n();
 var say = (key, values) => observedText(t, key, values);
@@ -64985,6 +65443,7 @@ var state = {
 	lastEventAt: 0,
 	listeners: new Set(),
 	namespace: "",
+	scopeIdentity: null,
 	epoch: 0,
 	online: false,
 	pollHealth: "initial",
@@ -65092,9 +65551,7 @@ async function openDiagnostics() {
 		}
 	});
 }
-async function activate(caps, endpoint = location.origin, reset = false) {
-	const scopeEndpoint = nativeDesktop && caps.actor === state.caps?.actor && caps.desktop_identity && state.caps?.desktop_identity && caps.desktop_identity.server_id === state.caps.desktop_identity.server_id && caps.desktop_identity.principal_id === state.caps.desktop_identity.principal_id ? state.scopeEndpoint || state.endpoint || endpoint : endpoint;
-	state.scopeEndpoint = scopeEndpoint;
+async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource) {
 	withdrawDiagnostics();
 	recentErrors.clear();
 	state.epoch++;
@@ -65116,7 +65573,18 @@ async function activate(caps, endpoint = location.origin, reset = false) {
 		const sync = bootstrap.sync;
 		if (sync?.version !== 1 || !sync.server_id || !sync.principal_id || !Number.isSafeInteger(sync.checkpoint?.cursor) || sync.checkpoint.cursor < 0 || !sync.checkpoint.token || bootstrap.capabilities?.actor !== caps.actor || caps.desktop_identity && (caps.desktop_identity.server_id !== sync.server_id || caps.desktop_identity.principal_id !== sync.principal_id)) throw new Error("Invalid central bootstrap identity");
 		state.caps = bootstrap.capabilities;
-		state.namespace = storageScope(scopeEndpoint, caps.actor, sync.server_id, sync.principal_id);
+		const identity = {
+			actor: caps.actor,
+			server_id: sync.server_id,
+			principal_id: sync.principal_id
+		};
+		const managed = nativeDesktop && configurationSource === "managed";
+		if (managed) migrateManagedStorage(identity, localStorage, sessionStorage);
+		state.scopeIdentity = {
+			...identity,
+			configurationSource
+		};
+		state.namespace = managed ? managedStorageScope(identity) : storageScope(endpoint, caps.actor, sync.server_id, sync.principal_id);
 		state.sync = sync.checkpoint;
 		if (!reset) try {
 			const saved = JSON.parse(localStorage.getItem(`batc.sync.${state.namespace}`));
@@ -65124,6 +65592,7 @@ async function activate(caps, endpoint = location.origin, reset = false) {
 		} catch {}
 		state.lastEvent = state.sync.cursor;
 	} else {
+		state.scopeIdentity = null;
 		state.namespace = storageScope(endpoint, caps.actor);
 		state.lastEvent = 0;
 	}
@@ -65144,6 +65613,7 @@ function disconnect() {
 	state.caps = null;
 	state.lastEvent = 0;
 	state.lastEventAt = 0;
+	state.scopeIdentity = null;
 	state.online = false;
 	state.viewReady = false;
 	state.sync = null;
@@ -70282,7 +70752,7 @@ async function nativeTransition(kind, config = null) {
 			} else {
 				state.token = "native-credential";
 				try {
-					await activate(caps, status.endpoint);
+					await activate(caps, status.endpoint, false, status.configuration_source);
 				} catch (error) {
 					if (attempt === state.nativeAttempt) {
 						if (kind !== "recover") await nativeDisconnect();
@@ -72729,7 +73199,7 @@ async function start() {
 				const caps = await nativeConnect();
 				if (attempt === state.nativeAttempt) {
 					state.token = "native-credential";
-					await activate(caps, status.endpoint);
+					await activate(caps, status.endpoint, false, status.configuration_source);
 				}
 			}
 		} catch (error) {

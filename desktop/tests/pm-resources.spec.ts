@@ -1,3 +1,4 @@
+import {revealPmView} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {mountConversation} from './conversation-fixture.ts';
@@ -24,7 +25,7 @@ function fixture(){
   return {state,dispatch};
 }
 const resources=(page:any)=>page.locator('[data-pm-resources]');
-async function open(page:any,native:boolean,f:any){await mountConversation(page,native,f.dispatch);await page.goto(route);if((page.viewportSize()?.width||1440)<1000)await page.locator('#workspace-menu').click();await page.locator('[data-pm-view="agents"]').click();await expect(resources(page).locator('[data-resource-row]')).toHaveCount(3);}
+async function open(page:any,native:boolean,f:any){await mountConversation(page,native,f.dispatch);await page.goto(route);if((page.viewportSize()?.width||1440)<1000)await page.locator('#workspace-menu').click();await (await revealPmView(page, 'agents')).click();await expect(resources(page).locator('[data-resource-row]')).toHaveCount(3);}
 
 for(const locale of ['en','zh-TW'])for(const native of [false,true])test(`resource focus handles literal quotes and backslashes ${locale} ${native?'native':'web'}`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width:1440,height:900}}),page=await context.newPage(),f=fixture();
@@ -46,7 +47,7 @@ for(const locale of ['en','zh-TW'])for(const native of [false,true])test(`resour
 for(const native of [false,true])test.describe(native?'native resources':'web resources',()=>{
   test('lazy resource read, distinct model evidence, missing counters and quota',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await expect(page.locator('[data-pm-charter]')).toBeVisible();expect(f.state.reads).toHaveLength(0);
-    await page.locator('[data-pm-view="agents"]').click();await expect(resources(page)).toContainText('1,000');
+    await (await revealPmView(page, 'agents')).click();await expect(resources(page)).toContainText('1,000');
     await resources(page).locator('[data-resource-row="Implementation"]').click();const detail=resources(page).locator('[data-resource-detail]');
     await expect(detail).toBeVisible();await expect(detail).toContainText('Requested model');await expect(detail).toContainText('Unknown');
     await expect(resources(page).locator('[data-resource-quota]')).toContainText('25%');

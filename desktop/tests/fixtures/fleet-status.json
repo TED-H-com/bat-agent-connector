@@ -59,7 +59,7 @@
     },
     "readiness": {
       "state": "fresh",
-      "observed_at": "2026-10-08T12:00:00.0000000Z",
+      "observed_at": "2026-10-08T12:00:00Z",
       "hosts": [
         {
           "name": "node-1",
@@ -68,7 +68,7 @@
           "level": "ready",
           "blocking": null,
           "code": null,
-          "observed_at": "2026-10-08T12:00:00.0000000Z",
+          "observed_at": "2026-10-08T12:00:00Z",
           "stale": false,
           "layers": {
             "tunnel": true,
@@ -86,7 +86,7 @@
           "level": "ready",
           "blocking": null,
           "code": null,
-          "observed_at": "2026-10-08T12:00:00.0000000Z",
+          "observed_at": "2026-10-08T12:00:00Z",
           "stale": false,
           "layers": {
             "tunnel": true,
@@ -104,7 +104,7 @@
           "level": "ready",
           "blocking": null,
           "code": null,
-          "observed_at": "2026-10-08T12:00:00.0000000Z",
+          "observed_at": "2026-10-08T12:00:00Z",
           "stale": false,
           "layers": {
             "tunnel": true,
@@ -122,7 +122,7 @@
           "level": "ready",
           "blocking": null,
           "code": null,
-          "observed_at": "2026-10-08T12:00:00.0000000Z",
+          "observed_at": "2026-10-08T12:00:00Z",
           "stale": false,
           "layers": {
             "tunnel": true,
@@ -140,7 +140,7 @@
           "level": "ready",
           "blocking": null,
           "code": null,
-          "observed_at": "2026-10-08T12:00:00.0000000Z",
+          "observed_at": "2026-10-08T12:00:00Z",
           "stale": false,
           "layers": {
             "tunnel": true,
@@ -159,10 +159,15 @@
         "level": "ready",
         "blocking": null,
         "code": null,
-        "observed_at": "2026-10-08T12:00:00.0000000Z",
+        "observed_at": "2026-10-08T12:00:00Z",
         "stale": false,
         "layers": {
-          "tunnel": true
+          "tunnel": true,
+          "tls": false,
+          "bat": false,
+          "workspace": false,
+          "auth": "ok",
+          "version": null
         }
       }
     }

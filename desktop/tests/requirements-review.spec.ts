@@ -1,3 +1,4 @@
+import {revealPmView} from './pm-navigation.ts';
 import {test, expect} from '@playwright/test';
 import {reviewFixture} from './requirements-review-fixture.ts';
 for (const mode of ['absent', 'partial', 'filtered', 'byte-limited', 'failed']) test(`B2 acceptance ${mode} remains unknown`, async ({page}) => {
@@ -269,7 +270,7 @@ test('M6 earlier-plan work names the revision without leaking IDs into chips or 
   await card.locator('[data-board-open]').click();
   await expect(page.locator('[data-work-section=requirements]')).toContainText('From an earlier plan');
   await expect(page.locator('[data-work-section=requirements]')).toContainText(f.copy.requirements[0].text);
-  await page.locator('[data-pm-view=requirements]').click();
+  await (await revealPmView(page, 'requirements')).click();
   await expect(page.locator(`[data-rtm-work="${f.ids.work.email}"]`)).toContainText('From an earlier plan');
 });
 

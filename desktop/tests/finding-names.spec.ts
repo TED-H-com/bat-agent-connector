@@ -1,3 +1,4 @@
+import {revealPmView} from './pm-navigation.ts';
 import {mkdirSync} from 'node:fs';
 import {expect, test, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
@@ -33,12 +34,8 @@ function copyFor(locale: 'en' | 'zh-TW') {
 
 async function openView(page: Page, id: string) {
   await expect.poll(() => page.locator('[data-pm-view]').count()).toBeGreaterThan(0);
-  const entry = page.locator(`[data-pm-view="${id}"]`);
+  const entry = await revealPmView(page, id);
   const narrow = (page.viewportSize()?.width ?? 0) < 1000;
-  if (!await entry.isVisible()) {
-    await page.locator('#workspace-menu').click();
-    await expect(page.locator('.workspace-nav')).toHaveAttribute('aria-modal', 'true');
-  }
   await entry.click();
   await expect(page.locator(`[data-pm-region="${id}"]`)).toBeVisible();
   if (narrow) await expect(page.locator('.workspace-nav')).toBeHidden();

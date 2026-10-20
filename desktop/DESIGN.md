@@ -198,6 +198,19 @@ Draft, Adopted, Historical. Done describes content only; it does not mean delive
 
 ## Shell and information architecture
 
+October 19 stabilization revision: the default layout shows four everyday project
+destinations in this order: Overview, Discussions, Board, Issues & changes. Each
+has one short explanation of what a person can do there, in English and zh-TW.
+Requirements, Schedule, Dependencies and Agents remain under **More project tools**.
+Only capability-supported entries appear. A bookmarked secondary view opens its
+group; collapsing the group does not close the view or discard its form. The
+expansion preference belongs to the current connection/principal and workspace.
+Keyboard users can open the group with Enter/Space and Tab to its destinations.
+Mobile uses the same group inside the existing drawer. Refresh preserves a focused
+navigation control when it remains visible. Existing routes, source gates, drafts,
+operation keys and Workbench preview remain in place. This presentation change
+does not claim completed Fleet onboarding or a validated installation candidate.
+
 The topbar is 48px. At ≥1000px it shows the product mark/name, a plain workspace
 link to Overview and one current-view breadcrumb; only the connection pill is on
 the right. The workspace switcher exists once, in the sidebar. At smaller widths,

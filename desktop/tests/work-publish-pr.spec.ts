@@ -1,3 +1,4 @@
+import {revealPmView} from './pm-navigation.ts';
 import {test, expect} from '@playwright/test';
 import {followUpFixture, ATTEMPT as LIVE_ATTEMPT} from './work-next-turn-fixture.ts';
 import {mountWorkspace} from './workspace-fixture.ts';
@@ -278,7 +279,7 @@ test.describe('Work Result pull request publication', () => {
     const before = f.state.resultRequests.length;
     f.emitResultRecorded(ATT);
     await expect.poll(() => f.state.resultRequests.length).toBeGreaterThan(before);
-    await page.locator('[data-pm-view="requirements"]').click();
+    await (await revealPmView(page, 'requirements')).click();
     const response = page.waitForResponse(row => row.url().endsWith('/result') && row.status() === 200);
     release();
     await response;
