@@ -128,8 +128,8 @@ Capabilities adds `frontend: {digest}` for the files served at read time.
 `client.served_frontend_digest` (capabilities). Both are validated lowercase
 64-character hex or null; exports retain all 64 characters. About and the summary
 show 12 characters, followed by Connector version, commit and source. When both
-browser identities are known and differ, they explain that the page is older
-than the UI now served and that reloading loads it. This is a mismatch signal,
+browser identities are known and differ, they explain that the page differs
+from the UI now served and that reloading loads it. This is a mismatch signal,
 not proof of version ordering. Settings reads capabilities again when opened;
 export uses its own fresh capabilities read. Neither replaces loaded identity.
 

@@ -224,3 +224,16 @@ for(const lang of ['en','zh-TW'])test(`loaded and served identities remain separ
  const native=clientIdentity({desktop:true,caps});assert.ok(!buildLine(native,t).includes(t('diag_frontend_stale')));
  assert.ok(!buildLine(clientIdentity({caps}),t).includes(t('diag_frontend_stale')));
 });
+
+for(const lang of ['en','zh-TW'])test(`build line describes a mismatch without ordering either UI (${lang})`,()=>{
+ const t=(key,vars={})=>diagnosticsStrings[lang][key].replace(/\{(\w+)\}/g,(_,k)=>vars[k]??'');
+ const expected=lang==='en'
+  ? 'This page differs from the UI Connector now serves. Reload this page to load that UI.'
+  : '此頁面與 Connector 目前提供的介面不同。重新載入此頁面即可載入該介面。';
+ for(const [loaded,served] of [['a','b'],['b','a']]){
+  const caps={...bootstrap.capabilities,frontend:{digest:served.repeat(64)}};
+  const line=buildLine(clientIdentity({frontendBuild:{frontend_digest:loaded.repeat(64)},caps}),t);
+  assert.doesNotMatch(line,lang==='en'?/\b(?:older|newer|outdated|updated)\b/i:/較舊|較新|更新|過時|介面舊|介面新|舊版|新版/);
+  assert.ok(line.endsWith(expected),line);
+ }
+});
