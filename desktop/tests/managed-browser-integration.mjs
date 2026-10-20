@@ -6,6 +6,7 @@ import {mkdtemp, rm} from "node:fs/promises";
 import {resolve, join} from "node:path";
 import {pathToFileURL} from "node:url";
 import {chromium} from "@playwright/test";
+import {STRINGS} from '../src/i18n.js';
 const temporary = await mkdtemp(join(testScratchRoot(), "managed-browser-"));
 // Keep browser and child-process temporary files inside this owned directory.
 process.env.TMPDIR = process.env.TEMP = process.env.TMP = temporary;
@@ -42,7 +43,7 @@ try {
   await page.locator("body.has-workspace").waitFor();
   await page.goto(first.endpoint + "/dashboard/#/settings");
   await page.locator("[data-setup-advanced] > summary").click();
-  await page.getByRole("heading", {name: "Connected to your local Connector"}).waitFor();
+  await page.getByRole("heading", {name: STRINGS.en.ui_local_connector}).waitFor();
   await page.getByRole("button", {name: "Disconnect", exact: true}).click();
   await page.waitForFunction(() => !document.body.classList.contains("has-workspace"));
   await page.reload();
