@@ -379,3 +379,27 @@ def test_unknown_loaded_commit_stays_unknown_when_metadata_later_appears(monkeyp
     distribution.read_text = lambda file: json.dumps({"vcs_info": {"vcs": "git", "commit_id": "a" * 40}})
     assert loaded._read_build_identity()["commit"] == "a" * 40
     assert loaded.build_identity() == original
+
+
+@pytest.mark.parametrize("relative", ["build-info.json", "__init__.py"])
+def test_mutable_installs_do_not_share_files_with_each_other_or_the_cache(clean_wheel, tmp_path, relative):
+    _, _, head, wheel = clean_wheel
+    expected = {"version": __version__, "commit": head, "source": "package"}
+    environments = []
+    for name in ("first", "second"):
+        directory = tmp_path / name
+        directory.mkdir()
+        assert _installed_identity(wheel, directory) == expected
+        environments.append(next((directory / "installed/lib").glob("python*/site-packages/bat_agent_connector")))
+    first, second = (package / relative for package in environments)
+    original = first.read_bytes()
+    assert first.stat().st_nlink == second.stat().st_nlink == 1
+    assert not first.samefile(second)
+    # Mutate real producer output exactly as the snapshot/tamper cases do.
+    first.write_bytes(b'{"commit": null}' if relative == "build-info.json" else original + b"\n# changed\n")
+    assert second.read_bytes() == original
+    third = tmp_path / "third"
+    third.mkdir()
+    assert _installed_identity(wheel, third) == expected
+    installed = next((third / "installed/lib").glob("python*/site-packages/bat_agent_connector"))
+    assert (installed / relative).read_bytes() == original
