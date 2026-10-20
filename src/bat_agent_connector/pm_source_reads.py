@@ -196,7 +196,8 @@ def check(db, principal, kind, identity, predicate):
         def group(value):
             return ('conversation' if value.startswith('conversation.') else value
                     if value in {'execution_verifier', 'quality_sources', 'workload_sources', 'repair_sources',
-                                 'work_batch_sources', 'execution_runtime_sources'} else 'original')
+                                 'work_batch_sources', 'execution_runtime_sources', 'baseline_sources',
+                                 'package_sources', 'requirement_sources'} else 'original')
         depth = sum(group(active_kind) == group(kind) for active_kind, _ in state['active'])
         if key in state['active'] or depth >= MAX_DEPTH or state['budget']['nodes'] >= MAX_NODES:
             pm_read_cache.refuse()

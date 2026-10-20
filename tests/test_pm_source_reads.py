@@ -132,7 +132,8 @@ def test_public_metadata_does_not_grant_anonymous_original_source_access(db):
 
 
 @pytest.mark.parametrize('kind', ['execution_verifier', 'quality_sources', 'workload_sources', 'repair_sources',
-                                  'work_batch_sources', 'execution_runtime_sources'])
+                                  'work_batch_sources', 'execution_runtime_sources', 'baseline_sources',
+                                  'package_sources', 'requirement_sources'])
 def test_typed_wrappers_preserve_original_depth_and_keep_their_own_bound(db, kind):
     def descend(level, maximum):
         if level == maximum:

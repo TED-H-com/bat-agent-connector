@@ -14,6 +14,7 @@ from bat_agent_connector import (
     pm_evidence,
     pm_plans,
     pm_read_cache,
+    pm_source_reads,
     pm_workspace,
     repository_sync,
     work_items,
@@ -149,8 +150,10 @@ async def test_repeated_package_context_proves_original_plan_once_per_snapshot(r
 
     monkeypatch.setattr(packages, '_original_plan', plan)
     for _ in range(2):
-        with baselines._snapshot(ops.db), pm_read_cache.scope(ops.db, OWNER):
+        with pm_source_reads.scope(ops.db, OWNER):
             for _ in range(3):
+                packages._access_context(ops, OWNER, w['workspace_id'], record['document']['context'])
+            with pm_read_cache.guarded(), pm_read_cache.guarded_scope(ops.db, OWNER):
                 packages._access_context(ops, OWNER, w['workspace_id'], record['document']['context'])
     assert proofs == [record['document']['context']['plan_ref']['revision_id']] * 2
 

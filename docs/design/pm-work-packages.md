@@ -136,8 +136,9 @@ Within one synchronous immutable snapshot, repeated original-source contexts
 reuse the existing read memo by full principal, workspace and the exact
 plan/work/evidence/Git/DoD inputs consumed by that predicate. Raw immutable
 package metadata is decoded and verified once, with isolated document copies
-for every caller. Context proofs stay private to their traversal guard; errors
-and traversal refusals are not saved. Writes or a new frame require fresh
+for every caller. Completed ordinary context booleans can join a later guard;
+conditional proofs stay private to their traversal, and errors or refusals do
+not become ordinary grants. Writes or a new frame require fresh
 proofs. Current configuration, lifecycle, membership at each new frame and
 execution eligibility retain their existing checks.
 

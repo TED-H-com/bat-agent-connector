@@ -152,13 +152,21 @@ def _evidence(ops, principal, wid, refs):
 
 
 def _access_context(ops, principal, wid, context):
+    from .pm_source_reads import check, scope
     # Several original-source readers can reach this same adopted plan/work
     # context. An ancestry pointer or code-configuration digest is not read by
     # this historical predicate; current configuration stays in the caller.
     selected = {key: context[key] for key in (
         'server_id', 'plan_ref', 'work_ref', 'evidence_refs', 'git_binding', 'dod_ref') if key in context}
-    return pm_read_cache.remember(_access_context, (principal, wid, selected),
-        lambda: _access_context_sources(ops, principal, wid, context), cache_errors=False, db=ops.db)
+    key = pm_read_cache._key((wid, selected))
+    with scope(ops.db, principal) as state:
+        def visible():
+            _access_context_sources(ops, principal, wid, context)
+            return True
+        if ('package_sources', key) in state['active']:
+            visible()
+        elif not check(ops.db, principal, 'package_sources', key, visible):
+            raise _bad('NOT_FOUND', 'Original package sources unavailable', 404)
 
 
 def _access_context_sources(ops, principal, wid, context):

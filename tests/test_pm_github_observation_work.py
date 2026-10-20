@@ -6,10 +6,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from bat_agent_connector import operations, pm_lifecycle_gates, task_journal
+from bat_agent_connector import operations, pm_lifecycle_gates, pm_read_cache, pm_source_reads, task_journal
 from bat_agent_connector import pm_execution_runtime as runtime
 from bat_agent_connector import pm_maintenance_policy as policies
 from bat_agent_connector import pm_release_baselines as baselines
+from bat_agent_connector import pm_requirement_acceptance as acceptance
 from bat_agent_connector import pm_work_batches as batches
 from bat_agent_connector import pm_work_packages as packages
 from bat_agent_connector.operations import OpContext
@@ -84,6 +85,24 @@ async def test_observer_bounds_repeated_baseline_sources_per_fresh_page_frame(op
     assert ops.db.execute('SELECT COUNT(*) FROM pm_github_observations').fetchone()[0] == 0
 
 
+async def test_completed_baseline_context_joins_later_private_guard(ops, monkeypatch):  # noqa: F811
+    data = await baseline_history(ops, monkeypatch, 2)
+    record = baselines._record(ops.db, data['workspace_id'], baselines._head(ops.db, data['workspace_id'])['baseline_id'])
+    project, expanded = baselines._project, []
+
+    def source(*args, **kwargs):
+        expanded.append(args[2])
+        return project(*args, **kwargs)
+
+    monkeypatch.setattr(baselines, '_project', source)
+    for _ in range(2):
+        with pm_source_reads.scope(ops.db, github.OWNER):
+            baselines._access_context(ops, github.OWNER, data['workspace_id'], record['document']['intent'])
+            with pm_read_cache.guarded(), pm_read_cache.guarded_scope(ops.db, github.OWNER):
+                baselines._access_context(ops, github.OWNER, data['workspace_id'], record['document']['intent'])
+    assert len(expanded) == 2  # One complete proof per fresh durable snapshot.
+
+
 async def test_observer_source_reuse_preserves_every_durable_byte(ops, monkeypatch, tmp_path):  # noqa: F811
     data = await baseline_history(ops, monkeypatch, 8)
     github.populate(ops.context['github'])
@@ -110,6 +129,7 @@ async def test_observer_source_reuse_preserves_every_durable_byte(ops, monkeypat
             reference.setattr(packages, '_record', packages._record.__wrapped__)
             reference.setattr(batches, '_access', batch_sources)
             reference.setattr(runtime, 'proof', runtime._proof_sources)
+            reference.setattr(acceptance, '_dependencies', acceptance._dependency_sources)
             await ops._execute(op['operation_id'])
         before = '\n'.join(ops.db.iterdump()).encode()
         result = ops.get(op['operation_id'])

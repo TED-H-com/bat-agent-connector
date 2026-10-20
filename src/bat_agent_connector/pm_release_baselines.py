@@ -146,6 +146,7 @@ class _Reader:
 
 
 def _access_context(ops, principal, wid, intent, *, decide=False):
+    from .pm_source_reads import check, scope
     # Baseline/policy ancestry can reach the same publication context many
     # times. Only these inputs are read below; a previous-baseline pointer or
     # adoption revision does not create another deployment-source proof.
@@ -154,8 +155,15 @@ def _access_context(ops, principal, wid, intent, *, decide=False):
     context = {key: intent[key] for key in (
         'server_id', 'project_binding', 'repository', 'source', 'repository_id',
         'commit_sha', 'channel', 'deployment_receipt') if key in intent}
-    return pm_read_cache.remember(_access_context, (principal, wid, context, decide),
-        lambda: _access_context_sources(ops, principal, wid, intent, decide=decide), cache_errors=False, db=ops.db)
+    key = pm_read_cache._key((wid, context, decide))
+    with scope(ops.db, principal) as state:
+        def visible():
+            _access_context_sources(ops, principal, wid, intent, decide=decide)
+            return True
+        if ('baseline_sources', key) in state['active']:
+            visible()
+        elif not check(ops.db, principal, 'baseline_sources', key, visible):
+            raise _bad('Original baseline sources unavailable', 'NOT_FOUND', 404)
 
 
 def _access_context_sources(ops, principal, wid, intent, *, decide=False):

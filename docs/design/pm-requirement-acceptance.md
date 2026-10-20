@@ -27,6 +27,14 @@ reservation and every unsent child frame recheck exact prerequisite proofs.
 An unknown sent effect retains its original recovery identity. No new queue,
 execution engine or implicit latest-review lookup is introduced.
 
+Historical prerequisite access may reuse a completed source boolean within the
+same synchronous durable snapshot. Its key binds the workspace, downstream
+requirements and plan identity, and every supplied upstream reference. Partial
+guard answers and refusals retain the existing source-read isolation; an active
+backedge runs the original bounded traversal. Current acceptance/readiness never
+uses this historical memo. Writes, awaits, credential changes and a new snapshot
+require a fresh proof.
+
 ## Shared readiness hook
 
 `pm_requirement_acceptance.require_dependencies(ops, principal,
