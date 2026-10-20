@@ -12,6 +12,7 @@ import json
 import os
 import signal
 import socket
+import subprocess
 import sys
 import tempfile
 import threading
@@ -189,7 +190,7 @@ async def serve_managed(commands):
                     child.terminate()
                     try:
                         await asyncio.to_thread(child.wait, timeout=10)
-                    except TimeoutError:
+                    except subprocess.TimeoutExpired:
                         child.kill()
                         await asyncio.to_thread(child.wait, timeout=10)
             if occupied:

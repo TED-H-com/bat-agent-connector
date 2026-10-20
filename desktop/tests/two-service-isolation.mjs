@@ -44,7 +44,7 @@ async function fixture(label) {
     await Promise.race([stopped, delay(3000, undefined, {ref:false})]);
     if (child.exitCode === null && !child.signalCode) {child.kill('SIGTERM'); await stopped;}
   })();
-  children.push({stop});
+  children.push({stop, isStopped:() => child.exitCode !== null || Boolean(child.signalCode)});
   return {...await next(), control, stop};
 }
 
@@ -372,6 +372,7 @@ async function managedPass(service, locale, reason) {
     assert.equal((await service.control('report')).instructions.operations.find(value => value.operation_id === original.op).status, 'accepted');
     const draft = `Unsent ${run}\n保留原始位元組 ✎`;
     await composer(page).fill(draft);
+    const originalComposer = await composer(page).elementHandle();
     await checkpoint(page, namespace, service);
     // Other namespaces and unscoped bytes must survive too. These are storage
     // sentinels, never substitute API facts/receipts/checkpoints.
@@ -409,9 +410,11 @@ async function managedPass(service, locale, reason) {
     assert.equal(reset.data.error.code, 'EVENT_CURSOR_RESET');
     assert.equal(reset.data.error.reason, reason);
     if (reason === 'access_changed') {
+      assert.equal(await originalComposer.evaluate(node => node.isConnected), false);
       await expect(composer(page)).toHaveCount(0);
       await expect(page.locator('.message-body').filter({hasText:service.marker})).toHaveCount(0);
     } else {
+      assert.equal(await originalComposer.evaluate(node => node.isConnected), true);
       await expect(composer(page)).toHaveValue(draft);
       await expect(page.locator('.message-body').filter({hasText:service.marker}).first()).toBeVisible();
     }
@@ -503,4 +506,6 @@ try {
   await browser?.close();
   await Promise.all(children.map(child => child.stop()));
   await rm(scratch, {recursive:true, force:true});
+  assert.ok(children.every(child => child.isStopped()), 'Every fixture and its owned runtime must stop');
+  await writeFile(join(evidence, 'cleanup.json'), JSON.stringify({fixtureProcessesStopped:children.length, scratchRemoved:true, runtimeChildrenJoined:true}, null, 2) + '\n');
 }

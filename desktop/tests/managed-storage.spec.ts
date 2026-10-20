@@ -243,6 +243,7 @@ for (const locale of ['en-US', 'zh-TW']) {
     const page = await context.newPage();
     await setup(page, {source: 'external'});
     await page.locator('textarea').first().fill('External central draft');
+    await expect.poll(() => page.evaluate(() => Object.keys(localStorage).some(key => key.startsWith('batc.sync.')))).toBe(true);
     const before = await storageSnapshot(page);
     const checkpointKey = before.localStorage.find(([key]) => key.startsWith('batc.sync.'))![0];
     await page.evaluate(() => {(window as any).__storage.reset = true;});

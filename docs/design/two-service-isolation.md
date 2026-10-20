@@ -107,3 +107,89 @@ lookup, saved checkpoints and native transition invalidation; it does not replac
 real BAT/provider, Rust bridge, vault, managed/external restart, packaged WebView,
 real installation or R0–R5/A01–A40 acceptance. It contributes to E03/E04/E11 without
 closing unrelated v1.2 work. No source is globally merged or transported.
+
+## Managed crash/rebind followed by a producer reset (M07/M08)
+
+`npm run test:managed-recovery-reset` extends this same fixture and forwarding
+harness with `--managed`: four passes, two reset reasons × en-US/zh-TW, at 1280px.
+The runtime is started by `managed_runtime.ensure`, including its actual spawn,
+manifest, lease, proof and identity verification. A test child entrypoint calls
+product `managed_runtime.serve`; it supplies MockBat configuration and pauses only
+`session.send` scheduling, keeping real accepted operations/receipts pending.
+Shared registry seeding and membership actions use `settle_operations`. The
+stdin control mailbox is fixture-only and exposes no new Connector API.
+
+Only the harness's captured Popen is killed. A listener occupies its old port
+while a second `ensure` recovers the same installation, identity and credential
+on a different port. Native status/connect/recovery IPC remains a stub; it reads
+identity from real bootstrap and forwards Connector requests unchanged to the
+current endpoint. This is real Python runtime/HTTP recovery with a browser UI,
+not execution of the Rust bridge, native vault or installed desktop.
+
+The first forwarded `/events` after rebind returns a real 409 computed by
+`dashboard_sync.check`:
+
+- `cursor_expired`, `src/bat_agent_connector/dashboard_sync.py:141`: while the
+  child is stopped, append a real event beyond the saved cursor and prune through
+  that event. The existing deletion trigger advances `retained_after` beyond the
+  client cursor. This models retention rather than fabricating an invalid token.
+- `access_changed`, `src/bat_agent_connector/dashboard_sync.py:136`: after
+  recovery, hold event forwarding while `pm.workspace.member.set` demotes the
+  authenticated owner to contributor (a second owner already exists). Wait for
+  the actual registry operation with `settle_operations`, then release the poll.
+
+Hold the reset's bootstrap request to observe access-change teardown before any
+facts can remount; the non-access case retains the exact composer DOM node.
+Compare every entry in both storage areas, including other namespaces, legacy
+and empty-scope sentinels, with one shared `storage-snapshot.ts` helper. Only the
+current `batc.sync.<namespace>` may change, to the refreshed real bootstrap
+checkpoint. The external reset spec uses the same full comparison. Pending
+receipt/key bytes, unsent Unicode draft and namespace survive reset and reload.
+No POST crosses the forwarding boundary during crash/recovery/reset or reload.
+The pending receipt has no resend button; after asserting zero writes, the test
+also explicitly submits the original composer request with Send, proving the
+original key returns the original operation at the new port. No BAT send occurs.
+Reload keeps the page origin and both storage areas; only static dashboard asset
+requests are forwarded from the occupied old port to the recovered runtime.
+
+The unchanged-main run exposed a non-access reset bug: `activate` cleared
+`viewReady` and advanced the epoch, then the focused-form branch deferred routing.
+Polling stopped with the old durable checkpoint and existing view guards became
+obsolete. Same-identity resnapshots now retain an editing view's epoch/readiness;
+changed identities and access boundaries still invalidate/remount. The regression
+fails on the stale stored checkpoint before this fix. This contributes evidence
+to E03/E04/E11 and M07 b/c/M08 b; it grants no R0–R5 or A01–A40 acceptance.
+
+The first complete local managed run measured **80.65 seconds**, over this task's
+60-second CI-admission threshold. The workflow is therefore unchanged. Proposed
+wiring, after budget review: add `test:managed-recovery-reset` immediately after
+`test:two-service-isolation` in `central-ui`, using the existing
+`bash scripts/ci-central-ui.sh test:managed-recovery-reset` shared 600-second
+budget. Do not increase that budget.
+
+Rust bridge identity fixtures now include the producer golden at
+`tests/fixtures/managed-bootstrap.json`. Managed recovery uses the full document;
+external fixtures remove only `desktop_identity` and `managed_installation`, as
+the Python golden test does. Changed identities update `sync`, `identity` and
+`desktop_identity` together before deriving either HTTP response. `/capabilities`
+is exactly `bootstrap.capabilities`: `ApiV1.bootstrap` calls `capabilities`, and
+the Python golden test checks equality for both modes. The redacted golden proof
+is a shape fixture; the Rust identity verifier does not verify checkpoint HMACs.
+
+Malformed cases retained deliberately:
+
+- `bootstrap_principal_mismatch_and_contract_missing_cannot_enroll`: retain its
+  minimal `{"capabilities":{},"sync":{"version":1}}` branch because missing
+  contract/identity fields are its subject; the actor-mismatch branch now uses
+  the complete golden with coherent identities and a correct Content-Length.
+- `contract_mismatch_cannot_unlock_operations`: retain the unsupported contract
+  mutation, now applied to full producer capabilities.
+- `wrong_identity_cannot_unlock_operations` and
+  `cancelled_invalid_or_unsavable_replacement_keeps_old_record_and_connection`:
+  retain wrong-actor negatives, now derived from full producer documents.
+
+Unrelated malformed route/body, redirect and failed-transport tests retain their
+inputs: they do not purport to be valid bootstrap documents. Native compilation
+requires pkg-config and WebKitGTK, absent on this host. `bridge.rs` is outside
+`scripts/ci_scope.py`'s native allowlist; its PR selects all four native build
+entries, whose existing Cargo test steps execute these tests in CI.
