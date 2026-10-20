@@ -135,7 +135,9 @@ class _History:
 
     def valid(self, ticket):
         try:
-            return self.usable(self.db) and ticket[1] == self.stamp()
+            # DDL can commit while _install builds its table list. A newer
+            # snapshot is not proof that its new tables already have trackers.
+            return self.usable(self.db) and self.schema == ticket[1][1] and ticket[1] == self.stamp()
         except sqlite3.Error:
             self.memo.clear()
             return False

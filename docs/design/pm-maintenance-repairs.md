@@ -32,6 +32,8 @@ and audit projections are excluded; they cannot alter its historical sources.
 Changes to its request, status, authority or cancellation are still tracked.
 The version is read before opening a fresh source transaction and checked after
 its WAL anchor, so a racing commit cannot label an old proof with a new version.
+The installed tracker schema must also match that version: DDL committed while
+the table list is being tracked cannot certify writes to an untracked new table.
 The journal may establish the same proof around its own new `BEGIN IMMEDIATE`:
 read the version before BEGIN, then verify it after anchoring the write snapshot.
 The caller's pre-existing transaction remains on the original cold-read path;

@@ -77,6 +77,43 @@ def test_external_commits_invalidate_without_a_local_trigger_callback(db):
         other.close()
 
 
+def test_schema_change_during_tracker_install_cannot_certify_untracked_writes(db, monkeypatch):
+    other, calls, created = other_connection(db), [], []
+    install = history._History._install
+
+    def raced(self):
+        result = install(self)
+        if not created:
+            # DDL commits after the tracked table list, before its version stamp.
+            other.execute('CREATE TABLE later_source(visible INTEGER)')
+            other.execute('INSERT INTO later_source VALUES(1)')
+            created.append(True)
+        return result
+
+    def source():
+        calls.append(1)
+        return bool(db.execute('SELECT visible FROM later_source').fetchone()[0])
+
+    def selected():
+        return reads.check(db, OWNER, 'baseline_sources', 'late', source)
+
+    try:
+        monkeypatch.setattr(history._History, '_install', raced)
+        with history.operation(db, 'observer'):
+            with Journal.tx(SimpleNamespace(db=db)):
+                assert selected()
+                db.execute('UPDATE later_source SET visible=0')
+                assert not selected()
+                assert len(calls) == 2
+            # The next fresh frame installs complete coverage and may reuse it.
+            db.execute('UPDATE later_source SET visible=1')
+            assert selected() and selected() and len(calls) == 3
+            db.execute('UPDATE later_source SET visible=0')
+            assert not selected() and len(calls) == 4
+    finally:
+        other.close()
+
+
 def test_backup_restore_on_the_connection_cannot_reuse_previous_data(db, tmp_path):
     replacement = sqlite3.connect(tmp_path / 'replacement.sqlite', isolation_level=None)
     replacement.execute('CREATE TABLE original_source(visible INTEGER)')
