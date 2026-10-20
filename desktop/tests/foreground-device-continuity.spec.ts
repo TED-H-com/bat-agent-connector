@@ -198,9 +198,7 @@ for (const native of [false, true]) for (const lang of ['en', 'zh-TW']) for (con
         await unchanged();
         if (scenario === 'ime') {
           await composingEnter();
-          await field.dispatchEvent('compositionend', {data: '第三句'});
-          await expect(field).toHaveValue(draft);
-          await unchanged();
+
         }
         if (scenario === 'newer-attempt' || scenario === 'sequence') {
           expect(f.follow.latest).toBe(newerAttempt);
@@ -212,7 +210,28 @@ for (const native of [false, true]) for (const lang of ['en', 'zh-TW']) for (con
         // Hold admission and compare the very first persisted intent to the sole
         // request, including its original target and selected-Attempt precondition.
         f.follow.holdPost = post.promise;
-        await send.click();
+        if (scenario === 'ime') {
+          // Deliberately activate Send in the same task as compositionend. A
+          // person can tap it immediately; the keyboard grace period must block
+          // the trailing Enter, without discarding this explicit button click.
+          const afterEnd = await field.evaluate((node: HTMLTextAreaElement) => {
+            node.dispatchEvent(new CompositionEvent('compositionend', {bubbles: true, data: '第三句'}));
+            node.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true}));
+            const observed = {
+              focused: document.activeElement === node,
+              value: node.value,
+              selection: [node.selectionStart, node.selectionEnd, node.selectionDirection],
+              scrollY: window.scrollY, scrollTop: node.scrollTop,
+              readerTop: document.querySelector('main.session-view')!.scrollTop,
+              stored: Object.entries(localStorage).filter(([key]) => key.startsWith('batc.pm.') && key.includes('.session.send.')),
+            };
+            node.closest('form')!.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+            return observed;
+          });
+          // No intent was created by the trailing Enter; all bytes and focus
+          // were still original immediately before explicit button activation.
+          expect(afterEnd).toEqual(before);
+        } else await send.click();
         await expect.poll(() => operationPosts().length).toBe(1);
         const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), before.stored[0][0]);
         const sent = operationPosts()[0];
