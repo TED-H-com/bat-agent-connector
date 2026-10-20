@@ -1,0 +1,1875 @@
+{
+  "cases": {
+    "allowed": {
+      "contract": "pm-work-attempt-result/v1",
+      "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attempt_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "cursor": 0,
+      "events_read": {
+        "http": "/api/v1/events?after=0&resource_type=pm_work_attempt&resource_id=att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "rpc": "api_events",
+        "mcp": "events_list",
+        "resource_type": "pm_work_attempt",
+        "resource_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "wait": {
+        "requested_ms": 0,
+        "timed_out": false,
+        "retry_after_ms": 0
+      },
+      "collection": {
+        "status": "checked",
+        "checked_at": 1790001000,
+        "outcome": "mid_turn"
+      },
+      "results": [],
+      "results_has_more": false,
+      "identity": {
+        "server_id": "00000000-0000-4000-8000-000000000001",
+        "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "project_id": "prj_00000000000000000001",
+        "work_item_id": "wi_00000000000000000001",
+        "attempt_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessor_attempt_id": null,
+        "start_operation_id": "op_00000000000000000000000000000002",
+        "execution_operation_id": "op_00000000000000000000000000000003",
+        "binding_id": "pmwb_00000000000000000000000000000004",
+        "package_id": "pmwp_00000000000000000000000000000005",
+        "scope_revision": "pmscope_00000000000000000000000000000006",
+        "requester_actor": "owner",
+        "controller": {
+          "server_id": "00000000-0000-4000-8000-000000000001",
+          "controller_id": "ctr_00000000000000000000000000000007"
+        },
+        "caller_is_controller": true,
+        "adapter": {
+          "kind": "bat",
+          "instance_id": "demo",
+          "agent_kind": "claude",
+          "model": "claude-sonnet-4-5"
+        },
+        "native_session": {
+          "host": "demo",
+          "session_id": "search-results",
+          "sdk_session_id": null,
+          "registry_origin": {
+            "controller_incarnation": "22222222222222222222222222222222",
+            "created_at": 1790001000,
+            "start_operation_id": "op_00000000000000000000000000000003"
+          }
+        }
+      },
+      "sources": {
+        "result_id": null,
+        "collector_actor": null,
+        "source_key": "bat:demo:search-results",
+        "source_uri": "bat://demo/sessions/search-results",
+        "source_generation": "22222222222222222222222222222222:1790001000",
+        "source_position": {
+          "turn_marker": "batc-op_00000000000000000000000000000003",
+          "last_message_id": null
+        },
+        "decoder_version": "bat_ipc_session_v1",
+        "digest": null,
+        "session_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+        "observed_at": 1790001000,
+        "collected_at": null
+      },
+      "conversation": {
+        "turn_marker": "batc-op_00000000000000000000000000000003",
+        "turn_started": "unknown",
+        "turn_done": "unknown",
+        "turn_phase": "unknown",
+        "turn_attribution": "unknown",
+        "latest_assistant_summary": null,
+        "messages_preview": [],
+        "tool_activity": [],
+        "streaming_text_tail": null,
+        "attachments": [],
+        "transcript": null,
+        "transcript_read": {
+          "http": "/api/v1/sessions/demo/search-results/messages?after=batc-op_00000000000000000000000000000003",
+          "rpc": "session_read",
+          "mcp": "session_read",
+          "after": "batc-op_00000000000000000000000000000003"
+        }
+      },
+      "execution": {
+        "state": "active",
+        "state_source": "inventory_observation",
+        "observed_at": 1790001000,
+        "state_reason": "streaming",
+        "stage": "started",
+        "operation_status": "succeeded",
+        "attention": null,
+        "pending": null,
+        "exit_code": "unknown",
+        "exit_code_reason": "not_exposed_by_bat",
+        "state_facets": {
+          "self_reported": "none",
+          "verification": "unverified",
+          "review_decision": {
+            "kind": "unassessed",
+            "acceptance": "unassessed",
+            "dod": "unassessed",
+            "qualified": false
+          },
+          "acceptance": {
+            "status": "unassessed",
+            "semantic_acceptance": "unassessed"
+          },
+          "merge": "not_started",
+          "deployment": {
+            "state": "not_deployed",
+            "verified": false,
+            "is_current": false
+          }
+        }
+      },
+      "changes": {
+        "base_commit": "1111111111111111111111111111111111111111",
+        "live_head_commit": "unknown",
+        "head_freshness": "unavailable",
+        "fixed_result_commit": null,
+        "uncommitted": {
+          "count": "unknown",
+          "files": "unknown",
+          "evidence": "unproven",
+          "reason": "turn_boundary_not_collected"
+        },
+        "summary": {
+          "aggregation": "per_commit",
+          "commits": [],
+          "files": [],
+          "additions": "unknown",
+          "deletions": "unknown",
+          "unavailable": [],
+          "complete": false,
+          "reason": "turn_boundary_not_collected",
+          "cached_from_result_id": null
+        },
+        "result_artifacts": []
+      },
+      "verification": {
+        "status": "unverified",
+        "runs": [],
+        "quality_reviews": {
+          "reviews": [],
+          "current": null
+        }
+      },
+      "delivery": {
+        "delivery_goal": "pull_request",
+        "pull_requests": [],
+        "integrations": [],
+        "merges": [],
+        "deployments": []
+      },
+      "usage": {
+        "context_tokens": "unknown",
+        "context_window": "unknown",
+        "num_turns": "unknown",
+        "input_tokens": "unknown",
+        "output_tokens": "unknown",
+        "total_tokens": "unknown",
+        "quota": "unknown",
+        "duration_seconds": "unknown",
+        "duration_reason": "not_exposed_by_bat"
+      },
+      "completeness": {
+        "status": "partial",
+        "reasons": [
+          "turn_boundary_not_collected"
+        ],
+        "coverage": {
+          "conversation": "unavailable",
+          "execution": "complete",
+          "changes": "unavailable",
+          "verification": "complete",
+          "delivery": "complete",
+          "document_truncated": false,
+          "transcript_window": null,
+          "changes_window": {
+            "commits_scanned": 0,
+            "files_included": 0,
+            "unavailable_files": [],
+            "complete": false
+          }
+        },
+        "last_successful_observation": null
+      },
+      "next_allowed_actions": [
+        {
+          "kind": "action",
+          "action": "session.interrupt",
+          "target": {
+            "host": "demo",
+            "session_id": "search-results"
+          },
+          "required_scopes": [
+            "observe",
+            "operate"
+          ]
+        },
+        {
+          "kind": "action",
+          "action": "session.send",
+          "target": {
+            "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "work_item_id": "wi_00000000000000000001"
+          },
+          "required_scopes": [
+            "observe",
+            "operate"
+          ],
+          "allowed_schedules": [
+            "after_current"
+          ],
+          "default_schedule": "after_current",
+          "requires_controller": true,
+          "requires_writer": true
+        }
+      ],
+      "blocked_actions": [],
+      "links": {
+        "start_operation_hash": "#/op/op_00000000000000000000000000000002",
+        "execution_operation_hash": "#/op/op_00000000000000000000000000000003",
+        "session_hash": "#/session/demo/search-results",
+        "work_item_hash": "#/pm/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/board?select=wi_00000000000000000001"
+      }
+    },
+    "missing_scope": {
+      "contract": "pm-work-attempt-result/v1",
+      "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attempt_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "cursor": 0,
+      "events_read": {
+        "http": "/api/v1/events?after=0&resource_type=pm_work_attempt&resource_id=att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "rpc": "api_events",
+        "mcp": "events_list",
+        "resource_type": "pm_work_attempt",
+        "resource_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "wait": {
+        "requested_ms": 0,
+        "timed_out": false,
+        "retry_after_ms": 0
+      },
+      "collection": {
+        "status": "checked",
+        "checked_at": 1790001000,
+        "outcome": "mid_turn"
+      },
+      "results": [],
+      "results_has_more": false,
+      "identity": {
+        "server_id": "00000000-0000-4000-8000-000000000001",
+        "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "project_id": "prj_00000000000000000001",
+        "work_item_id": "wi_00000000000000000001",
+        "attempt_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessor_attempt_id": null,
+        "start_operation_id": "op_00000000000000000000000000000002",
+        "execution_operation_id": "op_00000000000000000000000000000003",
+        "binding_id": "pmwb_00000000000000000000000000000004",
+        "package_id": "pmwp_00000000000000000000000000000005",
+        "scope_revision": "pmscope_00000000000000000000000000000006",
+        "requester_actor": "owner",
+        "controller": {
+          "server_id": "00000000-0000-4000-8000-000000000001",
+          "controller_id": "ctr_00000000000000000000000000000007"
+        },
+        "caller_is_controller": true,
+        "adapter": {
+          "kind": "bat",
+          "instance_id": "demo",
+          "agent_kind": "claude",
+          "model": "claude-sonnet-4-5"
+        },
+        "native_session": {
+          "host": "demo",
+          "session_id": "search-results",
+          "sdk_session_id": null,
+          "registry_origin": {
+            "controller_incarnation": "22222222222222222222222222222222",
+            "created_at": 1790001000,
+            "start_operation_id": "op_00000000000000000000000000000003"
+          }
+        }
+      },
+      "sources": {
+        "result_id": null,
+        "collector_actor": null,
+        "source_key": "bat:demo:search-results",
+        "source_uri": "bat://demo/sessions/search-results",
+        "source_generation": "22222222222222222222222222222222:1790001000",
+        "source_position": {
+          "turn_marker": "batc-op_00000000000000000000000000000003",
+          "last_message_id": null
+        },
+        "decoder_version": "bat_ipc_session_v1",
+        "digest": null,
+        "session_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+        "observed_at": 1790001000,
+        "collected_at": null
+      },
+      "conversation": {
+        "turn_marker": "batc-op_00000000000000000000000000000003",
+        "turn_started": "unknown",
+        "turn_done": "unknown",
+        "turn_phase": "unknown",
+        "turn_attribution": "unknown",
+        "latest_assistant_summary": null,
+        "messages_preview": [],
+        "tool_activity": [],
+        "streaming_text_tail": null,
+        "attachments": [],
+        "transcript": null,
+        "transcript_read": {
+          "http": "/api/v1/sessions/demo/search-results/messages?after=batc-op_00000000000000000000000000000003",
+          "rpc": "session_read",
+          "mcp": "session_read",
+          "after": "batc-op_00000000000000000000000000000003"
+        }
+      },
+      "execution": {
+        "state": "active",
+        "state_source": "inventory_observation",
+        "observed_at": 1790001000,
+        "state_reason": "streaming",
+        "stage": "started",
+        "operation_status": "succeeded",
+        "attention": null,
+        "pending": null,
+        "exit_code": "unknown",
+        "exit_code_reason": "not_exposed_by_bat",
+        "state_facets": {
+          "self_reported": "none",
+          "verification": "unverified",
+          "review_decision": {
+            "kind": "unassessed",
+            "acceptance": "unassessed",
+            "dod": "unassessed",
+            "qualified": false
+          },
+          "acceptance": {
+            "status": "unassessed",
+            "semantic_acceptance": "unassessed"
+          },
+          "merge": "not_started",
+          "deployment": {
+            "state": "not_deployed",
+            "verified": false,
+            "is_current": false
+          }
+        }
+      },
+      "changes": {
+        "base_commit": "1111111111111111111111111111111111111111",
+        "live_head_commit": "unknown",
+        "head_freshness": "unavailable",
+        "fixed_result_commit": null,
+        "uncommitted": {
+          "count": "unknown",
+          "files": "unknown",
+          "evidence": "unproven",
+          "reason": "turn_boundary_not_collected"
+        },
+        "summary": {
+          "aggregation": "per_commit",
+          "commits": [],
+          "files": [],
+          "additions": "unknown",
+          "deletions": "unknown",
+          "unavailable": [],
+          "complete": false,
+          "reason": "turn_boundary_not_collected",
+          "cached_from_result_id": null
+        },
+        "result_artifacts": []
+      },
+      "verification": {
+        "status": "unverified",
+        "runs": [],
+        "quality_reviews": {
+          "reviews": [],
+          "current": null
+        }
+      },
+      "delivery": {
+        "delivery_goal": "pull_request",
+        "pull_requests": [],
+        "integrations": [],
+        "merges": [],
+        "deployments": []
+      },
+      "usage": {
+        "context_tokens": "unknown",
+        "context_window": "unknown",
+        "num_turns": "unknown",
+        "input_tokens": "unknown",
+        "output_tokens": "unknown",
+        "total_tokens": "unknown",
+        "quota": "unknown",
+        "duration_seconds": "unknown",
+        "duration_reason": "not_exposed_by_bat"
+      },
+      "completeness": {
+        "status": "partial",
+        "reasons": [
+          "turn_boundary_not_collected"
+        ],
+        "coverage": {
+          "conversation": "unavailable",
+          "execution": "complete",
+          "changes": "unavailable",
+          "verification": "complete",
+          "delivery": "complete",
+          "document_truncated": false,
+          "transcript_window": null,
+          "changes_window": {
+            "commits_scanned": 0,
+            "files_included": 0,
+            "unavailable_files": [],
+            "complete": false
+          }
+        },
+        "last_successful_observation": null
+      },
+      "next_allowed_actions": [],
+      "blocked_actions": [
+        {
+          "action": "session.interrupt",
+          "reason": "missing_scope"
+        },
+        {
+          "action": "session.send",
+          "reason": "missing_scope"
+        }
+      ],
+      "links": {
+        "start_operation_hash": "#/op/op_00000000000000000000000000000002",
+        "execution_operation_hash": "#/op/op_00000000000000000000000000000003",
+        "session_hash": "#/session/demo/search-results",
+        "work_item_hash": "#/pm/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/board?select=wi_00000000000000000001"
+      }
+    },
+    "different_controller": {
+      "contract": "pm-work-attempt-result/v1",
+      "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attempt_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "cursor": 0,
+      "events_read": {
+        "http": "/api/v1/events?after=0&resource_type=pm_work_attempt&resource_id=att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "rpc": "api_events",
+        "mcp": "events_list",
+        "resource_type": "pm_work_attempt",
+        "resource_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "wait": {
+        "requested_ms": 0,
+        "timed_out": false,
+        "retry_after_ms": 0
+      },
+      "collection": {
+        "status": "checked",
+        "checked_at": 1790001000,
+        "outcome": "mid_turn"
+      },
+      "results": [],
+      "results_has_more": false,
+      "identity": {
+        "server_id": "00000000-0000-4000-8000-000000000001",
+        "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "project_id": "prj_00000000000000000001",
+        "work_item_id": "wi_00000000000000000001",
+        "attempt_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessor_attempt_id": null,
+        "start_operation_id": "op_00000000000000000000000000000002",
+        "execution_operation_id": "op_00000000000000000000000000000003",
+        "binding_id": "pmwb_00000000000000000000000000000004",
+        "package_id": "pmwp_00000000000000000000000000000005",
+        "scope_revision": "pmscope_00000000000000000000000000000006",
+        "requester_actor": "owner",
+        "controller": {
+          "server_id": "00000000-0000-4000-8000-000000000001",
+          "controller_id": "ctr_00000000000000000000000000000007"
+        },
+        "caller_is_controller": false,
+        "adapter": {
+          "kind": "bat",
+          "instance_id": "demo",
+          "agent_kind": "claude",
+          "model": "claude-sonnet-4-5"
+        },
+        "native_session": {
+          "host": "demo",
+          "session_id": "search-results",
+          "sdk_session_id": null,
+          "registry_origin": {
+            "controller_incarnation": "22222222222222222222222222222222",
+            "created_at": 1790001000,
+            "start_operation_id": "op_00000000000000000000000000000003"
+          }
+        }
+      },
+      "sources": {
+        "result_id": null,
+        "collector_actor": null,
+        "source_key": "bat:demo:search-results",
+        "source_uri": "bat://demo/sessions/search-results",
+        "source_generation": "22222222222222222222222222222222:1790001000",
+        "source_position": {
+          "turn_marker": "batc-op_00000000000000000000000000000003",
+          "last_message_id": null
+        },
+        "decoder_version": "bat_ipc_session_v1",
+        "digest": null,
+        "session_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+        "observed_at": 1790001000,
+        "collected_at": null
+      },
+      "conversation": {
+        "turn_marker": "batc-op_00000000000000000000000000000003",
+        "turn_started": "unknown",
+        "turn_done": "unknown",
+        "turn_phase": "unknown",
+        "turn_attribution": "unknown",
+        "latest_assistant_summary": null,
+        "messages_preview": [],
+        "tool_activity": [],
+        "streaming_text_tail": null,
+        "attachments": [],
+        "transcript": null,
+        "transcript_read": {
+          "http": "/api/v1/sessions/demo/search-results/messages?after=batc-op_00000000000000000000000000000003",
+          "rpc": "session_read",
+          "mcp": "session_read",
+          "after": "batc-op_00000000000000000000000000000003"
+        }
+      },
+      "execution": {
+        "state": "active",
+        "state_source": "inventory_observation",
+        "observed_at": 1790001000,
+        "state_reason": "streaming",
+        "stage": "started",
+        "operation_status": "succeeded",
+        "attention": null,
+        "pending": null,
+        "exit_code": "unknown",
+        "exit_code_reason": "not_exposed_by_bat",
+        "state_facets": {
+          "self_reported": "none",
+          "verification": "unverified",
+          "review_decision": {
+            "kind": "unassessed",
+            "acceptance": "unassessed",
+            "dod": "unassessed",
+            "qualified": false
+          },
+          "acceptance": {
+            "status": "unassessed",
+            "semantic_acceptance": "unassessed"
+          },
+          "merge": "not_started",
+          "deployment": {
+            "state": "not_deployed",
+            "verified": false,
+            "is_current": false
+          }
+        }
+      },
+      "changes": {
+        "base_commit": "1111111111111111111111111111111111111111",
+        "live_head_commit": "unknown",
+        "head_freshness": "unavailable",
+        "fixed_result_commit": null,
+        "uncommitted": {
+          "count": "unknown",
+          "files": "unknown",
+          "evidence": "unproven",
+          "reason": "turn_boundary_not_collected"
+        },
+        "summary": {
+          "aggregation": "per_commit",
+          "commits": [],
+          "files": [],
+          "additions": "unknown",
+          "deletions": "unknown",
+          "unavailable": [],
+          "complete": false,
+          "reason": "turn_boundary_not_collected",
+          "cached_from_result_id": null
+        },
+        "result_artifacts": []
+      },
+      "verification": {
+        "status": "unverified",
+        "runs": [],
+        "quality_reviews": {
+          "reviews": [],
+          "current": null
+        }
+      },
+      "delivery": {
+        "delivery_goal": "pull_request",
+        "pull_requests": [],
+        "integrations": [],
+        "merges": [],
+        "deployments": []
+      },
+      "usage": {
+        "context_tokens": "unknown",
+        "context_window": "unknown",
+        "num_turns": "unknown",
+        "input_tokens": "unknown",
+        "output_tokens": "unknown",
+        "total_tokens": "unknown",
+        "quota": "unknown",
+        "duration_seconds": "unknown",
+        "duration_reason": "not_exposed_by_bat"
+      },
+      "completeness": {
+        "status": "partial",
+        "reasons": [
+          "turn_boundary_not_collected"
+        ],
+        "coverage": {
+          "conversation": "unavailable",
+          "execution": "complete",
+          "changes": "unavailable",
+          "verification": "complete",
+          "delivery": "complete",
+          "document_truncated": false,
+          "transcript_window": null,
+          "changes_window": {
+            "commits_scanned": 0,
+            "files_included": 0,
+            "unavailable_files": [],
+            "complete": false
+          }
+        },
+        "last_successful_observation": null
+      },
+      "next_allowed_actions": [],
+      "blocked_actions": [
+        {
+          "action": "session.interrupt",
+          "reason": "not_controller"
+        },
+        {
+          "action": "session.send",
+          "reason": "not_controller"
+        }
+      ],
+      "links": {
+        "start_operation_hash": "#/op/op_00000000000000000000000000000002",
+        "execution_operation_hash": "#/op/op_00000000000000000000000000000003",
+        "session_hash": "#/session/demo/search-results",
+        "work_item_hash": "#/pm/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/board?select=wi_00000000000000000001"
+      }
+    },
+    "original_actor_without_write_access": {
+      "contract": "pm-work-attempt-result/v1",
+      "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attempt_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "cursor": 0,
+      "events_read": {
+        "http": "/api/v1/events?after=0&resource_type=pm_work_attempt&resource_id=att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "rpc": "api_events",
+        "mcp": "events_list",
+        "resource_type": "pm_work_attempt",
+        "resource_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "wait": {
+        "requested_ms": 0,
+        "timed_out": false,
+        "retry_after_ms": 0
+      },
+      "collection": {
+        "status": "checked",
+        "checked_at": 1790001000,
+        "outcome": "mid_turn"
+      },
+      "results": [],
+      "results_has_more": false,
+      "identity": {
+        "server_id": "00000000-0000-4000-8000-000000000001",
+        "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "project_id": "prj_00000000000000000001",
+        "work_item_id": "wi_00000000000000000001",
+        "attempt_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessor_attempt_id": null,
+        "start_operation_id": "op_00000000000000000000000000000002",
+        "execution_operation_id": "op_00000000000000000000000000000003",
+        "binding_id": "pmwb_00000000000000000000000000000004",
+        "package_id": "pmwp_00000000000000000000000000000005",
+        "scope_revision": "pmscope_00000000000000000000000000000006",
+        "requester_actor": "owner",
+        "controller": {
+          "server_id": "00000000-0000-4000-8000-000000000001",
+          "controller_id": "ctr_00000000000000000000000000000007"
+        },
+        "caller_is_controller": false,
+        "adapter": {
+          "kind": "bat",
+          "instance_id": "demo",
+          "agent_kind": "claude",
+          "model": "claude-sonnet-4-5"
+        },
+        "native_session": {
+          "host": "demo",
+          "session_id": "search-results",
+          "sdk_session_id": null,
+          "registry_origin": {
+            "controller_incarnation": "22222222222222222222222222222222",
+            "created_at": 1790001000,
+            "start_operation_id": "op_00000000000000000000000000000003"
+          }
+        }
+      },
+      "sources": {
+        "result_id": null,
+        "collector_actor": null,
+        "source_key": "bat:demo:search-results",
+        "source_uri": "bat://demo/sessions/search-results",
+        "source_generation": "22222222222222222222222222222222:1790001000",
+        "source_position": {
+          "turn_marker": "batc-op_00000000000000000000000000000003",
+          "last_message_id": null
+        },
+        "decoder_version": "bat_ipc_session_v1",
+        "digest": null,
+        "session_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+        "observed_at": 1790001000,
+        "collected_at": null
+      },
+      "conversation": {
+        "turn_marker": "batc-op_00000000000000000000000000000003",
+        "turn_started": "unknown",
+        "turn_done": "unknown",
+        "turn_phase": "unknown",
+        "turn_attribution": "unknown",
+        "latest_assistant_summary": null,
+        "messages_preview": [],
+        "tool_activity": [],
+        "streaming_text_tail": null,
+        "attachments": [],
+        "transcript": null,
+        "transcript_read": {
+          "http": "/api/v1/sessions/demo/search-results/messages?after=batc-op_00000000000000000000000000000003",
+          "rpc": "session_read",
+          "mcp": "session_read",
+          "after": "batc-op_00000000000000000000000000000003"
+        }
+      },
+      "execution": {
+        "state": "active",
+        "state_source": "inventory_observation",
+        "observed_at": 1790001000,
+        "state_reason": "streaming",
+        "stage": "started",
+        "operation_status": "succeeded",
+        "attention": null,
+        "pending": null,
+        "exit_code": "unknown",
+        "exit_code_reason": "not_exposed_by_bat",
+        "state_facets": {
+          "self_reported": "none",
+          "verification": "unverified",
+          "review_decision": {
+            "kind": "unassessed",
+            "acceptance": "unassessed",
+            "dod": "unassessed",
+            "qualified": false
+          },
+          "acceptance": {
+            "status": "unassessed",
+            "semantic_acceptance": "unassessed"
+          },
+          "merge": "not_started",
+          "deployment": {
+            "state": "not_deployed",
+            "verified": false,
+            "is_current": false
+          }
+        }
+      },
+      "changes": {
+        "base_commit": "1111111111111111111111111111111111111111",
+        "live_head_commit": "unknown",
+        "head_freshness": "unavailable",
+        "fixed_result_commit": null,
+        "uncommitted": {
+          "count": "unknown",
+          "files": "unknown",
+          "evidence": "unproven",
+          "reason": "turn_boundary_not_collected"
+        },
+        "summary": {
+          "aggregation": "per_commit",
+          "commits": [],
+          "files": [],
+          "additions": "unknown",
+          "deletions": "unknown",
+          "unavailable": [],
+          "complete": false,
+          "reason": "turn_boundary_not_collected",
+          "cached_from_result_id": null
+        },
+        "result_artifacts": []
+      },
+      "verification": {
+        "status": "unverified",
+        "runs": [],
+        "quality_reviews": {
+          "reviews": [],
+          "current": null
+        }
+      },
+      "delivery": {
+        "delivery_goal": "pull_request",
+        "pull_requests": [],
+        "integrations": [],
+        "merges": [],
+        "deployments": []
+      },
+      "usage": {
+        "context_tokens": "unknown",
+        "context_window": "unknown",
+        "num_turns": "unknown",
+        "input_tokens": "unknown",
+        "output_tokens": "unknown",
+        "total_tokens": "unknown",
+        "quota": "unknown",
+        "duration_seconds": "unknown",
+        "duration_reason": "not_exposed_by_bat"
+      },
+      "completeness": {
+        "status": "partial",
+        "reasons": [
+          "turn_boundary_not_collected"
+        ],
+        "coverage": {
+          "conversation": "unavailable",
+          "execution": "complete",
+          "changes": "unavailable",
+          "verification": "complete",
+          "delivery": "complete",
+          "document_truncated": false,
+          "transcript_window": null,
+          "changes_window": {
+            "commits_scanned": 0,
+            "files_included": 0,
+            "unavailable_files": [],
+            "complete": false
+          }
+        },
+        "last_successful_observation": null
+      },
+      "next_allowed_actions": [],
+      "blocked_actions": [
+        {
+          "action": "session.interrupt",
+          "reason": "not_controller"
+        },
+        {
+          "action": "session.send",
+          "reason": "not_controller"
+        }
+      ],
+      "links": {
+        "start_operation_hash": "#/op/op_00000000000000000000000000000002",
+        "execution_operation_hash": "#/op/op_00000000000000000000000000000003",
+        "session_hash": "#/session/demo/search-results",
+        "work_item_hash": "#/pm/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/board?select=wi_00000000000000000001"
+      }
+    },
+    "no_send_row": {
+      "contract": "pm-work-attempt-result/v1",
+      "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attempt_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "cursor": 0,
+      "events_read": {
+        "http": "/api/v1/events?after=0&resource_type=pm_work_attempt&resource_id=att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "rpc": "api_events",
+        "mcp": "events_list",
+        "resource_type": "pm_work_attempt",
+        "resource_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "wait": {
+        "requested_ms": 0,
+        "timed_out": false,
+        "retry_after_ms": 0
+      },
+      "collection": {
+        "status": "checked",
+        "checked_at": 1790001000,
+        "outcome": "mid_turn"
+      },
+      "results": [],
+      "results_has_more": false,
+      "identity": {
+        "server_id": "00000000-0000-4000-8000-000000000001",
+        "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "project_id": "prj_00000000000000000001",
+        "work_item_id": "wi_00000000000000000001",
+        "attempt_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessor_attempt_id": null,
+        "start_operation_id": "op_00000000000000000000000000000002",
+        "execution_operation_id": "op_00000000000000000000000000000003",
+        "binding_id": "pmwb_00000000000000000000000000000004",
+        "package_id": "pmwp_00000000000000000000000000000005",
+        "scope_revision": "pmscope_00000000000000000000000000000006",
+        "requester_actor": "owner",
+        "controller": {
+          "server_id": "00000000-0000-4000-8000-000000000001",
+          "controller_id": "ctr_00000000000000000000000000000007"
+        },
+        "caller_is_controller": true,
+        "adapter": {
+          "kind": "bat",
+          "instance_id": "demo",
+          "agent_kind": "claude",
+          "model": "claude-sonnet-4-5"
+        },
+        "native_session": {
+          "host": "demo",
+          "session_id": "search-results",
+          "sdk_session_id": null,
+          "registry_origin": {
+            "controller_incarnation": "22222222222222222222222222222222",
+            "created_at": 1790001000,
+            "start_operation_id": "op_00000000000000000000000000000008"
+          }
+        }
+      },
+      "sources": {
+        "result_id": null,
+        "collector_actor": null,
+        "source_key": "bat:demo:search-results",
+        "source_uri": "bat://demo/sessions/search-results",
+        "source_generation": "22222222222222222222222222222222:1790001000",
+        "source_position": {
+          "turn_marker": "batc-op_00000000000000000000000000000003",
+          "last_message_id": null
+        },
+        "decoder_version": "bat_ipc_session_v1",
+        "digest": null,
+        "session_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+        "observed_at": 1790001000,
+        "collected_at": null
+      },
+      "conversation": {
+        "turn_marker": "batc-op_00000000000000000000000000000003",
+        "turn_started": "unknown",
+        "turn_done": "unknown",
+        "turn_phase": "unknown",
+        "turn_attribution": "unknown",
+        "latest_assistant_summary": null,
+        "messages_preview": [],
+        "tool_activity": [],
+        "streaming_text_tail": null,
+        "attachments": [],
+        "transcript": null,
+        "transcript_read": {
+          "http": "/api/v1/sessions/demo/search-results/messages?after=batc-op_00000000000000000000000000000003",
+          "rpc": "session_read",
+          "mcp": "session_read",
+          "after": "batc-op_00000000000000000000000000000003"
+        }
+      },
+      "execution": {
+        "state": "unknown",
+        "state_source": "collector_check",
+        "observed_at": 1790001000,
+        "state_reason": "session_not_managed_by_attempt",
+        "stage": "started",
+        "operation_status": "succeeded",
+        "attention": null,
+        "pending": null,
+        "exit_code": "unknown",
+        "exit_code_reason": "not_exposed_by_bat",
+        "state_facets": {
+          "self_reported": "none",
+          "verification": "unverified",
+          "review_decision": {
+            "kind": "unassessed",
+            "acceptance": "unassessed",
+            "dod": "unassessed",
+            "qualified": false
+          },
+          "acceptance": {
+            "status": "unassessed",
+            "semantic_acceptance": "unassessed"
+          },
+          "merge": "not_started",
+          "deployment": {
+            "state": "not_deployed",
+            "verified": false,
+            "is_current": false
+          }
+        }
+      },
+      "changes": {
+        "base_commit": "1111111111111111111111111111111111111111",
+        "live_head_commit": "unknown",
+        "head_freshness": "unavailable",
+        "fixed_result_commit": null,
+        "uncommitted": {
+          "count": "unknown",
+          "files": "unknown",
+          "evidence": "unproven",
+          "reason": "turn_boundary_not_collected"
+        },
+        "summary": {
+          "aggregation": "per_commit",
+          "commits": [],
+          "files": [],
+          "additions": "unknown",
+          "deletions": "unknown",
+          "unavailable": [],
+          "complete": false,
+          "reason": "turn_boundary_not_collected",
+          "cached_from_result_id": null
+        },
+        "result_artifacts": []
+      },
+      "verification": {
+        "status": "unverified",
+        "runs": [],
+        "quality_reviews": {
+          "reviews": [],
+          "current": null
+        }
+      },
+      "delivery": {
+        "delivery_goal": "pull_request",
+        "pull_requests": [],
+        "integrations": [],
+        "merges": [],
+        "deployments": []
+      },
+      "usage": {
+        "context_tokens": "unknown",
+        "context_window": "unknown",
+        "num_turns": "unknown",
+        "input_tokens": "unknown",
+        "output_tokens": "unknown",
+        "total_tokens": "unknown",
+        "quota": "unknown",
+        "duration_seconds": "unknown",
+        "duration_reason": "not_exposed_by_bat"
+      },
+      "completeness": {
+        "status": "unavailable",
+        "reasons": [
+          "session_not_managed_by_attempt",
+          "turn_boundary_not_collected"
+        ],
+        "coverage": {
+          "conversation": "unavailable",
+          "execution": "partial",
+          "changes": "unavailable",
+          "verification": "complete",
+          "delivery": "complete",
+          "document_truncated": false,
+          "transcript_window": null,
+          "changes_window": {
+            "commits_scanned": 0,
+            "files_included": 0,
+            "unavailable_files": [],
+            "complete": false
+          }
+        },
+        "last_successful_observation": null
+      },
+      "next_allowed_actions": [],
+      "blocked_actions": [],
+      "links": {
+        "start_operation_hash": "#/op/op_00000000000000000000000000000002",
+        "execution_operation_hash": "#/op/op_00000000000000000000000000000003",
+        "session_hash": "#/session/demo/search-results",
+        "work_item_hash": "#/pm/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/board?select=wi_00000000000000000001"
+      }
+    },
+    "not_writer_member_boundary": {
+      "contract": "pm-work-attempt-result/v1",
+      "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attempt_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "cursor": 0,
+      "events_read": {
+        "http": "/api/v1/events?after=0&resource_type=pm_work_attempt&resource_id=att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "rpc": "api_events",
+        "mcp": "events_list",
+        "resource_type": "pm_work_attempt",
+        "resource_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "wait": {
+        "requested_ms": 0,
+        "timed_out": false,
+        "retry_after_ms": 0
+      },
+      "collection": {
+        "status": "checked",
+        "checked_at": 1790001000,
+        "outcome": "mid_turn"
+      },
+      "results": [],
+      "results_has_more": false,
+      "identity": {
+        "server_id": "00000000-0000-4000-8000-000000000001",
+        "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "project_id": "prj_00000000000000000001",
+        "work_item_id": "wi_00000000000000000001",
+        "attempt_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessor_attempt_id": null,
+        "start_operation_id": "op_00000000000000000000000000000002",
+        "execution_operation_id": "op_00000000000000000000000000000003",
+        "binding_id": "pmwb_00000000000000000000000000000004",
+        "package_id": "pmwp_00000000000000000000000000000005",
+        "scope_revision": "pmscope_00000000000000000000000000000006",
+        "requester_actor": "owner",
+        "controller": {
+          "server_id": "00000000-0000-4000-8000-000000000001",
+          "controller_id": "ctr_00000000000000000000000000000007"
+        },
+        "caller_is_controller": true,
+        "adapter": {
+          "kind": "bat",
+          "instance_id": "demo",
+          "agent_kind": "claude",
+          "model": "claude-sonnet-4-5"
+        },
+        "native_session": {
+          "host": "demo",
+          "session_id": "search-results",
+          "sdk_session_id": null,
+          "registry_origin": {
+            "controller_incarnation": "22222222222222222222222222222222",
+            "created_at": 1790001000,
+            "start_operation_id": "op_00000000000000000000000000000003"
+          }
+        }
+      },
+      "sources": {
+        "result_id": null,
+        "collector_actor": null,
+        "source_key": "bat:demo:search-results",
+        "source_uri": "bat://demo/sessions/search-results",
+        "source_generation": "22222222222222222222222222222222:1790001000",
+        "source_position": {
+          "turn_marker": "batc-op_00000000000000000000000000000003",
+          "last_message_id": null
+        },
+        "decoder_version": "bat_ipc_session_v1",
+        "digest": null,
+        "session_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+        "observed_at": 1790001000,
+        "collected_at": null
+      },
+      "conversation": {
+        "turn_marker": "batc-op_00000000000000000000000000000003",
+        "turn_started": "unknown",
+        "turn_done": "unknown",
+        "turn_phase": "unknown",
+        "turn_attribution": "unknown",
+        "latest_assistant_summary": null,
+        "messages_preview": [],
+        "tool_activity": [],
+        "streaming_text_tail": null,
+        "attachments": [],
+        "transcript": null,
+        "transcript_read": {
+          "http": "/api/v1/sessions/demo/search-results/messages?after=batc-op_00000000000000000000000000000003",
+          "rpc": "session_read",
+          "mcp": "session_read",
+          "after": "batc-op_00000000000000000000000000000003"
+        }
+      },
+      "execution": {
+        "state": "active",
+        "state_source": "inventory_observation",
+        "observed_at": 1790001000,
+        "state_reason": "streaming",
+        "stage": "started",
+        "operation_status": "succeeded",
+        "attention": null,
+        "pending": null,
+        "exit_code": "unknown",
+        "exit_code_reason": "not_exposed_by_bat",
+        "state_facets": {
+          "self_reported": "none",
+          "verification": "unverified",
+          "review_decision": {
+            "kind": "unassessed",
+            "acceptance": "unassessed",
+            "dod": "unassessed",
+            "qualified": false
+          },
+          "acceptance": {
+            "status": "unassessed",
+            "semantic_acceptance": "unassessed"
+          },
+          "merge": "not_started",
+          "deployment": {
+            "state": "not_deployed",
+            "verified": false,
+            "is_current": false
+          }
+        }
+      },
+      "changes": {
+        "base_commit": "1111111111111111111111111111111111111111",
+        "live_head_commit": "unknown",
+        "head_freshness": "unavailable",
+        "fixed_result_commit": null,
+        "uncommitted": {
+          "count": "unknown",
+          "files": "unknown",
+          "evidence": "unproven",
+          "reason": "turn_boundary_not_collected"
+        },
+        "summary": {
+          "aggregation": "per_commit",
+          "commits": [],
+          "files": [],
+          "additions": "unknown",
+          "deletions": "unknown",
+          "unavailable": [],
+          "complete": false,
+          "reason": "turn_boundary_not_collected",
+          "cached_from_result_id": null
+        },
+        "result_artifacts": []
+      },
+      "verification": {
+        "status": "unverified",
+        "runs": [],
+        "quality_reviews": {
+          "reviews": [],
+          "current": null
+        }
+      },
+      "delivery": {
+        "delivery_goal": "pull_request",
+        "pull_requests": [],
+        "integrations": [],
+        "merges": [],
+        "deployments": []
+      },
+      "usage": {
+        "context_tokens": "unknown",
+        "context_window": "unknown",
+        "num_turns": "unknown",
+        "input_tokens": "unknown",
+        "output_tokens": "unknown",
+        "total_tokens": "unknown",
+        "quota": "unknown",
+        "duration_seconds": "unknown",
+        "duration_reason": "not_exposed_by_bat"
+      },
+      "completeness": {
+        "status": "partial",
+        "reasons": [
+          "turn_boundary_not_collected"
+        ],
+        "coverage": {
+          "conversation": "unavailable",
+          "execution": "complete",
+          "changes": "unavailable",
+          "verification": "complete",
+          "delivery": "complete",
+          "document_truncated": false,
+          "transcript_window": null,
+          "changes_window": {
+            "commits_scanned": 0,
+            "files_included": 0,
+            "unavailable_files": [],
+            "complete": false
+          }
+        },
+        "last_successful_observation": null
+      },
+      "next_allowed_actions": [
+        {
+          "kind": "action",
+          "action": "session.interrupt",
+          "target": {
+            "host": "demo",
+            "session_id": "search-results"
+          },
+          "required_scopes": [
+            "observe",
+            "operate"
+          ]
+        }
+      ],
+      "blocked_actions": [
+        {
+          "action": "session.send",
+          "reason": "not_writer_member"
+        }
+      ],
+      "links": {
+        "start_operation_hash": "#/op/op_00000000000000000000000000000002",
+        "execution_operation_hash": "#/op/op_00000000000000000000000000000003",
+        "session_hash": "#/session/demo/search-results",
+        "work_item_hash": "#/pm/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/board?select=wi_00000000000000000001"
+      }
+    },
+    "codex_boundary": {
+      "contract": "pm-work-attempt-result/v1",
+      "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attempt_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "cursor": 0,
+      "events_read": {
+        "http": "/api/v1/events?after=0&resource_type=pm_work_attempt&resource_id=att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "rpc": "api_events",
+        "mcp": "events_list",
+        "resource_type": "pm_work_attempt",
+        "resource_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "wait": {
+        "requested_ms": 0,
+        "timed_out": false,
+        "retry_after_ms": 0
+      },
+      "collection": {
+        "status": "checked",
+        "checked_at": 1790001000,
+        "outcome": "mid_turn"
+      },
+      "results": [],
+      "results_has_more": false,
+      "identity": {
+        "server_id": "00000000-0000-4000-8000-000000000001",
+        "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "project_id": "prj_00000000000000000001",
+        "work_item_id": "wi_00000000000000000001",
+        "attempt_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessor_attempt_id": null,
+        "start_operation_id": "op_00000000000000000000000000000002",
+        "execution_operation_id": "op_00000000000000000000000000000003",
+        "binding_id": "pmwb_00000000000000000000000000000004",
+        "package_id": "pmwp_00000000000000000000000000000005",
+        "scope_revision": "pmscope_00000000000000000000000000000006",
+        "requester_actor": "owner",
+        "controller": {
+          "server_id": "00000000-0000-4000-8000-000000000001",
+          "controller_id": "ctr_00000000000000000000000000000007"
+        },
+        "caller_is_controller": true,
+        "adapter": {
+          "kind": "bat",
+          "instance_id": "demo",
+          "agent_kind": "codex",
+          "model": "claude-sonnet-4-5"
+        },
+        "native_session": {
+          "host": "demo",
+          "session_id": "search-results",
+          "sdk_session_id": null,
+          "registry_origin": {
+            "controller_incarnation": "22222222222222222222222222222222",
+            "created_at": 1790001000,
+            "start_operation_id": "op_00000000000000000000000000000003"
+          }
+        }
+      },
+      "sources": {
+        "result_id": null,
+        "collector_actor": null,
+        "source_key": "bat:demo:search-results",
+        "source_uri": "bat://demo/sessions/search-results",
+        "source_generation": "22222222222222222222222222222222:1790001000",
+        "source_position": {
+          "turn_marker": "batc-op_00000000000000000000000000000003",
+          "last_message_id": null
+        },
+        "decoder_version": "bat_ipc_session_v1",
+        "digest": null,
+        "session_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+        "observed_at": 1790001000,
+        "collected_at": null
+      },
+      "conversation": {
+        "turn_marker": "batc-op_00000000000000000000000000000003",
+        "turn_started": "unknown",
+        "turn_done": "unknown",
+        "turn_phase": "unknown",
+        "turn_attribution": "unknown",
+        "latest_assistant_summary": null,
+        "messages_preview": [],
+        "tool_activity": [],
+        "streaming_text_tail": null,
+        "attachments": [],
+        "transcript": null,
+        "transcript_read": {
+          "http": "/api/v1/sessions/demo/search-results/messages?after=batc-op_00000000000000000000000000000003",
+          "rpc": "session_read",
+          "mcp": "session_read",
+          "after": "batc-op_00000000000000000000000000000003"
+        }
+      },
+      "execution": {
+        "state": "active",
+        "state_source": "inventory_observation",
+        "observed_at": 1790001000,
+        "state_reason": "streaming",
+        "stage": "started",
+        "operation_status": "succeeded",
+        "attention": null,
+        "pending": null,
+        "exit_code": "unknown",
+        "exit_code_reason": "not_exposed_by_bat",
+        "state_facets": {
+          "self_reported": "none",
+          "verification": "unverified",
+          "review_decision": {
+            "kind": "unassessed",
+            "acceptance": "unassessed",
+            "dod": "unassessed",
+            "qualified": false
+          },
+          "acceptance": {
+            "status": "unassessed",
+            "semantic_acceptance": "unassessed"
+          },
+          "merge": "not_started",
+          "deployment": {
+            "state": "not_deployed",
+            "verified": false,
+            "is_current": false
+          }
+        }
+      },
+      "changes": {
+        "base_commit": "1111111111111111111111111111111111111111",
+        "live_head_commit": "unknown",
+        "head_freshness": "unavailable",
+        "fixed_result_commit": null,
+        "uncommitted": {
+          "count": "unknown",
+          "files": "unknown",
+          "evidence": "unproven",
+          "reason": "turn_boundary_not_collected"
+        },
+        "summary": {
+          "aggregation": "per_commit",
+          "commits": [],
+          "files": [],
+          "additions": "unknown",
+          "deletions": "unknown",
+          "unavailable": [],
+          "complete": false,
+          "reason": "turn_boundary_not_collected",
+          "cached_from_result_id": null
+        },
+        "result_artifacts": []
+      },
+      "verification": {
+        "status": "unverified",
+        "runs": [],
+        "quality_reviews": {
+          "reviews": [],
+          "current": null
+        }
+      },
+      "delivery": {
+        "delivery_goal": "pull_request",
+        "pull_requests": [],
+        "integrations": [],
+        "merges": [],
+        "deployments": []
+      },
+      "usage": {
+        "context_tokens": "unknown",
+        "context_window": "unknown",
+        "num_turns": "unknown",
+        "input_tokens": "unknown",
+        "output_tokens": "unknown",
+        "total_tokens": "unknown",
+        "quota": "unknown",
+        "duration_seconds": "unknown",
+        "duration_reason": "not_exposed_by_bat"
+      },
+      "completeness": {
+        "status": "partial",
+        "reasons": [
+          "turn_boundary_not_collected"
+        ],
+        "coverage": {
+          "conversation": "unavailable",
+          "execution": "complete",
+          "changes": "unavailable",
+          "verification": "complete",
+          "delivery": "complete",
+          "document_truncated": false,
+          "transcript_window": null,
+          "changes_window": {
+            "commits_scanned": 0,
+            "files_included": 0,
+            "unavailable_files": [],
+            "complete": false
+          }
+        },
+        "last_successful_observation": null
+      },
+      "next_allowed_actions": [
+        {
+          "kind": "action",
+          "action": "session.interrupt",
+          "target": {
+            "host": "demo",
+            "session_id": "search-results"
+          },
+          "required_scopes": [
+            "observe",
+            "operate"
+          ]
+        }
+      ],
+      "blocked_actions": [
+        {
+          "action": "session.send",
+          "reason": "codex_uncorrelated_turn_boundary"
+        }
+      ],
+      "links": {
+        "start_operation_hash": "#/op/op_00000000000000000000000000000002",
+        "execution_operation_hash": "#/op/op_00000000000000000000000000000003",
+        "session_hash": "#/session/demo/search-results",
+        "work_item_hash": "#/pm/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/board?select=wi_00000000000000000001"
+      }
+    },
+    "different_original_actor_boundary": {
+      "contract": "pm-work-attempt-result/v1",
+      "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attempt_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "cursor": 0,
+      "events_read": {
+        "http": "/api/v1/events?after=0&resource_type=pm_work_attempt&resource_id=att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "rpc": "api_events",
+        "mcp": "events_list",
+        "resource_type": "pm_work_attempt",
+        "resource_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "wait": {
+        "requested_ms": 0,
+        "timed_out": false,
+        "retry_after_ms": 0
+      },
+      "collection": {
+        "status": "checked",
+        "checked_at": 1790001000,
+        "outcome": "mid_turn"
+      },
+      "results": [],
+      "results_has_more": false,
+      "identity": {
+        "server_id": "00000000-0000-4000-8000-000000000001",
+        "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "project_id": "prj_00000000000000000001",
+        "work_item_id": "wi_00000000000000000001",
+        "attempt_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessor_attempt_id": null,
+        "start_operation_id": "op_00000000000000000000000000000002",
+        "execution_operation_id": "op_00000000000000000000000000000003",
+        "binding_id": "pmwb_00000000000000000000000000000004",
+        "package_id": "pmwp_00000000000000000000000000000005",
+        "scope_revision": "pmscope_00000000000000000000000000000006",
+        "requester_actor": "colleague",
+        "controller": {
+          "server_id": "00000000-0000-4000-8000-000000000001",
+          "controller_id": "ctr_00000000000000000000000000000007"
+        },
+        "caller_is_controller": true,
+        "adapter": {
+          "kind": "bat",
+          "instance_id": "demo",
+          "agent_kind": "claude",
+          "model": "claude-sonnet-4-5"
+        },
+        "native_session": {
+          "host": "demo",
+          "session_id": "search-results",
+          "sdk_session_id": null,
+          "registry_origin": {
+            "controller_incarnation": "22222222222222222222222222222222",
+            "created_at": 1790001000,
+            "start_operation_id": "op_00000000000000000000000000000003"
+          }
+        }
+      },
+      "sources": {
+        "result_id": null,
+        "collector_actor": null,
+        "source_key": "bat:demo:search-results",
+        "source_uri": "bat://demo/sessions/search-results",
+        "source_generation": "22222222222222222222222222222222:1790001000",
+        "source_position": {
+          "turn_marker": "batc-op_00000000000000000000000000000003",
+          "last_message_id": null
+        },
+        "decoder_version": "bat_ipc_session_v1",
+        "digest": null,
+        "session_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+        "observed_at": 1790001000,
+        "collected_at": null
+      },
+      "conversation": {
+        "turn_marker": "batc-op_00000000000000000000000000000003",
+        "turn_started": "unknown",
+        "turn_done": "unknown",
+        "turn_phase": "unknown",
+        "turn_attribution": "unknown",
+        "latest_assistant_summary": null,
+        "messages_preview": [],
+        "tool_activity": [],
+        "streaming_text_tail": null,
+        "attachments": [],
+        "transcript": null,
+        "transcript_read": {
+          "http": "/api/v1/sessions/demo/search-results/messages?after=batc-op_00000000000000000000000000000003",
+          "rpc": "session_read",
+          "mcp": "session_read",
+          "after": "batc-op_00000000000000000000000000000003"
+        }
+      },
+      "execution": {
+        "state": "active",
+        "state_source": "inventory_observation",
+        "observed_at": 1790001000,
+        "state_reason": "streaming",
+        "stage": "started",
+        "operation_status": "waiting_external",
+        "attention": null,
+        "pending": null,
+        "exit_code": "unknown",
+        "exit_code_reason": "not_exposed_by_bat",
+        "state_facets": {
+          "self_reported": "none",
+          "verification": "unverified",
+          "review_decision": {
+            "kind": "unassessed",
+            "acceptance": "unassessed",
+            "dod": "unassessed",
+            "qualified": false
+          },
+          "acceptance": {
+            "status": "unassessed",
+            "semantic_acceptance": "unassessed"
+          },
+          "merge": "not_started",
+          "deployment": {
+            "state": "not_deployed",
+            "verified": false,
+            "is_current": false
+          }
+        }
+      },
+      "changes": {
+        "base_commit": "1111111111111111111111111111111111111111",
+        "live_head_commit": "unknown",
+        "head_freshness": "unavailable",
+        "fixed_result_commit": null,
+        "uncommitted": {
+          "count": "unknown",
+          "files": "unknown",
+          "evidence": "unproven",
+          "reason": "turn_boundary_not_collected"
+        },
+        "summary": {
+          "aggregation": "per_commit",
+          "commits": [],
+          "files": [],
+          "additions": "unknown",
+          "deletions": "unknown",
+          "unavailable": [],
+          "complete": false,
+          "reason": "turn_boundary_not_collected",
+          "cached_from_result_id": null
+        },
+        "result_artifacts": []
+      },
+      "verification": {
+        "status": "unverified",
+        "runs": [],
+        "quality_reviews": {
+          "reviews": [],
+          "current": null
+        }
+      },
+      "delivery": {
+        "delivery_goal": "pull_request",
+        "pull_requests": [],
+        "integrations": [],
+        "merges": [],
+        "deployments": []
+      },
+      "usage": {
+        "context_tokens": "unknown",
+        "context_window": "unknown",
+        "num_turns": "unknown",
+        "input_tokens": "unknown",
+        "output_tokens": "unknown",
+        "total_tokens": "unknown",
+        "quota": "unknown",
+        "duration_seconds": "unknown",
+        "duration_reason": "not_exposed_by_bat"
+      },
+      "completeness": {
+        "status": "partial",
+        "reasons": [
+          "turn_boundary_not_collected"
+        ],
+        "coverage": {
+          "conversation": "unavailable",
+          "execution": "complete",
+          "changes": "unavailable",
+          "verification": "complete",
+          "delivery": "complete",
+          "document_truncated": false,
+          "transcript_window": null,
+          "changes_window": {
+            "commits_scanned": 0,
+            "files_included": 0,
+            "unavailable_files": [],
+            "complete": false
+          }
+        },
+        "last_successful_observation": null
+      },
+      "next_allowed_actions": [
+        {
+          "kind": "action",
+          "action": "session.interrupt",
+          "target": {
+            "host": "demo",
+            "session_id": "search-results"
+          },
+          "required_scopes": [
+            "observe",
+            "operate"
+          ]
+        },
+        {
+          "kind": "action",
+          "action": "session.send",
+          "target": {
+            "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "work_item_id": "wi_00000000000000000001"
+          },
+          "required_scopes": [
+            "observe",
+            "operate"
+          ],
+          "allowed_schedules": [
+            "after_current"
+          ],
+          "default_schedule": "after_current",
+          "requires_controller": true,
+          "requires_writer": true
+        }
+      ],
+      "blocked_actions": [],
+      "links": {
+        "start_operation_hash": "#/op/op_00000000000000000000000000000002",
+        "execution_operation_hash": "#/op/op_00000000000000000000000000000003",
+        "session_hash": "#/session/demo/search-results",
+        "work_item_hash": "#/pm/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/board?select=wi_00000000000000000001"
+      }
+    }
+  },
+  "inputs": {
+    "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "work_item_id": "wi_00000000000000000001",
+    "attempt_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "latest_attempt_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "items": [
+      {
+        "sequence": 1,
+        "operation_id": "op_cccccccccccccccccccccccccccccccc",
+        "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "work_item_id": "wi_00000000000000000001",
+        "attempt_id": "att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "attempt_sequence": 1,
+        "execution_operation_id": "op_00000000000000000000000000000003",
+        "host": "demo",
+        "session_id": "search-results",
+        "message_id": "batc-op_cccccccccccccccccccccccccccccccc",
+        "schedule": "after_current",
+        "position": 1,
+        "state": "queued",
+        "operation_status": "waiting_external",
+        "status_reason": "waiting_turn_boundary",
+        "blocked_by_operation_id": null,
+        "error_code": null,
+        "effective_predecessor_turn_marker": "batc-op_00000000000000000000000000000003",
+        "text_excerpt": "Original accepted instruction",
+        "text_truncated": false,
+        "actor": "owner",
+        "created_at": 1790001000,
+        "updated_at": 1790001000,
+        "sent_at": null,
+        "reconciled": false,
+        "settled_by": null,
+        "cancellable": true,
+        "next_allowed_actions": [
+          {
+            "kind": "action",
+            "action": "pm.work_input.defer",
+            "target": {
+              "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "work_item_id": "wi_00000000000000000001",
+              "source_operation_id": "op_cccccccccccccccccccccccccccccccc"
+            },
+            "preconditions": {
+              "expected_state": "queued"
+            },
+            "required_scopes": [
+              "observe",
+              "manage",
+              "operate"
+            ],
+            "label": "Keep for later",
+            "label_zh_TW": "留到稍後"
+          },
+          {
+            "kind": "operation_endpoint",
+            "endpoint": "cancel",
+            "operation_id": "op_cccccccccccccccccccccccccccccccc",
+            "http_method": "POST",
+            "http_path": "/api/v1/operations/op_cccccccccccccccccccccccccccccccc/cancel",
+            "required_scopes": [
+              "observe"
+            ],
+            "label": "Cancel queued instruction",
+            "label_zh_TW": "取消排隊中的指令"
+          }
+        ],
+        "links": {
+          "operation": "/api/v1/operations/op_cccccccccccccccccccccccccccccccc",
+          "attempt_result": "/api/v1/pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work-attempts/att_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/result",
+          "inputs": "/api/v1/pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work/wi_00000000000000000001/inputs",
+          "operation_hash": "#/op/op_cccccccccccccccccccccccccccccccc"
+        },
+        "labels": {
+          "state": {
+            "en": "Queued",
+            "zh-TW": "排隊中"
+          },
+          "detail": {
+            "en": "Waiting for the current turn to end. Cancelling removes this instruction before it is sent to BAT.",
+            "zh-TW": "正在等待目前回合結束。此時取消會在送交 BAT 前撤回此指令。"
+          }
+        }
+      }
+    ],
+    "next_cursor": null,
+    "has_more": false,
+    "visibility_filtered": false
+  }
+}
