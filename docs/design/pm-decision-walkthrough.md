@@ -85,6 +85,14 @@ to its status must preserve the reading pane's scroll position, so a pointer
 press and release still reach the same retained button after the gate settles.
 The original key, envelope and submission gates remain unchanged.
 
+If that gate closes after actionability but before pointerdown, or stays closed
+through release, a native disabled button can suppress click and submit entirely.
+The retained form reports the interrupted press, including its next step, without
+queueing an unknown admission for later. An explicit guard refusal before any API
+call also asks the person to refresh and review instead of leaving an old network
+error as that click's outcome. Late replies still cannot paint across a retired
+view or authority boundary.
+
 The recovery helper selects the stable adoption form. A `has` filter is relative
 to its candidate: passing a proposal-scoped role locator to a Details filter looks
 for another proposals container inside Details and never matches. Revealing and

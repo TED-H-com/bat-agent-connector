@@ -139,6 +139,27 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   }}, t('pm_edit_request'));
   const isFieldFocused = () => Object.values(fields).some(f => f === document.activeElement || f.contains?.(document.activeElement));
   const button = h('button', {type: 'submit', class: 'ui-button primary'}, t(label));
+  let pressing = false;
+  const releasePress = () => {
+    pressing = false;
+    document.removeEventListener('pointerup', releasePress, true);
+    document.removeEventListener('pointercancel', releasePress, true);
+  };
+  const explainBlockedPress = () => {
+    if (!disposed && form.isConnected && saved.intent && !busy && !damaged && (!allowed() || !sendReady())
+      && !status.querySelector('[data-pm-click-interrupted]'))
+      status.append(h('p', {class: 'muted', 'data-pm-click-interrupted': ''}, t('pm_click_interrupted')));
+  };
+  button.addEventListener('pointerdown', event => {
+    if (event.button !== 0) return;
+    releasePress(); pressing = true;
+    // Native disabled buttons still receive pointer events. A read gate may
+    // have closed after actionability but before this press, suppressing the
+    // mouse click/submit entirely. Explain it here; never queue a resend.
+    explainBlockedPress();
+    document.addEventListener('pointerup', releasePress, true);
+    document.addEventListener('pointercancel', releasePress, true);
+  });
   button.addEventListener('click', event => {
     if (busy || (initialChecking && (busy || receiptTimer !== null))) {
       event.preventDefault();
@@ -197,6 +218,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     button.textContent = t(saved.intent && !autoChecking ? 'pm_check_original' : label);
     reset.hidden = inFlight || (!terminal() && !saved.intent?.initialAdmissionRefused);
     reset.disabled = busy || !allowed();
+    if (pressing) explainBlockedPress();
     if (hadFocus && (button.hidden || button.disabled)) {
       if (!reset.hidden && !reset.disabled) reset.focus();
       else if (document.activeElement === document.body || document.activeElement === button) {
@@ -222,6 +244,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     if (!automatic) {receiptAttempt = 0; receiptPolling = true;}
     let firstAttempt = stagedHere; stagedHere = false;
     if (firstAttempt) initialChecking = true;
+    let requestStarted = false;
     try {
       guard(); busy = true; status.replaceChildren();
       if (!saved.intent) {
@@ -250,6 +273,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
         }
         collected = true;
       };
+      requestStarted = true;
       const data = intent.operation_id ? await api('GET', `/operations/${intent.operation_id}`, undefined, undefined, collectReceipt)
         : await api('POST', '/operations?wait=3', intent.request, intent.key, collectReceipt);
       collectReceipt(data);
@@ -299,7 +323,14 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
       // A detached request must not poison another view's successful refresh or
       // change an original intent after a route/authority boundary has moved.
       if (disposed) return;
-      try {guard();} catch {return;}
+      try {guard();} catch {
+        // An explicit refusal before any API call must not leave a previous
+        // network error masquerading as the outcome of this click. Late replies
+        // and automatic checks still cannot paint into a retired view.
+        if (!automatic && !requestStarted && form.isConnected)
+          status.replaceChildren(h('p', {class: 'muted'}, t('pm_stale')));
+        return;
+      }
       if (!retired(error)) {
         // Explicit server pre-admission refusal is useful only for the first attempt.
         // Only an explicit pre-admission refusal may be replaced. Any other error,
@@ -350,7 +381,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
       if (!busy) void run(true);
     },
     dispose: () => {
-      disposed = true; receiptPolling = false; initialChecking = false; stopTimer(); unsubscribe(); onConnectionChange(false);
+      disposed = true; receiptPolling = false; initialChecking = false; releasePress(); stopTimer(); unsubscribe(); onConnectionChange(false);
       for (const input of Object.values(fields)) input.disabled = true;
       button.disabled = reset.disabled = true;
     },
