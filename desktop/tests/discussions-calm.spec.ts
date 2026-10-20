@@ -76,7 +76,7 @@ for (const locale of ['en', 'zh-TW']) {
     await context.close();
   });
 
-  test(`saving without a PM explains that no reply will arrive ${locale}`, async ({browser, baseURL}) => {
+  test(`saving without a PM keeps unknown availability distinct from a connection fact ${locale}`, async ({browser, baseURL}) => {
     const context = await browser.newContext({baseURL, locale}), page = await context.newPage(), f = demoFixture({locale, discussions: true});
     await mountConversation(page, false, async input => {
       const result = await f.dispatch(input), caps = input.path === '/bootstrap' ? result.data.capabilities : input.path === '/capabilities' ? result.data : null;
@@ -85,7 +85,7 @@ for (const locale of ['en', 'zh-TW']) {
     });
     const route = `#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`;
     await page.goto('/dashboard/' + route);
-    const message = zh ? '訊息會儲存；PM 尚未連線，不會回覆。' : 'Messages are saved. The PM is not connected and will not reply.';
+    const message = zh ? 'PM 可用性未知。請重新整理，或詢問 Connector 管理員。' : 'PM availability is unknown. Refresh, or ask the Connector operator.';
     await expect(page.locator('.pd-composer')).toContainText(message);
     const setup = page.getByRole('link', {name: zh ? '設定 PM' : 'Set up PM'});
     await expect(setup).toHaveAttribute('href', '#/settings?section=agents&from=' + encodeURIComponent(route));
