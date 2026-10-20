@@ -15463,10 +15463,15 @@ function projectNavigation({ t, namespace, workspaceId, views, current, discussi
 		class: "ui-button ghost",
 		"data-pm-view": id,
 		"aria-current": current === id ? "page" : "false",
+		"aria-describedby": `project-nav-${encodeURIComponent(workspaceId)}-${id}-hint`,
 		onclick: () => {
 			location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${id}`;
 		}
-	}, icon(viewIcons[id], { size: 20 }), h$1("span", { class: "shell-view-copy" }, h$1("span", {}, t("ui_" + id)), h$1("span", { class: "shell-view-hint" }, t("ui_nav_" + id))), id === "discussions" ? discussionCount : null);
+	}, icon(viewIcons[id], { size: 20 }), h$1("span", { class: "shell-view-copy" }, h$1("span", {}, t("ui_" + id)), h$1("span", {
+		class: "shell-view-hint",
+		"aria-hidden": "true",
+		id: `project-nav-${encodeURIComponent(workspaceId)}-${id}-hint`
+	}, t("ui_nav_" + id))), id === "discussions" ? discussionCount : null);
 	const primary = dailyViews.filter((id) => views.includes(id));
 	const secondary = views.filter((id) => !dailyViews.includes(id));
 	if (preference.current !== current && secondary.includes(current)) preference.expanded = true;
