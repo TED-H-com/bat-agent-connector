@@ -906,6 +906,32 @@
         "runtime_preflight": "not_performed",
         "execution_authorized": false
       },
+      "effective_pm_route": {
+        "version": 1,
+        "scope": "workspace_selected_route",
+        "choice_source": "unset",
+        "adapter": null,
+        "choice_ref": null,
+        "ready": true,
+        "reason": null,
+        "eligible_adapters": [
+          "codex-native-linux"
+        ],
+        "adapters": [
+          {
+            "adapter": "codex-native-linux",
+            "ready": true,
+            "reason": null
+          },
+          {
+            "adapter": "bat-pm-linux-v1",
+            "ready": false,
+            "reason": "PM_WORKTREE_REQUIRED"
+          }
+        ],
+        "model_execution_verified": false,
+        "execution_authorized": false
+      },
       "follow_up_analysis": {
         "adapter": "codex-native-linux",
         "contract": "codex-pm-linux-v1",
@@ -2064,6 +2090,30 @@
           "occupied": false
         },
         "runtime_preflight": "not_performed",
+        "execution_authorized": false
+      },
+      "effective_pm_route": {
+        "version": 1,
+        "scope": "workspace_selected_route",
+        "choice_source": "unset",
+        "adapter": null,
+        "choice_ref": null,
+        "ready": false,
+        "reason": "scope_required",
+        "eligible_adapters": [],
+        "adapters": [
+          {
+            "adapter": "codex-native-linux",
+            "ready": false,
+            "reason": "scope_required"
+          },
+          {
+            "adapter": "bat-pm-linux-v1",
+            "ready": false,
+            "reason": "scope_required"
+          }
+        ],
+        "model_execution_verified": false,
         "execution_authorized": false
       },
       "follow_up_analysis": {
@@ -3228,6 +3278,30 @@
         "runtime_preflight": "not_performed",
         "execution_authorized": false
       },
+      "effective_pm_route": {
+        "version": 1,
+        "scope": "workspace_selected_route",
+        "choice_source": "unset",
+        "adapter": null,
+        "choice_ref": null,
+        "ready": false,
+        "reason": "no_eligible_adapter",
+        "eligible_adapters": [],
+        "adapters": [
+          {
+            "adapter": "codex-native-linux",
+            "ready": false,
+            "reason": "PM_NATIVE_EXECUTABLE_UNAVAILABLE"
+          },
+          {
+            "adapter": "bat-pm-linux-v1",
+            "ready": false,
+            "reason": "PM_WORKTREE_REQUIRED"
+          }
+        ],
+        "model_execution_verified": false,
+        "execution_authorized": false
+      },
       "follow_up_analysis": {
         "adapter": "codex-native-linux",
         "contract": "codex-pm-linux-v1",
@@ -4366,6 +4440,30 @@
           "occupied": false
         },
         "runtime_preflight": "not_performed",
+        "execution_authorized": false
+      },
+      "effective_pm_route": {
+        "version": 1,
+        "scope": "workspace_selected_route",
+        "choice_source": "unset",
+        "adapter": null,
+        "choice_ref": null,
+        "ready": false,
+        "reason": "no_eligible_adapter",
+        "eligible_adapters": [],
+        "adapters": [
+          {
+            "adapter": "codex-native-linux",
+            "ready": false,
+            "reason": "action_unavailable"
+          },
+          {
+            "adapter": "bat-pm-linux-v1",
+            "ready": false,
+            "reason": "action_unavailable"
+          }
+        ],
+        "model_execution_verified": false,
         "execution_authorized": false
       },
       "follow_up_analysis": {

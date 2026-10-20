@@ -3,6 +3,7 @@ import {button} from './ui/components.js';
 import {timeLabel,timeStamp} from './ui/stamps.js';
 import {internalFrom} from './work-paths.js';
 import {profileStateFacts,profileTimestamp} from './pm-work-profile-state.js';
+import {hasEffectivePmRoute,renderEffectivePmRoute} from './pm-effective-route.js';
 
 const identity = value => typeof value === 'string' && /^wpf_[0-9a-f]{32}$/.test(value);
 const states = ['discovered','signed_in_or_available','can_observe','can_start_own','can_continue_own','last_verified_execution'];
@@ -94,7 +95,9 @@ export function workProfilePicker({t,api,alive,namespace,workspaceId,workId,caps
       h('p',{class:'muted'},t('wpf_locked')),list,
       ...(data.states.can_start_own.value!=='ready'?[h('p',{class:'muted'},t('wpf_unverified'))]:[]),
       ...(gap?[h('div',{'data-work-profile-gap':''},...details)]:[]),
-      h('h4',{},t('wpf_pm')),h('p',{},t(data.pm_analysis?.pm_ready===true?'wpf_pm_preflight':'wpf_pm_unverified')));
+      h('h4',{},t('wpf_pm')),hasEffectivePmRoute(data.pm_analysis)
+        ?renderEffectivePmRoute(h('div',{'data-work-profile-pm':''}),{h,t,document:data.pm_analysis,readyKey:'wpf_pm_preflight'})
+        :h('p',{},t(data.pm_analysis?.pm_ready===true?'wpf_pm_preflight':'wpf_pm_unverified')));
     const gapName=states.find(name=>data.states[name].value!=='ready');
     announcement.textContent=[`${t('wpf_next_turn')}: ${t(nextKey)}`,
       gapName?`${t('wpf_'+gapName)}: ${t('wpf_'+data.states[gapName].value)}. ${t('wpf_unverified')}`:''].filter(Boolean).join(' ');
