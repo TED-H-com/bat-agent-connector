@@ -153,10 +153,10 @@ for (const locale of ['en-US', 'zh-TW']) {
           const facts = {token: 'credential', online: true, viewReady: true, nativeBusy: false, pollHealth: 'connected',
             manageAllowed: true, attachmentsSupported: true, uploadsAllowed: true};
           const requirements = {post: true, attachment: true, manage: true, supported: true, uploads: true};
-          if (reason === 'not_connected') facts.token = '';
-          if (reason === 'connecting') {facts.online = false; facts.pollHealth = 'initial';}
+          if (reason === 'not_connected') {facts.token = ''; facts.online = false; facts.viewReady = false;}
+          if (reason === 'connecting') {facts.online = false; facts.viewReady = false; facts.pollHealth = 'initial';}
           if (reason === 'reconnecting') {facts.online = false; facts.pollHealth = 'reconnecting';}
-          if (reason === 'connection_changing') facts.nativeBusy = true;
+          if (reason === 'connection_changing') {facts.nativeBusy = true; facts.online = false;}
           if (reason === 'view_not_ready') facts.viewReady = false;
           if (reason === 'manage_required') facts.manageAllowed = false;
           if (reason === 'attachments_unavailable') facts.attachmentsSupported = false;

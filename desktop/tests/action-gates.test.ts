@@ -34,10 +34,10 @@ for (const [name, requirements, oldAllowed] of sites) test(`${name}: exhaustive 
 const ready = {token: 'credential', online: true, viewReady: true, pollHealth: 'connected',
   nativeBusy: false, manageAllowed: true, attachmentsSupported: true, uploadsAllowed: true};
 export const reasons = [
-  ['not_connected', {...ready, token: null}, {post: true}],
-  ['connecting', {...ready, online: false, pollHealth: 'initial'}, {post: true}],
+  ['not_connected', {...ready, token: null, online: false, viewReady: false}, {post: true}],
+  ['connecting', {...ready, online: false, viewReady: false, pollHealth: 'initial'}, {post: true}],
   ['reconnecting', {...ready, online: false, pollHealth: 'reconnecting'}, {post: true}],
-  ['connection_changing', {...ready, nativeBusy: true}, {post: true}],
+  ['connection_changing', {...ready, nativeBusy: true, online: false}, {post: true}],
   ['view_not_ready', {...ready, viewReady: false}, {post: true}],
   ['manage_required', {...ready, manageAllowed: false}, {attachment: true, manage: true}],
   ['attachments_unavailable', {...ready, attachmentsSupported: false}, {attachment: true, supported: true}],
