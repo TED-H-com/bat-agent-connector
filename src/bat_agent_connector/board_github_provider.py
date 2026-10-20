@@ -76,7 +76,9 @@ def normalize(repository, value):
     merged = bool(pr and value['pull_request'].get('merged_at'))
     return {'number': number, 'node_id': node, 'url': url, 'title': title,
         'kind': 'pull_request' if pr else 'issue', 'state': 'merged' if merged else value['state'],
-        'lane': 'done' if merged or value['state'] == 'closed' else 'doing' if pr else 'todo'}
+        'state_reason': value.get('state_reason'), 'draft': bool(pr and value.get('draft')),
+        'lane': ('github_done' if merged else 'github_completed' if not pr and value.get('state_reason') == 'completed'
+            else 'github_closed') if value['state'] == 'closed' or merged else 'doing' if pr else 'todo'}
 
 
 class BoardGitHubProvider:

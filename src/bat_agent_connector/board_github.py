@@ -234,7 +234,7 @@ async def _apply(ctx, principal, pid, repo, wid, values, now):
     legacy = _legacy_index(db, pid)
     # New boards should show actionable work before historical Done cards.
     # Existing item/order and association history are never reordered.
-    for value in sorted(values, key=lambda entry: entry['lane'] == 'done'):
+    for value in sorted(values, key=lambda entry: entry['state'] != 'open'):
         number = value['number']
         row = db.execute('''SELECT * FROM work_items WHERE project_id=? AND
             json_extract(github_external,'$.repository')=? AND json_extract(github_external,'$.number')=?''', (pid, repo, number)).fetchone()
@@ -258,35 +258,29 @@ async def _apply(ctx, principal, pid, repo, wid, values, now):
         if row is None:
             created = await _local_action(ctx, principal, f'create.{repo}.{number}', 'work_item.create',
                 {'project_id': pid}, {'title': value['title'], 'goal': value['url'],
-                    'state': value['lane'] if value['lane'] != 'done' else 'todo'})
+                    'state': value['lane'] if value['state'] == 'open' else 'todo'})
             row = db.execute('SELECT * FROM work_items WHERE work_item_id=?', (created['work_item_id'],)).fetchone()
             counts['created'] += 1
         iid = row['work_item_id']
-        manual = old.get('manual', False) if old else adopted and row['state'] != value['lane']
+        # Source observations never mutate the local work state or its completion
+        # claim. Adoption preserves the complete human lane, even for closed history.
+        manual = old.get('manual', False) if old else adopted
         if old and row['state'] != old['applied_lane']:
             manual = True
-        closed_transition = value['state'] in ('closed', 'merged') and (not old or old['state'] != value['state'])
-        lane = value['lane'] if not manual or closed_transition else row['state']
+        transition = old is not None and old['state'] != value['state']
+        board_lane = value['lane'] if not manual or transition and value['state'] != 'open' else None
         if row['archived_at'] is not None:
-            lane = row['state']
-        board_lane = lane
-        if lane == 'done' and any(not step['done'] for step in json.loads(row['steps'])):
-            # Closing an external issue cannot claim unfinished local steps are complete.
-            # The board still presents the external closure in its GitHub Done lane.
-            lane = row['state']
-        if old and old.get('board_lane') == 'done' and old['state'] == value['state']:
-            board_lane = 'done'
+            board_lane = None
         external = {'repository': repo, 'number': number, 'node_id': value['node_id'],
             'key': f'{repo}#{number}:{value["node_id"]}', 'url': value['url'], 'kind': value['kind'],
-            'state': value['state'], 'applied_lane': lane, 'board_lane': board_lane, 'manual': manual}
-        if old != external or row['state'] != lane:
-            if row['state'] != lane:
-                await _local_action(ctx, principal, f'state.{iid}', 'work_item.update', {'work_item_id': iid},
-                    {'state': lane}, {'expected_version': row['version']})
+            'source': 'github', 'state': value['state'], 'state_reason': value.get('state_reason'),
+            'draft': value.get('draft', False), 'applied_lane': row['state'], 'board_lane': board_lane, 'manual': manual}
+        if old != external:
             db.execute('UPDATE work_items SET github_external=?,version=version+1,updated_at=? WHERE work_item_id=?',
                 (json.dumps(external), now, iid))
             counts['updated'] += 1
-            work_items._event(ctx, 'work_item', iid, 'work_item.github.synced', {'project_id': pid, 'from': row['state'], 'to': lane})
+            work_items._event(ctx, 'work_item', iid, 'work_item.github.synced',
+                {'project_id': pid, 'source': 'github', 'state': value['state'], 'state_reason': value.get('state_reason')})
         await _associate(ctx, principal, wid, iid)
     return counts
 

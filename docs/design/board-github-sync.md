@@ -83,16 +83,19 @@ manual sync or saving settings explicitly admits a new intent.
 
 ## Cards and migration
 
-Mapping: open issue → `todo`; open PR (draft included) → `doing`; closed/merged →
-`done`. Initial title and GitHub URL are copied; later text edits are preserved.
-Human moves set a persistent manual flag, including moving away and back between
-polls. Unchanged GitHub state cannot undo them. Only a subsequent transition to
-closed/merged forces Done; reopening respects the manual flag. Archived cards are
-neither restored nor moved. A Done GitHub card uses a separate `github_done` PM
-lane so that closing a GitHub object never fabricates content approval. Unfinished local steps remain
-unchanged: external closure uses the GitHub Done lane without claiming those
-local steps or local completion have been accepted. A later explicit human move
-clears that lane override.
+Mapping: open issue → `todo`; open PR → `doing`, with a retained draft marker.
+Merged PRs use `github_done`; completed issues use `github_completed`;
+other closures (unmerged PRs, not-planned, duplicate and unknown reasons) use
+`github_closed` (Closed, not completed). These source lanes never mutate local
+work state, completion claims, unfinished steps or human approval. Completed
+issues emit source events with `source: github`; delivery evidence still comes
+only from delivery lineage. Initial titles are copied; later edits are preserved.
+
+Human moves persist, including moving away and back between polls. A subsequent
+source closure can set the applicable source lane, while reopening never revokes
+human approval. First adoption always preserves the human lane, even for closed
+sources. Archived cards are neither restored nor moved. An explicit human move
+clears the source lane override.
 
 An additive nullable `work_items.github_external` stores repository, number, issue
 node ID, stable key, URL, source state and move bookkeeping. A unique expression
