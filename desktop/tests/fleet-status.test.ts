@@ -97,7 +97,7 @@ test('cached success is withdrawn on failed reads, stale evidence, stopped monit
     [(doc: any) => {doc.monitor = {state: 'stopped', epoch: null, controllable: false};
       doc.selection.applied_revision = null;
       doc.readiness = {state: 'unavailable', observed_at: null, hosts: [], connector: null};}, 'stopped'],
-    [(doc: any) => {doc.selection.applied_revision = 'e'.repeat(64); doc.readiness.state = 'stale';}, 'selection_pending'],
+    [(doc: any) => {doc.selection.applied_revision = 'e'.repeat(64);}, 'selection_pending'],
     [(doc: any) => {Object.assign(doc.readiness.hosts[0], {selected: false, level: 'off', observed_at: null,
       layers: {tunnel: false, tls: false, bat: false, workspace: false}});}, 'off'],
   ] as const) {
@@ -130,19 +130,37 @@ test('BAT requires complete evidence; Connector never claims a BAT workspace or 
 });
 
 test('errors have bilingual next steps, with raw diagnostic codes confined to details', () => {
-  const examples = {TAILSCALE_WAKING: 'waking', ROUTE_UNAVAILABLE: 'network', TLS_IDENTITY_MISMATCH: 'trust',
-    BAT_AUTH_REFUSED: 'identity', CONNECTOR_SCOPE_MISSING: 'identity', BAT_VERSION_UNSUPPORTED: 'version',
-    BAT_PROTOCOL_INVALID: 'service', WORKSPACE_BINDING_MISMATCH: 'workspace', INVENTORY_INVALID: 'configuration',
-    OWNER_UNPROVEN: 'ownership', STOP_UNCONFIRMED: 'ownership', PROBE_TIMEOUT: 'timeout', PROBE_PENDING: 'checking',
-    PROBE_STALE: 'stale', NEW_UNKNOWN_CODE: 'unknown', constructor: 'unknown'};
-  for (const locale of ['en', 'zh-TW']) for (const [code, expected] of Object.entries(examples)) {
-    const row = {...fixture.readiness.hosts[0], code, level: code === 'PROBE_PENDING' || code === 'TAILSCALE_WAKING' || code === 'PROBE_STALE' || code === 'PROBE_TIMEOUT' ? 'degraded' : 'down',
-      blocking: null, stale: code === 'PROBE_STALE',
-      layers: {tunnel: false, tls: false, bat: false, workspace: false}};
-    assert.equal(diagnose(fixture, true, row).state, expected);
+  // Layer progress follows probe.rs; supervisor failures reset all layers.
+  const empty = {tunnel: false, tls: false, bat: false, workspace: false};
+  const tcp = {...empty, tunnel: true, auth: 'unknown'};
+  const tls = {...tcp, tls: true};
+  const authenticated = {...tls, auth: 'ok'};
+  const cases = [
+    ['TAILSCALE_WAKING', 'waking', 'tunnel', empty, 'degraded'],
+    ['ROUTE_UNAVAILABLE', 'network', 'tunnel', empty],
+    ['TLS_IDENTITY_MISMATCH', 'trust', 'tls', tcp],
+    ['BAT_AUTH_REFUSED', 'identity', 'auth', {...tls, auth: 'refused'}],
+    ['CONNECTOR_SCOPE_MISSING', 'identity', 'auth', tcp],
+    ['BAT_VERSION_UNSUPPORTED', 'version', 'bat', {...authenticated, version: '3.0.0'}],
+    ['BAT_PROTOCOL_INVALID', 'service', 'auth', tls],
+    ['WORKSPACE_BINDING_MISMATCH', 'workspace', 'workspace', {...authenticated, bat: true, version: '3.2.5'}],
+    ['INVENTORY_INVALID', 'configuration', 'inventory', empty],
+    ['OWNER_UNPROVEN', 'ownership', 'tunnel', empty],
+    ['STOP_UNCONFIRMED', 'ownership', 'tunnel', empty],
+    ['PROBE_TIMEOUT', 'timeout', 'tunnel', {...empty, auth: 'unknown'}, 'degraded'],
+    ['PROBE_PENDING', 'checking', 'bat', empty, 'degraded'],
+    ['PROBE_STALE', 'stale', 'stale', empty, 'degraded'],
+    // Defensive unit cases for forward-compatible/prototype-safe lookups.
+    ['NEW_UNKNOWN_CODE', 'unknown', null, empty], ['constructor', 'unknown', null, empty],
+  ] as const;
+  for (const locale of ['en', 'zh-TW']) for (const [code, expected, blocking, layers, level] of cases) {
+    const connector = code === 'CONNECTOR_SCOPE_MISSING';
+    const row = {...(connector ? fixture.readiness.connector : fixture.readiness.hosts[0]),
+      code, level: level || 'down', blocking, layers, stale: code === 'PROBE_STALE'};
+    assert.equal(diagnose(fixture, true, row, connector ? 'connector' : 'host').state, expected);
     const t = (key: string) => {assert.ok(STRINGS[locale][key], key); return STRINGS[locale][key];};
     const h = (tag: string, attrs: unknown, ...children: unknown[]) => ({tag, attrs, children});
-    const view = fleetStatus(row, {h, t, snapshot: fixture, readable: true, entry: fixture.configuration.connections[0], detailsState: new Map()});
+    const view = fleetStatus(row, {h, t, snapshot: fixture, readable: true, entry: fixture.configuration.connections.find((entry: any) => entry.name === row.name), detailsState: new Map()});
     const text = JSON.stringify(view.children.slice(0, 2));
     assert.ok(!text.includes(code));
     assert.equal(/[\u3400-\u9fff]/u.test(text), locale === 'zh-TW');
