@@ -1,24 +1,53 @@
 """Real isolated service ownership, credential recovery and safe failure boundaries."""
 import concurrent.futures
+import copy
 import json
 import os
 import socket
 import sqlite3
 import sys
 import time
+from pathlib import Path
 
 import pytest
 
 from bat_agent_connector import managed_runtime as runtime
+from desktop.tests.managed_runtime_assertions import stable_launch
 
 
-def stable_launch(reply):
-    # Each verification is a fresh observation; every pre-existing launch field
-    # and every new identity fact must still compare equal, except these clocks.
-    value = json.loads(json.dumps(reply))
+def test_stable_launch_ignores_observation_clocks_without_mutating_replies():
+    reply = json.loads((Path(__file__).parent / "fixtures/managed-runtime-identity.json").read_text())["differs"]
+    original = copy.deepcopy(reply)
+    later = copy.deepcopy(reply)
     for field in ("bundled_runtime", "running_runtime"):
-        value[field].pop("observed_at")
-    return value
+        later[field]["observed_at"] += 1
+    expected_later = copy.deepcopy(later)
+    assert reply != later
+    assert stable_launch(reply) == stable_launch(later)
+    assert reply == original and later == expected_later
+
+
+def test_stable_launch_preserves_every_other_producer_field():
+    golden = json.loads((Path(__file__).parent / "fixtures/managed-runtime-identity.json").read_text())
+
+    def paths(value, prefix=()):
+        for key, item in value.items():
+            path = (*prefix, key)
+            yield path
+            if isinstance(item, dict):
+                yield from paths(item, path)
+
+    clocks = {("bundled_runtime", "observed_at"), ("running_runtime", "observed_at")}
+    for name, reply in golden.items():
+        for path in paths(reply):
+            if path in clocks:
+                continue
+            changed = copy.deepcopy(reply)
+            parent = changed
+            for key in path[:-1]:
+                parent = parent[key]
+            del parent[path[-1]]
+            assert stable_launch(changed) != stable_launch(reply), (name, path)
 
 
 @pytest.fixture

@@ -24,6 +24,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from managed_runtime_assertions import stable_launch
+
 
 def package(resources, directory):
     manifest = json.loads((resources / 'manifest.json').read_text())
@@ -123,7 +125,7 @@ def idle_upgrade(previous, current, old_manifest, new_manifest, root, env):
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as workers:
             replies = list(workers.map(lambda _: command(current, data, env), range(3)))
         upgraded = replies[0]
-        assert all(reply == upgraded for reply in replies)
+        assert all(stable_launch(reply) == stable_launch(upgraded) for reply in replies)
         assert identity(upgraded) == identity(original)
         assert upgraded['runtime_version'] == new_manifest['runtime_version']
         assert request(upgraded, '/api/v1/version')['connector'] == new_manifest['runtime_version']
@@ -132,7 +134,7 @@ def idle_upgrade(previous, current, old_manifest, new_manifest, root, env):
         assert replay['operation_id'] == operation['operation_id'] and replay['result'] == operation['result']
         assert history(data, operation['operation_id']) == saved
         command(previous, data, env, refused=True)
-        assert command(current, data, env) == upgraded
+        assert stable_launch(command(current, data, env)) == stable_launch(upgraded)
         assert command(current, data, env, action='stop')['stopped'] is True
         stopped = True
         restarted = command(current, data, env)
