@@ -166,6 +166,20 @@ this change. Reverting to the old frontend can still read original old-port keys
 when connected at that original endpoint, but later edits in the new scope are not
 copied back automatically.
 
+`batc.sync.<scope>` stores only `{cursor, token}`, not a last-used time or a
+namespace generation. The cursor orders journal events, not local draft edits:
+several restarts can save the same cursor with different drafts. A restored
+journal also retains its `server_id` while its cursor regresses; the B02 backend
+test covers both regression and divergent reuse of a sequence. Thus even a
+unique highest saved cursor does not prove the latest namespace. This migration
+deliberately leaves all such sources untouched. A user with several old scopes
+gets an empty new scope; their old drafts remain available for explicit local
+inspection/export. Recovery requires reviewing the matching identity and choosing
+the intended complete source, including its original operation keys and pending
+requests, after backing up both old and new data. This change supplies no tool
+for that selection or import; copying draft text alone must not replay a pending
+request. Do not clear storage or guess a source from its port or cursor.
+
 The namespace audit covers these existing families uniformly:
 
 | Stored state | Key families after `batc.` |

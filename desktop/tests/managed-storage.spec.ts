@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 // Generated and drift-checked by the real Python ApiV1.bootstrap handler.
 const bootstrap = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-bootstrap.json', import.meta.url), 'utf8'));
 
-async function setup(page: Page, options: {source?: string; legacy?: boolean} = {}) {
+async function setup(page: Page, options: {source?: string; legacy?: boolean; legacyCursors?: number[]} = {}) {
   await page.addInitScript(({golden, options}: any) => {
     const saved = JSON.parse(sessionStorage.getItem('fixture.native.identity') || '{}');
     const fixture = {endpoint: 'http://127.0.0.1:41001/', server: golden.sync.server_id,
@@ -30,8 +30,20 @@ async function setup(page: Page, options: {source?: string; legacy?: boolean} = 
           request: {action: 'session.send', target: {workspace_id: 'ws_' + 'c'.repeat(32), work_item_id: 'wi_' + 'd'.repeat(20)},
             params: {text: 'Keep this request', schedule: 'after_current'}, preconditions: {expected_attempt_id: 'att_' + 'e'.repeat(32)}}}}));
       sessionStorage.setItem(`batc.tree.${scope}`, JSON.stringify(['fixture-workspace']));
+      if (options.legacyCursors) {
+        const entries = Object.entries(localStorage), tree = sessionStorage.getItem(`batc.tree.${scope}`)!;
+        options.legacyCursors.forEach((cursor: number, index: number) => {
+          const old = [`http://127.0.0.1:${41001 + index}/`, fixture.server, fixture.principal, fixture.actor].map(encodeURIComponent).join(':');
+          for (const [key, value] of entries) localStorage.setItem(key.replace(scope, old), value);
+          localStorage.setItem(`batc.sync.${old}`, JSON.stringify({cursor, token: 'fixture-saved-checkpoint-proof'}));
+          localStorage.setItem(`batc.draft.${old}.send.demo.session-1`, `Retained port ${41001 + index} draft`);
+          sessionStorage.setItem(`batc.tree.${old}`, tree);
+        });
+        Object.assign(fixture, {legacyEntries: Object.entries(localStorage).sort(),
+          legacyTabs: Object.entries(sessionStorage).filter(([key]) => key.startsWith('batc.tree.')).sort()});
+      }
       sessionStorage.setItem('fixture.legacy.seeded', '1');
-      fixture.endpoint = 'http://127.0.0.1:41002/';
+      fixture.endpoint = `http://127.0.0.1:${41001 + (options.legacyCursors?.length || 1)}/`;
     }
     Object.assign(window, {isTauri: true, __storage: fixture, __TAURI_INTERNALS__: {invoke: async (command: string, args: any) => {
       if (command === 'native_status') {fixture.statuses++; return {endpoint: fixture.endpoint, expected_actor: fixture.actor, configuration_source: fixture.source,
@@ -146,6 +158,30 @@ for (const locale of ['en-US', 'zh-TW']) {
     expect(await page.evaluate(() => (window as any).__storage.writes)).toBe(0);
     await context.close();
   });
+
+  for (const cursors of [[1, 1], [2, 1]]) {
+    test(`multiple old managed ports retain all drafts without ranking checkpoint cursors ${cursors} (${locale})`, async ({browser}) => {
+      const context = await browser.newContext({locale});
+      const page = await context.newPage();
+      // Equal cursors cannot order local edits. A higher cursor can also belong
+      // to an older runtime before a same-server journal restore (backend B02).
+      await setup(page, {legacy: true, legacyCursors: cursors});
+      await expect(page.locator('textarea').first()).toHaveValue('');
+      const result = await page.evaluate(() => ({
+        originals: Object.entries(localStorage).filter(([key]) => key.includes('http%3A%2F%2F')).sort(),
+        tabs: Object.entries(sessionStorage).filter(([key]) => key.startsWith('batc.tree.http%3A%2F%2F')).sort(),
+        receipts: Object.keys(localStorage).filter(key => key.startsWith('batc.storage-migration.')),
+        copiedRequests: Object.keys(localStorage).filter(key => /^batc\.(?:draft|key|pm)\.managed:v1:/.test(key)),
+        fixture: (window as any).__storage,
+      }));
+      expect(result.originals).toEqual(result.fixture.legacyEntries);
+      expect(result.tabs).toEqual(result.fixture.legacyTabs);
+      expect(result.receipts).toEqual([]);
+      expect(result.copiedRequests).toEqual([]);
+      expect(result.fixture.writes).toBe(0);
+      await context.close();
+    });
+  }
 
   test(`disconnect then a new external port waits for verification and cannot inherit the previous binding (${locale})`, async ({browser}) => {
     const context = await browser.newContext({locale});
