@@ -87,7 +87,7 @@ try {
   assert(!(await page.locator('[data-build-line]').textContent()).includes(copy.diag_frontend_stale));
   await page.goto(first.endpoint + "/dashboard/#/settings");
   await page.locator("[data-setup-advanced] > summary").click();
-  await page.getByRole("heading", {name: copy.managed_browser_connected}).waitFor();
+  await page.getByRole("heading", {name: copy.ui_local_connector}).waitFor();
   await page.getByRole("button", {name: copy.disconnect, exact: true}).click();
   await page.waitForFunction(() => !document.body.classList.contains("has-workspace"));
   await page.reload();

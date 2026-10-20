@@ -4,6 +4,7 @@ import * as projection from '../src/central-service-status.js';
 import {STRINGS} from '../src/i18n.js';
 import {ApiError, errorPresentation} from '../src/error-presentation.js';
 import * as errors from '../src/error-presentation.js';
+import {failedPolls} from './poll-observation-fixture.ts';
 
 const gate = (facts: any, requirements: any) => (projection as any).clientActionGate(facts, requirements);
 const fields = ['token', 'nativeBusy', 'online', 'viewReady', 'manageAllowed', 'attachmentsSupported', 'uploadsAllowed'];
@@ -21,7 +22,8 @@ for (const [name, requirements, oldAllowed] of sites) test(`${name}: exhaustive 
   for (let bits = 0; bits < 2 ** fields.length; bits++) {
     const facts: any = Object.fromEntries(fields.map((field, i) => [field, !!(bits & (1 << i))]));
     facts.token = facts.token ? 'credential' : null;
-    for (const pollHealth of ['initial', 'connected', 'reconnecting']) for (const managedRecovery of [null, 'MANAGED_RECOVERING']) {
+    for (const pollHealth of ['initial', 'connected', 'reconnecting', ...failedPolls.map(([status, code, kind]) =>
+      ({kind, status, code, at: 1234}))]) for (const managedRecovery of [null, 'MANAGED_RECOVERING']) {
       facts.pollHealth = pollHealth; facts.managedRecovery = managedRecovery;
       const result = gate(facts, requirements);
       assert.equal(result.allowed, !!oldAllowed(facts), `${name}: ${JSON.stringify(facts)}`);
@@ -42,6 +44,8 @@ export const reasons = [
   ['manage_required', {...ready, manageAllowed: false}, {attachment: true, manage: true}],
   ['attachments_unavailable', {...ready, attachmentsSupported: false}, {attachment: true, supported: true}],
   ['uploads_not_allowed', {...ready, uploadsAllowed: false}, {attachment: true, uploads: true}],
+  ...failedPolls.filter(([, , kind]) => kind !== 'transport').map(([status, code, kind, , reason]) =>
+    [reason, {...ready, online: false, pollHealth: {kind, status, code, at: 1234}}, {post: true}] as const),
 ] as const;
 for (const [reason, facts, requirements] of reasons) test(`distinct reason: ${reason}`, () => {
   assert.deepEqual(gate(facts, requirements), {allowed: false, reason});

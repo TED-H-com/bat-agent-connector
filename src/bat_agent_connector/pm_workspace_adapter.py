@@ -13,6 +13,41 @@ ANALYSIS = {'pm.run.analyze', 'pm.run.bat.analyze'}
 SCOPES = ('observe', 'manage', 'start')
 
 
+def effective_route(choice, native, bat, scopes):
+    """Read-only preflight projection; no installation probe or run admission.
+
+    Choice-editing availability is separate: contributors may use the saved
+    route even when only an owner may change it. Authorization must be True.
+    """
+    permitted = all(scope in scopes for scope in SCOPES)
+    rows = []
+    for adapter, descriptor in zip(ADAPTERS, (native, bat), strict=True):
+        value = descriptor if isinstance(descriptor, dict) else {}
+        if not permitted:
+            reason = 'scope_required'
+        elif value.get('action_registered') is not True:
+            reason = 'action_unavailable'
+        elif value.get('authorized') is not True:
+            reason = 'authorization_required'
+        elif value.get('eligible_for_preflight') is not True:
+            reason = value.get('reason') or 'eligibility_unknown'
+        else:
+            reason = None
+        rows.append({'adapter': adapter, 'ready': reason is None, 'reason': reason})
+    unreadable = choice is not None and (choice.get('version') != 1 or choice.get('reason') == 'original_sources_unavailable')
+    saved = choice.get('choice') if choice and not unreadable else None
+    adapter = saved.get('adapter') if isinstance(saved, dict) else None
+    source = 'unreadable' if unreadable else 'saved' if saved else 'unset'
+    candidates = [] if unreadable else [row for row in rows if row['adapter'] == adapter] if saved else rows
+    eligible = [row['adapter'] for row in candidates if row['ready']]
+    reason = (None if eligible else 'original_sources_unavailable' if unreadable else 'scope_required' if not permitted else
+        candidates[0]['reason'] if saved and candidates else 'action_unavailable' if saved else 'no_eligible_adapter')
+    return {'version': 1, 'scope': 'workspace_selected_route', 'choice_source': source,
+        'adapter': adapter, 'choice_ref': choice.get('choice_ref') if saved else None,
+        'ready': bool(eligible), 'reason': reason, 'eligible_adapters': eligible, 'adapters': candidates,
+        'model_execution_verified': False, 'execution_authorized': False}
+
+
 def bad(message, code='PM_ADAPTER_CHANGED', status=409):
     return OperationError(code, message, status)
 

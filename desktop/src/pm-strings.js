@@ -1,4 +1,5 @@
 import {discussionStrings} from './pm-discussions-strings.js';
+import {pmEffectiveRouteStrings} from './pm-effective-route-strings.js';
 import {resourceStrings} from './pm-resources-strings.js';
 import {workbenchStrings} from './pm-workbench-strings.js';
 import {pmPlanProposalStrings} from './pm-plan-proposal-strings.js';
@@ -18,6 +19,7 @@ import {pmMeetingStrings} from './pm-meetings-strings.js';
 
 export const pmStrings = {
   en: {
+    ...pmEffectiveRouteStrings.en,
     ...workbenchStrings.en,
     ...resourceStrings.en,
     ...pmPlanProposalStrings.en,
@@ -288,6 +290,7 @@ export const pmStrings = {
     pm_slot_resources: 'Resources', pm_slot_risk: 'Risk', pm_slot_quality: 'Quality',
   },
   'zh-TW': {
+    ...pmEffectiveRouteStrings['zh-TW'],
     ...workbenchStrings['zh-TW'],
     ...resourceStrings['zh-TW'],
     ...pmPlanProposalStrings['zh-TW'],

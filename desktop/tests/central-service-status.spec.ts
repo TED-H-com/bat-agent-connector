@@ -31,10 +31,9 @@ for (const locale of ['en-US', 'zh-TW']) {
     await mountConversation(page, false, async input => {
       const path = new URL(input.path, 'http://fixture').pathname;
       if (state === 'connecting' && path === '/capabilities') await pending;
-      return failed && path === '/events'
-        ? {status: 503, data: {error: {code: 'UNAVAILABLE', message: 'Events unavailable'}}}
-        : fixture.dispatch(input);
+      return fixture.dispatch(input);
     });
+    await page.route('**/api/v1/events?*', route => failed ? route.abort('connectionfailed') : route.fallback());
     if (state === 'not-connected' || state === 'connecting') await page.addInitScript(() => sessionStorage.clear());
     try {
       await page.goto('/dashboard/#/settings');
@@ -72,7 +71,7 @@ for (const locale of ['en-US', 'zh-TW']) {
       await useHeaderFont(page, 'DejaVu Sans');
       await expect(page.locator('#live')).toHaveAttribute('data-connection', 'connected');
       failed = true;
-      const text = locale === 'zh-TW' ? '重新連線中' : 'Reconnecting';
+      const text = copy.ui_service_error;
       await expect(page.locator('#live')).toHaveText(text);
       await expect(page.locator('.global-connection-facts .ui-pill')).toHaveText(text);
       await expect(page.locator('#live')).toHaveAccessibleName(locale === 'zh-TW' ? `Connector：${text}` : `Connector: ${text}`);
