@@ -197,7 +197,7 @@ def observed(packages):
     try:
         path.unlink()
         with owner(packages, "unknown-installation") as (root, _first):
-            # I06 keeps the owner's unknown identity even after metadata reappears.
+            # The owner's unknown startup identity stays unknown after metadata reappears.
             path.write_bytes(original)
             observations["unknown_running"] = ensure(installed["b"], root, env)
     finally:

@@ -49,10 +49,10 @@ The translation regression checks explicit English/zh-TW entries and variables f
 
 The managed launch reply and native status distinguish `bundled_runtime` from
 `running_runtime`. Both carry `version`, `commit`, provenance `build_source`,
-observation `source` and an epoch-seconds `observed_at`. The bundle fact is this
-launcher's I06 loaded `build_identity()` snapshot (`this_process`), not an installed
-receipt. The running fact comes from the proven owner's existing authenticated
-capabilities read (`capabilities`), whose build is that service's loaded snapshot.
+observation `source` and an epoch-seconds `observed_at`. The bundle fact is the
+`build_identity()` snapshot this launcher loaded at startup (`this_process`), not
+an installed receipt. The running fact comes from the proven owner's existing
+authenticated capabilities read (`capabilities`), whose build is that service's loaded snapshot.
 Missing identity fields remain null, including for an older service.
 
 `runtime_difference` is `same`, `differs` or `unknown`; either missing commit
@@ -61,7 +61,8 @@ change waits for the service's next launch. These facts do not trigger replaceme
 restart, stop or refusal. Same-version reuse and the existing version upgrade gates
 are unchanged; readiness is not a build comparison. Native launch/status fields are
 additive and optional, and recovery refreshes the recorded observations. Same-version
-restart/refusal policy and each platform's ensure/stop ownership remain O06 decisions.
+restart/refusal policy and each platform's ensure/stop ownership are owner decisions
+that have not been made.
 
 - The persistent installation manifest binds runtime version, data location, installation actor, server ID and principal ID. Reopening and concurrent clients recover that installation.
 - Central uses kernel file leases, not an occupied port, stale PID or matching path, to enforce a single owner. The endpoint pointer is checked against the owned database, then a challenge verifies the live service before any bearer is sent.

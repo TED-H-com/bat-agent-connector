@@ -159,8 +159,8 @@ def _verify(root, doc):
     if (caps.get("actor") != doc["actor"] or caps.get("desktop_identity") !=
             {"server_id": doc["server_id"], "principal_id": doc["principal_id"]}):
         raise ValueError("owned service personal identity changed; automatic replacement is refused")
-    # Capabilities already comes from this proven owner and contains its I06
-    # loaded snapshot. Old services without build provenance remain unknown.
+    # Capabilities already comes from this proven owner and contains the build
+    # identity it loaded at startup. Old services without provenance remain unknown.
     running = _runtime_identity(caps.get("build"), "capabilities")
     return {"protocol": PROTOCOL, "endpoint": endpoint, "actor": doc["actor"],
             "server_id": doc["server_id"], "principal_id": doc["principal_id"],
