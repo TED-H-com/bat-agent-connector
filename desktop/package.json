@@ -18,6 +18,7 @@
     "test:ui": "playwright test",
     "test:delivery": "node tests/delivery-integration.mjs",
     "test:central": "node tests/central-integration.mjs",
+    "test:two-service-isolation": "node tests/two-service-isolation.mjs",
     "test:attention": "node tests/attention-integration.mjs",
     "tauri": "tauri",
     "test:cleanup": "node tests/cleanup-integration.mjs",

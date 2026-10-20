@@ -68889,17 +68889,18 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 		kind: sourceKind,
 		id: sourceId
 	} : null;
+	const storageKey = `batc.delivery.${connection.namespace}`;
 	const repo = h("input", {
 		"aria-label": t("delivery_repository_input"),
 		placeholder: "owner/name",
-		value: source ? sourceRepository || "" : sessionStorage.getItem("batc.repo") || ""
+		value: source ? sourceRepository || "" : sessionStorage.getItem(storageKey + ".repo") || ""
 	});
 	const num = h("input", {
 		"aria-label": t("delivery_pr_number"),
 		placeholder: "123",
 		inputmode: "numeric",
 		size: 6,
-		value: source ? "" : sessionStorage.getItem("batc.pr") || ""
+		value: source ? "" : sessionStorage.getItem(storageKey + ".pr") || ""
 	});
 	const card = h("div", { class: "panel delivery-card" });
 	const inputStatus = h("p", {
@@ -68962,8 +68963,8 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 	const load = async (flash = null, fromEvent = false) => {
 		const opens = drawerOpens;
 		const holdCard = () => card.querySelector(".drawer:not([hidden])") || fromEvent && holdRender(true, opens);
-		sessionStorage.setItem("batc.repo", repo.value);
-		sessionStorage.setItem("batc.pr", num.value);
+		sessionStorage.setItem(storageKey + ".repo", repo.value);
+		sessionStorage.setItem(storageKey + ".pr", num.value);
 		if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo.value) || !/^[1-9]\d{0,8}$/.test(num.value)) {
 			inputStatus.textContent = repo.value || num.value ? t("delivery_choose_pr") : "";
 			return;

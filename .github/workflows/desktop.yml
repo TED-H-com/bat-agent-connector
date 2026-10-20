@@ -157,6 +157,8 @@ jobs:
         run: echo "BATC_CENTRAL_UI_DEADLINE=$(($(date +%s) + 600))" >> "$GITHUB_ENV"
       - name: test:central
         run: bash scripts/ci-central-ui.sh test:central
+      - name: test:two-service-isolation
+        run: bash scripts/ci-central-ui.sh test:two-service-isolation
       - name: test:pm
         run: bash scripts/ci-central-ui.sh test:pm
       - name: test:cleanup

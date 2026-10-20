@@ -190,16 +190,15 @@ The namespace audit covers these durable families uniformly (names below omit
 | Setup, create, repair, capture and work controls | `managed.setup`, `create`, `repair`, `capture`, `task-control`, `start`, `orchestrate`, `published`, `dispatch` |
 | Resource forms, approvals and cleanup | `labels`, `session-bat`, `permissions`, `artifact-review`, `model-preferences`, `project-skills`, `approvals`, `cleanup.draft`, `cleanup.pending`, `cleanup.intent` |
 | Tab preferences | `tree`, `sessions`, `attention`, `composer-shortcut` |
+| Standalone delivery repository/PR selection | sessionStorage `delivery.<scope>.repo`, `delivery.<scope>.pr` |
 | In-memory view selection and navigation folds | `viewState(namespace, workspaceId, view)` and `pm-workbench` maps, including `project-navigation`; no durable keys to copy |
 
 `ui/view-state.js`, `pm-workbench.js`, project navigation and workbench perspectives use the same new namespace in their
-bounded in-memory maps; they have no durable data to migrate. Language, layout,
-unscoped delivery filters and independently bound native Fleet preferences keep
-their existing keys. Fleet's `desktop.fleet.selection` and `desktop.fleet.controls`
-remain scoped by native configuration binding; `desktop.fleet.bootstrap.original`
-retains its native request/recipe identity. Fleet diagnostic and advanced-panel
-folds are in-memory state reset when that binding changes. None derives from
-`state.namespace` or belongs in the managed migration copy set.
+bounded in-memory maps; they have no durable data to migrate. Delivery selections
+use the same verified scope; the old global `batc.repo` / `batc.pr` hints remain
+untouched and are never adopted because they cannot prove their source. For keys
+outside this namespace and why they may cross sources, use the
+[out-of-namespace key inventory](two-service-isolation.md#every-key-outside-the-connector-namespace).
 Migration does not turn retained native file handles into
 valid handles for a different credential; existing native checks still apply.
 
