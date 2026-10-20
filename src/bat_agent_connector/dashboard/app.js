@@ -476,6 +476,31 @@ var init_pm_work_profile_strings = __esmMin((() => {
 			wpf_git_changed: "The Git execution location changed. This check does not suggest another location.",
 			wpf_local_git: "Local Git is not available. Use an SSH host already configured on the Linux BAT.",
 			wpf_observation_only: "This check uses the last observation and does not contact the host.",
+			wpf_reason_absent: "No reason code reported",
+			wpf_read_at: "Read at {time}",
+			wpf_last_verified: "Last verified {time}",
+			wpf_last_verified_unknown: "Last verified at an unknown time",
+			wpf_last_success: "Last successful observation {time}",
+			wpf_reason_REPOSITORY_NOT_BOUND: "This repository is not bound to the saved workspace.",
+			wpf_reason_host_unknown: "Connector has no configuration for this host.",
+			wpf_reason_configured_unverified: "Connector has saved this profile; execution has not been verified.",
+			wpf_reason_DISCOVERY_SCOPE_CHANGED: "The observation scope changed; earlier discovery does not verify this scope.",
+			wpf_reason_SOURCE_UNAVAILABLE: "The stored discovery source was unavailable.",
+			wpf_reason_CREDENTIAL_REQUIRED: "Connector cannot find the credential for this connection.",
+			wpf_reason_unauthorized: "The usage provider reported that sign-in was refused.",
+			wpf_reason_auth_validity_unverified: "Current sign-in has not been verified.",
+			wpf_reason_local_git_not_enabled: "Local Git execution is not enabled.",
+			wpf_reason_local_git_platform_unsupported: "Local Git execution is not supported on this platform.",
+			wpf_reason_local_git_tools_missing: "Required local Git tools are missing.",
+			wpf_reason_git_execution_location_changed: "The Git execution location changed; earlier evidence does not verify it.",
+			wpf_reason_ssh_alias_missing: "Connector has no SSH alias configured for this host.",
+			wpf_reason_REPOSITORY_HOST_UNAVAILABLE: "Managed work permissions or dedicated roots are not configured.",
+			wpf_reason_never_observed: "Connector has no observation for this host. This check does not contact the host.",
+			wpf_reason_host_unreachable: "The last observation failed. This Connector check does not contact the host.",
+			wpf_reason_host_not_refreshed: "There is no recent observation. This Connector check does not contact the host.",
+			wpf_reason_action_unavailable: "Connector has not registered this action.",
+			wpf_reason_no_owned_session_verified: "No current owned session has been verified.",
+			wpf_reason_execution_not_verified: "No owned execution has been verified.",
 			wpf_action_unavailable: "This action is not available on this connection.",
 			wpf_return_work: "Back to work",
 			wpf_return_published: "Back to published",
@@ -519,6 +544,31 @@ var init_pm_work_profile_strings = __esmMin((() => {
 			wpf_git_changed: "Git 執行位置已變更。這次檢查不建議改換執行位置。",
 			wpf_local_git: "本機 Git 不可用。請改用 Linux BAT 上已經設定好的 SSH 主機。",
 			wpf_observation_only: "這次檢查使用上次觀察結果，不會連絡主機。",
+			wpf_reason_absent: "未回報原因代碼",
+			wpf_read_at: "讀取時間：{time}",
+			wpf_last_verified: "上次驗證：{time}",
+			wpf_last_verified_unknown: "上次驗證時間未知",
+			wpf_last_success: "上次成功觀察：{time}",
+			wpf_reason_REPOSITORY_NOT_BOUND: "這個儲存庫尚未綁定至已存工作區。",
+			wpf_reason_host_unknown: "Connector 尚未設定這台主機。",
+			wpf_reason_configured_unverified: "Connector 已儲存這份設定檔，尚未驗證執行結果。",
+			wpf_reason_DISCOVERY_SCOPE_CHANGED: "觀察範圍已變更，先前的發現結果不能驗證這個範圍。",
+			wpf_reason_SOURCE_UNAVAILABLE: "先前的發現來源無法使用。",
+			wpf_reason_CREDENTIAL_REQUIRED: "Connector 找不到這次連線所需的憑證。",
+			wpf_reason_unauthorized: "用量來源回報登入遭到拒絕。",
+			wpf_reason_auth_validity_unverified: "目前的登入狀態尚未驗證。",
+			wpf_reason_local_git_not_enabled: "尚未啟用本機 Git 執行。",
+			wpf_reason_local_git_platform_unsupported: "這個平台不支援本機 Git 執行。",
+			wpf_reason_local_git_tools_missing: "缺少必要的本機 Git 工具。",
+			wpf_reason_git_execution_location_changed: "Git 執行位置已變更，先前的證據不能驗證目前位置。",
+			wpf_reason_ssh_alias_missing: "Connector 尚未設定這台主機的 SSH 別名。",
+			wpf_reason_REPOSITORY_HOST_UNAVAILABLE: "尚未設定受管工作權限或專用目錄。",
+			wpf_reason_never_observed: "Connector 還沒有這台主機的觀察結果。這次檢查不會連絡主機。",
+			wpf_reason_host_unreachable: "上次觀察失敗。Connector 這次檢查不會連絡主機。",
+			wpf_reason_host_not_refreshed: "目前沒有近期觀察結果。Connector 這次檢查不會連絡主機。",
+			wpf_reason_action_unavailable: "Connector 尚未註冊這個動作。",
+			wpf_reason_no_owned_session_verified: "尚未驗證目前可用的自有工作階段。",
+			wpf_reason_execution_not_verified: "尚未驗證自有工作的執行。",
 			wpf_action_unavailable: "這次連線沒有這個動作。",
 			wpf_return_work: "返回工作",
 			wpf_return_published: "返回已發布",
@@ -17260,14 +17310,14 @@ function createWorkPublish({ h, t, form, namespace, caps, errorBox }) {
 var ACTION$5 = "pm.execution.verify";
 var sha$5 = /^[0-9a-f]{40}$/;
 var digest$9 = /^[0-9a-f]{64}$/;
-var operation$1 = /^op_[0-9a-f]{32}$/;
+var operation$2 = /^op_[0-9a-f]{32}$/;
 function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspace, caps, form, labelled, errorBox, namespace, onSaved, onConfiguration = () => {}, onUnavailable = () => {}, fixedResult = null, allowedAction = () => true }) {
 	let sources = [], selected = "", generation = 0, ready = false, configuration = null, editor = null;
 	const navigation = `batc.pm.verifier.${namespace}.${workspaceId}`;
 	if (fixedResult) selected = fixedResult.execution_operation_id;
 	else try {
 		const value = localStorage.getItem(navigation);
-		if (operation$1.test(value || "")) selected = value;
+		if (operation$2.test(value || "")) selected = value;
 	} catch {}
 	const picker = h("select", { "aria-label": t("pmq_verify_execution") }), status = h("div", { role: "status" }), factBody = h("div"), holder = h("div"), notes = h("div");
 	const facts = h("details", {}, h("summary", {}, t("pmq_details")), factBody);
@@ -17667,7 +17717,7 @@ var RECORD$2 = "pm.quality.review.record";
 var REVOKE = "pm.quality.review.revoke";
 var sha$4 = /^[0-9a-f]{40}$/;
 var digest$8 = /^[0-9a-f]{64}$/;
-var operation = /^op_[0-9a-f]{32}$/;
+var operation$1 = /^op_[0-9a-f]{32}$/;
 var reviewId = /^pmqr_[0-9a-f]{32}$/;
 var ordered$1 = (value) => Array.isArray(value) ? value.map(ordered$1) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, ordered$1(value[key])])) : value;
 var same$10 = (a, b) => JSON.stringify(ordered$1(a)) === JSON.stringify(ordered$1(b));
@@ -17822,7 +17872,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		throw Error(t("pmq_history_bound"));
 	}
 	function checkReview(row) {
-		if (row?.workspace_id !== workspaceId || row.work_item_id !== workId || !reviewId.test(row.review_id) || !operation.test(row.operation_id) || !Number.isSafeInteger(row.version) || row.version < 1 || !digest$8.test(row.context_digest) || !Array.isArray(row.context?.criteria) || !Array.isArray(row.history) || !Array.isArray(row.applicability_reasons) || typeof row.qualified !== "boolean" || !sha$4.test(row.context?.native_result?.candidate_commit) || !operation.test(row.context?.execution_operation_id) || !row.original_outcome || row.assessment && (!operation.test(row.assessment.operation_id) || !digest$8.test(row.assessment.document_digest) || !Number.isSafeInteger(row.assessment.version) || !Array.isArray(row.assessment.document?.criteria)) || row.qualified && !row.assessment) throw error();
+		if (row?.workspace_id !== workspaceId || row.work_item_id !== workId || !reviewId.test(row.review_id) || !operation$1.test(row.operation_id) || !Number.isSafeInteger(row.version) || row.version < 1 || !digest$8.test(row.context_digest) || !Array.isArray(row.context?.criteria) || !Array.isArray(row.history) || !Array.isArray(row.applicability_reasons) || typeof row.qualified !== "boolean" || !sha$4.test(row.context?.native_result?.candidate_commit) || !operation$1.test(row.context?.execution_operation_id) || !row.original_outcome || row.assessment && (!operation$1.test(row.assessment.operation_id) || !digest$8.test(row.assessment.document_digest) || !Number.isSafeInteger(row.assessment.version) || !Array.isArray(row.assessment.document?.criteria)) || row.qualified && !row.assessment) throw error();
 		return row;
 	}
 	function packageFor(id) {
@@ -18363,7 +18413,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				});
 			}
 			for (const delivery of deliveries) for (const source of delivery.integration?.sources || []) {
-				if (source.source_kind !== "execution" || source.status !== "delivered" || !sha$4.test(source.delivered_sha) || !operation.test(source.source_id)) continue;
+				if (source.source_kind !== "execution" || source.status !== "delivered" || !sha$4.test(source.delivered_sha) || !operation$1.test(source.source_id)) continue;
 				for (const observation of observations) {
 					if (!digest$8.test(observation.document_digest)) throw error();
 					proofs.push({
@@ -39057,6 +39107,55 @@ function kanbanObservation({ h, t, api, alive, workspaceId, workId, caps, permit
 	};
 }
 //#endregion
+//#region src/pm-work-profile-state.js
+var values$1 = new Set([
+	"ready",
+	"missing",
+	"unknown",
+	"unavailable"
+]);
+var reasons = new Set([
+	"REPOSITORY_NOT_BOUND",
+	"host_unknown",
+	"configured_unverified",
+	"DISCOVERY_SCOPE_CHANGED",
+	"SOURCE_UNAVAILABLE",
+	"CREDENTIAL_REQUIRED",
+	"unauthorized",
+	"auth_validity_unverified",
+	"local_git_not_enabled",
+	"local_git_platform_unsupported",
+	"local_git_tools_missing",
+	"git_execution_location_changed",
+	"ssh_alias_missing",
+	"REPOSITORY_HOST_UNAVAILABLE",
+	"never_observed",
+	"host_unreachable",
+	"host_not_refreshed",
+	"action_unavailable",
+	"no_owned_session_verified",
+	"execution_not_verified"
+]);
+var operation = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
+var valueKey = (value) => "wpf_" + (values$1.has(value) ? value : "unknown");
+var profileTimestamp = (value) => typeof value === "number" && Number.isFinite(value) && value > 0 && value < 253402300800 ? value : null;
+function profileStateFacts(state) {
+	const reason = typeof state?.reason === "string" && /^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(state.reason) ? state.reason : null;
+	const past = state?.verified && typeof state.verified === "object" && !Array.isArray(state.verified) ? state.verified : null;
+	return {
+		valueKey: valueKey(state?.value),
+		reasonKey: reasons.has(reason) ? "wpf_reason_" + reason : "wpf_unverified",
+		reasonCode: reason,
+		operationId: operation(state?.evidence_ref?.operation_id),
+		lastSuccessAt: profileTimestamp(state?.evidence_ref?.last_success_at) ?? profileTimestamp(past?.evidence_ref?.last_success_at),
+		past: past ? {
+			valueKey: valueKey(past.value),
+			at: profileTimestamp(past.observed_at),
+			operationId: operation(past.evidence_ref?.operation_id)
+		} : null
+	};
+}
+//#endregion
 //#region src/pm-work-profile-picker.js
 var identity = (value) => typeof value === "string" && /^wpf_[0-9a-f]{32}$/.test(value);
 var states$1 = [
@@ -39180,10 +39279,20 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		}
 		const list = h$1("dl", { class: "pm-work-profile-states" });
 		for (const name of states$1) {
-			const state = data.states[name], value = h$1("dd", {}, t("wpf_" + state.value));
+			const state = profileStateFacts(data.states[name]);
+			const value = h$1("dd", {
+				"data-work-profile-state": name,
+				style: "overflow-wrap:anywhere"
+			}, h$1("p", { "data-work-profile-value": "" }, t(state.valueKey)), h$1("p", { "data-work-profile-reason": "" }, t(state.reasonKey), " · ", h$1("code", {}, state.reasonCode || t("wpf_reason_absent"))));
 			list.append(h$1("dt", {}, t("wpf_" + name)), value);
-			const op = state.evidence_ref?.operation_id;
-			if (name === "last_verified_execution" && /^op_[0-9a-f]{32}$/.test(op)) value.append(" · ", h$1("a", { href: `#/op/${op}` }, t("pm_operation")));
+			const operationLink = (op) => h$1("a", { href: `#/op/${op}` }, t("pm_operation"));
+			if (state.operationId) value.append(h$1("p", {}, operationLink(state.operationId)));
+			if (state.lastSuccessAt !== null) value.append(h$1("p", { "data-work-profile-last-success": "" }, timeLabel(t, "wpf_last_success", { time: timeStamp(state.lastSuccessAt) })));
+			if (state.past) {
+				const past = h$1("div", { "data-work-profile-past": "" }, h$1("p", {}, state.past.at === null ? t("wpf_last_verified_unknown") : timeLabel(t, "wpf_last_verified", { time: timeStamp(state.past.at) }), " · ", t(state.past.valueKey)));
+				if (state.past.operationId && state.past.operationId !== state.operationId) past.append(h$1("p", {}, operationLink(state.past.operationId)));
+				value.append(past);
+			}
 		}
 		const gap = data.smallest_gap, details = [];
 		if (gap) {
@@ -39199,15 +39308,16 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 					}
 				}, t(action === "setup.host" ? "wpf_setup_host" : "wpf_setup_repository")));
 			} else {
-				const key = gap.reason === "git_execution_location_changed" ? "wpf_git_changed" : gap.reason?.startsWith("local_git_") ? "wpf_local_git" : ["host_unreachable", "host_not_refreshed"].includes(gap.reason) ? "wpf_observation_only" : gap.reason === "action_unavailable" ? "wpf_action_unavailable" : "wpf_unverified";
+				const key = gap.reason === "git_execution_location_changed" ? "wpf_git_changed" : gap.reason?.startsWith("local_git_") ? "wpf_local_git" : gap.reason === "host_unreachable" ? "wpf_reason_host_unreachable" : gap.reason === "host_not_refreshed" ? "wpf_reason_host_not_refreshed" : gap.reason === "action_unavailable" ? "wpf_action_unavailable" : "wpf_unverified";
 				details.push(h$1("p", { class: "muted" }, t(key)));
 			}
 			if (typeof gap.last_success_at === "number" && Number.isFinite(gap.last_success_at) && gap.last_success_at > 0) details.push(timeStamp(gap.last_success_at));
 		}
-		facts.replaceChildren(h$1("h4", {}, t("wpf_coding")), h$1("p", {
+		const readAt = profileTimestamp(data.observed_at);
+		facts.replaceChildren(h$1("h4", {}, t("wpf_coding")), ...readAt === null ? [] : [h$1("p", { "data-work-profile-read-at": "" }, timeLabel(t, "wpf_read_at", { time: timeStamp(readAt) }))], h$1("p", {
 			class: "muted",
 			"data-work-profile-next-turn": ""
-		}, h$1("strong", {}, t("wpf_next_turn") + " · "), t(nextKey)), h$1("p", { class: "muted" }, t("wpf_locked")), list, ...data.states.can_start_own.value !== "ready" ? [h$1("p", { class: "muted" }, t("wpf_unverified"))] : [], ...details, h$1("h4", {}, t("wpf_pm")), h$1("p", {}, t(data.pm_analysis?.pm_ready === true ? "wpf_pm_preflight" : "wpf_pm_unverified")));
+		}, h$1("strong", {}, t("wpf_next_turn") + " · "), t(nextKey)), h$1("p", { class: "muted" }, t("wpf_locked")), list, ...data.states.can_start_own.value !== "ready" ? [h$1("p", { class: "muted" }, t("wpf_unverified"))] : [], ...gap ? [h$1("div", { "data-work-profile-gap": "" }, ...details)] : [], h$1("h4", {}, t("wpf_pm")), h$1("p", {}, t(data.pm_analysis?.pm_ready === true ? "wpf_pm_preflight" : "wpf_pm_unverified")));
 		const gapName = states$1.find((name) => data.states[name].value !== "ready");
 		announcement.textContent = [`${t("wpf_next_turn")}: ${t(nextKey)}`, gapName ? `${t("wpf_" + gapName)}: ${t("wpf_" + data.states[gapName].value)}. ${t("wpf_unverified")}` : ""].filter(Boolean).join(" ");
 		verified = {
