@@ -17,7 +17,6 @@ import os
 import re
 import runpy
 import signal
-import socket
 import sqlite3
 import subprocess
 import sys
@@ -209,17 +208,7 @@ def busy_refusal(previous, current, old_manifest, root, env):
         assert command(previous, data, env, action='stop')['stopped'] is True
 
 
-def fixture_log_text(text, root):
-    """Keep stacks/stages, never fixture credentials or machine identity."""
-    for name, value in os.environ.items():
-        if any(part in name for part in ('TOKEN', 'PASSWORD', 'SECRET')) and len(value) >= 4:
-            text = text.replace(value, '<credential>')
-    text = re.sub(r'\bbatc_[A-Za-z0-9_-]+', '<credential>', text)
-    text = re.sub(r'(?i)\bBearer\s+\S+', 'Bearer <credential>', text)
-    for path, label in ((root, '<fixture>'), (Path(__file__).resolve().parents[2], '<checkout>')):
-        text = text.replace(str(path), label)
-    text = re.sub(r'''/(?:Users|home)/[^/\s'"\]]+''', '<home>', text)
-    return text.replace(socket.gethostname(), '<runner>')
+fixture_log_text = runpy.run_path(str(Path(__file__).with_name('managed_upgrade_observer.py')))['fixture_log_text']
 
 
 def preserve_publication_logs(root):
@@ -274,10 +263,12 @@ existing packaged workspace/identity checks; its publication path remains open.
     output = root / 'publication-seed.json'
     # Controller Python has dev dependencies; frozen children still have no
     # Python on PATH. The seeder writes through the real action/receipt code.
-    seed_env = {**os.environ, 'PYTHONPATH': os.pathsep.join([str(previous_source / 'src'), str(previous_source)]), 'TMPDIR': str(root),
+    seed_env = {**os.environ, 'PYTHONPATH': os.pathsep.join([str(previous_source / 'src'), str(previous_source),
+        str(Path(__file__).resolve().parent)]), 'TMPDIR': str(root),
         'TMP': str(root), 'TEMP': str(root), 'BATC_UPGRADE_SEED_DATA': str(data),
         'BATC_UPGRADE_SEED_REPORT': str(output), 'BATC_UPGRADE_SEED_MODE': '1'}
     seed_command = [*(pytest_prefix or [sys.executable, '-m', 'pytest']), '-vv', '-s', '--setup-show',
+        '-p', 'managed_upgrade_observer',
         str(Path(__file__).resolve()) + '::test_publication_seed', '--noconftest', '--import-mode=importlib',
         '--rootdir=' + str(previous_source), '--asyncio-mode=auto',
         '-o', 'faulthandler_timeout=40',
@@ -375,6 +366,7 @@ if os.environ.get('BATC_UPGRADE_SEED_MODE') == '1':
     # Explicit pytest node only. PYTHONPATH/rootdir select the original release;
     # --noconftest prevents this checkout's fixtures from replacing its producer.
     import pytest
+    from managed_upgrade_observer import record
 
     from bat_agent_connector import platform_files
     from bat_agent_connector.task_daemon import TaskDaemon
@@ -398,6 +390,7 @@ if os.environ.get('BATC_UPGRADE_SEED_MODE') == '1':
             yield value
 
     async def test_publication_seed(start_ready, mock, monkeypatch):
+        record('seed.producer.start')
         print('[publication-seed] start_ready complete; entering Work/Result/publication producer', flush=True)
         helper = Path(__file__).resolve().parents[2] / 'tests/upgrade_continuity_helpers.py'
         producer = runpy.run_path(str(helper))['seed_publication']
@@ -413,6 +406,7 @@ if os.environ.get('BATC_UPGRADE_SEED_MODE') == '1':
         info['provider_environment'] = {name: os.environ[name] for name in ('BATC_TEST_TOKEN', 'REPO_FAKE_TOKEN')}
         output = Path(os.environ['BATC_UPGRADE_SEED_REPORT'])
         platform_files.atomic_write(output, json.dumps(info).encode())
+        record('seed.ready')
         print('[publication-seed] readiness written; providers remain alive', flush=True)
         # Keep the original FakeGitHub/MockBat alive through the new core's
         # recovery, so a duplicate REST call is observed across the switch.
@@ -421,6 +415,7 @@ if os.environ.get('BATC_UPGRADE_SEED_MODE') == '1':
             assert time.monotonic() < until, 'Controller did not release owned source producer'
             await asyncio.sleep(0.05)
         effects = {'create_pull': len(start_ready['posts']), 'push': start_ready['runner'].ran['publication-push']}
+        record('seed.providers.released')
         assert effects == {'create_pull': 1, 'push': 1}
         platform_files.atomic_write(output.parent / 'publication-effects.json', json.dumps(effects).encode())
 

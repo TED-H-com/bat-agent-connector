@@ -54,7 +54,9 @@ def test_publication_failure_preserves_redacted_seed_and_core_logs(tmp_path, mon
 
     ticks = iter([0, 0, 46])
     monkeypatch.setitem(scope, 'time', SimpleNamespace(monotonic=lambda: next(ticks), sleep=lambda _: None))
-    monkeypatch.setitem(scope, 'socket', SimpleNamespace(gethostname=lambda: 'fixture-runner-host'))
+    redactor = scope['fixture_log_text'].__globals__
+    monkeypatch.setitem(redactor, '__file__', str(script))
+    monkeypatch.setitem(redactor, 'socket', SimpleNamespace(gethostname=lambda: 'fixture-runner-host'))
     monkeypatch.setitem(scope, 'subprocess', SimpleNamespace(
         Popen=popen, DEVNULL=subprocess.DEVNULL, STDOUT=subprocess.STDOUT,
         TimeoutExpired=subprocess.TimeoutExpired))
@@ -71,6 +73,7 @@ def test_publication_failure_preserves_redacted_seed_and_core_logs(tmp_path, mon
     assert 'older diagnostic' not in message  # The assertion contains only the last 300 lines.
     assert '-o' in arguments and 'faulthandler_timeout=40' in arguments
     assert '--setup-show' in arguments
+    assert '-p' in arguments and 'managed_upgrade_observer' in arguments
     output = checkout / 'desktop/test-results/packaged-core-upgrade'
     for name in ('publication-seed.log', 'publication-core.log'):
         saved = (output / name).read_text()
