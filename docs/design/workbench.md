@@ -214,6 +214,17 @@ inspectors and the workspace drawer retain their existing close behavior.
 landscape reflow, original composer identity, one send after reflow, IME key
 suppression, draft reload and HTTP/IPC source withdrawal. These are browser
 fixtures, not physical keyboard, lock-screen, Safari or installed Tauri evidence.
+
+`foreground-device-continuity.spec.ts` combines reflow, visibility recovery,
+`pagehide`/persisted `pageshow`, browser-engine offline/online, IME suppression and
+a newer Attempt in English/zh-TW at 390×844 and 844×390 over HTTP and simulated
+IPC. It checks composer identity, focus, selection, draft bytes, reading/textarea
+scroll positions, settled event/source gates and one explicit send to the original
+Attempt with its persisted key. IPC uses a real same-origin network probe before
+the simulated bridge; lifecycle events are synthetic. iPhone Safari, Android Chrome
+candidate Enter, the real lock screen, Wi-Fi↔cellular and installed Tauri still
+require the owner's physical-device evidence.
+
 Review images use synthetic shared-component fixtures. Before/after Work captures
 use identical data, draft, viewport and locale; list/Results captures add rows to
 exercise scrolling. They contain no live Fleet or account data.
