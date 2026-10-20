@@ -1,4 +1,4 @@
-import {centralServiceStatus, clientActionGate} from "./central-service-status.js";
+import {centralServiceStatus, clientActionGate, pollFailure} from "./central-service-status.js";
 import {workbenchEnabled} from './workbench-mode.js';
 import {workbenchViews} from './workbench-views.js';
 import {settingsAgents} from './settings-agents.js';
@@ -70,7 +70,7 @@ import {renderDeliveryWork, renderObservedResource, unavailableProject} from "./
 import {observedText} from "./observed-resource-strings.js";
 
 const TOKEN_KEY = "batc.dashboard.token";
-const state = { token: null, caps: null, lastEvent: 0, lastEventAt: 0, listeners: new Set(), namespace: "", scopeIdentity: null, epoch: 0, online: false, pollHealth: 'initial', viewReady: false, sync: null, endpoint: "", connectionError: null, nativeBusy: false, nativeAttempt: 0, connectionNotice: null, refreshCycle: null };
+const state = { token: null, caps: null, lastEvent: 0, lastEventAt: 0, lastPoll: null, listeners: new Set(), namespace: "", scopeIdentity: null, epoch: 0, online: false, pollHealth: 'initial', viewReady: false, sync: null, endpoint: "", connectionError: null, nativeBusy: false, nativeAttempt: 0, connectionNotice: null, refreshCycle: null };
 const recentErrors = errorRing();
 const diagnosticSessions = new Map();
 let diagnosticSessionsRead = false;
@@ -844,6 +844,9 @@ function paintConnection(waiting = false, paused = false) {
     : key === 'ui_not_connected' ? 'ui_not_connected_help'
     : key === 'ui_connecting' ? 'ui_connecting_help'
     : key === 'ui_reconnecting' ? 'offline_actions_paused'
+    : key === 'ui_connection_refused' ? 'error_code_CLIENT_ACTION_REFUSED'
+    : key === 'ui_service_error' ? 'error_code_CLIENT_ACTION_SERVICE_ERROR'
+    : key === 'ui_invalid_response' ? 'error_code_CLIENT_ACTION_INVALID_RESPONSE'
     : paused ? 'sync_actions_paused' : waiting ? 'sync_waiting' : 'desktop_polling';
   live.title = scoped + ' — ' + t(helpKey);
   for (const paint of [...connectionPainters]) paint();
@@ -902,18 +905,21 @@ async function streamEvents() {
     }
     const epoch = state.epoch, view = generation, foreground = foregroundVersion;
     let cycle, pollSucceeded = false;
+    const previousPoll = state.lastPoll;
     try {
       const before = state.lastEvent;
       const checkpoint = state.sync ? `&checkpoint=${encodeURIComponent(state.sync.token)}` : "";
       const page = await api("GET", `/events?after=${before}&limit=100${checkpoint}`);
       if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
-      pollSucceeded = true; state.pollHealth = 'connected'; paintConnection(true);
+      pollSucceeded = true; state.pollHealth = 'connected';
+      state.lastPoll = {at: Date.now(), namespace: state.namespace}; paintConnection(true);
       if (view !== generation || !state.viewReady) continue;
       cycle = {error: null}; state.refreshCycle = cycle;
       // A deferred render is not a connection failure: keep version-checked form saves usable.
       // Actual event/read failures below pause mutations until a successful replay.
       const cursor = await consumePageAsync(page, before, ev => {
-        return settleRefreshes([...state.listeners].map(fn => Promise.resolve().then(() => fn(ev))));
+        return settleRefreshes([...state.listeners].map(fn => Promise.resolve().then(() => fn(ev))))
+          .catch(error => {cycle.error ||= error; throw error;});
       });
       if (epoch !== state.epoch || view !== generation || foreground !== foregroundVersion || !state.viewReady) continue;
       if (cycle.error) throw cycle.error;
@@ -931,7 +937,12 @@ async function streamEvents() {
       if (!page.has_more || cursor <= before) await waitForEventPoll(1000);
     } catch (error) {
       if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
-      if (!pollSucceeded) {state.pollHealth = 'reconnecting'; paintConnection();}
+      // A successful HTTP page followed by a failed view refresh still proves
+      // transport health. Invalid event/checkpoint data is a poll response error.
+      if (!pollSucceeded || !cycle?.error) {
+        if (pollSucceeded) state.lastPoll = previousPoll;
+        state.pollHealth = pollFailure(error, Date.now()); paintConnection();
+      }
       if (view !== generation) continue;
       if (state.refreshCycle === cycle) state.refreshCycle = null;
       updateOnline(false);
@@ -3254,16 +3265,22 @@ function fleetEmpty() {
 function connectionFacts() {
   const endpoint = state.endpoint || (state.token ? location.origin : "");
   const stateCell = h("dd");
-  const eventCell = h("dd");
+  const eventCell = h("dd", {'data-last-event': ''});
+  const pollCell = h("dd", {'data-last-successful-poll': ''});
   const dl = h("dl", {class: "kv global-connection-facts"},
     h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"),
     h("dt", {}, t("global_state")), stateCell,
     h("dt", {}, t("global_last_event")), eventCell,
+    h("dt", {}, t("ui_last_poll")), pollCell,
     h("dt", {}, t("connection_access")), connectionAccess());
   const render = () => {
     const {key, tone} = centralServiceStatus(state);
     stateCell.replaceChildren(h("span", {class: `ui-pill tone-${tone}`}, t(key)));
     eventCell.replaceChildren(state.lastEventAt ? when(state.lastEventAt) : t("global_no_event"));
+    eventCell.dataset.observedAt = state.lastEventAt ? new Date(state.lastEventAt).toISOString() : '';
+    const pollAt = state.lastPoll?.namespace === state.namespace ? state.lastPoll.at : 0;
+    pollCell.replaceChildren(pollAt ? when(pollAt) : '—');
+    pollCell.dataset.observedAt = pollAt ? new Date(pollAt).toISOString() : '';
   };
   render();
   const paint = () => {
@@ -3340,7 +3357,7 @@ function viewBrowserSettings(main) {
   const facts = connectionFacts();
   frame.panel("connection").append(h("section", {class: "panel"},
     facts,
-    managed ? h("h2", {}, t("managed_browser_connected")) : null,
+    managed ? h("h2", {}, t("ui_local_connector")) : null,
     disclosure({label: t("global_details"), body: h('div', {}, connectionIdentity(), managed ? h("p", {}, t("managed_browser_help")) : null)}),
     h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect"))));
   frame.show("fleet");
@@ -3389,7 +3406,7 @@ async function viewManagedSettings(main) {
   const status = h("div", {role: "status"});
   const refreshButton = iconButton({icon: 'refresh-cw', label: t('global_refresh'), onClick: () => setup.reload()});
   const frame = openSettings(main, {exclusive: !nativeDesktop, refreshButton});
-  const local = h("section", {class: "panel", 'data-connection-card': ''}, h("h2", {}, t("managed_browser_connected")),
+  const local = h("section", {class: "panel", 'data-connection-card': ''}, h("h2", {}, t("ui_local_connector")),
     connectionFacts(),
     disclosure({label: t("global_details"), body: h('div', {}, connectionIdentity(),
       h("p", {}, t("managed_background_help")), !nativeDesktop ? h('p', {}, t('managed_browser_help')) : null,
