@@ -64583,6 +64583,111 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	};
 }
 //#endregion
+//#region src/state/storage-identity.ts
+function managedStorageScope(identity) {
+	return [
+		"managed",
+		"v1",
+		identity.server_id,
+		identity.principal_id,
+		identity.actor
+	].map(encodeURIComponent).join(":");
+}
+function keys(storage) {
+	return Array.from({ length: storage.length }, (_, index) => storage.key(index)).filter(Boolean);
+}
+function rebase(key, source, target) {
+	const prefix = key.match(/^(batc\.[a-z.-]+\.)(?=https?%3A%2F%2F|managed:v1:)/)?.[1];
+	if (!prefix) return null;
+	const rest = key.slice(prefix.length);
+	return rest === source || rest.startsWith(source + ".") ? prefix + target + rest.slice(source.length) : null;
+}
+function legacyIdentity(scope) {
+	try {
+		const parts = scope.split(":");
+		if (parts.length !== 4) return null;
+		const [endpoint, server_id, principal_id, actor] = parts.map(decodeURIComponent);
+		const url = new URL(endpoint);
+		if (url.protocol !== "http:" || ![
+			"127.0.0.1",
+			"localhost",
+			"[::1]"
+		].includes(url.hostname) || !url.port || url.username || url.password || url.pathname !== "/" || url.search || url.hash || scope !== storageScope(endpoint, actor, server_id, principal_id)) return null;
+		return {
+			server_id,
+			principal_id,
+			actor
+		};
+	} catch {
+		return null;
+	}
+}
+function migrateManagedStorage(identity, local, session) {
+	const target = managedStorageScope(identity), marker = `batc.storage-migration.${target}`;
+	const receipt = local.getItem(marker);
+	if (receipt !== null) {
+		const saved = JSON.parse(receipt);
+		if (saved?.version !== 1 || saved.target !== target || saved.status !== "complete") throw Error("Local storage migration is incomplete; original data is retained");
+		return;
+	}
+	const areas = [local, session], allKeys = areas.map(keys);
+	if (allKeys.some((list) => list.some((key) => rebase(key, target, target) !== null))) return;
+	const candidates = allKeys[0].filter((key) => key.startsWith("batc.sync.")).map((key) => key.slice(10));
+	const matching = candidates.filter((scope) => {
+		const old = legacyIdentity(scope);
+		return old?.server_id === identity.server_id && old.principal_id === identity.principal_id && old.actor === identity.actor;
+	});
+	if (matching.length !== 1) return;
+	const source = matching[0];
+	for (const key of allKeys.flat()) {
+		const endpoint = key.match(/^batc\.[a-z.-]+\.(https?%3A%2F%2F[^:]+):/)?.[1];
+		if (!endpoint) continue;
+		let possible;
+		try {
+			possible = storageScope(decodeURIComponent(endpoint), identity.actor, identity.server_id, identity.principal_id);
+		} catch {
+			continue;
+		}
+		if (possible !== source && legacyIdentity(possible) && rebase(key, possible, possible) !== null) return;
+	}
+	if (candidates.some((scope) => scope !== source && (scope.startsWith(source + ".") || source.startsWith(scope + ".")))) return;
+	const copies = areas.flatMap((storage, area) => allKeys[area].flatMap((key) => {
+		const destination = rebase(key, source, target), value = storage.getItem(key);
+		return destination !== null && value !== null ? [{
+			storage,
+			destination,
+			value
+		}] : [];
+	}));
+	if (!copies.length) return;
+	const record = {
+		version: 1,
+		source,
+		target,
+		status: "copying"
+	};
+	local.setItem(marker, JSON.stringify(record));
+	const written = [];
+	try {
+		for (const copy of copies) {
+			if (copy.storage.getItem(copy.destination) !== null) throw Error("Local storage migration destination changed");
+			copy.storage.setItem(copy.destination, copy.value);
+			written.push(copy);
+		}
+		local.setItem(marker, JSON.stringify({
+			...record,
+			status: "complete"
+		}));
+	} catch (error) {
+		for (const copy of written.reverse()) {
+			if (copy.storage.getItem(copy.destination) !== copy.value) throw Error("Local storage migration destination changed; original data is retained");
+			copy.storage.removeItem(copy.destination);
+		}
+		local.removeItem(marker);
+		throw error;
+	}
+}
+//#endregion
 //#region src/observed-resource.js
 init_i18n();
 var say = (key, values) => observedText(t, key, values);
@@ -64898,6 +65003,7 @@ var state = {
 	lastEventAt: 0,
 	listeners: new Set(),
 	namespace: "",
+	scopeIdentity: null,
 	epoch: 0,
 	online: false,
 	pollHealth: "initial",
@@ -65005,9 +65111,7 @@ async function openDiagnostics() {
 		}
 	});
 }
-async function activate(caps, endpoint = location.origin, reset = false) {
-	const scopeEndpoint = nativeDesktop && caps.actor === state.caps?.actor && caps.desktop_identity && state.caps?.desktop_identity && caps.desktop_identity.server_id === state.caps.desktop_identity.server_id && caps.desktop_identity.principal_id === state.caps.desktop_identity.principal_id ? state.scopeEndpoint || state.endpoint || endpoint : endpoint;
-	state.scopeEndpoint = scopeEndpoint;
+async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource) {
 	withdrawDiagnostics();
 	recentErrors.clear();
 	state.epoch++;
@@ -65029,7 +65133,18 @@ async function activate(caps, endpoint = location.origin, reset = false) {
 		const sync = bootstrap.sync;
 		if (sync?.version !== 1 || !sync.server_id || !sync.principal_id || !Number.isSafeInteger(sync.checkpoint?.cursor) || sync.checkpoint.cursor < 0 || !sync.checkpoint.token || bootstrap.capabilities?.actor !== caps.actor || caps.desktop_identity && (caps.desktop_identity.server_id !== sync.server_id || caps.desktop_identity.principal_id !== sync.principal_id)) throw new Error("Invalid central bootstrap identity");
 		state.caps = bootstrap.capabilities;
-		state.namespace = storageScope(scopeEndpoint, caps.actor, sync.server_id, sync.principal_id);
+		const identity = {
+			actor: caps.actor,
+			server_id: sync.server_id,
+			principal_id: sync.principal_id
+		};
+		const managed = nativeDesktop && configurationSource === "managed";
+		if (managed) migrateManagedStorage(identity, localStorage, sessionStorage);
+		state.scopeIdentity = {
+			...identity,
+			configurationSource
+		};
+		state.namespace = managed ? managedStorageScope(identity) : storageScope(endpoint, caps.actor, sync.server_id, sync.principal_id);
 		state.sync = sync.checkpoint;
 		if (!reset) try {
 			const saved = JSON.parse(localStorage.getItem(`batc.sync.${state.namespace}`));
@@ -65037,6 +65152,7 @@ async function activate(caps, endpoint = location.origin, reset = false) {
 		} catch {}
 		state.lastEvent = state.sync.cursor;
 	} else {
+		state.scopeIdentity = null;
 		state.namespace = storageScope(endpoint, caps.actor);
 		state.lastEvent = 0;
 	}
@@ -65057,6 +65173,7 @@ function disconnect() {
 	state.caps = null;
 	state.lastEvent = 0;
 	state.lastEventAt = 0;
+	state.scopeIdentity = null;
 	state.online = false;
 	state.viewReady = false;
 	state.sync = null;
@@ -70195,7 +70312,7 @@ async function nativeTransition(kind, config = null) {
 			} else {
 				state.token = "native-credential";
 				try {
-					await activate(caps, status.endpoint);
+					await activate(caps, status.endpoint, false, status.configuration_source);
 				} catch (error) {
 					if (attempt === state.nativeAttempt) {
 						if (kind !== "recover") await nativeDisconnect();
@@ -72617,7 +72734,7 @@ async function start() {
 				const caps = await nativeConnect();
 				if (attempt === state.nativeAttempt) {
 					state.token = "native-credential";
-					await activate(caps, status.endpoint);
+					await activate(caps, status.endpoint, false, status.configuration_source);
 				}
 			}
 		} catch (error) {
