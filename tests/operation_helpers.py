@@ -39,15 +39,18 @@ async def stop_workers(ops):
     await asyncio.gather(*pending, return_exceptions=True)
 
 
-async def wait_operation_attempts(ops, active, *, timeout=60, started=None, clock=None, wait=None, description=None):
+async def wait_operation_attempts(ops, active, *, timeout=60, started=None, clock=None, wait=None,
+                                description=None, deadline=None):
     """Wait for captured workers; each must make its own durable step progress.
 
     The stall bound protects the suite from a hung attempt, not from CPU time
-    used by a progressing operation. Callers retain scheduling and teardown.
+    used by a progressing operation. An independent overall cap also bounds a
+    worker that persists steps forever. Callers retain scheduling and teardown.
     """
     clock = clock or asyncio.get_running_loop().time
     wait = wait or asyncio.wait
     started = clock() if started is None else started
+    deadline = started + 10 * timeout if deadline is None else deadline
 
     def progress(oid):
         return tuple(tuple(row) for row in ops.db.execute(
@@ -57,9 +60,14 @@ async def wait_operation_attempts(ops, active, *, timeout=60, started=None, cloc
     changed = dict.fromkeys(receipts, started)
     pending = {task for _, task in active}
     while pending:
-        remaining = min(timeout - (clock() - changed[oid]) for oid, task in active if task in pending)
+        now = clock()
+        remaining = min(deadline - now, *(timeout - (now - changed[oid])
+            for oid, task in active if task in pending))
         _, pending = await wait(pending, timeout=max(0, min(1, remaining)))
         now = clock()
+        if now >= deadline:
+            raise AssertionError(f'{description or "Operation attempts"} exceeded overall {10 * timeout}s safety cap\n'
+                                 + worker_details(ops))
         for oid, task in active:
             if task not in pending:
                 continue
@@ -87,11 +95,13 @@ async def settle_operations(ops, *, timeout=60):
     Uncertain/waiting attempts return without forcing their future retries. Yield after scheduling so a retry
     enters running before wait() observes the previous attempt's uncertain status.
     timeout is a per-worker guard against missing durable step progress, not
-    an overall latency assertion. Product budgets remain independently checked.
+    an overall latency assertion. An independent 10x cap spans all worker
+    waves, including newly admitted children. Product budgets remain checked.
     On failure, stop and join this service's workers while its fixture journal is
     still open. This does not cancel durable operations or change their receipts.
     """
     loop = asyncio.get_running_loop()
+    deadline = loop.time() + 10 * timeout
     try:
         while True:
             await ops.run_due()
@@ -99,7 +109,8 @@ async def settle_operations(ops, *, timeout=60):
             if not active:
                 return
             await asyncio.sleep(0)
-            await wait_operation_attempts(ops, active, timeout=timeout, clock=loop.time, wait=asyncio.wait)
+            await wait_operation_attempts(ops, active, timeout=timeout, clock=loop.time, wait=asyncio.wait,
+                deadline=deadline)
     except BaseException:
         await stop_workers(ops)
         raise

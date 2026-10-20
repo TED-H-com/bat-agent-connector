@@ -24,11 +24,11 @@ from bat_agent_connector import pm_release_baselines as baselines
 from bat_agent_connector import pm_required_ci as required_ci
 from bat_agent_connector import pm_work_batch_evidence as evidence
 from bat_agent_connector import pm_workload as workload
-from bat_agent_connector.operations import OperationError
+from bat_agent_connector.operations import RUNNABLE, TERMINAL, OperationError
 from bat_agent_connector.task_verifier import ObservedVerifier, VerificationSettings
 from tests import test_pm_execution_verification as verifier
 from tests import test_pm_member_lifecycle_acceptance as member
-from tests.operation_helpers import stop_workers, wait_operation_attempts
+from tests.operation_helpers import stop_workers, wait_operation_attempts, worker_details
 from tests.pm_joined_delivery_helpers import settle
 from tests.pm_joined_lifecycle_helpers import OWNER, assert_manual_preserved, engineering, execute
 from tests.test_checkpoints import git
@@ -44,7 +44,7 @@ REPAIR_COMMAND = (sys.executable, '-B', '-c',
     "import runpy,sys; sys.argv=['member_regression.py','recovery']; runpy.run_path('member_regression.py')")
 
 
-async def advance(w, parent, rounds=3):
+async def advance(w, parent, rounds=3, *, timeout=60, deadline=None):
     """Wait for captured workers and their receipts, with a 60-second stall guard.
 
     Publication and its later observation are different registered operations.
@@ -55,6 +55,7 @@ async def advance(w, parent, rounds=3):
     Failures join this service's workers before fixture journal teardown.
     """
     ops = w['d'].ops
+    deadline = time.monotonic() + 10 * timeout if deadline is None else deadline
     try:
         for _ in range(rounds):
             ops.wake(parent['operation_id'])  # Only waiting_external; never force an uncertain child.
@@ -63,12 +64,45 @@ async def advance(w, parent, rounds=3):
             active = tuple((oid, task) for oid, task in ops._active.items() if not task.done())
             if not active:
                 continue
-            outcomes = await wait_operation_attempts(ops, active, started=started, clock=time.monotonic,
-                wait=asyncio.wait, description='Repair attempt wave')
+            outcomes = await wait_operation_attempts(ops, active, timeout=timeout, started=started, clock=time.monotonic,
+                wait=asyncio.wait, description='Repair attempt wave', deadline=deadline)
             print('Repair attempt wave:', round(time.monotonic() - started, 3), outcomes, flush=True)
         result = ops.get(parent['operation_id'])
         assert result['error_code'] != 'INTERNAL', result
         return result
+    except BaseException:
+        await stop_workers(ops)
+        raise
+
+
+async def advance_until(w, parent, complete, *, timeout=60):
+    """Wait for a durable milestone, respecting the existing scheduler's due times.
+
+    Ten scheduler rounds cannot stand in for the adopted CI observation
+    interval. Each captured worker retains its stall guard; the whole wait has
+    an independent 10x safety cap. No future child retry is forced due.
+    """
+    ops = w['d'].ops
+    deadline = time.monotonic() + 10 * timeout
+    try:
+        while True:
+            result = ops.get(parent['operation_id'])
+            if complete(result) or result['status'] in TERMINAL | {'needs_attention'}:
+                return result  # Callers retain every original outcome assertion.
+            if time.monotonic() >= deadline:
+                raise AssertionError(f'Repair milestone exceeded overall {10 * timeout}s safety cap: '
+                    f"{result['operation_id']} status={result['status']} reason={result['status_reason']}\n"
+                    + worker_details(ops))
+            result = await advance(w, result, rounds=1, timeout=timeout, deadline=deadline)
+            if complete(result) or result['status'] in TERMINAL | {'needs_attention'}:
+                return result
+            placeholders = ','.join('?' for _ in RUNNABLE)
+            due = ops.db.execute(f'SELECT MIN(next_run_at) FROM operations WHERE status IN ({placeholders})',
+                tuple(RUNNABLE)).fetchone()[0]
+            # The stored due time is the wake condition. A short yield covers a
+            # just-admitted runnable child without spinning on the same row.
+            delay = 1 if due is None else max(0.01, due - time.time())
+            await asyncio.sleep(min(delay, max(0, deadline - time.monotonic())))
     except BaseException:
         await stop_workers(ops)
         raise
@@ -225,7 +259,11 @@ async def repair_original_release(w, mock):
     reference = await member.record_quality(repair, passed, condition)
     await settle(w, record(w, parent, {'kind': 'quality', 'reference': {key: value
         for key, value in reference.items() if key != 'candidate_commit'}}))
-    parent = await advance(w, parent, rounds=10)
+    def delivery_waiting(current):
+        delegated = delivery.child(ops, current)
+        return bool(delegated and delegated['status'] == 'waiting_external')
+
+    parent = await advance_until(w, parent, delivery_waiting)
     delegated = delivery.child(ops, parent)
     assert delegated and delegated['status'] == 'waiting_external', {'parent': parent, 'delivery': delegated}
     for run_id, run in w['gh'].runs.items():
@@ -233,7 +271,7 @@ async def repair_original_release(w, mock):
             run.update(status='completed', conclusion='success')
             w['gh'].jobs[run_id][1]['conclusion'] = 'success'
     await ops._execute(delegated['operation_id'])
-    parent = await advance(w, parent, rounds=10)
+    parent = await advance_until(w, parent, lambda current: current['status'] == 'succeeded')
     assert parent['status'] == 'succeeded' and parent['result']['outcome'] == 'deployed', parent
     assert parent['result']['baseline_update']['status'] == 'updated', parent
     from tests.pm_joined_lifecycle_helpers import complete_native_turn
