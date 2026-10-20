@@ -1,4 +1,5 @@
 import {locale} from './i18n.js';
+import {clientActionReason} from './central-service-status.js';
 import {pmDurableForm} from './pm-workspace.js';
 import {button, emptyState, statusPill} from './ui/components.js';
 import {mountWorkInputIdea} from './pm-work-input-idea.js';
@@ -220,7 +221,7 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
     void refresh();
   }
   function handleFormError(error) {
-    if (!error?.code || error.code === 'NETWORK_ERROR' || error.code === 'TIMEOUT' || error.code === 'CENTRAL_OFFLINE') return false;
+    if (!error?.code || (error.status === 0 && clientActionReason(error.code)) || error.code === 'NETWORK_ERROR' || error.code === 'TIMEOUT' || error.code === 'CENTRAL_OFFLINE') return false;
     const formStatus = composer?.box.querySelector('[role=status]');
     if (formStatus) showError(error, formStatus);
     // A newer attempt can be read. It does not replace the original key or request.

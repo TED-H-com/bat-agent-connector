@@ -1,4 +1,4 @@
-import {centralServiceStatus} from "./central-service-status.js";
+import {centralServiceStatus, clientActionGate} from "./central-service-status.js";
 import {workbenchEnabled} from './workbench-mode.js';
 import {workbenchViews} from './workbench-views.js';
 import {settingsAgents} from './settings-agents.js';
@@ -25,7 +25,7 @@ import {mountPmWorkspace, pmAvailable, pmDurableForm} from "./pm-workspace.js";
 import {mountWorkFollowUp, workFollowUpAvailable} from "./pm-work-follow-up.js";
 import {workspaceNavigation} from "./workspace-nav.js";
 import {managedSetupPanel, setupFormValidity} from "./managed-setup.js";
-import {ApiError, errorPresentation} from "./error-presentation.js";
+import {ApiError, errorPresentation, clientActionError, sessionErrorLine} from "./error-presentation.js";
 import {managedControl, fleetAvailability} from "./transport/index.ts";
 import {restoreBrowserSession, browserSessionToken, forgetBrowserSession} from "./transport/index.ts";
 import {setupSidebarResizer, setupMobileSessionLayout} from "./workspace-layout.js";
@@ -288,9 +288,11 @@ async function api(method, path, body, key, collectReceipt) {
   }
 }
 async function apiRequest(method, path, body, key, collectReceipt) {
+  if (method === "POST") {
+    const gate = clientActionGate(state, {post: true});
+    if (!gate.allowed) throw clientActionError(gate.reason, t, state.token ? 0 : 401);
+  }
   if (!state.token) throw new ApiError(401, "UNAUTHORIZED", t("need_token"), {localized: true});
-  if (method === "POST" && (state.nativeBusy || !state.online || !state.viewReady))
-    throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"), {localized: true});
   const epoch = state.epoch;
   let response;
   try {response = await connectorRequest(method, path, body, key, state.token);}
@@ -401,6 +403,17 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
   const choose = nativeFiles ? h("button", {class: "secondary", disabled: !supported || !may("manage") || !nativeUploadAllowed, onclick: () => native.pick()}, t("files_choose")) : h("input", {type: "file", multiple: true, disabled: !supported || !may("manage"), "aria-label": t("choose_attachments")});
   const box = h("div", {class: "attachments", hidden: !supported}, nativeFiles ? h("div", {class: "actions"}, h("strong", {}, t("attachments")), choose) : h("label", {}, t("attachments"), choose),
     h("p", {class: "muted"}, t(nativeFiles ? "files_help" : "upload_on_choose")), rows, promptHint, status);
+  const attachmentGate = requirements => clientActionGate({...state, manageAllowed: may("manage"),
+    attachmentsSupported: supported, uploadsAllowed: nativeUploadAllowed}, requirements);
+  const refuseAttachment = reason => {
+    if (!supported) {
+      box.hidden = false;
+      for (const child of box.children) child.hidden = child !== status;
+    }
+    for (let parent = box.parentElement; parent; parent = parent.parentElement)
+      if (parent.tagName === 'DETAILS') parent.open = true;
+    fill(status, errorBox(clientActionError(reason, t), {within:status}));
+  };
   const guard = (mounted = false) => {
     assertView(connection);
     if (mounted && !box.isConnected) throw new ApiError(0, "VIEW_CHANGED", "Attachment form changed during the request");
@@ -470,7 +483,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
     if (typeof saved.native_draft !== "string" || !/^[0-9a-f-]{36}$/.test(saved.native_draft))
       saved.native_draft = saved.attachments.find(a => typeof a.native_receipt?.draft_id === "string" && /^[0-9a-f-]{36}$/.test(a.native_receipt.draft_id))?.native_receipt.draft_id || crypto.randomUUID();
     native = nativeAttachments({h, t, guard: () => guard(true),
-      canWrite: () => state.online && state.viewReady && may("manage") && nativeUploadAllowed, draftId: saved.native_draft,
+      canWrite: () => attachmentGate({attachment: true, manage: true, uploads: true}), draftId: saved.native_draft,
       onVisibility: render,
       onDiscard: id => {guard(true); saved.attachments = saved.attachments.filter(a => a.native_handle !== id || a.ref); persist(); render();},
       attached: id => saved.attachments.some(a => a.native_handle === id && a.ref) || saved.native_ignored?.includes(id),
@@ -520,7 +533,8 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
       };
       while (["accepted", "running"].includes(op.status)) op = await readNext();
       if (op.status === "waiting_external") {
-        if (!state.online || !state.viewReady) throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"), {localized: true});
+        const gate = attachmentGate({attachment: true});
+        if (!gate.allowed) throw clientActionError(gate.reason, t);
         const epoch = state.epoch;
         const response = await connectorUploadArtifact(op.operation_id, bytes, state.token);
         guard(true);
@@ -614,8 +628,9 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
     }
     if (!imageCandidates.length) return;
     e.preventDefault();
-    if (!supported || !may("manage") || (nativeFiles && !nativeUploadAllowed) || !state.online || !state.viewReady) {
-      fill(status, errorBox(new Error(t("offline_actions_paused")), {within:status}));
+    const gate = attachmentGate({attachment: true, supported: true, manage: true, uploads: nativeFiles});
+    if (!gate.allowed) {
+      refuseAttachment(gate.reason);
       return;
     }
     for (const file of imageCandidates) {
@@ -642,8 +657,10 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
     if (text && text.classList) text.classList.remove("drag-over");
     if (nativeFiles || !e.dataTransfer?.files?.length) return;
     e.preventDefault();
-    if (!supported || !may("manage") || (nativeFiles && !nativeUploadAllowed) || !state.online || !state.viewReady) {
-      fill(status, errorBox(new Error(t("offline_actions_paused")), {within:status}));
+    // nativeFiles returned above; its upload permission clause was unreachable.
+    const gate = attachmentGate({attachment: true, supported: true, manage: true});
+    if (!gate.allowed) {
+      refuseAttachment(gate.reason);
       return;
     }
     for (const file of e.dataTransfer.files) {
@@ -1498,19 +1515,6 @@ async function viewHostDiscovery(main, host) {
 }
 
 // Session read and write errors: one short localized line and its recovery; the raw code stays in Details.
-const SESSION_ERROR_LINES = {SESSION_BUSY: "session_err_busy", PENDING_CHANGED: "session_err_changed", NOT_FOUND: "session_err_gone",
-  PAYLOAD_TOO_LARGE: "session_err_too_large", INTERNAL: "session_err_server", FORBIDDEN: "session_err_forbidden"};
-function sessionErrorLine(e) {
-  const code = typeof e?.code === "string" ? e.code : "";
-  if (Object.hasOwn(SESSION_ERROR_LINES, code)) return t(SESSION_ERROR_LINES[code]);
-  if (e?.status === 403) return t("session_err_forbidden");
-  if (e?.status === 404 || e?.status === 410) return t("session_err_gone");
-  if (e?.status === 413) return t("session_err_too_large");
-  if (e?.status >= 500) return t("session_err_server");
-  // Client-made errors (offline, changed view, local checks) already carry a localized message.
-  if (e?.status === 0 && e?.code === "CENTRAL_OFFLINE") return t("offline_actions_paused");
-  return t("session_err_unknown");
-}
 function sessionErrorDetails(e, {within, insideDetails = false} = {}) {
   const code = typeof e?.code === "string" ? e.code : "";
   const detail = [code, e?.status ? `HTTP ${e.status}` : "", e?.message && e.message !== code ? e.message : ""].filter(Boolean).join(" · ");
@@ -1524,7 +1528,7 @@ function sessionErrorBox(e, action = null, options = {}) {
   if (state.refreshCycle) state.refreshCycle.error ||= e;
   const code = typeof e?.code === "string" ? e.code : "";
   return h("div", {class: "session-error", role: "alert", "data-session-error": code},
-    h("p", {class: "session-error-line"}, icon("circle-alert", {size: 16}), h("span", {}, options.summary || sessionErrorLine(e)),
+    h("p", {class: "session-error-line"}, icon("circle-alert", {size: 16}), h("span", {}, options.summary || sessionErrorLine(e, t)),
       action ? h("button", {type: "button", class: "session-error-action", onclick: action.run}, action.label) : null),
     sessionErrorDetails(e, options));
 }
