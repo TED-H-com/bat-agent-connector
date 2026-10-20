@@ -37,6 +37,15 @@ available in Web, Tauri's shared source and the read-only demo. No schema change
 ID migration, copied progress, new listener or new mutation is introduced.
 Legacy layout remains the default during this first review increment.
 
+`workbench-mode.js` captures one immutable layout decision per page load, with
+`layout`, `source`, `status` and a fallback `reason`. Its pure `decideLayout`
+accepts an optional policy that can disable the Workbench preview; without policy,
+only the first `workbench=1` query value enables it and Classic stays the default.
+Status remains `preview`, never acceptance. Switching either way preserves the
+storage namespace, all drafts, operation keys, selected target, checkpoint and
+displayed history. Accepted routes, rollout defaults and Classic retirement remain
+owner decisions.
+
 The four daily entries use existing views: Today opens Pending, Projects opens
 the selected workspace's Overview (otherwise the project catalog), Work opens
 the workspace Board (otherwise Sessions) on desktop and the shared full-screen

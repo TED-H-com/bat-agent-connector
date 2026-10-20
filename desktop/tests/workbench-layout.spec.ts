@@ -51,6 +51,9 @@ for (const locale of ['en-US', 'zh-TW']) for (const initial of ['classic', 'work
     const firstDraft = 'Keep the first target draft 第一份草稿';
     const selectedDraft = 'Keep the selected target draft 第二份草稿';
     await composer.fill(firstDraft);
+    await expect(page.locator('body')).toHaveAttribute('data-layout', initial);
+    await expect(page.locator('body')).toHaveAttribute('data-layout-source', 'url');
+    await expect(page.locator('body')).toHaveAttribute('data-layout-status', 'preview');
     const selectedLink = page.locator(`.workspace-tree-link[href="${selectedRoute}"]`);
     await selectedLink.click();
     await expect(composer).toHaveValue('');
@@ -80,6 +83,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const initial of ['classic', 'work
     expect(posts[0].body.target).toEqual(operation.target);
 
     for (const layout of [initial === 'workbench' ? 'classic' : 'workbench', initial]) {
+      const previousPolls = polls.length;
       await page.locator('[data-shell-tools]').click();
       // Exercise the product link, including its current target hash, both ways.
       await page.locator('[data-menu-key=workbench]').click();
@@ -87,10 +91,18 @@ for (const locale of ['en-US', 'zh-TW']) for (const initial of ['classic', 'work
         && url.hash === selectedRoute);
       await expect(page.locator('[data-workbench-views]')).toHaveCount(layout === 'workbench' ? 1 : 0);
       await expect(composer).toHaveValue(selectedDraft);
+      await expect(page.locator('body')).toHaveAttribute('data-layout', layout);
+      await expect(page.locator('body')).toHaveAttribute('data-layout-source', 'url');
+      await expect(page.locator('body')).toHaveAttribute('data-layout-status', 'preview');
+      await expect(page.locator('body')).toHaveAttribute('data-layout-reason', '');
       await expect(selectedLink).toHaveAttribute('aria-current', 'page');
       await expect(page.locator('.conversation .msg')).toHaveCount(history.length);
       expect(await page.locator('.conversation .msg').allTextContents()).toEqual(history);
       expect(await storageSnapshot(page)).toEqual(before);
+      await expect.poll(() => polls.length).toBeGreaterThan(previousPolls);
+      const poll = new URL(polls.at(-1)!, 'https://fixture.example');
+      expect(poll.searchParams.get('after')).toBe(String(bootstrap.sync.checkpoint.cursor));
+      expect(poll.searchParams.get('checkpoint')).toBe(bootstrap.sync.checkpoint.token);
       expect(posts).toHaveLength(1);
       expect(posts[0].idempotency_key).toBe(originalKey);
       expect(await page.evaluate(() => (window as any).__csp)).toEqual([]);
