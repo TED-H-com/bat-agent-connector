@@ -1,3 +1,7 @@
+import {mountProfilePicker} from './work-profile-picker-fixture.ts';
+import {effectiveGolden,effectiveExpected,effectiveReasonKeys,mountEffectiveGate} from './pm-effective-route-fixture.ts';
+import {pmEffectiveRouteStrings} from '../src/pm-effective-route-strings.js';
+import {STRINGS} from '../src/i18n.js';
 import {openPmSection} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
@@ -10,42 +14,34 @@ const readinessGolden=JSON.parse(readFileSync(new URL('../../tests/fixtures/work
 const first='wpf_'+'a'.repeat(32),second='wpf_'+'b'.repeat(32);
 const names=['discovered','signed_in_or_available','can_observe','can_start_own','can_continue_own','last_verified_execution'];
 
+for(const locale of ['en-US','zh-TW'])test.describe(`${locale} effective PM profile route`,()=>{
+  test.use({locale});
+  for(const [name,row] of Object.entries(effectiveGolden) as [keyof typeof effectiveExpected,any][])
+    test(`effective ${name}: Work agrees with the PM gate`,async({page})=>{
+      const expected=effectiveExpected[name];
+      const {facts,posts}=await mountProfilePicker(page,row.readiness,row.profile,locale);
+      const gate=await mountEffectiveGate(page,row,locale);
+      expect(gate.ready).toBe(expected.ready);
+      const readyText=workProfileStrings[locale==='en-US'?'en':'zh-TW'].wpf_pm_preflight;
+      await expect(facts.getByText(readyText,{exact:true})).toHaveCount(expected.ready?1:0);
+      const line=facts.locator('[data-work-profile-pm]');
+      await expect(line).toHaveAttribute('data-pm-effective-ready',String(expected.ready));
+      if(expected.adapter){await expect(line).toContainText(expected.adapter);expect(gate.adapter).toBe(expected.adapter);}
+      if(expected.reason){await expect(line).toContainText(expected.reason);expect(gate.reason).toContain(expected.reason);}
+      for(const key of effectiveReasonKeys[name]){
+        const message=STRINGS[locale==='en-US'?'en':'zh-TW'][key];
+        await expect(line).toContainText(message);expect(gate.reason).toContain(message);
+      }
+      if(name==='unset_blocked')for(const code of ['PM_NATIVE_PLATFORM_UNSUPPORTED','PM_WORKTREE_REQUIRED'])await expect(line).toContainText(code);
+      if(name==='choice_unreadable')expect(gate.reason).toContain(pmEffectiveRouteStrings[locale==='en-US'?'en':'zh-TW'].pm_effective_sources);
+      expect(posts).toEqual([]);
+      expect(await page.evaluate(()=>(window as any).__csp)).toEqual([]);
+    });
+});
+
 // Exercise the picker itself: the parent Work form's separate start-preview POST
 // remains covered by the existing integration cases below.
-async function mountGoldenPicker(page:any,body:any,locale:string){
-  const reads:string[]=[],posts:string[]=[];
-  await page.addInitScript(()=>{
-    (window as any).__csp=[];
-    document.addEventListener('securitypolicyviolation',event=>(window as any).__csp.push(event.violatedDirective));
-  });
-  page.on('request',(request:any)=>{if(request.method()==='POST')posts.push(request.url());});
-  await page.route('**/api/v1/**',async(route:any)=>{
-    const request=route.request(),path=new URL(request.url()).pathname;reads.push(path);
-    expect(request.method()).toBe('GET');
-    const profile=readinessGolden.profile;
-    const data=path.endsWith('/readiness')?body:path.endsWith('/work-profiles')
-      ?{profiles:[profile],count:1,default_profile_id:null,next_cursor:null}:profile;
-    await route.fulfill({status:200,json:data});
-  });
-  await page.goto('/ui-components.html');
-  await page.evaluate(async({body,locale})=>{
-    const {workProfilePicker}=await import('/src/pm-work-profile-picker.js');
-    const {t,setLocale}=await import('/src/i18n.js');const {h}=await import('/src/ui/dom.js');
-    setLocale(locale==='en-US'?'en':locale);
-    const field=document.createElement('input');field.type='hidden';
-    location.hash=`#/pm/${body.workspace_id}/board?select=wi_${'1'.repeat(20)}`;
-    const picker=workProfilePicker({t,api:async(method,path)=>{
-      if(method!=='GET')throw Error('Picker must only read');
-      const response=await fetch('/api/v1'+path);return response.json();
-    },alive:()=>{},namespace:'fixture',workspaceId:body.workspace_id,workId:'wi_'+'1'.repeat(20),
-    caps:()=>({scopes:['observe'],features:{pm_workspaces:{work_profiles:{version:1,available:true}}}}),field,
-    request:()=>({locked:()=>false,set:(_key,value)=>{field.value=value;},update:()=>{}}),active:()=>true,onChange:()=>{},
-    errorBox:error=>h('p',{},String(error))});
-    document.getElementById('fixture')!.append(picker.box,field);await picker.load();
-  },{body,locale});
-  await page.locator('[data-work-profile-picker] select').selectOption(body.profile_id);
-  return {reads,posts,facts:page.locator('[data-work-profile-readiness]')};
-}
+const mountGoldenPicker=(page:any,body:any,locale:string)=>mountProfilePicker(page,body,readinessGolden.profile,locale);
 const goldenCases=Object.entries(readinessGolden.cases);
 const future=structuredClone(readinessGolden.cases.never_observed);future.states.can_observe.reason='FUTURE_PROFILE_REASON';
 for(const locale of ['en-US','zh-TW'])test.describe(`${locale} producer profile evidence`,()=>{

@@ -28,13 +28,36 @@ function managedRecoveryKey(code) {
 }
 //#endregion
 //#region src/central-service-status.js
+function pollFailure(error, at) {
+	const status = Number.isFinite(error.status) ? error.status : 200;
+	const code = error.code || "INVALID_EVENT_PAGE";
+	return {
+		kind: code === "EVENT_CURSOR_RESET" ? "continuity" : status === 401 || status === 403 ? "refused" : status >= 500 ? "service_error" : status === 0 ? "transport" : "invalid_response",
+		status,
+		code,
+		at
+	};
+}
+var pollKeys = {
+	transport: "ui_reconnecting",
+	refused: "ui_connection_refused",
+	service_error: "ui_service_error",
+	invalid_response: "ui_invalid_response",
+	continuity: "ui_connecting"
+};
+var pollReasons = {
+	ui_reconnecting: "reconnecting",
+	ui_connection_refused: "refused",
+	ui_service_error: "service_error",
+	ui_invalid_response: "invalid_response"
+};
 function centralServiceStatus({ token, pollHealth, online, managedRecovery }) {
 	const connection = !token ? "offline" : pollHealth === "connected" || pollHealth === "initial" && online ? "connected" : "reconnecting";
 	const recoveryKey = managedRecoveryKey(managedRecovery);
-	const key = recoveryKey || (!token ? "ui_not_connected" : connection === "connected" ? "ui_connected" : pollHealth === "initial" ? "ui_connecting" : "ui_reconnecting");
+	const key = recoveryKey || (!token ? "ui_not_connected" : connection === "connected" ? "ui_connected" : pollHealth === "initial" ? "ui_connecting" : pollKeys[pollHealth?.kind] || (pollHealth === "reconnecting" ? "ui_reconnecting" : "ui_connecting"));
 	return {
 		key,
-		tone: key === "ui_connected" ? "ok" : key === "ui_reconnecting" ? "warn" : "neutral",
+		tone: key === "ui_connected" ? "ok" : pollReasons[key] ? "warn" : "neutral",
 		connection,
 		recoveryKey
 	};
@@ -48,13 +71,13 @@ function clientActionGate(facts, requirements) {
 	const key = centralServiceStatus(facts).key;
 	return {
 		allowed: false,
-		reason: requirements.post && !facts.token || key === "ui_not_connected" ? "not_connected" : requirements.post && facts.nativeBusy ? "connection_changing" : requirements.supported && !facts.attachmentsSupported ? "attachments_unavailable" : requirements.manage && !facts.manageAllowed ? "manage_required" : requirements.uploads && !facts.uploadsAllowed ? "uploads_not_allowed" : !facts.online && key === "ui_reconnecting" ? "reconnecting" : !facts.online && key === "ui_connecting" ? "connecting" : !facts.viewReady || key === "ui_connected" ? "view_not_ready" : "connecting"
+		reason: requirements.post && !facts.token || key === "ui_not_connected" ? "not_connected" : requirements.post && facts.nativeBusy ? "connection_changing" : requirements.supported && !facts.attachmentsSupported ? "attachments_unavailable" : requirements.manage && !facts.manageAllowed ? "manage_required" : requirements.uploads && !facts.uploadsAllowed ? "uploads_not_allowed" : !facts.online && pollReasons[key] ? pollReasons[key] : !facts.online && key === "ui_connecting" ? "connecting" : !facts.viewReady || key === "ui_connected" ? "view_not_ready" : "connecting"
 	};
 }
 var clientReasons = [
 	"not_connected",
 	"connecting",
-	"reconnecting",
+	...Object.values(pollReasons),
 	"connection_changing",
 	"view_not_ready",
 	"manage_required",
@@ -1763,6 +1786,14 @@ var init_ui_strings = __esmMin((() => {
 			ui_connector_status: "Connector: {status}",
 			ui_not_connected_help: "This window has no Connector session. Go to Settings → Connection and select Connect.",
 			ui_connecting_help: "Connector has not answered yet; actions are paused until it responds.",
+			ui_local_connector: "Local Connector",
+			ui_last_poll: "Last successful poll",
+			ui_connection_refused: "Access refused",
+			ui_service_error: "Service unavailable",
+			ui_invalid_response: "Invalid response",
+			error_code_CLIENT_ACTION_REFUSED: "Connector refused this window’s access; actions are paused. Reconnect in Settings → Connection. If access is still refused, ask the Connector administrator to restore access.",
+			error_code_CLIENT_ACTION_SERVICE_ERROR: "Connector answered with a service error; actions are paused. Wait for the service to recover, then try again.",
+			error_code_CLIENT_ACTION_INVALID_RESPONSE: "Connector returned an invalid event response; actions are paused. Wait for a valid refresh. If this continues, ask the Connector administrator to check the service.",
 			error_code_CLIENT_ACTION_NOT_CONNECTED: "This action needs a Connector session in this window. Connect in Settings → Connection, then try again.",
 			error_code_CLIENT_ACTION_CONNECTING: "This action is waiting for the Connector connection check. Wait for it to finish, then try again.",
 			error_code_CLIENT_ACTION_RECONNECTING: "This action is paused because this window cannot reach Connector. Wait for reconnection, then try again.",
@@ -1860,6 +1891,14 @@ var init_ui_strings = __esmMin((() => {
 			ui_connector_status: "Connector：{status}",
 			ui_not_connected_help: "這個視窗尚未建立 Connector 連線。請前往「設定 → 連線」，按「連線」。",
 			ui_connecting_help: "Connector 尚未回應；回應前暫停操作。",
+			ui_local_connector: "本機 Connector",
+			ui_last_poll: "上次成功輪詢",
+			ui_connection_refused: "存取遭拒",
+			ui_service_error: "服務暫不可用",
+			ui_invalid_response: "回應無效",
+			error_code_CLIENT_ACTION_REFUSED: "Connector 拒絕此視窗的存取，已暫停操作。請到「設定 → 連線」重新連線；若仍遭拒，請 Connector 管理員恢復存取權限。",
+			error_code_CLIENT_ACTION_SERVICE_ERROR: "Connector 已回應服務錯誤，已暫停操作。請等候服務恢復後再試。",
+			error_code_CLIENT_ACTION_INVALID_RESPONSE: "Connector 傳回的事件回應無效，已暫停操作。請等候有效的資料更新；若持續發生，請 Connector 管理員檢查服務。",
 			error_code_CLIENT_ACTION_NOT_CONNECTED: "此操作需要這個視窗的 Connector 連線。請前往「設定 → 連線」按「連線」，再試一次。",
 			error_code_CLIENT_ACTION_CONNECTING: "此操作正在等待 Connector 連線檢查。請等檢查完成後再試一次。",
 			error_code_CLIENT_ACTION_RECONNECTING: "這個視窗目前無法連線至 Connector，已暫停操作。請等重新連線後再試一次。",
@@ -5221,6 +5260,35 @@ var init_pm_discussions_strings = __esmMin((() => {
 	};
 }));
 //#endregion
+//#region src/pm-effective-route-strings.js
+var pmEffectiveRouteStrings;
+var init_pm_effective_route_strings = __esmMin((() => {
+	pmEffectiveRouteStrings = {
+		en: {
+			pm_effective_saved: "Workspace PM route: ",
+			pm_effective_unset: "No PM route is saved. You may choose an eligible adapter.",
+			pm_effective_available: "Eligible adapters:",
+			pm_effective_unreadable: "The saved PM route cannot be read.",
+			pm_effective_sources: "Refresh, or ask the workspace owner to restore access to the original PM sources.",
+			pm_effective_unknown: "The workspace PM route could not be verified. Refresh, or use a compatible Connector version.",
+			pm_effective_ready: "This workspace route is eligible for preflight.",
+			pm_effective_blocked: "This workspace route is not eligible for preflight.",
+			pm_effective_boundary: "Model execution is unverified; each request still checks admission."
+		},
+		"zh-TW": {
+			pm_effective_saved: "工作區 PM 路線：",
+			pm_effective_unset: "尚未儲存 PM 路線，可選擇符合預檢條件的介接器。",
+			pm_effective_available: "符合預檢條件的介接器：",
+			pm_effective_unreadable: "無法讀取已儲存的 PM 路線。",
+			pm_effective_sources: "請重新整理，或請工作區擁有者恢復原始 PM 來源的存取權。",
+			pm_effective_unknown: "無法確認工作區的 PM 路線。請重新整理，或使用相容版本的 Connector。",
+			pm_effective_ready: "這個工作區路線符合預檢條件。",
+			pm_effective_blocked: "這個工作區路線尚未符合預檢條件。",
+			pm_effective_boundary: "模型執行尚未驗證；每次要求仍會檢查准入條件。"
+		}
+	};
+}));
+//#endregion
 //#region src/pm-resources-strings.js
 var resourceStrings;
 var init_pm_resources_strings = __esmMin((() => {
@@ -8029,6 +8097,7 @@ var init_pm_meetings_strings = __esmMin((() => {
 var pmStrings;
 var init_pm_strings = __esmMin((() => {
 	init_pm_discussions_strings();
+	init_pm_effective_route_strings();
 	init_pm_resources_strings();
 	init_pm_workbench_strings();
 	init_pm_plan_proposal_strings();
@@ -8047,6 +8116,7 @@ var init_pm_strings = __esmMin((() => {
 	init_pm_meetings_strings();
 	pmStrings = {
 		en: {
+			...pmEffectiveRouteStrings.en,
 			...workbenchStrings.en,
 			...resourceStrings.en,
 			...pmPlanProposalStrings.en,
@@ -8437,6 +8507,7 @@ var init_pm_strings = __esmMin((() => {
 			pm_slot_quality: "Quality"
 		},
 		"zh-TW": {
+			...pmEffectiveRouteStrings["zh-TW"],
 			...workbenchStrings["zh-TW"],
 			...resourceStrings["zh-TW"],
 			...pmPlanProposalStrings["zh-TW"],
@@ -10008,7 +10079,6 @@ var init_i18n = __esmMin((() => {
 			managed_background_help: "Connector 在背景持續運作。關閉這個畫面不會停止工作。",
 			managed_open_browser: "在瀏覽器開啟 Dashboard",
 			managed_start_login: "登入電腦時啟動",
-			managed_browser_connected: "已連線至本機 Connector",
 			managed_browser_help: "此瀏覽器沿用桌面的個人身分。登出後，可從桌面選單重新開啟 Dashboard。",
 			delivery_list_prs: "瀏覽 Pull Requests",
 			delivery_no_prs: "找不到 PR。",
@@ -11701,7 +11771,6 @@ var init_i18n = __esmMin((() => {
 			managed_background_help: "Connector keeps running in the background. Closing this view does not stop work.",
 			managed_open_browser: "Open Dashboard in browser",
 			managed_start_login: "Start when I sign in",
-			managed_browser_connected: "Connected to your local Connector",
 			managed_browser_help: "This browser uses your desktop identity. After signing out, reopen Dashboard from the desktop menu.",
 			workspace_navigation: "Projects and work",
 			workspace_search: "Search loaded projects and work",
@@ -20720,6 +20789,48 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	};
 }
 //#endregion
+//#region src/pm-effective-route.js
+var hasEffectivePmRoute = (document) => document != null && Object.hasOwn(document, "effective_pm_route");
+var effectivePmRoute = (document) => document?.effective_pm_route?.version === 1 && document.effective_pm_route.scope === "workspace_selected_route" ? document.effective_pm_route : null;
+function workspacePmReady(document) {
+	if (hasEffectivePmRoute(document)) return effectivePmRoute(document)?.ready === true;
+	return Boolean(document?.structured_analysis?.version === 1 ? (document.structured_analysis.actions?.["pm.conversation.propose"]?.adapters || []).some((row) => ["codex-native-linux", "bat-pm-linux-v1"].includes(row.adapter) && row.action_registered === true && row.authorized === true && row.eligible_for_preflight === true) : document?.native_analysis?.authorized !== false && document?.native_analysis?.eligible_for_preflight === true || document?.bat_analysis?.authorized !== false && document?.bat_analysis?.eligible_for_preflight === true);
+}
+var routeReasons = {
+	scope_required: "agents_scope",
+	authorization_required: "agents_authorization",
+	original_sources_unavailable: "pm_effective_sources"
+};
+var pmRouteReasonKey = (code) => Object.hasOwn(routeReasons, code) ? routeReasons[code] : Object.hasOwn(eligibilityReasons, code) ? eligibilityReasons[code] : "agents_unknown";
+var safeCode = (value) => typeof value === "string" && /^[A-Za-z][A-Za-z0-9_-]{0,79}$/.test(value) ? value : "";
+var adapterKey = (adapter) => adapter === "codex-native-linux" ? "pm_analysis_local" : adapter === "bat-pm-linux-v1" ? "pm_analysis_bat" : null;
+function renderEffectivePmRoute(node, { h, t, document, readyKey = "pm_effective_ready" }) {
+	const facet = effectivePmRoute(document);
+	node.dataset.pmEffectiveReady = String(facet?.ready === true);
+	if (!facet) {
+		node.replaceChildren(h("p", {}, t("pm_effective_unknown")));
+		return node;
+	}
+	const label = (adapter) => h("span", {}, t(adapterKey(adapter) || "pm_effective_unknown"), " · ", h("code", {}, safeCode(adapter)));
+	const parts = [h("p", {}, t(facet.choice_source === "saved" ? "pm_effective_saved" : facet.choice_source === "unset" ? "pm_effective_unset" : "pm_effective_unreadable"), ...facet.adapter ? [label(facet.adapter)] : [])];
+	const ref = facet.choice_ref;
+	if (ref && Number.isSafeInteger(ref.version) && ref.version > 0) {
+		const link = typeof ref.operation_id === "string" && /^op_[0-9a-f]{32}$/.test(ref.operation_id) ? h("a", { href: `#/op/${ref.operation_id}` }, t("pm_operation")) : null;
+		parts.push(h("p", {}, t("pm_choice_revision") + " " + ref.version, " · ", link));
+	}
+	parts.push(h("p", {}, t(facet.ready === true ? readyKey : "pm_effective_blocked")));
+	if (facet.choice_source === "unset" && facet.ready === true) parts.push(h("p", {}, t("pm_effective_available"), " ", ...(facet.eligible_adapters || []).map(label)));
+	if (facet.ready !== true) {
+		const aggregate = facet.choice_source === "unset" && facet.reason === "no_eligible_adapter";
+		if (aggregate) parts.push(h("code", {}, facet.reason));
+		const reasons = aggregate ? facet.adapters || [] : [{ reason: facet.reason }];
+		for (const row of reasons) parts.push(h("p", {}, ...row.adapter ? [label(row.adapter), " · "] : [], t(pmRouteReasonKey(row.reason)), " · ", h("code", {}, safeCode(row.reason))));
+	}
+	parts.push(h("p", { class: "muted" }, t("pm_effective_boundary")));
+	node.replaceChildren(...parts);
+	return node;
+}
+//#endregion
 //#region src/pm-external-history.js
 function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox }) {
 	const root = `/pm/workspaces/${encodeURIComponent(workspaceId)}/history`;
@@ -21047,7 +21158,7 @@ function structuredAnalysis({ h, t, labelled, action, capability, legacyEligible
 		"data-pm-default": NATIVE
 	}, h("option", { value: NATIVE }, t("pm_analysis_local")), h("option", { value: BAT }, t("pm_analysis_bat")));
 	field.value = NATIVE;
-	const choice = labelled("pm_analysis_adapter", field), reason = h("p", {
+	const choice = labelled("pm_analysis_adapter", field), reason = h("div", {
 		class: "muted",
 		"data-structured-analysis-reason": ""
 	}), binding = h("p", { class: "muted pm-note-text" });
@@ -21083,7 +21194,12 @@ function structuredAnalysis({ h, t, labelled, action, capability, legacyEligible
 			PM_NATIVE_AUTH_UNAVAILABLE: "pm_native_auth",
 			PM_NATIVE_HOME_UNAVAILABLE: "pm_native_auth"
 		}[code] || "pm_native_unavailable";
-		reason.textContent = t(key);
+		if (effectivePmRoute(capability())?.ready === false) renderEffectivePmRoute(reason, {
+			h,
+			t,
+			document: capability()
+		});
+		else reason.replaceChildren(t(key));
 		const source = field.value === BAT && selected?.selected_binding;
 		binding.hidden = !source;
 		binding.textContent = source ? `${t("pm_analysis_selected_binding")} ${source.host} / ${source.workspace_id} / ${source.repository}` : "";
@@ -39615,7 +39731,12 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		facts.replaceChildren(h$1("h4", {}, t("wpf_coding")), ...readAt === null ? [] : [h$1("p", { "data-work-profile-read-at": "" }, timeLabel(t, "wpf_read_at", { time: timeStamp(readAt) }))], h$1("p", {
 			class: "muted",
 			"data-work-profile-next-turn": ""
-		}, h$1("strong", {}, t("wpf_next_turn") + " · "), t(nextKey)), h$1("p", { class: "muted" }, t("wpf_locked")), list, ...data.states.can_start_own.value !== "ready" ? [h$1("p", { class: "muted" }, t("wpf_unverified"))] : [], ...gap ? [h$1("div", { "data-work-profile-gap": "" }, ...details)] : [], h$1("h4", {}, t("wpf_pm")), h$1("p", {}, t(data.pm_analysis?.pm_ready === true ? "wpf_pm_preflight" : "wpf_pm_unverified")));
+		}, h$1("strong", {}, t("wpf_next_turn") + " · "), t(nextKey)), h$1("p", { class: "muted" }, t("wpf_locked")), list, ...data.states.can_start_own.value !== "ready" ? [h$1("p", { class: "muted" }, t("wpf_unverified"))] : [], ...gap ? [h$1("div", { "data-work-profile-gap": "" }, ...details)] : [], h$1("h4", {}, t("wpf_pm")), hasEffectivePmRoute(data.pm_analysis) ? renderEffectivePmRoute(h$1("div", { "data-work-profile-pm": "" }), {
+			h: h$1,
+			t,
+			document: data.pm_analysis,
+			readyKey: "wpf_pm_preflight"
+		}) : h$1("p", {}, t(data.pm_analysis?.pm_ready === true ? "wpf_pm_preflight" : "wpf_pm_unverified")));
 		const gapName = states$1.find((name) => data.states[name].value !== "ready");
 		announcement.textContent = [`${t("wpf_next_turn")}: ${t(nextKey)}`, gapName ? `${t("wpf_" + gapName)}: ${t("wpf_" + data.states[gapName].value)}. ${t("wpf_unverified")}` : ""].filter(Boolean).join(" ");
 		verified = {
@@ -52181,7 +52302,23 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						if (ticket !== sequence) return;
 						pmCapabilities = workspaceCaps;
 					}
-					const pmReady = Boolean(threadId === "new" && (workspaceCaps?.structured_analysis?.version === 1 ? (workspaceCaps.structured_analysis.actions?.["pm.conversation.propose"]?.adapters || []).some((row) => ["codex-native-linux", "bat-pm-linux-v1"].includes(row.adapter) && row.action_registered === true && row.authorized === true && row.eligible_for_preflight === true) : workspaceCaps?.native_analysis?.authorized !== false && workspaceCaps?.native_analysis?.eligible_for_preflight === true || workspaceCaps?.bat_analysis?.authorized !== false && workspaceCaps?.bat_analysis?.eligible_for_preflight === true));
+					const pmReady = threadId === "new" && workspacePmReady(workspaceCaps);
+					const draftAvailability = h("div", { "data-discussion-pm-unavailable": "" });
+					if (hasEffectivePmRoute(workspaceCaps)) renderEffectivePmRoute(draftAvailability, {
+						h,
+						t,
+						document: workspaceCaps
+					});
+					else renderPmAvailability(draftAvailability, {
+						h,
+						t,
+						setupHref: discussionSettingsHref(),
+						state: pmAvailability({
+							caps: caps(),
+							document: pmCapabilities,
+							checked: true
+						})
+					});
 					const contextDraft = h("section", { "data-discussion-tab": "context" }, ...discussionContext(t, draftRefs || launch.refs, { title: launch.title }));
 					const draftPanel = discussionPanel({
 						t,
@@ -52202,16 +52339,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						form: create,
 						draft: true,
 						pmReady,
-						availability: renderPmAvailability(h("div", { "data-discussion-pm-unavailable": "" }), {
-							h,
-							t,
-							setupHref: discussionSettingsHref(),
-							state: pmAvailability({
-								caps: caps(),
-								document: pmCapabilities,
-								checked: true
-							})
-						})
+						availability: draftAvailability
 					})), draftPanel.home));
 				}
 			}
@@ -53032,8 +53160,18 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 			errorBox,
 			extra: h("div", { class: "pm-fields work-next-field" }, field, hint)
 		});
+		const submitButton = composer.box.querySelector("button[type=submit]");
+		let buttonActivation = false;
+		submitButton.addEventListener("click", () => {
+			buttonActivation = true;
+			setTimeout(() => {
+				buttonActivation = false;
+			}, 0);
+		}, true);
 		composer.box.addEventListener("submit", (event) => {
-			if (composing || performance.now() - composeEnded < 50) {
+			const explicit = buttonActivation && event.submitter === submitButton;
+			buttonActivation = false;
+			if (composing || !explicit && performance.now() - composeEnded < 50) {
 				event.preventDefault();
 				event.stopImmediatePropagation();
 			}
@@ -65690,6 +65828,7 @@ var state = {
 	caps: null,
 	lastEvent: 0,
 	lastEventAt: 0,
+	lastPoll: null,
 	listeners: new Set(),
 	namespace: "",
 	scopeIdentity: null,
@@ -66885,7 +67024,7 @@ function paintConnection(waiting = false, paused = false) {
 		notice.querySelector("summary").textContent = t("connection_details");
 		notice.querySelector("code").textContent = state.managedRecovery || "";
 	}
-	const helpKey = recoveryKey ? recoveryKey + "_help" : key === "ui_not_connected" ? "ui_not_connected_help" : key === "ui_connecting" ? "ui_connecting_help" : key === "ui_reconnecting" ? "offline_actions_paused" : paused ? "sync_actions_paused" : waiting ? "sync_waiting" : "desktop_polling";
+	const helpKey = recoveryKey ? recoveryKey + "_help" : key === "ui_not_connected" ? "ui_not_connected_help" : key === "ui_connecting" ? "ui_connecting_help" : key === "ui_reconnecting" ? "offline_actions_paused" : key === "ui_connection_refused" ? "error_code_CLIENT_ACTION_REFUSED" : key === "ui_service_error" ? "error_code_CLIENT_ACTION_SERVICE_ERROR" : key === "ui_invalid_response" ? "error_code_CLIENT_ACTION_INVALID_RESPONSE" : paused ? "sync_actions_paused" : waiting ? "sync_waiting" : "desktop_polling";
 	live.title = scoped + " — " + t(helpKey);
 	for (const paint of [...connectionPainters]) paint();
 }
@@ -66947,18 +67086,26 @@ async function streamEvents() {
 		}
 		const epoch = state.epoch, view = generation, foreground = foregroundVersion;
 		let cycle, pollSucceeded = false;
+		const previousPoll = state.lastPoll;
 		try {
 			const before = state.lastEvent;
 			const page = await api("GET", `/events?after=${before}&limit=100${state.sync ? `&checkpoint=${encodeURIComponent(state.sync.token)}` : ""}`);
 			if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
 			pollSucceeded = true;
 			state.pollHealth = "connected";
+			state.lastPoll = {
+				at: Date.now(),
+				namespace: state.namespace
+			};
 			paintConnection(true);
 			if (view !== generation || !state.viewReady) continue;
 			cycle = { error: null };
 			state.refreshCycle = cycle;
 			const cursor = await consumePageAsync(page, before, (ev) => {
-				return settleRefreshes([...state.listeners].map((fn) => Promise.resolve().then(() => fn(ev))));
+				return settleRefreshes([...state.listeners].map((fn) => Promise.resolve().then(() => fn(ev)))).catch((error) => {
+					cycle.error ||= error;
+					throw error;
+				});
 			});
 			if (epoch !== state.epoch || view !== generation || foreground !== foregroundVersion || !state.viewReady) continue;
 			if (cycle.error) throw cycle.error;
@@ -66975,8 +67122,9 @@ async function streamEvents() {
 			if (!page.has_more || cursor <= before) await waitForEventPoll(1e3);
 		} catch (error) {
 			if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
-			if (!pollSucceeded) {
-				state.pollHealth = "reconnecting";
+			if (!pollSucceeded || !cycle?.error) {
+				if (pollSucceeded) state.lastPoll = previousPoll;
+				state.pollHealth = pollFailure(error, Date.now());
 				paintConnection();
 			}
 			if (view !== generation) continue;
@@ -70612,12 +70760,17 @@ function fleetEmpty() {
 function connectionFacts() {
 	const endpoint = state.endpoint || (state.token ? location.origin : "");
 	const stateCell = h("dd");
-	const eventCell = h("dd");
-	const dl = h("dl", { class: "kv global-connection-facts" }, h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"), h("dt", {}, t("global_state")), stateCell, h("dt", {}, t("global_last_event")), eventCell, h("dt", {}, t("connection_access")), connectionAccess());
+	const eventCell = h("dd", { "data-last-event": "" });
+	const pollCell = h("dd", { "data-last-successful-poll": "" });
+	const dl = h("dl", { class: "kv global-connection-facts" }, h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"), h("dt", {}, t("global_state")), stateCell, h("dt", {}, t("global_last_event")), eventCell, h("dt", {}, t("ui_last_poll")), pollCell, h("dt", {}, t("connection_access")), connectionAccess());
 	const render = () => {
 		const { key, tone } = centralServiceStatus(state);
 		stateCell.replaceChildren(h("span", { class: `ui-pill tone-${tone}` }, t(key)));
 		eventCell.replaceChildren(state.lastEventAt ? when(state.lastEventAt) : t("global_no_event"));
+		eventCell.dataset.observedAt = state.lastEventAt ? new Date(state.lastEventAt).toISOString() : "";
+		const pollAt = state.lastPoll?.namespace === state.namespace ? state.lastPoll.at : 0;
+		pollCell.replaceChildren(pollAt ? when(pollAt) : "—");
+		pollCell.dataset.observedAt = pollAt ? new Date(pollAt).toISOString() : "";
 	};
 	render();
 	const paint = () => {
@@ -70770,7 +70923,7 @@ function viewBrowserSettings(main) {
 	const frame = openSettings(main, { exclusive: true });
 	const managed = state.token === browserSessionToken;
 	const facts = connectionFacts();
-	frame.panel("connection").append(h("section", { class: "panel" }, facts, managed ? h("h2", {}, t("managed_browser_connected")) : null, disclosure({
+	frame.panel("connection").append(h("section", { class: "panel" }, facts, managed ? h("h2", {}, t("ui_local_connector")) : null, disclosure({
 		label: t("global_details"),
 		body: h("div", {}, connectionIdentity(), managed ? h("p", {}, t("managed_browser_help")) : null)
 	}), h("button", {
@@ -70856,7 +71009,7 @@ async function viewManagedSettings(main) {
 	const local = h("section", {
 		class: "panel",
 		"data-connection-card": ""
-	}, h("h2", {}, t("managed_browser_connected")), connectionFacts(), disclosure({
+	}, h("h2", {}, t("ui_local_connector")), connectionFacts(), disclosure({
 		label: t("global_details"),
 		body: h("div", {}, connectionIdentity(), h("p", {}, t("managed_background_help")), !nativeDesktop ? h("p", {}, t("managed_browser_help")) : null, h("div", { "data-managed-locations": "" }, h("h3", {}, t("managed_locations")), h("p", { class: "muted" }, t("managed_locations_central")), h("p", { class: "muted" }, t("managed_locations_work"))))
 	}), status);
@@ -71455,7 +71608,7 @@ document.addEventListener("focusout", () => setTimeout(() => {
 		fn();
 	}
 }, 0));
-function liveReload(fn, kinds, prepare = null) {
+function liveReload(fn, kinds, prepare = null, holding = () => editing || typing()) {
 	const connection = {
 		epoch: state.epoch,
 		namespace: state.namespace,
@@ -71471,7 +71624,7 @@ function liveReload(fn, kinds, prepare = null) {
 		};
 		await prepareNow();
 		for (;;) {
-			while (editing || typing()) {
+			while (holding()) {
 				assertView(connection);
 				await sleep(100);
 				if (prepare && Date.now() - preparedAt >= 1e3) await prepareNow();
@@ -71480,7 +71633,7 @@ function liveReload(fn, kinds, prepare = null) {
 			const opened = drawerOpens;
 			await fn(true);
 			assertView(connection);
-			if (!editing && !typing() && drawerOpens === opened) return;
+			if (!holding() && drawerOpens === opened) return;
 		}
 	}, 500);
 	return onEvents((ev) => {
@@ -72302,7 +72455,7 @@ async function viewWorkItem(main, wid) {
 	const offRepair = repair ? onEvents((event) => {
 		if (event.resource_type === "operation" || observationAffected("work_item", wid, event)) return repair.refresh();
 	}) : null;
-	const off = liveReload(render, (event) => observationAffected("work_item", wid, event), refreshSafety);
+	const off = liveReload(render, (event) => observationAffected("work_item", wid, event), refreshSafety, () => editing || typing() && main.contains(document.activeElement));
 	return () => {
 		off?.();
 		offRepair?.();

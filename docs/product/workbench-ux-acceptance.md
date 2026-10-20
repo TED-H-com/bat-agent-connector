@@ -130,6 +130,13 @@ PR；Hermes 經 MCP 另開 Work，PM 能解釋兩份成果對目標的影響。�
 
 手機鍵盤 viewport 模擬只算 I 證據。新的情境尚未因文件更新、CI 或發布而取得 L 通過。
 
+K15 的組合 I 證據：[`foreground-device-continuity.spec.ts`](../../desktop/tests/foreground-device-continuity.spec.ts)
+在兩語系、HTTP／模擬 IPC、390×844／844×390 結合 reflow、hide/show、persisted pageshow、
+瀏覽器離線／恢復、IME 與較新 Attempt，檢查同一 composer、草稿、選取、焦點、捲動、
+來源與權限恢復後才送出，以及原目標／key 的單次送出。生命週期事件為合成，IPC 以同源
+網路探針觸發真實瀏覽器 transport failure；仍待 owner 在 iPhone Safari、Android Chrome
+候選字 Enter、真鎖屏、Wi-Fi↔行動網路及已安裝 Tauri 各自留實機證據。
+
 ## Connector 工作循環回歸（I 證據）
 
 [`test_pm_work_loop_browser.py`](../../tests/test_pm_work_loop_browser.py) 啟動真正

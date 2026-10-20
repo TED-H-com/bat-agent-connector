@@ -1,3 +1,4 @@
+import importlib.util
 import json
 import os
 import shutil
@@ -30,7 +31,7 @@ def test_installed_provenance(monkeypatch, doc, source, commit):
     # Even an installed Git distribution must never inspect/run Git in a checkout.
     import subprocess
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: pytest.fail("runtime invoked a process"))
-    assert build_identity.build_identity() == {"version": __version__, "commit": commit, "source": source}
+    assert build_identity._read_build_identity() == {"version": __version__, "commit": commit, "source": source}
 
 
 @pytest.mark.parametrize("same_package", [True, False])
@@ -43,7 +44,7 @@ def test_provenance_belongs_to_running_package(monkeypatch, tmp_path, same_packa
     monkeypatch.setattr(build_identity.metadata, "distribution", lambda name: SimpleNamespace(
         locate_file=lambda file: installed,
         read_text=lambda file: json.dumps({"vcs_info": {"vcs": "git", "commit_id": "a" * 40}})))
-    assert build_identity.build_identity() == {
+    assert build_identity._read_build_identity() == {
         "version": __version__, "commit": "a" * 40 if same_package else None,
         "source": "vcs" if same_package else "package"}
 
@@ -60,10 +61,10 @@ def test_bundled_provenance(monkeypatch, tmp_path):
     monkeypatch.setattr(build_identity.sys, "frozen", True, raising=False)
     monkeypatch.setattr(build_identity, "__file__", str(tmp_path / "build_identity.py"))
     (tmp_path / "build-info.json").write_text(json.dumps({"commit": "b" * 40}))
-    assert build_identity.build_identity() == {"version": __version__, "commit": "b" * 40, "source": "bundled"}
+    assert build_identity._read_build_identity() == {"version": __version__, "commit": "b" * 40, "source": "bundled"}
     (tmp_path / "build-info.json").unlink()
-    assert build_identity.build_identity()["commit"] is None
-    assert build_identity.build_identity()["source"] == "bundled"
+    assert build_identity._read_build_identity()["commit"] is None
+    assert build_identity._read_build_identity()["source"] == "bundled"
 
 
 def _build_env(directory, commit=None):
@@ -390,3 +391,26 @@ def test_real_vcs_install_reconciles_embedded_identity(tmp_path, conflict):
     direct_url = next(site.glob("bat_agent_connector-*.dist-info/direct_url.json"))
     assert json.loads(direct_url.read_text())["vcs_info"]["commit_id"] == head
     assert identity == {"version": __version__, "commit": None if conflict else head, "source": "vcs"}
+
+
+def test_loaded_identity_returns_copies_and_keeps_its_original_provenance(monkeypatch):
+    original = build_identity.build_identity()
+    monkeypatch.setattr(build_identity, "_read_build_identity", lambda: pytest.fail("read installation after startup"))
+    changed = build_identity.build_identity()
+    changed.update(version="999.0.0", commit="a" * 40, source="vcs")
+    assert build_identity.build_identity() == original
+
+
+def test_unknown_loaded_commit_stays_unknown_when_metadata_later_appears(monkeypatch):
+    distribution = SimpleNamespace(
+        locate_file=lambda file: Path(build_identity.__file__).parent,
+        read_text=lambda file: None)
+    monkeypatch.setattr(build_identity.metadata, "distribution", lambda name: distribution)
+    spec = importlib.util.spec_from_file_location("bat_agent_connector._identity_fixture", build_identity.__file__)
+    loaded = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(loaded)
+    original = loaded.build_identity()
+    assert original == {"version": __version__, "commit": None, "source": "package"}
+    distribution.read_text = lambda file: json.dumps({"vcs_info": {"vcs": "git", "commit_id": "a" * 40}})
+    assert loaded._read_build_identity()["commit"] == "a" * 40
+    assert loaded.build_identity() == original

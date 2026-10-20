@@ -103,6 +103,8 @@ its packaged `build-info.json`. No runtime Git process is invoked. The packaging
 job supplies `BATC_BUILD_COMMIT` to PyInstaller and Rust `option_env!`; native
 version comes from `CARGO_PKG_VERSION`. Missing commit means unknown in both
 locales. Browser assets use the serving Connector build and remain reproducible.
+The Python build is captured once at module initialization, alongside the loaded
+version; later in-place metadata changes cannot identify that running process.
 
 The Hatch build hook accepts a full 40-hex `BATC_BUILD_COMMIT` (normalized to
 lowercase). In a clean Git checkout it must equal HEAD; a mismatch is unknown.

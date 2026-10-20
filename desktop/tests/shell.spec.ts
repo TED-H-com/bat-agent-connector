@@ -219,8 +219,8 @@ test(`long workspace label stays within the mobile topbar: ${header} ${locale} $
     await expect(page.locator('.conversation .msg')).toHaveCount(2);
   }
   await useHeaderFont(page,font);
-  // Capture a real reconnecting state with the long workspace still selected.
-  f.state.offline=true;await expect(page.locator('#live')).toHaveText(copy.ui_reconnecting);
+  // Capture the failed service response with the long workspace still selected.
+  f.state.offline=true;await expect(page.locator('#live')).toHaveText(copy.ui_service_error);
   const crumb=page.locator('.shell-mobile-name');await expect(crumb).toHaveAttribute('title',name);
   await expect(crumb).toHaveAccessibleName(name);
   const top=await page.locator('.top').boundingBox(), bounds=await crumb.boundingBox();
