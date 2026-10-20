@@ -28,7 +28,7 @@ Setup now uses an authenticated active write connection or existing inventory ev
 
 本節補充上方現行首次設定，未實作新的角色精靈。欄位來源、責任分工、狀態、
 驗收及 D1–D8 待決事項以 [Fleet 共用契約](fleet-configuration.md#加入機器共用契約待審查)
-為唯一明細；兩入口不得各建一套加入流程。以下現況引用固定於 `9172fd56`。
+為唯一明細；兩入口不得各建一套加入流程。以下現況引用固定於 `ebee8196`（含 #323 的 `2df805ed`）。
 
 | 共用部分 | 程式已證實的首次設定路徑 | 後續契約／驗收要求 |
 | --- | --- | --- |
@@ -36,7 +36,7 @@ Setup now uses an authenticated active write connection or existing inventory ev
 | 最少權限 | 自動設定以 false writes／orchestrate／shared_clone 與空 managed_roots 送出；advanced 才加入 SSH／管理選擇。[managed-setup.js:465](../../desktop/src/managed-setup.js#L465) | 先能閱讀；啟用開始工作時才檢查完整必要條件。加入成功不表示 managed start／第二輪／Git／PR／PM 已就緒。 |
 | 一次意圖與恢復 | UI 保存原 key／request，已知 operation ID 時 GET 查回；接受收據前核對 actor、action、params、preconditions、key。Python 用 before／after revision 對帳單一 managed_configuration step。[managed-setup.js:426](../../desktop/src/managed-setup.js#L426)、[managed_setup.py:563](../../src/bat_agent_connector/managed_setup.py#L563)、[managed_setup.py:609](../../src/bat_agent_connector/managed_setup.py#L609) | 同一套預覽→套用→讀回；native 子步驟須引用其收據，不由 UI 重送。現有 step 沒有跨 Fleet 四檔交易，接線／scopes 待 D2。 |
 | 角色與資料位置 | native 無 external config 時會呼叫 managed ensure；有 external config 時保留選取，只有已有 manifest 才同時恢復原 managed 背景服務。setup 限原安裝 personal identity。[managed.rs:98](../../desktop/src-tauri/src/managed.rs#L98)、[managed_setup.py:46](../../src/bat_agent_connector/managed_setup.py#L46) | 首次建立服務之前選「只操作既有服務／本機提供 workspace／兩者兼有」；僅 client 零第二份專案／身分／journal。既有安裝不默默轉換；D1 未定前不宣稱此角色流程已可用。此要求修訂上方既有 managed-first 旅程的未來入口。 |
-| 修改／刪除／更新憑證 | setup 可 stage secret ref，但改既有 host endpoint／pin／profile 會拒絕；registry 沒有 remove action。[managed_setup.py:222](../../src/bat_agent_connector/managed_setup.py#L222)、[managed_setup.py:318](../../src/bat_agent_connector/managed_setup.py#L318)、[managed_setup.py:621](../../src/bat_agent_connector/managed_setup.py#L621) | 使用共用變更預覽及依賴／busy guard；原歷史及已送操作保留。換址信任與刪除語意待 D4／D6，不能自創 API 或藉重建身分完成。 |
+| 修改／刪除／更新憑證 | setup 可 stage secret ref，但改既有 host 的 Git transport／endpoint／pin／profile 會拒絕；registry 沒有 remove action。[managed_setup.py:222](../../src/bat_agent_connector/managed_setup.py#L222)、[managed_setup.py:295](../../src/bat_agent_connector/managed_setup.py#L295)、[managed_setup.py:318](../../src/bat_agent_connector/managed_setup.py#L318)、[managed_setup.py:621](../../src/bat_agent_connector/managed_setup.py#L621) | 使用共用變更預覽及依賴／busy guard；原歷史及已送操作保留。換址信任與刪除語意待 D4／D6，不能自創 API 或藉重建身分完成。 |
 | 連線與能力 | setup 用目前 authenticated connection 或同 binding 的近期 inventory evidence；GET 不主動 probe。Work readiness 另有 states／work_follow_up／pm_analysis。[managed_setup.py:175](../../src/bat_agent_connector/managed_setup.py#L175)、[pm_work_profiles.py:970](../../src/bat_agent_connector/pm_work_profiles.py#L970) | 與 Fleet、Work、標頭共用按來源／權限分區的健康投影；缺值標未知，不把 checking／過期／拒絕／不支援都叫離線。標頭須註明「中央服務」，D7 定義投影接線。 |
 
 ### 本機 lifecycle 的驗收邊界
@@ -49,7 +49,7 @@ Setup now uses an authenticated active write connection or existing inventory ev
 | 多 client 開啟／服務退出後重開 | managed ensure 在 launcher lock 內確認 service lease，驗原 manifest／endpoint；失敗保留資料，不另建 DB。[managed_runtime.py:217](../../src/bat_agent_connector/managed_runtime.py#L217) | 引用同安裝及原 journal；查回原意圖，不重派已送工作。 |
 | 關閉 Dashboard／瀏覽器、鎖屏、登出 | native `Managed` 透過 ensure 準備 background service；這不能單獨證明每種 OS 登入政策下的生存性。[managed.rs:98](../../desktop/src-tauri/src/managed.rs#L98) | 關閉前景不應停止已承諾的背景工作；鎖屏／登出須按正式啟動方式、平台政策分格實測，未驗值標未知（D8）。 |
 | 重開機 | managed ensure 的恢復仍須原身分及 service lease 驗證。[managed_runtime.py:217](../../src/bat_agent_connector/managed_runtime.py#L217) | 停機期間不承諾運算；登入啟動及恢復後查回原 queue／Work，不能盲重播已送效果。一般登入是否自動恢復由 D8 支援矩陣定義。 |
-| 主動停止／替代程序 | Fleet adapter 對未能確認退出會回 `STOP_UNCONFIRMED`；migration launch unknown 僅查 owner。[windows_tunnel.rs:54](../../desktop/fleet-core/src/windows_tunnel.rs#L54)、[migration.rs:563](../../desktop/fleet-core/src/migration.rs#L563) | 只停止已證明 owned 的資源；肯定退出才可另啟，不以 PID 重用／port 狀態猜測。純 client 不停止來源服務。 |
+| 主動停止／替代程序 | Fleet adapter 對未能確認退出會回 `STOP_UNCONFIRMED`；migration launch unknown 僅查 owner。[windows_tunnel.rs:62](../../desktop/fleet-core/src/windows_tunnel.rs#L62)、[migration.rs:563](../../desktop/fleet-core/src/migration.rs#L563) | 只停止已證明 owned 的資源；肯定退出才可另啟，不以 PID 重用／port 狀態猜測。純 client 不停止來源服務。 |
 
 乾淨安裝、既有 BAT／SSH／Connector 設定、半套成功，均按共用契約的 CI／實機兩欄
 分別記錄。Linux mock／原生 fixture、Windows 安裝、非正式 Linux 真 BAT 及模型操作
