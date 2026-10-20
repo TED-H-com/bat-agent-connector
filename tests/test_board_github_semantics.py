@@ -314,3 +314,20 @@ async def test_configured_polling_before_first_success_backs_off_and_recovers(da
     await board_github.tick(d.ops)
     await settle_operations(d.ops)
     assert d.ops.db.execute('SELECT COUNT(*) FROM work_items').fetchone()[0] == 1
+
+
+async def test_corrected_closed_reason_updates_existing_source_lane(daemon):
+    d = daemon
+    pid = await project(d)
+    source = Provider([issue(1)])
+    d.ops.context['board_github_provider'] = source
+    await sync(d, pid)
+    iid = d.ops.db.execute('SELECT work_item_id FROM work_items').fetchone()[0]
+    await act(d, PERSON, 'work_item.update', {'work_item_id': iid}, {'state': 'waiting'}, {'expected_version': get(d, iid)['version']})
+    source.values = [issue(1, state='closed', state_reason='not_planned')]
+    await sync(d, pid)
+    assert get(d, iid)['external']['board_lane'] == 'github_closed'
+    source.values = [issue(1, state='closed', state_reason='completed')]
+    await sync(d, pid)
+    assert get(d, iid)['external']['board_lane'] == 'github_completed'
+    assert get(d, iid)['state'] == 'waiting' and get(d, iid)['done_by'] is None

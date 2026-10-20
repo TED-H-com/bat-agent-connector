@@ -288,7 +288,8 @@ async def _apply(ctx, principal, pid, repo, wid, values, now, *, include_closed=
         transition = old is not None and old['state'] != value['state']
         board_lane = value['lane'] if not manual or transition and value['state'] != 'open' else None
         if manual and old and not transition:
-            board_lane = old.get('board_lane')
+            previous_lane = old.get('board_lane')
+            board_lane = value['lane'] if previous_lane in ('github_closed', 'github_completed', 'github_done') else previous_lane
         if row['archived_at'] is not None:
             board_lane = None
         external = {'repository': repo, 'number': number, 'node_id': value['node_id'],
