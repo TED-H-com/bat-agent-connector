@@ -129,6 +129,8 @@ for (const native of [false, true]) for (const lang of ['en', 'zh-TW']) for (con
         await frame(page);
         const before = await snapshot(field);
         expect(before.focused).toBe(true);
+        expect(before.value).toBe(draft);
+        expect(before.selection).toEqual([3, 19, 'backward']);
         expect(before.scrollTop).toBeGreaterThan(0);
         expect(before.readerTop).toBeGreaterThan(0);
         expect(before.stored).toHaveLength(1);
@@ -142,6 +144,7 @@ for (const native of [false, true]) for (const lang of ['en', 'zh-TW']) for (con
           await expect(selectedResult).toHaveAttribute('href', originalHref!);
           expect(operationPosts()).toEqual([]);
           expect(f.follow.items).toEqual([]); // Local text is not a server receipt.
+          await expect(page.locator('[data-follow-up-ack], [data-follow-up-receipt]')).toHaveCount(0);
         };
         const composingEnter = async () => {
           await field.evaluate(node => {
