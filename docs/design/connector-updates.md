@@ -111,6 +111,14 @@ exercise lower data-step maxima, missing fences and future support separately.
 An empty work set has reason `NO_IN_FLIGHT_WORK`; `IN_FLIGHT_SUPPORT_DECLARED`
 means existing rows and every recorded step are covered by the declaration.
 
+Today, every real enrolled installation previews `unknown` even when its journal
+and fence facts are compatible: it has unversioned credentials or a retained
+rollout receipt. A known incompatibility still takes precedence. Versioned
+credential and receipt formats, with declared reader support, are needed to make
+`compatible` reachable for these deployments; versioning those formats is not
+part of this PR. If O07 refused `unknown`, it would refuse rollback on every
+current installation with these otherwise-compatible facts.
+
 Even `compatible` does not prove every rollback effect will succeed: observation
 can become stale, external systems can change, and declarations do not execute
 the old reconciler. Whether rollback should refuse incompatible or unknown

@@ -6,6 +6,7 @@ import os
 import socket
 import sqlite3
 import subprocess
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -256,6 +257,43 @@ async def test_real_unversioned_deployment_receipt_remains_unknown(produced, ins
     preview = preview_unchanged(service, journal)
     assert preview["verdict"] == "unknown"
     assert preview["facts"]["enrollment"]["reason"] == "ENROLLMENT_RECEIPT_UNVERSIONED"
+
+
+def test_real_enrollment_with_current_credentials_and_receipt_stays_unknown(installation):
+    home, installed_root, _, first, inspect, finalize = installation
+    receipt = Path(finalize()["receipt"])
+    proofs = {installed_root: inspect(installed_root, first, home=home)}
+
+    def install(root, candidate, *, home):
+        proofs[root] = make_package(root, candidate)
+        return proofs[root]
+
+    # Real enrollment/update/state/link/receipt producers; only the package
+    # installer/inspection boundary uses the existing synthetic package fixture.
+    service = updater.Updater(home, find_release=lambda channel: first, install=install,
+                              inspect=lambda root, candidate, **kwargs: proofs[root])
+    enrolled = service.enroll(receipt, "preview")
+    assert enrolled["installation_matches_state"] and not enrolled["pending"]
+    second = release("b" * 40, "0.2.8")
+    service.find_release = lambda channel: second
+    assert service.apply()["installed"] == second
+    state = service.read()
+    assert state["previous"] == first["commit"]
+    declare_previous(service, state)
+
+    with closing(Journal(home / "journal" / "tasks.sqlite3")) as journal:
+        token = api_auth.issue(journal.db, "enrolled-reader", ["observe"])
+        preview = preview_unchanged(service, journal)
+        facts = preview["facts"]
+        assert facts["journal"]["compatibility"] == "compatible"
+        assert facts["newer_journal_fence"]["compatibility"] == "compatible"
+        assert facts["in_flight"]["reason"] == "NO_IN_FLIGHT_WORK"
+        assert preview["verdict"] == "unknown"
+        assert facts["credentials"]["reason"] == "CREDENTIAL_FORMAT_UNVERSIONED"
+        assert facts["enrollment"]["reason"] == "ENROLLMENT_RECEIPT_UNVERSIONED"
+        assert facts["credentials"]["value"]["records"]["api_principals"] == 1
+        assert facts["enrollment"]["value"]["unversioned_deployment_receipts"] == 1
+        assert token not in json.dumps(preview)
 
 
 def test_shipped_declaration_matches_current_producer():
