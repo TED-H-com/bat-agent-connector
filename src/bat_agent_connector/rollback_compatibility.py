@@ -91,7 +91,7 @@ def _previous(record):
         require(hashlib.sha256(raw).hexdigest() == inventory["compatibility.json"], "declaration_changed")
         doc = json.loads(raw)
         require(_valid(doc, identity["version"]), "declaration_invalid")
-    except (OSError, ValueError, TypeError):
+    except (OSError, ValueError, TypeError, RecursionError):
         return identity, None, "PREVIOUS_DECLARATION_UNREADABLE_OR_INVALID"
     return identity, doc, None
 

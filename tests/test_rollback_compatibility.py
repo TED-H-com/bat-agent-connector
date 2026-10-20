@@ -187,13 +187,13 @@ async def test_known_incompatibility_wins_over_other_unknowns(produced, paramete
     assert preview["facts"]["credentials"]["compatibility"] == "unknown"
 
 
-@pytest.mark.parametrize("change", ["malformed", "unreadable", "edited_after_proof"])
+@pytest.mark.parametrize("change", ["malformed", "deeply_nested", "unreadable", "edited_after_proof"])
 async def test_unusable_declaration_cannot_prove_compatibility(produced, monkeypatch, change):
     service, state, journal, *_ = produced
     path = declare_previous(service, state)
     if change != "unreadable":
-        files.atomic_write(path, b"not JSON")
-        if change == "malformed":
+        files.atomic_write(path, b"[" * 20000 + b"0" + b"]" * 20000 if change == "deeply_nested" else b"not JSON")
+        if change in {"malformed", "deeply_nested"}:
             record = state["versions"][state["previous"]]
             record["proof"]["files"] = digest_files(package_files(path.parent))
             service.save(state)
