@@ -831,7 +831,7 @@ export function renderApp() {
   // a failed poll with the credential retained, using the real client's facts.
   const central = centralServiceStatus({token: 'fixture-token', online: !state.disconnectedDuringStart,
     pollHealth: state.disconnectedDuringStart ? 'reconnecting' : 'connected'});
-  const centralName = t('ui_central_status', {status: t(central.key)});
+  const centralName = t('ui_connector_status', {status: t(central.key)});
   const shell = h('div', tid('product-shell'), h('header', {
     class: 'top'
   }, iconButton({
@@ -864,9 +864,7 @@ export function renderApp() {
   }, t('projectName'))), h('div', {
     class: 'shell-top-actions'
   }, pendingButton(), h('span', {class: 'central-service-status', title: centralName},
-    h('span', {class: 'central-service-scope', 'aria-hidden': 'true'},
-      h('span', {class: 'central-service-scope-full'}, t('ui_central_scope')),
-      h('span', {class: 'central-service-scope-short'}, t('ui_central_scope_short'))),
+    h('span', {class: 'central-service-scope', 'aria-hidden': 'true'}, t('ui_connector_scope')),
     h('span', {class: `live tone-${central.tone}`, role: 'status', 'aria-label': centralName,
       title: centralName, 'data-connection': central.connection},
       h('span', {class: 'central-service-state'}, t(central.key)))))), h('div', {

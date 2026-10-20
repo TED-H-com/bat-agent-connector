@@ -178,14 +178,14 @@ test('workspace creation opens from the mobile switcher and from Settings with t
   await expect(panel.getByRole('textbox',{name:'Workspace name',exact:true})).toHaveValue('Saved draft');
   expect(f.pm.base.state.writes).toHaveLength(0);
 });
-test('initial central loading reports Reconnecting until the view is ready',async({page})=>{
+test('authenticated bootstrap stays Connected while the first view read is held',async({page})=>{
   const f=fixture();let release=()=>{};const gate=new Promise<void>(resolve=>{release=resolve;});
   await mountConversation(page,false,async input=>{
     if(input.path===`/pm/workspaces/${workspaceId}`) await gate;
     return f.dispatch(input);
   });
-  await page.goto(route);await expect(page.locator('#live')).toHaveAttribute('data-connection','reconnecting');
-  await expect(page.locator('#live')).toHaveText('Reconnecting');release();
+  await page.goto(route);await expect(page.locator('#live')).toHaveAttribute('data-connection','connected');
+  await expect(page.locator('#live')).toHaveText('Connected');release();
   await expect(page.locator('#live')).toHaveAttribute('data-connection','connected');
 });
 test('Overview rereads the selected fixed report after leaving for Settings',async({page})=>{

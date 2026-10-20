@@ -22,12 +22,14 @@ for (const lang of ['en', 'zh-TW']) for (const width of [1440, 390]) {
       await page.goto(`/prototype/v1.3/?lang=${lang}&scene=${scene}`);
       const connected = scene === 'idea';
       const text = lang === 'zh-TW' ? connected ? '已連線' : '重新連線中' : connected ? 'Connected' : 'Reconnecting';
-      const scoped = lang === 'zh-TW' ? `中央服務：${text}` : `Central service: ${text}`;
+      const scoped = lang === 'zh-TW' ? `Connector：${text}` : `Connector: ${text}`;
       const status = page.locator('.central-service-status .live');
       await expect(status).toHaveText(text);
       await expect(status).toHaveAccessibleName(scoped);
       await expect(status).toHaveAttribute('title', scoped);
       await expect(status).toHaveClass(connected ? /tone-ok/ : /tone-warn/);
+      await expect(page.locator('.central-service-scope')).toHaveText(lang === 'zh-TW' ? 'Connector：' : 'Connector:');
+      expect(await page.locator('.central-service-state').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     }
   });

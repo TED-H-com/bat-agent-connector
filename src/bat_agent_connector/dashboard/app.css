@@ -1992,7 +1992,6 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .shell-top-actions { display: flex; align-items: center; gap: var(--space-2); flex: none; margin-left: auto; }
 .central-service-status { display: inline-flex; align-items: center; gap: var(--space-1); min-width: 0; max-width: 45vw; font-size: var(--fs-caption); color: var(--text-2); }
 .central-service-scope { flex: none; white-space: nowrap; }
-.central-service-scope-short { display: none; }
 .central-service-state { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .live { display: inline-flex; align-items: center; gap: var(--space-1); margin: 0; width: auto; text-decoration: none; font-size: var(--fs-caption); color: var(--text-2); background: var(--surface-2); padding: 2px var(--space-2); border-radius: var(--r-pill); white-space: nowrap; }
 .central-service-status .live { min-width: 0; }
@@ -2051,9 +2050,6 @@ body.pm-mode #main { padding: 0; }
   #workspace-menu, .pm-mode #workspace-menu { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; border: 0; background: transparent; }
   .shell-crumb-workspace { max-width: calc(100vw - 112px); white-space: normal; font-weight: 600; text-align: left; }
   #nav > .ui-menu { min-width: 0; }
-  .central-service-scope-full { display: none; }
-  .central-service-scope-short { display: inline; }
-  .central-service-status { max-width: 42vw; }
   .central-service-status .live { font-size: var(--fs-caption); padding: var(--space-1); background: transparent; min-height: 44px; }
   .live::before { width: 8px; height: 8px; }
   body.has-workspace main, .pm-main { padding: var(--space-4); }

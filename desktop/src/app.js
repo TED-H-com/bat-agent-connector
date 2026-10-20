@@ -795,13 +795,11 @@ function paintConnection(waiting = false, paused = false) {
   live.dataset.connection = status;
   live.className = 'live tone-' + tone;
   live.replaceChildren(h('span', {class: 'central-service-state'}, t(key)));
-  const scoped = t('ui_central_status', {status: t(key)});
+  const scoped = t('ui_connector_status', {status: t(key)});
   live.setAttribute('aria-label', scoped);
   const central = document.getElementById('central-service-status');
   central.title = scoped;
-  central.querySelector('.central-service-scope').replaceChildren(
-    h('span', {class: 'central-service-scope-full'}, t('ui_central_scope')),
-    h('span', {class: 'central-service-scope-short'}, t('ui_central_scope_short')));
+  central.querySelector('.central-service-scope').textContent = t('ui_connector_scope');
   let notice = document.getElementById('managed-recovery-notice');
   if (state.managedRecovery && !notice) {
     notice = h('aside', {id: 'managed-recovery-notice', class: 'panel', role: 'status'}, h('p'),

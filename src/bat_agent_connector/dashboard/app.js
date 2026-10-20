@@ -1597,9 +1597,8 @@ var init_ui_strings = __esmMin((() => {
 			ui_connecting: "Connecting",
 			ui_reconnecting: "Reconnecting",
 			ui_workspace: "Workspace",
-			ui_central_scope: "Central service:",
-			ui_central_scope_short: "Central:",
-			ui_central_status: "Central service: {status}",
+			ui_connector_scope: "Connector:",
+			ui_connector_status: "Connector: {status}",
 			ui_switch_workspace: "Switch workspace",
 			ui_new_workspace: "New workspace",
 			ui_report: "Report",
@@ -1682,12 +1681,11 @@ var init_ui_strings = __esmMin((() => {
 			ui_pending: "待處理",
 			ui_connected: "已連線",
 			ui_not_connected: "未連線",
-			ui_connecting: "確認中",
+			ui_connecting: "連線中",
 			ui_reconnecting: "重新連線中",
 			ui_workspace: "工作空間",
-			ui_central_scope: "中央服務：",
-			ui_central_scope_short: "中央：",
-			ui_central_status: "中央服務：{status}",
+			ui_connector_scope: "Connector：",
+			ui_connector_status: "Connector：{status}",
 			ui_switch_workspace: "切換工作空間",
 			ui_new_workspace: "新增工作空間",
 			ui_report: "報告",
@@ -66127,11 +66125,11 @@ function paintConnection(waiting = false, paused = false) {
 	live.dataset.connection = status;
 	live.className = "live tone-" + tone;
 	live.replaceChildren(h("span", { class: "central-service-state" }, t(key)));
-	const scoped = t("ui_central_status", { status: t(key) });
+	const scoped = t("ui_connector_status", { status: t(key) });
 	live.setAttribute("aria-label", scoped);
 	const central = document.getElementById("central-service-status");
 	central.title = scoped;
-	central.querySelector(".central-service-scope").replaceChildren(h("span", { class: "central-service-scope-full" }, t("ui_central_scope")), h("span", { class: "central-service-scope-short" }, t("ui_central_scope_short")));
+	central.querySelector(".central-service-scope").textContent = t("ui_connector_scope");
 	let notice = document.getElementById("managed-recovery-notice");
 	if (state.managedRecovery && !notice) {
 		notice = h("aside", {

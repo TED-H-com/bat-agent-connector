@@ -13,7 +13,7 @@ async function baselineAssets(page: Page) {
 for (const locale of ['en-US', 'zh-TW']) {
   const connected = locale === 'zh-TW' ? '已連線' : 'Connected';
   const disconnected = locale === 'zh-TW' ? '未連線' : 'Not connected';
-  const scoped = locale === 'zh-TW' ? '中央服務：未連線' : 'Central service: Not connected';
+  const scoped = locale === 'zh-TW' ? 'Connector：未連線' : 'Connector: Not connected';
 
   test(`failed poll after success agrees on both surfaces at 390px ${locale}`, async ({browser}) => {
     const context = await browser.newContext({locale, viewport: {width: 390, height: 844}}), page = await context.newPage();
@@ -28,7 +28,9 @@ for (const locale of ['en-US', 'zh-TW']) {
       const text = locale === 'zh-TW' ? '重新連線中' : 'Reconnecting';
       await expect(page.locator('#live')).toHaveText(text);
       await expect(page.locator('.global-connection-facts .ui-pill')).toHaveText(text);
-      await expect(page.locator('#live')).toHaveAccessibleName(locale === 'zh-TW' ? `中央服務：${text}` : `Central service: ${text}`);
+      await expect(page.locator('#live')).toHaveAccessibleName(locale === 'zh-TW' ? `Connector：${text}` : `Connector: ${text}`);
+      await expect(page.locator('.central-service-scope')).toHaveText(locale === 'zh-TW' ? 'Connector：' : 'Connector:');
+      expect(await page.locator('.central-service-state').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     } finally { await context.close(); }
   });
@@ -103,6 +105,8 @@ for (const locale of ['en-US', 'zh-TW']) {
       await expect.soft(page.locator('#live')).toHaveAccessibleName(scoped);
       await expect.soft(page.locator('#live')).toHaveAttribute('title', new RegExp(scoped));
       await expect.soft(page.locator('.central-service-scope')).toBeVisible();
+      await expect(page.locator('.central-service-scope')).toHaveText(locale === 'zh-TW' ? 'Connector：' : 'Connector:');
+      expect(await page.locator('.central-service-state').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     } finally { await context.close(); }
   });

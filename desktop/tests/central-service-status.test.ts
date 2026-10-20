@@ -1,6 +1,13 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {centralServiceStatus} from '../src/central-service-status.js';
+import {STRINGS} from '../src/i18n.js';
+
+test('pending reachability says Connecting in both locales', () => {
+  const {key} = centralServiceStatus({token: 'credential', pollHealth: 'initial', online: false});
+  assert.equal(STRINGS.en[key], 'Connecting');
+  assert.equal(STRINGS['zh-TW'][key], '連線中');
+});
 
 test('credentials and authenticated bootstrap/poll observations settle central status', () => {
   for (const token of [null, '']) for (const pollHealth of ['initial', 'connected', 'reconnecting']) {
