@@ -26,6 +26,15 @@ from bat_agent_connector.updater import Updater
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def copy_fixture_source(root, source):
+    for name in ("pyproject.toml", "uv.lock", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"):
+        shutil.copy2(root / name, source / name)
+    shutil.copytree(root / "src/bat_agent_connector", source / "src/bat_agent_connector",
+                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    files.atomic_write(source / "skills/bat-agent-connector/SKILL.md",
+                       (root / "skills/bat-agent-connector/SKILL.md").read_bytes())
+
+
 def identity_line(process):
     with selectors.DefaultSelector() as selector:
         selector.register(process.stdout, selectors.EVENT_READ)
@@ -45,12 +54,7 @@ def validate(parent):
         (home / ".local/bin/python3.13").symlink_to(Path(sys.executable).resolve())
         source = scratch / "source"
         source.mkdir(mode=0o700)
-        for name in ("pyproject.toml", "uv.lock", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"):
-            shutil.copy2(ROOT / name, source / name)
-        shutil.copytree(ROOT / "src/bat_agent_connector", source / "src/bat_agent_connector",
-                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-        files.atomic_write(source / "skills/bat-agent-connector/SKILL.md",
-                           (ROOT / "skills/bat-agent-connector/SKILL.md").read_bytes())
+        copy_fixture_source(ROOT, source)
         env = clean_env(home)
         git = shutil.which("git", path=env["PATH"])
         run([git, "init", "--quiet", str(source)], env=env)
@@ -65,6 +69,7 @@ def validate(parent):
         root = scratch / "installed"
         fetches = []
         def command(args, **kwargs):
+            kwargs["env"] = {**kwargs["env"], "TMPDIR": str(scratch)}
             if "fetch" in args:
                 assert REPOSITORY + ".git" in args
                 args = [value if value != REPOSITORY + ".git" else source.as_uri() for value in args]
