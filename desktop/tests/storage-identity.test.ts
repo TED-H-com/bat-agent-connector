@@ -40,7 +40,7 @@ test('one exact legacy identity copies every scoped key byte for byte and retain
     'pm.verifier', 'pm.governance.selection', 'pm.meeting-navigation', 'pm.review-navigation', 'managed.setup',
     'create', 'repair', 'capture', 'task-control', 'labels', 'session-bat', 'permissions', 'cleanup.draft',
     'cleanup.pending', 'cleanup.intent', 'approvals', 'start', 'orchestrate', 'published', 'dispatch', 'artifact-review',
-    'model-preferences', 'project-skills', 'tree', 'sessions', 'attention', 'composer-shortcut', 'delivery'];
+    'model-preferences', 'project-skills', 'tree', 'sessions', 'attention', 'composer-shortcut'];
   for (const storage of [local, session]) for (const family of families)
     storage.setItem(`batc.${family}.${old()}.work-start.exact-work.exact-attempt`, JSON.stringify({key: 'original', work: 'original', attempt: 'original'}));
   local.setItem('batc.lang', 'zh-TW');
@@ -65,6 +65,19 @@ test('one exact legacy identity copies every scoped key byte for byte and retain
   migrateManagedStorage(identity, local, session);
   assert.equal(local.getItem(`batc.draft.${target}.send.demo.session-1`), null, 'a consumed draft must never be resurrected');
   assert.equal(local.getItem(`batc.key.${target}.send.demo.session-1`), null, 'an old operation key must never be reimported');
+});
+
+test('delivery migration copies the real scoped repo/pr keys and never adopts unowned globals', () => {
+  const {local, session} = stores(old());
+  session.setItem(`batc.delivery.${old()}.repo`, 'example/scoped-selection');
+  session.setItem(`batc.delivery.${old()}.pr`, '23');
+  session.setItem('batc.repo', 'example/unowned-selection');
+  session.setItem('batc.pr', '17');
+  const before = new Map(session.values);
+  migrateManagedStorage(identity, local, session);
+  for (const [key, value] of before) assert.equal(session.getItem(key), value);
+  assert.equal(session.getItem(`batc.delivery.${target}.repo`), 'example/scoped-selection');
+  assert.equal(session.getItem(`batc.delivery.${target}.pr`), '23');
 });
 
 for (const field of ['server_id', 'principal_id', 'actor']) test(`migration cannot cross ${field}`, () => {

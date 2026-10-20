@@ -50,8 +50,9 @@ const origin = service => `http://127.0.0.1:${service.port}`;
 const scope = (endpoint, service) => [endpoint, service.server_id, service.principal_id, service.actor].map(encodeURIComponent).join(':');
 const session = '#/session/h1/sess-claude-0001';
 const texts = locale => locale === 'zh-TW' ? {connect:'連線', disconnect:'中斷', send:'送出', reload:'重新載入設定',
-  repository:'儲存庫或 GitHub PR 網址', pr:'PR 編號', load:'讀取 PR'} : {connect:'Connect', disconnect:'Disconnect', send:'Send',
-  reload:'Reload configuration', repository:'Repository or GitHub PR URL', pr:'PR number', load:'Load PR'};
+  repository:'儲存庫或 GitHub PR 網址', pr:'PR 編號', load:'讀取 PR', emptyReceipts:'這個工作階段尚無送出紀錄', pending:'等待送出結果'} :
+  {connect:'Connect', disconnect:'Disconnect', send:'Send', reload:'Reload configuration', repository:'Repository or GitHub PR URL',
+    pr:'PR number', load:'Load PR', emptyReceipts:'No send receipts for this session', pending:'Send pending'};
 async function route(page, hash) {await page.evaluate(value => {location.hash = value;}, hash);}
 const composer = page => page.locator('[data-session-view] textarea').first();
 const dom = page => page.evaluate(() => document.documentElement.outerHTML + '\n' +
@@ -91,6 +92,19 @@ async function checkpoint(page, namespace, service) {
 async function privateDOM(page, own, other) {
   await expect(page.locator('.message-body').filter({hasText:own.marker}).first()).toBeVisible();
   assert.equal((await dom(page)).includes(other.marker), false, 'Other source private fact in DOM');
+}
+async function receipts(page, labels, original = null, text = '') {
+  const panel = page.locator('[data-instruction-receipts]');
+  await panel.locator('summary').click();
+  if (original) {
+    const row = panel.locator(`[data-instruction-operation="${original.op}"]`);
+    await expect(row).toBeVisible();
+    await expect(row).toContainText(text);
+    await expect(row).toContainText(labels.pending);
+  } else {
+    await expect(panel).toContainText(labels.emptyReceipts);
+    await expect(panel.locator('[data-instruction-operation]')).toHaveCount(0);
+  }
 }
 async function lists(page, own, other, selectedHost = '') {
   await route(page, '#/sessions');
@@ -230,8 +244,7 @@ async function pass(services, locale, native) {
     const report = await a.control('report');
     assert.equal(report.instructions.operations.find(value => value.operation_id === original.op).status, 'accepted');
     await checkpoint(page, namespaces.A, a);
-    await page.locator('[data-instruction-receipts] summary').click();
-    await expect(page.locator(`[data-instruction-operation="${original.op}"]`)).toHaveCount(1);
+    await receipts(page, labels, original, draftA);
     // A standalone delivery selection is also a source-private route/filter.
     await expect(await delivery(page, labels)).toHaveValue('');
     await delivery(page, labels, `example/${a.marker}`, '17');
@@ -256,6 +269,7 @@ async function pass(services, locale, native) {
     }
     assert.equal(await page.locator(`[data-instruction-operation="${original.op}"]`).count(), 0);
     await lists(page, b, a);
+    await receipts(page, labels);
     const inputB = await delivery(page, labels);
     await expect(inputB).toHaveValue('');
     await expect(page.getByRole('textbox', {name:labels.pr, exact:true})).toHaveValue('');
@@ -280,6 +294,7 @@ async function pass(services, locale, native) {
     const returned = await snapshot(page, run, 'A-returned', namespaces);
     assert.deepEqual(returned.B, onB.B, 'B namespace changed while on A');
     assert.deepEqual(returned.A, before.A, 'A namespace did not restore byte for byte');
+    await receipts(page, labels, original, draftA);
     if (native) {
       await route(page, '#/pm');
       await expect(page.locator('[data-workspace-id]').first()).toHaveAttribute('data-workspace-id', a.workspace_id);
