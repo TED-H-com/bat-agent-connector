@@ -4,12 +4,15 @@ import {demoFixture} from './demo/index.ts';
 import {mountConversation} from './conversation-fixture.ts';
 
 const action='pm.continuation.prepare', run='pmr_'+'7'.repeat(32), operation='op_'+'8'.repeat(32);
-function fixture(locale='en') {
+async function fixture(locale='en') {
   const f=demoFixture({locale,discussions:true}), root=`/pm/workspaces/${f.ids.workspaceId}`;
   const detail=f.discussion.details.get(f.ids.threadIdea);
+  // Production freezes this metadata in the run context. Reading the current
+  // plan later must not mutate the same saved continuation's source identity.
+  const initialPlans=await f.dispatch({method:'GET',path:root+'/plans?limit=20'});
   const saved:any={available:true,run_id:run,operation_id:operation,document_digest:'a'.repeat(64),
     validation:{status:'format_valid',conclusions_verified:false},as_of:1792320000,thread_version:detail.thread.version,
-    plan_head:null,coverage:{partial:false,through_message:8},source_references:{'message.one':{operation_id:operation,kind:'message',id:'pmm_'+'6'.repeat(32)}},
+    plan_head:structuredClone(initialPlans.data.head),coverage:{partial:false,through_message:8},source_references:{'message.one':{operation_id:operation,kind:'message',id:'pmm_'+'6'.repeat(32)}},
     document:{version:1,goal:{text:'Keep the original delivery goal.',source_refs:['message.one']},status:'next_steps',
       next_steps:[{text:'Decide whether the mobile evidence meets this release.',source_refs:['message.one']}],
       adopted_decisions:[],rejected_directions:[{text:'Do not add referrals to this release.',source_refs:['message.one']}],
@@ -34,7 +37,6 @@ function fixture(locale='en') {
       {adapter:'codex-native-linux',action_registered:true,authorized:true,eligible_for_preflight:!state.unavailable},
       {adapter:'bat-pm-linux-v1',action_registered:true,authorized:true,eligible_for_preflight:true}]}}};
     if(path===root+'/capabilities'&&state.choice)value.data.workspace_adapter={version:1,choice:{adapter:state.choice}};
-    if(path===root+'/plans')saved.plan_head=structuredClone(value.data.head);
     if(path===root+'/threads/'+f.ids.threadIdea){
       value.data.continuation_brief=state.withdrawn?{available:false}:structuredClone(saved);
     }
@@ -44,7 +46,7 @@ function fixture(locale='en') {
 }
 
 for(const locale of ['en','zh-TW']) for(const native of [false,true])test(`continuation uses one explicit sourced request ${locale} ${native?'IPC':'HTTP'}`,async({page})=>{
-  const x=fixture(locale), {f,state}=x, width=locale==='en'?1440:390;
+  const x=await fixture(locale), {f,state}=x, width=locale==='en'?1440:390;
   await page.setViewportSize({width,height:900});
   await page.addInitScript(value=>Object.defineProperty(navigator,'language',{get:()=>value}),locale);
   await mountConversation(page,native,x.dispatch);
@@ -79,7 +81,7 @@ for(const locale of ['en','zh-TW']) for(const native of [false,true])test(`conti
 });
 
 for(const native of [false,true])test(`withdrawn continuation disappears without falling back ${native?'IPC':'HTTP'}`,async({page})=>{
-  const x=fixture();await mountConversation(page,native,x.dispatch);
+  const x=await fixture();await mountConversation(page,native,x.dispatch);
   await page.goto(`/dashboard/#/pm/${x.f.ids.workspaceId}/discussions/${x.f.ids.threadIdea}`);
   const reader=page.locator('[data-continuation-brief]');await expect(reader).toBeVisible();
   await reader.locator(':scope > details > summary').click();await expect(reader).toContainText('mobile evidence');
@@ -91,7 +93,7 @@ for(const native of [false,true])test(`withdrawn continuation disappears without
 });
 
 for(const native of [false,true])test(`continuation recovery retains the exact prior version and adapter ${native?'IPC':'HTTP'}`,async({page})=>{
-  const x=fixture();x.state.lost=true;await mountConversation(page,native,x.dispatch);
+  const x=await fixture();x.state.lost=true;await mountConversation(page,native,x.dispatch);
   await page.goto(`/dashboard/#/pm/${x.f.ids.workspaceId}/discussions/${x.f.ids.threadIdea}`);
   await page.locator('[data-discussion-panel-toggle]').click();
   const tools=page.locator('[data-continuation-tools]');await expect(tools).toBeVisible();
@@ -108,13 +110,16 @@ for(const native of [false,true])test(`continuation recovery retains the exact p
 });
 
 test('discussion refresh preserves an open brief and does not run an unavailable adapter',async({page})=>{
-  const x=fixture();x.state.unavailable=true;await mountConversation(page,false,x.dispatch);
+  const x=await fixture();x.state.unavailable=true;await mountConversation(page,false,x.dispatch);
   await page.goto(`/dashboard/#/pm/${x.f.ids.workspaceId}/discussions/${x.f.ids.threadIdea}`);
+  await expect(page.locator('[data-discussion-composer]')).toBeEnabled();
   const reader=page.locator('[data-continuation-brief]');
+  await expect(reader).not.toContainText('New discussion or plan changes');
   await reader.locator(':scope > details > summary').click();
   const detail=reader.locator(':scope > details');const original=await detail.elementHandle();
   x.detail.thread.version++;
   await page.getByRole('button',{name:'Refresh',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Refresh',exact:true})).toBeEnabled();
   await expect(reader).toContainText('New discussion or plan changes');
   expect(await detail.evaluate((node,old)=>node===old,original)).toBe(true);
   await expect(detail).toHaveAttribute('open','');
@@ -124,7 +129,7 @@ test('discussion refresh preserves an open brief and does not run an unavailable
 });
 
 for(const native of [false,true])test(`workspace choice routes continuation while its original receipt survives a later choice ${native?'IPC':'HTTP'}`,async({page})=>{
-  const x=fixture();x.state.choice='bat-pm-linux-v1';x.state.lost=true;await mountConversation(page,native,x.dispatch);
+  const x=await fixture();x.state.choice='bat-pm-linux-v1';x.state.lost=true;await mountConversation(page,native,x.dispatch);
   await page.goto(`/dashboard/#/pm/${x.f.ids.workspaceId}/discussions/${x.f.ids.threadIdea}`);
   await page.locator('[data-discussion-panel-toggle]').click();
   const tools=page.locator('[data-continuation-tools]'),adapter=tools.getByLabel('Run analysis with',{exact:true});
@@ -135,4 +140,44 @@ for(const native of [false,true])test(`workspace choice routes continuation whil
   await expect(adapter).toHaveValue('bat-pm-linux-v1');await expect(adapter).toBeDisabled();
   await tools.locator('button[type=submit]').click();await expect.poll(()=>x.state.writes.length).toBe(2);
   expect(x.state.writes[1]).toEqual(original);expect(x.f.discussion.writes).toEqual([]);
+});
+
+for(const locale of ['en','zh-TW']) for(const native of [false,true]) for(const first of ['thread','plans'] as const)
+test(`continuation refresh keeps the same frozen brief with ${first} first ${locale} ${native?'IPC':'HTTP'}`,async({page})=>{
+  const x=await fixture(locale), root=`/pm/workspaces/${x.f.ids.workspaceId}`;
+  const paths={thread:root+'/threads/'+x.f.ids.threadIdea,plans:root+'/plans'};
+  let release!:()=>void;
+  const firstRead=new Promise<void>(resolve=>{release=resolve;});
+  const initial=new Set(Object.values(paths)), order:string[]=[];
+  const briefs:any[]=[];
+  await page.addInitScript(value=>Object.defineProperty(navigator,'language',{get:()=>value}),locale);
+  await mountConversation(page,native,async input=>{
+    const path=new URL(input.path,'http://fixture').pathname;
+    const initialRead=initial.delete(path);
+    // Hold the other initial response until the selected producer has returned.
+    // No timer or browser scheduling can choose the snapshot's plan metadata.
+    if(initialRead && path!==paths[first])await firstRead;
+    const value=await x.dispatch(input);
+    if(path===paths.thread)briefs.push(structuredClone(value.data.continuation_brief));
+    if(initialRead){order.push(path);if(path===paths[first])release();}
+    return value;
+  });
+  await page.goto(`/dashboard/#/pm/${x.f.ids.workspaceId}/discussions/${x.f.ids.threadIdea}`);
+  const composer=page.locator('[data-discussion-composer]');await expect(composer).toBeEnabled();
+  expect(order[0]).toBe(paths[first]);
+  await composer.fill('Keep this discussion draft.');
+  const reader=page.locator('[data-continuation-brief]');
+  const stale=locale==='en'?'New discussion or plan changes':'尚未納入新增討論或計畫變更';
+  await expect(reader).not.toContainText(stale);
+  await reader.locator(':scope > details > summary').click();
+  const detail=reader.locator(':scope > details'), original=await detail.elementHandle();
+  x.detail.thread.version++;
+  const refresh=page.getByRole('button',{name:locale==='en'?'Refresh':'重新整理',exact:true});
+  await refresh.click();await expect(refresh).toBeEnabled();
+  await expect(reader).toContainText(stale);
+  expect(await detail.evaluate((node,old)=>node===old,original)).toBe(true);
+  await expect(detail).toHaveAttribute('open','');
+  expect(briefs).toHaveLength(2);expect(briefs[1]).toEqual(briefs[0]);
+  await expect(composer).toHaveValue('Keep this discussion draft.');
+  expect(x.state.writes).toEqual([]);expect(x.f.discussion.writes).toEqual([]);
 });
