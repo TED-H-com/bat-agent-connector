@@ -22,6 +22,8 @@ const MAX_REPLY: u64 = 16384;
 struct Manifest {
     protocol: u8,
     runtime_version: String,
+    #[serde(default, rename = "build_commit")]
+    _build_commit: Option<String>,
     platform: String,
     architecture: String,
     executable: String,
@@ -469,6 +471,21 @@ fn materialize(resources: &Path, app_data: &Path) -> Result<(PathBuf, String), S
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn produced_manifest_has_optional_build_identity_and_rejects_unknown_fields() {
+        let mut document: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/runtime-manifest.json"
+        ))
+        .unwrap();
+        let current: Manifest = serde_json::from_value(document.clone()).unwrap();
+        assert_eq!(current._build_commit, Some("0".repeat(40)));
+        document.as_object_mut().unwrap().remove("build_commit");
+        let legacy: Manifest = serde_json::from_value(document.clone()).unwrap();
+        assert_eq!(legacy._build_commit, None);
+        document["unrecognized"] = serde_json::json!(true);
+        assert!(serde_json::from_value::<Manifest>(document).is_err());
+    }
 
     fn fixture(root: &Path, bytes: &[u8]) -> PathBuf {
         let resources = root.join("resources");
