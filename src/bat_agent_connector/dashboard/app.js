@@ -52475,7 +52475,7 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 	let reading = false, admissionReady = false;
 	let pageItems = [], nextCursor = null, hasMore = false, filtered = false, listSettled = false;
 	const pinned = new Map(), announced = new Set(), cancelDenied = new Set();
-	let composer = null, composing = false, composeEnded = -Infinity, focusAfter = null;
+	let composer = null, composing = false, focusAfter = null;
 	let sawList = false;
 	const idea = mountWorkInputIdea({
 		h,
@@ -52613,7 +52613,6 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		});
 		field.addEventListener("compositionend", () => {
 			composing = false;
-			composeEnded = performance.now();
 		});
 		field.addEventListener("input", () => composer?.update());
 		const hint = h("p", {
@@ -52653,7 +52652,7 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 			extra: h("div", { class: "pm-fields work-next-field" }, field, hint)
 		});
 		composer.box.addEventListener("submit", (event) => {
-			if (composing || performance.now() - composeEnded < 50) {
+			if (composing) {
 				event.preventDefault();
 				event.stopImmediatePropagation();
 			}

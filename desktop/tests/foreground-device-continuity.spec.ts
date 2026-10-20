@@ -196,10 +196,7 @@ for (const native of [false, true]) for (const lang of ['en', 'zh-TW']) for (con
         await expect(page.locator('#live')).toHaveAttribute('data-connection', 'connected');
         await frame(page);
         await unchanged();
-        if (scenario === 'ime') {
-          await composingEnter();
-
-        }
+        if (scenario === 'ime') await composingEnter();
         if (scenario === 'newer-attempt' || scenario === 'sequence') {
           expect(f.follow.latest).toBe(newerAttempt);
           const inputReads = requests.filter(row => row.path.includes(`/work/${WI}/inputs`));

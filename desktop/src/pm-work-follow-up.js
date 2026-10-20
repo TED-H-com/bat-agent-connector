@@ -55,7 +55,7 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
   let reading = false, admissionReady = false;
   let pageItems = [], nextCursor = null, hasMore = false, filtered = false, listSettled = false;
   const pinned = new Map(), announced = new Set(), cancelDenied = new Set();
-  let composer = null, composing = false, composeEnded = -Infinity, focusAfter = null;
+  let composer = null, composing = false, focusAfter = null;
   let sawList = false;
   const idea = mountWorkInputIdea({h, t, api, caps, guard, namespace, workspaceId, workItemId,
     receipts: mergedItems, permitted: mutationsAllowed, refresh, errorBox});
@@ -153,7 +153,7 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
     field.setAttribute('aria-labelledby', titleId);
     field.setAttribute('aria-describedby', hintId);
     field.addEventListener('compositionstart', () => {composing = true;});
-    field.addEventListener('compositionend', () => {composing = false; composeEnded = performance.now();});
+    field.addEventListener('compositionend', () => {composing = false;});
     field.addEventListener('input', () => composer?.update());
     const hint = h('p', {class: 'ui-meta', id: hintId}, t('loop_next_hint'));
     composer = pmDurableForm({
@@ -183,7 +183,9 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
       extra: h('div', {class: 'pm-fields work-next-field'}, field, hint),
     });
     composer.box.addEventListener('submit', event => {
-      if (composing || performance.now() - composeEnded < 50) {
+      // composerShortcut owns the post-composition Enter grace period. Applying
+      // it to every submit also discards an explicit button click after IME ends.
+      if (composing) {
         event.preventDefault();
         event.stopImmediatePropagation();
       }
