@@ -64,6 +64,9 @@ for (const locale of ['en-US', 'zh-TW']) {
         await expect(page.locator('#live')).toHaveText(copy.ui_connected);
         failed = true;
         await expect(page.locator('#live')).toHaveAttribute('data-connection', 'reconnecting');
+        await page.locator('[data-connection-card]').scrollIntoViewIfNeeded();
+        await expect(page.locator('[data-connection-card] h2')).toBeInViewport();
+        await expect(page.locator('.global-connection-facts .ui-pill')).toBeInViewport();
         await page.screenshot({path: info.outputPath(`managed-${failure}-${locale}-${width}.png`)});
         await expect.soft(page.locator('[data-connection-card] h2')).toHaveText(copy.ui_local_connector);
         const label = copy[states[failure][0]];
