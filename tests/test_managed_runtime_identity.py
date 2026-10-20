@@ -79,7 +79,8 @@ def packages(tmp_path_factory):
     source = scratch / "source"
     source.mkdir()
     package = package_inputs(source)
-    env = {key: os.environ[key] for key in ("PATH", "SystemRoot", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR", "LANG", "LC_ALL")
+    # The cache supplies dependencies only; golden identity comes from the fixture packages.
+    env = {key: os.environ[key] for key in ("PATH", "SystemRoot", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR", "LANG", "LC_ALL", "UV_CACHE_DIR")
            if key in os.environ}
     env.update(UV_NO_CONFIG="1", GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
                GIT_AUTHOR_DATE="2026-01-01T00:00:00+00:00", GIT_COMMITTER_DATE="2026-01-01T00:00:00+00:00")
