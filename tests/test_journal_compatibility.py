@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import json
+import os
 import sqlite3
 import subprocess
 import sys
@@ -203,9 +204,19 @@ def test_managed_startup_preserves_the_specific_safe_refusal(tmp_path, monkeypat
 
     monkeypatch.setattr(managed_runtime, "_spawn", tracked_spawn)
     monkeypatch.setattr(sys, "argv", ["managed-runtime", command, "--data-dir", str(root)])
+    environment_keys = ("BATC_STATE_DIR", "BATC_CONFIG_DIR", "BATC_CONFIG", "BATC_TASK_SETTINGS",
+                        "BATC_TASK_ADMIN_TOKEN_FILE", "BATC_TASK_CAPABILITY", "BATC_TASK_URL",
+                        "BATC_PM_PROVIDER_CONFIG", "BATC_DEVICE_ID")
+    expected_environment = {key: os.environ.get(key) for key in environment_keys}
     try:
-        with pytest.raises(SystemExit) as refused:
-            managed_runtime.main()
+        # serve() normally runs in a dedicated process and intentionally changes
+        # its environment. Bound those changes when exercising it in this process.
+        with monkeypatch.context() as environment:
+            for key in environment_keys:
+                environment.setenv(key, expected_environment[key] or "")
+            with pytest.raises(SystemExit) as refused:
+                managed_runtime.main()
+        assert all(os.environ.get(key) == value for key, value in expected_environment.items())
         assert refused.value.code == 1
         output = capsys.readouterr()
         failure = json.loads(output.err if command == "serve" else output.out)
