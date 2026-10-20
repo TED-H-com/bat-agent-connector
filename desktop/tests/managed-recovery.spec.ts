@@ -1,13 +1,14 @@
 import {test, expect} from '@playwright/test';
+import {readFileSync} from 'node:fs';
 
-for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 1280]) test(`native recovery status and same-identity rebind retain drafts (${locale}, ${width})`, async ({browser}) => {
+const bootstrap = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-bootstrap.json', import.meta.url), 'utf8'));
+
+for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 1280]) test(`native managed recovery status and same-identity reset retain drafts (${locale}, ${width})`, async ({browser}) => {
   const context = await browser.newContext({locale, viewport: {width, height: 844}});
   const page = await context.newPage();
-  await page.addInitScript(() => {
-    const caps = {actor: 'fixture-operator', scopes: ['observe', 'operate'], features: {}, hosts: [], actions: [],
-      desktop_identity: {server_id: 'fixture-server', principal_id: 'fixture-principal'}};
-    // Bridge verifies central bootstrap but does not inject desktop_identity.
-    const centralCaps = {...caps, desktop_identity: undefined};
+  await page.addInitScript(bootstrap => {
+    // Managed production includes desktop_identity in both responses.
+    const caps = structuredClone(bootstrap.capabilities);
     const fixture = {code: null as string | null, rebind: 0, reset: false, connects: 0, disconnects: 0, endpoint: 'http://127.0.0.1:41001/', writes: 0};
     Object.assign(window, {isTauri: true, __recovery: fixture, __TAURI_INTERNALS__: {invoke: async (command: string, args: any) => {
       if (command === 'native_status') return {endpoint: fixture.endpoint, configuration_source: 'managed',
@@ -21,8 +22,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 1280]) test(`
       if (command === 'connector_request') {
         const {method, path} = args.input;
         if (method === 'POST') fixture.writes++;
-        if (path === '/bootstrap') return {status: 200, data: {capabilities: centralCaps,
-          sync: {version: 1, ...caps.desktop_identity, checkpoint: {cursor: 0, token: 'fixture-proof'}}}};
+        if (path === '/bootstrap') return {status: 200, data: bootstrap};
         if (path === '/projects') return {status: 200, data: {projects: fixture.rebind > 1
           ? [{project_id: 'proj-recovered', name: 'Recovered project', children: []}] : []}};
         if (path === '/projects/proj-recovered') return {status: 200, data: {work: [], work_items: []}};
@@ -30,10 +30,10 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 1280]) test(`
           if (fixture.code) throw 'fixture transport unavailable';
           if (fixture.reset) {
             fixture.reset = false;
-            return {status: 409, data: {error: {code: 'EVENT_CURSOR_RESET', reason: 'retention', resnapshot: true, preserve_drafts: true}}};
+            return {status: 409, data: {error: {code: 'EVENT_CURSOR_RESET', reason: 'cursor_expired', resnapshot: true, preserve_drafts: true}}};
           }
           return {status: 200, data: {events: [], next_cursor: 0, head_cursor: 0, has_more: false,
-            sync: {checkpoint: {cursor: 0, token: 'fixture-proof'}}}};
+            sync: {...bootstrap.sync, checkpoint: bootstrap.sync.checkpoint}}};
         }
         return {status: 200, data: path === '/sessions/demo/session-1'
           ? {session: {host: 'demo', session_id: 'session-1', title: 'Fixture session', api_access: 'managed', provenance: 'connector'}}
@@ -41,7 +41,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 1280]) test(`
       }
       return {};
     }}});
-  });
+  }, bootstrap);
   await page.goto('/dashboard/#/session/demo/session-1');
   await expect(page.locator('.native-connection')).toBeVisible();
   expect(await page.evaluate(() => (window as any).__recovery.disconnects)).toBe(0);

@@ -102,17 +102,93 @@ fresh navigation/shell reads even when restart produces no event; failed views
 retry through the existing deferred-render guards. Failed initial managed reads
 remain eligible for native recovery; an explicit Disconnect disables it. It retains existing drafts,
 event checkpoints and operation keys, and never resends an application mutation.
-The shared frontend retains that storage namespace by comparing the verified
-bootstrap server, principal and actor, including after an event-cursor reset.
-Central capabilities do not contain native-only `desktop_identity`; missing that
-field is not evidence of an account change. A different verified identity or an
-explicit disconnect does not inherit the previous endpoint scope.
+Managed `/capabilities` and `/bootstrap` both include `desktop_identity`. A managed
+cursor reset already retained the scope before this namespace correction. An
+external central may omit that field from bootstrap; the native bridge still
+checks the bootstrap server/principal against its verified credential identity.
+Missing the optional field alone is not evidence of an account change.
 Disconnect, credential removal or switching configuration cancels a pending rebind.
 External-central connections never use this recovery loop, provision a local
 service or transfer a local credential to another endpoint. Recovery errors appear
 as short English/zh-TW status labels and visible recovery explanations, with a
 fixed diagnostic code in connection details;
 a changed identity stops automatic recovery until the connection is reviewed.
+
+### Verified storage identity and legacy port migration
+
+The native managed route uses `managed:v1:<server_id>:<principal_id>:<actor>`
+(each component URI encoded) for **all** shared-frontend storage. The native
+configuration source must be `managed`, and bootstrap must pass the existing
+identity checks before any view mounts or migration runs. The persistent journal
+`server_id` already distinguishes installations; adding `installation_id` would
+split the same journal unnecessarily. Principal identity includes effective actor,
+scopes and admin status. Workspaces, Works and exact Attempts retain their existing
+key suffixes and request bodies. A runtime port is only the current transport.
+
+Previously, the namespace included the endpoint. The managed runtime selects a
+random port on each start, so relaunching the native app after a service restart
+could hide local drafts, operation keys and checkpoints under the old port. The
+data was still stored. In-session recovery does not activate a new scope and did
+not reproduce that relaunch defect. This explains a reproducible failure mode,
+not a diagnosis of a particular installation without its local evidence.
+
+External-central native connections keep the endpoint in their namespace, even
+when that central advertises a managed installation: the explicit native route,
+not a remote capability, determines the storage rule. Distinct external bindings
+remain isolated. `bridge.rs` continues to reject a bootstrap whose verified server
+or principal changes. Browser clients keep endpoint scopes too: a changed port is
+a different origin with separate localStorage, which this migration cannot read.
+
+Migration runs only into a destination with no scoped data in either localStorage
+or sessionStorage. Exactly one legacy loopback-port scope must have an exact
+`batc.sync.<scope>` key whose encoded server, principal and actor all match the
+verified bootstrap. The checkpoint key delimits the old identity; an action suffix
+on a draft alone is insufficient. Only that complete scope is copied, byte for
+byte, including nested form namespaces. Nothing is submitted or automatically
+retried as part of migration. A matching retained draft can therefore reappear
+after an upgrade even if it looked lost on the previous port.
+
+The originals remain unchanged for rollback. A local
+`batc.storage-migration.<new-scope>` receipt records source, destination, version
+and copy status. A completed receipt prevents deleted/consumed drafts and keys from
+being imported again. A failed copy rolls back only its exact newly written values;
+an interrupted copy or failed rollback retains its marker and refuses activation
+instead of reading a draft separated from its original operation key. This case
+needs explicit recovery; automatic repair is not supported.
+
+Multiple matching old ports are **not** merged or ranked, even when their values
+look identical or one port only has orphan drafts/tab preferences without a
+checkpoint. Existing destination data, missing old checkpoint keys, legacy
+keys without server/principal proof, ambiguous namespace boundaries, non-loopback
+endpoints and different identities are left in place. These cases require explicit
+review/export of the retained data; there is no automatic picker or recovery UI in
+this change. Reverting to the old frontend can still read original old-port keys
+when connected at that original endpoint, but later edits in the new scope are not
+copied back automatically.
+
+The namespace audit covers these existing families uniformly:
+
+| Stored state | Key families after `batc.` |
+| --- | --- |
+| Drafts, original operation IDs/keys and sync proof | `draft`, `key`, `sync` |
+| PM forms, intents, handoffs, exact Work/Attempt navigation | `pm.<scope>.*`, nested `pm.*-selection`, `pm.*-navigation`, `pm.governance.selection`, `pm.verifier` |
+| Setup, create, repair, capture and work controls | `managed.setup`, `create`, `repair`, `capture`, `task-control`, `start`, `orchestrate`, `published`, `dispatch` |
+| Resource forms, approvals and cleanup | `labels`, `session-bat`, `permissions`, `artifact-review`, `model-preferences`, `project-skills`, `approvals`, `cleanup.draft`, `cleanup.pending`, `cleanup.intent` |
+| Tab preferences | `tree`, `sessions`, `attention`, `composer-shortcut` |
+
+`ui/view-state.js`, `pm-workbench.js` and workbench perspectives use the same new namespace in their
+bounded in-memory maps; they have no durable data to migrate. Language, layout,
+unscoped delivery filters and independently bound native Fleet preferences keep
+their existing keys. Migration does not turn retained native file handles into
+valid handles for a different credential; existing native checks still apply.
+
+`tests/fixtures/managed-bootstrap.json` is produced and drift-checked by
+`tests/test_api_v1_bootstrap_golden.py`, using the real Python bootstrap handler.
+Both recovery and relaunch Playwright specs load this same de-identified response;
+the external-central omission is checked against the real handler too. Regenerate
+the golden with `BATC_UPDATE_BOOTSTRAP_GOLDEN=1 pytest-disktmp uv run pytest -q
+tests/test_api_v1_bootstrap_golden.py`. These are automated contract/transport
+fixtures, not installed Tauri, BAT/model or operating-system restart acceptance.
 
 ### Windows job objects
 
