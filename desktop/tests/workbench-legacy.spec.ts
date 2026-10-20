@@ -1,3 +1,4 @@
+import {revealPmView} from './pm-navigation.ts';
 import {test, expect, type Page} from '@playwright/test';
 import {workspaceFixture, workspaceOperation, workspaceRoute} from './workspace-fixture.ts';
 import {workbenchFixture, workspaceId as fixtureWorkspaceId} from './pm-workbench-fixture.ts';
@@ -595,7 +596,7 @@ for (const {lang, width} of featureMapMatrix) {
 
     for (const {view, label} of pmViews) {
       await ensureDrawerOpen(page, width);
-      const btn = page.locator(`.pm-project-views button[data-pm-view="${view}"]`);
+      const btn = await revealPmView(page, view);
       await btn.click();
       await ensureDrawerClosed(page, width);
       await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/pm/${fixtureWorkspaceId}/${view}`);

@@ -3,7 +3,8 @@ import {h} from './ui/dom.js';
 import {t} from './i18n.js';
 import {button, iconButton, menu, trapFocus} from './ui/components.js';
 import {icon} from './ui/icons.js';
-import {lastWorkspace, lastProjectView, rememberWorkspace, forgetWorkspace, viewIcons, availableProjectViews} from './pm-workbench.js';
+import {lastWorkspace, lastProjectView, rememberWorkspace, forgetWorkspace, availableProjectViews} from './pm-workbench.js';
+import {projectNavigation} from './project-navigation.js';
 
 export function dashboardShell({navigation, namespace, caps, api, guard, onEvents, errorBox}) {
   const candidate = workbenchEnabled();
@@ -105,6 +106,8 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
     const signature = JSON.stringify([workspace, workspaces, views, currentView, currentRoute, phase, threadCount, threadMore]);
     if (signature === renderSignature) return; renderSignature = signature;
     for (const control of menus) control.dispose(); menus = [];
+    const focusedView = projectNav.contains(document.activeElement) ? document.activeElement.dataset.pmView : null;
+    const focusedManagement = projectNav.contains(document.activeElement) && document.activeElement.matches('summary');
     workspaceBlock.replaceChildren(); projectNav.replaceChildren(); crumb.replaceChildren();
     if (candidate) {
       const project = workspace ? `#/pm/${encodeURIComponent(workspace.workspace_id)}/` : '';
@@ -125,11 +128,11 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
       workspaceBlock.dataset.workspaceId = workspace.workspace_id;
       workspaceBlock.append(switcher(workspace.name, 'shell-workspace-switch'));
       if (phase) workspaceBlock.append(h('span', {class: 'ui-pill tone-neutral', 'data-shell-phase': ''}, phase));
-      projectNav.append(h('h2', {class: 'shell-nav-label'}, t('ui_project')),
-        h('nav', {class: 'pm-project-views', 'aria-label': t('wb_navigation')}, ...views.map(id => h('button', {type: 'button', class: 'ui-button ghost', 'data-pm-view': id,
-          'aria-current': currentRoute === 'pm' && currentView === id ? 'page' : 'false', onclick: () => {location.hash = `#/pm/${workspace.workspace_id}/${id}`;}},
-          icon(viewIcons[id], {size: 20}), h('span', {}, t('ui_' + id)), id === 'discussions' && threadCount !== null
-            ? h('span', {class: 'shell-count', title: t(threadMore ? 'ui_threads_loaded' : threadCount === 1 ? 'ui_thread_count' : 'ui_threads_count', {n: threadCount, more: threadMore ? '+' : ''}), 'aria-label': t(threadMore ? 'ui_threads_loaded' : threadCount === 1 ? 'ui_thread_count' : 'ui_threads_count', {n: threadCount, more: threadMore ? '+' : ''})}, String(threadCount) + (threadMore ? '+' : '')) : null))));
+      projectNav.append(h('h2', {class: 'shell-nav-label'}, t('ui_daily_navigation')),
+        projectNavigation({t, namespace, workspaceId: workspace.workspace_id, views,
+          current: currentRoute === 'pm' ? currentView : '',
+          discussionCount: threadCount !== null
+            ? h('span', {class: 'shell-count', title: t(threadMore ? 'ui_threads_loaded' : threadCount === 1 ? 'ui_thread_count' : 'ui_threads_count', {n: threadCount, more: threadMore ? '+' : ''}), 'aria-label': t(threadMore ? 'ui_threads_loaded' : threadCount === 1 ? 'ui_thread_count' : 'ui_threads_count', {n: threadCount, more: threadMore ? '+' : ''})}, String(threadCount) + (threadMore ? '+' : '')) : null}));
       crumb.append(h('a', {class: 'shell-crumb-workspace', href: `#/pm/${encodeURIComponent(workspace.workspace_id)}/overview`, title: workspace.name},
         h('span', {class: 'shell-workspace-name'}, workspace.name)));
     } else {
@@ -156,6 +159,11 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
     crumb.append(h('button', {type: 'button', class: 'shell-mobile-name', title: workspace?.name || routeTitle,
       'aria-label': workspace?.name || routeTitle || t('ui_menu'), 'aria-controls': 'workspace-sidebar', 'aria-expanded': 'false', onclick: openDrawer}, workspace?.name || routeTitle));
     workspaceBlock.hidden = !workspaceBlock.children.length; projectNav.hidden = candidate || !projectNav.children.length;
+    if (!projectNav.hidden && (media.matches || !scrim.hidden)) {
+      const focus = focusedView ? [...projectNav.querySelectorAll('[data-pm-view]')].find(node => node.dataset.pmView === focusedView)
+        : focusedManagement ? projectNav.querySelector('summary') : null;
+      if (focus?.getClientRects().length) focus.focus({preventScroll: true});
+    }
 
   }
   let threadCount = null, threadMore = false;

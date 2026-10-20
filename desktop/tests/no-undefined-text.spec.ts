@@ -1,6 +1,6 @@
 import {test, expect, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
-import {openPmSection, openThreadBrief} from './pm-navigation.ts';
+import {openPmSection, openThreadBrief, revealPmView} from './pm-navigation.ts';
 import {handoffFixture} from './pm-package-handoff-fixture.ts';
 import {pmRoute} from './pm-fixture.ts';
 import {workbenchFixture, route, workspaceId} from './pm-workbench-fixture.ts';
@@ -84,7 +84,7 @@ for (const locale of ['en-US', 'zh-TW']) test(`PM views hide missing values (${l
   await expect(page.locator('[data-charter-section]')).toHaveCount(6);
   await assertNoMissingLabels(page);
 
-  await page.locator('[data-pm-view="requirements"]').click();
+  await (await revealPmView(page, 'requirements')).click();
   await expect(page.locator('[data-rtm-requirement]')).toHaveCount(2);
   await expect(page.locator('[data-rtm-unassigned-issue]')).toContainText(zh ? 'example/library · 議題 #42' : 'example/library · Issue #42');
   await assertNoMissingLabels(page);
@@ -93,7 +93,7 @@ for (const locale of ['en-US', 'zh-TW']) test(`PM views hide missing values (${l
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(3);
   await assertNoMissingLabels(page);
 
-  await page.locator('[data-pm-view="agents"]').click();
+  await (await revealPmView(page, 'agents')).click();
   await expect(page.locator('[data-resource-row]')).toHaveCount(1);
   await assertNoMissingLabels(page);
 

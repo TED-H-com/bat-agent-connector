@@ -1,4 +1,4 @@
-import {fleetStatus} from "./fleet-status.js";
+import {fleetStatus, rememberFleetDetails} from "./fleet-status.js";
 import {fleetControl, fleetRequest} from "./transport/index.ts";
 
 export async function mountFleetDesktop(main, {h, t}) {
@@ -8,6 +8,7 @@ export async function mountFleetDesktop(main, {h, t}) {
   if (!main.isConnected) return () => {};
   main.append(panel);
   let disposed = false, busy = false, readable = false, snapshot, draft, binding, choicePreview, launch, migration, timer, pressed = null;
+  const detailsState = new Map();
   let backend = "rust", autostart = false;
   const alive = () => !disposed && panel.isConnected;
   const key = () => `batc.desktop.fleet.controls.${binding}`;
@@ -42,6 +43,7 @@ export async function mountFleetDesktop(main, {h, t}) {
       || !value.monitor || !value.login || !value.readiness) throw new Error(t("fleet_unavailable"));
     if (binding !== value.configuration.binding) {
       binding = value.configuration.binding; backend = value.backend; draft = choicePreview = launch = migration = null;
+      detailsState.clear();
       try {
         const old = JSON.parse(sessionStorage.getItem(key()) || "null");
         if (old?.draft && Array.isArray(old.draft.connections) && Array.isArray(old.draft.profiles)
@@ -77,17 +79,26 @@ export async function mountFleetDesktop(main, {h, t}) {
   const read = async () => {
     try {
       const value = await fleetControl({action:"overview"}); if (!alive()) return; accept(value);
-      if (launch?.attempted) {
+    } catch (error) {readable = false; throw error;}
+    // Receipts and machine observations have independent read boundaries. A
+    // failed receipt lookup keeps its original ID pending without withdrawing
+    // a successfully read overview or skipping the other receipt lookup.
+    const failures = [];
+    if (launch?.attempted) {
+      try {
         const receipt = await fleetControl({action:"launch_status",launch_id:launch.preview_id});
         if (alive() && receipt) {
           acceptLaunch(receipt);
         }
-      }
-      if (migration?.accepted) {
+      } catch (error) {if (alive()) launch.receipt = null; failures.push(error);}
+    }
+    if (migration?.accepted) {
+      try {
         const receipt = await fleetControl({action:"migration_status",migration_id:migration.preview_id});
         if (alive()) acceptMigration(receipt);
-      }
-    } catch (error) {readable = false; throw error;}
+      } catch (error) {if (alive()) migration.receipt = null; failures.push(error);}
+    }
+    if (failures.length) throw failures[0];
   };
   const reviewChoices = () => run(async () => {
     const value = await fleetControl({action:"preview_choices", choices:choices(draft), configuration_binding:binding,
@@ -101,7 +112,7 @@ export async function mountFleetDesktop(main, {h, t}) {
   }, false, "launch");
   const label = id => id === "default" ? t("fleet_local_bat") : snapshot.profiles.find(row => row.id === id)?.label || snapshot.configuration.connections.find(row => row.name === id)?.label || id;
   const gate = (blocked, action) => busy && action && pressed === action ? {"aria-disabled": "true"} : blocked ? {disabled: true} : busy ? {"aria-disabled": "true"} : {};
-  const focusKeys = ["data-fleet-action", "data-fleet-choice", "data-fleet-login", "data-fleet-autostart", "data-fleet-backend"];
+  const focusKeys = ["data-fleet-action", "data-fleet-choice", "data-fleet-login", "data-fleet-autostart", "data-fleet-backend", "data-fleet-details", "data-fleet-advanced"];
   const focusKey = node => {
     for (let current = node; current && current !== panel; current = current.parentElement) {
       for (const attr of focusKeys) if (current.hasAttribute?.(attr)) return [attr, current.getAttribute(attr)];
@@ -110,7 +121,7 @@ export async function mountFleetDesktop(main, {h, t}) {
   };
   const controlByKey = key => {
     if (!key) return null;
-    for (const node of content.querySelectorAll("button, input, select")) if (node.getAttribute(key[0]) === key[1]) return node;
+    for (const node of content.querySelectorAll("button, input, select, summary")) if (node.getAttribute(key[0]) === key[1]) return node;
     return null;
   };
   const groups = [
@@ -131,7 +142,13 @@ export async function mountFleetDesktop(main, {h, t}) {
     return message;
   };
   const render = () => {
-    if (!alive() || !snapshot) return;
+    if (!alive()) return;
+    rememberFleetDetails(content, detailsState);
+    if (!snapshot) {
+      content.replaceChildren(h('button', {class: 'secondary', disabled: busy, 'data-fleet-action': 'refresh',
+        onclick: () => run(read, false, 'refresh')}, t('fleet_refresh')));
+      return;
+    }
     const previous = panel.contains(document.activeElement) ? focusKey(document.activeElement) : null;
     const selected = draft || snapshot.selection, ready = new Map([...snapshot.readiness.hosts, snapshot.readiness.connector].filter(Boolean).map(row => [row.name,row]));
     const checkbox = (field, id, text) => {
@@ -147,18 +164,20 @@ export async function mountFleetDesktop(main, {h, t}) {
     };
     const button = (action, text, fn, blocked = false, primary = false) => h("button", {class: primary ? "primary" : "secondary", ...gate(blocked, action),
       "data-fleet-action": action, onclick: () => { if (busy || blocked) return; fn(); }}, t(text));
+    const advancedKey = `${binding}:advanced`;
+    if (migration && !detailsState.has(advancedKey)) detailsState.set(advancedKey, true);
     const fields = [
-      h("p", {"data-fleet-current-backend": true}, t("delivery_fleet_current_backend", {backend: t(["rust", "powershell"].includes(snapshot.backend) ? "fleet_backend_" + snapshot.backend : "obs_unknown")})),
       snapshot.launch_warning === "FLEET_SESSION_LIFETIME" ? h("div", {class: "note", "data-fleet-lifetime": ""},
         h("p", {}, t("fleet_session_lifetime")), h("details", {}, h("summary", {}, t("connection_details")), h("code", {}, snapshot.launch_warning))) : null,
-      snapshot.backend === "powershell" ? h("p", {class: "note"}, t("delivery_fleet_legacy_default")) : null,
-      h("p", {}, t("fleet_monitor_"+snapshot.monitor.state), " · ", t("fleet_"+snapshot.readiness.state)),
+      h("p", {}, readable ? t("fleet_monitor_"+snapshot.monitor.state) : t('fleet_check_title_unavailable')),
       snapshot.monitor.state === "running" && !snapshot.monitor.controllable ? h("p",{class:"note"},t("fleet_other_owner")):null,
       snapshot.login_launch?h("p",{class:"note"},t("fleet_login_"+snapshot.login_launch.state),snapshot.login_launch.code?` (${snapshot.login_launch.code})`:null):null,
-      h("div",{class:"actions"},button("start","fleet_start",()=>run(async()=>{await fleetRequest({action:"ensure_monitor",expected_configuration_binding:binding});await read();},false,"start"),!canEnable()||!!draft||snapshot.monitor.state!=="stopped"),
+      h("div",{class:"actions"},button("refresh","fleet_refresh",()=>run(read,false,"refresh")),
+        button("start","fleet_start",()=>run(async()=>{await fleetRequest({action:"ensure_monitor",expected_configuration_binding:binding});await read();},false,"start"),!canEnable()||!!draft||snapshot.monitor.state!=="stopped"),
         button("quit","fleet_quit",()=>run(async()=>{await fleetRequest({action:"quit_owned",expected_configuration_binding:binding,expected_monitor_epoch:snapshot.monitor.epoch});await read();},false,"quit"),!canEnable()||!!draft||!snapshot.monitor.controllable)),
       h("h3",{},t("fleet_connections")),
-      h("div",{class:"fleet-options"},...snapshot.configuration.connections.map(row=>h("div",{class:"row"},h("div",{class:"grow"},checkbox("connections",row.name,row.label),fleetStatus(ready.get(row.name), {h, t})),h("span",{class:"chip"},t("fleet_"+(ready.get(row.name)?.level||"unavailable")))))) ,
+      h("div",{class:"fleet-options"},...snapshot.configuration.connections.map(row=>h("div",{class:"fleet-machine"},
+        checkbox("connections",row.name,row.label),fleetStatus(ready.get(row.name), {h, t, snapshot, readable, entry: row, detailsState})))),
       h("h3",{},t("fleet_windows_title")),
       h("div",{class:"fleet-options"},...snapshot.profiles.map(row=>h("div",{class:"row"},checkbox("profiles",row.id,label(row.id)))),
         h("div",{class:"row"},checkbox("dashboard","dashboard",t("fleet_dashboard_choice")))),
@@ -166,7 +185,7 @@ export async function mountFleetDesktop(main, {h, t}) {
       stale()?h("p",{class:"error"},t("fleet_changed")):null,
       choicePreview?h("p",{class:"note"},t("fleet_prerequisites",{names:choicePreview.summary.added_connections.map(label).join(", ")||t("fleet_none")})):null,
       h("div",{class:"actions"},button("choices",choicePreview?"fleet_save_choices":"fleet_review_choices",()=>choicePreview?run(async()=>{await fleetControl({action:"apply_choices",preview_id:choicePreview.preview_id});await read();},false,"choices"):reviewChoices(),!canEnable()||!draft||!!stale(),true),
-        button("use-current","fleet_use_current",()=>{if(busy)return;draft=null;discardPreview();save();render();},!draft),button("refresh","fleet_refresh",()=>run(read,false,"refresh"))),
+        button("use-current","fleet_use_current",()=>{if(busy)return;draft=null;discardPreview();save();render();},!draft)),
       h("h3",{},t("fleet_launch_title")),h("p",{class:"muted"},t("fleet_launch_help")),
       launch?h("p",{class:"note"},launch.receipt?t("fleet_launch_"+(launch.receipt.state==="prepared"?"uncertain":launch.receipt.state||"uncertain")):t(launch.attempted?"fleet_launch_uncertain":"fleet_launch_review")):null,
       launch?.summary?.bat_may_open_local_window?h("p",{class:"muted"},t("fleet_local_anchor")):null,
@@ -178,6 +197,10 @@ export async function mountFleetDesktop(main, {h, t}) {
       h("h3",{},t("fleet_login_title")),h("label",{class:"fleet-choice"},h("input",{type:"checkbox",checked:snapshot.login.show_picker,...gate(!canEnable()),"data-fleet-login":"picker",
         onkeydown:event=>{if(busy&&event.key===" ")event.preventDefault();},onclick:event=>{if(busy)event.preventDefault();},
         onchange:event=>{if(busy||!canEnable()){event.target.checked=snapshot.login.show_picker;return;}const show=event.target.checked;run(async()=>{const value=await fleetControl({action:"save_login",expected_revision:snapshot.login.revision,show_picker:show});if(alive())snapshot.login=value;});}})," ",t("fleet_login_picker")),
+      h('details', {class: 'fleet-advanced', open: detailsState.get(advancedKey) === true, 'data-fleet-details-key': advancedKey},
+      h('summary', {'data-fleet-advanced': 'settings'}, t(migration ? 'fleet_check_advanced_pending' : 'fleet_check_advanced')),
+      h("p", {"data-fleet-current-backend": true}, t("delivery_fleet_current_backend", {backend: t(["rust", "powershell"].includes(snapshot.backend) ? "fleet_backend_" + snapshot.backend : "obs_unknown")})),
+      snapshot.backend === "powershell" ? h("p", {class: "note"}, t("delivery_fleet_legacy_default")) : null,
       h("h3",{},t("fleet_backend_title")),h("p",{class:"muted"},t("fleet_backend_help")),
       h("div",{class:"actions"},h("select",{value:backend,"data-fleet-backend":"choice","aria-label":t("fleet_backend_title"),...gate(!!migration),onchange:event=>{if(busy||migration){event.target.value=backend;return;}backend=event.target.value;}},h("option",{value:"rust",selected:backend==="rust"},t("fleet_backend_rust")),h("option",{value:"powershell",selected:backend==="powershell"},t("fleet_backend_powershell"))),
         h("label",{class:"fleet-choice"},h("input",{type:"checkbox",checked:autostart,...gate(!!migration),"data-fleet-autostart":"enabled",
@@ -191,7 +214,7 @@ export async function mountFleetDesktop(main, {h, t}) {
         migration?.accepted&&!migration.receipt?button("retry-migration","fleet_retry_migration",()=>run(async()=>{const value=await fleetControl(migration.restore_source?{action:"restore_migration",source_id:migration.restore_source,restore_id:migration.preview_id}:{action:"apply_migration",preview_id:migration.preview_id,fingerprint:migration.fingerprint});if(alive())acceptMigration(value);await read();},false,"retry-migration"),!migration.restore_source&&!migration.fingerprint):null,
         migration?.receipt?.phase==="complete"?button("new-migration","fleet_new_migration",()=>{if(busy)return;fleetControl({action:"discard",preview_id:migration.preview_id}).catch(()=>{});migration=null;save();render();}):null,
         migration&&!migration.accepted?button("cancel-migration","cancel",()=>{if(busy)return;fleetControl({action:"discard",preview_id:migration.preview_id}).catch(()=>{});migration=null;save();render();}):null,
-        migration?.receipt?.phase==="complete"?button("restore-migration","fleet_restore_migration",()=>run(async()=>{const source=migration.preview_id;const restoreId=crypto.randomUUID().replaceAll("-","");migration={preview_id:restoreId,accepted:true,restore_source:source};save();const value=await fleetControl({action:"restore_migration",source_id:source,restore_id:restoreId});if(alive())acceptMigration(value);await read();},false,"restore-migration"),!readable):null),
+        migration?.receipt?.phase==="complete"?button("restore-migration","fleet_restore_migration",()=>run(async()=>{const source=migration.preview_id;const restoreId=crypto.randomUUID().replaceAll("-","");migration={preview_id:restoreId,accepted:true,restore_source:source};save();const value=await fleetControl({action:"restore_migration",source_id:source,restore_id:restoreId});if(alive())acceptMigration(value);await read();},false,"restore-migration"),!readable):null)),
     ];
     content.replaceChildren(...fields.filter(Boolean));
     if ([...content.querySelectorAll("button")].some(node => node.getAttribute("aria-disabled") === "true")) message.setAttribute("aria-busy", "true");

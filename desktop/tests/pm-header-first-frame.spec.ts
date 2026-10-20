@@ -111,7 +111,7 @@ for (const [locale, width, view] of [
     await expect(select).toBeVisible();
     await expect(select).toHaveValue(view);
     await expect(select.locator('option:checked')).toHaveText(title);
-    await expect(page.locator(`[data-pm-view="${view}"] > span`).first()).toHaveText(title);
+    await expect(page.locator(`[data-pm-view="${view}"] > .shell-view-copy > span:first-child`).first()).toHaveText(title);
     await expect(live).toBeFocused();
     await expect.poll(() => page.evaluate(() => location.hash)).toBe(hash);
     expect(fixture.posts).toEqual([]);

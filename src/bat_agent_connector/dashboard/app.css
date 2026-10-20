@@ -847,6 +847,16 @@ button.mini.on { color: var(--warn); border-color: var(--warn); }
 .fleet-desktop .fleet-options .row { padding: 0; flex-wrap: nowrap; }
 .fleet-desktop .fleet-options .grow { flex: 1; }
 .fleet-desktop .fleet-choice { min-width: 0; overflow-wrap: anywhere; }
+.fleet-machine { min-width: 0; padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--r-md); margin-block-end: var(--space-3); }
+.fleet-machine > .fleet-choice { font-weight: 600; }
+.fleet-diagnosis p { margin: var(--space-2) 0; }
+.fleet-diagnosis-title { font-weight: 600; }
+.fleet-diagnosis .muted { font-size: var(--fs-body); }
+.fleet-diagnosis summary, .fleet-advanced > summary { min-height: 44px; align-content: center; cursor: pointer; }
+.fleet-diagnosis summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fleet-diagnosis code { display: block; overflow-wrap: anywhere; }
+.fleet-checks { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-2); }
+.fleet-checks dd { margin: 0; }
 @media (max-width: 650px) { .fleet-desktop .fleet-options { grid-template-columns: 1fr; } }
 
 .fleet-bootstrap .muted { font-size: var(--fs-body); }
@@ -2138,6 +2148,17 @@ body.pm-mode #main { padding: 0; }
 @media (min-width: 1000px) and (max-width: 1199px) { body.has-workspace #workspace::before { width: var(--workspace-sidebar-width, 232px); } }
 .workspace-nav-footer :is(a, button)[aria-current=page] { background: var(--accent-soft); color: var(--accent); border-radius: var(--r-sm); }
 .workspace-nav-footer [data-shell-tools] > .ui-icon:last-child { margin-left: auto; width: 16px; height: 16px; }
+
+/* Four everyday destinations; the full management set opens when needed. */
+.shell-project-nav .pm-project-views button { min-height: 56px; padding-block: var(--space-2); }
+.shell-view-copy { display: grid; gap: 2px; min-width: 0; }
+.shell-view-hint { color: var(--text-2); font-size: var(--fs-small); font-weight: 400; line-height: 1.5; white-space: normal; }
+.shell-management { margin-top: var(--space-2); border-top: 1px solid var(--line); padding-top: var(--space-2); }
+.shell-management > summary { display: flex; align-items: center; gap: var(--rail-gap); padding: var(--space-2) var(--rail-inset); min-height: 44px; cursor: pointer; list-style: none; color: var(--text-2); }
+.shell-management > summary::-webkit-details-marker { display: none; }
+.shell-management[open] > summary > .ui-icon { transform: rotate(90deg); }
+.shell-management-views { display: grid; gap: var(--space-1); }
+.shell-management > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r-sm); }
 
 /* Fixed nested docks reserve space; panels in their own grid column do not. */
 @media (min-width: 1200px) {

@@ -1,3 +1,4 @@
+import {revealPmView} from './pm-navigation.ts';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {mkdirSync} from 'node:fs';
@@ -24,8 +25,7 @@ for (const lang of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) {
     await expect(page.locator('#demo-bar')).toContainText(lang === 'en' ? 'Sample data' : '合成資料');
     const views = ['requirements', 'board', 'schedule', 'dependencies', 'issues', 'agents', 'discussions', 'overview'];
     for (const view of views) {
-      const entry = page.locator(`[data-pm-view="${view}"]`);
-      if (!await entry.isVisible()) await page.locator('#workspace-menu').click();
+      const entry = await revealPmView(page, view);
       await entry.click();
       await expect(page.locator(`[data-pm-region="${view}"]`)).toBeVisible();
       await expect(page.locator('#main [data-api-error]:visible')).toHaveCount(0);

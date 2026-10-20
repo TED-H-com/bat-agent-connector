@@ -33,9 +33,11 @@ import {workStartStrings} from './pm-work-start-strings.js';
 import {workResultStrings} from './pm-work-result-strings.js';
 import {workFollowUpStrings} from './pm-work-follow-up-strings.js';
 import {workPublishStrings} from './pm-work-publish-strings.js';
+import {FLEET_STRINGS} from './fleet-strings.js';
 // Display labels only. Logic and CSS never key on these strings (machine enums come from /api/v1).
 export const STRINGS = {
   "zh-TW": {
+    ...FLEET_STRINGS['zh-TW'],
     ...workbenchStrings["zh-TW"],
     ...externalHistoryStrings["zh-TW"],
     ...diagnosticsStrings["zh-TW"],
@@ -834,9 +836,7 @@ export const STRINGS = {
     fleet_migration_complete: "轉換完成。原設定已保留，可明確選擇還原。",
     fleet_title: "本機 Fleet 連線", fleet_help: "選擇這台電腦需要的連線；連線選擇與實際就緒狀態分開顯示。",
     fleet_apply: "儲存連線選擇", fleet_refresh: "重新讀取狀態", fleet_use_current: "使用目前選擇", fleet_start: "啟動連線監控", fleet_quit: "停止本機連線監控",
-    fleet_tailscale_waking: "正在喚醒 Tailscale 連線…",
-    fleet_route_unavailable: "目前無法透過 Tailscale 連到這台主機。請確認主機在 Tailscale 上為上線狀態；系統會自動重試。",
-    fleet_probe_pending: "正在檢查連線…", fleet_status_details: "詳細資料",
+    fleet_status_details: "詳細資料",
     fleet_monitor_running: "監控執行中", fleet_monitor_stopped: "監控已停止", fleet_ready: "就緒", fleet_degraded: "部分可用", fleet_down: "無法連線", fleet_off: "未啟用",
     fleet_fresh: "最新觀測", fleet_stale: "觀測已過期", fleet_unavailable: "尚無可用觀測", fleet_applied: "監控已讀取目前選擇。", fleet_waiting: "等待監控讀取目前選擇。",
     fleet_changed: "連線選擇或監控已變更。草稿已保留；請讀取並檢視目前選擇。", fleet_other_owner: "目前監控不屬於這個登入工作階段，僅供檢視。",
@@ -1094,6 +1094,7 @@ export const STRINGS = {
     integration_PUSH_UNPROVEN: "PR 分支在舊的 head，但組合後的 commit 已在 GitHub 上：之前的推送可能落地後被改回。不會再推一次；請看一下 PR，再取消並重新預覽。",
   },
   en: {
+    ...FLEET_STRINGS.en,
     ...workbenchStrings.en,
     ...externalHistoryStrings.en,
     ...diagnosticsStrings.en,
@@ -1876,9 +1877,7 @@ export const STRINGS = {
     fleet_migration_complete: "Transition complete. Original settings are retained for restore.",
     fleet_title: "Local Fleet connections", fleet_help: "Choose connections for this computer. Your selection and observed readiness are shown separately.",
     fleet_apply: "Save connections", fleet_refresh: "Read status", fleet_use_current: "Use current selection", fleet_start: "Start connection monitor", fleet_quit: "Stop local connection monitor",
-    fleet_tailscale_waking: "Waking the Tailscale connection…",
-    fleet_route_unavailable: "Tailscale can't reach this host right now. Make sure the host is online in Tailscale; retrying automatically.",
-    fleet_probe_pending: "Checking the connection…", fleet_status_details: "Details",
+    fleet_status_details: "Details",
     fleet_monitor_running: "Monitor running", fleet_monitor_stopped: "Monitor stopped", fleet_ready: "Ready", fleet_degraded: "Partly available", fleet_down: "Unavailable", fleet_off: "Off",
     fleet_fresh: "Recent observation", fleet_stale: "Observation stale", fleet_unavailable: "No current observation", fleet_applied: "The monitor has read the current selection.", fleet_waiting: "Waiting for the monitor to read the current selection.",
     fleet_changed: "The selection or monitor changed. Your draft is preserved; read and review the current selection.", fleet_other_owner: "This monitor is outside this login session's control; status is read-only.",

@@ -1,4 +1,4 @@
-import {openPmPanel, openThreadTab, openThreadBrief} from './pm-navigation.ts';
+import {openPmPanel, openThreadTab, openThreadBrief, revealPmView} from './pm-navigation.ts';
 // One browser flow against actual PM HTTP actions; the central has no BAT hosts.
 import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
@@ -335,13 +335,13 @@ try {
   await expect(page.locator('[data-overview-metric=progress]')).toContainText('No adopted plan');
   child.stdin.write(JSON.stringify({action:'connect_usage',workspace_id:workspaceId})+'\n');
   assert.equal((await next()).usage_connected,true);
-  await page.locator('[data-pm-view="agents"]').click();
+  await (await revealPmView(page, 'agents')).click();
   await expect(page.locator('[data-pm-resources]')).toContainText('1,000');
   await page.locator('[data-resource-select="Implementation"]').click();
   await expect(page.locator('[data-resource-detail]')).toContainText('fixture-model');
   await expect(page.locator('[data-resource-detail]')).toContainText('Input includes cache');
   await expect(page.locator('[data-resource-quota]')).toContainText('No current quota balance');
-  await page.locator('[data-pm-view="requirements"]').click();
+  await (await revealPmView(page, 'requirements')).click();
   await expect(page.locator('[data-pm-rtm]')).toContainText('First useful action');
   await expect(page.locator('[data-rtm-unassigned] > summary')).toHaveText('Unassigned (1)');
   await page.evaluate(hash=>{location.hash=hash;},`#/pm/${workspaceId}/requirements?select=${work.work_item_id}`);
