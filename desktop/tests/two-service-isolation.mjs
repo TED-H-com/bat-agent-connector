@@ -144,12 +144,13 @@ async function delivery(page, labels, repository, pr) {
 async function nativeBridge(page, services, run, initial) {
   let selected = initial, next = initial, connected = false;
   let recovering = false, rebind = 0, holdEvents = null, holdBootstrap = null;
-  const managed = initial.label === 'M', statuses = [], responses = [];
+  const managed = initial.label === 'M', statuses = [], responses = [], attempts = [];
   const gate = () => {let release; const promise = new Promise(resolve => {release = resolve;}); return {promise, release};};
   const status = () => ({endpoint:origin(selected) + '/', expected_actor:selected.actor, configuration_source:managed ? 'managed' : 'external', managed_recovery:recovering ? 'MANAGED_RECOVERING' : null, managed_rebind:rebind,
     configuration_reload:true, configuration_setup:false, credential_available:true, credential_saved:true,
     enrollment_supported:false, connected, error:null});
   const http = async (service, input) => {
+    attempts.push({method:input.method, path:input.path, idempotency_key:input.idempotency_key || null});
     if (managed && recovering) throw Error('Managed child transport unavailable');
     if (input.path.startsWith('/events') && holdEvents) await holdEvents.promise;
     if (input.path === '/bootstrap' && holdBootstrap) await holdBootstrap.promise;
@@ -185,7 +186,7 @@ async function nativeBridge(page, services, run, initial) {
   await page.addInitScript(() => Object.assign(window, {isTauri:true, __TAURI_INTERNALS__:{invoke:(command, args) => window.twoServiceInvoke(command, args)}}));
   await page.route('**/api/v1/**', () => {throw Error('Native Connector request bypassed IPC');});
   return Object.assign(value => {next = value;}, {
-    statuses, responses,
+    statuses, responses, attempts,
     crash() {recovering = true;},
     recover(port) {selected.port = port; recovering = false; rebind++;},
     holdEvents() {holdEvents = gate();}, releaseEvents() {holdEvents?.release(); holdEvents = null;},
@@ -384,7 +385,7 @@ async function managedPass(service, locale, reason) {
     });
     before = await raw('before-crash');
     const stale = before.localStorage.find(([key]) => key === checkpointKey)[1];
-    const oldPort = service.port, crashIndex = requests.length;
+    const oldPort = service.port, crashIndex = requests.length, crashAttempts = bridge.attempts.length;
     bridge.crash();
     const crash = await service.control('crash');
     assert.equal(crash.occupied_port, oldPort);
@@ -410,8 +411,8 @@ async function managedPass(service, locale, reason) {
     assert.equal(reset.data.error.code, 'EVENT_CURSOR_RESET');
     assert.equal(reset.data.error.reason, reason);
     if (reason === 'access_changed') {
-      assert.equal(await originalComposer.evaluate(node => node.isConnected), false);
       await expect(composer(page)).toHaveCount(0);
+      assert.equal(await originalComposer.evaluate(node => node.isConnected), false);
       await expect(page.locator('.message-body').filter({hasText:service.marker})).toHaveCount(0);
     } else {
       assert.equal(await originalComposer.evaluate(node => node.isConnected), true);
@@ -427,10 +428,12 @@ async function managedPass(service, locale, reason) {
     await expect(page.locator('#live')).toHaveAttribute('data-connection', 'connected', {timeout:10000});
     await expect.poll(() => page.evaluate(key => localStorage.getItem(key), checkpointKey)).toBe(JSON.stringify(refreshed));
     assert.notEqual(JSON.stringify(refreshed), stale);
+    if (reason !== 'access_changed') assert.equal(await originalComposer.evaluate(node => node.isConnected), true);
     const after = await raw('reset-settled');
     assertStoragePreserved(before, after, checkpointKey);
     assert.deepEqual(await pending(), [original]);
     assert.equal(requests.slice(crashIndex).filter(value => value.method === 'POST').length, 0, 'No writes during crash/recovery/reset');
+    assert.equal(bridge.attempts.slice(crashAttempts).filter(value => value.method === 'POST').length, 0, 'No POST attempts hidden by recovery IPC');
     assert.ok(bridge.statuses.some(value => value.managed_rebind === 1 && value.endpoint === origin(service) + '/'));
     // Preserve origin/storage while reloading; the old port is occupied. Serve
     // only page assets from the current runtime. Connector traffic still uses IPC.
@@ -462,7 +465,7 @@ async function managedPass(service, locale, reason) {
     assert.deepEqual(report.sends, []);
     assert.deepEqual(errors, []);
     results.push({run, reason, oldPort, newPort:service.port, checkpointChanged:true, namespacesByteIdentical:true,
-      noPostsDuringRecovery:true, receiptResendControl:false, explicitComposerReplay:true});
+      noPostsDuringRecovery:true, postAttemptsDuringRecovery:0, receiptResendControl:false, explicitComposerReplay:true});
     console.log(`${run}: real crash/rebind → first-poll ${reason} → byte-exact storage → reload → original-key replay passed`);
   } catch (error) {
     await raw('failure');
