@@ -87,7 +87,7 @@ test('missing sources and unreported metrics stay unknown; reasons are optional'
 test('identity shows known and unknown commits in both languages',()=>{
  for(const lang of ['en','zh-TW']){
  const t=(key,vars={})=>diagnosticsStrings[lang][key].replace(/\{(\w+)\}/g,(_,k)=>vars[k]??'');
- const browser=clientIdentity({caps:fixture().caps});assert.equal(browser.app_commit,'a'.repeat(40));assert.ok(buildLine(browser,t).includes('aaaaaaa'));
+ const browser=clientIdentity({caps:fixture().caps});assert.equal(browser.app_commit,null);assert.ok(buildLine(browser,t).includes('aaaaaaa'));
  const desktop=clientIdentity({desktop:true,appBuild:{version:'0.1.1',commit:null},caps:fixture().caps});assert.ok(buildLine(desktop,t).includes(diagnosticsStrings[lang].diag_unknown));assert.ok(buildLine(desktop,t).includes('0.1.1'));
  }
 });

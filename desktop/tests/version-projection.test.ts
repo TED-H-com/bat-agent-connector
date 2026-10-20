@@ -36,11 +36,18 @@ test('offline and older service never borrow an installed or cached build', () =
   assert.equal(row(offline,'running_runtime')?.period, 'launch');
   assert.equal(offline.versions.runtime_difference, 'differs');
 });
+test('browser export cannot identify a Desktop app by borrowing the Connector build', () => {
+  const out=buildDiagnostics({...input('differs'),desktop:false});
+  assert.equal(out.client.app_version,null);assert.equal(out.client.app_commit,null);
+  assert.equal(row(out,'desktop').version,null);
+  assert.equal(out.client.connector_version,bootstrap.capabilities.build.version);
+});
 for(const locale of ['en','zh-TW']) test(`projection renders the same build line and facts in ${locale}`, () => {
   const bundle=buildDiagnostics(input('differs'));
   const t=(key,vars={})=>diagnosticsStrings[locale][key]?.replace(/\{(\w+)\}/g,(_,k)=>vars[k]??'') ?? key;
   assert.ok(bundle.versions, 'About, summary, export and Updates need the same projection');
   assert.ok(buildLine(bundle.client,t).includes(bootstrap.capabilities.build.version));
+  assert.equal(buildLine(bundle.versions,t),buildLine(bundle.client,t));
   for(const value of bundle.versions.rows) {
     assert.ok(Object.hasOwn(value,'source'));assert.ok(Object.hasOwn(value,'observed_at'));
     for(const key of ['diag_version_'+value.id,'diag_version_source_'+value.source,'diag_version_period_'+value.period])
@@ -49,14 +56,24 @@ for(const locale of ['en','zh-TW']) test(`projection renders the same build line
   }
 });
 test('real adapter installation producer supplies a requirement, never an observed version', () => {
-  const bundle=buildDiagnostics({...input('differs'),adapterRead:{document:adapter.installation,at}});
-  assert.equal(row(bundle,'adapter_required').version,adapter.installation.native_analysis.required_version);
+  const bundle=buildDiagnostics({...input('differs'),adapterRead:{document:adapter.native.installation,at}});
+  assert.equal(row(bundle,'adapter_required').version,adapter.native.installation.native_analysis.required_version);
   assert.equal(row(bundle,'adapter_required').observed_at,at);
   assert.equal(row(bundle,'adapter_observed').version,null);
   assert.equal(row(bundle,'adapter_observed').observed_at,null);
   // The real producer rejects this older executable without returning its
   // numeric version. Keep that coverage gap explicit instead of inventing one.
-  assert.equal(adapter.older_executable_error,'PM_NATIVE_VERSION_UNSUPPORTED');
+  assert.equal(adapter.native.older_executable_error,'PM_NATIVE_VERSION_UNSUPPORTED');
+});
+test('a read of immutable BAT run provenance stays a past run with its own clock', () => {
+  const bundle=buildDiagnostics({...input('differs'),adapterRunRead:{run:adapter.bat_run,at}});
+  const observed=row(bundle,'adapter_bat_observed');
+  assert.equal(observed.commit,adapter.bat_run.bat_runtime_provenance.codex_source_revision);
+  assert.equal(observed.version,null);assert.equal(observed.period,'run');
+  assert.equal(observed.recorded_at,new Date(adapter.bat_run.updated_at*1000).toISOString());
+  assert.equal(observed.observed_at,at); // the client read, not a new run
+  assert.notEqual(observed.recorded_at,at);
+  assert.equal(row(bundle,'adapter_observed').version,null);
 });
 test('a projection never exports extra fields from producer envelopes', () => {
   const source=input('differs');
@@ -65,4 +82,10 @@ test('a projection never exports extra fields from producer envelopes', () => {
   const out=buildDiagnostics(source);
   for(const raw of [source.managedRuntime.endpoint,source.managedRuntime.token,source.managedRuntime.actor,'secret'])
     assert.ok(!JSON.stringify(out.versions).includes(raw));
+});
+test('all version strings have both locales and matching placeholders', () => {
+  for(const key of Object.keys(diagnosticsStrings.en).filter(key=>/^diag_(?:version|runtime|adapter)/.test(key))) {
+    assert.equal(typeof diagnosticsStrings['zh-TW'][key],'string',key);
+    assert.deepEqual(diagnosticsStrings.en[key].match(/\{\w+\}/g),diagnosticsStrings['zh-TW'][key].match(/\{\w+\}/g),key);
+  }
 });
