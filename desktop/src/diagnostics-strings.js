@@ -1,7 +1,9 @@
 export const diagnosticsStrings = {
   en: {
     diag_export:'Export diagnostics', diag_title:'Diagnostics', diag_save:'Save', diag_copy:'Copy', diag_close:'Close',
-    diag_unknown:'unknown', diag_connector_build:'Connector {version} ({commit})', diag_desktop_build:'Desktop {version} ({commit})',
+    diag_unknown:'unknown', diag_connector_build:'Connector {version} ({commit}) · source: {source}', diag_desktop_build:'Desktop {version} ({commit})',
+    diag_frontend_build:'Frontend SHA-256 {digest}',
+    diag_frontend_stale:'This page differs from the UI Connector now serves. Reload this page to load that UI.',
     diag_privacy:'Redacted preview. Saving and copying stay on this device.',
     diag_counts:'{errors} · {operations}',
     diag_errors_one:'1 recent error', diag_errors_many:'{count} recent errors', diag_operations_one:'1 failed or uncertain operation', diag_operations_many:'{count} failed or uncertain operations', diag_operations_unavailable:'Operations not available', diag_hosts_unavailable:'Hosts not available',
@@ -16,7 +18,9 @@ export const diagnosticsStrings = {
   },
   'zh-TW': {
     diag_export:'匯出診斷資料', diag_title:'診斷資料', diag_save:'儲存', diag_copy:'複製', diag_close:'關閉',
-    diag_unknown:'未知', diag_connector_build:'Connector {version}（{commit}）', diag_desktop_build:'桌面版 {version}（{commit}）',
+    diag_unknown:'未知', diag_connector_build:'Connector {version}（{commit}）· 來源：{source}', diag_desktop_build:'桌面版 {version}（{commit}）',
+    diag_frontend_build:'前端 SHA-256 {digest}',
+    diag_frontend_stale:'此頁面與 Connector 目前提供的介面不同。重新載入此頁面即可載入該介面。',
     diag_privacy:'預覽已去識別化。儲存與複製都只在這台裝置上進行。',
     diag_counts:'{errors} · {operations}',
     diag_errors_one:'最近 1 筆錯誤', diag_errors_many:'最近 {count} 筆錯誤', diag_operations_one:'1 筆失敗或結果未確認的操作', diag_operations_many:'{count} 筆失敗或結果未確認的操作', diag_operations_unavailable:'無法取得操作資料', diag_hosts_unavailable:'無法取得主機資料',

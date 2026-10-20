@@ -898,8 +898,10 @@ var init_diagnostics_strings = __esmMin((() => {
 			diag_copy: "Copy",
 			diag_close: "Close",
 			diag_unknown: "unknown",
-			diag_connector_build: "Connector {version} ({commit})",
+			diag_connector_build: "Connector {version} ({commit}) · source: {source}",
 			diag_desktop_build: "Desktop {version} ({commit})",
+			diag_frontend_build: "Frontend SHA-256 {digest}",
+			diag_frontend_stale: "This page differs from the UI Connector now serves. Reload this page to load that UI.",
 			diag_privacy: "Redacted preview. Saving and copying stay on this device.",
 			diag_counts: "{errors} · {operations}",
 			diag_errors_one: "1 recent error",
@@ -946,8 +948,10 @@ var init_diagnostics_strings = __esmMin((() => {
 			diag_copy: "複製",
 			diag_close: "關閉",
 			diag_unknown: "未知",
-			diag_connector_build: "Connector {version}（{commit}）",
+			diag_connector_build: "Connector {version}（{commit}）· 來源：{source}",
 			diag_desktop_build: "桌面版 {version}（{commit}）",
+			diag_frontend_build: "前端 SHA-256 {digest}",
+			diag_frontend_stale: "此頁面與 Connector 目前提供的介面不同。重新載入此頁面即可載入該介面。",
 			diag_privacy: "預覽已去識別化。儲存與複製都只在這台裝置上進行。",
 			diag_counts: "{errors} · {operations}",
 			diag_errors_one: "最近 1 筆錯誤",
@@ -15370,6 +15374,10 @@ function settingsAgents({ h, t, api, caps, guard, from }) {
 	};
 }
 //#endregion
+//#region src/frontend-identity.js
+var frontendDigest = (value) => typeof value === "string" && value.length === 64 && /^[a-f0-9]{64}$/.test(value) ? value : null;
+var frontendBuild = Object.freeze({ frontend_digest: frontendDigest("__BATC_FRONTEND_DIGEST_PLACEHOLDER______________________________") });
+//#endregion
 //#region src/diagnostics.js
 var code = (value) => typeof value === "string" && /^[A-Z][A-Z0-9_]{0,79}$/.test(value) ? value : null;
 var reason = (value) => typeof value === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(value) ? value : null;
@@ -15441,10 +15449,12 @@ function errorRing(limit = 50) {
 		}
 	};
 }
-function clientIdentity({ caps, appBuild, desktop = false, os = "unknown", locale = "en", width = 0 }) {
+function clientIdentity({ caps, appBuild, frontendBuild: frontendBuild$1 = frontendBuild, desktop = false, os = "unknown", locale = "en", width = 0 }) {
 	return {
-		app_version: desktop ? version$2(appBuild?.version) : version$2(caps?.build?.version ?? caps?.connector),
-		app_commit: desktop ? commit(appBuild?.commit) : commit(caps?.build?.commit),
+		app_version: desktop ? version$2(appBuild?.version) : null,
+		app_commit: desktop ? commit(appBuild?.commit) : null,
+		frontend_digest: frontendDigest(frontendBuild$1?.frontend_digest),
+		served_frontend_digest: frontendDigest(caps?.frontend?.digest),
 		connector_version: version$2(caps?.build?.version ?? caps?.connector),
 		connector_commit: commit(caps?.build?.commit),
 		connector_source: select(caps?.build?.source, [
@@ -15466,14 +15476,21 @@ function clientIdentity({ caps, appBuild, desktop = false, os = "unknown", local
 }
 function buildLine(client, t) {
 	const unknown = t("diag_unknown");
+	const frontend = client.platform !== "desktop" || client.frontend_digest ? t("diag_frontend_build", { digest: client.frontend_digest?.slice(0, 12) || unknown }) : null;
 	const connector = t("diag_connector_build", {
 		version: client.connector_version || unknown,
-		commit: client.connector_commit?.slice(0, 7) || unknown
+		commit: client.connector_commit?.slice(0, 7) || unknown,
+		source: client.connector_source || unknown
 	});
-	return client.platform === "desktop" ? t("diag_desktop_build", {
-		version: client.app_version || unknown,
-		commit: client.app_commit?.slice(0, 7) || unknown
-	}) + " · " + connector : connector;
+	const line = [
+		client.platform === "desktop" ? t("diag_desktop_build", {
+			version: client.app_version || unknown,
+			commit: client.app_commit?.slice(0, 7) || unknown
+		}) : null,
+		frontend,
+		connector
+	].filter(Boolean).join(" · ");
+	return client.platform === "browser" && client.frontend_digest && client.served_frontend_digest && client.frontend_digest !== client.served_frontend_digest ? line + " · " + t("diag_frontend_stale") : line;
 }
 var APP = "io.betteragent.dashboard";
 function logLocations(os, managed) {
@@ -70888,9 +70905,18 @@ function openSettings(main, { exclusive = false, refreshButton } = {}) {
 		onClick: openDiagnostics,
 		"data-export-diagnostics": ""
 	}), h("a", { href: setupGuide() }, t("global_setup_guide")))));
+	const identityEpoch = state.epoch;
+	let buildCaps = state.caps;
+	const paintBuild = () => {
+		if (frame.root.isConnected && identityEpoch === state.epoch) frame.panel("about").querySelector("[data-build-line]").textContent = buildLine(clientIdentity(diagnosticsClient(buildCaps)), t);
+	};
+	if (state.token) api("GET", "/capabilities").then((caps) => {
+		buildCaps = caps;
+		paintBuild();
+	}).catch(() => {});
 	if (nativeDesktop) nativeStatus().then((status) => {
 		desktopBuild = status.app_build;
-		if (frame.root.isConnected) frame.panel("about").querySelector("[data-build-line]").textContent = buildLine(clientIdentity(diagnosticsClient()), t);
+		paintBuild();
 	}).catch(() => {});
 	main.append(languageSwitch(), frame.root);
 	const back = connectionReturn(params.get("from"));
