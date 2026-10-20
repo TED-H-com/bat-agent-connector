@@ -38,6 +38,21 @@ test('stale and failed observations have distinct reasons; unknown reasons do no
     assert.equal(facts.reasonCode,reason??null);
   }
 });
+test('last success comes only from current evidence, never from past verification',async()=>{
+  const {profileStateFacts}=await import('../src/pm-work-profile-state.js');
+  for(const name of ['host_unreachable','host_not_refreshed','action_unavailable']){
+    const state=golden.cases[name].states.can_observe;
+    assert.equal(state.evidence_ref,null);assert.ok(state.verified.evidence_ref.last_success_at);
+    assert.equal(profileStateFacts(state).lastSuccessAt,null);
+  }
+});
+test('a current success matching the past verification time is shown only as past verification',async()=>{
+  const {profileStateFacts}=await import('../src/pm-work-profile-state.js');
+  const state=golden.cases.credential_required.states.can_observe;
+  assert.equal(state.evidence_ref.last_success_at,state.verified.observed_at);
+  const facts=profileStateFacts(state);
+  assert.equal(facts.lastSuccessAt,null);assert.equal(facts.past.at,state.verified.observed_at);
+});
 test('only validated operation IDs and timestamps survive evidence projection',async()=>{
   const {profileStateFacts}=await import('../src/pm-work-profile-state.js');
   const operation='op_'+'c'.repeat(32);

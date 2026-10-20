@@ -14,6 +14,10 @@ const names=['discovered','signed_in_or_available','can_observe','can_start_own'
 // remains covered by the existing integration cases below.
 async function mountGoldenPicker(page:any,body:any,locale:string){
   const reads:string[]=[],posts:string[]=[];
+  await page.addInitScript(()=>{
+    (window as any).__csp=[];
+    document.addEventListener('securitypolicyviolation',event=>(window as any).__csp.push(event.violatedDirective));
+  });
   page.on('request',(request:any)=>{if(request.method()==='POST')posts.push(request.url());});
   await page.route('**/api/v1/**',async(route:any)=>{
     const request=route.request(),path=new URL(request.url()).pathname;reads.push(path);
@@ -52,6 +56,12 @@ for(const locale of ['en-US','zh-TW'])test.describe(`${locale} producer profile 
       const lang=locale==='en-US'?'en':locale,copy=(key:string)=>workProfileStrings[lang][key];
       const {facts,reads,posts}=await mountGoldenPicker(page,body,locale);
       const cells=facts.locator('dl.pm-work-profile-states > dd');await expect(cells).toHaveCount(6);
+      const gap=facts.locator('[data-work-profile-gap]');
+      if(name==='host_unreachable'||name==='host_not_refreshed'){
+        await expect(gap).toHaveText(locale==='en-US'?'Connector is waiting for the next observation.':'Connector 正在等候下一次觀察結果。');
+        await expect(gap.locator('time')).toHaveCount(0);
+        await expect(gap).not.toContainText(copy('wpf_reason_'+name));
+      }
       for(const key of ['can_observe',...names.filter(key=>key!=='can_observe')]){
         const state=body.states[key],cell=cells.nth(names.indexOf(key));
         // This fails against the old value-only cells before any new selectors.
@@ -69,13 +79,18 @@ for(const locale of ['en-US','zh-TW'])test.describe(`${locale} producer profile 
         }else await expect(cell.locator('[data-work-profile-past]')).toHaveCount(0);
         const op=state.evidence_ref?.operation_id||state.verified?.evidence_ref?.operation_id;
         if(op)await expect(cell.locator(`a[href="#/op/${op}"]`)).toHaveCount(1);
-        const success=state.evidence_ref?.last_success_at??state.verified?.evidence_ref?.last_success_at;
-        if(success)await expect(cell.locator('[data-work-profile-last-success] time')).toHaveAttribute('datetime',new Date(success*1000).toISOString());
+        const success=state.evidence_ref?.last_success_at;
+        if(success&&success!==state.verified?.observed_at)await expect(cell.locator('[data-work-profile-last-success] time')).toHaveAttribute('datetime',new Date(success*1000).toISOString());
+        else await expect(cell.locator('[data-work-profile-last-success]')).toHaveCount(0);
+        const instants=await cell.locator('time').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('datetime')));
+        expect(new Set(instants).size).toBe(instants.length);
       }
       const read=facts.locator('[data-work-profile-read-at]');await expect(read).toContainText(locale==='en-US'?'Read at':'讀取時間');
       await expect(read.locator('time')).toHaveAttribute('datetime',new Date(body.observed_at*1000).toISOString());
       await expect(read).not.toContainText(locale==='en-US'?'verified':'驗證');
-      await expect(facts.locator('[data-work-profile-gap]')).toHaveCount(body.smallest_gap?1:0);
+      await expect(gap).toHaveCount(body.smallest_gap?1:0);
+      const cellInstants=await cells.locator('time').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('datetime')));
+      for(const instant of await gap.locator('time').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('datetime'))))expect(cellInstants).not.toContain(instant);
       if(name==='host_unreachable'||name==='host_not_refreshed'){
         const cell=cells.nth(names.indexOf('can_observe'));
         await expect(cell).toContainText(locale==='en-US'?'does not contact the host':'不會連絡主機');
@@ -85,6 +100,7 @@ for(const locale of ['en-US','zh-TW'])test.describe(`${locale} producer profile 
       expect(await facts.innerText()).not.toMatch(/scan_fixture|fixture-bat|\/srv\/|\/tmp\//);
       expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
       expect(reads.filter(path=>path.endsWith('/readiness'))).toHaveLength(1);expect(posts).toEqual([]);
+      expect(await page.evaluate(()=>(window as any).__csp)).toEqual([]);
     });
 });
 
