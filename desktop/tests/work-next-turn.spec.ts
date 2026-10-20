@@ -499,7 +499,7 @@ test('a missing operate scope keeps history without a composer', async ({page}) 
   const scoped = followUpFixture('en', {operate: false});
   scoped.follow.items = [queuedReceipt()];
   await openWork(page, scoped, 'en');
-  await expect(page.locator('[data-follow-up-pill]')).toContainText('Read-only');
+  await expect(page.locator('[data-follow-up-pill]')).toHaveText('API read-only');
   await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
   await expect(receipts(page)).toHaveCount(1);
 });

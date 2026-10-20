@@ -9226,6 +9226,18 @@ var init_pm_work_follow_up_strings = __esmMin((() => {
 			loop_next_blocked_link: "開啟未確認的指令",
 			loop_next_codex: "這個 Codex 工作階段無法排入下一步。",
 			loop_next_not_controller: "你不是這項工作的控制者。",
+			loop_next_codex_step: "請查看本輪結果，並向工作區擁有者詢問支援的工作階段。",
+			loop_next_controller_step: "請這項工作的控制者代為送出。",
+			loop_next_member_blocked: "你在這個工作區的成員權限不允許寫入。",
+			loop_next_member_step: "請向工作區擁有者申請寫入權限。",
+			loop_next_scope_blocked: "這組憑證沒有操作權限。",
+			loop_next_scope_step: "請使用具備操作權限的憑證重新連線。",
+			loop_next_blocked_unknown: "伺服器已阻擋下一步。",
+			loop_next_refresh_step: "請重新整理，或詢問工作區擁有者。",
+			loop_next_no_offer: "這次嘗試目前沒有提供下一步。",
+			loop_next_scope_readonly: "API 唯讀",
+			loop_next_member_readonly: "工作區唯讀",
+			loop_next_blocked: "無法送出",
 			loop_next_err_unknown: "這一步無法送出。",
 			loop_next_err_PM_WORK_SESSION_NOT_MANAGED: "這個工作階段不是由你控制的受管工作階段。",
 			loop_next_err_READ_ONLY: "這個工作階段是唯讀的。",
@@ -9280,6 +9292,18 @@ var init_pm_work_follow_up_strings = __esmMin((() => {
 			loop_next_blocked_link: "Open the unconfirmed instruction",
 			loop_next_codex: "A next step is not available for this Codex session.",
 			loop_next_not_controller: "You are not this work's controller.",
+			loop_next_codex_step: "Review the current result. Ask the workspace owner about a supported session.",
+			loop_next_controller_step: "Ask the work’s controller to send it.",
+			loop_next_member_blocked: "Your workspace membership does not allow writing.",
+			loop_next_member_step: "Ask a workspace owner for write access.",
+			loop_next_scope_blocked: "This credential does not have operate scope.",
+			loop_next_scope_step: "Reconnect with a credential that has operate scope.",
+			loop_next_blocked_unknown: "The server blocked the next step.",
+			loop_next_refresh_step: "Refresh, or ask the workspace owner.",
+			loop_next_no_offer: "This attempt does not currently offer a next step.",
+			loop_next_scope_readonly: "API read-only",
+			loop_next_member_readonly: "Workspace read-only",
+			loop_next_blocked: "Cannot send",
 			loop_next_err_unknown: "This step could not be sent.",
 			loop_next_err_PM_WORK_SESSION_NOT_MANAGED: "This session is not a managed session you control.",
 			loop_next_err_READ_ONLY: "This session is read-only.",
@@ -52253,6 +52277,74 @@ function mountWorkInputIdea({ h, t, api, caps, guard, namespace, workspaceId, wo
 	};
 }
 //#endregion
+//#region src/pm-work-follow-up-decision.js
+var serverReasons = {
+	codex_uncorrelated_turn_boundary: [
+		"loop_next_codex",
+		"loop_next_codex_step",
+		"loop_next_blocked"
+	],
+	not_controller: [
+		"loop_next_not_controller",
+		"loop_next_controller_step",
+		"loop_next_blocked"
+	],
+	not_writer_member: [
+		"loop_next_member_blocked",
+		"loop_next_member_step",
+		"loop_next_member_readonly"
+	],
+	missing_scope: [
+		"loop_next_scope_blocked",
+		"loop_next_scope_step",
+		"loop_next_scope_readonly"
+	]
+};
+function workFollowUpDecision({ stopped = false, disposed = false, suspended = false, capabilitiesLoaded, reading, admissionReady, resultSettled, blockedReason = "", sendOffer, managed, connected }) {
+	const client = (reason, messageKey = "", nextStepKey = "") => ({
+		allowed: false,
+		source: "client",
+		reason,
+		messageKey,
+		nextStepKey,
+		pillKey: "",
+		showCode: false
+	});
+	if (stopped || disposed) return client("stopped");
+	if (suspended) return client("suspended");
+	if (!capabilitiesLoaded) return client("capabilities_pending");
+	if (reading || !admissionReady || !resultSettled) return client("admission_pending");
+	if (blockedReason) {
+		const known = Object.hasOwn(serverReasons, blockedReason);
+		const [messageKey, nextStepKey, pillKey] = known ? serverReasons[blockedReason] : [
+			"loop_next_blocked_unknown",
+			"loop_next_refresh_step",
+			"loop_next_blocked"
+		];
+		return {
+			allowed: false,
+			source: "server",
+			reason: blockedReason,
+			messageKey,
+			nextStepKey,
+			pillKey,
+			showCode: !known
+		};
+	}
+	if (!sendOffer) return client("no_send_offer", "loop_next_no_offer", "loop_next_refresh_step");
+	if (!managed) return client("unmanaged", "loop_next_err_PM_WORK_SESSION_NOT_MANAGED", "loop_next_refresh_step");
+	if (!connected) return client("connection");
+	return {
+		allowed: true,
+		source: "server",
+		reason: "",
+		messageKey: "",
+		nextStepKey: "",
+		pillKey: "",
+		showCode: false
+	};
+}
+//#endregion
 //#region src/pm-work-follow-up.js
 init_i18n();
 var WORKSPACE_ID = /^ws_[0-9a-f]{32}$/;
@@ -52376,8 +52468,20 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 			onField(null, null);
 		} catch {}
 	}
-	function composerAllowed() {
-		return !reading && admissionReady && Boolean(sendOffer) && resultSettled && managed() && !suspended && caps()?.scopes?.includes("operate") && caps()?.actions?.some((row) => row.action === "session.send" && row.allowed === true);
+	function sendDecision() {
+		return workFollowUpDecision({
+			reading,
+			admissionReady,
+			resultSettled,
+			sendOffer,
+			blockedReason,
+			stopped,
+			suspended,
+			disposed,
+			managed: managed(),
+			capabilitiesLoaded: Boolean(caps()),
+			connected: canSend()
+		});
 	}
 	function dropUnconfirmedPins() {
 		const visible = new Set(pageItems.map((row) => row.operation_id));
@@ -52400,18 +52504,23 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		resultSettled = true;
 		sendOffer = offerSend(result);
 		const blocked = Array.isArray(result.blocked_actions) ? result.blocked_actions.find((row) => row?.action === "session.send") : null;
-		blockedReason = sendOffer ? "" : blocked?.reason || "";
+		blockedReason = typeof blocked?.reason === "string" ? blocked.reason : "";
 		return true;
 	}
 	function syncComposer() {
 		if (stopped || disposed) return;
-		const allowed = composerAllowed();
-		const showReadOnly = !reading && !allowed && resultSettled && admissionReady && (blockedReason === "missing_scope" || blockedReason === "not_writer_member" || !caps()?.scopes?.includes("operate"));
-		pill.replaceChildren(...showReadOnly ? [statusPill("read_only")] : []);
-		const reason = blockedReason === "codex_uncorrelated_turn_boundary" ? t("loop_next_codex") : blockedReason === "not_controller" ? t("loop_next_not_controller") : "";
-		note.replaceChildren(...reason ? [h("p", { class: "work-next-note" }, reason)] : []);
-		if (!allowed) {
-			if (reading && composer) {
+		const decision = sendDecision();
+		pill.replaceChildren(...decision.pillKey ? [h("span", { class: "ui-pill tone-review" }, t(decision.pillKey))] : []);
+		note.replaceChildren(...decision.messageKey ? [h("p", {
+			class: "work-next-note",
+			"data-reason-source": decision.source
+		}, t(decision.messageKey), decision.showCode ? [" ", h("code", {}, decision.reason)] : null, decision.nextStepKey ? [" ", t(decision.nextStepKey)] : null)] : []);
+		if (!decision.allowed && decision.reason !== "connection") {
+			if (composer && [
+				"admission_pending",
+				"connection",
+				"capabilities_pending"
+			].includes(decision.reason)) {
 				composer.update();
 				paint();
 				return;
@@ -52462,7 +52571,7 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 				schedule: "after_current"
 			}),
 			preconditions: () => attemptId ? { expected_attempt_id: attemptId } : {},
-			permitted: () => managed() && !stopped && !suspended,
+			permitted: mutationsAllowed,
 			canSend: () => !reading && admissionReady && field.value.trim().length > 0 && field.value.trim().length <= 2e4 && canSend(),
 			requiredScope: "operate",
 			label: "loop_next_send",
@@ -52559,14 +52668,7 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		}
 	}
 	function mutationsAllowed() {
-		if (reading || !admissionReady || !sendOffer) return false;
-		if ([
-			"not_controller",
-			"codex_uncorrelated_turn_boundary",
-			"not_writer_member",
-			"missing_scope"
-		].includes(blockedReason)) return false;
-		return managed() && !stopped && !suspended && caps()?.scopes?.includes("operate") && caps()?.actions?.some((row) => row.action === "session.send" && row.allowed === true);
+		return sendDecision().allowed;
 	}
 	function rowActions(receipt) {
 		if (!mutationsAllowed()) return [];
