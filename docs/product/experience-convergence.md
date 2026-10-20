@@ -47,6 +47,36 @@ PM v1.2 全生命週期及原 E／UX／R／V／K 範圍保留，改變的是先�
 以上是候選退出條件，尚未達成。每個修正必須進入同一可追溯安裝包再驗收；CI、
 模擬截圖、已合併與曾經安裝都不能替代這份證據。逐機擴大部署在小範圍驗收之後。
 
+### 2026-10-19 加入機器責任收斂（規格待審查）
+
+以下是 E01／E03／E11、T3／T8、K02／K08／K16 的契約補充，未實作精靈，未作
+R0–R5／A01–A40 驗收聲明。完整欄位、預覽／套用／讀回狀態與驗收列集中於
+[Fleet 加入機器契約](../design/fleet-configuration.md#加入機器共用契約待審查)，
+[首次設定](../design/managed-installation.md#與加入機器共用的契約待審查)引用同一份規格。
+下表的程式事實以 `9172fd56` 為基線；「退休」是後續完成條件。
+
+| 事實／責任 | 權威模組與現況證據 | 收斂後退休項目（規範） |
+| --- | --- | --- |
+| 可驗證身分 | Connector journal 的 server／principal，加上 native credential／bootstrap 驗證；BAT pin 是各自來源信任。[dashboard_sync.py:81](../../src/bat_agent_connector/dashboard_sync.py#L81)、[bridge.rs:1097](../../desktop/src-tauri/src/bridge.rs#L1097)、[supervisor_probe.rs:140](../../desktop/fleet-core/src/supervisor_probe.rs#L140) | 退休以 host 名稱／endpoint／同 server_id 字串推定同身分；不同 principal／workspace 保持隔離。 |
+| 已加入機器與信任 | 既有 setup 保存 hosts.toml；Fleet 另有 inventory／profile 關聯並比對 BAT live index。[managed_setup.py:59](../../src/bat_agent_connector/managed_setup.py#L59)、[inventory.rs:245](../../desktop/fleet-core/src/inventory.rs#L245)、[supervisor_probe.rs:89](../../desktop/fleet-core/src/supervisor_probe.rs#L89) | 一次受保護意圖，各層引用；退休重填四檔及多份 pin／ID。BAT 管登入與 profile，SSH 管 host trust。 |
+| 執行位置與 routes | 來源 workspace 與 setup execution binding；native route／tunnel 管本機 transport。[managed_setup.py:412](../../src/bat_agent_connector/managed_setup.py#L412)、[route.rs:44](../../desktop/fleet-core/src/route.rs#L44)、[tunnel.rs:74](../../desktop/fleet-core/src/tunnel.rs#L74) | 退休以 loopback、peer 或 alias 推論 workspace／權限；不新增自動替代路線。 |
+| 本機程序 lifecycle | managed ensure／service lease；Fleet monitor／tunnel 的 ownership 及 migration 各守原資源。[managed_runtime.py:217](../../src/bat_agent_connector/managed_runtime.py#L217)、[fleet_native.rs:186](../../desktop/src-tauri/src/fleet_native.rs#L186)、[windows_tunnel.rs:113](../../desktop/fleet-core/src/windows_tunnel.rs#L113) | 退休多入口各自 spawn／依 PID 或 port 猜測修復；只向正式 owner 表達 ensure／stop，未知效果先查回。 |
+| health／capabilities 投影 | Fleet readiness、setup inventory evidence、Work readiness 分別提供事實；標頭目前另算 token／pollHealth。[fleet_native.rs:176](../../desktop/src-tauri/src/fleet_native.rs#L176)、[managed_setup.py:175](../../src/bat_agent_connector/managed_setup.py#L175)、[pm_work_profiles.py:970](../../src/bat_agent_connector/pm_work_profiles.py#L970)、[app.js:787](../../desktop/src/app.js#L787) | 共用來源、時間、版本及 reason；標頭註明中央服務；退休每頁獨立把未知／過期／拒絕／未設定／不支援說成離線。 |
+| 已發布／已安裝／執行版本 | Release manifest、updater installed readback、managed Launch／desktop build info 各自出證據。[update_release.py:75](../../src/bat_agent_connector/update_release.py#L75)、[updater.py:267](../../src/bat_agent_connector/updater.py#L267)、[managed.rs:36](../../desktop/src-tauri/src/managed.rs#L36)、[diagnostics_files.rs:10](../../desktop/src-tauri/src/diagnostics_files.rs#L10) | 退休單一版本欄及以更新成功推定執行中版本；三份讀回並列，缺失標未知。 |
+| 已排指令與工作執行 | 本輪不動 | 本輪不動。 |
+| CLI transcript／turn／diff | 本輪不動 | 本輪不動。 |
+| 需求接受與 PM 建議 | 本輪不動 | 本輪不動。 |
+
+**規範：**第一個選擇為用途：只查看與操作既有服務、本機提供 workspace 執行能力、
+兩者兼有。既有安裝沿用原角色；純 client 不建立第二份專案／身分／journal。
+設定逐步保存並讀回，保留原 key／收據；不假裝跨檔交易，不覆寫使用者後改內容。
+退役條件是三種安裝情境可從正式 UI 完成，不靠 CLI 預塞或 AI 補設定；CI、Windows
+client＋非正式 Linux BAT host 實機各留獨立驗收列。
+
+待 owner 決定的 D1–D8 集中於上述 Fleet 契約：角色啟動時機、設定／收據協調、BAT
+來源及 enrollment、換址信任、自動映射及 schema、刪除保留、健康投影接線、具名維護者與
+平台實機候選。本次只交可審查文件，這些決策未定不准以猜測實作填補。
+
 ## 修訂導讀｜EC-1.1 不重置正在開發的工作
 
 上一版 EC-1.0 已投入實作。本版將 #276 合併的工作循環列為「已整合，待真實環境驗收」，並擴充手機互動、低干擾同步、長討論與下一步。保留原 E／UX／R／V／K 編號。
