@@ -1,7 +1,9 @@
 import {test, expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
+import {readFileSync} from 'node:fs';
 import {demoFixture} from './demo/index.ts';
 import {mountConversation} from './conversation-fixture.ts';
+import {workStartFixture, workspaceId, workId} from './work-start-fixture.ts';
 
 for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test(`GitHub empty board import and repeat sync ${locale} ${native ? 'IPC' : 'HTTP'}`, async ({page}) => {
   await page.setViewportSize({width: native ? 390 : 1280, height: 900});
@@ -149,21 +151,19 @@ for (const locale of ['en', 'zh-TW']) for (const missing of [false, true]) test(
 for (const locale of ['en', 'zh-TW']) test(`Failed first import preserves GitHub choices ${locale}`, async ({page}) => {
   const fixture = demoFixture({locale, managedSession: true}), {ids} = fixture;
   let operation: any = null;
-  const setting = () => ({project_id: ids.projectId, name: 'Example board', repository: 'example/board', workspace_id: null,
-    revision: 0, enabled: false, include_closed: false, status: 'not_synced', last_sync: null, next_sync: 0, authenticated: null, last_error: null});
   await page.addInitScript(value => Object.defineProperty(navigator, 'language', {value}), locale);
   await mountConversation(page, false, async (input: any) => {
     const path = new URL(input.path, 'http://fixture').pathname;
     if (input.method === 'POST') {
       expect(input.body.params.include_closed).toBe(true); expect(input.body.params.enabled).toBe(false);
       operation = {...input.body, operation_id: 'op_' + 'd'.repeat(32), actor: ids.actor, idempotency_key: input.idempotency_key,
-        status: 'succeeded', result: {project_id: ids.projectId, status: 'unreachable', github_sync: setting()}};
+        status: 'succeeded', result: {project_id: null, status: 'unreachable', github_sync: {revision: 0, repository: null, workspace_id: null}}};
       return {status: 202, data: {operation}};
     }
     if (path.startsWith('/operations/')) return {status: 200, data: {operation}};
     if (path.endsWith('/projects') && path.startsWith('/pm/')) return {status: 200, data: {
       version: 1, workspace_id: ids.workspaceId, bindings: [], next_cursor: null,
-      github_sync: {projects: [setting()], suggested_repository: 'example/board'}}};
+      github_sync: {projects: [], suggested_repository: 'example/board'}}};
     const result: any = await fixture.dispatch(input);
     const caps = path === '/capabilities' ? result.data : path === '/bootstrap' ? result.data.capabilities : null;
     if (caps) {caps.features.board_github_sync = {version: 1}; caps.scopes.push('manage');
@@ -181,4 +181,74 @@ for (const locale of ['en', 'zh-TW']) test(`Failed first import preserves GitHub
   await expect(history).toBeChecked(); await expect(keep).not.toBeChecked();
   await page.reload();
   await expect(history).toBeChecked(); await expect(keep).not.toBeChecked();
+});
+
+for (const locale of ['en', 'zh-TW']) test(`Managed Board and failed import drafts survive relaunch ${locale}`, async ({page}) => {
+  // Use the real bootstrap producer's verified identity envelope. The native
+  // bridge is a substitute; Board forms and storage run from the built bundle.
+  const golden = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-bootstrap.json', import.meta.url), 'utf8'));
+  const fixture = workStartFixture(), writes: any[] = [];
+  let operation: any = null;
+  const dispatch = async (input: any) => {
+    const path = new URL(input.path, 'http://fixture').pathname;
+    if (input.method === 'POST') {
+      writes.push(input);
+      expect(input.body.action).toBe('pm.github.import');
+      expect(input.body.params).toMatchObject({repository: 'example/board', include_closed: true, enabled: false});
+      operation = {...input.body, operation_id: 'op_' + 'd'.repeat(32), actor: fixture.base.state.actor,
+        idempotency_key: input.idempotency_key, status: 'succeeded', result: {project_id: null, status: 'unreachable',
+          github_sync: {revision: 0, repository: null, workspace_id: null}}};
+      return {status: 202, data: {operation}};
+    }
+    if (path.startsWith('/operations/')) return {status: 200, data: {operation}};
+    if (path === `/pm/workspaces/${workspaceId}/projects`) return {status: 200, data: {
+      version: 1, workspace_id: workspaceId, bindings: [], next_cursor: null,
+      github_sync: {projects: [], suggested_repository: 'example/board'}}};
+    const result: any = await fixture.dispatch(input);
+    const caps = path === '/capabilities' ? result.data : path === '/bootstrap' ? result.data.capabilities : null;
+    if (caps) {
+      caps.desktop_identity = golden.capabilities.desktop_identity;
+      caps.features.board_github_sync = {version: 1};
+      caps.actions.push({action: 'pm.github.import', allowed: true, scope: 'manage'});
+    }
+    if (path === '/bootstrap') Object.assign(result.data.sync, golden.capabilities.desktop_identity);
+    return result;
+  };
+  await page.exposeFunction('managedBoardRequest', dispatch);
+  await page.addInitScript(locale => {
+    Object.defineProperty(navigator, 'language', {value: locale});
+    Object.assign(window, {isTauri: true, __TAURI_INTERNALS__: {invoke: async (command: string, args: any) => {
+      if (command === 'native_status') return {endpoint: sessionStorage.getItem('fixture.board.endpoint') || 'http://127.0.0.1:41001/',
+        configuration_source: 'managed', credential_available: true};
+      if (command === 'connector_connect') return (await (window as any).managedBoardRequest({method: 'GET', path: '/capabilities'})).data;
+      if (command === 'connector_request') return (window as any).managedBoardRequest(args.input);
+      if (command === 'connector_disconnect') return null;
+      if (command === 'fleet_availability') return {configured: false, platform_supported: false};
+      throw Error(`Unexpected native command ${command}`);
+    }}});
+  }, locale);
+  await page.goto(`/dashboard/#/pm/${workspaceId}/board`);
+  const openWork = () => page.locator(`[data-pm-kanban-work="${workId(1)}"] [data-board-open]`).click();
+  await openWork();
+  const instruction = page.locator('[data-work-start-instruction]');
+  await instruction.fill('Keep this Board draft without starting work.');
+  const panel = page.locator('[data-board-github]');
+  const history = panel.getByRole('checkbox', {name: locale === 'en' ? 'Include closed history' : '包含已關閉的歷史'});
+  const keep = panel.getByRole('checkbox', {name: locale === 'en' ? 'Keep in sync' : '持續同步'});
+  await history.check(); await keep.uncheck();
+  await panel.getByRole('button', {name: locale === 'en' ? 'Import from GitHub' : '從 GitHub 匯入', exact: true}).click();
+  await expect(panel.locator('[data-github-sync-status]')).toContainText(locale === 'en' ? 'could not be reached' : '無法連線');
+  const namespace = ['managed', 'v1', golden.sync.server_id, golden.sync.principal_id, fixture.base.state.actor].map(encodeURIComponent).join(':');
+  await expect.poll(() => page.evaluate(namespace => {
+    const drafts = Object.entries(localStorage).filter(([key]) => key.startsWith(`batc.pm.${namespace}.`));
+    return drafts.some(([key, value]) => key.includes('.work.start.') && value.includes('Keep this Board draft'))
+      && drafts.some(([key, value]) => key.includes('.pm.github.import.') && JSON.parse(value).values.include_closed === 'true');
+  }, namespace)).toBe(true);
+  await page.evaluate(() => sessionStorage.setItem('fixture.board.endpoint', 'http://127.0.0.1:41002/'));
+  await page.reload();
+  await expect(history).toBeChecked(); await expect(keep).not.toBeChecked();
+  await openWork();
+  await expect(instruction).toHaveValue('Keep this Board draft without starting work.');
+  expect(writes).toHaveLength(1);
+  expect(fixture.state.writes).toEqual([]);
 });
