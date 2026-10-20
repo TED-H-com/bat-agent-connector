@@ -17,12 +17,12 @@ problem, discuss it with the PM and review a decision in the same context.
 It retains Windows Fleet, central authority, platform differences and installation guidance.
 
 The redesigned views and sixteen screenshots are a **development preview from merged main**
-pinned to `265026d4c1fc2bc04a9aaa727d566c1a2906b256`.
-This pin is merged main through #205 on October 16, 2026. It includes `work.start`, the Start work panel, fixed Result reads, and a read-only Result section in the Board's Work inspector (E03 part A). The public gallery does not open that panel. The panel needs the `work.start` capability, a configured BAT host and a bound repository. Not merged: a second instruction to the same Work (P5), adopt-and-start in one step (P6), on-request current changes and per-commit diffs (E03 part B), work profiles and readiness (E01), MCP/API loop parity (E10), and the closed loop end to end. No real BAT start, follow-up or Result has been observed.
+pinned to `14c62830240148b14a4d28a9c428f7f8b5ba8bf3`.
+This is the published Connector 0.2.12 / desktop 0.1.8 source through #314 (2026-10-19). It includes the merged Work loop: start, adopt-and-start, a second instruction to the same Work, fixed Results and requested diffs, profiles/readiness, verification, PR delivery and API/MCP parity. This compact gallery shows existing PM views and a read-only manual session; it does not open Start work or the Work Result inspector. Those features require the configured capabilities, BAT host and bound repository. Native coding/AHP routes, full PM lifecycle work and real BAT/model/device acceptance remain separate open work.
 It includes the first-run connection URL flow; repository binding and verification
 are optional collapsed steps. This refresh provides no installation or live evidence.
 CI and browser screenshots do not establish native or live acceptance.
-Keep validation outcomes in the dated [progress report](../docs/product/progress-2026-10-16.md);
+Keep validation outcomes in the [implementation status](../docs/product/implementation-status.md);
 link it from the site. The [October 12 report](../docs/product/progress-2026-10-12.md) retains historical evidence.
 The [handoff](../docs/handoff/2026-10-14-docs-ux-v2.md) has development continuation
 steps, while [PM status](../docs/product/pm-v1.2-status.md) retains the full backlog.

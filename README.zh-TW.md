@@ -4,11 +4,11 @@
 用合成的唯讀專案資料操作正式共用介面：搜尋工作、展開需求、查看交付證據與工作階段。
 展示內另有 v1.3 工作流程預覽，可模擬開始工作、追加修改與驗收決策；兩者都不連線到 BAT 或模型。
 主線上已有真正的「開始工作」面板，它需要已設定的 BAT 主機與已綁定的儲存庫。
-已合併主線 `b44a83ab`（#276–278、#282、#285、#287–301，2026 年 10 月 18 日）接通計畫採用、建立工作、持久第二句、固定成果、驗證與 PR 交付。Workbench 提供手機導航與前景恢復，profile 在開始前顯示路線限制。PM 可討論兩份固定評估、保存接續摘要，並依明確要求判讀總覽；資源頁可讀取另行授權的本機 Codex／Claude 對話。清單先載入摘要，未送指令可留成 Idea；核心 UI 操作共用 HTTP／MCP 契約。Classic 仍為預設。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；真 BAT／模型及實體裝置仍需另行驗收。
+已合併主線 `14c62830`（截至 #314，2026 年 10 月 19 日）接通計畫採用、建立工作、持久第二句、固定成果、驗證與 PR 交付。Workbench 提供手機導航與前景恢復，profile 在開始前顯示路線限制。PM 可討論兩份固定評估、保存接續摘要，並依明確要求判讀總覽；資源頁可讀取另行授權的本機 Codex／Claude 對話。清單先載入摘要，未送指令可留成 Idea；核心 UI 操作共用 HTTP／MCP 契約。Classic 仍為預設。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；真 BAT／模型及實體裝置仍需另行驗收。
 
 **看懂專案、找到問題，與 PM 完成一次決策。**
 
-[English](README.md) · **繁體中文** · [網站](https://ted-h-com.github.io/bat-agent-connector/?lang=zh-TW) · [安裝與開始使用](docs/getting-started.zh-TW.md) · [進度報告](docs/product/progress-2026-10-17.md)
+[English](README.md) · **繁體中文** · [網站](https://ted-h-com.github.io/bat-agent-connector/?lang=zh-TW) · [安裝與開始使用](docs/getting-started.zh-TW.md) · [進度報告](docs/product/implementation-status.md)
 
 Better Agent Dashboard 把專案狀況、PM 討論與決策放在同一個工作空間。
 先看即時總覽，找到問題，再從原紀錄直接與 PM 討論，不必重新整理脈絡。
@@ -20,9 +20,9 @@ Better Agent Dashboard 把專案狀況、PM 討論與決策放在同一個工作
 
 **Web 與 Tauri 桌面版共用介面及 Python 後端。** 你照常在 [Better Agent Terminal（BAT）](https://github.com/tony1223/better-agent-terminal) 開發；Windows Fleet 管理本機連線與啟動，Connector 則讓 Dashboard、CLI、MCP 使用同一份專案歷史、權限和操作紀錄。
 
-> **開發預覽。** 截圖來自已合併的 `main` `265026d4`（2026 年 10 月 16 日，包含 #205）。
+> **開發預覽。** 截圖來自已合併的 `main` `14c62830`（2026 年 10 月 19 日，包含 #314）。
 > 圖庫使用合成資料；發布、安裝與實機驗收分別記錄。
-> [進度報告](docs/product/progress-2026-10-17.md)分開列出分支、合併、安裝與實機驗收狀態。
+> [進度報告](docs/product/implementation-status.md)分開列出分支、合併、安裝與實機驗收狀態。
 > 下載時請核對套件的精確來源；截圖與 CI 不能代替原生或實機驗收。
 
 ## 它幫你回答什麼
@@ -43,7 +43,7 @@ Better Agent Dashboard 把專案狀況、PM 討論與決策放在同一個工作
 | 那個工作階段發生了什麼？ | **工作階段**一起呈現對話與成果；自有工作依權限操作，人工 BAT 工作階段保持唯讀。 |
 
 這些檢視都屬於同一個專案，次要工具需要時再展開。
-[目前範圍](#目前範圍與限制)分開列出已合併工作台與完整 PM v1.2 待辦。[進度報告](docs/product/progress-2026-10-17.md)另列審閱中的工作。
+[目前範圍](#目前範圍與限制)分開列出已合併工作台與完整 PM v1.2 待辦。[進度報告](docs/product/implementation-status.md)另列審閱中的工作。
 
 ## 先試一個小專案
 
@@ -71,7 +71,7 @@ Better Agent Dashboard 把專案狀況、PM 討論與決策放在同一個工作
 
 ## 安裝與連線
 
-下載[已發布預覽版](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.10-preview.20261018)：Connector **0.2.10**、desktop **0.1.6**，固定來源為 `b44a83ab`。包含 Python 套件、Windows／Linux／macOS 桌面包、來源清單與 SHA-256 校驗碼；套件為未簽章或 ad-hoc 簽章的開發預覽。後續候選仍可從 [`main` 的 desktop workflow](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) 取得，須核對成功的平台 job 與精確來源；Actions artifacts 可能到期。
+下載[已發布版本](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.12)：Connector **0.2.12**、desktop **0.1.8**，固定來源為 `14c62830`。包含 Python 套件、Windows／Linux／macOS 桌面包、來源清單與 SHA-256 校驗碼；套件為未簽章或 ad-hoc 簽章的開發預覽。後續候選仍可從 [`main` 的 desktop workflow](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) 取得，須核對成功的平台 job 與精確來源；Actions artifacts 可能到期。
 
 [Connector 自動更新](docs/connector-updates.md)適用於已核對的 Linux 使用者安裝。啟用後每小時檢查已發布版本，更新供下一次啟動使用；既有 MCP、central 與 BAT 程序繼續執行。
 
@@ -121,13 +121,13 @@ flowchart TB
 | 狀態 | 範圍 |
 | --- | --- |
 | 已合併主線 | 桌面／中央底座；PM 討論及計畫採用；工程包及有界派工；驗證、需求接受與依賴證據；政策內維護修復；BAT 提案／Follow-up；AHP 唯讀觀察。#132 補上中央總覽、討論來源與改名、登記表、時程、技術相依及每日資源桶；#134 補上採用後目標、近期決策及問題解決回報引導。 |
-| 已合併工作台 | 已合併主線 `b44a83ab`（#276–278、#282、#285、#287–301，2026 年 10 月 18 日）接通計畫採用、建立工作、持久第二句、固定成果、驗證與 PR 交付。Workbench 提供手機導航與前景恢復，profile 在開始前顯示路線限制。PM 可討論兩份固定評估、保存接續摘要，並依明確要求判讀總覽；資源頁可讀取另行授權的本機 Codex／Claude 對話。清單先載入摘要，未送指令可留成 Idea；核心 UI 操作共用 HTTP／MCP 契約。Classic 仍為預設。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；真 BAT／模型及實體裝置仍需另行驗收。 |
+| 已合併工作台 | 已合併主線 `14c62830`（截至 #314，2026 年 10 月 19 日）接通計畫採用、建立工作、持久第二句、固定成果、驗證與 PR 交付。Workbench 提供手機導航與前景恢復，profile 在開始前顯示路線限制。PM 可討論兩份固定評估、保存接續摘要，並依明確要求判讀總覽；資源頁可讀取另行授權的本機 Codex／Claude 對話。清單先載入摘要，未送指令可留成 Idea；核心 UI 操作共用 HTTP／MCP 契約。Classic 仍為預設。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；真 BAT／模型及實體裝置仍需另行驗收。 |
 | PM v1.2 剩餘工作 | 一般原生 coding adapter、AHP 自建／寫入、其餘文件視圖與簡報、更多 CLI 支援、遠端用量收集與交付效率歸因。 |
 
 已有 Codex／Claude 本機用量收集；這輪 Agent 資源改版補上有來源的每日趨勢與回報配額窗。
 遠端收集與交付效率歸因仍待做。
 缺資料不能當零，觀測 token、API 估價與訂閱配額也不能混算。
-尚未啟用依用量自動改模型的政策。[進度與優先順序](docs/product/progress-2026-10-17.md)。
+尚未啟用依用量自動改模型的政策。[進度與優先順序](docs/product/implementation-status.md)。
 
 正式簽章、Mac 公證、正式更新通道與 Linux 原生憑證持久儲存，已排除於本次交付。實際環境驗收由使用者執行，尚未宣稱通過。[完整 PM v1.2 計畫](docs/product/pm-v1.2-plan.md)仍是範圍依據，M4 是其中一個里程碑。
 
@@ -144,7 +144,7 @@ Connector 對人工 session 與 worktree 保持唯讀。Unknown 資源必須有�
 | 需要 | 入口 |
 | --- | --- |
 | 使用產品 | [首次使用](docs/getting-started.zh-TW.md) · [Windows Fleet](docs/windows.zh-TW.md) |
-| 了解進度 | [進度報告](docs/product/progress-2026-10-17.md) · [PM 狀態](docs/product/pm-v1.2-status.md) · [實作歷史](docs/product/implementation-status.md) |
+| 了解進度 | [進度報告](docs/product/implementation-status.md) · [PM 狀態](docs/product/pm-v1.2-status.md) · [10 月 17 日報告](docs/product/progress-2026-10-17.md) |
 | 接續開發 | [本輪交接](docs/handoff/2026-10-14-docs-ux-v2.md) · [已採用計畫](docs/product/pm-v1.2-plan.md) · [架構決策](docs/product/realignment-v2.md) |
 | 接入 Agent | [Agent skills](docs/agent-skills.md) · [API](docs/design/api-v1.md) · [Protocol](docs/PROTOCOL.md) |
 | 查交付能力 | [Artifacts](docs/design/artifacts.md) · [Delivery](docs/design/delivery.md) · [Cleanup](docs/design/cleanup.md) |
