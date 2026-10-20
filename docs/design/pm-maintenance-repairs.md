@@ -32,7 +32,10 @@ and audit projections are excluded; they cannot alter its historical sources.
 Changes to its request, status, authority or cancellation are still tracked.
 The version is read before opening a fresh source transaction and checked after
 its WAL anchor, so a racing commit cannot label an old proof with a new version.
-The caller's existing transaction remains on the original cold-read path.
+The journal may establish the same proof around its own new `BEGIN IMMEDIATE`:
+read the version before BEGIN, then verify it after anchoring the write snapshot.
+The caller's pre-existing transaction remains on the original cold-read path;
+a nested savepoint cannot turn that older snapshot into a fresh proof.
 
 Only completed, unrefused typed historical booleans are retained, under full
 principal/credential identity and the existing source bounds. Partial grants,

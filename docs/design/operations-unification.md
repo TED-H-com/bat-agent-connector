@@ -92,7 +92,7 @@ relay、fanout/failover 仍有各自副作用與 ownership 合約；不宣稱所
 
 `OpContext.effect` 與原 Journal.tx 的巢狀 savepoint 保存同交易 receipt；沒有 schema migration。task/send linkage 使用 external_refs、command payload 與 operation_steps response，不新增派工資料表。pause local effect 不等待 task lock，abort step 再按 task → session → host → BAT semaphore 順序執行。受信 verifier 在啟動 runner 與保存 evidence 前重查版本；caller 不能以外部 verification 取代它。未知 send 不重送；answer/interrupt 的正面 readback 可交原 coordinator，無法證明的 permissions 保留 uncertain，原 command capability 可作一次性人工對帳。
 
-同一 local effect 交易內，journal 的來源 gate 與同步 callback 共用既有 read memo，避免在未改變的 snapshot 重建同一來源圖。每個 current／final guard 仍執行；第一次寫入使 memo 失效，callback 後續讀取不能沿用寫入前的答案。memo 不跨交易、await、principal／credential 或原 private guard 邊界，也不保存 effect eligibility。
+GitHub observer 的已完成歷史來源證明，可在 journal 自己開啟的 `BEGIN IMMEDIATE` 內重用：版本先在交易外取得，再於交易內 anchor 後驗證。呼叫者原有的較舊交易與 savepoint 不建立這種證明。每個 current／final guard 仍執行；來源、schema 或 bounds 改變後，callback 不能沿用先前答案。這個受版本驗證的 operation memo 保留 principal／credential 與 private guard 邊界，也不保存 effect eligibility；一般 callback 不共用跨寫入的 read memo。
 
 task.verify／task.request_ted 的 paused／state 規則，以及 task.mark_stage 的 verified done 規則，與 principal／capability／engine 檢查分開。admission 沿用原順序與拒絕碼；執行取得 task lock 後，在第一個 effect／receipt intent 前重查 admission binding，再跑同一 state check。等待鎖時版本改變先回 CONTROL_VERSION_CONFLICT；同版本下 task 完成、暫停或失去 verified done 條件仍以 TASK_PAUSED／TASK_STATE_BLOCKED failed。task、verification／delivery、events 與 commands 不變。已有 succeeded receipt 的 worker replay 先回原 receipt，不因後來的 state／version 改變而重做 effect。task.pause／resume 的本機 effect 前沒有 await，交易內重查版本，原 journal 保留 terminal task；pause abort 的等待只發生在 pause receipt 之後。task.command.reconcile 在 task lock 下重讀 command，原 journal 交易再查 uncertain task／command 與 capability，並在最後提交前重查版本，不套用只供派送的 scoped state 規則。
 

@@ -14,6 +14,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 
 _CURRENT = ContextVar('pm_observer_source_history', default=None)
+_TRANSACTION = ContextVar('pm_observer_source_transaction', default=None)
 KINDS = frozenset({'baseline_sources', 'package_sources', 'requirement_sources', 'work_batch_sources',
     'execution_runtime_sources', 'execution_verifier', 'quality_sources', 'workload_sources', 'repair_sources'})
 
@@ -180,6 +181,40 @@ def before(db, bounds):
     except sqlite3.Error:
         history.changed()
         return None  # Unsupported tracking retains the original cold checks.
+
+
+def before_transaction(db):
+    history = _CURRENT.get()
+    if history is None or not history.usable(db) or db.in_transaction:
+        return None
+    from .pm_source_reads import MAX_DEPTH, MAX_NODES
+    return before(db, (MAX_DEPTH, MAX_NODES))
+
+
+def begin_transaction(db, ticket, *, nested):
+    """A journal-owned BEGIN IMMEDIATE establishes a new, anchored read point."""
+    if nested or _CURRENT.get() is None:
+        return None
+    if ticket is not None:
+        db.execute('SELECT name FROM main.sqlite_schema LIMIT 1').fetchone()
+        if not ticket[0].usable(db) or not ticket[0].valid(ticket):
+            ticket = None
+    return _TRANSACTION.set(ticket)
+
+
+def end_transaction(token):
+    if token is not None:
+        _TRANSACTION.reset(token)
+
+
+def transaction_snapshot(db, bounds):
+    ticket = _TRANSACTION.get()
+    if ticket is None or not ticket[0].usable(db):
+        return None
+    if ticket[0].bounds != bounds:
+        ticket[0].changed()
+        return None
+    return ticket  # seed/save recheck the version in this transaction.
 
 
 def seed(ticket, principal):

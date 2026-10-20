@@ -21,7 +21,7 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
-from . import platform_files
+from . import platform_files, pm_source_history
 
 # Latest allocated data step; individual backfills retain their own version gates.
 LATEST_DATA_STEP = 3
@@ -450,8 +450,11 @@ class Journal:
     @contextmanager
     def tx(self):
         nested = self.db.in_transaction
+        source_version = None if nested else pm_source_history.before_transaction(self.db)
         self.db.execute("SAVEPOINT task_effect" if nested else "BEGIN IMMEDIATE")
+        source_token = None
         try:
+            source_token = pm_source_history.begin_transaction(self.db, source_version, nested=nested)
             yield
             self.db.execute("RELEASE task_effect" if nested else "COMMIT")
         except BaseException:
@@ -459,6 +462,8 @@ class Journal:
             if nested:
                 self.db.execute("RELEASE task_effect")
             raise
+        finally:
+            pm_source_history.end_transaction(source_token)
 
     def close(self):
         self.db.close()

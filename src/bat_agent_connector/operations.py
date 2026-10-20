@@ -231,11 +231,7 @@ class OpContext:
         if row is None:
             self.service._step_start(self.operation_id, name, request or {}, local=True,
                                      bookkeeping=receipt_only or lifecycle_bookkeeping)
-        from . import pm_read_cache
-        # The local source gate and callback read the same transaction. Keep
-        # completed reads until the first write; every live/final guard still
-        # executes, and the memo disables itself as soon as total_changes moves.
-        with self.service.journal.tx(), pm_read_cache.scope(self.service.db):
+        with self.service.journal.tx():
             if not receipt_only:
                 from .host_git import require_execution
                 require_execution()

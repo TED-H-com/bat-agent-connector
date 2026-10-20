@@ -10,6 +10,7 @@ from bat_agent_connector import (
     operations,
     pm_lifecycle_gates,
     pm_read_cache,
+    pm_source_history,
     pm_source_lineage,
     pm_source_reads,
     task_journal,
@@ -32,6 +33,8 @@ class PagesChecked(Exception):
 
 async def test_observer_reuses_completed_history_only_while_durable_sources_are_unchanged(ops, monkeypatch):  # noqa: F811
     data = await baseline_history(ops, monkeypatch, 2)
+    # Admission precedes the operation-owned memo; measure the runner itself.
+    op = ops.create(github.OWNER, **github.request(ops, data))[0]
     source, expanded, checked = baselines._project, [], []
 
     def project(*args, **kwargs):
@@ -50,14 +53,13 @@ async def test_observer_reuses_completed_history_only_while_durable_sources_are_
 
     monkeypatch.setattr(baselines, '_project', project)
     monkeypatch.setattr(github.provider.Traversal, 'collect', prefix)
-    op = ops.create(github.OWNER, **github.request(ops, data))[0]
     with pytest.raises(PagesChecked):
         await github.observation._run(OpContext(ops, op))
     assert len(checked) == 12  # Every pre/post GET and receipt guard still executes.
-    # One initial proof plus the three journal gates per page, whose caller's
-    # transaction is deliberately ineligible for reuse across frames. Fresh page
-    # snapshots can prove that their completed historical sources are unchanged.
-    assert len(expanded) <= 10, len(expanded)
+    # Page and journal snapshots prove the same historical source version.
+    # At most the admitted/current caller identities need an initial proof;
+    # neither provider pages nor their receipts rebuild unchanged history.
+    assert len(expanded) <= 2, len(expanded)
     assert len(ops.context['github'].reads) == 3
     assert ops.db.execute('SELECT COUNT(*) FROM pm_github_observations').fetchone()[0] == 0
 
@@ -99,7 +101,7 @@ async def test_observer_bounds_repeated_baseline_sources_per_fresh_page_frame(op
             # These baselines all refer to the same published source and
             # project binding. Their chain metadata still needs verification,
             # but a versioned fresh snapshot may reuse the completed context.
-            # Existing caller transactions still prove it afresh.
+            # Journal-owned fresh snapshots also have a verified read point.
             return result
 
         traversal.check = measured
@@ -118,7 +120,7 @@ async def test_observer_bounds_repeated_baseline_sources_per_fresh_page_frame(op
         with pytest.raises(PagesChecked):
             await github.observation._run(OpContext(ops, op))
     assert len(frames) == 24
-    assert frames == [0, 0, 0, 1] * 6, frames
+    assert frames == [0] * 24, frames
     assert len(ops.context['github'].reads) == 6
     assert ops.db.execute('SELECT COUNT(*) FROM pm_github_observations').fetchone()[0] == 0
 
@@ -175,7 +177,7 @@ async def test_local_effect_and_callback_share_only_unchanged_source_work(ops, m
 
     def check():
         checks.append(1)
-        return pm_source_reads.check(ops.db, github.OWNER, 'test.local_sources', data['workspace_id'], source)
+        return pm_source_reads.check(ops.db, github.OWNER, 'baseline_sources', data['workspace_id'], source)
 
     def required(service, oid):
         guard(service, oid)
@@ -188,7 +190,8 @@ async def test_local_effect_and_callback_share_only_unchanged_source_work(ops, m
         return {'visible': check()}
 
     monkeypatch.setattr(pm_source_lineage, 'require_new_effect', required)
-    assert context.effect('test.local_sources', local) == {'visible': not withdraw}
+    with pm_source_history.operation(ops.db, operation['operation_id']):
+        assert context.effect('test.local_sources', local) == {'visible': not withdraw}
     assert len(checks) == 3  # Admission, local transaction guard and callback all run.
     assert len(proofs) == (3 if withdraw else 2)
     assert context.effect('test.local_sources', lambda: pytest.fail('Receipt replay must not repeat the callback')) == {'visible': not withdraw}

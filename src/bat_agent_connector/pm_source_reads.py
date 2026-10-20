@@ -80,7 +80,8 @@ copied asynchronous context invalidates reuse rather than granting access.
     # Only a fresh transaction can establish a versioned cross-frame proof.
     # A caller's older transaction remains on the original cold-read path.
     history = (pm_source_history.before(db, (MAX_DEPTH, MAX_NODES)) if owned else
-        parent.get('history') if parent and parent['db'] is db else None)
+        parent.get('history') if parent and parent['db'] is db else
+        pm_source_history.transaction_snapshot(db, (MAX_DEPTH, MAX_NODES)))
     if owned:
         db.execute('BEGIN')
     anchor = 'pm_source_read_' + uuid.uuid4().hex
