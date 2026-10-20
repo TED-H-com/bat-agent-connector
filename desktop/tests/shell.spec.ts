@@ -4,6 +4,8 @@ import {workbenchFixture, route, workspaceId, workId} from './pm-workbench-fixtu
 import {workspaceFixture, workspaceProject, workspaceRoute} from './workspace-fixture.ts';
 import {threadId} from './pm-fixture.ts';
 import {openPmSection, revealPmView} from './pm-navigation.ts';
+import {STRINGS} from '../src/i18n.js';
+import {expectHeaderFits, headerFonts, headerStatusLabels, useHeaderFont} from './header-layout';
 function fixture() {
   const pm = workbenchFixture(), work = workspaceFixture();
   const state = {denyBindings: false, offline: false, bindingReads: 0, eventType: 'pm_thread'};
@@ -198,20 +200,37 @@ test('Overview rereads the selected fixed report after leaving for Settings',asy
   await page.locator('[data-pm-report-menu]').click();await page.locator('[data-menu-key=versions]').click();
   await expect(picker).toHaveValue(selected);expect(f.pm.base.state.writes).toHaveLength(0);
 });
-for (const name of ['A workspace with a long descriptive project name that still fits the central name limit', '跨團隊產品改善與長期維護計畫的工作空間名稱，需要在導覽列中完整保留並維持清楚的版面']) test(`long workspace label stays within the mobile topbar: ${name}`,async({page})=>{
-  await page.setViewportSize({width:390,height:844});const f=fixture();
+for (const locale of ['en-US', 'zh-TW']) for (const font of headerFonts) for (const header of ['PM', 'Work'])
+test(`long workspace label stays within the mobile topbar: ${header} ${locale} ${font}`,async({browser}, info)=>{
+  const context=await browser.newContext({locale,viewport:{width:390,height:844}}),page=await context.newPage(),f=fixture();
+  const copy=STRINGS[locale==='zh-TW'?'zh-TW':'en'];
+  const name=locale==='zh-TW'?'跨團隊產品改善與長期維護計畫的工作空間名稱，需要在導覽列中完整保留並維持清楚的版面'
+    :'A workspace with a long descriptive project name that still fits the central name limit';
+  try {
   await mountConversation(page,false,async input=>{
     const result=await f.dispatch(input);
     if(result.data?.workspace?.workspace_id===workspaceId) result.data.workspace.name=name;
     for(const row of result.data?.workspaces||[]) if(row.workspace_id===workspaceId) row.name=name;
     return result;
   });
-  await page.goto(route);const crumb=page.locator('.shell-mobile-name');await expect(crumb).toHaveAttribute('title',name);
+  await page.goto(route);await expect(page.locator('.shell-workspace-block')).toHaveAttribute('data-workspace-id',workspaceId);
+  if(header==='Work') {
+    await page.evaluate(hash=>{location.hash=hash;},workspaceRoute);
+    await expect(page.locator('.conversation .msg')).toHaveCount(2);
+  }
+  await useHeaderFont(page,font);
+  // Capture a real reconnecting state with the long workspace still selected.
+  f.state.offline=true;await expect(page.locator('#live')).toHaveText(copy.ui_reconnecting);
+  const crumb=page.locator('.shell-mobile-name');await expect(crumb).toHaveAttribute('title',name);
   await expect(crumb).toHaveAccessibleName(name);
   const top=await page.locator('.top').boundingBox(), bounds=await crumb.boundingBox();
   expect(top!.height).toBe(48);expect(bounds!.y).toBeGreaterThanOrEqual(top!.y);expect(bounds!.y+bounds!.height).toBeLessThanOrEqual(top!.y+48);
+  await expect(page.locator('#workspace-menu')).toBeVisible();await expect(page.locator('.shell-pending')).toBeVisible();
+  await page.screenshot({path:info.outputPath(`header-${header}-${locale}-${font}.png`)});
+  await expectHeaderFits(page,info,headerStatusLabels(copy));
   await page.locator('#workspace-menu').click();await expect(page.locator('.shell-workspace-block')).toContainText(name);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  } finally { await context.close(); }
 });
 test('missing binding capability is unknown; an accessible empty binding page is known empty',async({page})=>{
   const f=fixture();let supported=false, hiddenProject=false;

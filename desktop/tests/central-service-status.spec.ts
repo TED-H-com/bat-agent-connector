@@ -2,6 +2,7 @@ import {test, expect, type Page} from '@playwright/test';
 import {readFileSync, writeFileSync} from 'node:fs';
 import {STRINGS} from '../src/i18n.js';
 import {conversationFixture, mountConversation} from './conversation-fixture';
+import {expectHeaderFits, headerFonts, headerStatusLabels, useHeaderFont} from './header-layout';
 
 async function baselineAssets(page: Page) {
   if (!process.env.CENTRAL_STATUS_BASELINE) return;
@@ -60,7 +61,7 @@ for (const locale of ['en-US', 'zh-TW']) {
     } finally { release(); await context.close(); }
   });
 
-  test(`failed poll after success agrees on both surfaces at 390px ${locale}`, async ({browser}) => {
+  test(`failed poll after success agrees on both surfaces at 390px ${locale}`, async ({browser}, info) => {
     const context = await browser.newContext({locale, viewport: {width: 390, height: 844}}), page = await context.newPage();
     const fixture = conversationFixture();
     let failed = false;
@@ -68,6 +69,7 @@ for (const locale of ['en-US', 'zh-TW']) {
       ? {status: 503, data: {error: {code: 'UNAVAILABLE', message: 'Events unavailable'}}} : fixture.dispatch(input));
     try {
       await page.goto('/dashboard/#/settings');
+      await useHeaderFont(page, 'DejaVu Sans');
       await expect(page.locator('#live')).toHaveAttribute('data-connection', 'connected');
       failed = true;
       const text = locale === 'zh-TW' ? '重新連線中' : 'Reconnecting';
@@ -77,6 +79,7 @@ for (const locale of ['en-US', 'zh-TW']) {
       await expect(page.locator('.central-service-scope')).toHaveText(locale === 'zh-TW' ? 'Connector：' : 'Connector:');
       expect(await page.locator('.central-service-state').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await expectHeaderFits(page, info);
     } finally { await context.close(); }
   });
 
@@ -122,7 +125,8 @@ for (const locale of ['en-US', 'zh-TW']) {
     } finally { release(); await context.close(); }
   });
 
-  for (const width of [1440, 390]) test(`central scope beside BAT rows ${locale} ${width}`, async ({browser}, info) => {
+  for (const {width, font} of [{width: 1440, font: null}, ...headerFonts.map(font => ({width: 390, font}))])
+    test(`central scope beside BAT rows ${locale} ${width}${font ? ` ${font}` : ''}`, async ({browser}, info) => {
     const context = await browser.newContext({locale, viewport: {width, height: 1000}}), page = await context.newPage();
     await baselineAssets(page);
     const doc = JSON.parse(readFileSync(new URL('./fixtures/fleet-status.golden.json', import.meta.url), 'utf8'));
@@ -141,11 +145,13 @@ for (const locale of ['en-US', 'zh-TW']) {
     }, doc);
     try {
       await page.goto('/dashboard/#/settings');
+      if (font) await useHeaderFont(page, font);
       await page.getByRole('link', {name: /^(Fleet|機群)$/}).click();
       await expect(page.locator('[data-fleet-diagnosis="node-1"]')).toHaveAttribute('data-fleet-state', 'ready');
       // Kept outside Git in the selected Playwright output directory, before assertions
       // so the original misleading header is preserved as evidence too.
       await page.screenshot({path: info.outputPath(`central-fleet-${locale}-${width}.png`)});
+      await expectHeaderFits(page, info, headerStatusLabels(copy));
       await expect.soft(page.locator('#live')).toHaveText(disconnected);
       await expect.soft(page.locator('#live')).toHaveAccessibleName(scoped);
       await expect.soft(page.locator('#live')).toHaveAttribute('title', `${scoped} — ${copy.ui_not_connected_help}`);

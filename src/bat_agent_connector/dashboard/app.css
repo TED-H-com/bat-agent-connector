@@ -1990,7 +1990,7 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .brand-mark { width: 20px; height: 20px; background: var(--accent); border-radius: var(--r-sm); }
 #nav { flex: 1; flex-wrap: nowrap; align-items: center; min-width: 0; gap: var(--space-2); }
 .shell-top-actions { display: flex; align-items: center; gap: var(--space-2); flex: none; margin-left: auto; }
-.central-service-status { display: inline-flex; align-items: center; gap: var(--space-1); min-width: 0; max-width: 45vw; font-size: var(--fs-caption); color: var(--text-2); }
+.central-service-status { display: inline-flex; align-items: center; gap: var(--space-1); min-width: 0; font-size: var(--fs-caption); color: var(--text-2); }
 .central-service-scope { flex: none; white-space: nowrap; }
 .central-service-state { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .live { display: inline-flex; align-items: center; gap: var(--space-1); margin: 0; width: auto; text-decoration: none; font-size: var(--fs-caption); color: var(--text-2); background: var(--surface-2); padding: 2px var(--space-2); border-radius: var(--r-pill); white-space: nowrap; }
@@ -2050,7 +2050,9 @@ body.pm-mode #main { padding: 0; }
   #workspace-menu, .pm-mode #workspace-menu { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; border: 0; background: transparent; }
   .shell-crumb-workspace { max-width: calc(100vw - 112px); white-space: normal; font-weight: 600; text-align: left; }
   #nav > .ui-menu { min-width: 0; }
-  .central-service-status .live { font-size: var(--fs-caption); padding: var(--space-1); background: transparent; min-height: 44px; }
+  /* Crumbs yield first; exceptionally long service labels can use two lines. */
+  .shell-top-actions { flex-shrink: 1; min-width: 0; }
+  .central-service-status .live { font-size: var(--fs-caption); padding: var(--space-1); background: transparent; min-height: 44px; white-space: normal; }
   .live::before { width: 8px; height: 8px; }
   body.has-workspace main, .pm-main { padding: var(--space-4); }
   .workspace-resizer { display: none; }
