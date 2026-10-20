@@ -5,7 +5,10 @@ import json
 import os
 from pathlib import Path
 
-from tests.test_managed_setup import installed, setup_evidence  # noqa: F401 - shared producer fixtures
+from tests import test_managed_setup as producer
+
+installed = producer.installed
+setup_evidence = producer.setup_evidence
 
 GOLDEN = Path(__file__).parent / "fixtures" / "managed-setup-evidence.json"
 
