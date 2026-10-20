@@ -65197,11 +65197,15 @@ async function openDiagnostics() {
 		}
 	});
 }
-async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource) {
+async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource, retainView = false) {
 	withdrawDiagnostics();
 	recentErrors.clear();
-	state.epoch++;
-	state.observations = new Map();
+	const retained = retainView ? {
+		namespace: state.namespace,
+		ready: state.viewReady
+	} : null;
+	if (!retained) state.epoch++;
+	if (!retained) state.observations = new Map();
 	state.connectionError = null;
 	state.online = false;
 	state.pollHealth = "initial";
@@ -65241,6 +65245,13 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
 		state.scopeIdentity = null;
 		state.namespace = storageScope(endpoint, caps.actor);
 		state.lastEvent = 0;
+	}
+	if (retained) {
+		if (state.namespace === retained.namespace) state.viewReady = retained.ready;
+		else {
+			state.epoch++;
+			state.observations = new Map();
+		}
 	}
 	state.online = true;
 }
@@ -66365,7 +66376,7 @@ async function streamEvents() {
 					document.getElementById("main").replaceChildren(h("p", { class: "muted" }, t("sync_waiting")));
 				}
 				try {
-					await activate(state.caps, state.endpoint, true);
+					await activate(state.caps, state.endpoint, true, state.scopeIdentity?.configurationSource, !accessChanged && (editing || typing()));
 					if (!accessChanged && state.namespace === previous.namespace && (editing || typing())) idleReload = route;
 					else await route();
 				} catch {
