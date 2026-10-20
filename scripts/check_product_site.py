@@ -174,8 +174,8 @@ def main() -> None:
         errors.append("Screenshot manifest must pin a full source commit.")
     if manifest.get("source_pin_kind") != "merged":
         errors.append("Public screenshots must use a merged source pin.")
-    if manifest.get("frontend_source_commit") != "265026d4c1fc2bc04a9aaa727d566c1a2906b256":
-        errors.append("Public screenshots must pin merged main at 265026d4.")
+    if manifest.get("frontend_source_commit") != "14c62830240148b14a4d28a9c428f7f8b5ba8bf3":
+        errors.append("Public screenshots must pin merged release source at 14c62830.")
     for entry in manifest["images"]:
         path = SITE / "images" / entry["file"]
         if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != entry["sha256"]:
