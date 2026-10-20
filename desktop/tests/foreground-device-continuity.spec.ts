@@ -75,7 +75,7 @@ for (const native of [false, true]) for (const lang of ['en', 'zh-TW']) for (con
         attempts.push({method: request.method(), path: url.pathname.slice('/api/v1'.length) + url.search, body: request.postDataJSON(), idempotency_key: request.headers()['idempotency-key']});
       });
       page.on('requestfailed', request => failures.push({url: request.url(), error: request.failure()?.errorText}));
-      const operationPosts = () => attempts.filter(row => row.method === 'POST' && row.path === '/operations');
+      const operationPosts = () => attempts.filter(row => row.method === 'POST' && new URL(row.path, 'http://fixture').pathname === '/operations');
       try {
         await openWork(page, f, lang);
         if (native) {
