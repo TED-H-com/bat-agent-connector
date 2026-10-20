@@ -6,7 +6,12 @@ import pytest
 
 from bat_agent_connector import __version__
 from bat_agent_connector.update_install import clean_env
-from scripts.validate_connector_update import ROOT, copy_fixture_source, fixture_build_inputs, installed_build_provenance
+from scripts.validate_connector_update import (
+    ROOT,
+    copy_fixture_source,
+    fixture_build_inputs,
+    installed_build_provenance,
+)
 from tests.package_build import _build_env, _command, _source_repo
 
 
@@ -30,7 +35,7 @@ def test_installed_provenance_does_not_need_the_build_cache(tmp_path):
     home.mkdir(mode=0o700)
     assert not (home / ".cache").exists()
     facts = installed_build_provenance(root, {"version": __version__, "commit": commit},
-                                       home=home, env=clean_env(home))
+                                       env=clean_env(home))
     assert facts == {"identity": {"version": __version__, "commit": commit, "source": "vcs"},
                      "embedded_commit": commit, "vcs_commit": commit}
 

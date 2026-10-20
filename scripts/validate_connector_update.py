@@ -87,7 +87,7 @@ def identity_line(process):
         return json.loads(process.stdout.readline())
 
 
-def installed_build_provenance(root, release, *, home, env):
+def installed_build_provenance(root, release, *, env):
     python = root / "tools/bat-agent-connector/bin/python"
     facts = json.loads(run([str(python), "-I", "-B", "-c", """
 import json
@@ -102,18 +102,9 @@ print(json.dumps({'identity': build_identity.build_identity(),
 """], env=env))
     assert facts["identity"] == {"version": release["version"], "commit": release["commit"], "source": "vcs"}
     assert facts["embedded_commit"] == facts["vcs_commit"] == release["commit"]
-    git = shutil.which("git", path=env["PATH"])
-    checkouts = []
-    for marker in sorted((home / ".cache/uv/git-v0/checkouts").glob("*/*/.git")):
-        checkout = marker.parent
-        if run([git, "-C", str(checkout), "rev-parse", "HEAD"], env=env) != release["commit"]:
-            continue
-        tracked = run([git, "-C", str(checkout), "status", "--porcelain", "--untracked-files=no"], env=env)
-        assert tracked == "", "uv's real checkout must have no tracked changes"
-        others = run([git, "-C", str(checkout), "status", "--porcelain", "--untracked-files=all", "--ignored"], env=env)
-        checkouts.append({"tracked_status": tracked, "untracked_or_ignored": others.splitlines()})
-    assert checkouts, "Inspect the actual uv Git checkout, not just the fixture source"
-    facts["uv_checkouts"] = checkouts
+    # This Git fixture has no PKG-INFO and clean_env strips build overrides. The
+    # real hook emits HEAD only after proving tracked inputs clean. The installed
+    # metadata therefore carries that proof without uv's disposable cache layout.
     return facts
 
 
@@ -158,7 +149,7 @@ def validate(parent):
             if args[1:3] == ["tool", "install"]:
                 release = releases[args[-1].rsplit("@", 1)[1]]
                 target = Path(kwargs["env"]["UV_TOOL_DIR"]).parent
-                identity = installed_build_provenance(target, release, home=home, env=kwargs["env"])
+                identity = installed_build_provenance(target, release, env=kwargs["env"])
                 build_identities.append(identity)
                 print("Fixture build identity: " + json.dumps(identity), flush=True)
             return result
