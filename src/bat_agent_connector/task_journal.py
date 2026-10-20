@@ -18,7 +18,7 @@ import secrets
 import sqlite3
 import time
 import uuid
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from pathlib import Path
 
 from . import platform_files
@@ -111,14 +111,15 @@ class Journal:
                 fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
                 os.close(fd)
             self.path.chmod(0o600)
-        self.db = sqlite3.connect(self.path, isolation_level=None, timeout=30)
         try:
-            # Refuse before WAL settings or DDL can change an unfamiliar journal.
-            recorded = self.db.execute("PRAGMA user_version").fetchone()[0]
-            if recorded > LATEST_DATA_STEP:
-                raise JournalNewerDataStep(recorded)
+            # Even closing a writable reader can checkpoint an unfamiliar WAL into
+            # the main file. Refuse through a read-only connection before any write.
+            with closing(sqlite3.connect(self.path.resolve().as_uri() + "?mode=ro", uri=True, timeout=30)) as reader:
+                recorded = reader.execute("PRAGMA user_version").fetchone()[0]
+                if recorded > LATEST_DATA_STEP:
+                    raise JournalNewerDataStep(recorded)
+            self.db = sqlite3.connect(self.path, isolation_level=None, timeout=30)
         except BaseException:
-            self.db.close()
             if getattr(self, "_storage_directory", None):
                 self._storage_directory.close()
             raise

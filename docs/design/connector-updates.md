@@ -56,7 +56,9 @@ re-enabled, and changes only the package pointer. It never restores or downgrade
 business databases, credentials, host configuration or operation journals.
 Before any journal DDL or migration, the Connector refuses a recorded data step
 greater than its `LATEST_DATA_STEP` with `JOURNAL_NEWER_DATA_STEP`; reopen that
-journal with the newer Connector. Refusal happens before the service binds, so
+journal with the newer Connector. A read-only preflight also prevents a refused
+open from checkpointing a newer writer's WAL into the main database.
+Refusal happens before the service binds, so
 there is no `/api/v1` error response: CLI startup exits 1 with the diagnostic
 on stderr, and a supervised service records the startup failure in its log.
 The managed launcher carries this same bounded diagnostic to the desktop's

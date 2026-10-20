@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import sqlite3
+import subprocess
 import sys
 from contextlib import closing
 
@@ -162,6 +163,28 @@ def test_newer_step_committed_in_wal_is_refused_without_another_commit(tmp_path)
         assert_refusal(refused.value)
         assert snapshot(path) == before
         assert wal.read_bytes() == wal_before
+
+
+def test_refusing_a_crashed_newer_writer_does_not_checkpoint_its_wal(tmp_path):
+    path = tmp_path / "journal.db"
+    subprocess.run([sys.executable, "-c", """
+import os, sys
+from bat_agent_connector.task_journal import Journal, LATEST_DATA_STEP
+journal = Journal(sys.argv[1])
+journal.submit(project='p', host='h1', workspace='w', original_words='Preserve this history',
+               acceptance='preserved', idempotency_key='crashed-newer-writer')
+journal.db.execute(f'PRAGMA user_version={LATEST_DATA_STEP + 1}')
+os._exit(0)  # Simulate a crash, leaving committed WAL frames without a live connection.
+""", str(path)], check=True, timeout=10)
+    before = snapshot(path)
+    wal = path.with_name(path.name + "-wal")
+    wal_before = wal.read_bytes()
+    with pytest.raises(ValueError) as refused:
+        with closing(Journal(path)):
+            pass
+    assert_refusal(refused.value)
+    assert snapshot(path) == before
+    assert wal.read_bytes() == wal_before
 
 
 @pytest.mark.parametrize("command", ["serve", "ensure"])
