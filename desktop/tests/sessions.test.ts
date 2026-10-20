@@ -131,3 +131,40 @@ for (const lang of ['en', 'zh-TW'] as const) {
     assert.equal(t('sessions_id'), lang === 'en' ? 'Session ID' : '工作階段 ID');
   });
 }
+
+// These are real list/detail producer outputs. Raw runtime_status=blocked/exited
+// currently has no typed attention/ended projection; do not invent either fact.
+test('runtime facets retain every producer case without upgrading unknown evidence', async () => {
+  const {readFileSync} = await import('node:fs');
+  const golden = JSON.parse(readFileSync(new URL('../../tests/fixtures/session-runtime.json', import.meta.url), 'utf8'));
+  const {sessionFacets} = await import('../src/state/sessions.js');
+  const expected = {
+    managed_blocked_runtime: ['not_streaming','none',false,'unknown',null],
+    ended_runtime: ['not_streaming','none',false,'unknown',null],
+    unknown_activity: ['unknown','none',false,'unknown',null],
+    streaming_pending_permission: ['streaming','asking_you',false,'active','asking_you'],
+    stale_pending: ['unknown','asking_you',true,'active','asking_you'],
+    managed_pending: ['not_streaming','asking_you',false,'unknown','asking_you'],
+    stale_activity_evidence: ['unknown','none',true,'active','stale'],
+  };
+  for (const [name, values] of Object.entries(expected)) for (const row of [golden[name].listed, golden[name].detail.session]) {
+    const facets = sessionFacets(row);
+    assert.deepEqual([facets.activity,facets.attention,facets.staleness.runtime,facets.lifecycle,sessionStatus(row)], values, name);
+    assert.equal(sessionPill(row)?.status ?? null, values[4]);
+    assert.notEqual(sessionActivity(row).key, row.stale || row.fields_stale ? 'obs_value_streaming' : 'invalid');
+  }
+});
+
+test('existing managed attention and ended input contract retains the single-pill order', async () => {
+  const {sessionFacets} = await import('../src/state/sessions.js');
+  for (const status of ['needs_ted','needs_you','needs_attention','waiting_permission','awaiting_approval','uncertain','blocked','failed','error']) {
+    // Existing sessionStatus inputs, not claimed to be emitted by inventory.
+    const row = {api_access:'managed',status,streaming:false,stale:true};
+    assert.equal(sessionFacets(row).attention, ['failed','error'].includes(status) ? 'failed' : 'needs_you');
+    assert.equal(sessionStatus(row), ['failed','error'].includes(status) ? 'failed' : 'needs_you');
+    assert.equal(sessionStatus({...row,pending:{kind:'permission'}}), 'asking_you');
+    assert.equal(sessionStatus({...row,pending:{kind:'other'}}), 'needs_you');
+  }
+  assert.equal(sessionFacets({streaming:true,state:{lifecycle:'ended'}}).activity, 'not_streaming');
+  assert.equal(sessionStatus({streaming:true,state:{lifecycle:'ended'}}), null);
+});
