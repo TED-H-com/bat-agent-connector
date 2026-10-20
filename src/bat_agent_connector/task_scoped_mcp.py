@@ -3,16 +3,25 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 
 from mcp.server.mcpserver import MCPServer
 from mcp_types import ToolAnnotations
 
+from . import __version__, mcp_identity
 from .task_daemon import request
 
 
 def build(task_id: str) -> MCPServer:
-    mcp = MCPServer(name="bat-task", instructions="Only operate on this one task and its BAT session.")
+    mcp = MCPServer(name="bat-task", version=__version__,
+                    instructions="Only operate on this one task and its BAT session.")
+
+    async def capabilities():
+        return await asyncio.to_thread(request, "api_capabilities", _auth_token=os.environ.get("BATC_API_TOKEN") or None,
+                                       entry="mcp")
+
+    mcp_identity.register(mcp, capabilities)
     ro = ToolAnnotations(read_only_hint=True, open_world_hint=False)
     wr = ToolAnnotations(read_only_hint=False, destructive_hint=False, open_world_hint=False)
 
