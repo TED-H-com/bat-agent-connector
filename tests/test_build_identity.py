@@ -233,9 +233,12 @@ def test_embedded_identity_cannot_identify_a_different_copy(clean_wheel, tmp_pat
     _, _, _, wheel = clean_wheel
     shadow = tmp_path / "different-copy"
     with zipfile.ZipFile(wheel) as archive:
-        archive.extractall(shadow)
+        for name in archive.namelist():
+            if name.startswith("bat_agent_connector/"):
+                archive.extract(name, shadow)
     # The other copy has real embedded metadata too. The installed distribution
-    # still must not identify code imported from that different package path.
+    # (whose dist-info is deliberately not copied) still must not identify code
+    # imported from that different package path.
     assert _installed_identity(wheel, tmp_path, shadow=shadow) == {
         "version": __version__, "commit": None, "source": "package"}
 
