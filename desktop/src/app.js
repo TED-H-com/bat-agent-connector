@@ -91,23 +91,27 @@ async function openDiagnostics() {
       try {desktopBuild=(await nativeStatus()).app_build;} catch { /* Build remains explicitly unknown. */ }
     }
     let caps=null;
-    try {caps=await api('GET','/capabilities');} catch { /* Current caller only; no credential fallback. */ }
+    const read=async(path,scope=null,offered=true,attempted=true)=>{
+      const permitted=!scope || !!caps?.scopes?.includes(scope);
+      if(!attempted || !offered || !permitted)return {attempted,offered,permitted,at:new Date().toISOString()};
+      try {return {data:await api('GET',path),completed:true,at:new Date().toISOString()};}
+      catch(error){return {error:{status:error.status,code:error.code},at:new Date().toISOString()};}
+    };
+    const capabilities=await read('/capabilities');caps=capabilities.data;
     if(epoch!==state.epoch)throw Error('Connection changed');
     if(!caps?.scopes?.includes('observe'))withdrawDiagnostics();
     const revision=diagnosticRevision;
-    const read=async(path,scope)=>{
-      if(!caps?.scopes?.includes(scope))return null;
-      try {const data=await api('GET',path);return revision===diagnosticRevision?data:null;} catch{return null;}
-    };
-    let [hosts,operations,setup]=await Promise.all([
-      read('/hosts','observe'),read('/operations?limit=50','observe'),
-      caps?.managed_installation?read('/managed/setup','manage'):null]);
+    const [hostsRead,operationsRead,setupRead,observationRead]=await Promise.all([
+      read('/hosts','observe',true,!!caps),read('/operations?limit=50','observe',true,!!caps),
+      read('/managed/setup','manage',!!caps?.managed_installation,!!caps),read(null,null,false)]);
     if(epoch!==state.epoch)throw Error('Connection changed');
-    if(revision!==diagnosticRevision)hosts=operations=setup=null;
+    const discarded=revision!==diagnosticRevision;
+    const hosts=discarded?null:hostsRead.data, operations=discarded?null:operationsRead.data, setup=discarded?null:setupRead.data;
     return buildDiagnostics({...diagnosticsClient(caps), exportedAt:new Date().toISOString(),
       hosts:hosts?.hosts, operations:operations?.operations, setup,
       sessions:hosts && caps?.scopes?.includes('observe') && diagnosticSessionsRead ? [...diagnosticSessions.values()] : null,
-      recentErrors:recentErrors.entries(), sources:{capabilities:caps?'available':'not_available',hosts:hosts?'available':'not_available',operations:operations?'available':'not_available',managed_setup:setup?'available':'not_available'}});
+      recentErrors:recentErrors.entries(), sourceReads:{capabilities,hosts:{...hostsRead,discarded},operations:{...operationsRead,discarded},
+        managed_setup:{...setupRead,discarded},observation:observationRead}});
   },save:async(content,filename)=>{
     if(epoch!==state.epoch)throw Error('Connection changed');
     if(nativeDesktop)return nativeDiagnosticsSave({content,filename,locale});
@@ -116,10 +120,13 @@ async function openDiagnostics() {
     setTimeout(()=>URL.revokeObjectURL(url),1000);return true;
   }});
 }
-async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource) {
+async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource, retainView = false) {
   withdrawDiagnostics(); recentErrors.clear();
-  state.epoch++;
-  state.observations = new Map();
+  const retained = retainView ? {namespace: state.namespace, ready: state.viewReady} : null;
+  // A same-identity resnapshot can retain an editing view and its guarded reads.
+  // A different namespace still invalidates every old callback before mounting.
+  if (!retained) state.epoch++;
+  if (!retained) state.observations = new Map();
   state.connectionError = null;
   state.online = false; state.pollHealth = 'initial'; state.viewReady = false;
   state.caps = caps; state.endpoint = endpoint; state.sync = null;
@@ -155,6 +162,10 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
     state.namespace = storageScope(endpoint, caps.actor);
     // A legacy central has no continuity proof; always read current views after reconnect.
     state.lastEvent = 0;
+  }
+  if (retained) {
+    if (state.namespace === retained.namespace) state.viewReady = retained.ready;
+    else {state.epoch++; state.observations = new Map();}
   }
   state.online = true;
 }
@@ -938,8 +949,9 @@ async function streamEvents() {
           document.getElementById("main").replaceChildren(h("p", {class: "muted"}, t("sync_waiting")));
         }
         try {
-          await activate(state.caps, state.endpoint, true);
-          // Keep open forms intact. Mutations wait until refreshed evidence is mounted.
+          await activate(state.caps, state.endpoint, true, state.scopeIdentity?.configurationSource, !accessChanged && (editing || typing()));
+          // Keep open forms and their same-identity guards intact. The event
+          // reader must remain ready to persist the refreshed checkpoint.
           if (!accessChanged && state.namespace === previous.namespace && (editing || typing())) idleReload = route;
           else await route();
         } catch { state.sync = previous.sync; state.viewReady = true; /* retry continuity proof */ }
@@ -2475,8 +2487,11 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   const source = sourceHost && ["execution", "task_command"].includes(sourceKind) && sourceId
     ? {host: sourceHost, kind: sourceKind, id: sourceId} : null;
-  const repo = h("input", { "aria-label": t("delivery_repository_input"), placeholder: "owner/name", value: source ? sourceRepository || "" : sessionStorage.getItem("batc.repo") || "" });
-  const num = h("input", { "aria-label": t("delivery_pr_number"), placeholder: "123", inputmode: "numeric", size: 6, value: source ? "" : sessionStorage.getItem("batc.pr") || "" });
+  // A repository/PR selection can contain private source facts. Legacy globals
+  // have no owner proof, so retain them without adopting them into any identity.
+  const storageKey = `batc.delivery.${connection.namespace}`;
+  const repo = h("input", { "aria-label": t("delivery_repository_input"), placeholder: "owner/name", value: source ? sourceRepository || "" : sessionStorage.getItem(storageKey + ".repo") || "" });
+  const num = h("input", { "aria-label": t("delivery_pr_number"), placeholder: "123", inputmode: "numeric", size: 6, value: source ? "" : sessionStorage.getItem(storageKey + ".pr") || "" });
   const card = h("div", { class: "panel delivery-card" });
   const inputStatus = h("p", {class: "muted", role: "status"});
   const acceptLink = () => {
@@ -2515,7 +2530,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
     const opens = drawerOpens;
     // Explicit PR loads only replace this card; another environment's open panel cannot hold them.
     const holdCard = () => card.querySelector(".drawer:not([hidden])") || (fromEvent && holdRender(true, opens));
-    sessionStorage.setItem("batc.repo", repo.value); sessionStorage.setItem("batc.pr", num.value);
+    sessionStorage.setItem(storageKey + ".repo", repo.value); sessionStorage.setItem(storageKey + ".pr", num.value);
     if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo.value) || !/^[1-9]\d{0,8}$/.test(num.value)) {
       inputStatus.textContent = repo.value || num.value ? t("delivery_choose_pr") : ""; return;
     }

@@ -24,6 +24,8 @@ async def test_managed_bootstrap_matches_shared_golden(tmp_path, managed):
     try:
         status, response = await ApiV1(daemon).bootstrap(principal)
         assert status == 200
+        caps_status, capabilities = await ApiV1(daemon).capabilities(principal)
+        assert caps_status == 200 and capabilities == response["capabilities"]
         identity = {key: response["sync"][key] for key in ("server_id", "principal_id")}
         if managed:
             assert response["capabilities"]["desktop_identity"] == identity

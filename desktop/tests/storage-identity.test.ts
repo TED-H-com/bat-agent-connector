@@ -45,6 +45,8 @@ test('one exact legacy identity copies every scoped key byte for byte and retain
     storage.setItem(`batc.${family}.${old()}.work-start.exact-work.exact-attempt`, JSON.stringify({key: 'original', work: 'original', attempt: 'original'}));
   local.setItem('batc.lang', 'zh-TW');
   local.setItem('batc.draft.unrelated', 'unchanged');
+  session.setItem('batc.repo', 'example/private-legacy-repository');
+  session.setItem('batc.pr', '17');
   const before = [new Map(local.values), new Map(session.values)];
   migrateManagedStorage(identity, local, session);
   for (const [index, storage] of [local, session].entries()) for (const [key, value] of before[index]) {
@@ -54,6 +56,8 @@ test('one exact legacy identity copies every scoped key byte for byte and retain
   const marker = JSON.parse(local.getItem(`batc.storage-migration.${target}`)!);
   assert.equal(marker.source, old());
   assert.equal(marker.status, 'complete');
+  assert.equal(session.getItem(`batc.delivery.${target}.repo`), null, 'global repository has no identity proof');
+  assert.equal(session.getItem(`batc.delivery.${target}.pr`), null, 'global PR has no identity proof');
   // Leave only the receipt: destination occupancy must not be what prevents
   // reimporting a request whose copied data has since been consumed/removed.
   for (const storage of [local, session]) for (const key of [...storage.values.keys()])
@@ -61,6 +65,19 @@ test('one exact legacy identity copies every scoped key byte for byte and retain
   migrateManagedStorage(identity, local, session);
   assert.equal(local.getItem(`batc.draft.${target}.send.demo.session-1`), null, 'a consumed draft must never be resurrected');
   assert.equal(local.getItem(`batc.key.${target}.send.demo.session-1`), null, 'an old operation key must never be reimported');
+});
+
+test('delivery migration copies the real scoped repo/pr keys and never adopts unowned globals', () => {
+  const {local, session} = stores(old());
+  session.setItem(`batc.delivery.${old()}.repo`, 'example/scoped-selection');
+  session.setItem(`batc.delivery.${old()}.pr`, '23');
+  session.setItem('batc.repo', 'example/unowned-selection');
+  session.setItem('batc.pr', '17');
+  const before = new Map(session.values);
+  migrateManagedStorage(identity, local, session);
+  for (const [key, value] of before) assert.equal(session.getItem(key), value);
+  assert.equal(session.getItem(`batc.delivery.${target}.repo`), 'example/scoped-selection');
+  assert.equal(session.getItem(`batc.delivery.${target}.pr`), '23');
 });
 
 for (const field of ['server_id', 'principal_id', 'actor']) test(`migration cannot cross ${field}`, () => {

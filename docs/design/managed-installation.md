@@ -24,6 +24,8 @@ Setup now uses an authenticated active write connection or existing inventory ev
 
 `GET /managed/setup` adds per-host `connection_status` and `connection_checked_at`. `connected` is `null` for unknown reachability. No schema, migration, permission or token-handling changes are introduced. Status is a recent observation, not a continuous network guarantee. Configured installs retain IDs, history, non-secret drafts and original operation keys and never automatically repeat setup.
 
+A succeeded `setup.host` receipt is evidence of that operation's verification and saved configuration at its `updated_at` completion time. When its target host's current row is checking, unreachable or absent, Setup shows that past evidence and time instead of the ready message. Each host row supplies its own current state, observation time when available, and next step. The existing ready copy remains when the receipt's target host is currently connected; without a host receipt, every displayed host must be connected to show it. An unrelated connected host cannot override the configured host's state. This readout makes no additional claim about starting Work and never resubmits setup.
+
 ## First-run visual evidence
 
 Synthetic shared-browser fixtures, identical data and light theme, 1440×900 and 390×844. These are not installed Windows or live BAT acceptance. Before captures use the original `origin/main` UI; after captures use this implementation. Every PNG is under 90 KB.
@@ -100,10 +102,9 @@ must verify the same identity. A successful rebind advances the bridge generatio
 invalidating in-flight responses and file scopes. A native recovery counter triggers
 fresh navigation/shell reads even when restart produces no event; failed views
 retry through the existing deferred-render guards. Failed initial managed reads
-remain eligible for native recovery; an explicit Disconnect disables it. It retains existing drafts,
-event checkpoints and operation keys, and never resends an application mutation.
-Managed `/capabilities` and `/bootstrap` both include `desktop_identity`. A managed
-cursor reset already retained the scope before this namespace correction. An
+remain eligible for native recovery; an explicit Disconnect disables it. Client state
+across recovery/reset follows the [shared managed resnapshot contract](two-service-isolation.md#managed-crashrebind-followed-by-a-producer-reset-m07m08).
+Managed `/capabilities` and `/bootstrap` both include `desktop_identity`. An
 external central may omit that field from bootstrap; the native bridge still
 checks the bootstrap server/principal against its verified credential identity.
 Missing the optional field alone is not evidence of an account change.
@@ -190,16 +191,15 @@ The namespace audit covers these durable families uniformly (names below omit
 | Setup, create, repair, capture and work controls | `managed.setup`, `create`, `repair`, `capture`, `task-control`, `start`, `orchestrate`, `published`, `dispatch` |
 | Resource forms, approvals and cleanup | `labels`, `session-bat`, `permissions`, `artifact-review`, `model-preferences`, `project-skills`, `approvals`, `cleanup.draft`, `cleanup.pending`, `cleanup.intent` |
 | Tab preferences | `tree`, `sessions`, `attention`, `composer-shortcut` |
+| Standalone delivery repository/PR selection | sessionStorage `delivery.<scope>.repo`, `delivery.<scope>.pr` |
 | In-memory view selection and navigation folds | `viewState(namespace, workspaceId, view)` and `pm-workbench` maps, including `project-navigation`; no durable keys to copy |
 
 `ui/view-state.js`, `pm-workbench.js`, project navigation and workbench perspectives use the same new namespace in their
-bounded in-memory maps; they have no durable data to migrate. Language, layout,
-unscoped delivery filters and independently bound native Fleet preferences keep
-their existing keys. Fleet's `desktop.fleet.selection` and `desktop.fleet.controls`
-remain scoped by native configuration binding; `desktop.fleet.bootstrap.original`
-retains its native request/recipe identity. Fleet diagnostic and advanced-panel
-folds are in-memory state reset when that binding changes. None derives from
-`state.namespace` or belongs in the managed migration copy set.
+bounded in-memory maps; they have no durable data to migrate. Delivery selections
+use the same verified scope; the old global `batc.repo` / `batc.pr` hints remain
+untouched and are never adopted because they cannot prove their source. For keys
+outside this namespace and why they may cross sources, use the
+[out-of-namespace key inventory](two-service-isolation.md#every-key-outside-the-connector-namespace).
 Migration does not turn retained native file handles into
 valid handles for a different credential; existing native checks still apply.
 
