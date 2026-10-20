@@ -51,18 +51,21 @@ export function workProfilePicker({t,api,alive,namespace,workspaceId,workId,caps
       else if(next.state==='unavailable'&&next.reason==='action_unavailable')nextKey='wpf_action_unavailable';
       else if(next.state==='requires_attempt'&&next.reason==='owned_attempt_required')nextKey='wpf_next_attempt';
     }
-    const list=h('dl',{class:'pm-work-profile-states'});
+    const list=h('dl',{class:'pm-work-profile-states'}),shownTimes=new Set();
     for(const name of states){
       const state=profileStateFacts(data.states[name]);
-      const value=h('dd',{'data-work-profile-state':name,style:'overflow-wrap:anywhere'},
+      const value=h('dd',{'data-work-profile-state':name},
         h('p',{'data-work-profile-value':''},t(state.valueKey)),
         h('p',{'data-work-profile-reason':''},t(state.reasonKey),' · ',h('code',{},state.reasonCode||t('wpf_reason_absent'))));
       list.append(h('dt',{},t('wpf_'+name)),value);
       const operationLink=op=>h('a',{href:`#/op/${op}`},t('pm_operation'));
       if(state.operationId)value.append(h('p',{},operationLink(state.operationId)));
-      if(state.lastSuccessAt!==null)value.append(h('p',{'data-work-profile-last-success':''},
-        timeLabel(t,'wpf_last_success',{time:timeStamp(state.lastSuccessAt)})));
+      if(state.lastSuccessAt!==null){
+        value.append(h('p',{'data-work-profile-last-success':''},timeLabel(t,'wpf_last_success',{time:timeStamp(state.lastSuccessAt)})));
+        shownTimes.add(state.lastSuccessAt);
+      }
       if(state.past){
+        if(state.past.at!==null)shownTimes.add(state.past.at);
         const past=h('div',{'data-work-profile-past':''},h('p',{},state.past.at===null?t('wpf_last_verified_unknown')
           :timeLabel(t,'wpf_last_verified',{time:timeStamp(state.past.at)}),' · ',t(state.past.valueKey)));
         if(state.past.operationId&&state.past.operationId!==state.operationId)past.append(h('p',{},operationLink(state.past.operationId)));
@@ -77,11 +80,12 @@ export function workProfilePicker({t,api,alive,namespace,workspaceId,workId,caps
         details.push(h('a',{href:gap.fix.ui_hash+(from?'&from='+encodeURIComponent(from):''),onclick:()=>{try{sessionStorage.setItem(returnKey,row.profile_id);}catch{}}},t(action==='setup.host'?'wpf_setup_host':'wpf_setup_repository')));
       }else{
         const key=gap.reason==='git_execution_location_changed'?'wpf_git_changed':gap.reason?.startsWith('local_git_')?'wpf_local_git'
-          :gap.reason==='host_unreachable'?'wpf_reason_host_unreachable':gap.reason==='host_not_refreshed'?'wpf_reason_host_not_refreshed'
+          :['host_unreachable','host_not_refreshed'].includes(gap.reason)?'wpf_gap_observation'
           :gap.reason==='action_unavailable'?'wpf_action_unavailable':'wpf_unverified';
         details.push(h('p',{class:'muted'},t(key)));
       }
-      if(typeof gap.last_success_at==='number'&&Number.isFinite(gap.last_success_at)&&gap.last_success_at>0)details.push(timeStamp(gap.last_success_at));
+      const gapAt=profileTimestamp(gap.last_success_at);
+      if(gapAt!==null&&!shownTimes.has(gapAt))details.push(timeStamp(gapAt));
     }
     const readAt=profileTimestamp(data.observed_at);
     facts.replaceChildren(h('h4',{},t('wpf_coding')),

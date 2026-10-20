@@ -10,8 +10,9 @@ export const profileTimestamp=value=>typeof value==='number'&&Number.isFinite(va
 export function profileStateFacts(state){
   const reason=typeof state?.reason==='string'&&/^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(state.reason)?state.reason:null;
   const past=state?.verified&&typeof state.verified==='object'&&!Array.isArray(state.verified)?state.verified:null;
+  const pastAt=profileTimestamp(past?.observed_at),lastSuccessAt=profileTimestamp(state?.evidence_ref?.last_success_at);
   return {valueKey:valueKey(state?.value),reasonKey:reasons.has(reason)?'wpf_reason_'+reason:'wpf_unverified',reasonCode:reason,
     operationId:operation(state?.evidence_ref?.operation_id),
-    lastSuccessAt:profileTimestamp(state?.evidence_ref?.last_success_at)??profileTimestamp(past?.evidence_ref?.last_success_at),
-    past:past?{valueKey:valueKey(past.value),at:profileTimestamp(past.observed_at),operationId:operation(past.evidence_ref?.operation_id)}:null};
+    lastSuccessAt:lastSuccessAt===pastAt?null:lastSuccessAt,
+    past:past?{valueKey:valueKey(past.value),at:pastAt,operationId:operation(past.evidence_ref?.operation_id)}:null};
 }

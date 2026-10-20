@@ -476,6 +476,7 @@ var init_pm_work_profile_strings = __esmMin((() => {
 			wpf_git_changed: "The Git execution location changed. This check does not suggest another location.",
 			wpf_local_git: "Local Git is not available. Use an SSH host already configured on the Linux BAT.",
 			wpf_observation_only: "This check uses the last observation and does not contact the host.",
+			wpf_gap_observation: "Connector is waiting for the next observation.",
 			wpf_reason_absent: "No reason code reported",
 			wpf_read_at: "Read at {time}",
 			wpf_last_verified: "Last verified {time}",
@@ -544,6 +545,7 @@ var init_pm_work_profile_strings = __esmMin((() => {
 			wpf_git_changed: "Git 執行位置已變更。這次檢查不建議改換執行位置。",
 			wpf_local_git: "本機 Git 不可用。請改用 Linux BAT 上已經設定好的 SSH 主機。",
 			wpf_observation_only: "這次檢查使用上次觀察結果，不會連絡主機。",
+			wpf_gap_observation: "Connector 正在等候下一次觀察結果。",
 			wpf_reason_absent: "未回報原因代碼",
 			wpf_read_at: "讀取時間：{time}",
 			wpf_last_verified: "上次驗證：{time}",
@@ -39142,15 +39144,16 @@ var profileTimestamp = (value) => typeof value === "number" && Number.isFinite(v
 function profileStateFacts(state) {
 	const reason = typeof state?.reason === "string" && /^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(state.reason) ? state.reason : null;
 	const past = state?.verified && typeof state.verified === "object" && !Array.isArray(state.verified) ? state.verified : null;
+	const pastAt = profileTimestamp(past?.observed_at), lastSuccessAt = profileTimestamp(state?.evidence_ref?.last_success_at);
 	return {
 		valueKey: valueKey(state?.value),
 		reasonKey: reasons.has(reason) ? "wpf_reason_" + reason : "wpf_unverified",
 		reasonCode: reason,
 		operationId: operation(state?.evidence_ref?.operation_id),
-		lastSuccessAt: profileTimestamp(state?.evidence_ref?.last_success_at) ?? profileTimestamp(past?.evidence_ref?.last_success_at),
+		lastSuccessAt: lastSuccessAt === pastAt ? null : lastSuccessAt,
 		past: past ? {
 			valueKey: valueKey(past.value),
-			at: profileTimestamp(past.observed_at),
+			at: pastAt,
 			operationId: operation(past.evidence_ref?.operation_id)
 		} : null
 	};
@@ -39277,18 +39280,19 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 			else if (next.state === "unavailable" && next.reason === "action_unavailable") nextKey = "wpf_action_unavailable";
 			else if (next.state === "requires_attempt" && next.reason === "owned_attempt_required") nextKey = "wpf_next_attempt";
 		}
-		const list = h$1("dl", { class: "pm-work-profile-states" });
+		const list = h$1("dl", { class: "pm-work-profile-states" }), shownTimes = new Set();
 		for (const name of states$1) {
 			const state = profileStateFacts(data.states[name]);
-			const value = h$1("dd", {
-				"data-work-profile-state": name,
-				style: "overflow-wrap:anywhere"
-			}, h$1("p", { "data-work-profile-value": "" }, t(state.valueKey)), h$1("p", { "data-work-profile-reason": "" }, t(state.reasonKey), " · ", h$1("code", {}, state.reasonCode || t("wpf_reason_absent"))));
+			const value = h$1("dd", { "data-work-profile-state": name }, h$1("p", { "data-work-profile-value": "" }, t(state.valueKey)), h$1("p", { "data-work-profile-reason": "" }, t(state.reasonKey), " · ", h$1("code", {}, state.reasonCode || t("wpf_reason_absent"))));
 			list.append(h$1("dt", {}, t("wpf_" + name)), value);
 			const operationLink = (op) => h$1("a", { href: `#/op/${op}` }, t("pm_operation"));
 			if (state.operationId) value.append(h$1("p", {}, operationLink(state.operationId)));
-			if (state.lastSuccessAt !== null) value.append(h$1("p", { "data-work-profile-last-success": "" }, timeLabel(t, "wpf_last_success", { time: timeStamp(state.lastSuccessAt) })));
+			if (state.lastSuccessAt !== null) {
+				value.append(h$1("p", { "data-work-profile-last-success": "" }, timeLabel(t, "wpf_last_success", { time: timeStamp(state.lastSuccessAt) })));
+				shownTimes.add(state.lastSuccessAt);
+			}
 			if (state.past) {
+				if (state.past.at !== null) shownTimes.add(state.past.at);
 				const past = h$1("div", { "data-work-profile-past": "" }, h$1("p", {}, state.past.at === null ? t("wpf_last_verified_unknown") : timeLabel(t, "wpf_last_verified", { time: timeStamp(state.past.at) }), " · ", t(state.past.valueKey)));
 				if (state.past.operationId && state.past.operationId !== state.operationId) past.append(h$1("p", {}, operationLink(state.past.operationId)));
 				value.append(past);
@@ -39308,10 +39312,11 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 					}
 				}, t(action === "setup.host" ? "wpf_setup_host" : "wpf_setup_repository")));
 			} else {
-				const key = gap.reason === "git_execution_location_changed" ? "wpf_git_changed" : gap.reason?.startsWith("local_git_") ? "wpf_local_git" : gap.reason === "host_unreachable" ? "wpf_reason_host_unreachable" : gap.reason === "host_not_refreshed" ? "wpf_reason_host_not_refreshed" : gap.reason === "action_unavailable" ? "wpf_action_unavailable" : "wpf_unverified";
+				const key = gap.reason === "git_execution_location_changed" ? "wpf_git_changed" : gap.reason?.startsWith("local_git_") ? "wpf_local_git" : ["host_unreachable", "host_not_refreshed"].includes(gap.reason) ? "wpf_gap_observation" : gap.reason === "action_unavailable" ? "wpf_action_unavailable" : "wpf_unverified";
 				details.push(h$1("p", { class: "muted" }, t(key)));
 			}
-			if (typeof gap.last_success_at === "number" && Number.isFinite(gap.last_success_at) && gap.last_success_at > 0) details.push(timeStamp(gap.last_success_at));
+			const gapAt = profileTimestamp(gap.last_success_at);
+			if (gapAt !== null && !shownTimes.has(gapAt)) details.push(timeStamp(gapAt));
 		}
 		const readAt = profileTimestamp(data.observed_at);
 		facts.replaceChildren(h$1("h4", {}, t("wpf_coding")), ...readAt === null ? [] : [h$1("p", { "data-work-profile-read-at": "" }, timeLabel(t, "wpf_read_at", { time: timeStamp(readAt) }))], h$1("p", {
