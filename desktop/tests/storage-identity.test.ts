@@ -54,9 +54,13 @@ test('one exact legacy identity copies every scoped key byte for byte and retain
   const marker = JSON.parse(local.getItem(`batc.storage-migration.${target}`)!);
   assert.equal(marker.source, old());
   assert.equal(marker.status, 'complete');
-  local.removeItem(`batc.draft.${target}.send.demo.session-1`);
+  // Leave only the receipt: destination occupancy must not be what prevents
+  // reimporting a request whose copied data has since been consumed/removed.
+  for (const storage of [local, session]) for (const key of [...storage.values.keys()])
+    if (key.includes(target) && key !== `batc.storage-migration.${target}`) storage.removeItem(key);
   migrateManagedStorage(identity, local, session);
   assert.equal(local.getItem(`batc.draft.${target}.send.demo.session-1`), null, 'a consumed draft must never be resurrected');
+  assert.equal(local.getItem(`batc.key.${target}.send.demo.session-1`), null, 'an old operation key must never be reimported');
 });
 
 for (const field of ['server_id', 'principal_id', 'actor']) test(`migration cannot cross ${field}`, () => {
