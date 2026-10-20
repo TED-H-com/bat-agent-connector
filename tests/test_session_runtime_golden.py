@@ -38,7 +38,8 @@ async def test_session_runtime_producer_golden(served, mock, monkeypatch):
         row = next(s for s in listing["sessions"] if s["session_id"] == MANUAL)
         status, detail = await http(port, "GET", f"/api/v1/sessions/h1/{MANUAL}", tok=auth)
         assert status == 200, detail
-        select = lambda source: {key: source[key] for key in FIELDS if key in source}
+        def select(source):
+            return {key: source[key] for key in FIELDS if key in source}
         assert select(row) == select(detail["session"])
         cases[name] = {"listed": select(row), "detail": {"session": select(detail["session"])},
                        "observation": work_item_results._observation(d.ops, {"host": "h1", "session_id": MANUAL})}

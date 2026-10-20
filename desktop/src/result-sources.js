@@ -1,9 +1,20 @@
+import {sessionFacets} from './state/sessions.js';
 import {iconButton, emptyState, errorDetails} from './ui/components.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
 import {errorPresentation} from './error-presentation.js';
 const itemHref = item => `#/item/${encodeURIComponent(item.work_item_id)}`;
 const artifactHref = artifact => `#/artifact-review/artifact/${encodeURIComponent(artifact.artifact_id)}/${artifact.revision}`;
 const date = value => timeStamp(value);
+// Link observations use an availability status, not a managed session status.
+// A count records pending work without inventing a permission kind or an action.
+export function resultSourceFacets(observation) {
+  const source = observation || {};
+  const pending = typeof source.pending === 'number'
+    ? source.pending > 0 ? {kind: 'other'} : null : source.pending;
+  return sessionFacets({streaming: source.status === 'available' ? source.streaming : null,
+    pending, stale: source.stale, fields_stale: source.fields_stale, gone_at: source.gone_at});
+}
+
 export function resultSourcesPanel({h, t, api, guard, workItemId, linkTarget, onEvents, errorBox}) {
   let doc = null, serial = 0, children = [], refreshing = null, pressed = null;
   const warning = h('div', {'data-child-warning': ''}), status = h('p', {class: 'muted', role: 'status'}), statusDetails = h('div'), body = h('div');
@@ -24,12 +35,15 @@ export function resultSourcesPanel({h, t, api, guard, workItemId, linkTarget, on
       const row = h('div', {class: 'panel'}, linkTarget(link));
       if (link.note) row.append(h('p', {class: 'muted'}, link.note));
       const observation = link.observation;
-      if (observation) row.append(h('p', {class: 'muted'}, t('results_activity', {
-        state: observation.status !== 'available' || observation.stale || observation.fields_stale || observation.gone_at ? t('obs_unknown')
-          : observation.streaming === true ? t('results_streaming') : observation.pending && typeof observation.pending === 'object' ? t('results_waiting')
-            : typeof observation.pending === 'number' && observation.pending > 0 ? t('results_pending', {count: observation.pending})
-            : observation.streaming === false && (observation.pending === null || observation.pending === 0) ? t('results_no_activity') : t('obs_unknown'),
-        time: date(observation.observed_at)})));
+      if (observation) {
+        const facets = resultSourceFacets(observation);
+        const facts = [t({streaming: 'results_streaming', not_streaming: 'results_no_activity', unknown: 'obs_unknown'}[facets.activity])];
+        if (facets.attention !== 'none') facts.push(t(typeof observation.pending === 'number' ? 'results_pending_observed' : 'results_waiting_observed', {count: observation.pending}));
+        if (facets.staleness.runtime) facts.push(t('results_observation_stale'));
+        if (facets.staleness.gone || facets.staleness.missing) facts.push(t('results_observation_gone'));
+        row.append(h('p', {class: 'muted', 'data-result-runtime-facets': ''}, timeLabel(t, 'results_activity', {
+          state: facts.join(' · '), time: date(observation.observed_at)})));
+      }
       for (const receipt of link.delivered_to || []) row.append(h('p', {class: 'note ok'}, t('results_delivered'), ' ',
         h('a', {href: `https://github.com/${receipt.repository}/pull/${receipt.pull_number}`, target: '_blank', rel: 'noopener'}, `${receipt.repository}#${receipt.pull_number}`),
         ' · ', h('a', {href: `#/op/${encodeURIComponent(receipt.operation_id)}`}, t('results_receipt')), ' · ', h('code', {}, receipt.delivered_sha?.slice(0, 12) || '—')));

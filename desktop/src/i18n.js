@@ -1,3 +1,4 @@
+import {resultSourcesStrings} from './result-sources-strings.js';
 import {externalHistoryStrings} from './pm-external-history-strings.js';
 import {adoptStartStrings} from './pm-adopt-start-strings.js';
 import {workProfileStrings} from './pm-work-profile-strings.js';
@@ -39,6 +40,7 @@ export const STRINGS = {
   "zh-TW": {
     ...FLEET_STRINGS['zh-TW'],
     ...workbenchStrings["zh-TW"],
+    ...resultSourcesStrings["zh-TW"],
     ...externalHistoryStrings["zh-TW"],
     ...diagnosticsStrings["zh-TW"],
     ...workStartStrings["zh-TW"],
@@ -1098,6 +1100,7 @@ export const STRINGS = {
   en: {
     ...FLEET_STRINGS.en,
     ...workbenchStrings.en,
+    ...resultSourcesStrings.en,
     ...externalHistoryStrings.en,
     ...diagnosticsStrings.en,
     ...workStartStrings.en,

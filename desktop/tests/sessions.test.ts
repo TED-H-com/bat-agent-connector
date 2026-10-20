@@ -168,3 +168,27 @@ test('existing managed attention and ended input contract retains the single-pil
   assert.equal(sessionFacets({streaming:true,state:{lifecycle:'ended'}}).activity, 'not_streaming');
   assert.equal(sessionStatus({streaming:true,state:{lifecycle:'ended'}}), null);
 });
+
+test('staleness axes stay independent of attention, lifecycle and unknown activity', async () => {
+  const {sessionFacets} = await import('../src/state/sessions.js');
+  for(const source of [{stale:true},{fields_stale:true},{state:{evidence:{activity:{stale:true}}}},
+    {gone_at:'2026-09-21T14:13:21Z'},{state:{enumeration:'gone'}},{state:{enumeration:'missing'}}]){
+    const facets=sessionFacets({...source,streaming:true,pending:{kind:'ask_user'}});
+    assert.equal(facets.activity,'unknown');assert.equal(facets.attention,'asking_you');
+    assert.equal(Object.values(facets.staleness).some(Boolean),true);
+  }
+  assert.equal(sessionFacets({api_access:'read_only',status:'blocked'}).attention,'none');
+  assert.equal(sessionFacets({api_access:'managed',state:{status:'blocked'}}).attention,'needs_you');
+  assert.equal(sessionFacets({api_access:'managed',state:{status:'failed'}}).attention,'failed');
+});
+
+test('runtime facet copy belongs to each surface and exists in both locales', async () => {
+  const {workbenchStrings} = await import('../src/workbench-strings.js');
+  const {resultSourcesStrings} = await import('../src/result-sources-strings.js');
+  for(const strings of [workbenchStrings,resultSourcesStrings]){
+    assert.deepEqual(Object.keys(strings.en).sort(),Object.keys(strings['zh-TW']).sort());
+    for(const lang of ['en','zh-TW'] as const)for(const [key,value] of Object.entries(strings[lang])){
+      assert.ok(value.trim(),`${lang}: ${key}`);assert.equal(STRINGS[lang][key],value);
+    }
+  }
+});
