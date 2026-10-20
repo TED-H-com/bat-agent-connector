@@ -1,7 +1,7 @@
 """Independent real HTTP/journal + MockBat, following central-fixture.py.
 
 Only listener lifetime and worker scheduling are controlled by stdin. After real
-registry actions seed the fixture, queued UI instructions deliberately stay queued.
+registry actions seed the fixture, admitted UI instructions deliberately stay pending.
 No HTTP response, source identity, receipt or idempotency lookup is substituted.
 """
 from __future__ import annotations
@@ -94,7 +94,7 @@ async def serve(commands, label):
                 **dashboard_sync.identity(daemon.journal, principal), "project_id": project["project_id"],
                 "work_item_id": work["work_item_id"], "workspace_id": workspace["workspace"]["workspace_id"], "port": await bind()}
             print(json.dumps(metadata), flush=True)
-            # Intentionally no ops.loop: the real operation/receipt remains queued.
+            # Intentionally no ops.loop: the real operation/receipt remains pending.
             while line := await commands.get():
                 command = json.loads(line)
                 if command["action"] == "stop":

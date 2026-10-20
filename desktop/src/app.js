@@ -2475,8 +2475,11 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   const source = sourceHost && ["execution", "task_command"].includes(sourceKind) && sourceId
     ? {host: sourceHost, kind: sourceKind, id: sourceId} : null;
-  const repo = h("input", { "aria-label": t("delivery_repository_input"), placeholder: "owner/name", value: source ? sourceRepository || "" : sessionStorage.getItem("batc.repo") || "" });
-  const num = h("input", { "aria-label": t("delivery_pr_number"), placeholder: "123", inputmode: "numeric", size: 6, value: source ? "" : sessionStorage.getItem("batc.pr") || "" });
+  // A repository/PR selection can contain private source facts. Legacy globals
+  // have no owner proof, so retain them without adopting them into any identity.
+  const storageKey = `batc.delivery.${connection.namespace}`;
+  const repo = h("input", { "aria-label": t("delivery_repository_input"), placeholder: "owner/name", value: source ? sourceRepository || "" : sessionStorage.getItem(storageKey + ".repo") || "" });
+  const num = h("input", { "aria-label": t("delivery_pr_number"), placeholder: "123", inputmode: "numeric", size: 6, value: source ? "" : sessionStorage.getItem(storageKey + ".pr") || "" });
   const card = h("div", { class: "panel delivery-card" });
   const inputStatus = h("p", {class: "muted", role: "status"});
   const acceptLink = () => {
@@ -2515,7 +2518,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
     const opens = drawerOpens;
     // Explicit PR loads only replace this card; another environment's open panel cannot hold them.
     const holdCard = () => card.querySelector(".drawer:not([hidden])") || (fromEvent && holdRender(true, opens));
-    sessionStorage.setItem("batc.repo", repo.value); sessionStorage.setItem("batc.pr", num.value);
+    sessionStorage.setItem(storageKey + ".repo", repo.value); sessionStorage.setItem(storageKey + ".pr", num.value);
     if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo.value) || !/^[1-9]\d{0,8}$/.test(num.value)) {
       inputStatus.textContent = repo.value || num.value ? t("delivery_choose_pr") : ""; return;
     }

@@ -20,6 +20,8 @@ const evidence = resolve(process.env.BATC_ISOLATION_EVIDENCE || 'test-results/tw
 await mkdir(evidence, {recursive: true});
 const python = resolve(backend, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
 const children = [], requests = [], snapshots = [], results = [];
+const locales = process.env.BATC_ISOLATION_LOCALE ? [process.env.BATC_ISOLATION_LOCALE] : ['en-US', 'zh-TW'];
+assert.ok(locales.every(locale => ['en-US', 'zh-TW'].includes(locale)), 'Unsupported isolation locale');
 let browser, currentPage;
 
 async function fixture(label) {
@@ -33,8 +35,15 @@ async function fixture(label) {
     return JSON.parse(line.value);
   };
   const control = async (action, data = {}) => {child.stdin.write(JSON.stringify({action, ...data}) + '\n'); return next();};
-  children.push({child, stopped});
-  return {...await next(), control};
+  let stopping;
+  const stop = () => stopping ||= (async () => {
+    if (child.exitCode !== null || child.signalCode) return;
+    child.stdin.end(JSON.stringify({action:'stop'}) + '\n');
+    await Promise.race([stopped, delay(3000, undefined, {ref:false})]);
+    if (child.exitCode === null && !child.signalCode) {child.kill('SIGTERM'); await stopped;}
+  })();
+  children.push({stop});
+  return {...await next(), control, stop};
 }
 
 const origin = service => `http://127.0.0.1:${service.port}`;
@@ -45,6 +54,8 @@ const texts = locale => locale === 'zh-TW' ? {connect:'連線', disconnect:'中�
   reload:'Reload configuration', repository:'Repository or GitHub PR URL', pr:'PR number', load:'Load PR'};
 async function route(page, hash) {await page.evaluate(value => {location.hash = value;}, hash);}
 const composer = page => page.locator('[data-session-view] textarea').first();
+const dom = page => page.evaluate(() => document.documentElement.outerHTML + '\n' +
+  [...document.querySelectorAll('input,textarea,select')].map(input => input.value).join('\n'));
 
 // Capture all network requests, not just writes. Credentials are compared in RAM;
 // evidence records presence and owner, never the actual Bearer token.
@@ -79,7 +90,7 @@ async function checkpoint(page, namespace, service) {
 }
 async function privateDOM(page, own, other) {
   await expect(page.locator('.message-body').filter({hasText:own.marker}).first()).toBeVisible();
-  assert.equal((await page.content()).includes(other.marker), false, 'Other source private fact in DOM');
+  assert.equal((await dom(page)).includes(other.marker), false, 'Other source private fact in DOM');
 }
 async function lists(page, own, other, selectedHost = '') {
   await route(page, '#/sessions');
@@ -156,10 +167,18 @@ async function pass(services, locale, native) {
   const [a, b] = services, run = `${native ? 'native' : 'browser'}-${locale}`, labels = texts(locale);
   const context = await browser.newContext({locale});
   const page = currentPage = await context.newPage(), errors = [];
+  await page.addInitScript(() => {
+    // Retained legacy globals have no source proof. No identity may adopt them.
+    sessionStorage.setItem('batc.repo', 'example/UNOWNED_LEGACY_FACT');
+    sessionStorage.setItem('batc.pr', '99');
+  });
   page.on('pageerror', error => errors.push(error.message));
   let active = a;
-  page.on('request', request => record(services, run, 'browser-http', native ? a : active,
-    request.method(), request.url(), request.headers(), request.postData()));
+  const browserRequests = new WeakMap();
+  context.on('request', request => browserRequests.set(request, record(services, run, 'browser-http', native ? a :
+    new URL(request.url()).origin === origin(active) ? active : services.find(value => origin(value) === new URL(request.url()).origin),
+    request.method(), request.url(), request.headers(), request.postData())));
+  context.on('response', response => {const row = browserRequests.get(response.request()); if (row) row.status = response.status();});
   let setConfiguration;
   if (native) setConfiguration = await nativeBridge(page, services, run, a);
   const namespaces = Object.fromEntries(services.map(value => [value.label, scope(origin(value) + (native ? '/' : ''), value)]));
@@ -169,6 +188,7 @@ async function pass(services, locale, native) {
     await route(page, '#/settings');
     if (!native) await page.locator('input[type=password]').fill(service.token);
     await page.getByRole('button', {name:labels.connect, exact:true}).click();
+    await expect(page).toHaveURL(/#\/home$/);
     await expect(page.locator('#live')).toHaveAttribute('data-connection', 'connected');
     await route(page, session);
     await expect(composer(page)).toBeVisible();
@@ -195,9 +215,11 @@ async function pass(services, locale, native) {
   try {
     await page.goto(origin(a) + '/dashboard/#/settings');
     await connect(a);
+    await snapshot(page, run, 'A-connected', namespaces);
     await lists(page, a, b);
     const draftA = `${a.marker} ${run} draft\n保留原始位元組 ✎`, draftB = `${b.marker} ${run} other draft`;
     await composer(page).fill(draftA);
+    await snapshot(page, run, 'A-typed', namespaces);
     const response = native ? null : page.waitForResponse(value => value.request().method() === 'POST' && value.url().includes('/operations?wait=3'));
     await page.getByRole('button', {name:labels.send, exact:true}).click();
     if (response) assert.equal((await response).status(), 202);
@@ -211,6 +233,7 @@ async function pass(services, locale, native) {
     await page.locator('[data-instruction-receipts] summary').click();
     await expect(page.locator(`[data-instruction-operation="${original.op}"]`)).toHaveCount(1);
     // A standalone delivery selection is also a source-private route/filter.
+    await expect(await delivery(page, labels)).toHaveValue('');
     await delivery(page, labels, `example/${a.marker}`, '17');
     await route(page, session);
     await expect(composer(page)).toHaveValue(draftA);
@@ -225,12 +248,19 @@ async function pass(services, locale, native) {
     await switchTo(a, b);
     await expect(composer(page)).toHaveValue('');
     await privateDOM(page, b, a);
+    const enteredB = await snapshot(page, run, 'B-connected', namespaces);
+    assert.deepEqual(enteredB.A, before.A, 'A namespace changed on entering B');
+    if (native) {
+      await route(page, '#/pm');
+      await expect(page).not.toHaveURL(new RegExp(a.workspace_id));
+    }
     assert.equal(await page.locator(`[data-instruction-operation="${original.op}"]`).count(), 0);
     await lists(page, b, a);
     const inputB = await delivery(page, labels);
     await expect(inputB).toHaveValue('');
     await expect(page.getByRole('textbox', {name:labels.pr, exact:true})).toHaveValue('');
-    assert.equal((await page.content()).includes(a.marker), false);
+    assert.equal((await dom(page)).includes(a.marker), false);
+    assert.equal((await dom(page)).includes('UNOWNED_LEGACY_FACT'), false);
     await route(page, session);
     await expect(composer(page)).toHaveValue('');
     await composer(page).fill(draftB);
@@ -250,6 +280,11 @@ async function pass(services, locale, native) {
     const returned = await snapshot(page, run, 'A-returned', namespaces);
     assert.deepEqual(returned.B, onB.B, 'B namespace changed while on A');
     assert.deepEqual(returned.A, before.A, 'A namespace did not restore byte for byte');
+    if (native) {
+      await route(page, '#/pm');
+      await expect(page.locator('[data-workspace-id]').first()).toHaveAttribute('data-workspace-id', a.workspace_id);
+      await expect(page).toHaveURL(new RegExp(a.workspace_id));
+    }
     await lists(page, a, b, 'h1');
     await expect(await delivery(page, labels)).toHaveValue(`example/${a.marker}`);
     await route(page, session);
@@ -257,6 +292,8 @@ async function pass(services, locale, native) {
     await expect.poll(() => requests.filter(value => value.run === run && value.method === 'POST' && value.idempotency_key === original.key).length).toBe(2);
     await expect.poll(async () => (await pending())[0]?.raw).toBe(original.raw);
     const sends = requests.filter(value => value.run === run && value.method === 'POST' && value.idempotency_key === original.key);
+    await expect.poll(() => sends[1].status).toBe(200);
+    assert.equal(sends[0].status, 202);
     assert.ok(sends.every(value => value.service === 'A' && value.target_endpoint === origin(a)));
     assert.equal(sends[0].body, sends[1].body);
     await checkpoint(page, namespaces.A, a);
@@ -264,6 +301,7 @@ async function pass(services, locale, native) {
     assert.equal((await a.control('report')).sends.length, 0, 'Paused workers must not send to BAT');
     assert.equal((await b.control('report')).instructions.operations.length, 0);
     assert.deepEqual(errors, []);
+    assert.deepEqual(await page.evaluate(() => [sessionStorage.getItem('batc.repo'), sessionStorage.getItem('batc.pr')]), ['example/UNOWNED_LEGACY_FACT', '99']);
     if (native) assert.equal(await page.evaluate(() => [...Object.keys(localStorage), ...Object.keys(sessionStorage)].includes('batc.dashboard.token')), false);
     results.push({run, requests:requests.filter(value => value.run === run).length, snapshots:snapshots.filter(value => value.run === run).length});
     console.log(`${run}: A → B → A, pending original-key replay, private facts, lists, checkpoints and byte-exact storage passed`);
@@ -276,7 +314,7 @@ async function pass(services, locale, native) {
 
 try {
   browser = await chromium.launch();
-  for (const locale of ['en-US', 'zh-TW']) {
+  for (const locale of locales) {
     const services = await Promise.all([fixture('A'), fixture('B')]);
     const [a, b] = services;
     assert.equal(a.actor, b.actor);
@@ -285,7 +323,7 @@ try {
     // Restore independent listeners before the external native configuration run.
     b.port = (await b.control('bind')).port;
     await pass(services, locale, true);
-    for (const service of services) await service.control('stop');
+    await Promise.all(services.map(service => service.stop()));
   }
   console.log(`Two-service isolation: ${results.length} full passes in ${((performance.now() - started) / 1000).toFixed(2)}s`);
 } catch (error) {
@@ -296,11 +334,6 @@ try {
   await writeFile(join(evidence, 'storage.json'), JSON.stringify(snapshots, null, 2) + '\n');
   await writeFile(join(evidence, 'results.json'), JSON.stringify({results, seconds:(performance.now() - started) / 1000}, null, 2) + '\n');
   await browser?.close();
-  for (const {child, stopped} of children) {
-    if (child.exitCode !== null || child.signalCode) continue;
-    child.stdin.end(JSON.stringify({action:'stop'}) + '\n');
-    await Promise.race([stopped, delay(3000, undefined, {ref:false})]);
-    if (child.exitCode === null && !child.signalCode) {child.kill('SIGTERM'); await stopped;}
-  }
+  await Promise.all(children.map(child => child.stop()));
   await rm(scratch, {recursive:true, force:true});
 }

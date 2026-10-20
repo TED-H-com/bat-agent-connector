@@ -40,11 +40,13 @@ test('one exact legacy identity copies every scoped key byte for byte and retain
     'pm.verifier', 'pm.governance.selection', 'pm.meeting-navigation', 'pm.review-navigation', 'managed.setup',
     'create', 'repair', 'capture', 'task-control', 'labels', 'session-bat', 'permissions', 'cleanup.draft',
     'cleanup.pending', 'cleanup.intent', 'approvals', 'start', 'orchestrate', 'published', 'dispatch', 'artifact-review',
-    'model-preferences', 'project-skills', 'tree', 'sessions', 'attention', 'composer-shortcut'];
+    'model-preferences', 'project-skills', 'tree', 'sessions', 'attention', 'composer-shortcut', 'delivery'];
   for (const storage of [local, session]) for (const family of families)
     storage.setItem(`batc.${family}.${old()}.work-start.exact-work.exact-attempt`, JSON.stringify({key: 'original', work: 'original', attempt: 'original'}));
   local.setItem('batc.lang', 'zh-TW');
   local.setItem('batc.draft.unrelated', 'unchanged');
+  session.setItem('batc.repo', 'example/private-legacy-repository');
+  session.setItem('batc.pr', '17');
   const before = [new Map(local.values), new Map(session.values)];
   migrateManagedStorage(identity, local, session);
   for (const [index, storage] of [local, session].entries()) for (const [key, value] of before[index]) {
@@ -54,6 +56,8 @@ test('one exact legacy identity copies every scoped key byte for byte and retain
   const marker = JSON.parse(local.getItem(`batc.storage-migration.${target}`)!);
   assert.equal(marker.source, old());
   assert.equal(marker.status, 'complete');
+  assert.equal(session.getItem(`batc.delivery.${target}.repo`), null, 'global repository has no identity proof');
+  assert.equal(session.getItem(`batc.delivery.${target}.pr`), null, 'global PR has no identity proof');
   // Leave only the receipt: destination occupancy must not be what prevents
   // reimporting a request whose copied data has since been consumed/removed.
   for (const storage of [local, session]) for (const key of [...storage.values.keys()])
