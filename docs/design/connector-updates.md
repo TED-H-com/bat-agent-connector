@@ -71,8 +71,16 @@ Pre-enrollment deployment backups remain available to the operator separately.
 
 ## Read-only rollback compatibility preview
 
-`batc-update rollback --preview` observes the configured local journal;
-`--journal /path/to/tasks.sqlite3` selects an explicit journal for the preview.
+`batc-update rollback --preview` uses the same default journal path as
+`batc serve` without `--db`: `BATC_STATE_DIR/tasks.sqlite3`, or otherwise
+`XDG_STATE_HOME/bat-agent-connector/tasks.sqlite3` (with `~/.local/state` as the
+fallback state root). It does not discover a deployment's `--db` override.
+A deployment started with a different `--db`, including a Fleet recipe's
+`journal_path`, needs `--journal /path/to/journal.db` for its preview.
+Every preview reports the absolute source journal path in `journal.path`, even
+when it cannot be read; `journal.source` is `explicit` for `--journal` or
+`default` for the shared default. This is the selected original file, not the
+temporary snapshot, and does not certify that it belongs to a running deployment.
 Ordinary rollback and managed Desktop downgrade refusal are unchanged. Preview
 is separate from `status` so existing status readers keep their output contract.
 It does not acquire/create an updater lease, reconcile activation, invoke an

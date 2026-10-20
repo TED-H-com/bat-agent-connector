@@ -331,11 +331,14 @@ class Updater:
             return self.status(state)
 
     def rollback_preview(self, *, journal=None):
-        from .config import state_dir
+        from .config import default_journal_path
         from .rollback_compatibility import preview
         # No updater lease/reconciliation: even creating a lease is a mutation.
-        return preview(self.read(), journal=journal if journal is not None else state_dir() / "tasks.sqlite3",
-                       observed_at=timestamp())
+        # Do not resolve symlinks: the snapshot reader must still refuse them.
+        path = (Path(journal) if journal is not None else default_journal_path()).absolute()
+        result = preview(self.read(), journal=path, observed_at=timestamp())
+        result["journal"] = {"path": str(path), "source": "explicit" if journal is not None else "default"}
+        return result
 
     def schedule(self):
         with self.locked():

@@ -146,14 +146,42 @@ async def test_old_build_without_declaration_is_unknown_and_preview_changes_noth
         assert tree_snapshot(service.home) == before
 
 
+@pytest.mark.parametrize("state_override", ["BATC_STATE_DIR", "XDG_STATE_HOME"])
+def test_preview_default_observes_the_daemon_default_and_reports_its_source(
+        deployment, tmp_path, monkeypatch, state_override):
+    from bat_agent_connector.config import Config
+    from bat_agent_connector.task_daemon import TaskDaemon
+
+    service, state = deployment
+    declare_previous(service, state)
+    monkeypatch.delenv("BATC_STATE_DIR", raising=False)
+    monkeypatch.setenv(state_override, str(tmp_path / "configured-state"))
+    directory = tmp_path / "configured-state"
+    if state_override == "XDG_STATE_HOME":
+        directory /= "bat-agent-connector"
+    # Real daemon construction selects its path before opening any service or BAT.
+    daemon = TaskDaemon(Config(hosts={}))
+    assert daemon._db_path == directory / "tasks.sqlite3"
+    with closing(Journal(daemon._db_path)) as journal:
+        before = tree_snapshot(directory), tree_snapshot(service.home)
+        preview = service.rollback_preview()
+        assert preview["journal"] == {"path": str(journal.path.absolute()), "source": "default"}
+        assert preview["facts"]["journal"]["value"]["recorded_data_step"] == LATEST_DATA_STEP
+        assert (tree_snapshot(directory), tree_snapshot(service.home)) == before
+
+
 def test_cli_exposes_an_explicit_read_only_preview(deployment, tmp_path, monkeypatch, capsys):
     service, _ = deployment
     path = tmp_path / "journal.db"
     Journal(path).close()
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(updater, "Updater", lambda: service)
     before = tree_snapshot(service.home)
-    assert updater.main(["rollback", "--preview", "--journal", str(path)]) == 0
-    assert json.loads(capsys.readouterr().out)["verdict"] == "unknown"
+    assert updater.main(["rollback", "--preview", "--journal", path.name]) == 0
+    preview = json.loads(capsys.readouterr().out)
+    assert preview["verdict"] == "unknown"
+    assert preview["journal"] == {"path": str(path), "source": "explicit"}
+    assert preview["facts"]["journal"]["value"]["recorded_data_step"] == LATEST_DATA_STEP
     assert tree_snapshot(service.home) == before
 
 
@@ -324,6 +352,7 @@ async def test_missing_journal_is_unknown_and_never_created(deployment):
     preview = service.rollback_preview(journal=journal)
     assert preview["verdict"] == "unknown"
     assert preview["facts"]["journal"]["reason"] == "JOURNAL_UNREADABLE"
+    assert preview["journal"] == {"path": str(journal), "source": "explicit"}
     assert tree_snapshot(service.home) == before
 
 
