@@ -79,6 +79,11 @@ def state_dir() -> Path:
     return Path(base).expanduser() / APP
 
 
+def default_journal_path() -> Path:
+    """Journal used by a local task daemon without an explicit database path."""
+    return state_dir() / "tasks.sqlite3"
+
+
 def default_config_path() -> Path:
     if os.environ.get("BATC_CONFIG"):
         return Path(os.environ["BATC_CONFIG"]).expanduser()

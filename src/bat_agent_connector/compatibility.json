@@ -1,0 +1,8 @@
+{
+  "format": 1,
+  "journal_max": 3,
+  "newer_journal_fence": true,
+  "operation_support": [],
+  "enrollment_formats": [1],
+  "enrollment_epochs": [1]
+}
