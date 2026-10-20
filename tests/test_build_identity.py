@@ -1,4 +1,9 @@
 import json
+import os
+import shutil
+import subprocess
+import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -54,3 +59,143 @@ def test_bundled_provenance(monkeypatch, tmp_path):
     (tmp_path / "build-info.json").unlink()
     assert build_identity.build_identity()["commit"] is None
     assert build_identity.build_identity()["source"] == "bundled"
+
+
+def _build_env(directory, commit=None):
+    env = dict(os.environ)
+    for key in ("PYTHONPATH", "PYTHONHOME", "BATC_BUILD_COMMIT", "GIT_DIR", "GIT_WORK_TREE",
+                "GIT_INDEX_FILE", "GIT_COMMON_DIR"):
+        env.pop(key, None)
+    scratch = directory / "scratch"
+    scratch.mkdir(exist_ok=True)
+    env["TMPDIR"] = str(scratch)
+    if commit is not None:
+        env["BATC_BUILD_COMMIT"] = commit
+    return env
+
+
+def _command(args, *, cwd, env):
+    result = subprocess.run(args, cwd=cwd, env=env, text=True, capture_output=True)
+    assert result.returncode == 0, f"{args!r}\n{result.stdout}\n{result.stderr}"
+    return result.stdout.strip()
+
+
+def _source_repo(directory, label):
+    """Copy the real build inputs, including the real hook when present."""
+    root = Path(__file__).resolve().parents[1]
+    repo = directory / "source"
+    repo.mkdir()
+    for name in ("pyproject.toml", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "hatch_build.py"):
+        if (root / name).exists():
+            shutil.copy2(root / name, repo / name)
+    for name in ("src", "skills"):
+        shutil.copytree(root / name, repo / name, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    env = _build_env(directory)
+    for args in (["git", "init", "-q"], ["git", "add", "."],
+                 ["git", "-c", "user.name=Build Fixture", "-c", "user.email=build@example.invalid",
+                  "commit", "-qm", label]):
+        _command(args, cwd=repo, env=env)
+    head = _command(["git", "rev-parse", "HEAD"], cwd=repo, env=env)
+    return repo, head
+
+
+def _build(source, directory, mode="wheel", commit=None):
+    out = directory / f"dist-{mode}"
+    started = time.perf_counter()
+    _command(["uv", "build", f"--{mode}", "--python", sys.executable, "--no-python-downloads",
+              "--out-dir", str(out), str(source)], cwd=directory, env=_build_env(directory, commit))
+    print(f"REAL BUILD {directory.name}/{mode}: {time.perf_counter() - started:.3f}s", flush=True)
+    return next(out.glob("*.whl" if mode == "wheel" else "*.tar.gz"))
+
+
+def _installed_identity(artifact, directory, *, frozen=False, shadow=None, commit=None):
+    """An offline, dependency-free install; the resolver itself only needs stdlib."""
+    env = _build_env(directory, commit)
+    target = directory / "installed"
+    _command(["uv", "venv", "--python", sys.executable, "--no-python-downloads", str(target)],
+             cwd=directory, env=env)
+    python = target / "bin" / "python"
+    _command(["uv", "pip", "install", "--python", str(python), "--offline", "--no-deps", str(artifact)],
+             cwd=directory, env=env)
+    script = (
+        "import json, subprocess, sys; "
+        + (f"sys.path.insert(0, {str(shadow)!r}); " if shadow else "")
+        + ("sys.frozen = True; " if frozen else "")
+        + "from bat_agent_connector.build_identity import build_identity; "
+        "subprocess.run = lambda *a, **kw: (_ for _ in ()).throw(AssertionError('runtime process')); "
+        "print(json.dumps(build_identity()))"
+    )
+    # Isolated mode and an unrelated cwd keep the build checkout off sys.path.
+    return json.loads(_command([str(python), "-I", "-c", script], cwd=directory, env=env))
+
+
+@pytest.fixture(scope="module")
+def clean_wheel(tmp_path_factory):
+    directory = tmp_path_factory.mktemp("clean-wheel")
+    repo, head = _source_repo(directory, "clean candidate")
+    wheel = _build(repo, directory)
+    return directory, repo, head, wheel
+
+
+def test_offline_wheel_keeps_candidate_commit(clean_wheel, tmp_path):
+    _, _, head, wheel = clean_wheel
+    assert _installed_identity(wheel, tmp_path) == {
+        "version": __version__, "commit": head, "source": "package"}
+
+
+@pytest.mark.parametrize("mode,override", [
+    ("dirty", None), ("override", "B" * 40), ("malformed", "not-a-commit"),
+    ("too-long", "b" * 64), ("no-git", None), ("archive-override", "b" * 40),
+])
+def test_wheel_build_commit_sources(tmp_path, mode, override):
+    repo, head = _source_repo(tmp_path, mode)
+    if mode == "dirty":
+        with (repo / "README.md").open("a") as stream:
+            stream.write("\nA tracked change after the candidate commit.\n")
+    if mode in {"no-git", "archive-override"}:
+        shutil.rmtree(repo / ".git")
+    wheel = _build(repo, tmp_path, commit=override)
+    expected = {"dirty": None, "no-git": None, "override": "b" * 40,
+                "archive-override": "b" * 40}.get(mode, head)
+    assert _installed_identity(wheel, tmp_path) == {
+        "version": __version__, "commit": expected, "source": "package"}
+
+
+@pytest.mark.parametrize("dirty", [False, True])
+def test_sdist_preserves_provenance_without_borrowing_an_enclosing_checkout(tmp_path, dirty):
+    import tarfile
+
+    repo, head = _source_repo(tmp_path, f"sdist dirty={dirty}")
+    if dirty:
+        (repo / "README.md").write_text("Changed tracked content\n")
+    sdist = _build(repo, tmp_path, "sdist")
+    # uv extracts sdists into its own isolated directory. A wheel built from this
+    # real producer archive must carry the original commit (or unknown).
+    with tarfile.open(sdist) as archive:
+        names = archive.getnames()
+    assert any(name.endswith("pyproject.toml") for name in names)
+    wheel = _build(sdist, tmp_path)
+    assert _installed_identity(wheel, tmp_path) == {
+        "version": __version__, "commit": None if dirty else head, "source": "package"}
+
+
+def test_frozen_resolver_reads_real_build_metadata(clean_wheel, tmp_path):
+    _, _, head, wheel = clean_wheel
+    assert _installed_identity(wheel, tmp_path, frozen=True) == {
+        "version": __version__, "commit": head, "source": "bundled"}
+
+
+def test_embedded_identity_cannot_identify_a_different_copy(clean_wheel, tmp_path):
+    _, repo, _, wheel = clean_wheel
+    assert _installed_identity(wheel, tmp_path, shadow=repo / "src") == {
+        "version": __version__, "commit": None, "source": "package"}
+
+
+@pytest.mark.parametrize("conflict", [False, True])
+def test_real_vcs_install_reconciles_embedded_identity(tmp_path, conflict):
+    repo, head = _source_repo(tmp_path, f"VCS conflict={conflict}")
+    # uv, not the fixture, writes PEP 610 direct_url.json. Any embedded metadata
+    # must likewise come from the actual Hatch build, including the conflict.
+    identity = _installed_identity(f"git+{repo.as_uri()}@{head}", tmp_path,
+                                   commit="b" * 40 if conflict else None)
+    assert identity == {"version": __version__, "commit": None if conflict else head, "source": "vcs"}
