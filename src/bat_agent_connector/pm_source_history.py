@@ -148,7 +148,10 @@ class _History:
         for name in self.triggers:
             self.db.execute('DROP TRIGGER IF EXISTS temp.' + _quoted(name))
         self.triggers.clear()
-        self.db.create_function(self.name, 0, None)
+        # An entry failure can unwind here after BEGIN but before the source
+        # scope's try/finally. ROLLBACK can then restore these TEMP triggers.
+        # Keep their callback inert without retaining this history or its memo.
+        self.db.create_function(self.name, 0, (lambda: 0) if self.db.in_transaction else None)
 
 
 @contextmanager

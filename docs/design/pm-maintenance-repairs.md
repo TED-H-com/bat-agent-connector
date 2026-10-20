@@ -45,7 +45,11 @@ mutable documents and current/final eligibility results never enter this memo.
 Every frame still executes its live policy, scope, parent, authority, cancellation
 and deadline checks. Unknown tracking surfaces (attached databases, TEMP shadow
 tables or virtual tables) retain cold reads. No transaction spans a provider await;
-the tracker, callbacks and bounded memo are discarded when the operation ends.
+the tracker is deactivated and its bounded memo is cleared when the operation ends.
+If scope entry fails with a transaction still open, rollback can restore the
+TEMP triggers dropped during cleanup. In that case their SQL function remains a
+stateless no-op for the connection, so restored triggers cannot break later
+writes. It retains no history and cannot serve a source proof.
 There are no persistent schema changes, user_version allocations, new actions/scopes or receipt changes.
 SQLite defines the [connection-local version counter](https://sqlite.org/pragma.html#pragma_data_version)
 and [TEMP triggers on main tables](https://sqlite.org/lang_createtrigger.html#temp_triggers_on_non_temp_tables).

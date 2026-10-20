@@ -173,6 +173,40 @@ def test_only_observers_exact_bookkeeping_writes_preserve_history(ops, table, ve
         assert check() and len(calls) == (1 if ignored else 2)
 
 
+async def test_observer_scope_entry_failure_cannot_poison_writes_after_rollback(ops, monkeypatch):  # noqa: F811
+    from bat_agent_connector.operations import OpContext
+    from tests import test_pm_github_observation as github
+
+    data = await github.prepared(ops, monkeypatch)
+    op = ops.create(github.OWNER, **github.request(ops, data))[0]
+    closed, close = [], history._History.close
+
+    def captured(self):
+        closed.append((self, self.db.in_transaction))
+        return close(self)
+
+    def unavailable():
+        raise OSError('Synthetic savepoint identity allocation failed')
+
+    monkeypatch.setattr(history._History, 'close', captured)
+    with monkeypatch.context() as entry:
+        # scope() has executed BEGIN but has not entered its try/except yet.
+        # Replace this module's dependency, never the global UUID function.
+        entry.setattr(reads, 'uuid', SimpleNamespace(uuid4=unavailable))
+        with pytest.raises(OSError, match='savepoint identity'):
+            await github.observation._run(OpContext(ops, op))
+    tracker, in_transaction = closed[0]
+    assert len(closed) == 1 and in_transaction and ops.db.in_transaction
+    assert not tracker.active and not tracker.memo
+    ops.db.execute('ROLLBACK')
+    # ROLLBACK restores the TEMP triggers dropped by close(). They must be
+    # inert, rather than calling an unregistered function on the next write.
+    assert ops.db.execute("SELECT 1 FROM temp.sqlite_schema WHERE type='trigger' AND name GLOB ?",
+        (tracker.name + '_*',)).fetchone()
+    ops.db.execute('UPDATE operations SET cancel_requested=1 WHERE operation_id=?', (op['operation_id'],))
+    assert ops.get(op['operation_id'])['cancel_requested']
+
+
 @pytest.fixture
 def db(tmp_path):
     connection = sqlite3.connect(tmp_path / 'source-history.sqlite', isolation_level=None)
