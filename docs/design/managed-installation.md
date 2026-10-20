@@ -276,9 +276,13 @@ Only fixture-owned process handles are terminated for fault-case teardown.
 The receipt records the old producer version/source hashes and the added time,
 which must be at most 60 seconds including cleanup. The source harness can test
 two actual source revisions locally; distinct frozen binaries remain CI evidence
-for their exact platform/head. The POSIX host-script producer runs on Linux and
-macOS native jobs. Windows keeps the existing workspace/identity/busy checks;
-its publication path and real OS-vault continuity remain open acceptance items.
+for their exact platform/head. The POSIX host-script producer has Linux evidence;
+macOS publication continuity remains unproven pending successful native CI. Its
+seed log, fixture setup stages and 40-second thread dump are preserved on failure
+without extending the 45-second readiness wait or the 60-second case budget.
+macOS retains the existing packaged workspace/identity/busy checks. Windows also
+keeps those checks; its publication path and real OS-vault continuity remain open
+acceptance items.
 This is upgrade evidence: managed downgrade refusal remains unchanged, and the
 separate plain-updater rollback cases cannot stand in for a managed rollback.
 

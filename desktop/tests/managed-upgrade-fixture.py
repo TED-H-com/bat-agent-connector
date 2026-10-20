@@ -277,7 +277,7 @@ existing packaged workspace/identity checks; its publication path remains open.
     seed_env = {**os.environ, 'PYTHONPATH': os.pathsep.join([str(previous_source / 'src'), str(previous_source)]), 'TMPDIR': str(root),
         'TMP': str(root), 'TEMP': str(root), 'BATC_UPGRADE_SEED_DATA': str(data),
         'BATC_UPGRADE_SEED_REPORT': str(output), 'BATC_UPGRADE_SEED_MODE': '1'}
-    seed_command = [*(pytest_prefix or [sys.executable, '-m', 'pytest']), '-vv', '-s',
+    seed_command = [*(pytest_prefix or [sys.executable, '-m', 'pytest']), '-vv', '-s', '--setup-show',
         str(Path(__file__).resolve()) + '::test_publication_seed', '--noconftest', '--import-mode=importlib',
         '--rootdir=' + str(previous_source), '--asyncio-mode=auto',
         '-o', 'faulthandler_timeout=40',
