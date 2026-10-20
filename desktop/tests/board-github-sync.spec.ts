@@ -5,7 +5,7 @@ import {demoFixture} from './demo/index.ts';
 import {mountConversation} from './conversation-fixture.ts';
 import {workStartFixture, workspaceId, workId} from './work-start-fixture.ts';
 
-for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test(`GitHub empty board import and repeat sync ${locale} ${native ? 'IPC' : 'HTTP'}`, async ({page}) => {
+for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test(`GitHub empty board import and repeat sync ${locale} ${native ? 'IPC' : 'HTTP'}`, async ({page}, testInfo) => {
   await page.setViewportSize({width: native ? 390 : 1280, height: 900});
   const fixture = demoFixture({locale, managedSession: true}), {ids} = fixture;
   const errors: string[] = [], writes: any[] = [], operations = new Map<string, any>();
@@ -54,7 +54,8 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test(`
   await expect(panel.getByRole('checkbox', {name: locale === 'en' ? 'Keep in sync' : '持續同步'})).toBeChecked();
   await expect(panel.getByRole('checkbox', {name: locale === 'en' ? 'Include closed history' : '包含已關閉的歷史'})).not.toBeChecked();
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(0);
-  const shots = `${process.env.BATC_WORK_VIEW_SCREENSHOTS || process.env.TMPDIR || '/tmp'}/board-github`; await mkdir(shots, {recursive: true});
+  const shots = process.env.BATC_WORK_VIEW_SCREENSHOTS || testInfo.outputPath('board-github');
+  await mkdir(shots, {recursive: true});
   await page.screenshot({path: `${shots}/empty-${locale}-${native ? 'ipc' : 'http'}.png`, fullPage: true});
   await panel.getByRole('button', {name: locale === 'en' ? 'Import from GitHub' : '從 GitHub 匯入', exact: true}).click();
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(1);
