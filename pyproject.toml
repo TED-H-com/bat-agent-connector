@@ -51,6 +51,9 @@ batc-update = "bat_agent_connector.updater:main"
 [project.urls]
 Upstream-BAT = "https://github.com/tony1223/better-agent-terminal"
 
+[tool.hatch.build.hooks.custom]
+path = "hatch_build.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/bat_agent_connector"]
 
