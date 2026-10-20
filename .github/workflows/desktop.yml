@@ -341,7 +341,7 @@ jobs:
       - name: Distinct packaged core upgrade retains identity, workspace and original intents
         working-directory: .
         timeout-minutes: 8
-        run: uv run --locked --extra desktop-build python desktop/tests/managed-upgrade-fixture.py --previous-resources .upgrade-baseline/desktop/managed-runtime --current-resources desktop/managed-runtime --receipt desktop/test-results/packaged-core-upgrade.json
+        run: uv run --locked --extra dev --extra desktop-build python desktop/tests/managed-upgrade-fixture.py --previous-resources .upgrade-baseline/desktop/managed-runtime --current-resources desktop/managed-runtime --previous-source .upgrade-baseline --receipt desktop/test-results/packaged-core-upgrade.json
       - name: Preserve packaged core upgrade evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
