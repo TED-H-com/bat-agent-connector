@@ -147,7 +147,8 @@ async function nativeBridge(page, services, run, initial) {
   const managed = initial.label === 'M', statuses = [], responses = [], attempts = [];
   const gate = () => {let release; const promise = new Promise(resolve => {release = resolve;}); return {promise, release};};
   const status = () => ({endpoint:origin(selected) + '/', expected_actor:selected.actor, configuration_source:managed ? 'managed' : 'external', managed_recovery:recovering ? 'MANAGED_RECOVERING' : null, managed_rebind:rebind,
-    configuration_reload:true, configuration_setup:false, credential_available:true, credential_saved:true,
+    configuration_reload:!managed, configuration_setup:managed, credential_available:true, credential_saved:!managed,
+    credential_source:managed ? 'launch_environment' : 'windows_credential_manager',
     enrollment_supported:false, connected, error:null});
   const http = async (service, input) => {
     attempts.push({method:input.method, path:input.path, idempotency_key:input.idempotency_key || null});
