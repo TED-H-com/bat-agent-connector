@@ -56,7 +56,7 @@ for (const locale of ['en-US', 'zh-TW']) {
     }
   }
 
-  for (const reason of ['view_not_ready', 'reconnecting', 'network_error']) test(`operation POST distinguishes ${reason} ${locale}`, async ({browser}) => {
+  for (const reason of ['view_not_ready', 'service_error', 'network_error']) test(`operation POST distinguishes ${reason} ${locale}`, async ({browser}) => {
     const context = await browser.newContext({locale}), page = await context.newPage();
     await serveGateBaseline(page);
     const fixture = conversationFixture(), id = 'wi_' + 'd'.repeat(20);

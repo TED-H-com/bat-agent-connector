@@ -28,13 +28,36 @@ function managedRecoveryKey(code) {
 }
 //#endregion
 //#region src/central-service-status.js
+function pollFailure(error, at) {
+	const status = Number.isFinite(error.status) ? error.status : 200;
+	const code = error.code || "INVALID_EVENT_PAGE";
+	return {
+		kind: code === "EVENT_CURSOR_RESET" ? "continuity" : status === 401 || status === 403 ? "refused" : status >= 500 ? "service_error" : status === 0 ? "transport" : "invalid_response",
+		status,
+		code,
+		at
+	};
+}
+var pollKeys = {
+	transport: "ui_reconnecting",
+	refused: "ui_connection_refused",
+	service_error: "ui_service_error",
+	invalid_response: "ui_invalid_response",
+	continuity: "ui_connecting"
+};
+var pollReasons = {
+	ui_reconnecting: "reconnecting",
+	ui_connection_refused: "refused",
+	ui_service_error: "service_error",
+	ui_invalid_response: "invalid_response"
+};
 function centralServiceStatus({ token, pollHealth, online, managedRecovery }) {
 	const connection = !token ? "offline" : pollHealth === "connected" || pollHealth === "initial" && online ? "connected" : "reconnecting";
 	const recoveryKey = managedRecoveryKey(managedRecovery);
-	const key = recoveryKey || (!token ? "ui_not_connected" : connection === "connected" ? "ui_connected" : pollHealth === "initial" ? "ui_connecting" : "ui_reconnecting");
+	const key = recoveryKey || (!token ? "ui_not_connected" : connection === "connected" ? "ui_connected" : pollHealth === "initial" ? "ui_connecting" : pollKeys[pollHealth?.kind] || (pollHealth === "reconnecting" ? "ui_reconnecting" : "ui_connecting"));
 	return {
 		key,
-		tone: key === "ui_connected" ? "ok" : key === "ui_reconnecting" ? "warn" : "neutral",
+		tone: key === "ui_connected" ? "ok" : pollReasons[key] ? "warn" : "neutral",
 		connection,
 		recoveryKey
 	};
@@ -48,13 +71,13 @@ function clientActionGate(facts, requirements) {
 	const key = centralServiceStatus(facts).key;
 	return {
 		allowed: false,
-		reason: requirements.post && !facts.token || key === "ui_not_connected" ? "not_connected" : requirements.post && facts.nativeBusy ? "connection_changing" : requirements.supported && !facts.attachmentsSupported ? "attachments_unavailable" : requirements.manage && !facts.manageAllowed ? "manage_required" : requirements.uploads && !facts.uploadsAllowed ? "uploads_not_allowed" : !facts.online && key === "ui_reconnecting" ? "reconnecting" : !facts.online && key === "ui_connecting" ? "connecting" : !facts.viewReady || key === "ui_connected" ? "view_not_ready" : "connecting"
+		reason: requirements.post && !facts.token || key === "ui_not_connected" ? "not_connected" : requirements.post && facts.nativeBusy ? "connection_changing" : requirements.supported && !facts.attachmentsSupported ? "attachments_unavailable" : requirements.manage && !facts.manageAllowed ? "manage_required" : requirements.uploads && !facts.uploadsAllowed ? "uploads_not_allowed" : !facts.online && pollReasons[key] ? pollReasons[key] : !facts.online && key === "ui_connecting" ? "connecting" : !facts.viewReady || key === "ui_connected" ? "view_not_ready" : "connecting"
 	};
 }
 var clientReasons = [
 	"not_connected",
 	"connecting",
-	"reconnecting",
+	...Object.values(pollReasons),
 	"connection_changing",
 	"view_not_ready",
 	"manage_required",
@@ -1626,6 +1649,14 @@ var init_ui_strings = __esmMin((() => {
 			ui_connector_status: "Connector: {status}",
 			ui_not_connected_help: "This window has no Connector session. Go to Settings → Connection and select Connect.",
 			ui_connecting_help: "Connector has not answered yet; actions are paused until it responds.",
+			ui_local_connector: "Local Connector",
+			ui_last_poll: "Last successful poll",
+			ui_connection_refused: "Access refused",
+			ui_service_error: "Service unavailable",
+			ui_invalid_response: "Invalid response",
+			error_code_CLIENT_ACTION_REFUSED: "Connector refused this window’s access; actions are paused. Reconnect in Settings → Connection. If access is still refused, ask the Connector administrator to restore access.",
+			error_code_CLIENT_ACTION_SERVICE_ERROR: "Connector answered with a service error; actions are paused. Wait for the service to recover, then try again.",
+			error_code_CLIENT_ACTION_INVALID_RESPONSE: "Connector returned an invalid event response; actions are paused. Wait for a valid refresh. If this continues, ask the Connector administrator to check the service.",
 			error_code_CLIENT_ACTION_NOT_CONNECTED: "This action needs a Connector session in this window. Connect in Settings → Connection, then try again.",
 			error_code_CLIENT_ACTION_CONNECTING: "This action is waiting for the Connector connection check. Wait for it to finish, then try again.",
 			error_code_CLIENT_ACTION_RECONNECTING: "This action is paused because this window cannot reach Connector. Wait for reconnection, then try again.",
@@ -1723,6 +1754,14 @@ var init_ui_strings = __esmMin((() => {
 			ui_connector_status: "Connector：{status}",
 			ui_not_connected_help: "這個視窗尚未建立 Connector 連線。請前往「設定 → 連線」，按「連線」。",
 			ui_connecting_help: "Connector 尚未回應；回應前暫停操作。",
+			ui_local_connector: "本機 Connector",
+			ui_last_poll: "上次成功輪詢",
+			ui_connection_refused: "存取遭拒",
+			ui_service_error: "服務暫不可用",
+			ui_invalid_response: "回應無效",
+			error_code_CLIENT_ACTION_REFUSED: "Connector 拒絕此視窗的存取，已暫停操作。請到「設定 → 連線」重新連線；若仍遭拒，請 Connector 管理員恢復存取權限。",
+			error_code_CLIENT_ACTION_SERVICE_ERROR: "Connector 已回應服務錯誤，已暫停操作。請等候服務恢復後再試。",
+			error_code_CLIENT_ACTION_INVALID_RESPONSE: "Connector 傳回的事件回應無效，已暫停操作。請等候有效的資料更新；若持續發生，請 Connector 管理員檢查服務。",
 			error_code_CLIENT_ACTION_NOT_CONNECTED: "此操作需要這個視窗的 Connector 連線。請前往「設定 → 連線」按「連線」，再試一次。",
 			error_code_CLIENT_ACTION_CONNECTING: "此操作正在等待 Connector 連線檢查。請等檢查完成後再試一次。",
 			error_code_CLIENT_ACTION_RECONNECTING: "這個視窗目前無法連線至 Connector，已暫停操作。請等重新連線後再試一次。",
@@ -9838,7 +9877,6 @@ var init_i18n = __esmMin((() => {
 			managed_background_help: "Connector 在背景持續運作。關閉這個畫面不會停止工作。",
 			managed_open_browser: "在瀏覽器開啟 Dashboard",
 			managed_start_login: "登入電腦時啟動",
-			managed_browser_connected: "已連線至本機 Connector",
 			managed_browser_help: "此瀏覽器沿用桌面的個人身分。登出後，可從桌面選單重新開啟 Dashboard。",
 			delivery_list_prs: "瀏覽 Pull Requests",
 			delivery_no_prs: "找不到 PR。",
@@ -11527,7 +11565,6 @@ var init_i18n = __esmMin((() => {
 			managed_background_help: "Connector keeps running in the background. Closing this view does not stop work.",
 			managed_open_browser: "Open Dashboard in browser",
 			managed_start_login: "Start when I sign in",
-			managed_browser_connected: "Connected to your local Connector",
 			managed_browser_help: "This browser uses your desktop identity. After signing out, reopen Dashboard from the desktop menu.",
 			workspace_navigation: "Projects and work",
 			workspace_search: "Search loaded projects and work",
@@ -65087,6 +65124,7 @@ var state = {
 	caps: null,
 	lastEvent: 0,
 	lastEventAt: 0,
+	lastPoll: null,
 	listeners: new Set(),
 	namespace: "",
 	scopeIdentity: null,
@@ -66245,7 +66283,7 @@ function paintConnection(waiting = false, paused = false) {
 		notice.querySelector("summary").textContent = t("connection_details");
 		notice.querySelector("code").textContent = state.managedRecovery || "";
 	}
-	const helpKey = recoveryKey ? recoveryKey + "_help" : key === "ui_not_connected" ? "ui_not_connected_help" : key === "ui_connecting" ? "ui_connecting_help" : key === "ui_reconnecting" ? "offline_actions_paused" : paused ? "sync_actions_paused" : waiting ? "sync_waiting" : "desktop_polling";
+	const helpKey = recoveryKey ? recoveryKey + "_help" : key === "ui_not_connected" ? "ui_not_connected_help" : key === "ui_connecting" ? "ui_connecting_help" : key === "ui_reconnecting" ? "offline_actions_paused" : key === "ui_connection_refused" ? "error_code_CLIENT_ACTION_REFUSED" : key === "ui_service_error" ? "error_code_CLIENT_ACTION_SERVICE_ERROR" : key === "ui_invalid_response" ? "error_code_CLIENT_ACTION_INVALID_RESPONSE" : paused ? "sync_actions_paused" : waiting ? "sync_waiting" : "desktop_polling";
 	live.title = scoped + " — " + t(helpKey);
 	for (const paint of [...connectionPainters]) paint();
 }
@@ -66318,7 +66356,10 @@ async function streamEvents() {
 			cycle = { error: null };
 			state.refreshCycle = cycle;
 			const cursor = await consumePageAsync(page, before, (ev) => {
-				return settleRefreshes([...state.listeners].map((fn) => Promise.resolve().then(() => fn(ev))));
+				return settleRefreshes([...state.listeners].map((fn) => Promise.resolve().then(() => fn(ev)))).catch((error) => {
+					cycle.error ||= error;
+					throw error;
+				});
 			});
 			if (epoch !== state.epoch || view !== generation || foreground !== foregroundVersion || !state.viewReady) continue;
 			if (cycle.error) throw cycle.error;
@@ -66328,6 +66369,10 @@ async function streamEvents() {
 			}
 			if (cursor !== state.lastEvent) state.lastEventAt = Date.now();
 			state.lastEvent = cursor;
+			state.lastPoll = {
+				at: Date.now(),
+				namespace: state.namespace
+			};
 			saveCursor();
 			state.refreshCycle = null;
 			updateOnline(true);
@@ -66335,8 +66380,8 @@ async function streamEvents() {
 			if (!page.has_more || cursor <= before) await waitForEventPoll(1e3);
 		} catch (error) {
 			if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
-			if (!pollSucceeded) {
-				state.pollHealth = "reconnecting";
+			if (!pollSucceeded || !cycle?.error) {
+				state.pollHealth = pollFailure(error, Date.now());
 				paintConnection();
 			}
 			if (view !== generation) continue;
@@ -69972,12 +70017,17 @@ function fleetEmpty() {
 function connectionFacts() {
 	const endpoint = state.endpoint || (state.token ? location.origin : "");
 	const stateCell = h("dd");
-	const eventCell = h("dd");
-	const dl = h("dl", { class: "kv global-connection-facts" }, h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"), h("dt", {}, t("global_state")), stateCell, h("dt", {}, t("global_last_event")), eventCell, h("dt", {}, t("connection_access")), connectionAccess());
+	const eventCell = h("dd", { "data-last-event": "" });
+	const pollCell = h("dd", { "data-last-successful-poll": "" });
+	const dl = h("dl", { class: "kv global-connection-facts" }, h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"), h("dt", {}, t("global_state")), stateCell, h("dt", {}, t("global_last_event")), eventCell, h("dt", {}, t("ui_last_poll")), pollCell, h("dt", {}, t("connection_access")), connectionAccess());
 	const render = () => {
 		const { key, tone } = centralServiceStatus(state);
 		stateCell.replaceChildren(h("span", { class: `ui-pill tone-${tone}` }, t(key)));
 		eventCell.replaceChildren(state.lastEventAt ? when(state.lastEventAt) : t("global_no_event"));
+		eventCell.dataset.observedAt = state.lastEventAt ? new Date(state.lastEventAt).toISOString() : "";
+		const pollAt = state.lastPoll?.namespace === state.namespace ? state.lastPoll.at : 0;
+		pollCell.replaceChildren(pollAt ? when(pollAt) : "—");
+		pollCell.dataset.observedAt = pollAt ? new Date(pollAt).toISOString() : "";
 	};
 	render();
 	const paint = () => {
@@ -70130,7 +70180,7 @@ function viewBrowserSettings(main) {
 	const frame = openSettings(main, { exclusive: true });
 	const managed = state.token === browserSessionToken;
 	const facts = connectionFacts();
-	frame.panel("connection").append(h("section", { class: "panel" }, facts, managed ? h("h2", {}, t("managed_browser_connected")) : null, disclosure({
+	frame.panel("connection").append(h("section", { class: "panel" }, facts, managed ? h("h2", {}, t("ui_local_connector")) : null, disclosure({
 		label: t("global_details"),
 		body: h("div", {}, connectionIdentity(), managed ? h("p", {}, t("managed_browser_help")) : null)
 	}), h("button", {
@@ -70216,7 +70266,7 @@ async function viewManagedSettings(main) {
 	const local = h("section", {
 		class: "panel",
 		"data-connection-card": ""
-	}, h("h2", {}, t("managed_browser_connected")), connectionFacts(), disclosure({
+	}, h("h2", {}, t("ui_local_connector")), connectionFacts(), disclosure({
 		label: t("global_details"),
 		body: h("div", {}, connectionIdentity(), h("p", {}, t("managed_background_help")), !nativeDesktop ? h("p", {}, t("managed_browser_help")) : null, h("div", { "data-managed-locations": "" }, h("h3", {}, t("managed_locations")), h("p", { class: "muted" }, t("managed_locations_central")), h("p", { class: "muted" }, t("managed_locations_work"))))
 	}), status);

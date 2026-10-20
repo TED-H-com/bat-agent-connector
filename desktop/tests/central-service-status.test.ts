@@ -2,6 +2,19 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {centralServiceStatus} from '../src/central-service-status.js';
 import {STRINGS} from '../src/i18n.js';
+import * as projection from '../src/central-service-status.js';
+
+import {failedPolls} from './poll-observation-fixture.ts';
+
+for (const [status, code, kind, key] of failedPolls) test(`poll observation retains ${status}/${code}`, () => {
+  assert.equal(typeof (projection as any).pollFailure, 'function');
+  const pollHealth = (projection as any).pollFailure({status, code}, 1234);
+  assert.deepEqual(pollHealth, {kind, status, code, at: 1234});
+  assert.equal(centralServiceStatus({token: 'credential', online: false, pollHealth}).key, key);
+  assert.equal(centralServiceStatus({token: null, online: false, pollHealth}).key, 'ui_not_connected');
+  assert.equal(centralServiceStatus({token: 'credential', online: false, pollHealth,
+    managedRecovery: 'MANAGED_RECOVERING'}).key, 'managed_service_recovering');
+});
 
 test('pending reachability says Connecting in both locales', () => {
   const {key} = centralServiceStatus({token: 'credential', pollHealth: 'initial', online: false});
