@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import {createInterface} from 'node:readline';
 import {resolve} from 'node:path';
+import {writeFileSync} from 'node:fs';
 import {chromium, expect as baseExpect} from '@playwright/test';
 
 const expect = baseExpect.configure({timeout: 30000});
@@ -12,13 +13,24 @@ const f = await receive(), origin = `http://127.0.0.1:${f.port}`;
 const zh = f.locale === 'zh-TW';
 const errors = [], operations = [], requests = [], responses = [], pending = new Map(), results = new Map();
 const resumedOperations = [];
-let browser, page, step = 'start';
+const allRequests = [];
+let browser, context, page, step = 'start', closeRestart = null;
 const launch = async () => {
-  browser = await chromium.launch();
-  const context = await browser.newContext({locale: zh ? 'zh-TW' : 'en-US',
-    viewport: {width: f.width, height: f.width === 390 ? 844 : 900}, reducedMotion: 'reduce'});
+  const options = {locale: zh ? 'zh-TW' : 'en-US',
+    viewport: {width: f.width, height: f.width === 390 ? 844 : 900}, reducedMotion: 'reduce'};
+  if (f.browser_profile) {
+    // Closing the app keeps its origin's storage on disk, as an ordinary
+    // phone/browser close does. Do not copy or reconstruct application state.
+    context = await chromium.launchPersistentContext(f.browser_profile, options);
+    browser = context.browser();
+  } else {
+    browser = await chromium.launch();
+    context = await browser.newContext(options);
+  }
   await context.addInitScript(token => sessionStorage.setItem('batc.dashboard.token', token), f.token);
-  page = await context.newPage();
+  context.on('request', request => allRequests.push({step, method: request.method(), url: request.url(),
+    ...(request.postData() === null ? {} : {body: request.postData()})}));
+  page = context.pages()[0] || await context.newPage();
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {if (message.type() === 'error') console.error(message.text());});
   page.on('request', request => {
@@ -157,6 +169,20 @@ try {
   await page.locator('[data-follow-up-input]').fill(text);
   const queued = await clickOperation('session.send', page.locator('[data-work-section="next-turn"]').getByRole('button', {name: zh ? '送出下一步' : 'Send next', exact: true}));
   await expect(page.locator('[data-follow-up-receipt]')).toContainText(zh ? '排隊中' : 'Queued');
+  const draft = f.browser_profile
+    ? (zh ? '  保留這段尚未送出的草稿。\n還不要送出。📝  ' : '  Keep this unsent draft.\nDo not send yet. 📝  ')
+    : (zh ? '保留這段尚未送出的草稿。' : 'Keep this unsent draft.');
+  let savedDraft;
+  if (f.browser_profile) {
+    send({stage: 'awaiting-admission', operation_id: queued.operation_id});
+    assert.equal((await receive()).admitted, queued.operation_id);
+    await expect(page.locator('[data-follow-up-input]')).toHaveValue('');
+    await page.locator('[data-follow-up-input]').fill(draft);
+    savedDraft = await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.includes('.session.send.')));
+    assert.equal(savedDraft.length, 1);
+    assert.equal(JSON.parse(savedDraft[0][1]).values.text, draft);
+    assert.equal(JSON.parse(savedDraft[0][1]).intent, undefined);
+  }
   await shot('02-queued');
   const layout = await page.locator('.workspace-conversation').evaluate(lane => ({
     readingBottom: Math.max(...[...lane.querySelectorAll('.conversation > .actions > *')]
@@ -166,15 +192,48 @@ try {
   }));
   assert.ok(layout.readingBottom <= layout.nextTop, `Reading controls overlap the next step: ${JSON.stringify(layout)}`);
   assert.ok(layout.overflow <= 1, `Page overflows: ${JSON.stringify(layout)}`);
-  await browser.close(); browser = null;
-  send({stage: 'closed', operation_id: queued.operation_id, instruction: text});
+  if (f.browser_profile) await context.close();
+  else await browser.close();
+  browser = null;
+  send({stage: 'closed', operation_id: queued.operation_id, instruction: text, draft});
   const fixed = await receive();
   assert.equal(fixed.attempt, active.attempt);
   step = 'reconnect';
+  const reconnectStart = allRequests.length;
   await launch();
   await page.goto(workUrl);
   await expect(page.locator('[data-follow-up-receipt]')).toContainText(text);
   await expect(page.locator('[data-follow-up-receipt]')).not.toContainText(zh ? '排隊中' : 'Queued');
+  if (f.browser_profile) {
+    const receipt = page.locator(`[data-follow-up-receipt="${queued.operation_id}"]`);
+    await expect(receipt).toHaveCount(1);
+    await expect(receipt).toHaveAttribute('data-follow-up-state', 'sent');
+    await expect(receipt).toContainText(zh ? '已送出' : 'Sent');
+    await expect(page.locator('[data-follow-up-input]')).toHaveValue(draft);
+    assert.deepEqual(await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.includes('.session.send.'))), savedDraft);
+    const receiptPath = `/api/v1/operations/${queued.operation_id}`;
+    const [reply] = await Promise.all([
+      page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === receiptPath),
+      receipt.locator(`a[href="#/op/${queued.operation_id}"]`).click(),
+    ]);
+    assert.equal(reply.status(), 200);
+    const original = (await reply.json()).operation;
+    assert.equal(original.operation_id, queued.operation_id);
+    assert.equal(original.input_receipt.operation_id, queued.operation_id);
+    assert.equal(original.input_receipt.state, 'sent');
+    await page.goto(workUrl);
+    await expect(page.locator(`[data-follow-up-receipt="${queued.operation_id}"]`)).toHaveAttribute('data-follow-up-state', 'sent');
+    await expect(page.locator('[data-follow-up-input]')).toHaveValue(draft);
+    assert.deepEqual(Buffer.from(await page.locator('[data-follow-up-input]').inputValue()), Buffer.from(draft));
+    const reconnectRequests = allRequests.slice(reconnectStart);
+    const posts = reconnectRequests.filter(row => row.method === 'POST' && new URL(row.url).pathname.startsWith('/api/v1/operations'));
+    assert.deepEqual(posts, [], 'Reconnect reads the original receipt; it must never submit or resume an operation');
+    assert.ok(reconnectRequests.some(row => row.method === 'GET' && new URL(row.url).pathname === receiptPath));
+    writeFileSync(resolve(f.shots, 'reconnect-requests.json'), JSON.stringify(reconnectRequests, null, 2) + '\n');
+    closeRestart = {operation_id: queued.operation_id, receipt_state: original.input_receipt.state,
+      operation_posts: posts.length, draft_utf8: Buffer.from(draft).toString('hex'), same_storage: true};
+    await shot('02-reconnected-draft');
+  }
   if (f.withdraw_writer) {
     step = 'withdrawn-writer';
     await expect(page.locator('[data-follow-up-receipt]')).toContainText(zh ? '目前權限不允許送出此指令；指令尚未送出。' : 'Your current permissions do not allow sending this instruction. It was not sent.');
@@ -199,8 +258,7 @@ try {
     assert.equal(new Set(requests.map(row => row.key)).size, 2);
     send({stage: 'withdrawn', operations, browser: browser.version()});
   } else {
-  const draft = zh ? '保留這段尚未送出的草稿。' : 'Keep this unsent draft.';
-  await page.locator('[data-follow-up-input]').fill(draft);
+  if (!f.browser_profile) await page.locator('[data-follow-up-input]').fill(draft);
   const views = page.locator('[data-workbench-views]');
   for (const name of zh ? ['關聯', '現場', '工作'] : ['Lineage', 'Live', 'Work']) {
     await views.getByRole('tab', {name, exact: true}).click();
@@ -392,7 +450,7 @@ try {
   assert.deepEqual(follow.body.preconditions, {expected_attempt_id: active.attempt});
   assert.equal(requests.at(-1).body.params.candidate_sha, fixed.candidate);
   assert.equal(requests.at(-1).body.params.draft, true);
-  send({stage: 'done', operations, resumed_operations: resumedOperations, browser: browser.version(), discussion_return: selection});
+  send({stage: 'done', operations, resumed_operations: resumedOperations, browser: browser.version(), discussion_return: selection, close_restart: closeRestart});
   }
 } catch (error) {
   console.error(JSON.stringify({step, url: page?.url(), errors, requests, responses, pending: [...pending.values()]}));
@@ -403,6 +461,8 @@ try {
   console.error(error);
   process.exitCode = 1;
 } finally {
-  await browser?.close();
+  writeFileSync(resolve(f.shots, 'browser-requests.json'), JSON.stringify(allRequests, null, 2) + '\n');
+  if (f.browser_profile) await context?.close();
+  else await browser?.close();
   process.stdin.destroy();
 }
