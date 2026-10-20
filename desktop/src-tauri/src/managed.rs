@@ -285,11 +285,31 @@ impl Managed {
             }
             std::thread::sleep(Duration::from_millis(20));
         };
-        if !result.success() || bytes.len() as u64 > MAX_REPLY {
+        if bytes.len() as u64 > MAX_REPLY {
             return Err("MANAGED_RUNTIME_START_FAILED".into());
+        }
+        if !result.success() {
+            return Err(journal_startup_failure(&bytes)
+                .unwrap_or_else(|| "MANAGED_RUNTIME_START_FAILED".into()));
         }
         Ok(bytes)
     }
+}
+
+fn journal_startup_failure(bytes: &[u8]) -> Option<String> {
+    // Reconstruct the one public diagnostic; never forward child messages or paths.
+    let failure: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    if failure.get("protocol")?.as_u64()? != 1
+        || failure.get("error")?.as_str()? != "JOURNAL_NEWER_DATA_STEP"
+    {
+        return None;
+    }
+    let recorded = failure.get("recorded_data_step")?.as_u64()?;
+    let supported = failure.get("supported_data_step")?.as_u64()?;
+    if recorded > i32::MAX as u64 || supported > i32::MAX as u64 {
+        return None;
+    }
+    Some(format!("JOURNAL_NEWER_DATA_STEP: journal records data step {recorded}; this Connector supports up to {supported}; reopen with the newer Connector"))
 }
 
 fn regular(path: &Path) -> Result<fs::Metadata, String> {
@@ -562,6 +582,26 @@ mod tests {
         assert_eq!(state.status.mode, "external");
         assert!(launch.is_none());
         assert!(!data.exists());
+    }
+
+    #[test]
+    fn journal_startup_diagnostic_has_only_the_registered_code_and_numbers() {
+        let mut failure = serde_json::json!({"protocol": 1, "error": "JOURNAL_NEWER_DATA_STEP",
+            "recorded_data_step": 4, "supported_data_step": 3,
+            "message": "private-provider-diagnostic"});
+        assert_eq!(journal_startup_failure(&serde_json::to_vec(&failure).unwrap()).unwrap(),
+            "JOURNAL_NEWER_DATA_STEP: journal records data step 4; this Connector supports up to 3; reopen with the newer Connector");
+        for invalid in [
+            serde_json::json!(true),
+            serde_json::json!(-1),
+            serde_json::json!(2147483648_u64),
+        ] {
+            failure["recorded_data_step"] = invalid;
+            assert!(journal_startup_failure(&serde_json::to_vec(&failure).unwrap()).is_none());
+        }
+        failure["recorded_data_step"] = serde_json::json!(4);
+        failure["error"] = serde_json::json!("UNKNOWN_FAILURE");
+        assert!(journal_startup_failure(&serde_json::to_vec(&failure).unwrap()).is_none());
     }
 
     #[test]

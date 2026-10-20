@@ -18,13 +18,26 @@ import secrets
 import sqlite3
 import time
 import uuid
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from pathlib import Path
 
 from . import platform_files
 
 # Latest allocated data step; individual backfills retain their own version gates.
 LATEST_DATA_STEP = 3
+
+
+class JournalNewerDataStep(ValueError):
+    """This Connector cannot safely write a journal advanced by a newer build."""
+
+    code = "JOURNAL_NEWER_DATA_STEP"
+
+    def __init__(self, recorded: int):
+        self.recorded = recorded
+        super().__init__(f"{self.code}: journal records data step {recorded}; "
+                         f"this Connector supports up to {LATEST_DATA_STEP}; "
+                         "reopen with the newer Connector")
+
 
 STATES = frozenset({
     "queued", "dispatching", "accepted", "running", "waiting_permission",
@@ -98,7 +111,18 @@ class Journal:
                 fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
                 os.close(fd)
             self.path.chmod(0o600)
-        self.db = sqlite3.connect(self.path, isolation_level=None, timeout=30)
+        try:
+            # Even closing a writable reader can checkpoint an unfamiliar WAL into
+            # the main file. Refuse through a read-only connection before any write.
+            with closing(sqlite3.connect(self.path.resolve().as_uri() + "?mode=ro", uri=True, timeout=30)) as reader:
+                recorded = reader.execute("PRAGMA user_version").fetchone()[0]
+                if recorded > LATEST_DATA_STEP:
+                    raise JournalNewerDataStep(recorded)
+            self.db = sqlite3.connect(self.path, isolation_level=None, timeout=30)
+        except BaseException:
+            if getattr(self, "_storage_directory", None):
+                self._storage_directory.close()
+            raise
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA journal_mode=WAL")
         # Intent must survive a host crash before the network dispatch begins.

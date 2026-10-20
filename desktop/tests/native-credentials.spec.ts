@@ -35,6 +35,21 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [1440, 390]) {
   });
 }
 
+for (const locale of ['en-US', 'zh-TW']) test(`newer journal startup refusal ${locale}`, async ({browser}) => {
+  const context = await browser.newContext({locale, viewport: {width: 390, height: 844}});
+  const page = await context.newPage();
+  const diagnostic = 'JOURNAL_NEWER_DATA_STEP: journal records data step 4; this Connector supports up to 3; reopen with the newer Connector';
+  await setup(page, {setup: true, configurationSource: 'managed', startupError: diagnostic});
+  const error = page.locator('.native-connection [data-api-error]');
+  await expect(error.locator('[data-error-summary]')).toHaveText(locale === 'zh-TW'
+    ? '這份紀錄需要較新的 Connector。請使用較新的 Connector 重新開啟，既有資料已保留。'
+    : 'These records need a newer Connector. Reopen with the newer Connector; existing data is preserved.');
+  await error.locator('summary').click();
+  await expect(error.locator('[data-error-details]')).toContainText(diagnostic);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await context.close();
+});
+
 async function setup(page: any, options: any = {}) {
   await page.addInitScript((options: any) => {
     const caps = (principal: string) => ({actor: 'fixture-operator', scopes: ['observe', 'operate'], api_version: 1,
