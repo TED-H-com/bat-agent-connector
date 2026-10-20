@@ -145,3 +145,4 @@ async def test_pm_effective_route_matches_producer_golden(pm, mock, tmp_path, mo
     assert [row["reason"] for row in bundle["unset_blocked"]["workspace"]["effective_pm_route"]["adapters"]] == [
         "PM_NATIVE_PLATFORM_UNSUPPORTED", "PM_WORKTREE_REQUIRED"]
     assert bundle == json.loads(GOLDEN.read_text(encoding="utf-8"))
+    assert raw == GOLDEN.read_text(encoding="utf-8")
