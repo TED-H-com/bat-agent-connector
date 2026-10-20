@@ -1,4 +1,5 @@
 import {operationStatusLabel} from './global-labels.js';
+import {timeLabel, timeStamp} from './ui/stamps.js';
 // BAT v3.2.15 renderer/src/utils/connection-url.ts grammar. Trust comes from
 // BAT's own copied fingerprint, never a network probe or a loopback assumption.
 export function normalizeSetupFingerprint(value) {
@@ -33,6 +34,19 @@ export const validSetupHostId = value => /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.tes
 export function setupConnectionStatus(host) {
   return ['connected', 'checking', 'unreachable'].includes(host.connection_status) ? host.connection_status
     : host.connected === true ? 'connected' : 'checking';
+}
+// A successful receipt records past verification, not current reachability.
+export function setupStatusLine({busy = false, operation = null, hosts = [], readReady = false}) {
+  if (busy) return {key: 'setup_checking'};
+  if (operation?.status === 'succeeded' && operation.action === 'setup.host') {
+    const host = hosts.find(row => row.name === operation.target?.host);
+    if (readReady && host && setupConnectionStatus(host) === 'connected') return {key: 'setup_ready'};
+    // updated_at is the succeeded receipt's completion time, not the inventory time.
+    return {key: 'setup_verified_saved', verifiedAt: operation.updated_at};
+  }
+  if (readReady && hosts.length && hosts.every(row => setupConnectionStatus(row) === 'connected')) return {key: 'setup_ready'};
+  if (operation) return {key: ['succeeded', 'failed', 'cancelled'].includes(operation.status) ? 'setup_failed_operation' : 'setup_saving'};
+  return {key: !readReady ? 'setup_loading' : hosts.length ? '' : 'setup_waiting'};
 }
 // Keep native HTML constraints, but use the chosen UI language for their messages.
 export function setupFormValidity(form, t) {
@@ -402,10 +416,10 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     connectionChoice.disabled = !!locked || !allowed('host');
     simple.hidden = !!snapshot?.hosts?.length;
     connectionStatus.hidden = !readReady;
-    automaticStatus.textContent = busy ? t('setup_checking')
-      : operation?.status === 'succeeded' && operation.action === 'setup.host' || snapshot?.hosts?.some(row => setupConnectionStatus(row) === 'connected') ? t('setup_ready')
-      : operation && !terminal() ? t('setup_saving') : operation && terminal() ? t('setup_failed_operation')
-      : snapshot?.hosts?.length ? '' : !readReady ? t('setup_loading') : t('setup_waiting');
+    const status = setupStatusLine({busy, operation, hosts: snapshot?.hosts || [], readReady});
+    automaticStatus.replaceChildren(status.key === 'setup_verified_saved'
+      ? timeLabel(t, status.key, {host: operation.target.host, time: timeStamp(status.verifiedAt)})
+      : status.key ? t(status.key) : '');
     automaticStatus.hidden = !automaticStatus.textContent;
     const base = saved.verification_base;
     const stale = base && base.revision !== snapshot?.revision;
@@ -563,6 +577,8 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     connectionStatus.replaceChildren(...(result.hosts || []).map(row => {
       const status = setupConnectionStatus(row);
       return h('div', {'data-setup-host-state': status}, h('p', {}, h('strong', {}, row.name), ' · ', t(`setup_connection_${status}`)),
+        row.connection_checked_at == null ? null : h('p', {class: 'muted'},
+          timeLabel(t, 'setup_connection_checked', {time: timeStamp(row.connection_checked_at)})),
         status === 'connected' ? null : h('p', {class: 'muted'}, t(status === 'unreachable' ? 'setup_connection_action' : 'setup_connection_checking_help')));
     }));
     summary.replaceChildren(h("p", {}, t("setup_counts", {hosts, repositories,
