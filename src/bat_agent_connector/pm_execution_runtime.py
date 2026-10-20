@@ -128,12 +128,22 @@ def origin(ops, child):
 
 def _access(ops, principal, child):
     from .pm_access import require_visible
-    ops = batches._Reader(ops.db)
-    bound = relation(ops, child)
-    if not bound or not principal.allows('observe'):
-        raise _bad('Original batch source unavailable', 'NOT_FOUND', 404)
-    batches._access(ops, principal, bound[0])
-    require_visible(ops.db, principal, child)
+    from .pm_source_reads import check, scope
+    with scope(ops.db, principal) as state:
+        ops = batches._Reader(ops.db)
+        bound = relation(ops, child)
+        if not bound or not principal.allows('observe'):
+            raise _bad('Original batch source unavailable', 'NOT_FOUND', 404)
+        selected = {key: child[key] for key in ('operation_id', 'action', 'target', 'actor') if key in child}
+        key = pm_read_cache._key((selected, (child.get('external_refs') or {}).get('pm_work_batch_parent')))
+        def visible():
+            batches._access(ops, principal, bound[0])
+            require_visible(ops.db, principal, child)
+            return True
+        if ('execution_runtime_sources', key) in state['active']:
+            visible()
+        elif not check(ops.db, principal, 'execution_runtime_sources', key, visible):
+            raise _bad('Original batch source unavailable', 'NOT_FOUND', 404)
 
 
 def _live(ops, child):

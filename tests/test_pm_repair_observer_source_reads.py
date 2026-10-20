@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from bat_agent_connector import pm_access, pm_source_reads, pm_workspace
+from bat_agent_connector import pm_access, pm_read_cache, pm_source_reads, pm_workspace
 from bat_agent_connector import pm_execution_runtime as runtime
 from bat_agent_connector import pm_github_observation as observations
 from bat_agent_connector import pm_maintenance_repair_delivery as delivery
@@ -138,7 +138,8 @@ def check_shared_batch_receipts(w, monkeypatch):
     child = ops.get(w['ledger'].references['execution_ids'][0])
     parent, _ = runtime.relation(ops, child)
     package, reader = runtime.batches.pm_package_handoff._package, runtime.observer
-    packages, receipts = [], []
+    batch_source = runtime.batches._access_sources
+    packages, receipts, expanded = [], [], []
 
     def package_read(*args, **kwargs):
         packages.append(args[2]['package_id'])
@@ -149,9 +150,14 @@ def check_shared_batch_receipts(w, monkeypatch):
             receipts.append(selected['operation_id'])
         return reader(service, selected)
 
+    def batch_sources(*args, **kwargs):
+        expanded.append(args[2]['operation_id'])
+        return batch_source(*args, **kwargs)
+
     with monkeypatch.context() as counted:
         counted.setattr(runtime.batches.pm_package_handoff, '_package', package_read)
         counted.setattr(runtime, 'observer', receipt_read)
+        counted.setattr(runtime.batches, '_access_sources', batch_sources)
         with pm_source_reads.scope(ops.db, OWNER):
             runtime.batches._access(ops, OWNER, parent)
             packages.clear()
@@ -161,8 +167,17 @@ def check_shared_batch_receipts(w, monkeypatch):
             first = runtime.proof(ops, OWNER, child)
             receipts.clear()
             proofs = [first, *(runtime.proof(ops, OWNER, child) for _ in range(2))]
+            repeated_receipts = len(receipts)
+            expanded.clear()
+            # A completed proof obtained outside a traversal guard is still
+            # complete inside it. Partial/back-edge proofs retain their exact
+            # guard through the existing source-read interface.
+            with pm_read_cache.guarded(), pm_read_cache.guarded_scope(ops.db, OWNER):
+                runtime.batches._access(ops, OWNER, parent)
+                assert runtime.proof(ops, OWNER, child) == first
     assert proofs[0] is not None and proofs[0] == proofs[1] == proofs[2]
-    assert (batch_reads, len(receipts)) == (0, 0)
+    assert (batch_reads, repeated_receipts) == (0, 0)
+    assert expanded == []
 
 
 async def check_next_page(w, parent, observer, monkeypatch):

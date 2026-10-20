@@ -228,3 +228,10 @@ reference. The private scope ends before the reservation is inserted. Ordinary
 workload reads, other parents and unknown or external effects keep their usual
 blocking behavior. Current authority, lifecycle, complete source and workload
 checks still run in the original reservation transaction.
+
+Historical runtime source access uses the same synchronous completed-source
+interface as its original batch. Relation and caller identity are verified before
+reusing a completed source boolean; partial guard answers cannot escape their
+traversal. Receipt documents remain isolated copies. No completed-source memo
+survives the snapshot, a write or an await, and current native completion and
+authority checks remain outside it.

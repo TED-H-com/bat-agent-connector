@@ -11,7 +11,6 @@ from . import (
     controller_authority,
     pm_lifecycle_gates,
     pm_package_handoff,
-    pm_read_cache,
     pm_requirement_acceptance,
     pm_source_lineage,
     pm_spec_format,
@@ -254,14 +253,24 @@ def _batch(ops, wid, bid):
 
 
 def _access(ops, principal, op):
-    wid, intent = op['target']['workspace_id'], _intent(op)
-    _member(ops, principal, wid)
-    # _intent has verified these exact source bytes against their digest.
-    # Sibling runtime readers need one completed batch-source proof in this
-    # snapshot, not another expansion of every package and evidence root.
-    digest = op['external_refs']['admission_binding']['work_batch_intent_digest']
-    return pm_read_cache.remember(_access, (principal, wid, op.get('operation_id'), digest),
-        lambda: _access_sources(ops, principal, op, intent), cache_errors=False, db=ops.db)
+    from .pm_source_reads import check, scope
+    with scope(ops.db, principal) as state:
+        wid, intent = op['target']['workspace_id'], _intent(op)
+        _member(ops, principal, wid)
+        # Verify caller bytes before reusing only the completed source decision.
+        # Unlike raw private reads, a completed boolean can join a later guard.
+        digest = op['external_refs']['admission_binding']['work_batch_intent_digest']
+        key = wid, op['operation_id'], digest
+        def visible():
+            _access_sources(ops, principal, op, intent)
+            return True
+        if ('work_batch_sources', key) in state['active']:
+            # An owned receipt can lead back to this batch. Run the original
+            # traversal; its domain guards still bound that backedge. An active
+            # source decision is never a reusable grant.
+            visible()
+        elif not check(ops.db, principal, 'work_batch_sources', key, visible):
+            raise _bad('NOT_FOUND', 'Original batch sources unavailable', 404)
 
 
 def _access_sources(ops, principal, op, intent):
