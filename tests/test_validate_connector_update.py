@@ -1,14 +1,38 @@
 """Package fixture inputs follow the real project's build declarations."""
 import shutil
+import sys
 
 import pytest
 
-from scripts.validate_connector_update import ROOT, copy_fixture_source, fixture_build_inputs
+from bat_agent_connector import __version__
+from bat_agent_connector.update_install import clean_env
+from scripts.validate_connector_update import ROOT, copy_fixture_source, fixture_build_inputs, installed_build_provenance
+from tests.package_build import _build_env, _command, _source_repo
 
 
 def test_fixture_includes_declared_custom_hook(tmp_path):
     copy_fixture_source(ROOT, tmp_path)
     assert (tmp_path / "hatch_build.py").read_bytes() == (ROOT / "hatch_build.py").read_bytes()
+
+
+def test_installed_provenance_does_not_need_the_build_cache(tmp_path):
+    # uv and the real hook produce both metadata files. A fresh runtime HOME has
+    # no build cache; installed provenance must remain sufficient on its own.
+    source, commit = _source_repo(tmp_path, "installed provenance without build cache")
+    root = tmp_path / "installation"
+    environment = root / "tools/bat-agent-connector"
+    env = _build_env(tmp_path)
+    _command(["uv", "venv", "--python", sys.executable, "--no-python-downloads", str(environment)],
+             cwd=tmp_path, env=env)
+    _command(["uv", "pip", "install", "--python", str(environment / "bin/python"), "--offline", "--no-deps",
+              f"git+{source.as_uri()}@{commit}"], cwd=tmp_path, env=env)
+    home = tmp_path / "runtime-home"
+    home.mkdir(mode=0o700)
+    assert not (home / ".cache").exists()
+    facts = installed_build_provenance(root, {"version": __version__, "commit": commit},
+                                       home=home, env=clean_env(home))
+    assert facts == {"identity": {"version": __version__, "commit": commit, "source": "vcs"},
+                     "embedded_commit": commit, "vcs_commit": commit}
 
 
 def test_fixture_follows_relocated_metadata_and_license_globs(tmp_path):
