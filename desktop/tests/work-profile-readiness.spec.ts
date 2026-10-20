@@ -3,9 +3,107 @@ import {test,expect} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {workStartFixture,workspaceId,workId,route} from './work-start-fixture.ts';
 import {managedSetupFixture} from './managed-setup-fixture.ts';
+import {readFileSync} from 'node:fs';
+import {workProfileStrings} from '../src/pm-work-profile-strings.js';
+const readinessGolden=JSON.parse(readFileSync(new URL('../../tests/fixtures/work-profile-readiness.json',import.meta.url),'utf8'));
 
 const first='wpf_'+'a'.repeat(32),second='wpf_'+'b'.repeat(32);
 const names=['discovered','signed_in_or_available','can_observe','can_start_own','can_continue_own','last_verified_execution'];
+
+// Exercise the picker itself: the parent Work form's separate start-preview POST
+// remains covered by the existing integration cases below.
+async function mountGoldenPicker(page:any,body:any,locale:string){
+  const reads:string[]=[],posts:string[]=[];
+  await page.addInitScript(()=>{
+    (window as any).__csp=[];
+    document.addEventListener('securitypolicyviolation',event=>(window as any).__csp.push(event.violatedDirective));
+  });
+  page.on('request',(request:any)=>{if(request.method()==='POST')posts.push(request.url());});
+  await page.route('**/api/v1/**',async(route:any)=>{
+    const request=route.request(),path=new URL(request.url()).pathname;reads.push(path);
+    expect(request.method()).toBe('GET');
+    const profile=readinessGolden.profile;
+    const data=path.endsWith('/readiness')?body:path.endsWith('/work-profiles')
+      ?{profiles:[profile],count:1,default_profile_id:null,next_cursor:null}:profile;
+    await route.fulfill({status:200,json:data});
+  });
+  await page.goto('/ui-components.html');
+  await page.evaluate(async({body,locale})=>{
+    const {workProfilePicker}=await import('/src/pm-work-profile-picker.js');
+    const {t,setLocale}=await import('/src/i18n.js');const {h}=await import('/src/ui/dom.js');
+    setLocale(locale==='en-US'?'en':locale);
+    const field=document.createElement('input');field.type='hidden';
+    location.hash=`#/pm/${body.workspace_id}/board?select=wi_${'1'.repeat(20)}`;
+    const picker=workProfilePicker({t,api:async(method,path)=>{
+      if(method!=='GET')throw Error('Picker must only read');
+      const response=await fetch('/api/v1'+path);return response.json();
+    },alive:()=>{},namespace:'fixture',workspaceId:body.workspace_id,workId:'wi_'+'1'.repeat(20),
+    caps:()=>({scopes:['observe'],features:{pm_workspaces:{work_profiles:{version:1,available:true}}}}),field,
+    request:()=>({locked:()=>false,set:(_key,value)=>{field.value=value;},update:()=>{}}),active:()=>true,onChange:()=>{},
+    errorBox:error=>h('p',{},String(error))});
+    document.getElementById('fixture')!.append(picker.box,field);await picker.load();
+  },{body,locale});
+  await page.locator('[data-work-profile-picker] select').selectOption(body.profile_id);
+  return {reads,posts,facts:page.locator('[data-work-profile-readiness]')};
+}
+const goldenCases=Object.entries(readinessGolden.cases);
+const future=structuredClone(readinessGolden.cases.never_observed);future.states.can_observe.reason='FUTURE_PROFILE_REASON';
+for(const locale of ['en-US','zh-TW'])test.describe(`${locale} producer profile evidence`,()=>{
+  test.use({locale});
+  for(const width of [390,1440])for(const [name,body] of [...goldenCases,['unknown_reason',future]])
+    test(`golden ${name} ${width}`,async({page})=>{
+      await page.setViewportSize({width,height:900});
+      const lang=locale==='en-US'?'en':locale,copy=(key:string)=>workProfileStrings[lang][key];
+      const {facts,reads,posts}=await mountGoldenPicker(page,body,locale);
+      const cells=facts.locator('dl.pm-work-profile-states > dd');await expect(cells).toHaveCount(6);
+      const gap=facts.locator('[data-work-profile-gap]');
+      if(name==='host_unreachable'||name==='host_not_refreshed'){
+        await expect(gap).toHaveText(locale==='en-US'?'Connector is waiting for the next observation.':'Connector 正在等候下一次觀察結果。');
+        await expect(gap.locator('time')).toHaveCount(0);
+        await expect(gap).not.toContainText(copy('wpf_reason_'+name));
+      }
+      for(const key of ['can_observe',...names.filter(key=>key!=='can_observe')]){
+        const state=body.states[key],cell=cells.nth(names.indexOf(key));
+        // This fails against the old value-only cells before any new selectors.
+        if(state.reason)await expect(cell).toContainText(state.reason);
+        const reasonKey='wpf_reason_'+state.reason;
+        await expect(cell).toContainText(copy(reasonKey)||copy('wpf_unverified'));
+        await expect(cell.locator('[data-work-profile-value]')).toHaveText(copy('wpf_'+state.value));
+        expect((await cell.innerText()).trim().startsWith(copy('wpf_'+state.value))).toBe(true);
+        if(state.verified){
+          const past=cell.locator('[data-work-profile-past]');await expect(past).toBeVisible();
+          await expect(past).toContainText(locale==='en-US'?'Last verified':'上次驗證');
+          await expect(past.locator('time')).toHaveAttribute('datetime',new Date(state.verified.observed_at*1000).toISOString());
+          expect(state.verified.observed_at).not.toBe(body.observed_at);
+          await expect(past).toContainText(copy('wpf_'+state.verified.value));
+        }else await expect(cell.locator('[data-work-profile-past]')).toHaveCount(0);
+        const op=state.evidence_ref?.operation_id||state.verified?.evidence_ref?.operation_id;
+        if(op)await expect(cell.locator(`a[href="#/op/${op}"]`)).toHaveCount(1);
+        const success=state.evidence_ref?.last_success_at;
+        if(success&&success!==state.verified?.observed_at)await expect(cell.locator('[data-work-profile-last-success] time')).toHaveAttribute('datetime',new Date(success*1000).toISOString());
+        else await expect(cell.locator('[data-work-profile-last-success]')).toHaveCount(0);
+        const instants=await cell.locator('time').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('datetime')));
+        expect(new Set(instants).size).toBe(instants.length);
+      }
+      const read=facts.locator('[data-work-profile-read-at]');await expect(read).toContainText(locale==='en-US'?'Read at':'讀取時間');
+      await expect(read.locator('time')).toHaveAttribute('datetime',new Date(body.observed_at*1000).toISOString());
+      await expect(read).not.toContainText(locale==='en-US'?'verified':'驗證');
+      await expect(gap).toHaveCount(body.smallest_gap?1:0);
+      const cellInstants=await cells.locator('time').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('datetime')));
+      for(const instant of await gap.locator('time').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('datetime'))))expect(cellInstants).not.toContain(instant);
+      if(name==='host_unreachable'||name==='host_not_refreshed'){
+        const cell=cells.nth(names.indexOf('can_observe'));
+        await expect(cell).toContainText(locale==='en-US'?'does not contact the host':'不會連絡主機');
+        await expect(cell).toContainText(copy('wpf_reason_'+name));
+        expect(copy('wpf_reason_host_unreachable')).not.toBe(copy('wpf_reason_host_not_refreshed'));
+      }
+      expect(await facts.innerText()).not.toMatch(/scan_fixture|fixture-bat|\/srv\/|\/tmp\//);
+      expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+      expect(reads.filter(path=>path.endsWith('/readiness'))).toHaveLength(1);expect(posts).toEqual([]);
+      expect(await page.evaluate(()=>(window as any).__csp)).toEqual([]);
+    });
+});
+
 function fixture(){
   const f=workStartFixture(),base=f.dispatch;
   const profiles=[first,second].map((id,index)=>({profile_id:id,revision:1,digest:String(index+1).repeat(64),is_default:!index,
