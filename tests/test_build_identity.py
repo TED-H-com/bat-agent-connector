@@ -319,8 +319,27 @@ def test_embedded_identity_cannot_identify_a_different_copy(clean_wheel, tmp_pat
 @pytest.mark.parametrize("conflict", [False, True])
 def test_real_vcs_install_reconciles_embedded_identity(tmp_path, conflict):
     repo, head = _source_repo(tmp_path, f"VCS conflict={conflict}")
+    source_commit = head
+    if conflict:
+        # Preserve a real producer's sdist provenance in a later Git snapshot.
+        # This creates two known, different identities without hand-written
+        # metadata or relying on the now-rejected checkout override mismatch.
+        sdist = _build(repo, tmp_path, "sdist")
+        with tarfile.open(sdist) as archive:
+            prefix = archive.getnames()[0].split("/")[0]
+            for relative in ("PKG-INFO", "src/bat_agent_connector/build-info.json"):
+                (repo / relative).write_bytes(archive.extractfile(f"{prefix}/{relative}").read())
+        env = _build_env(tmp_path)
+        _command(["git", "add", "PKG-INFO", "src/bat_agent_connector/build-info.json"], cwd=repo, env=env)
+        _command(["git", "-c", "user.name=Build Fixture", "-c", "user.email=build@example.invalid",
+                  "commit", "-qm", "version the producer's sdist export"], cwd=repo, env=env)
+        head = _command(["git", "rev-parse", "HEAD"], cwd=repo, env=env)
+        assert head != source_commit
     # uv, not the fixture, writes PEP 610 direct_url.json. Any embedded metadata
     # must likewise come from the actual Hatch build, including the conflict.
-    identity = _installed_identity(f"git+{repo.as_uri()}@{head}", tmp_path,
-                                   commit="b" * 40 if conflict else None)
+    identity = _installed_identity(f"git+{repo.as_uri()}@{head}", tmp_path)
+    site = next((tmp_path / "installed/lib").glob("python*/site-packages"))
+    assert json.loads((site / "bat_agent_connector/build-info.json").read_text()) == {"commit": source_commit}
+    direct_url = next(site.glob("bat_agent_connector-*.dist-info/direct_url.json"))
+    assert json.loads(direct_url.read_text())["vcs_info"]["commit_id"] == head
     assert identity == {"version": __version__, "commit": None if conflict else head, "source": "vcs"}

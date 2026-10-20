@@ -104,9 +104,13 @@ job supplies `BATC_BUILD_COMMIT` to PyInstaller and Rust `option_env!`; native
 version comes from `CARGO_PKG_VERSION`. Missing commit means unknown in both
 locales. Browser assets use the serving Connector build and remain reproducible.
 
-The Hatch build hook embeds a full 40-hex `BATC_BUILD_COMMIT` (normalized to
-lowercase), otherwise the HEAD of a Git checkout with a clean tracked tree.
+The Hatch build hook accepts a full 40-hex `BATC_BUILD_COMMIT` (normalized to
+lowercase). In a clean Git checkout it must equal HEAD; a mismatch is unknown.
+Without a valid override, the hook uses that clean checkout's HEAD.
 Dirty tracked inputs always produce an unknown commit, including with an override.
+Outside any checkout, without `PKG-INFO`, an explicit override can identify an
+exported source candidate: there is no independent checkout identity to contradict
+it. This remains a build-time declaration, never a guessed Git identity.
 An sdist carries that attribution into a wheel without consulting an enclosing
 checkout; a conflicting override makes it unknown. No provenance is guessed from
 an archive without it. This commit identifies the build's declared source

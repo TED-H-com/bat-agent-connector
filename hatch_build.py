@@ -25,6 +25,10 @@ def _git(root, *args):
     ).stdout.strip()
 
 
+def _matching_commit(original, override):
+    return original if override is None or override == original else None
+
+
 def _build_commit(root):
     override = _commit(os.environ.get("BATC_BUILD_COMMIT"))
     if (root / "PKG-INFO").is_file():
@@ -35,7 +39,7 @@ def _build_commit(root):
             original = _commit(doc.get("commit"))
         except (OSError, ValueError, TypeError, AttributeError):
             return None
-        return original if override is None or override == original else None
+        return _matching_commit(original, override)
 
     try:
         checkout = Path(_git(root, "rev-parse", "--show-toplevel")).resolve() == root
@@ -44,7 +48,7 @@ def _build_commit(root):
             # when supplied explicitly by the packaging environment.
             if _git(root, "status", "--porcelain", "--untracked-files=no"):
                 return None
-            return override or _commit(_git(root, "rev-parse", "HEAD"))
+            return _matching_commit(_commit(_git(root, "rev-parse", "HEAD")), override)
     except (OSError, subprocess.CalledProcessError):
         if (root / ".git").exists():
             return None  # A checkout whose cleanliness cannot be proved.
