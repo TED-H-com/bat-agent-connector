@@ -241,8 +241,26 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
   });
   test('missing PM capability offers no entry or mutation',async({page})=>{
     const f=pmFixture();f.state.available=false;await mountConversation(page,native,f.dispatch);await page.goto('/dashboard/#/pm');
-    await expect(page.locator('#nav a[href="#/pm"]')).toHaveCount(0);await expect(page.locator('#main')).toContainText('does not provide PM workspaces');
+    await expect(page.locator('#nav a[href="#/pm"]')).toHaveCount(0);await expect(page.locator('#main')).toHaveText('PM workspaces are not supported by this Connector. Use a compatible Connector version.');
     expect(await page.locator('[data-pm-action]').count()).toBe(0);expect(f.state.writes).toHaveLength(0);
+  });
+  for(const locale of ['en-US','zh-TW'])test(`missing View scope has its own reason and next step ${locale}`,async({browser,baseURL})=>{
+    const context=await browser.newContext({baseURL,locale}),page=await context.newPage(),f=pmFixture();
+    const dispatch=async(input:any)=>{
+      const response=await f.dispatch(input),path=new URL(input.path,'http://fixture').pathname;
+      if(path==='/capabilities'||path==='/bootstrap'){
+        const caps=path==='/bootstrap'?response.data.capabilities:response.data;
+        caps.scopes=caps.scopes.filter((scope:string)=>scope!=='observe');
+      }
+      return response;
+    };
+    await mountConversation(page,native,dispatch);await page.goto('/dashboard/#/pm');
+    await expect(page.locator('#nav a[href="#/pm"]')).toHaveCount(0);
+    await expect(page.locator('#main')).toHaveText(locale==='zh-TW'
+      ?'PM 工作區需要檢視權限。請使用具備檢視權限的憑證重新連線。'
+      :'PM workspaces need View access. Reconnect with a credential that has View access.');
+    expect(await page.locator('[data-pm-action]').count()).toBe(0);expect(f.state.writes).toHaveLength(0);
+    await context.close();
   });
 });
 
