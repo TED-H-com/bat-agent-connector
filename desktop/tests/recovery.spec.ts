@@ -17,7 +17,7 @@ test("cursor reset preserves an active draft, then resumes with the new paired c
     if (url.pathname.endsWith("/events")) {
       eventRequests.push(url);
       if (reset && !resetSent) { resetSent = true; return route.fulfill({status: 409, json: {error: {
-        code: "EVENT_CURSOR_RESET", reason: "retention", resnapshot: true, preserve_drafts: true}}}); }
+        code: "EVENT_CURSOR_RESET", reason: "cursor_expired", resnapshot: true, preserve_drafts: true}}}); }
       return route.fulfill({json: {events: [], next_cursor: checkpoint.cursor, head_cursor: checkpoint.cursor,
         has_more: false, sync: {checkpoint}}});
     }
