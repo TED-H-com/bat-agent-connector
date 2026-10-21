@@ -11,6 +11,8 @@ from scripts.validate_connector_update import copy_fixture_source
 
 
 def _build_env(directory, commit=None):
+    from bat_agent_connector.update_install import uv_git_env
+
     env = dict(os.environ)
     for key in ("PYTHONPATH", "PYTHONHOME", "BATC_BUILD_COMMIT", "GIT_DIR", "GIT_WORK_TREE",
                 "GIT_INDEX_FILE", "GIT_COMMON_DIR"):
@@ -23,7 +25,7 @@ def _build_env(directory, commit=None):
     env["UV_LINK_MODE"] = "copy"
     if commit is not None:
         env["BATC_BUILD_COMMIT"] = commit
-    return env
+    return uv_git_env(env)
 
 
 def _command(args, *, cwd, env):

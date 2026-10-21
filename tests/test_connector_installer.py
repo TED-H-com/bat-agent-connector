@@ -184,9 +184,12 @@ def test_bootstrap_uv_install_and_finalizer_are_pinned(tmp_path, monkeypatch):
     item, raw, download = transport()
     home = tmp_path / "home"
     calls = []
+    uv_environments = []
     monkeypatch.setattr(bootstrap.shutil, "which", lambda name: "/usr/bin/" + name)
     def run(args, **kwargs):
         calls.append(args)
+        if args[0] == "/usr/bin/uv":
+            uv_environments.append(kwargs["env"])
         if "rev-parse" in args:
             return "a" * 40
         if "bat_agent_connector.installer" in args:
@@ -197,6 +200,11 @@ def test_bootstrap_uv_install_and_finalizer_are_pinned(tmp_path, monkeypatch):
     uv = next(c for c in calls if "install" in c)
     assert uv[-1] == "git+" + bootstrap.REPOSITORY + "@" + "a" * 40
     assert "--constraints" in uv and "--force" not in uv
+    assert uv_environments
+    for env in uv_environments:
+        assert env["GIT_CONFIG_COUNT"] == "2"
+        assert (env["GIT_CONFIG_KEY_0"], env["GIT_CONFIG_VALUE_0"]) == ("maintenance.auto", "false")
+        assert (env["GIT_CONFIG_KEY_1"], env["GIT_CONFIG_VALUE_1"]) == ("gc.auto", "0")
 
 
 def test_shell_syntax():
