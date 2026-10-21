@@ -170,10 +170,57 @@ async function refusedAccess(active, workUrl) {
   };
   step = 'revoke-access';
   await expect(header).toHaveText(copy.ui_connected);
+  // A checkpoint is committed only after its listener refreshes settle. It
+  // establishes the retained-source case without assuming Connected means idle.
+  send({stage: 'refusal-checkpoint'});
+  const {cursor} = await receive();
+  await expect.poll(() => page.evaluate(() => Object.entries(localStorage)
+    .filter(([key]) => key.startsWith('batc.sync.')).map(([, value]) => JSON.parse(value).cursor))).toContain(cursor);
+  let refreshRace = null, debug;
+  if (f.late_refusal_refresh) {
+    // Pause JavaScript, not HTTP: a real inventory event starts loadObservation,
+    // and the debugger stops its Result read before fetch sends it. ApiV1 alone
+    // authenticates and produces every reply after the real principal is revoked.
+    debug = await context.newCDPSession(page);
+    await debug.send('Debugger.enable');
+    const resultPath = `/work-attempts/${active.attempt}/result`;
+    let paused = null;
+    const eventPages = [];
+    const observePage = async response => {
+      if (new URL(response.url()).pathname === '/api/v1/events' && response.status() === 200)
+        eventPages.push(await response.json());
+    };
+    context.on('response', observePage);
+    debug.on('Debugger.paused', async event => {
+      if (event.callFrames.some(frame => frame.functionName === 'setAttempt')) paused = event;
+      else await debug.send('Debugger.resume');
+    });
+    await debug.send('DOMDebugger.setXHRBreakpoint', {url: resultPath});
+    step = 'refusal-refresh';
+    send({stage: 'refusal-refresh'});
+    const {event} = await receive();
+    await expect.poll(() => Boolean(paused)).toBe(true);
+    assert.ok(eventPages.some(page => page.events.some(row => row.seq === event.seq)));
+    refreshRace = {event, paused_at: Date.now(), frames: paused.callFrames.map(frame => ({
+      name: frame.functionName, location: frame.location})), result_path: resultPath};
+    context.off('response', observePage);
+  }
   const refusal = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/events'
     && response.status() === 401);
   send({stage: 'revoke-access'});
   assert.equal((await receive()).revoked, true);
+  if (debug) {
+    const refusedResult = page.waitForResponse(response => new URL(response.url()).pathname.endsWith(refreshRace.result_path)
+      && response.status() === 401);
+    refreshRace.revoked_at = Date.now();
+    await debug.send('DOMDebugger.removeXHRBreakpoint', {url: refreshRace.result_path});
+    await debug.send('Debugger.resume');
+    await debug.detach();
+    const source = await refusedResult;
+    refreshRace.source = {path: new URL(source.url()).pathname, status: source.status(), body: await source.json()};
+    assert.equal(refreshRace.source.body.error.code, 'UNAUTHORIZED');
+    writeFileSync(resolve(f.shots, 'refusal-refresh.json'), JSON.stringify(refreshRace, null, 2) + '\n');
+  }
   const response = await refusal;
   const body = await response.json();
   assert.equal(body.error.code, 'UNAUTHORIZED');
