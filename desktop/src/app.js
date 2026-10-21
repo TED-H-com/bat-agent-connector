@@ -344,9 +344,9 @@ async function apiRequest(method, path, body, key, collectReceipt) {
   }
   if (!state.token) throw new ApiError(401, "UNAUTHORIZED", t("need_token"), {localized: true});
   const epoch = state.epoch;
-  // Mounted source reads survive resume even without a replayed event. The
-  // event poll belongs to the shared reader instead, which starts its next page.
-  const resumable = method === 'GET' && state.viewReady;
+  // Source reads survive resume while a view is still loading, too. Readiness
+  // gates writes; the shared event reader separately owns its next poll page.
+  const resumable = method === 'GET';
   const request = signal => connectorRequest(method, path, body, key, state.token, signal);
   let response;
   try {
