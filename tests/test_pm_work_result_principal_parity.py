@@ -81,13 +81,16 @@ async def owner_submit(w, action, target, params, preconditions=None, *, key):
 def domain(envelopes):
     """Compare the entire response except the producer's caller-specific fields."""
     result = copy.deepcopy(envelopes)
-    result["work"]["work_item"].pop("reading")
+    for field in ("read_version", "unread", "read_at"):
+        result["work"]["work_item"]["reading"].pop(field)
     result["result"]["identity"].pop("caller_is_controller")
     result["result"].pop("next_allowed_actions")
     result["result"].pop("blocked_actions")
     attention = result["result"]["execution"]["attention"]
     if attention is not None:
         attention.pop("resumable")
+    for field in ("latest_attempt_id", "next_cursor", "has_more", "visibility_filtered"):
+        result["inputs"].pop(field)
     return result
 
 
@@ -197,10 +200,16 @@ async def test_owner_http_and_observe_only_mcp_reader_share_work_and_fixed_resul
     async with reader_client(w, monkeypatch, reader_token) as client:
         reader_caps = await mcp_read(client, "capabilities_get")
         assert reader_caps["actor"] == "result-reader" and reader_caps["scopes"] == ["observe"]
+        assert reader_caps["actor"] != owner_caps["actor"]
         assert "operate" in owner_caps["scopes"]
         assert reader_caps["identity"]["server_id"] == owner_caps["identity"]["server_id"]
         peer = {name: await mcp_read(client, tool, **arguments)
                 for name, (_, tool, arguments) in routes.items()}
+        for envelopes in (before, peer):
+            assert {field: envelopes["inputs"][field] for field in (
+                "latest_attempt_id", "next_cursor", "has_more", "visibility_filtered")} == {
+                    "latest_attempt_id": attempt_id, "next_cursor": None,
+                    "has_more": False, "visibility_filtered": False}
         assert before["result"]["identity"]["caller_is_controller"] is True
         assert peer["result"]["identity"]["caller_is_controller"] is False
         assert before["work"]["work_item"]["reading"] == {
