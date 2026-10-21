@@ -214,7 +214,7 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) {
       if (['/sessions/demo/search-results', '/sessions/demo/search-results/messages'].includes(path)) {
         const count = (sourceReads.get(path) || 0) + 1; sourceReads.set(path, count);
         if (count === 1) {
-          if (path.endsWith('/search-results')) return {status: 503, data: {error: {code: 'UNAVAILABLE', message: 'Session read unavailable'}}};
+          if (path.endsWith('/messages')) return {status: 503, data: {error: {code: 'UNAVAILABLE', message: 'Message read unavailable'}}};
         } else if (stage === 'old') {oldReads++; await gates[0];}
         else if (stage === 'fresh') {freshReads++; await gates[2];}
       }
