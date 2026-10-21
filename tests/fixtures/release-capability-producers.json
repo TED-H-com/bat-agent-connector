@@ -1890,6 +1890,7 @@
     }
   },
   "web": {
+    "producer": "shipped_browser_bundle",
     "native_desktop": false,
     "central_request": {
       "method": "GET",

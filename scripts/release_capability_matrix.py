@@ -247,7 +247,7 @@ def consistency(matrix, claims=()):
     return result
 
 
-def generate(source, candidate, *, scratch, receipts=(), claims=(), tools=ROOT):
+def generate(source, candidate, *, scratch, receipts=(), claims=()):
     """Generate offline from exact Git objects. Local candidate code must be trusted.
 
     Unlike a receipt-only validator this executes ApiV1 from the named source, in
@@ -272,7 +272,7 @@ def generate(source, candidate, *, scratch, receipts=(), claims=(), tools=ROOT):
     if node is None:
         raise ValueError("BROWSER_PRODUCER_UNAVAILABLE")
     web = json.loads(subprocess.check_output(  # noqa: S603 -- fixed local script, no shell/network/native IPC
-        [node, str(ROOT / "scripts/capability_matrix_browser.mjs"), str(snapshot), str(tools)],
+        [node, str(ROOT / "scripts/capability_matrix_browser.mjs"), str(snapshot)],
         cwd=state, env=env, timeout=30))
     native = native_facts(files)
     rows = []
@@ -288,7 +288,8 @@ def generate(source, candidate, *, scratch, receipts=(), claims=(), tools=ROOT):
                              declaration["managed_installation_present"], source_ref,
                              reason="PRODUCER_FIELD_PRESENT" if variant == "managed" else "PRODUCER_FIELD_ABSENT",
                              receipt_kind="api_producer"))
-    web_source = {"file": "desktop/src/transport/index.ts", "producer": "scripts/capability_matrix_browser.mjs",
+    web_source = {"file": "src/bat_agent_connector/dashboard/app.js", "region": "src/transport/index.ts",
+                  "producer": "scripts/capability_matrix_browser.mjs",
                   "adapters": ["locale=en", "empty fetch response; no server fields", "browser without native IPC"]}
     shared_proof = _shared_ui(files)
     rows.append(_row(candidate, "Browser", "web", "browser", "shared_ui", True if shared_proof else "unknown",

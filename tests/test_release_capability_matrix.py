@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 from copy import deepcopy
 from pathlib import Path
 
@@ -41,6 +43,26 @@ def test_real_producers_match_golden(matrix):
     assert matrix["producers"] == json.loads(GOLDEN.read_text())
     assert matrix["producers"]["server"]["managed"]["bootstrap_capabilities_equal"] is True
     assert matrix["producers"]["server"]["plain"]["bootstrap_capabilities_equal"] is True
+
+
+def test_browser_probe_needs_no_npm_install_or_host_configuration(tmp_path):
+    # Python CI has Node but does not npm ci. Use only shipped candidate bytes;
+    # the tool directory intentionally has no package.json or node_modules.
+    candidate = _git(ROOT, "rev-parse", "HEAD").decode().strip()
+    files = _archive(_git(ROOT, "archive", candidate))
+    snapshot = tmp_path / "snapshot"
+    _write_files(snapshot, {name: data for name, data in files.items()
+                            if name in {"src/bat_agent_connector/dashboard/app.js", "desktop/src/transport/index.ts",
+                                        "desktop/package.json"}})
+    result = subprocess.run([shutil.which("node"), str(ROOT / "scripts/capability_matrix_browser.mjs"),
+                             str(snapshot), str(tmp_path / "empty-tools")],
+                            cwd=tmp_path, capture_output=True, text=True, timeout=30,
+                            env={"PATH": "", "HOME": str(tmp_path)})
+    assert result.returncode == 0, result.stderr
+    output = json.loads(result.stdout)
+    assert output["native_desktop"] is False
+    assert output["native_fleet_unavailable"] is True
+    assert output["credential_vault_unavailable"] is True
 
 
 def test_browser_has_no_native_fleet_or_vault(matrix):
