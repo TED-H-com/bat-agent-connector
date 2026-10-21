@@ -104,7 +104,8 @@ class Journal:
         # Intent must survive a host crash before the network dispatch begins.
         self.db.execute("PRAGMA synchronous=FULL")
         self.db.execute("PRAGMA foreign_keys=ON")
-        self.db.executescript("""
+        try:
+            self.db.executescript("""
             BEGIN IMMEDIATE;
             CREATE TABLE IF NOT EXISTS confinement_host_checks (
                 host TEXT PRIMARY KEY, evidence TEXT NOT NULL
@@ -308,7 +309,12 @@ class Journal:
                 operation_id TEXT PRIMARY KEY, result TEXT NOT NULL, applied_at REAL NOT NULL
             );
             COMMIT;
-        """)
+            """)
+        except BaseException:
+            # executescript leaves its explicit BEGIN open if schema SQL fails.
+            if self.db.in_transaction:
+                self.db.execute("ROLLBACK")
+            raise
         columns = {r[1] for r in self.db.execute("PRAGMA table_info(tasks)")}
         for name, sql_type in (("verification_tree", "TEXT"), ("review_commit", "TEXT"),
                                ("review_tree", "TEXT"), ("review_marker", "TEXT"),
@@ -451,8 +457,8 @@ class Journal:
     def tx(self):
         nested = self.db.in_transaction
         source_version = None if nested else pm_source_history.before_transaction(self.db)
-        self.db.execute("SAVEPOINT task_effect" if nested else "BEGIN IMMEDIATE")
         source_token = None
+        self.db.execute("SAVEPOINT task_effect" if nested else "BEGIN IMMEDIATE")
         try:
             source_token = pm_source_history.begin_transaction(self.db, source_version, nested=nested)
             yield
