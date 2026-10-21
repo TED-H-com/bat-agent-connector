@@ -144,6 +144,10 @@ task send 在等待 session lock／派送準備時被 pause 擋住，operation�
 
 owner lock 固定在 registry/state directory 的 `task-daemon.lock`，不同 --db 仍爭同一個平台 owner lock。TaskDaemon 在取得 owner 後才初始化 Journal、0600 admin token、providers、listener 與 worker。第二個 daemon 回 OWNER_CONFLICT 與既有 pointer metadata，不修改候選 journal／token／pointer。heartbeat 是觀測，不能用過期時間奪取 live lock；OS 釋放後才可重啟並沿用 journal。升級需先停舊版（舊版鎖在 DB 父目錄），不得混跑。
 
+Owner pointer 在取得 lease 時公布 pid、owner_id、journal 與 lease 路徑；只有 listener 綁定成功後才加入實際 endpoint。只嵌入 Journal 的 owner 沒有 endpoint。缺少 endpoint 表示 owner 尚未就緒：控制轉交回 `TASK_OWNER_UNAVAILABLE`，managed launcher 在原期限內重試，不能退回預設 port。Managed launcher 及安裝測試 probe 在送 bearer 前先驗證 installation proof；正常關閉先撤下 endpoint，再關閉 listener 並釋放 lease，保留其餘 pointer metadata。程序被強制終止仍可能留下舊 metadata，不能把檔案本身當成存活或身分證據。
+
+Rollback 後，既有 managed reader 已會拒絕缺少 endpoint 並重試；舊版控制轉交 reader 會把缺值送進其預設網址 fallback，因此不能保證舊 reader 的行為。本變更不新增舊版使用政策；重新啟動的舊套件也會沿用它自己的 pointer writer。
+
 Part A 沒有 schema migration、業務資料搬移或歷史 operations 回填。僅 local-admin work_submit 相容入口可按原 payload hash 連到既有 task；其 bridge receipt 與 operation intent 同交易提交，crash 不會造成重啟錯建 task。新提交使用 operation identity 作 task key，其他 actor 不認領歷史 key。
 
 ## 相容性與外部邊界

@@ -12,10 +12,12 @@ import concurrent.futures
 import contextlib
 import gzip
 import hashlib
+import hmac
 import json
 import os
 import re
 import runpy
+import secrets
 import signal
 import sqlite3
 import subprocess
@@ -23,6 +25,7 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -73,8 +76,8 @@ def command(executable, data, env, *, action='ensure', refused=False):
     return reply
 
 
-def request(launch, path, *, body=None, key=None):
-    headers = {'Authorization': 'Bearer ' + launch['token']}
+def request(launch, path, *, body=None, key=None, authenticated=True):
+    headers = {'Authorization': 'Bearer ' + launch['token']} if authenticated else {}
     if body is not None:
         headers['Content-Type'] = 'application/json'
     if key:
@@ -90,6 +93,26 @@ def request(launch, path, *, body=None, key=None):
         payload = response.read(1_048_577)
         assert len(payload) <= 1_048_576
         return json.loads(payload)
+
+
+def owned_launch(data, child, original):
+    pointer = json.loads((data / 'state/task-service.json').read_text())
+    endpoint = pointer.get('endpoint')
+    if pointer.get('pid') != child.pid or not endpoint:
+        raise ValueError('Owned fixture service is not listening yet')
+    parsed = urllib.parse.urlsplit(endpoint)
+    # Both fixture cores serve on port zero, never an operator's fixed port.
+    if (parsed.scheme != 'http' or parsed.hostname != '127.0.0.1' or not parsed.port or parsed.port == 18796
+            or parsed.path != '/rpc' or parsed.username or parsed.password or parsed.query or parsed.fragment):
+        raise ValueError('Invalid owned fixture endpoint')
+    launch = {**original, 'endpoint': endpoint.removesuffix('/rpc')}
+    challenge = secrets.token_hex(32)
+    proof = request(launch, '/api/v1/managed/identity?challenge=' + challenge, authenticated=False)
+    payload = json.dumps([1, challenge, launch['endpoint'], original['server_id']], separators=(',', ':')).encode()
+    expected = hmac.new((data / 'installation.key').read_bytes(), payload, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(str(proof.get('proof', '')), expected):
+        raise ValueError('Owned fixture service identity could not be verified')
+    return launch
 
 
 def identity(reply):
@@ -190,8 +213,7 @@ def busy_refusal(previous, current, old_manifest, root, env):
         while True:
             assert child.poll() is None, 'Owned fixture service exited'
             try:
-                pointer = json.loads((data / 'state' / 'task-service.json').read_text())
-                launch = {**original, 'endpoint': pointer['endpoint'].removesuffix('/rpc')}
+                launch = owned_launch(data, child, original)
                 bootstrap = request(launch, '/api/v1/bootstrap')
                 assert bootstrap['sync']['server_id'] == original['server_id']
                 break
@@ -344,8 +366,7 @@ existing packaged workspace/identity checks; its publication path remains open.
             while True:
                 assert child.poll() is None, 'Owned upgraded core exited'
                 try:
-                    pointer = json.loads((data / 'state/task-service.json').read_text())
-                    upgraded = {**original, 'endpoint': pointer['endpoint'].removesuffix('/rpc')}
+                    upgraded = owned_launch(data, child, original)
                     version = request(upgraded, '/api/v1/version')['connector']
                     if version != original['runtime_version']:
                         break

@@ -4,6 +4,8 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import runpy
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -13,7 +15,9 @@ from bat_agent_connector.errors import OwnerConflict, TaskControlRefused
 from bat_agent_connector.fleet import Fleet
 from bat_agent_connector.task_daemon import TaskDaemon
 from tests.conftest import make_config
-from tests.test_operations_unification import SID, owned  # noqa: F401 - shared real owned-session fixture
+from tests.test_operations_unification import SID, owned
+
+_ = owned  # shared real owned-session fixture
 
 
 def pointer():
@@ -179,3 +183,45 @@ def test_managed_verification_never_sends_bearer_to_an_unproven_service(tmp_path
     with pytest.raises(ValueError, match='identity could not be verified'):
         runtime._verify(root, {'server_id': 'fixture-server'})
     assert requests == [{}]
+
+
+@pytest.mark.parametrize('state', [{}, {'pid': 42}, {'pid': 43, 'endpoint': 'http://127.0.0.1:45123/rpc'}])
+def test_packaged_upgrade_probe_waits_for_its_child_endpoint(tmp_path, monkeypatch, state):
+    script = Path(__file__).resolve().parents[1] / 'desktop/tests/managed-upgrade-fixture.py'
+    monkeypatch.syspath_prepend(str(script.parent))
+    fixture = runpy.run_path(str(script))
+    (tmp_path / 'state').mkdir()
+    (tmp_path / 'state/task-service.json').write_text(json.dumps(state))
+    with pytest.raises(ValueError, match='not listening yet'):
+        fixture['owned_launch'](tmp_path, SimpleNamespace(pid=42), {})
+
+
+def test_packaged_upgrade_probe_proves_identity_without_a_bearer(tmp_path, monkeypatch):
+    script = Path(__file__).resolve().parents[1] / 'desktop/tests/managed-upgrade-fixture.py'
+    monkeypatch.syspath_prepend(str(script.parent))
+    fixture = runpy.run_path(str(script))
+    (tmp_path / 'state').mkdir()
+    (tmp_path / 'state/task-service.json').write_text(json.dumps({
+        'pid': 42, 'endpoint': 'http://127.0.0.1:45123/rpc'}))
+    (tmp_path / 'installation.key').write_bytes(b'fixture-key')
+    requests = []
+
+    def unrelated(launch, path, **kwargs):
+        requests.append(kwargs)
+        return {'proof': 'unrelated-service'}
+
+    monkeypatch.setitem(fixture['owned_launch'].__globals__, 'request', unrelated)
+    with pytest.raises(ValueError, match='identity could not be verified'):
+        fixture['owned_launch'](tmp_path, SimpleNamespace(pid=42), {'server_id': 'fixture-server', 'token': 'fixture-token'})
+    assert requests == [{'authenticated': False}]
+
+
+def test_packaged_upgrade_probe_never_contacts_the_default_port(tmp_path, monkeypatch):
+    script = Path(__file__).resolve().parents[1] / 'desktop/tests/managed-upgrade-fixture.py'
+    monkeypatch.syspath_prepend(str(script.parent))
+    fixture = runpy.run_path(str(script))
+    (tmp_path / 'state').mkdir()
+    (tmp_path / 'state/task-service.json').write_text(json.dumps({
+        'pid': 42, 'endpoint': 'http://127.0.0.1:18796/rpc'}))
+    with pytest.raises(ValueError, match='Invalid owned fixture endpoint'):
+        fixture['owned_launch'](tmp_path, SimpleNamespace(pid=42), {})
