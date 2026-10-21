@@ -17738,6 +17738,7 @@ function createWorkPublish({ h, t, form, namespace, caps, errorBox }) {
 				if (!statusBox) return false;
 				statusBox.hidden = false;
 				const presented = errorBox ? errorBox(error, {
+					sourceRefresh: false,
 					summary: sentence,
 					within: statusBox
 				}) : h("p", {}, sentence);
@@ -18366,12 +18367,13 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		workChoice.replaceChildren();
 		status.replaceChildren();
 	}
-	function failure(err) {
+	function failure(err, options = {}) {
 		serial++;
 		clear();
 		purge();
 		workChoice.replaceChildren();
 		status.replaceChildren(errorBox(err, {
+			...options,
 			summary: t("pmq_unavailable"),
 			within: status
 		}));
@@ -18385,7 +18387,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				401,
 				403,
 				404
-			].includes(err.status)) failure(err);
+			].includes(err.status)) failure(err, { sourceRefresh: args[0] !== "POST" && !(args[0] === "GET" && typeof args[4] === "function") });
 			throw err;
 		}
 	};
@@ -23605,7 +23607,10 @@ function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, 
 		note.textContent = t(nativeDesktop && !nativeBriefExportSupport ? "pm_export_native_unavailable" : "pm_export_help");
 		if (pendingReceipt && caps()?.actor === actor) {
 			if (pendingReceipt.error) {
-				status.replaceChildren(errorBox(pendingReceipt.error, { within: status }));
+				status.replaceChildren(errorBox(pendingReceipt.error, {
+					sourceRefresh: false,
+					within: status
+				}));
 				return;
 			}
 			const value = pendingReceipt.receipt;
@@ -23622,7 +23627,7 @@ function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, 
 		pendingReceipt = null;
 		update();
 		const expected = identity(), source = snapshot(), kind = format.value, language = locale.value;
-		let nativeSaveStarted = false;
+		let nativeSaveStarted = false, sourceRefresh = true;
 		status.replaceChildren(h("p", { class: "muted" }, t("pm_export_reading")));
 		try {
 			const report = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/snapshots/${encodeURIComponent(source.snapshot_id)}/brief-export?format=${kind}&locale=${language}`);
@@ -23633,6 +23638,7 @@ function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, 
 			const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (value) => value.toString(16).padStart(2, "0")).join("");
 			live(expected);
 			if (digest !== report.output_digest) throw Error(t("pm_export_changed"));
+			sourceRefresh = false;
 			if (nativeDesktop) {
 				nativeSaveStarted = true;
 				const receipt = await nativeBriefSave({
@@ -23693,7 +23699,7 @@ function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, 
 			}
 			if (identity() !== expected) return;
 			status.replaceChildren();
-			onUnavailable(rendered);
+			onUnavailable(rendered, { sourceRefresh });
 		} finally {
 			busy = false;
 			update();
@@ -23796,7 +23802,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		caps,
 		snapshot: () => snapshot,
 		readable: canRead,
-		onUnavailable: (error) => unavailable(error),
+		onUnavailable: (error, options) => unavailable(error, options),
 		errorBox
 	}) : null;
 	if (exports) box.insertBefore(exports.element, box.lastChild);
@@ -23810,9 +23816,12 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		create.update();
 		exports?.update();
 	}
-	function unavailable(error) {
+	function unavailable(error, options = {}) {
 		withdraw();
-		status.replaceChildren(errorBox(error, { within: status }));
+		status.replaceChildren(errorBox(error, {
+			...options,
+			within: status
+		}));
 	}
 	const stamp = (value) => timeStamp(value, { empty: t("pm_evidence_time_unknown") });
 	const check = (data) => {
@@ -25527,7 +25536,10 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 						try {
 							await navigator.clipboard.writeText(accepted.plan.adoption.commit_sha);
 						} catch (error) {
-							if (details.isConnected) details.append(errorBox(error, { within: details }));
+							if (details.isConnected) details.append(errorBox(error, {
+								sourceRefresh: false,
+								within: details
+							}));
 						}
 					}
 				}, t("pd_copy"))));
@@ -25677,9 +25689,12 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		caps,
 		snapshot: () => snapshot,
 		readable: canRead,
-		onUnavailable: (error) => {
+		onUnavailable: (error, options) => {
 			withdraw();
-			status.replaceChildren(errorBox(error, { within: status }));
+			status.replaceChildren(errorBox(error, {
+				...options,
+				within: status
+			}));
 			onChange(null, "error", error);
 		},
 		errorBox
@@ -29492,7 +29507,7 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 				401,
 				403,
 				404
-			].includes(error.status)) failure(error);
+			].includes(error.status)) failure(error, { sourceRefresh: args[0] !== "POST" && !(args[0] === "GET" && typeof args[4] === "function") });
 			throw error;
 		}
 	};
@@ -29863,11 +29878,12 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 			for (const f of item.forms) f.update();
 		}
 	}
-	function failure(error) {
+	function failure(error, options = {}) {
 		withdraw();
 		adapterFields.hidden = true;
 		historyDetails.hidden = true;
 		status.append(errorBox(error, {
+			...options,
 			summary: t("ahp_unavailable"),
 			within: status
 		}));
@@ -30373,7 +30389,11 @@ function adoptStartReview({ t, api, alive, form, caps, namespace, workspaceId, t
 			if (request && !updating) update();
 		},
 		extra: h$1("div", {}, selection, h$1("h4", {}, t("loop_works_heading")), h$1("p", { class: "muted" }, t("loop_adopt_start_help")), catalog, controls, status),
-		errorBox: (error) => errorBox(error, { summary: t("loop_preview_mismatch") })
+		errorBox: (error, options) => errorBox(error, {
+			...options,
+			sourceRefresh: false,
+			summary: t("loop_preview_mismatch")
+		})
 	});
 	const box = h$1("section", {
 		class: "pm-adopt-start",
@@ -30594,7 +30614,10 @@ function adoptStartReview({ t, api, alive, form, caps, namespace, workspaceId, t
 			if (live(own)) {
 				prepared = null;
 				if (error.message === "loop_preview_mismatch") error = Error(t("loop_preview_mismatch"));
-				status.replaceChildren(errorBox(error, { within: status }));
+				status.replaceChildren(errorBox(error, {
+					sourceRefresh: false,
+					within: status
+				}));
 			}
 		} finally {
 			if (own === ticket) checking = false;
@@ -32001,9 +32024,10 @@ function workspaceSpecMaterialization({ h, t, api, alive, workspaceId, workspace
 		editorView.replaceChildren();
 		editor = null;
 	}
-	function fail(error) {
+	function fail(error, options = {}) {
 		clear();
 		status.replaceChildren(errorBox(error, {
+			...options,
 			summary: t(error.message?.startsWith("PM_SPEC_") ? "psm_invalid" : "psm_unavailable"),
 			within: status
 		}));
@@ -32030,7 +32054,7 @@ function workspaceSpecMaterialization({ h, t, api, alive, workspaceId, workspace
 						401,
 						403,
 						404
-					].includes(error.status)) fail(error);
+					].includes(error.status)) fail(error, { sourceRefresh: false });
 					throw error;
 				}
 			};
@@ -32444,7 +32468,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 		status.replaceChildren();
 		update();
 	}
-	function failure(err) {
+	function failure(err, options = {}) {
 		withdraw();
 		showDraft(false);
 		newBatch.hidden = true;
@@ -32453,6 +32477,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 		proofView.hidden = true;
 		head.hidden = true;
 		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(err, {
+			...options,
 			summary: t(err.code === "PM_REQUIREMENT_QUALITY_INVALID" ? "pmb_invalid" : "pmb_unavailable"),
 			within: status
 		})), refreshButton));
@@ -32466,7 +32491,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 				401,
 				403,
 				404
-			].includes(err.status)) failure(err);
+			].includes(err.status)) failure(err, { sourceRefresh: false });
 			throw err;
 		}
 	};
@@ -32591,7 +32616,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 					renderEntries(true);
 					update();
 				} catch (err) {
-					failure(err);
+					failure(err, { sourceRefresh: false });
 				}
 			});
 			const changed = text("pmb_changed_dependency");
@@ -32665,7 +32690,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 					401,
 					403,
 					404
-				].includes(err.status)) failure(err);
+				].includes(err.status)) failure(err, { sourceRefresh: false });
 				throw Object.assign(err, { admissionRefused: true });
 			}
 		}
@@ -35420,7 +35445,7 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 		useReview.hidden = true;
 		update();
 	}
-	function fail(error) {
+	function fail(error, options = {}) {
 		if ([
 			401,
 			403,
@@ -35435,6 +35460,7 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 		outcome.replaceChildren();
 		const mismatch = error.message?.startsWith("PM_SPEC_") || error.code === "PM_REQUIREMENT_QUALITY_INVALID";
 		status.replaceChildren(errorBox(error, {
+			...options,
 			...error.code === "PM_HANDOFF_BLOCKED" ? {} : { summary: t(mismatch ? "ph_invalid" : "ph_unavailable") },
 			within: status
 		}));
@@ -35496,7 +35522,7 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 						401,
 						403,
 						404
-					].includes(error.status)) fail(error);
+					].includes(error.status)) fail(error, { sourceRefresh: false });
 					throw error;
 				}
 			};
@@ -37429,15 +37455,18 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 		body.replaceChildren();
 		status.replaceChildren();
 	}
-	function fail(error) {
+	function fail(error, options = {}) {
 		++serial;
 		thread = null;
 		capability = null;
 		request?.dispose();
 		request = null;
 		body.replaceChildren();
-		status.replaceChildren(errorBox(error, { within: status }));
-		onAccessFailure(error);
+		status.replaceChildren(errorBox(error, {
+			...options,
+			within: status
+		}));
+		onAccessFailure(error, options);
 	}
 	function navigation() {
 		const selected = choices.get(intake.intake_id) || intake.document.thread_ref?.thread_id || "";
@@ -37471,7 +37500,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 					return await api(...args);
 				} catch (error) {
 					try {
-						if (current(ticket)) onAccessFailure(error);
+						if (current(ticket)) onAccessFailure(error, { sourceRefresh: false });
 					} catch {}
 					throw error;
 				}
@@ -37610,7 +37639,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 			}
 			readThread();
 		} catch (error) {
-			fail(error);
+			fail(error, { sourceRefresh: false });
 		}
 	});
 	element.addEventListener("toggle", () => {
@@ -37689,12 +37718,12 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 		meetings,
 		_baseline: baseline
 	};
-	const onAccessFailure = (error) => {
+	const onAccessFailure = (error, options) => {
 		if ([401, 403].includes(error.status) || [
 			"PM_FOLLOW_UP_SOURCE_UNAVAILABLE",
 			"FORBIDDEN",
 			"NOT_FOUND"
-		].includes(error.code)) unavailable(error);
+		].includes(error.code)) unavailable(error, options);
 	};
 	const assessments = caps()?.features?.pm_workspaces?.follow_up_analysis ? followUpAssessments({
 		h,
@@ -37763,7 +37792,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			previousChoice
 		]) updateOptions(node, [], node === snapshotChoice ? "pm_fu_select_snapshot" : "pm_fu_none");
 	}
-	function unavailable(error) {
+	function unavailable(error, options = {}) {
 		assessments?.clear();
 		analysis?.clear();
 		++serial;
@@ -37781,7 +37810,10 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 		editor?.update();
 		editorFold.hidden = true;
 		if (retired) editor?.box.remove();
-		status.replaceChildren(errorBox(error, { within: status }), h("button", {
+		status.replaceChildren(errorBox(error, {
+			...options,
+			within: status
+		}), h("button", {
 			type: "button",
 			class: "ui-button secondary ui-sm",
 			onclick: () => void refresh()
@@ -40728,7 +40760,10 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 					403,
 					404
 				].includes(err.status)) withdraw();
-				errorStatusBox.replaceChildren(panelErrorBox(err, { within: errorStatusBox }));
+				errorStatusBox.replaceChildren(panelErrorBox(err, {
+					sourceRefresh: false,
+					within: errorStatusBox
+				}));
 				errorStatusBox.hidden = false;
 			} finally {
 				if (checkingTicket === ticket) checking = false;
@@ -40866,7 +40901,10 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 					const statusBox = editorInstance?.box?.querySelector(":scope > [role=\"status\"]");
 					if (statusBox) {
 						statusBox.hidden = false;
-						statusBox.replaceChildren(panelErrorBox(error, { within: statusBox }));
+						statusBox.replaceChildren(panelErrorBox(error, {
+							sourceRefresh: false,
+							within: statusBox
+						}));
 						return true;
 					}
 				}
@@ -41117,7 +41155,10 @@ function adoptStartLanding({ t, api, alive, namespace, workspaceId, caps, errorB
 			checked(value.operation, current);
 			await refresh();
 		} catch (error) {
-			if (valid(own)) status.replaceChildren(errorBox(error, { within: status }));
+			if (valid(own)) status.replaceChildren(errorBox(error, {
+				sourceRefresh: false,
+				within: status
+			}));
 		} finally {
 			busy = false;
 			if (valid(own)) for (const button of body.querySelectorAll("button")) button.disabled = false;
@@ -45472,7 +45513,7 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 				401,
 				403,
 				404
-			].includes(error.status) || ["FORBIDDEN", "NOT_FOUND"].includes(error.code))) failure(error);
+			].includes(error.status) || ["FORBIDDEN", "NOT_FOUND"].includes(error.code))) failure(error, { sourceRefresh: false });
 			throw error;
 		}
 	};
@@ -45505,9 +45546,10 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 		output = null;
 		update();
 	}
-	function failure(error) {
+	function failure(error, options = {}) {
 		withdraw();
 		status.replaceChildren(errorBox(error, {
+			...options,
 			summary: t("pmrv_unavailable"),
 			within: status
 		}));
@@ -46410,7 +46452,7 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 				401,
 				403,
 				404
-			].includes(error.status)) failure(error);
+			].includes(error.status)) failure(error, { sourceRefresh: args[0] !== "POST" && !(args[0] === "GET" && typeof args[4] === "function") });
 			throw error;
 		}
 	};
@@ -46760,9 +46802,10 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 		for (const editor of [start, ...editors.values()]) editor?.box.querySelector(".pm-receipt")?.replaceChildren();
 		update();
 	}
-	function failure(error) {
+	function failure(error, options = {}) {
 		withdraw();
 		status.append(errorBox(error, {
+			...options,
 			summary: t("pmr_unavailable"),
 			within: status
 		}));
@@ -47119,7 +47162,7 @@ function maintenanceChecks({ h, t, api, alive, workspaceId, workspace, caps, per
 				401,
 				403,
 				404
-			].includes(error.status)) failure(error);
+			].includes(error.status)) failure(error, { sourceRefresh: false });
 			throw error;
 		}
 	};
@@ -47226,9 +47269,10 @@ function maintenanceChecks({ h, t, api, alive, workspaceId, workspace, caps, per
 		context.replaceChildren();
 		update();
 	}
-	function failure(error) {
+	function failure(error, options = {}) {
 		withdraw();
 		status.append(errorBox(error, {
+			...options,
 			summary: t("pmc_unavailable"),
 			within: status
 		}));
@@ -47434,7 +47478,7 @@ function maintenanceObservations({ h, t, api, alive, workspaceId, workspace, cap
 				401,
 				403,
 				404
-			].includes(error.status)) failure(error);
+			].includes(error.status)) failure(error, { sourceRefresh: false });
 			throw error;
 		}
 	};
@@ -47531,9 +47575,10 @@ function maintenanceObservations({ h, t, api, alive, workspaceId, workspace, cap
 		status.replaceChildren();
 		update();
 	}
-	function failure(error) {
+	function failure(error, options = {}) {
 		withdraw();
 		status.append(errorBox(error, {
+			...options,
 			summary: t("pmo_unavailable"),
 			within: status
 		}));
@@ -47789,7 +47834,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 				401,
 				403,
 				404
-			].includes(error.status)) failure(error);
+			].includes(error.status)) failure(error, { sourceRefresh: false });
 			throw error;
 		}
 	};
@@ -48129,9 +48174,10 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		paintPolicyHeading(null);
 		controls();
 	}
-	function failure(error) {
+	function failure(error, options = {}) {
 		withdraw();
 		status.replaceChildren(errorBox(error, {
+			...options,
 			summary: t("pmp_unavailable"),
 			within: status
 		}));
@@ -48381,9 +48427,10 @@ function workspaceReleaseBaselines({ h, t, api, alive, workspaceId, workspace, c
 		headingState.replaceChildren(h("h3", {}, t("prb_title")));
 		controls();
 	}
-	function failure(error) {
+	function failure(error, options = {}) {
 		withdraw();
 		status.replaceChildren(errorBox(error, {
+			...options,
 			summary: t("prb_unavailable"),
 			within: status
 		}));
@@ -48397,7 +48444,7 @@ function workspaceReleaseBaselines({ h, t, api, alive, workspaceId, workspace, c
 				401,
 				403,
 				404
-			].includes(error.status)) failure(error);
+			].includes(error.status)) failure(error, { sourceRefresh: false });
 			throw error;
 		}
 	};
@@ -49226,7 +49273,10 @@ function pmWorktreeChoice({ h, t, api, alive, input, labelled, capability, scope
 				renderProof();
 			} catch (error) {
 				if (retiredView(error) || viewLeft(alive)) return;
-				if (ticket === sequence) proof.replaceChildren(errorBox(error, { within: proof }));
+				if (ticket === sequence) proof.replaceChildren(errorBox(error, {
+					sourceRefresh: false,
+					within: proof
+				}));
 			} finally {
 				if (ticket === sequence) {
 					reading = false;
@@ -49385,7 +49435,10 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		try {
 			persist();
 		} catch (error) {
-			status.replaceChildren(errorBox(error, { within: status }));
+			status.replaceChildren(errorBox(error, {
+				sourceRefresh: false,
+				within: status
+			}));
 		}
 	};
 	for (const [name, input] of Object.entries(fields)) {
@@ -49434,7 +49487,10 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				receipt.replaceChildren();
 				update();
 			} catch (error) {
-				if (!retiredView(error)) status.replaceChildren(errorBox(error, { within: status }));
+				if (!retiredView(error)) status.replaceChildren(errorBox(error, {
+					sourceRefresh: false,
+					within: status
+				}));
 			}
 		}
 	}, t("pm_edit_request"));
@@ -53256,9 +53312,10 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 		const text = t(key);
 		return text !== key ? text : t("loop_next_err_unknown");
 	}
-	function showError(error, host) {
+	function showError(error, host, options = {}) {
 		const summary = error?.code ? sentence(error.code) : t("loop_next_err_unknown");
 		host.replaceChildren(errorBox(error, {
+			...options,
 			summary,
 			within: host
 		}));
@@ -53442,7 +53499,7 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 	function handleFormError(error) {
 		if (!error?.code || error.status === 0 && clientActionReason(error.code) || error.code === "NETWORK_ERROR" || error.code === "TIMEOUT" || error.code === "CENTRAL_OFFLINE") return false;
 		const formStatus = composer?.box.querySelector("[role=status]");
-		if (formStatus) showError(error, formStatus);
+		if (formStatus) showError(error, formStatus, { sourceRefresh: false });
 		if (REKEY.has(error.code)) refresh();
 		return true;
 	}
@@ -53471,11 +53528,11 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 			if (mark !== epoch || stopped || disposed || retired(error)) return;
 			if (error?.code === "PM_WORK_CANCEL_NOT_ALLOWED_AFTER_SEND") {
 				cancelDenied.add(receipt.operation_id);
-				showError(error, status);
+				showError(error, status, { sourceRefresh: false });
 				paint();
 				return;
 			}
-			showError(error, status);
+			showError(error, status, { sourceRefresh: false });
 		}
 	}
 	function mutationsAllowed() {
@@ -54579,7 +54636,10 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				try {
 					persist();
 				} catch (error) {
-					message.replaceChildren(errorBox(error, { within: message }));
+					message.replaceChildren(errorBox(error, {
+						sourceRefresh: false,
+						within: message
+					}));
 				}
 			}
 			unsaved.hidden = false;
@@ -54616,7 +54676,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				persist();
 				unsaved.hidden = false;
 			} catch (error) {
-				showError(error);
+				showError(error, { sourceRefresh: false });
 			}
 		});
 		fields.set(name, node);
@@ -54650,7 +54710,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			persist();
 			unsaved.hidden = false;
 		} catch (error) {
-			showError(error);
+			showError(error, { sourceRefresh: false });
 		}
 	});
 	const manual = h("details", { "data-setup-manual": "" }, h("summary", {}, t("setup_enter_manually")), profileField, h("div", { class: "capture-fields" }, input("url", "setup_host_url", {
@@ -54773,7 +54833,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			unsaved.hidden = false;
 			update();
 		} catch (error) {
-			showError(error);
+			showError(error, { sourceRefresh: false });
 		}
 	}
 	const retry = h("button", {
@@ -54800,7 +54860,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				refresh().catch(showError);
 			} catch (error) {
 				saved = previous;
-				showError(error);
+				showError(error, { sourceRefresh: false });
 			}
 		}
 	}, t("setup_next_change"));
@@ -54838,7 +54898,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		try {
 			persist();
 		} catch (error) {
-			showError(error);
+			showError(error, { sourceRefresh: false });
 		}
 	});
 	const choiceField = h("label", {
@@ -54873,7 +54933,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			copyReady = true;
 			copyRead.hidden = false;
 		} catch (error) {
-			showError(error);
+			showError(error, { sourceRefresh: false });
 		}
 	}
 	copyInput.addEventListener("input", (event) => {
@@ -55005,7 +55065,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		try {
 			applyConnection(parsed);
 		} catch (error) {
-			showError(error);
+			showError(error, { sourceRefresh: false });
 		}
 	}
 	fields.get("connection_url").addEventListener("input", () => consumeConnectionUrl(false));
@@ -55143,11 +55203,13 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		if (!alive() || busy || !saved.intent || damaged) return;
 		busy = true;
 		update();
+		let sourceRefresh = false;
 		try {
 			await sendOriginal();
+			sourceRefresh = true;
 			await refresh();
 		} catch (error) {
-			handleSubmissionError(error, saved.intent?.request.action.split(".")[1]);
+			handleSubmissionError(error, saved.intent?.request.action.split(".")[1], { sourceRefresh });
 		} finally {
 			busy = false;
 			if (alive()) update();
@@ -55159,6 +55221,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		busy = true;
 		update();
 		message.replaceChildren();
+		let sourceRefresh = false;
 		try {
 			if (kind === "verification" && saved.verification_base && (!validVerification(saved.verification_base) || !/^[0-9a-f]{64}$/.test(saved.verification_base.revision))) throw Error(t("setup_verification_invalid"));
 			persist();
@@ -55220,15 +55283,16 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			persist();
 			automaticStatus.textContent = t("setup_saving");
 			await sendOriginal();
+			sourceRefresh = true;
 			await refresh();
 		} catch (error) {
-			handleSubmissionError(error, kind);
+			handleSubmissionError(error, kind, { sourceRefresh });
 		} finally {
 			busy = false;
 			if (alive()) update();
 		}
 	}
-	function handleSubmissionError(error, kind) {
+	function handleSubmissionError(error, kind, options = { sourceRefresh: false }) {
 		if (!alive()) return;
 		let field;
 		if (saved.intent && !saved.intent.operation_id && error.admissionRefused === true) {
@@ -55238,7 +55302,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				persist();
 			} catch (storageError) {
 				saved.intent = previous;
-				showError(storageError);
+				showError(storageError, { sourceRefresh: false });
 				return;
 			}
 			field = kind === "host" ? {
@@ -55269,7 +55333,10 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			saved.intent.problemCode = error.code;
 			persist();
 		}
-		showError(error, field ? { summary: t("setup_refused") } : void 0);
+		showError(error, {
+			...options,
+			...field ? { summary: t("setup_refused") } : {}
+		});
 		if (field) {
 			fieldError(field, `error_code_${error.code}`);
 			queueMicrotask(() => {
@@ -56226,9 +56293,12 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 	});
 	input.value = saved.text || "";
 	const tags = h("div", { class: "actions session-label-tags" }), message = h("div", { role: "status" }), result = h("div"), restriction = h("p", { class: "muted" });
-	const error = (e) => {
+	const error = (e, options = {}) => {
 		if (live()) {
-			message.replaceChildren(errorBox(e, { within: message }));
+			message.replaceChildren(errorBox(e, {
+				...options,
+				within: message
+			}));
 			update();
 		}
 	};
@@ -56257,7 +56327,7 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 			if (!live() || busy || refreshing || !readable || !permitted() || damaged || saved.intent?.operation_id || saved.intent && (!saved.intent.request || saved.intent.refused)) return;
 			const values = parsed();
 			if (!validLabels(values)) {
-				error(Error(t("labels_limits")));
+				error(Error(t("labels_limits")), { sourceRefresh: false });
 				return;
 			}
 			const previous = saved;
@@ -56279,7 +56349,7 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 				persist();
 			} catch (e) {
 				saved = previous;
-				error(e);
+				error(e, { sourceRefresh: false });
 				return;
 			}
 			busy = true;
@@ -56299,7 +56369,7 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 								persist();
 							} catch {}
 						}
-						error(e);
+						error(e, { sourceRefresh: false });
 					}
 				} finally {
 					busy = false;
@@ -56339,7 +56409,7 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 				persist();
 			} catch (e) {
 				saved = previous;
-				error(e);
+				error(e, { sourceRefresh: false });
 				return;
 			}
 			damaged = false;
@@ -56361,7 +56431,7 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 		try {
 			persist();
 		} catch (e) {
-			error(e);
+			error(e, { sourceRefresh: false });
 		}
 		update();
 	};
@@ -58477,7 +58547,10 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 			try {
 				show(await (controller.snapshot().intent ? controller.check() : controller.create(document)));
 			} catch (error) {
-				if (alive()) status.replaceChildren(errorBox(error, { within: status }));
+				if (alive()) status.replaceChildren(errorBox(error, {
+					sourceRefresh: false,
+					within: status
+				}));
 			} finally {
 				busy = false;
 				if (alive()) update();
@@ -58504,7 +58577,10 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 				read();
 			} catch (error) {
 				release();
-				if (alive()) status.replaceChildren(errorBox(error, { within: status }));
+				if (alive()) status.replaceChildren(errorBox(error, {
+					sourceRefresh: false,
+					within: status
+				}));
 				return;
 			}
 			if (release() && (next.hidden || next.disabled)) moveFrom(next, reload);
@@ -58902,7 +58978,10 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 		try {
 			persist();
 		} catch (error) {
-			status.replaceChildren(errorBox(error, { within: status }));
+			status.replaceChildren(errorBox(error, {
+				sourceRefresh: false,
+				within: status
+			}));
 		}
 	};
 	const field = (name, label, multiline = false, max = 2e4) => {
@@ -59012,7 +59091,10 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 					saved.intent.initialAdmissionRefused = true;
 					persist();
 				}
-				status.replaceChildren(errorBox(error, { within: status }));
+				status.replaceChildren(errorBox(error, {
+					sourceRefresh: false,
+					within: status
+				}));
 			} catch {}
 		} finally {
 			busy = false;
@@ -59049,7 +59131,10 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 				status.replaceChildren();
 				update();
 			} catch (error) {
-				status.replaceChildren(errorBox(error, { within: status }));
+				status.replaceChildren(errorBox(error, {
+					sourceRefresh: false,
+					within: status
+				}));
 			}
 		}
 	});
@@ -61164,8 +61249,11 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 		}
 	};
 	const validInput = (input) => input.host && input.session_id.length >= 6 && input.session_id.length <= 256 && !/[\x00-\x1f\x7f-\x9f/\\]/.test(input.session_id) && input.relative_path && new TextEncoder().encode(input.relative_path).length <= 4096 && !/[\\\x00-\x1f\x7f-\x9f]/.test(input.relative_path) && input.relative_path.split("/").every((part) => part && part !== "." && part !== ".." && part.toLowerCase() !== ".git");
-	const showError = (error) => {
-		if (currentView()) notice.replaceChildren(errorBox(error, { within: notice }));
+	const showError = (error, options = {}) => {
+		if (currentView()) notice.replaceChildren(errorBox(error, {
+			...options,
+			within: notice
+		}));
 	};
 	const preview = h("button", {
 		class: "secondary",
@@ -61181,10 +61269,12 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 			reviewed.checked = false;
 			persist();
 			render();
+			let sourceRefresh = true;
 			try {
 				const row = (await api("GET", `/sessions/${encodeURIComponent(input.host)}/${encodeURIComponent(input.session_id)}`)).session;
 				guard();
 				if (ticket !== revision) return;
+				sourceRefresh = false;
 				if (row?.provenance !== "manual" || row.host !== input.host || row.session_id !== input.session_id) throw new Error(t("capture_manual_only"));
 				const response = await api("POST", "/artifact-capture-previews", input);
 				guard();
@@ -61195,7 +61285,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 				persist();
 				notice.replaceChildren();
 			} catch (error) {
-				if (ticket === revision) showError(error);
+				if (ticket === revision) showError(error, { sourceRefresh });
 			} finally {
 				busy = false;
 				pressed = null;
@@ -61267,7 +61357,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 					"INVALID_PARAMS"
 				].includes(error.code)) saved.refused = true;
 				persist();
-				showError(error);
+				showError(error, { sourceRefresh: false });
 			} finally {
 				busy = false;
 				pressed = null;
@@ -61579,9 +61669,12 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 		checked: saved.abort
 	});
 	const message = h("div", { role: "status" }), result = h("div", { "data-task-result": "" }), restriction = h("p", { class: "muted" });
-	const showError = (error) => {
+	const showError = (error, options = {}) => {
 		if (live()) {
-			message.replaceChildren(errorBox(error, { within: message }));
+			message.replaceChildren(errorBox(error, {
+				...options,
+				within: message
+			}));
 			update();
 		}
 	};
@@ -61624,7 +61717,7 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 				persist();
 			} catch (e) {
 				saved = previous;
-				showError(e);
+				showError(e, { sourceRefresh: false });
 				return;
 			}
 			busy = true;
@@ -61643,7 +61736,7 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 								persist();
 							} catch {}
 						}
-						showError(e);
+						showError(e, { sourceRefresh: false });
 					}
 				} finally {
 					busy = false;
@@ -61695,7 +61788,7 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 				persist();
 			} catch (e) {
 				saved = previous;
-				showError(e);
+				showError(e, { sourceRefresh: false });
 				return;
 			}
 			operation = null;
@@ -61714,7 +61807,7 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 		try {
 			persist();
 		} catch (e) {
-			showError(e);
+			showError(e, { sourceRefresh: false });
 		}
 		update();
 	};
@@ -62174,7 +62267,10 @@ function permissionsPanel({ h, t, api, caps, guard, errorBox, opStatus, storageK
 							intent.refused = error.code;
 							persist();
 						}
-						message.replaceChildren(errorBox(error, { within: message }));
+						message.replaceChildren(errorBox(error, {
+							sourceRefresh: false,
+							within: message
+						}));
 					}
 				} finally {
 					busy = false;
@@ -62391,7 +62487,10 @@ function approvalsPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, sto
 				status.replaceChildren();
 				renderPreview();
 			} catch (e) {
-				if (current()) status.replaceChildren(errorBox(e, { within: status }));
+				if (current()) status.replaceChildren(errorBox(e, {
+					sourceRefresh: false,
+					within: status
+				}));
 			} finally {
 				busy = false;
 				if (current()) update();
@@ -62445,7 +62544,10 @@ function approvalsPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, sto
 			try {
 				persist(true);
 			} catch (error) {
-				status.replaceChildren(errorBox(error, { within: status }));
+				status.replaceChildren(errorBox(error, {
+					sourceRefresh: false,
+					within: status
+				}));
 				update();
 				return;
 			}
@@ -62463,7 +62565,10 @@ function approvalsPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, sto
 							intent.refused = e.code;
 							persist();
 						}
-						status.replaceChildren(errorBox(e, { within: status }));
+						status.replaceChildren(errorBox(e, {
+							sourceRefresh: false,
+							within: status
+						}));
 					}
 				} finally {
 					busy = false;
@@ -62782,8 +62887,11 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 	const fill = () => {
 		for (const [k, el] of Object.entries(inputs)) el.value = saved[k];
 	};
-	const showError = (e) => {
-		if (current()) status.replaceChildren(errorBox(e, { within: status }));
+	const showError = (e, options = {}) => {
+		if (current()) status.replaceChildren(errorBox(e, {
+			...options,
+			within: status
+		}));
 	};
 	function renderWorkspaces() {
 		workspace.replaceChildren(h("option", { value: "" }, t("start_choose_workspace")), ...workspaces.map((w) => h("option", { value: w.workspace_id }, `${w.name || w.workspace_id} · ${w.workspace_id}`)));
@@ -62883,7 +62991,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 			try {
 				persist();
 			} catch (e) {
-				showError(e);
+				showError(e, { sourceRefresh: false });
 				update();
 				return;
 			}
@@ -62904,7 +63012,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 								persist();
 							} catch {}
 						}
-						showError(e);
+						showError(e, { sourceRefresh: false });
 					}
 				} finally {
 					busy = false;
@@ -62942,7 +63050,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 				persist();
 			} catch (e) {
 				saved = previous;
-				showError(e);
+				showError(e, { sourceRefresh: false });
 				return;
 			}
 			operation = null;
@@ -62969,7 +63077,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 		try {
 			persist();
 		} catch (e) {
-			showError(e);
+			showError(e, { sourceRefresh: false });
 		}
 		update();
 		if (key === "host") discover();
@@ -63519,8 +63627,11 @@ function orchestrationPanel({ h, t, api, caps, guard, ready, errorBox, opStatus,
 		agent.value = saved.agent;
 		maximum.value = saved.max_items;
 	}
-	const showError = (error) => {
-		if (current()) status.replaceChildren(errorBox(error, { within: status }));
+	const showError = (error, options = {}) => {
+		if (current()) status.replaceChildren(errorBox(error, {
+			...options,
+			within: status
+		}));
 	};
 	function renderSelection() {
 		const id = (row) => sessionMode(mode) ? row.session_id : row.workspace_id;
@@ -63592,7 +63703,7 @@ function orchestrationPanel({ h, t, api, caps, guard, ready, errorBox, opStatus,
 		try {
 			persist();
 		} catch (e) {
-			showError(e);
+			showError(e, { sourceRefresh: false });
 		}
 		update();
 	};
@@ -63746,7 +63857,7 @@ function orchestrationPanel({ h, t, api, caps, guard, ready, errorBox, opStatus,
 			try {
 				persist();
 			} catch (e) {
-				showError(e);
+				showError(e, { sourceRefresh: false });
 				update();
 				return;
 			}
@@ -63766,7 +63877,7 @@ function orchestrationPanel({ h, t, api, caps, guard, ready, errorBox, opStatus,
 								persist();
 							} catch {}
 						}
-						showError(error);
+						showError(error, { sourceRefresh: false });
 					}
 				} finally {
 					busy = false;
@@ -63803,7 +63914,7 @@ function orchestrationPanel({ h, t, api, caps, guard, ready, errorBox, opStatus,
 				persist();
 			} catch (error) {
 				saved = previous;
-				showError(error);
+				showError(error, { sourceRefresh: false });
 				return;
 			}
 			operation = null;
@@ -64095,8 +64206,11 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 		binding.value = saved.target ? key(saved.target) : "";
 		for (const [k, el] of Object.entries(inputs)) el.value = saved[k];
 	}
-	const showError = (e) => {
-		if (current()) status.replaceChildren(errorBox(e, { within: status }));
+	const showError = (e, options = {}) => {
+		if (current()) status.replaceChildren(errorBox(e, {
+			...options,
+			within: status
+		}));
 	};
 	const selected = () => ({
 		target: saved.target,
@@ -64196,7 +64310,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 				preview = doc.preview;
 				previewProjectVersion = projectVersion;
 			} catch (e) {
-				if (expected === sequence) showError(e);
+				if (expected === sequence) showError(e, { sourceRefresh: false });
 			} finally {
 				if (expected === sequence && current()) {
 					reading = false;
@@ -64252,7 +64366,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 			try {
 				persist();
 			} catch (e) {
-				showError(e);
+				showError(e, { sourceRefresh: false });
 				update();
 				return;
 			}
@@ -64274,7 +64388,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 								persist();
 							} catch {}
 						}
-						showError(e);
+						showError(e, { sourceRefresh: false });
 					}
 				} finally {
 					busy = false;
@@ -64315,7 +64429,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 				persist();
 			} catch (e) {
 				saved = previous;
-				showError(e);
+				showError(e, { sourceRefresh: false });
 				release();
 				return;
 			}
@@ -64341,7 +64455,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 		try {
 			persist();
 		} catch (e) {
-			showError(e);
+			showError(e, { sourceRefresh: false });
 		}
 		update();
 	}
@@ -64984,8 +65098,11 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 			return false;
 		}
 	};
-	const showError = (error) => {
-		if (currentView()) notice.replaceChildren(errorBox(error, { within: notice }));
+	const showError = (error, options = {}) => {
+		if (currentView()) notice.replaceChildren(errorBox(error, {
+			...options,
+			within: notice
+		}));
 	};
 	const supported = () => caps()?.artifacts?.capture?.managed_single_file === true;
 	const scope = (name) => caps()?.scopes?.includes(name);
@@ -65114,7 +65231,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 				];
 				if (!saved[kind].operation_id && error.status >= 400 && error.status < 500 && safe.includes(error.code)) saved[kind].refused = error.code;
 				persist();
-				showError(error);
+				showError(error, { sourceRefresh: false });
 				if (kind === "capture" && error.status === 403) notice.append(h("p", { class: "muted" }, t("ar_original_credential")));
 			} finally {
 				busy = false;
@@ -65155,7 +65272,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 					persist();
 					notice.replaceChildren();
 				} catch (error) {
-					if (ticket === revision) showError(error);
+					if (ticket === revision) showError(error, { sourceRefresh: false });
 				} finally {
 					busy = false;
 					pressed.delete(preview);
@@ -66359,7 +66476,10 @@ function h(tag, attrs = {}, ...children) {
 		try {
 			await openExternal(attrs.href);
 		} catch (error) {
-			document.getElementById("main").prepend(errorBox(error, { within: document.getElementById("main") }));
+			document.getElementById("main").prepend(errorBox(error, {
+				sourceRefresh: false,
+				within: document.getElementById("main")
+			}));
 		}
 	});
 	return el;
@@ -66693,7 +66813,10 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 			for (const child of box.children) child.hidden = child !== status;
 		}
 		for (let parent = box.parentElement; parent; parent = parent.parentElement) if (parent.tagName === "DETAILS") parent.open = true;
-		fill(status, errorBox(clientActionError(reason, t), { within: status }));
+		fill(status, errorBox(clientActionError(reason, t), {
+			sourceRefresh: false,
+			within: status
+		}));
 	};
 	const guard = (mounted = false) => {
 		assertView(connection);
@@ -66980,11 +67103,17 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		fill(status);
 		const limit = Math.min(state.caps?.artifacts?.limits?.max_file_bytes || 16777216, nativeDesktop ? 16777216 : Number.MAX_SAFE_INTEGER);
 		if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-			fill(status, errorBox(new Error(t("attachment_unsupported_image")), { within: status }));
+			fill(status, errorBox(new Error(t("attachment_unsupported_image")), {
+				sourceRefresh: false,
+				within: status
+			}));
 			return;
 		}
 		if (file.size > limit) {
-			fill(status, errorBox(new ApiError(413, "ARTIFACT_TOO_LARGE", `Limit: ${limit}`), { within: status }));
+			fill(status, errorBox(new ApiError(413, "ARTIFACT_TOO_LARGE", `Limit: ${limit}`), {
+				sourceRefresh: false,
+				within: status
+			}));
 			return;
 		}
 		let name = file.name;
@@ -68359,8 +68488,8 @@ function sessionErrorDetails(e, { within, insideDetails = false } = {}) {
 		body
 	});
 }
-function sessionErrorBox(e, action = null, options = {}) {
-	if (state.refreshCycle) state.refreshCycle.error ||= e;
+function sessionErrorBox(e, action = null, { sourceRefresh = true, ...options } = {}) {
+	if (sourceRefresh && state.refreshCycle) state.refreshCycle.error ||= e;
 	return h("div", {
 		class: "session-error",
 		role: "alert",
@@ -68576,7 +68705,10 @@ async function viewSession(main, host, sid, context = null) {
 					mobileLayout?.updateDraft();
 				}
 			} catch (e) {
-				status.replaceChildren(sessionErrorBox(e, sendRecovery(e), { within: status }));
+				status.replaceChildren(sessionErrorBox(e, sendRecovery(e), {
+					sourceRefresh: false,
+					within: status
+				}));
 			} finally {
 				const active = document.activeElement;
 				const owned = active === send || active === document.body;
@@ -68612,7 +68744,10 @@ async function viewSession(main, host, sid, context = null) {
 				status.replaceChildren(sessionErrorBox(e, e?.status === 403 ? accessRecovery() : [404, 410].includes(e?.status) ? goneRecovery() : {
 					label: t("ui_retry"),
 					run: () => stop.click()
-				}, { within: status }));
+				}, {
+					sourceRefresh: false,
+					within: status
+				}));
 			}
 		}
 	});
@@ -69117,6 +69252,7 @@ async function viewSession(main, host, sid, context = null) {
 			saved = JSON.parse(localStorage.getItem(key));
 		} catch {}
 		const answer = async (params) => {
+			let sourceRefresh = true;
 			try {
 				assertView(connection);
 				const sourceVersion = withdrawalVersion;
@@ -69139,6 +69275,7 @@ async function viewSession(main, host, sid, context = null) {
 				assertView(connection);
 				if (disposed || withdrawn || sourceVersion !== withdrawalVersion) return;
 				applyObservation(latest);
+				sourceRefresh = false;
 				if (latest.session.api_access !== "managed" || identity(latest.session.pending) !== current || !pend.toolUseId) throw new ApiError(409, "PENDING_CHANGED", t("pending_changed"));
 				const op = await submit("session.answer", {
 					host,
@@ -69149,7 +69286,10 @@ async function viewSession(main, host, sid, context = null) {
 				}, {}, answerScope);
 				assertView(connection);
 				status.replaceChildren(opStatus(op));
-				if (op.status === "succeeded") await loadObservation();
+				if (op.status === "succeeded") {
+					sourceRefresh = true;
+					await loadObservation();
+				}
 			} catch (e) {
 				status.replaceChildren(sessionErrorBox(e, e?.code === "PENDING_CHANGED" ? {
 					label: t("session_err_review"),
@@ -69160,7 +69300,10 @@ async function viewSession(main, host, sid, context = null) {
 				} : e?.status === 403 ? accessRecovery() : [404, 410].includes(e?.status) ? goneRecovery() : {
 					label: t("ui_retry"),
 					run: () => answer(params)
-				}, { within: status }));
+				}, {
+					sourceRefresh,
+					within: status
+				}));
 			}
 		};
 		const actions = h("div", { class: "actions session-asking-actions" });
@@ -69756,7 +69899,10 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 					out.replaceChildren(sessionErrorBox(e, {
 						label: t("ui_retry"),
 						run: () => go.click()
-					}, { within: out }));
+					}, {
+						sourceRefresh: false,
+						within: out
+					}));
 				} finally {
 					starting = false;
 					if (go.isConnected) {
@@ -69879,7 +70025,10 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 				status.replaceChildren(sessionErrorBox(e, {
 					label: t("ui_retry"),
 					run: () => load().catch(() => {})
-				}, { within: status }));
+				}, {
+					sourceRefresh: false,
+					within: status
+				}));
 			} finally {
 				const active = document.activeElement;
 				const owned = active === create || active === document.body;
@@ -70094,7 +70243,10 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 					const receipt = op.result?.merge || op.result || op.external_refs?.merge_receipt;
 					fill(status, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id), receipt?.base_moved ? h("p", { class: "note warn" }, t("merged_newer_base", { count: receipt.other_commits_count })) : null);
 				} catch (e) {
-					fill(status, errorBox(e, { within: status }));
+					fill(status, errorBox(e, {
+						sourceRefresh: false,
+						within: status
+					}));
 				}
 			};
 			const blocked = pr.state !== "open" || pr.draft || pr.merged || pv.blocking.length > 0 || scopeChanged;
@@ -70137,12 +70289,17 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 					class: "secondary",
 					disabled: !may("deploy") || !state.caps?.deploy_recipes?.find((c) => c.name === r.name)?.readiness?.ready,
 					onclick: async () => {
+						let sourceRefresh = true;
 						try {
-							const deploymentPreview = (await api("GET", `/deployments/preview?recipe=${encodeURIComponent(r.name)}`)).preview;
-							const op = await submit("deployment.start", { recipe: r.name }, { source_sha: pr.merge_commit_sha }, deploymentPreview.preconditions, `deploy.${r.name}.${pr.merge_commit_sha}`);
+							const preconditions = (await api("GET", `/deployments/preview?recipe=${encodeURIComponent(r.name)}`)).preview.preconditions;
+							sourceRefresh = false;
+							const op = await submit("deployment.start", { recipe: r.name }, { source_sha: pr.merge_commit_sha }, preconditions, `deploy.${r.name}.${pr.merge_commit_sha}`);
 							fill(status, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id));
 						} catch (e) {
-							fill(status, errorBox(e, { within: status }));
+							fill(status, errorBox(e, {
+								sourceRefresh,
+								within: status
+							}));
 						}
 					}
 				}, t("deploy_to", { env: r.environment })));
@@ -70297,7 +70454,10 @@ function deploymentIntent(dep, kind, reload) {
 					fill(out, h("p", {}, opStatus(op), " · ", h("a", { href: `#/op/${op.operation_id}` }, t("dep_open_operation"))), deploymentReceipt({ operation_id: op.operation_id }));
 				}
 			} catch (e) {
-				fill(out, h("p", { class: "error" }, t("dep_refused")), heldDetails(t("dep_operation_details"), [errorBox(e, { insideDetails: true })]));
+				fill(out, h("p", { class: "error" }, t("dep_refused")), heldDetails(t("dep_operation_details"), [errorBox(e, {
+					sourceRefresh: false,
+					insideDetails: true
+				})]));
 				if ([
 					"DEPLOY_PREVIEW_REQUIRED",
 					"ENVIRONMENT_CHANGED",
@@ -70516,7 +70676,10 @@ function metadataDrawer(pr, reload) {
 				fill(out, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id), op.error_code ? chip(op.error_code, "bad") : null, contents, h("p", { class: "muted" }, t("metadata_result_help")));
 				idleReload = () => reload();
 			} catch (e) {
-				fill(out, errorBox(e, { within: out }));
+				fill(out, errorBox(e, {
+					sourceRefresh: false,
+					within: out
+				}));
 				save.disabled = false;
 			}
 		}
@@ -70635,7 +70798,10 @@ function integrationPanel(pr, reloadCard, source = null) {
 			doc = op.result;
 			renderPreview();
 		} catch (e) {
-			if (mine === generation) previewBox.replaceChildren(errorBox(e, { within: previewBox }));
+			if (mine === generation) previewBox.replaceChildren(errorBox(e, {
+				sourceRefresh: false,
+				within: previewBox
+			}));
 		}
 	};
 	const changed = debounce(() => {
@@ -70672,7 +70838,10 @@ function integrationPanel(pr, reloadCard, source = null) {
 					};
 					follow((await api("POST", "/operations?wait=3", req, "integrate." + doc.preview_id)).operation);
 				} catch (e) {
-					status.replaceChildren(errorBox(e, { within: status }));
+					status.replaceChildren(errorBox(e, {
+						sourceRefresh: false,
+						within: status
+					}));
 					go.disabled = false;
 				}
 			}
@@ -70701,7 +70870,10 @@ function integrationPanel(pr, reloadCard, source = null) {
 					try {
 						follow((await api("POST", `/operations/${op.operation_id}/resume`, {})).operation);
 					} catch (e) {
-						status.append(errorBox(e, { within: status }));
+						status.append(errorBox(e, {
+							sourceRefresh: false,
+							within: status
+						}));
 					}
 				},
 				cancel: async () => {
@@ -70796,7 +70968,10 @@ function repairControl(op) {
 					const o = await submit("integration.handoff", { operation_id: op.operation_id }, { agent: agent.value }, {}, `handoff.${op.operation_id}`);
 					out.append(h("p", {}, opStatus(o), " ", t("handoff_started"), " ", h("a", { href: `#/op/${o.operation_id}` }, o.operation_id)));
 				} catch (e) {
-					out.append(errorBox(e, { within: out }));
+					out.append(errorBox(e, {
+						sourceRefresh: false,
+						within: out
+					}));
 				} finally {
 					starting = false;
 					if (go.isConnected) {
@@ -70946,12 +71121,17 @@ async function viewOperation(main, id) {
 			const retry = refs.merged_sha && op.action === "delivery.merge_and_deploy" && op.status === "failed" ? h("button", {
 				class: "primary",
 				onclick: async () => {
+					let sourceRefresh = true;
 					try {
-						const preview = (await api("GET", `/deployments/preview?recipe=${encodeURIComponent(op.target.recipe)}`)).preview;
-						const o = await submit("deployment.start", { recipe: op.target.recipe }, { source_sha: refs.merged_sha }, preview.preconditions, `deploy.${op.target.recipe}.${refs.merged_sha}`);
+						const preconditions = (await api("GET", `/deployments/preview?recipe=${encodeURIComponent(op.target.recipe)}`)).preview.preconditions;
+						sourceRefresh = false;
+						const o = await submit("deployment.start", { recipe: op.target.recipe }, { source_sha: refs.merged_sha }, preconditions, `deploy.${op.target.recipe}.${refs.merged_sha}`);
 						location.hash = `#/op/${o.operation_id}`;
 					} catch (e) {
-						panel.append(errorBox(e, { within: panel }));
+						panel.append(errorBox(e, {
+							sourceRefresh,
+							within: panel
+						}));
 					}
 				}
 			}, t("retry_deploy")) : null;
@@ -70964,7 +71144,10 @@ async function viewOperation(main, id) {
 						await api("POST", `/operations/${id}/resume`, {});
 						render();
 					} catch (e) {
-						panel.append(errorBox(e, { within: panel }));
+						panel.append(errorBox(e, {
+							sourceRefresh: false,
+							within: panel
+						}));
 					}
 				}
 			}, t(op.action === "worktree.merge" ? "delivery_merge_read_receipts" : "resume")) : null;
@@ -70976,14 +71159,19 @@ async function viewOperation(main, id) {
 						namespace: state.namespace,
 						generation
 					};
+					let sourceRefresh = true;
 					try {
 						const seen = (await api("GET", `/checkpoints/${op.target.checkpoint_id}?live=true`)).source.head;
 						assertView(connection);
 						if (!seen) throw new Error(t("source_unavailable"));
+						sourceRefresh = false;
 						await submit("checkpoint.continue.revalidate", { operation_id: id }, { observed_source_head_sha: seen }, { expected_input_manifest_digest: refs.input_manifest_digest }, `revalidate.${id}.${seen}`);
 						render();
 					} catch (e) {
-						panel.append(errorBox(e, { within: panel }));
+						panel.append(errorBox(e, {
+							sourceRefresh,
+							within: panel
+						}));
 					}
 				}
 			}, t("confirm_source")) : null;
@@ -71004,7 +71192,10 @@ async function viewOperation(main, id) {
 						await api("POST", `/operations/${id}/cancel`, {});
 						render();
 					} catch (e) {
-						panel.append(errorBox(e, { within: panel }));
+						panel.append(errorBox(e, {
+							sourceRefresh: false,
+							within: panel
+						}));
 					}
 				}
 			}, t("cancel")) : null;
@@ -71372,7 +71563,10 @@ async function viewManagedSettings(main) {
 					guard();
 					status.replaceChildren();
 				} catch (error) {
-					if (connection.generation === generation) status.replaceChildren(errorBox(error, { within: status }));
+					if (connection.generation === generation) status.replaceChildren(errorBox(error, {
+						sourceRefresh: false,
+						within: status
+					}));
 				} finally {
 					open.disabled = false;
 				}
@@ -71401,7 +71595,10 @@ async function viewManagedSettings(main) {
 			} catch (error) {
 				if (connection.generation === generation) {
 					login.checked = !wanted;
-					status.replaceChildren(errorBox(error, { within: status }));
+					status.replaceChildren(errorBox(error, {
+						sourceRefresh: false,
+						within: status
+					}));
 				}
 			} finally {
 				login.disabled = false;
@@ -71772,7 +71969,10 @@ async function change(out, action, target, params, pre, scope) {
 		else fill(out, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id));
 	} catch (e) {
 		lastFailure = e.code || "ERROR";
-		fill(out, e.status === 403 ? errorBox(e, { within: out }) : problem(e.code, e.message));
+		fill(out, e.status === 403 ? errorBox(e, {
+			sourceRefresh: false,
+			within: out
+		}) : problem(e.code, e.message));
 	}
 	return null;
 }
@@ -72555,7 +72755,10 @@ async function viewWorkItem(main, wid) {
 						assertView(connection);
 						await render(true);
 					} catch (error) {
-						if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) fill(notice, errorBox(error, { within: notice }));
+						if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) fill(notice, errorBox(error, {
+							sourceRefresh: false,
+							within: notice
+						}));
 					} finally {
 						if (mark.isConnected) mark.disabled = !canRead || progress.read_version >= w.version;
 					}
@@ -72670,7 +72873,10 @@ async function viewWorkItem(main, wid) {
 					requireMutable();
 					op = await attachment.perform("work_item.update", { work_item_id: wid }, params, pre, `wi.edit.${wid}`);
 				} catch (e) {
-					fill(notice, errorBox(e, { within: notice }));
+					fill(notice, errorBox(e, {
+						sourceRefresh: false,
+						within: notice
+					}));
 					if (STALE.includes(e.code)) {
 						draft = params;
 						render();
@@ -72826,7 +73032,10 @@ function continueFrom(w, checkpointId, notice, children = []) {
 					expected_work_item_fingerprint: w.completion.fingerprint
 				} : {}, `continue.${checkpointId}`);
 			} catch (e) {
-				fill(out, errorBox(e, { within: out }));
+				fill(out, errorBox(e, {
+					sourceRefresh: false,
+					within: out
+				}));
 				if (go.isConnected) {
 					go.removeAttribute("aria-disabled");
 					out.removeAttribute("aria-busy");
@@ -73185,7 +73394,10 @@ async function viewCleanup(main, section, ident) {
 					intent.refused = e.code;
 					persist(intentKey, intent);
 				}
-				fill(status, errorBox(e, { within: status }), h("p", {}, t(intent?.refused ? "cleanup_repreview" : "cleanup_retry_same")));
+				fill(status, errorBox(e, {
+					sourceRefresh: false,
+					within: status
+				}), h("p", {}, t(intent?.refused ? "cleanup_repreview" : "cleanup_retry_same")));
 			} finally {
 				busy = false;
 				finish();
@@ -73233,7 +73445,10 @@ async function viewCleanup(main, section, ident) {
 				renderPreview();
 				fill(status);
 			} catch (e) {
-				if (revision === previewRevision && connection.epoch === state.epoch) fill(status, errorBox(e, { within: status }));
+				if (revision === previewRevision && connection.epoch === state.epoch) fill(status, errorBox(e, {
+					sourceRefresh: false,
+					within: status
+				}));
 			} finally {
 				previewButton.disabled = false;
 			}

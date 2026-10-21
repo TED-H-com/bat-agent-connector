@@ -93,9 +93,9 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
     const text = t(key);
     return text !== key ? text : t('loop_next_err_unknown');
   }
-  function showError(error, host) {
+  function showError(error, host, options = {}) {
     const summary = error?.code ? sentence(error.code) : t('loop_next_err_unknown');
-    host.replaceChildren(errorBox(error, {summary, within: host}));
+    host.replaceChildren(errorBox(error, {...options, summary, within: host}));
   }
 
   function clearComposer() {
@@ -237,7 +237,7 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
   function handleFormError(error) {
     if (!error?.code || (error.status === 0 && clientActionReason(error.code)) || error.code === 'NETWORK_ERROR' || error.code === 'TIMEOUT' || error.code === 'CENTRAL_OFFLINE') return false;
     const formStatus = composer?.box.querySelector('[role=status]');
-    if (formStatus) showError(error, formStatus);
+    if (formStatus) showError(error, formStatus, {sourceRefresh:false});
     // A newer attempt can be read. It does not replace the original key or request.
     if (REKEY.has(error.code)) void refresh();
     return true;
@@ -264,11 +264,11 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
       if (mark !== epoch || stopped || disposed || retired(error)) return;
       if (error?.code === 'PM_WORK_CANCEL_NOT_ALLOWED_AFTER_SEND') {
         cancelDenied.add(receipt.operation_id);
-        showError(error, status);
+        showError(error, status, {sourceRefresh:false});
         paint();
         return;
       }
-      showError(error, status);
+      showError(error, status, {sourceRefresh:false});
     }
   }
   function mutationsAllowed() {

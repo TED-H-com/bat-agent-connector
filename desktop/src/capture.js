@@ -57,16 +57,18 @@ export function capturePanel({h, t, api, caps, guard, onEvents, errorBox, storag
     !/[\x00-\x1f\x7f-\x9f/\\]/.test(input.session_id) && input.relative_path &&
     new TextEncoder().encode(input.relative_path).length <= 4096 && !/[\\\x00-\x1f\x7f-\x9f]/.test(input.relative_path) &&
     input.relative_path.split("/").every(part => part && part !== "." && part !== ".." && part.toLowerCase() !== ".git");
-  const showError = error => {if (currentView()) notice.replaceChildren(errorBox(error, {within:notice}));};
+  const showError = (error, options = {}) => {if (currentView()) notice.replaceChildren(errorBox(error, {...options, within:notice}));};
   const preview = h("button", {class: "secondary", "data-capture-preview": "", onclick: async () => {
     const input = current(); guard();
     if (busy || saved.intent || !mayPreview() || !validInput(input)) return;
     const ticket = ++revision, owned = owns(preview);
     pressed = preview; busy = true; saved.preview = null; reviewed.checked = false; persist(); render();
+    let sourceRefresh = true;
     try {
       // This is a helpful read-model gate; central preview repeats current source/policy checks.
       const row = (await api("GET", `/sessions/${encodeURIComponent(input.host)}/${encodeURIComponent(input.session_id)}`)).session;
       guard(); if (ticket !== revision) return;
+      sourceRefresh = false;
       if (row?.provenance !== "manual" || row.host !== input.host || row.session_id !== input.session_id)
         throw new Error(t("capture_manual_only"));
       const response = await api("POST", "/artifact-capture-previews", input); guard();
@@ -76,7 +78,7 @@ export function capturePanel({h, t, api, caps, guard, onEvents, errorBox, storag
           doc.relative_path !== input.relative_path)
         throw new Error(t("capture_invalid_preview"));
       saved.preview = doc; persist(); notice.replaceChildren();
-    } catch (error) {if (ticket === revision) showError(error);}
+    } catch (error) {if (ticket === revision) showError(error, {sourceRefresh});}
     finally {busy = false; pressed = null; render(); if (ticket === revision) placeFocus(preview, owned);}
   }}, t("capture_preview"));
   const accept = async operation => {
@@ -123,7 +125,7 @@ export function capturePanel({h, t, api, caps, guard, onEvents, errorBox, storag
       // These admission failures prove that this key did not accept an operation.
       if (!saved.intent.operation_id && ["PREVIEW_EXPIRED", "PREVIEW_TOKEN_INVALID", "PREVIEW_MISMATCH", "INVALID_PARAMS"].includes(error.code))
         saved.refused = true;
-      persist(); showError(error);
+      persist(); showError(error, {sourceRefresh:false});
     } finally {busy = false; pressed = null; render(); placeFocus(apply, owned);}
   }}, t("capture_save"));
   const reset = h("button", {class: "secondary", "data-capture-new": "", onclick: () => {

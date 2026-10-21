@@ -20,7 +20,7 @@ export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,w
   const stamp=value=>timeStamp(value);
   const line=(key,value)=>h('p',{},h('strong',{},`${t(key)}: `),value);
   const active=item=>ready&&selected===item.key&&choices.has(item.key)&&Boolean(workspace()?.membership);
-  const request=async(...args)=>{const ticket=epoch;try{return await api(...args);}catch(error){if(valid(ticket)&&[401,403,404].includes(error.status))failure(error);throw error;}};
+  const request=async(...args)=>{const ticket=epoch;try{return await api(...args);}catch(error){if(valid(ticket)&&[401,403,404].includes(error.status))failure(error, {sourceRefresh:args[0] !== 'POST' && !(args[0] === 'GET' && typeof args[4] === 'function')});throw error;}};
   function row(value,withDocument=false){
     if(value?.workspace_id!==workspaceId||!/^pmah_[0-9a-f]{32}$/.test(value.observation_id)||!/^op_[0-9a-f]{32}$/.test(value.operation_id)
       ||!/^([0-9a-f]{64})$/.test(value.document_digest)||typeof value.adapter_id!=='string'||!['observed','incomplete'].includes(value.coverage_status))throw Error(t('ahp_invalid'));
@@ -150,8 +150,8 @@ export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,w
   adapter.addEventListener('change',()=>{try{alive();localStorage.setItem(selectionStorage,adapter.value);}catch{ /* preference only */ }void selectAdapter(adapter.value);});
   function withdraw(){epoch++;detailEpoch++;ready=false;historyBusy=false;choices.clear();body.replaceChildren();history.replaceChildren();detail.replaceChildren();status.replaceChildren();adapter.replaceChildren();adapter.disabled=true;more.hidden=true;
     for(const item of editors.values()){item.catalog=null;item.catalogBox.replaceChildren();for(const f of item.forms)f.update();}}
-  function failure(error){withdraw();adapterFields.hidden=true;historyDetails.hidden=true;
-    status.append(errorBox(error,{summary:t('ahp_unavailable'), within:status}));}
+  function failure(error, options = {}){withdraw();adapterFields.hidden=true;historyDetails.hidden=true;
+    status.append(errorBox(error,{...options, summary:t('ahp_unavailable'), within:status}));}
   async function refresh(){const prior=selected;withdraw();adapterFields.hidden=true;historyDetails.hidden=true;const ticket=epoch;refreshButton.disabled=true;try{
     const [a,c,l]=await Promise.all(['ahp-adapters','ahp-observations/current','ahp-observations?after=0&limit=20'].map(path=>request('GET',`${base}/${path}`)));
     if(!valid(ticket))return;check(a);check(c);check(l);

@@ -74,7 +74,7 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
   const sourceLabel=row=>row.title||t('pmrv_ref_'+row.kind);
   const known=(field,choices)=>{const selected=JSON.parse(field.value||'[]');return selected.every(id=>choices.some(row=>row.id===id));};
   const request=async(...args)=>{const current=ticket;try{return await api(...args);}catch(error){
-    if(valid(current)&&([401,403,404].includes(error.status)||['FORBIDDEN','NOT_FOUND'].includes(error.code)))failure(error);throw error;
+    if(valid(current)&&([401,403,404].includes(error.status)||['FORBIDDEN','NOT_FOUND'].includes(error.code)))failure(error, {sourceRefresh:false});throw error;
   }};
   function update(){
     let stale=false;for(const entry of forms){stale ||= !entry.editor.locked()&&entry.stale();entry.editor.update();}
@@ -84,7 +84,7 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
     paintActions();
   }
   function withdraw(){ticket++;ready=false;model=null;imports.forEach(item=>item.dispose());imports=[];view.replaceChildren();scheduleView.replaceChildren();choose.replaceChildren();editors.hidden=true;status.replaceChildren();output=null;update();}
-  function failure(error){withdraw();status.replaceChildren(errorBox(error,{summary:t('pmrv_unavailable'), within:status}));paintHeading();}
+  function failure(error, options = {}){withdraw();status.replaceChildren(errorBox(error,{...options, summary:t('pmrv_unavailable'), within:status}));paintHeading();}
   function localForm(config){
     const expected=()=>JSON.stringify({preconditions:config.preconditions(),context:config.context?.()??null});
     const baseline=h('input',{type:'hidden',value:expected()});baseline.dataset.pmDefault=baseline.value;

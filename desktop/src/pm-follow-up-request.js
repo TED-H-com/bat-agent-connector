@@ -45,7 +45,7 @@ export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespac
     return {id:[...pending][0]??pointer?.thread_id??(drafts.size===1?[...drafts][0]:''),locked:pending.size===1};
   }
   function clear(){++serial;intake=null;thread=null;capability=null;request?.dispose();request=null;rows=[];next=null;targetLocked=false;body.replaceChildren();status.replaceChildren();}
-  function fail(error){++serial;thread=null;capability=null;request?.dispose();request=null;body.replaceChildren();status.replaceChildren(errorBox(error, {within:status}));onAccessFailure(error);}
+  function fail(error, options = {}){++serial;thread=null;capability=null;request?.dispose();request=null;body.replaceChildren();status.replaceChildren(errorBox(error, {...options, within:status}));onAccessFailure(error, options);}
   function navigation(){
     const selected=choices.get(intake.intake_id)||intake.document.thread_ref?.thread_id||'';
     chooser.replaceChildren(h('option',{value:''},t('pm_fa_thread_choose')),...rows.map(row=>h('option',{value:row.thread_id},row.title)));
@@ -62,7 +62,7 @@ export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespac
         ||!['idea','planning'].includes(data.thread.mode))throw Error(t('pm_fa_mismatch'));
       thread=data;status.replaceChildren();
       const guardedApi=async(...args)=>{try{return await api(...args);}catch(error){
-        try{if(current(ticket))onAccessFailure(error);}catch{/* The originating view has already retired. */}throw error;
+        try{if(current(ticket))onAccessFailure(error, {sourceRefresh:false});}catch{/* The originating view has already retired. */}throw error;
       }};
       const purpose=input('pm_fa_purpose',{multiline:true,max:4000}),model=input('pm_native_model',{required:false,max:128});model.placeholder=t('pm_native_default_model');
       const version=h('input',{type:'hidden',value:String(thread.thread.version)}),warning=note('pm_fa_thread_stale');
@@ -105,7 +105,7 @@ export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespac
       if(saved.locked){targetLocked=true;saveTarget(saved.id);navigation();}
       else {if(chooser.value&&!validThread(chooser.value))throw Error(t('pm_fa_mismatch'));saveTarget(chooser.value);}
       void readThread();
-    }catch(error){fail(error);}
+    }catch(error){fail(error, {sourceRefresh:false});}
   });
   element.addEventListener('toggle',()=>{if(element.open&&intake&&!request)void prepare();});
   async function load(row){clear();intake=row;if(element.open)await prepare();}
