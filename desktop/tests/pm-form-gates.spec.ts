@@ -32,8 +32,7 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW'] as cons
       await expect(page.locator('#live')).toHaveAttribute('title', new RegExp(STRINGS[locale].sync_waiting));
     } finally {release();}
     await expect(region.locator('[data-error-summary]')).toHaveCount(1);
-    await expect(region.locator('[data-error-summary]')).toHaveText(locale === 'en'
-      ? 'Could not confirm the current version' : '目前無法確認最新版本');
+    await expect(region.locator('[data-error-summary]')).toHaveText(STRINGS[locale].pm_stale);
     await expect(region.locator('[data-api-error]')).toHaveCount(1);
     await expect(region.locator('[data-pm-client-gate]:not([hidden])')).toHaveCount(0);
     expect(await region.locator('[data-pm-client-gate]').allTextContents()).toEqual(expect.arrayContaining(['']));
