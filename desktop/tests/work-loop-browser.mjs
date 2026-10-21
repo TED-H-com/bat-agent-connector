@@ -250,14 +250,18 @@ async function refusedAccess(active, workUrl) {
     await expect(reason).toHaveAttribute('data-client-action-code', 'CLIENT_ACTION_REFUSED');
     await expect(page.locator('.workspace-session-heading button.danger')).toBeDisabled();
   } else {
-    await expect(work.locator('[data-api-error]')).toContainText('CLIENT_ACTION_REFUSED');
-    await expect(work.getByText(copy.error_code_CLIENT_ACTION_REFUSED, {exact: true})).toBeVisible();
     if (surface === 'pm-form') {
+      const reason = work.locator('[data-pm-client-gate]');
+      await expect(reason).toHaveAttribute('data-client-action-code', 'CLIENT_ACTION_REFUSED');
+      await expect(reason).toHaveText(copy.error_code_CLIENT_ACTION_REFUSED);
+      await expect(reason.locator('[data-api-error], [data-error-summary], [aria-live]')).toHaveCount(0);
       // A submit queued before the disabled state must explain the same gate,
       // without generating an intent, a key or an operation POST.
       await work.evaluate(node => node.requestSubmit());
       await expect(work).toContainText(copy.error_code_CLIENT_ACTION_REFUSED);
     } else {
+      await expect(work.locator('[data-api-error]')).toContainText('CLIENT_ACTION_REFUSED');
+      await expect(work.getByText(copy.error_code_CLIENT_ACTION_REFUSED, {exact: true})).toBeVisible();
       // Revoking during a refresh can withdraw a previously validated Result.
       // Preserve its target, not the presence of a link that is now unreadable.
       const resultState = () => page.evaluate(() => ({

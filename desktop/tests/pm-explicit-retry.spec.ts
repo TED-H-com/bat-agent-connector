@@ -56,7 +56,7 @@ async function mountForm(page: Page, locale: string, activeRefresh = false) {
 }
 
 for(const locale of ['en','zh-TW']) {
-  for (const reason of ['reconnecting', 'connection_changing', 'view_not_ready']) test(`the client gate explains ${reason} without changing the original request ${locale}`, async ({page}) => {
+  for (const reason of ['not_connected', 'connecting', 'reconnecting', 'connection_changing', 'refused', 'view_not_ready']) test(`the client gate explains ${reason} without changing the original request ${locale}`, async ({page}) => {
     const form = await mountForm(page, locale, true);
     const saved = () => page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.startsWith('batc.pm.explicit-retry.')));
     const before = await saved();
@@ -67,6 +67,9 @@ for(const locale of ['en','zh-TW']) {
       // Controlled client observations, not API response payloads. Real credential
       // revocation and its HTTP body are covered by the shared browser journey.
       const facts = {token:'component-credential',online:true,viewReady:true,nativeBusy:false,pollHealth:'connected' as any};
+      if (reason === 'not_connected') facts.token='';
+      if (reason === 'connecting') {facts.online=false;facts.pollHealth='initial';}
+      if (reason === 'refused') {facts.online=false;facts.pollHealth=pollFailure(new ApiError(401,'UNAUTHORIZED','Access refused'),Date.now());}
       if (reason === 'reconnecting') {facts.online=false;facts.pollHealth=pollFailure(new ApiError(0,'NETWORK_ERROR','unreachable'),Date.now());}
       if (reason === 'connection_changing') facts.nativeBusy=true;
       if (reason === 'view_not_ready') facts.viewReady=false;
@@ -74,8 +77,19 @@ for(const locale of ['en','zh-TW']) {
       win.retryForm.update();
     }, reason);
     const notice = form.locator('[data-pm-client-gate]');
-    await expect(notice).toContainText('CLIENT_ACTION_' + reason.toUpperCase());
-    await expect(notice).toContainText(STRINGS[locale]['error_code_CLIENT_ACTION_' + reason.toUpperCase()]);
+    if (reason === 'view_not_ready') {
+      // The view's source/loading state owns this explanation, not each form.
+      await expect(notice).toBeHidden();
+      await expect(notice).toBeEmpty();
+    } else {
+      await expect(notice).toHaveAttribute('data-client-action-code', 'CLIENT_ACTION_' + reason.toUpperCase());
+      await expect(notice).toHaveText(STRINGS[locale]['error_code_CLIENT_ACTION_' + reason.toUpperCase()]);
+      await expect(notice).not.toHaveAttribute('aria-live', /.+/);
+      await expect(notice.locator('[role=status], [role=alert], [aria-live], [data-api-error], [data-error-summary], [data-error-details]')).toHaveCount(0);
+    }
+    await expect(form.locator('[data-error-summary]')).toHaveCount(1);
+    await expect(form.locator('[data-api-error]')).toHaveCount(1);
+    await expect(form.locator('button[type=submit]')).toBeDisabled();
     await form.evaluate(node => node.requestSubmit());
     expect(await saved()).toEqual(before);
     expect(await page.evaluate(() => (window as any).retryState.writes.length)).toBe(1);
@@ -84,6 +98,7 @@ for(const locale of ['en','zh-TW']) {
     await expect(notice).toBeHidden();
     // The prior request's outcome remains distinct from the current client gate.
     await expect(form).toContainText(STRINGS[locale].error_code_NETWORK_ERROR);
+    await expect(form.locator('[data-error-summary]')).toHaveCount(1);
   });
 
   test(`the client write gate still reads an acknowledged original receipt ${locale}`, async ({page}) => {
