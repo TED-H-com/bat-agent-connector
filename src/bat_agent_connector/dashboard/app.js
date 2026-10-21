@@ -49382,7 +49382,7 @@ var pmAvailable = (caps) => pmAvailability({
 	caps,
 	kind: "workspace"
 }).ready;
-function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, keepEditable = () => false, savedText = "pm_saved", pendingText = "pm_pending", releaseAfterAcknowledgement = false, acknowledgedText = "", onAcknowledged = () => {}, acknowledgeStatus = null }) {
+function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, clientGate = () => null, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, keepEditable = () => false, savedText = "pm_saved", pendingText = "pm_pending", releaseAfterAcknowledgement = false, acknowledgedText = "", onAcknowledged = () => {}, acknowledgeStatus = null }) {
 	const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
 	let saved = {
 		version: 1,
@@ -49422,6 +49422,11 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		damaged = true;
 	}
 	const status = h("div", { role: "status" }), receipt = h("div", { class: "pm-receipt" });
+	const gateNotice = h("p", {
+		class: "muted",
+		"data-pm-client-gate": "",
+		hidden: true
+	});
 	const persist = () => {
 		guard();
 		if (pruneEmpty && !saved.intent && !Object.keys(saved.values).length) localStorage.removeItem(storage);
@@ -49451,6 +49456,11 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 	}
 	const allowed = () => (saved.intent ? recoverPermitted() : permitted()) && caps()?.scopes?.includes(requiredScope) && caps()?.actions?.some((row) => row.action === action && row.allowed === true);
 	const sendReady = () => Boolean(saved.intent?.operation_id) || canSend();
+	const clientBlock = () => {
+		if (sendReady()) return null;
+		const gate = clientGate();
+		return gate && !gate.allowed && gate.reason ? clientActionError(gate.reason, t) : null;
+	};
 	const receiveReceipt = () => {
 		if (disposed || !form.isConnected || damaged || !saved.intent) return;
 		try {
@@ -49531,7 +49541,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			if (isFieldFocused()) button.focus();
 			run();
 		}
-	}, extra, h("div", { class: "actions" }, button, reset), status, receipt);
+	}, extra, h("div", { class: "actions" }, button, reset), status, gateNotice, receipt);
 	function pollReceipt() {
 		if (disposed || receiptTimer !== null || busy || damaged || !receiptPolling || receiptAttempt >= receiptDelays.length || !saved.intent?.operation_id || !form.isConnected || !allowed()) return;
 		if (operation && ![
@@ -49563,6 +49573,12 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		if (!busy && receiptTimer === null) initialChecking = false;
 		const autoChecking = initialChecking && (busy || receiptTimer !== null);
 		const inFlight = busy || autoChecking;
+		const block = !inFlight && !damaged && allowed() && !terminal() && !saved.intent?.initialAdmissionRefused ? clientBlock() : null;
+		const notice = block?.code !== "CLIENT_ACTION_VIEW_NOT_READY" ? block : null;
+		gateNotice.hidden = !notice;
+		gateNotice.textContent = notice?.message || "";
+		if (notice) gateNotice.dataset.clientActionCode = notice.code;
+		else delete gateNotice.dataset.clientActionCode;
 		const frozen = busy || damaged || Boolean(saved.intent), locked = frozen || !allowed();
 		for (const [name, input] of Object.entries(fields)) {
 			const preserve = !frozen && !damaged && keepEditable(name);
@@ -49598,7 +49614,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		if (disposed || busy || damaged || !automatic && initialChecking && (busy || receiptTimer !== null) || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
 		if (!allowed() || !sendReady()) {
 			if (!automatic) {
-				status.replaceChildren(h("p", { class: "muted" }, t("pm_action_unavailable")));
+				if (!clientBlock()) status.replaceChildren(h("p", { class: "muted" }, t("pm_action_unavailable")));
 				update();
 			}
 			return;
@@ -49851,7 +49867,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		values: () => capture()
 	};
 }
-async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, canSend = () => true, onOnline = () => () => {}, onContext = () => {}, openCreate = false }) {
+async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, canSend = () => true, clientGate = () => null, onOnline = () => () => {}, onContext = () => {}, openCreate = false }) {
 	if (!pmAvailable(caps())) {
 		main.append(renderPmAvailability(h("div"), {
 			h,
@@ -50115,6 +50131,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			statusText: threadId ? (value) => discussionLabel(t, "pd_op_", value) : void 0,
 			...options,
 			canSend: () => (options.canSend ? options.canSend() : true) && canSend(),
+			clientGate,
 			permitted: () => initialReadComplete && options.permitted() && (lifecycle?.newActionAllowed(options.action, () => options.params(Object.fromEntries(Object.entries(options.fields).map(([key, input]) => [key, input.value])))) ?? true),
 			recoverPermitted: () => initialReadComplete && (options.recoverPermitted || options.permitted)(),
 			onConnectionChange: (connected) => {
@@ -69437,9 +69454,14 @@ async function viewSession(main, host, sid, context = null) {
 		stop.disabled = !allowed("session.interrupt");
 		stop.hidden = withdrawn || row?.api_access !== "managed";
 		let reason = "";
+		delete sendReason.dataset.clientActionCode;
 		if (row?.api_access === "managed" && send.disabled && !sending) {
-			if (!state.online || !state.viewReady || state.nativeBusy) reason = t("sync_actions_paused");
-			else if (!readReady) reason = t("session_send_waiting");
+			const gate = clientActionGate(state, { post: true });
+			if (!gate.allowed) {
+				const error = clientActionError(gate.reason, t);
+				reason = error.message;
+				sendReason.dataset.clientActionCode = error.code;
+			} else if (!readReady) reason = t("session_send_waiting");
 			else if (!may("operate")) reason = t("session_send_scope");
 			else if (state.caps?.hosts?.find((item) => item.host === host)?.writes === false) reason = t("session_send_host");
 			else if (state.caps?.actions?.find((item) => item.action === "session.send")?.allowed === false) reason = t("session_send_denied");
@@ -73982,6 +74004,7 @@ async function viewPmWorkspace(main, workspaceId, viewOrThread, thread) {
 		caps: () => state.caps,
 		canSend: () => !state.nativeBusy && state.online && state.viewReady,
 		onOnline,
+		clientGate: () => clientActionGate(state, { post: true }),
 		guard: () => assertView(connection),
 		namespace: connection.namespace,
 		workspaceId: workspaceId === "new" ? null : workspaceId,

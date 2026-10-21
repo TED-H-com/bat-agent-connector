@@ -5,6 +5,7 @@ import {resolve} from 'node:path';
 import {readFileSync, writeFileSync} from 'node:fs';
 import {chromium, expect as baseExpect} from '@playwright/test';
 import {uiStrings} from '../src/ui/ui-strings.js';
+import {workbenchStrings} from '../src/workbench-strings.js';
 
 const expect = baseExpect.configure({timeout: 30000});
 const lines = createInterface({input: process.stdin})[Symbol.asyncIterator]();
@@ -91,9 +92,10 @@ async function refusedAccess(active, workUrl) {
     assert.equal(observedBootstrap.capabilities[key], golden.capabilities[key]);
   assert.deepEqual(observedBootstrap.capabilities.features.pm_workspaces.work_follow_up.routes,
     golden.capabilities.features.pm_workspaces.work_follow_up.routes);
-  const field = page.locator('[data-follow-up-input]');
-  const work = page.locator('[data-work-section="next-turn"]');
-  const submit = work.getByRole('button', {name: zh ? '送出下一步' : 'Send next', exact: true});
+  const surface = f.refusal_surface || 'work';
+  let field = page.locator('[data-follow-up-input]');
+  let work = page.locator('[data-work-section="next-turn"]');
+  let submit = work.getByRole('button', {name: zh ? '送出下一步' : 'Send next', exact: true});
   const draft = '  尚未送出 📝\nKeep this instruction unsent.\n  ';
   await field.fill(draft);
   await expect(submit).toBeEnabled();
@@ -101,15 +103,58 @@ async function refusedAccess(active, workUrl) {
   const resultHref = await page.locator('[data-work-result-focus="live-output"]').getAttribute('href');
   assert.ok(resultHref.includes(`attempt=${active.attempt}`));
   await page.keyboard.press('Escape');
-  const draftEntries = () => page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.includes('.session.send.')));
+  const sessionRoute = resultHref.split('?')[0];
+  const [, , host, sid] = sessionRoute.split('/');
+  let target = {workspace_id: f.workspace, work_item_id: f.work};
+  let suffix = `.session.send.${JSON.stringify(target)}`;
+  if (surface !== 'work') step = 'refusal-setup-' + surface;
+  if (surface === 'pm-form') {
+    target = {workspace_id: f.workspace, thread_id: f.thread};
+    suffix = `.pm.message.append.${JSON.stringify(target)}`;
+    await page.evaluate(hash => {location.hash = hash;}, `#/pm/${f.workspace}/discussions/${f.thread}`);
+    work = page.locator('form[data-pm-action="pm.message.append"]');
+    field = work.locator('[data-discussion-composer]');
+    submit = work.locator('button[type=submit]');
+  } else if (surface === 'session-toolbar') {
+    // The Result supplies this managed session's existing route. A plain session
+    // route has no Work selection; Classic exposes its original Send/Interrupt toolbar.
+    await page.goto(`${origin}/dashboard/${sessionRoute}`);
+    target = {host, session_id: sid};
+    suffix = `.send.${host}.${sid}`;
+    await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
+    work = page.locator('.workspace-composer');
+    field = page.locator('#workspace-message-input > textarea');
+    submit = page.locator('#workspace-message-input .composer-row button.primary');
+    const queue = work.locator('input[type=checkbox]');
+    await expect(field).toBeVisible();
+    await queue.setChecked(!await queue.isChecked());
+    await expect(page.locator('.workspace-session-heading button.danger')).toBeEnabled();
+  }
+  await field.fill(draft);
+  await expect(submit).toBeEnabled();
+  const surfaceUrl = page.url();
+  const originalField = await field.elementHandle();
+  const draftEntries = () => page.evaluate(({suffix, surface}) => Object.entries(localStorage)
+    .filter(([key]) => surface === 'work' ? key.includes('.session.send.')
+      : key.endsWith(suffix) || key.endsWith(suffix + '.queue')).sort(([a], [b]) => a.localeCompare(b)), {suffix, surface});
   const saved = await draftEntries();
-  assert.equal(saved.length, 1);
-  const [draftKey, raw] = saved[0];
-  assert.ok(draftKey.endsWith(`.session.send.${JSON.stringify({workspace_id: f.workspace, work_item_id: f.work})}`));
-  assert.deepEqual(Buffer.from(JSON.parse(raw).values.text), Buffer.from(draft));
-  assert.equal(Object.hasOwn(JSON.parse(raw), 'intent'), false);
+  assert.equal(saved.length, surface === 'session-toolbar' ? 2 : 1);
+  const [draftKey, raw] = saved.find(([key]) => key.endsWith(suffix));
+  assert.ok(draftKey.endsWith(suffix));
+  if (surface === 'session-toolbar') assert.deepEqual(Buffer.from(raw), Buffer.from(draft));
+  else {
+    assert.deepEqual(Buffer.from(JSON.parse(raw).values[surface === 'pm-form' ? 'content' : 'text']), Buffer.from(draft));
+    assert.equal(Object.hasOwn(JSON.parse(raw), 'intent'), false);
+  }
   const originalContext = context, originalPage = page;
   const since = allRequests.length;
+  const refusedResults = [];
+  const resultPath = `/api/v1/pm/workspaces/${f.workspace}/work-attempts/${active.attempt}/result`;
+  const observeResultRefusal = async response => {
+    if (new URL(response.url()).pathname === resultPath && response.status() === 401)
+      refusedResults.push({path: resultPath, status: response.status(), body: await response.json()});
+  };
+  context.on('response', observeResultRefusal);
   const unchanged = async () => {
     assert.equal(context, originalContext); assert.equal(page, originalPage);
     assert.deepEqual(await draftEntries(), saved);
@@ -121,6 +166,9 @@ async function refusedAccess(active, workUrl) {
       if (url.pathname.endsWith('/inputs')) assert.equal(url.searchParams.get('attempt_id'), active.attempt);
       if (/\/work-attempts\//.test(url.pathname)) assert.ok(url.pathname.includes('/' + active.attempt));
     }
+    for (const href of await page.locator('#main a[href*="attempt="]').evaluateAll(nodes => nodes.map(node => node.getAttribute('href'))))
+      assert.equal(new URLSearchParams(href.split('?')[1]).get('attempt'), active.attempt);
+    await expect(page.locator('[data-answer-action]:enabled')).toHaveCount(0);
   };
   const header = page.locator('#live');
   const scoped = copy.ui_connector_status.replace('{status}', copy.ui_connection_refused);
@@ -133,20 +181,105 @@ async function refusedAccess(active, workUrl) {
   };
   step = 'revoke-access';
   await expect(header).toHaveText(copy.ui_connected);
+  // A checkpoint is committed only after its listener refreshes settle. It
+  // establishes the retained-source case without assuming Connected means idle.
+  send({stage: 'refusal-checkpoint'});
+  const {cursor} = await receive();
+  await expect.poll(() => page.evaluate(cursor => Object.entries(localStorage)
+    .some(([key, value]) => key.startsWith('batc.sync.') && JSON.parse(value).cursor >= cursor), cursor)).toBe(true);
+  let refreshRace = null, debug;
+  if (f.late_refusal_refresh) {
+    // Pause JavaScript, not HTTP: a real inventory event starts a source refresh,
+    // and the debugger stops its read before fetch sends it. ApiV1 alone
+    // authenticates and produces every reply after the real principal is revoked.
+    debug = await context.newCDPSession(page);
+    await debug.send('Debugger.enable');
+    const sourcePath = surface === 'work' ? resultPath : surface === 'pm-form'
+      ? `/api/v1/pm/workspaces/${f.workspace}/threads/${f.thread}` : `/api/v1/sessions/${host}/${sid}`;
+    const caller = surface === 'work' ? 'setAttempt' : surface === 'pm-form' ? 'refreshDiscussionSources' : 'loadObservation';
+    let paused = null;
+    const eventPages = [];
+    const observePage = async response => {
+      if (new URL(response.url()).pathname === '/api/v1/events' && response.status() === 200)
+        eventPages.push(await response.json());
+    };
+    context.on('response', observePage);
+    debug.on('Debugger.paused', async event => {
+      if (event.callFrames.some(frame => frame.functionName === caller)) paused = event;
+      else await debug.send('Debugger.resume');
+    });
+    await debug.send('DOMDebugger.setXHRBreakpoint', {url: sourcePath});
+    step = 'refusal-refresh';
+    send({stage: 'refusal-refresh'});
+    const {event} = await receive();
+    await expect.poll(() => Boolean(paused)).toBe(true);
+    assert.ok(eventPages.some(page => page.events.some(row => row.seq === event.seq)));
+    refreshRace = {event, paused_at: Date.now(), frames: paused.callFrames.map(frame => ({
+      name: frame.functionName, location: frame.location})), source_path: sourcePath};
+    context.off('response', observePage);
+  }
   const refusal = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/events'
     && response.status() === 401);
   send({stage: 'revoke-access'});
   assert.equal((await receive()).revoked, true);
+  if (debug) {
+    const refusedSource = page.waitForResponse(response => new URL(response.url()).pathname === refreshRace.source_path
+      && response.status() === 401);
+    refreshRace.revoked_at = Date.now();
+    await debug.send('DOMDebugger.removeXHRBreakpoint', {url: refreshRace.source_path});
+    await debug.send('Debugger.resume');
+    await debug.detach();
+    const source = await refusedSource;
+    refreshRace.source = {path: new URL(source.url()).pathname, status: source.status(), body: await source.json()};
+    assert.equal(refreshRace.source.body.error.code, 'UNAUTHORIZED');
+    writeFileSync(resolve(f.shots, 'refusal-refresh.json'), JSON.stringify(refreshRace, null, 2) + '\n');
+  }
   const response = await refusal;
   const body = await response.json();
   assert.equal(body.error.code, 'UNAUTHORIZED');
-  step = 'refused-work';
+  step = 'refused-' + surface;
   await headerRefused();
   await expect(submit).toBeDisabled();
   await expect(field).toHaveValue(draft);
-  await expect(work.locator('[data-api-error]')).toContainText('CLIENT_ACTION_REFUSED');
-  await expect(work.getByText(copy.error_code_CLIENT_ACTION_REFUSED, {exact: true})).toBeVisible();
-  await expect(page.locator('[data-work-result-focus="live-output"]')).toHaveAttribute('href', resultHref);
+  assert.equal(await field.evaluate((node, old) => node === old, originalField), true);
+  assert.equal(page.url(), surfaceUrl);
+  let resultOutcome = null;
+  if (surface === 'session-toolbar') {
+    const reason = page.locator('.session-send-reason');
+    await expect(reason).toHaveText(copy.error_code_CLIENT_ACTION_REFUSED);
+    await expect(reason).toHaveAttribute('data-client-action-code', 'CLIENT_ACTION_REFUSED');
+    await expect(page.locator('.workspace-session-heading button.danger')).toBeDisabled();
+  } else {
+    if (surface === 'pm-form') {
+      const reason = work.locator('[data-pm-client-gate]');
+      await expect(reason).toHaveAttribute('data-client-action-code', 'CLIENT_ACTION_REFUSED');
+      await expect(reason).toHaveText(copy.error_code_CLIENT_ACTION_REFUSED);
+      await expect(reason.locator('[data-api-error], [data-error-summary], [aria-live]')).toHaveCount(0);
+      // A submit queued before the disabled state must explain the same gate,
+      // without generating an intent, a key or an operation POST.
+      await work.evaluate(node => node.requestSubmit());
+      await expect(work).toContainText(copy.error_code_CLIENT_ACTION_REFUSED);
+    } else {
+      await expect(work.locator('[data-api-error]')).toContainText('CLIENT_ACTION_REFUSED');
+      await expect(work.getByText(copy.error_code_CLIENT_ACTION_REFUSED, {exact: true})).toBeVisible();
+      // Revoking during a refresh can withdraw a previously validated Result.
+      // Preserve its target, not the presence of a link that is now unreadable.
+      const resultState = () => page.evaluate(() => ({
+        hrefs: [...document.querySelectorAll('[data-work-result-focus="live-output"]')].map(node => node.getAttribute('href')),
+        summary: document.querySelector('[data-workbench-summary]')?.textContent,
+        refused: Boolean(document.querySelector('.session-status [data-session-error="UNAUTHORIZED"]')),
+      }));
+      const classify = async () => {
+        const source = await resultState();
+        if (source.hrefs.length === 1 && source.hrefs[0] === resultHref) return 'retained';
+        if (source.hrefs.length === 0 && source.summary === workbenchStrings[zh ? 'zh-TW' : 'en'].wc_unavailable && source.refused
+          && refusedResults.some(row => row.body.error.code === 'UNAUTHORIZED')) return 'refused';
+        return 'unsettled';
+      };
+      await expect.poll(async () => resultOutcome = await classify())
+        .toMatch(f.late_refusal_refresh ? /^refused$/ : /^(retained|refused)$/);
+    }
+  }
   await unchanged();
   await shot('02-refused-work');
   step = 'refused-settings';
@@ -156,24 +289,28 @@ async function refusedAccess(active, workUrl) {
   await headerRefused();
   await unchanged();
   await shot('03-refused-settings');
-  step = 'refused-work-return';
-  const returned = page.waitForResponse(response => response.status() === 401
-    && new URL(response.url()).pathname === `/api/v1/work-items/${f.work}`);
-  await page.evaluate(hash => {location.hash = hash;}, new URL(workUrl).hash);
-  await returned;
-  await expect(page).toHaveURL(workUrl);
-  // Refused source reads cannot recreate actionable controls from cached data.
-  await expect(page.locator('#main [data-api-error]')).toContainText('UNAUTHORIZED');
-  await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
-  await headerRefused();
-  await unchanged();
+  if (surface === 'work') {
+    step = 'refused-work-return';
+    const returned = page.waitForResponse(response => response.status() === 401
+      && new URL(response.url()).pathname === `/api/v1/work-items/${f.work}`);
+    await page.evaluate(hash => {location.hash = hash;}, new URL(workUrl).hash);
+    await returned;
+    await expect(page).toHaveURL(workUrl);
+    // Refused source reads cannot recreate actionable controls from cached data.
+    await expect(page.locator('#main [data-api-error]')).toContainText('UNAUTHORIZED');
+    await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
+    await headerRefused();
+    await unchanged();
+  }
   assert.deepEqual(errors, []);
   await shot('04-refused-work-return');
-  const proof = {draft_key: draftKey, draft_unchanged: true, attempt: active.attempt, result_href: resultHref,
+  const proof = {surface, target, draft_key: draftKey, draft_unchanged: true, attempt: active.attempt, result_href: resultHref,
+    result_outcome: resultOutcome, late_refresh: refreshRace,
     events_status: response.status(), server_code: body.error.code,
     header_reason: await header.innerText(), settings_reason: settingsReason, draft_has_intent: false,
     reason_key: 'ui_connection_refused', gate_code: 'CLIENT_ACTION_REFUSED', operation_posts: 0};
   writeFileSync(resolve(f.shots, 'refused-access.json'), JSON.stringify({proof, requests: allRequests.slice(since)}, null, 2) + '\n');
+  context.off('response', observeResultRefusal);
   send({stage: 'refused-done', operations, browser: browser.version(), refusal: proof});
 }
 

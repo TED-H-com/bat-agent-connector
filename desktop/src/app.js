@@ -2069,8 +2069,13 @@ async function viewSession(main, host, sid, context = null) {
     stop.disabled = !allowed("session.interrupt");
     stop.hidden = withdrawn || row?.api_access !== "managed";
     let reason = "";
+    delete sendReason.dataset.clientActionCode;
     if (row?.api_access === "managed" && send.disabled && !sending) {
-      if (!state.online || !state.viewReady || state.nativeBusy) reason = t('sync_actions_paused');
+      const gate = clientActionGate(state, {post: true});
+      if (!gate.allowed) {
+        const error = clientActionError(gate.reason, t);
+        reason = error.message; sendReason.dataset.clientActionCode = error.code;
+      }
       else if (!readReady) reason = t("session_send_waiting");
       else if (!may("operate")) reason = t("session_send_scope");
       else if (state.caps?.hosts?.find(item => item.host === host)?.writes === false) reason = t("session_send_host");
@@ -4883,6 +4888,7 @@ async function viewPmWorkspace(main, workspaceId, viewOrThread, thread) {
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   return mountPmWorkspace({main, h, t, api, caps: () => state.caps,
     canSend: () => !state.nativeBusy && state.online && state.viewReady, onOnline,
+    clientGate: () => clientActionGate(state, {post: true}),
     guard: () => assertView(connection), namespace: connection.namespace,
     workspaceId: workspaceId === 'new' ? null : workspaceId, threadId, view, onEvents, errorBox,
     onContext: context => shell?.update(context), openCreate: workspaceId === 'new'});
