@@ -69462,9 +69462,14 @@ async function viewSession(main, host, sid, context = null) {
 		stop.disabled = !allowed("session.interrupt");
 		stop.hidden = withdrawn || row?.api_access !== "managed";
 		let reason = "";
+		delete sendReason.dataset.clientActionCode;
 		if (row?.api_access === "managed" && send.disabled && !sending) {
-			if (!state.online || !state.viewReady || state.nativeBusy) reason = t("sync_actions_paused");
-			else if (!readReady) reason = t("session_send_waiting");
+			const gate = clientActionGate(state, { post: true });
+			if (!gate.allowed) {
+				const error = clientActionError(gate.reason, t);
+				reason = error.message;
+				sendReason.dataset.clientActionCode = error.code;
+			} else if (!readReady) reason = t("session_send_waiting");
 			else if (!may("operate")) reason = t("session_send_scope");
 			else if (state.caps?.hosts?.find((item) => item.host === host)?.writes === false) reason = t("session_send_host");
 			else if (state.caps?.actions?.find((item) => item.action === "session.send")?.allowed === false) reason = t("session_send_denied");
