@@ -60,7 +60,7 @@ export function sessionLabelsPanel({h,t,api,caps,guard,target,storageKey,errorBo
   const input=h('textarea',{'aria-label':t('labels_input'),rows:3,maxlength:1000});
   input.value=saved.text||'';
   const tags=h('div',{class:'actions session-label-tags'}), message=h('div',{role:'status'}), result=h('div'), restriction=h('p',{class:'muted'});
-  const error=e=>{if(live()){message.replaceChildren(errorBox(e, {within:message}));update();}};
+  const error=(e, options = {})=>{if(live()){message.replaceChildren(errorBox(e, {...options, within:message}));update();}};
   const parsed=()=>input.value.trim()===''?[]:input.value.split('\n').map(v=>v.trim());
   const accept=candidate=>{
     guard();const intent=saved.intent;
@@ -76,18 +76,18 @@ export function sessionLabelsPanel({h,t,api,caps,guard,target,storageKey,errorBo
   const apply=h('button',{class:'secondary',onclick:async()=>{
     if(!live() || busy || refreshing || !readable || !permitted() || damaged || saved.intent?.operation_id ||
       saved.intent && (!saved.intent.request || saved.intent.refused))return;
-    const values=parsed();if(!validLabels(values)){error(Error(t('labels_limits')));return;}
+    const values=parsed();if(!validLabels(values)){error(Error(t('labels_limits')), {sourceRefresh:false});return;}
     const previous=saved;
     if(!saved.intent)saved={text:input.value,base_version:saved.base_version??current.version,intent:{key:crypto.randomUUID(),operation_id:null,
       request:{action:'session.labels.set',target:{...target},params:{labels:values},preconditions:{expected_version:saved.base_version??current.version}}}};
-    try{persist();}catch(e){saved=previous;error(e);return;}
+    try{persist();}catch(e){saved=previous;error(e, {sourceRefresh:false});return;}
     busy=true;update();const intent=saved.intent;
     submission=(async()=>{
       try{const data=await api('POST','/operations?wait=3',intent.request,intent.key);guard();accept(data.operation);message.replaceChildren();}
       catch(e){if(live()){
         // This action-specific code is raised after key replay, before admission INSERT.
         if(e.code==='METADATA_VERSION_CONFLICT' && e.status===409){intent.refused=e.code;try{persist();}catch{/* keep intent in memory */}}
-        error(e);
+        error(e, {sourceRefresh:false});
       }} finally{busy=false;if(live())update();}
     })();
     try{await submission;}finally{submission=null;}
@@ -101,12 +101,12 @@ export function sessionLabelsPanel({h,t,api,caps,guard,target,storageKey,errorBo
     if(!live() || busy || refreshing || !readable || !permitted() || saved.intent && !terminal() && !saved.intent.refused)return;
     const previous=saved;
     const text=operation?.status==='succeeded'?current.labels.join('\n'):(saved.text??current.labels.join('\n'));
-    saved={text,base_version:current.version};try{persist();}catch(e){saved=previous;error(e);return;}
+    saved={text,base_version:current.version};try{persist();}catch(e){saved=previous;error(e, {sourceRefresh:false});return;}
     damaged=false;operation=null;input.value=text;message.replaceChildren();update();
   }},t('labels_review_current'));
   input.oninput=()=>{
     if(!live() || saved.intent || !readable){input.value=saved.text||'';return;}
-    saved={text:input.value,base_version:saved.base_version??current.version};try{persist();}catch(e){error(e);}update();
+    saved={text:input.value,base_version:saved.base_version??current.version};try{persist();}catch(e){error(e, {sourceRefresh:false});}update();
   };
   const editorMount=h('div',{class:'session-label-editor'});
   const reason=h('p',{class:'muted session-label-reason'});

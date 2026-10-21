@@ -24,6 +24,8 @@ def test_publication_seed_conftest_defers_package_build_imports():
 
 @pytest.mark.parametrize('failure', ['timeout', 'exit', 'assertion', 'cleanup-timeout'])
 def test_publication_failure_preserves_redacted_seed_and_core_logs(tmp_path, monkeypatch, failure):
+    # Match direct script execution's sibling-import context for this test only.
+    monkeypatch.syspath_prepend(str(SCRIPT.parent))
     fixture = runpy.run_path(str(SCRIPT))
     scope = fixture['publication_upgrade'].__globals__
     root = tmp_path / 'runtime'

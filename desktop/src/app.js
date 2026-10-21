@@ -3,8 +3,10 @@ import {layoutDecision} from './workbench-mode.js';
 import {workbenchViews} from './workbench-views.js';
 import {settingsAgents} from './settings-agents.js';
 import {actionAllowed, mayStartSession, checkpointReason, dispatchExplanation, connectionReturn} from './work-paths.js';
-import {buildDiagnostics, clientIdentity, buildLine, errorRing, sessionFacts} from './diagnostics.js';
+import {buildDiagnostics, buildLine, errorRing, sessionFacts} from './diagnostics.js';
 import {diagnosticsDialog} from './diagnostics-dialog.js';
+import {versionProjection} from './version-projection.js';
+import {versionFacts} from './version-facts.js';
 import {dashboardShell} from './shell.js';
 import {lastWorkspace, lastProjectView} from './pm-workbench.js';
 import {searchField, disclosure, emptyState, iconButton, pageHeader, segmented, statusPill, agentMark, inspector, menu, button, sectionCard, errorDetails} from './ui/components.js';
@@ -76,22 +78,46 @@ const state = { token: null, caps: null, lastEvent: 0, lastEventAt: 0, lastPoll:
 const recentErrors = errorRing();
 const diagnosticSessions = new Map();
 let diagnosticSessionsRead = false;
-let diagnosticRevision = 0, diagnosticsPreview = null, desktopBuild = null;
+let diagnosticRevision = 0, diagnosticsPreview = null;
+const versionPainters = new Set();
+let versionReads = {epoch:-1}, nativeVersionRead = null;
+const paintVersions = () => {for(const paint of [...versionPainters])paint();};
+function rememberVersionRead(key, data, at = new Date().toISOString(), epoch = state.epoch) {
+  if(epoch !== state.epoch)return;
+  if(versionReads.epoch !== epoch)versionReads = {epoch};
+  versionReads[key] = {data,at};
+  paintVersions();
+}
+async function readNativeVersions() {
+  if(!nativeDesktop)return;
+  if(nativeVersionRead?.epoch === state.epoch)return nativeVersionRead.promise;
+  const epoch = state.epoch;
+  const promise = Promise.allSettled([
+    nativeStatus().then(value => rememberVersionRead('native',value.app_build,undefined,epoch)),
+    managedControl({action:'status'}).then(value => rememberVersionRead('managed',value,undefined,epoch)),
+  ]).finally(() => {if(nativeVersionRead?.epoch === epoch)nativeVersionRead=null;});
+  nativeVersionRead = {epoch,promise};
+  return promise;
+}
 function withdrawDiagnostics() {
   diagnosticRevision++; diagnosticSessions.clear(); diagnosticSessionsRead=false; diagnosticsPreview?.withdraw();
 }
-function diagnosticsClient(caps = state.caps) {
+function diagnosticsClient(caps = versionReads.epoch === state.epoch ? versionReads.capabilities?.data : null) {
   const platform = navigator.platform || navigator.userAgent;
-  return {caps, appBuild:desktopBuild, desktop:nativeDesktop,
+  const reads = versionReads.epoch === state.epoch ? versionReads : {};
+  return {caps, appBuild:reads.native?.data, desktop:nativeDesktop,
+    online:state.online, nativeReadAt:reads.native?.at, capabilitiesReadAt:reads.capabilities?.at,
+    managedRuntime:reads.managed?.data, managedReadAt:reads.managed?.at,
+    adapterRead:reads.adapter ? {document:reads.adapter.data,at:reads.adapter.at} : null,
+    adapterRunRead:reads.adapterRun ? {run:reads.adapterRun.data,at:reads.adapterRun.at} : null,
+    updater:reads.updater?.data, updaterReadAt:reads.updater?.at,
     os:/win/i.test(platform)?'windows':/mac/i.test(platform)?'macos':/linux/i.test(platform)?'linux':'unknown', locale, width:innerWidth};
 }
 async function openDiagnostics() {
   if(diagnosticsPreview)return;
   const epoch=state.epoch;
   diagnosticsPreview=diagnosticsDialog({h,t,onClose:()=>{diagnosticsPreview=null;}, load:async()=>{
-    if(nativeDesktop && !desktopBuild){
-      try {desktopBuild=(await nativeStatus()).app_build;} catch { /* Build remains explicitly unknown. */ }
-    }
+    await readNativeVersions();
     let caps=null;
     const read=async(path,scope=null,offered=true,attempted=true)=>{
       const permitted=!scope || !!caps?.scopes?.includes(scope);
@@ -99,7 +125,7 @@ async function openDiagnostics() {
       try {return {data:await api('GET',path),completed:true,at:new Date().toISOString()};}
       catch(error){return {error:{status:error.status,code:error.code},at:new Date().toISOString()};}
     };
-    const capabilities=await read('/capabilities');caps=capabilities.data;
+    const capabilities=await read('/capabilities');caps=capabilities.data || null;
     if(epoch!==state.epoch)throw Error('Connection changed');
     if(!caps?.scopes?.includes('observe'))withdrawDiagnostics();
     const revision=diagnosticRevision;
@@ -109,7 +135,7 @@ async function openDiagnostics() {
     if(epoch!==state.epoch)throw Error('Connection changed');
     const discarded=revision!==diagnosticRevision;
     const hosts=discarded?null:hostsRead.data, operations=discarded?null:operationsRead.data, setup=discarded?null:setupRead.data;
-    return buildDiagnostics({...diagnosticsClient(caps), exportedAt:new Date().toISOString(),
+    return buildDiagnostics({...diagnosticsClient(caps), online:!!caps, exportedAt:new Date().toISOString(),
       hosts:hosts?.hosts, operations:operations?.operations, setup,
       sessions:hosts && caps?.scopes?.includes('observe') && diagnosticSessionsRead ? [...diagnosticSessions.values()] : null,
       recentErrors:recentErrors.entries(), sourceReads:{capabilities,hosts:{...hostsRead,discarded},operations:{...operationsRead,discarded},
@@ -206,7 +232,7 @@ function h(tag, attrs = {}, ...children) {
     el.addEventListener("click", async event => {
       event.preventDefault();
       try { await openExternal(attrs.href); }
-      catch (error) { document.getElementById("main").prepend(errorBox(error, {within:document.getElementById("main")})); }
+      catch (error) { document.getElementById("main").prepend(errorBox(error, {sourceRefresh:false, within:document.getElementById("main")})); }
     });
   }
   return el;
@@ -270,6 +296,15 @@ async function api(method, path, body, key, collectReceipt) {
   const revision=diagnosticRevision, epoch=state.epoch;
   try {
     const data=await apiRequest(method,path,body,key,collectReceipt);
+    if(epoch===state.epoch && method==='GET') {
+      if(path==='/capabilities' || path==='/bootstrap')rememberVersionRead('capabilities',path==='/bootstrap'?data.capabilities:data,undefined,epoch);
+      if(/^\/pm\/(?:installation-capabilities|workspaces\/[^/?]+\/capabilities)(?:\?|$)/.test(path))
+        rememberVersionRead('adapter',{native_analysis:{required_version:data.native_analysis?.required_version}},undefined,epoch);
+      if(/^\/pm\/workspaces\/[^/?]+\/runs\/[^/?]+(?:\?|$)/.test(path) && data.run)
+        rememberVersionRead('adapterRun',{updated_at:data.run.updated_at,bat_runtime_provenance:{
+          codex_source_revision:data.run.bat_runtime_provenance?.codex_source_revision,
+          bat_source_revision:data.run.bat_runtime_provenance?.bat_source_revision}},undefined,epoch);
+    }
     if(epoch===state.epoch && revision===diagnosticRevision && method==='GET' && /^\/sessions(?:[/?]|$)/.test(path)) {
       const previous = new Map(diagnosticSessions);
       if(Array.isArray(data.sessions)) {
@@ -294,6 +329,7 @@ async function api(method, path, body, key, collectReceipt) {
     return data;
   } catch(error) {
     if(epoch===state.epoch) {
+      if(method==='GET' && (path==='/capabilities' || path==='/bootstrap'))rememberVersionRead('capabilities',null,undefined,epoch);
       recentErrors.record({at:new Date().toISOString(),method,path,status:error.status,code:error.code,admissionRefused:error.admissionRefused,operation:error.operation});
       if([401,403,404].includes(error.status))withdrawDiagnostics();
     }
@@ -330,6 +366,7 @@ async function apiRequest(method, path, body, key, collectReceipt) {
 function errorBox(e, {summary, within, insideDetails = false, sourceRefresh = true} = {}) {
   // Renderers display read errors locally. Also report them to the event batch so a
   // caught refresh error cannot acknowledge its checkpoint or re-enable mutations.
+  // A request/receipt/validation outcome opts out; it is not a source read.
   if (sourceRefresh && state.refreshCycle) state.refreshCycle.error ||= e;
   const presentation = errorPresentation(e, t, {summary});
   const diagnostics = [presentation.code ? h('code', {}, presentation.code) : null,
@@ -425,7 +462,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
     }
     for (let parent = box.parentElement; parent; parent = parent.parentElement)
       if (parent.tagName === 'DETAILS') parent.open = true;
-    fill(status, errorBox(clientActionError(reason, t), {within:status}));
+    fill(status, errorBox(clientActionError(reason, t), {sourceRefresh:false, within:status}));
   };
   const guard = (mounted = false) => {
     assertView(connection);
@@ -586,11 +623,11 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
     const limit = Math.min(state.caps?.artifacts?.limits?.max_file_bytes || 16 * 1024 * 1024,
       nativeDesktop ? 16 * 1024 * 1024 : Number.MAX_SAFE_INTEGER);
     if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-      fill(status, errorBox(new Error(t("attachment_unsupported_image")), {within:status}));
+      fill(status, errorBox(new Error(t("attachment_unsupported_image")), {sourceRefresh:false, within:status}));
       return;
     }
     if (file.size > limit) {
-      fill(status, errorBox(new ApiError(413, "ARTIFACT_TOO_LARGE", `Limit: ${limit}`), {within:status}));
+      fill(status, errorBox(new ApiError(413, "ARTIFACT_TOO_LARGE", `Limit: ${limit}`), {sourceRefresh:false, within:status}));
       return;
     }
     let name = file.name;
@@ -852,6 +889,7 @@ function paintConnection(waiting = false, paused = false) {
     : paused ? 'sync_actions_paused' : waiting ? 'sync_waiting' : 'desktop_polling';
   live.title = scoped + ' — ' + t(helpKey);
   for (const paint of [...connectionPainters]) paint();
+  paintVersions();
 }
 let managedStatusAt = 0;
 async function refreshManagedRecovery() {
@@ -1548,9 +1586,9 @@ function sessionErrorDetails(e, {within, insideDetails = false} = {}) {
     button({variant:'ghost',label:t('diag_export'),onClick:openDiagnostics,'data-export-diagnostics':''}));
   return insideDetails || within?.closest?.('details') ? body : disclosure({label: t("session_error_details"), body});
 }
-function sessionErrorBox(e, action = null, options = {}) {
+function sessionErrorBox(e, action = null, {sourceRefresh = true, ...options} = {}) {
   // Like errorBox: a caught refresh error still keeps its event batch unacknowledged.
-  if (state.refreshCycle) state.refreshCycle.error ||= e;
+  if (sourceRefresh && state.refreshCycle) state.refreshCycle.error ||= e;
   const code = typeof e?.code === "string" ? e.code : "";
   return h("div", {class: "session-error", role: "alert", "data-session-error": code},
     h("p", {class: "session-error-line"}, icon("circle-alert", {size: 16}), h("span", {}, options.summary || sessionErrorLine(e, t)),
@@ -1669,7 +1707,7 @@ async function viewSession(main, host, sid, context = null) {
         box.value = ""; try { localStorage.removeItem(draftKey); localStorage.removeItem(draftKey + ".queue"); } catch { /* unavailable */ }
         mobileLayout?.updateDraft();
       }
-    } catch (e) { status.replaceChildren(sessionErrorBox(e, sendRecovery(e), {within:status})); }
+    } catch (e) { status.replaceChildren(sessionErrorBox(e, sendRecovery(e), {sourceRefresh:false, within:status})); }
     finally {
       const active = document.activeElement;
       const owned = active === send || active === document.body;
@@ -1687,7 +1725,7 @@ async function viewSession(main, host, sid, context = null) {
       assertView(connection);
       const op = await submit("session.interrupt", { host, session_id: sid }, { mode: "soft" }, {}, `interrupt.${host}.${sid}`);
       assertView(connection); status.replaceChildren(opStatus(op));
-    } catch (e) { status.replaceChildren(sessionErrorBox(e, e?.status === 403 ? accessRecovery() : [404, 410].includes(e?.status) ? goneRecovery() : {label: t("ui_retry"), run: () => stop.click()}, {within:status})); }
+    } catch (e) { status.replaceChildren(sessionErrorBox(e, e?.status === 403 ? accessRecovery() : [404, 410].includes(e?.status) ? goneRecovery() : {label: t("ui_retry"), run: () => stop.click()}, {sourceRefresh:false, within:status})); }
   }});
   const paintSend = op => {
     const id = typeof op?.operation_id === "string" ? op.operation_id : "";
@@ -1931,6 +1969,7 @@ async function viewSession(main, host, sid, context = null) {
     let saved;
     try { saved = JSON.parse(localStorage.getItem(key)); } catch { /* unavailable */ }
     const answer = async params => {
+      let sourceRefresh = true;
       try {
         assertView(connection);
         // Inventory is observation evidence, not write authority. Recheck its latest identity here;
@@ -1950,18 +1989,19 @@ async function viewSession(main, host, sid, context = null) {
         // A fresh view after withdrawal cannot authorize an older preflight's answer.
         if (disposed || withdrawn || sourceVersion !== withdrawalVersion) return;
         applyObservation(latest);
+        sourceRefresh = false;
         if (latest.session.api_access !== "managed" || identity(latest.session.pending) !== current || !pend.toolUseId)
           throw new ApiError(409, "PENDING_CHANGED", t("pending_changed"));
         const op = await submit("session.answer", { host, session_id: sid }, { ...params, tool_use_id: pend.toolUseId }, {}, answerScope);
         assertView(connection); status.replaceChildren(opStatus(op));
-        if (op.status === "succeeded") await loadObservation();
+        if (op.status === "succeeded") {sourceRefresh = true; await loadObservation();}
       } catch (e) {
         status.replaceChildren(sessionErrorBox(e, e?.code === "PENDING_CHANGED"
           ? {label: t("session_err_review"), run: async () => {
             await refresh().catch(() => {});
             pending.querySelector("button:not(:disabled), input")?.focus();
           }}
-          : e?.status === 403 ? accessRecovery() : [404, 410].includes(e?.status) ? goneRecovery() : {label: t("ui_retry"), run: () => answer(params)}, {within:status}));
+          : e?.status === 403 ? accessRecovery() : [404, 410].includes(e?.status) ? goneRecovery() : {label: t("ui_retry"), run: () => answer(params)}, {sourceRefresh, within:status}));
       }
     };
     const actions = h("div", { class: "actions session-asking-actions" });
@@ -2363,7 +2403,7 @@ function checkpointPanel(host, sid, {namespace = state.namespace, manual = () =>
           ? h("a", {href: `#/session/${encodeURIComponent(resultHost)}/${encodeURIComponent(op.result.session_id)}`}, t("open_new_session")) : null;
         out.replaceChildren(h("p", {class: "session-checkpoint-op"}, statusPill(operationStatusKey(op.status)), opened ? " " : "", opened || ""),
           disclosure({label: t("checkpoint_op_details"), body: h("p", {}, h("a", { href: `#/op/${encodeURIComponent(op.operation_id)}` }, op.operation_id))}));
-      } catch (e) { out.replaceChildren(sessionErrorBox(e, {label: t("ui_retry"), run: () => go.click()}, {within:out})); }
+      } catch (e) { out.replaceChildren(sessionErrorBox(e, {label: t("ui_retry"), run: () => go.click()}, {sourceRefresh:false, within:out})); }
       finally {
         starting = false;
         if (go.isConnected) {
@@ -2444,7 +2484,7 @@ function checkpointPanel(host, sid, {namespace = state.namespace, manual = () =>
         op.error_code || op.status_reason ? disclosure({label: t("checkpoint_op_details"), body: h("p", {},
           h("code", {}, [op.error_code, op.status_reason].filter(Boolean).join(" · ")))}) : null].filter(Boolean));
       await load();
-    } catch (e) { status.replaceChildren(sessionErrorBox(e, {label: t("ui_retry"), run: () => load().catch(() => {})}, {within:status})); }
+    } catch (e) { status.replaceChildren(sessionErrorBox(e, {label: t("ui_retry"), run: () => load().catch(() => {})}, {sourceRefresh:false, within:status})); }
     finally {
       const active = document.activeElement;
       const owned = active === create || active === document.body;
@@ -2568,7 +2608,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
           const receipt = op.result?.merge || op.result || op.external_refs?.merge_receipt;
           fill(status, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id),
             receipt?.base_moved ? h("p", { class: "note warn" }, t("merged_newer_base", { count: receipt.other_commits_count })) : null);
-        } catch (e) { fill(status, errorBox(e, {within:status})); }
+        } catch (e) { fill(status, errorBox(e, {sourceRefresh:false, within:status})); }
       };
       const blocked = pr.state !== "open" || pr.draft || pr.merged || pv.blocking.length > 0 || scopeChanged;
       const method = h("select", { "aria-label": t("merge_method"), onchange: () => { selectedMethod = method.value; load(); } },
@@ -2587,11 +2627,14 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
         t("merge_and_deploy_to", { env: r.environment })));
         if (pr.merged && pr.merge_commit_sha) buttons.push(h("button", { class: "secondary", disabled: !may("deploy") || !state.caps?.deploy_recipes?.find(c => c.name === r.name)?.readiness?.ready,
           onclick: async () => {
+            let sourceRefresh = true;
             try {
               const deploymentPreview = (await api("GET", `/deployments/preview?recipe=${encodeURIComponent(r.name)}`)).preview;
-              const op = await submit("deployment.start", { recipe: r.name }, { source_sha: pr.merge_commit_sha }, deploymentPreview.preconditions, `deploy.${r.name}.${pr.merge_commit_sha}`);
+              const preconditions = deploymentPreview.preconditions;
+              sourceRefresh = false;
+              const op = await submit("deployment.start", { recipe: r.name }, { source_sha: pr.merge_commit_sha }, preconditions, `deploy.${r.name}.${pr.merge_commit_sha}`);
               fill(status, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id));
-            } catch (e) { fill(status, errorBox(e, {within:status})); }
+            } catch (e) { fill(status, errorBox(e, {sourceRefresh, within:status})); }
           } }, t("deploy_to", { env: r.environment })));
       }
       const commitList = h("details", { class: "row-details" }, h("summary", {}, t("merge_commit_range", { count: pv.commits.length })),
@@ -2716,7 +2759,7 @@ function deploymentIntent(dep, kind, reload) {
             deploymentReceipt({ operation_id: op.operation_id }));
         }
       } catch (e) {
-        fill(out, h("p", { class: "error" }, t("dep_refused")), heldDetails(t("dep_operation_details"), [errorBox(e, {insideDetails:true})]));
+        fill(out, h("p", { class: "error" }, t("dep_refused")), heldDetails(t("dep_operation_details"), [errorBox(e, {sourceRefresh:false, insideDetails:true})]));
         if (["DEPLOY_PREVIEW_REQUIRED", "ENVIRONMENT_CHANGED", "RECIPE_CHANGED"].includes(e.code)) {
           out.prepend(h("p", { class: "note warn" }, t("dep_stale_preview")));
           await refreshPreview();
@@ -2883,7 +2926,7 @@ function metadataDrawer(pr, reload) {
         op.error_code ? chip(op.error_code, "bad") : null, contents,
         h("p", { class: "muted" }, t("metadata_result_help")));
       idleReload = () => reload();
-    } catch (e) { fill(out, errorBox(e, {within:out})); save.disabled = false; }
+    } catch (e) { fill(out, errorBox(e, {sourceRefresh:false, within:out})); save.disabled = false; }
   } }, t("save"));
   const close = h("button", { class: "secondary", "data-testid": "metadata-close", onclick: () => d.close() }, t("close"));
   d = drawer(h("label", {}, t("metadata_title"), title), h("label", {}, t("description"), body),
@@ -2951,7 +2994,7 @@ function integrationPanel(pr, reloadCard, source = null) {
       }
       doc = op.result;
       renderPreview();
-    } catch (e) { if (mine === generation) previewBox.replaceChildren(errorBox(e, {within:previewBox})); }
+    } catch (e) { if (mine === generation) previewBox.replaceChildren(errorBox(e, {sourceRefresh:false, within:previewBox})); }
   };
   const changed = debounce(() => { rerender(); runPreview(); }, 600);
   const add = (kind, id, label) => {
@@ -2969,7 +3012,7 @@ function integrationPanel(pr, reloadCard, source = null) {
         const req = { action: "integration.apply", target, params: { preview_id: doc.preview_id },
           preconditions: { expected_head_sha: doc.target.head_sha, preview_digest: doc.digest } };
         follow((await api("POST", "/operations?wait=3", req, "integrate." + doc.preview_id)).operation);
-      } catch (e) { status.replaceChildren(errorBox(e, {within:status})); go.disabled = false; }
+      } catch (e) { status.replaceChildren(errorBox(e, {sourceRefresh:false, within:status})); go.disabled = false; }
     } }, conflictAt ? t("start_integration_conflict", { n: conflictAt.seq }) : t("update_pr_results"));
     previewBox.replaceChildren(...[
       h("p", {}, h("code", {}, `${doc.repository} #${doc.pull_number} · ${doc.target.head_ref} @ ${doc.target.head_sha.slice(0, 12)}`),
@@ -2995,7 +3038,7 @@ function integrationPanel(pr, reloadCard, source = null) {
       status.replaceChildren(integrationStatus(op, {
         resume: async () => {
           try { follow((await api("POST", `/operations/${op.operation_id}/resume`, {})).operation); }
-          catch (e) { status.append(errorBox(e, {within:status})); }
+          catch (e) { status.append(errorBox(e, {sourceRefresh:false, within:status})); }
         },
         cancel: async () => { await api("POST", `/operations/${op.operation_id}/cancel`, {}); await freshHead(); runPreview(); } }));
       if (TERMINAL.includes(op.status) || op.status === "needs_attention") break;
@@ -3070,7 +3113,7 @@ function repairControl(op) {
           `handoff.${op.operation_id}`);
         out.append(h("p", {}, opStatus(o), " ", t("handoff_started"), " ",
           h("a", { href: `#/op/${o.operation_id}` }, o.operation_id)));
-      } catch (e) { out.append(errorBox(e, {within:out})); }
+      } catch (e) { out.append(errorBox(e, {sourceRefresh:false, within:out})); }
       finally {
         starting = false;
         if (go.isConnected) {
@@ -3153,26 +3196,31 @@ async function viewOperation(main, id) {
       const refs = op.external_refs || {};
       const retry = refs.merged_sha && op.action === "delivery.merge_and_deploy" && op.status === "failed"
         ? h("button", { class: "primary", onclick: async () => {
+          let sourceRefresh = true;
           try {
             const preview = (await api("GET", `/deployments/preview?recipe=${encodeURIComponent(op.target.recipe)}`)).preview;
-            const o = await submit("deployment.start", { recipe: op.target.recipe }, { source_sha: refs.merged_sha }, preview.preconditions,
+            const preconditions = preview.preconditions;
+            sourceRefresh = false;
+            const o = await submit("deployment.start", { recipe: op.target.recipe }, { source_sha: refs.merged_sha }, preconditions,
               `deploy.${op.target.recipe}.${refs.merged_sha}`);
             location.hash = `#/op/${o.operation_id}`;
-          } catch (e) { panel.append(errorBox(e, {within:panel})); }
+          } catch (e) { panel.append(errorBox(e, {sourceRefresh, within:panel})); }
         } }, t("retry_deploy")) : null;
       const needsConfirm = op.action === "checkpoint.continue" && ["SOURCE_MOVED", "SOURCE_UNAVAILABLE"].includes(op.error_code);
       const resume = op.status === "needs_attention" && !needsConfirm
         ? h("button", { class: "primary", title: t("resume_help"), onclick: async () => {
-          try { await api("POST", `/operations/${id}/resume`, {}); render(); } catch (e) { panel.append(errorBox(e, {within:panel})); }
+          try { await api("POST", `/operations/${id}/resume`, {}); render(); } catch (e) { panel.append(errorBox(e, {sourceRefresh:false, within:panel})); }
         } }, t(op.action === "worktree.merge" ? "delivery_merge_read_receipts" : "resume")) : null;
       const confirmSource = op.status === "needs_attention" && needsConfirm ? h("button", { class: "primary", onclick: async () => {
         const connection = {epoch: state.epoch, namespace: state.namespace, generation};
+        let sourceRefresh = true;
         try { const seen = (await api("GET", `/checkpoints/${op.target.checkpoint_id}?live=true`)).source.head;
           assertView(connection);
           if (!seen) throw new Error(t("source_unavailable"));
+          sourceRefresh = false;
           await submit("checkpoint.continue.revalidate", { operation_id: id }, { observed_source_head_sha: seen },
             { expected_input_manifest_digest: refs.input_manifest_digest }, `revalidate.${id}.${seen}`); render();
-        } catch (e) { panel.append(errorBox(e, {within:panel})); }
+        } catch (e) { panel.append(errorBox(e, {sourceRefresh, within:panel})); }
       } }, t("confirm_source")) : null;
       const materialized = refs.materializations || op.result?.materializations || [];
       const opened = op.result?.session_id && op.result?.host
@@ -3189,7 +3237,7 @@ async function viewOperation(main, id) {
       }
       const cancel = !TERMINAL.includes(op.status)
         ? h("button", { class: "danger", onclick: async () => {
-          try { await api("POST", `/operations/${id}/cancel`, {}); render(); } catch (e) { panel.append(errorBox(e, {within:panel})); }
+          try { await api("POST", `/operations/${id}/cancel`, {}); render(); } catch (e) { panel.append(errorBox(e, {sourceRefresh:false, within:panel})); }
         } }, t("cancel"))
         : null;
       if (!panel.isConnected) return;
@@ -3336,18 +3384,21 @@ function openSettings(main, {exclusive = false, refreshButton} = {}) {
   frame.panel("about").append(h("section", {class: "panel"},
     h("h2", {}, t("global_nav_about")),
     h("p", {}, t("global_product")),
-    h('p', {'data-build-line':''}, buildLine(clientIdentity(diagnosticsClient()),t)),
+    h('p', {'data-build-line':''}, buildLine(versionProjection(diagnosticsClient()),t)),
+    h('div', {'data-about-versions':''}),
     h('div',{class:'actions'},button({label:t('diag_export'),onClick:openDiagnostics,'data-export-diagnostics':''}),
       h("a", {href: setupGuide()}, t("global_setup_guide")))));
-  const identityEpoch = state.epoch;
-  let buildCaps = state.caps;
-  const paintBuild = () => {
-    if(frame.root.isConnected && identityEpoch === state.epoch)
-      frame.panel('about').querySelector('[data-build-line]').textContent=buildLine(clientIdentity(diagnosticsClient(buildCaps)),t);
-  };
-  if(state.token)api('GET','/capabilities').then(caps=>{buildCaps=caps;paintBuild();}).catch(()=>{});
-  if(nativeDesktop)nativeStatus().then(status=>{desktopBuild=status.app_build;paintBuild();}).catch(()=>{});
   main.append(languageSwitch(), frame.root);
+  const identityEpoch = state.epoch;
+  const paintBuild = () => {
+    if(!frame.root.isConnected || identityEpoch !== state.epoch){versionPainters.delete(paintBuild);return;}
+    const projection=versionProjection(diagnosticsClient());
+    frame.panel('about').querySelector('[data-build-line]').textContent=buildLine(projection,t);
+    frame.panel('about').querySelector('[data-about-versions]').replaceChildren(versionFacts({h,t,projection}));
+  };
+  versionPainters.add(paintBuild);paintBuild();
+  if(state.token)api('GET','/capabilities').catch(()=>{});
+  void readNativeVersions();
   const back=connectionReturn(params.get('from'));
   if(back)frame.panel('connection').append(h('a',{href:back.href,'data-connection-return':''},t(back.label)));
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
@@ -3439,7 +3490,7 @@ async function viewManagedSettings(main) {
     const open = h("button", {class: "secondary", onclick: async () => {
       open.disabled = true;
       try {guard(); await managedControl({action: "open_browser"}); guard(); status.replaceChildren();}
-      catch (error) {if (connection.generation === generation) status.replaceChildren(errorBox(error, {within:status}));}
+      catch (error) {if (connection.generation === generation) status.replaceChildren(errorBox(error, {sourceRefresh:false, within:status}));}
       finally {open.disabled = false;}
     }}, t("managed_open_browser"));
     local.append(h("div", {class: "actions"}, open, h("label", {}, login, " ", t("managed_start_login"))));
@@ -3448,7 +3499,7 @@ async function viewManagedSettings(main) {
     login.addEventListener("change", async () => {
       const wanted = login.checked; login.disabled = true;
       try {guard(); const result = await managedControl({action: "set_login", enabled: wanted}); guard(); login.checked = !!result.login_enabled;}
-      catch (error) {if (connection.generation === generation) {login.checked = !wanted; status.replaceChildren(errorBox(error, {within:status}));}}
+      catch (error) {if (connection.generation === generation) {login.checked = !wanted; status.replaceChildren(errorBox(error, {sourceRefresh:false, within:status}));}}
       finally {login.disabled = false;}
     });
     try {
@@ -3581,7 +3632,9 @@ async function viewNativeSettings(main) {
   try {
     const status = await nativeStatus();
     if (mine !== generation || !main.contains(details)) return;
-    if (status.updates === true) disposeUpdates = await mountUpdates(updateRoot, {h, t});
+    if (status.updates === true) disposeUpdates = await mountUpdates(updateRoot, {h, t, versionInput:diagnosticsClient,
+      onRead:(value,at)=>rememberVersionRead('updater',value,at),
+      onVersions:paint=>{versionPainters.add(paint);return()=>versionPainters.delete(paint);}});
     if (mine !== generation || !main.contains(details)) { disposeUpdates?.(); return; }
     const row = (label, value) => { if (value) details.append(h("dt", {}, t(label)), h("dd", {}, value)); };
     if (status.configuration_setup === true) {
@@ -3678,7 +3731,7 @@ async function change(out, action, target, params, pre, scope) {
     else fill(out, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id));
   } catch (e) {
     lastFailure = e.code || "ERROR";
-    fill(out, e.status === 403 ? errorBox(e, {within:out}) : problem(e.code, e.message));
+    fill(out, e.status === 403 ? errorBox(e, {sourceRefresh:false, within:out}) : problem(e.code, e.message));
   }
   return null;
 }
@@ -4133,7 +4186,7 @@ async function viewWorkItem(main, wid) {
           await change(notice, "work_item.read", {work_item_id: wid}, {}, {expected_version: w.version}, `wi.read.${wid}.${w.version}`);
           assertView(connection); await render(true);
         } catch (error) {
-          if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) fill(notice, errorBox(error, {within:notice}));
+          if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) fill(notice, errorBox(error, {sourceRefresh:false, within:notice}));
         } finally {if (mark.isConnected) mark.disabled = !canRead || progress.read_version >= w.version;}
       }}, t("reading_mark"));
       reading.append(h("div", {class: "panel reading-state"},
@@ -4196,7 +4249,7 @@ async function viewWorkItem(main, wid) {
         if (!Object.keys(params).length && !attachment.pending()) { d.close(); return; }
         let op;
         try { requireMutable(); op = await attachment.perform("work_item.update", {work_item_id: wid}, params, pre, `wi.edit.${wid}`); }
-        catch (e) { fill(notice, errorBox(e, {within:notice})); if (STALE.includes(e.code)) {draft = params; render();} return; }
+        catch (e) { fill(notice, errorBox(e, {sourceRefresh:false, within:notice})); if (STALE.includes(e.code)) {draft = params; render();} return; }
         const ok = op.status === "succeeded";
         if (!ok) fill(notice, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id));
         if (!ok && STALE.includes(lastFailure)) draft = params;
@@ -4305,7 +4358,7 @@ function continueFrom(w, checkpointId, notice, children = []) {
           { instructions, agent: agent.value, ...(state.caps?.artifacts ? {artifacts: draft.refs(), work_item_id: w.work_item_id} : {}) },
           state.caps?.artifacts ? { expected_source_head_sha: expectedHead, expected_work_item_fingerprint: w.completion.fingerprint } : {}, `continue.${checkpointId}`);
     } catch (e) {
-      fill(out, errorBox(e, {within:out}));
+      fill(out, errorBox(e, {sourceRefresh:false, within:out}));
       if (go.isConnected) {
         go.removeAttribute("aria-disabled");
         out.removeAttribute("aria-busy");
@@ -4544,7 +4597,7 @@ async function viewCleanup(main, section, ident) {
           ["PREVIEW_TOKEN_INVALID", "PREVIEW_EXPIRED", "PREVIEW_MISMATCH", "PREVIEW_BLOCKED"].includes(e.code)) {
         intent.refused = e.code; persist(intentKey, intent);
       }
-      fill(status, errorBox(e, {within:status}), h("p", {}, t(intent?.refused ? "cleanup_repreview" : "cleanup_retry_same")));
+      fill(status, errorBox(e, {sourceRefresh:false, within:status}), h("p", {}, t(intent?.refused ? "cleanup_repreview" : "cleanup_retry_same")));
     } finally { busy = false; finish(); submission = null;
       if (connection.epoch === state.epoch && connection.generation === generation) cleanupControls(); }
   } }, t("cleanup_apply"));
@@ -4566,7 +4619,7 @@ async function viewCleanup(main, section, ident) {
       if (revision !== previewRevision) return;
       doc = result.preview; renderPreview();
       fill(status);
-    } catch (e) { if (revision === previewRevision && connection.epoch === state.epoch) fill(status, errorBox(e, {within:status})); }
+    } catch (e) { if (revision === previewRevision && connection.epoch === state.epoch) fill(status, errorBox(e, {sourceRefresh:false, within:status})); }
     finally { previewButton.disabled = false; }
   } }, t("cleanup_preview"));
   if (pending && section !== "resource") {

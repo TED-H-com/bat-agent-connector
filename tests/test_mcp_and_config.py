@@ -4,7 +4,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import time
 from copy import deepcopy
 from pathlib import Path
@@ -25,6 +24,7 @@ from bat_agent_connector.mcp_server import (
 from bat_agent_connector.update_install import uv_git_env
 from scripts.validate_connector_update import copy_fixture_source, identity_line
 from tests.conftest import make_config
+from tests.fixture_vcs_install import install_fixture_candidate
 
 
 @pytest.fixture(scope="module")
@@ -42,11 +42,9 @@ def in_place_packages(tmp_path_factory):
     env = uv_git_env({"HOME": str(home), "PATH": os.environ["PATH"], "LANG": "C.UTF-8", "TMPDIR": str(temporary),
                       "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_TERMINAL_PROMPT": "0",
                       "UV_NO_CONFIG": "true", "UV_PYTHON_DOWNLOADS": "never",
-                      # Each installed version owns its files, independently of the cache.
-                      "UV_LINK_MODE": "copy",
-                      "UV_CACHE_DIR": os.environ.get("UV_CACHE_DIR", str(Path.home() / ".cache/uv"))})
-    uv, git = shutil.which("uv"), shutil.which("git")
-    assert uv and git, "Real package fixture requires uv and Git"
+                      "UV_CACHE_DIR": os.environ.get("UV_CACHE_DIR", str(scratch / "cache"))})
+    git = shutil.which("git")
+    assert git, "Real package fixture requires Git"
 
     def run(args, *, cwd=None):
         result = subprocess.run(args, cwd=cwd, env=env, capture_output=True, text=True, timeout=120)
@@ -63,15 +61,9 @@ def in_place_packages(tmp_path_factory):
 
     first_sha = commit()
     environment = scratch / "environment"
-    run([uv, "venv", "--python", sys.executable, str(environment)])
-    python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-    constraints = scratch / "constraints.txt"
-    run([uv, "export", "--locked", "--no-dev", "--no-emit-project", "--no-hashes",
-         "--output-file", str(constraints)], cwd=source)
 
     def install(sha):
-        run([uv, "pip", "install", "--python", str(python), "--reinstall-package", "bat-agent-connector",
-             "--constraints", str(constraints), "git+" + source.as_uri() + "@" + sha])
+        return install_fixture_candidate(source, sha, environment, env=env, lock_root=root)
 
     def provenance():
         script = (
@@ -101,7 +93,7 @@ def in_place_packages(tmp_path_factory):
         )
         return json.loads(run([str(python), "-I", "-B", "-c", script]))
 
-    install(first_sha)
+    python = install(first_sha)
     first_provenance = provenance()
     first_caps = capabilities("first")
     script = ("import json;from bat_agent_connector.build_identity import build_identity;"

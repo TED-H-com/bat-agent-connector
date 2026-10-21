@@ -81,7 +81,7 @@ export function orchestrationPanel({h, t, api, caps, guard, ready, errorBox, opS
   const label = (key, input) => h('label', {}, t(key), input);
   const inputs = {host, selection, message, queue, agent, maximum};
   function fill() {host.value = saved.host; selection.value = saved.selection; message.value = saved.message; queue.checked = saved.queue; agent.value = saved.agent; maximum.value = saved.max_items;}
-  const showError = error => {if (current()) status.replaceChildren(errorBox(error, {within:status}));};
+  const showError = (error, options = {}) => {if (current()) status.replaceChildren(errorBox(error, {...options, within:status}));};
   function renderSelection() {
     const id = row => sessionMode(mode) ? row.session_id : row.workspace_id;
     selection.replaceChildren(h('option', {value: ''}, t(sessionMode(mode) ? 'orch_choose_session' : 'start_choose_workspace')),
@@ -119,7 +119,7 @@ export function orchestrationPanel({h, t, api, caps, guard, ready, errorBox, opS
     finally {if (current() && mine === discovery) {discovering = false; update();}}
   }
   const reload = h('button', {class: 'secondary', onclick: () => discover().catch(() => {})}, t('orch_reload'));
-  const changed = () => {reviewed = false; review.checked = false; try {persist();} catch (e) {showError(e);} update();};
+  const changed = () => {reviewed = false; review.checked = false; try {persist();} catch (e) {showError(e, {sourceRefresh:false});} update();};
   for (const [key, input] of Object.entries(inputs)) input.addEventListener(['host', 'selection', 'queue', 'agent'].includes(key) ? 'change' : 'input', () => {
     if (!current() || busy || saved.intent) {fill(); return;}
     if (key === 'maximum') saved.max_items = Number(input.value);
@@ -179,13 +179,13 @@ export function orchestrationPanel({h, t, api, caps, guard, ready, errorBox, opS
       saved.intent = {request: request(), key: crypto.randomUUID(), operation_id: null};
     }
     if (!saved.intent.request || !saved.intent.key) return;
-    try {persist();} catch (e) {showError(e); update(); return;}
+    try {persist();} catch (e) {showError(e, {sourceRefresh:false}); update(); return;}
     busy = true; update(); const intent = saved.intent;
     submission = (async () => {
       try {const doc = await api('POST', '/operations?wait=3', intent.request, intent.key); guard(); accept(doc.operation);}
       catch (error) {if (current()) {
         if (error.status >= 400 && error.status < 500 && admissionRefusals.has(error.code)) {intent.refused = error.code; try {persist();} catch { /* keep original */ }}
-        showError(error);
+        showError(error, {sourceRefresh:false});
       }} finally {busy = false; if (current()) update();}
     })();
     try {await submission;} finally {submission = null;}
@@ -195,7 +195,7 @@ export function orchestrationPanel({h, t, api, caps, guard, ready, errorBox, opS
     if (!current() || busy || refreshing || readFailed || !(mayReplace() || saved.intent?.refused)) return;
     const previous = saved;
     saved = {...saved, message: '', queue: false, items: [{title: '', prompt: ''}]}; delete saved.intent;
-    try {persist();} catch (error) {saved = previous; showError(error); return;}
+    try {persist();} catch (error) {saved = previous; showError(error, {sourceRefresh:false}); return;}
     operation = null; reviewed = false; review.checked = false; status.replaceChildren(); fill(); renderItems(); update(); await discover().catch(() => {});
   }}, t('orch_new'));
   const editor = mode === 'items' ? h('div', {class: 'panel'}, label('start_agent', agent), items, h('div', {class: 'actions'}, add)) :

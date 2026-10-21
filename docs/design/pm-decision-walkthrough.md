@@ -93,10 +93,13 @@ call also asks the person to refresh and review instead of leaving an old networ
 error as that click's outcome. Late replies still cannot paint across a retired
 view or authority boundary.
 
-A durable request or receipt error belongs to that original operation. Rendering
-it while an unrelated event-source read is pending must not fail that read's
-refresh cycle or pause transport readiness. Actual source read errors still keep
-their event batch unacknowledged and pause writes until a successful replay.
+A request, receipt, local draft or validation error belongs to that action. Both
+shared error renderers accept `sourceRefresh: false` for these outcomes, including
+non-durable actions and custom PM error callbacks. Rendering an action outcome
+while an unrelated event-source read is pending must not fail that read's refresh
+cycle or pause transport readiness. The default remains strict for source reads
+and errors whose origin cannot be established: their event batch stays
+unacknowledged and writes pause until a successful replay.
 
 The recovery helper selects the stable adoption form. A `has` filter is relative
 to its candidate: passing a proposal-scoped role locator to a Details filter looks

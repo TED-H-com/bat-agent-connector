@@ -32,6 +32,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 1440]) {
       const frontend = t('diag_frontend_build', {digest: digest.slice(0,12)});
       const connector = t('diag_connector_build', {version: bootstrap.capabilities.build.version,
         commit: bootstrap.capabilities.build.commit || copy.diag_unknown, source: bootstrap.capabilities.build.source});
+      await page.screenshot({path:info.outputPath(`about-${locale}-${width}.png`),fullPage:true});
       await expect(line).toHaveText(`${frontend} · ${connector}`);
       await expect(page.locator('#settings-panel-about')).not.toContainText(/Fleet|native|原生|桌面版|Desktop/);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -42,6 +43,14 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 1440]) {
       expect(bundle.client).toMatchObject({frontend_digest: digest, served_frontend_digest: served, app_version: null, app_commit: null,
         connector_version: bootstrap.capabilities.build.version, connector_commit: bootstrap.capabilities.build.commit,
         connector_source: bootstrap.capabilities.build.source, platform: 'browser'});
+      for(const surface of ['#settings-panel-about','[data-diagnostics-summary]']) {
+        await expect(page.locator(`${surface} [data-version-row=loaded_ui]`)).toContainText(digest);
+        await expect(page.locator(`${surface} [data-version-row=served_ui]`)).toContainText(served);
+      }
+      expect(bundle.versions.rows.find(row=>row.id==='loaded_ui')).toMatchObject({digest,source:'loaded_ui',period:'loaded'});
+      expect(bundle.versions.rows.find(row=>row.id==='served_ui')).toMatchObject({digest:served,source:'capabilities',period:'read'});
+      const loadedAt=bundle.versions.rows.find(row=>row.id==='loaded_ui').observed_at;
+      expect(Number.isFinite(Date.parse(loadedAt))).toBe(true);
       await expect(page.locator('[data-diagnostics-summary]')).toContainText(`${frontend} · ${connector}`);
       expect(Object.keys(bundle.client).some(key => /fleet|native/i.test(key))).toBe(false);
       const download = page.waitForEvent('download');
@@ -59,6 +68,12 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 1440]) {
       await expect(page.locator('[data-diagnostics-json]')).toContainText(served);
       const stale = JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
       expect(stale.client.frontend_digest).toBe(digest);expect(stale.client.served_frontend_digest).toBe(served);
+      expect(stale.versions.rows.find(row=>row.id==='loaded_ui')).toMatchObject({digest,observed_at:loadedAt});
+      expect(stale.versions.rows.find(row=>row.id==='served_ui').digest).toBe(served);
+      for(const surface of ['#settings-panel-about','[data-diagnostics-summary]']) {
+        await expect(page.locator(`${surface} [data-version-row=loaded_ui]`)).toContainText(digest);
+        await expect(page.locator(`${surface} [data-version-row=served_ui]`)).toContainText(served);
+      }
       await expect(page.locator('[data-diagnostics-summary]')).toContainText(copy.diag_frontend_stale);
       await page.screenshot({path: info.outputPath(`stale-${locale}-${width}.png`)});
       await page.reload();

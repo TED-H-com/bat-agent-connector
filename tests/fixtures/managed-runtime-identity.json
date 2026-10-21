@@ -1,0 +1,122 @@
+{
+  "differs": {
+    "actor": "fixture-operator",
+    "bundled_runtime": {
+      "build_source": "vcs",
+      "commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "observed_at": 1790000000.0,
+      "source": "this_process",
+      "version": "0.2.12"
+    },
+    "endpoint": "http://127.0.0.1:45123",
+    "principal_id": "fixture-principal",
+    "protocol": 1,
+    "running_runtime": {
+      "build_source": "vcs",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "observed_at": 1790000001.0,
+      "source": "capabilities",
+      "version": "0.2.12"
+    },
+    "runtime_difference": "differs",
+    "runtime_version": "0.2.12",
+    "server_id": "fixture-server",
+    "token": "fixture-token"
+  },
+  "older_service": {
+    "actor": "fixture-operator",
+    "bundled_runtime": {
+      "build_source": "vcs",
+      "commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "observed_at": 1790000000.0,
+      "source": "this_process",
+      "version": "0.2.12"
+    },
+    "endpoint": "http://127.0.0.1:45123",
+    "principal_id": "fixture-principal",
+    "protocol": 1,
+    "running_runtime": {
+      "build_source": null,
+      "commit": null,
+      "observed_at": 1790000001.0,
+      "source": "capabilities",
+      "version": null
+    },
+    "runtime_difference": "unknown",
+    "runtime_version": "0.2.12",
+    "server_id": "fixture-server",
+    "token": "fixture-token"
+  },
+  "same": {
+    "actor": "fixture-operator",
+    "bundled_runtime": {
+      "build_source": "vcs",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "observed_at": 1790000000.0,
+      "source": "this_process",
+      "version": "0.2.12"
+    },
+    "endpoint": "http://127.0.0.1:45123",
+    "principal_id": "fixture-principal",
+    "protocol": 1,
+    "running_runtime": {
+      "build_source": "vcs",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "observed_at": 1790000001.0,
+      "source": "capabilities",
+      "version": "0.2.12"
+    },
+    "runtime_difference": "same",
+    "runtime_version": "0.2.12",
+    "server_id": "fixture-server",
+    "token": "fixture-token"
+  },
+  "unknown_bundled": {
+    "actor": "fixture-operator",
+    "bundled_runtime": {
+      "build_source": "package",
+      "commit": null,
+      "observed_at": 1790000000.0,
+      "source": "this_process",
+      "version": "0.2.12"
+    },
+    "endpoint": "http://127.0.0.1:45123",
+    "principal_id": "fixture-principal",
+    "protocol": 1,
+    "running_runtime": {
+      "build_source": "vcs",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "observed_at": 1790000001.0,
+      "source": "capabilities",
+      "version": "0.2.12"
+    },
+    "runtime_difference": "unknown",
+    "runtime_version": "0.2.12",
+    "server_id": "fixture-server",
+    "token": "fixture-token"
+  },
+  "unknown_running": {
+    "actor": "fixture-operator",
+    "bundled_runtime": {
+      "build_source": "vcs",
+      "commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "observed_at": 1790000000.0,
+      "source": "this_process",
+      "version": "0.2.12"
+    },
+    "endpoint": "http://127.0.0.1:45123",
+    "principal_id": "fixture-principal",
+    "protocol": 1,
+    "running_runtime": {
+      "build_source": "package",
+      "commit": null,
+      "observed_at": 1790000001.0,
+      "source": "capabilities",
+      "version": "0.2.12"
+    },
+    "runtime_difference": "unknown",
+    "runtime_version": "0.2.12",
+    "server_id": "fixture-server",
+    "token": "fixture-token"
+  }
+}
