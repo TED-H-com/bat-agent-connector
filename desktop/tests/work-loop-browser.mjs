@@ -2,8 +2,9 @@
 import assert from 'node:assert/strict';
 import {createInterface} from 'node:readline';
 import {resolve} from 'node:path';
-import {writeFileSync} from 'node:fs';
+import {readFileSync, writeFileSync} from 'node:fs';
 import {chromium, expect as baseExpect} from '@playwright/test';
+import {uiStrings} from '../src/ui/ui-strings.js';
 
 const expect = baseExpect.configure({timeout: 30000});
 const lines = createInterface({input: process.stdin})[Symbol.asyncIterator]();
@@ -15,6 +16,7 @@ const errors = [], operations = [], requests = [], responses = [], pending = new
 const resumedOperations = [];
 const allRequests = [], requestRecords = new Map();
 let browser, context, page, step = 'start', closeRestart = null;
+let observedBootstrap;
 const launch = async () => {
   const options = {locale: zh ? 'zh-TW' : 'en-US',
     viewport: {width: f.width, height: f.width === 390 ? 844 : 900}, reducedMotion: 'reduce'};
@@ -33,6 +35,7 @@ const launch = async () => {
       key: request.headers()['idempotency-key'], ...(request.postData() === null ? {} : {body: request.postData()})};
     allRequests.push(row); requestRecords.set(request, row);
   });
+  context.on('response', response => {requestRecords.get(response.request()).status = response.status();});
   context.on('requestfinished', request => Object.assign(requestRecords.get(request), {end: Date.now(), end_step: step}));
   context.on('requestfailed', request => Object.assign(requestRecords.get(request), {
     end: Date.now(), end_step: step, failure: request.failure()?.errorText}));
@@ -50,6 +53,8 @@ const launch = async () => {
   page.on('response', response => {
     pending.delete(response.request());
     if (new URL(response.url()).pathname.startsWith('/api/')) responses.push({path: new URL(response.url()).pathname, status: response.status()});
+    if (response.ok() && new URL(response.url()).pathname === '/api/v1/bootstrap')
+      response.json().then(data => {observedBootstrap = data;}).catch(() => {});
     if (response.ok() && /\/work-attempts\/[^/]+\/result$/.test(new URL(response.url()).pathname)) {
       response.json().then(result => results.set(result.attempt_id, result)).catch(() => {});
     }
@@ -75,6 +80,103 @@ const deferred = () => {
   const promise = new Promise(resolve => {release = resolve;});
   return {promise, release};
 };
+async function refusedAccess(active, workUrl) {
+  // The principal, revocation and all HTTP bodies are real. Only BAT/model
+  // are doubles; this journey does not probe a separate Fleet credential.
+  const copy = uiStrings[zh ? 'zh-TW' : 'en'];
+  // Cross-check the real reply's contract; this golden never answers a request.
+  const golden = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-bootstrap.json', import.meta.url), 'utf8'));
+  await expect.poll(() => Boolean(observedBootstrap)).toBe(true);
+  for (const key of ['api_version', 'contract_version'])
+    assert.equal(observedBootstrap.capabilities[key], golden.capabilities[key]);
+  assert.deepEqual(observedBootstrap.capabilities.features.pm_workspaces.work_follow_up.routes,
+    golden.capabilities.features.pm_workspaces.work_follow_up.routes);
+  const field = page.locator('[data-follow-up-input]');
+  const work = page.locator('[data-work-section="next-turn"]');
+  const submit = work.getByRole('button', {name: zh ? '送出下一步' : 'Send next', exact: true});
+  const draft = '  尚未送出 📝\nKeep this instruction unsent.\n  ';
+  await field.fill(draft);
+  await expect(submit).toBeEnabled();
+  await page.getByRole('button', {name: zh ? '成果' : 'Results', exact: true}).click();
+  const resultHref = await page.locator('[data-work-result-focus="live-output"]').getAttribute('href');
+  assert.ok(resultHref.includes(`attempt=${active.attempt}`));
+  await page.keyboard.press('Escape');
+  const draftEntries = () => page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.includes('.session.send.')));
+  const saved = await draftEntries();
+  assert.equal(saved.length, 1);
+  const [draftKey, raw] = saved[0];
+  assert.ok(draftKey.endsWith(`.session.send.${JSON.stringify({workspace_id: f.workspace, work_item_id: f.work})}`));
+  assert.deepEqual(Buffer.from(JSON.parse(raw).values.text), Buffer.from(draft));
+  assert.equal(Object.hasOwn(JSON.parse(raw), 'intent'), false);
+  const originalContext = context, originalPage = page;
+  const since = allRequests.length;
+  const unchanged = async () => {
+    assert.equal(context, originalContext); assert.equal(page, originalPage);
+    assert.deepEqual(await draftEntries(), saved);
+    assert.deepEqual(allRequests.slice(since).filter(row => row.method === 'POST'
+      && new URL(row.url).pathname.startsWith('/api/v1/operations')), []);
+    assert.equal(requests.length, 1, 'Only the initial Work start may submit an operation');
+    for (const row of allRequests.slice(since).filter(row => row.method === 'GET')) {
+      const url = new URL(row.url);
+      if (url.pathname.endsWith('/inputs')) assert.equal(url.searchParams.get('attempt_id'), active.attempt);
+      if (/\/work-attempts\//.test(url.pathname)) assert.ok(url.pathname.includes('/' + active.attempt));
+    }
+  };
+  const header = page.locator('#live');
+  const scoped = copy.ui_connector_status.replace('{status}', copy.ui_connection_refused);
+  const headerRefused = async () => {
+    await expect(header).toHaveText(copy.ui_connection_refused);
+    await expect(header).toHaveAccessibleName(scoped);
+    await expect(header).toHaveAttribute('title', `${scoped} — ${copy.error_code_CLIENT_ACTION_REFUSED}`);
+    await expect(header).toHaveAttribute('data-connection', 'reconnecting');
+    await expect(page.locator('.central-service-scope')).toHaveText(copy.ui_connector_scope);
+  };
+  step = 'revoke-access';
+  await expect(header).toHaveText(copy.ui_connected);
+  const refusal = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/events'
+    && response.status() === 401);
+  send({stage: 'revoke-access'});
+  assert.equal((await receive()).revoked, true);
+  const response = await refusal;
+  const body = await response.json();
+  assert.equal(body.error.code, 'UNAUTHORIZED');
+  step = 'refused-work';
+  await headerRefused();
+  await expect(submit).toBeDisabled();
+  await expect(field).toHaveValue(draft);
+  await expect(work.locator('[data-api-error]')).toContainText('CLIENT_ACTION_REFUSED');
+  await expect(work.getByText(copy.error_code_CLIENT_ACTION_REFUSED, {exact: true})).toBeVisible();
+  await expect(page.locator('[data-work-result-focus="live-output"]')).toHaveAttribute('href', resultHref);
+  await unchanged();
+  await shot('02-refused-work');
+  step = 'refused-settings';
+  await page.evaluate(() => {location.hash = '#/settings?section=connection';});
+  await expect(page.locator('.global-connection-facts .ui-pill')).toHaveText(await header.innerText());
+  const settingsReason = await page.locator('.global-connection-facts .ui-pill').innerText();
+  await headerRefused();
+  await unchanged();
+  await shot('03-refused-settings');
+  step = 'refused-work-return';
+  const returned = page.waitForResponse(response => response.status() === 401
+    && new URL(response.url()).pathname === `/api/v1/work-items/${f.work}`);
+  await page.evaluate(hash => {location.hash = hash;}, new URL(workUrl).hash);
+  await returned;
+  await expect(page).toHaveURL(workUrl);
+  // Refused source reads cannot recreate actionable controls from cached data.
+  await expect(page.locator('#main [data-api-error]')).toContainText('UNAUTHORIZED');
+  await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
+  await headerRefused();
+  await unchanged();
+  assert.deepEqual(errors, []);
+  await shot('04-refused-work-return');
+  const proof = {draft_key: draftKey, draft_unchanged: true, attempt: active.attempt, result_href: resultHref,
+    events_status: response.status(), server_code: body.error.code,
+    header_reason: await header.innerText(), settings_reason: settingsReason, draft_has_intent: false,
+    reason_key: 'ui_connection_refused', gate_code: 'CLIENT_ACTION_REFUSED', operation_posts: 0};
+  writeFileSync(resolve(f.shots, 'refused-access.json'), JSON.stringify({proof, requests: allRequests.slice(since)}, null, 2) + '\n');
+  send({stage: 'refused-done', operations, browser: browser.version(), refusal: proof});
+}
+
 async function foregroundRecovery(active, workUrl) {
   // HTTP, the bundle and storage are real. BAT/model and OS lifecycle events
   // are doubles; this sequence does not establish physical-phone acceptance.
@@ -373,7 +475,9 @@ try {
   if (f.mode === 'adopt') await shot('01-started');
   const workUrl = page.url();
   assert.equal(new URL(workUrl).hash.includes(active.attempt), true);
-  if (f.foreground_recovery) {
+  if (f.refused_access) {
+    await refusedAccess(active, workUrl);
+  } else if (f.foreground_recovery) {
     await foregroundRecovery(active, workUrl);
   } else {
   const text = zh ? '再補一個失敗後重新送出的案例。' : 'Add a retry-after-failure case.';

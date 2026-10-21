@@ -1870,6 +1870,7 @@ async function viewSession(main, host, sid, context = null) {
     ? mountWorkFollowUp({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
       namespace: connection.namespace, workspaceId: followWorkspace, workItemId: followWorkId, selectedAttemptId: selectedAttempt.attempt_id, errorBox,
       canSend: () => state.online && !state.nativeBusy && state.viewReady,
+      clientGate: () => clientActionGate(state, {post: true}),
       managed: () => !withdrawn && row?.provenance === "connector_managed" && row?.api_access === "managed",
       onField: (field, button) => {
         shortcut.rebind(field, button);

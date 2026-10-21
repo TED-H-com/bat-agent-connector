@@ -21,7 +21,7 @@ from urllib.parse import unquote
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
-from bat_agent_connector import pm_discussions, pm_native_runtime, pm_plans, pm_runs, pr_publication
+from bat_agent_connector import api_auth, pm_discussions, pm_native_runtime, pm_plans, pm_runs, pr_publication
 from bat_agent_connector.errors import InvokeTimeout
 from bat_agent_connector.task_verifier import ObservedVerifier, VerificationSettings
 from tests import test_pm_conversation_proposals as conversation
@@ -90,6 +90,12 @@ async def test_start_queue_close_reconnect_result_and_pr(start_ready, mock, tmp_
 async def test_work_foreground_recovery_keeps_unsent_draft_and_attempt(start_ready, mock, tmp_path, locale):
     """Real HTTP/storage; BAT/model and lifecycle events are doubles, not a physical phone."""
     await work_loop(start_ready, mock, tmp_path, locale, 390, foreground_recovery=True)
+
+
+@pytest.mark.parametrize("locale", ["en", "zh-TW"])
+async def test_work_refused_access_keeps_draft_and_attempt(start_ready, mock, tmp_path, locale):
+    """Revoke the real principal after sign-in; all browser replies come from ApiV1."""
+    await work_loop(start_ready, mock, tmp_path, locale, 390, refused_access=True)
 
 
 @pytest.mark.parametrize(("locale", "width"), [("en", 1440), ("zh-TW", 390)])
@@ -195,7 +201,7 @@ async def discussion_loop(start_ready, mock, tmp_path, monkeypatch, locale, widt
 
 async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_token=None, monkeypatch=None,
                     withdraw_writer=False, lost_reply=None, review_result=False, verify_result=False,
-                    close_restart=False, foreground_recovery=False):
+                    close_restart=False, foreground_recovery=False, refused_access=False):
     ops = w["d"].ops
     # The handoff test runner decodes a single protocol. This journey also runs
     # checkpoint and publication shell scripts, so execute every actual script.
@@ -224,6 +230,8 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
     entry = "verify-result" if verify_result else "review-result" if review_result else "lost-start-reply" if lost_reply else "withdraw-writer" if withdraw_writer else mode
     if foreground_recovery:
         entry = "foreground-recovery"
+    if refused_access:
+        entry = "refused-access"
     shots = ROOT / "desktop/test-results/work-loop" / f"{entry}-{locale}-{width}"
     shutil.rmtree(shots, ignore_errors=True)
     shots.mkdir(parents=True, exist_ok=True)
@@ -343,8 +351,8 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 "create_work": create_work, "project": project_id, "withdraw_writer": withdraw_writer,
                 "lost_start_reply": lost_reply is not None, "review_result": review_result,
                 "reviewer_actor": STARTER_OWNER.actor, "verify_result": verify_result,
-                "foreground_recovery": foreground_recovery,
-                "browser_profile": str(browser_temp / "profile") if close_restart or foreground_recovery else None})
+                "foreground_recovery": foreground_recovery, "refused_access": refused_access,
+                "browser_profile": str(browser_temp / "profile") if close_restart or foreground_recovery or refused_access else None})
             if create_work:
                 created = await receive("created")
                 await wait_status(created["operation_id"], "succeeded")
@@ -411,6 +419,36 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             _set_turn_messages(mock, sid, marker, streaming=True, assistant_text=assistant_text)
             await w["d"].inventory._refresh_scheduled("h1")
             await send({"ready": True, "attempt": att["attempt_id"], "execution": result["children"]["handoff"]})
+            if refused_access:
+                await receive("revoke-access")
+                original_operations = {row[0] for row in ops.db.execute("SELECT operation_id FROM operations")}
+                original_attempts = [tuple(row) for row in ops.db.execute(
+                    "SELECT attempt_id FROM work_attempts WHERE work_item_id=?", (att["work_item_id"],))]
+                original_frames = copy.deepcopy(bat_writes(mock))
+                with w["d"].journal.tx():
+                    assert api_auth.revoke(ops.db, STARTER_OWNER.actor) == 1
+                assert api_auth.authenticate(ops.db, w["owner_token"], w["d"]._admin_token) is None
+                await send({"revoked": True})
+                done = await receive("refused-done")
+                assert await asyncio.wait_for(child.wait(), 10) == 0, (shots / "browser.log").read_text()
+                assert done["operations"] == [start["operation_id"]]
+                assert {row[0] for row in ops.db.execute("SELECT operation_id FROM operations")} == original_operations
+                assert [tuple(row) for row in ops.db.execute(
+                    "SELECT attempt_id FROM work_attempts WHERE work_item_id=?", (att["work_item_id"],))] == original_attempts
+                assert original_attempts == [(att["attempt_id"],)]
+                assert not ops.db.execute("SELECT 1 FROM work_inputs WHERE attempt_id=?", (att["attempt_id"],)).fetchall()
+                assert bat_writes(mock) == original_frames
+                assert [frame["channel"] for frame in original_frames] == ["claude:start-session", "claude:send-message"]
+                assert snapshot(w["human"]) == before
+                assert (mock.metas[MANUAL], mock.states[MANUAL]) == manual
+                assert not any(row[0] == "POST" for row in w["gh"].requests)
+                (shots / "evidence.json").write_text(json.dumps({"locale": locale, "width": width,
+                    "source_sha": git(ROOT, "rev-parse", "HEAD"), "same_attempt": att["attempt_id"],
+                    "revoked_tokens": 1, "new_operations": 0, "new_bat_frames": 0,
+                    "browser": done["browser"], "refusal": done["refusal"]}, indent=2) + "\n")
+                # End while access remains refused: neither reconnect nor resend
+                # may repair it. Other modes retain publication assertions.
+                return
             if foreground_recovery:
                 await receive("prepare-refresh")
                 cursor = (await _result(w, att))["cursor"]
