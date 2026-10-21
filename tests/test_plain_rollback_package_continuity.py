@@ -21,6 +21,7 @@ import time
 from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -55,12 +56,20 @@ def package_pair(tmp_path, request):
     copy_fixture_source(ROOT, source)
     build_env = _build_env(tmp_path)
     # Production stage selects 3.13 even when the controlling pytest uses 3.10.
-    # Reuse an available interpreter; cold CI may install it into owned scratch.
-    found = subprocess.run(['uv', 'python', 'find', '3.13'], env=build_env, capture_output=True, text=True)
-    if found.returncode:
-        build_env['UV_PYTHON_INSTALL_DIR'] = str(tmp_path / 'interpreters')
-        _command(['uv', 'python', 'install', '3.13'], cwd=tmp_path, env=build_env)
-    python = Path(_command(['uv', 'python', 'find', '3.13'], cwd=tmp_path, env=build_env)).resolve()
+    # Interpreter provisioning belongs to CI, never to a test's scratch directory.
+    build_env['UV_PYTHON_DOWNLOADS'] = 'never'
+    if sys.version_info[:2] == (3, 13):
+        python = Path(sys.executable)
+        assert python.is_file() and os.access(python, os.X_OK), 'The controlling Python 3.13 interpreter is unavailable'
+    else:
+        found = subprocess.run(['uv', 'python', 'find', '3.13'], cwd=tmp_path,
+                               env=build_env, capture_output=True, text=True)
+        if found.returncode or not found.stdout.strip():
+            pytest.skip('Python 3.13 interpreter is not discoverable; package fixtures never download interpreters')
+        python = Path(found.stdout.strip())
+        if not python.is_file() or not os.access(python, os.X_OK):
+            pytest.skip('Discovered Python 3.13 interpreter is unavailable; package fixtures never download interpreters')
+    python = python.resolve(strict=True)
     (home / '.local/bin/uv').symlink_to(shutil.which('uv'))
     (home / '.local/bin/python3.13').symlink_to(python)
     env = {**clean_env(home), 'TMPDIR': str(tmp_path)}
@@ -235,11 +244,14 @@ async def running_port(child, path):
         assert child.poll() is None, 'Selected package exited before listening'
         try:
             pointer = json.loads((path.parent / 'task-service.json').read_text())
-            if pointer['pid'] == child.pid and pointer['endpoint']:
-                assert pointer['db_path'] == str(path.resolve())
-                return int(pointer['endpoint'].split(':')[2].split('/')[0])
-        except (OSError, ValueError, KeyError):
-            pass
+        except (OSError, ValueError):
+            pointer = {}
+        if pointer.get('pid') == child.pid and pointer.get('endpoint'):
+            assert pointer['db_path'] == str(path.resolve())
+            endpoint = urlsplit(pointer['endpoint'])
+            assert endpoint.scheme == 'http' and endpoint.hostname == '127.0.0.1' and endpoint.path == '/rpc'
+            assert endpoint.port and endpoint.port != 18796, 'Disposable package must never contact the default port'
+            return endpoint.port
         assert asyncio.get_running_loop().time() < until, 'Selected package did not publish its listener'
         await asyncio.sleep(0.05)
 
