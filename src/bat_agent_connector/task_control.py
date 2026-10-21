@@ -356,6 +356,9 @@ def guarded(action):
                             return [dict(r) for r in conn.execute("SELECT * FROM commands WHERE task_id=?", (tid,))]
                     task = check(Reader(), task_id, host, sid, action, params.get("control_version"))
                 pointer = json.loads((registry.registry_path().parent / service.TASK_SERVICE_POINTER).read_text())
+                endpoint = pointer.get("endpoint")
+                if not endpoint:
+                    raise TaskControlRefused("TASK_OWNER_UNAVAILABLE", "task owner is not listening yet")
                 import os
 
                 from .task_daemon import request
@@ -368,7 +371,7 @@ def guarded(action):
                 forwarded = {k: params[k] for k in fields if k in params}
                 method = "session_set_permissions" if action == "permissions" else "session_" + action
                 return await asyncio.to_thread(request, method, timeout=60,
-                                               _url=pointer.get("endpoint"), _auth_token=token,
+                                               _url=endpoint, _auth_token=token,
                                                host=host, session_id=sid, confirm=True,
                                                control_version=task["control_version"], **forwarded)
             except TaskControlRefused:
