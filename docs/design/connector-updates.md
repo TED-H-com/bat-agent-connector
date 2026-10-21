@@ -35,6 +35,11 @@ candidate SHA. That validated file can lack a tracked source counterpart; all
 other source files still match individually. The installed proof digest includes
 the generated file, so later changes are detected on verification and reuse.
 
+Git source installs disable automatic maintenance and automatic garbage collection in
+their subprocess environment, preventing background repacking while uv copies
+its Git database. These settings append after caller-supplied Git entries and
+apply only to installer subprocesses; malformed entry counts are refused.
+
 ## Installation ownership and activation
 
 Enrollment requires the existing deployment receipt, matching installed source,
