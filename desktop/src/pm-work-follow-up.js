@@ -1,5 +1,6 @@
 import {locale} from './i18n.js';
 import {clientActionReason} from './central-service-status.js';
+import {clientActionError} from './error-presentation.js';
 import {pmDurableForm} from './pm-workspace.js';
 import {button, emptyState} from './ui/components.js';
 import {mountWorkInputIdea} from './pm-work-input-idea.js';
@@ -36,7 +37,7 @@ function actionLabel(action, t) {
   return typeof value === 'string' && value.trim() ? value : '';
 }
 
-export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceId, workItemId, selectedAttemptId = '', errorBox, canSend = () => true, managed = () => false, onField = () => {}}) {
+export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceId, workItemId, selectedAttemptId = '', errorBox, canSend = () => true, clientGate = () => null, managed = () => false, onField = () => {}}) {
   if (!workFollowUpAvailable(caps()) || !WORKSPACE_ID.test(workspaceId || '') || !WORK_ITEM_ID.test(workItemId || '')) return null;
   const titleId = `work-next-title-${workItemId}`;
   const hintId = `work-next-hint-${workItemId}`;
@@ -142,6 +143,13 @@ export function mountWorkFollowUp({h, t, api, caps, guard, namespace, workspaceI
     note.replaceChildren(...(decision.messageKey ? [h('p', {class: 'work-next-note', 'data-reason-source': decision.source},
       t(decision.messageKey), decision.showCode ? [' ', h('code', {}, decision.reason)] : null,
       decision.nextStepKey ? [' ', t(decision.nextStepKey)] : null)] : []));
+    // Explain the existing write gate with the same observation as the header
+    // and Settings. This presentation neither reads a source nor changes admission.
+    if (decision.reason === 'connection') {
+      const gate = clientGate();
+      if (gate && !gate.allowed && gate.reason)
+        note.replaceChildren(errorBox(clientActionError(gate.reason, t), {within: note, sourceRefresh: false}));
+    }
     if (!decision.allowed && decision.reason !== 'connection') {
       if (composer && ['admission_pending', 'capabilities_pending'].includes(decision.reason)) {composer.update(); paint(); return;}
       if (composer) clearComposer();

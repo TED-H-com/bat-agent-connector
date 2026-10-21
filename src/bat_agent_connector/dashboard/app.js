@@ -53234,7 +53234,7 @@ function actionLabel(action, t) {
 	const value = locale === "zh-TW" ? action?.label_zh_TW : action?.label;
 	return typeof value === "string" && value.trim() ? value : "";
 }
-function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, workItemId, selectedAttemptId = "", errorBox, canSend = () => true, managed = () => false, onField = () => {} }) {
+function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, workItemId, selectedAttemptId = "", errorBox, canSend = () => true, clientGate = () => null, managed = () => false, onField = () => {} }) {
 	if (!workFollowUpAvailable(caps()) || !WORKSPACE_ID.test(workspaceId || "") || !WORK_ITEM_ID.test(workItemId || "")) return null;
 	const titleId = `work-next-title-${workItemId}`;
 	const hintId = `work-next-hint-${workItemId}`;
@@ -53376,6 +53376,13 @@ function mountWorkFollowUp({ h, t, api, caps, guard, namespace, workspaceId, wor
 			class: "work-next-note",
 			"data-reason-source": decision.source
 		}, t(decision.messageKey), decision.showCode ? [" ", h("code", {}, decision.reason)] : null, decision.nextStepKey ? [" ", t(decision.nextStepKey)] : null)] : []);
+		if (decision.reason === "connection") {
+			const gate = clientGate();
+			if (gate && !gate.allowed && gate.reason) note.replaceChildren(errorBox(clientActionError(gate.reason, t), {
+				within: note,
+				sourceRefresh: false
+			}));
+		}
 		if (!decision.allowed && decision.reason !== "connection") {
 			if (composer && ["admission_pending", "capabilities_pending"].includes(decision.reason)) {
 				composer.update();
@@ -69076,6 +69083,7 @@ async function viewSession(main, host, sid, context = null) {
 		selectedAttemptId: selectedAttempt.attempt_id,
 		errorBox,
 		canSend: () => state.online && !state.nativeBusy && state.viewReady,
+		clientGate: () => clientActionGate(state, { post: true }),
 		managed: () => !withdrawn && row?.provenance === "connector_managed" && row?.api_access === "managed",
 		onField: (field, button) => {
 			shortcut.rebind(field, button);
