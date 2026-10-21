@@ -243,3 +243,61 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) {
     } finally {releases.forEach(release => release());}
   });
 }
+
+for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) {
+  test(`resume rereads a failed session before its old backoff expires ${native ? 'IPC' : 'HTTP'} ${locale}`, async ({page}, info) => {
+    const f = workspaceFixture(locale), dispatch = f.dispatch;
+    const releases: (() => void)[] = [];
+    const gates = [0, 1].map(() => new Promise<void>(resolve => releases.push(resolve)));
+    let failed = 0, fresh = 0, resumedPolls = 0, eventSources = 0, stage = 'failed';
+    f.dispatch = async input => {
+      const path = input.path.split('?')[0];
+      if (path === '/events' && stage === 'resumed') {resumedPolls++; await gates[0];}
+      // Navigation's event read proves the page has reached its listeners before
+      // advancing their debounce. It is not an invented event or response shape.
+      if (path.startsWith('/projects/') && stage === 'sources') eventSources++;
+      if (path === '/sessions/demo/search-results/messages' && stage === 'failed')
+        return {status: 503, data: {error: {code: 'UNAVAILABLE', message: `Message read failed ${++failed}`}}};
+      if (stage === 'sources' && ['/sessions/demo/search-results', '/sessions/demo/search-results/messages'].includes(path)) {
+        fresh++; await gates[1];
+      }
+      return dispatch(input);
+    };
+    await page.clock.install();
+    await mountWorkspace(page, native, f);
+    await page.addInitScript(locale => Object.defineProperty(navigator, 'language', {value: locale}), locale);
+    try {
+      await page.goto('/dashboard/?workbench=1#/session/demo/search-results');
+      const error = page.locator('[data-session-error=UNAVAILABLE] details');
+      const send = page.getByRole('button', {name: locale === 'en' ? 'Send' : '送出', exact: true});
+      await expect(error).toContainText('Message read failed 1');
+      await page.clock.pauseAt(await page.evaluate(() => Date.now()));
+      // Exercise the real 1, 2, 4 second retries. The next retry is eight seconds
+      // away; the resumed event must refresh now, while that timer is still paused.
+      for (const [index, delay] of [1000, 2000, 4000].entries()) {
+        await page.clock.runFor(delay);
+        await expect(error).toContainText(`Message read failed ${index + 2}`);
+      }
+      expect(failed).toBe(4);
+      await expect(send).toBeDisabled();
+      await visibility(page, 'hidden');
+      f.data.events.push({seq: 1, resource_type: 'session', resource_id: 'demo/search-results', kind: 'session.updated'});
+      stage = 'resumed'; await visibility(page, 'visible');
+      await expect.poll(() => resumedPolls).toBe(1);
+      stage = 'sources'; releases[0]();
+      await expect.poll(() => eventSources).toBeGreaterThan(0);
+      await page.clock.runFor(500);
+      await expect.poll(() => fresh).toBe(2);
+      await expect(send).toBeDisabled();
+      expect(f.data.posts).toEqual([]);
+      expect(await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.startsWith('batc.sync.')).map(([, value]) => JSON.parse(value).cursor))).not.toContain(1);
+      releases[1]();
+      await expect(send).toBeEnabled(); await expect(error).toHaveCount(0);
+      await expect.poll(() => page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.startsWith('batc.sync.')).map(([, value]) => JSON.parse(value).cursor))).toContain(1);
+      expect(f.data.posts).toEqual([]);
+    } finally {
+      releases.forEach(release => release());
+      await info.attach('retry-reads', {body: JSON.stringify({failed, fresh, resumedPolls, eventSources}), contentType: 'application/json'});
+    }
+  });
+}
