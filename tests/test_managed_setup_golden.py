@@ -23,6 +23,7 @@ async def test_managed_setup_evidence_matches_shared_golden(setup_evidence):
         .replace(operation["params"]["url"], "wss://bat.example:9876")
         .replace(operation["params"]["fingerprint"], "A" * 64)
         .replace(operation["params"]["secret_ref"], "setup_" + "b" * 32)
+        .replace(operation["actor"], "desktop-fixture")
         .replace(operation["operation_id"], "op_" + "c" * 32)
         .replace(operation["preconditions"]["config_revision"], "a" * 64)
         .replace(operation["result"]["revision"], "b" * 64))
