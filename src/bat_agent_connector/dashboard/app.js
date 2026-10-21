@@ -49521,10 +49521,11 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 						persist();
 					} catch {}
 				}
-				if (!onError(error)) status.replaceChildren(errorBox(error, error.code === "VERSION_CONFLICT" ? {
-					summary: t("pm_stale"),
-					within: status
-				} : { within: status }));
+				if (!onError(error)) status.replaceChildren(errorBox(error, {
+					within: status,
+					sourceRefresh: false,
+					...error.code === "VERSION_CONFLICT" ? { summary: t("pm_stale") } : {}
+				}));
 			}
 		} finally {
 			busy = false;
@@ -66292,8 +66293,8 @@ async function apiRequest(method, path, body, key, collectReceipt) {
 	}
 	return data;
 }
-function errorBox(e, { summary, within, insideDetails = false } = {}) {
-	if (state.refreshCycle) state.refreshCycle.error ||= e;
+function errorBox(e, { summary, within, insideDetails = false, sourceRefresh = true } = {}) {
+	if (sourceRefresh && state.refreshCycle) state.refreshCycle.error ||= e;
 	const presentation = errorPresentation(e, t, { summary });
 	const body = h("div", { "data-error-details": "" }, ...[presentation.code ? h("code", {}, presentation.code) : null, presentation.message && presentation.message !== presentation.code ? h("p", {}, presentation.message) : null].filter(Boolean), button({
 		variant: "ghost",
