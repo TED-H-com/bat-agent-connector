@@ -27,6 +27,7 @@ class FakeGitHub:
     def __init__(self) -> None:
         self.requests: list[tuple[str, str, dict | None]] = []
         self.pulls: dict[int, dict] = {}
+        self.issues: dict[int, dict] = {}
         self.merge_requests: dict[str, dict] = {}
         self.commits: dict[str, dict] = {"b" * 40: {"sha": "b" * 40, "parents": [], "commit": {"message": "base"}}}
         self.branches = {"main": "b" * 40}
@@ -87,6 +88,19 @@ class FakeGitHub:
         self.pulls[number] = pr
         return pr
 
+    def add_issue(self, number: int, **fields) -> dict:
+        # REST issue fields and closure reasons, not Connector completion fields:
+        # https://docs.github.com/en/rest/issues/issues#get-an-issue
+        base = self.url + "/repos/o/r"
+        now = datetime.now(timezone.utc).isoformat()
+        issue = {"id": 2000 + number, "number": number, "title": f"Issue {number}", "body": "",
+                 "state": "open", "state_reason": None, "closed_at": None,
+                 "created_at": now, "updated_at": now,
+                 "labels": [], "url": base + f"/issues/{number}", "repository_url": base,
+                 "html_url": f"https://github.example/o/r/issues/{number}", **fields}
+        self.issues[number] = issue
+        return issue
+
     def track_remote(self, number: int, bare_repo: str) -> None:
         """Make PR ``number``'s head follow its head ref in a local bare repository (a stand-in for the remote)."""
         self.pr_remotes[number] = bare_repo
@@ -116,7 +130,7 @@ class FakeGitHub:
         self.commits[sha] = {"sha": sha, "parents": parents, "commit": {"message": "merged"}}
         self.branches[pr["base"]["ref"]] = sha
         now = datetime.now(timezone.utc).isoformat()
-        pr.update(merged=True, state="closed", merge_commit_sha=sha, merged_at=now, updated_at=now)
+        pr.update(merged=True, state="closed", merge_commit_sha=sha, merged_at=now, closed_at=now, updated_at=now)
 
     def ancestors(self, sha):
         seen, pending = set(), [sha]
@@ -197,6 +211,17 @@ class FakeGitHub:
                     return self._send(400, {"message": "unsupported API version"})
                 if path == "/repos/o/r" and method == "GET":
                     return self._send(200, {"id": fake.repository_id, "full_name": "o/r", "default_branch": fake.default_branch})
+                if path == "/repos/o/r/issues" and method == "GET":
+                    issues = [i for i in fake.issues.values() if query.get("state") == "all"
+                              or i["state"] == query.get("state", "open")]
+                    labels = set(unquote(query.get("labels", "")).split(",")) - {""}
+                    issues = [i for i in issues if labels <= {label["name"] for label in i["labels"]}]
+                    page = int(query.get("page", 1))
+                    return self._send(200, issues[(page-1)*100:page*100])
+                m = re.fullmatch(r"/repos/o/r/issues/(\d+)", path)
+                if m and method == "GET":
+                    issue = fake.issues.get(int(m.group(1)))
+                    return self._send(200, issue) if issue else self._send(404, {"message": "Not Found"})
                 if path == "/repos/o/r/pulls" and method == "GET":
                     prs = [p for p in fake.pulls.values() if query.get("state") == "all"
                            or p["state"] == query.get("state", "open")]
