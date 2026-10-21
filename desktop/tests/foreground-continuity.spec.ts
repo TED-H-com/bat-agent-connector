@@ -119,6 +119,7 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) {
       const draft = page.locator('#workspace-message-input textarea');
       await expect(send).toBeEnabled(); await draft.fill('尚未送出，keep this draft.');
       const before = await savedCheckpoints(page);
+      expect(before.map(([, value]) => JSON.parse(value))).toEqual([{cursor: 0, token: 'w-0'}]);
       armed = true; await expect.poll(() => polls.length).toBe(1);
       for (let count = 2; count <= 4; count++) {
         const previousOutstanding = outstanding(), previousRequest = requests.at(-1)!;
@@ -174,6 +175,7 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) {
     await page.goto('/dashboard/?workbench=1' + workspaceRoute);
     await expect(page.getByRole('button', {name: locale === 'en' ? 'Send' : '送出', exact: true})).toBeEnabled();
     const before = await savedCheckpoints(page);
+    expect(before.map(([, value]) => JSON.parse(value))).toEqual([{cursor: 0, token: 'w-0'}]);
     f.data.messages = [{id: 'late-reply', role: 'assistant', ts: '2026-10-10T12:03:00Z', text: retiredReplyMarker}];
     f.data.events.push(sessionUpdated(91));
     await expect(page.locator('#main')).toContainText(retiredReplyMarker);
