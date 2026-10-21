@@ -19,6 +19,120 @@ if (process.argv.includes('--read-existing')) {
   await readExistingSession();
   process.exit(0);
 }
+if (process.argv.includes('--resume-initial')) {
+  await resumeInitialRead();
+  process.exit(0);
+}
+
+async function resumeInitialRead() {
+  const lines = createInterface({input: process.stdin})[Symbol.asyncIterator]();
+  const fixture = JSON.parse((await lines.next()).value);
+  const browser = await chromium.launch();
+  const context = await browser.newContext({locale: fixture.locale === 'zh-TW' ? 'zh-TW' : 'en-US'});
+  const releases = [], finished = [], reads = [], errors = [], posts = [];
+  const gates = Array.from({length: 4}, () => new Promise(resolve => releases.push(resolve)));
+  let page, polls = 0;
+  context.on('request', request => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname.startsWith('/api/v1/operations')) posts.push(request.url());
+  });
+  const visibility = value => page.evaluate(value => {
+    Object.defineProperty(document, 'visibilityState', {configurable: true, value});
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, value);
+  const storage = target => target.evaluate(() => ({...localStorage}));
+  const draftField = target => target.locator('[data-setup-field=host]');
+  try {
+    // Produce the draft through the existing form, before starting a new app page.
+    const prime = await context.newPage();
+    await prime.goto(pathToFileURL(fixture.handoff).href);
+    await prime.waitForURL(fixture.origin + '/dashboard/**');
+    const automatic = prime.locator('.setup-automatic');
+    await expect(automatic).toBeEnabled();
+    await prime.locator('[data-setup-advanced] > summary').click();
+    const beforeDraft = await storage(prime);
+    const draft = 'unfinished-connector';
+    await draftField(prime).fill(draft);
+    const saved = await storage(prime);
+    const changed = Object.keys(saved).filter(key => saved[key] !== beforeDraft[key]);
+    assert.equal(changed.length, 1, 'The app must produce the draft storage entry');
+    const draftStorage = changed[0], draftBytes = saved[draftStorage];
+    assert.equal(JSON.parse(draftBytes).intent?.key ?? null, null);
+    await prime.close();
+
+    page = await context.newPage();
+    page.on('pageerror', error => errors.push(error.message));
+    page.on('request', request => {if (new URL(request.url()).pathname === '/api/v1/events') polls++;});
+    await page.route('**/api/v1/managed/setup', async route => {
+      const index = reads.length;
+      const actual = await route.fetch(); // Real ApiV1 producer; preserve its status, headers and body.
+      reads.push({status: actual.status()});
+      try {await gates[index]; await route.fulfill({response: actual});}
+      finally {finished[index] = true;}
+    });
+    if (fixture.entry === 'route') {
+      await page.goto(fixture.origin + '/dashboard/#/projects');
+      await expect.poll(() => polls).toBeGreaterThan(0);
+      await page.evaluate(() => {location.hash = '#/settings';});
+    } else await page.goto(fixture.origin + '/dashboard/#/settings');
+    await expect.poll(() => reads.length).toBe(1);
+    const button = page.locator('.setup-automatic');
+    await page.locator('[data-setup-advanced] > summary').click();
+    await expect(draftField(page)).toHaveValue(draft);
+    await expect(button).toBeDisabled();
+    if (fixture.entry === 'startup') assert.equal(polls, 0);
+    await visibility('hidden'); await visibility('visible');
+    // The first real response stays held. The replacement has its own response.
+    await expect.poll(() => reads.length).toBe(2);
+    await expect(button).toBeDisabled();
+    assert.equal(finished[0], undefined);
+    assert.equal((await storage(page))[draftStorage], draftBytes);
+    const beforeFresh = polls;
+    releases[1]();
+    await expect(button).toBeEnabled();
+    await expect.poll(() => polls).toBeGreaterThan(beforeFresh);
+    await expect(draftField(page)).toHaveValue(draft);
+    const editor = await draftField(page).elementHandle();
+    const fresh = await page.locator('[data-managed-setup]').innerHTML();
+    releases[0]();
+    await expect.poll(() => finished[0]).toBe(true);
+    assert.equal(await page.locator('[data-managed-setup]').innerHTML(), fresh);
+    assert.equal(await draftField(page).evaluate((node, original) => node === original, editor), true);
+    assert.equal((await storage(page))[draftStorage], draftBytes);
+
+    // Full route changes also start with viewReady=false. Leave during the
+    // renewed read to exercise the real route-generation guard before publish.
+    await page.evaluate(() => {location.hash = '#/projects';});
+    await expect(page.locator('[data-managed-setup]')).toHaveCount(0);
+    await page.evaluate(() => {location.hash = '#/settings';});
+    await expect.poll(() => reads.length).toBe(3);
+    await visibility('hidden'); await visibility('visible');
+    await expect.poll(() => reads.length).toBe(4);
+    await expect(button).toBeDisabled();
+    await page.evaluate(() => {location.hash = '#/projects';});
+    await expect(page.locator('[data-managed-setup]')).toHaveCount(0);
+    await expect(page.locator('#main h1')).toHaveText(fixture.locale === 'zh-TW' ? '專案' : 'Projects');
+    await expect(page.locator('#main .or-archive-filter')).toBeVisible();
+    const left = await page.locator('#main').innerHTML();
+    releases[3](); releases[2]();
+    await expect.poll(() => finished.filter(Boolean).length).toBe(4);
+    assert.equal(await page.locator('#main').innerHTML(), left);
+    assert.equal((await storage(page))[draftStorage], draftBytes);
+    assert.deepEqual(posts, []);
+    assert.deepEqual(errors, []);
+    assert(reads.every(read => read.status === 200));
+    const identity = await page.evaluate(async () => (await (await fetch('/api/v1/bootstrap')).json()).capabilities.identity);
+    assert.deepEqual(identity, fixture.identity);
+    await page.screenshot({path: join(fixture.shots, fixture.entry + '-renewed.png')});
+    process.stdout.write(JSON.stringify({identity, operation_posts: posts.length, source_reads: reads.length,
+      draft_key: JSON.parse(draftBytes).intent?.key ?? null, polls, entry: fixture.entry}) + '\n');
+  } catch (error) {
+    await page?.screenshot({path: join(fixture.shots, fixture.entry + '-failure.png')}).catch(() => {});
+    throw error;
+  } finally {
+    releases.forEach(release => release());
+    await browser.close();
+  }
+}
 
 async function readExistingSession() {
   const lines = createInterface({input: process.stdin})[Symbol.asyncIterator]();
