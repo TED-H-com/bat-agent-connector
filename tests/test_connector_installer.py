@@ -11,7 +11,7 @@ import pytest
 from bat_agent_connector import installer, updater
 from bat_agent_connector import platform_files as files
 from bat_agent_connector.update_install import package_files
-from bat_agent_connector.update_release import EPOCH, UpdateError, manifest
+from bat_agent_connector.update_release import EPOCH, EntrypointDirectoryError, UpdateError, manifest
 from scripts import install_connector as bootstrap
 from tests.test_connector_updates import SKILL, make_package, publication, release
 
@@ -437,6 +437,40 @@ def test_entrypoint_directory_error_names_directory_without_chmod(installation):
     assert caught.value.diagnostic()['directory'] == str(directory)
     assert caught.value.diagnostic()['hint'] == 'chmod g-w,o-w ' + str(directory)
     assert directory.stat().st_mode & 0o777 == 0o775
+
+
+@pytest.mark.parametrize('verify_only', [False, True])
+@pytest.mark.parametrize('mode', [0o775, 0o757])
+def test_config_directory_error_names_directory_without_chmod(installation, verify_only, mode):
+    home, root, source, candidate, inspect, finalize = installation
+    if verify_only:
+        finalize()
+    directory = home / '.config'
+    directory.mkdir()
+    directory.chmod(mode)
+    before = {p: p.lstat() for p in home.rglob('*')}
+    with pytest.raises(EntrypointDirectoryError) as caught:
+        finalize(verify_only=verify_only)
+    assert caught.value.diagnostic() == {
+        'code': 'entrypoint_directory_not_owned', 'directory': str(directory),
+        'hint': 'chmod g-w,o-w ' + str(directory),
+    }
+    assert {p: p.lstat() for p in home.rglob('*')} == before
+
+
+@pytest.mark.parametrize('mode', [None, 0o700, 0o755])
+def test_healthy_or_missing_config_directory_passes_without_chmod(installation, mode):
+    home, root, source, candidate, inspect, finalize = installation
+    directory = home / '.config'
+    if mode is not None:
+        directory.mkdir()
+        directory.chmod(mode)
+    assert finalize()['status'] == 'installed'
+    assert finalize(verify_only=True)['writes'] is False
+    if mode is None:
+        assert not directory.exists()
+    else:
+        assert directory.stat().st_mode & 0o777 == mode
 
 
 @pytest.mark.parametrize('reason', ['directory', 'other'])

@@ -122,6 +122,18 @@ def finalize(root, release, *, source=None, home=None, verify_only=False,
     home = Path.home() if home is None else Path(home)
     root = Path(root).absolute()
     files.check_private(root, directory=True)
+    config = home / ".config"
+    try:
+        descriptor = files._posix_dir(config)
+    except FileNotFoundError:
+        pass
+    else:
+        try:
+            info = os.fstat(descriptor)
+            if info.st_uid != os.getuid() or info.st_mode & 0o022:
+                raise EntrypointDirectoryError(config)
+        finally:
+            os.close(descriptor)
     proof = inspect(root, release, home=home)
     package = Path(proof["package"])
     expected_identity = {"version": release["version"], "commit": release["commit"], "source": "vcs"}
