@@ -52,6 +52,7 @@ import {planRevisions} from './pm-plans.js';
 import {pmWorktreeChoice} from './pm-worktree-choice.js';
 import {nativeRunState, pmDiscussionMessage, pmDiscussionRequest, pmNativeAnalysis} from './pm-native-analysis.js';
 import {retiredView as retired} from './pm-retired.js';
+import {clientActionError} from './error-presentation.js';
 const isWorkbench = layoutDecision.layout === 'workbench';
 
 const same = (a, b) => a === b || (a && b && typeof a === 'object' && typeof b === 'object'
@@ -73,7 +74,7 @@ export const pmAvailable = caps => pmAvailability({caps, kind: 'workspace'}).rea
 
 // Save the exact request before admission. A later authorization/validation error can never
 // release an earlier ambiguous request; only its matching terminal receipt permits replacement.
-function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, keepEditable = () => false, savedText = 'pm_saved', pendingText = 'pm_pending', releaseAfterAcknowledgement = false, acknowledgedText = '', onAcknowledged = () => {}, acknowledgeStatus = null}) {
+function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, clientGate = () => null, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, keepEditable = () => false, savedText = 'pm_saved', pendingText = 'pm_pending', releaseAfterAcknowledgement = false, acknowledgedText = '', onAcknowledged = () => {}, acknowledgeStatus = null}) {
   const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
   let saved = {version: 1, values: {}}, damaged = false, busy = false, operation = null;
   const receiptDelays = action === 'pm.conversation.adopt' ? [250, 500, 1000, 1500, 2000, 3000, 3000, 3000, 3000, 3000] : [250, 500, 1000, 1500, 2000, 3000];
@@ -91,6 +92,8 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     }
   } catch {damaged = true;}
   const status = h('div', {role: 'status'}), receipt = h('div', {class: 'pm-receipt'});
+  // The current write gate is separate from the original request's outcome.
+  const gateNotice = h('div', {'data-pm-client-gate': '', 'aria-live': 'polite', hidden: true});
   const persist = () => {guard(); if (pruneEmpty && !saved.intent && !Object.keys(saved.values).length) localStorage.removeItem(storage); else localStorage.setItem(storage, JSON.stringify(saved));};
   const capture = () => Object.fromEntries(Object.entries(fields).map(([name, input]) => [name, input.value]));
   const changed = () => {
@@ -111,6 +114,12 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   // An acknowledged ID can be read while sending is paused. An unknown admission
   // still needs its explicit original-key POST once the transport admits sends.
   const sendReady = () => Boolean(saved.intent?.operation_id) || canSend();
+  const clientBlock = () => {
+    // An acknowledged receipt remains a GET, even while new POSTs are paused.
+    if (sendReady()) return null;
+    const gate = clientGate();
+    return gate && !gate.allowed && gate.reason ? clientActionError(gate.reason, t) : null;
+  };
   const receiveReceipt = () => {
     if (disposed || !form.isConnected || damaged || !saved.intent) return;
     try {
@@ -171,7 +180,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     if (isFieldFocused()) button.focus();
     void run();
   }},
-    extra, h('div', {class: 'actions'}, button, reset), status, receipt);
+    extra, h('div', {class: 'actions'}, button, reset), status, gateNotice, receipt);
   function pollReceipt() {
     // Only an acknowledged original ID may be checked automatically. An unknown
     // admission keeps its exact key and the existing explicit recovery control.
@@ -194,6 +203,14 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     if (!busy && receiptTimer === null) initialChecking = false;
     const autoChecking = initialChecking && (busy || receiptTimer !== null);
     const inFlight = busy || autoChecking;
+    const block = !inFlight && !damaged ? clientBlock() : null;
+    gateNotice.hidden = !block;
+    if (block) {
+      if (gateNotice.dataset.clientActionCode !== block.code) {
+        gateNotice.dataset.clientActionCode = block.code;
+        gateNotice.replaceChildren(errorBox(block, {sourceRefresh: false, within: gateNotice}));
+      }
+    } else {delete gateNotice.dataset.clientActionCode; gateNotice.replaceChildren();}
     const frozen = busy || damaged || Boolean(saved.intent), locked = frozen || !allowed();
     for (const [name, input] of Object.entries(fields)) {
       // A restored title draft must receive Escape while initial reads gate Save.
@@ -236,7 +253,10 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     if (disposed || busy || damaged || (!automatic && initialChecking && (busy || receiptTimer !== null))
       || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
     if (!allowed() || !sendReady()) {
-      if (!automatic) {status.replaceChildren(h('p', {class: 'muted'}, t('pm_action_unavailable'))); update();}
+      if (!automatic) {
+        if (!clientBlock()) status.replaceChildren(h('p', {class: 'muted'}, t('pm_action_unavailable')));
+        update();
+      }
       return;
     }
     if (!automatic && isFieldFocused()) button.focus();
@@ -395,7 +415,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
 // Test fixtures rewrite the declaration above to an export. This alias stays a second export.
 export {durableForm as pmDurableForm};
 
-export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, canSend = () => true, onOnline = () => () => {}, onContext = () => {}, openCreate = false}) {
+export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, canSend = () => true, clientGate = () => null, onOnline = () => () => {}, onContext = () => {}, openCreate = false}) {
   if (!pmAvailable(caps())) {main.append(renderPmAvailability(h('div'), {h, t, state: pmAvailability({caps: caps(), kind: 'workspace'})})); return;}
   // Navigation preference must not wait for unrelated secondary reads to settle.
   if (workspaceId && threadId) rememberProjectView(namespace, workspaceId, 'discussions');
@@ -582,6 +602,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const form = options => {
     const value = durableForm({h, t, api, caps, guard: alive, namespace, errorBox, statusText: threadId ? value => discussionLabel(t, 'pd_op_', value) : undefined, ...options,
       canSend: () => (options.canSend ? options.canSend() : true) && canSend(),
+      clientGate,
       permitted:()=>initialReadComplete&&options.permitted()&&(lifecycle?.newActionAllowed(options.action,()=>options.params(Object.fromEntries(Object.entries(options.fields).map(([key,input])=>[key,input.value]))))??true),
       recoverPermitted:()=>initialReadComplete&&(options.recoverPermitted||options.permitted)(),
       onConnectionChange: connected => {

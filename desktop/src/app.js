@@ -4883,6 +4883,7 @@ async function viewPmWorkspace(main, workspaceId, viewOrThread, thread) {
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   return mountPmWorkspace({main, h, t, api, caps: () => state.caps,
     canSend: () => !state.nativeBusy && state.online && state.viewReady, onOnline,
+    clientGate: () => clientActionGate(state, {post: true}),
     guard: () => assertView(connection), namespace: connection.namespace,
     workspaceId: workspaceId === 'new' ? null : workspaceId, threadId, view, onEvents, errorBox,
     onContext: context => shell?.update(context), openCreate: workspaceId === 'new'});
