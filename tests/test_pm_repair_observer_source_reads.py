@@ -270,9 +270,9 @@ async def check_next_page(w, parent, observer, monkeypatch, tmp_path):
 
 async def test_original_observer_frame_bounds_repeated_sources_and_rechecks_authority(joined, mock, monkeypatch, record_property, tmp_path):  # noqa: F811
     advance, checked = maintenance.advance, []
-    async def stop_at_observer(w, parent, rounds=3):
+    async def stop_at_observer(w, parent, rounds=3, **wait_options):
         for _ in range(rounds):
-            parent = await advance(w, parent, rounds=1)
+            parent = await advance(w, parent, rounds=1, **wait_options)
             rows = delivery._rows(w['d'].ops, parent, 'observation')
             if rows:
                 observer = delivery._child(w['d'].ops, parent, rows[-1])

@@ -12,10 +12,12 @@ import concurrent.futures
 import contextlib
 import gzip
 import hashlib
+import hmac
 import json
 import os
 import re
 import runpy
+import secrets
 import signal
 import sqlite3
 import subprocess
@@ -23,16 +25,19 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
 from managed_runtime_assertions import stable_launch
 
-# macOS d6c8f319 spent 35.88s after the fake's reverse lookup. Removing that
-# dependency leaves 56.98 - 35.88 = 21.10s to producer entry, even retaining all
-# 13.63s of ready-fixture work. Restore 45s after fixing DNS and observer parsing;
-# faulthandler remains 40s, providers and the whole case remain bounded by 60s.
-SEED_READINESS_TIMEOUT_S = 45
+# Intel's longest observed progress gap is 10.903s before fixture setup:
+# round 1.5 * 10.903 up to 5s => 20s of inactivity. Stack samples are not progress.
+# Round the slowest whole case (50.545s) + 20s up to 5s => a 75s seed ceiling.
+# Retain the former 60 - 45 = 15s allowance for recovery and cleanup: 90s total.
+SEED_INACTIVITY_TIMEOUT_S = 20
+SEED_READINESS_CEILING_S = 75
+PUBLICATION_CASE_BUDGET_S = 90
 
 
 def package(resources, directory):
@@ -71,8 +76,8 @@ def command(executable, data, env, *, action='ensure', refused=False):
     return reply
 
 
-def request(launch, path, *, body=None, key=None):
-    headers = {'Authorization': 'Bearer ' + launch['token']}
+def request(launch, path, *, body=None, key=None, authenticated=True):
+    headers = {'Authorization': 'Bearer ' + launch['token']} if authenticated else {}
     if body is not None:
         headers['Content-Type'] = 'application/json'
     if key:
@@ -88,6 +93,26 @@ def request(launch, path, *, body=None, key=None):
         payload = response.read(1_048_577)
         assert len(payload) <= 1_048_576
         return json.loads(payload)
+
+
+def owned_launch(data, child, original):
+    pointer = json.loads((data / 'state/task-service.json').read_text())
+    endpoint = pointer.get('endpoint')
+    if pointer.get('pid') != child.pid or not endpoint:
+        raise ValueError('Owned fixture service is not listening yet')
+    parsed = urllib.parse.urlsplit(endpoint)
+    # Both fixture cores serve on port zero, never an operator's fixed port.
+    if (parsed.scheme != 'http' or parsed.hostname != '127.0.0.1' or not parsed.port or parsed.port == 18796
+            or parsed.path != '/rpc' or parsed.username or parsed.password or parsed.query or parsed.fragment):
+        raise ValueError('Invalid owned fixture endpoint')
+    launch = {**original, 'endpoint': endpoint.removesuffix('/rpc')}
+    challenge = secrets.token_hex(32)
+    proof = request(launch, '/api/v1/managed/identity?challenge=' + challenge, authenticated=False)
+    payload = json.dumps([1, challenge, launch['endpoint'], original['server_id']], separators=(',', ':')).encode()
+    expected = hmac.new((data / 'installation.key').read_bytes(), payload, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(str(proof.get('proof', '')), expected):
+        raise ValueError('Owned fixture service identity could not be verified')
+    return launch
 
 
 def identity(reply):
@@ -188,8 +213,7 @@ def busy_refusal(previous, current, old_manifest, root, env):
         while True:
             assert child.poll() is None, 'Owned fixture service exited'
             try:
-                pointer = json.loads((data / 'state' / 'task-service.json').read_text())
-                launch = {**original, 'endpoint': pointer['endpoint'].removesuffix('/rpc')}
+                launch = owned_launch(data, child, original)
                 bootstrap = request(launch, '/api/v1/bootstrap')
                 assert bootstrap['sync']['server_id'] == original['server_id']
                 break
@@ -249,6 +273,45 @@ def publication_upgrade(previous, current, previous_source, root, env, *, pytest
     return result
 
 
+def wait_for_seed(child, output, seed_log, *, monotonic=None, sleep=None):
+    """Bound readiness by useful timeline events and an unconditional ceiling.
+
+    The sampling thread can keep printing while the producer is stuck. Only
+    collection/fixture transitions, child starts and host-call boundaries extend its wait.
+    Consume complete records incrementally; arbitrary output is not progress.
+    Clock/sleep injection lets tests exercise the real loop without long sleeps.
+    """
+    clock, pause = monotonic or time.monotonic, sleep or time.sleep
+    started = last_progress = clock()
+    events = {'observer.start', 'seed.collection.start', 'seed.collection.end',
+              'fixture.setup.start', 'fixture.setup.end',
+              'subprocess.Popen', 'os.posix_spawn', 'os.exec',
+              'host.call.start', 'host.call.end', 'seed.producer.start', 'seed.ready'}
+    with seed_log.open() as log:
+        while True:
+            now = clock()
+            assert now - started < SEED_READINESS_CEILING_S, (
+                f'Original source producer did not become ready: {SEED_READINESS_CEILING_S}s ceiling')
+            if output.exists():
+                return
+            assert child.poll() is None, 'Original source producer exited before readiness'
+            while True:
+                offset = log.tell()
+                line = log.readline()
+                if not line.endswith('\n'):
+                    log.seek(offset)
+                    break
+                _, marker, payload = line.partition('[seed-timeline] ')
+                if marker:
+                    with contextlib.suppress(ValueError, AttributeError):
+                        if json.loads(payload).get('event') in events:
+                            last_progress = now
+            assert now - last_progress < SEED_INACTIVITY_TIMEOUT_S, (
+                'Original source producer did not become ready: '
+                f'no progress for {SEED_INACTIVITY_TIMEOUT_S}s')
+            pause(0.05)
+
+
 def _publication_upgrade(previous, current, previous_source, root, env, *, pytest_prefix=None):
     """Real 201 producer -> distinct managed core, preserving the original journal.
 
@@ -286,11 +349,7 @@ existing packaged workspace/identity checks; its publication path remains open.
         seeded = subprocess.Popen(seed_command, cwd=previous_source, env=seed_env,  # noqa: S603 - fixed source producer
             stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
     try:
-        until = time.monotonic() + SEED_READINESS_TIMEOUT_S
-        while not output.exists():
-            assert seeded.poll() is None, 'Original source producer exited before readiness'
-            assert time.monotonic() < until, 'Original source producer did not become ready'
-            time.sleep(0.05)
+        wait_for_seed(seeded, output, seed_log)
         info = json.loads(output.read_text())
         assert info['handlers'] == handlers and info['effects'] == {'create_pull': 1, 'push': 1}
         assert info['producer_version'] == original['runtime_version']
@@ -307,8 +366,7 @@ existing packaged workspace/identity checks; its publication path remains open.
             while True:
                 assert child.poll() is None, 'Owned upgraded core exited'
                 try:
-                    pointer = json.loads((data / 'state/task-service.json').read_text())
-                    upgraded = {**original, 'endpoint': pointer['endpoint'].removesuffix('/rpc')}
+                    upgraded = owned_launch(data, child, original)
                     version = request(upgraded, '/api/v1/version')['connector']
                     if version != original['runtime_version']:
                         break
@@ -366,7 +424,8 @@ existing packaged workspace/identity checks; its publication path remains open.
     effects = json.loads((root / 'publication-effects.json').read_text())
     assert effects == {'create_pull': 1, 'push': 1}
     result['seconds'] = round(time.monotonic() - started, 3)
-    assert result['seconds'] <= 60, 'Added packaged publication case exceeded its 60-second budget'
+    assert result['seconds'] <= PUBLICATION_CASE_BUDGET_S, (
+        f'Added packaged publication case exceeded its {PUBLICATION_CASE_BUDGET_S}-second budget')
     return result
 
 

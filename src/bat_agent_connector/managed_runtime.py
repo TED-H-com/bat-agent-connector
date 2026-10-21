@@ -100,6 +100,8 @@ def _endpoint(root):
     if pointer.get("db_path") != str(root / "state" / "tasks.sqlite3"):
         raise ValueError("service pointer belongs to another database")
     value = pointer.get("endpoint", "")
+    if not value:
+        raise ValueError("owned service is not listening yet")
     parsed = urlsplit(value)
     if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or not parsed.port
             or parsed.path != "/rpc" or parsed.username or parsed.password or parsed.query or parsed.fragment):
