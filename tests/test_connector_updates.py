@@ -372,13 +372,16 @@ def test_policy_changes_are_persisted_including_reconciliation(deployment, monke
         u.policy(False, "preview")
     path = u.root / "state.json"
     before = policy_file_snapshot(path)
-    result = u.policy(change != "channel", "stable" if change == "channel" else "preview")
+    # Reconciliation can replace twice; keep the original inode allocated.
+    with path.open("rb") as original:
+        result = u.policy(change != "channel", "stable" if change == "channel" else "preview")
+        assert path.stat().st_ino != os.fstat(original.fileno()).st_ino
+        assert original.read() == before[0]
     saved = u.read()
     assert saved["enabled"] is result["enabled"] is (change != "channel")
     assert saved["channel"] == result["channel"] == ("stable" if change == "channel" else "preview")
     assert u.status() == result
     assert path.read_bytes() != before[0]
-    assert path.stat().st_ino != before[1]
     if change == "pending":
         assert not saved.get("pending") and not result["pending"]
         assert saved["current"] == result["installed"]["commit"] == "b" * 40
