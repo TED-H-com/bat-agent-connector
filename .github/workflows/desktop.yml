@@ -59,6 +59,8 @@ on:
       - "tests/test_integration.py"
       - "tests/test_journal_compatibility.py"
       - "tests/test_lifecycle.py"
+      - "tests/test_managed_setup.py"
+      - "tests/test_managed_setup_browser.py"
       - "tests/test_mcp_principal.py"
       - "tests/test_operations_unification.py"
       - "tests/test_platform_files.py"
@@ -157,6 +159,8 @@ on:
       - "tests/test_integration.py"
       - "tests/test_journal_compatibility.py"
       - "tests/test_lifecycle.py"
+      - "tests/test_managed_setup.py"
+      - "tests/test_managed_setup_browser.py"
       - "tests/test_mcp_principal.py"
       - "tests/test_operations_unification.py"
       - "tests/test_platform_files.py"
@@ -445,13 +449,15 @@ jobs:
           mkdir -p "$HOME/agent-work/tmp/pytest"
           loop_temp=$(mktemp -d "$HOME/agent-work/tmp/pytest/work-loop-XXXXXX")
           trap 'rm -rf -- "$loop_temp"' EXIT
-          uv run --extra dev pytest -q tests/test_pm_work_loop_browser.py -k "$WORK_LOOP_SELECTION" --basetemp="$loop_temp/bt"
+          uv run --extra dev pytest -q tests/test_pm_work_loop_browser.py tests/test_managed_setup_browser.py -k "$WORK_LOOP_SELECTION" --basetemp="$loop_temp/bt"
       - name: Preserve Work loop evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: desktop-work-loop-${{ matrix.part }}
-          path: desktop/test-results/work-loop/
+          path: |
+            desktop/test-results/work-loop/
+            desktop/test-results/managed-setup-reading/
           if-no-files-found: ignore
           retention-days: 7
 

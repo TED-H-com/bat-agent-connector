@@ -313,6 +313,109 @@ def test_disabling_after_interruption_does_not_activate_a_pending_release(deploy
     assert u.policy(True)["installed"]["commit"] == "b" * 40
 
 
+def policy_file_snapshot(path):
+    info = path.lstat()
+    content = os.readlink(path) if path.is_symlink() else path.read_bytes() if path.is_file() else None
+    return content, info.st_ino, info.st_mtime_ns
+
+
+@pytest.mark.parametrize("channel", [None, "preview"])
+def test_repeated_disable_preserves_state_links_and_receipts(deployment, monkeypatch, channel):
+    u, receipt, _ = deployment
+    u.enroll(receipt, "preview")
+    # Retain a real update outcome as well as the original deployment receipt.
+    u.find_release = lambda channel: release("b" * 40, "0.2.8")
+    u.install = lambda root, candidate, **kwargs: make_package(root, candidate)
+    u.apply()
+    calls = []
+    def unexpected(*args, **kwargs):
+        calls.append((args, kwargs))
+        pytest.fail("Changing policy must not install a package or invoke the scheduler")
+    monkeypatch.setattr(u, "install", unexpected)
+    monkeypatch.setattr(u, "schedule", unexpected)
+    monkeypatch.setattr(u, "command", unexpected)
+    first = u.policy(False, channel)
+    state = u.root / "state.json"
+    assert not first["enabled"] and not first["pending"]
+    before = policy_file_snapshot(state)
+    links = {p: policy_file_snapshot(p) for p in [u.root / "current", *u.links()]}
+    receipt_root = u.root / "receipts"
+    assert len(list(receipt_root.glob("*.json"))) == 1
+    def receipts():
+        return {p: policy_file_snapshot(p) for p in [receipt, receipt_root, *receipt_root.rglob("*")]}
+    saved_receipts = receipts()
+
+    assert u.policy(False, channel) == first
+    assert calls == []
+    assert {p: policy_file_snapshot(p) for p in links} == links
+    assert receipts() == saved_receipts
+    assert state.read_bytes() == before[0]
+    assert state.stat().st_ino == before[1]
+    assert state.stat().st_mtime_ns == before[2]
+
+
+@pytest.mark.parametrize("change", ["enable", "channel", "pending"])
+def test_policy_changes_are_persisted_including_reconciliation(deployment, monkeypatch, change):
+    u, receipt, _ = deployment
+    u.enroll(receipt, "preview")
+    if change == "pending":
+        u.find_release = lambda channel: release("b" * 40, "0.2.8")
+        u.install = lambda root, candidate, **kwargs: make_package(root, candidate)
+        def crash(*args, **kwargs):
+            raise KeyboardInterrupt("fixture stops before pointer activation")
+        with monkeypatch.context() as patch:
+            patch.setattr(updater, "replace_link", crash)
+            with pytest.raises(KeyboardInterrupt):
+                u.apply()
+        assert u.read()["enabled"] and u.read()["pending"]
+    else:
+        u.policy(False, "preview")
+    path = u.root / "state.json"
+    before = policy_file_snapshot(path)
+    # Reconciliation can replace twice; keep the original inode allocated.
+    with path.open("rb") as original:
+        result = u.policy(change != "channel", "stable" if change == "channel" else "preview")
+        assert path.stat().st_ino != os.fstat(original.fileno()).st_ino
+        assert original.read() == before[0]
+    saved = u.read()
+    assert saved["enabled"] is result["enabled"] is (change != "channel")
+    assert saved["channel"] == result["channel"] == ("stable" if change == "channel" else "preview")
+    assert u.status() == result
+    assert path.read_bytes() != before[0]
+    if change == "pending":
+        assert not saved.get("pending") and not result["pending"]
+        assert saved["current"] == result["installed"]["commit"] == "b" * 40
+        assert os.readlink(u.root / "current") == saved["versions"][saved["current"]]["root"]
+        outcome = json.loads((u.root / "receipts" / (saved["last"]["receipt"] + ".json")).read_bytes())
+        assert outcome["to"] == "b" * 40 and outcome["status"] == "installed_for_next_launch"
+
+
+@pytest.mark.parametrize("guard,code", [("lease", "update_already_running"), ("channel", "invalid_channel"),
+    ("state", "update_state_incompatible"), ("entrypoint", "managed_entrypoint_changed")])
+def test_unchanged_policy_keeps_validation_and_lease(deployment, guard, code):
+    u, receipt, _ = deployment
+    u.enroll(receipt, "preview")
+    enabled = guard == "entrypoint"
+    if not enabled:
+        u.policy(False, "preview")
+    if guard == "state":
+        state = u.read()
+        u.save({**state, "format": 2})
+    elif guard == "entrypoint":
+        path = next(iter(u.links()))
+        path.unlink()
+        path.symlink_to(receipt.parent / "bin" / path.name)
+    path = u.root / "state.json"
+    before = policy_file_snapshot(path)
+    if guard == "lease":
+        with u.locked(), pytest.raises(UpdateError, match=code):
+            u.policy(False, "preview")
+    else:
+        with pytest.raises(UpdateError, match=code):
+            u.policy(enabled, "invalid" if guard == "channel" else "preview")
+    assert policy_file_snapshot(path) == before
+
+
 def test_scheduler_uses_owned_units_and_reconciles_systemctl_failure(deployment):
     u, receipt, _ = deployment
     u.enroll(receipt, "preview")
