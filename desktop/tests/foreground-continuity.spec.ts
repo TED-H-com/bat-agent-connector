@@ -200,3 +200,44 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) {
     } finally {releases.forEach(release => release());}
   });
 }
+
+for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) {
+  test(`resume replaces a hung session retry even when the event page is empty ${native ? 'IPC' : 'HTTP'} ${locale}`, async ({page}) => {
+    const f = workspaceFixture(locale), dispatch = f.dispatch;
+    const releases: (() => void)[] = [];
+    const gates = Array.from({length: 3}, () => new Promise<void>(resolve => releases.push(resolve)));
+    const sourceReads = new Map<string, number>();
+    let stage = 'old', oldReads = 0, resumedPolls = 0, freshReads = 0;
+    f.dispatch = async input => {
+      const path = input.path.split('?')[0];
+      if (stage === 'resumed' && path === '/events') {resumedPolls++; await gates[1];}
+      if (['/sessions/demo/search-results', '/sessions/demo/search-results/messages'].includes(path)) {
+        const count = (sourceReads.get(path) || 0) + 1; sourceReads.set(path, count);
+        if (count === 1) {
+          if (path.endsWith('/search-results')) return {status: 503, data: {error: {code: 'UNAVAILABLE', message: 'Session read unavailable'}}};
+        } else if (stage === 'old') {oldReads++; await gates[0];}
+        else if (stage === 'fresh') {freshReads++; await gates[2];}
+      }
+      return dispatch(input);
+    };
+    await mountWorkspace(page, native, f);
+    await page.addInitScript(locale => Object.defineProperty(navigator, 'language', {value: locale}), locale);
+    try {
+      await page.goto('/dashboard/?workbench=1#/session/demo/search-results');
+      const send = page.getByRole('button', {name: locale === 'en' ? 'Send' : '送出', exact: true});
+      await expect.poll(() => oldReads).toBe(2);
+      await visibility(page, 'hidden'); stage = 'resumed'; await visibility(page, 'visible');
+      await expect.poll(() => resumedPolls).toBe(1);
+      await expect(send).toBeDisabled();
+      stage = 'fresh'; releases[1]();
+      // The failed read's retry has no unacknowledged event to replay. It must
+      // still read fresh sources; its old, unanswered requests stay held.
+      await expect.poll(() => freshReads).toBe(2);
+      await expect(send).toBeDisabled();
+      expect(f.data.posts).toEqual([]);
+      releases[2](); await expect(send).toBeEnabled();
+      expect(f.data.events).toEqual([]);
+      expect(f.data.posts).toEqual([]);
+    } finally {releases.forEach(release => release());}
+  });
+}
