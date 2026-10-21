@@ -902,6 +902,41 @@ var diagnosticsStrings;
 var init_diagnostics_strings = __esmMin((() => {
 	diagnosticsStrings = {
 		en: {
+			diag_version_number: "Version: {version}",
+			diag_version_commit: "Commit: {commit}",
+			diag_version_digest: "Digest: {digest}",
+			diag_version_run_updated: "Past run updated at {time}",
+			diag_version_adapter_bat_observed: "Codex revision recorded by a past PM run",
+			diag_version_bat_observed: "BAT revision recorded by a past PM run",
+			diag_version_source_pm_run_provenance: "Source: immutable PM run provenance",
+			diag_version_period_run: "Past run; not a current installation observation",
+			diag_versions: "Component versions",
+			diag_version_desktop: "Desktop app",
+			diag_version_loaded_ui: "Loaded UI",
+			diag_version_served_ui: "UI served by Connector",
+			diag_version_connector: "Answering Connector",
+			diag_version_bundled_runtime: "Bundled runtime",
+			diag_version_running_runtime: "Runtime observed at launch",
+			diag_version_adapter_required: "PM Codex adapter required version",
+			diag_version_adapter_observed: "PM Codex adapter observed version",
+			diag_version_desktop_update: "Desktop updater version",
+			diag_version_source_native_app_build: "Source: Desktop app build",
+			diag_version_source_loaded_ui: "Source: loaded UI bytes",
+			diag_version_source_capabilities: "Source: Connector capabilities",
+			diag_version_source_managed_launch_process: "Source: managed launcher process",
+			diag_version_source_managed_launch_capabilities: "Source: capabilities read by managed launcher",
+			diag_version_source_pm_capabilities: "Source: PM capabilities",
+			diag_version_source_not_reported: "Source: not reported",
+			diag_version_source_desktop_updater: "Source: Desktop updater",
+			diag_version_period_loaded: "Loaded in this window",
+			diag_version_period_read: "Last successful read in this window",
+			diag_version_period_launch: "Launch observation; not a fresh service check",
+			diag_version_period_unknown: "No observation",
+			diag_version_time_unknown: "Observation time unknown",
+			diag_runtime_differs: "Bundled and launch-observed runtimes differ. This information does not restart or replace a service.",
+			diag_runtime_same: "Bundled and launch-observed runtimes match.",
+			diag_runtime_unknown: "Runtime comparison is unknown.",
+			diag_adapter_observed_unknown: "Installation hints do not report an observed adapter version or verify model execution. No version from an earlier run is treated as current.",
 			diag_export: "Export diagnostics",
 			diag_title: "Diagnostics",
 			diag_save: "Save",
@@ -952,6 +987,41 @@ var init_diagnostics_strings = __esmMin((() => {
 			diag_state_unknown: "Unknown"
 		},
 		"zh-TW": {
+			diag_version_number: "版本：{version}",
+			diag_version_commit: "Commit：{commit}",
+			diag_version_digest: "摘要：{digest}",
+			diag_version_run_updated: "過去執行記錄的更新時間：{time}",
+			diag_version_adapter_bat_observed: "過去 PM 執行記錄的 Codex 版本",
+			diag_version_bat_observed: "過去 PM 執行記錄的 BAT 版本",
+			diag_version_source_pm_run_provenance: "來源：不可變的 PM 執行來源記錄",
+			diag_version_period_run: "過去的執行；不是目前安裝的觀察",
+			diag_versions: "元件版本",
+			diag_version_desktop: "桌面程式",
+			diag_version_loaded_ui: "已載入的介面",
+			diag_version_served_ui: "Connector 目前提供的介面",
+			diag_version_connector: "回應中的 Connector",
+			diag_version_bundled_runtime: "隨附 runtime",
+			diag_version_running_runtime: "啟動時觀察到的 runtime",
+			diag_version_adapter_required: "PM Codex 配接器所需版本",
+			diag_version_adapter_observed: "PM Codex 配接器觀察版本",
+			diag_version_desktop_update: "桌面更新器版本",
+			diag_version_source_native_app_build: "來源：桌面程式建置",
+			diag_version_source_loaded_ui: "來源：已載入的介面內容",
+			diag_version_source_capabilities: "來源：Connector 能力資料",
+			diag_version_source_managed_launch_process: "來源：受管啟動程式",
+			diag_version_source_managed_launch_capabilities: "來源：受管啟動程式讀取的能力資料",
+			diag_version_source_pm_capabilities: "來源：PM 能力資料",
+			diag_version_source_not_reported: "來源：未回報",
+			diag_version_source_desktop_updater: "來源：桌面更新器",
+			diag_version_period_loaded: "此視窗載入的內容",
+			diag_version_period_read: "此視窗上次成功讀取",
+			diag_version_period_launch: "啟動時的觀察；不是重新檢查服務",
+			diag_version_period_unknown: "尚無觀察資料",
+			diag_version_time_unknown: "觀察時間未知",
+			diag_runtime_differs: "隨附與啟動時觀察到的 runtime 不同。此資訊不會重新啟動或替換服務。",
+			diag_runtime_same: "隨附與啟動時觀察到的 runtime 相同。",
+			diag_runtime_unknown: "Runtime 比較結果未知。",
+			diag_adapter_observed_unknown: "安裝提示未回報配接器的觀察版本，也不代表模型已通過執行驗證。較早執行的版本不會視為目前版本。",
 			diag_export: "匯出診斷資料",
 			diag_title: "診斷資料",
 			diag_save: "儲存",
@@ -15390,20 +15460,93 @@ function settingsAgents({ h, t, api, caps, guard, from }) {
 var frontendDigest = (value) => typeof value === "string" && value.length === 64 && /^[a-f0-9]{64}$/.test(value) ? value : null;
 var frontendBuild = Object.freeze({ frontend_digest: frontendDigest("__BATC_FRONTEND_DIGEST_PLACEHOLDER______________________________") });
 //#endregion
+//#region src/version-projection.js
+var version$2 = (value) => typeof value === "string" && value === value.trim() && /^\d+(?:\.\d+){1,3}(?:-(?:alpha|beta|rc|dev)\.?\d{0,4})?$/i.test(value) ? value : null;
+var commit = (value) => typeof value === "string" && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value) && [40, 64].includes(value.length) ? value : null;
+var digest$10 = frontendDigest;
+var frontendLoadedAt = new Date().toISOString();
+var time = (value) => {
+	if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value < 253402300800) return new Date(value * 1e3).toISOString();
+	return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
+};
+var buildSource = (value) => [
+	"vcs",
+	"package",
+	"bundled"
+].includes(value) ? value : null;
+var fact$1 = (id, value, source, at, period, extra = {}) => {
+	const selected = {
+		version: version$2(value?.version),
+		commit: commit(value?.commit),
+		digest: digest$10(value?.digest)
+	};
+	const observed_at = time(at), observed = Object.values(selected).some(Boolean) || observed_at !== null;
+	return {
+		id,
+		...selected,
+		source: observed ? source : "not_reported",
+		observed_at,
+		period: observed ? period : "unknown",
+		build_source: buildSource(value?.source),
+		...extra
+	};
+};
+function versionProjection(input = {}) {
+	const caps = input.online === false ? null : input.caps;
+	const managed = input.managedRuntime;
+	const descriptor = input.adapterRead?.document?.native_analysis;
+	const run = input.adapterRunRead?.run;
+	const frontend = input.frontendBuild === void 0 ? frontendBuild : input.frontendBuild;
+	const loadedAt = input.frontendLoadedAt === void 0 && frontend === frontendBuild && digest$10(frontend?.frontend_digest) ? frontendLoadedAt : input.frontendLoadedAt;
+	const rows = [
+		fact$1("desktop", input.desktop ? input.appBuild : null, "native_app_build", input.nativeReadAt, "loaded"),
+		fact$1("loaded_ui", { digest: frontend?.frontend_digest }, "loaded_ui", loadedAt, "loaded"),
+		fact$1("served_ui", { digest: caps?.frontend?.digest }, "capabilities", caps ? input.capabilitiesReadAt : null, "read"),
+		fact$1("connector", caps ? {
+			...caps.build,
+			version: caps.build?.version ?? caps.connector
+		} : null, "capabilities", caps ? input.capabilitiesReadAt : null, "read"),
+		...["bundled_runtime", "running_runtime"].map((id) => fact$1(id, managed?.[id] ? {
+			version: managed[id].version,
+			commit: managed[id].commit,
+			source: managed[id].build_source
+		} : null, id === "bundled_runtime" ? "managed_launch_process" : "managed_launch_capabilities", managed?.[id]?.observed_at, "launch")),
+		fact$1("adapter_required", { version: descriptor?.required_version }, "pm_capabilities", input.adapterRead?.at, "read"),
+		fact$1("adapter_observed", null, "not_reported", null, "unknown"),
+		fact$1("adapter_bat_observed", { commit: run?.bat_runtime_provenance?.codex_source_revision }, "pm_run_provenance", input.adapterRunRead?.at, "run", { recorded_at: time(run?.updated_at) }),
+		fact$1("bat_observed", { commit: run?.bat_runtime_provenance?.bat_source_revision }, "pm_run_provenance", input.adapterRunRead?.at, "run", { recorded_at: time(run?.updated_at) }),
+		fact$1("desktop_update", input.updaterReadFailed ? null : { version: input.updater?.current_version }, "desktop_updater", input.updaterReadFailed ? null : input.updaterReadAt, "read")
+	];
+	return {
+		platform: input.desktop ? "desktop" : "browser",
+		rows,
+		runtime_difference: ["same", "differs"].includes(managed?.runtime_difference) ? managed.runtime_difference : "unknown"
+	};
+}
+var versionRow = (projection, id) => projection.rows.find((row) => row.id === id);
+function projectionBuild(projection) {
+	const connector = versionRow(projection, "connector");
+	const app = versionRow(projection, "desktop");
+	return {
+		platform: projection.platform,
+		app_version: app.version,
+		app_commit: app.commit,
+		frontend_digest: versionRow(projection, "loaded_ui").digest,
+		served_frontend_digest: versionRow(projection, "served_ui").digest,
+		connector_version: connector.version,
+		connector_commit: connector.commit,
+		connector_source: connector.build_source
+	};
+}
+//#endregion
 //#region src/diagnostics.js
 var code = (value) => typeof value === "string" && /^[A-Z][A-Z0-9_]{0,79}$/.test(value) ? value : null;
 var reason = (value) => typeof value === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(value) ? value : null;
-var version$2 = (value) => typeof value === "string" && value === value.trim() && /^\d+(?:\.\d+){1,3}(?:-(?:alpha|beta|rc|dev)\.?\d{0,4})?$/i.test(value) ? value : null;
-var commit = (value) => typeof value === "string" && [40, 64].includes(value.length) && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value) ? value : null;
 var action = (value) => typeof value === "string" && /^(?:session|checkpoint|integration|artifact|repository|project|work_item|task|delivery|deployment|setup|pm)[._][a-z_.]+$/.test(value) ? value : null;
 var protocols = ["bat-remote/v2", "bat-remote/legacy-v1"];
 var contractVersion = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
 var bool = (value) => typeof value === "boolean" ? value : null;
 var operationId$4 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
-var time = (value) => {
-	if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value < 253402300800) return new Date(value * 1e3).toISOString();
-	return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
-};
 var select = (value, values) => values.includes(value) ? value : null;
 var routeWords = new Set("v1 hosts sessions projects work-items tasks operations capabilities bootstrap events managed setup secrets observation status pending attention reading permissions labels checkpoints checkpoint-preview instructions artifacts uploads content delivery receipts discovery pm workspaces plans threads messages snapshots brief-export resources roadmap dependencies registers governance".split(" "));
 var resourceNames = {
@@ -15461,19 +15604,10 @@ function errorRing(limit = 50) {
 		}
 	};
 }
-function clientIdentity({ caps, appBuild, frontendBuild: frontendBuild$1 = frontendBuild, desktop = false, os = "unknown", locale = "en", width = 0 }) {
+function clientIdentity(input = {}, projection = versionProjection(input)) {
+	const { caps, desktop = false, os = "unknown", locale = "en", width = 0 } = input;
 	return {
-		app_version: desktop ? version$2(appBuild?.version) : null,
-		app_commit: desktop ? commit(appBuild?.commit) : null,
-		frontend_digest: frontendDigest(frontendBuild$1?.frontend_digest),
-		served_frontend_digest: frontendDigest(caps?.frontend?.digest),
-		connector_version: version$2(caps?.build?.version ?? caps?.connector),
-		connector_commit: commit(caps?.build?.commit),
-		connector_source: select(caps?.build?.source, [
-			"vcs",
-			"package",
-			"bundled"
-		]),
+		...projectionBuild(projection),
 		api_version: Number.isInteger(caps?.api_version) ? caps.api_version : null,
 		contract_version: contractVersion(caps?.contract_version),
 		platform: desktop ? "desktop" : "browser",
@@ -15486,7 +15620,8 @@ function clientIdentity({ caps, appBuild, frontendBuild: frontendBuild$1 = front
 		viewport_class: width > 0 ? width < 800 ? "small" : width < 1200 ? "medium" : "large" : "unknown"
 	};
 }
-function buildLine(client, t) {
+function buildLine(projection, t) {
+	const client = projection.rows ? projectionBuild(projection) : projection;
 	const unknown = t("diag_unknown");
 	const frontend = client.platform !== "desktop" || client.frontend_digest ? t("diag_frontend_build", { digest: client.frontend_digest?.slice(0, 12) || unknown }) : null;
 	const connector = t("diag_connector_build", {
@@ -15608,10 +15743,12 @@ function buildDiagnostics(input) {
 		"observation"
 	].map((key) => [key, diagnosticsSource(input.sourceReads?.[key])]));
 	const sources = Object.fromEntries(Object.entries(sourceReads).map(([key, read]) => [key, read.status === "available" ? "available" : "not_available"]));
+	const versions = versionProjection(input);
 	const bundle = {
 		schema: "batc.diagnostics.v1",
 		exported_at: time(input.exportedAt),
-		client: clientIdentity(input),
+		client: clientIdentity(input, versions),
+		versions,
 		sources,
 		source_reads: sourceReads,
 		hosts: hosts.map((host, i) => {
@@ -15717,6 +15854,27 @@ function buildDiagnostics(input) {
 		}
 	};
 	return JSON.parse(scrubDiagnostics(JSON.stringify(bundle)));
+}
+//#endregion
+//#region src/version-facts.js
+function versionFactText(row, t) {
+	const unknown = t("diag_unknown");
+	if ([
+		"desktop",
+		"connector",
+		"bundled_runtime",
+		"running_runtime"
+	].includes(row.id)) return t("diag_version_number", { version: row.version || unknown }) + " · " + t("diag_version_commit", { commit: row.commit || unknown });
+	if (["loaded_ui", "served_ui"].includes(row.id)) return t("diag_version_digest", { digest: row.digest || unknown });
+	if (["adapter_bat_observed", "bat_observed"].includes(row.id)) return t("diag_version_commit", { commit: row.commit || unknown });
+	return t("diag_version_number", { version: row.version || unknown });
+}
+function versionFacts({ h, t, projection }) {
+	const rows = projection.rows.filter((row) => projection.platform === "desktop" || !["desktop", "desktop_update"].includes(row.id));
+	return h("section", {
+		class: "version-facts",
+		"data-version-facts": ""
+	}, h("h3", {}, t("diag_versions")), h("dl", {}, ...rows.map((row) => h("div", { "data-version-row": row.id }, h("dt", {}, t("diag_version_" + row.id)), h("dd", {}, h("p", { class: "mono" }, versionFactText(row, t)), h("p", { class: "muted" }, t("diag_version_source_" + row.source), " · ", t("diag_version_period_" + row.period), " · ", row.observed_at || t("diag_version_time_unknown")), row.recorded_at ? h("p", { class: "muted" }, t("diag_version_run_updated", { time: row.recorded_at })) : null)))), h("p", { "data-runtime-difference": "" }, t("diag_runtime_" + projection.runtime_difference)), h("p", { class: "muted" }, t("diag_adapter_observed_unknown")));
 }
 //#endregion
 //#region src/diagnostics-dialog.js
@@ -15834,7 +15992,11 @@ function diagnosticsDialog({ h, t, load, save, onClose }) {
 		if (current !== serial || !dialog.isConnected) return;
 		content = JSON.stringify(bundle, null, 2) + "\n";
 		filename = "batc-diagnostics-" + bundle.exported_at.slice(0, 10).replaceAll("-", "") + "-" + bundle.exported_at.slice(11, 16).replace(":", "") + ".json";
-		summary.append(h("div", {}, h("p", {}, buildLine(bundle.client, t)), ...Object.entries(bundle.source_reads).map(([source, read]) => h("p", { "data-diagnostics-source": source }, t("diag_source_" + source), " · ", t("diag_source_" + read.status), read.http_status == null ? null : ` · HTTP ${read.http_status}`, read.code ? [" · ", h("code", {}, read.code)] : null, read.read_at ? [" · ", timeLabel(t, "diag_source_checked", { time: timeStamp(read.read_at) })] : null)), bundle.sources.hosts === "not_available" ? h("p", {}, t("diag_hosts_unavailable")) : null, ...bundle.hosts.map((host) => h("p", {}, `${host.alias} · ${t("diag_" + (host.connection_state === "unknown" ? "state_unknown" : host.connection_state))}${host.stale === true && host.connection_state !== "stale" ? " · " + t("diag_stale") : ""}`)), h("p", {}, t("diag_counts", {
+		summary.append(h("div", {}, h("p", {}, buildLine(bundle.versions, t)), versionFacts({
+			h,
+			t,
+			projection: bundle.versions
+		}), ...Object.entries(bundle.source_reads).map(([source, read]) => h("p", { "data-diagnostics-source": source }, t("diag_source_" + source), " · ", t("diag_source_" + read.status), read.http_status == null ? null : ` · HTTP ${read.http_status}`, read.code ? [" · ", h("code", {}, read.code)] : null, read.read_at ? [" · ", timeLabel(t, "diag_source_checked", { time: timeStamp(read.read_at) })] : null)), bundle.sources.hosts === "not_available" ? h("p", {}, t("diag_hosts_unavailable")) : null, ...bundle.hosts.map((host) => h("p", {}, `${host.alias} · ${t("diag_" + (host.connection_state === "unknown" ? "state_unknown" : host.connection_state))}${host.stale === true && host.connection_state !== "stale" ? " · " + t("diag_stale") : ""}`)), h("p", {}, t("diag_counts", {
 			errors: t(bundle.recent_errors.length === 1 ? "diag_errors_one" : "diag_errors_many", { count: bundle.recent_errors.length }),
 			operations: bundle.operations === null ? t("diag_operations_unavailable") : t(bundle.operations.length === 1 ? "diag_operations_one" : "diag_operations_many", { count: bundle.operations.length })
 		})), h("p", { class: "muted" }, t("diag_sample"))));
@@ -60839,18 +61001,31 @@ function mountTailscale(main, { h, t, presentation } = {}) {
 //#endregion
 //#region src/updates.js
 init_transport();
-async function mountUpdates(main, { h, t }) {
+async function mountUpdates(main, { h, t, versionInput = () => ({ desktop: true }), onVersions = () => () => {}, onRead = () => {} }) {
 	const panel = h("section", {
 		class: "panel",
 		"aria-label": t("update_title")
 	});
-	const content = h("div"), message = h("p", {
+	const content = h("div"), facts = h("div"), message = h("p", {
 		role: "status",
 		class: "muted"
 	});
-	panel.append(h("h2", {}, t("update_title")), content, message);
+	panel.append(h("h2", {}, t("update_title")), content, facts, message);
 	main.append(panel);
-	let disposed = false, busy = false, readable = false, value, pressed = null;
+	let disposed = false, busy = false, readable = false, value, pressed = null, readAt = null;
+	const projection = () => versionProjection({
+		...versionInput(),
+		updater: value,
+		updaterReadAt: readAt,
+		updaterReadFailed: !readable
+	});
+	const paintFacts = () => {
+		if (active()) facts.replaceChildren(versionFacts({
+			h,
+			t,
+			projection: projection()
+		}));
+	};
 	const active = () => !disposed && panel.isConnected;
 	const phases = new Set([
 		"idle",
@@ -60894,6 +61069,7 @@ async function mountUpdates(main, { h, t }) {
 	};
 	const render = () => {
 		if (!active()) return;
+		paintFacts();
 		const focused = document.activeElement;
 		const key = focused instanceof Element && content.contains(focused) ? focused.getAttribute("data-update-action") : null;
 		let flying = false;
@@ -60922,7 +61098,7 @@ async function mountUpdates(main, { h, t }) {
 				"installation_unknown"
 			].includes(value.phase);
 			const candidate = value.candidate;
-			content.replaceChildren(h("p", {}, t("update_current", { version: value.current_version })), h("p", { class: "muted" }, !value.available ? t(value.code === "UPDATE_PLATFORM_UNSUPPORTED" ? "update_platform" : "update_unsigned") : t("update_phase_" + value.phase)), ...candidate ? [h("dl", { class: "kv" }, h("dt", {}, t("update_candidate")), h("dd", {}, candidate.version), h("dt", {}, t("pub_sha")), h("dd", { class: "mono" }, candidate.source_sha))] : [], ...value.installation ? [h("p", {}, t("update_requested", { version: value.installation.to_version }))] : [], ...value.available ? [h("p", { class: "muted" }, t("update_help")), h("div", { class: "actions" }, action("check", t("update_check"), candidate ? "secondary" : "primary", staticActions, () => request({ action: "check" })), ...candidate ? [action("download", t("update_download"), "primary", staticActions || value.phase === "verified", () => request({
+			content.replaceChildren(h("p", {}, t("update_current", { version: versionRow(projection(), "desktop_update").version || t("diag_unknown") })), h("p", { class: "muted" }, !value.available ? t(value.code === "UPDATE_PLATFORM_UNSUPPORTED" ? "update_platform" : "update_unsigned") : t("update_phase_" + value.phase)), ...candidate ? [h("dl", { class: "kv" }, h("dt", {}, t("update_candidate")), h("dd", {}, candidate.version), h("dt", {}, t("pub_sha")), h("dd", { class: "mono" }, candidate.source_sha))] : [], ...value.installation ? [h("p", {}, t("update_requested", { version: value.installation.to_version }))] : [], ...value.available ? [h("p", { class: "muted" }, t("update_help")), h("div", { class: "actions" }, action("check", t("update_check"), candidate ? "secondary" : "primary", staticActions, () => request({ action: "check" })), ...candidate ? [action("download", t("update_download"), "primary", staticActions || value.phase === "verified", () => request({
 				action: "download",
 				candidate_id: candidate.candidate_id
 			})), action("install", t("update_install"), value.phase === "verified" ? "primary" : "secondary", staticActions || value.phase !== "verified", () => request({
@@ -60950,10 +61126,13 @@ async function mountUpdates(main, { h, t }) {
 			].some((k) => typeof next.candidate[k] !== "string")) throw new Error("UPDATE_STATUS_INVALID");
 			value = next;
 			readable = true;
+			readAt = new Date().toISOString();
+			onRead({ current_version: next.current_version }, readAt);
 			if (next.code && next.available && !next.installation) message.textContent = `${t("update_problem")} ${next.code}`;
 		} catch {
 			if (active()) {
 				readable = false;
+				onRead(null, null);
 				message.textContent = t(input.action === "install" ? "update_unknown" : "update_read_failed");
 			}
 		} finally {
@@ -60963,9 +61142,11 @@ async function mountUpdates(main, { h, t }) {
 			render();
 		}
 	};
+	const offVersions = onVersions(paintFacts);
 	await request({ action: "status" });
 	return () => {
 		disposed = true;
+		offVersions();
 		panel.remove();
 	};
 }
@@ -66030,19 +66211,62 @@ var diagnosticSessions = new Map();
 var diagnosticSessionsRead = false;
 var diagnosticRevision = 0;
 var diagnosticsPreview = null;
-var desktopBuild = null;
+var versionPainters = new Set();
+var versionReads = { epoch: -1 };
+var nativeVersionRead = null;
+var paintVersions = () => {
+	for (const paint of [...versionPainters]) paint();
+};
+function rememberVersionRead(key, data, at = new Date().toISOString(), epoch = state.epoch) {
+	if (epoch !== state.epoch) return;
+	if (versionReads.epoch !== epoch) versionReads = { epoch };
+	versionReads[key] = {
+		data,
+		at
+	};
+	paintVersions();
+}
+async function readNativeVersions() {
+	if (!nativeDesktop) return;
+	if (nativeVersionRead?.epoch === state.epoch) return nativeVersionRead.promise;
+	const epoch = state.epoch;
+	const promise = Promise.allSettled([nativeStatus().then((value) => rememberVersionRead("native", value.app_build, void 0, epoch)), managedControl({ action: "status" }).then((value) => rememberVersionRead("managed", value, void 0, epoch))]).finally(() => {
+		if (nativeVersionRead?.epoch === epoch) nativeVersionRead = null;
+	});
+	nativeVersionRead = {
+		epoch,
+		promise
+	};
+	return promise;
+}
 function withdrawDiagnostics() {
 	diagnosticRevision++;
 	diagnosticSessions.clear();
 	diagnosticSessionsRead = false;
 	diagnosticsPreview?.withdraw();
 }
-function diagnosticsClient(caps = state.caps) {
+function diagnosticsClient(caps = versionReads.epoch === state.epoch ? versionReads.capabilities?.data : null) {
 	const platform = navigator.platform || navigator.userAgent;
+	const reads = versionReads.epoch === state.epoch ? versionReads : {};
 	return {
 		caps,
-		appBuild: desktopBuild,
+		appBuild: reads.native?.data,
 		desktop: nativeDesktop,
+		online: state.online,
+		nativeReadAt: reads.native?.at,
+		capabilitiesReadAt: reads.capabilities?.at,
+		managedRuntime: reads.managed?.data,
+		managedReadAt: reads.managed?.at,
+		adapterRead: reads.adapter ? {
+			document: reads.adapter.data,
+			at: reads.adapter.at
+		} : null,
+		adapterRunRead: reads.adapterRun ? {
+			run: reads.adapterRun.data,
+			at: reads.adapterRun.at
+		} : null,
+		updater: reads.updater?.data,
+		updaterReadAt: reads.updater?.at,
 		os: /win/i.test(platform) ? "windows" : /mac/i.test(platform) ? "macos" : /linux/i.test(platform) ? "linux" : "unknown",
 		locale,
 		width: innerWidth
@@ -66058,9 +66282,7 @@ async function openDiagnostics() {
 			diagnosticsPreview = null;
 		},
 		load: async () => {
-			if (nativeDesktop && !desktopBuild) try {
-				desktopBuild = (await nativeStatus()).app_build;
-			} catch {}
+			await readNativeVersions();
 			let caps = null;
 			const read = async (path, scope = null, offered = true, attempted = true) => {
 				const permitted = !scope || !!caps?.scopes?.includes(scope);
@@ -66087,7 +66309,7 @@ async function openDiagnostics() {
 				}
 			};
 			const capabilities = await read("/capabilities");
-			caps = capabilities.data;
+			caps = capabilities.data || null;
 			if (epoch !== state.epoch) throw Error("Connection changed");
 			if (!caps?.scopes?.includes("observe")) withdrawDiagnostics();
 			const revision = diagnosticRevision;
@@ -66102,6 +66324,7 @@ async function openDiagnostics() {
 			const hosts = discarded ? null : hostsRead.data, operations = discarded ? null : operationsRead.data, setup = discarded ? null : setupRead.data;
 			return buildDiagnostics({
 				...diagnosticsClient(caps),
+				online: !!caps,
 				exportedAt: new Date().toISOString(),
 				hosts: hosts?.hosts,
 				operations: operations?.operations,
@@ -66339,6 +66562,17 @@ async function api(method, path, body, key, collectReceipt) {
 	const revision = diagnosticRevision, epoch = state.epoch;
 	try {
 		const data = await apiRequest(method, path, body, key, collectReceipt);
+		if (epoch === state.epoch && method === "GET") {
+			if (path === "/capabilities" || path === "/bootstrap") rememberVersionRead("capabilities", path === "/bootstrap" ? data.capabilities : data, void 0, epoch);
+			if (/^\/pm\/(?:installation-capabilities|workspaces\/[^/?]+\/capabilities)(?:\?|$)/.test(path)) rememberVersionRead("adapter", { native_analysis: { required_version: data.native_analysis?.required_version } }, void 0, epoch);
+			if (/^\/pm\/workspaces\/[^/?]+\/runs\/[^/?]+(?:\?|$)/.test(path) && data.run) rememberVersionRead("adapterRun", {
+				updated_at: data.run.updated_at,
+				bat_runtime_provenance: {
+					codex_source_revision: data.run.bat_runtime_provenance?.codex_source_revision,
+					bat_source_revision: data.run.bat_runtime_provenance?.bat_source_revision
+				}
+			}, void 0, epoch);
+		}
 		if (epoch === state.epoch && revision === diagnosticRevision && method === "GET" && /^\/sessions(?:[/?]|$)/.test(path)) {
 			const previous = new Map(diagnosticSessions);
 			if (Array.isArray(data.sessions)) {
@@ -66370,6 +66604,7 @@ async function api(method, path, body, key, collectReceipt) {
 		return data;
 	} catch (error) {
 		if (epoch === state.epoch) {
+			if (method === "GET" && (path === "/capabilities" || path === "/bootstrap")) rememberVersionRead("capabilities", null, void 0, epoch);
 			recentErrors.record({
 				at: new Date().toISOString(),
 				method,
@@ -67220,6 +67455,7 @@ function paintConnection(waiting = false, paused = false) {
 	const helpKey = recoveryKey ? recoveryKey + "_help" : key === "ui_not_connected" ? "ui_not_connected_help" : key === "ui_connecting" ? "ui_connecting_help" : key === "ui_reconnecting" ? "offline_actions_paused" : key === "ui_connection_refused" ? "error_code_CLIENT_ACTION_REFUSED" : key === "ui_service_error" ? "error_code_CLIENT_ACTION_SERVICE_ERROR" : key === "ui_invalid_response" ? "error_code_CLIENT_ACTION_INVALID_RESPONSE" : paused ? "sync_actions_paused" : waiting ? "sync_waiting" : "desktop_polling";
 	live.title = scoped + " — " + t(helpKey);
 	for (const paint of [...connectionPainters]) paint();
+	paintVersions();
 }
 var managedStatusAt = 0;
 async function refreshManagedRecovery() {
@@ -71138,25 +71374,30 @@ function openSettings(main, { exclusive = false, refreshButton } = {}) {
 			onClick: () => route()
 		})]
 	}));
-	frame.panel("about").append(h("section", { class: "panel" }, h("h2", {}, t("global_nav_about")), h("p", {}, t("global_product")), h("p", { "data-build-line": "" }, buildLine(clientIdentity(diagnosticsClient()), t)), h("div", { class: "actions" }, button({
+	frame.panel("about").append(h("section", { class: "panel" }, h("h2", {}, t("global_nav_about")), h("p", {}, t("global_product")), h("p", { "data-build-line": "" }, buildLine(versionProjection(diagnosticsClient()), t)), h("div", { "data-about-versions": "" }), h("div", { class: "actions" }, button({
 		label: t("diag_export"),
 		onClick: openDiagnostics,
 		"data-export-diagnostics": ""
 	}), h("a", { href: setupGuide() }, t("global_setup_guide")))));
-	const identityEpoch = state.epoch;
-	let buildCaps = state.caps;
-	const paintBuild = () => {
-		if (frame.root.isConnected && identityEpoch === state.epoch) frame.panel("about").querySelector("[data-build-line]").textContent = buildLine(clientIdentity(diagnosticsClient(buildCaps)), t);
-	};
-	if (state.token) api("GET", "/capabilities").then((caps) => {
-		buildCaps = caps;
-		paintBuild();
-	}).catch(() => {});
-	if (nativeDesktop) nativeStatus().then((status) => {
-		desktopBuild = status.app_build;
-		paintBuild();
-	}).catch(() => {});
 	main.append(languageSwitch(), frame.root);
+	const identityEpoch = state.epoch;
+	const paintBuild = () => {
+		if (!frame.root.isConnected || identityEpoch !== state.epoch) {
+			versionPainters.delete(paintBuild);
+			return;
+		}
+		const projection = versionProjection(diagnosticsClient());
+		frame.panel("about").querySelector("[data-build-line]").textContent = buildLine(projection, t);
+		frame.panel("about").querySelector("[data-about-versions]").replaceChildren(versionFacts({
+			h,
+			t,
+			projection
+		}));
+	};
+	versionPainters.add(paintBuild);
+	paintBuild();
+	if (state.token) api("GET", "/capabilities").catch(() => {});
+	readNativeVersions();
 	const back = connectionReturn(params.get("from"));
 	if (back) frame.panel("connection").append(h("a", {
 		href: back.href,
@@ -71561,7 +71802,13 @@ async function viewNativeSettings(main) {
 		if (mine !== generation || !main.contains(details)) return;
 		if (status.updates === true) disposeUpdates = await mountUpdates(updateRoot, {
 			h,
-			t
+			t,
+			versionInput: diagnosticsClient,
+			onRead: (value, at) => rememberVersionRead("updater", value, at),
+			onVersions: (paint) => {
+				versionPainters.add(paint);
+				return () => versionPainters.delete(paint);
+			}
 		});
 		if (mine !== generation || !main.contains(details)) {
 			disposeUpdates?.();

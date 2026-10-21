@@ -23,6 +23,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from . import __version__, api_auth, dashboard_sync, detached_process, platform_files
+from .build_identity import _commit, build_identity
 from .platform_files import (
     atomic_write,
     ensure_private_directory,
@@ -130,7 +131,23 @@ def _proof(key, challenge, endpoint, server_id):
     return hmac.new(key, data, hashlib.sha256).hexdigest()
 
 
+def _runtime_identity(build, source):
+    build = build if isinstance(build, dict) else {}
+    version = build.get("version")
+    return {"version": version if isinstance(version, str) and 0 < len(version) <= 128 else None,
+            "commit": _commit(build.get("commit")),
+            "build_source": build.get("source") if build.get("source") in ("package", "vcs", "bundled") else None,
+            "source": source, "observed_at": time.time()}
+
+
+def _runtime_difference(bundled, running):
+    if any(fact[key] is None for fact in (bundled, running) for key in ("version", "commit")):
+        return "unknown"
+    return "same" if (bundled["version"], bundled["commit"]) == (running["version"], running["commit"]) else "differs"
+
+
 def _verify(root, doc):
+    bundled = _runtime_identity(build_identity(), "this_process")
     endpoint = _endpoint(root)
     challenge = secrets.token_hex(32)
     result = _request(endpoint, "/api/v1/managed/identity?challenge=" + challenge)
@@ -142,9 +159,14 @@ def _verify(root, doc):
     if (caps.get("actor") != doc["actor"] or caps.get("desktop_identity") !=
             {"server_id": doc["server_id"], "principal_id": doc["principal_id"]}):
         raise ValueError("owned service personal identity changed; automatic replacement is refused")
+    # Capabilities already comes from this proven owner and contains the build
+    # identity it loaded at startup. Old services without provenance remain unknown.
+    running = _runtime_identity(caps.get("build"), "capabilities")
     return {"protocol": PROTOCOL, "endpoint": endpoint, "actor": doc["actor"],
             "server_id": doc["server_id"], "principal_id": doc["principal_id"],
-            "runtime_version": result.get("runtime_version", doc["runtime_version"]), "token": token}
+            "runtime_version": result.get("runtime_version", doc["runtime_version"]), "token": token,
+            "bundled_runtime": bundled, "running_runtime": running,
+            "runtime_difference": _runtime_difference(bundled, running)}
 
 
 def _service_command(root):

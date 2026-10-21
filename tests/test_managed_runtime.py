@@ -1,15 +1,53 @@
 """Real isolated service ownership, credential recovery and safe failure boundaries."""
 import concurrent.futures
+import copy
 import json
 import os
 import socket
 import sqlite3
 import sys
 import time
+from pathlib import Path
 
 import pytest
 
 from bat_agent_connector import managed_runtime as runtime
+from desktop.tests.managed_runtime_assertions import stable_launch
+
+
+def test_stable_launch_ignores_observation_clocks_without_mutating_replies():
+    reply = json.loads((Path(__file__).parent / "fixtures/managed-runtime-identity.json").read_text())["differs"]
+    original = copy.deepcopy(reply)
+    later = copy.deepcopy(reply)
+    for field in ("bundled_runtime", "running_runtime"):
+        later[field]["observed_at"] += 1
+    expected_later = copy.deepcopy(later)
+    assert reply != later
+    assert stable_launch(reply) == stable_launch(later)
+    assert reply == original and later == expected_later
+
+
+def test_stable_launch_preserves_every_other_producer_field():
+    golden = json.loads((Path(__file__).parent / "fixtures/managed-runtime-identity.json").read_text())
+
+    def paths(value, prefix=()):
+        for key, item in value.items():
+            path = (*prefix, key)
+            yield path
+            if isinstance(item, dict):
+                yield from paths(item, path)
+
+    clocks = {("bundled_runtime", "observed_at"), ("running_runtime", "observed_at")}
+    for name, reply in golden.items():
+        for path in paths(reply):
+            if path in clocks:
+                continue
+            changed = copy.deepcopy(reply)
+            parent = changed
+            for key in path[:-1]:
+                parent = parent[key]
+            del parent[path[-1]]
+            assert stable_launch(changed) != stable_launch(reply), (name, path)
 
 
 @pytest.fixture
@@ -39,7 +77,9 @@ def test_installed_runtime_reuses_identity_and_recovers_after_restart(installati
     root, children = installation
     first = runtime.ensure(root, timeout=15)
     second = runtime.ensure(root, timeout=5)
-    assert first == second and len(children) == 1
+    assert stable_launch(first) == stable_launch(second) and len(children) == 1
+    for field in ("bundled_runtime", "running_runtime"):
+        assert second[field]["observed_at"] >= first[field]["observed_at"]
     assert first["token"].startswith("batc_")
     assert first["actor"].startswith("desktop-")
     # Service continues independently of launcher/client; its ordinary API is authoritative.
@@ -127,7 +167,7 @@ def test_new_package_upgrades_owned_idle_service_preserving_identity_and_history
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as workers:
         replies = list(workers.map(lambda _: runtime.ensure(root, timeout=15), range(3)))
     upgraded = replies[0]
-    assert all(reply == upgraded for reply in replies)
+    assert all(stable_launch(reply) == stable_launch(upgraded) for reply in replies)
     assert upgraded["runtime_version"] == "1.1.0"
     assert len(children) == 2
     children[0].wait(timeout=10)
@@ -135,7 +175,7 @@ def test_new_package_upgrades_owned_idle_service_preserving_identity_and_history
         k: original[k] for k in ("actor", "token", "server_id", "principal_id")}
     with sqlite3.connect(root / "state" / "tasks.sqlite3") as db:
         assert db.execute("SELECT seq FROM api_events WHERE resource_id='saved-event'").fetchone()[0] == sequence
-    assert runtime.ensure(root, timeout=5) == upgraded and len(children) == 2
+    assert stable_launch(runtime.ensure(root, timeout=5)) == stable_launch(upgraded) and len(children) == 2
 
 
 def test_busy_upgrade_preserves_original_owner_and_uncertain_operation(versioned_installation, monkeypatch):
@@ -153,7 +193,7 @@ def test_busy_upgrade_preserves_original_owner_and_uncertain_operation(versioned
     with pytest.raises(ValueError, match="busy"):
         runtime.ensure(root, timeout=5)
     assert len(children) == 1 and children[0].poll() is None
-    assert runtime._verify(root, runtime._manifest(root)) == original
+    assert stable_launch(runtime._verify(root, runtime._manifest(root))) == stable_launch(original)
     with sqlite3.connect(root / "state" / "tasks.sqlite3") as db:
         assert db.execute("SELECT status,idem_key FROM operations WHERE operation_id='uncertain-fixture'").fetchone() == (
             "uncertain", "original-key")
@@ -166,7 +206,7 @@ def test_older_package_never_downgrades_a_running_service(versioned_installation
     with pytest.raises(ValueError, match="newer"):
         runtime.ensure(root, timeout=5)
     assert len(children) == 1 and children[0].poll() is None
-    assert runtime._verify(root, runtime._manifest(root)) == original
+    assert stable_launch(runtime._verify(root, runtime._manifest(root))) == stable_launch(original)
 
 
 def test_older_package_never_downgrades_a_stopped_installation(versioned_installation, monkeypatch):
