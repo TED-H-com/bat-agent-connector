@@ -15,7 +15,16 @@ from pathlib import Path
 
 from . import platform_files as files
 from .update_install import clean_env, digest_files, installed, package_files, run, stage
-from .update_release import EPOCH, REPOSITORY, UpdateError, commit, discover, require, version
+from .update_release import (
+    EPOCH,
+    REPOSITORY,
+    EntrypointDirectoryError,
+    UpdateError,
+    commit,
+    discover,
+    require,
+    version,
+)
 
 COMMANDS = ("batc", "bat-agent-connector-mcp", "batc-update")
 SERVICE = """[Unit]
@@ -66,7 +75,8 @@ def replace_link(path, target, expected):
     temporary = ".batc-update-" + secrets.token_hex(12)
     try:
         info = os.fstat(parent)
-        require(info.st_uid == os.getuid() and not info.st_mode & 0o022, "entrypoint_directory_not_owned")
+        if info.st_uid != os.getuid() or info.st_mode & 0o022:
+            raise EntrypointDirectoryError(path.parent)
         require(snapshot(path) == expected, "entrypoint_changed")
         os.symlink(str(target), temporary, dir_fd=parent)
         os.replace(temporary, path.name, src_dir_fd=parent, dst_dir_fd=parent)
@@ -414,7 +424,7 @@ def main(argv=None):
         return 0
     except (OSError, ValueError, KeyError, TypeError) as exc:
         code = str(exc) if isinstance(exc, UpdateError) else "update_state_or_environment_invalid"
-        print(json.dumps({"status": "failed", "code": code}), file=sys.stderr)
+        print(json.dumps({"status": "failed", **(exc.diagnostic() if isinstance(exc, EntrypointDirectoryError) else {"code": code})}), file=sys.stderr)
         return 1
 
 

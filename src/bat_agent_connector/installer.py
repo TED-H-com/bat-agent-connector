@@ -17,7 +17,7 @@ from pathlib import Path
 from . import platform_files as files
 from .build_identity import build_identity
 from .update_install import clean_env, installed, package_files, run, verify_source_package
-from .update_release import REPOSITORY, UpdateError, require
+from .update_release import REPOSITORY, EntrypointDirectoryError, UpdateError, require
 
 COMMANDS = ("batc", "bat-agent-connector-mcp", "batc-update")
 
@@ -73,7 +73,8 @@ def adoption_links(home, root, adoption, *, restore=False):
         descriptor = files._posix_dir(path.parent)
         try:
             info = os.fstat(descriptor)
-            require(info.st_uid == os.getuid() and not info.st_mode & 0o022, "entrypoint_directory_not_owned")
+            if info.st_uid != os.getuid() or info.st_mode & 0o022:
+                raise EntrypointDirectoryError(path.parent)
         finally:
             os.close(descriptor)
     descriptor = files._posix_dir(skill.parent)
@@ -121,6 +122,18 @@ def finalize(root, release, *, source=None, home=None, verify_only=False,
     home = Path.home() if home is None else Path(home)
     root = Path(root).absolute()
     files.check_private(root, directory=True)
+    config = home / ".config"
+    try:
+        descriptor = files._posix_dir(config)
+    except FileNotFoundError:
+        pass
+    else:
+        try:
+            info = os.fstat(descriptor)
+            if info.st_uid != os.getuid() or info.st_mode & 0o022:
+                raise EntrypointDirectoryError(config)
+        finally:
+            os.close(descriptor)
     proof = inspect(root, release, home=home)
     package = Path(proof["package"])
     expected_identity = {"version": release["version"], "commit": release["commit"], "source": "vcs"}
@@ -160,7 +173,8 @@ def finalize(root, release, *, source=None, home=None, verify_only=False,
         descriptor = files._posix_dir(target.parent, create=True)
         try:
             info = os.fstat(descriptor)
-            require(info.st_uid == os.getuid() and not info.st_mode & 0o022, "entrypoint_directory_not_owned")
+            if info.st_uid != os.getuid() or info.st_mode & 0o022:
+                raise EntrypointDirectoryError(target.parent)
         finally:
             os.close(descriptor)
     if not adoption:
@@ -201,7 +215,8 @@ def main(argv=None):
         print(json.dumps(result, sort_keys=True))
         return 0
     except (OSError, ValueError, KeyError, TypeError) as exc:
-        print(str(exc) if isinstance(exc, UpdateError) else "installation_verification_failed", file=sys.stderr)
+        print(json.dumps(exc.diagnostic()) if isinstance(exc, EntrypointDirectoryError) else
+              str(exc) if isinstance(exc, UpdateError) else "installation_verification_failed", file=sys.stderr)
         return 1
 
 
