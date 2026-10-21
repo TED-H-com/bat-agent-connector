@@ -88,7 +88,7 @@ for(const locale of ['en','zh-TW'])for(const family of ['session','pm','approval
     const key=family==='session'?'send':family==='pm'?'pm_preview_worktree':'bulk_preview';
     await page.getByRole('button',{name:STRINGS[locale][key],exact:true}).click();
     await expect.poll(()=>page.evaluate(()=>(window as any).operationCalls.length)).toBe(1);
-    await expect(page.locator(family==='session'?'[data-session-error]':'[data-api-error]')).toBeVisible();
+    await expect(page.locator(family==='session'?'.session-error-line':'[data-error-summary]')).toHaveText(STRINGS[locale][family==='session'?'session_err_unknown':'error_code_INVALID_PARAMS']);
     expect(await page.evaluate(()=>(window as any).operationCycle.error)).toBeNull();
     expect(await page.evaluate(()=>(window as any).operationCalls[0].method)).toBe('POST');
     if(family==='session')await expect(page.locator('#fixture textarea')).toHaveValue('Keep this original draft');
@@ -101,3 +101,34 @@ for(const locale of ['en','zh-TW'])for(const family of ['session','pm','approval
     expect(await page.evaluate(()=>(window as any).operationCalls[0].method)).toBe('GET');
   });
 }
+
+// These adapters also present errors before durableForm's catch sees them. Its
+// existing collectReceipt callback identifies an original-ID read; ordinary GETs
+// through the same adapter must keep the strict source default.
+for(const locale of ['en','zh-TW'])for(const module of ['pm-ahp-observer','pm-quality-reviews','pm-maintenance-repairs'])
+for(const kind of ['write','receipt','source'])test(`${module} preserves ${kind} error context ${locale}`,async({page})=>{
+  const source=await readFile(new URL('../src/'+module+'.js',import.meta.url),'utf8');
+  const all:any[]=[];
+  const walk=(n:any)=>{if(!n||typeof n!=='object')return;if(n.type==='VariableDeclarator'&&n.id.name==='request'&&n.init?.params[0]?.type==='RestElement')all.push(n);
+    for(const v of Object.values(n)){if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object')walk(v);}};
+  walk(parse(source,{ecmaVersion:'latest',sourceType:'module'}));expect(all).toHaveLength(1);
+  const adapter=all[0].init;
+  await mount(page,locale,'session',false);
+  await page.route('**/__operation-adapter.js',route=>route.fulfill({contentType:'text/javascript',body:`
+    import {errorBox} from '/__operation-handlers.js';
+    export function requestAdapter(api) {
+      let epoch=0,serial=0,firstStart=false;
+      const valid=()=>true,START='pm.maintenance.repair.start';
+      const failure=(error,options)=>document.getElementById('fixture').replaceChildren(errorBox(error,options));
+      return ${source.slice(adapter.start,adapter.end)};
+    }`}));
+  await page.evaluate(async kind=>{
+    const {ApiError}=await import('/__operation_src/error-presentation.js');
+    const {requestAdapter}=await import('/__operation-adapter.js');
+    const request=requestAdapter(async()=>{throw new ApiError(403,'FORBIDDEN','Fixture refused this principal');});
+    await request(kind==='write'?'POST':'GET',kind==='source'?'/source':'/operations/op_'+'8'.repeat(32),undefined,undefined,kind==='receipt'?()=>{}:undefined).catch(()=>{});
+  },kind);
+  await expect(page.locator('[data-error-summary]')).toHaveText(STRINGS[locale].error_code_FORBIDDEN);
+  const code=await page.evaluate(()=>(window as any).operationCycle.error?.code??null);
+  expect(code).toBe(kind==='source'?'FORBIDDEN':null);
+});

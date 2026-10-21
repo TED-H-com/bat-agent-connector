@@ -78,7 +78,7 @@ export function adoptStartReview({t,api,alive,form,caps,namespace,workspaceId,th
     onSaved:()=>{},onBeforeSaved:()=>{},
     onStateChange:()=>{if(request&&!updating)update();},
     extra:h('div',{},selection,h('h4',{},t('loop_works_heading')),h('p',{class:'muted'},t('loop_adopt_start_help')),catalog,controls,status),
-    errorBox:error=>errorBox(error,{summary:t('loop_preview_mismatch')})});
+    errorBox:(error,options)=>errorBox(error,{...options, sourceRefresh:false, summary:t('loop_preview_mismatch')})});
   const box=h('section',{class:'pm-adopt-start','data-adopt-start':''},notice,request.box);
   // Only this tab's explicit submission requests automatic navigation. Reading
   // a stored receipt in another view or tab must not redirect that reader.
@@ -190,7 +190,7 @@ export function adoptStartReview({t,api,alive,form,caps,namespace,workspaceId,th
         node.observed.replaceChildren(pill,...(reason?[h('p',{},reason)]:[]),...(ready?[h('p',{class:'muted'},t('loop_work_resolved'),' · ',[row.agent,row.model].filter(Boolean).join(' · '),' · ',row.code_target.repository,' · ',row.code_target.source_ref),disclosure({label:t('pd_details'),body:h('code',{class:'mono'},JSON.stringify(row.code_target))})]:[]));
       }
       status.textContent=prepared.works.length?t('loop_preview_ready'):t('loop_preview_blocked');render();
-    }catch(error){if(live(own)){prepared=null;if(error.message==='loop_preview_mismatch')error=Error(t('loop_preview_mismatch'));status.replaceChildren(errorBox(error,{within:status}));}}
+    }catch(error){if(live(own)){prepared=null;if(error.message==='loop_preview_mismatch')error=Error(t('loop_preview_mismatch'));status.replaceChildren(errorBox(error,{sourceRefresh:false, within:status}));}}
     finally{if(own===ticket)checking=false;update();}
   }
   function withdraw(){invalidate();visible=false;rows.clear();nodes.clear();catalog.replaceChildren();status.replaceChildren();request.update();}

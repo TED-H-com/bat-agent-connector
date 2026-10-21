@@ -99,7 +99,7 @@ export function repositoryStartPanel({h, t, api, caps, guard, ready, errorBox, o
     binding.value = saved.target ? key(saved.target) : '';
     for (const [k, el] of Object.entries(inputs)) el.value = saved[k];
   }
-  const showError = e => {if (current()) status.replaceChildren(errorBox(e, {within:status}));};
+  const showError = (e, options = {}) => {if (current()) status.replaceChildren(errorBox(e, {...options, within:status}));};
   const selected = () => ({target: saved.target, source_ref: branchRef(saved.source_ref)});
   const effectivePrompt = () => saved.prompt.trim() ? saved.prompt : (attachments?.refs().length ? t('dispatch_inspect_images') : saved.prompt);
   const request = () => ({action: 'repository.continue', target: saved.target,
@@ -156,7 +156,7 @@ export function repositoryStartPanel({h, t, api, caps, guard, ready, errorBox, o
       if (expected !== sequence || saved.intent || !equal(input, selected())) return;
       if (!validPreview(doc.preview, input)) throw new Error(t('pub_invalid_preview'));
       preview = doc.preview; previewProjectVersion = projectVersion;
-    } catch (e) {if (expected === sequence) showError(e);}
+    } catch (e) {if (expected === sequence) showError(e, {sourceRefresh:false});}
     finally {
       if (expected === sequence && current()) {reading = false; update();}
       const keep = release();
@@ -191,13 +191,13 @@ export function repositoryStartPanel({h, t, api, caps, guard, ready, errorBox, o
       saved.intent = {request: structuredClone(request()), key: crypto.randomUUID(), operation_id: null};
     }
     if (!saved.intent.request || !saved.intent.key) return;
-    try {persist();} catch (e) {showError(e); update(); return;}
+    try {persist();} catch (e) {showError(e, {sourceRefresh:false}); update(); return;}
     if (fieldFocused()) apply.focus();
     const release = ownFocus(apply);
     busy = true; update(); const intent = saved.intent;
     submission = (async () => {
       try {const doc = await api('POST', '/operations?wait=3', intent.request, intent.key); guard(); accept(doc.operation);}
-      catch (e) {if (current()) {if (e.status >= 400 && e.status < 500 && noAdmission.has(e.code)) {intent.refused = e.code; try {persist();} catch { /* fixed request remains */ }} showError(e);}}
+      catch (e) {if (current()) {if (e.status >= 400 && e.status < 500 && noAdmission.has(e.code)) {intent.refused = e.code; try {persist();} catch { /* fixed request remains */ }} showError(e, {sourceRefresh:false});}}
       finally {busy = false; if (current()) update();}
     })();
     try {await submission;} finally {
@@ -214,7 +214,7 @@ export function repositoryStartPanel({h, t, api, caps, guard, ready, errorBox, o
     if (repairSeed || !current() || busy || refreshing || readFailed || attachments && !attachments.ready() || !(terminal(operation) || saved.intent?.refused)) return;
     const release = ownFocus(another);
     const previous = saved; saved = {target: saved.target, source_ref: saved.source_ref, agent: saved.agent, prompt: '', title: '', model: saved.model};
-    try {persist();} catch (e) {saved = previous; showError(e); release(); return;}
+    try {persist();} catch (e) {saved = previous; showError(e, {sourceRefresh:false}); release(); return;}
     operation = preview = null; status.replaceChildren(); attachments?.reset(); fill(); update();
     if (release() && (another.hidden || another.disabled)) moveFrom(another, binding);
   }}, t('pub_new'));
@@ -222,7 +222,7 @@ export function repositoryStartPanel({h, t, api, caps, guard, ready, errorBox, o
     if (!current() || saved.intent || busy || repairSeed && field === 'prompt') {fill(); return;}
     saved[field] = value;
     if (field === 'target' || field === 'source_ref') {preview = null; sequence++; reading = false;}
-    try {persist();} catch (e) {showError(e);} update();
+    try {persist();} catch (e) {showError(e, {sourceRefresh:false});} update();
   }
   binding.addEventListener('change', () => change('target', binding.value ? JSON.parse(binding.value) : null));
   for (const [field, el] of Object.entries(inputs)) el.addEventListener(field === 'agent' ? 'change' : 'input', () => change(field, el.value));

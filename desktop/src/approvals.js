@@ -74,7 +74,7 @@ export function approvalsPanel({h, t, api, caps, guard, ready, errorBox, opStatu
       const p = await api("POST", "/approval-previews", {host: saved.host, ...(saved.workspace ? {workspace: saved.workspace} : {})}); guard();
       if (!validPreview(p) || p.host !== saved.host || (p.workspace || "") !== saved.workspace) throw new Error(t("bulk_invalid_preview"));
       saved.preview = p; persist(); status.replaceChildren(); renderPreview();
-    } catch (e) {if (current()) status.replaceChildren(errorBox(e, {within:status}));}
+    } catch (e) {if (current()) status.replaceChildren(errorBox(e, {sourceRefresh:false, within:status}));}
     finally {busy = false; if (current()) update();}
   }}, t("bulk_preview"));
   const accept = candidate => {
@@ -94,14 +94,14 @@ export function approvalsPanel({h, t, api, caps, guard, ready, errorBox, opStatu
         params: {preview_token: saved.preview.preview_token, selection}, preconditions: {expected_fingerprint: saved.preview.fingerprint}}};
     }
     if (!saved.intent.request || !saved.intent.key) return;
-    try {persist(true);} catch (error) {status.replaceChildren(errorBox(error, {within:status})); update(); return;}
+    try {persist(true);} catch (error) {status.replaceChildren(errorBox(error, {sourceRefresh:false, within:status})); update(); return;}
     busy = true; const intent = saved.intent; update();
     submission = (async () => {
       try {const data = await api("POST", "/operations?wait=3", intent.request, intent.key); guard(); accept(data.operation);}
       catch (e) {
         if (current()) {
           if (e.status >= 400 && e.status < 500 && refusedBeforeAdmission.has(e.code)) {intent.refused = e.code; persist();}
-          status.replaceChildren(errorBox(e, {within:status}));
+          status.replaceChildren(errorBox(e, {sourceRefresh:false, within:status}));
         }
       } finally {busy = false; if (current()) update();}
     })();

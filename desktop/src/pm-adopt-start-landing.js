@@ -56,7 +56,7 @@ export function adoptStartLanding({t,api,alive,namespace,workspaceId,caps,errorB
       const value=await api('POST',`/operations/${operation.operation_id}/${verb}`,{});
       if(!valid(own))return;
       checked(value.operation,current);await refresh();
-    }catch(error){if(valid(own))status.replaceChildren(errorBox(error,{within:status}));}
+    }catch(error){if(valid(own))status.replaceChildren(errorBox(error,{sourceRefresh:false, within:status}));}
     finally{busy=false;if(valid(own))for(const button of body.querySelectorAll('button'))button.disabled=false;}
   }
   function render(operation,children,names) {

@@ -60,7 +60,7 @@ export function repairPanel({h, t, api, caps, guard, namespace, source, errorBox
     const release = ownFocus(create);
     busy = true; update();
     try {show(await (controller.snapshot().intent ? controller.check() : controller.create(document)));}
-    catch(error) {if(alive()) status.replaceChildren(errorBox(error, {within:status}));}
+    catch(error) {if(alive()) status.replaceChildren(errorBox(error, {sourceRefresh:false, within:status}));}
     finally {
       busy=false;
       if (alive()) update();
@@ -72,7 +72,7 @@ export function repairPanel({h, t, api, caps, guard, namespace, source, errorBox
     if (!alive() || busy || !['succeeded','failed','cancelled'].includes(controller.snapshot().operation?.status)) return;
     const release = ownFocus(next);
     try {localStorage.removeItem(key); initializeController(); outcome.replaceChildren(); read();}
-    catch(error) {release(); if(alive()) status.replaceChildren(errorBox(error, {within:status})); return;}
+    catch(error) {release(); if(alive()) status.replaceChildren(errorBox(error, {sourceRefresh:false, within:status})); return;}
     if (release() && (next.hidden || next.disabled)) moveFrom(next, reload);
   }},t('repair_review_new'));
   const box = h('details',{class:'panel', 'data-repair-panel':''}, h('summary',{},t('repair_title')),
