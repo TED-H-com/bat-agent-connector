@@ -24,6 +24,8 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) {
     try {
       await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/overview`);
       await expect(page.locator('[data-pm-overview]')).toBeVisible();
+      // Wait for the mounted workspace before switching its projection in place.
+      await expect(page.locator('#live')).toHaveAttribute('data-connection', 'connected');
       await page.evaluate(id => {location.hash = `#/pm/${id}/requirements`;}, f.ids.workspaceId);
       await expect.poll(() => entered).toBe(true);
       await page.evaluate(() => {
