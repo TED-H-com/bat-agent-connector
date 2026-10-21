@@ -13,10 +13,13 @@ from bat_agent_connector import (
     pm_discussions,
     pm_evidence,
     pm_plans,
+    pm_read_cache,
+    pm_source_reads,
     pm_workspace,
     repository_sync,
     work_items,
 )
+from bat_agent_connector import pm_release_baselines as baselines
 from bat_agent_connector import pm_work_packages as packages
 from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.operations import OpContext, OperationError, Uncertain
@@ -132,6 +135,65 @@ def read(w, operation, who=OWNER):
 
 def readiness(w, operation):
     return packages.readiness(w["d"].ops, OWNER, w["workspace_id"], operation["result"]["package_id"])
+
+
+async def test_repeated_package_context_proves_original_plan_once_per_snapshot(ready, monkeypatch):
+    w, ops = ready, ready['d'].ops
+    body = request(w)
+    result = await action(w, packages.ACTION, body['target'], body['params'], body['preconditions'])
+    record = packages._record(ops.db, w['workspace_id'], result['package_id'])
+    original, proofs = packages._original_plan, []
+
+    def plan(*args, **kwargs):
+        proofs.append(args[-1]['revision_id'])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(packages, '_original_plan', plan)
+    for _ in range(2):
+        with pm_source_reads.scope(ops.db, OWNER):
+            for _ in range(3):
+                packages._access_context(ops, OWNER, w['workspace_id'], record['document']['context'])
+            with pm_read_cache.guarded(), pm_read_cache.guarded_scope(ops.db, OWNER):
+                packages._access_context(ops, OWNER, w['workspace_id'], record['document']['context'])
+    assert proofs == [record['document']['context']['plan_ref']['revision_id']] * 2
+
+
+async def test_repeated_package_metadata_verifies_bytes_once_and_returns_isolated_documents(ready, monkeypatch):
+    w, ops = ready, ready['d'].ops
+    body = request(w)
+    result = await action(w, packages.ACTION, body['target'], body['params'], body['preconditions'])
+    digest, verified = packages._digest, []
+
+    def counted(value):
+        verified.append(value)
+        return digest(value)
+
+    monkeypatch.setattr(packages, '_digest', counted)
+    with baselines._snapshot(ops.db), pm_read_cache.scope(ops.db, OWNER):
+        records = [packages._record(ops.db, w['workspace_id'], result['package_id']) for _ in range(3)]
+    assert len(verified) == 1
+    assert records[0] == records[1] == records[2]
+    records[0]['document']['context']['server_id'] = 'changed caller copy'
+    assert records[1]['document']['context']['server_id'] == records[2]['document']['context']['server_id']
+
+
+async def test_package_context_cannot_borrow_a_proof_from_another_database(ready, tmp_path):
+    w, ops = ready, ready['d'].ops
+    body = request(w)
+    result = await action(w, packages.ACTION, body['target'], body['params'], body['preconditions'])
+    context = packages._record(ops.db, w['workspace_id'], result['package_id'])['document']['context']
+    other = sqlite3.connect(tmp_path / 'other.sqlite', isolation_level=None)
+    other.row_factory = sqlite3.Row
+    try:
+        ops.db.backup(other)
+        other.execute('DELETE FROM pm_workspace_members WHERE workspace_id=? AND actor=?',
+            (w['workspace_id'], OWNER.actor))
+        with baselines._snapshot(ops.db), pm_read_cache.scope(ops.db, OWNER), baselines._snapshot(other):
+            packages._access_context(ops, OWNER, w['workspace_id'], context)
+            with pytest.raises(OperationError):
+                packages._access_context(packages._SourceReader(other), OWNER, w['workspace_id'], context)
+    finally:
+        other.close()
 
 
 async def test_fixed_sources_requirements_and_verification_preserve_human_work_and_never_dispatch(ready, mock):

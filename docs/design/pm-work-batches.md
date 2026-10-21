@@ -129,6 +129,17 @@ is refused whole; list scans omit whole rows while preserving their signed
 whole entries and explicit scope/verification/cost coverage. Reads create no
 operations and contact no provider or BAT host.
 
+Within one synchronous snapshot, sibling source readers reuse a completed
+batch-source proof by full principal, workspace, original operation and verified
+intent digest. Membership and intent integrity are checked on every call. The
+existing completed-source interface can reuse an ordinary completed boolean in
+a later private guard. Conditional proofs stay private to their exact traversal
+guard; errors and refusals cannot become ordinary grants. A recursive owned-child
+backedge runs the original bounded traversal instead of borrowing an active proof.
+Batch and runtime wrappers retain independent depth allowances and share the
+existing total node budget. Reuse ends before writes or awaits. This does not cache
+current execution authority, cancellation, deadline, capacity or retry eligibility.
+
 Tests use temporary real Git and fake existing transports. Mixed independent /
 blocked entries, duplicate selection, exact-key recovery, native result identity,
 late source withdrawal, pause/deadline between child admission and final frame,
