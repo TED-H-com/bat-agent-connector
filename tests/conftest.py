@@ -11,7 +11,15 @@ from bat_agent_connector.config import parse_config
 from bat_agent_connector.fleet import Fleet
 from bat_agent_connector.task_journal import Journal
 from tests.mockbat import TOKEN, MockBat
-from tests.package_build import clean_wheel as clean_wheel
+
+
+@pytest.fixture(scope="session")
+def clean_wheel(tmp_path_factory):
+    # The publication seed runs a fixed baseline product against this tests
+    # package. Keep newer-product build imports inside the requested fixture.
+    from tests.package_build import build_clean_wheel
+
+    return build_clean_wheel(tmp_path_factory)
 
 
 @pytest.fixture(autouse=True)

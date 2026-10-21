@@ -3,12 +3,23 @@ from __future__ import annotations
 
 import runpy
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'desktop/tests/managed-upgrade-fixture.py'
+
+
+def test_publication_seed_conftest_defers_package_build_imports():
+    child = subprocess.run([
+        sys.executable, '-c',
+        'import sys; from tests import conftest; '
+        'assert "tests.package_build" not in sys.modules; '
+        'assert "scripts.validate_connector_update" not in sys.modules',
+    ], cwd=SCRIPT.parents[2], capture_output=True, text=True)
+    assert child.returncode == 0, child.stdout + child.stderr
 
 
 @pytest.mark.parametrize('failure', ['timeout', 'exit', 'assertion', 'cleanup-timeout'])
