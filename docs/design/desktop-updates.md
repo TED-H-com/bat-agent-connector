@@ -140,13 +140,15 @@ Screenshot receipts reuse the capture-manifest reader and content checks,
 including listed PNG hashes, capture guarantees, the frontend Git tree and
 source-file hashes. README and static-site receipts cover their source bytes;
 their `version` comes from project metadata and must match candidate metadata.
-They do not certify the readable
-release captions or select a new published version. Screenshot `version` is its
+They do not certify the readable release captions or select a new published
+version. Screenshot `version` is its
 capture schema. These distinct version sources are not interchangeable.
-The static-site checker keeps capture/source integrity checks without a
-hand-maintained release SHA comparison. Candidate agreement belongs to this
-validator's explicit candidate input; a screenshot from a different candidate
-is refused even when its own images and capture manifest remain intact.
+The static-site checker's `main()` keeps the published release pin at `14c62830`
+until a release workflow runs this validator. Moving that pin is an owner
+decision about pin timing. Shared capture/content checks do not enforce this
+fixed pin, so the validator can accept screenshots matching a different,
+explicit candidate. It refuses screenshots from another candidate even when
+their own images and capture manifest remain intact.
 
 Each required component has `matches`, `differs` or `unknown`, with its own
 reason. Missing/malformed claims, missing files, unavailable candidate objects

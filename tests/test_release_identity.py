@@ -130,6 +130,33 @@ def test_one_candidate_accepts_every_required_producer_receipt(candidates):
     assert result["refusals"] == []
 
 
+def test_site_release_guard_does_not_limit_explicit_candidate_validation(candidates, tmp_path, monkeypatch):
+    from scripts import check_product_site as site_check
+    from scripts.release_identity import validate
+    a, _ = candidates()
+    claim = next(row for row in a["receipts"] if row["component"] == "screenshots")
+    published = site_check.read_screenshot_manifest(ROOT / "site/images/manifest.json")
+    assert a["sha"] != published["frontend_source_commit"]
+    result = validate(a["sha"], [claim], source=a["source"], required=["screenshots"])
+    assert result["one_candidate"] is True
+    assert result["components"][0]["status"] == "matches"
+
+    source = tmp_path / "site-source"
+    _command(["git", "clone", "-q", "--no-hardlinks", str(a["source"]), str(source)],
+             cwd=tmp_path, env=_build_env(tmp_path))
+    shutil.copytree(ROOT / "docs", source / "docs")
+    shutil.copy2(ROOT / "CHANGELOG.md", source / "CHANGELOG.md")
+    shutil.copy2(claim["artifact"], source / "site/images/manifest.json")
+    monkeypatch.setattr(site_check, "ROOT", source)
+    monkeypatch.setattr(site_check, "SITE", source / "site")
+    # Link resolution is separate from this release gate. Keep the real manifest
+    # reader, PNG/content checks and local Git source checks, with no fake fields.
+    monkeypatch.setattr(site_check, "check_link", lambda *args: None)
+    with pytest.raises(SystemExit) as refusal:
+        site_check.main()
+    assert str(refusal.value) == "Public screenshots must pin merged release source at 14c62830."
+
+
 @pytest.mark.parametrize("component", AVAILABLE)
 def test_each_single_component_swap_is_refused_and_named(candidates, component):
     from scripts.release_identity import validate
