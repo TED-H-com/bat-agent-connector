@@ -183,7 +183,7 @@ async def test_existing_profile_connection_remains_one_source_across_read_only_e
     platform_files.atomic_write(unrelated, setup._encode({"unrelated_extension": {"keep": "original"}}))
 
     def files(paths):
-        return {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in paths}
+        return {p: (p.read_bytes(), p.stat().st_mtime_ns, p.stat().st_ino) for p in paths}
 
     external = files([profiles / "index.json", store, ssh, unrelated])
     manual = json.dumps([mock.ws_doc, mock.metas, mock.states, mock.archives], sort_keys=True)
@@ -300,6 +300,7 @@ async def test_existing_profile_connection_remains_one_source_across_read_only_e
         assert not [frame for frame in mock.invokes if frame["channel"] in WRITE_CHANNELS | ORCHESTRATE_CHANNELS | GUARDED_CHANNELS]
         # This same file also owns unrelated client/safety/usage/operator settings.
         assert path.read_bytes() == saved_config[path][0]
+        assert path.stat().st_ino == saved_config[path][2]
         assert path.stat().st_mtime_ns == saved_config[path][1]
     finally:
         server.close()
