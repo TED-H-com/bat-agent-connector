@@ -36,17 +36,6 @@ const launch = async () => {
   context.on('requestfinished', request => Object.assign(requestRecords.get(request), {end: Date.now(), end_step: step}));
   context.on('requestfailed', request => Object.assign(requestRecords.get(request), {
     end: Date.now(), end_step: step, failure: request.failure()?.errorText}));
-  if (f.foreground_recovery) await context.addInitScript(() => {
-    const ledger = window.__foregroundLedger = [];
-    window.addEventListener('connector-read-trace', event => ledger.push(event.detail));
-    const original = window.fetch;
-    window.fetch = function(input, init) {
-      const url = new URL(typeof input === 'string' ? input : input.url, location.href);
-      if (url.pathname.startsWith('/api/v1/')) ledger.push({at: Date.now(), kind: 'fetch', path: url.pathname + url.search,
-        caller: new Error().stack, visibility: document.visibilityState, online: navigator.onLine});
-      return original.apply(this, arguments);
-    };
-  });
   page = context.pages()[0] || await context.newPage();
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {if (message.type() === 'error') console.error(message.text());});
@@ -269,7 +258,6 @@ async function foregroundRecovery(active, workUrl) {
       event: changed.event, original_result: originalHref, same_context: true, same_node: true,
     }});
   } finally {
-    const readerTrace = await page.evaluate(() => ({ledger: window.__foregroundLedger, reader: window.__foregroundReader}));
     step = 'cleanup';
     events.release(); sources.release(); admission.release(); preResume.release(); preparationEvents.release();
     await context.setOffline(false);
@@ -280,7 +268,7 @@ async function foregroundRecovery(active, workUrl) {
       ledger[row.step][key] = (ledger[row.step][key] || 0) + 1;
     }
     writeFileSync(resolve(f.shots, 'foreground-recovery.json'), JSON.stringify({before, after, syncKey,
-      changedKeys, intent, recoveryStart, recoveryEnd, heldEvents, heldSources, preResumeReads, preparationPolls, readerTrace, ledger}, null, 2) + '\n');
+      changedKeys, intent, recoveryStart, recoveryEnd, heldEvents, heldSources, preResumeReads, preparationPolls, ledger, requests: allRequests}, null, 2) + '\n');
   }
 }
 
