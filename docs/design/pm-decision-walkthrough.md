@@ -93,6 +93,11 @@ call also asks the person to refresh and review instead of leaving an old networ
 error as that click's outcome. Late replies still cannot paint across a retired
 view or authority boundary.
 
+A durable request or receipt error belongs to that original operation. Rendering
+it while an unrelated event-source read is pending must not fail that read's
+refresh cycle or pause transport readiness. Actual source read errors still keep
+their event batch unacknowledged and pause writes until a successful replay.
+
 The recovery helper selects the stable adoption form. A `has` filter is relative
 to its candidate: passing a proposal-scoped role locator to a Details filter looks
 for another proposals container inside Details and never matches. Revealing and
