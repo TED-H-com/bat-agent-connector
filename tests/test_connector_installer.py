@@ -424,3 +424,56 @@ def test_adoption_version_policy(legacy):
     files.atomic_write(home / '.local/share/bat-agent-connector/update/state.json', b'{}')
     with pytest.raises(ValueError, match='already_update_managed'):
         bootstrap.verify_adoption(home, candidate)
+
+
+def test_entrypoint_directory_error_names_directory_without_chmod(installation):
+    home, root, source, candidate, inspect, finalize = installation
+    directory = home / '.local/bin'
+    directory.mkdir(parents=True, exist_ok=True)
+    directory.chmod(0o775)
+    with pytest.raises(UpdateError) as caught:
+        finalize()
+    assert str(caught.value) == 'entrypoint_directory_not_owned'
+    assert caught.value.diagnostic()['directory'] == str(directory)
+    assert caught.value.diagnostic()['hint'] == 'chmod g-w,o-w ' + str(directory)
+    assert directory.stat().st_mode & 0o777 == 0o775
+
+
+@pytest.mark.parametrize('reason', ['directory', 'other'])
+def test_verify_only_surfaces_known_directory_diagnostic(tmp_path, monkeypatch, capsys, reason):
+    home = tmp_path / 'home'
+    root = home / 'release'
+    python = root / 'tools/bat-agent-connector/bin/python'
+    files.atomic_write(python, b'fixture')
+    monkeypatch.setattr(bootstrap.Path, 'home', lambda: home)
+    monkeypatch.setattr(bootstrap, 'resolve', lambda *a: release())
+    monkeypatch.setattr(bootstrap.shutil, 'which', lambda name: '/usr/bin/' + name)
+    directory = home / '.local/bin'
+    diagnostic = json.dumps({'code': 'entrypoint_directory_not_owned', 'directory': str(directory)}).encode()
+    def run(args, **kwargs):
+        assert '--verify-only' in args
+        assert kwargs['capture_output'] is True
+        return subprocess.CompletedProcess(args, 1, b'', diagnostic if reason == 'directory' else b'other_failure')
+    monkeypatch.setattr(bootstrap.subprocess, 'run', run)
+    assert bootstrap.main(['--tag', 'v0.2.7', '--root', str(root), '--verify-only', '--allow-root']) == 1
+    error = capsys.readouterr().err
+    if reason == 'directory':
+        assert 'entrypoint_directory_not_owned' in error
+        assert str(directory) in error
+        assert 'chmod g-w,o-w ' + str(directory) in error
+        assert 'verification_command_failed' not in error
+    else:
+        assert 'verification_command_failed' in error
+
+
+def test_verifier_cli_serializes_directory_detail(tmp_path, monkeypatch, capsys):
+    from bat_agent_connector.update_release import EntrypointDirectoryError
+
+    directory = tmp_path / '.config'
+    def fail(*args, **kwargs):
+        raise EntrypointDirectoryError(directory)
+    monkeypatch.setattr(installer, 'finalize', fail)
+    assert installer.main([str(tmp_path), '{}', '--verify-only']) == 1
+    detail = json.loads(capsys.readouterr().err)
+    assert detail == {'code': 'entrypoint_directory_not_owned', 'directory': str(directory),
+                      'hint': 'chmod g-w,o-w ' + str(directory)}

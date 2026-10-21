@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shlex
 import time
 import urllib.error
 import urllib.parse
@@ -17,6 +18,18 @@ EPOCH = 1
 
 class UpdateError(ValueError):
     """A public, credential-free diagnostic code."""
+
+
+class EntrypointDirectoryError(UpdateError):
+    """Stable code with actionable directory detail."""
+
+    def __init__(self, directory):
+        super().__init__("entrypoint_directory_not_owned")
+        self.directory = str(directory)
+
+    def diagnostic(self):
+        return {"code": str(self), "directory": self.directory,
+                "hint": "chmod g-w,o-w " + shlex.quote(self.directory)}
 
 
 def require(condition, code):
