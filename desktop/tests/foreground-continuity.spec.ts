@@ -61,11 +61,20 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) {
     const polls: {path: string, pending: boolean}[] = [], sources: string[] = [];
     const requests: Request[] = [], live = new Set<Request>(), failures = new Map<Request, string | undefined>();
     const httpTimeline: {event: string, request: number, live: number}[] = [];
-    let armed = false, sourcePhase = 'late', livePeak = 0;
+    let armed = false, sourcePhase = 'late', initialRequests = 0;
     const outstanding = () => polls.filter(poll => poll.pending).length;
+    const assertPages = (expected: number) => {
+      const order = JSON.stringify(httpTimeline);
+      expect(polls, order).toHaveLength(expected);
+      if (!native) expect(requests, order).toHaveLength(initialRequests + expected);
+    };
+    const releasePage = (index: number, expected: number) => {
+      // Check absence at the release barrier, while the page is still held.
+      assertPages(expected); releases[index]();
+    };
     page.on('request', request => {
       if (!request.url().includes('/api/v1/events?')) return;
-      requests.push(request); live.add(request); livePeak = Math.max(livePeak, live.size);
+      requests.push(request); live.add(request);
       httpTimeline.push({event: 'issued', request: requests.length - 1, live: live.size});
     });
     page.on('requestfinished', request => {
@@ -120,8 +129,10 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) {
       await expect(send).toBeEnabled(); await draft.fill('尚未送出，keep this draft.');
       const before = await savedCheckpoints(page);
       expect(before.map(([, value]) => JSON.parse(value))).toEqual([{cursor: 0, token: 'w-0'}]);
+      initialRequests = requests.length;
       armed = true; await expect.poll(() => polls.length).toBe(1);
       for (let count = 2; count <= 4; count++) {
+        assertPages(count - 1);
         const previousOutstanding = outstanding(), previousRequest = requests.at(-1)!;
         await visibility(page, 'hidden'); await visibility(page, 'visible');
         // The replacement arrives while every older fixture handler stays held.
@@ -132,29 +143,34 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) {
           expect(outstanding()).toBeLessThanOrEqual(previousOutstanding + 1);
         } else {
           await expect.poll(() => failures.get(previousRequest)).toBe('net::ERR_ABORTED');
-          expect(livePeak, JSON.stringify(httpTimeline)).toBe(1); expect(live.size).toBe(1);
+          // Request and abort notifications can arrive out of order. Once the
+          // old failure is observed, only this return's replacement remains.
+          const order = JSON.stringify(httpTimeline);
+          expect(live.size, order).toBe(1);
+          expect(live.has(requests.at(-1)!), order).toBe(true);
         }
+        assertPages(count);
         await expect(send).toBeDisabled();
       }
       const beforeLate = await page.locator('#main').innerText();
-      releases[0](); releases[1]();
+      releasePage(0, 4); releasePage(1, 4);
       await expect.poll(() => polls.slice(0, 2).every(poll => !poll.pending)).toBe(true);
       if (native) await expect.poll(lateReplies).toEqual([91, 92]);
       await expect(send).toBeDisabled();
       expect(await savedCheckpoints(page)).toEqual(before);
       expect(await page.locator('#main').innerText()).toBe(beforeLate);
-      expect(sources).toEqual([]); expect(polls).toHaveLength(4);
-      sourcePhase = 'fresh'; f.data.events.push(sessionUpdated(1)); releases[3]();
+      expect(sources).toEqual([]); assertPages(4);
+      sourcePhase = 'fresh'; f.data.events.push(sessionUpdated(1)); releasePage(3, 4);
       await expect.poll(() => [...new Set(sources)].sort()).toEqual(['/sessions/demo/search-results', '/sessions/demo/search-results/messages']);
       await expect(send).toBeDisabled(); expect(await savedCheckpoints(page)).toEqual(before);
-      expect(polls).toHaveLength(4); expect(f.data.posts).toEqual([]);
+      assertPages(4); expect(f.data.posts).toEqual([]);
       releaseSources(); await expect(send).toBeEnabled();
       expect(await savedCheckpoints(page)).toEqual(before.map(([key]) => [key, JSON.stringify({cursor: 1, token: 'w-1'})]));
       // Hold the reader's one normal next page while draining the last old reply.
       await expect.poll(() => polls.length).toBe(5);
       expect(polls.map(poll => new URL(poll.path, 'http://fixture').searchParams.get('after'))).toEqual(['0', '0', '0', '0', '1']);
       const settled = {checkpoint: await savedCheckpoints(page), text: await page.locator('#main').innerText(), sources: sources.length};
-      sourcePhase = 'late'; releases[2]();
+      sourcePhase = 'late'; releasePage(2, 5);
       await expect.poll(() => polls.slice(0, 4).every(poll => !poll.pending)).toBe(true);
       if (native) await expect.poll(lateReplies).toEqual([91, 92, 93]);
       await expect(send).toBeEnabled();
@@ -163,8 +179,9 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) {
       await expect(page.locator('#main')).not.toContainText(retiredReplyMarker);
       await expect(draft).toHaveValue('尚未送出，keep this draft.');
       expect(sources).toHaveLength(settled.sources); expect(f.data.posts).toEqual([]);
-      expect(polls).toHaveLength(5); expect(outstanding()).toBe(1);
-      if (!native) {expect(failures.size).toBe(3); expect(livePeak, JSON.stringify(httpTimeline)).toBe(1); expect(live.size).toBe(1);}
+      assertPages(5); expect(outstanding()).toBe(1);
+      if (!native) {expect(failures.size).toBe(3); expect(live.size, JSON.stringify(httpTimeline)).toBe(1);}
+      releasePage(4, 5);
     } finally {releaseSources(); releases.forEach(release => release());}
   });
 
