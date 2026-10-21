@@ -4,7 +4,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import time
 from copy import deepcopy
 from pathlib import Path
@@ -22,8 +21,9 @@ from bat_agent_connector.mcp_server import (
     WRITE_TOOLS,
     build_server,
 )
-from scripts.validate_connector_update import identity_line
+from scripts.validate_connector_update import copy_fixture_source, identity_line
 from tests.conftest import make_config
+from tests.fixture_vcs_install import install_fixture_candidate
 
 
 @pytest.fixture(scope="module")
@@ -33,13 +33,7 @@ def in_place_packages(tmp_path_factory):
     root = Path(__file__).resolve().parents[1]
     source = scratch / "source"
     source.mkdir()
-    for name in ("pyproject.toml", "uv.lock", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"):
-        shutil.copy2(root / name, source / name)
-    shutil.copytree(root / "src/bat_agent_connector", source / "src/bat_agent_connector",
-                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    skill = source / "skills/bat-agent-connector/SKILL.md"
-    skill.parent.mkdir(parents=True)
-    shutil.copy2(root / "skills/bat-agent-connector/SKILL.md", skill)
+    copy_fixture_source(root, source)
     home = scratch / "home"
     home.mkdir()
     temporary = scratch / "temporary"
@@ -47,13 +41,14 @@ def in_place_packages(tmp_path_factory):
     env = {"HOME": str(home), "PATH": os.environ["PATH"], "LANG": "C.UTF-8", "TMPDIR": str(temporary),
            "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_TERMINAL_PROMPT": "0",
            "UV_NO_CONFIG": "true", "UV_PYTHON_DOWNLOADS": "never",
-           "UV_CACHE_DIR": str(Path.home() / ".cache/uv")}
-    uv, git = shutil.which("uv"), shutil.which("git")
-    assert uv and git, "Real package fixture requires uv and Git"
+           "UV_CACHE_DIR": os.environ.get("UV_CACHE_DIR", str(scratch / "cache"))}
+    git = shutil.which("git")
+    assert git, "Real package fixture requires Git"
 
     def run(args, *, cwd=None):
-        return subprocess.run(args, cwd=cwd, env=env, check=True, capture_output=True, text=True,
-                              timeout=120).stdout.strip()
+        result = subprocess.run(args, cwd=cwd, env=env, capture_output=True, text=True, timeout=120)
+        assert result.returncode == 0, f"{args!r}\n{result.stdout}\n{result.stderr}"
+        return result.stdout.strip()
 
     run([git, "init", "--quiet", str(source)])
 
@@ -65,15 +60,22 @@ def in_place_packages(tmp_path_factory):
 
     first_sha = commit()
     environment = scratch / "environment"
-    run([uv, "venv", "--python", sys.executable, str(environment)])
-    python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-    constraints = scratch / "constraints.txt"
-    run([uv, "export", "--locked", "--no-dev", "--no-emit-project", "--no-hashes",
-         "--output-file", str(constraints)], cwd=source)
 
     def install(sha):
-        run([uv, "pip", "install", "--python", str(python), "--reinstall-package", "bat-agent-connector",
-             "--constraints", str(constraints), "git+" + source.as_uri() + "@" + sha])
+        return install_fixture_candidate(source, sha, environment, env=env, lock_root=root)
+
+    def provenance():
+        script = (
+            "import json;from pathlib import Path;from importlib import metadata;"
+            "from bat_agent_connector import build_identity as identity;"
+            "print(json.dumps({'build':identity.build_identity(),"
+            "'embedded':json.loads(Path(identity.__file__).with_name('build-info.json').read_text())['commit'],"
+            "'direct_url':json.loads(metadata.distribution('bat-agent-connector').read_text('direct_url.json'))"
+            "['vcs_info']['commit_id']}))"
+        )
+        observed = json.loads(run([str(python), "-I", "-B", "-c", script]))
+        print("REAL IN_PLACE PROVENANCE " + json.dumps(observed, sort_keys=True), flush=True)
+        return observed
 
     def capabilities(name):
         script = (
@@ -90,7 +92,8 @@ def in_place_packages(tmp_path_factory):
         )
         return json.loads(run([str(python), "-I", "-B", "-c", script]))
 
-    install(first_sha)
+    python = install(first_sha)
+    first_provenance = provenance()
     first_caps = capabilities("first")
     script = ("import json;from bat_agent_connector.build_identity import build_identity;"
               "print(json.dumps(build_identity()));input();print(json.dumps(build_identity()))")
@@ -120,6 +123,7 @@ def in_place_packages(tmp_path_factory):
             path.write_text(text.replace(old, new, 1))
         second_sha = commit()
         install(second_sha)
+        second_provenance = provenance()
         second_caps = capabilities("second")
         observed = []
         for reader in readers:
@@ -139,11 +143,17 @@ def in_place_packages(tmp_path_factory):
             for stream in (reader.stdin, reader.stdout, reader.stderr):
                 stream.close()
     return {"before": before, "after": observed[0], "late": observed[1], "first": first_caps,
-            "second": second_caps, "first_sha": first_sha, "second_sha": second_sha}
+            "second": second_caps, "first_sha": first_sha, "second_sha": second_sha,
+            "first_provenance": first_provenance, "second_provenance": second_provenance}
 
 
 def test_in_place_upgrade_never_mixes_loaded_version_and_installed_commit(in_place_packages):
     data = in_place_packages
+    for name in ("first", "second"):
+        proof = data[name + "_provenance"]
+        assert proof["build"] == data[name]["build"]
+        assert proof["build"]["source"] == "vcs"
+        assert proof["build"]["commit"] == proof["embedded"] == proof["direct_url"] == data[name + "_sha"]
     assert data["before"] == data["first"]["build"]
     assert data["before"]["commit"] == data["first_sha"]
     assert data["second"]["build"]["commit"] == data["second_sha"]

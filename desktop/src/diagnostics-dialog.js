@@ -1,4 +1,5 @@
 import {buildLine} from './diagnostics.js';
+import {versionFacts} from './version-facts.js';
 import {button} from './ui/components.js';
 import {timeLabel, timeStamp} from './ui/stamps.js';
 export function diagnosticsDialog({h, t, load, save, onClose}) {
@@ -53,7 +54,7 @@ export function diagnosticsDialog({h, t, load, save, onClose}) {
     if(current!==serial || !dialog.isConnected)return;
     content=JSON.stringify(bundle,null,2)+'\n';
     filename='batc-diagnostics-'+bundle.exported_at.slice(0,10).replaceAll('-','')+'-'+bundle.exported_at.slice(11,16).replace(':','')+'.json';
-    summary.append(h('div',{},h('p',{},buildLine(bundle.client,t)),
+    summary.append(h('div',{},h('p',{},buildLine(bundle.versions,t)),versionFacts({h,t,projection:bundle.versions}),
       ...Object.entries(bundle.source_reads).map(([source, read]) => h('p', {'data-diagnostics-source':source},
         t('diag_source_'+source), ' · ', t('diag_source_'+read.status),
         read.http_status == null ? null : ` · HTTP ${read.http_status}`, read.code ? [' · ',h('code',{},read.code)] : null,

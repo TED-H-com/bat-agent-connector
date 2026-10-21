@@ -29,6 +29,12 @@ compares installed Python files and the canonical skill with that source. It
 also verifies installed package metadata, VCS commit and command availability.
 No branch tip, mutable checkout or unpublished Git object is an update source.
 
+The shared installer/updater source verifier accepts the wheel's generated
+`build-info.json` only with the producer's commit-only schema and the exact
+candidate SHA. That validated file can lack a tracked source counterpart; all
+other source files still match individually. The installed proof digest includes
+the generated file, so later changes are detected on verification and reuse.
+
 ## Installation ownership and activation
 
 Enrollment requires the existing deployment receipt, matching installed source,
@@ -68,6 +74,33 @@ Every new data step must bump the update compatibility epoch together with the
 step, so the updater never offers a rollback across it. The journal fence is
 the last line of defense for older or manually selected packages.
 Pre-enrollment deployment backups remain available to the operator separately.
+
+### Continuity evidence
+
+The source continuity fixtures run upgrade and rollback as separate cases through
+the real updater, private home layout and package pointers. They use one data
+step and compatibility epoch, with synthetic package directories and unchanged
+Connector handlers. The journal contains an actual Work, Attempt, collected
+Result, queued and uncertain instruction receipts, original keys, steps and
+events. Pointer changes leave the closed database bytes unchanged. Reopening a
+real TaskDaemon preserves those rows and the durable Work/Result API view; new
+process collection/liveness diagnostics are allowed to change. The original
+credential still authenticates and the manual checkout remains unchanged.
+Workers are held between admission and execution to inspect pending receipts;
+publication recovery separately runs the real worker after restart.
+
+Rollback intentionally leaves updates disabled. Reapplying requires an explicit
+policy enable; a disabled `apply` is not evidence of a second upgrade. Publication
+cases lose outer completion after the original 201 receipt is committed, switch
+the pointer, then replay the original key. They assert the same operation and one
+creation call and push, rather than relying on a journal sentinel.
+
+These source cases do not prove a downloaded package install, an OS credential
+vault or a rollback across data steps. The native MockVault test retains the
+encoded credential through a real updater/API peer; real Windows/macOS vault
+retention and operator installations still need their own acceptance. Distinct
+managed-core upgrade evidence and its platform limits are documented in the
+[managed lifecycle contract](managed-installation.md#background-recovery-and-upgrades).
 
 ## Read-only rollback compatibility preview
 

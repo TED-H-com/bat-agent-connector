@@ -755,3 +755,10 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
   .record-row-meta > .record-row-status { display: inline-flex; }
 }
 @media (min-width: 601px) { .record-row-meta > .record-row-status { display: none; } }
+
+/* Version facts retain full hashes and ISO observation times at mobile widths. */
+.version-facts { min-width: 0; }
+.version-facts dl { display: grid; gap: 1rem; }
+.version-facts dt { font-weight: 600; }
+.version-facts dd { margin: .25rem 0 0; min-width: 0; }
+.version-facts p { overflow-wrap: anywhere; margin: .25rem 0; }

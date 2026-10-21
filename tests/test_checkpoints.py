@@ -11,6 +11,8 @@ import json
 import os
 import shutil
 import subprocess
+import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -51,7 +53,19 @@ class LocalRunner:
 
     async def run(self, host: str, script: str, timeout_s: float | None = None) -> str:
         self.scripts.append(script)
-        return await checkpoints._run(("sh", "-c", script), timeout_s)
+        # Optional seed diagnostics observe this fixture's own await, so child
+        # runtime is distinguishable from the audit observer's launch overhead.
+        observer = sys.modules.get("managed_upgrade_observer")
+        if observer is None:
+            return await checkpoints._run(("sh", "-c", script), timeout_s)
+        started = time.monotonic()
+        call = {"call_id": time.monotonic_ns(), "script_chars": len(script),
+                "sha256": hashlib.sha256(script.encode()).hexdigest()}
+        observer.record("host.call.start", **call)
+        try:
+            return await checkpoints._run(("sh", "-c", script), timeout_s)
+        finally:
+            observer.record("host.call.end", duration_s=round(time.monotonic() - started, 6), **call)
 
 
 class RealGitLog(dict):

@@ -71,11 +71,11 @@ export function workspaceSpecMaterialization({h,t,api,alive,workspaceId,workspac
   }
   function clear(){ready=false;eligible=false;record=null;facts.replaceChildren();status.replaceChildren();editorView.hidden=true;update();}
   function withdraw(){serial++;selected=null;clear();editorView.replaceChildren();editor=null;}
-  function fail(error){clear();status.replaceChildren(errorBox(error,{summary:t(error.message?.startsWith('PM_SPEC_')?'psm_invalid':'psm_unavailable'), within:status}));
+  function fail(error, options = {}){clear();status.replaceChildren(errorBox(error,{...options, summary:t(error.message?.startsWith('PM_SPEC_')?'psm_invalid':'psm_unavailable'), within:status}));
     if([401,403,404].includes(error.status)){selected=null;editorView.replaceChildren();editor=null;onSourceFailure();update();}}
   function bind(row){
     if(!editors.has(row.package_id)){
-      const guardedApi=async(...args)=>{const ticket=serial;try{return await api(...args);}catch(error){if(valid(ticket)&&[401,403,404].includes(error.status))fail(error);throw error;}};
+      const guardedApi=async(...args)=>{const ticket=serial;try{return await api(...args);}catch(error){if(valid(ticket)&&[401,403,404].includes(error.status))fail(error, {sourceRefresh:false});throw error;}};
       const value=form({namespace:`${namespace}.spec-materialization.${row.package_id}`,api:guardedApi,action,target:{workspace_id:workspaceId,package_id:row.package_id},fields:{},params:()=>({}),
         preconditions:()=>({expected_package_digest:row.document_digest,expected_scope_revision:row.document.context.plan_ref.scope_revision}),
         permitted:()=>ready&&eligible&&!record&&selected?.package_id===row.package_id&&writer(),

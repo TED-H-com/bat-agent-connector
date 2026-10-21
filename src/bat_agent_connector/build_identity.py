@@ -28,8 +28,19 @@ def _read_build_identity() -> dict:
             raw = distribution.read_text("direct_url.json")
             doc = json.loads(raw) if raw else {}
             vcs = doc.get("vcs_info", {})
+            embedded = Path(__file__).with_name("build-info.json")
             if vcs.get("vcs") == "git":
                 result.update(source="vcs", commit=_commit(vcs.get("commit_id")))
+                if embedded.exists():
+                    # Conflicting attribution is unknown; neither source wins.
+                    vcs_commit = result["commit"]
+                    result["commit"] = None
+                    info = json.loads(embedded.read_text(encoding="utf-8"))
+                    if _commit(info.get("commit")) == vcs_commit:
+                        result["commit"] = vcs_commit
+            elif embedded.exists():
+                info = json.loads(embedded.read_text(encoding="utf-8"))
+                result["commit"] = _commit(info.get("commit"))
     except (OSError, ValueError, TypeError, AttributeError, metadata.PackageNotFoundError):
         pass  # Missing/malformed provenance is unknown, never a guessed checkout HEAD.
     return result

@@ -5457,6 +5457,95 @@ mod tests {
         bytes
     }
 
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn saved_vault_record_authenticates_after_real_updater_rollback() {
+        // Same data handlers/epoch, real updater pointers + real authenticated API.
+        // Only the OS vault is doubled; no native-vault acceptance is claimed.
+        struct Peer(std::process::Child);
+        impl Drop for Peer {
+            fn drop(&mut self) {
+                let _ = self.0.kill();
+                let _ = self.0.wait();
+            }
+        }
+        let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let scratch = std::env::var_os("RUNNER_TEMP")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| repository.join(".test-tmp"));
+        std::fs::create_dir_all(&scratch).unwrap();
+        let directory = tempfile::Builder::new()
+            .prefix("updater-vault-")
+            .tempdir_in(scratch)
+            .unwrap();
+        let python = repository.join(".venv/bin/python");
+        assert!(
+            python.is_file(),
+            "Prepare the dev Python environment before native integration tests"
+        );
+        let mut peer = Peer(
+            std::process::Command::new(python)
+                .arg(repository.join("desktop/tests/updater-credentials-fixture.py"))
+                .arg("--data-dir")
+                .arg(directory.path())
+                .env("TMPDIR", directory.path())
+                .env("PYTHONPATH", &repository)
+                .current_dir(&repository)
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::inherit())
+                .spawn()
+                .unwrap(),
+        );
+        let output = peer.0.stdout.take().unwrap();
+        let (send, receive) = mpsc::channel();
+        let reader = thread::spawn(move || {
+            for line in std::io::BufRead::lines(std::io::BufReader::new(output)) {
+                if send.send(line.unwrap()).is_err() {
+                    break;
+                }
+            }
+        });
+        let response = || {
+            let line = receive.recv_timeout(Duration::from_secs(20)).unwrap();
+            serde_json::from_str::<serde_json::Value>(&line).unwrap()
+        };
+        let hello = response();
+        let endpoint = hello["endpoint"].as_str().unwrap();
+        let vault = Arc::new(MockVault::default());
+        *vault.answer.lock().unwrap() = Some(hello["token"].as_str().unwrap().into());
+        let bridge = credential_bridge(endpoint, vault.clone());
+        let first = bridge.enroll(Locale::English, 0).await.unwrap().unwrap();
+        let original = vault.records.lock().unwrap().clone();
+        assert_eq!(original.len(), 1);
+        drop(bridge);
+        for (action, commit) in [
+            ("apply", "b".repeat(40)),
+            ("rollback", "a".repeat(40)),
+            ("apply", "b".repeat(40)),
+        ] {
+            writeln!(
+                peer.0.stdin.as_mut().unwrap(),
+                "{}",
+                serde_json::json!({"action": action})
+            )
+            .unwrap();
+            let switched = response();
+            assert_eq!(switched["commit"], commit);
+            assert_eq!(switched["credential_unchanged"], true);
+            *vault.answer.lock().unwrap() = None; // Reopen must read, never prompt/re-enroll.
+            let restarted = credential_bridge(endpoint, vault.clone());
+            let current = restarted.connect().await.unwrap();
+            assert_eq!(current["desktop_identity"], first["desktop_identity"]);
+            assert!(restarted.status().connected);
+            assert!(*vault.records.lock().unwrap() == original);
+        }
+        writeln!(peer.0.stdin.as_mut().unwrap(), "{{\"action\":\"stop\"}}").unwrap();
+        assert_eq!(response()["stopped"], true);
+        assert!(peer.0.wait().unwrap().success());
+        reader.join().unwrap();
+    }
+
     #[tokio::test]
     async fn enrollment_is_verified_before_persistence_and_survives_native_restart() {
         let (endpoint, requests, server) = server(vec![
