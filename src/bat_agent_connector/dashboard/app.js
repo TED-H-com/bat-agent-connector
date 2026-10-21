@@ -69802,7 +69802,16 @@ async function viewSession(main, host, sid, context = null) {
 				readError?.remove();
 				readError = null;
 			} catch (error) {
-				if (["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error?.code)) throw error;
+				if (error?.code === "VIEW_CHANGED") {
+					if (!readReady) {
+						clearTimeout(retryTimer);
+						retryTimer = null;
+						retryDelay = 1e3;
+						scheduleRetry();
+					}
+					throw error;
+				}
+				if (error?.code === "CONNECTION_CHANGED") throw error;
 				if (error?.sessionWithdrawn) {
 					withdraw(error.sessionWithdrawn, error);
 					return;

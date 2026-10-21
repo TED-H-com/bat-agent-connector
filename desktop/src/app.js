@@ -2338,7 +2338,13 @@ async function viewSession(main, host, sid, context = null) {
         readReady = true; retryDelay = 1000; clearTimeout(retryTimer); retryTimer = null;
         updateControls(); readError?.remove(); readError = null;
       } catch (error) {
-        if (["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error?.code)) throw error;
+        if (error?.code === "VIEW_CHANGED") {
+          // A failed source may have no event left to replay. Retry its reads;
+          // only the shared reader can restore the separate online write gate.
+          if (!readReady) {clearTimeout(retryTimer); retryTimer = null; retryDelay = 1000; scheduleRetry();}
+          throw error;
+        }
+        if (error?.code === "CONNECTION_CHANGED") throw error;
         // Withdrawal is the settled, displayed state: it does not keep the event batch failing.
         if (error?.sessionWithdrawn) {withdraw(error.sessionWithdrawn, error); return;}
         readReady = false; updateControls();
