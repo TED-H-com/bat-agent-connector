@@ -1,4 +1,4 @@
-import {test, expect, type Page} from '@playwright/test';
+import {test, expect, type Page, type Request} from '@playwright/test';
 import {workspaceFixture, mountWorkspace, workspaceRoute} from './workspace-fixture.ts';
 
 async function visibility(page: Page, value: 'hidden' | 'visible') {
@@ -45,32 +45,136 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) {
   });
 }
 
-test('a poll started before resume cannot reopen writes or create a second reader', async ({page}) => {
-  const f = workspaceFixture(), dispatch = f.dispatch;
-  let stage = 0, entered = 0, active = 0, maximum = 0;
-  const releases: (() => void)[] = [];
-  const holds = [0, 1].map(() => new Promise<void>(resolve => releases.push(resolve)));
-  f.dispatch = async input => {
-    if (!input.path.startsWith('/events?')) return dispatch(input);
-    active++; maximum = Math.max(maximum, active);
-    try {if (stage && entered < 2) await holds[entered++]; return await dispatch(input);}
-    finally {active--;}
-  };
-  await mountWorkspace(page, false, f);
-  try {
+const retiredReplyMarker = 'This event must only appear from a live page.';
+const sessionUpdated = (seq: number) => ({seq, resource_type: 'session', resource_id: 'demo/search-results', kind: 'session.updated'});
+const eventPage = (cursor: number) => ({status: 200, data: {events: [sessionUpdated(cursor)], next_cursor: cursor,
+  head_cursor: cursor, has_more: false, sync: {checkpoint: {cursor, token: 'w-' + cursor}}}});
+const savedCheckpoints = (page: Page) => page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.startsWith('batc.sync.')));
+
+for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) {
+  test(`a poll started before resume cannot reopen writes or create a second reader ${native ? 'IPC' : 'HTTP'} ${locale}`, async ({page}) => {
+    const f = workspaceFixture(locale), dispatch = f.dispatch;
+    const releases: (() => void)[] = [];
+    const gates = Array.from({length: 5}, () => new Promise<void>(resolve => releases.push(resolve)));
+    let releaseSources!: () => void;
+    const sourcesGate = new Promise<void>(resolve => {releaseSources = resolve;});
+    const polls: {path: string, pending: boolean}[] = [], sources: string[] = [];
+    const requests: Request[] = [], live = new Set<Request>(), failures = new Map<Request, string | undefined>();
+    let armed = false, sourcePhase = 'late', livePeak = 0;
+    const outstanding = () => polls.filter(poll => poll.pending).length;
+    page.on('request', request => {
+      if (!request.url().includes('/api/v1/events?')) return;
+      requests.push(request); live.add(request); livePeak = Math.max(livePeak, live.size);
+    });
+    page.on('requestfinished', request => live.delete(request));
+    page.on('requestfailed', request => {
+      if (!live.delete(request)) return;
+      failures.set(request, request.failure()?.errorText);
+    });
+    f.dispatch = async input => {
+      if (armed && input.path.startsWith('/events?')) {
+        const poll = {path: input.path, pending: true}, index = polls.push(poll) - 1;
+        try {
+          if (gates[index]) await gates[index];
+          return index < 3 ? eventPage(91 + index) : index === 3 ? eventPage(1) : dispatch(input);
+        } finally {poll.pending = false;}
+      }
+      const path = input.path.split('?')[0];
+      if (armed && ['/sessions/demo/search-results', '/sessions/demo/search-results/messages'].includes(path)) {
+        sources.push(path);
+        if (sourcePhase === 'fresh') await sourcesGate;
+        else {
+          const result = structuredClone(await dispatch(input));
+          if (path.endsWith('/messages')) result.data.messages = [{id: 'late-reply', role: 'assistant',
+            ts: '2026-10-10T12:03:00Z', text: retiredReplyMarker}];
+          else result.data.session.title = retiredReplyMarker;
+          return result;
+        }
+      }
+      return dispatch(input);
+    };
+    await mountWorkspace(page, native, f);
+    await page.addInitScript(locale => Object.defineProperty(navigator, 'language', {value: locale}), locale);
+    if (native) await page.addInitScript(() => {
+      // Observe replies at the existing IPC fixture boundary, not app state.
+      const boundary = (window as any).__TAURI_INTERNALS__, invoke = boundary.invoke;
+      (window as any).__fixtureEventReplies = [];
+      boundary.invoke = async (command: string, args: any) => {
+        const result = await invoke(command, args);
+        if (command === 'connector_request' && args.input.path.startsWith('/events?'))
+          (window as any).__fixtureEventReplies.push(result.data.next_cursor);
+        return result;
+      };
+    });
+    const lateReplies = () => page.evaluate(() => (window as any).__fixtureEventReplies.filter((cursor: number) => cursor >= 91));
+    try {
+      await page.goto('/dashboard/?workbench=1' + workspaceRoute);
+      const send = page.getByRole('button', {name: locale === 'en' ? 'Send' : '送出', exact: true});
+      const draft = page.locator('#workspace-message-input textarea');
+      await expect(send).toBeEnabled(); await draft.fill('尚未送出，keep this draft.');
+      const before = await savedCheckpoints(page);
+      armed = true; await expect.poll(() => polls.length).toBe(1);
+      for (let count = 2; count <= 4; count++) {
+        const previousOutstanding = outstanding(), previousRequest = requests.at(-1)!;
+        await visibility(page, 'hidden'); await visibility(page, 'visible');
+        // The replacement arrives while every older fixture handler stays held.
+        await expect.poll(() => polls.length).toBe(count);
+        if (native) {
+          // IPC retires results. A stalled native call ends at the timeout owned
+          // by the Bridge client builder in src-tauri/src/bridge.rs.
+          expect(outstanding()).toBeLessThanOrEqual(previousOutstanding + 1);
+        } else {
+          await expect.poll(() => failures.get(previousRequest)).toBe('net::ERR_ABORTED');
+          expect(livePeak).toBe(1); expect(live.size).toBe(1);
+        }
+        await expect(send).toBeDisabled();
+      }
+      const beforeLate = await page.locator('#main').innerText();
+      releases[0](); releases[1]();
+      await expect.poll(() => polls.slice(0, 2).every(poll => !poll.pending)).toBe(true);
+      if (native) await expect.poll(lateReplies).toEqual([91, 92]);
+      await expect(send).toBeDisabled();
+      expect(await savedCheckpoints(page)).toEqual(before);
+      expect(await page.locator('#main').innerText()).toBe(beforeLate);
+      expect(sources).toEqual([]); expect(polls).toHaveLength(4);
+      sourcePhase = 'fresh'; f.data.events.push(sessionUpdated(1)); releases[3]();
+      await expect.poll(() => [...new Set(sources)].sort()).toEqual(['/sessions/demo/search-results', '/sessions/demo/search-results/messages']);
+      await expect(send).toBeDisabled(); expect(await savedCheckpoints(page)).toEqual(before);
+      expect(polls).toHaveLength(4); expect(f.data.posts).toEqual([]);
+      releaseSources(); await expect(send).toBeEnabled();
+      expect(await savedCheckpoints(page)).toEqual(before.map(([key]) => [key, JSON.stringify({cursor: 1, token: 'w-1'})]));
+      // Hold the reader's one normal next page while draining the last old reply.
+      await expect.poll(() => polls.length).toBe(5);
+      expect(polls.map(poll => new URL(poll.path, 'http://fixture').searchParams.get('after'))).toEqual(['0', '0', '0', '0', '1']);
+      const settled = {checkpoint: await savedCheckpoints(page), text: await page.locator('#main').innerText(), sources: sources.length};
+      sourcePhase = 'late'; releases[2]();
+      await expect.poll(() => polls.slice(0, 4).every(poll => !poll.pending)).toBe(true);
+      if (native) await expect.poll(lateReplies).toEqual([91, 92, 93]);
+      await expect(send).toBeEnabled();
+      expect(await savedCheckpoints(page)).toEqual(settled.checkpoint);
+      expect(await page.locator('#main').innerText()).toBe(settled.text);
+      await expect(page.locator('#main')).not.toContainText(retiredReplyMarker);
+      await expect(draft).toHaveValue('尚未送出，keep this draft.');
+      expect(sources).toHaveLength(settled.sources); expect(f.data.posts).toEqual([]);
+      expect(polls).toHaveLength(5); expect(outstanding()).toBe(1);
+      if (!native) {expect(failures.size).toBe(3); expect(livePeak).toBe(1); expect(live.size).toBe(1);}
+    } finally {releaseSources(); releases.forEach(release => release());}
+  });
+
+  test(`a live poll applies the event used to detect a retired reply ${native ? 'IPC' : 'HTTP'} ${locale}`, async ({page}) => {
+    const f = workspaceFixture(locale);
+    await mountWorkspace(page, native, f);
+    await page.addInitScript(locale => Object.defineProperty(navigator, 'language', {value: locale}), locale);
     await page.goto('/dashboard/?workbench=1' + workspaceRoute);
-    const send = page.getByRole('button', {name: 'Send', exact: true});
-    await expect(send).toBeEnabled();
-    stage = 1; await expect.poll(() => entered).toBe(1);
-    await visibility(page, 'hidden'); await visibility(page, 'visible');
-    releases[0]();
-    await expect.poll(() => entered).toBe(2);
-    await expect(send).toBeDisabled();
-    expect(maximum).toBe(1);
-    releases[1](); await expect(send).toBeEnabled();
+    await expect(page.getByRole('button', {name: locale === 'en' ? 'Send' : '送出', exact: true})).toBeEnabled();
+    const before = await savedCheckpoints(page);
+    f.data.messages = [{id: 'late-reply', role: 'assistant', ts: '2026-10-10T12:03:00Z', text: retiredReplyMarker}];
+    f.data.events.push(sessionUpdated(91));
+    await expect(page.locator('#main')).toContainText(retiredReplyMarker);
+    await expect.poll(() => savedCheckpoints(page)).toEqual(before.map(([key]) => [key, JSON.stringify({cursor: 91, token: 'w-91'})]));
     expect(f.data.posts).toEqual([]);
-  } finally {releases.forEach(release => release());}
-});
+  });
+}
 
 test('a page restored from the browser cache waits for a fresh central poll', async ({page}) => {
   const f = workspaceFixture(), dispatch = f.dispatch;
