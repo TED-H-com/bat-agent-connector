@@ -91,9 +91,10 @@ async function refusedAccess(active, workUrl) {
     assert.equal(observedBootstrap.capabilities[key], golden.capabilities[key]);
   assert.deepEqual(observedBootstrap.capabilities.features.pm_workspaces.work_follow_up.routes,
     golden.capabilities.features.pm_workspaces.work_follow_up.routes);
-  const field = page.locator('[data-follow-up-input]');
-  const work = page.locator('[data-work-section="next-turn"]');
-  const submit = work.getByRole('button', {name: zh ? '送出下一步' : 'Send next', exact: true});
+  const surface = f.refusal_surface || 'work';
+  let field = page.locator('[data-follow-up-input]');
+  let work = page.locator('[data-work-section="next-turn"]');
+  let submit = work.getByRole('button', {name: zh ? '送出下一步' : 'Send next', exact: true});
   const draft = '  尚未送出 📝\nKeep this instruction unsent.\n  ';
   await field.fill(draft);
   await expect(submit).toBeEnabled();
@@ -101,13 +102,48 @@ async function refusedAccess(active, workUrl) {
   const resultHref = await page.locator('[data-work-result-focus="live-output"]').getAttribute('href');
   assert.ok(resultHref.includes(`attempt=${active.attempt}`));
   await page.keyboard.press('Escape');
-  const draftEntries = () => page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.includes('.session.send.')));
+  const sessionRoute = resultHref.split('?')[0];
+  const [, , host, sid] = sessionRoute.split('/');
+  let target = {workspace_id: f.workspace, work_item_id: f.work};
+  let suffix = `.session.send.${JSON.stringify(target)}`;
+  if (surface !== 'work') step = 'refusal-setup-' + surface;
+  if (surface === 'pm-form') {
+    target = {workspace_id: f.workspace, thread_id: f.thread};
+    suffix = `.pm.message.append.${JSON.stringify(target)}`;
+    await page.evaluate(hash => {location.hash = hash;}, `#/pm/${f.workspace}/discussions/${f.thread}`);
+    work = page.locator('form[data-pm-action="pm.message.append"]');
+    field = work.locator('[data-discussion-composer]');
+    submit = work.locator('button[type=submit]');
+  } else if (surface === 'session-toolbar') {
+    // The Result supplies this managed session's existing route. A plain session
+    // route has no Work selection; Classic exposes its original Send/Interrupt toolbar.
+    await page.goto(`${origin}/dashboard/${sessionRoute}`);
+    target = {host, session_id: sid};
+    suffix = `.send.${host}.${sid}`;
+    await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
+    work = page.locator('.workspace-composer');
+    field = page.locator('#workspace-message-input > textarea');
+    submit = page.locator('#workspace-message-input .composer-row button.primary');
+    const queue = work.locator('input[type=checkbox]');
+    await expect(field).toBeVisible();
+    await queue.setChecked(!await queue.isChecked());
+    await expect(page.locator('.workspace-session-heading button.danger')).toBeEnabled();
+  }
+  await field.fill(draft);
+  await expect(submit).toBeEnabled();
+  const surfaceUrl = page.url();
+  const originalField = await field.elementHandle();
+  const draftEntries = () => page.evaluate(suffix => Object.entries(localStorage)
+    .filter(([key]) => key.endsWith(suffix) || key.endsWith(suffix + '.queue')).sort(([a], [b]) => a.localeCompare(b)), suffix);
   const saved = await draftEntries();
-  assert.equal(saved.length, 1);
-  const [draftKey, raw] = saved[0];
-  assert.ok(draftKey.endsWith(`.session.send.${JSON.stringify({workspace_id: f.workspace, work_item_id: f.work})}`));
-  assert.deepEqual(Buffer.from(JSON.parse(raw).values.text), Buffer.from(draft));
-  assert.equal(Object.hasOwn(JSON.parse(raw), 'intent'), false);
+  assert.equal(saved.length, surface === 'session-toolbar' ? 2 : 1);
+  const [draftKey, raw] = saved.find(([key]) => key.endsWith(suffix));
+  assert.ok(draftKey.endsWith(suffix));
+  if (surface === 'session-toolbar') assert.deepEqual(Buffer.from(raw), Buffer.from(draft));
+  else {
+    assert.deepEqual(Buffer.from(JSON.parse(raw).values[surface === 'pm-form' ? 'content' : 'text']), Buffer.from(draft));
+    assert.equal(Object.hasOwn(JSON.parse(raw), 'intent'), false);
+  }
   const originalContext = context, originalPage = page;
   const since = allRequests.length;
   const unchanged = async () => {
@@ -140,13 +176,27 @@ async function refusedAccess(active, workUrl) {
   const response = await refusal;
   const body = await response.json();
   assert.equal(body.error.code, 'UNAUTHORIZED');
-  step = 'refused-work';
+  step = 'refused-' + surface;
   await headerRefused();
   await expect(submit).toBeDisabled();
   await expect(field).toHaveValue(draft);
-  await expect(work.locator('[data-api-error]')).toContainText('CLIENT_ACTION_REFUSED');
-  await expect(work.getByText(copy.error_code_CLIENT_ACTION_REFUSED, {exact: true})).toBeVisible();
-  await expect(page.locator('[data-work-result-focus="live-output"]')).toHaveAttribute('href', resultHref);
+  assert.equal(await field.evaluate((node, old) => node === old, originalField), true);
+  assert.equal(page.url(), surfaceUrl);
+  if (surface === 'session-toolbar') {
+    const reason = page.locator('.session-send-reason');
+    await expect(reason).toHaveText(copy.error_code_CLIENT_ACTION_REFUSED);
+    await expect(reason).toHaveAttribute('data-client-action-code', 'CLIENT_ACTION_REFUSED');
+    await expect(page.locator('.workspace-session-heading button.danger')).toBeDisabled();
+  } else {
+    await expect(work.locator('[data-api-error]')).toContainText('CLIENT_ACTION_REFUSED');
+    await expect(work.getByText(copy.error_code_CLIENT_ACTION_REFUSED, {exact: true})).toBeVisible();
+    if (surface === 'pm-form') {
+      // A submit queued before the disabled state must explain the same gate,
+      // without generating an intent, a key or an operation POST.
+      await work.evaluate(node => node.requestSubmit());
+      await expect(work).toContainText(copy.error_code_CLIENT_ACTION_REFUSED);
+    } else await expect(page.locator('[data-work-result-focus="live-output"]')).toHaveAttribute('href', resultHref);
+  }
   await unchanged();
   await shot('02-refused-work');
   step = 'refused-settings';
@@ -156,20 +206,22 @@ async function refusedAccess(active, workUrl) {
   await headerRefused();
   await unchanged();
   await shot('03-refused-settings');
-  step = 'refused-work-return';
-  const returned = page.waitForResponse(response => response.status() === 401
-    && new URL(response.url()).pathname === `/api/v1/work-items/${f.work}`);
-  await page.evaluate(hash => {location.hash = hash;}, new URL(workUrl).hash);
-  await returned;
-  await expect(page).toHaveURL(workUrl);
-  // Refused source reads cannot recreate actionable controls from cached data.
-  await expect(page.locator('#main [data-api-error]')).toContainText('UNAUTHORIZED');
-  await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
-  await headerRefused();
-  await unchanged();
+  if (surface === 'work') {
+    step = 'refused-work-return';
+    const returned = page.waitForResponse(response => response.status() === 401
+      && new URL(response.url()).pathname === `/api/v1/work-items/${f.work}`);
+    await page.evaluate(hash => {location.hash = hash;}, new URL(workUrl).hash);
+    await returned;
+    await expect(page).toHaveURL(workUrl);
+    // Refused source reads cannot recreate actionable controls from cached data.
+    await expect(page.locator('#main [data-api-error]')).toContainText('UNAUTHORIZED');
+    await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
+    await headerRefused();
+    await unchanged();
+  }
   assert.deepEqual(errors, []);
   await shot('04-refused-work-return');
-  const proof = {draft_key: draftKey, draft_unchanged: true, attempt: active.attempt, result_href: resultHref,
+  const proof = {surface, target, draft_key: draftKey, draft_unchanged: true, attempt: active.attempt, result_href: resultHref,
     events_status: response.status(), server_code: body.error.code,
     header_reason: await header.innerText(), settings_reason: settingsReason, draft_has_intent: false,
     reason_key: 'ui_connection_refused', gate_code: 'CLIENT_ACTION_REFUSED', operation_posts: 0};

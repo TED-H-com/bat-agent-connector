@@ -26,7 +26,7 @@ async function mountForm(page: Page, locale: string, activeRefresh = false) {
     const {pmDurableForm} = await import('/__retry_src/pm-workspace.js');
     const win = window as any;
     win.eventRefresh = {error:null};
-    const state = win.retryState = {writes:[] as any[],guardCode:null as string|null,sendReady:true,permitted:true,mode:'lost',held:null as any,resolve:null as any};
+    const state = win.retryState = {writes:[] as any[],guardCode:null as string|null,sendReady:true,gate:null as any,permitted:true,mode:'lost',held:null as any,resolve:null as any};
     const guard = () => {if(state.guardCode)throw new ApiError(0,state.guardCode,'View changed during refresh');};
     const api = async (method:string,path:string,body:any,key:string) => {
       const row = {method,path,body:structuredClone(body),key};state.writes.push(row);
@@ -41,7 +41,7 @@ async function mountForm(page: Page, locale: string, activeRefresh = false) {
     const reason = h('textarea',{'aria-label':t('pcp_resolve_rationale'),required:true});reason.value='Preserve the reviewed original request';
     const options = win.retryOptions = {h,t,api,caps:()=>caps,guard,namespace:'explicit-retry',action:'pm.governance.revise',target,
       fields:{rationale:reason},params:values=>({...params,rationale:values.rationale}),preconditions:()=>({expected_version:1}),
-      permitted:()=>state.permitted,canSend:()=>state.sendReady,onSaved:()=>{},label:'pcp_resolve_issue',extra:reason,
+      permitted:()=>state.permitted,canSend:()=>state.sendReady,clientGate:()=>state.gate,onSaved:()=>{},label:'pcp_resolve_issue',extra:reason,
       errorBox:createErrorBox(h,t,locale,{refreshCycle:activeRefresh?win.eventRefresh:null})};
     const ui = win.retryForm = pmDurableForm(options);
     document.getElementById('fixture')!.append(ui.box);
@@ -56,6 +56,57 @@ async function mountForm(page: Page, locale: string, activeRefresh = false) {
 }
 
 for(const locale of ['en','zh-TW']) {
+  for (const reason of ['reconnecting', 'connection_changing', 'view_not_ready']) test(`the client gate explains ${reason} without changing the original request ${locale}`, async ({page}) => {
+    const form = await mountForm(page, locale, true);
+    const saved = () => page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.startsWith('batc.pm.explicit-retry.')));
+    const before = await saved();
+    await page.evaluate(async reason => {
+      const win = window as any, state = win.retryState;
+      const {clientActionGate, pollFailure} = await import('/__retry_src/central-service-status.js');
+      const {ApiError} = await import('/__retry_src/error-presentation.js');
+      // Controlled client observations, not API response payloads. Real credential
+      // revocation and its HTTP body are covered by the shared browser journey.
+      const facts = {token:'component-credential',online:true,viewReady:true,nativeBusy:false,pollHealth:'connected' as any};
+      if (reason === 'reconnecting') {facts.online=false;facts.pollHealth=pollFailure(new ApiError(0,'NETWORK_ERROR','unreachable'),Date.now());}
+      if (reason === 'connection_changing') facts.nativeBusy=true;
+      if (reason === 'view_not_ready') facts.viewReady=false;
+      state.gate = clientActionGate(facts, {post:true}); state.sendReady=false;
+      win.retryForm.update();
+    }, reason);
+    const notice = form.locator('[data-pm-client-gate]');
+    await expect(notice).toContainText('CLIENT_ACTION_' + reason.toUpperCase());
+    await expect(notice).toContainText(STRINGS[locale]['error_code_CLIENT_ACTION_' + reason.toUpperCase()]);
+    await form.evaluate(node => node.requestSubmit());
+    expect(await saved()).toEqual(before);
+    expect(await page.evaluate(() => (window as any).retryState.writes.length)).toBe(1);
+    expect(await page.evaluate(() => (window as any).eventRefresh.error)).toBeNull();
+    await page.evaluate(() => {const win=window as any;win.retryState.sendReady=true;win.retryState.gate=null;win.retryForm.update();});
+    await expect(notice).toBeHidden();
+    // The prior request's outcome remains distinct from the current client gate.
+    await expect(form).toContainText(STRINGS[locale].error_code_NETWORK_ERROR);
+  });
+
+  test(`the client write gate still reads an acknowledged original receipt ${locale}`, async ({page}) => {
+    const form = await mountForm(page, locale);
+    await page.evaluate(() => {(window as any).retryState.mode='pending';});
+    await form.getByRole('button', {name:STRINGS[locale].pm_check_original,exact:true}).click();
+    await expect.poll(() => page.evaluate(() => JSON.parse(Object.entries(localStorage)
+      .find(([key]) => key.startsWith('batc.pm.explicit-retry.'))![1]).intent.operation_id)).toBe('op_'+'8'.repeat(32));
+    await page.evaluate(async () => {
+      const win=window as any, state=win.retryState;
+      const {clientActionGate} = await import('/__retry_src/central-service-status.js');
+      state.gate=clientActionGate({token:'component-credential',online:true,viewReady:false,pollHealth:'connected'}, {post:true});
+      state.sendReady=false;state.mode='success';win.retryForm.update();win.retryForm.recheck();
+    });
+    await expect(form.locator('[data-pm-saved]')).toBeVisible();
+    const requests = await page.evaluate(() => (window as any).retryState.writes);
+    const posts = requests.filter(row => row.method === 'POST');
+    expect(posts).toHaveLength(2);expect(posts[1]).toEqual(posts[0]);
+    const gets = requests.filter(row => row.method === 'GET');
+    expect(gets.length).toBeGreaterThan(0);
+    expect(gets.every(row => row.path === '/operations/op_'+'8'.repeat(32))).toBe(true);
+  });
+
   test(`a lost operation reply does not fail a concurrent source refresh ${locale}`,async({page})=>{
     const form=await mountForm(page,locale,true);
     expect(await page.evaluate(()=>(window as any).eventRefresh.error)).toBeNull();

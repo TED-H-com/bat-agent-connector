@@ -98,6 +98,13 @@ async def test_work_refused_access_keeps_draft_and_attempt(start_ready, mock, tm
     await work_loop(start_ready, mock, tmp_path, locale, 390, refused_access=True)
 
 
+@pytest.mark.parametrize("locale", ["en", "zh-TW"])
+@pytest.mark.parametrize("surface", ["pm-form", "session-toolbar"])
+async def test_other_form_refusal_keeps_draft_and_target(start_ready, mock, tmp_path, locale, surface):
+    """The existing journey's principal is revoked while each draft stays mounted."""
+    await work_loop(start_ready, mock, tmp_path, locale, 390, refused_access=True, refusal_surface=surface)
+
+
 @pytest.mark.parametrize(("locale", "width"), [("en", 1440), ("zh-TW", 390)])
 async def test_fixed_result_review_records_insufficient_evidence_from_ui(start_ready, mock, tmp_path, monkeypatch, locale, width):
     w, ops = start_ready, start_ready["d"].ops
@@ -201,7 +208,7 @@ async def discussion_loop(start_ready, mock, tmp_path, monkeypatch, locale, widt
 
 async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_token=None, monkeypatch=None,
                     withdraw_writer=False, lost_reply=None, review_result=False, verify_result=False,
-                    close_restart=False, foreground_recovery=False, refused_access=False):
+                    close_restart=False, foreground_recovery=False, refused_access=False, refusal_surface="work"):
     ops = w["d"].ops
     # The handoff test runner decodes a single protocol. This journey also runs
     # checkpoint and publication shell scripts, so execute every actual script.
@@ -231,7 +238,7 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
     if foreground_recovery:
         entry = "foreground-recovery"
     if refused_access:
-        entry = "refused-access"
+        entry = "refused-access" + ("-" + refusal_surface if refusal_surface != "work" else "")
     shots = ROOT / "desktop/test-results/work-loop" / f"{entry}-{locale}-{width}"
     shutil.rmtree(shots, ignore_errors=True)
     shots.mkdir(parents=True, exist_ok=True)
@@ -351,7 +358,7 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 "create_work": create_work, "project": project_id, "withdraw_writer": withdraw_writer,
                 "lost_start_reply": lost_reply is not None, "review_result": review_result,
                 "reviewer_actor": STARTER_OWNER.actor, "verify_result": verify_result,
-                "foreground_recovery": foreground_recovery, "refused_access": refused_access,
+                "foreground_recovery": foreground_recovery, "refused_access": refused_access, "refusal_surface": refusal_surface,
                 "browser_profile": str(browser_temp / "profile") if close_restart or foreground_recovery or refused_access else None})
             if create_work:
                 created = await receive("created")
