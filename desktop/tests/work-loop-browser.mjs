@@ -249,7 +249,7 @@ async function foregroundRecovery(active, workUrl) {
   }
 }
 
-async function runJourney() {
+try {
   await launch();
   let start;
   let savedReviewId=null;
@@ -350,7 +350,9 @@ async function runJourney() {
   if (f.mode === 'adopt') await shot('01-started');
   const workUrl = page.url();
   assert.equal(new URL(workUrl).hash.includes(active.attempt), true);
-  if (f.foreground_recovery) {await foregroundRecovery(active, workUrl); return;}
+  if (f.foreground_recovery) {
+    await foregroundRecovery(active, workUrl);
+  } else {
   const text = zh ? '再補一個失敗後重新送出的案例。' : 'Add a retry-after-failure case.';
   await page.locator('[data-follow-up-input]').fill(text);
   const queued = await clickOperation('session.send', page.locator('[data-work-section="next-turn"]').getByRole('button', {name: zh ? '送出下一步' : 'Send next', exact: true}));
@@ -638,8 +640,8 @@ async function runJourney() {
   assert.equal(requests.at(-1).body.params.draft, true);
   send({stage: 'done', operations, resumed_operations: resumedOperations, browser: browser.version(), discussion_return: selection, close_restart: closeRestart});
   }
-}
-try {await runJourney();} catch (error) {
+  }
+} catch (error) {
   console.error(JSON.stringify({step, url: page?.url(), errors, requests, responses, pending: [...pending.values()]}));
   if (page && !page.isClosed()) {
     console.error(await page.locator('body').innerText());
