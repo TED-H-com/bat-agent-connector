@@ -50,6 +50,8 @@ async function mount(page: Page, locale: string, family: string, sourceRead: boo
         workSendOwned:false,sending:false,disposed:false,readReady:true,refreshInFlight:null,readError:null,
         retryTimer:null,retryAt:0,retryDelay:1000,withdrawn:'',messageFailure:null,settleRefreshes,sessionErrorBox,t};
       let {queue,host,sid,scope,draftKey,connection,assertView,allowed,paintSend,sendRecovery,mobileLayout,conversation,permissions,perspectives,reinstate,withdraw,updateControls,scheduleRetry,loadObservation,loadMessages,submit,workSendOwned,sending,disposed,readReady,refreshInFlight,readError,retryTimer,retryAt,retryDelay,withdrawn,messageFailure}=context;
+      // These outcomes use one foreground scope, including the handler's captured state.
+      let foregroundVersion=0,refreshForeground=foregroundVersion;
       const refresh=${app.slice(refresh.start,refresh.end)};
       send.onclick=${app.slice(send.start,send.end)};
       return {box:h('section',{},box,send,status),refresh};
