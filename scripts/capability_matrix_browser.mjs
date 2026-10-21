@@ -17,6 +17,7 @@ for (const name of ['acorn', '@tauri-apps/api']) {
 }
 globalThis.window = {}; // An ordinary browser has no __TAURI_INTERNALS__.
 const requests = [];
+let authenticatedRequest = false;
 const source = fs.readFileSync(path.join(snapshot, 'desktop/src/transport/index.ts'), 'utf8');
 let code = stripTypeScriptTypes(source);
 const imports = parse(code, {ecmaVersion: 'latest', sourceType: 'module'}).body.filter(n => n.type === 'ImportDeclaration');
@@ -29,6 +30,8 @@ for (const node of imports.reverse()) {
 }
 globalThis.fetch = async (url, options) => {
   requests.push({method: options.method, path: url});
+  authenticatedRequest = options.headers.Authorization === 'Bearer fixture-token'
+    && options.credentials === 'same-origin' && options.redirect === 'error';
   return {status: 200, json: async () => ({})}; // No server fields invented.
 };
 const exports = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
@@ -41,5 +44,6 @@ async function unavailable(call) {
 }
 console.log(JSON.stringify({native_desktop: exports.nativeDesktop,
   central_request: requests[0],
+  authenticated_request: authenticatedRequest,
   native_fleet_unavailable: await unavailable(exports.fleetAvailability),
   credential_vault_unavailable: await unavailable(exports.nativeEnroll)}));

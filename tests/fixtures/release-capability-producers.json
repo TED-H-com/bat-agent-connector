@@ -1895,6 +1895,7 @@
       "method": "GET",
       "path": "/api/v1/capabilities"
     },
+    "authenticated_request": true,
     "native_fleet_unavailable": true,
     "credential_vault_unavailable": true
   }

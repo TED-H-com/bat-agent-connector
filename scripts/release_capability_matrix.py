@@ -97,6 +97,14 @@ def _proof(files, path, snippet):
     return {"file": path, "line": source[:source.index(snippet)].count("\n") + 1, "assertion": snippet}
 
 
+def _shared_ui(files):
+    proofs = [_proof(files, "desktop/vite.config.ts",
+                     'outDir: mode === "browser" ? "../src/bat_agent_connector/dashboard" : "dist",'),
+              _proof(files, "desktop/index.html", '<script type="module" src="/src/main.ts"></script>'),
+              _proof(files, "desktop/src/main.ts", 'import "./app.js";')]
+    return proofs if all(proofs) else None
+
+
 def native_facts(files):
     fleet = _proof(files, "desktop/src-tauri/src/fleet.rs", "native_controls: cfg!(windows),")
     windows_module = _proof(files, "desktop/src-tauri/src/credentials.rs", "#[cfg(windows)]\nmod windows {")
@@ -114,6 +122,17 @@ def native_facts(files):
     bundled = _proof(files, "desktop/src-tauri/src/managed.rs",
                      'let (executable, version) = materialize(&resources.join("managed-runtime"), app_data)?;')
     shared = _proof(files, "desktop/src-tauri/tauri.conf.json", '"frontendDist": "../dist"')
+    # Inventory registration only. It says nothing about a platform command's
+    # runtime permission, configuration, return value, or successful execution.
+    main = files["desktop/src-tauri/src/main.rs"].decode()
+    start, end = ".invoke_handler(tauri::generate_handler![", "])"
+    registrations = []
+    if main.count(start) == 1:
+        block = main.split(start, 1)[1].split(end, 1)[0]
+        names = [name.strip() for name in block.split(",") if name.strip()]
+        if names and all(name.isascii() and name.isidentifier() for name in names) and len(names) == len(set(names)):
+            registrations = names
+    surface = _proof(files, "desktop/src-tauri/src/main.rs", start)
     packages = {}
     for node in ast.parse(files["scripts/ci_scope.py"]).body:
         if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "NATIVE_BUILDS" for t in node.targets):
@@ -136,9 +155,10 @@ def native_facts(files):
             "credential_vault": {"coded": entry != "Linux" if vault else "unknown", "proof": vault_proofs},
             "tray": {"coded": True if tray else "unknown", "proof": [tray]},
             "bundled_central": {"coded": True if bundled else "unknown", "proof": [bundled]},
-            "shared_ui": {"coded": True if shared else "unknown", "proof": [shared]},
+            "shared_ui": {"coded": True if shared and _shared_ui(files) else "unknown", "proof": [shared, *(_shared_ui(files) or [])]},
             "installer": {"coded": True if package in packages.get(artifacts[entry], []) else "unknown",
                           "proof": [package_proof], "package": package},
+            **{"ipc." + name: {"coded": True, "proof": [surface]} for name in registrations},
         }
     return result
 
@@ -270,8 +290,11 @@ def generate(source, candidate, *, scratch, receipts=(), claims=(), tools=ROOT):
                              receipt_kind="api_producer"))
     web_source = {"file": "desktop/src/transport/index.ts", "producer": "scripts/capability_matrix_browser.mjs",
                   "adapters": ["locale=en", "empty fetch response; no server fields", "browser without native IPC"]}
-    for capability, present in (("shared_ui", web["native_desktop"] is False),
-                                ("authenticated_central", web["central_request"] == {"method": "GET", "path": "/api/v1/capabilities"}),
+    shared_proof = _shared_ui(files)
+    rows.append(_row(candidate, "Browser", "web", "browser", "shared_ui", True if shared_proof else "unknown",
+                     shared_proof, reason="SHARED_BUILD_ENTRY" if shared_proof else "SOURCE_GATE_UNVERIFIED"))
+    for capability, present in (("authenticated_central", web["central_request"] == {"method": "GET", "path": "/api/v1/capabilities"}
+                                and web["authenticated_request"] is True),
                                 ("native_fleet", not web["native_fleet_unavailable"]),
                                 ("credential_vault", not web["credential_vault_unavailable"])):
         rows.append(_row(candidate, "Browser", "web", "browser", capability, present, web_source,

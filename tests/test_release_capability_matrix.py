@@ -50,6 +50,7 @@ def test_browser_has_no_native_fleet_or_vault(matrix):
         assert item["evidence"]["coded"]["value"] is False
         assert item["evidence"]["running"]["value"] == "unknown"
     assert matrix["producers"]["web"]["central_request"] == {"method": "GET", "path": "/api/v1/capabilities"}
+    assert matrix["producers"]["web"]["authenticated_request"] is True
 
 
 def test_package_ci_only_supplies_its_own_state_and_row(matrix):
@@ -125,6 +126,15 @@ def test_source_gates_prove_code_only(matrix):
     assert row(matrix, "Linux", "credential_vault")["evidence"]["coded"]["value"] is False
     for entry in ("Windows x64", "macOS arm64", "macOS x64"):
         assert row(matrix, entry, "credential_vault")["evidence"]["coded"]["value"] is True
+
+
+def test_native_ipc_registration_is_coded_but_not_a_runtime_observation(matrix):
+    for entry in ENTRIES[1:]:
+        for command in ("native_status", "native_files_status", "desktop_update", "managed_control"):
+            item = row(matrix, entry, "ipc." + command, "native")
+            assert item["evidence"]["coded"]["value"] is True
+            assert item["availability"] == "unknown"
+            assert item["evidence"]["running"]["value"] == "unknown"
 
 
 def test_unrecognised_native_gate_is_unknown_not_another_platforms_fact():
