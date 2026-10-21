@@ -168,10 +168,18 @@ print(json.dumps({'identity': build_identity.build_identity(),
     'modules': {module.__name__: module.__file__ for module in (cli, task_daemon, task_journal, pr_publication)},
     'maximum_data_step': task_journal.LATEST_DATA_STEP}), flush=True)
 def audit(event, args):
+    record = None
     if event == 'subprocess.Popen':
+        record = {'event': event, 'executable': Path(os.fsdecode(args[0])).name,
+                  'git_push': 'push' in args[1]}
+    elif event == 'sqlite3.connect':
+        record = {'event': event, 'database': str(args[0])}
+    elif event == 'socket.bind':
+        record = {'event': event}
+    if record is not None:
+        record['pid'] = os.getpid()
         with open(os.environ['BATC_PACKAGE_PROCESS_LOG'], 'a') as log:
-            log.write(json.dumps({'executable': Path(os.fsdecode(args[0])).name,
-                                  'git_push': 'push' in args[1]}) + '\\n')
+            log.write(json.dumps(record) + '\\n')
 sys.addaudithook(audit)
 raise SystemExit(cli.main())
 '''
@@ -270,7 +278,14 @@ def assert_one_push(w, info):
     process_log = w['data'] / 'package-processes.jsonl'
     if process_log.exists():
         children = [json.loads(line) for line in process_log.read_text().splitlines()]
-        assert not any(item['executable'] == 'ssh' or item['git_push'] for item in children), children
+        assert not any(item['event'] == 'subprocess.Popen' and (item['executable'] == 'ssh' or item['git_push'])
+                       for item in children), children
+
+
+def journal_opens(w, pid):
+    observed = [item for line in (w['data'] / 'package-processes.jsonl').read_text().splitlines()
+                if (item := json.loads(line))['pid'] == pid]
+    return observed, [item['database'] for item in observed if item['event'] == 'sqlite3.connect']
 
 
 @pytest.mark.parametrize('package_pair', [False], indirect=True, ids=['compatible-builds'])
@@ -348,6 +363,8 @@ async def test_previous_package_recovers_publication_and_preserves_work_inputs_a
                 assert len(w['posts']) == w['runner'].ran['publication-push'] == 1
                 assert w['gh'].count('POST', r'/repos/o/r/pulls$') == 1
                 assert_one_push(w, info)
+                _, databases = journal_opens(w, child.pid)
+                assert path.as_uri() + '?mode=ro' in databases and str(path) in databases
                 assert checkout_files(w['human']) == manual
                 print('PACKAGE CONTINUITY ' + json.dumps({'commit': candidate['commit'],
                     'work_item_id': info['attempt']['work_item_id'], 'operation_id': info['operation_id'],
@@ -388,9 +405,12 @@ async def test_previous_package_refuses_newer_journal_before_listening_or_writin
         with pytest.raises(ConnectionRefusedError):
             probe.connect(('127.0.0.1', port))
     assert not (path.parent / 'task-service.json').exists()
+    observed, databases = journal_opens(w, child.pid)
+    assert databases == [path.as_uri() + '?mode=ro']
+    assert not any(item['event'] == 'socket.bind' for item in observed)
     assert snapshot(path) == before
     assert (len(mock.frames), len(mock.invokes), len(mock.auth_frames), len(w['gh'].requests)) == provider_before
     assert len(w['posts']) == w['runner'].ran['publication-push'] == 1
     print('PACKAGE REFUSAL ' + json.dumps({'commit': pair.old['commit'], 'exit': child.returncode,
         'diagnostic': message.strip(), 'journal_unchanged': True, 'no_listener': True,
-        'provider_calls': 0}), flush=True)
+        'bind_events': 0, 'journal_open': 'read-only', 'provider_calls': 0}), flush=True)
