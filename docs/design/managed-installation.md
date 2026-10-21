@@ -299,13 +299,14 @@ API content and manual checkout bytes are checked.
 Only fixture-owned process handles are terminated for fault-case teardown.
 
 The receipt records the old producer version/source hashes and the added time,
-which must be at most 60 seconds including cleanup. The source harness can test
+which must be at most 90 seconds including cleanup. The source harness can test
 two actual source revisions locally; distinct frozen binaries remain CI evidence
-for their exact platform/head. The POSIX host-script producer has Linux evidence;
-macOS publication continuity remains unproven pending successful native CI. Its
+for their exact platform/head. Existing Linux and macOS receipts prove continuity
+on their recorded heads; the revised wait needs new native CI evidence. Its
 seed log, fixture setup stages and 40-second thread dump are preserved on failure.
 A test-only audit plugin records monotonic child-start and fixture start/end
-events without replacing subprocess or socket functions. Large host arguments
+events without replacing subprocess or socket functions. Collection start/end
+events separate test-module imports from fixture setup. Large host arguments
 remain opaque (length and digest only); phase detection reads at most a 128-character
 plain-text prefix. The fixture's own host-call await records duration, and fixture
 setup samples at most twelve main-thread frame locations once per second. Import
@@ -313,20 +314,24 @@ origins and reverse-lookup call stacks identify which checkout owns a slow fake.
 Environment values and frame locals are omitted; the same log redactor is used
 before printing and uploading.
 
-The seed-readiness ceiling is restored to 45 seconds. The macOS timeline on
-`d6c8f319` had a 35.88-second gap after the loopback reverse-lookup audit event.
-The real Linux source harness confirms the call originates in this checkout's
-FakeGitHub, through `HTTPServer.server_bind` and `socket.getfqdn`. Its test server
-now binds the numeric address without reverse DNS. The old macOS log contains no
-sample inside that gap, so the resolver's exact blocked frame and duration remain
-unproven on macOS. A separate dump proves the observer was parsing a large host
-script; that parsing is removed. Even retaining all 13.63 seconds of macOS
-ready-fixture work, subtracting the lookup gap puts producer entry at about
-21.10 seconds (56.98 - 35.88). The next native run must confirm the improvement;
-Linux timings cannot establish the remaining macOS process-start cost.
-The 40-second faulthandler timeout, 60-second provider window and whole-case
-budget, including cleanup, remain unchanged. Pytest's `--setup-show` prints fixture
-completion; the explicit timeline locates slow work.
+The seed wait fails after 20 seconds without a useful timeline event, or at an
+unconditional 75-second readiness ceiling. Collection/fixture transitions, child
+starts and host-call boundaries count as progress; periodic stack samples, socket diagnostics
+and arbitrary output do not. There are no retries or Intel-specific skips.
+An Intel macOS failure reached readiness at 47.127 seconds despite the former
+45-second limit: the observer-to-first-fixture interval was 10.903 seconds, and
+15 host calls took 26.475 seconds, with the longest call taking 3.855 seconds.
+The 20-second inactivity bound rounds 1.5 times that largest observed progress
+gap up to five seconds. Recent Intel whole-case receipts ranged from 23.602 to
+50.545 seconds; adding one inactivity interval to the slowest receipt and rounding
+up to five seconds gives the 75-second ceiling. The whole-case budget is 90 seconds,
+retaining the former 60 - 45 = 15 seconds for recovery and cleanup. The new core's
+recovery waits are unchanged. The 40-second faulthandler timeout and 60-second
+provider window after readiness also remain unchanged. Numeric-only fake HTTP
+binding and bounded observer argument handling remain in place.
+Linux source measurements and virtual-clock deadline tests establish the rule's
+behavior; the revised wait still needs Intel native CI evidence on its exact head.
+Pytest's `--setup-show` prints fixture completion; the timeline locates slow work.
 macOS retains the existing packaged workspace/identity/busy checks. Windows also
 keeps those checks; its publication path and real OS-vault continuity remain open
 acceptance items.
