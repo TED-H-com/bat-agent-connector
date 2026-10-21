@@ -95,16 +95,88 @@ def request(launch, path, *, body=None, key=None, authenticated=True):
         return json.loads(payload)
 
 
+class OwnerNotReady(ValueError):
+    """Only pointer discovery may be retried, never connection or identity failure."""
+
+
+def windows_process_parents():
+    # Toolhelp's documented PROCESSENTRY32W layout, including pointer-sized heap ID.
+    # https://learn.microsoft.com/en-us/windows/win32/api/tlhelp32/ns-tlhelp32-processentry32w
+    import ctypes
+    from ctypes import wintypes
+
+    class Entry(ctypes.Structure):
+        _fields_ = [('dwSize', wintypes.DWORD), ('cntUsage', wintypes.DWORD),
+            ('th32ProcessID', wintypes.DWORD), ('th32DefaultHeapID', ctypes.c_size_t),
+            ('th32ModuleID', wintypes.DWORD), ('cntThreads', wintypes.DWORD),
+            ('th32ParentProcessID', wintypes.DWORD), ('pcPriClassBase', wintypes.LONG),
+            ('dwFlags', wintypes.DWORD), ('szExeFile', wintypes.WCHAR * 260)]
+
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    snapshot = kernel.CreateToolhelp32Snapshot
+    snapshot.argtypes, snapshot.restype = [wintypes.DWORD, wintypes.DWORD], wintypes.HANDLE
+    first, following, close = kernel.Process32FirstW, kernel.Process32NextW, kernel.CloseHandle
+    for read in (first, following):
+        read.argtypes, read.restype = [wintypes.HANDLE, ctypes.POINTER(Entry)], wintypes.BOOL
+    close.argtypes, close.restype = [wintypes.HANDLE], wintypes.BOOL
+    handle = snapshot(2, 0)  # TH32CS_SNAPPROCESS
+    if handle == wintypes.HANDLE(-1).value:
+        raise ctypes.WinError()
+    try:
+        entry = Entry()
+        entry.dwSize = ctypes.sizeof(entry)
+        parents = {}
+        more = first(handle, ctypes.byref(entry))
+        while more:
+            parents[entry.th32ProcessID] = entry.th32ParentProcessID
+            more = following(handle, ctypes.byref(entry))
+        if ctypes.get_last_error() != 18:  # ERROR_NO_MORE_FILES
+            raise ctypes.WinError()
+        return parents
+    finally:
+        if not close(handle):
+            raise ctypes.WinError()
+
+
+def owned_pid(child, pid):
+    if type(pid) is not int or pid <= 0:
+        return False
+    if pid == child.pid:
+        return True
+    if os.name == 'nt':
+        # CREATE_NEW_PROCESS_GROUP is not a POSIX session; prove ancestry instead.
+        parents, seen = windows_process_parents(), set()
+        while pid in parents and pid not in seen:
+            seen.add(pid)
+            pid = parents[pid]
+            if pid == child.pid:
+                return True
+        return False
+    try:
+        # Both call sites create a fresh session. One-file Python children inherit
+        # its session/group; a previous stopped service belongs to neither.
+        return os.getsid(pid) == child.pid and os.getpgid(pid) == child.pid
+    except ProcessLookupError:
+        return False
+
+
 def owned_launch(data, child, original):
-    pointer = json.loads((data / 'state/task-service.json').read_text())
+    try:
+        pointer = json.loads((data / 'state/task-service.json').read_text())
+    except FileNotFoundError:
+        raise OwnerNotReady('Owned fixture service is not listening yet') from None
     endpoint = pointer.get('endpoint')
-    if pointer.get('pid') != child.pid or not endpoint:
-        raise ValueError('Owned fixture service is not listening yet')
-    parsed = urllib.parse.urlsplit(endpoint)
+    if not owned_pid(child, pointer.get('pid')) or not endpoint:
+        raise OwnerNotReady('Owned fixture service is not listening yet')
+    try:
+        parsed = urllib.parse.urlsplit(endpoint)
+        port = parsed.port
+    except ValueError:
+        raise OwnerNotReady('Invalid owned fixture endpoint') from None
     # Both fixture cores serve on port zero, never an operator's fixed port.
-    if (parsed.scheme != 'http' or parsed.hostname != '127.0.0.1' or not parsed.port or parsed.port == 18796
+    if (parsed.scheme != 'http' or parsed.hostname != '127.0.0.1' or not port or port == 18796
             or parsed.path != '/rpc' or parsed.username or parsed.password or parsed.query or parsed.fragment):
-        raise ValueError('Invalid owned fixture endpoint')
+        raise OwnerNotReady('Invalid owned fixture endpoint')
     launch = {**original, 'endpoint': endpoint.removesuffix('/rpc')}
     challenge = secrets.token_hex(32)
     proof = request(launch, '/api/v1/managed/identity?challenge=' + challenge, authenticated=False)
@@ -113,6 +185,17 @@ def owned_launch(data, child, original):
     if not hmac.compare_digest(str(proof.get('proof', '')), expected):
         raise ValueError('Owned fixture service identity could not be verified')
     return launch
+
+
+def wait_owned_launch(data, child, original, *, timeout, interval=0.1, name='Owned fixture service'):
+    until = time.monotonic() + timeout
+    while True:
+        assert child.poll() is None, name + ' exited'
+        try:
+            return owned_launch(data, child, original)
+        except OwnerNotReady:
+            assert time.monotonic() < until, name + ' did not become ready'
+            time.sleep(interval)
 
 
 def identity(reply):
@@ -209,17 +292,9 @@ def busy_refusal(previous, current, old_manifest, root, env):
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **options)
     try:
         # Wait for this owned process without asking ensure to spawn another.
-        until = time.monotonic() + 45
-        while True:
-            assert child.poll() is None, 'Owned fixture service exited'
-            try:
-                launch = owned_launch(data, child, original)
-                bootstrap = request(launch, '/api/v1/bootstrap')
-                assert bootstrap['sync']['server_id'] == original['server_id']
-                break
-            except (OSError, ValueError, urllib.error.URLError):
-                assert time.monotonic() < until, 'Owned fixture service did not become ready'
-                time.sleep(0.1)
+        launch = wait_owned_launch(data, child, original, timeout=45)
+        bootstrap = request(launch, '/api/v1/bootstrap')
+        assert bootstrap['sync']['server_id'] == original['server_id']
         assert identity(command(previous, data, env)) == identity(original)
         oid, now = 'op_' + '7' * 32, time.time()
         with contextlib.closing(sqlite3.connect(data / 'state' / 'tasks.sqlite3')) as db, db:
@@ -362,18 +437,9 @@ existing packaged workspace/identity checks; its publication path remains open.
         try:
             # Same child command ensure would spawn, held by our Popen handle so a
             # fault fixture can always reap it without adopting a PID from disk.
-            until = time.monotonic() + 15
-            while True:
-                assert child.poll() is None, 'Owned upgraded core exited'
-                try:
-                    upgraded = owned_launch(data, child, original)
-                    version = request(upgraded, '/api/v1/version')['connector']
-                    if version != original['runtime_version']:
-                        break
-                except (OSError, ValueError, urllib.error.URLError):
-                    pass
-                assert time.monotonic() < until, 'Owned upgraded core did not become ready'
-                time.sleep(0.05)
+            upgraded = wait_owned_launch(data, child, original, timeout=15, interval=0.05, name='Owned upgraded core')
+            version = request(upgraded, '/api/v1/version')['connector']
+            assert version != original['runtime_version']
             verified = command(current, data, env)
             assert identity(verified) == identity(original)
             peer = {**verified, 'token': info['token']}
