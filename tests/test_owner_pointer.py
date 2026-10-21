@@ -13,6 +13,7 @@ import pytest
 from bat_agent_connector import api_auth, dashboard_sync, managed_runtime, registry, service, task_daemon
 from bat_agent_connector.errors import OwnerConflict, TaskControlRefused
 from bat_agent_connector.fleet import Fleet
+from bat_agent_connector.operations import OperationError
 from bat_agent_connector.task_daemon import TaskDaemon
 from tests.conftest import make_config
 from tests.test_operations_unification import SID, owned
@@ -92,6 +93,78 @@ async def test_endpoint_is_published_only_after_bind_and_withdrawn_before_close(
     assert not daemon._owns_fleet() and not servers[0].is_serving()
     with pytest.raises(OSError):
         await asyncio.open_connection('127.0.0.1', port)
+
+
+@pytest.mark.parametrize('reader', ['origin', 'proof'])
+async def test_unserved_browser_origin_and_managed_proof_refuse_explicitly(tmp_path, monkeypatch, reader):
+    observed = []
+
+    class BeforeBind(TaskDaemon):
+        async def serve(self, **kwargs):
+            assert self._endpoint is None
+            with pytest.raises(OperationError) as error:
+                if reader == 'origin':
+                    _ = self.api.browser_sessions.origin
+                else:
+                    self.managed_proof('a' * 64, '127.0.0.1:45123')
+            assert error.value.code == 'TASK_OWNER_UNAVAILABLE' and error.value.status == 503
+            observed.append(error.value.code)
+
+    runtime = managed_runtime
+    root = runtime._root(tmp_path / 'managed')
+    runtime._prepare(root)
+    for name in ('BATC_STATE_DIR', 'BATC_CONFIG_DIR', 'BATC_CONFIG'):
+        monkeypatch.setenv(name, os.environ.get(name, ''))
+    monkeypatch.setattr(task_daemon, 'TaskDaemon', BeforeBind)
+    await runtime.serve(root)
+    assert observed == ['TASK_OWNER_UNAVAILABLE']
+
+
+async def test_shutdown_closes_an_accepted_request_before_closing_its_journal(mock, tmp_path, monkeypatch):
+    daemon = TaskDaemon(make_config(mock), tmp_path / 'tasks.db')
+    accepted, published = asyncio.Event(), asyncio.Event()
+    held = []
+    real_write = daemon._write_owner_pointer
+
+    async def pending(*args):
+        held.append((asyncio.current_task(), args[-1]))
+        accepted.set()
+        await asyncio.Future()  # a controlled long poll, never a timed sleep
+
+    def write():
+        real_write()
+        if daemon._endpoint:
+            published.set()
+
+    monkeypatch.setattr(daemon.api, 'handle', pending)
+    monkeypatch.setattr(daemon, '_write_owner_pointer', write)
+    serving = asyncio.create_task(daemon.serve(port=0))
+    writer = None
+    try:
+        await published.wait()
+        from urllib.parse import urlsplit
+        port = urlsplit(daemon._endpoint).port
+        reader, writer = await asyncio.open_connection('127.0.0.1', port)
+        writer.write(f'GET /api/v1/version HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\r\n'.encode())
+        await writer.drain()
+        await accepted.wait()
+        serving.cancel()
+        # Shutdown must not wait for an unbounded client request or close its DB underneath it.
+        await asyncio.wait_for(asyncio.shield(asyncio.gather(serving, return_exceptions=True)), 5)
+        assert held[0][0].done()
+        assert await asyncio.wait_for(reader.read(), 1) == b''  # clean transport failure, no generic 500
+        assert 'endpoint' not in json.loads(pointer().read_text())
+    finally:
+        for task, connection in held:
+            task.cancel()
+            connection.close()
+            await connection.wait_closed()
+        if writer:
+            writer.close()
+            await writer.wait_closed()
+        await asyncio.gather(*(task for task, _ in held), return_exceptions=True)
+        if not serving.done():
+            await asyncio.gather(serving, return_exceptions=True)
 
 
 @pytest.mark.parametrize('endpoint', [None, ''])
