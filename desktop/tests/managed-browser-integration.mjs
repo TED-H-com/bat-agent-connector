@@ -54,7 +54,16 @@ try {
   const readClient = async () => {
     await page.locator('[data-export-diagnostics]').click();
     await page.locator('[data-diagnostics-json]').filter({hasText:'batc.diagnostics.v1'}).waitFor();
-    const client = JSON.parse(await page.locator('[data-diagnostics-json]').textContent()).client;
+    const bundle = JSON.parse(await page.locator('[data-diagnostics-json]').textContent());
+    const client = bundle.client;
+    for(const [id,key] of [['loaded_ui','frontend_digest'],['served_ui','served_frontend_digest']]) {
+      const row=bundle.versions.rows.find(row=>row.id===id);
+      assert.equal(row.digest,client[key]);
+      assert.equal(row.source,id==='loaded_ui'?'loaded_ui':'capabilities');
+      assert(Number.isFinite(Date.parse(row.observed_at)));
+      for(const surface of ['#settings-panel-about','[data-diagnostics-summary]'])
+        assert((await page.locator(`${surface} [data-version-row=${id}]`).textContent()).includes(client[key]));
+    }
     await page.getByRole('dialog').getByRole('button', {name:copy.diag_close,exact:true}).click();
     return client;
   };
