@@ -210,7 +210,7 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                     withdraw_writer=False, lost_reply=None, review_result=False, verify_result=False,
                     close_restart=False, foreground_recovery=False, refused_access=False, refusal_surface="work"):
     ops = w["d"].ops
-    late_refusal_refresh = refused_access and refusal_surface == "work" and locale == "zh-TW"
+    late_refusal_refresh = refused_access and locale == "zh-TW"
     # The handoff test runner decodes a single protocol. This journey also runs
     # checkpoint and publication shell scripts, so execute every actual script.
     ops.context["git_runner"] = LocalRunner()

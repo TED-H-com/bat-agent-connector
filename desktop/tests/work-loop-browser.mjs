@@ -5,6 +5,7 @@ import {resolve} from 'node:path';
 import {readFileSync, writeFileSync} from 'node:fs';
 import {chromium, expect as baseExpect} from '@playwright/test';
 import {uiStrings} from '../src/ui/ui-strings.js';
+import {workbenchStrings} from '../src/workbench-strings.js';
 
 const expect = baseExpect.configure({timeout: 30000});
 const lines = createInterface({input: process.stdin})[Symbol.asyncIterator]();
@@ -147,6 +148,13 @@ async function refusedAccess(active, workUrl) {
   }
   const originalContext = context, originalPage = page;
   const since = allRequests.length;
+  const refusedResults = [];
+  const resultPath = `/api/v1/pm/workspaces/${f.workspace}/work-attempts/${active.attempt}/result`;
+  const observeResultRefusal = async response => {
+    if (new URL(response.url()).pathname === resultPath && response.status() === 401)
+      refusedResults.push({path: resultPath, status: response.status(), body: await response.json()});
+  };
+  context.on('response', observeResultRefusal);
   const unchanged = async () => {
     assert.equal(context, originalContext); assert.equal(page, originalPage);
     assert.deepEqual(await draftEntries(), saved);
@@ -158,6 +166,9 @@ async function refusedAccess(active, workUrl) {
       if (url.pathname.endsWith('/inputs')) assert.equal(url.searchParams.get('attempt_id'), active.attempt);
       if (/\/work-attempts\//.test(url.pathname)) assert.ok(url.pathname.includes('/' + active.attempt));
     }
+    for (const href of await page.locator('#main a[href*="attempt="]').evaluateAll(nodes => nodes.map(node => node.getAttribute('href'))))
+      assert.equal(new URLSearchParams(href.split('?')[1]).get('attempt'), active.attempt);
+    await expect(page.locator('[data-answer-action]:enabled')).toHaveCount(0);
   };
   const header = page.locator('#live');
   const scoped = copy.ui_connector_status.replace('{status}', copy.ui_connection_refused);
@@ -174,16 +185,18 @@ async function refusedAccess(active, workUrl) {
   // establishes the retained-source case without assuming Connected means idle.
   send({stage: 'refusal-checkpoint'});
   const {cursor} = await receive();
-  await expect.poll(() => page.evaluate(() => Object.entries(localStorage)
-    .filter(([key]) => key.startsWith('batc.sync.')).map(([, value]) => JSON.parse(value).cursor))).toContain(cursor);
+  await expect.poll(() => page.evaluate(cursor => Object.entries(localStorage)
+    .some(([key, value]) => key.startsWith('batc.sync.') && JSON.parse(value).cursor >= cursor), cursor)).toBe(true);
   let refreshRace = null, debug;
   if (f.late_refusal_refresh) {
-    // Pause JavaScript, not HTTP: a real inventory event starts loadObservation,
-    // and the debugger stops its Result read before fetch sends it. ApiV1 alone
+    // Pause JavaScript, not HTTP: a real inventory event starts a source refresh,
+    // and the debugger stops its read before fetch sends it. ApiV1 alone
     // authenticates and produces every reply after the real principal is revoked.
     debug = await context.newCDPSession(page);
     await debug.send('Debugger.enable');
-    const resultPath = `/work-attempts/${active.attempt}/result`;
+    const sourcePath = surface === 'work' ? resultPath : surface === 'pm-form'
+      ? `/api/v1/pm/workspaces/${f.workspace}/threads/${f.thread}` : `/api/v1/sessions/${host}/${sid}`;
+    const caller = surface === 'work' ? 'setAttempt' : surface === 'pm-form' ? 'refreshDiscussionSources' : 'loadObservation';
     let paused = null;
     const eventPages = [];
     const observePage = async response => {
@@ -192,17 +205,17 @@ async function refusedAccess(active, workUrl) {
     };
     context.on('response', observePage);
     debug.on('Debugger.paused', async event => {
-      if (event.callFrames.some(frame => frame.functionName === 'setAttempt')) paused = event;
+      if (event.callFrames.some(frame => frame.functionName === caller)) paused = event;
       else await debug.send('Debugger.resume');
     });
-    await debug.send('DOMDebugger.setXHRBreakpoint', {url: resultPath});
+    await debug.send('DOMDebugger.setXHRBreakpoint', {url: sourcePath});
     step = 'refusal-refresh';
     send({stage: 'refusal-refresh'});
     const {event} = await receive();
     await expect.poll(() => Boolean(paused)).toBe(true);
     assert.ok(eventPages.some(page => page.events.some(row => row.seq === event.seq)));
     refreshRace = {event, paused_at: Date.now(), frames: paused.callFrames.map(frame => ({
-      name: frame.functionName, location: frame.location})), result_path: resultPath};
+      name: frame.functionName, location: frame.location})), source_path: sourcePath};
     context.off('response', observePage);
   }
   const refusal = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/events'
@@ -210,13 +223,13 @@ async function refusedAccess(active, workUrl) {
   send({stage: 'revoke-access'});
   assert.equal((await receive()).revoked, true);
   if (debug) {
-    const refusedResult = page.waitForResponse(response => new URL(response.url()).pathname.endsWith(refreshRace.result_path)
+    const refusedSource = page.waitForResponse(response => new URL(response.url()).pathname === refreshRace.source_path
       && response.status() === 401);
     refreshRace.revoked_at = Date.now();
-    await debug.send('DOMDebugger.removeXHRBreakpoint', {url: refreshRace.result_path});
+    await debug.send('DOMDebugger.removeXHRBreakpoint', {url: refreshRace.source_path});
     await debug.send('Debugger.resume');
     await debug.detach();
-    const source = await refusedResult;
+    const source = await refusedSource;
     refreshRace.source = {path: new URL(source.url()).pathname, status: source.status(), body: await source.json()};
     assert.equal(refreshRace.source.body.error.code, 'UNAUTHORIZED');
     writeFileSync(resolve(f.shots, 'refusal-refresh.json'), JSON.stringify(refreshRace, null, 2) + '\n');
@@ -230,6 +243,7 @@ async function refusedAccess(active, workUrl) {
   await expect(field).toHaveValue(draft);
   assert.equal(await field.evaluate((node, old) => node === old, originalField), true);
   assert.equal(page.url(), surfaceUrl);
+  let resultOutcome = null;
   if (surface === 'session-toolbar') {
     const reason = page.locator('.session-send-reason');
     await expect(reason).toHaveText(copy.error_code_CLIENT_ACTION_REFUSED);
@@ -243,7 +257,24 @@ async function refusedAccess(active, workUrl) {
       // without generating an intent, a key or an operation POST.
       await work.evaluate(node => node.requestSubmit());
       await expect(work).toContainText(copy.error_code_CLIENT_ACTION_REFUSED);
-    } else await expect(page.locator('[data-work-result-focus="live-output"]')).toHaveAttribute('href', resultHref);
+    } else {
+      // Revoking during a refresh can withdraw a previously validated Result.
+      // Preserve its target, not the presence of a link that is now unreadable.
+      const resultState = () => page.evaluate(() => ({
+        hrefs: [...document.querySelectorAll('[data-work-result-focus="live-output"]')].map(node => node.getAttribute('href')),
+        summary: document.querySelector('[data-workbench-summary]')?.textContent,
+        refused: Boolean(document.querySelector('.session-status [data-session-error="UNAUTHORIZED"]')),
+      }));
+      const classify = async () => {
+        const source = await resultState();
+        if (source.hrefs.length === 1 && source.hrefs[0] === resultHref) return 'retained';
+        if (source.hrefs.length === 0 && source.summary === workbenchStrings[zh ? 'zh-TW' : 'en'].wc_unavailable && source.refused
+          && refusedResults.some(row => row.body.error.code === 'UNAUTHORIZED')) return 'refused';
+        return 'unsettled';
+      };
+      await expect.poll(async () => resultOutcome = await classify())
+        .toMatch(f.late_refusal_refresh ? /^refused$/ : /^(retained|refused)$/);
+    }
   }
   await unchanged();
   await shot('02-refused-work');
@@ -270,10 +301,12 @@ async function refusedAccess(active, workUrl) {
   assert.deepEqual(errors, []);
   await shot('04-refused-work-return');
   const proof = {surface, target, draft_key: draftKey, draft_unchanged: true, attempt: active.attempt, result_href: resultHref,
+    result_outcome: resultOutcome, late_refresh: refreshRace,
     events_status: response.status(), server_code: body.error.code,
     header_reason: await header.innerText(), settings_reason: settingsReason, draft_has_intent: false,
     reason_key: 'ui_connection_refused', gate_code: 'CLIENT_ACTION_REFUSED', operation_posts: 0};
   writeFileSync(resolve(f.shots, 'refused-access.json'), JSON.stringify({proof, requests: allRequests.slice(since)}, null, 2) + '\n');
+  context.off('response', observeResultRefusal);
   send({stage: 'refused-done', operations, browser: browser.version(), refusal: proof});
 }
 
