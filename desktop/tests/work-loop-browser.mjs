@@ -13,7 +13,7 @@ const f = await receive(), origin = `http://127.0.0.1:${f.port}`;
 const zh = f.locale === 'zh-TW';
 const errors = [], operations = [], requests = [], responses = [], pending = new Map(), results = new Map();
 const resumedOperations = [];
-const allRequests = [];
+const allRequests = [], requestRecords = new Map();
 let browser, context, page, step = 'start', closeRestart = null;
 const launch = async () => {
   const options = {locale: zh ? 'zh-TW' : 'en-US',
@@ -28,8 +28,25 @@ const launch = async () => {
     context = await browser.newContext(options);
   }
   await context.addInitScript(token => sessionStorage.setItem('batc.dashboard.token', token), f.token);
-  context.on('request', request => allRequests.push({step, method: request.method(), url: request.url(), key: request.headers()['idempotency-key'],
-    ...(request.postData() === null ? {} : {body: request.postData()})}));
+  context.on('request', request => {
+    const row = {id: allRequests.length + 1, start: Date.now(), step, method: request.method(), url: request.url(),
+      key: request.headers()['idempotency-key'], ...(request.postData() === null ? {} : {body: request.postData()})};
+    allRequests.push(row); requestRecords.set(request, row);
+  });
+  context.on('requestfinished', request => Object.assign(requestRecords.get(request), {end: Date.now(), end_step: step}));
+  context.on('requestfailed', request => Object.assign(requestRecords.get(request), {
+    end: Date.now(), end_step: step, failure: request.failure()?.errorText}));
+  if (f.foreground_recovery) await context.addInitScript(() => {
+    const ledger = window.__foregroundLedger = [];
+    window.addEventListener('connector-read-trace', event => ledger.push(event.detail));
+    const original = window.fetch;
+    window.fetch = function(input, init) {
+      const url = new URL(typeof input === 'string' ? input : input.url, location.href);
+      if (url.pathname.startsWith('/api/v1/')) ledger.push({at: Date.now(), kind: 'fetch', path: url.pathname + url.search,
+        caller: new Error().stack, visibility: document.visibilityState, online: navigator.onLine});
+      return original.apply(this, arguments);
+    };
+  });
   page = context.pages()[0] || await context.newPage();
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {if (message.type() === 'error') console.error(message.text());});
@@ -88,9 +105,9 @@ async function foregroundRecovery(active, workUrl) {
     scrollY, scrollTop: node.scrollTop, readerTop: document.querySelector('main.session-view').scrollTop,
     stored: Object.entries(localStorage).sort(([a], [b]) => a.localeCompare(b)),
   }));
-  const events = deferred(), sources = deferred(), admission = deferred();
-  const heldEvents = [], heldSources = [], eventPages = [];
-  let holdEvents = false, holdSources = false, holdAdmission = false;
+  const events = deferred(), sources = deferred(), admission = deferred(), preResume = deferred(), preparationEvents = deferred();
+  const heldEvents = [], heldSources = [], eventPages = [], preResumeReads = [], preparationPolls = [];
+  let holdEvents = false, holdSources = false, holdAdmission = false, holdPreResume = false, holdPreparation = false;
   let before, after, syncKey, intent, changedKeys, recoveryStart, recoveryEnd;
   const operationPosts = since => allRequests.slice(since).filter(row => row.method === 'POST'
     && new URL(row.url).pathname.startsWith('/api/v1/operations'));
@@ -104,7 +121,12 @@ async function foregroundRecovery(active, workUrl) {
   };
   await context.route('**/api/v1/**', async route => {
     const request = route.request(), path = new URL(request.url()).pathname;
-    if (holdEvents && request.method() === 'GET' && path === '/api/v1/events') {
+    if (holdPreparation && request.method() === 'GET' && path === '/api/v1/events') {
+      preparationPolls.push(request.url()); await preparationEvents.promise;
+    } else if (holdPreResume && request.method() === 'GET' && /^\/api\/v1\/sessions\/[^/]+\/[^/]+(?:\/messages)?$/.test(path)) {
+      preResumeReads.push({at: Date.now(), path, online: await page.evaluate(() => navigator.onLine)});
+      await preResume.promise;
+    } else if (holdEvents && request.method() === 'GET' && path === '/api/v1/events') {
       heldEvents.push(request.url()); await events.promise;
     } else if (holdSources && request.method() === 'GET'
       && (path.includes('/sessions/') || path.endsWith('/inputs') || path.endsWith('/result'))) {
@@ -164,7 +186,18 @@ async function foregroundRecovery(active, workUrl) {
       assert.deepEqual(operationPosts(recoveryStart), []);
       await expect(page.locator('[data-follow-up-receipt], [data-follow-up-ack]')).toHaveCount(0);
     };
+    await expect(submit).toBeEnabled();
     recoveryStart = allRequests.length;
+    step = 'pre-resume-refresh';
+    holdPreparation = true;
+    send({stage: 'prepare-refresh'});
+    const preparation = await receive();
+    await expect.poll(() => preparationPolls.length).toBeGreaterThan(0);
+    holdPreResume = true; holdPreparation = false; preparationEvents.release();
+    await expect.poll(() => preResumeReads.length).toBe(2);
+    assert.ok(preResumeReads.every(row => row.online), 'Both unanswered reads must start before going offline');
+    await expect.poll(() => eventPages.some(body => body.events.some(row => row.seq === preparation.refresh_event.seq))).toBe(true);
+    holdPreResume = false;
     step = 'hidden';
     await visibility('hidden');
     await expect(submit).toBeDisabled();
@@ -179,9 +212,9 @@ async function foregroundRecovery(active, workUrl) {
     send({stage: 'background-offline'});
     const changed = await receive();
     assert.equal(changed.event.kind, 'session.updated');
-    holdEvents = true; holdSources = true;
     step = 'resume-events';
     await context.setOffline(false);
+    holdEvents = true; holdSources = true;
     await visibility('visible');
     await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true})));
     await expect(submit).toBeDisabled();
@@ -236,7 +269,9 @@ async function foregroundRecovery(active, workUrl) {
       event: changed.event, original_result: originalHref, same_context: true, same_node: true,
     }});
   } finally {
-    events.release(); sources.release(); admission.release();
+    const readerTrace = await page.evaluate(() => ({ledger: window.__foregroundLedger, reader: window.__foregroundReader}));
+    step = 'cleanup';
+    events.release(); sources.release(); admission.release(); preResume.release(); preparationEvents.release();
     await context.setOffline(false);
     const ledger = {};
     for (const row of allRequests) {
@@ -245,7 +280,7 @@ async function foregroundRecovery(active, workUrl) {
       ledger[row.step][key] = (ledger[row.step][key] || 0) + 1;
     }
     writeFileSync(resolve(f.shots, 'foreground-recovery.json'), JSON.stringify({before, after, syncKey,
-      changedKeys, intent, recoveryStart, recoveryEnd, heldEvents, heldSources, ledger}, null, 2) + '\n');
+      changedKeys, intent, recoveryStart, recoveryEnd, heldEvents, heldSources, preResumeReads, preparationPolls, readerTrace, ledger}, null, 2) + '\n');
   }
 }
 

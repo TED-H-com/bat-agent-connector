@@ -412,6 +412,18 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             await w["d"].inventory._refresh_scheduled("h1")
             await send({"ready": True, "attempt": att["attempt_id"], "execution": result["children"]["handoff"]})
             if foreground_recovery:
+                await receive("prepare-refresh")
+                cursor = (await _result(w, att))["cursor"]
+                # Inventory emits a real session event. Its listener's reads are
+                # left unanswered while still online, before the network switch.
+                mock.ws_doc["terminals"][-1]["title"] = "Login repair."
+                await w["d"].inventory._refresh_scheduled("h1")
+                status, page = await http(w["port"], "GET", f"/api/v1/events?after={cursor}&limit=100",
+                    tok=w["owner_token"])
+                assert status == 200, page
+                refresh_event = next(row for row in page["events"] if row["resource_type"] == "session"
+                    and row["resource_id"] == "h1/" + sid and row["kind"] == "session.updated")
+                await send({"refresh_event": refresh_event})
                 await receive("background-offline")
                 cursor = (await _result(w, att))["cursor"]
                 # A real BAT observation advances the turn while the browser is

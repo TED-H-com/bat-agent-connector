@@ -146,3 +146,57 @@ test('foreground keeps writes paused until the event source read has settled', a
     expect(f.data.posts).toEqual([]);
   } finally {release();}
 });
+
+for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) {
+  test(`resume retires unanswered source reads before replaying the event page ${native ? 'IPC' : 'HTTP'} ${locale}`, async ({page}) => {
+    const f = workspaceFixture(locale), dispatch = f.dispatch;
+    const releases: (() => void)[] = [];
+    const gates = Array.from({length: 3}, () => new Promise<void>(resolve => releases.push(resolve)));
+    let stage = 'initial', oldReads = 0, resumedPolls = 0, freshReads = 0;
+    f.dispatch = async input => {
+      const path = input.path.split('?')[0];
+      if (stage === 'resumed' && path === '/events') {resumedPolls++; await gates[1];}
+      if (['/sessions/demo/search-results', '/sessions/demo/search-results/messages'].includes(path)) {
+        if (stage === 'old') {
+          const response = structuredClone(await dispatch(input));
+          oldReads++; await gates[0]; return response;
+        }
+        if (stage === 'fresh') {freshReads++; await gates[2];}
+      }
+      return dispatch(input);
+    };
+    await mountWorkspace(page, native, f);
+    await page.addInitScript(locale => Object.defineProperty(navigator, 'language', {value: locale}), locale);
+    try {
+      await page.goto('/dashboard/?workbench=1' + workspaceRoute);
+      const draft = page.locator('#workspace-message-input textarea');
+      const send = page.getByRole('button', {name: locale === 'en' ? 'Send' : '送出', exact: true});
+      await expect(send).toBeEnabled(); await draft.fill('未送出，keep this draft 🐈');
+      const original = await draft.elementHandle();
+      await draft.focus(); await draft.evaluate((node: HTMLTextAreaElement) => node.setSelectionRange(2, 6, 'backward'));
+      stage = 'old';
+      f.data.events.push({seq: 1, resource_type: 'session', resource_id: 'demo/search-results', kind: 'session.updated'});
+      await expect.poll(() => oldReads).toBe(2);
+      await visibility(page, 'hidden');
+      stage = 'resumed';
+      await visibility(page, 'visible');
+      // Neither old response is released. The single reader must retire their
+      // listener before it can read and settle the post-resume page.
+      await expect.poll(() => resumedPolls).toBe(1);
+      await expect(send).toBeDisabled();
+      expect(f.data.posts).toEqual([]);
+      stage = 'fresh'; releases[1]();
+      await expect.poll(() => freshReads).toBe(2);
+      await expect(send).toBeDisabled();
+      expect(await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.startsWith('batc.sync.')).map(([, value]) => JSON.parse(value).cursor))).not.toContain(1);
+      releases[2](); await expect(send).toBeEnabled();
+      await expect.poll(() => page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.startsWith('batc.sync.')).map(([, value]) => JSON.parse(value).cursor))).toContain(1);
+      releases[0]();
+      expect(await draft.evaluate((node, old) => node === old && document.activeElement === node, original)).toBe(true);
+      await expect(draft).toHaveValue('未送出，keep this draft 🐈');
+      expect(await draft.evaluate((node: HTMLTextAreaElement) => [node.selectionStart, node.selectionEnd, node.selectionDirection])).toEqual([2, 6, 'backward']);
+      expect(f.data.posts).toEqual([]);
+      await send.click(); await expect.poll(() => f.data.posts.length).toBe(1);
+    } finally {releases.forEach(release => release());}
+  });
+}
