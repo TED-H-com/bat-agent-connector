@@ -117,3 +117,24 @@ assert not observer._sampler.is_alive()
     assert all(set(frame) == {'file', 'function', 'line'} for item in samples for frame in item['stack'])
     assert all(second['monotonic_s'] - first['monotonic_s'] >= 1
                for first, second in zip(samples, samples[1:]))
+
+
+def test_collection_timeline_bounds_the_import_phase_before_fixture_setup(tmp_path):
+    seed = tmp_path / 'test_seed.py'
+    seed.write_text('def test_seed(tmp_path):\n    assert tmp_path.is_dir()\n')
+    child = subprocess.run([sys.executable, '-m', 'pytest', '-q', '-s', '-p', 'managed_upgrade_observer',
+                            '--noconftest', '--rootdir=' + str(tmp_path),
+                            '--basetemp=' + str(tmp_path / 'child-pytest'), str(seed)],
+                           cwd=tmp_path, env={**os.environ, 'PYTHONPATH': str(OBSERVER),
+                                'BATC_UPGRADE_SEED_MODE': '1',
+                                'BATC_UPGRADE_SEED_DATA': str(tmp_path / 'installation')},
+                           capture_output=True, text=True, timeout=20)
+    assert child.returncode == 0, child.stdout + child.stderr
+    records = [json.loads(line.split('[seed-timeline] ', 1)[1]) for line in child.stdout.splitlines()
+               if '[seed-timeline] ' in line]
+    names = [item['event'] for item in records]
+    assert names.index('observer.start') < names.index('seed.collection.start')
+    assert names.index('seed.collection.start') < names.index('seed.collection.end')
+    assert names.index('seed.collection.end') < names.index('fixture.setup.start')
+    collected = next(item for item in records if item['event'] == 'seed.collection.end')
+    assert collected['ok'] and collected['duration_s'] > 0
