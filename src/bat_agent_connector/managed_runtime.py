@@ -341,10 +341,11 @@ async def serve(raw):
         from . import managed_setup
         managed_setup.install(daemon)
         from .browser_sessions import BrowserSessions
-        daemon.api.browser_sessions = BrowserSessions(daemon, root, doc["installation_id"])
+        browser_sessions = BrowserSessions(daemon, root, doc["installation_id"])
+        daemon.api.browser_sessions = browser_sessions
 
         def prove(challenge, host):
-            endpoint = daemon._endpoint.removesuffix("/rpc")
+            endpoint = browser_sessions.origin
             if not re.fullmatch(r"[0-9a-f]{64}", challenge) or host != urlsplit(endpoint).netloc:
                 raise ValueError("invalid managed identity challenge")
             return {"protocol": PROTOCOL, "runtime_version": __version__,

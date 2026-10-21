@@ -146,6 +146,8 @@ owner lock 固定在 registry/state directory 的 `task-daemon.lock`，不同 --
 
 Owner pointer 在取得 lease 時公布 pid、owner_id、journal 與 lease 路徑；只有 listener 綁定成功後才加入實際 endpoint。只嵌入 Journal 的 owner 沒有 endpoint。缺少 endpoint 表示 owner 尚未就緒：控制轉交回 `TASK_OWNER_UNAVAILABLE`，managed launcher 在原期限內重試，不能退回預設 port。Managed launcher 及安裝測試 probe 在送 bearer 前先驗證 installation proof；正常關閉先撤下 endpoint，再關閉 listener 並釋放 lease，保留其餘 pointer metadata。程序被強制終止仍可能留下舊 metadata，不能把檔案本身當成存活或身分證據。
 
+`localhost` 綁定會公布所選 socket 的實際 loopback address，而非字面上的 `localhost`。Browser origin 與 managed identity proof 共用明確的未就緒拒絕；沒有 endpoint 時回 `TASK_OWNER_UNAVAILABLE`。Shutdown 保留 lease 與 journal，先結束已接受而尚未完成的 HTTP requests 並關閉連線，再停止 workers、關閉 journal 和釋放 lease；未完成的 request 得到連線結束，不能當成操作成功或自動重送。這個順序不依賴舊 Python 的 `Server.wait_closed()` 是否等待 clients。
+
 Rollback 後，既有 managed reader 已會拒絕缺少 endpoint 並重試；舊版控制轉交 reader 會把缺值送進其預設網址 fallback，因此不能保證舊 reader 的行為。本變更不新增舊版使用政策；重新啟動的舊套件也會沿用它自己的 pointer writer。
 
 Part A 沒有 schema migration、業務資料搬移或歷史 operations 回填。僅 local-admin work_submit 相容入口可按原 payload hash 連到既有 task；其 bridge receipt 與 operation intent 同交易提交，crash 不會造成重啟錯建 task。新提交使用 operation identity 作 task key，其他 actor 不認領歷史 key。

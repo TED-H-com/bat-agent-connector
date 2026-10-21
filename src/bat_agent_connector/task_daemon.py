@@ -1228,9 +1228,30 @@ class TaskDaemon:
             raise ValueError("task service only binds loopback")
         self.acquire_owner()
         server = serving = None
+        requests = {}
+        stopping = False
+
+        async def handle(reader, writer):
+            try:
+                await self._handle(reader, writer)
+            finally:
+                writer.close()
+                try:
+                    await writer.wait_closed()
+                except ConnectionError:
+                    pass
+
+        def connected(reader, writer):
+            if stopping:
+                writer.close()
+                return
+            task = asyncio.create_task(handle(reader, writer))
+            requests[task] = writer
+            task.add_done_callback(lambda done: requests.pop(done, None))
+
         worker = pusher = reaper = operations = metadata_reads = deployment_reads = inventory = usage_reads = history_reads = None
         try:
-            server = await asyncio.start_server(self._handle, host, port)
+            server = await asyncio.start_server(connected, host, port)
             bound_host = server.sockets[0].getsockname()[0]
             address = "[::1]" if bound_host == "::1" else bound_host
             self._endpoint = f"http://{address}:{server.sockets[0].getsockname()[1]}/rpc"
@@ -1248,6 +1269,7 @@ class TaskDaemon:
             # Withdraw discovery before cancellation closes the listening socket.
             await asyncio.shield(serving)
         finally:
+            stopping = True
             try:
                 self._endpoint = None
                 if self._lease_fd is not None:
@@ -1255,6 +1277,13 @@ class TaskDaemon:
             finally:
                 if server is not None:
                     server.close()
+                    # Server.wait_closed() did not join clients on Python <=3.11.
+                    # End accepted requests before closing their journal on every Python.
+                    accepted = list(requests.items())
+                    for task, writer in accepted:
+                        task.cancel()
+                        writer.close()
+                    await asyncio.gather(*(task for task, _ in accepted), return_exceptions=True)
                     await server.wait_closed()
                 if serving is not None:
                     serving.cancel()

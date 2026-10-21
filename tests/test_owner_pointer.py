@@ -7,10 +7,12 @@ import os
 import runpy
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import urlsplit
 
 import pytest
 
 from bat_agent_connector import api_auth, dashboard_sync, managed_runtime, registry, service, task_daemon
+from bat_agent_connector.browser_sessions import BrowserSessions
 from bat_agent_connector.errors import OwnerConflict, TaskControlRefused
 from bat_agent_connector.fleet import Fleet
 from bat_agent_connector.operations import OperationError
@@ -46,8 +48,10 @@ def test_embedder_publishes_ownership_without_an_endpoint(mock, tmp_path):
     assert 'endpoint' not in json.loads(pointer().read_text())
 
 
-async def test_endpoint_is_published_only_after_bind_and_withdrawn_before_close(mock, tmp_path, monkeypatch):
+@pytest.mark.parametrize('host', ['127.0.0.1', 'localhost'])
+async def test_endpoint_is_published_only_after_bind_and_withdrawn_before_close(mock, tmp_path, monkeypatch, host):
     daemon = TaskDaemon(make_config(mock), tmp_path / 'tasks.db')
+    browser = BrowserSessions(daemon, tmp_path, 'fixture')
     binding, proceed, published = asyncio.Event(), asyncio.Event(), asyncio.Event()
     servers, withdrawals = [], []
     real_write = daemon._write_owner_pointer
@@ -68,31 +72,37 @@ async def test_endpoint_is_published_only_after_bind_and_withdrawn_before_close(
                 published.set()
             else:
                 withdrawals.append(servers[0].is_serving())
+                with pytest.raises(OperationError, match='not listening') as error:
+                    _ = browser.origin
+                assert error.value.code == 'TASK_OWNER_UNAVAILABLE'
 
     # Replace only this module's API reference, never a global stdlib object.
     monkeypatch.setattr(task_daemon, 'asyncio', SimpleNamespace(
         **{name: getattr(asyncio, name) for name in dir(asyncio) if name != 'start_server'}, start_server=bind))
     monkeypatch.setattr(daemon, '_write_owner_pointer', write)
-    serving = asyncio.create_task(daemon.serve(port=0))
+    serving = asyncio.create_task(daemon.serve(host=host, port=0))
     try:
         await binding.wait()
         assert 'endpoint' not in json.loads(pointer().read_text())
         proceed.set()
         await published.wait()
         state = json.loads(pointer().read_text())
-        port = servers[0].sockets[0].getsockname()[1]
-        assert state['endpoint'] == f'http://127.0.0.1:{port}/rpc'
-        _reader, writer = await asyncio.open_connection('127.0.0.1', port)
+        bound_host, port, *_ = servers[0].sockets[0].getsockname()
+        endpoint = urlsplit(state['endpoint'])
+        assert endpoint.hostname == bound_host and endpoint.port == port and endpoint.path == '/rpc'
+        assert browser.origin == state['endpoint'].removesuffix('/rpc')
+        _reader, writer = await asyncio.open_connection(bound_host, port)
         writer.close()
         await writer.wait_closed()
     finally:
         serving.cancel()
         await asyncio.gather(serving, return_exceptions=True)
     assert withdrawals and all(withdrawals)
+    assert serving.cancelled()
     assert 'endpoint' not in json.loads(pointer().read_text())
     assert not daemon._owns_fleet() and not servers[0].is_serving()
     with pytest.raises(OSError):
-        await asyncio.open_connection('127.0.0.1', port)
+        await asyncio.open_connection(bound_host, port)
 
 
 @pytest.mark.parametrize('reader', ['origin', 'proof'])
@@ -122,14 +132,20 @@ async def test_unserved_browser_origin_and_managed_proof_refuse_explicitly(tmp_p
 
 async def test_shutdown_closes_an_accepted_request_before_closing_its_journal(mock, tmp_path, monkeypatch):
     daemon = TaskDaemon(make_config(mock), tmp_path / 'tasks.db')
-    accepted, published = asyncio.Event(), asyncio.Event()
+    accepted, published, ended = asyncio.Event(), asyncio.Event(), asyncio.Event()
     held = []
     real_write = daemon._write_owner_pointer
 
     async def pending(*args):
         held.append((asyncio.current_task(), args[-1]))
         accepted.set()
-        await asyncio.Future()  # a controlled long poll, never a timed sleep
+        try:
+            await asyncio.Future()  # a controlled long poll, never a timed sleep
+        finally:
+            assert daemon.journal.db.execute('SELECT 1').fetchone()[0] == 1
+            assert daemon._owns_fleet() and daemon._endpoint is None
+            assert 'endpoint' not in json.loads(pointer().read_text())
+            ended.set()
 
     def write():
         real_write()
@@ -142,7 +158,6 @@ async def test_shutdown_closes_an_accepted_request_before_closing_its_journal(mo
     writer = None
     try:
         await published.wait()
-        from urllib.parse import urlsplit
         port = urlsplit(daemon._endpoint).port
         reader, writer = await asyncio.open_connection('127.0.0.1', port)
         writer.write(f'GET /api/v1/version HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\r\n'.encode())
@@ -151,7 +166,7 @@ async def test_shutdown_closes_an_accepted_request_before_closing_its_journal(mo
         serving.cancel()
         # Shutdown must not wait for an unbounded client request or close its DB underneath it.
         await asyncio.wait_for(asyncio.shield(asyncio.gather(serving, return_exceptions=True)), 5)
-        assert held[0][0].done()
+        assert held[0][0].done() and ended.is_set()
         assert await asyncio.wait_for(reader.read(), 1) == b''  # clean transport failure, no generic 500
         assert 'endpoint' not in json.loads(pointer().read_text())
     finally:
