@@ -113,10 +113,26 @@ async function resumeInitialRead() {
     await expect(draftField(page)).toHaveValue(draft);
     const editor = await draftField(page).elementHandle();
     const fresh = await sourceView();
+    await page.locator('[data-managed-setup]').evaluate(node => {
+      window.setupSourceMutations = [];
+      window.setupSourceObserver = new MutationObserver(records => {
+        for (const record of records) {
+          const target = record.target instanceof Element ? record.target : record.target.parentElement;
+          if (!target?.closest('[data-connection-card]')) window.setupSourceMutations.push(record.type);
+        }
+      });
+      window.setupSourceObserver.observe(node, {subtree: true, childList: true, attributes: true, characterData: true});
+    });
     releases[0]();
     await expect.poll(() => finished[0]).toBe(true);
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.deepEqual(await page.evaluate(() => {
+      window.setupSourceObserver.disconnect();
+      return window.setupSourceMutations;
+    }), []);
     assert.equal(await sourceView(), fresh);
     assert.equal(await draftField(page).evaluate((node, original) => node === original, editor), true);
+    await expect(draftField(page)).toHaveValue(draft);
     assert.equal((await storage(page))[draftStorage], draftBytes);
 
     // Full route changes also start with viewReady=false. Leave during the
