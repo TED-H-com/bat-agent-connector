@@ -65773,11 +65773,15 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 }
 //#endregion
 //#region src/state/retired-read.ts
+var retiredReadError = () => Object.assign(new Error("Read retired during foreground recovery"), {
+	name: "AbortError",
+	code: "FOREGROUND_READ_RETIRED"
+});
 function retiredRead(pending, signal) {
 	return new Promise((resolve, reject) => {
 		const abort = () => {
 			signal.removeEventListener("abort", abort);
-			reject(new DOMException("Read retired", "AbortError"));
+			reject(retiredReadError());
 		};
 		pending.then((value) => {
 			signal.removeEventListener("abort", abort);
@@ -65789,6 +65793,19 @@ function retiredRead(pending, signal) {
 		if (signal.aborted) abort();
 		else signal.addEventListener("abort", abort, { once: true });
 	});
+}
+async function readThroughResume(request, currentSignal, guard) {
+	for (;;) {
+		guard();
+		const signal = currentSignal();
+		try {
+			const value = await retiredRead(request(signal), signal);
+			if (signal.aborted) throw retiredReadError();
+			return value;
+		} catch (error) {
+			if (!signal.aborted) throw error;
+		}
+	}
 }
 //#endregion
 //#region src/state/storage-identity.ts
@@ -66623,7 +66640,7 @@ async function api(method, path, body, key, collectReceipt) {
 		}
 		return data;
 	} catch (error) {
-		if (epoch === state.epoch && error.code !== "VIEW_CHANGED") {
+		if (epoch === state.epoch && !["VIEW_CHANGED", "FOREGROUND_READ_RETIRED"].includes(error.code)) {
 			if (method === "GET" && (path === "/capabilities" || path === "/bootstrap")) rememberVersionRead("capabilities", null, void 0, epoch);
 			recentErrors.record({
 				at: new Date().toISOString(),
@@ -66650,14 +66667,16 @@ async function apiRequest(method, path, body, key, collectReceipt) {
 	}
 	if (!state.token) throw new ApiError(401, "UNAUTHORIZED", t("need_token"), { localized: true });
 	const epoch = state.epoch;
-	const signal = method === "GET" && state.viewReady ? foregroundReads.signal : null;
+	const resumable = method === "GET" && state.viewReady;
+	const request = (signal) => connectorRequest(method, path, body, key, state.token, signal);
 	let response;
 	try {
-		const pending = connectorRequest(method, path, body, key, state.token, signal || void 0);
-		response = signal ? await retiredRead(pending, signal) : await pending;
-		if (signal?.aborted) throw new DOMException("Read retired", "AbortError");
+		const guard = () => {
+			if (epoch !== state.epoch) throw new ApiError(0, "CONNECTION_CHANGED", "Connection changed while the request was in flight");
+		};
+		response = !resumable ? await request() : /^\/events(?:\?|$)/.test(path) ? await retiredRead(request(foregroundReads.signal), foregroundReads.signal) : await readThroughResume(request, () => foregroundReads.signal, guard);
 	} catch (cause) {
-		if (signal?.aborted) throw new ApiError(0, "VIEW_CHANGED", "Read retired during foreground recovery");
+		if (["FOREGROUND_READ_RETIRED", "CONNECTION_CHANGED"].includes(cause?.code)) throw cause;
 		throw new ApiError(0, ["AbortError", "TimeoutError"].includes(cause?.name) || /timed?\s*out|timeout/i.test(cause?.message || String(cause)) ? "TIMEOUT" : "NETWORK_ERROR", cause?.message || String(cause));
 	}
 	const { status, data } = response;
@@ -67524,9 +67543,11 @@ function waitForEventPoll(ms) {
 }
 function foregroundChanged() {
 	foregroundVersion++;
-	const previousReads = foregroundReads;
-	foregroundReads = new AbortController();
-	previousReads.abort();
+	if (document.visibilityState !== "hidden") {
+		const previousReads = foregroundReads;
+		foregroundReads = new AbortController();
+		previousReads.abort();
+	}
 	if (state.token) {
 		updateOnline(false);
 		paintConnection(true, true);
@@ -67560,7 +67581,7 @@ async function streamEvents() {
 			state.refreshCycle = cycle;
 			const cursor = await retiredRead(consumePageAsync(page, before, (ev) => {
 				return settleRefreshes([...state.listeners].map((fn) => Promise.resolve().then(() => {
-					if (signal.aborted) throw new ApiError(0, "VIEW_CHANGED", "Event page retired");
+					if (signal.aborted) throw retiredReadError();
 					return fn(ev);
 				}))).catch((error) => {
 					cycle.error ||= error;
@@ -67657,7 +67678,7 @@ function debounceRefresh(fn, ms) {
 			const batch = waiting;
 			waiting = [];
 			const current = batch.filter((p) => !p.signal.aborted);
-			for (const p of batch) if (p.signal.aborted) p.reject(new ApiError(0, "VIEW_CHANGED", "Refresh retired"));
+			for (const p of batch) if (p.signal.aborted) p.reject(retiredReadError());
 			if (!current.length) return;
 			try {
 				assertView(connection);

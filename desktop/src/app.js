@@ -66,7 +66,7 @@ import { sessionBatPanel } from "./session-bat.js";
 import { orchestrationPanel, orchestrationActions } from "./orchestration.js";
 import { repositoryStartPanel } from "./repository-start.js";
 import { mountArtifactReview, managedCaptureExecution } from "./artifact-review.js";
-import {retiredRead} from "./state/retired-read.ts";
+import {retiredRead, readThroughResume, retiredReadError} from "./state/retired-read.ts";
 import { consumePageAsync, settleRefreshes, storageScope } from "./state/events.ts";
 import {managedStorageScope, migrateManagedStorage} from './state/storage-identity.ts';
 import {renderDeliveryWork, renderObservedResource, unavailableProject} from "./observed-resource.js";
@@ -329,7 +329,7 @@ async function api(method, path, body, key, collectReceipt) {
     }
     return data;
   } catch(error) {
-    if(epoch===state.epoch && error.code !== "VIEW_CHANGED") {
+    if(epoch===state.epoch && !["VIEW_CHANGED", "FOREGROUND_READ_RETIRED"].includes(error.code)) {
       if(method==='GET' && (path==='/capabilities' || path==='/bootstrap'))rememberVersionRead('capabilities',null,undefined,epoch);
       recentErrors.record({at:new Date().toISOString(),method,path,status:error.status,code:error.code,admissionRefused:error.admissionRefused,operation:error.operation});
       if([401,403,404].includes(error.status))withdrawDiagnostics();
@@ -344,17 +344,21 @@ async function apiRequest(method, path, body, key, collectReceipt) {
   }
   if (!state.token) throw new ApiError(401, "UNAUTHORIZED", t("need_token"), {localized: true});
   const epoch = state.epoch;
-  // Initial activation owns its reads until the view is mounted. After that,
-  // foreground recovery retires reads only; a write keeps its original receipt.
-  const signal = method === 'GET' && state.viewReady ? foregroundReads.signal : null;
+  // Mounted source reads survive resume even without a replayed event. The
+  // event poll belongs to the shared reader instead, which starts its next page.
+  const resumable = method === 'GET' && state.viewReady;
+  const request = signal => connectorRequest(method, path, body, key, state.token, signal);
   let response;
   try {
-    const pending = connectorRequest(method, path, body, key, state.token, signal || undefined);
-    response = signal ? await retiredRead(pending, signal) : await pending;
-    if (signal?.aborted) throw new DOMException('Read retired', 'AbortError');
+    const guard = () => {
+      if (epoch !== state.epoch) throw new ApiError(0, "CONNECTION_CHANGED", "Connection changed while the request was in flight");
+    };
+    response = !resumable ? await request()
+      : /^\/events(?:\?|$)/.test(path) ? await retiredRead(request(foregroundReads.signal), foregroundReads.signal)
+      : await readThroughResume(request, () => foregroundReads.signal, guard);
   }
   catch (cause) {
-    if (signal?.aborted) throw new ApiError(0, "VIEW_CHANGED", "Read retired during foreground recovery");
+    if (['FOREGROUND_READ_RETIRED', 'CONNECTION_CHANGED'].includes(cause?.code)) throw cause;
     const timeout = ['AbortError', 'TimeoutError'].includes(cause?.name) || /timed?\s*out|timeout/i.test(cause?.message || String(cause));
     throw new ApiError(0, timeout ? 'TIMEOUT' : 'NETWORK_ERROR', cause?.message || String(cause));
   }
@@ -943,9 +947,12 @@ function foregroundChanged() {
   // Invalidate an in-flight page as well as the sleeping poll. Only the existing
   // reader can re-enable writes, after a post-resume page and its sources settle.
   foregroundVersion++;
-  const previousReads = foregroundReads;
-  foregroundReads = new AbortController();
-  previousReads.abort();
+  // Hidden pages do not poll. Retire only on return, including bfcache restore.
+  if (document.visibilityState !== 'hidden') {
+    const previousReads = foregroundReads;
+    foregroundReads = new AbortController();
+    previousReads.abort();
+  }
   if (state.token) {updateOnline(false); paintConnection(true, true);}
   wakeEventPoll?.();
 }
@@ -972,7 +979,7 @@ async function streamEvents() {
       // Actual event/read failures below pause mutations until a successful replay.
       const cursor = await retiredRead(consumePageAsync(page, before, ev => {
         return settleRefreshes([...state.listeners].map(fn => Promise.resolve().then(() => {
-          if (signal.aborted) throw new ApiError(0, "VIEW_CHANGED", "Event page retired");
+          if (signal.aborted) throw retiredReadError();
           return fn(ev);
         })))
           .catch(error => {cycle.error ||= error; throw error;});
@@ -1043,7 +1050,7 @@ function debounceRefresh(fn, ms) {
     id = setTimeout(async () => {
       const batch = waiting; waiting = [];
       const current = batch.filter(p => !p.signal.aborted);
-      for (const p of batch) if (p.signal.aborted) p.reject(new ApiError(0, "VIEW_CHANGED", "Refresh retired"));
+      for (const p of batch) if (p.signal.aborted) p.reject(retiredReadError());
       if (!current.length) return;
       try { assertView(connection); await fn(); assertView(connection); current.forEach(p => p.resolve()); }
       catch (error) { current.forEach(p => p.reject(error)); }
