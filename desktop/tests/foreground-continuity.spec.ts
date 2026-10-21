@@ -60,16 +60,22 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) {
     const sourcesGate = new Promise<void>(resolve => {releaseSources = resolve;});
     const polls: {path: string, pending: boolean}[] = [], sources: string[] = [];
     const requests: Request[] = [], live = new Set<Request>(), failures = new Map<Request, string | undefined>();
+    const httpTimeline: {event: string, request: number, live: number}[] = [];
     let armed = false, sourcePhase = 'late', livePeak = 0;
     const outstanding = () => polls.filter(poll => poll.pending).length;
     page.on('request', request => {
       if (!request.url().includes('/api/v1/events?')) return;
       requests.push(request); live.add(request); livePeak = Math.max(livePeak, live.size);
+      httpTimeline.push({event: 'issued', request: requests.length - 1, live: live.size});
     });
-    page.on('requestfinished', request => live.delete(request));
+    page.on('requestfinished', request => {
+      if (!live.delete(request)) return;
+      httpTimeline.push({event: 'finished', request: requests.indexOf(request), live: live.size});
+    });
     page.on('requestfailed', request => {
       if (!live.delete(request)) return;
       failures.set(request, request.failure()?.errorText);
+      httpTimeline.push({event: 'failed', request: requests.indexOf(request), live: live.size});
     });
     f.dispatch = async input => {
       if (armed && input.path.startsWith('/events?')) {
@@ -125,7 +131,7 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) {
           expect(outstanding()).toBeLessThanOrEqual(previousOutstanding + 1);
         } else {
           await expect.poll(() => failures.get(previousRequest)).toBe('net::ERR_ABORTED');
-          expect(livePeak).toBe(1); expect(live.size).toBe(1);
+          expect(livePeak, JSON.stringify(httpTimeline)).toBe(1); expect(live.size).toBe(1);
         }
         await expect(send).toBeDisabled();
       }
@@ -157,7 +163,7 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) {
       await expect(draft).toHaveValue('尚未送出，keep this draft.');
       expect(sources).toHaveLength(settled.sources); expect(f.data.posts).toEqual([]);
       expect(polls).toHaveLength(5); expect(outstanding()).toBe(1);
-      if (!native) {expect(failures.size).toBe(3); expect(livePeak).toBe(1); expect(live.size).toBe(1);}
+      if (!native) {expect(failures.size).toBe(3); expect(livePeak, JSON.stringify(httpTimeline)).toBe(1); expect(live.size).toBe(1);}
     } finally {releaseSources(); releases.forEach(release => release());}
   });
 
