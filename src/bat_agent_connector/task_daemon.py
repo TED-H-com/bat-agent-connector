@@ -561,9 +561,8 @@ class TaskDaemon:
                 cursor=params.get("cursor"), unread=params.get("unread"),
                 principal_id=identity(self.journal, principal)["principal_id"])
         if method == "work_item_get":
-            from .dashboard_sync import identity
-            return work_items.work_item_get(self.journal.db, str(params.get("work_item_id")),
-                                           principal_id=identity(self.journal, principal)["principal_id"])
+            # Share the HTTP envelope, including central cleanup history and personal reading markers.
+            return (await self.api.work_item(wi=str(params.get("work_item_id")), principal=principal))[1]
         raise ValueError("unknown api method")
 
     async def call(self, method: str, params: dict, *, auth_token: str | None = None,
