@@ -14,6 +14,7 @@ from bat_agent_connector import (
     pm_evidence,
     pm_github_observation,
     pm_github_sources,
+    pm_issue_mappings,
     pm_lifecycle_gates,
     pm_maintenance_policy,
     pm_plans,
@@ -63,7 +64,6 @@ def provider_reads(w):
 
     gh.before_request = serve
     gh.pulls[1]['id'] = 1001
-    gh.add_issue(2, labels=[{'name': 'bug'}])
 
 
 @pytest.fixture
@@ -82,6 +82,13 @@ async def source_world(delivery_ready):
     assert not w['review']['qualified'] and w['review']['assessment']
     await lifecycle.decide(ops, w['workspace_id'], 'set_stage', who=OWNER, params={'stage': 'development'})
     provider_reads(w)
+    mapping = await action(w, pm_issue_mappings.PUBLISH, w['target'],
+        {'package_id': w['package']['package_id'], 'public_title': 'Verify login implementation',
+         'public_body': 'Selected public login behavior.'},
+        {'expected_package_digest': w['package']['document_digest'], 'expected_mapping_revision': None}, who=OWNER)
+    assert mapping['issue']['number'] == 2 and not mapping['publication']['counts_as_done']
+    w['mapping_id'] = mapping['mapping_id']
+    w['gh'].issues[2]['labels'] = [{'name': 'bug'}]
     project = pm_evidence.list_projects(ops, OWNER, w['workspace_id'])['bindings'][0]
     baseline = releases.request(ops, {'workspace_id': w['workspace_id'], 'repository': 'o/r'}, project['binding_id'])
     baseline['preconditions']['expected_commit_sha'] = w['state']['sha']
@@ -140,6 +147,7 @@ async def read(w, suffix):
 async def views(w):
     result = {name: await read(w, name) for name in ('overview', 'kanban', 'schedule', 'roadmap', 'register')}
     result['sprint'] = await read(w, 'sprints/' + w['sprint_target']['sprint_id'])
+    result['mapping'] = await read(w, 'issue-mappings/' + w['mapping_id'])
     return result
 
 
@@ -158,7 +166,7 @@ def fixed_rows(w):
     db = w['d'].ops.db
     sprint_tables = [row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'pm_sprint_%'")]
     return {table: [tuple(row) for row in db.execute(f'SELECT * FROM {table} ORDER BY rowid')]
-        for table in ['pm_quality_reviews', 'pm_quality_review_records', 'pm_quality_review_heads', 'pm_plan_adoptions', *sprint_tables]}
+        for table in ['pm_quality_reviews', 'pm_quality_review_records', 'pm_quality_review_heads', 'pm_plan_adoptions', 'pm_issue_revisions', *sprint_tables]}
 
 
 def counts(view):
@@ -183,6 +191,8 @@ async def test_external_closure_preserves_fixed_acceptance_and_only_verified_mer
     assert original['evidence']['observed_open_pulls'] is True
     issues = original['evidence']['maintenance_sources']['issues']
     assert issues['status'] == 'complete' and len(issues['findings']) == 1
+    assert issues['findings'][0]['existing_work'][0]['work_item_id'] == w['target']['work_item_id']
+    assert issues['findings'][0]['existing_work'][0]['mapping_id'] == w['mapping_id']
     before = await views(w)
     assert before['overview']['progress']['complete']
     assert before['overview']['progress']['requirements'] == 1
@@ -238,6 +248,7 @@ async def test_external_closure_preserves_fixed_acceptance_and_only_verified_mer
     assert after['sprint']['selected_items'] == before['sprint']['selected_items']
     assert after['sprint']['quality'] == before['sprint']['quality']
     assert after['roadmap'] == before['roadmap']
+    assert after['mapping'] == before['mapping']
     assert fixed_rows(w) == fixed_before
     original_assessment = pm_quality_reviews.get_assessment(ops, OWNER, w['workspace_id'], w['review']['review_id'],
         **{key: w['accepted_assessment'][key] for key in ('operation_id', 'version', 'document_digest')})
@@ -283,6 +294,7 @@ async def test_external_closure_preserves_fixed_acceptance_and_only_verified_mer
         assert after_counts['register']['open_by_age'] == before_counts['register']['open_by_age']
         assert after_counts['register']['blocking_reasons'] == before_counts['register']['blocking_reasons']
     assert bat_writes(mock) == frames and snapshot(w['human']) == manual
+    assert w['gh'].count('POST', r'/issues$') == 1
     print(json.dumps({'closure': reason, 'merged': merged, 'accepted': after['overview']['progress']['accepted'],
         'recent_deliveries': len(after['overview']['recent_deliveries']), 'fixed_records_unchanged': True,
         'qualified_deliverables': current['brief']['delivery']['coverage']['qualified_deliverables']}, sort_keys=True))

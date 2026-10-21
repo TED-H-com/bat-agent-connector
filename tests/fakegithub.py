@@ -211,6 +211,11 @@ class FakeGitHub:
                     return self._send(400, {"message": "unsupported API version"})
                 if path == "/repos/o/r" and method == "GET":
                     return self._send(200, {"id": fake.repository_id, "full_name": "o/r", "default_branch": fake.default_branch})
+                if path == "/repos/o/r/issues" and method == "POST":
+                    number = max([0, *fake.pulls, *fake.issues]) + 1
+                    issue = fake.add_issue(number, title=body["title"], body=body.get("body", ""),
+                                           labels=body.get("labels", []))
+                    return self._send(201, issue)
                 if path == "/repos/o/r/issues" and method == "GET":
                     issues = [i for i in fake.issues.values() if query.get("state") == "all"
                               or i["state"] == query.get("state", "open")]
