@@ -44,7 +44,7 @@ REPAIR_COMMAND = (sys.executable, '-B', '-c',
     "import runpy,sys; sys.argv=['member_regression.py','recovery']; runpy.run_path('member_regression.py')")
 
 
-async def advance(w, parent, rounds=3, *, timeout=60, deadline=None):
+async def advance(w, parent, rounds=3, *, timeout=60, deadline=None, wake=True):
     """Wait for captured workers and their receipts, with a 60-second stall guard.
 
     Publication and its later observation are different registered operations.
@@ -58,7 +58,8 @@ async def advance(w, parent, rounds=3, *, timeout=60, deadline=None):
     deadline = time.monotonic() + 10 * timeout if deadline is None else deadline
     try:
         for _ in range(rounds):
-            ops.wake(parent['operation_id'])  # Only waiting_external; never force an uncertain child.
+            if wake:
+                ops.wake(parent['operation_id'])  # Only waiting_external; never force an uncertain child.
             started = time.monotonic()
             await ops.run_due()
             active = tuple((oid, task) for oid, task in ops._active.items() if not task.done())
@@ -93,7 +94,10 @@ async def advance_until(w, parent, complete, *, timeout=60):
                 raise AssertionError(f'Repair milestone exceeded overall {10 * timeout}s safety cap: '
                     f"{result['operation_id']} status={result['status']} reason={result['status_reason']}\n"
                     + worker_details(ops))
-            result = await advance(w, result, rounds=1, timeout=timeout, deadline=deadline)
+            # Unlike the story's explicit input checkpoints, this wait has no
+            # new parent input. An unrelated due operation must not wake it
+            # before its own persisted retry time.
+            result = await advance(w, result, rounds=1, timeout=timeout, deadline=deadline, wake=False)
             if complete(result) or result['status'] in TERMINAL | {'needs_attention'}:
                 return result
             placeholders = ','.join('?' for _ in RUNNABLE)

@@ -267,7 +267,8 @@ async def test_persisting_forever_still_hits_an_overall_safety_cap(ops, monkeypa
 
 
 @pytest.mark.parametrize('milestone', ['deployed', 'delegated'])
-async def test_repair_milestone_waits_for_due_receipts_beyond_ten_rounds(ops, monkeypatch, milestone):
+@pytest.mark.parametrize('unrelated', [False, True])
+async def test_repair_milestone_waits_for_due_receipts_beyond_ten_rounds(ops, monkeypatch, milestone, unrelated):
     elapsed, slept, attempted = [1000.0], [], []
     clock = SimpleNamespace(time=lambda: elapsed[0], monotonic=lambda: elapsed[0])
 
@@ -304,6 +305,11 @@ async def test_repair_milestone_waits_for_due_receipts_beyond_ten_rounds(ops, mo
     monkeypatch.setattr(maintenance, 'asyncio', SimpleNamespace(wait=asyncio.wait, sleep=sleep_until_due))
     ops.register(ActionDef('fixture.milestone', 'operate', 'Synthetic scheduled receipts', run))
     ops.register(ActionDef('fixture.child', 'operate', 'Synthetic pending delivery', child))
+    if unrelated:
+        async def poll(ctx):
+            raise Wait('waiting_external', 'Independent provider poll', 1)
+        ops.register(ActionDef('fixture.poll', 'operate', 'Independent scheduled poll', poll))
+        ops.create(CALLER, action='fixture.poll', target={}, params={}, idempotency_key='unrelated')
     parent, _ = ops.create(CALLER, action='fixture.milestone', target={}, params={}, idempotency_key='milestone')
     result = await maintenance.advance_until({'d': SimpleNamespace(ops=ops)}, parent, complete)
     assert complete(result) and result['attempts'] >= 12
