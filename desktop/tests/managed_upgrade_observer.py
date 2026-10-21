@@ -143,6 +143,14 @@ def pytest_configure(config):
     _sampler.start()
 
     class Fixtures:
+        @pytest.hookimpl(hookwrapper=True)
+        def pytest_collection(self, session):
+            started = time.monotonic()
+            record('seed.collection.start')
+            outcome = yield
+            record('seed.collection.end', duration_s=round(time.monotonic() - started, 6),
+                   ok=outcome.excinfo is None)
+
         @pytest.hookimpl(hookwrapper=True, tryfirst=True)
         def pytest_fixture_setup(self, fixturedef, request):
             global _active_fixture
