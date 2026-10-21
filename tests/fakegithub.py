@@ -213,14 +213,11 @@ class FakeGitHub:
                     return self._send(200, {"id": fake.repository_id, "full_name": "o/r", "default_branch": fake.default_branch})
                 if path == "/repos/o/r/issues" and method == "POST":
                     number = max([0, *fake.pulls, *fake.issues]) + 1
-                    issue = fake.add_issue(number, title=body["title"], body=body.get("body", ""),
-                                           labels=body.get("labels", []))
+                    issue = fake.add_issue(number, title=body["title"], body=body.get("body", ""))
                     return self._send(201, issue)
                 if path == "/repos/o/r/issues" and method == "GET":
                     issues = [i for i in fake.issues.values() if query.get("state") == "all"
                               or i["state"] == query.get("state", "open")]
-                    labels = set(unquote(query.get("labels", "")).split(",")) - {""}
-                    issues = [i for i in issues if labels <= {label["name"] for label in i["labels"]}]
                     page = int(query.get("page", 1))
                     return self._send(200, issues[(page-1)*100:page*100])
                 m = re.fullmatch(r"/repos/o/r/issues/(\d+)", path)
