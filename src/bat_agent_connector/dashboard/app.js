@@ -49422,9 +49422,9 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		damaged = true;
 	}
 	const status = h("div", { role: "status" }), receipt = h("div", { class: "pm-receipt" });
-	const gateNotice = h("div", {
+	const gateNotice = h("p", {
+		class: "muted",
 		"data-pm-client-gate": "",
-		"aria-live": "polite",
 		hidden: true
 	});
 	const persist = () => {
@@ -49573,20 +49573,12 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		if (!busy && receiptTimer === null) initialChecking = false;
 		const autoChecking = initialChecking && (busy || receiptTimer !== null);
 		const inFlight = busy || autoChecking;
-		const block = !inFlight && !damaged ? clientBlock() : null;
-		gateNotice.hidden = !block;
-		if (block) {
-			if (gateNotice.dataset.clientActionCode !== block.code) {
-				gateNotice.dataset.clientActionCode = block.code;
-				gateNotice.replaceChildren(errorBox(block, {
-					sourceRefresh: false,
-					within: gateNotice
-				}));
-			}
-		} else {
-			delete gateNotice.dataset.clientActionCode;
-			gateNotice.replaceChildren();
-		}
+		const block = !inFlight && !damaged && allowed() && !terminal() && !saved.intent?.initialAdmissionRefused ? clientBlock() : null;
+		const notice = block?.code !== "CLIENT_ACTION_VIEW_NOT_READY" ? block : null;
+		gateNotice.hidden = !notice;
+		gateNotice.textContent = notice?.message || "";
+		if (notice) gateNotice.dataset.clientActionCode = notice.code;
+		else delete gateNotice.dataset.clientActionCode;
 		const frozen = busy || damaged || Boolean(saved.intent), locked = frozen || !allowed();
 		for (const [name, input] of Object.entries(fields)) {
 			const preserve = !frozen && !damaged && keepEditable(name);
