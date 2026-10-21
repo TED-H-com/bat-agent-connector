@@ -67,10 +67,10 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
     h('div', {}, h('h2', {}, t('pm_brief_title')), h('p', {class: 'muted'}, t('pm_brief_intro'))), h('div',{},create.box,pending)),
     status, view, h('details', {}, h('summary', {}, t('pm_brief_history')), history));
   const exports=caps?.()?.features?.pm_workspaces?.brief_export
-    ?briefExport({h,t,api,alive,workspaceId,caps,snapshot:()=>snapshot,readable:canRead,onUnavailable:error=>unavailable(error),errorBox}):null;
+    ?briefExport({h,t,api,alive,workspaceId,caps,snapshot:()=>snapshot,readable:canRead,onUnavailable:(error,options)=>unavailable(error,options),errorBox}):null;
   if(exports)box.insertBefore(exports.element,box.lastChild);
   function withdraw(){++serial;head=null;snapshot=null;signature='';view.replaceChildren();history.replaceChildren();create.update();exports?.update();}
-  function unavailable(error){withdraw();status.replaceChildren(errorBox(error, {within:status}));}
+  function unavailable(error, options = {}){withdraw();status.replaceChildren(errorBox(error, {...options, within:status}));}
   const stamp = value => timeStamp(value, {empty: t('pm_evidence_time_unknown')});
   const check = data => {if (data.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch')); return data;};
   const readable = (prefix, value) => {

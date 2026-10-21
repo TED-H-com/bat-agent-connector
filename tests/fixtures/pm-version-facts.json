@@ -1,0 +1,34 @@
+{
+  "native": {
+    "installation": {
+      "native_analysis": {
+        "adapter": "codex-native-linux",
+        "contract": "codex-pm-linux-v1",
+        "required_version": "0.160.0",
+        "execution_scope": "frozen_context_only",
+        "execution_location": "connector_service",
+        "eligible_for_preflight": false,
+        "options_confirmed": false,
+        "version_verification": "per_run",
+        "auth_validity": "unverified",
+        "model_execution_verified": false,
+        "auth_file_readable": false,
+        "reason": "PM_NATIVE_EXECUTABLE_UNAVAILABLE",
+        "action_registered": true
+      },
+      "workspace_required": true
+    },
+    "older_executable_error": "PM_NATIVE_VERSION_UNSUPPORTED"
+  },
+  "bat_run": {
+    "adapter": "bat-pm-linux-v1",
+    "updated_at": 1790000000.0,
+    "bat_runtime_provenance": {
+      "adapter": "bat-pm-linux-v1",
+      "profile": "codex-pm-linux-v1",
+      "profile_version": 1,
+      "bat_source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "codex_source_revision": "a956835d020762cb2b570053af06f643a11c0ecc"
+    }
+  }
+}

@@ -71,9 +71,9 @@ export function workspaceWorkBatches({h,t,api,alive,workspaceId,workspace,caps,p
   function clearSources(){sourceTicket++;labels.clear();packages.clear();qualityReviews=[];sourceReady=false;proofReady=false;evidenceFiltered=false;evidenceNotice.hidden=true;receipts=[];observations=[];entriesView.replaceChildren();entrySignature='';facts.replaceChildren();history.replaceChildren();startView.hidden=true;proofView.hidden=true;
     if(proof){proofChoices ||= Object.fromEntries(['entry','receipt','observation','assessment'].map(name=>[name,proof.fields[name].value]));for(const name of ['entry','receipt','observation','assessment'])proof.fields[name].replaceChildren();}}
   function withdraw(){serial++;ready=false;context=null;batch=null;clearSources();status.replaceChildren();update();}
-  function failure(err){withdraw();showDraft(false);newBatch.hidden=true;historyLabel.hidden=true;facts.hidden=true;proofView.hidden=true;head.hidden=true;
-    status.replaceChildren(h('div',{class:'pm-tool-head'},h('div',{class:'pm-tool-note'},errorBox(err,{summary:t(err.code==='PM_REQUIREMENT_QUALITY_INVALID'?'pmb_invalid':'pmb_unavailable'), within:status})),refreshButton));}
-  const request=async(...args)=>{const ticket=serial;try{return await api(...args);}catch(err){if(valid(ticket)&&[401,403,404].includes(err.status))failure(err);throw err;}};
+  function failure(err, options = {}){withdraw();showDraft(false);newBatch.hidden=true;historyLabel.hidden=true;facts.hidden=true;proofView.hidden=true;head.hidden=true;
+    status.replaceChildren(h('div',{class:'pm-tool-head'},h('div',{class:'pm-tool-note'},errorBox(err,{...options, summary:t(err.code==='PM_REQUIREMENT_QUALITY_INVALID'?'pmb_invalid':'pmb_unavailable'), within:status})),refreshButton));}
+  const request=async(...args)=>{const ticket=serial;try{return await api(...args);}catch(err){if(valid(ticket)&&[401,403,404].includes(err.status))failure(err, {sourceRefresh:false});throw err;}};
   async function readContext(){
     const [w,l]=await Promise.all([api('GET',base),api('GET',`${base}/lifecycle`)]);
     if(w?.workspace?.workspace_id!==workspaceId||!Number.isSafeInteger(w.workspace.version)||w.workspace.version<1
@@ -122,7 +122,7 @@ export function workspaceWorkBatches({h,t,api,alive,workspaceId,workspace,caps,p
         if(start.locked()||!writer())return;const values=draft();values.find(item=>item.key===row.key).depends_on=values.find(item=>item.key===row.key).depends_on.filter(edge=>edge.entry_key!==missing.entry_key);
         start.set('entries',JSON.stringify(values));renderEntries();update();}}));}
       const result=choose('pmb_profile_label',[[profile.profile,t('pmb_github_profile')],...(cap().profiles.includes(acceptanceProfile)?[[acceptanceProfile,t('pmb_acceptance_profile')]]:[])]);result.value=condition(row).profile;
-      result.addEventListener('change',()=>{if(start.locked()||!writer())return;try{const values=draft();values.find(item=>item.key===row.key).result_condition=result.value===acceptanceProfile?requirementCondition(packages.get(row.handoff.params.pm_package_ref.package_id)):clone(profile);start.set('entries',JSON.stringify(values));renderEntries(true);update();}catch(err){failure(err);}});
+      result.addEventListener('change',()=>{if(start.locked()||!writer())return;try{const values=draft();values.find(item=>item.key===row.key).result_condition=result.value===acceptanceProfile?requirementCondition(packages.get(row.handoff.params.pm_package_ref.package_id)):clone(profile);start.set('entries',JSON.stringify(values));renderEntries(true);update();}catch(err){failure(err, {sourceRefresh:false});}});
       const changed=text('pmb_changed_dependency');changed.dataset.conditionChanged='';changed.hidden=!row.depends_on.some(edge=>!same(edge.condition,condition(rows.find(other=>other.key===edge.entry_key)||{})));
       const details=h('details',{},h('summary',{},t('pmb_fixed_handoff')),line('pmb_entry_key',row.key),line('pmb_base',row.handoff.params.source_sha),
         line('pmb_package',row.handoff.params.pm_package_ref.package_id),h('p',{class:'pm-note-text'},row.handoff.params.prompt),h('p',{class:'pm-note-text'},row.handoff.params.pm_code_basis.rationale),
@@ -147,7 +147,7 @@ export function workspaceWorkBatches({h,t,api,alive,workspaceId,workspace,caps,p
         const pre={expected_workspace_version:latest.workspace.version,expected_lifecycle_revision:latest.lifecycle.lifecycle.revision};
         if(!same(pre,args[2].preconditions)||latest.lifecycle.blocked_actions.includes(START)){context=latest;throw Object.assign(Error(t('pmb_stale')),{code:'VERSION_CONFLICT'});}
         if(!await checkDraft(args[2].params.entries,ticket)||!valid(ticket))throw error();
-      }catch(err){if(valid(ticket)&&[401,403,404].includes(err.status))failure(err);throw Object.assign(err,{admissionRefused:true});}
+      }catch(err){if(valid(ticket)&&[401,403,404].includes(err.status))failure(err, {sourceRefresh:false});throw Object.assign(err,{admissionRefused:true});}
     }return request(...args);
   };
   start=form({namespace:`${namespace}.work-batch`,api:guardedStart,action:START,target:{workspace_id:workspaceId},
