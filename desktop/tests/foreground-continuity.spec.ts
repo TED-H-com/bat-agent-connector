@@ -161,7 +161,9 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) {
           const response = structuredClone(await dispatch(input));
           oldReads++; await gates[0]; return response;
         }
-        if (stage === 'fresh') {freshReads++; await gates[2];}
+        // Source owners may renew before the resumed event page returns. Hold
+        // every resumed source, keeping the same exact two-read barrier.
+        if (stage === 'resumed' || stage === 'fresh') {freshReads++; await gates[2];}
       }
       return dispatch(input);
     };
