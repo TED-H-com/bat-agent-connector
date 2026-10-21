@@ -106,7 +106,7 @@ export type UpdateRequest = {action: "status" | "check"} | {action: "download" |
 export const updateRequest = (input: UpdateRequest) => invoke<any>("desktop_update", {input});
 
 export async function connectorRequest(method: string, path: string, body: unknown, key: string | undefined,
-  browserToken: string): Promise<ConnectorResponse> {
+  browserToken: string, signal?: AbortSignal): Promise<ConnectorResponse> {
   if (nativeDesktop) {
     return invoke<ConnectorResponse>("connector_request", { input: {
       method, path, body: body ?? null, idempotency_key: key ?? null
@@ -116,7 +116,7 @@ export async function connectorRequest(method: string, path: string, body: unkno
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (key) headers["Idempotency-Key"] = key;
   const res = await fetch(`/api/v1${path}`, { method, headers, credentials: "same-origin", redirect: "error",
-    body: body === undefined ? undefined : JSON.stringify(body) });
+    body: body === undefined ? undefined : JSON.stringify(body), signal });
   return { status: res.status, data: await res.json().catch(() => ({})) };
 }
 

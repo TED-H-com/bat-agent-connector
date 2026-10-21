@@ -66,6 +66,7 @@ import { sessionBatPanel } from "./session-bat.js";
 import { orchestrationPanel, orchestrationActions } from "./orchestration.js";
 import { repositoryStartPanel } from "./repository-start.js";
 import { mountArtifactReview, managedCaptureExecution } from "./artifact-review.js";
+import {retiredRead, readThroughResume, retiredReadError} from "./state/retired-read.ts";
 import { consumePageAsync, settleRefreshes, storageScope } from "./state/events.ts";
 import {managedStorageScope, migrateManagedStorage} from './state/storage-identity.ts';
 import {renderDeliveryWork, renderObservedResource, unavailableProject} from "./observed-resource.js";
@@ -328,7 +329,7 @@ async function api(method, path, body, key, collectReceipt) {
     }
     return data;
   } catch(error) {
-    if(epoch===state.epoch) {
+    if(epoch===state.epoch && !["VIEW_CHANGED", "FOREGROUND_READ_RETIRED"].includes(error.code)) {
       if(method==='GET' && (path==='/capabilities' || path==='/bootstrap'))rememberVersionRead('capabilities',null,undefined,epoch);
       recentErrors.record({at:new Date().toISOString(),method,path,status:error.status,code:error.code,admissionRefused:error.admissionRefused,operation:error.operation});
       if([401,403,404].includes(error.status))withdrawDiagnostics();
@@ -343,9 +344,21 @@ async function apiRequest(method, path, body, key, collectReceipt) {
   }
   if (!state.token) throw new ApiError(401, "UNAUTHORIZED", t("need_token"), {localized: true});
   const epoch = state.epoch;
+  // Mounted source reads survive resume even without a replayed event. The
+  // event poll belongs to the shared reader instead, which starts its next page.
+  const resumable = method === 'GET' && state.viewReady;
+  const request = signal => connectorRequest(method, path, body, key, state.token, signal);
   let response;
-  try {response = await connectorRequest(method, path, body, key, state.token);}
+  try {
+    const guard = () => {
+      if (epoch !== state.epoch) throw new ApiError(0, "CONNECTION_CHANGED", "Connection changed while the request was in flight");
+    };
+    response = !resumable ? await request()
+      : /^\/events(?:\?|$)/.test(path) ? await retiredRead(request(foregroundReads.signal), foregroundReads.signal)
+      : await readThroughResume(request, () => foregroundReads.signal, guard);
+  }
   catch (cause) {
+    if (['FOREGROUND_READ_RETIRED', 'CONNECTION_CHANGED'].includes(cause?.code)) throw cause;
     const timeout = ['AbortError', 'TimeoutError'].includes(cause?.name) || /timed?\s*out|timeout/i.test(cause?.message || String(cause));
     throw new ApiError(0, timeout ? 'TIMEOUT' : 'NETWORK_ERROR', cause?.message || String(cause));
   }
@@ -922,6 +935,7 @@ async function refreshManagedRecovery() {
   } catch { /* Existing transport health remains authoritative if native IPC fails. */ }
 }
 let foregroundVersion = 0, wakeEventPoll = null;
+let foregroundReads = new AbortController();
 function waitForEventPoll(ms) {
   return new Promise(resolve => {
     const finish = () => {clearTimeout(timer); wakeEventPoll = null; resolve();};
@@ -933,6 +947,12 @@ function foregroundChanged() {
   // Invalidate an in-flight page as well as the sleeping poll. Only the existing
   // reader can re-enable writes, after a post-resume page and its sources settle.
   foregroundVersion++;
+  // Hidden pages do not poll. Retire only on return, including bfcache restore.
+  if (document.visibilityState !== 'hidden') {
+    const previousReads = foregroundReads;
+    foregroundReads = new AbortController();
+    previousReads.abort();
+  }
   if (state.token) {updateOnline(false); paintConnection(true, true);}
   wakeEventPoll?.();
 }
@@ -943,7 +963,7 @@ async function streamEvents() {
       paintConnection(true);
       await waitForEventPoll(1000); continue;
     }
-    const epoch = state.epoch, view = generation, foreground = foregroundVersion;
+    const epoch = state.epoch, view = generation, foreground = foregroundVersion, signal = foregroundReads.signal;
     let cycle, pollSucceeded = false;
     const previousPoll = state.lastPoll;
     try {
@@ -957,10 +977,13 @@ async function streamEvents() {
       cycle = {error: null}; state.refreshCycle = cycle;
       // A deferred render is not a connection failure: keep version-checked form saves usable.
       // Actual event/read failures below pause mutations until a successful replay.
-      const cursor = await consumePageAsync(page, before, ev => {
-        return settleRefreshes([...state.listeners].map(fn => Promise.resolve().then(() => fn(ev))))
+      const cursor = await retiredRead(consumePageAsync(page, before, ev => {
+        return settleRefreshes([...state.listeners].map(fn => Promise.resolve().then(() => {
+          if (signal.aborted) throw retiredReadError();
+          return fn(ev);
+        })))
           .catch(error => {cycle.error ||= error; throw error;});
-      });
+      }), signal);
       if (epoch !== state.epoch || view !== generation || foreground !== foregroundVersion || !state.viewReady) continue;
       if (cycle.error) throw cycle.error;
       if (state.sync) {
@@ -1023,11 +1046,14 @@ function debounceRefresh(fn, ms) {
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   let id, waiting = [];
   return () => new Promise((resolve, reject) => {
-    waiting.push({resolve, reject}); clearTimeout(id);
+    waiting.push({resolve, reject, signal: foregroundReads.signal}); clearTimeout(id);
     id = setTimeout(async () => {
       const batch = waiting; waiting = [];
-      try { assertView(connection); await fn(); assertView(connection); batch.forEach(p => p.resolve()); }
-      catch (error) { batch.forEach(p => p.reject(error)); }
+      const current = batch.filter(p => !p.signal.aborted);
+      for (const p of batch) if (p.signal.aborted) p.reject(retiredReadError());
+      if (!current.length) return;
+      try { assertView(connection); await fn(); assertView(connection); current.forEach(p => p.resolve()); }
+      catch (error) { current.forEach(p => p.reject(error)); }
     }, ms);
   });
 }
@@ -2296,8 +2322,14 @@ async function viewSession(main, host, sid, context = null) {
     overflow.hidden = false; syncWide();
     void settleRefreshes([cps.load(), labels.refresh()]).catch(() => {});
   };
+  let refreshForeground = foregroundVersion;
   const refresh = async (fromEvent = false) => {
     assertView(connection);
+    // A resumed event must reread now, rather than inherit a failed read's timer.
+    if (refreshForeground !== foregroundVersion) {
+      refreshForeground = foregroundVersion;
+      clearTimeout(retryTimer); retryTimer = null; retryDelay = 1000;
+    }
     if (disposed) return;
     // Replayed, unacknowledged events obey the same backoff as timer retries.
     if (fromEvent && retryTimer && Date.now() < retryAt && readError) throw readError.error;
@@ -2314,6 +2346,7 @@ async function viewSession(main, host, sid, context = null) {
         readReady = true; retryDelay = 1000; clearTimeout(retryTimer); retryTimer = null;
         updateControls(); readError?.remove(); readError = null;
       } catch (error) {
+        if (["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error?.code)) throw error;
         // Withdrawal is the settled, displayed state: it does not keep the event batch failing.
         if (error?.sessionWithdrawn) {withdraw(error.sessionWithdrawn, error); return;}
         readReady = false; updateControls();
