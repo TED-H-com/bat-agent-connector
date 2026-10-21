@@ -15,6 +15,7 @@ from scripts.desktop_fixture_inputs import (
     path_matches,
     referenced_files,
     render_filters,
+    tracked_files,
     triggered,
 )
 
@@ -55,6 +56,7 @@ def test_desktop_filters_cover_real_fixture_imports(desktop_inputs):
     ('a/b.js', '**.js', True),
     ('Desktop/app.js', 'desktop/**', False),
     ('docs/a.md', 'desktop/**', False),
+    ('tests/中文 draft.py', 'tests/中文 draft.py', True),
 ])
 def test_github_path_pattern_subset(path, pattern, expected):
     assert path_matches(path, pattern) is expected
@@ -132,6 +134,7 @@ def test_probe_runs_seed_imports_and_records_dynamic_imports_and_reads(tmp_path)
         'tests/runtime_fixture.py': "import importlib; importlib.import_module('tests.runtime_leaf')\n",
         'tests/runtime_leaf.py': "from pathlib import Path; Path(__file__).with_name('payload.json').read_text()\n",
         'tests/payload.json': '{}\n',
+        'tests/中文 draft.py': '# A tracked path must survive Git quoting.\n',
         'desktop/tests/seed.py': "import os; assert os.environ['BATC_UPGRADE_SEED_MODE'] == '1'; import tests.runtime_fixture\n",
     }.items():
         path = tmp_path / name
@@ -139,6 +142,7 @@ def test_probe_runs_seed_imports_and_records_dynamic_imports_and_reads(tmp_path)
         path.write_text(content)
     for args in (['git', 'init', '-q'], ['git', 'add', '.']):
         subprocess.run(args, cwd=tmp_path, check=True, capture_output=True)
+    assert 'tests/中文 draft.py' in tracked_files(tmp_path)
     child = subprocess.run([sys.executable, '-c',
         'import json, sys; from pathlib import Path; '
         'from scripts.desktop_fixture_inputs import probe; '

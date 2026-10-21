@@ -72,7 +72,7 @@ def filters(root):
 
 def tracked_files(root):
     return set(subprocess.check_output(  # noqa: S607 - fixed read-only Git command
-        ['git', 'ls-files'], cwd=root, text=True).splitlines())  # noqa: S607
+        ['git', 'ls-files', '-z'], cwd=root, text=True).split('\0')) - {''}  # noqa: S607
 
 
 def referenced_files(root, source, directory, tracked, *, command=False):
