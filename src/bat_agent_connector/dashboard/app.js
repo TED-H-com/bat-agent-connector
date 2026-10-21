@@ -89,7 +89,17 @@ var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}
 var clientActionReason = (code) => clientReasons.find((reason) => clientActionCode(reason) === code) || null;
 //#endregion
 //#region src/workbench-mode.js
-var workbenchEnabled = () => new URLSearchParams(location.search).get("workbench") === "1";
+function decideLayout({ search = "", policy } = {}) {
+	const requested = new URLSearchParams(search).get("workbench");
+	const blocked = requested === "1" && policy?.allowWorkbench === false;
+	return Object.freeze({
+		layout: requested === "1" && !blocked ? "workbench" : "classic",
+		source: blocked ? "policy" : requested === null ? "default" : "url",
+		status: "preview",
+		reason: blocked ? "policy_disabled" : requested !== null && !["0", "1"].includes(requested) ? "unrecognized_workbench_value" : null
+	});
+}
+var layoutDecision = decideLayout({ search: globalThis.location?.search || "" });
 //#endregion
 //#region src/ui/dom.js
 function place(node, method, ...children) {
@@ -8488,6 +8498,7 @@ var init_pm_strings = __esmMin((() => {
 			pm_receipt_mismatch: "The receipt does not match the original request. Its key and draft have been preserved.",
 			pm_damaged: "The saved request cannot be validated. It has been preserved; no replacement will be sent.",
 			pm_action_unavailable: "This action is currently unavailable. Your draft and original request are preserved.",
+			pm_click_interrupted: "The action was unavailable during this click. Your original request is preserved. Review the current state, then check the original request.",
 			pm_stale: "Could not confirm the current version. Your draft is preserved. Refresh and review before another change.",
 			pm_scope_mismatch: "The response does not belong to the selected workspace and discussion.",
 			pm_partial: "This is a bounded view; older records or additional candidates may not be included.",
@@ -8879,6 +8890,7 @@ var init_pm_strings = __esmMin((() => {
 			pm_receipt_mismatch: "回執與原請求不一致。已保留原 key 與草稿。",
 			pm_damaged: "無法驗證已存請求。原資料仍保留，不會另送一筆。",
 			pm_action_unavailable: "目前無法執行這項操作。草稿與原請求仍保留。",
+			pm_click_interrupted: "這次點擊期間無法執行這項操作。原請求仍保留；請檢視目前狀態，再查回原請求。",
 			pm_stale: "目前無法確認最新版本。草稿仍保留；請重新整理並檢視後，再進行變更。",
 			pm_scope_mismatch: "回應不屬於選定的工作區與討論。",
 			pm_partial: "目前只顯示部分紀錄；較早的內容或其他候選想法可能未列入。",
@@ -16002,7 +16014,13 @@ function projectNavigation({ t, namespace, workspaceId, views, current, discussi
 //#region src/shell.js
 init_i18n();
 function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, errorBox }) {
-	const candidate = workbenchEnabled();
+	const candidate = layoutDecision.layout === "workbench";
+	Object.assign(document.body.dataset, {
+		layout: layoutDecision.layout,
+		layoutSource: layoutDecision.source,
+		layoutStatus: layoutDecision.status,
+		layoutReason: layoutDecision.reason || ""
+	});
 	const aside = navigation.box, main = document.getElementById("main"), top = document.querySelector(".top");
 	const toggle = document.getElementById("workspace-menu"), crumb = document.getElementById("nav");
 	const workspaceBlock = h$1("div", { class: "shell-workspace-block" }), projectNav = h$1("div", { class: "shell-project-nav" });
@@ -49131,6 +49149,7 @@ function pmWorktreeChoice({ h, t, api, alive, input, labelled, capability, scope
 //#region src/pm-workspace.js
 init_i18n();
 init_finding_name();
+var isWorkbench$2 = layoutDecision.layout === "workbench";
 var same$3 = (a, b) => a === b || a && b && typeof a === "object" && typeof b === "object" && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((key) => Object.hasOwn(b, key) && same$3(a[key], b[key]));
 var receiptSubscribers = new Map();
 var formConnectionTag = "batc-pm-form-connection";
@@ -49262,6 +49281,26 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		type: "submit",
 		class: "ui-button primary"
 	}, t(label));
+	let pressing = false;
+	const releasePress = () => {
+		pressing = false;
+		document.removeEventListener("pointerup", releasePress, true);
+		document.removeEventListener("pointercancel", releasePress, true);
+	};
+	const explainBlockedPress = () => {
+		if (!disposed && form.isConnected && saved.intent && !busy && !damaged && (!allowed() || !sendReady()) && !status.querySelector("[data-pm-click-interrupted]")) status.append(h("p", {
+			class: "muted",
+			"data-pm-click-interrupted": ""
+		}, t("pm_click_interrupted")));
+	};
+	button.addEventListener("pointerdown", (event) => {
+		if (event.button !== 0) return;
+		releasePress();
+		pressing = true;
+		explainBlockedPress();
+		document.addEventListener("pointerup", releasePress, true);
+		document.addEventListener("pointercancel", releasePress, true);
+	});
 	button.addEventListener("click", (event) => {
 		if (busy || initialChecking && (busy || receiptTimer !== null)) event.preventDefault();
 	});
@@ -49326,6 +49365,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		button.textContent = t(saved.intent && !autoChecking ? "pm_check_original" : label);
 		reset.hidden = inFlight || !terminal() && !saved.intent?.initialAdmissionRefused;
 		reset.disabled = busy || !allowed();
+		if (pressing) explainBlockedPress();
 		if (hadFocus && (button.hidden || button.disabled)) {
 			if (!reset.hidden && !reset.disabled) reset.focus();
 			else if (document.activeElement === document.body || document.activeElement === button) {
@@ -49353,6 +49393,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		let firstAttempt = stagedHere;
 		stagedHere = false;
 		if (firstAttempt) initialChecking = true;
+		let requestStarted = false;
 		try {
 			guard();
 			busy = true;
@@ -49397,6 +49438,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				}
 				collected = true;
 			};
+			requestStarted = true;
 			const data = intent.operation_id ? await api("GET", `/operations/${intent.operation_id}`, void 0, void 0, collectReceipt) : await api("POST", "/operations?wait=3", intent.request, intent.key, collectReceipt);
 			collectReceipt(data);
 			guard();
@@ -49469,6 +49511,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			try {
 				guard();
 			} catch {
+				if (!automatic && !requestStarted && form.isConnected) status.replaceChildren(h("p", { class: "muted" }, t("pm_stale")));
 				return;
 			}
 			if (!retiredView(error)) {
@@ -49572,6 +49615,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			disposed = true;
 			receiptPolling = false;
 			initialChecking = false;
+			releasePress();
 			stopTimer();
 			unsubscribe();
 			onConnectionChange(false);
@@ -49910,7 +49954,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		"data-pm-work-meta": "",
 		hidden: true
 	});
-	const management = workbenchEnabled() ? h("select", {
+	const management = isWorkbench$2 ? h("select", {
 		"aria-label": t("wc_management"),
 		"data-workbench-management": "",
 		hidden: true,
@@ -53707,6 +53751,7 @@ function observedText(t, key, values = {}) {
 }
 //#endregion
 //#region src/workspace-nav.js
+var isWorkbench$1 = layoutDecision.layout === "workbench";
 function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, caps = () => null }) {
 	const key = `batc.tree.${namespace}`;
 	let saved = [], hasPreference = false;
@@ -53824,7 +53869,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 	const selectedRow = (node) => node.getAttribute("href") === selected || node.dataset.workItem && node.dataset.workItem === selectedWork() || (node.dataset.workOperations || "").split(",").includes(selectedExecution());
 	const workIdentity = (item) => {
 		const value = item.work_identity;
-		if (!workbenchEnabled() || item.kind !== "execution" || item.id !== item.operation_id || !value || typeof item.host !== "string" || !item.host || typeof item.session_id !== "string" || !item.session_id) return null;
+		if (!isWorkbench$1 || item.kind !== "execution" || item.id !== item.operation_id || !value || typeof item.host !== "string" || !item.host || typeof item.session_id !== "string" || !item.session_id) return null;
 		const context = workSessionContext(new URLSearchParams({
 			workspace: value.workspace_id,
 			work: value.work_item_id,
@@ -54134,7 +54179,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 			refresh().catch(() => {});
 		},
 		select(hash) {
-			if (hash === "#/work-list" && workbenchEnabled()) return;
+			if (hash === "#/work-list" && isWorkbench$1) return;
 			selected = hash;
 			const [type, pid] = hash.replace(/^#\//, "").split("/");
 			if ([
@@ -65840,6 +65885,7 @@ function renderDeliveryWork(item, repositories = [], compact = false, { h, caps,
 init_transport();
 init_i18n();
 var TOKEN_KEY = "batc.dashboard.token";
+var isWorkbench = layoutDecision.layout === "workbench";
 var state = {
 	token: null,
 	caps: null,
@@ -68100,7 +68146,7 @@ function sessionPullHref(target) {
 async function viewSession(main, host, sid, context = null) {
 	const params = new URLSearchParams(location.hash.split("?")[1] || "");
 	let fromQuery = params.get("from") || "";
-	let workRecord = workbenchEnabled() ? context?.workRecord : null;
+	let workRecord = isWorkbench ? context?.workRecord : null;
 	const connection = {
 		epoch: state.epoch,
 		namespace: state.namespace,
@@ -68109,7 +68155,7 @@ async function viewSession(main, host, sid, context = null) {
 	const path = `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(sid)}`;
 	const requestedWork = workSessionContext(params);
 	const workContextReadable = workFollowUpAvailable(state.caps) || state.caps?.features?.pm_workspaces?.work_start?.version === 1;
-	const workContext = workbenchEnabled() && workContextReadable && requestedWork ? requestedWork : null;
+	const workContext = isWorkbench && workContextReadable && requestedWork ? requestedWork : null;
 	let selectedAttempt = null;
 	if (workContext) try {
 		const selected = await readWorkSessionContext({
@@ -68441,12 +68487,12 @@ async function viewSession(main, host, sid, context = null) {
 	const results = inspector({
 		title: t("session_results"),
 		dock: true,
-		overlay: workbenchEnabled(),
-		historyNavigation: workbenchEnabled(),
+		overlay: isWorkbench,
+		historyNavigation: isWorkbench,
 		canReopen: () => !disposed && !withdrawn && readReady,
 		returnFocus: () => openResults
 	});
-	const openResults = workbenchEnabled() ? button({
+	const openResults = isWorkbench ? button({
 		variant: "secondary",
 		icon: "panel-right",
 		label: t("session_results"),
@@ -68458,7 +68504,7 @@ async function viewSession(main, host, sid, context = null) {
 	});
 	const wide = matchMedia("(min-width: 1200px)");
 	const syncWide = () => {
-		openResults.hidden = !workbenchEnabled() && wide.matches || Boolean(withdrawn);
+		openResults.hidden = !isWorkbench && wide.matches || Boolean(withdrawn);
 	};
 	syncWide();
 	wide.addEventListener("change", syncWide);
@@ -68475,7 +68521,7 @@ async function viewSession(main, host, sid, context = null) {
 			label: t("ui_more")
 		}),
 		items: [
-			...workbenchEnabled() ? [{
+			...isWorkbench ? [{
 				key: "interrupt",
 				label: t("interrupt"),
 				content: stop
@@ -68515,7 +68561,7 @@ async function viewSession(main, host, sid, context = null) {
 			}
 		]
 	});
-	if (workbenchEnabled()) {
+	if (isWorkbench) {
 		stop.setAttribute("role", "menuitem");
 		stop.addEventListener("click", () => overflow.close());
 	}
@@ -68524,7 +68570,7 @@ async function viewSession(main, host, sid, context = null) {
 		mark: markSlot,
 		pill: pillSlot,
 		meta,
-		actions: workbenchEnabled() ? [openResults] : [stop, openResults],
+		actions: isWorkbench ? [openResults] : [stop, openResults],
 		overflow
 	});
 	head.append(backSlot, header);
@@ -68544,7 +68590,7 @@ async function viewSession(main, host, sid, context = null) {
 		recoverPermitted: () => resultSourceAvailable() && (options.recoverPermitted || options.permitted)(),
 		canSend: () => state.online && !state.nativeBusy && state.viewReady
 	});
-	const workResultTools = workbenchEnabled() && Boolean(workContext);
+	const workResultTools = isWorkbench && Boolean(workContext);
 	const sessionTools = h("div", {}, workResultTools ? context?.itemBox : null, sessionSection("list-checks", t("checkpoints"), cps.box, cps.action), sessionSection("check", t("session_delivery"), result), sessionSection("inbox", t("session_sources"), sourcesBody), batSlot, permissionsSlot, labels.box, instructions?.box, observations.box, details);
 	const supporting = h("div", {}, sessionTools);
 	const toolsDisclosure = workResultTools ? disclosure({
@@ -68590,7 +68636,7 @@ async function viewSession(main, host, sid, context = null) {
 	const followWorkspace = workContext?.workspaceId || "";
 	const followWorkId = workRecord?.work_item?.work_item_id || "";
 	let mobileLayout = null;
-	const followUp = workbenchEnabled() && followWorkspace && /^wi_[0-9a-f]{20}$/.test(followWorkId) && workFollowUpAvailable(state.caps) ? mountWorkFollowUp({
+	const followUp = isWorkbench && followWorkspace && /^wi_[0-9a-f]{20}$/.test(followWorkId) && workFollowUpAvailable(state.caps) ? mountWorkFollowUp({
 		h,
 		t,
 		api,
@@ -68642,7 +68688,7 @@ async function viewSession(main, host, sid, context = null) {
 	}, lane, results);
 	const withdrawnSlot = h("div", { class: "session-withdrawn" });
 	main.append(head, workspaceNode);
-	const perspectives = workbenchEnabled() ? workbenchViews({
+	const perspectives = isWorkbench ? workbenchViews({
 		main,
 		head,
 		work: workspaceNode,
@@ -69269,7 +69315,7 @@ async function viewSession(main, host, sid, context = null) {
 		cps.clear();
 		deliveryKnown.clear();
 		state.observations?.delete(`session:${host}/${sid}`);
-		if (first && !results.hidden && (!wide.matches || workbenchEnabled())) results.close();
+		if (first && !results.hidden && (!wide.matches || isWorkbench)) results.close();
 		conversation.clear();
 		pending.replaceChildren();
 		pendingIdentity = void 0;
@@ -73551,7 +73597,7 @@ async function route() {
 		return;
 	}
 	const off = await ({
-		"work-list": workbenchEnabled() ? () => {} : viewSessions,
+		"work-list": isWorkbench ? () => {} : viewSessions,
 		pm: viewPmWorkspace,
 		home: viewHome,
 		projects: viewProjects,

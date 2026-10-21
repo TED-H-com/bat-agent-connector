@@ -1,4 +1,4 @@
-import {workbenchEnabled} from './workbench-mode.js';
+import {layoutDecision} from './workbench-mode.js';
 import {h} from './ui/dom.js';
 import {t} from './i18n.js';
 import {button, iconButton, menu, trapFocus} from './ui/components.js';
@@ -7,7 +7,9 @@ import {lastWorkspace, lastProjectView, rememberWorkspace, forgetWorkspace, avai
 import {projectNavigation} from './project-navigation.js';
 
 export function dashboardShell({navigation, namespace, caps, api, guard, onEvents, errorBox}) {
-  const candidate = workbenchEnabled();
+  const candidate = layoutDecision.layout === 'workbench';
+  Object.assign(document.body.dataset, {layout: layoutDecision.layout, layoutSource: layoutDecision.source,
+    layoutStatus: layoutDecision.status, layoutReason: layoutDecision.reason || ''});
   const aside = navigation.box, main = document.getElementById('main'), top = document.querySelector('.top');
   const toggle = document.getElementById('workspace-menu'), crumb = document.getElementById('nav');
   const workspaceBlock = h('div', {class: 'shell-workspace-block'}), projectNav = h('div', {class: 'shell-project-nav'});

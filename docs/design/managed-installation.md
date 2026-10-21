@@ -270,6 +270,52 @@ kills an owner to upgrade. Passing output includes both binary digests and clean
 This supplements clean-profile installation evidence; it does not establish an
 in-place app installer upgrade or acceptance of an operator's existing data.
 
+The publication extension uses the earlier checkout's own Python product source
+with this checkout's supporting test fixtures to produce a real Work/Attempt/Result and a GitHub REST 201 receipt
+in the earlier core's owned journal. Only the outer completion is interrupted;
+receipt rows are not synthesized. That producer releases its journal while its
+FakeGitHub/MockBat peers remain alive. The current core's ordinary `serve` child
+then opens the same data, and `ensure` verifies its ownership and identity. The
+original key resolves the same operation without a second creation call or push;
+immutable Work/Attempt/Result and creation-receipt rows, original events, Result
+API content and manual checkout bytes are checked.
+Only fixture-owned process handles are terminated for fault-case teardown.
+
+The receipt records the old producer version/source hashes and the added time,
+which must be at most 60 seconds including cleanup. The source harness can test
+two actual source revisions locally; distinct frozen binaries remain CI evidence
+for their exact platform/head. The POSIX host-script producer has Linux evidence;
+macOS publication continuity remains unproven pending successful native CI. Its
+seed log, fixture setup stages and 40-second thread dump are preserved on failure.
+A test-only audit plugin records monotonic child-start and fixture start/end
+events without replacing subprocess or socket functions. Large host arguments
+remain opaque (length and digest only); phase detection reads at most a 128-character
+plain-text prefix. The fixture's own host-call await records duration, and fixture
+setup samples at most twelve main-thread frame locations once per second. Import
+origins and reverse-lookup call stacks identify which checkout owns a slow fake.
+Environment values and frame locals are omitted; the same log redactor is used
+before printing and uploading.
+
+The seed-readiness ceiling is restored to 45 seconds. The macOS timeline on
+`d6c8f319` had a 35.88-second gap after the loopback reverse-lookup audit event.
+The real Linux source harness confirms the call originates in this checkout's
+FakeGitHub, through `HTTPServer.server_bind` and `socket.getfqdn`. Its test server
+now binds the numeric address without reverse DNS. The old macOS log contains no
+sample inside that gap, so the resolver's exact blocked frame and duration remain
+unproven on macOS. A separate dump proves the observer was parsing a large host
+script; that parsing is removed. Even retaining all 13.63 seconds of macOS
+ready-fixture work, subtracting the lookup gap puts producer entry at about
+21.10 seconds (56.98 - 35.88). The next native run must confirm the improvement;
+Linux timings cannot establish the remaining macOS process-start cost.
+The 40-second faulthandler timeout, 60-second provider window and whole-case
+budget, including cleanup, remain unchanged. Pytest's `--setup-show` prints fixture
+completion; the explicit timeline locates slow work.
+macOS retains the existing packaged workspace/identity/busy checks. Windows also
+keeps those checks; its publication path and real OS-vault continuity remain open
+acceptance items.
+This is upgrade evidence: managed downgrade refusal remains unchanged, and the
+separate plain-updater rollback cases cannot stand in for a managed rollback.
+
 The owner explicitly excluded formal signing, Mac notarization, production update channels and Linux persistent native credential enrollment from this delivery. Full human execution of the 46-item real-environment acceptance matrix is user-owned and is not an outstanding agent task. Exclusion does not mean these capabilities or checks were completed. Unknown native BAT merge acknowledgements preserve original work under the [merge contract](worktree-merge.md); its separate human-adjudication API is not a delivery gate.
 
 See [first use](../getting-started.md), [implementation status](../product/implementation-status.md), [acceptance reference](../product/acceptance-v2.md) and [shared frontend lifecycle](shared-frontend.md).

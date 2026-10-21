@@ -42,7 +42,7 @@ from . import (
 )
 from .api_v1 import ApiV1, is_dashboard_path
 from .artifact_host import ArtifactHost
-from .config import Config, state_dir
+from .config import Config, default_journal_path, state_dir
 from .errors import BatError, OwnerConflict, ResourceReadOnly, TaskControlRefused, TokenUnavailable
 from .fleet import Fleet
 from .github import GitHubClient
@@ -159,7 +159,7 @@ def request(method: str, *, _auth_token: str | None = None, _url: str | None = N
 class TaskDaemon:
     def __init__(self, config: Config, db_path: str | Path | None = None):
         self._config = config
-        self._db_path = Path(db_path or state_dir() / "tasks.sqlite3")
+        self._db_path = Path(db_path or default_journal_path())
         self._lease_fd: int | None = None
         self._owner_id = secrets.token_hex(16)
         self._initialized = False
