@@ -1,44 +1,41 @@
 """Every journal-owned BEGIN ends even when entry or schema installation fails."""
 import sqlite3
-from types import SimpleNamespace
 
 import pytest
 
 from bat_agent_connector import pm_source_history as history
-from bat_agent_connector import task_journal as journal_module
 from bat_agent_connector.task_journal import Journal
 
 
-def test_schema_script_failure_rolls_back_its_partial_schema(tmp_path, monkeypatch):
+def test_schema_script_failure_rolls_back_its_partial_schema(tmp_path):
     path = tmp_path / 'incompatible-journal.sqlite'
     original = sqlite3.connect(path, isolation_level=None)
     original.execute('CREATE TABLE events(event_id INTEGER PRIMARY KEY)')
     original.close()
-    connections = []
-
-    def connect(*args, **kwargs):
-        connection = sqlite3.connect(*args, **kwargs)
-        connections.append(connection)
-        return connection
-
-    # Inspect the production initializer's actual connection after failure,
-    # without changing sqlite3.connect for any other module.
-    monkeypatch.setattr(journal_module, 'sqlite3', SimpleNamespace(connect=connect, Row=sqlite3.Row))
+    journal = Journal.__new__(Journal)
     try:
-        with pytest.raises(sqlite3.OperationalError, match='no such column: task_id'):
-            Journal(path)
-        connection, = connections
+        with pytest.raises(sqlite3.OperationalError, match='no such column: task_id') as failed:
+            journal.__init__(path)
+        connection = journal.db
         assert not connection.in_transaction
         assert not connection.execute("SELECT 1 FROM sqlite_schema WHERE name='tasks'").fetchone()
+        # The exception retains the real initializer's preflight resource.
+        # Inspect it without replacing sqlite3 or counting connect calls.
+        reader = next(entry.frame.f_locals['reader'] for entry in failed.traceback
+            if entry.frame.f_locals.get('self') is journal)
+        assert reader is not connection
+        with pytest.raises(sqlite3.ProgrammingError, match='closed'):
+            reader.execute('SELECT 1')
         other = sqlite3.connect(path, isolation_level=None, timeout=0)
         try:
             other.execute('INSERT INTO events(event_id) VALUES(1)')
             assert connection.execute('SELECT event_id FROM events').fetchone()[0] == 1
+            assert other.execute('PRAGMA wal_checkpoint(TRUNCATE)').fetchone()[0] == 0
         finally:
             other.close()
     finally:
-        for connection in connections:
-            connection.close()
+        if hasattr(journal, 'db'):
+            journal.close()
 
 
 @pytest.mark.parametrize('nested', [False, True])
