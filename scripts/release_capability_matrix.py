@@ -272,7 +272,7 @@ def generate(source, candidate, *, scratch, receipts=(), claims=()):
     if node is None:
         raise ValueError("BROWSER_PRODUCER_UNAVAILABLE")
     web = json.loads(subprocess.check_output(  # noqa: S603 -- fixed local script, no shell/network/native IPC
-        [node, str(ROOT / "scripts/capability_matrix_browser.mjs"), str(snapshot)],
+        [node, str(ROOT / "scripts/capability_matrix_browser.mjs"), str(snapshot), str(state / "browser-capabilities.json")],
         cwd=state, env=env, timeout=30))
     native = native_facts(files)
     rows = []
@@ -290,12 +290,12 @@ def generate(source, candidate, *, scratch, receipts=(), claims=()):
                              receipt_kind="api_producer"))
     web_source = {"file": "src/bat_agent_connector/dashboard/app.js", "region": "src/transport/index.ts",
                   "producer": "scripts/capability_matrix_browser.mjs",
-                  "adapters": ["locale=en", "empty fetch response; no server fields", "browser without native IPC"]}
+                  "adapters": ["locale=en", "fetch returns complete ApiV1 producer response", "browser without native IPC"]}
     shared_proof = _shared_ui(files)
     rows.append(_row(candidate, "Browser", "web", "browser", "shared_ui", True if shared_proof else "unknown",
                      shared_proof, reason="SHARED_BUILD_ENTRY" if shared_proof else "SOURCE_GATE_UNVERIFIED"))
     for capability, present in (("authenticated_central", web["central_request"] == {"method": "GET", "path": "/api/v1/capabilities"}
-                                and web["authenticated_request"] is True),
+                                and web["authenticated_request"] is True and web["producer_response_unchanged"] is True),
                                 ("native_fleet", not web["native_fleet_unavailable"]),
                                 ("credential_vault", not web["credential_vault_unavailable"])):
         rows.append(_row(candidate, "Browser", "web", "browser", capability, present, web_source,

@@ -28,6 +28,11 @@ async def server_facts(directory):
             caps_status, caps = await ApiV1(daemon).capabilities(principal)
             if status != 200 or caps_status != 200 or bootstrap["capabilities"] != caps:
                 raise ValueError("BOOTSTRAP_CAPABILITIES_DIFFER")
+            if not managed:
+                # The browser probe's HTTP adapter returns the complete real
+                # response, not a hand-written subset. Ephemeral IDs/build digest
+                # stay in this temporary file and never enter the golden.
+                (directory / "browser-capabilities.json").write_text(json.dumps(caps), encoding="utf-8")
             result["managed" if managed else "plain"] = {
                 "bootstrap_capabilities_equal": True,
                 "principal": {"actor": caps["actor"], "scopes": caps["scopes"]},
