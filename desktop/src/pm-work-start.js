@@ -758,7 +758,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         } else if ([401, 403, 404].includes(err.status)) {
           withdraw();
         }
-        errorStatusBox.replaceChildren(panelErrorBox(err, {within: errorStatusBox}));
+        errorStatusBox.replaceChildren(panelErrorBox(err, {sourceRefresh:false, within: errorStatusBox}));
         errorStatusBox.hidden = false;
       } finally {
         if (checkingTicket === ticket) checking = false;
@@ -902,7 +902,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
           const statusBox = editorInstance?.box?.querySelector(':scope > [role="status"]');
           if (statusBox) {
             statusBox.hidden = false;
-            statusBox.replaceChildren(panelErrorBox(error, {within: statusBox}));
+            statusBox.replaceChildren(panelErrorBox(error, {sourceRefresh:false, within: statusBox}));
             return true;
           }
         }

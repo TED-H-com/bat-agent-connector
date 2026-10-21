@@ -71,7 +71,7 @@ export function permissionsPanel({h, t, api, caps, guard, errorBox, opStatus, st
           if (error.status >= 400 && error.status < 500 && admissionRefusals.has(error.code)) {
             intent.refused = error.code; persist();
           }
-          message.replaceChildren(errorBox(error, {within:message}));
+          message.replaceChildren(errorBox(error, {sourceRefresh:false, within:message}));
         }
       } finally {busy = false; if (current()) update();}
     })();

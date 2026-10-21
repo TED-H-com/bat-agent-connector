@@ -53,7 +53,7 @@ export function maintenanceObservations({h,t,api,alive,workspaceId,workspace,cap
   const editorsBox=h('div',{class:'pm-observation-actions'});
   function update(){for(const editor of editors)editor.update();}
   const request=async(...args)=>{const ticket=epoch;try{return await api(...args);}catch(error){
-    if(valid(ticket)&&[401,403,404].includes(error.status))failure(error);throw error;
+    if(valid(ticket)&&[401,403,404].includes(error.status))failure(error, {sourceRefresh:false});throw error;
   }};
   for(const [action,label,description] of [['pm.github.observe','pmo_observe','pmo_observe_help'],['pm.workload.capture','pmo_capture','pmo_capture_help']]){
     if(action==='pm.github.observe'&&!githubAvailable())continue;
@@ -109,7 +109,7 @@ export function maintenanceObservations({h,t,api,alive,workspaceId,workspace,cap
       h('a',{href:`#/op/${encodeURIComponent(row.operation_id)}`},t('pm_operation'))));return box;
   }
   function withdraw(){epoch++;ready=false;policy=null;baseline=null;lifecycle=null;facts.replaceChildren();context.replaceChildren();status.replaceChildren();update();}
-  function failure(error){withdraw();status.append(errorBox(error,{summary:t('pmo_unavailable'), within:status}));}
+  function failure(error, options = {}){withdraw();status.append(errorBox(error,{...options, summary:t('pmo_unavailable'), within:status}));}
   async function refresh(){
     withdraw();const ticket=epoch;
     try{

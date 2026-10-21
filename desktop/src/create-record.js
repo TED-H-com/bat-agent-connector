@@ -34,7 +34,7 @@ export function createRecordForm({h, t, api, caps, guard, namespace, kind, proje
   const changed = () => {
     if (busy || saved.intent || damaged) return;
     saved.values = capture(); unsaved.hidden = false;
-    try {persist();} catch (error) {status.replaceChildren(errorBox(error, {within:status}));}
+    try {persist();} catch (error) {status.replaceChildren(errorBox(error, {sourceRefresh:false, within:status}));}
   };
   const field = (name, label, multiline = false, max = 20000) => {
     const input = h(multiline ? 'textarea' : 'input', {maxlength: max, required: name === primary, 'aria-label': t(label)});
@@ -111,7 +111,7 @@ export function createRecordForm({h, t, api, caps, guard, namespace, kind, proje
           && Object.hasOwn(admissionRefusals, error.code) && admissionRefusals[error.code] === error.status) {
           saved.intent.initialAdmissionRefused = true; persist();
         }
-        status.replaceChildren(errorBox(error, {within:status}));} catch { /* retired or storage unavailable */ }
+        status.replaceChildren(errorBox(error, {sourceRefresh:false, within:status}));} catch { /* retired or storage unavailable */ }
     } finally {busy = false; try {guard(); update();} catch { /* retired */ }}
   };
   const create = button({variant: 'primary', type: 'submit', label: t(project ? 'add_project' : 'add_item')});
@@ -122,7 +122,7 @@ export function createRecordForm({h, t, api, caps, guard, namespace, kind, proje
     try {
       const next = {version: 1, values: saved.values}; localStorage.setItem(key, JSON.stringify(next)); saved = next; operation = null;
       receipt.replaceChildren(); status.replaceChildren(); update();
-    } catch (error) {status.replaceChildren(errorBox(error, {within:status}));}
+    } catch (error) {status.replaceChildren(errorBox(error, {sourceRefresh:false, within:status}));}
   }});
   const form = h('form', {class: 'panel', 'data-create-record': kind, onsubmit: event => {
     event.preventDefault();

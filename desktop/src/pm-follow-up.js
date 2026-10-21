@@ -29,7 +29,7 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
   const hidden=value=>h('input',{type:'hidden',value});
   const governance=hidden('[]'),meetings=hidden('[]'),baseline=hidden('');
   const fields={snapshot:snapshotChoice,thread:threadChoice,previous:previousChoice,governance,meetings,_baseline:baseline};
-  const onAccessFailure=error=>{if([401,403].includes(error.status)||['PM_FOLLOW_UP_SOURCE_UNAVAILABLE','FORBIDDEN','NOT_FOUND'].includes(error.code))unavailable(error);};
+  const onAccessFailure=(error,options)=>{if([401,403].includes(error.status)||['PM_FOLLOW_UP_SOURCE_UNAVAILABLE','FORBIDDEN','NOT_FOUND'].includes(error.code))unavailable(error,options);};
   const assessments=caps()?.features?.pm_workspaces?.follow_up_analysis
     ?followUpAssessments({h,t,api,alive,workspaceId,caps,errorBox,onAccessFailure,pageSize}):null;
   const analysis=assessments?followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespace,form,input,labelled,
@@ -61,13 +61,13 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
     sourceLoaded=false;sourcePages={};snapshot=null;thread=null;choices.replaceChildren();meetingChoices.replaceChildren();sourceStatus.replaceChildren();
     for(const node of [snapshotChoice,threadChoice,previousChoice])updateOptions(node,[],node===snapshotChoice?'pm_fu_select_snapshot':'pm_fu_none');
   }
-  function unavailable(error) {
+  function unavailable(error, options = {}) {
     assessments?.clear();
     analysis?.clear();
     ++serial;++sourceSerial;loaded=false;reading=false;head=null;plan=null;metadata=[];next=null;
     view.replaceChildren();choose.replaceChildren();more.hidden=true;clearSources();editor?.update();editorFold.hidden=true;
     if(retired){editor?.box.remove();}
-    status.replaceChildren(errorBox(error, {within:status}),h('button',{type:'button',class:'ui-button secondary ui-sm',onclick:()=>void refresh()},t('pm_fu_retry')));
+    status.replaceChildren(errorBox(error, {...options, within:status}),h('button',{type:'button',class:'ui-button secondary ui-sm',onclick:()=>void refresh()},t('pm_fu_retry')));
   }
   function render(row) {
     view.replaceChildren();if(!row){view.append(emptyState({title:t('pm_fu_empty')}));return;}
