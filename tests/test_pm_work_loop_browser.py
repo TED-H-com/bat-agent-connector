@@ -86,6 +86,12 @@ async def test_start_queue_close_reconnect_result_and_pr(start_ready, mock, tmp_
     await work_loop(start_ready, mock, tmp_path, locale, width, close_restart=True)
 
 
+@pytest.mark.parametrize("locale", ["en", "zh-TW"])
+async def test_work_foreground_recovery_keeps_unsent_draft_and_attempt(start_ready, mock, tmp_path, locale):
+    """Real HTTP/storage; BAT/model and lifecycle events are doubles, not a physical phone."""
+    await work_loop(start_ready, mock, tmp_path, locale, 390, foreground_recovery=True)
+
+
 @pytest.mark.parametrize(("locale", "width"), [("en", 1440), ("zh-TW", 390)])
 async def test_fixed_result_review_records_insufficient_evidence_from_ui(start_ready, mock, tmp_path, monkeypatch, locale, width):
     w, ops = start_ready, start_ready["d"].ops
@@ -189,7 +195,7 @@ async def discussion_loop(start_ready, mock, tmp_path, monkeypatch, locale, widt
 
 async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_token=None, monkeypatch=None,
                     withdraw_writer=False, lost_reply=None, review_result=False, verify_result=False,
-                    close_restart=False):
+                    close_restart=False, foreground_recovery=False):
     ops = w["d"].ops
     # The handoff test runner decodes a single protocol. This journey also runs
     # checkpoint and publication shell scripts, so execute every actual script.
@@ -216,6 +222,8 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             commands={project_id: (sys.executable, "-c", script)}, artifact_dir=str(tmp_path / "verifier-logs")))
     adoptions_before = ops.db.execute("SELECT count(*) FROM pm_plan_adoptions").fetchone()[0]
     entry = "verify-result" if verify_result else "review-result" if review_result else "lost-start-reply" if lost_reply else "withdraw-writer" if withdraw_writer else mode
+    if foreground_recovery:
+        entry = "foreground-recovery"
     shots = ROOT / "desktop/test-results/work-loop" / f"{entry}-{locale}-{width}"
     shutil.rmtree(shots, ignore_errors=True)
     shots.mkdir(parents=True, exist_ok=True)
@@ -335,7 +343,8 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 "create_work": create_work, "project": project_id, "withdraw_writer": withdraw_writer,
                 "lost_start_reply": lost_reply is not None, "review_result": review_result,
                 "reviewer_actor": STARTER_OWNER.actor, "verify_result": verify_result,
-                "browser_profile": str(browser_temp / "profile") if close_restart else None})
+                "foreground_recovery": foreground_recovery,
+                "browser_profile": str(browser_temp / "profile") if close_restart or foreground_recovery else None})
             if create_work:
                 created = await receive("created")
                 await wait_status(created["operation_id"], "succeeded")
@@ -397,9 +406,73 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             mock.ws_doc["terminals"].append({"id": sid, "workspaceId": "ws-1", "title": "Login repair",
                 "type": "terminal", "cwd": wt, "worktreePath": wt, "worktreeBranch": execution["branch"],
                 "agentPreset": "claude-code", "sdkSessionId": "sdk-work-loop", "model": "claude-sonnet-4-5"})
-            _set_turn_messages(mock, sid, marker, streaming=True, assistant_text="Working on the login repair.")
+            assistant_text = ("\n\n".join(f"Progress {i}: 正在檢查登入修正與測試，等待下一步指示。" for i in range(60))
+                if foreground_recovery else "Working on the login repair.")
+            _set_turn_messages(mock, sid, marker, streaming=True, assistant_text=assistant_text)
             await w["d"].inventory._refresh_scheduled("h1")
             await send({"ready": True, "attempt": att["attempt_id"], "execution": result["children"]["handoff"]})
+            if foreground_recovery:
+                await receive("background-offline")
+                cursor = (await _result(w, att))["cursor"]
+                # A real BAT observation advances the turn while the browser is
+                # offline. Inventory, not the test, writes the resulting event.
+                _set_turn_messages(mock, sid, marker, streaming=False, assistant_text=assistant_text,
+                    last_data_at=1_790_001_020_000)
+                await w["d"].inventory._refresh_scheduled("h1")
+                status, page = await http(w["port"], "GET", f"/api/v1/events?after={cursor}&limit=100",
+                    tok=w["owner_token"])
+                assert status == 200, page
+                event = next(row for row in page["events"] if row["resource_type"] == "session"
+                    and row["resource_id"] == "h1/" + sid and row["kind"] == "session.updated")
+                assert event["seq"] > cursor
+                assert mock.channels().count("claude:send-message") == 1
+                assert not any(ops.get(row[0])["action"] == "session.send"
+                    for row in ops.db.execute("SELECT operation_id FROM operations"))
+                await send({"event": event})
+                sent = await receive("sent-after-recovery")
+                oid, intent = sent["operation_id"], sent["intent"]
+                await wait_status(oid, "succeeded")
+                follow = ops.get(oid)
+                assert follow["idempotency_key"] == intent["key"]
+                assert {key: follow[key] for key in ("action", "target", "params", "preconditions")} == intent["request"]
+                assert follow["target"] == w["target"]
+                assert follow["preconditions"] == {"expected_attempt_id": att["attempt_id"]}
+                assert follow["params"] == {"text": sent["draft"].strip(), "schedule": "after_current"}
+                assert (await _get_op(w, oid))["input_receipt"]["state"] == "sent"
+                await send({"sent": oid})
+                done = await receive("foreground-done")
+                assert await asyncio.wait_for(child.wait(), 10) == 0, (shots / "browser.log").read_text()
+                assert done["operations"] == [start["operation_id"], oid]
+                user_ops = [ops.get(identity) for identity in done["operations"]]
+                assert all(op["actor"] == STARTER_OWNER.actor and op["status"] == "succeeded" for op in user_ops)
+                assert len({op["idempotency_key"] for op in user_ops}) == 2
+                created = {row[0] for row in ops.db.execute("SELECT operation_id FROM operations")} - seed_ids
+                assert created == set(done["operations"]) | {identity for identity in result["children"].values() if identity}
+                sends = [ops.get(row[0]) for row in ops.db.execute("SELECT operation_id FROM operations")
+                    if ops.get(row[0])["action"] == "session.send"]
+                assert [op["operation_id"] for op in sends] == [oid]
+                rows = ops.db.execute("SELECT operation_id, message_id FROM work_inputs WHERE attempt_id=?",
+                    (att["attempt_id"],)).fetchall()
+                assert [tuple(row) for row in rows] == [(oid, "batc-" + oid)]
+                frames = bat_writes(mock)
+                assert [frame["channel"] for frame in frames] == [
+                    "claude:start-session", "claude:send-message", "claude:send-message"]
+                assert all(frame["params"]["sessionId"] == sid for frame in frames)
+                assert sum(frame["params"].get("clientMessageId") == "batc-" + oid for frame in frames) == 1
+                assert frames[-1]["params"]["prompt"] == sent["draft"].strip()
+                assert snapshot(w["human"]) == before
+                assert (mock.metas[MANUAL], mock.states[MANUAL]) == manual
+                assert not any(row[0] == "POST" for row in w["gh"].requests)
+                assert git(w["remote"], "rev-parse", "refs/heads/main") == w["sha"]
+                (shots / "bat-frames.json").write_text(json.dumps(frames, indent=2) + "\n")
+                (shots / "evidence.json").write_text(json.dumps({"locale": locale, "width": width,
+                    "source_sha": git(ROOT, "rev-parse", "HEAD"), "source_dirty": bool(git(ROOT, "status", "--porcelain")),
+                    "python": sys.version, "browser": done["browser"], "same_attempt": att["attempt_id"],
+                    "event": event, "browser_operations": 2, "receipt_rows": 1, "matching_bat_frames": 1,
+                    "manual_unchanged": True, "recovery": done["recovery"]}, indent=2) + "\n")
+                # This mode ends at its sent receipt. The shared journey's other
+                # modes still exercise commits, restart, review and publication.
+                return
             if close_restart:
                 queued = await receive("awaiting-admission")
 

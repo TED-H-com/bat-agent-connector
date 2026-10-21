@@ -28,7 +28,7 @@ const launch = async () => {
     context = await browser.newContext(options);
   }
   await context.addInitScript(token => sessionStorage.setItem('batc.dashboard.token', token), f.token);
-  context.on('request', request => allRequests.push({step, method: request.method(), url: request.url(),
+  context.on('request', request => allRequests.push({step, method: request.method(), url: request.url(), key: request.headers()['idempotency-key'],
     ...(request.postData() === null ? {} : {body: request.postData()})}));
   page = context.pages()[0] || await context.newPage();
   page.on('pageerror', error => errors.push(error.message));
@@ -64,7 +64,192 @@ const clickOperation = async (action, button) => {
   return operation(response);
 };
 const shot = name => page.screenshot({path: resolve(f.shots, name + '.png'), animations: 'disabled'});
-try {
+const deferred = () => {
+  let release;
+  const promise = new Promise(resolve => {release = resolve;});
+  return {promise, release};
+};
+async function foregroundRecovery(active, workUrl) {
+  // HTTP, the bundle and storage are real. BAT/model and OS lifecycle events
+  // are doubles; this sequence does not establish physical-phone acceptance.
+  const originalPage = page, originalContext = context;
+  const field = page.locator('[data-follow-up-input]');
+  const submit = page.getByRole('button', {name: zh ? '送出下一步' : 'Send next', exact: true});
+  const draft = '  尚未送出 📝 — keep this draft\n' + Array.from({length: 36}, (_, i) =>
+    `第 ${i + 1} 行：登入修正 / unchanged text 🙂`).join('\n') + '\n  ';
+  const frames = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const visibility = value => page.evaluate(value => {
+    Object.defineProperty(document, 'visibilityState', {configurable: true, value});
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, value);
+  const snapshot = () => field.evaluate(node => ({
+    focused: document.activeElement === node, value: node.value,
+    selection: [node.selectionStart, node.selectionEnd, node.selectionDirection],
+    scrollY, scrollTop: node.scrollTop, readerTop: document.querySelector('main.session-view').scrollTop,
+    stored: Object.entries(localStorage).sort(([a], [b]) => a.localeCompare(b)),
+  }));
+  const events = deferred(), sources = deferred(), admission = deferred();
+  const heldEvents = [], heldSources = [], eventPages = [];
+  let holdEvents = false, holdSources = false, holdAdmission = false;
+  let before, after, syncKey, intent, changedKeys, recoveryStart, recoveryEnd;
+  const operationPosts = since => allRequests.slice(since).filter(row => row.method === 'POST'
+    && new URL(row.url).pathname.startsWith('/api/v1/operations'));
+  const readTargets = since => {
+    const reads = allRequests.slice(since).filter(row => row.method === 'GET');
+    const inputs = reads.filter(row => new URL(row.url).pathname.endsWith('/inputs'));
+    const results = reads.filter(row => /\/work-attempts\/[^/]+\/result$/.test(new URL(row.url).pathname));
+    assert.ok(inputs.length && results.length, 'Recovery must read real inputs and the original Result');
+    assert.ok(inputs.every(row => new URL(row.url).searchParams.get('attempt_id') === active.attempt));
+    assert.ok(results.every(row => new URL(row.url).pathname.endsWith(`/${active.attempt}/result`)));
+  };
+  await context.route('**/api/v1/**', async route => {
+    const request = route.request(), path = new URL(request.url()).pathname;
+    if (holdEvents && request.method() === 'GET' && path === '/api/v1/events') {
+      heldEvents.push(request.url()); await events.promise;
+    } else if (holdSources && request.method() === 'GET'
+      && (path.includes('/sessions/') || path.endsWith('/inputs') || path.endsWith('/result'))) {
+      heldSources.push(request.url()); await sources.promise;
+    } else if (holdAdmission && request.method() === 'POST' && path.startsWith('/api/v1/operations')) {
+      await admission.promise;
+    }
+    // Hold the actual request, then let ApiV1 produce its response unchanged.
+    await route.continue();
+  });
+  context.on('response', response => {
+    if (response.ok() && new URL(response.url()).pathname === '/api/v1/events') {
+      response.json().then(body => eventPages.push(body)).catch(() => {});
+    }
+  });
+  try {
+    step = 'foreground-setup';
+    await field.fill(draft);
+    await expect(submit).toBeEnabled();
+    await page.getByRole('button', {name: zh ? '成果' : 'Results', exact: true}).click();
+    const selectedResult = page.locator('[data-work-result-focus="live-output"]');
+    const originalHref = await selectedResult.getAttribute('href');
+    assert.ok(originalHref.includes(`attempt=${active.attempt}`));
+    await page.keyboard.press('Escape');
+    await field.fill(draft);
+    const original = await field.elementHandle();
+    await field.evaluate(node => {
+      node.setSelectionRange(3, 19, 'backward');
+      node.scrollTop = 45;
+      document.querySelector('main.session-view').scrollTop = 75;
+    });
+    await frames();
+    before = await snapshot();
+    assert.equal(before.focused, true);
+    assert.deepEqual(before.selection, [3, 19, 'backward']);
+    assert.ok(before.scrollTop > 0 && before.readerTop > 0, JSON.stringify(before));
+    const drafts = before.stored.filter(([key]) => key.startsWith('batc.pm.') && key.includes('.session.send.'));
+    assert.equal(drafts.length, 1);
+    const [draftKey, stored] = drafts[0];
+    assert.ok(draftKey.endsWith(`.session.send.${JSON.stringify({workspace_id: f.workspace, work_item_id: f.work})}`));
+    assert.equal(JSON.parse(stored).values.text, draft);
+    assert.equal(Object.hasOwn(JSON.parse(stored), 'intent'), false);
+    // app.js saveCursor writes this server checkpoint only after the events page
+    // and its source refreshes settle. No draft or other storage key is exempt.
+    syncKey = 'batc.sync.' + draftKey.slice('batc.pm.'.length, draftKey.indexOf('.session.send.'));
+    assert.ok(before.stored.some(([key]) => key === syncKey));
+    const unchanged = async () => {
+      assert.equal(page, originalPage); assert.equal(context, originalContext);
+      assert.equal(await field.evaluate((node, old) => node === old, original), true);
+      const current = await snapshot();
+      assert.deepEqual(Buffer.from(current.value, 'utf8'), Buffer.from(draft, 'utf8'));
+      const withoutCheckpoint = state => ({...state, stored: state.stored.filter(([key]) => key !== syncKey)});
+      assert.deepEqual(withoutCheckpoint(current), withoutCheckpoint(before));
+      assert.equal(Object.hasOwn(JSON.parse(current.stored.find(([key]) => key === draftKey)[1]), 'intent'), false);
+      assert.equal(page.url(), workUrl);
+      await expect(selectedResult).toHaveAttribute('href', originalHref);
+      assert.deepEqual(operationPosts(recoveryStart), []);
+      await expect(page.locator('[data-follow-up-receipt], [data-follow-up-ack]')).toHaveCount(0);
+    };
+    recoveryStart = allRequests.length;
+    step = 'hidden';
+    await visibility('hidden');
+    await expect(submit).toBeDisabled();
+    step = 'offline';
+    await context.setOffline(true);
+    assert.equal(await page.evaluate(() => navigator.onLine), false);
+    assert.equal(await page.evaluate(async () => {
+      try {await fetch('/dashboard/index.html?foreground-offline', {cache: 'no-store'}); return false;}
+      catch {return true;}
+    }), true, 'Chromium must fail a real HTTP fetch while offline');
+    await unchanged();
+    send({stage: 'background-offline'});
+    const changed = await receive();
+    assert.equal(changed.event.kind, 'session.updated');
+    holdEvents = true; holdSources = true;
+    step = 'resume-events';
+    await context.setOffline(false);
+    await visibility('visible');
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true})));
+    await expect(submit).toBeDisabled();
+    await expect.poll(() => heldEvents.length).toBeGreaterThan(0);
+    await unchanged();
+    step = 'resume-sources';
+    events.release();
+    await expect.poll(() => heldSources.filter(url => new URL(url).pathname.endsWith('/inputs')).length).toBeGreaterThan(0);
+    await expect(submit).toBeDisabled();
+    await unchanged();
+    sources.release();
+    await expect(submit).toBeEnabled();
+    await expect(page.locator('#live')).toHaveAttribute('data-connection', 'connected');
+    await expect.poll(() => eventPages.some(body => body.events.some(row => row.seq === changed.event.seq
+      && row.resource_id === changed.event.resource_id && row.kind === changed.event.kind))).toBe(true);
+    await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)).cursor, syncKey)).toBeGreaterThanOrEqual(changed.event.seq);
+    await frames();
+    await unchanged();
+    after = await snapshot();
+    changedKeys = [...new Set([...before.stored, ...after.stored].map(([key]) => key))]
+      .filter(key => new Map(before.stored).get(key) !== new Map(after.stored).get(key));
+    assert.deepEqual(changedKeys, [syncKey]);
+    recoveryEnd = allRequests.length;
+    readTargets(recoveryStart);
+    step = 'recovered';
+    await shot('02-foreground-recovered');
+    holdAdmission = true;
+    step = 'explicit-send';
+    const sending = Promise.all([post('session.send'), submit.click()]);
+    await expect.poll(() => operationPosts(recoveryStart).length).toBe(1);
+    intent = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).intent, draftKey);
+    const request = operationPosts(recoveryStart)[0];
+    assert.equal(request.key, intent.key);
+    assert.deepEqual(JSON.parse(request.body), intent.request);
+    assert.deepEqual(intent.request.target, {workspace_id: f.workspace, work_item_id: f.work});
+    assert.deepEqual(intent.request.preconditions, {expected_attempt_id: active.attempt});
+    assert.deepEqual(intent.request.params, {text: draft.trim(), schedule: 'after_current'});
+    admission.release();
+    const [response] = await sending;
+    const sent = await operation(response);
+    send({stage: 'sent-after-recovery', operation_id: sent.operation_id, intent, draft});
+    assert.equal((await receive()).sent, sent.operation_id);
+    step = 'receipt';
+    await expect(page.locator(`[data-follow-up-receipt="${sent.operation_id}"]`)).toContainText(zh ? '已送出' : 'Sent');
+    assert.equal(operationPosts(recoveryStart).length, 1);
+    readTargets(recoveryStart);
+    assert.deepEqual(errors, []);
+    assert.equal(requests.length, 2);
+    assert.equal(new Set(requests.map(row => row.key)).size, 2);
+    send({stage: 'foreground-done', operations, browser: browser.version(), recovery: {
+      changed_storage_keys: changedKeys, sync_key: syncKey, recovery_posts: 0, explicit_posts: 1,
+      event: changed.event, original_result: originalHref, same_context: true, same_node: true,
+    }});
+  } finally {
+    events.release(); sources.release(); admission.release();
+    await context.setOffline(false);
+    const ledger = {};
+    for (const row of allRequests) {
+      const key = `${row.method} ${new URL(row.url).pathname}`;
+      ledger[row.step] ||= {};
+      ledger[row.step][key] = (ledger[row.step][key] || 0) + 1;
+    }
+    writeFileSync(resolve(f.shots, 'foreground-recovery.json'), JSON.stringify({before, after, syncKey,
+      changedKeys, intent, recoveryStart, recoveryEnd, heldEvents, heldSources, ledger}, null, 2) + '\n');
+  }
+}
+
+async function runJourney() {
   await launch();
   let start;
   let savedReviewId=null;
@@ -165,6 +350,7 @@ try {
   if (f.mode === 'adopt') await shot('01-started');
   const workUrl = page.url();
   assert.equal(new URL(workUrl).hash.includes(active.attempt), true);
+  if (f.foreground_recovery) {await foregroundRecovery(active, workUrl); return;}
   const text = zh ? '再補一個失敗後重新送出的案例。' : 'Add a retry-after-failure case.';
   await page.locator('[data-follow-up-input]').fill(text);
   const queued = await clickOperation('session.send', page.locator('[data-work-section="next-turn"]').getByRole('button', {name: zh ? '送出下一步' : 'Send next', exact: true}));
@@ -452,7 +638,8 @@ try {
   assert.equal(requests.at(-1).body.params.draft, true);
   send({stage: 'done', operations, resumed_operations: resumedOperations, browser: browser.version(), discussion_return: selection, close_restart: closeRestart});
   }
-} catch (error) {
+}
+try {await runJourney();} catch (error) {
   console.error(JSON.stringify({step, url: page?.url(), errors, requests, responses, pending: [...pending.values()]}));
   if (page && !page.isClosed()) {
     console.error(await page.locator('body').innerText());
