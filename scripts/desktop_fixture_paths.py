@@ -25,6 +25,13 @@ def javascript_expressions(file, source):
         pending.extend(reversed(node.named_children))
     error = next((node for node in nodes if node.is_error or node.is_missing), None)
     assert not tree.root_node.has_error, f'{file}:{error.start_point.row + 1 if error else 1}: cannot parse fixture paths'
+    aliases = {}
+    for node in nodes:
+        if node.type in {'import_specifier', 'pair_pattern'}:
+            name = node.child_by_field_name('name') or node.child_by_field_name('key')
+            alias = node.child_by_field_name('alias') or node.child_by_field_name('value')
+            if name and alias and name.text in {b'join', b'resolve'}:
+                aliases[alias.text.decode()] = name.text.decode()
     bindings, initializers = {}, []
     for node in nodes:
         if node.type == 'variable_declarator':
@@ -51,7 +58,8 @@ def javascript_expressions(file, source):
     def called_name(node):
         if node.type == 'member_expression':
             node = node.child_by_field_name('property')
-        return node.text.decode() if node else ''
+        name = node.text.decode() if node else ''
+        return aliases.get(name, name)
 
     def parts(node, seen=frozenset()):
         if node is None:
@@ -105,6 +113,8 @@ def javascript_expressions(file, source):
 
 def python_expressions(file, source):
     tree = ast.parse(source)
+    aliases = {alias.asname: alias.name for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)
+               for alias in node.names if alias.asname and alias.name in {'Path', 'join'}}
     bindings, initializers = {}, []
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
@@ -147,6 +157,7 @@ def python_expressions(file, source):
                 return [str(Path(''.join(value)).parents[node.slice.value])]
         if isinstance(node, ast.Call):
             called = node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, 'id', '')
+            called = aliases.get(called, called)
             if called in {'Path', 'join', 'joinpath'}:
                 values = [parts(arg, seen) for arg in node.args]
                 if called == 'joinpath':
@@ -165,7 +176,7 @@ def python_expressions(file, source):
     for node in ast.walk(tree):
         computed = isinstance(node, (ast.JoinedStr, ast.BinOp, ast.Constant))
         constructor = isinstance(node, ast.Call) and (
-            isinstance(node.func, ast.Name) and node.func.id in {'Path', 'join'} or
+            isinstance(node.func, ast.Name) and aliases.get(node.func.id, node.func.id) in {'Path', 'join'} or
             isinstance(node.func, ast.Attribute) and node.func.attr in {
                 'join', 'joinpath', 'with_name', 'format', 'format_map', 'replace', 'with_suffix', 'with_stem'})
         if computed or constructor:

@@ -121,6 +121,8 @@ def test_discovery_follows_new_npm_entrypoint_and_function_import(tmp_path):
     ('desktop/tests/read.mjs', "const base = '../../tests/fixtures/';\nreadFileSync(base + name + '.json');\n", 2),
     ('desktop/tests/read.js', "readFileSync(join(root, 'tests', 'fixtures', name));\n", 1),
     ('desktop/tests/read.js', "readFileSync(join(root, 'scripts', name));\n", 1),
+    ('desktop/tests/read.ts', "import {join as pathJoin} from 'node:path';\n"
+     "readFileSync(pathJoin(root, 'tests', name));\n", 2),
     ('desktop/tests/read.js', "readFileSync(`../../tests/${name}/../fixed.json`);\n", 1),
     ('desktop/tests/read.ts', "readFileSync(new URL(`../../${area}/${name}`, import.meta.url));\n", 1),
     ('desktop/tests/read.ts', "let base = '../../tests/fixtures/';\nbase = runtime;\nreadFileSync(base + name);\n", 1),
@@ -129,6 +131,8 @@ def test_discovery_follows_new_npm_entrypoint_and_function_import(tmp_path):
     ('tests/read.py', 'from pathlib import Path\n'
      'value = Path(__file__).parent.joinpath("fixtures", name).read_bytes()\n', 2),
     ('tests/read.py', 'from os.path import join\nvalue = open(join(root, "tests", name)).read()\n', 2),
+    ('tests/read.py', 'from pathlib import Path as File\n'
+     'value = (File(__file__).parent / "fixtures" / name).read_text()\n', 2),
     ('tests/read.py', 'from pathlib import Path\n'
      'root = Path(__file__).parent.parent\nvalue = (root / area / name).read_text()\n', 3),
     ('tests/read.py', 'base = "tests/fixtures/"\nbase = runtime\nvalue = open(base + name).read()\n', 1),
