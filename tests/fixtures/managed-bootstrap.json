@@ -960,7 +960,11 @@
         ],
         "collection": "explicit_local_files",
         "recurring": true,
-        "remote_collection": false,
+        "remote_collection": true,
+        "remote_hosts": {
+          "transport": "ssh_pull",
+          "helper_version": 1
+        },
         "forecast": false,
         "dispatch": false,
         "buckets": {

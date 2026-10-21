@@ -1,17 +1,19 @@
-# Agent resource observations: local collection v1
+# Agent resource observations: host-local collection v1
 
 This is the first resource-data increment of the [six-view workbench](pm-project-control-center.md#3-agent-資源與效能以可交付成果評估資源).
-It adds recurring collection in the Python central daemon and an English/zh-TW shared
-browser/Tauri resource view. It does not complete W30, remote host collection, delivery
+It adds recurring central-local and [remote host-local collection](remote-usage-collection.md)
+in the Python central daemon and an English/zh-TW shared browser/Tauri resource view.
+It does not complete W30, delivery
 performance attribution, capacity reservations or forecasts.
 
 ## Authority and configuration
 
-The central administrator explicitly connects one local JSONL file, original CLI session
+The central administrator explicitly connects one host-local JSONL file, original CLI session
 identity and existing PM workspace. No home-directory discovery, path-based project
-matching, transcript upload, credential reading, subprocess or provider request occurs.
+matching, transcript upload, credential reading or provider request occurs; remote reads use the restricted SSH helper.
 Manual sessions remain read-only. A source is a read grant, never management ownership.
-The host shown is this central's durable server identity, not a guessed BAT host alias.
+Central-local rows show this central's durable server identity. Remote rows show the explicitly
+configured Fleet host; see the [transport and binding addendum](remote-usage-collection.md).
 
 Configuration is loaded with the existing central configuration at service startup:
 
@@ -201,7 +203,7 @@ work remain unknown/insufficient; no savings recommendation or automatic model d
 
 ## Remaining work
 
-Remote host-local collectors and authenticated metadata transport; safe graphical source
+Safe graphical source
 binding and session discovery; more named CLI adapters; account/pool federation; complete
 work/attempt/verification attribution and rework classification; capacity observations;
 comparable accepted-work distributions and range forecasts; the shared usage-chart UI over

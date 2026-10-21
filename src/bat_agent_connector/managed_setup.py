@@ -524,6 +524,8 @@ def _activate(daemon, config, document, revision=None, *, runner=None):
         fleet._clients = {}
         fleet.config = config
     daemon._config = config
+    from .usage_host import UsageHost
+    daemon.usage_collector.remote = UsageHost(aliases)
     daemon.usage_collector.config = config.usage
     daemon.history_collector.config = config.session_history
     daemon.inventory.config = config

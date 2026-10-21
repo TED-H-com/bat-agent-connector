@@ -756,7 +756,7 @@ def parse_config(data: dict, path: Path | None = None) -> Config:
     if relay_name and not re.fullmatch(r"[A-Za-z0-9 ._-]{1,40}", relay_name):
         raise ConfigError("[client] relay_name must be 1-40 letters/digits/spaces")
     from .ahp_config import parse_ahp
-    return Config(hosts=hosts, safety=safety, jev=jev, api=api, github=parse_github(data), ahp=parse_ahp(data), usage=parse_usage(data), session_history=parse_history(data), client_label=label,
+    return Config(hosts=hosts, safety=safety, jev=jev, api=api, github=parse_github(data), ahp=parse_ahp(data), usage=parse_usage(data, hosts), session_history=parse_history(data), client_label=label,
                   path=path, human_name=human, relay_name=relay_name)
 
 

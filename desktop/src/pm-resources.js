@@ -14,16 +14,16 @@ const TREND_TTL = 15 * 60 * 1000;
 const EM = '—';
 const STATUS_KEY = {
   current: 'res_current', catching_up: 'res_catching_up', pending: 'res_pending',
-  source_unavailable: 'res_unavailable', unavailable: 'res_unavailable',
+  host_unreachable: 'res_unavailable', source_unavailable: 'res_unavailable', unavailable: 'res_unavailable',
   error: 'res_error', binding_changed: 'res_error',
 };
 const STATUS_TONE = {
-  current: 'ok', catching_up: 'info', pending: 'warn', source_unavailable: 'neutral', unavailable: 'neutral',
+  current: 'ok', catching_up: 'info', pending: 'warn', host_unreachable: 'neutral', source_unavailable: 'neutral', unavailable: 'neutral',
   error: 'bad', binding_changed: 'warn',
 };
 const SOURCE_KIND = {
   catching_up: 'catching_up', stale: 'stale', pending: 'pending',
-  source_unavailable: 'unavailable', unavailable: 'unavailable',
+  host_unreachable: 'unavailable', source_unavailable: 'unavailable', unavailable: 'unavailable',
   error: 'error', binding_changed: 'error',
 };
 
@@ -94,7 +94,7 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
   function sourceName(row) {
     const cli = isReadable(row) ? cliName(cliOf(row)) : '';
     const role = row.role ? roleLabel(row.role) : '';
-    return [cli, role].filter(Boolean).join(' · ') || t('res_unnamed');
+    return [cli, role, row.host].filter(Boolean).join(' · ') || t('res_unnamed');
   }
   function effortLabel(value) {
     if (value === 'low' || value === 'medium' || value === 'high') return t('res_effort_' + value);
