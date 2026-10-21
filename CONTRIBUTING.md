@@ -140,6 +140,15 @@ to remove `desktop/tests/**/*.ts` from the allowlist. Untraceable computed impor
 also fail the guard. PyYAML is a locked dev-only dependency for this guard; the
 scope classifier uses only the standard library.
 
+Desktop PR and main-push path filters also contain generated, exact fixture inputs.
+Run `uv run python scripts/desktop_fixture_inputs.py --write` after changing a
+fixture's dependencies. The ordinary pytest guard follows workflow/npm entrypoints,
+local imports and script references, and checks imports and file reads in a fresh
+process, including the publication seed. It checks both identical path lists and
+their generated blocks. A shared fixture test change runs desktop CI and retains
+all four native builds; an unrelated test change runs Python CI without starting
+desktop CI. The native scope rules above remain unchanged.
+
 After `uv sync --locked --extra dev`, run one shard from the repository root.
 Use a disk-backed `TMPDIR`:
 
