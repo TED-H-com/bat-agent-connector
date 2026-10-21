@@ -216,7 +216,7 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) {
         if (count === 1) {
           if (path.endsWith('/messages')) return {status: 503, data: {error: {code: 'UNAVAILABLE', message: 'Message read unavailable'}}};
         } else if (stage === 'old') {oldReads++; await gates[0];}
-        else if (stage === 'fresh') {freshReads++; await gates[2];}
+        else if (stage === 'resumed' || stage === 'fresh') {freshReads++; await gates[2];}
       }
       return dispatch(input);
     };
