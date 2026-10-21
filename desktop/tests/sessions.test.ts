@@ -131,3 +131,64 @@ for (const lang of ['en', 'zh-TW'] as const) {
     assert.equal(t('sessions_id'), lang === 'en' ? 'Session ID' : '工作階段 ID');
   });
 }
+
+// These are real list/detail producer outputs. Raw runtime_status=blocked/exited
+// currently has no typed attention/ended projection; do not invent either fact.
+test('runtime facets retain every producer case without upgrading unknown evidence', async () => {
+  const {readFileSync} = await import('node:fs');
+  const golden = JSON.parse(readFileSync(new URL('../../tests/fixtures/session-runtime.json', import.meta.url), 'utf8'));
+  const {sessionFacets} = await import('../src/state/sessions.js');
+  const expected = {
+    managed_blocked_runtime: ['not_streaming','none',false,'unknown',null],
+    ended_runtime: ['not_streaming','none',false,'unknown',null],
+    unknown_activity: ['unknown','none',false,'unknown',null],
+    streaming_pending_permission: ['streaming','asking_you',false,'active','asking_you'],
+    stale_pending: ['unknown','asking_you',true,'active','asking_you'],
+    managed_pending: ['not_streaming','asking_you',false,'unknown','asking_you'],
+    stale_activity_evidence: ['unknown','none',true,'active','stale'],
+  };
+  for (const [name, values] of Object.entries(expected)) for (const row of [golden[name].listed, golden[name].detail.session]) {
+    const facets = sessionFacets(row);
+    assert.deepEqual([facets.activity,facets.attention,facets.staleness.runtime,facets.lifecycle,sessionStatus(row)], values, name);
+    assert.equal(sessionPill(row)?.status ?? null, values[4]);
+    assert.notEqual(sessionActivity(row).key, row.stale || row.fields_stale ? 'obs_value_streaming' : 'invalid');
+  }
+});
+
+test('existing managed attention and ended input contract retains the single-pill order', async () => {
+  const {sessionFacets} = await import('../src/state/sessions.js');
+  for (const status of ['needs_ted','needs_you','needs_attention','waiting_permission','awaiting_approval','uncertain','blocked','failed','error']) {
+    // Existing sessionStatus inputs, not claimed to be emitted by inventory.
+    const row = {api_access:'managed',status,streaming:false,stale:true};
+    assert.equal(sessionFacets(row).attention, ['failed','error'].includes(status) ? 'failed' : 'needs_you');
+    assert.equal(sessionStatus(row), ['failed','error'].includes(status) ? 'failed' : 'needs_you');
+    assert.equal(sessionStatus({...row,pending:{kind:'permission'}}), 'asking_you');
+    assert.equal(sessionStatus({...row,pending:{kind:'other'}}), 'needs_you');
+  }
+  assert.equal(sessionFacets({streaming:true,state:{lifecycle:'ended'}}).activity, 'not_streaming');
+  assert.equal(sessionStatus({streaming:true,state:{lifecycle:'ended'}}), null);
+});
+
+test('staleness axes stay independent of attention, lifecycle and unknown activity', async () => {
+  const {sessionFacets} = await import('../src/state/sessions.js');
+  for(const source of [{stale:true},{fields_stale:true},{state:{evidence:{activity:{stale:true}}}},
+    {gone_at:'2026-09-21T14:13:21Z'},{state:{enumeration:'gone'}},{state:{enumeration:'missing'}}]){
+    const facets=sessionFacets({...source,streaming:true,pending:{kind:'ask_user'}});
+    assert.equal(facets.activity,'unknown');assert.equal(facets.attention,'asking_you');
+    assert.equal(Object.values(facets.staleness).some(Boolean),true);
+  }
+  assert.equal(sessionFacets({api_access:'read_only',status:'blocked'}).attention,'none');
+  assert.equal(sessionFacets({api_access:'managed',state:{status:'blocked'}}).attention,'needs_you');
+  assert.equal(sessionFacets({api_access:'managed',state:{status:'failed'}}).attention,'failed');
+});
+
+test('runtime facet copy belongs to each surface and exists in both locales', async () => {
+  const {workbenchStrings} = await import('../src/workbench-strings.js');
+  const {resultSourcesStrings} = await import('../src/result-sources-strings.js');
+  for(const strings of [workbenchStrings,resultSourcesStrings]){
+    assert.deepEqual(Object.keys(strings.en).sort(),Object.keys(strings['zh-TW']).sort());
+    for(const lang of ['en','zh-TW'] as const)for(const [key,value] of Object.entries(strings[lang])){
+      assert.ok(value.trim(),`${lang}: ${key}`);assert.equal(STRINGS[lang][key],value);
+    }
+  }
+});

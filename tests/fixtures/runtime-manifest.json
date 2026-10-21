@@ -1,0 +1,11 @@
+{
+  "protocol": 1,
+  "runtime_version": "fixture-1",
+  "build_commit": "0000000000000000000000000000000000000000",
+  "platform": "linux",
+  "architecture": "x86_64",
+  "executable": "batc-managed-runtime",
+  "payload_sha256": "0ed5cf1133ef4c1ee6b1a1c646311357c8569f91c877827a7d76c5483c054108",
+  "sha256": "28cc0da41c289b87fb292491cd6ad729d8a1f4167848970ea7238620a9a28362",
+  "size": 39
+}

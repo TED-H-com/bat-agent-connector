@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,8 @@ async def test_managed_bootstrap_matches_shared_golden(tmp_path, managed):
     try:
         status, response = await ApiV1(daemon).bootstrap(principal)
         assert status == 200
+        caps_status, capabilities = await ApiV1(daemon).capabilities(principal)
+        assert caps_status == 200 and capabilities == response["capabilities"]
         identity = {key: response["sync"][key] for key in ("server_id", "principal_id")}
         if managed:
             assert response["capabilities"]["desktop_identity"] == identity
@@ -33,13 +36,16 @@ async def test_managed_bootstrap_matches_shared_golden(tmp_path, managed):
         assert response["capabilities"]["identity"] == identity
         assert response["sync"]["checkpoint"]["token"].startswith("s1.")
         assert set(response["capabilities"]["build"]) == {"version", "commit", "source"}
-        # Only nondeterministic identities, signed proof and build provenance are redacted.
+        digest = capabilities["frontend"]["digest"]
+        assert digest is None or re.fullmatch(r"[a-f0-9]{64}", digest)
+        # Identities, signed proof, build provenance and the checkout's UI digest are normalized.
         # Everything else is the real handler output, including all capability fields.
         normalized = json.loads(json.dumps(response).replace(identity["server_id"], "fixture-server")
             .replace(identity["principal_id"], "fixture-principal")
             .replace(response["sync"]["checkpoint"]["token"], "fixture-checkpoint-proof"))
         normalized["capabilities"]["build"]["commit"] = None
         normalized["capabilities"]["build"]["source"] = "package"
+        normalized["capabilities"]["frontend"]["digest"] = None
         if managed and os.environ.get("BATC_UPDATE_BOOTSTRAP_GOLDEN") == "1":
             GOLDEN.write_text(json.dumps(normalized, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         expected = json.loads(GOLDEN.read_text(encoding="utf-8"))

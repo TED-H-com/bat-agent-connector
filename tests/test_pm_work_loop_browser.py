@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import sys
+from contextlib import AsyncExitStack
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -40,7 +41,7 @@ from tests.test_pm_work_attempt_result import (
     start_ready,
     world,
 )
-from tests.test_pm_work_follow_up import _get_op
+from tests.test_pm_work_follow_up import _get_op, _restarted
 from tests.test_pm_work_packages import member as add_member
 from tests.test_pm_work_start import STARTER_OWNER
 
@@ -82,7 +83,7 @@ async def eventually(predicate, *, seconds=60):
 
 @pytest.mark.parametrize(("locale", "width"), [("en", 1440), ("zh-TW", 768), ("zh-TW", 390)])
 async def test_start_queue_close_reconnect_result_and_pr(start_ready, mock, tmp_path, locale, width):
-    await work_loop(start_ready, mock, tmp_path, locale, width)
+    await work_loop(start_ready, mock, tmp_path, locale, width, close_restart=True)
 
 
 @pytest.mark.parametrize(("locale", "width"), [("en", 1440), ("zh-TW", 390)])
@@ -187,7 +188,8 @@ async def discussion_loop(start_ready, mock, tmp_path, monkeypatch, locale, widt
 
 
 async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_token=None, monkeypatch=None,
-                    withdraw_writer=False, lost_reply=None, review_result=False, verify_result=False):
+                    withdraw_writer=False, lost_reply=None, review_result=False, verify_result=False,
+                    close_restart=False):
     ops = w["d"].ops
     # The handoff test runner decodes a single protocol. This journey also runs
     # checkpoint and publication shell scripts, so execute every actual script.
@@ -221,6 +223,8 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
     browser_temp.mkdir()
     worker = asyncio.create_task(ops.loop(0.03))
     child = None
+    restarts = AsyncExitStack()
+    restarted_server = None
 
     async def produce_commit(wt, path, content, message):
         sha = await asyncio.to_thread(commit, wt, path, content, message)
@@ -330,7 +334,8 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 "mode": mode, "thread": thread_target(w)["thread_id"], "peer_agent": bool(peer_token),
                 "create_work": create_work, "project": project_id, "withdraw_writer": withdraw_writer,
                 "lost_start_reply": lost_reply is not None, "review_result": review_result,
-                "reviewer_actor": STARTER_OWNER.actor, "verify_result": verify_result})
+                "reviewer_actor": STARTER_OWNER.actor, "verify_result": verify_result,
+                "browser_profile": str(browser_temp / "profile") if close_restart else None})
             if create_work:
                 created = await receive("created")
                 await wait_status(created["operation_id"], "succeeded")
@@ -395,6 +400,19 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             _set_turn_messages(mock, sid, marker, streaming=True, assistant_text="Working on the login repair.")
             await w["d"].inventory._refresh_scheduled("h1")
             await send({"ready": True, "attempt": att["attempt_id"], "execution": result["children"]["handoff"]})
+            if close_restart:
+                queued = await receive("awaiting-admission")
+
+                async def admitted():
+                    while True:
+                        receipt = (await _get_op(w, queued["operation_id"]))["input_receipt"]
+                        assert receipt["operation_id"] == queued["operation_id"]
+                        if receipt["state"] == "queued":
+                            return receipt
+                        await asyncio.sleep(0.05)
+
+                admission = await asyncio.wait_for(admitted(), 60)
+                await send({"admitted": admission["operation_id"]})
             closed = await receive("closed")
             queued_id = closed["operation_id"]
             await wait_status(queued_id, "waiting_external")
@@ -457,6 +475,9 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             assert first["changes"]["fixed_result_commit"]["commit_sha"] == first_sha
             candidate = await produce_commit(wt, "retry-test.txt", "retry after failure\n", "Add retry case")
             second_marker = "batc-" + queued_id
+            if close_restart:
+                assert sum(frame.get("params", {}).get("clientMessageId") == second_marker
+                    for frame in mock.invokes) == 1
             _set_turn_messages(mock, sid, marker, assistant_id="second-answer",
                 assistant_text="Added the retry-after-failure case.", last_data_at=1_790_001_020_000,
                 extra_items=[{"id": second_marker, "role": "user", "content": closed["instruction"],
@@ -464,6 +485,34 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             await w["d"].inventory._refresh_scheduled("h1")
             final = await _result(w, att)
             assert final["changes"]["fixed_result_commit"]["commit_sha"] == candidate, final
+            if close_restart:
+                # Stop the HTTP listener and worker, then use the same journal/owner
+                # reconstruction as the waiting-input restart tests. Keep the port:
+                # changing it would change the browser's localStorage origin.
+                original = w["d"]
+                w["server"].close()
+                await w["server"].wait_closed()
+                worker.cancel()
+                await asyncio.gather(worker, return_exceptions=True)
+                await ops.drain()
+                await original.artifact_store.close_reaper()
+                await original.api.session_observation.close()
+                await original.result_collector.close()
+                await original.inventory.close()
+                await original.fleet.close()
+                original.journal.close()
+                restarted = await restarts.enter_async_context(_restarted(original))
+                assert restarted._db_path == original._db_path
+                w = {**w, "d": restarted}
+                ops = restarted.ops
+                # Reinstall only the external GitHub fixture's integrate config.
+                # No operation, receipt or browser state is reconstructed here.
+                publication_provider(w)
+                restarted_server = await asyncio.start_server(restarted._handle, "127.0.0.1", w["port"])
+                assert restarted_server.sockets[0].getsockname()[1] == w["port"]
+                worker = asyncio.create_task(ops.loop(0.03))
+                receipt = (await _get_op(w, queued_id))["input_receipt"]
+                assert receipt["operation_id"] == admission["operation_id"] and receipt["state"] == "sent"
             await send({"candidate": candidate, "attempt": att["attempt_id"]})
             quality = verification = None
             if verify_result:
@@ -586,6 +635,15 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             assert bat_writes(mock) == expected_writes
             assert all(f["params"]["sessionId"] == sid for f in starts[:1] + sends[:2])
             assert sends[1]["params"]["clientMessageId"] == second_marker
+            if close_restart:
+                assert sum(frame.get("params", {}).get("clientMessageId") == second_marker
+                    for frame in mock.invokes) == 1
+                rows = ops.db.execute("SELECT operation_id, message_id FROM work_inputs WHERE attempt_id=?",
+                    (att["attempt_id"],)).fetchall()
+                assert [tuple(row) for row in rows] == [(queued_id, second_marker)]
+                assert all(frame.get("params", {}).get("prompt") != closed["draft"].strip()
+                    for frame in mock.invokes)
+                (shots / "bat-frames.json").write_text(json.dumps(bat_writes(mock), indent=2) + "\n")
             if peer:
                 assert starts[-1]["params"]["sessionId"] == sends[-1]["params"]["sessionId"] == peer["session_id"]
             assert len([r for r in w["gh"].requests if r[:2] == ("POST", "/repos/o/r/pulls")]) == 1
@@ -609,7 +667,10 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 "entry": entry, "recovery": recovery, "quality_review": quality, "verification": verification, "created_work_in_ui": created_work, "same_attempt": att["attempt_id"],
                 "discussion_return": done["discussion_return"], "browser_operations": len(user_ops), "bat_starts": len(starts),
                 "bat_sends": len(sends), "github_posts": 1, "manual_unchanged": True, "mcp_peer": peer,
-                "candidate": candidate, "browser_closed_during_dispatch": True}, indent=2) + "\n")
+                "candidate": candidate, "browser_closed_during_dispatch": True,
+                "close_restart": {**done["close_restart"], "receipt_rows": len(rows),
+                    "matching_bat_frames": 1, "same_journal": True, "same_port": True}
+                    if close_restart else None}, indent=2) + "\n")
     finally:
         (shots / "operations.json").write_text(json.dumps([ops.get(row[0]) for row in
             ops.db.execute("SELECT operation_id FROM operations") if row[0] not in seed_ids], indent=2) + "\n")
@@ -624,3 +685,9 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
         await asyncio.gather(worker, return_exceptions=True)
         await ops.drain()
         await w["d"].artifact_store.close_reaper()
+        if restarted_server:
+            restarted_server.close()
+            await restarted_server.wait_closed()
+            await w["d"].api.session_observation.close()
+            await w["d"].result_collector.close()
+        await restarts.aclose()

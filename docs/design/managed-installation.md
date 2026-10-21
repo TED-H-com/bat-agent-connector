@@ -24,6 +24,8 @@ Setup now uses an authenticated active write connection or existing inventory ev
 
 `GET /managed/setup` adds per-host `connection_status` and `connection_checked_at`. `connected` is `null` for unknown reachability. No schema, migration, permission or token-handling changes are introduced. Status is a recent observation, not a continuous network guarantee. Configured installs retain IDs, history, non-secret drafts and original operation keys and never automatically repeat setup.
 
+A succeeded `setup.host` receipt is evidence of that operation's verification and saved configuration at its `updated_at` completion time. When its target host's current row is checking, unreachable or absent, Setup shows that past evidence and time instead of the ready message. Each host row supplies its own current state, observation time when available, and next step. The existing ready copy remains when the receipt's target host is currently connected; without a host receipt, every displayed host must be connected to show it. An unrelated connected host cannot override the configured host's state. This readout makes no additional claim about starting Work and never resubmits setup.
+
 ## First-run visual evidence
 
 Synthetic shared-browser fixtures, identical data and light theme, 1440×900 and 390×844. These are not installed Windows or live BAT acceptance. Before captures use the original `origin/main` UI; after captures use this implementation. Every PNG is under 90 KB.
@@ -45,8 +47,33 @@ The translation regression checks explicit English/zh-TW entries and variables f
 
 ## Ownership, identity and storage
 
+The managed launch reply and native status distinguish `bundled_runtime` from
+`running_runtime`. Both carry `version`, `commit`, provenance `build_source`,
+observation `source` and an epoch-seconds `observed_at`. The bundle fact is the
+`build_identity()` snapshot this launcher loaded at startup (`this_process`), not
+an installed receipt. The running fact comes from the proven owner's existing
+authenticated capabilities read (`capabilities`), whose build is that service's loaded snapshot.
+Missing identity fields remain null, including for an older service.
+
+`runtime_difference` is `same`, `differs` or `unknown`; either missing commit
+makes it unknown. `differs` means the running service is not that bundle and the
+change waits for the service's next launch. These facts do not trigger replacement,
+restart, stop or refusal. Same-version reuse and the existing version upgrade gates
+are unchanged; readiness is not a build comparison. Native launch/status fields are
+additive and optional, and recovery refreshes the recorded observations. Same-version
+restart/refusal policy and each platform's ensure/stop ownership are owner decisions
+that have not been made.
+
 - The persistent installation manifest binds runtime version, data location, installation actor, server ID and principal ID. Reopening and concurrent clients recover that installation.
 - Central uses kernel file leases, not an occupied port, stale PID or matching path, to enforce a single owner. The endpoint pointer is checked against the owned database, then a challenge verifies the live service before any bearer is sent.
+- Concurrent first clients open an existing POSIX lease without `O_CREAT`, or
+  create it with `O_CREAT | O_EXCL` after `ENOENT`. A losing creator reopens the
+  existing inode; it never replaces or unlinks another client's lease. The shared
+  private-file helper bounds this lookup/create reconciliation to eight pairs and
+  reports `PrivateFileCreateRaceError` (`EAGAIN`) if the leaf keeps changing.
+  Other create errors propagate. Every open keeps `O_NOFOLLOW`, ownership, private
+  mode and single-link checks; truncation still waits for validation. This is
+  file-creation reconciliation, not a retry of `ensure` or application effects.
 - Windows uses private ACLs, verified handles, reparse rejection and native locking. POSIX uses private owned directories/files and process locks. These protections also cover journal, token and atomic configuration publication.
 - The package pins its compressed runtime and executable digests. Installation does not download and execute an unversioned script. The frozen runtime starts without Python or uv on the user's PATH.
 - Browser handoff is short-lived and single-use. The resulting session uses an HttpOnly SameSite cookie plus origin/CSRF checks; this is not a public unauthenticated hosting mode.
@@ -100,10 +127,9 @@ must verify the same identity. A successful rebind advances the bridge generatio
 invalidating in-flight responses and file scopes. A native recovery counter triggers
 fresh navigation/shell reads even when restart produces no event; failed views
 retry through the existing deferred-render guards. Failed initial managed reads
-remain eligible for native recovery; an explicit Disconnect disables it. It retains existing drafts,
-event checkpoints and operation keys, and never resends an application mutation.
-Managed `/capabilities` and `/bootstrap` both include `desktop_identity`. A managed
-cursor reset already retained the scope before this namespace correction. An
+remain eligible for native recovery; an explicit Disconnect disables it. Client state
+across recovery/reset follows the [shared managed resnapshot contract](two-service-isolation.md#managed-crashrebind-followed-by-a-producer-reset-m07m08).
+Managed `/capabilities` and `/bootstrap` both include `desktop_identity`. An
 external central may omit that field from bootstrap; the native bridge still
 checks the bootstrap server/principal against its verified credential identity.
 Missing the optional field alone is not evidence of an account change.
@@ -190,16 +216,15 @@ The namespace audit covers these durable families uniformly (names below omit
 | Setup, create, repair, capture and work controls | `managed.setup`, `create`, `repair`, `capture`, `task-control`, `start`, `orchestrate`, `published`, `dispatch` |
 | Resource forms, approvals and cleanup | `labels`, `session-bat`, `permissions`, `artifact-review`, `model-preferences`, `project-skills`, `approvals`, `cleanup.draft`, `cleanup.pending`, `cleanup.intent` |
 | Tab preferences | `tree`, `sessions`, `attention`, `composer-shortcut` |
+| Standalone delivery repository/PR selection | sessionStorage `delivery.<scope>.repo`, `delivery.<scope>.pr` |
 | In-memory view selection and navigation folds | `viewState(namespace, workspaceId, view)` and `pm-workbench` maps, including `project-navigation`; no durable keys to copy |
 
 `ui/view-state.js`, `pm-workbench.js`, project navigation and workbench perspectives use the same new namespace in their
-bounded in-memory maps; they have no durable data to migrate. Language, layout,
-unscoped delivery filters and independently bound native Fleet preferences keep
-their existing keys. Fleet's `desktop.fleet.selection` and `desktop.fleet.controls`
-remain scoped by native configuration binding; `desktop.fleet.bootstrap.original`
-retains its native request/recipe identity. Fleet diagnostic and advanced-panel
-folds are in-memory state reset when that binding changes. None derives from
-`state.namespace` or belongs in the managed migration copy set.
+bounded in-memory maps; they have no durable data to migrate. Delivery selections
+use the same verified scope; the old global `batc.repo` / `batc.pr` hints remain
+untouched and are never adopted because they cannot prove their source. For keys
+outside this namespace and why they may cross sources, use the
+[out-of-namespace key inventory](two-service-isolation.md#every-key-outside-the-connector-namespace).
 Migration does not turn retained native file handles into
 valid handles for a different credential; existing native checks still apply.
 
@@ -261,6 +286,52 @@ explicitly launched fixture process tree is reaped for teardown; the product nev
 kills an owner to upgrade. Passing output includes both binary digests and cleanup.
 This supplements clean-profile installation evidence; it does not establish an
 in-place app installer upgrade or acceptance of an operator's existing data.
+
+The publication extension uses the earlier checkout's own Python product source
+with this checkout's supporting test fixtures to produce a real Work/Attempt/Result and a GitHub REST 201 receipt
+in the earlier core's owned journal. Only the outer completion is interrupted;
+receipt rows are not synthesized. That producer releases its journal while its
+FakeGitHub/MockBat peers remain alive. The current core's ordinary `serve` child
+then opens the same data, and `ensure` verifies its ownership and identity. The
+original key resolves the same operation without a second creation call or push;
+immutable Work/Attempt/Result and creation-receipt rows, original events, Result
+API content and manual checkout bytes are checked.
+Only fixture-owned process handles are terminated for fault-case teardown.
+
+The receipt records the old producer version/source hashes and the added time,
+which must be at most 60 seconds including cleanup. The source harness can test
+two actual source revisions locally; distinct frozen binaries remain CI evidence
+for their exact platform/head. The POSIX host-script producer has Linux evidence;
+macOS publication continuity remains unproven pending successful native CI. Its
+seed log, fixture setup stages and 40-second thread dump are preserved on failure.
+A test-only audit plugin records monotonic child-start and fixture start/end
+events without replacing subprocess or socket functions. Large host arguments
+remain opaque (length and digest only); phase detection reads at most a 128-character
+plain-text prefix. The fixture's own host-call await records duration, and fixture
+setup samples at most twelve main-thread frame locations once per second. Import
+origins and reverse-lookup call stacks identify which checkout owns a slow fake.
+Environment values and frame locals are omitted; the same log redactor is used
+before printing and uploading.
+
+The seed-readiness ceiling is restored to 45 seconds. The macOS timeline on
+`d6c8f319` had a 35.88-second gap after the loopback reverse-lookup audit event.
+The real Linux source harness confirms the call originates in this checkout's
+FakeGitHub, through `HTTPServer.server_bind` and `socket.getfqdn`. Its test server
+now binds the numeric address without reverse DNS. The old macOS log contains no
+sample inside that gap, so the resolver's exact blocked frame and duration remain
+unproven on macOS. A separate dump proves the observer was parsing a large host
+script; that parsing is removed. Even retaining all 13.63 seconds of macOS
+ready-fixture work, subtracting the lookup gap puts producer entry at about
+21.10 seconds (56.98 - 35.88). The next native run must confirm the improvement;
+Linux timings cannot establish the remaining macOS process-start cost.
+The 40-second faulthandler timeout, 60-second provider window and whole-case
+budget, including cleanup, remain unchanged. Pytest's `--setup-show` prints fixture
+completion; the explicit timeline locates slow work.
+macOS retains the existing packaged workspace/identity/busy checks. Windows also
+keeps those checks; its publication path and real OS-vault continuity remain open
+acceptance items.
+This is upgrade evidence: managed downgrade refusal remains unchanged, and the
+separate plain-updater rollback cases cannot stand in for a managed rollback.
 
 The owner explicitly excluded formal signing, Mac notarization, production update channels and Linux persistent native credential enrollment from this delivery. Full human execution of the 46-item real-environment acceptance matrix is user-owned and is not an outstanding agent task. Exclusion does not mean these capabilities or checks were completed. Unknown native BAT merge acknowledgements preserve original work under the [merge contract](worktree-merge.md); its separate human-adjudication API is not a delivery gate.
 

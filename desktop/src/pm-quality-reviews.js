@@ -39,8 +39,8 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
   function clear(){ready=false;model=null;verifier?.withdraw();comparison.invalidate();facts.replaceChildren();history.replaceChildren();draft.hidden=assessment.hidden=withdrawal.hidden=true;emit(null);update();}
   function purge(){for(const editor of [create,record,revoke])editor?.dispose();create=record=revoke=null;formKey=matrixKey='';draft.replaceChildren();assessment.replaceChildren();withdrawal.replaceChildren();}
   function withdraw(){serial++;clear();comparison.withdraw();purge();workChoice.replaceChildren();status.replaceChildren();}
-  function failure(err){serial++;clear();purge();workChoice.replaceChildren();status.replaceChildren(errorBox(err,{summary:t('pmq_unavailable'), within:status}));}
-  const request=async(...args)=>{const ticket=serial;try{return await api(...args);}catch(err){if(valid(ticket)&&[401,403,404].includes(err.status))failure(err);throw err;}};
+  function failure(err, options = {}){serial++;clear();purge();workChoice.replaceChildren();status.replaceChildren(errorBox(err,{...options, summary:t('pmq_unavailable'), within:status}));}
+  const request=async(...args)=>{const ticket=serial;try{return await api(...args);}catch(err){if(valid(ticket)&&[401,403,404].includes(err.status))failure(err, {sourceRefresh:args[0] !== 'POST' && !(args[0] === 'GET' && typeof args[4] === 'function')});throw err;}};
   async function pages(path,key,ticket,{cursor='next_cursor',wid=true,descending=false}={}){
     let after=descending?null:0;const rows=[],seen=new Set();
     for(let page=0;page<20;page++){

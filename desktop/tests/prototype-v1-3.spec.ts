@@ -15,6 +15,25 @@ type Flow = {page: Page; lang: Locale; width: number; all: boolean; capture: (na
 const forbidden = /§|\bF[1-7]\b|after_current|ACK|Safety invariant/;
 const ids = /\b(?:wi_|att_|opk_|op_|bat_sess_|wt_|ctr_|msg_|inbox_|rev_|disc_|principal_)[\w-]+/;
 const english = /\b(Send to PM|Save note only|Update plan|Start work|Send next step|Adopt, do later|Adopt and start|Self-reported|Tests passed|PR open|Accepted|Merged|Deployed|Read-only|Results|Controller|Current judgment|Not recorded|Undefined|Discussion info|Change scope)\b/;
+for (const lang of ['en', 'zh-TW']) for (const width of [1440, 390]) {
+  test(`prototype shares the scoped central status ${lang} ${width}`, async ({page}) => {
+    await page.setViewportSize({width, height: 900});
+    for (const scene of ['idea', 'disconnect_recovery']) {
+      await page.goto(`/prototype/v1.3/?lang=${lang}&scene=${scene}`);
+      const connected = scene === 'idea';
+      const text = lang === 'zh-TW' ? connected ? '已連線' : '重新連線中' : connected ? 'Connected' : 'Reconnecting';
+      const scoped = lang === 'zh-TW' ? `Connector：${text}` : `Connector: ${text}`;
+      const status = page.locator('.central-service-status .live');
+      await expect(status).toHaveText(text);
+      await expect(status).toHaveAccessibleName(scoped);
+      await expect(status).toHaveAttribute('title', scoped);
+      await expect(status).toHaveClass(connected ? /tone-ok/ : /tone-warn/);
+      await expect(page.locator('.central-service-scope')).toHaveText(lang === 'zh-TW' ? 'Connector：' : 'Connector:');
+      expect(await page.locator('.central-service-state').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
+  });
+}
 async function health(page: Page, lang: 'en' | 'zh-TW') {
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   expect(await page.locator('[style]').count()).toBe(0);

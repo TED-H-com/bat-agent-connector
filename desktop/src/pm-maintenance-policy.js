@@ -77,7 +77,7 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
         expected_baseline_id:baseline.baseline.baseline_id,expected_lifecycle_revision:lifecycle.revision}:null;
   }
   const matches=()=>context()&&fields.context.value===JSON.stringify(context());
-  const editorApi=async(...args)=>{const ticket=epoch;try{return await api(...args);}catch(error){if(valid(ticket)&&[401,403,404].includes(error.status))failure(error);throw error;}};
+  const editorApi=async(...args)=>{const ticket=epoch;try{return await api(...args);}catch(error){if(valid(ticket)&&[401,403,404].includes(error.status))failure(error, {sourceRefresh:false});throw error;}};
   editor=form({action,target:{workspace_id:workspaceId},fields,api:editorApi,
     params:values=>({policy:policy(values),rationale:required(values.rationale,4000)}),preconditions:()=>JSON.parse(fields.context.value),
     permitted:()=>Boolean(allowed()&&ready&&!stopped()&&matches()),recoverPermitted:recover,label:'pmp_save',extra,
@@ -199,7 +199,7 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
       line('pmp_github_profile',t(s.github_scope===githubProfile?'pmp_profile_github':'pmp_profile_legacy')),details);
   }
   function withdraw(){repairSourcesReady=false;maintenanceRuns?.withdraw();observations?.withdraw();epoch++;ready=false;current=null;baseline=null;lifecycle=null;historyLoaded=false;historyCursor=null;historyFiltered=false;view.replaceChildren();source.replaceChildren();history.replaceChildren();paintPolicyHeading(null);controls();}
-  function failure(error){withdraw();status.replaceChildren(errorBox(error,{summary:t('pmp_unavailable'), within:status}));}
+  function failure(error, options = {}){withdraw();status.replaceChildren(errorBox(error,{...options, summary:t('pmp_unavailable'), within:status}));}
   async function readHistory(append){
     const ticket=epoch,after=append?historyCursor:0;
     try{

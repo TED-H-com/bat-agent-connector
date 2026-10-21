@@ -7,6 +7,7 @@ handles; chmod and PID files are not substitutes for those checks.
 
 from __future__ import annotations
 
+import errno
 import os
 import secrets
 import stat
@@ -14,10 +15,15 @@ from contextlib import suppress
 from pathlib import Path
 
 WINDOWS = os.name == "nt"
+_OPEN_CREATE_ATTEMPTS = 8
 if WINDOWS:
     from . import windows_files as native
 else:
     import fcntl
+
+
+class PrivateFileCreateRaceError(OSError):
+    """The private leaf kept changing between lookup and exclusive creation."""
 
 
 def lock(fd: int, *, blocking: bool = True) -> None:
@@ -89,6 +95,24 @@ def _check_private_stat(info, *, directory=False):
         raise ValueError("local state must be private and owned by the current user")
 
 
+def _posix_open(parent, name, flags, mode):
+    flags = (flags & ~os.O_TRUNC) | os.O_NOFOLLOW
+    if not flags & os.O_CREAT or flags & os.O_EXCL:
+        return os.open(name, flags, mode, dir_fd=parent)
+    # Keep lookup and creation distinct: concurrent first clients must not rely
+    # on a filesystem's nonexclusive O_CREAT race handling. Never replace the
+    # winner's inode; all lease contenders must lock that same file.
+    for _ in range(_OPEN_CREATE_ATTEMPTS):
+        try:
+            return os.open(name, flags & ~os.O_CREAT, mode, dir_fd=parent)
+        except FileNotFoundError:
+            try:
+                return os.open(name, flags | os.O_EXCL, mode, dir_fd=parent)
+            except FileExistsError:
+                pass
+    raise PrivateFileCreateRaceError(errno.EAGAIN, "private file open/create race did not settle", name)
+
+
 def open_private_file(path, flags, mode=0o600) -> int:
     path = Path(path)
     if WINDOWS:
@@ -101,7 +125,7 @@ def open_private_file(path, flags, mode=0o600) -> int:
     parent = _posix_dir(path.parent)
     try:
         # Validate before a truncating open can damage a link or foreign file.
-        fd = os.open(path.name, (flags & ~os.O_TRUNC) | os.O_NOFOLLOW, mode, dir_fd=parent)
+        fd = _posix_open(parent, path.name, flags, mode)
     finally:
         os.close(parent)
     try:

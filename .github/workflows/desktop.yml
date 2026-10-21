@@ -157,6 +157,10 @@ jobs:
         run: echo "BATC_CENTRAL_UI_DEADLINE=$(($(date +%s) + 600))" >> "$GITHUB_ENV"
       - name: test:central
         run: bash scripts/ci-central-ui.sh test:central
+      - name: test:two-service-isolation
+        run: bash scripts/ci-central-ui.sh test:two-service-isolation
+      - name: test:managed-recovery-reset
+        run: bash scripts/ci-central-ui.sh test:managed-recovery-reset
       - name: test:pm
         run: bash scripts/ci-central-ui.sh test:pm
       - name: test:cleanup
@@ -337,13 +341,15 @@ jobs:
       - name: Distinct packaged core upgrade retains identity, workspace and original intents
         working-directory: .
         timeout-minutes: 8
-        run: uv run --locked --extra desktop-build python desktop/tests/managed-upgrade-fixture.py --previous-resources .upgrade-baseline/desktop/managed-runtime --current-resources desktop/managed-runtime --receipt desktop/test-results/packaged-core-upgrade.json
+        run: uv run --locked --extra dev --extra desktop-build python desktop/tests/managed-upgrade-fixture.py --previous-resources .upgrade-baseline/desktop/managed-runtime --current-resources desktop/managed-runtime --previous-source .upgrade-baseline --receipt desktop/test-results/packaged-core-upgrade.json
       - name: Preserve packaged core upgrade evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: packaged-core-upgrade-${{ matrix.os }}
-          path: desktop/test-results/packaged-core-upgrade.json
+          path: |
+            desktop/test-results/packaged-core-upgrade.json
+            desktop/test-results/packaged-core-upgrade/
           if-no-files-found: ignore
           retention-days: 7
       - name: Packaged managed setup with real browser and MockBAT

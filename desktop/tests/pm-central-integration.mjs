@@ -3,8 +3,8 @@ import {openPmPanel, openThreadTab, openThreadBrief, revealPmView} from './pm-na
 import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
 import {delimiter, resolve} from 'node:path';
-import {mkdir, mkdtemp, readFile, rm} from 'node:fs/promises';
-import {homedir} from 'node:os';
+import {mkdtemp, readFile, rm} from 'node:fs/promises';
+import {testScratchRoot} from './test-scratch.mjs';
 import assert from 'node:assert/strict';
 import {chromium, expect as baseExpect} from '@playwright/test';
 const expect = baseExpect.configure({timeout: 30000});
@@ -17,9 +17,9 @@ async function openDisclosure(summary) {
 }
 const source = resolve('..'), backend = resolve(process.env.BATC_PM_BACKEND || source);
 const python = process.env.BATC_PM_PYTHON || resolve(backend, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
-const scratch = resolve(homedir(), 'agent-work/tmp/pytest');
-await mkdir(scratch, {recursive:true});
-const temporary = await mkdtemp(resolve(scratch, 'pm-central-run-'));
+const temporary = await mkdtemp(resolve(testScratchRoot(), 'pm-central-run-'));
+// Keep browser and child-process temporary files inside this owned directory.
+process.env.TMPDIR = process.env.TEMP = process.env.TMP = temporary;
 let child, browser, output, stopped, spawnError, failureDetails=async()=>({});
 async function bounded(promise, milliseconds, message) {
   let timer;

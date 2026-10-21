@@ -1,4 +1,6 @@
 import {test, expect, type Page} from "@playwright/test";
+import {STRINGS} from '../src/i18n.js';
+import {serveGateBaseline} from './action-gate-baseline';
 const wid="wi_"+"d".repeat(20), oid="op_"+"a".repeat(32), aid="art_"+"b".repeat(32), digest="c".repeat(64);
 const ref={artifact_id:aid,revision:1,digest};
 async function fixture(page:Page) {
@@ -59,6 +61,38 @@ async function open(page:Page,locale="en-US"){
   await expect(page.getByRole("button",{name:locale==="en-US"?"Choose files":"選擇檔案",exact:true})).toBeVisible();
 }
 async function choose(page:Page){await page.getByRole("button",{name:"Choose files",exact:true}).click();await expect(page.getByRole("progressbar")).toBeVisible();}
+
+for (const locale of ['en-US', 'zh-TW']) test(`native picker rechecks the view reason before uploading ${locale}`, async ({browser}) => {
+  const context = await browser.newContext({locale}), page = await context.newPage();
+  const copy = STRINGS[locale === 'zh-TW' ? 'zh-TW' : 'en'];
+  await serveGateBaseline(page);
+  const state = await fixture(page);
+  state.held = true;
+  try {
+    await open(page, locale);
+    await page.getByRole('button', {name: locale === 'zh-TW' ? '選擇檔案' : 'Choose files', exact: true}).click();
+    await expect.poll(() => Boolean(state.release)).toBe(true);
+    await page.evaluate(() => {
+      const bridge = (window as any).__TAURI_INTERNALS__, invoke = bridge.invoke;
+      const releases: (() => void)[] = [];
+      (window as any).releaseGatePolls = () => {bridge.invoke = invoke; releases.forEach(release => release());};
+      bridge.invoke = async (command: string, args: any) => {
+        if (command === 'connector_request' && args.input.path.startsWith('/events'))
+          await new Promise<void>(resolve => releases.push(resolve));
+        return invoke(command, args);
+      };
+      window.dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}));
+    });
+    state.release!();
+    await expect(page.locator('.native-files').getByText(copy.error_code_CLIENT_ACTION_VIEW_NOT_READY, {exact: true})).toBeVisible();
+    await expect(page.locator('#live')).toHaveAccessibleName(copy.ui_connector_status.replace('{status}', copy.ui_connected));
+    expect(state.calls.filter(c => c.command === 'native_files_upload')).toHaveLength(0);
+    expect(state.errors).toEqual([]);
+  } finally {
+    await page.evaluate(() => (window as any).releaseGatePolls?.()).catch(() => {});
+    await context.close();
+  }
+});
 
 test("opaque upload retains original receipt across stop and reload; full progress is not completion",async({page})=>{
   const state=await fixture(page);await open(page);await choose(page);

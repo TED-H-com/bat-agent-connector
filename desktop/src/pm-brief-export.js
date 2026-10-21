@@ -22,7 +22,7 @@ export function briefExport({h,t,api,alive,workspaceId,caps,snapshot,readable,on
     element.hidden=!snapshot();button.disabled=busy||!allowed();format.disabled=locale.disabled=busy;
     note.textContent=t(nativeDesktop&&!nativeBriefExportSupport?'pm_export_native_unavailable':'pm_export_help');
     if(pendingReceipt&&caps()?.actor===actor){
-      if(pendingReceipt.error){status.replaceChildren(errorBox(pendingReceipt.error, {within:status}));return;}
+      if(pendingReceipt.error){status.replaceChildren(errorBox(pendingReceipt.error, {sourceRefresh:false, within:status}));return;}
       const value=pendingReceipt.receipt;
       status.replaceChildren(h('p',{class:'muted'},value===null?t('pm_export_cancelled'):
         allowed()&&identity()===pendingReceipt.expected?t('pm_export_saved_file',{name:value.display_name}):t('pm_export_prior_saved')));
@@ -31,7 +31,7 @@ export function briefExport({h,t,api,alive,workspaceId,caps,snapshot,readable,on
   function live(expected){alive();if(caps()?.actor!==actor||!allowed()||identity()!==expected)throw Object.assign(Error(t('pm_export_changed')),{code:'PM_EXPORT_VIEW_CHANGED'});}
   async function save(){
     if(busy||!allowed())return;busy=true;pendingReceipt=null;update();const expected=identity(),source=snapshot(),kind=format.value,language=locale.value;
-    let nativeSaveStarted=false;
+    let nativeSaveStarted=false,sourceRefresh=true;
     status.replaceChildren(h('p',{class:'muted'},t('pm_export_reading')));
     try{
       const report=await api('GET',`/pm/workspaces/${encodeURIComponent(workspaceId)}/snapshots/${encodeURIComponent(source.snapshot_id)}/brief-export?format=${kind}&locale=${language}`);
@@ -46,6 +46,7 @@ export function briefExport({h,t,api,alive,workspaceId,caps,snapshot,readable,on
       if(bytes.length!==report.byte_length)throw Error(t('pm_export_changed'));
       const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),value=>value.toString(16).padStart(2,'0')).join('');
       live(expected);if(digest!==report.output_digest)throw Error(t('pm_export_changed'));
+      sourceRefresh=false;
       if(nativeDesktop){
         nativeSaveStarted=true;
         const receipt=await nativeBriefSave({workspace_id:workspaceId,snapshot_id:source.snapshot_id,format:kind,locale:language,
@@ -72,7 +73,7 @@ export function briefExport({h,t,api,alive,workspaceId,caps,snapshot,readable,on
       }
       if(identity()!==expected)return;
       status.replaceChildren();
-      onUnavailable(rendered);
+      onUnavailable(rendered, {sourceRefresh});
     }finally{busy=false;update();}
   }
   format.addEventListener('change',update);locale.addEventListener('change',update);update();
