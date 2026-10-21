@@ -66674,7 +66674,7 @@ async function apiRequest(method, path, body, key, collectReceipt) {
 	}
 	if (!state.token) throw new ApiError(401, "UNAUTHORIZED", t("need_token"), { localized: true });
 	const epoch = state.epoch;
-	const resumable = method === "GET" && state.viewReady;
+	const resumable = method === "GET";
 	const request = (signal) => connectorRequest(method, path, body, key, state.token, signal);
 	let response;
 	try {

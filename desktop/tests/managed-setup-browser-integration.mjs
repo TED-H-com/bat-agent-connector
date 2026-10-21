@@ -19,6 +19,165 @@ if (process.argv.includes('--read-existing')) {
   await readExistingSession();
   process.exit(0);
 }
+if (process.argv.includes('--resume-initial')) {
+  await resumeInitialRead();
+  process.exit(0);
+}
+
+async function resumeInitialRead() {
+  const lines = createInterface({input: process.stdin})[Symbol.asyncIterator]();
+  const fixture = JSON.parse((await lines.next()).value);
+  const browser = await chromium.launch();
+  const context = await browser.newContext({locale: fixture.locale === 'zh-TW' ? 'zh-TW' : 'en-US'});
+  const finished = [], reads = [], errors = [], posts = [], released = new Set();
+  const send = command => process.stdout.write(JSON.stringify(command) + '\n');
+  const releases = Array.from({length: 4}, (_, index) => () => {
+    if (!released.has(index)) {released.add(index); send({command: 'release', index});}
+  });
+  let armed = false;
+  const notifications = (async () => {
+    for await (const line of lines) {
+      const event = JSON.parse(line);
+      if (event.stage === 'armed') armed = true;
+      if (event.stage === 'source') reads[event.index] = {status: event.status};
+      if (event.stage === 'released') finished[event.index] = true;
+    }
+  })();
+  let page, polls = 0, completedSources = 0;
+  const transport = [];
+  context.on('request', request => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname.startsWith('/api/v1/operations')) posts.push(request.url());
+  });
+  const visibility = value => page.evaluate(value => {
+    Object.defineProperty(document, 'visibilityState', {configurable: true, value});
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, value);
+  const storage = target => target.evaluate(() => ({...localStorage}));
+  const sourceView = () => page.locator('[data-managed-setup]').evaluate(node => {
+    const source = node.cloneNode(true);
+    // The separate connection card's poll clock advances independently of Setup.
+    source.querySelector('[data-connection-card]')?.remove();
+    return source.innerHTML;
+  });
+  const draftField = target => target.locator('[data-setup-field=host]');
+  try {
+    // Produce the draft through the existing form, before starting a new app page.
+    const prime = await context.newPage();
+    await prime.goto(pathToFileURL(fixture.handoff).href);
+    await prime.waitForURL(fixture.origin + '/dashboard/**');
+    const automatic = prime.locator('.setup-automatic');
+    await expect(automatic).toBeEnabled();
+    await prime.locator('[data-setup-advanced] > summary').click();
+    const beforeDraft = await storage(prime);
+    const draft = 'unfinished-connector';
+    await draftField(prime).fill(draft);
+    const saved = await storage(prime);
+    const changed = Object.keys(saved).filter(key => saved[key] !== beforeDraft[key]);
+    assert.equal(changed.length, 1, 'The app must produce the draft storage entry');
+    const draftStorage = changed[0], draftBytes = saved[draftStorage];
+    assert.equal(JSON.parse(draftBytes).intent?.key ?? null, null);
+    await prime.close();
+
+    page = await context.newPage();
+    page.on('pageerror', error => errors.push(error.message));
+    page.on('requestfailed', request => transport.push({path: new URL(request.url()).pathname, failure: request.failure()}));
+    page.on('requestfinished', request => {
+      if (new URL(request.url()).pathname === '/api/v1/managed/setup') completedSources++;
+    });
+    page.on('request', request => {if (new URL(request.url()).pathname === '/api/v1/events') polls++;});
+    // The daemon holds its own handler result after the real producer returns.
+    // Browser HTTP, cookie, origin and CSRF checks run without interception.
+    send({command: 'arm'});
+    await expect.poll(() => armed).toBe(true);
+    if (fixture.entry === 'route') {
+      await page.goto(fixture.origin + '/dashboard/#/projects');
+      await expect.poll(() => polls).toBeGreaterThan(0);
+      await page.evaluate(() => {location.hash = '#/settings';});
+    } else await page.goto(fixture.origin + '/dashboard/#/settings');
+    await expect.poll(() => reads.length).toBe(1);
+    const button = page.locator('.setup-automatic');
+    await page.locator('[data-setup-advanced] > summary').click();
+    await expect(draftField(page)).toHaveValue(draft);
+    await expect(button).toBeDisabled();
+    if (fixture.entry === 'startup') assert.equal(polls, 0);
+    await visibility('hidden'); await visibility('visible');
+    // The first real response stays held. The replacement has its own response.
+    await expect.poll(() => reads.length).toBe(2);
+    await expect(button).toBeDisabled();
+    assert.equal(finished[0], undefined);
+    assert.equal((await storage(page))[draftStorage], draftBytes);
+    const beforeFresh = polls;
+    releases[1]();
+    await expect(button).toBeEnabled();
+    await expect.poll(() => polls).toBeGreaterThan(beforeFresh);
+    await expect(draftField(page)).toHaveValue(draft);
+    const editor = await draftField(page).elementHandle();
+    const fresh = await sourceView();
+    await page.locator('[data-managed-setup]').evaluate(node => {
+      window.setupSourceMutations = [];
+      window.setupSourceObserver = new MutationObserver(records => {
+        for (const record of records) {
+          const target = record.target instanceof Element ? record.target : record.target.parentElement;
+          if (!target?.closest('[data-connection-card]')) window.setupSourceMutations.push(record.type);
+        }
+      });
+      window.setupSourceObserver.observe(node, {subtree: true, childList: true, attributes: true, characterData: true});
+    });
+    releases[0]();
+    await expect.poll(() => finished[0]).toBe(true);
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.deepEqual(await page.evaluate(() => {
+      window.setupSourceObserver.disconnect();
+      return window.setupSourceMutations;
+    }), []);
+    assert.equal(await sourceView(), fresh);
+    assert.equal(await draftField(page).evaluate((node, original) => node === original, editor), true);
+    await expect(draftField(page)).toHaveValue(draft);
+    assert.equal((await storage(page))[draftStorage], draftBytes);
+
+    // Full route changes also start with viewReady=false. Leave during the
+    // renewed read to exercise the real route-generation guard before publish.
+    await page.evaluate(() => {location.hash = '#/projects';});
+    await expect(page.locator('[data-managed-setup]')).toHaveCount(0);
+    await page.evaluate(() => {location.hash = '#/settings';});
+    await expect.poll(() => reads.length).toBe(3);
+    await visibility('hidden'); await visibility('visible');
+    await expect.poll(() => reads.length).toBe(4);
+    await expect(button).toBeDisabled();
+    await page.evaluate(() => {location.hash = '#/projects';});
+    await expect(page.locator('[data-managed-setup]')).toHaveCount(0);
+    await expect(page.locator('#main h1')).toHaveText(fixture.locale === 'zh-TW' ? '專案' : 'Projects');
+    await expect(page.locator('#main .or-archive-filter')).toBeVisible();
+    const left = await page.locator('#main').innerHTML();
+    releases[3](); releases[2]();
+    await expect.poll(() => finished.filter(Boolean).length).toBe(4);
+    await expect.poll(() => completedSources).toBe(2);
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.equal(await page.locator('#main').innerHTML(), left);
+    assert.equal((await storage(page))[draftStorage], draftBytes);
+    assert.deepEqual(posts, []);
+    assert.deepEqual(errors, []);
+    assert(reads.every(read => read.status === 200));
+    const identity = await page.evaluate(async () => {
+      const session = await (await fetch('/api/v1/browser-session')).json();
+      const response = await fetch('/api/v1/bootstrap', {headers: {'X-Batc-CSRF': session.csrf}});
+      if (!response.ok) throw Error(`Bootstrap read failed (${response.status})`);
+      return (await response.json()).capabilities.identity;
+    });
+    assert.deepEqual(identity, fixture.identity);
+    await page.screenshot({path: join(fixture.shots, fixture.entry + '-renewed.png')});
+    process.stdout.write(JSON.stringify({identity, operation_posts: posts.length, source_reads: reads.length,
+      draft_key: JSON.parse(draftBytes).intent?.key ?? null, polls, entry: fixture.entry}) + '\n');
+  } catch (error) {
+    console.error(JSON.stringify({reads, finished, polls, operation_posts: posts.length, errors, transport, text: await page?.locator('#main').textContent()}));
+    await page?.screenshot({path: join(fixture.shots, fixture.entry + '-failure.png')}).catch(() => {});
+    throw error;
+  } finally {
+    releases.forEach(release => release());
+    await browser.close();
+    void notifications;
+  }
+}
 
 async function readExistingSession() {
   const lines = createInterface({input: process.stdin})[Symbol.asyncIterator]();
