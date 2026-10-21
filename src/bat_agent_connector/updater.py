@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -308,13 +309,16 @@ class Updater:
     def policy(self, enabled, channel=None):
         with self.locked():
             state = self.read()
+            before = copy.deepcopy(state)
             if enabled:
                 self.reconcile(state)
             state["enabled"] = enabled
             if channel:
                 require(channel in {"stable", "preview"}, "invalid_channel")
                 state["channel"] = channel
-            self.save(state)
+            # Unchanged policy must preserve the existing state file.
+            if state != before:
+                self.save(state)
             return self.status(state)
 
     def rollback(self):
