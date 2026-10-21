@@ -163,6 +163,49 @@ segment when null; browser always shows it, with unknown when null. No native
 hash algorithm or browser build commit is added. These identities do not prove
 native abilities, reachability, or a readable release name.
 
+## Shared component version facts
+
+`desktop/src/version-projection.js` selects the version facts used by About,
+Diagnostics (summary and JSON) and Updates. The existing readable build line and
+its order remain unchanged. Desktop build, loaded UI digest, served UI digest,
+answering Connector build, bundled/runtime launch observations, PM adapter
+requirements, read BAT-run revisions and the Desktop updater version are separate
+rows; none supplies a missing value for another. Inputs live only in this window
+and connection epoch. Each row names its source and retains the client read time
+or the producer's observation time. Unknown values and times remain null.
+
+The loaded UI row reads the immutable `frontendBuild` in
+`frontend-identity.js`; its client load time is captured once with that module
+identity. The served UI row reads `capabilities.frontend.digest` and keeps the
+capabilities read time. A later read can change only the served value. The
+compatibility fields and the existing Frontend/build line, including the browser
+stale-tab warning, are rendered from these same rows. Native/dev unknown values
+and the first-line ordering retain the served-frontend identity contract above.
+
+Managed status is read through `managed_control` and retains the launch reply's
+original `observed_at`; reading it again does not establish which process is
+answering now. Only a fresh capabilities read supplies that Connector build.
+`runtime_difference` explains the launch comparison without stopping, restarting
+or replacing anything. When the connection is offline, the answering Connector
+and served UI facts are unknown. Earlier launch facts remain explicitly labelled
+as launch observations. A BAT run's immutable provenance is labelled as a past
+run, with its record-update time separately retained from the client read time.
+
+Installation capabilities expose the native adapter's `required_version`, but
+not an observed executable version. Even a rejected older executable exposes
+only `PM_NATIVE_VERSION_UNSUPPORTED`; neither that code nor readiness supplies
+the missing number. BAT run provenance exposes Codex/BAT source revisions, not
+their numeric versions. These facts remain separate, and no historical receipt
+is upgraded to a current installation observation. Installation hints do not
+verify model execution. The producer-owned fixture `pm-version-facts.json` pins
+these limits with empty host paths/config and a real immutable-run read model.
+
+All exported version rows use explicit fields before the existing JSON scrubber;
+raw native status, launch replies, PM runs and credentials are never spread into
+the export. The updater's `current_version` is one independently sourced row;
+its display and the other surfaces use the same projection, including after a
+failed read withdraws that value.
+
 ## Save boundary
 
 Browsers use a Blob download and report only that the download started. Native

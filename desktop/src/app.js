@@ -3,8 +3,10 @@ import {layoutDecision} from './workbench-mode.js';
 import {workbenchViews} from './workbench-views.js';
 import {settingsAgents} from './settings-agents.js';
 import {actionAllowed, mayStartSession, checkpointReason, dispatchExplanation, connectionReturn} from './work-paths.js';
-import {buildDiagnostics, clientIdentity, buildLine, errorRing, sessionFacts} from './diagnostics.js';
+import {buildDiagnostics, buildLine, errorRing, sessionFacts} from './diagnostics.js';
 import {diagnosticsDialog} from './diagnostics-dialog.js';
+import {versionProjection} from './version-projection.js';
+import {versionFacts} from './version-facts.js';
 import {dashboardShell} from './shell.js';
 import {lastWorkspace, lastProjectView} from './pm-workbench.js';
 import {searchField, disclosure, emptyState, iconButton, pageHeader, segmented, statusPill, agentMark, inspector, menu, button, sectionCard, errorDetails} from './ui/components.js';
@@ -76,22 +78,46 @@ const state = { token: null, caps: null, lastEvent: 0, lastEventAt: 0, lastPoll:
 const recentErrors = errorRing();
 const diagnosticSessions = new Map();
 let diagnosticSessionsRead = false;
-let diagnosticRevision = 0, diagnosticsPreview = null, desktopBuild = null;
+let diagnosticRevision = 0, diagnosticsPreview = null;
+const versionPainters = new Set();
+let versionReads = {epoch:-1}, nativeVersionRead = null;
+const paintVersions = () => {for(const paint of [...versionPainters])paint();};
+function rememberVersionRead(key, data, at = new Date().toISOString(), epoch = state.epoch) {
+  if(epoch !== state.epoch)return;
+  if(versionReads.epoch !== epoch)versionReads = {epoch};
+  versionReads[key] = {data,at};
+  paintVersions();
+}
+async function readNativeVersions() {
+  if(!nativeDesktop)return;
+  if(nativeVersionRead?.epoch === state.epoch)return nativeVersionRead.promise;
+  const epoch = state.epoch;
+  const promise = Promise.allSettled([
+    nativeStatus().then(value => rememberVersionRead('native',value.app_build,undefined,epoch)),
+    managedControl({action:'status'}).then(value => rememberVersionRead('managed',value,undefined,epoch)),
+  ]).finally(() => {if(nativeVersionRead?.epoch === epoch)nativeVersionRead=null;});
+  nativeVersionRead = {epoch,promise};
+  return promise;
+}
 function withdrawDiagnostics() {
   diagnosticRevision++; diagnosticSessions.clear(); diagnosticSessionsRead=false; diagnosticsPreview?.withdraw();
 }
-function diagnosticsClient(caps = state.caps) {
+function diagnosticsClient(caps = versionReads.epoch === state.epoch ? versionReads.capabilities?.data : null) {
   const platform = navigator.platform || navigator.userAgent;
-  return {caps, appBuild:desktopBuild, desktop:nativeDesktop,
+  const reads = versionReads.epoch === state.epoch ? versionReads : {};
+  return {caps, appBuild:reads.native?.data, desktop:nativeDesktop,
+    online:state.online, nativeReadAt:reads.native?.at, capabilitiesReadAt:reads.capabilities?.at,
+    managedRuntime:reads.managed?.data, managedReadAt:reads.managed?.at,
+    adapterRead:reads.adapter ? {document:reads.adapter.data,at:reads.adapter.at} : null,
+    adapterRunRead:reads.adapterRun ? {run:reads.adapterRun.data,at:reads.adapterRun.at} : null,
+    updater:reads.updater?.data, updaterReadAt:reads.updater?.at,
     os:/win/i.test(platform)?'windows':/mac/i.test(platform)?'macos':/linux/i.test(platform)?'linux':'unknown', locale, width:innerWidth};
 }
 async function openDiagnostics() {
   if(diagnosticsPreview)return;
   const epoch=state.epoch;
   diagnosticsPreview=diagnosticsDialog({h,t,onClose:()=>{diagnosticsPreview=null;}, load:async()=>{
-    if(nativeDesktop && !desktopBuild){
-      try {desktopBuild=(await nativeStatus()).app_build;} catch { /* Build remains explicitly unknown. */ }
-    }
+    await readNativeVersions();
     let caps=null;
     const read=async(path,scope=null,offered=true,attempted=true)=>{
       const permitted=!scope || !!caps?.scopes?.includes(scope);
@@ -99,7 +125,7 @@ async function openDiagnostics() {
       try {return {data:await api('GET',path),completed:true,at:new Date().toISOString()};}
       catch(error){return {error:{status:error.status,code:error.code},at:new Date().toISOString()};}
     };
-    const capabilities=await read('/capabilities');caps=capabilities.data;
+    const capabilities=await read('/capabilities');caps=capabilities.data || null;
     if(epoch!==state.epoch)throw Error('Connection changed');
     if(!caps?.scopes?.includes('observe'))withdrawDiagnostics();
     const revision=diagnosticRevision;
@@ -109,7 +135,7 @@ async function openDiagnostics() {
     if(epoch!==state.epoch)throw Error('Connection changed');
     const discarded=revision!==diagnosticRevision;
     const hosts=discarded?null:hostsRead.data, operations=discarded?null:operationsRead.data, setup=discarded?null:setupRead.data;
-    return buildDiagnostics({...diagnosticsClient(caps), exportedAt:new Date().toISOString(),
+    return buildDiagnostics({...diagnosticsClient(caps), online:!!caps, exportedAt:new Date().toISOString(),
       hosts:hosts?.hosts, operations:operations?.operations, setup,
       sessions:hosts && caps?.scopes?.includes('observe') && diagnosticSessionsRead ? [...diagnosticSessions.values()] : null,
       recentErrors:recentErrors.entries(), sourceReads:{capabilities,hosts:{...hostsRead,discarded},operations:{...operationsRead,discarded},
@@ -270,6 +296,15 @@ async function api(method, path, body, key, collectReceipt) {
   const revision=diagnosticRevision, epoch=state.epoch;
   try {
     const data=await apiRequest(method,path,body,key,collectReceipt);
+    if(epoch===state.epoch && method==='GET') {
+      if(path==='/capabilities' || path==='/bootstrap')rememberVersionRead('capabilities',path==='/bootstrap'?data.capabilities:data,undefined,epoch);
+      if(/^\/pm\/(?:installation-capabilities|workspaces\/[^/?]+\/capabilities)(?:\?|$)/.test(path))
+        rememberVersionRead('adapter',{native_analysis:{required_version:data.native_analysis?.required_version}},undefined,epoch);
+      if(/^\/pm\/workspaces\/[^/?]+\/runs\/[^/?]+(?:\?|$)/.test(path) && data.run)
+        rememberVersionRead('adapterRun',{updated_at:data.run.updated_at,bat_runtime_provenance:{
+          codex_source_revision:data.run.bat_runtime_provenance?.codex_source_revision,
+          bat_source_revision:data.run.bat_runtime_provenance?.bat_source_revision}},undefined,epoch);
+    }
     if(epoch===state.epoch && revision===diagnosticRevision && method==='GET' && /^\/sessions(?:[/?]|$)/.test(path)) {
       const previous = new Map(diagnosticSessions);
       if(Array.isArray(data.sessions)) {
@@ -294,6 +329,7 @@ async function api(method, path, body, key, collectReceipt) {
     return data;
   } catch(error) {
     if(epoch===state.epoch) {
+      if(method==='GET' && (path==='/capabilities' || path==='/bootstrap'))rememberVersionRead('capabilities',null,undefined,epoch);
       recentErrors.record({at:new Date().toISOString(),method,path,status:error.status,code:error.code,admissionRefused:error.admissionRefused,operation:error.operation});
       if([401,403,404].includes(error.status))withdrawDiagnostics();
     }
@@ -852,6 +888,7 @@ function paintConnection(waiting = false, paused = false) {
     : paused ? 'sync_actions_paused' : waiting ? 'sync_waiting' : 'desktop_polling';
   live.title = scoped + ' — ' + t(helpKey);
   for (const paint of [...connectionPainters]) paint();
+  paintVersions();
 }
 let managedStatusAt = 0;
 async function refreshManagedRecovery() {
@@ -3336,18 +3373,21 @@ function openSettings(main, {exclusive = false, refreshButton} = {}) {
   frame.panel("about").append(h("section", {class: "panel"},
     h("h2", {}, t("global_nav_about")),
     h("p", {}, t("global_product")),
-    h('p', {'data-build-line':''}, buildLine(clientIdentity(diagnosticsClient()),t)),
+    h('p', {'data-build-line':''}, buildLine(versionProjection(diagnosticsClient()),t)),
+    h('div', {'data-about-versions':''}),
     h('div',{class:'actions'},button({label:t('diag_export'),onClick:openDiagnostics,'data-export-diagnostics':''}),
       h("a", {href: setupGuide()}, t("global_setup_guide")))));
-  const identityEpoch = state.epoch;
-  let buildCaps = state.caps;
-  const paintBuild = () => {
-    if(frame.root.isConnected && identityEpoch === state.epoch)
-      frame.panel('about').querySelector('[data-build-line]').textContent=buildLine(clientIdentity(diagnosticsClient(buildCaps)),t);
-  };
-  if(state.token)api('GET','/capabilities').then(caps=>{buildCaps=caps;paintBuild();}).catch(()=>{});
-  if(nativeDesktop)nativeStatus().then(status=>{desktopBuild=status.app_build;paintBuild();}).catch(()=>{});
   main.append(languageSwitch(), frame.root);
+  const identityEpoch = state.epoch;
+  const paintBuild = () => {
+    if(!frame.root.isConnected || identityEpoch !== state.epoch){versionPainters.delete(paintBuild);return;}
+    const projection=versionProjection(diagnosticsClient());
+    frame.panel('about').querySelector('[data-build-line]').textContent=buildLine(projection,t);
+    frame.panel('about').querySelector('[data-about-versions]').replaceChildren(versionFacts({h,t,projection}));
+  };
+  versionPainters.add(paintBuild);paintBuild();
+  if(state.token)api('GET','/capabilities').catch(()=>{});
+  void readNativeVersions();
   const back=connectionReturn(params.get('from'));
   if(back)frame.panel('connection').append(h('a',{href:back.href,'data-connection-return':''},t(back.label)));
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
@@ -3581,7 +3621,9 @@ async function viewNativeSettings(main) {
   try {
     const status = await nativeStatus();
     if (mine !== generation || !main.contains(details)) return;
-    if (status.updates === true) disposeUpdates = await mountUpdates(updateRoot, {h, t});
+    if (status.updates === true) disposeUpdates = await mountUpdates(updateRoot, {h, t, versionInput:diagnosticsClient,
+      onRead:(value,at)=>rememberVersionRead('updater',value,at),
+      onVersions:paint=>{versionPainters.add(paint);return()=>versionPainters.delete(paint);}});
     if (mine !== generation || !main.contains(details)) { disposeUpdates?.(); return; }
     const row = (label, value) => { if (value) details.append(h("dt", {}, t(label)), h("dd", {}, value)); };
     if (status.configuration_setup === true) {

@@ -1,8 +1,8 @@
 import type {Page} from '@playwright/test';
 import {attentionFixture, mountAttention} from './attention-fixture.ts';
-export async function diagnosticsFixture(page:Page, native=false, known=true) {
+export async function diagnosticsFixture(page:Page, native=false, known=true, producerBootstrap:any=null) {
  const base=attentionFixture(),state={projectsStatus:200,hostsStatus:200,hostStale:false,operationsStatus:200,eventStatus:200,sessionReads:false,omitReading:false,historyReasons:['archive_unconfirmed','archive_budget','message_ids'] as string[]|undefined,scopes:['observe'],reads:[] as string[],hold:false,release:null as any,saved:[] as any[],sessions:[{host:'private-box.internal',session_id:'sample-1',title:'Private title',loaded:true,streaming:false,stale:false},{host:'private-box.internal',session_id:'sample-2',title:'Private title 2',loaded:false,streaming:true,stale:true,pending:{kind:'permission'}}] as any[]};
- const producer={bootstrap:null as any};
+ const producer={bootstrap:producerBootstrap};
  const caps=()=>producer.bootstrap?.capabilities||({...base.caps(),connector:'0.2.5',build:{version:'0.2.5',commit:known?'a'.repeat(40):null,source:'vcs'},scopes:state.scopes,
   hosts:[{host:'private-box.internal',writes:true}],managed_installation:undefined});
  const dispatch=async(input:any)=>{
