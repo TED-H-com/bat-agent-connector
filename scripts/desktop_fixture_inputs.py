@@ -19,6 +19,11 @@ from pathlib import Path
 
 import yaml
 
+if __package__:
+    from scripts.desktop_fixture_paths import fixture_paths
+else:
+    from desktop_fixture_paths import fixture_paths
+
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = '.github/workflows/desktop.yml'
 CODE = {'.py', '.mjs', '.cjs', '.js', '.ts', '.sh', '.rs', '.toml', '.ps1', '.swift', '.cs'}
@@ -99,7 +104,7 @@ def referenced_files(root, source, directory, tracked, *, command=False):
                 result.update(name for name in tracked if path_matches(name, relative))
             elif relative in tracked:
                 result.add(relative)
-        if '/' not in token and '*' not in token and '?' not in token and Path(token).suffix in CODE - {'.js', '.ts'}:
+        if '/' not in token and '*' not in token and '?' not in token and Path(token).suffix in (CODE - {'.js', '.ts'}) | {'.json', '.tsv'}:
             result.update(by_name.get(token, ()))
     return result
 
@@ -203,6 +208,7 @@ def dependency_closure(root):
     visited = set()
     runtime = set()
     reads = set()
+    path_audit = []
     while True:
         while pending:
             path = pending.pop()
@@ -218,6 +224,12 @@ def dependency_closure(root):
                 pending.update(referenced_files(root, source, (root / path).parent, tracked) - visited)
                 if path.endswith('.py'):
                     pending.update(local_imports(root, path) - visited)
+        sources = {name: (root / name).read_text(encoding='utf-8') for name in visited
+                   if Path(name).suffix in {'.py', '.js', '.ts', '.mjs', '.cjs'}}
+        resolved, path_audit = fixture_paths(root, sources, tracked)
+        pending.update(resolved - visited)
+        if pending:
+            continue
         child = subprocess.run(  # noqa: S603 - fresh, repository-owned import probe
             [sys.executable, str(root / 'scripts/desktop_fixture_inputs.py'), '--probe'],
                                input=json.dumps(sorted(visited)), cwd=root, text=True, capture_output=True)
@@ -229,7 +241,7 @@ def dependency_closure(root):
         if not pending:
             break
     return {'entries': {job: sorted(paths) for job, paths in entries.items()},
-            'files': sorted(visited), 'loaded': sorted(runtime), 'read': sorted(reads)}
+            'files': sorted(visited), 'loaded': sorted(runtime), 'read': sorted(reads), 'path_audit': path_audit}
 
 
 def missing_inputs(root, closure):

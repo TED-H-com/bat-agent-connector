@@ -5,9 +5,9 @@ import {buildDiagnostics, buildLine} from '../src/diagnostics.js';
 import {diagnosticsStrings} from '../src/diagnostics-strings.js';
 import {versionFactText} from '../src/version-facts.js';
 import {frontendBuild} from '../src/frontend-identity.js';
-const golden = name => JSON.parse(readFileSync(new URL(`../../tests/fixtures/${name}.json`, import.meta.url), 'utf8'));
-const bootstrap = golden('managed-bootstrap'), runtime = golden('managed-runtime-identity');
-const adapter = golden('pm-version-facts');
+const bootstrap = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-bootstrap.json', import.meta.url), 'utf8'));
+const runtime = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-runtime-identity.json', import.meta.url), 'utf8'));
+const adapter = JSON.parse(readFileSync(new URL('../../tests/fixtures/pm-version-facts.json', import.meta.url), 'utf8'));
 const at = '2026-10-20T12:00:00.000Z';
 const input = name => ({caps:bootstrap.capabilities, managedRuntime:runtime[name], desktop:true,
   capabilitiesReadAt:at, managedReadAt:at, online:true, exportedAt:at});

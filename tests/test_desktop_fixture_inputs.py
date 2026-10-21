@@ -40,6 +40,11 @@ def test_desktop_filters_cover_real_fixture_imports(desktop_inputs):
             'tests/test_windows_central.py', 'scripts/ci_scope.py'} <= set(desktop_inputs['files'])
 
 
+def test_computed_golden_read_is_not_silently_omitted(desktop_inputs):
+    assert 'tests/fixtures/pm-version-facts.json' in desktop_inputs['files'], (
+        'desktop/tests/version-projection.test.ts:8: computed golden path must be resolved or rejected')
+
+
 @pytest.mark.parametrize('path,pattern,expected', [
     ('desktop/src/app.js', 'desktop/**', True),
     ('desktop/src/app.js', 'desktop/*', False),
@@ -71,6 +76,7 @@ def test_unsupported_pattern_syntax_fails_closed(pattern):
 @pytest.mark.parametrize('path,starts,native,count', [
     ('tests/conftest.py', True, 'all', 4),
     ('tests/test_api_v1.py', True, 'all', 4),
+    ('tests/fixtures/pm-version-facts.json', True, 'all', 4),
     ('tests/test_ci_scope.py', False, 'all', 0),
     ('desktop/src/app.js', True, 'none', 0),
     ('docs/design/workbench.md', False, 'none', 0),
@@ -107,6 +113,69 @@ def test_discovery_follows_new_npm_entrypoint_and_function_import(tmp_path):
     assert 'tests/future_fixture.py' in referenced_files(tmp_path, entry.read_text(), entry.parent, tracked)
     from scripts.desktop_fixture_inputs import local_imports
     assert local_imports(tmp_path, 'tests/future_fixture.py') == {'tests/future_helper.py'}
+
+
+@pytest.mark.parametrize('name,source,line', [
+    ('desktop/tests/read.ts', 'const name = process.env.FIXTURE;\n'
+     'readFileSync(new URL(`../../tests/fixtures/${name}.json`, import.meta.url));\n', 2),
+    ('desktop/tests/read.mjs', "const base = '../../tests/fixtures/';\nreadFileSync(base + name + '.json');\n", 2),
+    ('desktop/tests/read.js', "readFileSync(join(root, 'tests', 'fixtures', name));\n", 1),
+    ('desktop/tests/read.js', "readFileSync(join(root, 'scripts', name));\n", 1),
+    ('desktop/tests/read.js', "readFileSync(`../../tests/${name}/../fixed.json`);\n", 1),
+    ('desktop/tests/read.ts', "readFileSync(new URL(`../../${area}/${name}`, import.meta.url));\n", 1),
+    ('desktop/tests/read.ts', "let base = '../../tests/fixtures/';\nbase = runtime;\nreadFileSync(base + name);\n", 1),
+    ('tests/read.py', 'from pathlib import Path\n'
+     'value = (Path(__file__).parent / "fixtures" / name).read_text()\n', 2),
+    ('tests/read.py', 'from pathlib import Path\n'
+     'value = Path(__file__).parent.joinpath("fixtures", name).read_bytes()\n', 2),
+    ('tests/read.py', 'from os.path import join\nvalue = open(join(root, "tests", name)).read()\n', 2),
+    ('tests/read.py', 'from pathlib import Path\n'
+     'root = Path(__file__).parent.parent\nvalue = (root / area / name).read_text()\n', 3),
+    ('tests/read.py', 'base = "tests/fixtures/"\nbase = runtime\nvalue = open(base + name).read()\n', 1),
+])
+def test_computed_path_detector_fails_closed_in_workflow_closure(tmp_path, name, source, line):
+    import yaml
+
+    from scripts.desktop_fixture_paths import fixture_paths
+
+    path = tmp_path / name
+    path.parent.mkdir(parents=True)
+    path.write_text(source)
+    workflow = tmp_path / '.github/workflows/desktop.yml'
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text(yaml.safe_dump({'jobs': {'example': {'steps': [{'run': f'node {name}'}]}}}))
+    package = tmp_path / 'desktop/package.json'
+    package.parent.mkdir(parents=True, exist_ok=True)
+    package.write_text('{"scripts": {}}')
+    tracked = {name, 'tests/fixtures/value.json'}
+    entries = command_inputs(tmp_path, tracked)['example']
+    assert entries == {name}
+    with pytest.raises(AssertionError, match=rf'{name}:{line}: unresolved computed path'):
+        fixture_paths(tmp_path, {file: (tmp_path / file).read_text() for file in entries}, tracked)
+
+
+def test_literal_path_joins_and_data_basenames_are_resolved(tmp_path):
+    from scripts.desktop_fixture_paths import fixture_paths
+
+    sources = {
+        'tests/read.py': 'from pathlib import Path\n'
+        'value = (Path(__file__).parent / "fixtures" / "value.json").read_text()\n',
+        'desktop/tests/read.ts': "readFileSync(join(root, 'tests', 'fixtures', 'value.json'));\n"
+        "const file = '../../tests/fixtures/' + 'value' + '.json';\n",
+    }
+    tracked = {*sources, 'tests/fixtures/value.json', 'tests/fixtures/value.tsv', 'site/images/value.json'}
+    resolved, audit = fixture_paths(tmp_path, sources, tracked)
+    assert resolved == {'tests/fixtures/value.json'}
+    assert {value['file'] for value in audit} == set(sources)
+    assert referenced_files(tmp_path, '"value.json" "value.tsv"', tmp_path, tracked) == {
+        'tests/fixtures/value.json', 'tests/fixtures/value.tsv', 'site/images/value.json'}
+
+
+def test_path_parser_rejects_invalid_typescript_with_source_location(tmp_path):
+    from scripts.desktop_fixture_paths import fixture_paths
+
+    with pytest.raises(AssertionError, match='desktop/read.ts:1: cannot parse fixture paths'):
+        fixture_paths(tmp_path, {'desktop/read.ts': 'const file = ;'}, set())
 
 
 def test_filter_generation_preserves_jobs_and_is_idempotent(tmp_path):
