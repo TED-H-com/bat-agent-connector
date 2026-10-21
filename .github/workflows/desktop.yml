@@ -413,9 +413,11 @@ jobs:
       matrix:
         include:
           - part: work
-            selection: not fixed_result
+            selection: not fixed_result and not foreground_recovery
           - part: evidence
             selection: fixed_result
+          - part: foreground
+            selection: foreground_recovery
     env:
       TZ: UTC
       BATC_WORK_LOOP_BROWSER: "1"
