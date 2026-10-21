@@ -20,6 +20,7 @@ from pathlib import Path
 from scripts.release_identity import _archive, _commit, _git, _write_files
 
 ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_CLAIMS = ROOT / "tests/fixtures/platform-table-claims.json"
 ENTRIES = ("Browser", "Windows x64", "macOS arm64", "macOS x64", "Linux")
 STATES = ("coded", "merged", "integration_tested", "released", "installed", "running", "accepted", "operator")
 KINDS = {"merge": "merged", "package_ci": "integration_tested", "integration": "integration_tested",
@@ -200,54 +201,114 @@ def platform_cells(files):
 
 
 def _cell_digest(cell):
-    # Only this reviewed cell's bytes, never a digest of all frontend sources.
-    return hashlib.sha256(json.dumps(cell, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    """Exact UTF-8 text; the site's ordered bilingual pair uses canonical JSON.
 
-
-def reviewed_claim(candidate, cell, entry, capability, expected):
-    """Explicit review input; cannot silently survive edited or differently scoped prose.
-
-    A reviewer supplies the interpretation. This is not a generated support policy.
-    It is stored with private review evidence, not in the public platform tables.
+    File, label and column identify a cell separately. Neither the candidate nor
+    its moving line number participates in the text digest.
     """
-    if _commit(candidate) is None or type(expected) is not bool or entry not in ENTRIES:
-        raise ValueError("CLAIM_INVALID")
-    return {"subject_sha": candidate, "cell_id": cell["id"], "cell_sha256": _cell_digest(cell),
-            "entry": entry, "capability": capability, "expected": expected}
+    value = cell["text"]
+    raw = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def consistency(matrix, claims=()):
-    cells = {item["id"]: item for item in matrix["platform_cells"]}
-    result = {"checked": [], "mismatches": [], "unchecked": []}
+def load_claims(path=DEFAULT_CLAIMS):
+    claims = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(claims, list):
+        raise ValueError("CELL_REVIEWS_INVALID")
+    return claims
+
+
+def _cell_key(cell):
+    return tuple(cell.get(key) for key in ("file", "entry", "column"))
+
+
+def _valid_review(record):
+    return (isinstance(record, dict)
+            and set(record) == {"file", "entry", "column", "text_sha256", "claims", "unchecked_reason"}
+            and all(isinstance(record[k], str) and record[k] for k in ("file", "entry", "unchecked_reason"))
+            and isinstance(record["column"], str) and record["column"] in {"features", "boundary"}
+            and isinstance(record["text_sha256"], str) and len(record["text_sha256"]) == 64
+            and all(c in "0123456789abcdef" for c in record["text_sha256"])
+            and isinstance(record["claims"], list)
+            and all(isinstance(claim, dict) and set(claim) == {"entry", "capability", "expected"}
+                    and isinstance(claim["entry"], str) and claim["entry"] in ENTRIES
+                    and isinstance(claim["capability"], str) and bool(claim["capability"])
+                    and type(claim["expected"]) is bool for claim in record["claims"]))
+
+
+def consistency(matrix, claims=None):
+    """Check explicit reviews; changed, new, removed or ambiguous cells fail closed.
+
+    Uncovered prose is retained with its reviewer's reason. It is distinct from
+    an unbound review, which is never checked and requires another review in CI.
+    """
+    claims = load_claims() if claims is None else claims
+    grouped_cells = {}
+    for cell in matrix["platform_cells"]:
+        grouped_cells.setdefault(_cell_key(cell), []).append(cell)
+    cells = {key: group[0] for key, group in grouped_cells.items()}
+    result = {"checked": [], "mismatches": [], "unchecked": [], "review_errors": []}
+
+    def error(reason, record, cell=None):
+        anchor = cell or record
+        source = f'{anchor.get("file")}:{anchor["line"]}' if "line" in anchor else str(anchor.get("file"))
+        issue = {"reason": reason, "source": source,
+                 "cell": {key: anchor.get(key) for key in ("file", "entry", "column")},
+                 "message": f'{source}: {anchor.get("entry")} / {anchor.get("column")} must be re-reviewed ({reason})'}
+        result["review_errors"].append(issue)
+        return issue
+
     for path in ("README.md", "README.zh-TW.md", "scripts/build_product_site.py"):
         if not any(cell["file"] == path for cell in cells.values()):
             result["unchecked"].append({"source": path, "reason": "PLATFORM_TABLE_UNAVAILABLE"})
-    reviewed = set()
-    for claim in claims:
-        cell = cells.get(claim.get("cell_id"))
-        if (cell is None or claim.get("subject_sha") != matrix["candidate"]
-                or claim.get("cell_sha256") != _cell_digest(cell) or type(claim.get("expected")) is not bool):
-            result["unchecked"].append({"claim": claim, "reason": "REVIEW_NOT_BOUND_TO_CANDIDATE_CELL"})
+            error("PLATFORM_TABLE_UNAVAILABLE", {"file": path})
+    indexed = {}
+    for record in claims:
+        if not _valid_review(record):
+            result["unchecked"].append({"claim": record, "reason": "CELL_REVIEW_INVALID"})
+            error("CELL_REVIEW_INVALID", record if isinstance(record, dict) else {})
             continue
-        reviewed.add(cell["id"])
-        matching = [item for item in matrix["rows"] if item["entry"] == claim.get("entry")
-                    and item["capability"] == claim.get("capability") and item["source_kind"] != "server"]
-        values = [item["evidence"]["coded"]["value"] for item in matching]
-        reason = ("CODED_ROW_MISSING" if not matching else "CODED_UNKNOWN" if "unknown" in values
-                  else "CODED_CLAIM_DIFFERS" if any(v != claim["expected"] for v in values) else None)
-        observation = {"claim": claim, "source": f'{cell["file"]}:{cell["line"]}',
-                       "result": "differs" if reason else "matches", "reason": reason}
-        result["checked"].append(observation)
+        indexed.setdefault(_cell_key(record), []).append(record)
+    boundaries = set()
+    for key in sorted(cells.keys() | indexed.keys()):
+        cell, reviews = cells.get(key), indexed.get(key, [])
+        record = reviews[0] if reviews else {}
+        reason = ("REVIEW_CELL_MISSING" if cell is None
+                  else "PLATFORM_CELL_DUPLICATE" if len(grouped_cells[key]) != 1
+                  else "CELL_REVIEW_MISSING" if not reviews
+                  else "CELL_REVIEW_DUPLICATE" if len(reviews) != 1
+                  else "CELL_TEXT_CHANGED" if record["text_sha256"] != _cell_digest(cell) else None)
         if reason:
-            result["mismatches"].append(observation)
-    # A checked capability does not mean every phrase in that cell was checked.
-    for cell in cells.values():
-        result["unchecked"].append({"cell": cell, "reason": "PROSE_REQUIRES_REVIEW",
-                                    "has_explicit_claims": cell["id"] in reviewed})
+            issue = error(reason, record, grouped_cells[key][-1] if cell is not None else None)
+            result["unchecked"].append({"cell": cell, "claim": record, "reason": reason, "source": issue["source"]})
+            continue
+        for claim in record["claims"]:
+            matching = [item for item in matrix["rows"] if item["entry"] == claim["entry"]
+                        and item["capability"] == claim["capability"] and item["source_kind"] != "server"]
+            values = [item["evidence"]["coded"]["value"] for item in matching]
+            reason = ("CODED_ROW_MISSING" if not matching else "CODED_UNKNOWN" if "unknown" in values
+                      else "CODED_CLAIM_DIFFERS" if any(v != claim["expected"] for v in values) else None)
+            observation = {"claim": claim, "cell": {k: cell[k] for k in ("file", "entry", "column")},
+                           "source": f'{cell["file"]}:{cell["line"]}',
+                           "result": "differs" if reason else "matches", "reason": reason}
+            result["checked"].append(observation)
+            if reason:
+                result["mismatches"].append(observation)
+            if cell["column"] == "boundary" and claim["expected"] is False:
+                boundaries.add((cell["file"], claim["entry"], claim["capability"]))
+        # Binding a coded assertion is not a review of all the prose around it.
+        result["unchecked"].append({"cell": cell, "reason": record["unchecked_reason"],
+                                    "has_explicit_claims": bool(record["claims"])})
+    for file in ("README.md", "README.zh-TW.md", "scripts/build_product_site.py"):
+        for entry, capability in (("Browser", "native_fleet"), ("Browser", "credential_vault"),
+                                  ("macOS arm64", "native_fleet"), ("macOS x64", "native_fleet")):
+            if (file, entry, capability) not in boundaries:
+                issue = error("BOUNDARY_REVIEW_MISSING", {"file": file, "entry": entry, "column": "boundary"})
+                issue["capability"] = capability
     return result
 
 
-def generate(source, candidate, *, scratch, receipts=(), claims=()):
+def generate(source, candidate, *, scratch, receipts=(), claims=None):
     """Generate offline from exact Git objects. Local candidate code must be trusted.
 
     Unlike a receipt-only validator this executes ApiV1 from the named source, in
@@ -305,7 +366,8 @@ def generate(source, candidate, *, scratch, receipts=(), claims=()):
         for capability, fact in capabilities.items():
             rows.append(_row(candidate, entry, "native", "source", capability, fact["coded"], fact["proof"],
                              declaration={"package": fact["package"]} if "package" in fact else None,
-                             reason="SOURCE_GATE" if fact["coded"] != "unknown" else "SOURCE_GATE_UNVERIFIED"))
+                             reason=("IPC_REGISTERED" if capability.startswith("ipc.") else "SOURCE_GATE")
+                             if fact["coded"] != "unknown" else "SOURCE_GATE_UNVERIFIED"))
         rows.append(_row(candidate, entry, "native", "runtime", "native_status", "unknown", None,
                          reason="NATIVE_PRODUCER_UNAVAILABLE"))
     result = {"format": 1, "candidate": candidate, "source": "git_objects", "rows": rows,

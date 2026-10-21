@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import sys
 from copy import deepcopy
 from pathlib import Path
 
@@ -15,14 +16,17 @@ from scripts.release_capability_matrix import (
     apply_receipts,
     consistency,
     generate,
+    load_claims,
     make_receipt,
     native_facts,
-    reviewed_claim,
+    platform_cells,
 )
 from scripts.release_identity import _archive, _git, _write_files
 
 ROOT = Path(__file__).resolve().parents[1]
-GOLDEN = ROOT / "tests/fixtures/release-capability-producers.json"
+GOLDEN = ROOT / "tests/fixtures/managed-bootstrap.json"
+CLAIMS = ROOT / "tests/fixtures/platform-table-claims.json"
+PUBLIC_TABLES = ("README.md", "README.zh-TW.md", "scripts/build_product_site.py")
 
 
 @pytest.fixture(scope="module")
@@ -37,12 +41,56 @@ def row(matrix, entry, capability, source_kind=None):
                 and (source_kind is None or item["source_kind"] == source_kind))
 
 
-def test_real_producers_match_golden(matrix):
-    # Generator: scripts/generate_capability_matrix.py --producer-golden PATH.
-    # Only de-identified producer declarations, no source-tree digest or clock.
-    assert matrix["producers"] == json.loads(GOLDEN.read_text())
-    assert matrix["producers"]["server"]["managed"]["bootstrap_capabilities_equal"] is True
-    assert matrix["producers"]["server"]["plain"]["bootstrap_capabilities_equal"] is True
+def test_server_facts_use_existing_bootstrap_golden(matrix):
+    assert GOLDEN == ROOT / "tests/fixtures/managed-bootstrap.json", "one golden authority for ApiV1"
+    saved = json.loads(GOLDEN.read_text())["capabilities"]
+    for variant in ("managed", "plain"):
+        expected = deepcopy(saved)
+        if variant == "plain":
+            del expected["desktop_identity"]
+            del expected["managed_installation"]
+        actual = matrix["producers"]["server"][variant]
+        assert actual["features"] == expected["features"]
+        assert actual["artifacts"] == expected["artifacts"]
+        assert actual["principal"] == {"actor": expected["actor"], "scopes": expected["scopes"]}
+        assert actual["desktop_identity_present"] == ("desktop_identity" in expected)
+        assert actual["managed_installation_present"] == ("managed_installation" in expected)
+        assert actual["bootstrap_capabilities_equal"] is True
+
+
+def public_tree(tmp_path):
+    for name in PUBLIC_TABLES:
+        target = tmp_path / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / name, target)
+    return tmp_path
+
+
+def tree_cells(tree):
+    return platform_cells({name: (tree / name).read_bytes() for name in PUBLIC_TABLES})
+
+
+def test_platform_guard_detects_edited_cell(matrix, tmp_path):
+    tree = public_tree(tmp_path)
+    path = tree / "README.md"
+    path.write_text(path.read_text().replace("NSIS, bundled central", "NSIS, edited central", 1))
+    changed = {**matrix, "platform_cells": tree_cells(tree)}
+    cell = next(c for c in changed["platform_cells"] if c["file"] == "README.md"
+                and c["entry"] == "Windows x64" and c["column"] == "features")
+    result = consistency(changed, json.loads(CLAIMS.read_text()))
+    assert any(error["reason"] == "CELL_TEXT_CHANGED" and error["source"] == f'README.md:{cell["line"]}'
+               and "must be re-reviewed" in error["message"] for error in result.get("review_errors", []))
+    assert not any(check["source"] == f'README.md:{cell["line"]}' for check in result["checked"])
+
+
+def test_platform_guard_detects_claim_for_removed_cell(matrix, tmp_path):
+    tree = public_tree(tmp_path)
+    path = tree / "README.md"
+    path.write_text("\n".join(line for line in path.read_text().splitlines() if not line.startswith("| Linux |")) + "\n")
+    changed = {**matrix, "platform_cells": tree_cells(tree)}
+    result = consistency(changed, json.loads(CLAIMS.read_text()))
+    assert any(error["reason"] == "REVIEW_CELL_MISSING" and error["cell"]["file"] == "README.md"
+               and error["cell"]["entry"] == "Linux" for error in result.get("review_errors", []))
 
 
 def test_browser_probe_needs_no_npm_install_or_host_configuration(tmp_path):
@@ -78,6 +126,11 @@ def test_browser_has_no_native_fleet_or_vault(matrix):
         assert item["evidence"]["running"]["value"] == "unknown"
     assert matrix["producers"]["web"]["central_request"] == {"method": "GET", "path": "/api/v1/capabilities"}
     assert matrix["producers"]["web"]["authenticated_request"] is True
+    assert matrix["producers"]["web"]["producer_response_unchanged"] is True
+    assert matrix["producers"]["web"]["producer"] == "shipped_browser_bundle"
+    assert matrix["producers"]["web"]["native_desktop"] is False
+    assert matrix["producers"]["web"]["native_fleet_unavailable"] is True
+    assert matrix["producers"]["web"]["credential_vault_unavailable"] is True
 
 
 def test_package_ci_only_supplies_its_own_state_and_row(matrix):
@@ -160,6 +213,7 @@ def test_native_ipc_registration_is_coded_but_not_a_runtime_observation(matrix):
         for command in ("native_status", "native_files_status", "desktop_update", "managed_control"):
             item = row(matrix, entry, "ipc." + command, "native")
             assert item["evidence"]["coded"]["value"] is True
+            assert item["evidence"]["coded"]["reason"] == "IPC_REGISTERED"
             assert item["availability"] == "unknown"
             assert item["evidence"]["running"]["value"] == "unknown"
 
@@ -183,31 +237,124 @@ def test_server_declaration_versions_do_not_become_readiness(matrix):
 
 
 def test_table_claims_are_reviewed_bytes_not_prose_guesses(matrix):
-    # A review receipt binds an explicit interpretation to an exact candidate cell.
+    # An explicit interpretation binds to text, not the commit or moving line.
     # New/changed prose is unchecked; no keyword parser turns wording into support.
     cells = matrix["platform_cells"]
     browser = next(cell for cell in cells if cell["entry"] == "Browser" and cell["column"] == "boundary")
-    claim = reviewed_claim(matrix["candidate"], browser, "Browser", "native_fleet", False)
-    result = consistency(matrix, [claim])
+    record = next(r for r in load_claims() if all(r[k] == browser[k] for k in ("file", "entry", "column")))
+    result = consistency(matrix, [record])
     assert not result["mismatches"]
     assert result["checked"][0]["result"] == "matches"
-    wrong = {**claim, "expected": True}
+    wrong = {**record, "claims": [{"entry": "Browser", "capability": "native_fleet", "expected": True}]}
     assert consistency(matrix, [wrong])["mismatches"][0]["reason"] == "CODED_CLAIM_DIFFERS"
-    missing = {**claim, "capability": "not-declared"}
+    missing = {**record, "claims": [{"entry": "Browser", "capability": "not-declared", "expected": True}]}
     assert consistency(matrix, [missing])["mismatches"][0]["reason"] == "CODED_ROW_MISSING"
     changed = deepcopy(matrix)
     changed["platform_cells"] = [{**cell, "text": "Edited platform prose"} for cell in cells]
-    assert consistency(changed, [claim])["unchecked"]
-    assert not consistency(changed, [claim])["checked"]
+    assert consistency(changed, [record])["unchecked"]
+    assert not consistency(changed, [record])["checked"]
 
 
 def test_both_readmes_and_site_are_inventoried_and_missing_table_is_unchecked(matrix):
-    assert len(matrix["platform_cells"]) == 24
+    records = load_claims()
+
+    def key(cell):
+        return tuple(cell[k] for k in ("file", "entry", "column"))
+
+    assert {key(cell) for cell in matrix["platform_cells"]} == {key(record) for record in records}
+    assert len(matrix["platform_cells"]) == len(records)
     assert {cell["file"] for cell in matrix["platform_cells"]} == {
         "README.md", "README.zh-TW.md", "scripts/build_product_site.py"}
     missing = {**matrix, "platform_cells": []}
-    assert len(consistency(missing)["unchecked"]) == 3
-    assert all(item["reason"] == "PLATFORM_TABLE_UNAVAILABLE" for item in consistency(missing)["unchecked"])
+    assert {item["source"] for item in consistency(missing)["unchecked"]
+            if item["reason"] == "PLATFORM_TABLE_UNAVAILABLE"} == set(PUBLIC_TABLES)
+
+
+def test_platform_table_claims_are_current(matrix):
+    # CI checks its checkout; local pre-commit runs also catch edited prose.
+    current = {**matrix, "platform_cells": tree_cells(ROOT)}
+    result = consistency(current, load_claims())
+    assert not result["review_errors"], "\n".join(issue["message"] for issue in result["review_errors"])
+    assert not result["mismatches"], result["mismatches"]
+    assert len(result["checked"]) == sum(len(record["claims"]) for record in load_claims())
+    assert {item["reason"] for item in result["unchecked"]} == {record["unchecked_reason"] for record in load_claims()}
+
+
+@pytest.mark.parametrize("entry,capability", [("Browser", "native_fleet"), ("Browser", "credential_vault"),
+                                               ("macOS arm64", "native_fleet"), ("macOS x64", "native_fleet")])
+def test_guard_requires_both_public_boundaries(matrix, entry, capability):
+    records = load_claims()
+    for record in records:
+        if record["file"] == "README.md" and record["column"] == "boundary":
+            record["claims"] = [c for c in record["claims"] if (c["entry"], c["capability"]) != (entry, capability)]
+    result = consistency(matrix, records)
+    assert any(error["reason"] == "BOUNDARY_REVIEW_MISSING" and error["cell"]["entry"] == entry
+               and error["capability"] == capability for error in result["review_errors"])
+
+
+def test_new_cell_requires_review(matrix, tmp_path):
+    tree = public_tree(tmp_path)
+    path = tree / "README.md"
+    source = path.read_text()
+    original = next(line for line in source.splitlines() if line.startswith("| Browser |"))
+    path.write_text(source.replace(original, original + "\n| Preview entry | Shared UI | Unreviewed |", 1))
+    changed = {**matrix, "platform_cells": tree_cells(tree)}
+    cell = next(c for c in changed["platform_cells"] if c["entry"] == "Preview entry")
+    result = consistency(changed, load_claims())
+    assert any(e["reason"] == "CELL_REVIEW_MISSING" and e["source"] == f'README.md:{cell["line"]}'
+               and "must be re-reviewed" in e["message"] for e in result["review_errors"])
+
+
+def test_duplicate_platform_cell_requires_review(matrix, tmp_path):
+    tree = public_tree(tmp_path)
+    path = tree / "README.md"
+    original = next(line for line in path.read_text().splitlines() if line.startswith("| Browser |"))
+    path.write_text(path.read_text().replace(original, original + "\n" + original, 1))
+    changed = {**matrix, "platform_cells": tree_cells(tree)}
+    result = consistency(changed, load_claims())
+    assert any(e["reason"] == "PLATFORM_CELL_DUPLICATE" and "must be re-reviewed" in e["message"]
+               for e in result["review_errors"])
+    assert not any(check["cell"]["file"] == "README.md" and check["cell"]["entry"] == "Browser"
+                   for check in result["checked"])
+
+
+def test_line_moves_do_not_unbind_review(matrix, tmp_path):
+    tree = public_tree(tmp_path)
+    for name in PUBLIC_TABLES:
+        path = tree / name
+        path.write_text("\n\n" + path.read_text())
+    changed = {**matrix, "platform_cells": tree_cells(tree)}
+    result = consistency(changed, load_claims())
+    assert not result["review_errors"]
+    assert not result["mismatches"]
+    assert len(result["checked"]) == len(matrix["consistency"]["checked"])
+
+
+@pytest.mark.parametrize("override", [False, True])
+def test_cli_defaults_to_committed_claims_and_allows_draft_override(matrix, tmp_path, override):
+    output = tmp_path / "matrix.json"
+    command = ["-m", "scripts.generate_capability_matrix", "--candidate", matrix["candidate"], "--output", str(output)]
+    if override:
+        records = load_claims()
+        records[0]["text_sha256"] = "0" * 64
+        draft = tmp_path / "draft.json"
+        draft.write_text(json.dumps(records))
+        command += ["--claims", str(draft)]
+    result = subprocess.run([sys.executable, *command], cwd=ROOT, capture_output=True, text=True, timeout=90)
+    assert result.returncode == (1 if override else 0), result.stdout + result.stderr
+    actual = json.loads(output.read_text())["consistency"]
+    if override:
+        assert any(error["reason"] == "CELL_TEXT_CHANGED" for error in actual["review_errors"])
+    else:
+        assert not actual["review_errors"] and not actual["mismatches"]
+        assert len(actual["checked"]) == sum(len(record["claims"]) for record in load_claims())
+
+
+def test_cli_has_no_second_golden_generator():
+    result = subprocess.run([sys.executable, "-m", "scripts.generate_capability_matrix", "--help"],
+                            cwd=ROOT, capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    assert "--producer-golden" not in result.stdout
 
 
 def test_candidate_parser_is_shared_and_dirty_files_do_not_supply_facts(matrix, tmp_path):
@@ -232,3 +379,4 @@ def test_dirty_candidate_checkout_cannot_supply_producer_facts(matrix, tmp_path)
     result = generate(source, candidate, scratch=tmp_path / "probe")
     assert result["producers"] == matrix["producers"]
     assert all(item["subject_sha"] == candidate for item in result["rows"])
+    assert not result["consistency"]["review_errors"]  # Same reviewed text at another real commit.
