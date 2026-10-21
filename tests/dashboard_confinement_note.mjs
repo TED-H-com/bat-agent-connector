@@ -39,7 +39,7 @@ class FixtureNode {
 
 function render(language, effect, agent, declared = true) {
   const context = vm.createContext({
-    navigator: { language }, Node: FixtureNode, nativeDesktop: false, errorRing, layoutDecision, ...translations,
+    navigator: { language }, Node: FixtureNode, AbortController, nativeDesktop: false, errorRing, layoutDecision, ...translations,
     document: { documentElement: {}, createElement: () => new FixtureNode(), createTextNode: () => new FixtureNode(), addEventListener() {} },
   });
   vm.runInContext(dom + "\n" + i18n + "\n" + app + "\nglobalThis.fixture = { state, confinementNote, t };", context);
