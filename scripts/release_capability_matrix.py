@@ -99,6 +99,7 @@ def _proof(files, path, snippet):
 
 def native_facts(files):
     fleet = _proof(files, "desktop/src-tauri/src/fleet.rs", "native_controls: cfg!(windows),")
+    windows_module = _proof(files, "desktop/src-tauri/src/credentials.rs", "#[cfg(windows)]\nmod windows {")
     windows = _proof(files, "desktop/src-tauri/src/credentials.rs",
                      'impl Vault for OsVault {\n        fn supported(&self) -> bool {\n            true\n        }\n        fn source(&self) -> &\'static str {\n            "windows_credential_manager"\n        }')
     mac = _proof(files, "desktop/src-tauri/src/credentials_macos.rs",
@@ -121,13 +122,18 @@ def native_facts(files):
                  "macOS x64": "desktop-macOS-x64-validation", "Linux": "desktop-Linux-unsigned"}
     result = {}
     for entry in ENTRIES[1:]:
-        vault = windows if entry == "Windows x64" else linux if entry == "Linux" else mac if mac_module else None
+        if entry == "Windows x64":
+            vault, vault_proofs = windows if windows_module else None, [windows, windows_module]
+        elif entry == "Linux":
+            vault, vault_proofs = linux, [linux]
+        else:
+            vault, vault_proofs = mac if mac_module else None, [mac, mac_module]
         package = "nsis" if entry == "Windows x64" else "deb" if entry == "Linux" else "dmg"
         package_proof = _proof(files, "scripts/ci_scope.py", f'"artifact": "{artifacts[entry]}"')
         result[entry] = {
             "native_fleet": {"coded": entry == "Windows x64" if fleet and fleet_module else "unknown",
                              "proof": [fleet, fleet_module]},
-            "credential_vault": {"coded": entry != "Linux" if vault else "unknown", "proof": [vault]},
+            "credential_vault": {"coded": entry != "Linux" if vault else "unknown", "proof": vault_proofs},
             "tray": {"coded": True if tray else "unknown", "proof": [tray]},
             "bundled_central": {"coded": True if bundled else "unknown", "proof": [bundled]},
             "shared_ui": {"coded": True if shared else "unknown", "proof": [shared]},
@@ -140,22 +146,23 @@ def native_facts(files):
 def platform_cells(files):
     """Read table structure only. Never interpret prose as a capability or acceptance."""
     result = []
-    lines = files["README.md"].decode().splitlines()
-    in_table = False
-    for number, line in enumerate(lines, 1):
-        if line.startswith("| Entry | Package / local features | Boundary |"):
-            in_table = True
-            continue
-        if not in_table:
-            continue
-        if not line.startswith("|"):
-            break
-        cells = [part.strip() for part in line.strip("|").split("|")]
-        if len(cells) != 3 or cells[0].startswith("---"):
-            continue
-        for column, text in zip(("features", "boundary"), cells[1:], strict=True):
-            result.append({"id": f"README.md:{number}:{column}", "file": "README.md", "line": number,
-                           "entry": cells[0], "column": column, "text": text})
+    for path, header in (("README.md", "| Entry | Package / local features | Boundary |"),
+                         ("README.zh-TW.md", "| 入口 | 套件／本機能力 | 界線 |")):
+        in_table = False
+        for number, line in enumerate(files.get(path, b"").decode().splitlines(), 1):
+            if line == header:
+                in_table = True
+                continue
+            if not in_table:
+                continue
+            if not line.startswith("|"):
+                break
+            cells = [part.strip() for part in line.strip("|").split("|")]
+            if len(cells) != 3 or cells[0].startswith("---"):
+                continue
+            for column, text in zip(("features", "boundary"), cells[1:], strict=True):
+                result.append({"id": f"{path}:{number}:{column}", "file": path, "line": number,
+                               "entry": cells[0], "column": column, "text": text})
     # The site's real producer declares table rows as literal tuples. No execution,
     # HTML copy, or fuzzy keyword matching is needed to inventory their exact cells.
     path = "scripts/build_product_site.py"
@@ -192,6 +199,9 @@ def reviewed_claim(candidate, cell, entry, capability, expected):
 def consistency(matrix, claims=()):
     cells = {item["id"]: item for item in matrix["platform_cells"]}
     result = {"checked": [], "mismatches": [], "unchecked": []}
+    for path in ("README.md", "README.zh-TW.md", "scripts/build_product_site.py"):
+        if not any(cell["file"] == path for cell in cells.values()):
+            result["unchecked"].append({"source": path, "reason": "PLATFORM_TABLE_UNAVAILABLE"})
     reviewed = set()
     for claim in claims:
         cell = cells.get(claim.get("cell_id"))

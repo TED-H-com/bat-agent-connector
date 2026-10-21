@@ -14,6 +14,7 @@ from scripts.release_capability_matrix import (
     consistency,
     generate,
     make_receipt,
+    native_facts,
     reviewed_claim,
 )
 from scripts.release_identity import _archive, _git, _write_files
@@ -126,6 +127,16 @@ def test_source_gates_prove_code_only(matrix):
         assert row(matrix, entry, "credential_vault")["evidence"]["coded"]["value"] is True
 
 
+def test_unrecognised_native_gate_is_unknown_not_another_platforms_fact():
+    candidate = _git(ROOT, "rev-parse", "HEAD").decode().strip()
+    files = _archive(_git(ROOT, "archive", candidate))
+    path = "desktop/src-tauri/src/credentials.rs"
+    files[path] = files[path].replace(b"#[cfg(windows)]\nmod windows {", b"#[cfg(any())]\nmod windows {")
+    facts = native_facts(files)
+    assert facts["Windows x64"]["credential_vault"]["coded"] == "unknown"
+    assert facts["macOS arm64"]["credential_vault"]["coded"] is True
+
+
 def test_server_declaration_versions_do_not_become_readiness(matrix):
     item = row(matrix, "Browser", "pm_workspaces", "server")
     assert item["declaration"]["version"] == 1
@@ -151,6 +162,15 @@ def test_table_claims_are_reviewed_bytes_not_prose_guesses(matrix):
     changed["platform_cells"] = [{**cell, "text": "Edited platform prose"} for cell in cells]
     assert consistency(changed, [claim])["unchecked"]
     assert not consistency(changed, [claim])["checked"]
+
+
+def test_both_readmes_and_site_are_inventoried_and_missing_table_is_unchecked(matrix):
+    assert len(matrix["platform_cells"]) == 24
+    assert {cell["file"] for cell in matrix["platform_cells"]} == {
+        "README.md", "README.zh-TW.md", "scripts/build_product_site.py"}
+    missing = {**matrix, "platform_cells": []}
+    assert len(consistency(missing)["unchecked"]) == 3
+    assert all(item["reason"] == "PLATFORM_TABLE_UNAVAILABLE" for item in consistency(missing)["unchecked"])
 
 
 def test_candidate_parser_is_shared_and_dirty_files_do_not_supply_facts(matrix, tmp_path):
