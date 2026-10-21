@@ -5,8 +5,6 @@ import sys
 import time
 from pathlib import Path
 
-import pytest
-
 from scripts.validate_connector_update import copy_fixture_source
 
 
@@ -58,8 +56,7 @@ def _build(source, directory, mode="wheel", commit=None):
     return next(out.glob("*.whl" if mode == "wheel" else "*.tar.gz"))
 
 
-@pytest.fixture(scope="session")
-def clean_wheel(tmp_path_factory):
+def build_clean_wheel(tmp_path_factory):
     """One real candidate wheel per session, shared by packaging consumers."""
     directory = tmp_path_factory.mktemp("clean-wheel")
     repo, head = _source_repo(directory, "clean candidate")
