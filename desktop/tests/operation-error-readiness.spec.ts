@@ -7,7 +7,7 @@ import {STRINGS} from '../src/i18n.js';
 test.describe.configure({mode:'parallel'});
 
 // Complete production session handlers and renderers, with controlled API outcomes.
-async function mount(page: Page, locale: string, family: string, sourceRead: boolean) {
+async function mount(page: Page, locale: string, family: string, sourceRead: boolean, clientChange: 'VIEW_CHANGED' | 'CONNECTION_CHANGED' | null = null) {
   const app=await readFile(new URL('../src/app.js',import.meta.url),'utf8');
   const ast:any=parse(app,{ecmaVersion:'latest',sourceType:'module'});
   const session=ast.body.find((n:any)=>n.type==='FunctionDeclaration'&&n.id.name==='viewSession');
@@ -18,6 +18,7 @@ async function mount(page: Page, locale: string, family: string, sourceRead: boo
     if(n.type==='VariableDeclarator'&&n.id.name==='refresh')refresh=n.init;
     for(const v of Object.values(n)){if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object')walk(v);}
   }walk(session);expect(send).toBeTruthy();expect(refresh).toBeTruthy();
+  const clientGuards=['assertConnection','assertView'].map(name=>{const node=ast.body.find((n:any)=>n.type==='FunctionDeclaration'&&n.id.name===name);expect(node).toBeTruthy();return app.slice(node.start,node.end);}).join('\n');
   const renderer=app.slice(app.indexOf('function errorBox('),app.indexOf('async function submit('));
   const sessionRenderer=app.slice(app.indexOf('function sessionErrorDetails('),app.indexOf('// Pull-request links'));
   await page.route('**/__operation_src/**',async route=>{
@@ -30,42 +31,50 @@ async function mount(page: Page, locale: string, family: string, sourceRead: boo
     import {t,setLocale} from '/__operation_src/i18n.js';
     import {button,disclosure} from '/__operation_src/ui/components.js';
     import {icon} from '/__operation_src/ui/icons.js';
-    import {errorPresentation,sessionErrorLine} from '/__operation_src/error-presentation.js';
+    import {ApiError,errorPresentation,sessionErrorLine} from '/__operation_src/error-presentation.js';
     import {settleRefreshes} from '/__operation_src/state/events.ts';
     export const state={refreshCycle:{error:null}};
     function openDiagnostics() {}
     ${renderer}
     ${sessionRenderer}
     export {errorBox};
-    export function sessionHandlers(locale,api) {
+    export function sessionHandlers(locale,api,clientChange=null) {
       setLocale(locale);
       const status=h('div',{role:'status'}),box=h('textarea'),send=h('button',{type:'button'},t('send'));
       box.value='Keep this original draft';
+      let retries=0;
+      // Client guard failures use the real producers, never fake server codes.
+      const lifecycle=(()=>{
+        state.epoch=0;state.namespace='handler-fixture';let generation=0;
+        const connection={epoch:state.epoch,namespace:state.namespace,generation};
+        ${clientGuards}
+        return {assert:()=>assertView(connection),change:()=>{if(clientChange==='VIEW_CHANGED')generation++;else state.epoch++;}};
+      })();
       const context={status,box,send,queue:{checked:false,onchange(){}},host:'demo',sid:'session-1',scope:'send.demo.session-1',draftKey:'operation-readiness',
-        connection:{},assertView(){},allowed:()=>true,paintSend(){},sendRecovery:()=>null,mobileLayout:null,
+        connection:{},assertView:clientChange?lifecycle.assert:()=>{},allowed:()=>true,paintSend(){},sendRecovery:()=>null,mobileLayout:null,
         conversation:{box:h('div'),follow(){},fail({error}){status.replaceChildren(error);}},
-        permissions:null,perspectives:null,reinstate(){},withdraw(){},updateControls(){},scheduleRetry(){},
-        loadObservation:()=>api('GET','/sessions/demo/session-1'),loadMessages:()=>Promise.resolve(),
+        permissions:null,perspectives:null,reinstate(){},withdraw(){},updateControls(){},scheduleRetry(){retries++;},
+        loadObservation:async()=>{await api('GET','/sessions/demo/session-1');if(clientChange){lifecycle.change();lifecycle.assert();}},loadMessages:()=>Promise.resolve(),
         submit:(action,target,params,preconditions,key)=>api('POST','/operations?wait=3',{action,target,params,preconditions},key),
-        workSendOwned:false,sending:false,disposed:false,readReady:true,refreshInFlight:null,readError:null,
+        workSendOwned:false,sending:false,disposed:false,readReady:!clientChange,refreshInFlight:null,readError:null,
         retryTimer:null,retryAt:0,retryDelay:1000,withdrawn:'',messageFailure:null,settleRefreshes,sessionErrorBox,t};
       let {queue,host,sid,scope,draftKey,connection,assertView,allowed,paintSend,sendRecovery,mobileLayout,conversation,permissions,perspectives,reinstate,withdraw,updateControls,scheduleRetry,loadObservation,loadMessages,submit,workSendOwned,sending,disposed,readReady,refreshInFlight,readError,retryTimer,retryAt,retryDelay,withdrawn,messageFailure}=context;
       // These outcomes use one foreground scope, including the handler's captured state.
       let foregroundVersion=0,refreshForeground=foregroundVersion;
       const refresh=${app.slice(refresh.start,refresh.end)};
       send.onclick=${app.slice(send.start,send.end)};
-      return {box:h('section',{},box,send,status),refresh};
+      return {box:h('section',{},box,send,status),refresh,retries:()=>retries};
     }` }));
   await page.goto('/ui-components.html');
-  await page.evaluate(async({locale,family,sourceRead})=>{
+  await page.evaluate(async({locale,family,sourceRead,clientChange})=>{
     const {h}=await import('/__operation_src/ui/dom.js'),{t,setLocale}=await import('/__operation_src/i18n.js');setLocale(locale);
     const {ApiError}=await import('/__operation_src/error-presentation.js');
     const {state,errorBox,sessionHandlers}=await import('/__operation-handlers.js');
     const w=window as any;w.operationCycle=state.refreshCycle;w.operationCalls=[];
-    const api=async(method:string,path:string,body:any)=>{w.operationCalls.push({method,path,body});throw new ApiError(sourceRead?503:422,sourceRead?'UNAVAILABLE':'INVALID_PARAMS','Fixture request refused');};
+    const api=async(method:string,path:string,body:any)=>{w.operationCalls.push({method,path,body});if(clientChange)return {};throw new ApiError(sourceRead?503:422,sourceRead?'UNAVAILABLE':'INVALID_PARAMS','Fixture request refused');};
     const common={h,t,api,errorBox,guard:()=>{},alive:()=>{},caps:()=>({actor:'reader',scopes:['observe','operate'],hosts:[{host:'demo',writes:true}],actions:[{action:'session.approve_pending',allowed:true}]}),ready:()=>true,storageKey:'operation-readiness',opStatus:()=>h('span')};
     let ui:any;
-    if(family==='session')ui=sessionHandlers(locale,api);
+    if(family==='session')ui=sessionHandlers(locale,api,clientChange);
     else if(family==='pm') {
       if(sourceRead){
         const {pmContextBundle}=await import('/__operation_src/pm-context-bundle.js');
@@ -82,7 +91,7 @@ async function mount(page: Page, locale: string, family: string, sourceRead: boo
       if(!sourceRead){const select=ui.box.querySelector('select');select.value='demo';select.dispatchEvent(new Event('change'));}
     }
     document.getElementById('fixture')!.replaceChildren(ui.box);w.operationUi=ui;
-  },{locale,family,sourceRead});
+  },{locale,family,sourceRead,clientChange});
 }
 for(const locale of ['en','zh-TW'])for(const family of ['session','pm','approval']){
   test(`${family} operation outcome leaves an overlapping source refresh healthy ${locale}`,async({page})=>{
@@ -134,3 +143,16 @@ for(const kind of ['write','receipt','source'])test(`${module} preserves ${kind}
   const code=await page.evaluate(()=>(window as any).operationCycle.error?.code??null);
   expect(code).toBe(kind==='source'?'FORBIDDEN':null);
 });
+
+for(const locale of ['en','zh-TW'])for(const code of ['VIEW_CHANGED','CONNECTION_CHANGED'] as const){
+  test(`session client guard ${code} leaves no read error or retry in the current view ${locale}`,async({page})=>{
+    await mount(page,locale,'session',true,code);
+    const outcome=await page.evaluate(async()=>{
+      const w=window as any;
+      try {await w.operationUi.refresh();return null;}
+      catch(error){return {code:error.code,retries:w.operationUi.retries(),cycle:w.operationCycle.error};}
+    });
+    expect(outcome).toEqual({code,retries:0,cycle:null});
+    await expect(page.locator('[data-session-error]')).toHaveCount(0);
+  });
+}
