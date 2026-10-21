@@ -65,8 +65,14 @@ finally:
             child.wait(timeout=10)
 
 
-def test_owned_launch_rejects_an_unrelated_live_pid_without_contact(upgrade, tmp_path, monkeypatch):
-    put_pointer(tmp_path, os.getpid())
+@pytest.mark.parametrize('stale', ['live', 'stopped'])
+def test_owned_launch_rejects_a_stale_pid_without_contact(upgrade, tmp_path, monkeypatch, stale):
+    pid = os.getpid()
+    if stale == 'stopped':
+        with subprocess.Popen([sys.executable, '-c', 'pass']) as previous:
+            previous.wait(timeout=10)
+            pid = previous.pid
+    put_pointer(tmp_path, pid)
 
     def unexpected(*args, **kwargs):
         pytest.fail('A stale pointer must not receive even an unauthenticated probe')
@@ -77,6 +83,7 @@ def test_owned_launch_rejects_an_unrelated_live_pid_without_contact(upgrade, tmp
     with subprocess.Popen([sys.executable, '-c', 'import sys; sys.stdin.buffer.read()'],
                           stdin=subprocess.PIPE, **options) as child:
         try:
+            assert child.pid != pid
             with pytest.raises(ValueError, match='not listening yet'):
                 upgrade['owned_launch'](tmp_path, child, {})
         finally:
@@ -85,8 +92,10 @@ def test_owned_launch_rejects_an_unrelated_live_pid_without_contact(upgrade, tmp
             child.wait(timeout=10)
 
 
-def test_owned_launch_waits_out_the_previous_cores_default_endpoint(upgrade, tmp_path, monkeypatch):
-    put_pointer(tmp_path, os.getpid(), 'http://127.0.0.1:18796/rpc')
+@pytest.mark.parametrize('endpoint', ['http://127.0.0.1:18796/rpc',
+    'http://127.0.0.1:invalid/rpc', 'http://127.0.0.1:45123/wrong'])
+def test_owned_launch_waits_for_usable_endpoint_without_contact(upgrade, tmp_path, monkeypatch, endpoint):
+    put_pointer(tmp_path, os.getpid(), endpoint)
 
     def unexpected(*args, **kwargs):
         pytest.fail('The fixed operator port must never receive a fixture probe')
@@ -128,3 +137,14 @@ def test_wait_owned_launch_does_not_retry_connection_or_proof_failure(upgrade, m
     with pytest.raises(type(failure), match='fixture|identity'):
         upgrade['wait_owned_launch'](None, SimpleNamespace(poll=lambda: None), {}, timeout=45)
     assert attempts == [1]
+
+
+@pytest.mark.parametrize('parents,pid,expected', [({101: 100}, 101, True),
+    ({102: 101, 101: 100}, 102, True), ({77: 1}, 77, False), ({}, 77, False),
+    ({77: 78, 78: 77}, 77, False), ({}, True, False)])
+def test_windows_ancestry_requires_the_spawned_parent_chain(upgrade, monkeypatch, parents, pid, expected):
+    # Controlled Toolhelp parent map; the Win32 API itself remains native CI evidence.
+    scope = upgrade['owned_pid'].__globals__
+    monkeypatch.setitem(scope, 'os', SimpleNamespace(name='nt'))
+    monkeypatch.setitem(scope, 'windows_process_parents', lambda: parents)
+    assert upgrade['owned_pid'](SimpleNamespace(pid=100), pid) is expected
