@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {createInterface} from 'node:readline';
 import {resolve} from 'node:path';
-import {writeFileSync} from 'node:fs';
+import {readFileSync, writeFileSync} from 'node:fs';
 import {chromium, expect as baseExpect} from '@playwright/test';
 import {uiStrings} from '../src/ui/ui-strings.js';
 
@@ -16,6 +16,7 @@ const errors = [], operations = [], requests = [], responses = [], pending = new
 const resumedOperations = [];
 const allRequests = [], requestRecords = new Map();
 let browser, context, page, step = 'start', closeRestart = null;
+let observedBootstrap;
 const launch = async () => {
   const options = {locale: zh ? 'zh-TW' : 'en-US',
     viewport: {width: f.width, height: f.width === 390 ? 844 : 900}, reducedMotion: 'reduce'};
@@ -52,6 +53,8 @@ const launch = async () => {
   page.on('response', response => {
     pending.delete(response.request());
     if (new URL(response.url()).pathname.startsWith('/api/')) responses.push({path: new URL(response.url()).pathname, status: response.status()});
+    if (response.ok() && new URL(response.url()).pathname === '/api/v1/bootstrap')
+      response.json().then(data => {observedBootstrap = data;}).catch(() => {});
     if (response.ok() && /\/work-attempts\/[^/]+\/result$/.test(new URL(response.url()).pathname)) {
       response.json().then(result => results.set(result.attempt_id, result)).catch(() => {});
     }
@@ -81,6 +84,13 @@ async function refusedAccess(active, workUrl) {
   // The principal, revocation and all HTTP bodies are real. Only BAT/model
   // are doubles; this journey does not probe a separate Fleet credential.
   const copy = uiStrings[zh ? 'zh-TW' : 'en'];
+  // Cross-check the real reply's contract; this golden never answers a request.
+  const golden = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-bootstrap.json', import.meta.url), 'utf8'));
+  await expect.poll(() => Boolean(observedBootstrap)).toBe(true);
+  for (const key of ['api_version', 'contract_version'])
+    assert.equal(observedBootstrap.capabilities[key], golden.capabilities[key]);
+  assert.deepEqual(observedBootstrap.capabilities.features.pm_workspaces.work_follow_up.routes,
+    golden.capabilities.features.pm_workspaces.work_follow_up.routes);
   const field = page.locator('[data-follow-up-input]');
   const work = page.locator('[data-work-section="next-turn"]');
   const submit = work.getByRole('button', {name: zh ? '送出下一步' : 'Send next', exact: true});
@@ -122,6 +132,7 @@ async function refusedAccess(active, workUrl) {
     await expect(page.locator('.central-service-scope')).toHaveText(copy.ui_connector_scope);
   };
   step = 'revoke-access';
+  await expect(header).toHaveText(copy.ui_connected);
   const refusal = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/events'
     && response.status() === 401);
   send({stage: 'revoke-access'});
@@ -141,12 +152,13 @@ async function refusedAccess(active, workUrl) {
   step = 'refused-settings';
   await page.evaluate(() => {location.hash = '#/settings?section=connection';});
   await expect(page.locator('.global-connection-facts .ui-pill')).toHaveText(await header.innerText());
+  const settingsReason = await page.locator('.global-connection-facts .ui-pill').innerText();
   await headerRefused();
   await unchanged();
   await shot('03-refused-settings');
   step = 'refused-work-return';
   const returned = page.waitForResponse(response => response.status() === 401
-    && new URL(response.url()).pathname === `/api/v1/pm/workspaces/${f.workspace}/work-attempts/${active.attempt}`);
+    && new URL(response.url()).pathname === `/api/v1/work-items/${f.work}`);
   await page.evaluate(hash => {location.hash = hash;}, new URL(workUrl).hash);
   await returned;
   await expect(page).toHaveURL(workUrl);
@@ -159,6 +171,7 @@ async function refusedAccess(active, workUrl) {
   await shot('04-refused-work-return');
   const proof = {draft_key: draftKey, draft_unchanged: true, attempt: active.attempt, result_href: resultHref,
     events_status: response.status(), server_code: body.error.code,
+    header_reason: await header.innerText(), settings_reason: settingsReason, draft_has_intent: false,
     reason_key: 'ui_connection_refused', gate_code: 'CLIENT_ACTION_REFUSED', operation_posts: 0};
   writeFileSync(resolve(f.shots, 'refused-access.json'), JSON.stringify({proof, requests: allRequests.slice(since)}, null, 2) + '\n');
   send({stage: 'refused-done', operations, browser: browser.version(), refusal: proof});
