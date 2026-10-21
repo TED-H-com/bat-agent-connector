@@ -23482,7 +23482,7 @@ async function nativeStatus() {
 	nativeBriefExportSupport = status.brief_exports === true;
 	return status;
 }
-async function connectorRequest(method, path, body, key, browserToken) {
+async function connectorRequest(method, path, body, key, browserToken, signal) {
 	if (nativeDesktop) return invoke("connector_request", { input: {
 		method,
 		path,
@@ -23497,7 +23497,8 @@ async function connectorRequest(method, path, body, key, browserToken) {
 		headers,
 		credentials: "same-origin",
 		redirect: "error",
-		body: body === void 0 ? void 0 : JSON.stringify(body)
+		body: body === void 0 ? void 0 : JSON.stringify(body),
+		signal
 	});
 	return {
 		status: res.status,
@@ -65771,6 +65772,25 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	};
 }
 //#endregion
+//#region src/state/retired-read.ts
+function retiredRead(pending, signal) {
+	return new Promise((resolve, reject) => {
+		const abort = () => {
+			signal.removeEventListener("abort", abort);
+			reject(new DOMException("Read retired", "AbortError"));
+		};
+		pending.then((value) => {
+			signal.removeEventListener("abort", abort);
+			resolve(value);
+		}, (error) => {
+			signal.removeEventListener("abort", abort);
+			reject(error);
+		});
+		if (signal.aborted) abort();
+		else signal.addEventListener("abort", abort, { once: true });
+	});
+}
+//#endregion
 //#region src/state/storage-identity.ts
 function managedStorageScope(identity) {
 	return [
@@ -66603,7 +66623,7 @@ async function api(method, path, body, key, collectReceipt) {
 		}
 		return data;
 	} catch (error) {
-		if (epoch === state.epoch) {
+		if (epoch === state.epoch && error.code !== "VIEW_CHANGED") {
 			if (method === "GET" && (path === "/capabilities" || path === "/bootstrap")) rememberVersionRead("capabilities", null, void 0, epoch);
 			recentErrors.record({
 				at: new Date().toISOString(),
@@ -66630,10 +66650,14 @@ async function apiRequest(method, path, body, key, collectReceipt) {
 	}
 	if (!state.token) throw new ApiError(401, "UNAUTHORIZED", t("need_token"), { localized: true });
 	const epoch = state.epoch;
+	const signal = method === "GET" && state.viewReady ? foregroundReads.signal : null;
 	let response;
 	try {
-		response = await connectorRequest(method, path, body, key, state.token);
+		const pending = connectorRequest(method, path, body, key, state.token, signal || void 0);
+		response = signal ? await retiredRead(pending, signal) : await pending;
+		if (signal?.aborted) throw new DOMException("Read retired", "AbortError");
 	} catch (cause) {
+		if (signal?.aborted) throw new ApiError(0, "VIEW_CHANGED", "Read retired during foreground recovery");
 		throw new ApiError(0, ["AbortError", "TimeoutError"].includes(cause?.name) || /timed?\s*out|timeout/i.test(cause?.message || String(cause)) ? "TIMEOUT" : "NETWORK_ERROR", cause?.message || String(cause));
 	}
 	const { status, data } = response;
@@ -67486,6 +67510,7 @@ async function refreshManagedRecovery() {
 }
 var foregroundVersion = 0;
 var wakeEventPoll = null;
+var foregroundReads = new AbortController();
 function waitForEventPoll(ms) {
 	return new Promise((resolve) => {
 		const finish = () => {
@@ -67499,6 +67524,9 @@ function waitForEventPoll(ms) {
 }
 function foregroundChanged() {
 	foregroundVersion++;
+	const previousReads = foregroundReads;
+	foregroundReads = new AbortController();
+	previousReads.abort();
 	if (state.token) {
 		updateOnline(false);
 		paintConnection(true, true);
@@ -67513,7 +67541,7 @@ async function streamEvents() {
 			await waitForEventPoll(1e3);
 			continue;
 		}
-		const epoch = state.epoch, view = generation, foreground = foregroundVersion;
+		const epoch = state.epoch, view = generation, foreground = foregroundVersion, signal = foregroundReads.signal;
 		let cycle, pollSucceeded = false;
 		const previousPoll = state.lastPoll;
 		try {
@@ -67530,12 +67558,15 @@ async function streamEvents() {
 			if (view !== generation || !state.viewReady) continue;
 			cycle = { error: null };
 			state.refreshCycle = cycle;
-			const cursor = await consumePageAsync(page, before, (ev) => {
-				return settleRefreshes([...state.listeners].map((fn) => Promise.resolve().then(() => fn(ev)))).catch((error) => {
+			const cursor = await retiredRead(consumePageAsync(page, before, (ev) => {
+				return settleRefreshes([...state.listeners].map((fn) => Promise.resolve().then(() => {
+					if (signal.aborted) throw new ApiError(0, "VIEW_CHANGED", "Event page retired");
+					return fn(ev);
+				}))).catch((error) => {
 					cycle.error ||= error;
 					throw error;
 				});
-			});
+			}), signal);
 			if (epoch !== state.epoch || view !== generation || foreground !== foregroundVersion || !state.viewReady) continue;
 			if (cycle.error) throw cycle.error;
 			if (state.sync) {
@@ -67618,19 +67649,23 @@ function debounceRefresh(fn, ms) {
 	return () => new Promise((resolve, reject) => {
 		waiting.push({
 			resolve,
-			reject
+			reject,
+			signal: foregroundReads.signal
 		});
 		clearTimeout(id);
 		id = setTimeout(async () => {
 			const batch = waiting;
 			waiting = [];
+			const current = batch.filter((p) => !p.signal.aborted);
+			for (const p of batch) if (p.signal.aborted) p.reject(new ApiError(0, "VIEW_CHANGED", "Refresh retired"));
+			if (!current.length) return;
 			try {
 				assertView(connection);
 				await fn();
 				assertView(connection);
-				batch.forEach((p) => p.resolve());
+				current.forEach((p) => p.resolve());
 			} catch (error) {
-				batch.forEach((p) => p.reject(error));
+				current.forEach((p) => p.reject(error));
 			}
 		}, ms);
 	});
@@ -69738,8 +69773,15 @@ async function viewSession(main, host, sid, context = null) {
 		syncWide();
 		settleRefreshes([cps.load(), labels.refresh()]).catch(() => {});
 	};
+	let refreshForeground = foregroundVersion;
 	const refresh = async (fromEvent = false) => {
 		assertView(connection);
+		if (refreshForeground !== foregroundVersion) {
+			refreshForeground = foregroundVersion;
+			clearTimeout(retryTimer);
+			retryTimer = null;
+			retryDelay = 1e3;
+		}
 		if (disposed) return;
 		if (fromEvent && retryTimer && Date.now() < retryAt && readError) throw readError.error;
 		if (refreshInFlight) {
@@ -69760,6 +69802,7 @@ async function viewSession(main, host, sid, context = null) {
 				readError?.remove();
 				readError = null;
 			} catch (error) {
+				if (["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error?.code)) throw error;
 				if (error?.sessionWithdrawn) {
 					withdraw(error.sessionWithdrawn, error);
 					return;
