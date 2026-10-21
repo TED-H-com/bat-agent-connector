@@ -22,10 +22,31 @@ from . import platform_files as files
 from .update_release import REPOSITORY, require
 
 
+def uv_git_env(environment):
+    """Keep automatic Git writers out of the database uv copies into checkouts."""
+    env = dict(environment)
+    raw = env.get("GIT_CONFIG_COUNT", "0")
+    if not isinstance(raw, str) or not raw.isascii() or not raw.isdecimal():
+        raise ValueError("invalid_git_config_count")
+    try:
+        count = int(raw)
+    except ValueError:
+        raise ValueError("invalid_git_config_count") from None
+    # Git parses a signed int; leave room for the two appended entries.
+    if count > 2**31 - 3:
+        raise ValueError("invalid_git_config_count")
+    for key, value in (("maintenance.auto", "false"), ("gc.auto", "0")):
+        env[f"GIT_CONFIG_KEY_{count}"] = key
+        env[f"GIT_CONFIG_VALUE_{count}"] = value
+        count += 1
+    env["GIT_CONFIG_COUNT"] = str(count)
+    return env
+
+
 def clean_env(home):
-    return {"HOME": str(home), "PATH": str(home / ".local/bin") + ":/usr/local/bin:/usr/bin:/bin",
-            "LANG": "C.UTF-8", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
-            "GIT_TERMINAL_PROMPT": "0", "UV_PYTHON_DOWNLOADS": "never", "UV_NO_CONFIG": "true"}
+    return uv_git_env({"HOME": str(home), "PATH": str(home / ".local/bin") + ":/usr/local/bin:/usr/bin:/bin",
+                       "LANG": "C.UTF-8", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
+                       "GIT_TERMINAL_PROMPT": "0", "UV_PYTHON_DOWNLOADS": "never", "UV_NO_CONFIG": "true"})
 
 
 def run(args, *, env, cwd=None, timeout=180):

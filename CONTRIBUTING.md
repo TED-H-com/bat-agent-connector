@@ -44,6 +44,22 @@ and frame, consuming the settling budget even when provider replies are prompt.
 Keep original-key, withdrawal, write-count and retry-budget assertions against
 the production hooks; mock only the external providers and managed test resources.
 
+ApiV1 capability fixtures share `tests/fixtures/managed-bootstrap.json`; do not
+add another golden for the same producer and setup. Platform table interpretations
+live in `tests/fixtures/platform-table-claims.json`. Ordinary pytest checks the
+working tree's claims and cells; `scripts/generate_capability_matrix.py` reads the
+candidate's committed copy by default and records its source and digest. An explicit
+`--claims` review draft is recorded separately. When editing a platform
+table row in either README or the site producer, re-review its capability claims
+and uncovered prose in the same PR. New, changed or removed cells fail the guard;
+do not merely refresh a digest. A record binds file, table entry label, column
+and SHA-256 of exact text, not the candidate or a line number. Text is UTF-8; the
+site's ordered English/Traditional Chinese pair is encoded as a JSON array with
+`ensure_ascii=False` and separators `(',', ':')` before hashing. Each record lists
+explicit entry/capability/expected-coded claims and an `unchecked_reason` for the
+remaining prose. Such unchecked prose does not fail the guard or prove support,
+installation, runtime readiness or acceptance.
+
 Public documentation, screenshots, examples and issue/PR text must work without a
 maintainer's private Fleet inventory or deployment. Use synthetic host names, reserved
 example addresses and generic user paths. Keep private installation evidence, operator

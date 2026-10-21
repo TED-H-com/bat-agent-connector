@@ -407,7 +407,10 @@ def test_command_timeout_output_limit_and_clean_environment(tmp_path, monkeypatc
     monkeypatch.setenv("BATC_API_TOKEN", "fixture-secret")
     monkeypatch.setenv("GIT_CONFIG_COUNT", "9")
     env = clean_env(tmp_path)
-    assert "BATC_API_TOKEN" not in env and "GIT_CONFIG_COUNT" not in env
+    assert "BATC_API_TOKEN" not in env
+    assert env["GIT_CONFIG_COUNT"] == "2"
+    assert (env["GIT_CONFIG_KEY_0"], env["GIT_CONFIG_VALUE_0"]) == ("maintenance.auto", "false")
+    assert (env["GIT_CONFIG_KEY_1"], env["GIT_CONFIG_VALUE_1"]) == ("gc.auto", "0")
     with pytest.raises(UpdateError, match="command_timeout"):
         run([sys.executable, "-c", "import time; time.sleep(10)"], env=env, timeout=0.05)
     with pytest.raises(UpdateError, match="output_limit"):

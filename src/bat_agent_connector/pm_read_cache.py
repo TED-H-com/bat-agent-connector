@@ -197,7 +197,7 @@ def recall(kind, key):
 
 
 def remember(kind, key, load, *, cache_errors=True, cache_if=None, guard_independent=False,
-             freeze=deepcopy, thaw=deepcopy):
+             freeze=deepcopy, thaw=deepcopy, db=None):
     """Remember a namespaced value; include explicit visibility inputs in key.
 
     The selected scope principal is also part of every key. Unsupported key
@@ -208,9 +208,11 @@ def remember(kind, key, load, *, cache_errors=True, cache_if=None, guard_indepen
     sanitized projections or answers depending on a traversal guard.
     freeze/thaw may optimize copies of known value types; each returned value
     must remain isolated from the loader, other callers and the saved envelope.
+    Explicit source readers pass db to reject another database's active scope,
+    without opening a disabled scope around a loader that owns its own snapshot.
     """
     frame = _CURRENT.get()
-    if frame is None or not frame.scope.usable():
+    if frame is None or db is not None and frame.scope.db is not db or not frame.scope.usable():
         return load()
     current = frame.scope
     if current.guard_depth and _GUARDS.get() != current.guard_depth:

@@ -28,6 +28,27 @@ def require(value, code):
         raise InstallError(code)
 
 
+def uv_git_env(environment):
+    """Bootstrap counterpart of update_install.uv_git_env; parity is tested."""
+    env = dict(environment)
+    raw = env.get("GIT_CONFIG_COUNT", "0")
+    if not isinstance(raw, str) or not raw.isascii() or not raw.isdecimal():
+        raise ValueError("invalid_git_config_count")
+    try:
+        count = int(raw)
+    except ValueError:
+        raise ValueError("invalid_git_config_count") from None
+    # Git parses a signed int; leave room for the two appended entries.
+    if count > 2**31 - 3:
+        raise ValueError("invalid_git_config_count")
+    for key, value in (("maintenance.auto", "false"), ("gc.auto", "0")):
+        env[f"GIT_CONFIG_KEY_{count}"] = key
+        env[f"GIT_CONFIG_VALUE_{count}"] = value
+        count += 1
+    env["GIT_CONFIG_COUNT"] = str(count)
+    return env
+
+
 class Redirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         require(allowed(newurl), "download_redirect_refused")
@@ -209,9 +230,9 @@ def install(args, *, home=None, download=fetch, run=command):
     uv = shutil.which("uv")
     git = shutil.which("git")
     require(uv and git, "uv_and_git_required")
-    env = {"HOME": str(home), "PATH": os.environ.get("PATH", "/usr/bin:/bin"), "LANG": "C.UTF-8",
-           "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0",
-           "UV_NO_CONFIG": "true", "UV_TOOL_DIR": str(root / "tools"), "UV_TOOL_BIN_DIR": str(root / "bin")}
+    env = uv_git_env({"HOME": str(home), "PATH": os.environ.get("PATH", "/usr/bin:/bin"), "LANG": "C.UTF-8",
+                      "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0",
+                      "UV_NO_CONFIG": "true", "UV_TOOL_DIR": str(root / "tools"), "UV_TOOL_BIN_DIR": str(root / "bin")})
     python = root / "tools/bat-agent-connector/bin/python"
     if args.verify_only:
         # The installed verifier reads only; no uv invocation, checkout or receipt write.
