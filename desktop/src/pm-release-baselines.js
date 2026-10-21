@@ -59,10 +59,10 @@ export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,c
     bindings=[];bindingCursor=null;repository.replaceChildren(h('option',{value:''},t('prb_choose_repository')));moreBindings.hidden=true;
     view.replaceChildren();history.replaceChildren();sourceStatus.replaceChildren();resetSources();headingState.replaceChildren(h('h3',{},t('prb_title')));controls();
   }
-  function failure(error){withdraw();status.replaceChildren(errorBox(error,{summary:t('prb_unavailable'), within:status}));}
+  function failure(error, options = {}){withdraw();status.replaceChildren(errorBox(error,{...options, summary:t('prb_unavailable'), within:status}));}
   const editorApi=async(...args)=>{
     const ticket=epoch;
-    try{return await api(...args);}catch(error){if(valid(ticket)&&[401,403,404].includes(error.status))failure(error);throw error;}
+    try{return await api(...args);}catch(error){if(valid(ticket)&&[401,403,404].includes(error.status))failure(error, {sourceRefresh:false});throw error;}
   };
   function fixedDetails(document,proof,metadata=null){
     const details=h('details',{},h('summary',{},t('prb_sources')));

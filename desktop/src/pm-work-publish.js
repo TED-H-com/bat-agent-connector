@@ -454,7 +454,7 @@ export function createWorkPublish({h, t, form, namespace, caps, errorBox}) {
         const statusBox = editor?.box.querySelector(':scope > [role="status"]');
         if (!statusBox) return false;
         statusBox.hidden = false;
-        const presented = errorBox ? errorBox(error, {summary: sentence, within: statusBox}) : h('p', {}, sentence);
+        const presented = errorBox ? errorBox(error, {sourceRefresh:false, summary: sentence, within: statusBox}) : h('p', {}, sentence);
         statusBox.replaceChildren(presented);
         if (error?.code === 'PR_AUTHORITY_UNAVAILABLE' || (SETUP_CODES.has(error?.code) && readCaps(caps)?.managed_installation)) {
           statusBox.append(h('p', {}, h('a', {href: '#/settings?section=connection'}, t('paths_setup'))));

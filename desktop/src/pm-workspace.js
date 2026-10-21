@@ -98,7 +98,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     const values = capture();
     if (same(saved.values, values)) return;
     saved.values = values;
-    try {persist();} catch (error) {status.replaceChildren(errorBox(error, {within:status}));}
+    try {persist();} catch (error) {status.replaceChildren(errorBox(error, {sourceRefresh:false, within:status}));}
   };
   for (const [name, input] of Object.entries(fields)) {
     const value = saved.values[name] ?? input.value;
@@ -135,7 +135,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     try {
       guard(); if (!terminal() && !saved.intent?.initialAdmissionRefused) return;
       saved = {version: 1, values: capture()}; persist(); operation = null; initialChecking = false; status.replaceChildren(); receipt.replaceChildren(); update();
-    } catch (error) {if (!retired(error)) status.replaceChildren(errorBox(error, {within:status}));}
+    } catch (error) {if (!retired(error)) status.replaceChildren(errorBox(error, {sourceRefresh:false, within:status}));}
   }}, t('pm_edit_request'));
   const isFieldFocused = () => Object.values(fields).some(f => f === document.activeElement || f.contains?.(document.activeElement));
   const button = h('button', {type: 'submit', class: 'ui-button primary'}, t(label));
