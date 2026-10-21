@@ -35,7 +35,10 @@ class BrowserSessions:
 
     @property
     def origin(self):
-        return self.daemon._endpoint.removesuffix("/rpc")
+        endpoint = self.daemon._endpoint
+        if not endpoint:
+            raise OperationError("TASK_OWNER_UNAVAILABLE", "task owner is not listening", 503)
+        return endpoint.removesuffix("/rpc")
 
     def _parent_valid(self, digest):
         row = self.daemon.journal.db.execute(

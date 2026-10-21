@@ -163,7 +163,7 @@ class TaskDaemon:
         self._lease_fd: int | None = None
         self._owner_id = secrets.token_hex(16)
         self._initialized = False
-        self._endpoint = DEFAULT_URL
+        self._endpoint: str | None = None
 
     _lazy_attributes = {"journal", "fleet", "adapter", "coordinator", "ops", "api", "inventory",
                         "result_collector",
@@ -1226,10 +1226,33 @@ class TaskDaemon:
         if host not in {"127.0.0.1", "::1", "localhost"}:
             raise ValueError("task service only binds loopback")
         self.acquire_owner()
+        server = serving = None
+        requests = {}
+        stopping = False
+
+        async def handle(reader, writer):
+            try:
+                await self._handle(reader, writer)
+            finally:
+                writer.close()
+                try:
+                    await writer.wait_closed()
+                except ConnectionError:
+                    pass
+
+        def connected(reader, writer):
+            if stopping:
+                writer.close()
+                return
+            task = asyncio.create_task(handle(reader, writer))
+            requests[task] = writer
+            task.add_done_callback(lambda done: requests.pop(done, None))
+
         worker = pusher = reaper = operations = metadata_reads = deployment_reads = inventory = usage_reads = history_reads = None
         try:
-            server = await asyncio.start_server(self._handle, host, port)
-            address = "[::1]" if host == "::1" else host
+            server = await asyncio.start_server(connected, host, port)
+            bound_host = server.sockets[0].getsockname()[0]
+            address = "[::1]" if bound_host == "::1" else bound_host
             self._endpoint = f"http://{address}:{server.sockets[0].getsockname()[1]}/rpc"
             self._write_owner_pointer()
             worker = asyncio.create_task(self._worker())
@@ -1241,23 +1264,43 @@ class TaskDaemon:
             inventory = asyncio.create_task(self.inventory.loop())
             usage_reads = asyncio.create_task(self.usage_collector.loop())
             history_reads = asyncio.create_task(self.history_collector.loop())
-            async with server:
-                await server.serve_forever()
+            serving = asyncio.create_task(server.serve_forever())
+            # Withdraw discovery before cancellation closes the listening socket.
+            await asyncio.shield(serving)
         finally:
-            for background in (worker, pusher, reaper, operations, metadata_reads, deployment_reads, inventory, usage_reads, history_reads):
-                if background is not None:
-                    background.cancel()
-                    await asyncio.gather(background, return_exceptions=True)
-            for active in list(self.ops._active.values()):
-                active.cancel()
-            await asyncio.gather(*list(self.ops._active.values()), return_exceptions=True)
-            await self.artifact_store.close_reaper()
-            await self.api.session_observation.close()
-            await self.result_collector.close()
-            await self.inventory.close()
-            await self.fleet.close()
-            self.journal.close()
-            self.release_owner()
+            stopping = True
+            try:
+                self._endpoint = None
+                if self._lease_fd is not None:
+                    self._write_owner_pointer()
+            finally:
+                if server is not None:
+                    server.close()
+                    # Server.wait_closed() did not join clients on Python <=3.11.
+                    # End accepted requests before closing their journal on every Python.
+                    accepted = list(requests.items())
+                    for task, writer in accepted:
+                        task.cancel()
+                        writer.close()
+                    await asyncio.gather(*(task for task, _ in accepted), return_exceptions=True)
+                    await server.wait_closed()
+                if serving is not None:
+                    serving.cancel()
+                    await asyncio.gather(serving, return_exceptions=True)
+                for background in (worker, pusher, reaper, operations, metadata_reads, deployment_reads, inventory, usage_reads, history_reads):
+                    if background is not None:
+                        background.cancel()
+                        await asyncio.gather(background, return_exceptions=True)
+                for active in list(self.ops._active.values()):
+                    active.cancel()
+                await asyncio.gather(*list(self.ops._active.values()), return_exceptions=True)
+                await self.artifact_store.close_reaper()
+                await self.api.session_observation.close()
+                await self.result_collector.close()
+                await self.inventory.close()
+                await self.fleet.close()
+                self.journal.close()
+                self.release_owner()
 
     def acquire_owner(self):
         if self._lease_fd is not None:
@@ -1304,12 +1347,19 @@ class TaskDaemon:
 
     def _write_owner_pointer(self):
         pointer = registry.registry_path().parent / service.TASK_SERVICE_POINTER
-        platform_files.atomic_write(pointer, json.dumps({"db_path": str(self.journal.path.resolve()), "pid": os.getpid(),
-                               "owner_id": self._owner_id, "endpoint": self._endpoint,
-                               "lease_path": str(pointer.parent / "task-daemon.lock")}).encode())
+        owner = {"db_path": str(self.journal.path.resolve()), "pid": os.getpid(),
+                 "owner_id": self._owner_id, "lease_path": str(pointer.parent / "task-daemon.lock")}
+        if self._endpoint is not None:
+            owner["endpoint"] = self._endpoint
+        platform_files.atomic_write(pointer, json.dumps(owner).encode())
 
     def release_owner(self):
         if self._lease_fd is not None:
-            platform_files.unlock(self._lease_fd)
-            os.close(self._lease_fd)
-            self._lease_fd = None
+            try:
+                if self._endpoint is not None:
+                    self._endpoint = None
+                    self._write_owner_pointer()
+            finally:
+                platform_files.unlock(self._lease_fd)
+                os.close(self._lease_fd)
+                self._lease_fd = None
