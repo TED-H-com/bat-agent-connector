@@ -29,9 +29,22 @@ async function resumeInitialRead() {
   const fixture = JSON.parse((await lines.next()).value);
   const browser = await chromium.launch();
   const context = await browser.newContext({locale: fixture.locale === 'zh-TW' ? 'zh-TW' : 'en-US'});
-  const releases = [], finished = [], reads = [], errors = [], posts = [];
-  const gates = Array.from({length: 4}, () => new Promise(resolve => releases.push(resolve)));
-  let page, polls = 0;
+  const finished = [], reads = [], errors = [], posts = [], released = new Set();
+  const send = command => process.stdout.write(JSON.stringify(command) + '\n');
+  const releases = Array.from({length: 4}, (_, index) => () => {
+    if (!released.has(index)) {released.add(index); send({command: 'release', index});}
+  });
+  let armed = false;
+  const notifications = (async () => {
+    for await (const line of lines) {
+      const event = JSON.parse(line);
+      if (event.stage === 'armed') armed = true;
+      if (event.stage === 'source') reads[event.index] = {status: event.status};
+      if (event.stage === 'released') finished[event.index] = true;
+    }
+  })();
+  let page, polls = 0, completedSources = 0;
+  const transport = [];
   context.on('request', request => {
     if (request.method() === 'POST' && new URL(request.url()).pathname.startsWith('/api/v1/operations')) posts.push(request.url());
   });
@@ -40,6 +53,12 @@ async function resumeInitialRead() {
     document.dispatchEvent(new Event('visibilitychange'));
   }, value);
   const storage = target => target.evaluate(() => ({...localStorage}));
+  const sourceView = () => page.locator('[data-managed-setup]').evaluate(node => {
+    const source = node.cloneNode(true);
+    // The separate connection card's poll clock advances independently of Setup.
+    source.querySelector('[data-connection-card]')?.remove();
+    return source.innerHTML;
+  });
   const draftField = target => target.locator('[data-setup-field=host]');
   try {
     // Produce the draft through the existing form, before starting a new app page.
@@ -61,14 +80,15 @@ async function resumeInitialRead() {
 
     page = await context.newPage();
     page.on('pageerror', error => errors.push(error.message));
-    page.on('request', request => {if (new URL(request.url()).pathname === '/api/v1/events') polls++;});
-    await page.route('**/api/v1/managed/setup', async route => {
-      const index = reads.length;
-      const actual = await route.fetch(); // Real ApiV1 producer; preserve its status, headers and body.
-      reads.push({status: actual.status()});
-      try {await gates[index]; await route.fulfill({response: actual});}
-      finally {finished[index] = true;}
+    page.on('requestfailed', request => transport.push({path: new URL(request.url()).pathname, failure: request.failure()}));
+    page.on('requestfinished', request => {
+      if (new URL(request.url()).pathname === '/api/v1/managed/setup') completedSources++;
     });
+    page.on('request', request => {if (new URL(request.url()).pathname === '/api/v1/events') polls++;});
+    // The daemon holds its own handler result after the real producer returns.
+    // Browser HTTP, cookie, origin and CSRF checks run without interception.
+    send({command: 'arm'});
+    await expect.poll(() => armed).toBe(true);
     if (fixture.entry === 'route') {
       await page.goto(fixture.origin + '/dashboard/#/projects');
       await expect.poll(() => polls).toBeGreaterThan(0);
@@ -92,10 +112,10 @@ async function resumeInitialRead() {
     await expect.poll(() => polls).toBeGreaterThan(beforeFresh);
     await expect(draftField(page)).toHaveValue(draft);
     const editor = await draftField(page).elementHandle();
-    const fresh = await page.locator('[data-managed-setup]').innerHTML();
+    const fresh = await sourceView();
     releases[0]();
     await expect.poll(() => finished[0]).toBe(true);
-    assert.equal(await page.locator('[data-managed-setup]').innerHTML(), fresh);
+    assert.equal(await sourceView(), fresh);
     assert.equal(await draftField(page).evaluate((node, original) => node === original, editor), true);
     assert.equal((await storage(page))[draftStorage], draftBytes);
 
@@ -115,22 +135,31 @@ async function resumeInitialRead() {
     const left = await page.locator('#main').innerHTML();
     releases[3](); releases[2]();
     await expect.poll(() => finished.filter(Boolean).length).toBe(4);
+    await expect.poll(() => completedSources).toBe(2);
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     assert.equal(await page.locator('#main').innerHTML(), left);
     assert.equal((await storage(page))[draftStorage], draftBytes);
     assert.deepEqual(posts, []);
     assert.deepEqual(errors, []);
     assert(reads.every(read => read.status === 200));
-    const identity = await page.evaluate(async () => (await (await fetch('/api/v1/bootstrap')).json()).capabilities.identity);
+    const identity = await page.evaluate(async () => {
+      const session = await (await fetch('/api/v1/browser-session')).json();
+      const response = await fetch('/api/v1/bootstrap', {headers: {'X-Batc-CSRF': session.csrf}});
+      if (!response.ok) throw Error(`Bootstrap read failed (${response.status})`);
+      return (await response.json()).capabilities.identity;
+    });
     assert.deepEqual(identity, fixture.identity);
     await page.screenshot({path: join(fixture.shots, fixture.entry + '-renewed.png')});
     process.stdout.write(JSON.stringify({identity, operation_posts: posts.length, source_reads: reads.length,
       draft_key: JSON.parse(draftBytes).intent?.key ?? null, polls, entry: fixture.entry}) + '\n');
   } catch (error) {
+    console.error(JSON.stringify({reads, finished, polls, operation_posts: posts.length, errors, transport, text: await page?.locator('#main').textContent()}));
     await page?.screenshot({path: join(fixture.shots, fixture.entry + '-failure.png')}).catch(() => {});
     throw error;
   } finally {
     releases.forEach(release => release());
     await browser.close();
+    void notifications;
   }
 }
 

@@ -62,13 +62,63 @@ async def managed_browser(installed, tmp_path):
                     child.stdin.write((json.dumps({"origin": daemon._endpoint.removesuffix("/rpc"), "locale": locale,
                         "handoff": handoff["handoff_file"], "identity": identity, "shots": str(shots), **facts}) + "\n").encode())
                     await child.stdin.drain()
-                    stdout, _ = await asyncio.wait_for(child.communicate(), 80)
+                    if mode == "--resume-initial":
+                        # Delay actual handler results, after normal HTTP authentication.
+                        # No wire field, status or browser Fetch Metadata is synthesized.
+                        armed, count = False, 0
+                        gates = [asyncio.Event() for _ in range(4)]
+                        routes = daemon.api.routes
+
+                        async def emit(event):
+                            if not child.stdin.is_closing():
+                                child.stdin.write((json.dumps(event) + "\n").encode())
+                                with suppress(BrokenPipeError, ConnectionResetError):
+                                    await child.stdin.drain()
+
+                        async def delayed(*args, **kwargs):
+                            nonlocal count
+                            actual = await producer(*args, **kwargs)
+                            if not armed:
+                                return actual
+                            index = count
+                            count += 1
+                            assert index < len(gates), "Unexpected extra source read"
+                            assert actual[0] == 200, actual
+                            await emit({"stage": "source", "index": index, "status": actual[0]})
+                            await gates[index].wait()
+                            await emit({"stage": "released", "index": index})
+                            return actual
+
+                        producer = next(fn for method, path, fn, _ in routes if path == r"/api/v1/managed/setup" and method == "GET")
+                        daemon.api.routes = [(method, path, delayed if fn == producer else fn, scope)
+                            for method, path, fn, scope in routes]
+                        try:
+                            async def converse():
+                                nonlocal armed
+                                while line := await child.stdout.readline():
+                                    message = json.loads(line)
+                                    if message.get("command") == "arm":
+                                        armed = True
+                                        await emit({"stage": "armed"})
+                                    elif message.get("command") == "release":
+                                        gates[message["index"]].set()
+                                    else:
+                                        return message
+                                return None
+                            report = await asyncio.wait_for(converse(), 80)
+                        finally:
+                            for gate in gates:
+                                gate.set()
+                            daemon.api.routes = routes
+                        await child.communicate()
+                    else:
+                        stdout, _ = await asyncio.wait_for(child.communicate(), 80)
+                        report = json.loads(stdout) if stdout else None
                     assert child.returncode == 0, (shots / "browser.log").read_text()
                 finally:
                     if child.returncode is None:
                         child.terminate()
                         await child.wait()
-            report = json.loads(stdout)
             (shots / "receipt.json").write_text(json.dumps(report, indent=2) + "\n")
             return report
 
