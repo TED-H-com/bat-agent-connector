@@ -82,18 +82,21 @@ copied asynchronous context invalidates reuse rather than granting access.
     history = (pm_source_history.before(db, (MAX_DEPTH, MAX_NODES)) if owned else
         parent.get('history') if parent and parent['db'] is db else
         pm_source_history.transaction_snapshot(db, (MAX_DEPTH, MAX_NODES)))
-    if owned:
-        db.execute('BEGIN')
     anchor = 'pm_source_read_' + uuid.uuid4().hex
-    db.execute('SAVEPOINT ' + anchor)
-    state = {'db': db, 'identity': identity, 'owner': _owner(), 'open': True,
-        'yielded': False, 'changes': db.total_changes, 'active': set(), 'memo': {}, 'visibility': {}, 'history': history,
-        'remembering': False, 'local_only': set(), 'refused': set(), 'guarded_visibility': {},
-        'guard_contexts': {}, 'partial_sources': {}, 'repair_walks': set(), 'repair_completed': set(), 'repair_generation': None,
-        'scope_depth': parent['scope_depth'] + 1 if parent and parent['open'] else 1,
-        'budget': parent['budget'] if parent and parent['open'] else {'nodes': 0}}
-    token, handle = _READ.set(state), None
+    state = token = handle = None
     try:
+        # Everything after our BEGIN, including partial scope entry, must
+        # unwind here before the observer tears down its TEMP trackers.
+        if owned:
+            db.execute('BEGIN')
+        db.execute('SAVEPOINT ' + anchor)
+        state = {'db': db, 'identity': identity, 'owner': _owner(), 'open': True,
+            'yielded': False, 'changes': db.total_changes, 'active': set(), 'memo': {}, 'visibility': {}, 'history': history,
+            'remembering': False, 'local_only': set(), 'refused': set(), 'guarded_visibility': {},
+            'guard_contexts': {}, 'partial_sources': {}, 'repair_walks': set(), 'repair_completed': set(), 'repair_generation': None,
+            'scope_depth': parent['scope_depth'] + 1 if parent and parent['open'] else 1,
+            'budget': parent['budget'] if parent and parent['open'] else {'nodes': 0}}
+        token = _READ.set(state)
         # Establish the WAL read point before any nested source predicate.
         db.execute('SELECT name FROM sqlite_schema LIMIT 1').fetchone()
         state['memo'].update(pm_source_history.seed(history, principal))
@@ -122,7 +125,9 @@ copied asynchronous context invalidates reuse rather than granting access.
             db.execute('COMMIT')
     except BaseException:
         pm_source_history.reject(history)
-        original_transaction = anchor is None
+        # Before entry completes there is no source body that could replace
+        # the transaction. A failed SAVEPOINT must still roll back our BEGIN.
+        original_transaction = token is None or anchor is None
         if anchor is not None:
             try:
                 db.execute('RELEASE ' + anchor)
@@ -133,20 +138,22 @@ copied asynchronous context invalidates reuse rather than granting access.
             db.execute('ROLLBACK')
         raise
     finally:
-        state['open'] = False
-        state['memo'].clear()
-        state['visibility'].clear()
-        state['guarded_visibility'].clear()
-        state['local_only'].clear()
-        state['refused'].clear()
-        state['guard_contexts'].clear()
-        state['partial_sources'].clear()
-        state['repair_walks'].clear()
-        state['repair_completed'].clear()
-        state['active'].clear()
+        if state is not None:
+            state['open'] = False
+            state['memo'].clear()
+            state['visibility'].clear()
+            state['guarded_visibility'].clear()
+            state['local_only'].clear()
+            state['refused'].clear()
+            state['guard_contexts'].clear()
+            state['partial_sources'].clear()
+            state['repair_walks'].clear()
+            state['repair_completed'].clear()
+            state['active'].clear()
         if handle is not None:
             handle.cancel()
-        _READ.reset(token)
+        if token is not None:
+            _READ.reset(token)
 
 
 def _guard_context(db, principal):

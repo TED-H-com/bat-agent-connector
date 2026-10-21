@@ -46,10 +46,15 @@ Every frame still executes its live policy, scope, parent, authority, cancellati
 and deadline checks. Unknown tracking surfaces (attached databases, TEMP shadow
 tables or virtual tables) retain cold reads. No transaction spans a provider await;
 the tracker is deactivated and its bounded memo is cleared when the operation ends.
-If scope entry fails with a transaction still open, rollback can restore the
-TEMP triggers dropped during cleanup. In that case their SQL function remains a
-stateless no-op for the connection, so restored triggers cannot break later
-writes. It retains no history and cannot serve a source proof.
+Source scopes allocate their savepoint identity before BEGIN and protect all
+transaction and scope initialization with the same cleanup. Entry failures roll
+back their own transaction; inside a caller's transaction they release only
+their own savepoint. Transaction-replacement checks still preserve a caller's
+replacement transaction. The observer enters outside a transaction, and no
+provider await occurs inside its synchronous source scopes or journal effects.
+Consequently history cleanup runs outside a transaction: it removes its TEMP
+triggers and unregisters its SQL function without leaving a no-op callback or
+rollback-restored trackers on the long-lived connection.
 There are no persistent schema changes, user_version allocations, new actions/scopes or receipt changes.
 SQLite defines the [connection-local version counter](https://sqlite.org/pragma.html#pragma_data_version)
 and [TEMP triggers on main tables](https://sqlite.org/lang_createtrigger.html#temp_triggers_on_non_temp_tables).

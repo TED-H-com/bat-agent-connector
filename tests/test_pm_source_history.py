@@ -173,38 +173,127 @@ def test_only_observers_exact_bookkeeping_writes_preserve_history(ops, table, ve
         assert check() and len(calls) == (1 if ignored else 2)
 
 
-async def test_observer_scope_entry_failure_cannot_poison_writes_after_rollback(ops, monkeypatch):  # noqa: F811
-    from bat_agent_connector.operations import OpContext
-    from tests import test_pm_github_observation as github
+ENTRY_FAILURES = ('anchor', 'savepoint', 'savepoint-created', 'state', 'context')
 
-    data = await github.prepared(ops, monkeypatch)
-    op = ops.create(github.OWNER, **github.request(ops, data))[0]
+
+def fail_source_entry(db, phase, patch):
+    def unavailable(*args):
+        raise OSError('Synthetic source scope entry failure: ' + phase)
+
+    if phase == 'anchor':
+        patch.setattr(reads, 'uuid', SimpleNamespace(uuid4=unavailable))
+    elif phase == 'state':
+        patch.setattr(reads, '_owner', unavailable)
+    elif phase == 'context':
+        current = reads._READ
+        patch.setattr(reads, '_READ', SimpleNamespace(get=current.get, set=unavailable, reset=current.reset))
+    else:
+        class Connection:
+            def __getattr__(self, name):
+                return getattr(db, name)
+
+            def execute(self, sql, *args):
+                if sql.startswith('SAVEPOINT pm_source_read_'):
+                    if phase == 'savepoint-created':
+                        db.execute(sql, *args)
+                    unavailable()
+                return db.execute(sql, *args)
+        return Connection()
+    return db
+
+
+def capture_history_close(patch):
     closed, close = [], history._History.close
 
     def captured(self):
         closed.append((self, self.db.in_transaction))
         return close(self)
 
-    def unavailable():
-        raise OSError('Synthetic savepoint identity allocation failed')
+    patch.setattr(history._History, 'close', captured)
+    return closed
 
-    monkeypatch.setattr(history._History, 'close', captured)
+
+def assert_later_write_commits(service, operation_id):
+    service.db.execute('UPDATE operations SET cancel_requested=1 WHERE operation_id=?', (operation_id,))
+    assert not service.db.in_transaction
+    other = other_connection(service.db)
+    try:
+        assert other.execute('SELECT cancel_requested FROM operations WHERE operation_id=?',
+            (operation_id,)).fetchone()[0] == 1
+    finally:
+        other.close()
+
+
+@pytest.mark.parametrize('phase', ENTRY_FAILURES)
+async def test_observer_scope_entry_failure_ends_its_transaction(ops, monkeypatch, phase):  # noqa: F811
+    from bat_agent_connector.operations import OpContext
+    from tests import test_pm_github_observation as github
+
+    data = await github.prepared(ops, monkeypatch)
+    op = ops.create(github.OWNER, **github.request(ops, data))[0]
+    closed = capture_history_close(monkeypatch)
     with monkeypatch.context() as entry:
-        # scope() has executed BEGIN but has not entered its try/except yet.
-        # Replace this module's dependency, never the global UUID function.
-        entry.setattr(reads, 'uuid', SimpleNamespace(uuid4=unavailable))
-        with pytest.raises(OSError, match='savepoint identity'):
+        # Replace only module-local dependencies or this service's connection
+        # facade; never modify the global uuid or sqlite3 modules.
+        entry.setattr(ops, 'db', fail_source_entry(ops.db, phase, entry))
+        with pytest.raises(OSError, match='source scope entry failure'):
             await github.observation._run(OpContext(ops, op))
     tracker, in_transaction = closed[0]
-    assert len(closed) == 1 and in_transaction and ops.db.in_transaction
+    assert not ops.db.in_transaction
+    assert len(closed) == 1 and not in_transaction
     assert not tracker.active and not tracker.memo
-    ops.db.execute('ROLLBACK')
-    # ROLLBACK restores the TEMP triggers dropped by close(). They must be
-    # inert, rather than calling an unregistered function on the next write.
-    assert ops.db.execute("SELECT 1 FROM temp.sqlite_schema WHERE type='trigger' AND name GLOB ?",
+    assert reads._READ.get() is None
+    assert not ops.db.execute("SELECT 1 FROM temp.sqlite_schema WHERE type='trigger' AND name GLOB ?",
         (tracker.name + '_*',)).fetchone()
-    ops.db.execute('UPDATE operations SET cancel_requested=1 WHERE operation_id=?', (op['operation_id'],))
-    assert ops.get(op['operation_id'])['cancel_requested']
+    assert_later_write_commits(ops, op['operation_id'])
+
+
+@pytest.mark.parametrize('phase', ENTRY_FAILURES)
+async def test_source_entry_failure_preserves_callers_transaction_and_releases_savepoint(ops, monkeypatch, phase):  # noqa: F811
+    from tests import test_pm_github_observation as github
+
+    data = await github.prepared(ops, monkeypatch)
+    op = ops.create(github.OWNER, **github.request(ops, data))[0]
+    db, statements = ops.db, []
+    closed = capture_history_close(monkeypatch)
+    with history.operation(db, op['operation_id']):
+        # Install real trackers before the caller opens its own transaction.
+        assert reads.check(db, github.OWNER, 'baseline_sources', 'entry-fixture', lambda: True)
+        db.execute('BEGIN')
+        db.execute("UPDATE operations SET status_reason='caller data' WHERE operation_id=?", (op['operation_id'],))
+        db.execute('SAVEPOINT caller_scope')
+        db.set_trace_callback(statements.append)
+        try:
+            with monkeypatch.context() as entry:
+                connection = fail_source_entry(db, phase, entry)
+                with pytest.raises(OSError, match='source scope entry failure'):
+                    with reads.scope(connection, github.OWNER):
+                        pytest.fail('The synthetic entry failure must precede the source body')
+        finally:
+            db.set_trace_callback(None)
+        assert db.in_transaction and reads._READ.get() is None
+        assert db.execute('SELECT status_reason FROM operations WHERE operation_id=?',
+            (op['operation_id'],)).fetchone()[0] == 'caller data'
+        # A partial entry must not leave its own savepoint on the caller's stack.
+        anchors = [sql.split()[-1] for sql in statements if sql.startswith('SAVEPOINT pm_source_read_')]
+        for anchor in anchors:
+            with pytest.raises(sqlite3.OperationalError, match='no such savepoint'):
+                db.execute('RELEASE ' + anchor)
+        db.execute('RELEASE caller_scope')
+        other = other_connection(db)
+        try:
+            assert other.execute('SELECT status_reason FROM operations WHERE operation_id=?',
+                (op['operation_id'],)).fetchone()[0] is None
+            db.execute('COMMIT')  # Only the caller ends its own transaction.
+            assert other.execute('SELECT status_reason FROM operations WHERE operation_id=?',
+                (op['operation_id'],)).fetchone()[0] == 'caller data'
+        finally:
+            other.close()
+    tracker, in_transaction = closed[0]
+    assert len(closed) == 1 and not in_transaction
+    assert not db.execute("SELECT 1 FROM temp.sqlite_schema WHERE type='trigger' AND name GLOB ?",
+        (tracker.name + '_*',)).fetchone()
+    assert_later_write_commits(ops, op['operation_id'])
 
 
 @pytest.fixture
