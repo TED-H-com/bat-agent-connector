@@ -5,9 +5,11 @@ from types import SimpleNamespace
 
 import pytest
 
+from bat_agent_connector import operations
 from bat_agent_connector.api_auth import Principal
-from bat_agent_connector.operations import ActionDef, OperationService
+from bat_agent_connector.operations import ActionDef, OperationService, Wait
 from bat_agent_connector.task_journal import Journal
+from tests import operation_helpers as helpers
 from tests import pm_joined_maintenance_helpers as maintenance
 from tests.operation_helpers import _worker_details, settle_operations, stop_workers, worker_details
 
@@ -75,6 +77,7 @@ async def test_wait_timeout_joins_workers_and_preserves_original_recovery(ops, m
 
     assert finalized == ["running"] * count
     assert not ops._active
+
     message = str(caught.value)
     for oid in ids:
         assert oid in message
@@ -150,7 +153,8 @@ async def test_settle_requires_worker_completion_after_persisted_outcome(ops, mo
 
 
 @pytest.mark.parametrize("stalled_sibling", [False, True])
-async def test_advance_waits_for_persisted_progress_across_a_slow_wave(ops, monkeypatch, stalled_sibling):
+@pytest.mark.parametrize("waiter", ["settle", "advance"])
+async def test_advance_waits_for_persisted_progress_across_a_slow_wave(ops, monkeypatch, stalled_sibling, waiter):
     """A delayed scheduler can see new receipts after the wave's original bound."""
     elapsed = [0]
     release, recorded = asyncio.Event(), asyncio.Event()
@@ -179,19 +183,169 @@ async def test_advance_waits_for_persisted_progress_across_a_slow_wave(ops, monk
             await asyncio.Event().wait()
         ops.register(ActionDef("fixture.stalled", "operate", "Synthetic stalled worker", stalled))
         sibling, _ = ops.create(CALLER, action="fixture.stalled", target={}, params={}, idempotency_key="stalled")
-    monkeypatch.setattr(maintenance, "time", SimpleNamespace(monotonic=lambda: elapsed[0]))
-    monkeypatch.setattr(maintenance, "asyncio", SimpleNamespace(wait=delayed_wait))
+    if waiter == "advance":
+        monkeypatch.setattr(maintenance, "time", SimpleNamespace(monotonic=lambda: elapsed[0]))
+        monkeypatch.setattr(maintenance, "asyncio", SimpleNamespace(wait=delayed_wait))
+    else:
+        # Replace this helper's dependency only, never a global stdlib clock.
+        facade = SimpleNamespace(**{name: getattr(asyncio, name) for name in (
+            "sleep", "gather", "wait_for", "shield", "TimeoutError")},
+            get_running_loop=lambda: SimpleNamespace(time=lambda: elapsed[0]), wait=delayed_wait)
+        monkeypatch.setattr(helpers, "asyncio", facade)
+        original_wait = ops.wait
+
+        async def progressed_wait(oid, *, timeout):
+            await delayed_wait({ops._active[oid]}, timeout=timeout)
+            return await original_wait(oid, timeout=0)
+
+        monkeypatch.setattr(ops, "wait", progressed_wait)
+
+    async def finish():
+        if waiter == "advance":
+            return await maintenance.advance({"d": SimpleNamespace(ops=ops)}, op, rounds=1)
+        await settle_operations(ops)
+        return ops.get(op["operation_id"])
+
     if stalled_sibling:
         with pytest.raises(AssertionError, match=sibling["operation_id"]):
-            await maintenance.advance({"d": SimpleNamespace(ops=ops)}, op, rounds=1)
+            await finish()
         assert elapsed[0] == 61
         assert not ops._active
         assert ops.get(op["operation_id"])["steps"][0]["status"] == "succeeded"
         assert ops.get(sibling["operation_id"])["status"] == "running"
         return
-    outcome = await maintenance.advance({"d": SimpleNamespace(ops=ops)}, op, rounds=1)
+    outcome = await finish()
     assert elapsed[0] == 122
     assert outcome["status"] == "succeeded" and outcome["result"] == {"accepted": True}
     assert [(step["name"], step["status"]) for step in outcome["steps"]] == [
         ("receipt.0", "succeeded"), ("receipt.1", "succeeded")]
     assert not ops._active
+
+
+@pytest.mark.parametrize('waiter', ['settle', 'advance'])
+async def test_persisting_forever_still_hits_an_overall_safety_cap(ops, monkeypatch, waiter):
+    elapsed, finalized = [0], []
+    release, recorded = asyncio.Event(), asyncio.Event()
+
+    async def run(ctx):
+        try:
+            # Finite only so the original unbounded helper can finish its red run.
+            for index in range(12):
+                await release.wait()
+                release.clear()
+                ctx.effect(f'receipt.{index}', lambda: {'accepted': True})
+                recorded.set()
+            return {'accepted': True}
+        finally:
+            finalized.append(ops.get(ctx.operation_id)['status'])
+
+    async def delayed_wait(tasks, *, timeout):
+        release.set()
+        await recorded.wait()
+        recorded.clear()
+        elapsed[0] += 55  # Each receipt arrives within the unchanged 60s stall bound.
+        return await asyncio.wait(tasks, timeout=0)
+
+    ops.register(ActionDef('fixture.continues', 'operate', 'Synthetic durable progress', run))
+    op, _ = ops.create(CALLER, action='fixture.continues', target={}, params={}, idempotency_key='continues')
+    if waiter == 'advance':
+        monkeypatch.setattr(maintenance, 'time', SimpleNamespace(monotonic=lambda: elapsed[0]))
+        monkeypatch.setattr(maintenance, 'asyncio', SimpleNamespace(wait=delayed_wait))
+    else:
+        monkeypatch.setattr(helpers, 'asyncio', SimpleNamespace(sleep=asyncio.sleep, gather=asyncio.gather,
+            get_running_loop=lambda: SimpleNamespace(time=lambda: elapsed[0]), wait=delayed_wait))
+    with pytest.raises(AssertionError, match='overall.*cap'):
+        if waiter == 'advance':
+            await maintenance.advance({'d': SimpleNamespace(ops=ops)}, op, rounds=1)
+        else:
+            await settle_operations(ops)
+    assert elapsed[0] == 605
+    assert finalized == ['running'] and not ops._active
+    saved = ops.get(op['operation_id'])
+    assert saved['status'] == 'running'
+    assert len(saved['steps']) == 11 and all(s['status'] == 'succeeded' for s in saved['steps'])
+
+
+@pytest.mark.parametrize('milestone', ['deployed', 'delegated'])
+@pytest.mark.parametrize('unrelated', [False, True])
+async def test_repair_milestone_waits_for_due_receipts_beyond_ten_rounds(ops, monkeypatch, milestone, unrelated):
+    elapsed, slept, attempted = [1000.0], [], []
+    clock = SimpleNamespace(time=lambda: elapsed[0], monotonic=lambda: elapsed[0])
+
+    async def sleep_until_due(delay):
+        slept.append(delay)
+        elapsed[0] += delay
+        await asyncio.sleep(0)
+
+    async def child(ctx):
+        raise Wait('waiting_external', 'Waiting for the declared provider result', 15)
+
+    async def run(ctx):
+        attempted.append(elapsed[0])
+        attempt = ctx.op['attempts']
+        ctx.effect(f'receipt.{attempt}', lambda: {'accepted': True})
+        if attempt < 12:
+            raise Wait('waiting_external', 'Waiting for the adopted observation interval', 15)
+        if milestone == 'delegated':
+            def delegate():
+                selected, _ = ops.create(CALLER, action='fixture.child', target={}, params={}, idempotency_key='child')
+                return {'operation_id': selected['operation_id']}
+            ctx.effect('delegate', delegate, refs=lambda result: {'child': result['operation_id']})
+            raise Wait('waiting_external', 'Original delivery remains waiting_external', 15)
+        return {'outcome': 'deployed'}
+
+    def complete(parent):
+        if milestone == 'deployed':
+            return parent['status'] == 'succeeded' and parent['result']['outcome'] == 'deployed'
+        oid = (parent['external_refs'] or {}).get('child')
+        return bool(oid and ops.get(oid)['status'] == 'waiting_external')
+
+    monkeypatch.setattr(operations, 'time', clock)
+    monkeypatch.setattr(maintenance, 'time', clock)
+    monkeypatch.setattr(maintenance, 'asyncio', SimpleNamespace(wait=asyncio.wait, sleep=sleep_until_due))
+    ops.register(ActionDef('fixture.milestone', 'operate', 'Synthetic scheduled receipts', run))
+    ops.register(ActionDef('fixture.child', 'operate', 'Synthetic pending delivery', child))
+    if unrelated:
+        async def poll(ctx):
+            raise Wait('waiting_external', 'Independent provider poll', 1)
+        ops.register(ActionDef('fixture.poll', 'operate', 'Independent scheduled poll', poll))
+        ops.create(CALLER, action='fixture.poll', target={}, params={}, idempotency_key='unrelated')
+    parent, _ = ops.create(CALLER, action='fixture.milestone', target={}, params={}, idempotency_key='milestone')
+    result = await maintenance.advance_until({'d': SimpleNamespace(ops=ops)}, parent, complete)
+    assert complete(result) and result['attempts'] >= 12
+    assert attempted[:12] == [1000 + 15 * index for index in range(12)]
+    assert slept and all(delay >= 0 for delay in slept)
+    assert not ops._active
+
+
+async def test_settle_overall_cap_is_not_renewed_for_new_worker_waves(ops, monkeypatch):
+    elapsed = [0]
+    release, recorded = asyncio.Event(), asyncio.Event()
+
+    async def run(ctx):
+        await release.wait()
+        release.clear()
+        ctx.effect('receipt', lambda: {'accepted': True})
+        generation = ctx.params['generation']
+        if generation < 12:
+            ops.create(CALLER, action='fixture.chain', target={}, params={'generation': generation + 1},
+                idempotency_key=f'chain-{generation + 1}')
+        recorded.set()
+        return {'accepted': True}
+
+    async def delayed_wait(tasks, *, timeout):
+        release.set()
+        await recorded.wait()
+        recorded.clear()
+        elapsed[0] += 55
+        return await asyncio.wait(tasks, timeout=0)
+
+    monkeypatch.setattr(helpers, 'asyncio', SimpleNamespace(sleep=asyncio.sleep, gather=asyncio.gather,
+        get_running_loop=lambda: SimpleNamespace(time=lambda: elapsed[0]), wait=delayed_wait))
+    ops.register(ActionDef('fixture.chain', 'operate', 'Synthetic child chain', run))
+    ops.create(CALLER, action='fixture.chain', target={}, params={'generation': 1}, idempotency_key='chain-1')
+    with pytest.raises(AssertionError, match='overall.*cap'):
+        await settle_operations(ops)
+    assert elapsed[0] == 605 and not ops._active
+    assert ops.db.execute("SELECT COUNT(*) FROM operation_steps WHERE status='succeeded'").fetchone()[0] == 11
+    assert ops.db.execute("SELECT COUNT(*) FROM operations WHERE status='accepted'").fetchone()[0] == 1
