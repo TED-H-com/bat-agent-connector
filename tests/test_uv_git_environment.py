@@ -4,13 +4,37 @@ import os
 import shutil
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from bat_agent_connector import update_install
 from scripts import install_connector
+from tests import fixture_vcs_install
 from tests.package_build import _build_env, _command, _source_repo
 from tests.test_build_identity import _installed_identity
+
+
+def test_shared_fixture_installer_applies_product_rule(tmp_path, monkeypatch):
+    calls = []
+
+    def run(args, **kwargs):
+        calls.append((args, kwargs["env"]))
+        return SimpleNamespace(returncode=0, stderr="")
+
+    # Replace these module bindings, leaving the stdlib modules unchanged.
+    monkeypatch.setattr(fixture_vcs_install, "subprocess", SimpleNamespace(run=run))
+    monkeypatch.setattr(fixture_vcs_install, "shutil", SimpleNamespace(which=lambda name: "fixture-uv"))
+    original = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "maintenance.strategy",
+                "GIT_CONFIG_VALUE_0": "geometric", "UV_CACHE_DIR": str(tmp_path / "cache")}
+    fixture_vcs_install.install_fixture_candidate(tmp_path / "source", "a" * 40,
+        tmp_path / "environment", env=original, lock_root=tmp_path)
+    assert len(calls) == 3
+    expected = update_install.uv_git_env({**original, "UV_NO_CONFIG": "1", "UV_LINK_MODE": "copy"})
+    for args, env in calls:
+        assert args[0] == "fixture-uv"
+        assert env == expected
+    assert original["GIT_CONFIG_COUNT"] == "1"
 
 
 def test_clean_env_discards_ambient_git_entries_and_applies_product_rule(tmp_path, monkeypatch):

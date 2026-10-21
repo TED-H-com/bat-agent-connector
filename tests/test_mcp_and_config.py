@@ -21,7 +21,6 @@ from bat_agent_connector.mcp_server import (
     WRITE_TOOLS,
     build_server,
 )
-from bat_agent_connector.update_install import uv_git_env
 from scripts.validate_connector_update import copy_fixture_source, identity_line
 from tests.conftest import make_config
 from tests.fixture_vcs_install import install_fixture_candidate
@@ -39,10 +38,10 @@ def in_place_packages(tmp_path_factory):
     home.mkdir()
     temporary = scratch / "temporary"
     temporary.mkdir()
-    env = uv_git_env({"HOME": str(home), "PATH": os.environ["PATH"], "LANG": "C.UTF-8", "TMPDIR": str(temporary),
-                      "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_TERMINAL_PROMPT": "0",
-                      "UV_NO_CONFIG": "true", "UV_PYTHON_DOWNLOADS": "never",
-                      "UV_CACHE_DIR": os.environ.get("UV_CACHE_DIR", str(scratch / "cache"))})
+    env = {"HOME": str(home), "PATH": os.environ["PATH"], "LANG": "C.UTF-8", "TMPDIR": str(temporary),
+           "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_TERMINAL_PROMPT": "0",
+           "UV_NO_CONFIG": "true", "UV_PYTHON_DOWNLOADS": "never",
+           "UV_CACHE_DIR": os.environ.get("UV_CACHE_DIR", str(scratch / "cache"))}
     git = shutil.which("git")
     assert git, "Real package fixture requires Git"
 
