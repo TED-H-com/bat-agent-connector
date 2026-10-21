@@ -133,8 +133,9 @@ async function refusedAccess(active, workUrl) {
   await expect(submit).toBeEnabled();
   const surfaceUrl = page.url();
   const originalField = await field.elementHandle();
-  const draftEntries = () => page.evaluate(suffix => Object.entries(localStorage)
-    .filter(([key]) => key.endsWith(suffix) || key.endsWith(suffix + '.queue')).sort(([a], [b]) => a.localeCompare(b)), suffix);
+  const draftEntries = () => page.evaluate(({suffix, surface}) => Object.entries(localStorage)
+    .filter(([key]) => surface === 'work' ? key.includes('.session.send.')
+      : key.endsWith(suffix) || key.endsWith(suffix + '.queue')).sort(([a], [b]) => a.localeCompare(b)), {suffix, surface});
   const saved = await draftEntries();
   assert.equal(saved.length, surface === 'session-toolbar' ? 2 : 1);
   const [draftKey, raw] = saved.find(([key]) => key.endsWith(suffix));
