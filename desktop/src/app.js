@@ -363,10 +363,10 @@ async function apiRequest(method, path, body, key, collectReceipt) {
   }
   return data;
 }
-function errorBox(e, {summary, within, insideDetails = false} = {}) {
+function errorBox(e, {summary, within, insideDetails = false, sourceRefresh = true} = {}) {
   // Renderers display read errors locally. Also report them to the event batch so a
   // caught refresh error cannot acknowledge its checkpoint or re-enable mutations.
-  if (state.refreshCycle) state.refreshCycle.error ||= e;
+  if (sourceRefresh && state.refreshCycle) state.refreshCycle.error ||= e;
   const presentation = errorPresentation(e, t, {summary});
   const diagnostics = [presentation.code ? h('code', {}, presentation.code) : null,
     presentation.message && presentation.message !== presentation.code ? h('p', {}, presentation.message) : null].filter(Boolean);

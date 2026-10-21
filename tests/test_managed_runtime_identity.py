@@ -6,7 +6,6 @@ import os
 import selectors
 import shutil
 import subprocess
-import sys
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -14,11 +13,7 @@ from pathlib import Path
 import pytest
 
 from scripts.validate_connector_update import copy_fixture_source
-
-try:
-    import tomllib
-except ImportError:
-    import tomli as tomllib
+from tests.fixture_vcs_install import install_fixture_candidate
 
 ROOT = Path(__file__).resolve().parents[1]
 GOLDEN = Path(__file__).parent / "fixtures" / "managed-runtime-identity.json"
@@ -60,52 +55,44 @@ def packages(tmp_path_factory):
     source = scratch / "source"
     source.mkdir()
     copy_fixture_source(ROOT, source)
-    document = tomllib.loads((ROOT / "pyproject.toml").read_text())
-    package = document["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"][0]
     # The cache supplies dependencies only; golden identity comes from the fixture packages.
     env = {key: os.environ[key] for key in ("PATH", "SystemRoot", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR", "LANG", "LC_ALL", "UV_CACHE_DIR")
            if key in os.environ}
     env.update(UV_NO_CONFIG="1", GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
-               # Provenance is temporarily removed below; installs own their files.
-               UV_LINK_MODE="copy",
                GIT_AUTHOR_DATE="2026-01-01T00:00:00+00:00", GIT_COMMITTER_DATE="2026-01-01T00:00:00+00:00")
-    git, uv = shutil.which("git"), shutil.which("uv")
-    assert git and uv
+    env.setdefault("UV_CACHE_DIR", str(scratch / "cache"))
+    git = shutil.which("git")
+    assert git
     run([git, "init", "--quiet", str(source)], env=env)
     installed = {}
     for candidate in ("a", "b"):
         if candidate == "b":
-            path = source / package / "__init__.py"
+            path = source / "src/bat_agent_connector/__init__.py"
             path.write_text(path.read_text() + "\n# Fixture candidate B, with the same package version.\n")
         run([git, "-C", str(source), "add", "."], env=env)
         run([git, "-C", str(source), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
              "-c", "commit.gpgsign=false", "-c", f"core.hooksPath={os.devnull}", "commit", "--quiet", "-m", candidate], env=env)
         sha = run([git, "-C", str(source), "rev-parse", "HEAD"], env=env)
-        tool_root = scratch / ("tools-" + candidate)
-        install_env = {**env, "UV_TOOL_DIR": str(tool_root), "UV_TOOL_BIN_DIR": str(scratch / ("bin-" + candidate))}
-        run([uv, "tool", "install", "--offline", "--python", sys.executable,
-             "git+" + source.as_uri() + "@" + sha], env=install_env, cwd=scratch)
-        interpreter = tool_root / "bat-agent-connector" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        interpreter = install_fixture_candidate(source, sha, scratch / ("environment-" + candidate),
+                                                env=env, lock_root=ROOT)
         identity = json.loads(run([str(interpreter), "-I", "-c",
             "import json;from bat_agent_connector.build_identity import build_identity;print(json.dumps(build_identity()))"],
             env=env, cwd=scratch))
         assert identity["commit"] == sha and identity["source"] == "vcs"
-        provenance = json.loads(run([str(interpreter), "-I", "-c",
-            "import json;from pathlib import Path;from importlib.metadata import distribution;"
-            "from bat_agent_connector import build_identity;"
+        metadata = Path(json.loads(run([str(interpreter), "-I", "-c",
+            "import json;from importlib.metadata import distribution;"
             "d=distribution('bat-agent-connector');"
-            "embedded=Path(build_identity.__file__).with_name('build-info.json');"
-            "print(json.dumps({'embedded':str(embedded),'commit':json.loads(embedded.read_text())['commit'],"
-            "'direct':str(next(d.locate_file(p) for p in d.files if str(p).endswith('.dist-info/direct_url.json')))}))"],
-            env=env, cwd=scratch))
-        metadata = Path(provenance["direct"])
+            "print(json.dumps(str(next(d.locate_file(p) for p in d.files if str(p).endswith('.dist-info/direct_url.json')))))"],
+            env=env, cwd=scratch)))
         direct = json.loads(metadata.read_text())
         assert direct["vcs_info"]["commit_id"] == sha
-        assert provenance["commit"] == sha
-        print("REAL MANAGED PACKAGE " + json.dumps({"identity": identity,
-            "embedded_commit": provenance["commit"], "direct_url_commit": direct["vcs_info"]["commit_id"]}))
+        build_info = Path(json.loads(run([str(interpreter), "-I", "-c",
+            "import json;from pathlib import Path;from bat_agent_connector import build_identity;"
+            "print(json.dumps(str(Path(build_identity.__file__).with_name('build-info.json'))))"],
+            env=env, cwd=scratch)))
+        assert json.loads(build_info.read_text())["commit"] == sha
         installed[candidate] = {"python": str(interpreter), "commit": sha, "metadata": metadata,
-            "embedded": Path(provenance["embedded"]), "identity": identity}
+                                "build_info": build_info, "identity": identity}
     assert installed["a"]["commit"] != installed["b"]["commit"]
     assert installed["a"]["identity"]["version"] == installed["b"]["identity"]["version"]
     empty_path = scratch / "empty-path"
@@ -165,17 +152,22 @@ print(json.dumps(runtime.ensure(sys.argv[1], timeout=15)))
 
 
 @contextmanager
-def hidden_provenance(package):
-    # Both real build outputs can identify an installed package after I05.
-    # Restore original bytes by replacement; never mutate shared cache inodes.
-    original = {package[key]: package[key].read_bytes() for key in ("metadata", "embedded")}
+def missing_provenance(package):
+    """An install without either VCS metadata or embedded build attribution."""
+    originals = {path: path.read_bytes() for path in (package["metadata"], package["build_info"])}
+    for path in originals:
+        assert path.stat().st_nlink == 1, "Fixture installs must use UV_LINK_MODE=copy"
+
     def restore():
-        for path, content in original.items():
+        for path, content in originals.items():
+            # Restoring twice must also create fresh inodes, never truncate an
+            # installed file that could have been linked to a package cache.
             path.unlink(missing_ok=True)
             path.write_bytes(content)
-    for path in original:
-        path.unlink()
+
     try:
+        for path in originals:
+            path.unlink()
         yield restore
     finally:
         restore()
@@ -195,12 +187,14 @@ def observed(packages):
         for field in ("endpoint", "actor", "server_id", "principal_id", "token", "runtime_version"):
             assert same[field] == different[field] == first["launch"][field]
         observations.update(same=same, differs=different)
-        with hidden_provenance(installed["b"]):
+        # An unattributed launcher cannot identify its own installed build.
+        with missing_provenance(installed["b"]):
             observations["unknown_bundled"] = ensure(installed["b"], root, env)
         observations["older_service"] = ensure(installed["b"], root, env, older=True)
-    with hidden_provenance(installed["a"]) as restore:
+    # A service started without attribution keeps that unknown loaded snapshot,
+    # even when an installation repair restores provenance while it is running.
+    with missing_provenance(installed["a"]) as restore:
         with owner(packages, "unknown-installation") as (root, _first):
-            # The owner's unknown startup identity stays unknown after metadata reappears.
             restore()
             observations["unknown_running"] = ensure(installed["b"], root, env)
     return observations
