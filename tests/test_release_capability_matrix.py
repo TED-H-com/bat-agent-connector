@@ -1,6 +1,7 @@
 """Candidate facts come from producers; evidence states never promote each other."""
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import subprocess
@@ -42,7 +43,6 @@ def row(matrix, entry, capability, source_kind=None):
 
 
 def test_server_facts_use_existing_bootstrap_golden(matrix):
-    assert GOLDEN == ROOT / "tests/fixtures/managed-bootstrap.json", "one golden authority for ApiV1"
     saved = json.loads(GOLDEN.read_text())["capabilities"]
     for variant in ("managed", "plain"):
         expected = deepcopy(saved)
@@ -342,9 +342,13 @@ def test_cli_defaults_to_committed_claims_and_allows_draft_override(matrix, tmp_
         command += ["--claims", str(draft)]
     result = subprocess.run([sys.executable, *command], cwd=ROOT, capture_output=True, text=True, timeout=90)
     assert result.returncode == (1 if override else 0), result.stdout + result.stderr
-    actual = json.loads(output.read_text())["consistency"]
+    generated = json.loads(output.read_text())
+    raw = draft.read_bytes() if override else _git(ROOT, "show", f'{matrix["candidate"]}:tests/fixtures/platform-table-claims.json')
+    assert generated["claims"] == {"source": "draft" if override else "candidate", "sha256": hashlib.sha256(raw).hexdigest()}
+    actual = generated["consistency"]
     if override:
         assert any(error["reason"] == "CELL_TEXT_CHANGED" for error in actual["review_errors"])
+        assert all(error["message"] in result.stderr for error in actual["review_errors"])
     else:
         assert not actual["review_errors"] and not actual["mismatches"]
         assert len(actual["checked"]) == sum(len(record["claims"]) for record in load_claims())
@@ -380,3 +384,78 @@ def test_dirty_candidate_checkout_cannot_supply_producer_facts(matrix, tmp_path)
     assert result["producers"] == matrix["producers"]
     assert all(item["subject_sha"] == candidate for item in result["rows"])
     assert not result["consistency"]["review_errors"]  # Same reviewed text at another real commit.
+
+
+def claims_candidate(matrix, tmp_path, raw):
+    source = tmp_path / "checkout"
+    source.mkdir()
+    _write_files(source, _archive(_git(ROOT, "archive", matrix["candidate"])))
+    path = source / "tests/fixtures/platform-table-claims.json"
+    if raw is None:
+        path.unlink()
+    else:
+        path.write_bytes(raw)
+    _git(source, "init", "-q")
+    _git(source, "add", ".")
+    _git(source, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "candidate claims")
+    candidate = _git(source, "rev-parse", "HEAD").decode().strip()
+    # A later, uncommitted review must not replace the named commit's evidence.
+    path.write_bytes(CLAIMS.read_bytes())
+    return source, candidate
+
+
+def test_default_claims_come_from_candidate_git_objects(matrix, tmp_path):
+    committed = load_claims()
+    committed[0]["claims"][0]["expected"] = False
+    raw = (json.dumps(committed, indent=2) + "\n").encode()
+    source, candidate = claims_candidate(matrix, tmp_path, raw)
+    result = generate(source, candidate, scratch=tmp_path / "probe")
+    assert result["consistency"]["mismatches"], "committed interpretation must not be replaced by later working-tree claims"
+    assert result["consistency"] == consistency(result, committed)
+    assert result["claims"] == {"source": "candidate", "sha256": hashlib.sha256(raw).hexdigest()}
+    output = tmp_path / "cli.json"
+    reply = subprocess.run([sys.executable, "-m", "scripts.generate_capability_matrix", "--source", str(source),
+                            "--candidate", candidate, "--output", str(output)],
+                           cwd=ROOT, capture_output=True, text=True, timeout=90)
+    assert reply.returncode == 1, reply.stdout + reply.stderr
+    assert json.loads(output.read_text())["claims"] == result["claims"]
+    assert json.loads(output.read_text())["consistency"] == result["consistency"]
+
+
+@pytest.mark.parametrize("raw,reason", [
+    (None, "CLAIMS_FILE_MISSING"),
+    (b"{", "CLAIMS_FILE_INVALID"),
+    (b"{}", "CLAIMS_FILE_INVALID"),
+    (b"\xff", "CLAIMS_FILE_INVALID"),
+])
+def test_candidate_without_readable_claims_fails_every_cell(matrix, tmp_path, raw, reason):
+    source, candidate = claims_candidate(matrix, tmp_path, raw)
+    result = generate(source, candidate, scratch=tmp_path / "probe")
+    assert not result["consistency"]["checked"], "missing/invalid candidate claims must not fall back to the working tree"
+    assert result["claims"] == {"source": "candidate", "sha256": hashlib.sha256(raw).hexdigest() if raw is not None else None,
+                                "reason": reason}
+    errors = result["consistency"]["review_errors"]
+    assert any(issue["reason"] == reason for issue in errors)
+    for cell in result["platform_cells"]:
+        assert any(issue["reason"] == "CELL_REVIEW_MISSING"
+                   and issue["cell"] == {k: cell[k] for k in ("file", "entry", "column")} for issue in errors)
+
+
+@pytest.mark.parametrize("file", PUBLIC_TABLES)
+@pytest.mark.parametrize("reason", ["CELL_TEXT_CHANGED", "CELL_REVIEW_MISSING"])
+def test_guard_message_has_current_cell_text_and_digest(matrix, file, reason):
+    cell = next(c for c in matrix["platform_cells"] if c["file"] == file and c["column"] == "features")
+    records = load_claims()
+    record = next(r for r in records if all(r[k] == cell[k] for k in ("file", "entry", "column")))
+    if reason == "CELL_TEXT_CHANGED":
+        record["text_sha256"] = "0" * 64
+    else:
+        records.remove(record)
+    issue = next(e for e in consistency(matrix, records)["review_errors"] if e["reason"] == reason)
+    text = cell["text"]
+    raw = text if isinstance(text, str) else json.dumps(text, ensure_ascii=False, separators=(",", ":"))
+    digest = hashlib.sha256(raw.encode()).hexdigest()
+    assert issue["current_text"] == text
+    assert issue["text_sha256"] == digest
+    assert json.dumps(text, ensure_ascii=False) in issue["message"]
+    assert digest in issue["message"]

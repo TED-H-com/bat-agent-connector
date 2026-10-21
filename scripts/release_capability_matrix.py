@@ -20,7 +20,8 @@ from pathlib import Path
 from scripts.release_identity import _archive, _commit, _git, _write_files
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CLAIMS = ROOT / "tests/fixtures/platform-table-claims.json"
+CLAIMS_FILE = "tests/fixtures/platform-table-claims.json"
+DEFAULT_CLAIMS = ROOT / CLAIMS_FILE
 ENTRIES = ("Browser", "Windows x64", "macOS arm64", "macOS x64", "Linux")
 STATES = ("coded", "merged", "integration_tested", "released", "installed", "running", "accepted", "operator")
 KINDS = {"merge": "merged", "package_ci": "integration_tested", "integration": "integration_tested",
@@ -211,11 +212,30 @@ def _cell_digest(cell):
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def load_claims(path=DEFAULT_CLAIMS):
-    claims = json.loads(Path(path).read_text(encoding="utf-8"))
+def _parse_claims(raw):
+    claims = json.loads(raw.decode("utf-8"))
     if not isinstance(claims, list):
         raise ValueError("CELL_REVIEWS_INVALID")
     return claims
+
+
+def load_claims(path=DEFAULT_CLAIMS):
+    """Working-tree reviews for the pre-commit guard and explicit local checks."""
+    return _parse_claims(Path(path).read_bytes())
+
+
+def _candidate_claims(files, draft):
+    raw = files.get(CLAIMS_FILE) if draft is None else draft
+    provenance = {"source": "candidate" if draft is None else "draft",
+                  "sha256": hashlib.sha256(raw).hexdigest() if raw is not None else None}
+    if raw is None:
+        provenance["reason"] = "CLAIMS_FILE_MISSING"
+    else:
+        try:
+            return _parse_claims(raw), provenance
+        except ValueError:
+            provenance["reason"] = "CLAIMS_FILE_INVALID"
+    return [], provenance
 
 
 def _cell_key(cell):
@@ -255,6 +275,11 @@ def consistency(matrix, claims=None):
         issue = {"reason": reason, "source": source,
                  "cell": {key: anchor.get(key) for key in ("file", "entry", "column")},
                  "message": f'{source}: {anchor.get("entry")} / {anchor.get("column")} must be re-reviewed ({reason})'}
+        if cell is not None and reason in {"CELL_TEXT_CHANGED", "CELL_REVIEW_MISSING"}:
+            issue["current_text"] = cell["text"]
+            issue["text_sha256"] = _cell_digest(cell)
+            issue["message"] += (f'; current text: {json.dumps(cell["text"], ensure_ascii=False)}'
+                                 f'; text_sha256: {issue["text_sha256"]}')
         result["review_errors"].append(issue)
         return issue
 
@@ -314,10 +339,12 @@ def generate(source, candidate, *, scratch, receipts=(), claims=None):
     Unlike a receipt-only validator this executes ApiV1 from the named source, in
     an empty disk sandbox with an allowlisted environment. It never starts HTTP,
     a background daemon, native IPC, BAT, a model or an installer.
+    Claims default to the same archive; an explicit draft supplies raw UTF-8 bytes.
     """
     if _commit(candidate) is None:
         raise ValueError("CANDIDATE_INVALID")
     files = _archive(_git(source, "archive", candidate))
+    reviews, provenance = _candidate_claims(files, claims)
     snapshot, state = Path(scratch) / "source", Path(scratch) / "state"
     snapshot.mkdir(parents=True)
     state.mkdir()
@@ -371,7 +398,14 @@ def generate(source, candidate, *, scratch, receipts=(), claims=None):
         rows.append(_row(candidate, entry, "native", "runtime", "native_status", "unknown", None,
                          reason="NATIVE_PRODUCER_UNAVAILABLE"))
     result = {"format": 1, "candidate": candidate, "source": "git_objects", "rows": rows,
-              "producers": {"server": server, "web": web}, "platform_cells": platform_cells(files), "rejected_receipts": []}
+              "producers": {"server": server, "web": web}, "platform_cells": platform_cells(files),
+              "claims": provenance, "rejected_receipts": []}
     result = apply_receipts(result, receipts)
-    result["consistency"] = consistency(result, claims)
+    result["consistency"] = consistency(result, reviews)
+    if "reason" in provenance:
+        reason = provenance["reason"]
+        result["consistency"]["review_errors"].insert(0, {
+            "reason": reason, "source": CLAIMS_FILE,
+            "message": f'{CLAIMS_FILE}: {provenance["source"]} {reason}; every platform cell must be re-reviewed',
+        })
     return result

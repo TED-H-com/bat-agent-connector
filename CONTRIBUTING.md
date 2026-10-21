@@ -46,8 +46,10 @@ the production hooks; mock only the external providers and managed test resource
 
 ApiV1 capability fixtures share `tests/fixtures/managed-bootstrap.json`; do not
 add another golden for the same producer and setup. Platform table interpretations
-live in `tests/fixtures/platform-table-claims.json`, checked by ordinary pytest and
-used by `scripts/generate_capability_matrix.py` by default. When editing a platform
+live in `tests/fixtures/platform-table-claims.json`. Ordinary pytest checks the
+working tree's claims and cells; `scripts/generate_capability_matrix.py` reads the
+candidate's committed copy by default and records its source and digest. An explicit
+`--claims` review draft is recorded separately. When editing a platform
 table row in either README or the site producer, re-review its capability claims
 and uncovered prose in the same PR. New, changed or removed cells fail the guard;
 do not merely refresh a digest. A record binds file, table entry label, column
