@@ -68537,7 +68537,7 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
 	} : null;
 	if (!retained) state.epoch++;
 	if (!retained) state.observations = new Map();
-	state.connectionError = null;
+	if (!verifiedBootstrap) state.connectionError = null;
 	state.online = false;
 	state.pollHealth = "initial";
 	state.viewReady = false;

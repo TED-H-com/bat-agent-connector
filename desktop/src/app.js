@@ -236,7 +236,8 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
   // A different namespace still invalidates every old callback before mounting.
   if (!retained) state.epoch++;
   if (!retained) state.observations = new Map();
-  state.connectionError = null;
+  // A verified health refresh does not dismiss an explicit credential-replacement outcome.
+  if (!verifiedBootstrap) state.connectionError = null;
   state.online = false; state.pollHealth = 'initial'; state.viewReady = false;
   // Continuity verification retains its display; identity resets withdraw it before activation.
   state.health ||= {sessions: [], hosts: []};

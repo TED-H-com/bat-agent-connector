@@ -130,7 +130,9 @@ not a separate health classification or bootstrap path.
 Version/build/contract changes trigger one existing verified bootstrap when the
 principal and namespace can be verified unchanged. It preserves drafts, operation
 keys and the active view; static facts are replaced, cached Inventory becomes
-last-known until renewed. Unsafe or failed verification shows its reason and a
+last-known until renewed. This background verification does not dismiss a retained
+native credential-replacement refusal; explicit connection actions own that outcome.
+Unsafe or failed verification shows its reason and a
 localized Reload action. A bootstrap still pending after 60 seconds also offers
 Reload with `VERIFICATION_PENDING`; it does not issue another request or discard a
 later verified response. It never leaves an unbounded capabilities Checking state.
