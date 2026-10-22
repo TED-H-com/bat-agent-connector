@@ -1,6 +1,8 @@
+import {boardGitHubStrings} from './board-github-strings.js';
 // Global-screen copy. One block per locale; i18n merges these next to the shared UI strings.
 export const globalStrings = {
   en: {
+    ...boardGitHubStrings.en,
     global_product: 'BAT Dashboard',
     global_first_sentence: 'Connect this dashboard to your Connector.',
     global_setup_guide: 'Setup guide',
@@ -204,6 +206,7 @@ export const globalStrings = {
     action_work_item_pin: 'Pin work item',
   },
   'zh-TW': {
+    ...boardGitHubStrings['zh-TW'],
     global_product: 'BAT Dashboard',
     global_first_sentence: '將這個儀表板連到你的 Connector。',
     global_setup_guide: '設定說明',

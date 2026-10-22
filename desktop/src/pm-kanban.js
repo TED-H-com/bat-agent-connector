@@ -1,3 +1,4 @@
+import {boardGitHubPanel, boardGitHubLink} from './board-github.js';
 import {h} from './ui/dom.js';
 import {button, searchField, pageHeader, iconButton, statusPill, agentMark, contextChip, disclosure, emptyState, inlineError} from './ui/components.js';
 import {icon} from './ui/icons.js';
@@ -81,6 +82,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   };
   ensureStartPanel();
   const landing=adoptStartLanding({t,api,alive,namespace,workspaceId,caps,errorBox});
+  const github = form && caps()?.features?.board_github_sync?.version === 1 ? boardGitHubPanel({t, api, alive, caps, form, permitted: () => permitted(true), workspaceId, onSaved: () => refresh()}) : null;
   const meta = h('span'), status = h('div', {role: 'status'}), list = h('div', {class: 'pm-kanban-list'}), boardInfo = h('div');
   const refreshButton = iconButton({icon: 'refresh-cw', label: t('wv_refresh'), onClick: () => void refresh()});
   const more = h('button', {type: 'button', class: 'ui-button secondary', hidden: true, onclick: () => void loadMore()}, t('pm_kanban_more'));
@@ -95,7 +97,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   const element = h('section', {class: 'pm-kanban', 'data-pm-kanban': ''},
     !embedded ? pageHeader({title: t('ui_board'), meta, actions: [refreshButton]}) : null,
     h('div', {class: 'pm-board-toolbar'}, searchField(search, {class:'pm-work-search'}), requirementFilter, agentFilter, h('label', {}, t('wv_group'), group)),
-    status, landing.element, layout, h('footer', {class: 'pm-kanban-footer'}, more,
+    status, ...(github ? [github.element] : []), landing.element, layout, h('footer', {class: 'pm-kanban-footer'}, more,
       disclosure({label: t('pm_kanban_board_details'), body: h('div', {}, boardInfo, h('p', {}, t('pm_kanban_wip_basis')), h('p', {}, t('pm_kanban_quality')), h('p', {}, t('pm_kanban_limits')))})));
   const detail = workInspector({t, workspaceId, from: 'board', mount: layout, tools: () => toolItems(), returnFocus: () => rows.get(selected)?.node.querySelector('[data-board-open]') || viewHeading(), onClose: () => {
     withdrawObservers();
@@ -202,6 +204,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     more.hidden = next == null; more.disabled = reading;
   }
   function preview(card) {
+    const external = boardGitHubLink(card.work.external);
     const source = sources.get(card.work_item_id), reqs = requirements(card), coverage = card.execution?.coverage || {};
     const earlier = card.binding.plan_revision_id !== plan?.revision_id;
     const chip = text => {const node = contextChip({text}); node.title = text; return node;};
@@ -213,7 +216,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       h('div', {class: 'pm-board-requirements'}, ...(reqs.length ? reqs.map(req => {const text = firstLabel(req.text, t('wv_earlier_plan'));
           return earlier ? chip(joinLabel([t('wv_earlier_plan'), text])) : h('a', {class: 'ui-context-chip', title: text, href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?select=${encodeURIComponent(req.id)}`}, text);})
         : [chip(card.binding.requirement_ids?.length ? t('wv_earlier_plan') : t('wv_no_requirement'))])),
-      h('div', {class: 'pm-kanban-card-meta'}, ...workAgents(source).map(agentMark).filter(mark => mark.textContent !== '?'),
+      h('div', {class: 'pm-kanban-card-meta'}, external ? h('a', {class: 'ui-context-chip', href: external.url, target: '_blank', rel: 'noopener noreferrer', title: `${external.repository} · ${external.label}`, 'data-github-card-link': ''}, external.label) : null, ...workAgents(source).map(agentMark).filter(mark => mark.textContent !== '?'),
         ...prGroups(source?.deliveries).map(({target, rows}) => {const node = contextChip({text: `PR #${target.pull_number}`});
           node.title = joinLabel([node.textContent, target.repository, t(rows.some(row => row.merge?.merged === true) ? 'ui_status_merged' : 'ui_status_unknown')]);
           node.setAttribute('aria-label', node.title); return node;}), coverageState !== 'complete' ? statusPill(coverageState) : null, blockedWork(card) ? h('span', {class: 'pm-board-blocker', title: blockerText(t, card), 'aria-label': blockerText(t, card)}, icon('circle-alert'), h('span', {class: 'pm-board-blocker-label'}, t('ui_status_blocked'))) : null,
@@ -248,7 +251,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   const locked = lane => lane && (lane.matches(':hover') || lane.contains(document.activeElement));
   function laneKey(card) {
     if (group.value === 'milestone') return milestones.find(row => row.plan_revision_id === card.binding.plan_revision_id && row.requirement_ids?.some(id => card.binding.requirement_ids?.includes(id)))?.milestone_id || 'unassigned';
-    return [...columns, 'archived'].includes(card.column) ? card.column : 'unknown';
+    return [...columns, 'github_done', 'github_closed', 'github_completed', 'archived'].includes(card.column) ? card.column : 'unknown';
   }
   function renderColumns(force = false) {
     if (!page) return;
@@ -416,6 +419,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
         for (const card of data.cards) combined.set(card.work_item_id, card);
         if (data.next_cursor == null) break; after = data.next_cursor;
       }
+      await github?.refresh(); alive(); if (ticket !== serial) return;
       const features = caps()?.features?.pm_workspaces;
       const [accepted, roadmap, read] = await Promise.all([features?.plan_drafting ? api('GET', `${endpoint}/plans/accepted`) : null,
         features?.roadmap ? api('GET', `${endpoint}/roadmap`).then(data => {if (data.workspace_id !== workspaceId) throw Error(t('wv_source_mismatch')); return data;}).catch(() => null) : null,
@@ -498,5 +502,5 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       return read;
     }
   }
-  return {element, box: element, meta, refresh, titleFor, withdraw, setActive, rememberScroll, hideInspector: closeRetaining, setTools: value => {toolItems = value;}, dispose: () => {rememberScroll(); window.removeEventListener('scroll', onScroll); landing.dispose();startPanel?.dispose(); startPanel = null; resultPanel?.dispose(); resultPanel = null; resize.disconnect(); withdraw({forgetRoute: false});}};
+  return {element, box: element, meta, refresh, titleFor, withdraw, setActive, rememberScroll, hideInspector: closeRetaining, setTools: value => {toolItems = value;}, dispose: () => {rememberScroll(); window.removeEventListener('scroll', onScroll); github?.dispose();landing.dispose();startPanel?.dispose(); startPanel = null; resultPanel?.dispose(); resultPanel = null; resize.disconnect(); withdraw({forgetRoute: false});}};
 }

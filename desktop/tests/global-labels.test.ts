@@ -25,6 +25,7 @@ test('operation metadata omits empty separators and unknown durations', () => {
   assert.equal(operationStatusKey('needs_attention'), 'blocked');
   assert.equal(workStatusKey('awaiting_approval'), 'in_review');
   assert.equal(workStatusKey('doing'), 'in_progress');
+  for (const lane of ['github_closed', 'github_completed', 'github_done']) assert.equal(workStatusKey(lane), lane);
 });
 
 test('duration boundaries use a compact day and hour form', () => {

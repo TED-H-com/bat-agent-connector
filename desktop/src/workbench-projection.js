@@ -33,7 +33,7 @@ export function workbenchProjection(data, record = null) {
       href: '#/item/' + encodeURIComponent(from.work_item_id), source: '/work-items/' + encodeURIComponent(item.work_item_id)});
   }
   return {id: item?.work_item_id || JSON.stringify([session.host, session.session_id]), title: item?.title || session.title,
-    goal: item?.goal || item?.request || '', recordState: item?.completion?.display_state || item?.state || null,
+    goal: item?.goal || item?.request || '', recordState: item?.display_state || item?.completion?.display_state || item?.state || null, external: item?.external || null,
     href: item ? '#/item/' + encodeURIComponent(item.work_item_id) : href, source,
     host: session.host, runtime: session.agent_kind, model: session.model, observedAt: session.observed_at,
     state, pill, facets, managed: session.api_access === 'managed' && session.provenance === 'connector_managed',
