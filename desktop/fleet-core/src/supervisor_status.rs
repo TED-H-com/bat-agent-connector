@@ -237,9 +237,13 @@ impl Snapshot {
             {
                 return Err("STATUS_UNPROVEN");
             }
+            // A retained status converted to an off row must discard its route,
+            // independently of the legacy sparse readiness-layer contract.
+            if !row.selected {
+                row.route = None;
+            }
             if let Some(route) = &row.route {
-                if !row.selected
-                    || route.generation == 0
+                if route.generation == 0
                     || route.generation > 9_007_199_254_740_991
                     || millis(&route.observed_at)? > now
                 {
