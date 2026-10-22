@@ -42970,9 +42970,10 @@ function adoptStartLanding({ t, api, alive, namespace, workspaceId, caps, errorB
 			}
 		}
 	}
-	function withdraw() {
+	function withdraw({ preserveNavigation = false } = {}) {
+		const keep = preserveNavigation && current && requestedWork(current.operation_id) === current.work_item_ids[0] && selectedWork() === current.work_item_ids[0];
 		serial++;
-		if (current) stopFollowing(current.operation_id);
+		if (current && !keep) stopFollowing(current.operation_id);
 		current = null;
 		shown = null;
 		body.replaceChildren();
@@ -42986,7 +42987,7 @@ function adoptStartLanding({ t, api, alive, namespace, workspaceId, caps, errorB
 		pending: () => Boolean(current) && !shown,
 		dispose: () => {
 			disposed = true;
-			withdraw();
+			withdraw({ preserveNavigation: true });
 		}
 	};
 }

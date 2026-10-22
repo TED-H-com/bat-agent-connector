@@ -142,7 +142,7 @@ async function landing(page:any,{locale='en',denied=false,unknown=false,status='
     if(input.path===`/operations/${id}`){state.reads.push(input.path);if(state.hold)await state.hold;if(state.denied)return {status:404,data:{error:{code:'NOT_FOUND',message:'Source withdrawn'}}};return {status:200,data:{operation:structuredClone(state.parent)}};}
     if(input.path===`/operations/${child}`){state.reads.push(input.path);return {status:200,data:{operation:structuredClone(state.child)}};}
     if(input.path.startsWith('/work-items/'))return {status:200,data:{work_item:{work_item_id:input.path.split('/').at(-1),title:input.path.endsWith(work)?'Fix duplicate login':'Verify retry'}}};
-    if(input.method==='POST'&&input.path.startsWith('/operations/')){state.writes.push(input);return {status:200,data:{operation:state.parent}};}
+    if(input.method==='POST'&&input.path.startsWith('/operations/')){state.writes.push(structuredClone(input));if(state.writeHold)await state.writeHold;return {status:200,data:{operation:structuredClone(state.parent)}};}
     return dispatch(input);
   };
   await mountProposal(page,f,locale);
@@ -153,8 +153,11 @@ async function landing(page:any,{locale='en',denied=false,unknown=false,status='
     const caps=(await api('GET','/fixture-state')).caps;
     localStorage.setItem(`batc.pm.landing.owner.adopt-start-landing.${workspaceId}.${id}`,JSON.stringify({version:1,operation_id:id,thread_id:threadId,work_item_ids:[work,second]}));
     location.hash=`#/pm/${workspaceId}/board?select=${work}`;
-    const element=adoptStartLanding({t,api,alive:()=>{},namespace:'landing.owner',workspaceId,caps:()=>caps,errorBox:(error:any)=>{const node=document.createElement('p');node.textContent=error.message;return node;}});
-    document.getElementById('mount')!.replaceChildren(element.element);win.landingRefresh=element.refresh;win.landingWithdraw=element.withdraw;win.landing=element;
+    const mount=()=>{
+      const element=adoptStartLanding({t,api,alive:()=>{},namespace:'landing.owner',workspaceId,caps:()=>caps,errorBox:(error:any)=>{const node=document.createElement('p');node.textContent=error.message;return node;}});
+      document.getElementById('mount')!.replaceChildren(element.element);win.landingRefresh=element.refresh;win.landingWithdraw=element.withdraw;win.landing=element;
+    };
+    mount();win.remountLanding=()=>{const old=win.landing;mount();win.disposeEarlierLanding=()=>old.dispose();};
   },{workspaceId,threadId,work,second,id,locale});
   return {state,id,child,handoff};
 }
@@ -178,6 +181,44 @@ test('a fresh successful adoption opens its exact live Attempt once without anot
   expect(await page.evaluate(()=>Object.keys(sessionStorage).filter(key=>key.includes('adopt-start-live')))).toEqual([]);
   await page.evaluate(({workspaceId,work})=>{location.hash=`#/pm/${workspaceId}/board?select=${work}`;return (window as any).landingRefresh();},{workspaceId,work});
   await expect(page).toHaveURL(new RegExp('board\\?select='+work));
+});
+
+// The router can mount a replacement before an earlier asynchronous view load
+// returns its disposer. Both instances read the same original receipt and tab hint.
+for(const locale of ['en','zh-TW'])for(const destination of ['same-work','other-work','other-page'])
+test(`Resume keeps the original navigation across an earlier view disposal: ${destination} ${locale}`,async({page},testInfo)=>{
+  const {state,id}=await landing(page,{locale,status:'needs_attention'});
+  await followLanding(page,state,id,{ready:false});
+  // The child has reconciled its lost reply; the paused parent still records
+  // start_unknown until its original Resume completes the readback.
+  state.parent.result.stage='start_unknown';state.parent.result.works[0].stage='start_unknown';
+  await page.evaluate(()=>(window as any).landingRefresh());
+  await page.evaluate(()=>{(window as any).remountLanding();return (window as any).landingRefresh();});
+  let release!:()=>void;state.writeHold=new Promise<void>(resolve=>{release=resolve;});
+  await page.evaluate(()=>{
+    const win=window as any;win.landingHashes=[];
+    window.addEventListener('hashchange',()=>win.landingHashes.push(location.hash));
+  });
+  await page.locator('[data-adopt-start-landing]').getByRole('button',{name:locale==='en'?'Resume':'恢復',exact:true}).click();
+  await expect.poll(()=>state.writes.length).toBe(1);
+  if(destination!=='same-work')await page.evaluate(({workspaceId,second,destination})=>{
+    location.hash=destination==='other-work'?`#/pm/${workspaceId}/board?select=${second}`:'#/settings';
+  },{workspaceId,second,destination});
+  await page.evaluate(()=>(window as any).disposeEarlierLanding());
+  state.parent.status='succeeded';state.parent.result.stage='started';state.parent.result.works[0].stage='started';release();
+  await expect(page.locator('[data-adopt-live]')).toHaveAttribute('href',new RegExp(`work=${work}&attempt=att_9{32}$`));
+  await testInfo.attach('original-navigation', {contentType:'application/json',body:JSON.stringify({
+    destination,locale,writes:state.writes,reads:state.reads,
+    tab:await page.evaluate(()=>({hash:location.hash,hints:Object.entries(sessionStorage).filter(([key])=>key.includes('adopt-start-live'))})),
+  })});
+  if(destination==='same-work'){
+    await expect(page).toHaveURL(new RegExp(`/session/host-a/session-a\\?from=board&workspace=${workspaceId}&work=${work}&attempt=att_9{32}$`));
+    expect(await page.evaluate(()=>(window as any).landingHashes)).toEqual([
+      `#/session/host-a/session-a?from=board&workspace=${workspaceId}&work=${work}&attempt=att_${'9'.repeat(32)}`]);
+  }else await expect(page).toHaveURL(destination==='other-work'?new RegExp('board\\?select='+second):/#\/settings$/);
+  expect(state.writes.map((row:any)=>({method:row.method,path:row.path,body:row.body})))
+    .toEqual([{method:'POST',path:`/operations/${id}/resume`,body:{}}]);
+  expect(await page.evaluate(()=>Object.keys(sessionStorage).filter(key=>key.includes('adopt-start-live')))).toEqual([]);
 });
 
 test('another tab or connection navigation hint cannot open a completed adoption automatically',async({page})=>{
