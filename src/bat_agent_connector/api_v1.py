@@ -1401,7 +1401,7 @@ class ApiV1:
     async def managed_setup_preview(self, principal, query, body, **_):
         from . import managed_setup
         if query:
-            raise OperationError("INVALID_QUERY", "Setup preview does not accept query parameters")
+            raise ApiError(422, "INVALID_REQUEST", "setup preview accepts no query")
         return 200, managed_setup.preview(self.daemon, principal, body)
 
     async def managed_setup_secret(self, principal, query, body, **_):

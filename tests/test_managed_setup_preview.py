@@ -215,3 +215,37 @@ async def test_reviewed_noop_preserves_live_client_bytes_and_ids(installed, serv
     assert len(mock.auth_frames) == probes
     assert daemon.journal.db.execute("SELECT * FROM api_principals").fetchall() == identity
     assert setup.tomllib.loads(path.read_text())["operator_extension"]["keep"] == ["one", "two"]
+
+
+async def test_preview_uses_cookie_csrf_and_native_bearer_boundaries(installed, mock):
+    from bat_agent_connector.browser_sessions import BrowserSessions
+    from tests.test_browser_sessions import enter
+    from tests.test_browser_sessions import http as browser_http
+
+    daemon, principal, root = installed
+    bearer = token(daemon, principal.actor, *principal.scopes)
+    # Authenticate the actual parent token before creating its browser handoff.
+    from bat_agent_connector.api_auth import authenticate
+    personal = authenticate(daemon.journal.db, bearer, daemon._admin_token)
+    server = await asyncio.start_server(daemon._handle, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    daemon._endpoint = f"http://127.0.0.1:{port}/rpc"
+    daemon.api.browser_sessions = BrowserSessions(daemon, root, "example-installation")
+    try:
+        _, cookie, _ = await enter((daemon, personal, bearer, port))
+        origin = f"http://127.0.0.1:{port}"
+        headers = {"Cookie": cookie, "Sec-Fetch-Site": "same-origin", "Referer": origin + "/dashboard/"}
+        _, _, session = await browser_http(port, "GET", "/api/v1/browser-session", headers)
+        body = json.dumps(request_body(installed, mock)).encode()
+        assert (await browser_http(port, "POST", ROUTE, {**headers, "Origin": origin}, body))[0] == 403
+        headers.update({"Origin": origin, "X-Batc-CSRF": session["csrf"]})
+        status, _, response = await browser_http(port, "POST", ROUTE, headers, body)
+        assert status == 200 and response["preview"]["contract_version"] == 1
+        assert (await browser_http(port, "POST", ROUTE, {"Authorization": "Bearer " + cookie.split("=", 1)[1]}, body))[0] == 401
+        status, _, native = await browser_http(port, "POST", ROUTE, {"Authorization": "Bearer " + bearer}, body)
+        assert status == 200 and native == response
+        assert not daemon.journal.db.execute("SELECT 1 FROM operations").fetchone()
+        assert not mock.auth_frames
+    finally:
+        server.close()
+        await server.wait_closed()
