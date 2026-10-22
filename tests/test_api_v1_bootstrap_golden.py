@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -51,13 +52,15 @@ async def test_managed_bootstrap_matches_shared_golden(tmp_path, managed, monkey
         assert response["sync"]["checkpoint"]["token"].startswith("s1.")
         assert set(response["capabilities"]["build"]) == {"version", "commit", "source"}
         assert response["capabilities"]["connector_update"] == {
-            "state": "not_enrolled", "activation": "next_launch"}
+            "state": "not_enrolled" if sys.platform.startswith("linux") else "unsupported", "activation": "next_launch"}
         digest = capabilities["frontend"]["digest"]
         assert digest is None or re.fullmatch(r"[a-f0-9]{64}", digest)
         normalized = normalize_bootstrap(response)
         if managed and os.environ.get("BATC_UPDATE_BOOTSTRAP_GOLDEN") == "1":
             GOLDEN.write_text(json.dumps(normalized, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         expected = json.loads(GOLDEN.read_text(encoding="utf-8"))
+        if not sys.platform.startswith("linux"):
+            expected["capabilities"]["connector_update"]["state"] = "unsupported"
         if not managed:
             del expected["capabilities"]["desktop_identity"]
             del expected["capabilities"]["managed_installation"]

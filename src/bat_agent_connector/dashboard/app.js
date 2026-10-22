@@ -1133,6 +1133,30 @@ var diagnosticsStrings;
 var init_diagnostics_strings = __esmMin((() => {
 	diagnosticsStrings = {
 		en: {
+			diag_version_connector_installed: "Connector installed for the next launch",
+			diag_version_source_connector_update: "Source: Connector update status",
+			diag_version_period_next_launch: "Installed for the next launch",
+			diag_version_installation_same: "The next-launch installation matches the answering Connector.",
+			diag_version_installation_differs: "A different Connector installation waits for the next launch; updating does not restart the service.",
+			diag_version_installation_unknown: "The next-launch installation comparison is unknown.",
+			diag_version_update_not_reported: "This Connector did not report its update status.",
+			diag_version_update_not_enrolled: "Connector automatic updates are not enrolled.",
+			diag_version_update_not_managed: "This Connector was not identified as running from the updater-managed installation.",
+			diag_version_update_unsupported: "Connector automatic updates are unsupported on this platform.",
+			diag_version_update_unreadable: "Connector update status could not be read.",
+			diag_version_update_channel: "Update channel: {channel}",
+			diag_version_channel_stable: "Stable",
+			diag_version_channel_preview: "Preview",
+			diag_version_update_enabled: "Automatic updates are enabled.",
+			diag_version_update_disabled: "Automatic updates are disabled.",
+			diag_version_update_pending: "An update transition is pending.",
+			diag_version_update_last: "Last update result: {result} · {at}",
+			diag_version_result_enrolled_for_next_launch: "Enrolled for the next launch",
+			diag_version_result_installed_for_next_launch: "Installed for the next launch",
+			diag_version_result_rolled_back_updates_disabled: "Rolled back; automatic updates disabled",
+			diag_version_result_no_newer_release: "No newer release available",
+			diag_version_result_up_to_date: "Up to date",
+			diag_version_result_failed: "Failed",
 			diag_version_number: "Version: {version}",
 			diag_version_commit: "Commit: {commit}",
 			diag_version_digest: "Digest: {digest}",
@@ -1218,6 +1242,30 @@ var init_diagnostics_strings = __esmMin((() => {
 			diag_state_unknown: "Unknown"
 		},
 		"zh-TW": {
+			diag_version_connector_installed: "供下次啟動的 Connector 安裝",
+			diag_version_source_connector_update: "來源：Connector 更新狀態",
+			diag_version_period_next_launch: "已安裝，供下次啟動使用",
+			diag_version_installation_same: "供下次啟動的安裝與回應中的 Connector 相同。",
+			diag_version_installation_differs: "另一個不同的 Connector 安裝正等待下次啟動；更新不會重新啟動服務。",
+			diag_version_installation_unknown: "供下次啟動的安裝比較結果未知。",
+			diag_version_update_not_reported: "此 Connector 未回報更新狀態。",
+			diag_version_update_not_enrolled: "Connector 尚未登記自動更新。",
+			diag_version_update_not_managed: "尚未確認此 Connector 是從更新器管理的安裝啟動。",
+			diag_version_update_unsupported: "此平台不支援 Connector 自動更新。",
+			diag_version_update_unreadable: "無法讀取 Connector 更新狀態。",
+			diag_version_update_channel: "更新頻道：{channel}",
+			diag_version_channel_stable: "穩定版",
+			diag_version_channel_preview: "預覽版",
+			diag_version_update_enabled: "已啟用自動更新。",
+			diag_version_update_disabled: "已停用自動更新。",
+			diag_version_update_pending: "更新切換尚未完成。",
+			diag_version_update_last: "上次更新結果：{result} · {at}",
+			diag_version_result_enrolled_for_next_launch: "已登記，供下次啟動使用",
+			diag_version_result_installed_for_next_launch: "已安裝，供下次啟動使用",
+			diag_version_result_rolled_back_updates_disabled: "已回退並停用自動更新",
+			diag_version_result_no_newer_release: "沒有較新的發布版本",
+			diag_version_result_up_to_date: "已是最新版本",
+			diag_version_result_failed: "失敗",
 			diag_version_number: "版本：{version}",
 			diag_version_commit: "Commit：{commit}",
 			diag_version_digest: "摘要：{digest}",
@@ -17185,13 +17233,29 @@ var digest$10 = frontendDigest;
 var frontendLoadedAt = new Date().toISOString();
 var time = (value) => {
 	if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value < 253402300800) return new Date(value * 1e3).toISOString();
-	return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
+	return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
 };
 var buildSource = (value) => [
 	"vcs",
 	"package",
 	"bundled"
 ].includes(value) ? value : null;
+var updateCode = (value) => typeof value === "string" && /^[a-z][a-z0-9_]{0,95}$/.test(value) ? value : null;
+var updateStates = [
+	"reported",
+	"not_enrolled",
+	"not_managed",
+	"unsupported",
+	"unreadable"
+];
+var updateResults = [
+	"enrolled_for_next_launch",
+	"installed_for_next_launch",
+	"rolled_back_updates_disabled",
+	"no_newer_release",
+	"up_to_date",
+	"failed"
+];
 var fact$1 = (id, value, source, at, period, extra = {}) => {
 	const selected = {
 		version: version$2(value?.version),
@@ -17215,6 +17279,13 @@ function versionProjection(input = {}) {
 	const descriptor = input.adapterRead?.document?.native_analysis;
 	const run = input.adapterRunRead?.run;
 	const frontend = input.frontendBuild === void 0 ? frontendBuild : input.frontendBuild;
+	const update = caps?.connector_update;
+	const reported = update?.state === "reported";
+	const last = reported && updateResults.includes(update.last?.status) ? {
+		status: update.last.status,
+		code: updateCode(update.last.code),
+		at: time(update.last.at)
+	} : null;
 	const loadedAt = input.frontendLoadedAt === void 0 && frontend === frontendBuild && digest$10(frontend?.frontend_digest) ? frontendLoadedAt : input.frontendLoadedAt;
 	const rows = [
 		fact$1("desktop", input.desktop ? input.appBuild : null, "native_app_build", input.nativeReadAt, "loaded"),
@@ -17224,6 +17295,14 @@ function versionProjection(input = {}) {
 			...caps.build,
 			version: caps.build?.version ?? caps.connector
 		} : null, "capabilities", caps ? input.capabilitiesReadAt : null, "read"),
+		fact$1("connector_installed", reported ? update.installed : null, "connector_update", reported ? input.capabilitiesReadAt : null, "next_launch", {
+			state: updateStates.includes(update?.state) ? update.state : "not_reported",
+			code: update?.state === "unreadable" ? updateCode(update.code) : null,
+			enabled: reported && typeof update.enabled === "boolean" ? update.enabled : null,
+			channel: reported && ["stable", "preview"].includes(update.channel) ? update.channel : null,
+			pending: reported && typeof update.pending === "boolean" ? update.pending : null,
+			last
+		}),
 		...["bundled_runtime", "running_runtime"].map((id) => fact$1(id, managed?.[id] ? {
 			version: managed[id].version,
 			commit: managed[id].commit,
@@ -17235,9 +17314,12 @@ function versionProjection(input = {}) {
 		fact$1("bat_observed", { commit: run?.bat_runtime_provenance?.bat_source_revision }, "pm_run_provenance", input.adapterRunRead?.at, "run", { recorded_at: time(run?.updated_at) }),
 		fact$1("desktop_update", input.updaterReadFailed ? null : { version: input.updater?.current_version }, "desktop_updater", input.updaterReadFailed ? null : input.updaterReadAt, "read")
 	];
+	const installedCommit = rows.find((row) => row.id === "connector_installed").commit;
+	const answeringCommit = rows.find((row) => row.id === "connector").commit;
 	return {
 		platform: input.desktop ? "desktop" : "browser",
 		rows,
+		connector_installation_difference: installedCommit && answeringCommit ? installedCommit === answeringCommit ? "same" : "differs" : "unknown",
 		runtime_difference: ["same", "differs"].includes(managed?.runtime_difference) ? managed.runtime_difference : "unknown"
 	};
 }
@@ -17580,6 +17662,7 @@ function versionFactText(row, t) {
 	if ([
 		"desktop",
 		"connector",
+		"connector_installed",
 		"bundled_runtime",
 		"running_runtime"
 	].includes(row.id)) return t("diag_version_number", { version: row.version || unknown }) + " · " + t("diag_version_commit", { commit: row.commit || unknown });
@@ -17592,7 +17675,10 @@ function versionFacts({ h, t, projection }) {
 	return h("section", {
 		class: "version-facts",
 		"data-version-facts": ""
-	}, h("h3", {}, t("diag_versions")), h("dl", {}, ...rows.map((row) => h("div", { "data-version-row": row.id }, h("dt", {}, t("diag_version_" + row.id)), h("dd", {}, h("p", { class: "mono" }, versionFactText(row, t)), h("p", { class: "muted" }, t("diag_version_source_" + row.source), " · ", t("diag_version_period_" + row.period), " · ", row.observed_at || t("diag_version_time_unknown")), row.recorded_at ? h("p", { class: "muted" }, t("diag_version_run_updated", { time: row.recorded_at })) : null)))), h("p", { "data-runtime-difference": "" }, t("diag_runtime_" + projection.runtime_difference)), h("p", { class: "muted" }, t("diag_adapter_observed_unknown")));
+	}, h("h3", {}, t("diag_versions")), h("dl", {}, ...rows.map((row) => h("div", { "data-version-row": row.id }, h("dt", {}, t("diag_version_" + row.id)), h("dd", {}, h("p", { class: "mono" }, versionFactText(row, t)), h("p", { class: "muted" }, t("diag_version_source_" + row.source), " · ", t("diag_version_period_" + row.period), " · ", row.observed_at || t("diag_version_time_unknown")), row.id === "connector_installed" ? h("div", {}, row.state !== "reported" ? h("p", { class: "muted" }, t("diag_version_update_" + row.state), row.code ? " · " + row.code : "") : null, row.channel ? h("p", { class: "muted" }, t("diag_version_update_channel", { channel: t("diag_version_channel_" + row.channel) })) : null, row.enabled !== null ? h("p", { class: "muted" }, t("diag_version_update_" + (row.enabled ? "enabled" : "disabled"))) : null, row.pending === true ? h("p", { class: "muted" }, t("diag_version_update_pending")) : null, row.last ? h("p", { class: "muted" }, t("diag_version_update_last", {
+		result: t("diag_version_result_" + row.last.status),
+		at: row.last.at || t("diag_version_time_unknown")
+	}), row.last.code ? " · " + row.last.code : "") : null, h("p", { "data-connector-installation-difference": "" }, t("diag_version_installation_" + projection.connector_installation_difference))) : null, row.recorded_at ? h("p", { class: "muted" }, t("diag_version_run_updated", { time: row.recorded_at })) : null)))), h("p", { "data-runtime-difference": "" }, t("diag_runtime_" + projection.runtime_difference)), h("p", { class: "muted" }, t("diag_adapter_observed_unknown")));
 }
 //#endregion
 //#region src/diagnostics-dialog.js

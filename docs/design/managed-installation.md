@@ -75,6 +75,17 @@ an installed receipt. The running fact comes from the proven owner's existing
 authenticated capabilities read (`capabilities`), whose build is that service's loaded snapshot.
 Missing identity fields remain null, including for an older service.
 
+The shared version projection also distinguishes the answering Connector's loaded
+build from its updater's `connector_installed` row, sourced only from
+`capabilities.connector_update`. It describes the installation for the next launch,
+with its own capabilities read time, channel and last result/time; it is visible in
+both browser and desktop. `connector_installation_difference` compares commits as
+`same`, `differs` or `unknown`. Missing or non-`reported` update evidence leaves this
+row unknown with `not_reported` as its source, while the explicit reason remains
+visible. This is separate from `running_runtime` and its launch observation; it
+does not start, stop or replace a service. Updater ownership is established at
+process startup as specified in the [update contract](connector-updates.md).
+
 `runtime_difference` is `same`, `differs` or `unknown`; either missing commit
 makes it unknown. `differs` means the running service is not that bundle and the
 change waits for the service's next launch. These facts do not trigger replacement,

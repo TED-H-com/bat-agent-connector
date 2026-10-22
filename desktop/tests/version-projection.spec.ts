@@ -3,6 +3,51 @@ import {readFileSync} from 'node:fs';
 import {diagnosticsFixture} from './diagnostics-fixture.ts';
 const bootstrap=JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-bootstrap.json',import.meta.url),'utf8'));
 const runtimes=JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-runtime-identity.json',import.meta.url),'utf8'));
+const connectorUpdates=JSON.parse(readFileSync(new URL('../../tests/fixtures/connector-update-facts.json',import.meta.url),'utf8'));
+for(const locale of ['en-US','zh-TW'])for(const scenario of ['differs','outside_root','absent'])for(const native of [false,true])
+test(`next-launch installation ${scenario} ${native?'desktop':'browser'} ${locale}`,async({browser})=>{
+  const context=await browser.newContext({locale}),page=await context.newPage();
+  const at=Date.UTC(2026,9,22);
+  await page.clock.install({time:at});await page.clock.pauseAt(at);
+  const producer=structuredClone(bootstrap);
+  if(scenario==='absent')delete producer.capabilities.connector_update;
+  else Object.assign(producer.capabilities,connectorUpdates[scenario]);
+  if(native)delete producer.capabilities.managed_installation;
+  const state=await diagnosticsFixture(page,native,true,producer);
+  try {
+    await page.goto('/dashboard/#/settings?section=about');
+    const about=page.locator('#settings-panel-about [data-version-row=connector_installed]');
+    await expect(about).toContainText(locale==='en-US'?'Connector installed for the next launch':'供下次啟動的 Connector 安裝');
+    const differs=scenario==='differs',en=locale==='en-US';
+    const sentence=differs
+      ? (en?'A different Connector installation waits for the next launch; updating does not restart the service.':'另一個不同的 Connector 安裝正等待下次啟動；更新不會重新啟動服務。')
+      : (en?'The next-launch installation comparison is unknown.':'供下次啟動的安裝比較結果未知。');
+    await expect(about).toContainText(differs?(en?'Source: Connector update status':'來源：Connector 更新狀態'):(en?'Source: not reported':'來源：未回報'));
+    await expect(about).toContainText(sentence);
+    await page.locator('[data-export-diagnostics]').click();
+    const summary=page.locator('[data-diagnostics-summary] [data-version-row=connector_installed]');
+    await expect(summary).toContainText(sentence);
+    const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
+    expect(bundle.versions.rows.find(row=>row.id==='connector_installed').source).toBe(differs?'connector_update':'not_reported');
+    expect(bundle.versions.connector_installation_difference).toBe(differs?'differs':'unknown');
+    for(const surface of [about,summary]){
+      if(differs){
+        await expect(surface).toContainText('0.2.8');
+        await expect(surface).toContainText('b'.repeat(40));
+        await expect(surface).toContainText(en?'Update channel: Preview':'更新頻道：預覽版');
+        await expect(surface).toContainText(en?'Last update result: Installed for the next launch':'上次更新結果：已安裝，供下次啟動使用');
+        await expect(surface).toContainText('2026-10-22T12:00:00.123456+00:00');
+      }else{
+        await expect(surface).toContainText(en?'unknown':'未知');
+        await expect(surface).toContainText(scenario==='absent'
+          ? (en?'This Connector did not report its update status.':'此 Connector 未回報更新狀態。')
+          : (en?'This Connector was not identified as running from the updater-managed installation.':'尚未確認此 Connector 是從更新器管理的安裝啟動。'));
+      }
+    }
+    expect(state.reads).toContain('/capabilities');
+    expect(state.reads.filter(path=>path.includes('restart')||path.includes('stop'))).toEqual([]);
+  } finally {await context.close();}
+});
 for(const locale of ['en-US','zh-TW'])for(const width of [390,1440])for(const native of [false,true]) {
   test(`one version projection ${native?'desktop':'browser'} ${locale} ${width}`,async({browser},info)=>{
     const context=await browser.newContext({locale,viewport:{width,height:1000}}),page=await context.newPage();

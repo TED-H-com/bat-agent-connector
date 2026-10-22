@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from bat_agent_connector import api_auth, api_v1, updater
+from bat_agent_connector import build_identity as identity_module
 from bat_agent_connector.config import Config
 from bat_agent_connector.task_daemon import TaskDaemon
 from bat_agent_connector.update_release import UpdateError
@@ -17,16 +18,18 @@ from tests.test_connector_updates import deployment, make_package, release, upda
 
 pytestmark = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux updater producer")
 GOLDEN = Path(__file__).parent / "fixtures" / "connector-update-facts.json"
-AT = "2026-10-22T12:00:00+00:00"
+AT = "2026-10-22T12:00:00.123456+00:00"
 
 
 @pytest.fixture
-def process(deployment, monkeypatch):
+def process(deployment, monkeypatch):  # noqa: F811
     u, receipt, _ = deployment
     monkeypatch.setenv("HOME", str(u.home))
     monkeypatch.setattr(updater, "timestamp", lambda: AT)
     build = {"version": "0.2.7", "commit": "a" * 40, "source": "vcs"}
     monkeypatch.setattr(api_v1, "build_identity", lambda: dict(build))
+    monkeypatch.setattr(identity_module, "build_identity", lambda: dict(build))
+    monkeypatch.setattr(updater, "_PROCESS_INSTALLATION", None)
     package = receipt.parent / "tools/bat-agent-connector/lib/python3.13/site-packages/bat_agent_connector"
     monkeypatch.setattr(updater, "__file__", str(package / "updater.py"))
     return u, receipt, build
@@ -69,8 +72,17 @@ async def test_capabilities_update_states_are_read_only(process, tmp_path, monke
             monkeypatch.setattr(updater, "__file__", str(tmp_path / "checkout/updater.py"))
         elif scenario == "unsupported":
             monkeypatch.setattr(updater, "sys", SimpleNamespace(platform="darwin"))
+        monkeypatch.setattr(updater, "_PROCESS_INSTALLATION", updater._capture_process_installation())
         (u.root / "lease").unlink()
     before = update_tree(u.root)
+    def forbidden(*args, **kwargs):
+        pytest.fail("capabilities must not lock, reconcile, write, inspect packages or contact a release feed")
+    for method in ("locked", "reconcile", "save", "outcome", "failure", "verify"):
+        monkeypatch.setattr(updater.Updater, method, forbidden)
+    original_init = updater.Updater.__init__
+    def read_only_init(self):
+        original_init(self, find_release=forbidden, install=forbidden, inspect=forbidden, command=forbidden)
+    monkeypatch.setattr(updater.Updater, "__init__", read_only_init)
     reads = []
     read = updater.files.read_private
     def counted(path, **kwargs):
@@ -95,5 +107,77 @@ async def test_capabilities_update_states_are_read_only(process, tmp_path, monke
     state_reads = [entry for entry in reads if entry[0] == u.root / "state.json"]
     assert len(state_reads) == (0 if scenario == "unsupported" else 1)
     assert all(size <= 1024 * 1024 for _, size in state_reads)
+    assert [entry for entry in reads if entry[0].is_relative_to(u.root)] == state_reads
     for private in (str(u.home), "receipt", "proof", "previous", "https://", "root"):
         assert private not in json.dumps(block)
+    golden = json.loads(GOLDEN.read_text()) if GOLDEN.exists() else {}
+    if os.environ.get("BATC_UPDATE_CONNECTOR_GOLDEN") == "1":
+        golden[scenario] = result
+        GOLDEN.write_text(json.dumps(golden, indent=2) + "\n")
+    assert result == golden[scenario]
+
+
+async def test_running_process_reports_changed_installation_without_stale_state(process, tmp_path, monkeypatch):
+    u, receipt, _ = process
+    u.enroll(receipt, "preview")
+    monkeypatch.setattr(updater, "_PROCESS_INSTALLATION", updater._capture_process_installation())
+    first = await read_capabilities(tmp_path)
+    assert first["connector_update"]["installed"]["commit"] == "a" * 40
+    u.find_release = lambda channel: release("b" * 40, "0.2.8")
+    u.install = lambda root, candidate, **_: make_package(root, candidate)
+    u.apply()
+    before = update_tree(u.root)
+    second = await read_capabilities(tmp_path)
+    assert update_tree(u.root) == before
+    assert second["build"] == first["build"]
+    assert second["connector_update"]["installed"] == {"version": "0.2.8", "commit": "b" * 40}
+    assert second["connector_update"]["last"] == {"status": "installed_for_next_launch", "at": AT}
+    u.rollback()
+    third = await read_capabilities(tmp_path)
+    assert third["connector_update"]["installed"]["commit"] == "a" * 40
+    assert third["connector_update"]["enabled"] is False
+    # A changed last result/policy must also be re-read, even without a commit change.
+    u.policy(True, "stable")
+    assert (await read_capabilities(tmp_path))["connector_update"]["channel"] == "stable"
+    generated = {"same": first, "differs": second, "rollback": third}
+    if os.environ.get("BATC_UPDATE_CONNECTOR_GOLDEN") == "1":
+        GOLDEN.write_text(json.dumps({**json.loads(GOLDEN.read_text()), **generated}, indent=2) + "\n")
+    golden = json.loads(GOLDEN.read_text())
+    assert generated == {key: golden[key] for key in generated}
+
+
+async def test_rollback_can_leave_an_older_installation_waiting_for_next_launch(process, tmp_path, monkeypatch):
+    u, receipt, build = process
+    u.enroll(receipt, "preview")
+    u.find_release = lambda channel: release("b" * 40, "0.2.8")
+    u.install = lambda root, candidate, **_: make_package(root, candidate)
+    u.apply()
+    # A newly launched process belongs to the current installation, then stays
+    # loaded while a subsequent rollback changes the next-launch pointer.
+    build.update(version="0.2.8", commit="b" * 40)
+    package = u.root / "versions" / ("b" * 40) / "tools/bat-agent-connector/lib/python3.13/site-packages/bat_agent_connector"
+    monkeypatch.setattr(updater, "__file__", str(package / "updater.py"))
+    monkeypatch.setattr(updater, "_PROCESS_INSTALLATION", updater._capture_process_installation())
+    u.rollback()
+    before = update_tree(u.root)
+    result = await read_capabilities(tmp_path)
+    assert result["connector_update"]["installed"] == {"version": "0.2.7", "commit": "a" * 40}
+    assert result["build"]["commit"] == "b" * 40
+    assert update_tree(u.root) == before
+    golden = json.loads(GOLDEN.read_text())
+    if os.environ.get("BATC_UPDATE_CONNECTOR_GOLDEN") == "1":
+        golden["rollback_differs"] = result
+        GOLDEN.write_text(json.dumps(golden, indent=2) + "\n")
+    assert result == golden["rollback_differs"]
+
+
+async def test_launch_evidence_does_not_attach_an_old_process_to_a_new_current(process, tmp_path, monkeypatch):
+    u, receipt, _ = process
+    u.enroll(receipt, "preview")
+    u.find_release = lambda channel: release("b" * 40, "0.2.8")
+    u.install = lambda root, candidate, **_: make_package(root, candidate)
+    u.apply()
+    # First discovery after the switch cannot claim the old process was launched
+    # from current. A matching retained version alone is insufficient.
+    monkeypatch.setattr(updater, "_PROCESS_INSTALLATION", updater._capture_process_installation())
+    assert (await read_capabilities(tmp_path))["connector_update"]["state"] == "not_managed"

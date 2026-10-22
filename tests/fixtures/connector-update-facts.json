@@ -1,0 +1,181 @@
+{
+  "not_enrolled": {
+    "build": {
+      "version": "0.2.7",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source": "vcs"
+    },
+    "connector_update": {
+      "activation": "next_launch",
+      "state": "not_enrolled"
+    }
+  },
+  "same": {
+    "build": {
+      "version": "0.2.7",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source": "vcs"
+    },
+    "connector_update": {
+      "state": "reported",
+      "enabled": true,
+      "channel": "preview",
+      "installed": {
+        "version": "0.2.7",
+        "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "pending": false,
+      "last": {
+        "status": "enrolled_for_next_launch",
+        "at": "2026-10-22T12:00:00.123456+00:00"
+      },
+      "activation": "next_launch"
+    }
+  },
+  "failed": {
+    "build": {
+      "version": "0.2.7",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source": "vcs"
+    },
+    "connector_update": {
+      "state": "reported",
+      "enabled": true,
+      "channel": "preview",
+      "installed": {
+        "version": "0.2.7",
+        "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "pending": false,
+      "last": {
+        "status": "failed",
+        "at": "2026-10-22T12:00:00.123456+00:00",
+        "code": "fixture_install_failed"
+      },
+      "activation": "next_launch"
+    }
+  },
+  "unreadable": {
+    "build": {
+      "version": "0.2.7",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source": "vcs"
+    },
+    "connector_update": {
+      "activation": "next_launch",
+      "state": "unreadable",
+      "code": "update_state_unreadable"
+    }
+  },
+  "incompatible": {
+    "build": {
+      "version": "0.2.7",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source": "vcs"
+    },
+    "connector_update": {
+      "activation": "next_launch",
+      "state": "unreadable",
+      "code": "update_state_incompatible"
+    }
+  },
+  "commit_mismatch": {
+    "build": {
+      "version": "0.2.7",
+      "commit": "cccccccccccccccccccccccccccccccccccccccc",
+      "source": "vcs"
+    },
+    "connector_update": {
+      "activation": "next_launch",
+      "state": "not_managed"
+    }
+  },
+  "outside_root": {
+    "build": {
+      "version": "0.2.7",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source": "vcs"
+    },
+    "connector_update": {
+      "activation": "next_launch",
+      "state": "not_managed"
+    }
+  },
+  "unsupported": {
+    "build": {
+      "version": "0.2.7",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source": "vcs"
+    },
+    "connector_update": {
+      "activation": "next_launch",
+      "state": "unsupported"
+    }
+  },
+  "differs": {
+    "build": {
+      "version": "0.2.7",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source": "vcs"
+    },
+    "connector_update": {
+      "state": "reported",
+      "enabled": true,
+      "channel": "preview",
+      "installed": {
+        "version": "0.2.8",
+        "commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "pending": false,
+      "last": {
+        "status": "installed_for_next_launch",
+        "at": "2026-10-22T12:00:00.123456+00:00"
+      },
+      "activation": "next_launch"
+    }
+  },
+  "rollback": {
+    "build": {
+      "version": "0.2.7",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source": "vcs"
+    },
+    "connector_update": {
+      "state": "reported",
+      "enabled": false,
+      "channel": "preview",
+      "installed": {
+        "version": "0.2.7",
+        "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "pending": false,
+      "last": {
+        "status": "rolled_back_updates_disabled",
+        "at": "2026-10-22T12:00:00.123456+00:00"
+      },
+      "activation": "next_launch"
+    }
+  },
+  "rollback_differs": {
+    "build": {
+      "version": "0.2.8",
+      "commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "source": "vcs"
+    },
+    "connector_update": {
+      "state": "reported",
+      "enabled": false,
+      "channel": "preview",
+      "installed": {
+        "version": "0.2.7",
+        "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "pending": false,
+      "last": {
+        "status": "rolled_back_updates_disabled",
+        "at": "2026-10-22T12:00:00.123456+00:00"
+      },
+      "activation": "next_launch"
+    }
+  }
+}

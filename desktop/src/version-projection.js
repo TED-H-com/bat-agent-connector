@@ -11,9 +11,12 @@ export const digest = frontendDigest;
 const frontendLoadedAt = new Date().toISOString();
 export const time = value => {
   if(typeof value === 'number' && Number.isFinite(value) && value >= 0 && value < 253402300800) return new Date(value * 1000).toISOString();
-  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
 };
 const buildSource = value => ['vcs','package','bundled'].includes(value) ? value : null;
+const updateCode = value => typeof value === 'string' && /^[a-z][a-z0-9_]{0,95}$/.test(value) ? value : null;
+const updateStates = ['reported','not_enrolled','not_managed','unsupported','unreadable'];
+const updateResults = ['enrolled_for_next_launch','installed_for_next_launch','rolled_back_updates_disabled','no_newer_release','up_to_date','failed'];
 const fact = (id, value, source, at, period, extra = {}) => {
   const selected={version:version(value?.version),commit:commit(value?.commit),digest:digest(value?.digest)};
   const observed_at=time(at), observed=Object.values(selected).some(Boolean)||observed_at!==null;
@@ -26,6 +29,10 @@ export function versionProjection(input = {}) {
   const descriptor = input.adapterRead?.document?.native_analysis;
   const run = input.adapterRunRead?.run;
   const frontend = input.frontendBuild === undefined ? loadedFrontendBuild : input.frontendBuild;
+  const update = caps?.connector_update;
+  const reported = update?.state === 'reported';
+  const last = reported && updateResults.includes(update.last?.status)
+    ? {status:update.last.status,code:updateCode(update.last.code),at:time(update.last.at)} : null;
   const loadedAt = input.frontendLoadedAt === undefined && frontend === loadedFrontendBuild && digest(frontend?.frontend_digest)
     ? frontendLoadedAt : input.frontendLoadedAt;
   const rows = [
@@ -34,6 +41,14 @@ export function versionProjection(input = {}) {
     fact('served_ui', {digest:caps?.frontend?.digest}, 'capabilities', caps ? input.capabilitiesReadAt : null, 'read'),
     fact('connector', caps ? {...caps.build,version:caps.build?.version ?? caps.connector} : null,
       'capabilities', caps ? input.capabilitiesReadAt : null, 'read'),
+    fact('connector_installed', reported ? update.installed : null, 'connector_update',
+      reported ? input.capabilitiesReadAt : null, 'next_launch', {
+        state:updateStates.includes(update?.state) ? update.state : 'not_reported',
+        code:update?.state === 'unreadable' ? updateCode(update.code) : null,
+        enabled:reported && typeof update.enabled === 'boolean' ? update.enabled : null,
+        channel:reported && ['stable','preview'].includes(update.channel) ? update.channel : null,
+        pending:reported && typeof update.pending === 'boolean' ? update.pending : null,last,
+      }),
     ...['bundled_runtime','running_runtime'].map(id => fact(id, managed?.[id] ? {
       version:managed[id].version, commit:managed[id].commit, source:managed[id].build_source,
     } : null, id === 'bundled_runtime' ? 'managed_launch_process' : 'managed_launch_capabilities', managed?.[id]?.observed_at, 'launch')),
@@ -49,7 +64,10 @@ export function versionProjection(input = {}) {
     fact('desktop_update', input.updaterReadFailed ? null : {version:input.updater?.current_version},
       'desktop_updater', input.updaterReadFailed ? null : input.updaterReadAt, 'read'),
   ];
+  const installedCommit = rows.find(row => row.id === 'connector_installed').commit;
+  const answeringCommit = rows.find(row => row.id === 'connector').commit;
   return {platform:input.desktop ? 'desktop' : 'browser', rows,
+    connector_installation_difference:installedCommit && answeringCommit ? (installedCommit === answeringCommit ? 'same' : 'differs') : 'unknown',
     runtime_difference: ['same','differs'].includes(managed?.runtime_difference) ? managed.runtime_difference : 'unknown'};
 }
 export const versionRow = (projection, id) => projection.rows.find(row => row.id === id);
