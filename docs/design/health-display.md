@@ -125,7 +125,10 @@ The display clock starts before the first view read. Ages use coarse minute buck
 outside the Connector live region. Header links remain attached; Settings reconciles
 only changed content and preserves focus. One banner landmark remains. A measured
 shell height includes a wrapped summary in session height and navigation offsets,
-so the composer remains reachable without scrolling the page.
+so the composer uses the available viewport space. Conversation captions, notices,
+diagnostics and reading controls retain their content height. The transcript yields
+space down to its reading minimum; if the controls still cannot fit, the session
+view scrolls instead of shrinking rows into each other. The summary stays sticky.
 
 ## Route quality follow-up
 

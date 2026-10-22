@@ -10,7 +10,9 @@ main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-it
 .session-back { margin: 0 0 var(--space-2); }
 .session-back a { color: var(--text-2); font-size: var(--fs-small); text-decoration: none; }
 .session-back a:hover { color: var(--text); }
-.session-workspace .conversation { position: relative; flex: 1 1 auto; min-height: 160px; display: flex; flex-direction: column; }
+.session-workspace .conversation { position: relative; flex: 1 1 auto; min-height: auto; display: flex; flex-direction: column; }
+/* Keep controls in flow; the transcript yields space, then the session scrolls. */
+.session-workspace .conversation > :not(.conversation-scroll) { flex: none; }
 .session-workspace .conversation-scroll { flex: 1 1 auto; min-height: 120px; height: auto; max-width: 760px; }
 .session-workspace .conversation-scroll > .msg,
 .session-workspace .workspace-conversation .conversation-scroll > .msg.user {
