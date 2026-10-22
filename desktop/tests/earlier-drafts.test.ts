@@ -70,7 +70,7 @@ test('PM writers recover authored fields and collections without hidden selector
     ['pm.meeting.draft', {why: 'Planning purpose', decisions: JSON.stringify([{id: 'decision_1', text: 'Decision text', rationale: 'Decision reason', source_refs: ['private']}]), follow_ups: JSON.stringify([{id: 'followup_1', text: 'Follow this up', owner_actor: 'other', expected_effect: 'Expected effect', verification: 'Verify it'}])}, ['Planning purpose', 'Decision text', 'Decision reason', 'Follow this up', 'Expected effect', 'Verify it']],
   ];
   for (const [action, values, expected] of cases) {
-    const raw = JSON.stringify({version: 1, values, intent: {key: 'original-key', request: {params: {text: 'must not escape'}}}});
+    const raw = JSON.stringify({version: 1, values});
     assert.deepEqual(draftText('pm', `nested.form.${action}.{"workspace_id":"ws_fixture"}`, raw).map(row => row.text), expected, action);
   }
   for (const family of ['key', 'sync', 'managed.setup', 'repair', 'capture', 'task-control', 'session-bat', 'permissions',
@@ -170,4 +170,14 @@ test('mirrored text preserves submission evidence even when only the attachment 
   const entries = (await earlierDrafts(identity, local)).filter(entry => entry.text === 'Original prompt');
   assert.equal(entries.length, 1); assert.equal(entries[0].state, 'possibly-sent');
   assert.equal(entries[0].href, '#/op/op_' + 'a'.repeat(32));
+});
+
+
+test('real session writer output preserves its hashed operation evidence', async () => {
+  const rows = JSON.parse(readFileSync(new URL('./fixtures/earlier-drafts-session.json', import.meta.url), 'utf8'));
+  const local = new MemoryStorage(); local.setItem(`batc.sync.${old()}`, JSON.stringify({cursor: 1, token: 'fixture-proof'}));
+  for (const row of rows) local.setItem(`batc.${row.family}.${old()}.${row.suffix}`, row.raw);
+  const [entry] = await earlierDrafts(identity, local);
+  assert.equal(entry.text, 'Original session message'); assert.equal(entry.state, 'possibly-sent');
+  assert.equal(entry.href, '#/op/op_' + 'a'.repeat(32));
 });

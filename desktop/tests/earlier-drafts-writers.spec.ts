@@ -1,9 +1,11 @@
+import {STRINGS} from '../src/i18n.js';
+import {setup} from './managed-storage-fixture';
 import {unavailableBriefTransport} from './pm-source-transport-fixture';
 import {test, expect, type Page} from '@playwright/test';
 import {readFile, writeFile, mkdir} from 'node:fs/promises';
-import {startFixture, openStart, chooseWorkspace} from './session-start-fixture';
-import {publishedFixture, openPublished, previewPublished, dispatchProject, publishedSha, selected} from './repository-start-fixture';
-import {orchestrationFixture, openOrchestration, chooseTarget, fillOrchestration} from './orchestration-fixture';
+import {startFixture, openStart} from './session-start-fixture';
+import {publishedFixture, openPublished, dispatchProject, publishedSha, selected} from './repository-start-fixture';
+import {orchestrationFixture, openOrchestration} from './orchestration-fixture';
 import {labelsFixture, openLabels} from './session-labels-fixture';
 
 // Snapshots are emitted by the real UI writers, before and after a lost reply.
@@ -24,11 +26,17 @@ async function golden(name: string, rows: any[]) {
   expect(rows).toEqual(JSON.parse(await readFile(path, 'utf8')));
 }
 
+for (const locale of ['en-US', 'zh-TW']) test.describe(locale, () => {
+  test.use({locale});
+  const words = STRINGS[locale === 'en-US' ? 'en' : locale];
+
 test('session start writer retains the prompt with its original intent', async ({page}) => {
-  await startFixture(page, false, {lost: true}); const form = await openStart(page); await chooseWorkspace(page);
-  await form.getByRole('textbox', {name: 'Original instructions (optional)', exact: true}).fill('  Original start\n');
+  await startFixture(page, false, {lost: true}); const form = await openStart(page);
+  await form.locator('select').nth(0).selectOption('demo'); await expect(form.locator('select').nth(1)).toBeEnabled();
+  await form.locator('select').nth(1).selectOption('demo-ws');
+  await form.getByRole('textbox', {name: words.start_prompt, exact: true}).fill('  Original start\n');
   const before = await snapshot(page, 'start');
-  await form.getByRole('button', {name: 'Start session', exact: true}).click();
+  await form.getByRole('button', {name: words.start_apply, exact: true}).click();
   await expect(form).toContainText('Lost start reply');
   await golden('start', [...before, ...await snapshot(page, 'start')]);
 });
@@ -38,20 +46,31 @@ for (const family of ['published', 'dispatch']) test(`${family} writer retains t
   const form = family === 'published' ? await openPublished(page) : page.locator('[data-published-start]');
   if (family === 'dispatch') {
     await page.goto('/dashboard/#/dispatch/' + dispatchProject);
-    await form.getByRole('textbox', {name: 'Published branch ref'}).fill('refs/heads/main');
-    await form.getByRole('button', {name: 'Preview published version'}).click();
+    await form.getByRole('textbox', {name: words.pub_ref}).fill('refs/heads/main');
+    await form.getByRole('button', {name: words.pub_preview}).click();
     await expect(form.locator('[data-published-preview]')).toContainText(publishedSha);
-    await form.getByRole('textbox', {name: 'Original instructions', exact: true}).fill('Original dispatch');
-  } else await previewPublished(page);
+    await form.getByRole('textbox', {name: words.pub_prompt, exact: true}).fill('Original dispatch');
+  } else {
+    await form.locator('select').first().selectOption(JSON.stringify(selected));
+    await form.getByRole('textbox', {name: words.pub_ref}).fill('refs/heads/main');
+    await form.getByRole('button', {name: words.pub_preview}).click();
+    await expect(form.locator('[data-published-preview]')).toContainText(publishedSha);
+    await form.getByRole('textbox', {name: words.pub_prompt, exact: true}).fill('  Work from this version.\nPreserve these instructions.  ');
+  }
   const before = await snapshot(page, family), attachments = await snapshot(page, 'draft');
-  await form.getByRole('button', {name: 'Start from this version', exact: true}).click();
+  await form.getByRole('button', {name: words.pub_apply, exact: true}).click();
   await expect(form).toContainText('Lost published start reply');
   await golden(family, [...before, ...await snapshot(page, family), ...attachments]);
 });
 
 test('orchestration writer retains item text with its original intent', async ({page}) => {
   await orchestrationFixture(page, false, {lost: true}); const form = await openOrchestration(page, 'items');
-  await chooseTarget(form, 'items'); await fillOrchestration(form, 'items'); const before = await snapshot(page, 'orchestrate');
+  await form.locator('select').nth(0).selectOption('demo'); await expect(form.locator('select').nth(1)).toBeEnabled();
+  await form.locator('select').nth(1).selectOption('demo-ws');
+  await form.locator('.orch-item input').first().fill('Review login'); await form.locator('.orch-item textarea').first().fill('  Literal first item.  ');
+  await form.getByRole('button', {name: words.orch_add_item}).click();
+  await form.locator('.orch-item input').nth(1).fill('Add tests'); await form.locator('.orch-item textarea').nth(1).fill('Second literal item.');
+  await form.locator('.orch-check input').last().check(); const before = await snapshot(page, 'orchestrate');
   await form.locator('button.primary').click(); await expect(form).toContainText('Lost orchestration reply');
   await golden('orchestrate', [...before, ...await snapshot(page, 'orchestrate')]);
 });
@@ -59,7 +78,7 @@ test('orchestration writer retains item text with its original intent', async ({
 test('labels writer retains authored labels with its original intent', async ({page}) => {
   await labelsFixture(page, false, {lost: true}); const form = await openLabels(page);
   await form.getByRole('textbox').fill('Authored label'); const before = await snapshot(page, 'labels');
-  await form.getByRole('button', {name: 'Save labels', exact: true}).click(); await expect(form).toContainText('Lost label reply');
+  await form.getByRole('button', {name: words.labels_save, exact: true}).click(); await expect(form).toContainText('Lost label reply');
   await golden('labels', [...before, ...await snapshot(page, 'labels')]);
 });
 
@@ -114,4 +133,29 @@ test('PM, create and artifact review writers retain their exact envelopes', asyn
     return JSON.parse(JSON.stringify(rows).replaceAll(/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/g, '00000000-0000-4000-8000-000000000001'));
   });
   await golden('forms', rows);
+});
+
+
+test('session writer retains the text beside its hashed operation key', async ({page}) => {
+  await setup(page, {source: 'external'});
+  await page.evaluate(() => {
+    const bridge = (window as any).__TAURI_INTERNALS__, invoke = bridge.invoke;
+    bridge.invoke = async (command: string, args: any) => {
+      if (command === 'connector_request' && args.input.path.startsWith('/sessions/demo/session-1/messages'))
+        return {status: 200, data: {messages: [], next_offset: null}};
+      if (command === 'connector_request' && args.input.method === 'POST') {
+        const fixture = (window as any).__storage; fixture.writes++;
+        return {status: 200, data: {operation: {operation_id: 'op_' + 'a'.repeat(32), actor: fixture.actor,
+          idempotency_key: args.input.idempotency_key, ...args.input.body, status: 'queued', steps: []}}};
+      }
+      return invoke(command, args);
+    };
+  });
+  await page.locator('textarea').first().fill('Original session message');
+  await page.getByRole('button', {name: words.send, exact: true}).click();
+  await expect.poll(() => page.evaluate(() => Object.keys(localStorage).some(key => key.startsWith('batc.key.')))).toBe(true);
+  await expect.poll(() => page.evaluate(() => Object.entries(localStorage).some(([key, value]) => key.startsWith('batc.key.') && value.includes('op_')))).toBe(true);
+  await golden('session', [...await snapshot(page, 'draft'), ...await snapshot(page, 'key')]);
+  expect(await page.evaluate(() => (window as any).__storage.writes)).toBe(1);
+});
 });
