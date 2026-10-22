@@ -10,11 +10,13 @@ from types import SimpleNamespace
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from bat_agent_connector import api_auth, api_v1, mcp_identity, updater
+from bat_agent_connector import api_auth, api_v1, mcp_identity, update_release, updater
 from bat_agent_connector import build_identity as identity_module
 from bat_agent_connector.config import Config
 from bat_agent_connector.task_daemon import TaskDaemon
 from bat_agent_connector.update_release import UpdateError
+from scripts import install_connector as bootstrap
+from tests.test_connector_installer import transport
 from tests.test_connector_updates import (  # noqa: F401
     deployment,
     make_deployment,
@@ -291,3 +293,53 @@ async def test_older_private_state_does_not_invent_release_or_installation_clock
     assert result["state"] == "reported"
     assert result["release_check"] is None and result["installed_at"] is None
     assert update_tree(u.root) == before
+
+
+@pytest.mark.parametrize("published_at", [
+    pytest.param("not-a-time", id="malformed"),
+    pytest.param("2026-10-17T00:00:00", id="naive"),
+    pytest.param("2026-10-17T00:00:00.00000000000000000000000000000000Z", id="too-long"),
+    pytest.param(123, id="number"),
+    pytest.param(["2026-10-17T00:00:00Z"], id="array"),
+    pytest.param({"time": "2026-10-17T00:00:00Z"}, id="object"),
+])
+async def test_publication_display_clock_never_changes_release_acceptance_or_installation(
+        process, tmp_path, monkeypatch, published_at):
+    u, receipt, build = process
+    u.enroll(receipt, "preview")
+    monkeypatch.setattr(updater, "_PROCESS_INSTALLATION", updater._capture_process_installation())
+    item, raw, download = transport(candidate=release("c" * 40, "0.2.9"))
+    item["published_at"] = published_at
+    accepted = bootstrap.resolve(item["tag_name"], "preview", download)
+    assert update_release.manifest(item, raw) == accepted
+    calls = []
+    def release_download(url, **kwargs):
+        calls.append(url)
+        return json.dumps([item]).encode() if url == update_release.API else download(url)
+    monkeypatch.setattr(update_release, "fetch", release_download)
+    u.find_release = updater.discover
+    u.install = lambda root, candidate, **_: make_package(root, candidate)
+    checked = u.check()
+    assert checked["available"] == accepted
+    assert checked["installed"]["commit"] == build["commit"]
+    assert u.read()["release_check"]["completed_at"] == AT
+    assert u.read()["release_check"]["candidate"].get("published_at") is None
+    installed = u.apply()
+    assert installed["installed"] == accepted
+    assert installed["installation_matches_state"] and not installed["pending"]
+    assert installed["last"]["status"] == "installed_for_next_launch"
+    assert u.read()["versions"][accepted["commit"]]["release"] == accepted
+    # Two explicit checks, each using the existing list/manifest reads; no clock poll.
+    assert len(calls) == 4
+    before = update_tree(u.root)
+    caps = await read_capabilities(tmp_path)
+    assert update_tree(u.root) == before
+    assert caps["build"] == build
+    assert caps["connector_update"]["installed"] == {"version": "0.2.9", "commit": "c" * 40}
+    assert caps["connector_update"]["state"] == "reported"
+    assert caps["connector_update"]["release_check"] is None
+    golden = json.loads(GOLDEN.read_text())
+    if os.environ.get("BATC_UPDATE_CONNECTOR_GOLDEN") == "1":
+        golden["publication_unknown"] = caps
+        GOLDEN.write_text(json.dumps(golden, indent=2) + "\n")
+    assert caps == golden["publication_unknown"]
