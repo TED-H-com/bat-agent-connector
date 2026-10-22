@@ -1,13 +1,14 @@
 """Principal-local connection projection and coordinated personal setup intents."""
 from __future__ import annotations
 
-import hashlib
 import json
 import re
+import secrets
 
 from . import connection_handoff as handoff
 from . import dashboard_sync, platform_files
 from . import managed_setup as setup
+from . import setup_source_discovery as discovery
 from .connection_source_descriptor import build_source_descriptor
 from .operations import TERMINAL, ActionDef, NeedsAttention, OperationError, Uncertain, Wait
 
@@ -29,57 +30,29 @@ def _document(ops):
     return {}
 
 
-def source_descriptor(ops, principal, source, *, expired=False):
-    """Single integration adapter for discovery's future validate_source authority."""
-    if principal is not None:
-        setup._installation(ops.context["daemon"], principal)
-    if isinstance(source, dict) and "source_digest" in source and source.get("kind") == "bat_profile":
-        source = {key: source[key] for key in ("kind", "profile_reference")}
-    return _recompute_source(ops, principal, source, expired=expired)
-
-
-def _recompute_source(ops, principal, source, *, expired=False):
-    """Base 9fd10de3 has no discovery helper: rebuild from local D3 snapshot bytes.
-
-    This is deliberately separate from discovery and never probes BAT. Callers
-    pass only a selector; the server recomputes the immutable public descriptor.
-    """
+def _source_params(source):
     if not isinstance(source, dict):
         raise OperationError("INVALID_PARAMS", "Choose a typed source selector", 422)
-    kind = source.get("kind")
+    if "source_digest" in source and source.get("kind") == "bat_profile":
+        descriptor = _public_descriptor(source)
+        source = {key: descriptor[key] for key in ("kind", "profile_reference")}
+    if source.get("kind") == "bat_profile" and set(source) == {"kind", "profile_reference"}:
+        return {"import_profile_id": source["profile_reference"]}
+    if source.get("kind") == "staged_secret" and set(source) == {"kind", "secret_ref", "url", "fingerprint"}:
+        return {key: source[key] for key in ("secret_ref", "url", "fingerprint")}
+    raise OperationError("INVALID_PARAMS", "Unsupported source selector fields", 422)
+
+
+def source_descriptor(ops, principal, source, *, expected_digest=None):
+    """Adapt typed connection choices to the sole discovery source authority."""
     daemon = ops.context["daemon"]
-    try:
-        if kind == "bat_profile" and set(source) == {"kind", "profile_reference"}:
-            selected = setup._text(source["profile_reference"], "profile reference")
-            document = _document(ops)
-            directory = setup._profile_directory(document)
-            index = platform_files.read_private(directory / "index.json", max_bytes=setup.MAX_CONFIG)
-            credential = platform_files.read_private(directory / "remote-tokens.enc.json", max_bytes=setup.MAX_CONFIG)
-            profiles, _ = setup._profiles(document)
-            profile = next((row for row in profiles if row["id"] == selected and row["token_available"]), None)
-            if (not profile or index != platform_files.read_private(directory / "index.json", max_bytes=setup.MAX_CONFIG)
-                    or credential != platform_files.read_private(directory / "remote-tokens.enc.json", max_bytes=setup.MAX_CONFIG)):
-                _changed()
-            association = {key: profile[key] for key in ("url", "fingerprint")}
-            state = {"directory": hashlib.sha256(str(directory.resolve()).encode()).hexdigest(),
-                "index": hashlib.sha256(index).hexdigest(), "credential": hashlib.sha256(credential).hexdigest()}
-        elif kind == "staged_secret" and set(source) == {"kind", "secret_ref", "url", "fingerprint"}:
-            setup._installation(daemon, principal)
-            setup._secret(daemon, source["secret_ref"], "bat", expired=expired)
-            directory = setup._installation(daemon) / "config/setup-secrets"
-            ref = source["secret_ref"]
-            state = {"reference": handoff.digest(ref),
-                "metadata": hashlib.sha256(platform_files.read_private(directory / (ref + ".json"), max_bytes=4096)).hexdigest(),
-                "credential": hashlib.sha256(platform_files.read_private(directory / (ref + ".token"), max_bytes=4096)).hexdigest()}
-            selected = None
-            association = {"url": setup._url(source["url"]),
-                "fingerprint": setup.normalize_fingerprint(setup._text(source["fingerprint"], "fingerprint", 200))}
-        else:
-            raise OperationError("INVALID_PARAMS", "Unsupported source selector fields", 422)
-        return build_source_descriptor(kind=kind, profile_reference=selected, association=association,
-            availability_reason="SOURCE_AVAILABLE", source_state=state)
-    except (OSError, ValueError, setup.ConfigError):
-        _changed("Source is unavailable or changed; review again")
+    if principal is not None:
+        setup._installation(daemon, principal)
+    params = _source_params(source)
+    document = _document(ops)
+    if expected_digest is not None:
+        return discovery.validate_source(daemon, document, {**params, "source_digest": expected_digest}, return_source=True)
+    return discovery.resolve_source(daemon, document, params)[0]
 
 
 def _public_descriptor(source):
@@ -226,8 +199,9 @@ def _plan(ops, principal, action, target, params, pre):
     elif before and "source" not in params and "server_configuration" not in params:
         descriptor = _saved_descriptor(before)
     else:
-        descriptor = source_descriptor(ops, principal, params.get("source"))
-        if params.get("source_reference") != descriptor["reference"]:
+        reference = params.get("source_reference")
+        descriptor = source_descriptor(ops, principal, params.get("source"), expected_digest=reference[7:] if reference else None)
+        if not secrets.compare_digest(reference or "", descriptor["reference"]):
             _changed("Source snapshot changed; review again")
     if before and (before["association"] != descriptor["association"] or before["remote_profile_id"] != changes["remote_profile_id"]):
         _changed("Endpoint, pin or remote profile changed; add a separate connection")
@@ -333,9 +307,15 @@ def abandon(ops, principal, operation):
             reason="Human abandoned this operation: local effect never proven")
 
 
+def validate_operation_source(ops, operation):
+    source = operation["params"].get("source")
+    if source is not None:
+        source_descriptor(ops, None, source,
+            expected_digest=operation["external_refs"]["admission_binding"]["source_descriptor"]["source_digest"])
+
+
 def _source_guard(ctx):
-    if source_descriptor(ctx.service, None, ctx.params["source"], expired=True) != ctx.admission_binding["source_descriptor"]:
-        _changed("Source changed before saving; review again")
+    validate_operation_source(ctx.service, ctx.op)
 
 
 def _save(ctx):

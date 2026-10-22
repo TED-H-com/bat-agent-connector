@@ -96,7 +96,7 @@ def resolve_source(daemon, document, params):
     return descriptor, host
 
 
-def validate_source(daemon, document, params):
+def validate_source(daemon, document, params, *, return_source=False):
     """The same refusal at preview, admission, execution and final publication."""
     from . import managed_setup as setup
     digest = params.get("source_digest")
@@ -124,6 +124,8 @@ def validate_source(daemon, document, params):
             raise ValueError
     except (OperationError, ConfigError, OSError, ValueError, TypeError):
         raise setup._error("SETUP_REVIEW_CHANGED", "Settings changed; review again", 409) from None
+
+    return current if return_source else None
 
 
 async def discover(daemon, principal, body):

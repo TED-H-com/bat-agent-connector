@@ -11,7 +11,6 @@ import pytest
 
 from bat_agent_connector import managed_setup as setup
 from bat_agent_connector import platform_files
-from bat_agent_connector.connection_source_descriptor import build_source_descriptor
 from tests import test_managed_setup as producer
 from tests.operation_helpers import settle_operations
 from tests.test_api_v1 import http, token
@@ -64,12 +63,8 @@ def source(installed):
     path, _, document, _ = setup._configuration(daemon)
     document["bat"] = {"profiles_dir": str(directory)}
     platform_files.atomic_write(path, setup._encode(document))
-    descriptor = build_source_descriptor(kind="bat_profile", profile_reference="profile-a",
-        association={"url": "wss://bat.example:9876/", "fingerprint": "A" * 64},
-        availability_reason="SOURCE_AVAILABLE", source_state={
-            "directory": digest(str(directory.resolve()).encode()),
-            "index": digest((directory / "index.json").read_bytes()),
-            "credential": digest((directory / "remote-tokens.enc.json").read_bytes())})
+    from bat_agent_connector.setup_source_discovery import resolve_source
+    descriptor, _ = resolve_source(daemon, document, {"import_profile_id": "profile-a"})
     return {"source": descriptor,
         "source_reference": descriptor["reference"], "remote_profile_id": "default",
         "label": "Fixture connection", "preferences": {"favorite": True},
@@ -919,10 +914,11 @@ async def test_published_configuration_survives_source_drift(installed, served_s
     assert "fixture" in setup.tomllib.loads(published.decode())["hosts"]
     if not restart:
         assert daemon.ops.get(ident)["status"] == "waiting_external"
-        native = await claim_handoff(served_setup, ident)
-        assert (await DiskParticipant(tmp_path / "participant.json").send(served_setup, native))[0][0] == 200
-        await settle_operations(daemon.ops)
-        assert daemon.ops.get(ident)["status"] == "succeeded"
+        status, refused = await served_setup("POST", HANDOFF, {"operation_id": ident, "installation_ref": "desktop-a"})
+        assert status == 409 and refused["error"]["code"] == "SETUP_REVIEW_CHANGED"
+        step = next(step for step in daemon.ops.get(ident)["steps"] if step["name"] == "managed_configuration")
+        assert step["status"] == "succeeded"
+        assert daemon.ops.get(ident)["external_refs"]["native_effects_sent"] is False
         assert path.read_bytes() == published
         return
     assert daemon.ops.get(ident)["status"] == "uncertain"
@@ -942,10 +938,11 @@ async def test_published_configuration_survives_source_drift(installed, served_s
         restored.journal.db.execute("UPDATE operations SET next_run_at=0 WHERE operation_id=?", (ident,))
         await settle_operations(restored.ops)
         assert restored.ops.get(ident)["status"] == "waiting_external"
-        native = await claim_handoff(request, ident)
-        assert (await DiskParticipant(tmp_path / "participant.json").send(request, native))[0][0] == 200
-        await settle_operations(restored.ops)
-        assert restored.ops.get(ident)["status"] == "succeeded"
+        status, refused = await request("POST", HANDOFF, {"operation_id": ident, "installation_ref": "desktop-a"})
+        assert status == 409 and refused["error"]["code"] == "SETUP_REVIEW_CHANGED"
+        step = next(step for step in restored.ops.get(ident)["steps"] if step["name"] == "managed_configuration")
+        assert step["status"] == "succeeded"
+        assert restored.ops.get(ident)["external_refs"]["native_effects_sent"] is False
         assert path.read_bytes() == published
     finally:
         server.close()

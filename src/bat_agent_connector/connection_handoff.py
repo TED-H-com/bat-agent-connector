@@ -125,14 +125,21 @@ def claim(ops, principal, body):
             _refuse("A terminal operation cannot claim a new native effect")
         if sent and now() >= request["expires_at"]:
             raise OperationError("CONNECTION_HANDOFF_EXPIRED", "A claimed effect cannot be claimed again after expiry", 409)
-        from .setup_connections import revision_matches
-        if not sent and not revision_matches(ops, operation):
-            # Commit this honest failure before returning the refusal; no fence/effect was sent.
+        from .setup_connections import revision_matches, validate_operation_source
+        refusal = None
+        if not sent:
+            try:
+                if not revision_matches(ops, operation):
+                    raise OperationError("SETUP_REVIEW_CHANGED",
+                        "Connection revision changed before dispatch; review again / 派送前連線版本已變更；請重新檢閱", 409)
+                validate_operation_source(ops, operation)
+            except OperationError as error:
+                refusal = error
+        if refusal:
+            # Commit this honest refusal before replying; the native effect was never sent.
             if operation["status"] not in {"running", "needs_attention"}:
                 ops._transition(operation["operation_id"], "running")
-            message = "Connection revision changed before dispatch; review again / 派送前連線版本已變更；請重新檢閱"
-            ops._transition(operation["operation_id"], "failed", error_code="SETUP_REVIEW_CHANGED", reason=message)
-            refusal = OperationError("SETUP_REVIEW_CHANGED", message, 409)
+            ops._transition(operation["operation_id"], "failed", error_code=refusal.code, reason=refusal.message)
         else:
             if not sent:
                 request = _renew(ops, operation["operation_id"], request, claiming=True)

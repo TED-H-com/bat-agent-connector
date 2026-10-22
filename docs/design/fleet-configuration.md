@@ -494,6 +494,15 @@ staged 來源涵蓋 opaque staging reference、完整 metadata（含到期及擁
 setup revision 與 operation key：這些由 discovery 回應或既有 preview／apply 意圖綁定；
 本 descriptor 只描述可信來源，不能授予寫入權或證明伺服器／workspace 仍可用。
 
+#### Purpose-separated keys
+
+兩個用途各用既有 key，不新增秘密檔案或資料步驟：
+
+| 用途 | Key 與 domain separation | 信任界線 |
+| --- | --- | --- |
+| Source commitments | discovery 的 journal `api_sync_metadata.signing_key`；`bat-setup-source-state/v1` | 對 credential-derived state 使用 HMAC，避免在 exports／logs 暴露可直接驗猜的秘密衍生值。Key 在 journal 內，因此不對能讀該資料庫的人隱藏；公開 index／目錄等 metadata 的摘要沿用 discovery 政策。 |
+| Native handoff challenge | journal 外受保護的 `task-admin.token`；`connection-native-handoff-v1` | 與 cleanup、capture、bulk-approval preview keys 相同的既有模式；step 只存 challenge hash。只讀資料庫而沒有 admin token 者不能重建 challenge；同時持有兩者可以。不是裝置 attestation。 |
+
 設定元件的「Find profiles and workspaces／尋找設定檔與工作區」是獨立標示的讀取。
 有 discovery capability 時，手填 BAT `profile_id` 欄位隱藏，由伺服器選單提供並列入唯讀 Review；
 沒有 capability 的 Connector 保留原輸入。workspace 選擇可帶入既有 repository 欄位；
@@ -563,8 +572,8 @@ Before the first dispatch fence, claim checks the accepted connection revision
 again. A mismatch ends the operation `failed SETUP_REVIEW_CHANGED` without serving
 a write instruction. This also protects operations admitted before serialization.
 
-All claims above, except `receipt`, bind a domain-separated HMAC using the existing
-Connector-local `task-admin.token`, held in its protected file outside the journal.
+All claims above, except `receipt`, bind the handoff HMAC described in
+[Purpose-separated keys](#purpose-separated-keys).
 No new credential or secret file is introduced. Only a challenge hash is stored in
 step state, alongside the claims; raw challenges do not enter receipts, events or
 exports. A database reader without that local secret cannot reconstruct a challenge.
@@ -577,8 +586,8 @@ effect happened. An original cached challenge can still report evidence against 
 stored hash, even after key rotation. Restore the original key to reconstruct an
 envelope, or use original participant evidence / the ordinary uncertainty and
 abandonment rules; never rotate a claimed effect into another write. This is not a
-device attestation. The source
-resolver's key choice is a separate integration concern; no discovery key is copied.
+device attestation. Source commitments and handoff challenges retain their separate
+keys and purposes; neither is a remote ownership proof.
 
 **POST /api/v1/connections/receipt** uses `manage` and the same original personal
 identity. Its wire body is limited to **8192 bytes before JSON parsing**, and uses
@@ -691,9 +700,19 @@ only that principal/installation's rows, with limit 1–200 (default 50), and `n
 `POST /api/v1/connections/preview` accepts `{action,target,params,preconditions}` and
 creates no operation, writes no configuration and probes nothing. Source selectors
 remain `{kind:"bat_profile",profile_reference}` or staged secret fields for personal
-setup. A single source recomputation adapter isolates the existing temporary builder;
-discovery integration must replace that adapter, not copy current discovery hashes.
-The existing descriptor digest algorithms are not aligned here. Reference preferences
+setup. The connection adapter maps them to discovery's `import_profile_id` or
+`secret_ref,url,fingerprint` params. Discovery's `resolve_source` / `validate_source`
+are the sole snapshot authority; connection operations never hash source files.
+The validator can return its validated descriptor without reading a second snapshot.
+Unreviewed source resolution retains `PROFILE_UNAVAILABLE` / `INVALID_SECRET`;
+malformed snapshot params retain `INVALID_PARAMS`; changed or unavailable reviewed
+snapshots retain `SETUP_REVIEW_CHANGED`. Preview, admission, first claim and final
+configuration publication use that same mapping, without a translation layer.
+A public 0644 BAT index is admitted by discovery's bounded regular-file/no-follow
+reader; credential files retain their private-file checks. A source change before
+first claim refuses the pending native instruction even if an earlier configuration
+step is already proven; that successful configuration receipt is preserved.
+Reference preferences
 allow only `favorite` (boolean) and `order` (integer 0–10000); label is 1–100 characters.
 
 Lost acceptance replies are read back with the identical request/key; known IDs use
