@@ -87,6 +87,7 @@ fn authorization_refuses_directory_artifact_and_both_replacement_guards() {
             }
             let launcher = f.native.launcher.clone();
             let monitor = f.native.monitor.clone();
+            let target = f.path(plan.steps[stop].artifact);
             let mut seen = 0;
             let mut writes = Vec::new();
             let result = f.publisher().publish_authorized(
@@ -97,6 +98,17 @@ fn authorization_refuses_directory_artifact_and_both_replacement_guards() {
                     if at == point && a == plan.steps[stop].artifact {
                         seen += 1;
                         if seen == occurrence {
+                            if point == AuthorizationPoint::ReplacementGuard && occurrence == 2 {
+                                assert!(std::fs::read_dir(target.parent().unwrap()).unwrap().any(
+                                    |entry| {
+                                        entry
+                                            .unwrap()
+                                            .file_name()
+                                            .to_string_lossy()
+                                            .starts_with(".fleet-publication-")
+                                    }
+                                ));
+                            }
                             return Err("AUTHORITY_EXPIRED");
                         }
                     }
@@ -173,6 +185,14 @@ fn authority_lapsing_after_each_kit_file_leaves_only_that_prefix() {
             })
         );
         assert_eq!(written.get(), count);
+        let receipts: Value =
+            serde_json::from_slice(&std::fs::read(f.journal(&plan)).unwrap()).unwrap();
+        for receipt in &receipts["receipts"].as_array().unwrap()[..count] {
+            assert_eq!(
+                receipt["state"], "published",
+                "evidence may finish after expiry"
+            );
+        }
         for (i, out) in plan.outputs.iter().enumerate() {
             assert_eq!(
                 std::fs::read(f.path(out.artifact)).ok(),
@@ -180,6 +200,34 @@ fn authority_lapsing_after_each_kit_file_leaves_only_that_prefix() {
             );
         }
     }
+}
+
+#[test]
+fn expiry_after_pointer_allows_final_evidence_without_more_effects() {
+    let mut f = Fixture::new();
+    let plan = build(&f.input).unwrap();
+    let expired = Cell::new(false);
+    f.publisher()
+        .publish_authorized(
+            &plan,
+            &mut f.native,
+            &mut |_, _| {
+                if expired.get() {
+                    Err("EXPIRED")
+                } else {
+                    Ok(())
+                }
+            },
+            &mut |b, _| {
+                if b == Boundary::AfterPointer {
+                    expired.set(true);
+                }
+                Ok(())
+            },
+        )
+        .unwrap();
+    assert!(expired.get());
+    f.finished(&plan);
 }
 
 #[test]
@@ -463,6 +511,64 @@ fn frozen_plan_reloads_original_inputs_even_after_partial_publication() {
 }
 
 #[test]
+fn frozen_plan_preserves_owned_before_bytes_and_is_create_only() {
+    let mut f = Fixture::new();
+    let first = build(&f.input).unwrap();
+    f.publish(&first).unwrap();
+    capture(&mut f);
+    f.input.label = "Next owned review".into();
+    f.input.preferences.bat_windows = true;
+    let plan = build(&f.input).unwrap();
+    let frozen = f.publisher().export_plan(&plan, &mut f.native).unwrap();
+    let path = f
+        .root
+        .join("native/fleet-publication-plans")
+        .join(format!("{}.json", frozen.review_digest));
+    let before = std::fs::read(&path).unwrap();
+    let modified = std::fs::metadata(&path).unwrap().modified().unwrap();
+    let document: Value = serde_json::from_slice(&before).unwrap();
+    assert_eq!(document["input"]["existing"].as_object().unwrap().len(), 4);
+    assert_eq!(document["input"]["ssh_source"], json!(f.input.ssh_source));
+    let recovered = f
+        .publisher()
+        .load_plan(&frozen, &f.input.owner, &mut f.native)
+        .unwrap();
+    assert_eq!(recovered, plan);
+    assert_eq!(
+        f.publisher().export_plan(&plan, &mut f.native).unwrap(),
+        frozen
+    );
+    assert_eq!(
+        std::fs::metadata(&path).unwrap().modified().unwrap(),
+        modified
+    );
+    let mut changed = before.clone();
+    changed.push(b' ');
+    std::fs::write(&path, &changed).unwrap();
+    assert_eq!(
+        f.publisher()
+            .load_plan(&frozen, &f.input.owner, &mut f.native),
+        Err(Error::InvalidPlan)
+    );
+    assert_eq!(
+        f.publisher().export_plan(&plan, &mut f.native),
+        Err(Error::ReceiptConflict)
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), changed);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let metadata = std::fs::metadata(&path).unwrap();
+        assert_eq!(metadata.mode() & 0o777, 0o600);
+        assert_eq!(metadata.uid(), unsafe { libc::geteuid() });
+        assert_eq!(
+            std::fs::metadata(path.parent().unwrap()).unwrap().mode() & 0o777,
+            0o700
+        );
+    }
+}
+
+#[test]
 fn frozen_plan_tampering_version_missing_input_and_size_refuse() {
     for tamper in ["input", "version", "missing", "outputs", "size", "digest"] {
         let mut f = Fixture::new();
@@ -590,7 +696,7 @@ fn windows_abandonment_directories_have_protected_dacl() {
             unsafe { GetSecurityDescriptorControl(descriptor, &mut control, &mut revision) },
             0
         );
-        assert_ne!(control & SE_DACL_PROTECTED as u16, 0);
+        assert_ne!(control & SE_DACL_PROTECTED, 0);
         unsafe {
             LocalFree(descriptor);
         }
