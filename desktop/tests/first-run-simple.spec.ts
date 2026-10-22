@@ -1,8 +1,8 @@
 import {test, expect} from '@playwright/test';
-import {managedSetupFixture, applySetupReview} from './managed-setup-fixture.ts';
+import {managedSetupFixture, reviewSetupConnection, expectLegacyProfileFallback, applySetupReview} from './managed-setup-fixture.ts';
 for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test.describe(`${locale} ${native ? 'native' : 'web'} simple setup`, () => {
   test.use({locale});
-  const automatic = locale === 'en' ? 'Review connection' : '預覽連線';
+  const automatic = locale === 'en' ? 'Find profiles and workspaces' : '尋找設定檔與工作區';
   test('review then Apply uses a saved connection with safe defaults and no technical fields', async ({page}) => {
     const state = await managedSetupFixture(page, native, locale); await page.goto('/dashboard/');
     await expect(page.locator('[data-language-switch]')).toBeVisible();
@@ -11,7 +11,7 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test.d
     await page.locator('[data-setup-host] input[type=checkbox]').evaluateAll((nodes: HTMLInputElement[]) => {for (const node of nodes) node.checked = true;});
     for (const field of ['host', 'url', 'fingerprint', 'bat_secret', 'ssh_alias', 'managed_roots', 'connection_url'])
       await expect(page.locator(`[data-setup-field=${field}]`)).toBeHidden();
-    await page.getByRole('button', {name: automatic, exact: true}).click(); await applySetupReview(page);
+    await reviewSetupConnection(page,locale); await applySetupReview(page);
     await expect(page.locator('[data-setup-sessions]')).toBeVisible();
     await expect(page.locator('[data-setup-progress]')).toHaveText(locale === 'en' ? 'Setup is complete. You’re ready to go.' : '設定完成，可以開始使用了。');
     expect(state.posts).toHaveLength(1); expect(state.staged).toEqual([]);
@@ -37,7 +37,7 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test.d
     await expect(input).toHaveValue('');
     await expect(copy.locator('[role=status]')).toBeVisible();
     expect(state.staged).toEqual([]);
-    await copy.locator('button').click(); await applySetupReview(page); await expect(page.locator('[data-setup-sessions]')).toBeVisible();
+    await copy.locator('button').click(); await expect(page.locator('[data-setup-discovered-profile]')).toHaveValue('default'); await reviewSetupConnection(page,locale); await applySetupReview(page); await expect(page.locator('[data-setup-sessions]')).toBeVisible();
     expect(state.posts).toHaveLength(1); expect(state.staged).toHaveLength(1);
     expect(state.posts[0].body.params.url).toBe('wss://demo.example:9876');
     expect(await page.evaluate(() => JSON.stringify({...localStorage, ...sessionStorage}))).not.toMatch(/synthetic.*secret|token=/);
@@ -50,15 +50,15 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test.d
     await page.goto('/dashboard/'); await page.getByRole('button', {name: automatic, exact: true}).click();
     expect(state.posts).toEqual([]);
     await expect(page.locator('[data-setup-simple] label').filter({has: page.locator('select')})).toContainText(locale === 'en'
-      ? 'Choose the one you want, then select Review connection.' : '請選擇要使用的連線，再按「預覽連線」。');
+      ? 'Choose the one you want, then select Find profiles and workspaces.' : '請選擇要使用的連線，再按「尋找設定檔與工作區」。');
     await page.locator('[data-setup-simple] select').selectOption('two');
-    await page.getByRole('button', {name: automatic, exact: true}).click(); await applySetupReview(page);
+    await reviewSetupConnection(page,locale); await applySetupReview(page);
     await expect(page.locator('[data-setup-sessions]')).toBeVisible();
     expect(state.posts[0].body.params.import_profile_id).toBe('two');
   });
   test('automatic setup recovers an uncertain result using the exact original request', async ({page}) => {
     const state = await managedSetupFixture(page, native, locale); state.lost = true;
-    await page.goto('/dashboard/'); await page.getByRole('button', {name: automatic, exact: true}).click(); await applySetupReview(page);
+    await page.goto('/dashboard/'); await reviewSetupConnection(page,locale); await applySetupReview(page);
     await expect(page.locator('[data-error-summary]')).toHaveText(locale === 'en' ? 'This request could not be completed. Check Details.' : '無法完成此要求，請查看詳細資料。');
     const original = structuredClone(state.posts[0]);
     await page.reload(); await expect(page.getByRole('button', {name: automatic, exact: true})).toBeDisabled();
@@ -71,10 +71,10 @@ for (const language of ['zh-TW', 'zh-Hant', 'zh-HK', 'zh-MO', 'zh-CN', 'en-US'])
   await managedSetupFixture(page, false, null); await page.goto('/dashboard/');
   const zh = ['zh-TW', 'zh-Hant', 'zh-HK', 'zh-MO'].includes(language);
   const switcher = page.locator('[data-language-switch]');
-  await expect(page.getByRole('button', {name: zh ? '預覽連線' : 'Review connection', exact: true})).toBeVisible();
+  await expect(page.getByRole('button', {name: zh ? '尋找設定檔與工作區' : 'Find profiles and workspaces', exact: true})).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('batc.lang'))).toBe(zh ? 'zh-TW' : 'en');
   await switcher.getByRole('button', {name: zh ? 'English' : '繁體中文', exact: true}).click();
-  await expect(page.getByRole('button', {name: zh ? 'Review connection' : '預覽連線', exact: true})).toBeVisible();
+  await expect(page.getByRole('button', {name: zh ? 'Find profiles and workspaces' : '尋找設定檔與工作區', exact: true})).toBeVisible();
   await expect(page.locator('.workspace-nav-heading strong')).toHaveText(zh ? 'Projects' : '專案');
   await page.reload();
   await expect(switcher.getByRole('button', {name: zh ? 'English' : '繁體中文', exact: true})).toHaveAttribute('aria-pressed', 'true');
@@ -118,4 +118,8 @@ test('managed setup validation uses the chosen language even with an English bro
   await verification.locator('button[type=submit]').click();
   expect(await verification.locator('[data-setup-field=verification_timeout]').evaluate((node: HTMLInputElement) => node.validationMessage)).toBe('輸入內容不符合要求，請檢查欄位。');
   expect(state.posts).toEqual([]); expect(state.staged).toEqual([]);
+});
+
+for (const locale of ['en', 'zh-TW']) test(`${locale} older Connector keeps the typed profile fallback`, async ({page}) => {
+  await expectLegacyProfileFallback(page, locale);
 });

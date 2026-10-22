@@ -177,5 +177,64 @@
         ]
       }
     }
+  },
+  "existing": {
+    "request": {
+      "action": "setup.host",
+      "target": {
+        "host": "bat"
+      },
+      "params": {
+        "url": "wss://host-a.example.invalid:9876",
+        "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "profile_id": "default",
+        "writes": false,
+        "orchestrate": false,
+        "shared_clone_worktrees": false,
+        "managed_roots": [
+          "/srv/new-managed"
+        ]
+      },
+      "preconditions": {
+        "config_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "preview": {
+      "contract_version": 1,
+      "action": "setup.host",
+      "target": {
+        "host": "bat"
+      },
+      "config_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "after_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "review_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "changes": [
+        {
+          "field": "managed_roots",
+          "before": [],
+          "after": [
+            "/srv/new-managed"
+          ]
+        }
+      ],
+      "source": {
+        "kind": "existing_connection",
+        "reference": "bat",
+        "available": true
+      },
+      "warnings": [
+        "READ_ONLY_VERIFICATION_ON_APPLY"
+      ],
+      "effects": {
+        "configuration_written": false,
+        "operation_created": false,
+        "probe_started": false,
+        "credential_staged": false,
+        "on_apply": [
+          "read_only_verification",
+          "save_configuration"
+        ]
+      }
+    }
   }
 }

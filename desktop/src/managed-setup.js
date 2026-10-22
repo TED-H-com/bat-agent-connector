@@ -71,6 +71,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   let saved = {}, snapshot = null, busy = false, disposed = false, operation = null, readSerial = 0, readReady = false, hostDisclosureReady = false;
   const stagedSecrets = new Map(); // Principal/kind-bound references expire centrally after one hour.
   let review = null, reviewing = false, reviewSerial = 0, reviewChanged = false;
+  let discovery = null, discovering = false, discoverySerial = 0, secretTimer;
   try { saved = JSON.parse(localStorage.getItem(key) || "{}"); } catch { /* fresh draft */ }
   if (!saved || typeof saved !== "object" || Array.isArray(saved)) saved = {};
   // Old clients stored these codes as refusals without retaining admission proof.
@@ -138,6 +139,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     node.addEventListener("input", () => {
       if (!alive() || saved.intent || busy) return;
       if (!name.startsWith('verification_') && !['repository', 'repository_host', 'workspace_id', 'remote_url', 'github_secret'].includes(name)) invalidateReview();
+      if (['url', 'fingerprint', 'connection_url', 'bat_secret'].includes(name)) invalidateDiscovery();
       if (name === 'bat_secret') stagedSecrets.delete('host');
       if (['url', 'fingerprint', 'connection_url'].includes(name)) clearPasteRead();
       if (name.startsWith("verification_")) seedVerificationBase();
@@ -180,7 +182,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     h('span', {}, t('setup_profile')), profile, profilesError);
   profile.addEventListener("change", () => {
     if (!alive() || saved.intent) return;
-    invalidateReview(); stagedSecrets.delete('host');
+    invalidateDiscovery(); stagedSecrets.delete('host');
     const selected = snapshot?.profiles?.find(row => row.id === profile.value);
     if (selected) clearPasteRead();
     saved.import_profile_id = selected?.id || "";
@@ -200,11 +202,15 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   const hostForm = h("form", {novalidate: true, "data-setup-host": "", onsubmit: event => {event.preventDefault(); run("host");}},
     h('div', {class: 'capture-fields'}, input('connection_url', 'setup_connection_url', {type: 'password', hint: 'setup_connection_url_hint'})),
     h('div', {class: 'capture-fields'}, input("host", "setup_host_name", {required: true, maxlength: 64, hint: 'setup_host_hint'})), manual,
+    h('button', {type: 'button', class: 'secondary', 'data-setup-discover': '', hidden: true,
+      onclick: () => findSources().catch(showError)}, t('setup_discover')),
+    h('p', {class: 'note', hidden: true, 'data-setup-discovery-reason': ''}),
     h("details", {}, h("summary", {}, t("setup_managed_work")),
       checkbox("writes", "setup_allow_messages"), checkbox("orchestrate", "setup_allow_start"),
       checkbox("shared_clone_worktrees", "setup_shared_clone"), h("p", {class: "muted"}, t("setup_shared_clone_help")),
       h("div", {class: "capture-fields"}, input("managed_roots", "setup_managed_roots"), input("ssh_alias", "setup_ssh_alias")),
       h("p", {class: "muted"}, t("setup_roots_help"))),
+    h('p', {class: 'note', hidden: true, 'data-setup-review-reason': ''}),
     h("button", {type: "submit", class: "primary"}, t("setup_review_connection")));
   const repoForm = h("form", {novalidate: true, "data-setup-repository": "", onsubmit: event => {event.preventDefault(); run("repository");}},
     h("h3", {}, t("setup_repository_title")), h("p", {class: "muted"}, t("setup_repository_help")),
@@ -267,7 +273,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   const connectionChoice = h('select', {'aria-label': t('setup_connection_choice')});
   connectionChoice.addEventListener('change', () => {
     if (!alive() || busy || saved.intent) return;
-    invalidateReview();
+    invalidateDiscovery();
     stagedSecrets.delete('host'); fields.get('bat_secret').value = '';
     saved.import_profile_id = '';
     try {persist();} catch (error) {showError(error, {sourceRefresh:false});}
@@ -297,7 +303,9 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     copyError.hidden = copyReady;
     copyError.textContent = copyReady ? '' : t('setup_invalid_connection_url');
     if (!copyReady || !alive() || busy || saved.intent || !readReady) return;
-    copyReady = false; copyRead.hidden = true; void run('host', true);
+    copyReady = false; copyRead.hidden = true;
+    if (snapshot.discovery_contract_version === 1) void findSources().catch(showError);
+    else void run('host', true);
   }}, h('p', {id: 'setup-copy-help'}, t('setup_copy_help')),
     h('label', {class: 'setup-field'}, t('setup_copy_label'), copyInput), copyError, copyRead,
     h('button', {type: 'submit', class: 'primary'}, t('setup_continue')));
@@ -309,9 +317,19 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     h("details", {}, h("summary", {}, t("setup_verification_title")), verificationForm));
   const applyReview = h('button', {type: 'button', class: 'primary', onclick: () => applyConnectionReview()}, t('setup_apply_connection'));
   const reviewBox = h('section', {hidden: true, 'data-setup-review': '', 'aria-label': t('setup_review_connection')});
+  const discoveredProfile = h('select', {'aria-label': t('setup_discovered_profile'), 'data-setup-discovered-profile': ''});
+  discoveredProfile.addEventListener('change', () => {
+    if (!alive() || busy || saved.intent || discovering) return;
+    invalidateReview();
+    void findSources(discoveredProfile.value).catch(showError);
+  });
+  const discoveredWorkspaces = h('div', {'data-setup-discovered-workspaces': ''});
+  const discoveryBox = h('section', {hidden: true, 'data-setup-discovery': ''},
+    h('label', {class: 'setup-field'}, t('setup_discovered_profile'), discoveredProfile),
+    h('p', {class: 'muted'}, t('setup_discovery_read')), discoveredWorkspaces);
   const box = h("section", {class: "panel ui-section-card managed-setup", "data-managed-setup": ""},
     h('header', {}, h("h2", {}, t("setup_title"), " ", unsaved)),
-    simple, automaticStatus, reviewBox, connectionStatus, actions, message, receipt,
+    simple, automaticStatus, discoveryBox, reviewBox, connectionStatus, actions, message, receipt,
     advanced,
     h('details', {'data-setup-details': ''}, h('summary', {}, t('global_details')), summary,
       operationReceipt, h('p', {}, t('setup_resume_help'))));
@@ -325,7 +343,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     fields.get('host').value = saved.host = name;
   }
   function applyConnection(parsed) {
-    invalidateReview();
+    invalidateDiscovery();
     fields.get('connection_url').value = '';
     for (const [name, value] of Object.entries({url: parsed.endpoint, fingerprint: parsed.fingerprint, bat_secret: parsed.token})) {
       fields.get(name).value = value; fieldError(name, null);
@@ -354,7 +372,9 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       saved.import_profile_id = selected.id; profile.value = selected.id;
       for (const name of ['url', 'fingerprint', 'profile_id']) fields.get(name).value = saved[name] = selected[name] || '';
     }
-    defaultHost(); persist(); await run('host', true);
+    defaultHost(); persist();
+    if (snapshot.discovery_contract_version === 1 && !discovery?.profile_id) await findSources();
+    else await run('host', true);
   }
   function suggestLocal() {
     if (!snapshot || snapshot.hosts?.length !== 0 || fields.get('host').value) return;
@@ -384,8 +404,83 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   const usableSecret = kind => {
     const secret = stagedSecrets.get(kind);
     if (secret && secret.expiresAt > Date.now()) return secret.ref;
-    stagedSecrets.delete(kind); return null;
+    stagedSecrets.delete(kind);
+    if (secret && kind === 'host') invalidateDiscovery();
+    return null;
   };
+  function invalidateDiscovery() {
+    discoverySerial++; discovery = null;
+    clearTimeout(secretTimer);
+    invalidateReview();
+    if (typeof discoveryBox !== 'undefined') {discoveryBox.hidden = true; update();}
+  }
+  const hasFreshCredential = () => !!fields.get('bat_secret').value || (stagedSecrets.get('host')?.expiresAt || 0) > Date.now();
+  const configuredHost = () => snapshot?.hosts?.find(row => row.name === fields.get('host').value.trim());
+  const profileId = () => fields.get('profile_id').value.trim() || configuredHost()?.profile_id || 'default';
+  function reuseExistingConnection() {
+    const host = configuredHost();
+    return !!host?.token_available && !saved.import_profile_id && !hasFreshCredential() &&
+      host.url?.replace(/\/$/, '') === fields.get('url').value.trim().replace(/\/$/, '') &&
+      normalizeSetupFingerprint(host.fingerprint || '') === normalizeSetupFingerprint(fields.get('fingerprint').value) &&
+      (host.profile_id || 'default') === profileId();
+  }
+  const needsDiscovery = () => snapshot?.discovery_contract_version === 1 && !reuseExistingConnection() && !discovery?.profile_id;
+  const discoveryReason = () => configuredHost() && !hasFreshCredential() ? 'setup_profile_token_required' : 'setup_discovery_required';
+  async function findSources(selected) {
+    if (!alive() || busy || reviewing || discovering || saved.intent || !readReady || snapshot?.busy || !allowed('host') || snapshot.discovery_contract_version !== 1) return;
+    defaultHost();
+    if (configuredHost() && !hasFreshCredential()) {
+      showError(Error(t('setup_profile_token_required')), {sourceRefresh: false}); return;
+    }
+    if (!validateHost(undefined, true)) return;
+    const serial = ++discoverySerial;
+    invalidateReview(); discovering = true; update(); message.replaceChildren();
+    try {
+      const tokenField = fields.get('bat_secret');
+      let ref = usableSecret('host');
+      if (tokenField.value) {
+        const result = await api('POST', '/managed/setup/secrets', {kind: 'bat', value: tokenField.value}); guard();
+        if (serial !== discoverySerial) return;
+        ref = result.secret_ref; tokenField.value = '';
+        stagedSecrets.set('host', {ref, expiresAt: Date.now() + 3600 * 1000});
+        fieldHint('bat_secret', t('setup_secret_staged'));
+      }
+      const body = {revision: snapshot.revision, ...(saved.import_profile_id && !ref
+        ? {import_profile_id: saved.import_profile_id} : {url: fields.get('url').value.trim(), fingerprint: fields.get('fingerprint').value.trim(), secret_ref: ref}),
+        ...(selected ? {profile_id: selected} : {})};
+      const result = await api('POST', '/managed/setup/discover', body); guard();
+      if (serial !== discoverySerial || body.revision !== snapshot?.revision) return;
+      const row = (value, keys) => object(value) && Object.keys(value).length === keys.length &&
+        keys.every(key => typeof value[key] === 'string' && value[key].length > 0 && value[key].length <= 256 &&
+          value[key] === value[key].trim() && !/[\x00-\x1f]/.test(value[key]));
+      if (!result.source || !/^[a-f0-9]{64}$/.test(result.source.source_digest) || !Array.isArray(result.profiles) ||
+          result.profiles.length > 200 || !Array.isArray(result.workspaces) || result.workspaces.length > 200 ||
+          !result.profiles.every(value => row(value, ['id', 'name'])) ||
+          !result.workspaces.every(value => row(value, ['workspace_id', 'name'])) ||
+          result.profile_id !== null && !result.profiles.some(row => row.id === result.profile_id)) throw Error(t('setup_receipt_mismatch'));
+      discovery = result;
+      discoveredProfile.replaceChildren(h('option', {value: ''}, t('setup_choose_profile')),
+        ...result.profiles.map(row => h('option', {value: row.id}, `${row.name} · ${row.id}`)));
+      discoveredProfile.value = result.profile_id || '';
+      fields.get('profile_id').value = saved.profile_id = result.profile_id || '';
+      discoveredWorkspaces.replaceChildren(...result.workspaces.map(row => h('button', {type: 'button', class: 'secondary', onclick: () => {
+        if (!alive() || busy || saved.intent) return;
+        fields.get('workspace_id').value = saved.workspace_id = row.workspace_id; persist(); unsaved.hidden = false;
+      }}, `${row.name} · ${row.workspace_id}`)));
+      discoveryBox.hidden = false; persist();
+      clearTimeout(secretTimer);
+      const secret = stagedSecrets.get('host');
+      if (secret) secretTimer = setTimeout(() => {
+        if (!alive()) return;
+        stagedSecrets.delete('host'); invalidateDiscovery(); fieldHint('bat_secret', t('setup_paste_token_again'));
+      }, Math.max(0, secret.expiresAt - Date.now()));
+    } catch (error) {
+      if (serial !== discoverySerial) return;
+      invalidateDiscovery();
+      if (error.code === 'INVALID_SECRET') {stagedSecrets.delete('host'); fieldHint('bat_secret', t('setup_paste_token_again'));}
+      showError(error, {sourceRefresh: false});
+    } finally {discovering = false; if (alive()) update();}
+  }
   function validateHost(only, defaults = false) {
     const value = name => fields.get(name).value.trim(), faults = {};
     if (fields.get('connection_url').value) faults.connection_url = 'setup_invalid_connection_url';
@@ -409,7 +504,9 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   function showError(error, options) {if (alive()) {
     const codeKey = `error_code_${error?.code}`;
     const summary = error?.code && t(codeKey) !== codeKey ? t(codeKey)
-      : [t('setup_verification_invalid'), t('setup_receipt_mismatch')].includes(error?.message) ? error.message : t('error_generic');
+      : ['setup_verification_invalid', 'setup_receipt_mismatch', 'setup_discovery_required', 'setup_profile_token_required',
+        'setup_scope_required', 'setup_busy', 'setup_loading', 'setup_uncertain', 'setup_review_unsupported'].some(key => t(key) === error?.message)
+        ? error.message : t('error_generic');
     message.replaceChildren(errorBox(error, {summary, ...options, within:message})); update();
   }}
   function update() {
@@ -422,11 +519,24 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       scope.hidden = !!allowed(kind);
     }
     const supported = snapshot?.preview_contract_version === 1;
-    hostForm.querySelector('button[type=submit]').disabled ||= !supported || reviewing;
-    automaticButton.disabled = !!locked || !allowed('host') || !supported || reviewing;
+    const discoverySupported = snapshot?.discovery_contract_version === 1;
+    fields.get('profile_id').closest('label').hidden = discoverySupported;
+    const find = hostForm.querySelector('[data-setup-discover]'); find.hidden = !discoverySupported;
+    find.disabled ||= discovering || reviewing || !!configuredHost() && !hasFreshCredential();
+    const tokenReason = hostForm.querySelector('[data-setup-discovery-reason]');
+    tokenReason.hidden = !discoverySupported || !configuredHost() || hasFreshCredential();
+    tokenReason.textContent = t('setup_profile_token_required');
+    const reviewReason = hostForm.querySelector('[data-setup-review-reason]');
+    reviewReason.hidden = !needsDiscovery(); reviewReason.textContent = t(discoveryReason());
+    hostForm.querySelector('button[type=submit]').disabled ||= !supported || reviewing || discovering || needsDiscovery();
+    automaticButton.textContent = t(discoverySupported && !discovery?.profile_id ? 'setup_discover' : 'setup_review_connection');
+    automaticButton.disabled = !!locked || !allowed('host') || !supported || reviewing || discovering;
+    discoveredProfile.disabled = !!locked || discovering;
+    for (const button of discoveredWorkspaces.querySelectorAll('button')) button.disabled = !!locked || discovering;
     automaticButton.hidden = !!review;
     for (const field of copyForm.querySelectorAll('input,button')) field.disabled = !!locked || !allowed('host');
-    copyForm.querySelector('button').disabled ||= !supported || reviewing;
+    copyForm.querySelector('button').disabled ||= !supported || reviewing || discovering;
+    copyForm.querySelector('button').textContent = t(discoverySupported ? 'setup_discover' : 'setup_continue');
     connectionChoice.disabled = !!locked || !allowed('host');
     simple.hidden = !!snapshot?.hosts?.length;
     connectionStatus.hidden = !readReady;
@@ -457,7 +567,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   }
   function invalidateReview() {
     reviewSerial++;
-    reviewChanged = !!review || reviewing;
+    reviewChanged ||= !!review || reviewing;
     review = null;
     if (typeof reviewBox !== 'undefined') {reviewBox.hidden = true; update();}
   }
@@ -478,6 +588,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       ? t(item ? 'setup_review_yes' : 'setup_review_no') : Array.isArray(item) ? item.join('; ') || t('setup_review_unset') : String(item);
     review = {request: structuredClone(request), digest: preview.review_digest}; reviewChanged = false;
     reviewBox.replaceChildren(h('h3', {}, t('setup_review_connection')),
+      request.params.profile_id ? h('p', {}, `${t('setup_workspace_profile')}: ${request.params.profile_id}`) : null,
       h('p', {}, t(`setup_review_source_${preview.source.kind}`, {reference: preview.source.reference})),
       h('p', {}, t(preview.source.available ? 'setup_review_source_available' : 'setup_review_source_unavailable')),
       preview.changes.length ? h('table', {}, h('thead', {}, h('tr', {}, ...['field', 'before', 'after'].map(key => h('th', {}, t(`setup_review_${key}`))))),
@@ -535,9 +646,12 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   }
   async function run(kind, defaults = false) {
     const form = kind === "host" ? hostForm : kind === "repository" ? repoForm : verificationForm;
-    if (!alive() || busy || reviewing || composing.size || !snapshot || !readReady || snapshot.busy || saved.intent || !allowed(kind) ||
-        kind === 'host' && snapshot.preview_contract_version !== 1 ||
-        kind === 'host' && !validateHost(undefined, defaults) || !setupFormValidity(form, t)) return;
+    const blocked = !allowed(kind) ? 'setup_scope_required' : saved.intent ? 'setup_uncertain'
+      : busy || reviewing || composing.size || snapshot?.busy ? 'setup_busy' : !snapshot || !readReady ? 'setup_loading'
+      : kind === 'host' && snapshot.preview_contract_version !== 1 ? 'setup_review_unsupported'
+      : kind === 'host' && needsDiscovery() ? discoveryReason() : null;
+    if (!alive() || blocked) {showError(Error(t(blocked || 'setup_loading')), {sourceRefresh:false}); return;}
+    if (kind === 'host' && !validateHost(undefined, defaults) || !setupFormValidity(form, t)) return; // Fields show the refusal.
     const serial = ++reviewSerial;
     if (kind === 'host') {reviewing = true; review = null; reviewChanged = false;} else busy = true;
     update(); message.replaceChildren();
@@ -561,7 +675,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       }
       const imported = kind === "host" && !secretRef && saved.import_profile_id;
       const params = kind === "host" ? {...(imported ? {import_profile_id: imported} :
-        {url: value("url"), fingerprint: value("fingerprint"), profile_id: value("profile_id") || "default"}),
+        {url: value("url"), fingerprint: value("fingerprint"), profile_id: profileId()}),
         writes: checked("writes"), orchestrate: checked("orchestrate"), shared_clone_worktrees: checked("shared_clone_worktrees"),
         managed_roots: defaults ? [] : value("managed_roots").split(/\r?\n|;/).map(item => item.trim()).filter(Boolean),
         ...(!defaults && value("ssh_alias") ? {ssh_alias: value("ssh_alias")} : {})}
@@ -572,6 +686,10 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
           timeout_s: Number(value("verification_timeout"))};
       if (kind === "verification" && !validVerification(params)) throw Error(t("setup_verification_invalid"));
       if (secretRef) params.secret_ref = secretRef;
+      if (kind === 'host' && snapshot.discovery_contract_version === 1 && !reuseExistingConnection()) {
+        params.profile_id = discovery.profile_id;
+        params.source_digest = discovery.source.source_digest;
+      }
       const request = {action: `setup.${kind}`,
         target: kind === "host" ? {host: value("host")} : kind === "repository" ? {repository: value("repository")} : {}, params,
         preconditions: {config_revision: kind === "verification" ? saved.verification_base?.revision || snapshot.revision : snapshot.revision}};
@@ -591,6 +709,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   }
   function handleSubmissionError(error, kind, options = {sourceRefresh:false}) {
     if (!alive()) return;
+    if (kind === 'host' && ['INVALID_SECRET', 'SETUP_REVIEW_CHANGED'].includes(error.code)) invalidateDiscovery();
     let field;
     if (saved.intent && !saved.intent.operation_id && error.admissionRefused === true) {
       const previous = saved.intent;
@@ -649,7 +768,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       }
       result.verification = {commands: {}, timeout_s: 600};
     }
-    if (snapshot && (snapshot.revision !== result.revision || !equal(snapshot.profiles, result.profiles) || result.preview_contract_version !== 1)) invalidateReview();
+    if (snapshot && (snapshot.revision !== result.revision || !equal(snapshot.profiles, result.profiles) || result.preview_contract_version !== 1 || snapshot.discovery_contract_version !== result.discovery_contract_version)) invalidateDiscovery();
     snapshot = result; readReady = true;
     if (!hostDisclosureReady) {hostDisclosure.open = !result.hosts?.length; hostDisclosureReady = true;}
     suggestLocal();
@@ -691,5 +810,5 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   }
   return {box, reload: () => refresh().catch(showError),
     async load() {try {await refresh(); if (saved.intent?.operation_id) await recover();} catch (error) {showError(error);}},
-    dispose() {copyInput.value = ""; disposed = true; stagedSecrets.clear(); for (const name of ['connection_url', "bat_secret", "github_secret"]) fields.get(name).value = "";}};
+    dispose() {copyInput.value = ""; disposed = true; clearTimeout(secretTimer); stagedSecrets.clear(); for (const name of ['connection_url', "bat_secret", "github_secret"]) fields.get(name).value = "";}};
 }

@@ -1,7 +1,9 @@
 import {test, expect, type Page} from '@playwright/test';
 import {readFileSync} from 'node:fs';
+import {discoverSetupProfiles, reviewSetupConnection} from './managed-setup-fixture.ts';
 import {attentionFixture} from './attention-fixture.ts';
 
+const discoveryGolden = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-setup-discovery.json', import.meta.url), 'utf8'));
 const golden = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-setup-preview.json', import.meta.url), 'utf8'));
 // Local until the event-delivery helper handoff is merged. Hold delivery, not clocks.
 async function reviewFixture(page: Page, native: boolean, locale: string) {
@@ -21,11 +23,12 @@ async function reviewFixture(page: Page, native: boolean, locale: string) {
       server_id: 'server-a', principal_id: 'person-a', checkpoint: {cursor: 0, token: 'checkpoint-a'}}}};
     if (path === '/events') {state.eventReads++; if (!state.primeEvents || state.eventReads > 1) await events; return {status: 200, data: {events: [], next_cursor: 0,
       has_more: false, head_cursor: 0, sync: {checkpoint: {cursor: 0, token: 'checkpoint-a'}}}};}
-    if (path === '/managed/setup') return {status: 200, data: {preview_contract_version: state.version,
+    if (path === '/managed/setup') return {status: 200, data: {preview_contract_version: state.version, discovery_contract_version:1,
       revision: state.revision, hosts: state.saved ? [{name: 'bat', url: 'wss://host-a.example.invalid:9876/', connection_status: 'checking'}] : [],
       repositories: [], profiles: [{id: 'profile-demo', name: 'host-a', url: 'wss://host-a.example.invalid:9876/',
         fingerprint: 'A'.repeat(64), profile_id: 'default', token_available: true}], profiles_error: null,
       verification: {commands: {}, timeout_s: 600}, busy: false}};
+    if (path === '/managed/setup/discover') return {status:200, data:structuredClone(discoveryGolden[input.body.import_profile_id ? 'imported' : 'default'].response)};
     if (path === '/managed/setup/preview') {
       state.previews.push(input);
       if (state.holdPreview) await new Promise<void>(resolve => {releasePreview = resolve;});
@@ -75,12 +78,12 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test.d
     const state = await reviewFixture(page, native, locale); state.lost = true;
     try {
       await page.goto('/dashboard/');
-      await page.getByRole('button', {name: review, exact: true}).first().click();
+      await reviewSetupConnection(page,locale);
       await expect(page.locator('[data-setup-review]')).toBeVisible();
       expect(state.previews).toHaveLength(1); expect(state.posts).toEqual([]); expect(state.staged).toEqual([]);
       await page.getByRole('button', {name: locale === 'en' ? 'Cancel' : '取消', exact: true}).click();
       expect(state.posts).toEqual([]);
-      await page.getByRole('button', {name: review, exact: true}).first().click();
+      await reviewSetupConnection(page,locale);
       await page.getByRole('button', {name: apply, exact: true}).click();
       await expect(page.locator('[data-error-summary]')).toBeVisible();
       expect(state.posts).toHaveLength(1);
@@ -97,7 +100,7 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test.d
     const state = await reviewFixture(page, native, locale); state.holdPreview = true;
     try {
       await page.goto('/dashboard/');
-      await page.getByRole('button', {name: review, exact: true}).first().click();
+      await reviewSetupConnection(page,locale);
       await expect.poll(() => state.previews.length).toBe(1);
       await page.locator('[data-setup-advanced] > summary').click();
       await page.locator('[data-setup-field=host]').fill('host-b');
@@ -120,7 +123,7 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test.d
     const state = await reviewFixture(page, native, locale); state.mismatch = true;
     try {
       await page.goto('/dashboard/');
-      await page.getByRole('button', {name: review, exact: true}).first().click();
+      await reviewSetupConnection(page,locale);
       await page.getByRole('button', {name: apply, exact: true}).click();
       await expect(page.locator('[data-error-summary]')).toContainText(locale === 'en'
         ? 'The receipt does not match the original configuration request.' : '回執與原設定請求不一致。');
@@ -138,16 +141,17 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test.d
     try {
       await page.goto('/dashboard/');
       await expect.poll(() => state.eventReads).toBe(2);
+      await discoverSetupProfiles(page,locale);
       await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true})));
       await expect(page.getByRole('button', {name: review, exact: true}).first()).toBeEnabled();
-      await page.getByRole('button', {name: review, exact: true}).first().click();
+      await reviewSetupConnection(page,locale);
       await page.locator('details:has(> [data-error-details]) > summary').click();
       await expect(page.locator('[data-error-details] code')).toHaveText('CLIENT_ACTION_VIEW_NOT_READY');
       expect(state.previews).toEqual([]); expect(state.posts).toEqual([]);
       expect(await page.evaluate(() => JSON.parse(localStorage.getItem(Object.keys(localStorage).find(key => key.startsWith('batc.managed.setup.'))!)!).host)).toBe('bat');
       state.releaseEvents();
       await expect.poll(() => state.eventReads).toBeGreaterThan(2);
-      await page.getByRole('button', {name: review, exact: true}).first().click();
+      await reviewSetupConnection(page,locale);
       await expect(page.getByRole('button', {name: apply, exact: true})).toBeVisible();
       expect(state.previews).toHaveLength(1); expect(state.posts).toEqual([]);
     } finally {state.releaseEvents();}
@@ -158,7 +162,7 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test.d
       await page.goto('/dashboard/');
       await page.locator('[data-setup-advanced] > summary').click();
       await page.locator('[data-setup-field=connection_url]').fill(`wss://host-a.example.invalid:9876?token=synthetic-bat-secret&fp=${'A'.repeat(64)}`);
-      await page.locator('[data-setup-host] button[type=submit]').click();
+      await reviewSetupConnection(page,locale);
       await expect(page.locator('[data-setup-review]')).toContainText(locale === 'en' ? 'already staged' : '已先存入');
       expect(state.staged).toHaveLength(1); expect(state.posts).toEqual([]);
       expect(await page.locator('[data-managed-setup]').innerText()).not.toMatch(/synthetic-bat-secret|token=/);
@@ -173,7 +177,7 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test.d
     const state = await reviewFixture(page, native, locale);
     try {
       await page.goto('/dashboard/');
-      await page.getByRole('button', {name: review, exact: true}).first().click();
+      await reviewSetupConnection(page,locale);
       await expect(page.getByRole('button', {name: apply, exact: true})).toBeVisible();
       state.revision = 'd'.repeat(64);
       await page.locator('#main > .ui-page-header').getByRole('button', {name: locale === 'en' ? 'Refresh' : '重新整理', exact: true}).click();
