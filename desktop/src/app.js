@@ -621,7 +621,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
   const box = h("div", {class: "attachments", hidden: !supported}, nativeFiles ? h("div", {class: "actions"}, h("strong", {}, t("attachments")), choose) : h("label", {}, t("attachments"), choose),
     h("p", {class: "muted"}, t(nativeFiles ? "files_help" : "upload_on_choose")), rows, promptHint, status);
   const attachmentGate = requirements => clientActionGate({...state, manageAllowed: may("manage"),
-    attachmentsSupported: supported, uploadsAllowed: nativeUploadAllowed}, requirements);
+    attachmentsSupported: supported, uploadsAllowed: nativeUploadAllowed, nativeDesktop}, requirements);
   const refuseAttachment = reason => {
     if (!supported) {
       box.hidden = false;
@@ -847,7 +847,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
     }
     if (!imageCandidates.length) return;
     e.preventDefault();
-    const gate = attachmentGate({attachment: true, supported: true, manage: true, uploads: nativeFiles});
+    const gate = attachmentGate({attachment: true, paste: true, supported: true, manage: true, uploads: nativeFiles});
     if (!gate.allowed) {
       refuseAttachment(gate.reason);
       return;
@@ -1154,6 +1154,7 @@ async function refreshHealthCapabilities() {
 }
 function tickHealth() {
   if (document.hidden) return;
+  document.dispatchEvent(new Event('health-display-tick'));
   const verification = state.health?.capabilityRefresh;
   if (verification?.state === 'loading' && Date.now() - verification.startedAt >= 60_000) {
     verification.state = 'failed'; verification.reason = 'VERIFICATION_PENDING';

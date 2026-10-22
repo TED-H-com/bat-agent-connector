@@ -13,7 +13,7 @@
   "capabilities": {
     "managed_installation": {
       "installation_id": "fixture-installation",
-      "runtime_version": "0.2.12",
+      "runtime_version": "0.2.13",
       "background": true
     },
     "desktop_identity": {
@@ -27,9 +27,9 @@
     ],
     "api_version": 1,
     "contract_version": "2026-10-08",
-    "connector": "0.2.12",
+    "connector": "0.2.13",
     "build": {
-      "version": "0.2.12",
+      "version": "0.2.13",
       "commit": null,
       "source": "package"
     },

@@ -101,5 +101,18 @@ export function fleetStatus(row, {h, t, snapshot, readable, entry, detailsState,
   const helpKey = ['ready', 'identity', 'service', 'version'].includes(state) ? `${state}_${kind === 'connector' ? 'connector' : 'bat'}` : state;
   return h('div', {class: 'fleet-diagnosis', 'data-fleet-diagnosis': entry.name, 'data-fleet-state': state, 'data-freshness': fact.freshness},
     h('p', {class: 'fleet-diagnosis-title'}, healthLabel(fact, t)),
-    h('p', {class: 'muted'}, t('fleet_check_help_' + helpKey)), details);
+    h('p', {class: 'muted'}, t('fleet_check_help_' + helpKey)), details,
+    ...fleetRoute(row, {h, t, snapshot, readable, entry, now}));
+}
+
+// Route is an independent secondary fact. It cannot change diagnosis or steps,
+// and a down tunnel must not be accompanied by a reassuring last route.
+function fleetRoute(row, {h, t, snapshot, readable, entry, now}) {
+  const route = row?.route;
+  if (!route || !['direct', 'lan', 'cf', 'configured'].includes(route.kind)
+    || !readable || row.selected !== true || ['off', 'down'].includes(row.level)
+    || snapshot.monitor.state !== 'running' || snapshot.readiness.state === 'unavailable'
+    || snapshot.selection.applied_revision !== snapshot.selection.revision) return [];
+  const fact = displayFact({key: 'fleet_route_' + route.kind, observed_at: route.observed_at}, {now});
+  return [h('p', {class: 'muted', 'data-fleet-route': entry.name, 'data-freshness': fact.freshness}, healthLabel(fact, t))];
 }

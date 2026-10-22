@@ -26,7 +26,13 @@ from . import dashboard_sync, platform_files, service
 from .artifact_host import ArtifactHost
 from .client import BatClient
 from .config import git_transport, normalize_fingerprint, parse_config, tomllib
-from .connection_sources import SourceUnavailable, TokenMode, read_token_store, select_profiles_directory
+from .connection_sources import (
+    SourceUnavailable,
+    TokenMode,
+    read_profile_index,
+    read_token_store,
+    select_profiles_directory,
+)
 from .errors import ConfigError, TokenUnavailable
 from .github import GitHubClient
 from .operations import RERUN, TERMINAL, ActionDef, NeedsAttention, OperationError, Uncertain
@@ -118,34 +124,17 @@ def _profiles(document):
         directory = _profile_directory(document)
     except SourceUnavailable as error:
         return [], str(error)
-    try:
-        path = directory / "index.json"
-        if path.is_symlink() or path.stat().st_size > MAX_CONFIG:
-            raise ValueError
-        index = json.loads(path.read_text())
-        profiles = index.get("profiles", [])
-        if not isinstance(profiles, list) or len(profiles) > 200:
-            raise ValueError
-    except (OSError, ValueError, AttributeError):
+    listing = read_profile_index(directory)
+    if listing.reason in {"PROFILE_INDEX_INVALID", "PROFILE_INDEX_UNAVAILABLE"}:
         return [], "BAT profiles are unavailable; enter the host and its trusted fingerprint"
     store = read_token_store(directory, mode=TokenMode.ADMISSION)
     result = []
-    for profile in profiles:
-        if not isinstance(profile, dict) or profile.get("type") != "remote":
-            continue
-        try:
-            ident = _text(profile.get("id"), "profile ID")
-            token = store.lookup(ident)
-            host = _text(profile.get("remoteHost"), "profile host")
-            host = f"[{host}]" if ":" in host and not host.startswith("[") else host
-            result.append({"id": ident, "name": _text(profile.get("name") or ident, "profile name"),
-                "url": _url(f"wss://{host}:{int(profile['remotePort'])}/"),
-                "fingerprint": normalize_fingerprint(_text(profile["remoteFingerprint"], "profile fingerprint", 200)),
-                "profile_id": _text(profile.get("remoteProfileId") or "default", "remote profile ID"),
-                "token_available": token.state == "available",
-                "token_state": token.state})
-        except (ValueError, TypeError, KeyError, OperationError, ConfigError):
-            continue
+    for profile in listing.profiles:
+        token = store.lookup(profile["id"])
+        result.append({"id": profile["id"], "name": profile["name"],
+            "url": profile["endpoint"]["url"], "fingerprint": profile["fingerprint"],
+            "profile_id": profile["remote_profile_id"],
+            "token_available": token.state == "available", "token_state": token.state})
     return result, (None if result else "No complete remote BAT profiles were found")
 
 

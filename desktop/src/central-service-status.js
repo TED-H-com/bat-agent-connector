@@ -32,9 +32,10 @@ export function centralServiceStatus({token, pollHealth, online, managedRecovery
   return {key, tone, connection, recoveryKey};
 }
 
-// Requirements describe the checks each caller already made. Transport labels
-// explain a refusal; they never add a new requirement to an otherwise allowed action.
+// Requirements describe each caller’s action checks. Transport labels explain
+// refusals; native image paste has no upload path in the WebView.
 export function clientActionGate(facts, requirements) {
+  if (requirements.paste && facts.nativeDesktop) return {allowed: false, reason: 'native_paste_unsupported'};
   const ready = requirements.post || requirements.attachment;
   const blocked = (requirements.post && (!facts.token || facts.nativeBusy))
     || (ready && (!facts.online || !facts.viewReady))
@@ -55,7 +56,7 @@ export function clientActionGate(facts, requirements) {
 }
 
 const clientReasons = ['not_connected', 'connecting', ...Object.values(pollReasons), 'connection_changing',
-  'view_not_ready', 'manage_required', 'attachments_unavailable', 'uploads_not_allowed'];
+  'view_not_ready', 'manage_required', 'attachments_unavailable', 'uploads_not_allowed', 'native_paste_unsupported'];
 export const clientActionCode = reason => `CLIENT_ACTION_${reason.toUpperCase()}`;
 export const clientActionMessageKey = reason => `error_code_${clientActionCode(reason)}`;
 export const clientActionReason = code => clientReasons.find(reason => clientActionCode(reason) === code) || null;

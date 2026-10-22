@@ -73,14 +73,72 @@ for (const locale of ['en', 'zh-TW']) {
     assert.equal(view.attrs['data-fleet-state'], 'stale');
     assert.equal(view.attrs['data-freshness'], 'stale');
   });
-  test(`Work producer has no per-capability validity; reported values and reasons remain unchanged ${locale}`, () => {
+  test(`Work observation expires at its producer deadline; undeclared values stay plain ${locale}`, () => {
     for (const body of Object.values(profiles.cases) as any[]) for (const state of Object.values(body.states) as any[]) {
-      const facts = profileStateFacts(state);
-      assert.equal(t(facts.valueKey), labels.values[state.value]);
-      assert.equal(facts.reasonCode, state.reason);
-      assert.equal(Object.hasOwn(state, 'valid_until'), false);
+      for (const now of [1790000540000, 1790000720000, 1790100720000]) {
+        const facts = profileStateFacts(state, {now});
+        assert.equal(facts.reasonCode, state.reason);
+        if (!state.valid_until) assert.equal(facts.fact ? healthLabel(facts.fact, t) : t(facts.valueKey), labels.values[state.value]);
+      }
+    }
+    const state = profiles.cases.owned_execution.states.can_observe;
+    const text = now => {const facts = profileStateFacts(state, {now}); return facts.fact ? healthLabel(facts.fact, t) : t(facts.valueKey);};
+    assert.equal(text(1790000540000), labels.values.ready);
+    assert.equal(text(1790000719999), labels.values.ready);
+    assert.equal(text(1790000720000), locale === 'en' ? 'Ready · 3 min ago · Checking' : '已就緒 · 3 分鐘前 · 檢查中');
+  });
+  test(`Work unreachable dates the last attempt, not the older success ${locale}`, () => {
+    for (const key of ['can_observe', 'can_start_own']) {
+      const facts = profileStateFacts(profiles.cases.host_unreachable.states[key], {now:1790000900000});
+      assert.equal(healthLabel(facts.fact, t), locale === 'en'
+        ? 'Unavailable · Last attempt: 1 min ago; host unreachable, last successful observation is stale'
+        : '不可用 · 上次嘗試：1 分鐘前；無法連至主機，上次成功觀察已過期');
+      assert.equal(facts.reasonCode, 'host_unreachable');
+      assert.equal(profiles.cases.host_unreachable.states[key].observed_at, 1790000840);
+      assert.equal(profiles.cases.host_unreachable.states.can_observe.verified.observed_at, 1790000540);
+    }
+    const past = profileStateFacts(profiles.cases.owned_execution.states.last_verified_execution, {now:1791000600000});
+    assert.equal(past.fact, null); assert.equal(t(past.valueKey), labels.values.ready);
+  });
+  for (const scenario of ['host_unreachable', 'host_not_refreshed', 'owned_execution']) {
+    test(`Work unchanged renewal preserves per-reason wording: ${scenario} ${locale}`, () => {
+      const body = profiles.cases[scenario];
+      const now = scenario === 'owned_execution' ? 1790000720000 : body.observed_at * 1000;
+      const error = {code: 'OBSERVATION_NOT_RENEWED', unchangedDeadline: true};
+      const keys = scenario === 'owned_execution' ? ['can_observe', 'discovered'] : ['can_observe', 'can_start_own'];
+      const expected = locale === 'en' ? {
+        host_unreachable: 'Unavailable · Last attempt: 1 min ago; host unreachable, last successful observation is stale',
+        host_not_refreshed: 'Unavailable · 10 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)',
+        owned_execution: 'Ready · 3 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)',
+      } : {
+        host_unreachable: '不可用 · 上次嘗試：1 分鐘前；無法連至主機，上次成功觀察已過期',
+        host_not_refreshed: '不可用 · 10 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）',
+        owned_execution: '已就緒 · 3 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）',
+      };
+      for (const key of keys) {
+        const facts = profileStateFacts(body.states[key], {now, error});
+        assert.equal(healthLabel(facts.fact, t), expected[scenario]);
+        assert.equal(facts.reasonCode, body.states[key].reason);
+      }
+    });
+  }
+  test(`Work actual renewal errors override unreachable wording ${locale}`, () => {
+    // A real read error has no unchangedDeadline marker, even if its code happens
+    // to match the synthetic unchanged-renewal code.
+    for (const [code, expected] of locale === 'en' ? [
+      ['503', 'Unavailable · 1 min ago · Could not confirm (503)'],
+      ['OBSERVATION_NOT_RENEWED', 'Unavailable · 1 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)'],
+    ] : [
+      ['503', '不可用 · 1 分鐘前 · 無法確認（503）'],
+      ['OBSERVATION_NOT_RENEWED', '不可用 · 1 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）'],
+    ]) {
+      const facts = profileStateFacts(profiles.cases.host_unreachable.states.can_observe,
+        {now: 1790000900000, error: {code}});
+      assert.equal(healthLabel(facts.fact, t), expected);
+      assert.equal(facts.reasonCode, 'host_unreachable');
     }
   });
+
 }
 
 test('reachable Connector does not supply an unavailable Work capability or PM readiness', () => {
@@ -139,14 +197,14 @@ test('unconfirmed stop and unsupported version reasons survive display expiry', 
   }
 });
 
-test('Work retains its reported value and past verification while per-capability validity is absent', () => {
+test('Work validity is separate from past verification', () => {
   const body = profiles.cases.owned_execution, state = body.states.can_observe;
   const facts = profileStateFacts(state);
   assert.equal(facts.valueKey, 'wpf_ready');
   assert.equal(facts.lastSuccessAt, null); // The existing past section already shows this instant.
   assert.equal(facts.past.at, state.verified.observed_at);
-  assert.equal(Object.hasOwn(state, 'observed_at'), false);
-  assert.equal(Object.hasOwn(state, 'valid_until'), false);
+  assert.equal(Object.hasOwn(state, 'observed_at'), true);
+  assert.equal(Object.hasOwn(state, 'valid_until'), true);
 });
 
 test('Fleet expiry is per row, with no cross-host or cross-domain inference', () => {

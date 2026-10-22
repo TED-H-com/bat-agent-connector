@@ -1,6 +1,6 @@
 // Shared real picker renderer with producer profile/readiness inputs.
 import {expect} from '@playwright/test';
-export async function mountProfilePicker(page:any,body:any,profile:any,locale:string){
+export async function mountProfilePicker(page:any,body:any,profile:any,locale:string,onRead?: (route:any, count:number)=>Promise<void>){
   const reads:string[]=[],posts:string[]=[];
   await page.addInitScript(()=>{
     (window as any).__csp=[];
@@ -10,6 +10,7 @@ export async function mountProfilePicker(page:any,body:any,profile:any,locale:st
   await page.route('**/api/v1/**',async(route:any)=>{
     const request=route.request(),path=new URL(request.url()).pathname;reads.push(path);
     expect(request.method()).toBe('GET');
+    if(path.endsWith('/readiness')&&onRead){await onRead(route,reads.filter(path=>path.endsWith('/readiness')).length);return;}
     const data=path.endsWith('/readiness')?body:path.endsWith('/work-profiles')
       ?{profiles:[profile],count:1,default_profile_id:null,next_cursor:null}:profile;
     await route.fulfill({status:200,json:data});
@@ -23,11 +24,16 @@ export async function mountProfilePicker(page:any,body:any,profile:any,locale:st
     location.hash=`#/pm/${body.workspace_id}/board?select=wi_${'1'.repeat(20)}`;
     const picker=workProfilePicker({t,api:async(method,path)=>{
       if(method!=='GET')throw Error('Picker must only read');
-      const response=await fetch('/api/v1'+path);return response.json();
+      const response=await fetch('/api/v1'+path),data=await response.json();
+      if(!response.ok)throw Object.assign(Error(data.error?.message||'Read failed'),{status:response.status,code:data.error?.code});
+      return data;
     },alive:()=>{},namespace:'fixture',workspaceId:body.workspace_id,workId:'wi_'+'1'.repeat(20),
     caps:()=>({scopes:['observe'],features:{pm_workspaces:{work_profiles:{version:1,available:true}}}}),field,
     request:()=>({locked:()=>false,set:(_key,value)=>{field.value=value;},update:()=>{}}),active:()=>true,onChange:()=>{},
     errorBox:error=>h('p',{},String(error))});
+    (window as any).__profilePicker=picker;
+    // Mirror app.js's existing display-only clock in this isolated component mount.
+    setInterval(()=>{if(!document.hidden)document.dispatchEvent(new Event('health-display-tick'));},1000);
     document.getElementById('fixture')!.append(picker.box,field);await picker.load();
   },{body,locale});
   await page.locator('[data-work-profile-picker] select').selectOption(body.profile_id);

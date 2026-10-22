@@ -2176,6 +2176,7 @@ var init_ui_strings = __esmMin((() => {
 			error_code_CLIENT_ACTION_MANAGE_REQUIRED: "This attachment action needs Manage access. Ask the Connector administrator for Manage access, then try again.",
 			error_code_CLIENT_ACTION_ATTACHMENTS_UNAVAILABLE: "Attachments are unavailable on this connection. Ask the Connector administrator to check attachment support.",
 			error_code_CLIENT_ACTION_UPLOADS_NOT_ALLOWED: "Attachment uploads are not allowed on this connection. Ask the Connector administrator to allow uploads, then try again.",
+			error_code_CLIENT_ACTION_NATIVE_PASTE_UNSUPPORTED: "Image paste is not supported in the desktop app. Use Choose files, or Enable file drop and drop the file.",
 			ui_switch_workspace: "Switch workspace",
 			ui_new_workspace: "New workspace",
 			ui_report: "Report",
@@ -2281,6 +2282,7 @@ var init_ui_strings = __esmMin((() => {
 			error_code_CLIENT_ACTION_MANAGE_REQUIRED: "此附件操作需要管理權限。請向 Connector 管理員申請管理權限，再試一次。",
 			error_code_CLIENT_ACTION_ATTACHMENTS_UNAVAILABLE: "目前連線無法使用附件。請聯絡 Connector 管理員確認附件支援。",
 			error_code_CLIENT_ACTION_UPLOADS_NOT_ALLOWED: "目前連線未允許附件上傳。請聯絡 Connector 管理員開放上傳，再試一次。",
+			error_code_CLIENT_ACTION_NATIVE_PASTE_UNSUPPORTED: "桌面版不支援貼上圖片。請使用「選擇檔案」，或先「啟用拖放」再拖入檔案。",
 			ui_switch_workspace: "切換工作空間",
 			ui_new_workspace: "新增工作空間",
 			ui_report: "報告",
@@ -11509,6 +11511,10 @@ var init_i18n = __esmMin((() => {
 			fleet_start: "啟動連線監控",
 			fleet_quit: "停止本機連線監控",
 			fleet_status_details: "詳細資料",
+			fleet_route_direct: "路徑：Tailscale 直連",
+			fleet_route_lan: "路徑：區域網路",
+			fleet_route_cf: "路徑：Cloudflare",
+			fleet_route_configured: "路徑：已設定的 SSH",
 			fleet_monitor_running: "監控執行中",
 			fleet_monitor_stopped: "監控已停止",
 			fleet_ready: "就緒",
@@ -13250,6 +13256,10 @@ var init_i18n = __esmMin((() => {
 			fleet_start: "Start connection monitor",
 			fleet_quit: "Stop local connection monitor",
 			fleet_status_details: "Details",
+			fleet_route_direct: "Route: Tailscale direct",
+			fleet_route_lan: "Route: LAN",
+			fleet_route_cf: "Route: Cloudflare",
+			fleet_route_configured: "Route: Configured SSH",
 			fleet_monitor_running: "Monitor running",
 			fleet_monitor_stopped: "Monitor stopped",
 			fleet_ready: "Ready",
@@ -14107,6 +14117,10 @@ function centralServiceStatus({ token, pollHealth, online, managedRecovery }) {
 	};
 }
 function clientActionGate(facts, requirements) {
+	if (requirements.paste && facts.nativeDesktop) return {
+		allowed: false,
+		reason: "native_paste_unsupported"
+	};
 	const ready = requirements.post || requirements.attachment;
 	if (!(requirements.post && (!facts.token || facts.nativeBusy) || ready && (!facts.online || !facts.viewReady) || requirements.supported && !facts.attachmentsSupported || requirements.manage && !facts.manageAllowed || requirements.uploads && !facts.uploadsAllowed)) return {
 		allowed: true,
@@ -14126,7 +14140,8 @@ var clientReasons = [
 	"view_not_ready",
 	"manage_required",
 	"attachments_unavailable",
-	"uploads_not_allowed"
+	"uploads_not_allowed",
+	"native_paste_unsupported"
 ];
 var clientActionCode = (reason) => `CLIENT_ACTION_${reason.toUpperCase()}`;
 var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}`;
@@ -14434,7 +14449,32 @@ function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState, now =
 		"data-fleet-diagnosis": entry.name,
 		"data-fleet-state": state,
 		"data-freshness": fact.freshness
-	}, h("p", { class: "fleet-diagnosis-title" }, healthLabel(fact, t)), h("p", { class: "muted" }, t("fleet_check_help_" + helpKey)), details);
+	}, h("p", { class: "fleet-diagnosis-title" }, healthLabel(fact, t)), h("p", { class: "muted" }, t("fleet_check_help_" + helpKey)), details, ...fleetRoute(row, {
+		h,
+		t,
+		snapshot,
+		readable,
+		entry,
+		now
+	}));
+}
+function fleetRoute(row, { h, t, snapshot, readable, entry, now }) {
+	const route = row?.route;
+	if (!route || ![
+		"direct",
+		"lan",
+		"cf",
+		"configured"
+	].includes(route.kind) || !readable || row.selected !== true || ["off", "down"].includes(row.level) || snapshot.monitor.state !== "running" || snapshot.readiness.state === "unavailable" || snapshot.selection.applied_revision !== snapshot.selection.revision) return [];
+	const fact = displayFact({
+		key: "fleet_route_" + route.kind,
+		observed_at: route.observed_at
+	}, { now });
+	return [h("p", {
+		class: "muted",
+		"data-fleet-route": entry.name,
+		"data-freshness": fact.freshness
+	}, healthLabel(fact, t))];
 }
 var codeReason, layerReason, layerStep, lookup;
 var init_fleet_status = __esmMin((() => {
@@ -25283,11 +25323,8 @@ async function connectorRequest(method, path, body, key, browserToken, signal) {
 	};
 }
 async function connectorUploadArtifact(operationId, bytes, browserToken) {
+	if (nativeDesktop) throw new Error("Native uploads require the native file manager.");
 	if (!/^op_[0-9a-f]{32}$/.test(operationId)) throw new Error("Invalid artifact upload operation ID");
-	if (nativeDesktop) {
-		if (bytes.byteLength > 16777216) throw new Error("Artifact exceeds the native 16 MiB upload limit");
-		return invoke("connector_upload_artifact", bytes, { headers: { "x-batc-upload-operation": operationId } });
-	}
 	const res = await fetch(`/api/v1/artifacts/uploads/${operationId}/content`, {
 		method: "POST",
 		redirect: "error",
@@ -41528,6 +41565,7 @@ function kanbanObservation({ h, t, api, alive, workspaceId, workId, caps, permit
 }
 //#endregion
 //#region src/pm-work-profile-state.js
+init_health_fact();
 var values$1 = new Set([
 	"ready",
 	"missing",
@@ -41559,11 +41597,21 @@ var reasons = new Set([
 var operation = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
 var valueKey = (value) => "wpf_" + (values$1.has(value) ? value : "unknown");
 var profileTimestamp = (value) => typeof value === "number" && Number.isFinite(value) && value > 0 && value < 253402300800 ? value : null;
-function profileStateFacts(state) {
+function profileStateFacts(state, { now = Date.now(), error = null } = {}) {
 	const reason = typeof state?.reason === "string" && /^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(state.reason) ? state.reason : null;
 	const past = state?.verified && typeof state.verified === "object" && !Array.isArray(state.verified) ? state.verified : null;
 	const pastAt = profileTimestamp(past?.observed_at), lastSuccessAt = profileTimestamp(state?.evidence_ref?.last_success_at);
+	const observed = profileTimestamp(state?.observed_at), deadline = typeof state?.valid_until === "string" ? Date.parse(state.valid_until) : NaN;
+	const readError = reason === "host_unreachable" && error?.unchangedDeadline === true ? null : error;
 	return {
+		fact: observed !== null && Number.isFinite(deadline) ? displayFact({
+			key: valueKey(state?.value),
+			observed_at: observed * 1e3,
+			valid_until: deadline,
+			stale: ["host_unreachable", "host_not_refreshed"].includes(reason),
+			stale_reason: reason,
+			error: readError
+		}, { now }) : null,
 		valueKey: valueKey(state?.value),
 		reasonKey: reasons.has(reason) ? "wpf_reason_" + reason : "wpf_unverified",
 		reasonCode: reason,
@@ -41578,6 +41626,7 @@ function profileStateFacts(state) {
 }
 //#endregion
 //#region src/pm-work-profile-picker.js
+init_health_fact();
 var identity = (value) => typeof value === "string" && /^wpf_[0-9a-f]{32}$/.test(value);
 var states$1 = [
 	"discovered",
@@ -41632,6 +41681,51 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 	const box = h$1("section", { "data-work-profile-picker": "" }, h$1("label", {}, t("wpf_label"), select), more, status, announcement, facts);
 	const returnKey = `batc.pm.${namespace}.profile-return.${workspaceId}.${workId}`;
 	let serial = 0, loading = false, disposed = false, rows = new Map(), cursor = null, verified = null;
+	let observation = null, expiryTimer = null;
+	const renewed = new Map();
+	const renewalKey = (row, at) => `${row.profile_id}:${row.revision}:${row.digest}:${at}`;
+	const deadline = (data) => Math.min(...states$1.map((name) => profileStateFacts(data.states[name]).fact?.valid_until ?? Infinity));
+	function clearObservation() {
+		clearTimeout(expiryTimer);
+		expiryTimer = null;
+		observation = null;
+	}
+	function paintValues() {
+		if (!observation || !valid(observation.ticket) || document.hidden) return;
+		for (const name of states$1) {
+			const state = profileStateFacts(observation.data.states[name], { error: observation.error });
+			const node = facts.querySelector(`[data-work-profile-state="${name}"] [data-work-profile-value]`);
+			const text = state.fact ? healthLabel(state.fact, t) : t(state.valueKey);
+			if (node && node.textContent !== text) node.textContent = text;
+		}
+	}
+	function scheduleExpiry() {
+		clearTimeout(expiryTimer);
+		expiryTimer = null;
+		if (!observation || document.hidden || !valid(observation.ticket)) return;
+		paintValues();
+		const at = deadline(observation.data);
+		if (!Number.isFinite(at) || renewed.has(renewalKey(observation.row, at))) return;
+		if (Date.now() < at) expiryTimer = setTimeout(scheduleExpiry, Math.min(at - Date.now(), 2147483647));
+		else renew(observation, at);
+	}
+	async function renew(current, at) {
+		const attempt = { error: {
+			code: "OBSERVATION_NOT_RENEWED",
+			unchangedDeadline: true
+		} };
+		renewed.set(renewalKey(current.row, at), attempt);
+		try {
+			await read(current.row, current.ticket, true);
+		} catch (error) {
+			if (!valid(current.ticket) || observation !== current) return;
+			attempt.error = { code: error.code || error.status || "READ_FAILED" };
+			current.error = attempt.error;
+			paintValues();
+		}
+	}
+	document.addEventListener("health-display-tick", paintValues);
+	document.addEventListener("visibilitychange", scheduleExpiry);
 	const available = () => caps()?.features?.pm_workspaces?.work_profiles?.version === 1 && caps()?.features?.pm_workspaces?.work_profiles?.available === true && caps()?.scopes?.includes("observe");
 	const selected = () => {
 		try {
@@ -41668,6 +41762,7 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		const row = selected();
 		select.value = row?.profile_id || "";
 		if (!row) {
+			clearObservation();
 			facts.replaceChildren();
 			announcement.textContent = "";
 			verified = null;
@@ -41678,6 +41773,7 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		more.disabled = loading || Boolean(request()?.locked());
 	}
 	function forget(message) {
+		clearObservation();
 		const current = selected();
 		if (current) rows.delete(current.profile_id);
 		verified = null;
@@ -41690,7 +41786,30 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		status.replaceChildren(h$1("p", { class: "muted" }, t(message)));
 		options();
 	}
-	function display(data, row) {
+	function patch(current, next) {
+		if (current.isEqualNode(next)) return;
+		if (current.nodeType !== next.nodeType || current.nodeName !== next.nodeName) {
+			current.replaceWith(next);
+			return;
+		}
+		if (current.nodeType === Node.TEXT_NODE) {
+			current.data = next.data;
+			return;
+		}
+		for (const attr of [...current.attributes]) if (!next.hasAttribute(attr.name) && attr.name !== "open") current.removeAttribute(attr.name);
+		for (const attr of next.attributes) if (attr.name !== "open") current.setAttribute(attr.name, attr.value);
+		const old = [...current.childNodes], fresh = [...next.childNodes];
+		for (let i = 0; i < Math.max(old.length, fresh.length); i++) if (!old[i]) current.append(fresh[i]);
+		else if (!fresh[i]) old[i].remove();
+		else patch(old[i], fresh[i]);
+	}
+	function display(data, row, renewal = false) {
+		const scroll = [];
+		if (renewal) for (let node = facts; node; node = node.parentElement) scroll.push([
+			node,
+			node.scrollLeft,
+			node.scrollTop
+		]);
 		const next = data.work_follow_up;
 		let nextKey = "wpf_next_unknown";
 		if (next?.route === "bat_work_start" && next.agent === row.agent && next.admission_checked === false) {
@@ -41700,8 +41819,8 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		}
 		const list = h$1("dl", { class: "pm-work-profile-states" }), shownTimes = new Set();
 		for (const name of states$1) {
-			const state = profileStateFacts(data.states[name]);
-			const value = h$1("dd", { "data-work-profile-state": name }, h$1("p", { "data-work-profile-value": "" }, t(state.valueKey)), h$1("p", { "data-work-profile-reason": "" }, t(state.reasonKey), " · ", h$1("code", {}, state.reasonCode || t("wpf_reason_absent"))));
+			const state = profileStateFacts(data.states[name], { error: observation?.error });
+			const value = h$1("dd", { "data-work-profile-state": name }, h$1("p", { "data-work-profile-value": "" }, state.fact ? healthLabel(state.fact, t) : t(state.valueKey)), h$1("p", { "data-work-profile-reason": "" }, t(state.reasonKey), " · ", h$1("code", {}, state.reasonCode || t("wpf_reason_absent"))));
 			list.append(h$1("dt", {}, t("wpf_" + name)), value);
 			const operationLink = (op) => h$1("a", { href: `#/op/${op}` }, t("pm_operation"));
 			if (state.operationId) value.append(h$1("p", {}, operationLink(state.operationId)));
@@ -41737,7 +41856,10 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 			if (gapAt !== null && !shownTimes.has(gapAt)) details.push(timeStamp(gapAt));
 		}
 		const readAt = profileTimestamp(data.observed_at);
-		facts.replaceChildren(h$1("h4", {}, t("wpf_coding")), ...readAt === null ? [] : [h$1("p", { "data-work-profile-read-at": "" }, timeLabel(t, "wpf_read_at", { time: timeStamp(readAt) }))], h$1("p", {
+		const content = h$1("div", {
+			"data-work-profile-readiness": "",
+			tabindex: -1
+		}, h$1("h4", {}, t("wpf_coding")), ...readAt === null ? [] : [h$1("p", { "data-work-profile-read-at": "" }, timeLabel(t, "wpf_read_at", { time: timeStamp(readAt) }))], h$1("p", {
 			class: "muted",
 			"data-work-profile-next-turn": ""
 		}, h$1("strong", {}, t("wpf_next_turn") + " · "), t(nextKey)), h$1("p", { class: "muted" }, t("wpf_locked")), list, ...data.states.can_start_own.value !== "ready" ? [h$1("p", { class: "muted" }, t("wpf_unverified"))] : [], ...gap ? [h$1("div", { "data-work-profile-gap": "" }, ...details)] : [], h$1("h4", {}, t("wpf_pm")), hasEffectivePmRoute(data.pm_analysis) ? renderEffectivePmRoute(h$1("div", { "data-work-profile-pm": "" }), {
@@ -41746,6 +41868,8 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 			document: data.pm_analysis,
 			readyKey: "wpf_pm_preflight"
 		}) : h$1("p", {}, t(data.pm_analysis?.pm_ready === true ? "wpf_pm_preflight" : "wpf_pm_unverified")));
+		if (renewal) patch(facts, content);
+		else facts.replaceChildren(...content.childNodes);
 		const gapName = states$1.find((name) => data.states[name].value !== "ready");
 		announcement.textContent = [`${t("wpf_next_turn")}: ${t(nextKey)}`, gapName ? `${t("wpf_" + gapName)}: ${t("wpf_" + data.states[gapName].value)}. ${t("wpf_unverified")}` : ""].filter(Boolean).join(" ");
 		verified = {
@@ -41754,12 +41878,24 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 			digest: row.digest
 		};
 		request()?.update();
+		for (const [node, left, top] of scroll) {
+			node.scrollLeft = left;
+			node.scrollTop = top;
+		}
 	}
-	async function read(row, ticket) {
+	async function read(row, ticket, renewal = false) {
 		const data = await api("GET", `${base}/${row.profile_id}/readiness`);
 		if (!valid(ticket)) return;
 		if (data.contract !== "work-profile-readiness/v1" || data.workspace_id !== workspaceId || data.profile_id !== row.profile_id || data.revision !== row.revision || data.digest !== row.digest || data.calls_bat !== false || states$1.some((name) => !values.includes(data.states?.[name]?.value))) throw Error(t("wpf_invalid"));
-		display(data, row);
+		const at = deadline(data);
+		observation = {
+			data,
+			row,
+			ticket,
+			error: renewed.get(renewalKey(row, at))?.error || null
+		};
+		display(data, row, Boolean(renewal));
+		scheduleExpiry();
 	}
 	select.addEventListener("change", async () => {
 		if (request()?.locked()) {
@@ -41767,6 +41903,7 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 			return;
 		}
 		const ticket = ++serial, row = select.value ? checkedWorkProfile(rows.get(select.value)) : null;
+		clearObservation();
 		verified = null;
 		facts.replaceChildren();
 		status.replaceChildren();
@@ -41780,6 +41917,7 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		}
 	});
 	function handle(error) {
+		clearObservation();
 		verified = null;
 		facts.replaceChildren();
 		announcement.textContent = "";
@@ -41788,6 +41926,7 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 	}
 	async function load(append = false) {
 		const ticket = ++serial;
+		clearObservation();
 		verified = null;
 		facts.replaceChildren();
 		announcement.textContent = "";
@@ -41848,6 +41987,7 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		},
 		withdraw() {
 			serial++;
+			clearObservation();
 			loading = false;
 			verified = null;
 			rows.clear();
@@ -41859,6 +41999,9 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		dispose() {
 			disposed = true;
 			serial++;
+			clearObservation();
+			document.removeEventListener("health-display-tick", paintValues);
+			document.removeEventListener("visibilitychange", scheduleExpiry);
 			facts.replaceChildren();
 		},
 		focusOnReturn() {
@@ -69354,7 +69497,8 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		...state,
 		manageAllowed: may("manage"),
 		attachmentsSupported: supported,
-		uploadsAllowed: nativeUploadAllowed
+		uploadsAllowed: nativeUploadAllowed,
+		nativeDesktop
 	}, requirements);
 	const refuseAttachment = (reason) => {
 		if (!supported) {
@@ -69713,6 +69857,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		e.preventDefault();
 		const gate = attachmentGate({
 			attachment: true,
+			paste: true,
 			supported: true,
 			manage: true,
 			uploads: nativeFiles
@@ -70144,6 +70289,7 @@ async function refreshHealthCapabilities() {
 }
 function tickHealth() {
 	if (document.hidden) return;
+	document.dispatchEvent(new Event("health-display-tick"));
 	const verification = state.health?.capabilityRefresh;
 	if (verification?.state === "loading" && Date.now() - verification.startedAt >= 6e4) {
 		verification.state = "failed";
