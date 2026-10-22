@@ -85,7 +85,9 @@ test('a broken Fleet host leaves the other host and central Connector healthy', 
 test('unconfirmed stop and unsupported version reasons survive display expiry', () => {
   for (const [code, blocking, state] of [['STOP_UNCONFIRMED', 'tunnel', 'ownership'],
     ['BAT_VERSION_UNSUPPORTED', 'bat', 'version']]) {
-    const row = {...fleet.readiness.hosts[0], code, blocking, level: 'down'};
+    const layers = {tunnel: false, tls: false, bat: false, workspace: false};
+    const row = {...fleet.readiness.hosts[0], code, blocking, level: 'down',
+      layers: state === 'ownership' ? layers : {...layers, tunnel: true, tls: true, auth: 'ok', version: '3.0.0'}};
     const result = fleetHealth(row, {snapshot: fleet, readable: true, now: at + 60_000});
     assert.equal(result.state, state);
     assert.equal(result.fact.freshness, 'stale');
