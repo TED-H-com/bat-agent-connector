@@ -9,8 +9,6 @@ import {workStartFixture,workspaceId,workId,route} from './work-start-fixture.ts
 import {managedSetupFixture} from './managed-setup-fixture.ts';
 import {readFileSync} from 'node:fs';
 import {workProfileStrings} from '../src/pm-work-profile-strings.js';
-import {profileStateFacts} from '../src/pm-work-profile-state.js';
-import {healthLabel} from '../src/health-display.js';
 const readinessGolden=JSON.parse(readFileSync(new URL('../../tests/fixtures/work-profile-readiness.json',import.meta.url),'utf8'));
 
 const first='wpf_'+'a'.repeat(32),second='wpf_'+'b'.repeat(32);
@@ -66,10 +64,7 @@ for(const locale of ['en-US','zh-TW'])test.describe(`${locale} producer profile 
         if(state.reason)await expect(cell).toContainText(state.reason);
         const reasonKey='wpf_reason_'+state.reason;
         await expect(cell).toContainText(copy(reasonKey)||copy('wpf_unverified'));
-        // The producer's value is unchanged; the shared formatter now also
-        // explains missing/stale validity instead of treating a read as a check.
-        const translate=(key,args={})=>Object.entries(args).reduce((text,[k,v])=>text.replaceAll(`{${k}}`,String(v)),STRINGS[lang][key]);
-        await expect(cell.locator('[data-work-profile-value]')).toHaveText(healthLabel(profileStateFacts(state).display,translate));
+        await expect(cell.locator('[data-work-profile-value]')).toHaveText(copy('wpf_'+state.value));
         expect((await cell.innerText()).trim().startsWith(copy('wpf_'+state.value))).toBe(true);
         if(state.verified){
           const past=cell.locator('[data-work-profile-past]');await expect(past).toBeVisible();

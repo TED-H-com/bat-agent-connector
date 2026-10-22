@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {fleetStatus, fleetDiagnosis, fleetHealth} from '../src/fleet-status.js';
 import {profileStateFacts} from '../src/pm-work-profile-state.js';
-import {displayFact, healthDisplay, healthLabel} from '../src/health-display.js';
+import {healthDisplay, healthLabel} from '../src/health-display.js';
 import {pollFailure} from '../src/central-service-status.js';
 import {runtimeGolden} from './session-runtime-fixture.ts';
 import {STRINGS} from '../src/i18n.js';
@@ -21,31 +21,37 @@ const render = (row, t, now) => fleetStatus(row, {h, t, now, snapshot: fleet, re
 
 for (const locale of ['en', 'zh-TW']) {
   const t = translate(locale);
+  const labels = locale === 'en' ? {
+    expired: 'Connected · 1 min ago · Checking', unknown: 'Unknown · Checking',
+    values: {ready: 'Ready', missing: 'Setup still missing', unknown: 'Not verified yet', unavailable: 'Unavailable'},
+  } : {
+    expired: '已連線 · 1 分鐘前 · 檢查中', unknown: '未知 · 檢查中',
+    values: {ready: '已就緒', missing: '還缺設定', unknown: '尚未驗證', unavailable: '不可用'},
+  };
   test(`Fleet and Connector use the same last connected value and age at expiry ${locale}`, () => {
     const now = at + 60_000, row = fleet.readiness.hosts[0];
     const header = healthDisplay(input(), now).connection;
     const view = render(row, t, now);
-    assert.equal(view.children[0].children[0], healthLabel(header, t));
+    assert.equal(view.children[0].children[0], labels.expired);
+    assert.equal(healthLabel(header, t), labels.expired);
     assert.equal(view.attrs['data-fleet-state'], 'stale');
-    assert.equal(view.attrs['data-freshness'], header.freshness);
+    assert.equal(view.attrs['data-freshness'], 'stale');
+    assert.equal(header.freshness, 'stale');
   });
   test(`Fleet pending evidence uses the shared unknown wording ${locale}`, () => {
     // The monitor's pending row has no observation, unlike an HTTP receipt.
     const row = {...fleet.readiness.hosts[0], level: 'degraded', code: 'PROBE_PENDING', blocking: 'bat',
       observed_at: null, layers: {tunnel: false, tls: false, bat: false, workspace: false}};
     const view = render(row, t, at);
-    assert.equal(view.children[0].children[0], healthLabel(displayFact({key: 'health_unknown'}, {now: at}), t));
+    assert.equal(view.children[0].children[0], labels.unknown);
     assert.doesNotMatch(view.children[0].children[0], /offline|down|離線|停機/i);
   });
-  test(`Work producer stale and absent evidence use shared freshness without borrowing read time ${locale}`, () => {
-    for (const name of ['never_observed', 'host_not_refreshed', 'action_unavailable']) {
-      const body = profiles.cases[name], state = body.states.can_observe;
-      const facts = profileStateFacts(state, {now: body.observed_at * 1000});
-      assert.equal(facts.display?.freshness, name === 'host_not_refreshed' ? 'stale' : 'unknown');
-      assert.equal(facts.display.ageSeconds, null);
-      assert.equal(facts.display.key, facts.valueKey);
-      assert.ok(healthLabel(facts.display, t).includes(t('health_checking')));
+  test(`Work producer has no per-capability validity; reported values and reasons remain unchanged ${locale}`, () => {
+    for (const body of Object.values(profiles.cases) as any[]) for (const state of Object.values(body.states) as any[]) {
+      const facts = profileStateFacts(state);
+      assert.equal(t(facts.valueKey), labels.values[state.value]);
       assert.equal(facts.reasonCode, state.reason);
+      assert.equal(Object.hasOwn(state, 'valid_until'), false);
     }
   });
 }
@@ -94,21 +100,26 @@ test('unconfirmed stop and unsupported version reasons survive display expiry', 
     assert.ok(result.steps.every(step => step.state === 'unchecked'));
     for (const locale of ['en', 'zh-TW']) {
       const t = translate(locale);
-      assert.ok(healthLabel(result.fact, t).startsWith(t('fleet_check_title_' + state)));
+      const labels = locale === 'en' ? {
+        ownership: 'The background connection outcome is unconfirmed · 1 min ago · Checking',
+        version: 'The service version is incompatible · 1 min ago · Checking',
+      } : {
+        ownership: '背景連線的操作結果尚未確認 · 1 分鐘前 · 檢查中',
+        version: '服務版本不相容 · 1 分鐘前 · 檢查中',
+      };
+      assert.equal(healthLabel(result.fact, t), labels[state]);
     }
   }
 });
 
-test('Work host success without Inventory validity retains age but cannot borrow the live-reader timeout', () => {
+test('Work retains its reported value and past verification while per-capability validity is absent', () => {
   const body = profiles.cases.owned_execution, state = body.states.can_observe;
-  for (const now of [body.observed_at * 1000, body.observed_at * 1000 + 600_000]) {
-    const facts = profileStateFacts(state, {now});
-    assert.equal(facts.display.freshness, 'unknown');
-    assert.equal(facts.display.ageSeconds, (now - state.evidence_ref.last_success_at * 1000) / 1000);
-    assert.equal(facts.valueKey, 'wpf_ready');
-    assert.equal(facts.lastSuccessAt, null); // The existing past section already shows this instant.
-    assert.equal(facts.past.at, state.verified.observed_at);
-  }
+  const facts = profileStateFacts(state);
+  assert.equal(facts.valueKey, 'wpf_ready');
+  assert.equal(facts.lastSuccessAt, null); // The existing past section already shows this instant.
+  assert.equal(facts.past.at, state.verified.observed_at);
+  assert.equal(Object.hasOwn(state, 'observed_at'), false);
+  assert.equal(Object.hasOwn(state, 'valid_until'), false);
 });
 
 test('Fleet expiry is per row, with no cross-host or cross-domain inference', () => {

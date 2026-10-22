@@ -9,9 +9,8 @@ for (const locale of ['en-US', 'zh-TW']) test.describe(`shared readiness ${local
   test.use({locale});
   test('Fleet uses the header formatter at the same clock boundary', async ({page}) => {
     await page.goto('/ui-components.html');
-    const result = await page.evaluate(async ({fleet, locale}) => {
+    await page.evaluate(async ({fleet, locale}) => {
       const {fleetStatus} = await import('/src/fleet-status.js');
-      const {displayFact, healthLabel} = await import('/src/health-display.js');
       const {h} = await import('/src/ui/dom.js');
       const {t, setLocale} = await import('/src/i18n.js');
       setLocale(locale === 'en-US' ? 'en' : locale);
@@ -19,20 +18,29 @@ for (const locale of ['en-US', 'zh-TW']) test.describe(`shared readiness ${local
       const node = fleetStatus(fleet.readiness.hosts[0], {h, t, now, snapshot: fleet,
         readable: true, entry: fleet.configuration.connections[0], detailsState: new Map()});
       document.getElementById('fixture')!.append(node);
-      return healthLabel(displayFact({key: 'ui_connected', observed_at: fleet.readiness.observed_at}, {now}), t);
     }, {fleet, locale});
-    await expect(page.locator('.fleet-diagnosis-title')).toHaveText(result);
+    await expect(page.locator('.fleet-diagnosis-title')).toHaveText(locale === 'en-US'
+      ? 'Connected · 1 min ago · Checking' : '已連線 · 1 分鐘前 · 檢查中');
     await expect(page.locator('[data-fleet-diagnosis]')).toHaveAttribute('data-freshness', 'stale');
     await page.locator('summary').click();
     await expect(page.locator('[data-check-state="passed"]')).toHaveCount(0);
   });
 
   for (const [name, body] of Object.entries(profiles.cases) as [string, any][]) {
-    test(`Work ${name} keeps independent values and shared freshness`, async ({page}) => {
+    test(`Work ${name}: producer lacks per-capability validity, so value text stays unchanged`, async ({page}) => {
+      await page.clock.install({time: new Date(body.observed_at * 1000)});
       const {facts, reads, posts} = await mountProfilePicker(page, body, profiles.profile, locale);
-      const value = facts.locator('[data-work-profile-state="can_observe"] [data-work-profile-value]');
-      await expect(value).toContainText(locale === 'en-US' ? 'Checking' : '檢查中');
-      await expect(value).toHaveAttribute('data-freshness', name === 'host_not_refreshed' ? 'stale' : 'unknown');
+      const values = locale === 'en-US'
+        ? {ready: 'Ready', missing: 'Setup still missing', unknown: 'Not verified yet', unavailable: 'Unavailable'}
+        : {ready: '已就緒', missing: '還缺設定', unknown: '尚未驗證', unavailable: '不可用'};
+      // There is no deadline or automatic renewal in this producer/picker.
+      // Reading or waiting cannot justify adding "Checking" to any capability.
+      for (const elapsed of [0, 60_000]) {
+        await page.clock.fastForward(elapsed);
+        for (const [key, state] of Object.entries(body.states) as [string, any][]) {
+          await expect(facts.locator(`[data-work-profile-state="${key}"] [data-work-profile-value]`)).toHaveText(values[state.value]);
+        }
+      }
       if (body.states.can_observe.reason) await expect(facts.locator('[data-work-profile-state="can_observe"]'))
         .toContainText(body.states.can_observe.reason);
       await expect(facts.locator('[data-work-profile-state]')).toHaveCount(6);
