@@ -72,6 +72,9 @@ jobs:
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
       - name: Bound stalled apt downloads
         uses: ./.github/actions/bounded-apt
+        with:
+          package-set: playwright-chromium
+          package-set-hash: ${{ hashFiles('desktop/package-lock.json') }}
       - name: Chromium system dependencies
         working-directory: desktop
         run: npx playwright install-deps chromium

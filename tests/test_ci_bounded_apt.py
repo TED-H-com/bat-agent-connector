@@ -1,5 +1,7 @@
 """Every workflow apt invocation uses the shared setup before package downloads."""
+import os
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -9,11 +11,13 @@ from scripts.desktop_fixture_inputs import path_matches
 
 ROOT = Path(__file__).resolve().parents[1]
 ACTION = './.github/actions/bounded-apt'
+CACHE = 'actions/cache@caa296126883cff596d87d8935842f9db880ef25'
 APT = re.compile(r'\bapt(?:-get)?\s+(?:update|install)\b|playwright\s+install-deps\b|playwright\s+install\s+--with-deps\b')
 
 
 def test_all_workflow_apt_steps_use_shared_setup():
     sites = []
+    native_inputs = []
     for path in sorted((ROOT / '.github/workflows').glob('*.yml')):
         document = yaml.safe_load(path.read_text())
         for job_name, job in document['jobs'].items():
@@ -25,6 +29,16 @@ def test_all_workflow_apt_steps_use_shared_setup():
                     continue
                 sites.append((path.name, job_name))
                 assert index and steps[index - 1].get('uses') == ACTION, (path.name, job_name, step)
+                inputs = steps[index - 1]['with']
+                expected_set = {'browser-ui': 'playwright-chromium-fonts', 'build': 'native-linux'}.get(
+                    job_name, 'playwright-chromium')
+                assert inputs['package-set'] == expected_set
+                # The lock pins Playwright's list; native libraries and extra fonts live in the workflow.
+                assert "hashFiles('desktop/package-lock.json'" in inputs['package-set-hash']
+                if job_name in ('browser-ui', 'build'):
+                    assert "'.github/workflows/desktop.yml'" in inputs['package-set-hash']
+                if job_name == 'build':
+                    native_inputs.append(inputs)
                 assert steps[index - 1].get('if') == step.get('if')
                 assert any(s.get('uses', '').startswith('actions/checkout@') for s in steps[:index - 1])
     assert set(sites) == {
@@ -32,6 +46,7 @@ def test_all_workflow_apt_steps_use_shared_setup():
         ('desktop.yml', 'work-loop'), ('desktop.yml', 'build'), ('pages.yml', 'validate'),
     }
     assert len(sites) == 6
+    assert len(native_inputs) == 2 and native_inputs[0] == native_inputs[1]
 
 
 @pytest.mark.parametrize('workflow', ['desktop.yml', 'pages.yml'])
@@ -47,8 +62,88 @@ def test_action_changes_trigger_each_consumer_workflow(workflow):
 def test_shared_apt_settings_keep_retries_and_short_timeouts():
     action = yaml.safe_load((ROOT / '.github/actions/bounded-apt/action.yml').read_text())
     assert action['runs']['using'] == 'composite'
-    step, = action['runs']['steps']
+    step, = [step for step in action['runs']['steps'] if 'Acquire::' in step.get('run', '')]
     assert step['shell'] == 'bash'
     assert '/etc/apt/apt.conf.d/99-playwright-ci' in step['run']
     settings = dict(re.findall(r'(Acquire::[\w:]+) "(\d+)";', step['run']))
     assert settings == {'Acquire::Retries': '3', 'Acquire::http::Timeout': '15', 'Acquire::https::Timeout': '15'}
+
+
+def test_archives_cache_matches_apt_directory_and_is_best_effort():
+    action = yaml.safe_load((ROOT / '.github/actions/bounded-apt/action.yml').read_text())
+    for name in ('package-set', 'package-set-hash'):
+        assert action['inputs'][name]['required'] is True
+    prepare, cache, configure = action['runs']['steps']
+    assert prepare['id'] == 'archives'
+    assert cache['uses'] == CACHE
+    assert cache['continue-on-error'] is True
+    assert cache['if'] == "steps.archives.outputs.cache-needed == 'true'"
+    assert cache['with']['path'] == '${{ steps.archives.outputs.directory }}/*.deb'
+    assert cache['with']['key'] == '${{ steps.archives.outputs.key }}'
+    assert cache['with']['restore-keys'].splitlines() == [
+        '${{ steps.archives.outputs.exact-prefix }}', '${{ steps.archives.outputs.set-prefix }}',
+    ]
+    assert configure['env']['APT_ARCHIVES'] == '${{ steps.archives.outputs.directory }}'
+    assert 'Dir::Cache::Archives "$APT_ARCHIVES";' in configure['run']
+    assert 'APT::Keep-Downloaded-Packages "true";' in configure['run']
+    assert 'Binary::apt::APT::Keep-Downloaded-Packages "true";' in configure['run']
+    assert 'sudo install -d -o _apt -g root -m 0700 "$APT_ARCHIVES/partial"' in configure['run']
+    assert 'sudo -u _apt test -w "$APT_ARCHIVES/partial"' in configure['run']
+    assert 'test -w "$APT_ARCHIVES"' in configure['run']
+    assert 'APT::Sandbox::User' not in configure['run']
+    for workflow in ('desktop.yml', 'pages.yml'):
+        jobs = yaml.safe_load((ROOT / '.github/workflows' / workflow).read_text())['jobs']
+        pins = {s['uses'] for job in jobs.values() for s in job.get('steps', [])
+                if s.get('uses', '').startswith('actions/cache@')}
+        assert pins == {CACHE}
+
+
+def test_cache_identity_fallback_and_repeated_native_setup(tmp_path):
+    """Execute the real key preparation: no sudo, apt, network or Actions service."""
+    action = yaml.safe_load((ROOT / '.github/actions/bounded-apt/action.yml').read_text())
+    prepare = action['runs']['steps'][0]
+    assert prepare.get('id') == 'archives'
+    assert prepare['env'] == {
+        'PACKAGE_SET': '${{ inputs.package-set }}',
+        'PACKAGE_SET_HASH': '${{ inputs.package-set-hash }}',
+    }
+    runner_temp = tmp_path / 'work' / '_temp'
+    runner_temp.mkdir(parents=True)
+    output = tmp_path / 'output'
+    env = {
+        **os.environ, 'RUNNER_TEMP': str(runner_temp), 'GITHUB_OUTPUT': str(output),
+        'RUNNER_OS': 'Linux', 'RUNNER_ARCH': 'X64', 'ImageOS': 'ubuntu24', 'ImageVersion': '20261019.1',
+        'PACKAGE_SET': 'native-linux', 'PACKAGE_SET_HASH': 'a' * 64,
+    }
+
+    def run(**changes):
+        output.write_text('')
+        subprocess.run(['bash', '-euo', 'pipefail', '-c', prepare['run']], env={**env, **changes},
+                       check=True, capture_output=True, text=True)
+        return dict(line.split('=', 1) for line in output.read_text().splitlines())
+
+    cold = run()
+    directory = Path(cold['directory'])
+    assert directory == tmp_path / 'work' / 'apt-archives' / 'native-linux'
+    assert directory.stat().st_uid == os.getuid()
+    assert directory.stat().st_mode & 0o777 == 0o755
+    assert cold['cache-needed'] == 'true'
+    assert cold['key'] == f"apt-v1-Linux-X64-ubuntu24-native-linux-{'a' * 64}-20261019.1"
+    assert cold['exact-prefix'] == cold['key'].removesuffix('20261019.1')
+    assert cold['set-prefix'] == 'apt-v1-Linux-X64-ubuntu24-native-linux-'
+
+    # The first invocation's cache post saves packages from both native install steps.
+    downloaded = directory / 'example_1.0_amd64.deb'
+    downloaded.write_bytes(b'completed package placeholder')
+    assert run()['cache-needed'] == 'false'
+    assert downloaded.read_bytes() == b'completed package placeholder'
+    newer = run(ImageVersion='20261026.1')
+    assert newer['cache-needed'] == 'true'
+    assert newer['key'] != cold['key']
+    assert newer['exact-prefix'] == cold['exact-prefix']
+    changed_set = run(PACKAGE_SET_HASH='b' * 64)
+    assert changed_set['exact-prefix'] != cold['exact-prefix']
+    assert changed_set['set-prefix'] == cold['set-prefix']
+    for changes in ({'RUNNER_ARCH': 'ARM64'}, {'RUNNER_OS': 'Other'}, {'ImageOS': 'ubuntu26'},
+                    {'PACKAGE_SET': 'playwright-chromium'}):
+        assert not run(**changes)['key'].startswith(cold['set-prefix'])
