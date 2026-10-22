@@ -356,7 +356,7 @@ impl Managed {
             .unwrap()
             .clone()
             .ok_or("MANAGED_RUNTIME_UNAVAILABLE")?;
-        let mut command = Command::new(executable);
+        let mut command = Command::new(&executable);
         command
             .args([action, "--data-dir"])
             .arg(&self.data_dir)
@@ -370,7 +370,36 @@ impl Managed {
         }
         let mut child = command.spawn().map_err(|error| {
             #[cfg(test)]
-            eprintln!("managed launcher spawn: {error}");
+            {
+                eprintln!("managed launcher spawn: {error}");
+                #[cfg(target_os = "linux")]
+                if error.raw_os_error() == Some(libc::ETXTBSY) {
+                    use std::os::unix::fs::MetadataExt;
+                    let target = fs::metadata(&executable).unwrap();
+                    for process in fs::read_dir("/proc").unwrap().flatten() {
+                        let pid = process.file_name();
+                        if pid.to_string_lossy().parse::<u32>().is_err() {
+                            continue;
+                        }
+                        if let Ok(fds) = fs::read_dir(process.path().join("fd")) {
+                            for fd in fds.flatten() {
+                                if fs::metadata(fd.path()).is_ok_and(|meta| {
+                                    meta.dev() == target.dev() && meta.ino() == target.ino()
+                                }) {
+                                    eprintln!(
+                                        "runtime held by pid {:?} fd {:?}: {:?}",
+                                        pid,
+                                        fd.file_name(),
+                                        fs::read_to_string(
+                                            process.path().join("fdinfo").join(fd.file_name())
+                                        )
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             let _ = error;
             "MANAGED_RUNTIME_START_FAILED"
         })?;
