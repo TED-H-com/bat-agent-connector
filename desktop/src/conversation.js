@@ -125,6 +125,8 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
     }
   };
   const observePosition = () => {
+    // A hidden perspective has no scroll geometry; zero is not reader movement.
+    if (!viewport.clientHeight) return;
     if (initialized && !resizing && viewport.scrollTop !== scrollPosition) pinned = atBottom();
     scrollPosition = viewport.scrollTop;
   };

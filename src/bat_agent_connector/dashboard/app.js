@@ -58845,6 +58845,7 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 		}
 	};
 	const observePosition = () => {
+		if (!viewport.clientHeight) return;
 		if (initialized && !resizing && viewport.scrollTop !== scrollPosition) pinned = atBottom();
 		scrollPosition = viewport.scrollTop;
 	};

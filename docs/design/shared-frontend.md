@@ -69,6 +69,8 @@ reference, not a new dependency or copied runtime.
   The reader samples movement before changing message geometry, even when the
   browser has not yet delivered its scroll event. Applied programmatic positions
   remain distinguishable from reader movement so layout changes can still re-pin.
+  A hidden transcript has no usable scroll geometry and retains its prior follow
+  state until shown again.
 - Prefer supplied message IDs for reading anchors. Without IDs, match exact message
   content/metadata and duplicate occurrence only for presentation, never as domain
   identity. If an anchor leaves the loaded window, show that limitation rather than
