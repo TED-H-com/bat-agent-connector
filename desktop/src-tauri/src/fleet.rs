@@ -880,15 +880,66 @@ mod tests {
             serde_json::from_str(include_str!("../../tests/fixtures/fleet-stop.json")).unwrap();
         let mut output = json!({});
         for (name, case) in cases.as_object().unwrap() {
-            let snapshot = serde_json::from_value(case["snapshot"].clone()).unwrap();
-            let mut result = fixture()["result"].clone();
-            result["selection"]["revision"] = case["selection_revision"].clone();
-            result["selection"]["connections"] = case["connections"].clone();
-            result["readiness"] =
-                native_readiness(Some(&snapshot), case["now"].as_u64().unwrap()).unwrap();
-            output[name] = sanitize_result(&result, "status").unwrap();
+            output[name] = project_snapshot_case(case);
         }
         output
+    }
+    fn project_snapshot_case(case: &Value) -> Value {
+        let snapshot = serde_json::from_value(case["snapshot"].clone()).unwrap();
+        let mut result = fixture()["result"].clone();
+        result["selection"]["revision"] = case["selection_revision"].clone();
+        result["selection"]["connections"] = case["connections"].clone();
+        result["readiness"] =
+            native_readiness(Some(&snapshot), case["now"].as_u64().unwrap()).unwrap();
+        sanitize_result(&result, "status").unwrap()
+    }
+    fn pending_cases() -> Value {
+        let raw: Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/fleet-pending.json")).unwrap();
+        raw.as_object()
+            .unwrap()
+            .iter()
+            .map(|(name, variants)| {
+                let cases: Value = variants
+                    .as_object()
+                    .unwrap()
+                    .iter()
+                    .map(|(state, case)| (state.clone(), project_snapshot_case(case)))
+                    .collect();
+                (name.clone(), cases)
+            })
+            .collect()
+    }
+    #[test]
+    fn pending_requirement_survives_native_projection_and_sanitizer() {
+        let cases = pending_cases();
+        for (name, expected) in [
+            ("unknown", "DIRECT_PEER_UNKNOWN"),
+            ("tcp", "DIRECT_TCP_UNREACHABLE"),
+            ("exhausted", "CONFIGURED_ROUTES_EXHAUSTED"),
+        ] {
+            let row = &cases[name]["pending"]["readiness"]["hosts"][0];
+            assert_eq!(row["code"], "PROBE_PENDING");
+            assert_eq!(row["route_requirement"], expected, "{name}");
+            assert!(row.get("observed_at").is_none());
+            assert_eq!(
+                cases[name]["pending"]["readiness"]["hosts"][1]["level"],
+                "ready"
+            );
+        }
+    }
+    #[test]
+    fn aged_pending_requirement_is_withdrawn_by_parse() {
+        for case in pending_cases().as_object().unwrap().values() {
+            let row = &case["aged"]["readiness"]["hosts"][0];
+            assert_eq!(row["code"], "PROBE_STALE");
+            assert!(row.get("route_requirement").is_none());
+        }
+    }
+    #[test]
+    #[ignore = "explicit fixture regeneration only"]
+    fn pending_generate_golden() {
+        println!("FLEET_PENDING_GOLDEN={}", pending_cases());
     }
     #[test]
     fn stop_aged_evidence_survives_native_projection_and_sanitizer() {

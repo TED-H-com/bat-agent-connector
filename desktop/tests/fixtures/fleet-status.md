@@ -76,3 +76,19 @@ using `requirement` / `stop`. On the native build host, run the ignored
 all values to the checked-in files. These fixtures exercise real production code
 with synthetic processes, peers, inventory and local files, not live BAT,
 Tailscale, SSH or installed Windows process ownership.
+
+`fleet-pending.json` comes from the real supervisor's
+`generate_pending_requirement_fixture` test: unknown-peer, failed-TCP and exhausted
+selections are harvested, subsequent ticks publish `PROBE_PENDING`, and the actual
+status file is parsed both immediately and after 60,001 ms. It checks attempt
+counts, no target launches or stops, and the healthy Connector row. Only binding
+metadata is de-identified, as in the stop fixture. Native projection and sanitizer
+produce `fleet-pending.golden.json`; Node and Playwright consume it in both locales.
+
+```sh
+cargo test --locked --manifest-path desktop/fleet-core/Cargo.toml --test supervisor generate_pending_requirement_fixture -- --ignored --nocapture > pending.log
+node desktop/scripts/regenerate-fleet-status.mjs pending pending.log
+# On the native build host (use the native service locally):
+cargo test --locked --manifest-path desktop/src-tauri/Cargo.toml pending_generate_golden -- --ignored --nocapture > pending-golden.log
+node desktop/scripts/regenerate-fleet-status.mjs pending-golden pending-golden.log
+```

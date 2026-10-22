@@ -9,8 +9,10 @@ const outputs = {
   'stop-golden': ['FLEET_STOP_GOLDEN=', 'fleet-stop.golden.json'],
   requirement: ['FLEET_REQUIREMENT=', 'fleet-requirement.json'],
   'requirement-golden': ['FLEET_REQUIREMENT_GOLDEN=', 'fleet-requirement.golden.json'],
+  pending: ['FLEET_PENDING=', 'fleet-pending.json'],
+  'pending-golden': ['FLEET_PENDING_GOLDEN=', 'fleet-pending.golden.json'],
 };
-if (!Object.hasOwn(outputs, kind) || !log) throw new Error('Usage: raw|golden|stop|stop-golden|requirement|requirement-golden producer.log');
+if (!Object.hasOwn(outputs, kind) || !log) throw new Error('Usage: ' + Object.keys(outputs).join('|') + ' producer.log');
 const [marker, filename] = outputs[kind];
 const line = readFileSync(log, 'utf8').split('\n').find(line => line.startsWith(marker));
 if (!line) throw new Error(`Missing ${marker} producer output`);

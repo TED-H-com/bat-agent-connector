@@ -552,7 +552,7 @@ mod contract_tests {
         assert!(row.get("route_requirement").is_none());
     }
     #[test]
-    fn route_requirement_is_emitted_only_for_selected_route_failure() {
+    fn route_requirement_follows_unobserved_tunnel_states() {
         let generation = ProbeGeneration {
             epoch: "a".repeat(32),
             configuration_binding: "c".repeat(64),
@@ -564,8 +564,12 @@ mod contract_tests {
                 None,
                 Some("ROUTE_UNAVAILABLE"),
                 Some("TAILSCALE_WAKING"),
-                Some("STOP_UNCONFIRMED"),
                 Some("TUNNEL_DOWN"),
+                Some("RECOVERY_EXHAUSTED"),
+                Some("STOP_UNCONFIRMED"),
+                Some("CREDENTIAL_MISSING"),
+                Some("PROFILE_DRIFT"),
+                Some("BAT_AUTH_REFUSED"),
             ] {
                 let row = Entry::observed(
                     ("node-1", "Fixture 1"),
@@ -577,14 +581,118 @@ mod contract_tests {
                     code.map(|code| (code, Layer::Tunnel)),
                 )
                 .unwrap();
-                let expected =
-                    selected && matches!(code, Some("ROUTE_UNAVAILABLE" | "TAILSCALE_WAKING"));
+                let expected = selected
+                    && matches!(
+                        code,
+                        None | Some(
+                            "ROUTE_UNAVAILABLE"
+                                | "TAILSCALE_WAKING"
+                                | "TUNNEL_DOWN"
+                                | "RECOVERY_EXHAUSTED"
+                        )
+                    );
                 assert_eq!(
                     row.route_requirement.is_some(),
                     expected,
                     "selected={selected}, code={code:?}"
                 );
             }
+        }
+    }
+    #[test]
+    fn route_requirement_withholds_current_probe_observations() {
+        let generation = ProbeGeneration {
+            epoch: "a".repeat(32),
+            configuration_binding: "c".repeat(64),
+            selection_revision: "d".repeat(64),
+            generation: 1,
+        };
+        let probe = ProbeObservation {
+            generation: generation.clone(),
+            observed_ms: 1000,
+            kind: ProbeKind::Bat,
+            tunnel: false,
+            tls: false,
+            auth: Authentication::Unknown,
+            bat: false,
+            workspace: false,
+            connector: false,
+            version: None,
+            code: None,
+            blocking: None,
+            reason: None,
+        };
+        for code in [
+            None,
+            Some("ROUTE_UNAVAILABLE"),
+            Some("TAILSCALE_WAKING"),
+            Some("TUNNEL_DOWN"),
+        ] {
+            let row = Entry::observed(
+                ("node-1", "Fixture 1"),
+                true,
+                ProbeKind::Bat,
+                (
+                    Some(&probe),
+                    None,
+                    Some(RouteRequirement::DirectPeerUnknown),
+                ),
+                &generation,
+                1000,
+                code.map(|code| (code, Layer::Tunnel)),
+            )
+            .unwrap();
+            assert!(row.route_requirement.is_none(), "code={code:?}");
+        }
+    }
+    #[tokio::test]
+    async fn route_requirement_rejects_observed_or_ready_rows() {
+        let raw = observed_fixture().await;
+        let now = millis(raw["result"]["readiness"]["observed_at"].as_str().unwrap()).unwrap();
+        let inventory =
+            crate::inventory::Inventory::parse(include_bytes!("../tests/fixtures/inventory.json"))
+                .unwrap();
+        let generation = ProbeGeneration {
+            epoch: "a".repeat(32),
+            configuration_binding: "c".repeat(64),
+            selection_revision: "d".repeat(64),
+            generation: 1,
+        };
+        let row = Entry::observed(
+            ("node-1", "Fixture 1"),
+            true,
+            ProbeKind::Bat,
+            (None, None, Some(RouteRequirement::DirectPeerUnknown)),
+            &generation,
+            now,
+            Some(("ROUTE_UNAVAILABLE", Layer::Tunnel)),
+        )
+        .unwrap();
+        for (field, value) in [
+            ("selected", serde_json::json!(false)),
+            ("level", serde_json::json!("ready")),
+            ("observed_at", serde_json::json!(timestamp(now).unwrap())),
+            ("layers", serde_json::json!({"tunnel":true})),
+            ("layers", serde_json::json!({"tls":true})),
+            ("layers", serde_json::json!({"bat":true})),
+            ("layers", serde_json::json!({"workspace":true})),
+            ("layers", serde_json::json!({"auth":"unknown"})),
+            ("layers", serde_json::json!({"version":"3.2.5"})),
+            (
+                "route",
+                serde_json::json!({"kind":"direct","generation":1,"observed_at":timestamp(now).unwrap()}),
+            ),
+        ] {
+            let mut invalid = raw.clone();
+            invalid["result"]["readiness"]["hosts"][0] = serde_json::to_value(&row).unwrap();
+            invalid["result"]["readiness"]["hosts"][0][field] = value.clone();
+            assert!(
+                matches!(
+                    parse_fixture_file(&invalid, &inventory, now),
+                    Err("STATUS_UNPROVEN")
+                ),
+                "{field}={value}"
+            );
         }
     }
     #[tokio::test]
