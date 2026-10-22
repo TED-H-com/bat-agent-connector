@@ -2,6 +2,35 @@
 
 ## Next release (unreleased)
 
+- Review an existing BAT connection before applying it. A read-only preview shows the configuration
+  changes and source boundary without saving configuration, creating an operation or probing
+  BAT/SSH. Apply checks the reviewed revision and digest, and lost replies retain the original
+  request and key. (#392)
+
+- Keep the successful Adopt and start destination when an earlier view of the same Work is disposed,
+  so view replacement does not discard the pending move to the original Work and Attempt. (#397)
+
+- Use the shared health freshness rule and localized wording in Fleet rows. Producer validity and
+  observation age remain visible; unestablished values stay Checking instead of becoming bare
+  unknown or implying that a machine is offline. Existing reads and probes keep their original
+  ownership. (#396)
+
+- Share explicit BAT profile-directory selection and token-state policy across setup, Connector
+  runtime and native Fleet. Unavailable or unsupported sources retain their reasons instead of
+  scanning unrelated directories or silently changing sources; documented legacy runtime
+  compatibility remains explicit. (#394)
+
+- Use Inventory observation validity for Work readiness, including the last host-attempt time and
+  producer deadline. Renew once per deadline through the existing read and preserve the renewed
+  observation even when the deadline is unchanged; readiness renewal never starts work or retries a
+  mutation. (#398)
+
+- CI only: use one shared bounded apt setup with a package archive cache in every package-installing
+  job, preserving the existing retry counts and short network stall limits. (#390)
+
+- Tests/CI only: make write-pause scenarios deterministic by controlling event delivery and waiting
+  for reader checkpoints before editing or retrying, without increasing product deadlines. (#391)
+
 - Import and keep a project board synchronized with GitHub issues and pull requests through explicit
   repository binding and managed polling. GitHub receives read requests only; source closure stays
   separate from human completion and PM acceptance. Failed or incomplete traversals preserve the
