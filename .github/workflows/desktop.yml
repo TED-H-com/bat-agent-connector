@@ -265,13 +265,13 @@ jobs:
       - run: npm test
 
   browser-ui:
-    name: browser-ui (${{ matrix.shard }}/3)
+    name: browser-ui (${{ matrix.shard }}/5)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5]
     env:
       TZ: UTC
       PLAYWRIGHT_HTML_OPEN: never
@@ -308,7 +308,7 @@ jobs:
           fc-list | wc -l
       # The static server reads the committed dashboard assets; no Vite/native build needed.
       - name: Shared browser and native-transport UI tests
-        run: npx playwright test --shard=${{ matrix.shard }}/3 --reporter=line,html
+        run: npx playwright test --shard=${{ matrix.shard }}/5 --reporter=line,html
       - name: Preserve failed browser UI evidence
         if: failure()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
