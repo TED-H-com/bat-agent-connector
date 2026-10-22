@@ -1395,3 +1395,17 @@ async fn wake_progress_publishes_pending_and_completion_reselects_without_fiftee
         .contains(&"node-1".to_owned()));
     runtime.shutdown(2503).await.unwrap();
 }
+
+#[tokio::test]
+async fn chosen_route_is_published_without_private_transport_inputs() {
+    let (_f, _shared, mut runtime) = fixture();
+    let status = advance(&mut runtime, 1000).await;
+    let row =
+        serde_json::to_value(status.entries.iter().find(|r| r.name == "node-1").unwrap()).unwrap();
+    assert_eq!(row["route"]["kind"], "cf");
+    assert!(row["route"]["generation"].as_u64().unwrap() > 0);
+    let at = row["route"]["observed_at"].as_str().unwrap();
+    assert!(at.starts_with("1970-01-01T00:00:01"));
+    assert_eq!(row["route"].as_object().unwrap().len(), 3);
+    runtime.shutdown(2000).await.unwrap();
+}

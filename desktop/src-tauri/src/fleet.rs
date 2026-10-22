@@ -805,6 +805,32 @@ mod tests {
             golden
         );
     }
+    #[test]
+    fn route_allowlist_retains_only_safe_chosen_route_fields() {
+        let mut doc = fixture()["result"].clone();
+        doc["readiness"]["hosts"][0]["route"] = json!({
+            "kind":"direct", "observed_at":"2026-10-08T12:00:00Z", "generation":1,
+            "alias":"private-route", "endpoint":"192.0.2.1:22", "address":"192.0.2.1",
+            "hostname":"private.example", "peer":{"CurAddr":"192.0.2.1"}, "output":"private output"
+        });
+        let safe = sanitize_result(&doc, "status").unwrap();
+        assert_eq!(
+            safe["readiness"]["hosts"][0]["route"],
+            json!({
+                "kind":"direct", "observed_at":"2026-10-08T12:00:00Z", "generation":1
+            })
+        );
+        let text = serde_json::to_string(&safe).unwrap();
+        for secret in [
+            "private-route",
+            "192.0.2.1",
+            "private.example",
+            "CurAddr",
+            "private output",
+        ] {
+            assert!(!text.contains(secret));
+        }
+    }
     fn contract() -> Value {
         serde_json::from_str(include_str!("../../tests/fixtures/fleet-contract.json")).unwrap()
     }
