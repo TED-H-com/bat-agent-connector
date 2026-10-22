@@ -95,7 +95,14 @@ for (const locale of ['en-US', 'zh-TW']) for (const status of [401, 403]) {
       await page.reload();
       await expect(page.getByRole('alert')).toContainText(copy.global_token_rejected);
       expect(presentations).toBe(2);
+      const retry = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/capabilities');
       await page.getByRole('button', {name: copy.connection_retry_remembered, exact: true}).click();
+      expect((await retry).status()).toBe(status);
+      // Reload only after this retry's response has restored the refusal record.
+      // The earlier alert can remain visible while the retry is still pending.
+      await expect.poll(() => page.evaluate(() => Object.keys(localStorage)
+        .filter(key => key.startsWith('batc.credential-refused.'))
+        .map(key => JSON.parse(localStorage.getItem(key)!).status))).toEqual([status]);
       await expect.poll(() => presentations).toBe(3);
       await expect(page.getByRole('alert')).toContainText(copy.global_token_rejected);
       await page.reload();
