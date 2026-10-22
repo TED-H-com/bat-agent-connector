@@ -227,14 +227,16 @@ async function connectBrowserToken(token) {
   await activate(caps);
 }
 function retryRememberedTokenButton() {
-  if (state.token === browserSessionToken || !state.connectionError?.credentialRefused) return null;
   const retry = h('button', {onclick: async () => {
     try {await connectBrowserToken(state.token);}
     catch (error) {if (error.code !== 'CONNECTION_CHANGED') state.connectionError = error;}
     await route();
   }}, t('connection_retry_remembered'));
+  const render = () => {retry.hidden = !state.token || state.token === browserSessionToken || !state.connectionError?.credentialRefused;};
+  render();
   const paint = () => {
-    if (!retry.isConnected || !state.connectionError?.credentialRefused) {retry.remove(); connectionPainters.delete(paint);}
+    if (!retry.isConnected) connectionPainters.delete(paint);
+    else render();
   };
   connectionPainters.add(paint);
   return retry;
