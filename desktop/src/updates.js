@@ -71,7 +71,9 @@ export async function mountUpdates(main, {h, t, versionInput = () => ({desktop:t
       if (!next || typeof next.current_version !== "string" || typeof next.available !== "boolean" || !phases.has(next.phase)
           || next.candidate && ["candidate_id", "version", "source_sha"].some(k => typeof next.candidate[k] !== "string")) throw new Error("UPDATE_STATUS_INVALID");
       value = next; readable = true; readAt = new Date().toISOString();
-      onRead({current_version:next.current_version}, readAt);
+      onRead({current_version:next.current_version,candidate:next.candidate ? {
+        version:next.candidate.version,source_sha:next.candidate.source_sha,checked_at:next.candidate.checked_at,
+      } : null}, readAt);
       if (next.code && next.available && !next.installation) message.textContent = `${t("update_problem")} ${next.code}`;
     } catch {
       if (active()) { readable = false; onRead(null,null); message.textContent = t(input.action === "install" ? "update_unknown" : "update_read_failed"); }

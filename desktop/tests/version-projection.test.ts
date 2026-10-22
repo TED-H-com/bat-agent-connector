@@ -98,7 +98,7 @@ for(const [name,caps] of Object.entries(connectorUpdates) as [string,any][])test
   assert.equal(installed.observed_at,reported?at:null);
   assert.equal(installed.version,reported?caps.connector_update.installed.version:null);
   assert.equal(installed.commit,reported?caps.connector_update.installed.commit:null);
-  assert.equal(bundle.versions.connector_installation_difference,reported?(['differs','rollback_differs'].includes(name)?'differs':'same'):'unknown');
+  assert.equal(bundle.versions.connector_installation_difference,reported?(['differs','rollback_differs','released'].includes(name)?'differs':'same'):'unknown');
   assert.equal(installed.channel,reported?'preview':null);
   assert.equal(installed.last?.status??null,reported?caps.connector_update.last.status:null);
   assert.equal(installed.last?.at??null,reported?'2026-10-22T12:00:00.123456+00:00':null);
@@ -190,4 +190,32 @@ test('released slots and the unobserved MCP process are explicitly unknown by de
     assert.equal(row(bundle,id).observed_at,null);
     assert.equal(row(bundle,id).source,'not_reported');
   }
+});
+
+
+test('released, installed and answering Connector facts retain their independent values and clocks',()=>{
+  const caps=connectorUpdates.released;
+  const bundle=buildDiagnostics({...input('differs'),caps});
+  const released=row(bundle,'connector_released'),installed=row(bundle,'connector_installed'),answering=row(bundle,'connector');
+  assert.equal(released.version,'0.2.9');assert.equal(released.commit,'c'.repeat(40));
+  assert.equal(installed.version,'0.2.8');assert.equal(answering.version,'0.2.7');
+  assert.equal(released.observed_at,caps.connector_update.release_check.completed_at);
+  assert.equal(released.published_at,caps.connector_update.release_check.candidate.published_at);
+  assert.equal(installed.last.at,caps.connector_update.last.at);
+  assert.equal(answering.observed_at,at);
+  assert.equal(new Set([released.observed_at,installed.last.at,answering.observed_at]).size,3);
+  const later=row(buildDiagnostics({...input('differs'),caps,capabilitiesReadAt:'2026-10-23T00:00:00Z'}),'connector_released');
+  assert.deepEqual(later,released);
+  for(const caps of [connectorUpdates.same,connectorUpdates.failed,connectorUpdates.outside_root]) {
+    assert.equal(row(buildDiagnostics({...input('differs'),caps}),'connector_released').source,'not_reported');
+  }
+  assert.equal(row(buildDiagnostics({...input('differs'),caps,online:false}),'connector_released').version,null);
+});
+for(const locale of ['en','zh-TW'])test(`released Connector facts agree with diagnostics in ${locale}`,()=>{
+  const projection=buildDiagnostics({...input('differs'),caps:connectorUpdates.released}).versions;
+  const t=(key,vars={})=>diagnosticsStrings[locale][key]?.replace(/\{(\w+)\}/g,(_,k)=>vars[k]??'')??key;
+  const text=versionFacts({h:(_tag,_props,...children)=>children.flat(Infinity).filter(value=>value!==null).join(' '),t,projection});
+  for(const value of ['0.2.9','c'.repeat(40),'2026-10-22T13:00:00.123456+00:00','2026-10-17T00:00:00Z'])assert.ok(text.includes(value),value);
+  assert.ok(text.includes(locale==='en'?'Released Connector':'已發布的 Connector'));
+  assert.ok(text.includes(locale==='en'?'Release check completed at':'發布檢查完成時間'));
 });

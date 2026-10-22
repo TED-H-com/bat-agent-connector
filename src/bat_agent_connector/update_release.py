@@ -9,6 +9,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime
 
 REPOSITORY = "https://github.com/TED-H-com/bat-agent-connector"
 API = "https://api.github.com/repos/TED-H-com/bat-agent-connector/releases?per_page=30"
@@ -90,7 +91,14 @@ def manifest(release, raw):
         doc = json.loads(raw)
         tag = release["tag_name"]
         require(isinstance(tag, str) and re.fullmatch(r"v[0-9][A-Za-z0-9.+-]{0,95}", tag), "invalid_release_tag")
-        require(not release.get("draft") and release.get("published_at"), "release_unpublished")
+        published_at = release.get("published_at")
+        require(not release.get("draft") and isinstance(published_at, str) and len(published_at) <= 40,
+                "release_unpublished")
+        try:
+            published = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise UpdateError("release_unpublished") from exc
+        require(published.tzinfo is not None, "release_unpublished")
         require(doc["format"] == 1 and doc["repository"] == REPOSITORY and doc["release"] == tag,
                 "release_manifest_mismatch")
         update = doc["connector_update"]
@@ -106,7 +114,7 @@ def manifest(release, raw):
         require(doc["validation"]["status"] == "passed", "release_not_validated")
         return {"commit": sha, "version": ver, "tag": tag, "epoch": EPOCH,
                 "skill_sha256": skill, "manifest_sha256": hashlib.sha256(raw).hexdigest(),
-                "prerelease": bool(release.get("prerelease"))}
+                "prerelease": bool(release.get("prerelease")), "published_at": published_at}
     except (KeyError, TypeError, json.JSONDecodeError) as exc:
         raise UpdateError("release_manifest_invalid") from exc
 

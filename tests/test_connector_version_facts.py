@@ -8,14 +8,20 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from mcp.server.mcpserver import MCPServer
 
 from bat_agent_connector import api_auth, api_v1, mcp_identity, updater
-from mcp.server.mcpserver import MCPServer
 from bat_agent_connector import build_identity as identity_module
 from bat_agent_connector.config import Config
 from bat_agent_connector.task_daemon import TaskDaemon
 from bat_agent_connector.update_release import UpdateError
-from tests.test_connector_updates import deployment, make_package, publication, release, update_tree  # noqa: F401
+from tests.test_connector_updates import (  # noqa: F401
+    deployment,
+    make_package,
+    publication,
+    release,
+    update_tree,
+)
 
 pytestmark = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux updater producer")
 GOLDEN = Path(__file__).parent / "fixtures" / "connector-update-facts.json"

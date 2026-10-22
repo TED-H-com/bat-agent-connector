@@ -7,7 +7,7 @@ use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
     sync::Mutex,
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tauri_plugin_updater::{Update, UpdaterExt};
 
@@ -38,6 +38,7 @@ pub struct Candidate {
     pub version: String,
     pub source_sha: String,
     pub workflow_version: String,
+    pub checked_at: f64,
 }
 
 #[derive(Clone, Serialize)]
@@ -155,6 +156,10 @@ fn metadata(update: &Update) -> Result<Candidate, String> {
         version: update.version.clone(),
         source_sha: source.into(),
         workflow_version: workflow.into(),
+        checked_at: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| "UPDATE_CLOCK_UNAVAILABLE")?
+            .as_secs_f64(),
     })
 }
 
@@ -498,6 +503,10 @@ mod tests {
             metadata(update).expect("release producer's canonical workflow must be accepted");
         assert_eq!(candidate.workflow_version, workflow);
         assert_eq!(candidate.version, update.version);
+        let mut candidate = serde_json::to_value(candidate).unwrap();
+        candidate["candidate_id"] = serde_json::json!("opaque-native-candidate");
+        candidate["checked_at"] = serde_json::json!(1792670400.125);
+        println!("NATIVE_UPDATE_CANDIDATE={candidate}");
     }
 
     // The real updater verifies ephemeral signatures against a bounded loopback peer.

@@ -295,6 +295,8 @@ class Updater:
         result = {"enabled": state["enabled"], "channel": state["channel"],
                   "installed": current["release"] if matches else None, "installation_matches_state": matches,
                   "previous": state["previous"], "last": state.get("last"),
+                  "release_check": (state.get("release_check")
+                                    if state.get("release_check", {}).get("channel") == state["channel"] else None),
                   "pending": bool(state.get("pending") or state.get("enrollment")),
                   "activation": "next_launch", "processes_restarted": False,
                   "scheduler_configured": bool(state.get("schedule_complete"))}
@@ -302,6 +304,21 @@ class Updater:
 
     def status(self, state=None):
         return self._status_snapshot(state)[2]
+
+    def _check_release(self, state):
+        # Only the existing release producer can supply this observation. Persist
+        # completion before installation; status/capabilities never renew it.
+        candidate = self.find_release(state["channel"])
+        state["release_check"] = {"channel": state["channel"], "completed_at": timestamp(),
+                                  "candidate": candidate}
+        self.save(state)
+        return candidate
+
+    def check(self):
+        with self.locked():
+            state = self.read()
+            candidate = self._check_release(state)
+            return {"available": candidate, **self.status(state)}
 
     def apply(self):
         with self.locked():
@@ -311,7 +328,7 @@ class Updater:
             try:
                 self.reconcile(state)
                 self.verify(state["versions"][state["current"]])
-                candidate = self.find_release(state["channel"])
+                candidate = self._check_release(state)
                 current = state["versions"][state["current"]]["release"]
                 if not candidate or version(candidate["version"]) < version(current["version"]):
                     state["last"] = {"status": "no_newer_release", "at": timestamp()}
@@ -402,6 +419,27 @@ class Updater:
             return self.status(state)
 
 
+def _public_release_check(check):
+    if check is None:
+        return None
+    at = check["completed_at"]
+    require(isinstance(at, str) and len(at) <= 40
+            and datetime.fromisoformat(at.replace("Z", "+00:00")).tzinfo is not None, "update_state_unreadable")
+    candidate = check["candidate"]
+    if candidate is not None:
+        version(candidate["version"])
+        commit(candidate["commit"])
+        published = candidate.get("published_at")
+        # Older private state has no supported publication observation.
+        if published is None:
+            return None
+        require(isinstance(published, str) and len(published) <= 40
+                and datetime.fromisoformat(published.replace("Z", "+00:00")).tzinfo is not None,
+                "update_state_unreadable")
+        candidate = {key: candidate[key] for key in ("version", "commit", "published_at")}
+    return {"completed_at": at, "candidate": candidate}
+
+
 def _public_status(result):
     """Explicit public fields only; private receipts and installation proofs stay local."""
     require(result["installation_matches_state"], "update_installation_mismatch")
@@ -425,7 +463,8 @@ def _public_status(result):
         last = public_last
     return {"state": "reported", "enabled": result["enabled"], "channel": result["channel"],
             "installed": {"version": installed["version"], "commit": sha}, "pending": result["pending"],
-            "last": last, "activation": "next_launch"}
+            "last": last, "activation": "next_launch",
+            "release_check": _public_release_check(result.get("release_check"))}
 
 
 def _capture_process_installation():
@@ -500,9 +539,6 @@ def main(argv=None):
                 result = updater.policy(True, args.channel)
         elif args.action == "disable":
             result = updater.policy(False)
-        elif args.action == "check":
-            state = updater.read()
-            result = {"available": updater.find_release(state["channel"]), **updater.status(state)}
         elif args.action == "run":
             result = updater.apply()
         elif args.action == "rollback" and args.preview:

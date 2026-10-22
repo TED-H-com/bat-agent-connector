@@ -116,7 +116,7 @@ for(const locale of ['en-US','zh-TW'])for(const width of [390,1440])for(const na
         expect(bundle.versions.rows.find(row=>row.id==='connector').commit).toBe(answering.commit);
         for(const row of bundle.versions.rows){
           const rendered=page.locator(`[data-diagnostics-summary] [data-version-row=${row.id}]`);
-          if(!native&&['desktop','desktop_update'].includes(row.id)){await expect(rendered).toHaveCount(0);continue;}
+          if(!native&&['desktop','desktop_update','desktop_released'].includes(row.id)){await expect(rendered).toHaveCount(0);continue;}
           for(const value of [row.version,row.commit,row.digest,row.observed_at,row.recorded_at].filter(Boolean)){
             await expect(rendered).toContainText(value);
             await expect(about.locator(`[data-version-row=${row.id}]`)).toContainText(value);
@@ -143,3 +143,36 @@ for(const locale of ['en-US','zh-TW'])for(const width of [390,1440])for(const na
     }finally{await context.close();}
   });
 }
+
+
+for(const locale of ['en-US','zh-TW'])test(`released Connector and unknown MCP agree across screen and export ${locale}`,async({browser})=>{
+  const context=await browser.newContext({locale}),page=await context.newPage();
+  const producer=structuredClone(bootstrap);
+  Object.assign(producer.capabilities,connectorUpdates.released);
+  const state=await diagnosticsFixture(page,false,true,producer);
+  try {
+    await page.goto('/dashboard/#/settings?section=about');
+    const about=page.locator('#settings-panel-about');
+    const released=about.locator('[data-version-row=connector_released]');
+    const en=locale==='en-US';
+    await expect(released).toContainText(en?'Released Connector':'已發布的 Connector');
+    for(const value of ['0.2.9','c'.repeat(40),'2026-10-22T13:00:00.123456+00:00','2026-10-17T00:00:00Z'])await expect(released).toContainText(value);
+    await expect(about.locator('[data-version-row=connector_installed]')).toContainText('0.2.8');
+    await expect(about.locator('[data-version-row=connector]')).toContainText('0.2.7');
+    const mcp=about.locator('[data-version-row=mcp]');
+    await expect(mcp).toContainText(en?'not observed by Dashboard':'Dashboard 尚無觀察資料');
+    await expect(mcp).toContainText(en?'Source: not reported':'來源：未回報');
+    await page.locator('[data-export-diagnostics]').click();
+    const summary=page.locator('[data-diagnostics-summary]');
+    const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
+    for(const id of ['connector_released','connector_installed','connector','mcp']){
+      const fact=bundle.versions.rows.find(row=>row.id===id);
+      for(const value of [fact.version,fact.commit,fact.observed_at,fact.published_at].filter(Boolean)) {
+        await expect(about.locator(`[data-version-row=${id}]`)).toContainText(value);
+        await expect(summary.locator(`[data-version-row=${id}]`)).toContainText(value);
+      }
+    }
+    expect(bundle.versions.rows.find(row=>row.id==='mcp').source).toBe('not_reported');
+    expect(state.reads.some(path=>path.includes('identity')||path.includes('mcp'))).toBe(false);
+  }finally{await context.close();}
+});
