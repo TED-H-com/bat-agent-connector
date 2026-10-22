@@ -33,9 +33,8 @@ export function centralServiceStatus({token, pollHealth, online, managedRecovery
 }
 
 // Requirements describe each caller’s action checks. Transport labels explain
-// refusals; native image paste has no upload path in the WebView.
+// refusals; clipboard format support is reported by the native reader.
 export function clientActionGate(facts, requirements) {
-  if (requirements.paste && facts.nativeDesktop) return {allowed: false, reason: 'native_paste_unsupported'};
   const ready = requirements.post || requirements.attachment;
   const blocked = (requirements.post && (!facts.token || facts.nativeBusy))
     || (ready && (!facts.online || !facts.viewReady))

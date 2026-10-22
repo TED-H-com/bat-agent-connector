@@ -1,6 +1,6 @@
 // Native paths, tokens, source bytes and credential bindings never enter this module.
 import {nativeFilesPick, nativeFilesStatus, nativeFilesUpload, nativeFilesControl,
-  nativeFilesSave, nativeFilesPreview, nativeFilesDropTarget} from "./transport/index.ts";
+  nativeFilesSave, nativeFilesPreview, nativeFilesDropTarget, nativeFilesPasteArm, nativeFilesPaste} from "./transport/index.ts";
 import {clientActionError} from './error-presentation.js';
 
 const pending = new Set(["checking", "uploading", "verifying", "downloading", "saving"]);
@@ -13,7 +13,13 @@ export function nativeAttachments({h, t, guard, canWrite, draftId, onReceipt, on
   const known = new Map(), downloads = new Set();
   let armed = false, timer, refreshing, picking = false, objectUrl = null, stopped = false;
   const live = () => {guard(); if (!box.isConnected) throw new Error("Attachment form changed");};
-  const failure = error => {try {live(); notice.textContent = String(error?.message || error);} catch { /* old view */ }};
+  const failure = error => {
+    try {
+      live();
+      const key = error?.code && `error_code_${error.code}`;
+      notice.textContent = key && t(key) !== key ? t(key) : String(error?.message || error);
+    } catch { /* old view */ }
+  };
   const writable = () => {live(); const gate = canWrite(); if (!gate.allowed) throw clientActionError(gate.reason, t);};
   const act = async (receipt, action) => {
     try {
@@ -73,16 +79,26 @@ export function nativeAttachments({h, t, guard, canWrite, draftId, onReceipt, on
     refreshing = task;
     try {await task;} finally {if (refreshing === task) refreshing = null;}
   };
-  const pick = async () => {
+  const select = async (read, rethrow = false) => {
     if (picking) return;
     try {
       writable(); picking = true;
-      const receipts = await nativeFilesPick(draftId); live();
-      for (const receipt of receipts) {adopt(receipt); writable(); await nativeFilesUpload(receipt.transfer_id); live();}
+      const receipts = await read(); live();
+      for (const receipt of receipts) {
+        adopt(receipt); render(); writable(); await nativeFilesUpload(receipt.transfer_id); live();
+      }
       await refresh();
-    } catch (error) {failure(error); await refresh().catch(failure);}
-    finally {picking = false;}
+    } catch (error) {
+      const present = rethrow ? () => {} : failure;
+      present(error); await refresh().catch(present);
+      if (rethrow) throw error; // The composer retains its typed unsupported/error presentation.
+    } finally {picking = false;}
   };
+  const pick = () => select(() => nativeFilesPick(draftId));
+  const paste = () => select(async () => {
+    await nativeFilesPasteArm(draftId); writable();
+    return [await nativeFilesPaste(draftId)];
+  }, true);
   const drop = h("button", {class: "secondary", "aria-pressed": false, onclick: async () => {
     try {
       writable(); armed = !armed; await nativeFilesDropTarget(draftId, armed); live();
@@ -126,5 +142,5 @@ export function nativeAttachments({h, t, guard, canWrite, draftId, onReceipt, on
     if (!stopped) timer = setTimeout(tick, 1000);
   };
   queueMicrotask(tick);
-  return {box, pick, drop, actions, refresh, has: id => known.has(id)};
+  return {box, pick, paste, drop, actions, refresh, has: id => known.has(id)};
 }

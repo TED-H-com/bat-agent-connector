@@ -2224,7 +2224,8 @@ var init_ui_strings = __esmMin((() => {
 			error_code_CLIENT_ACTION_MANAGE_REQUIRED: "This attachment action needs Manage access. Ask the Connector administrator for Manage access, then try again.",
 			error_code_CLIENT_ACTION_ATTACHMENTS_UNAVAILABLE: "Attachments are unavailable on this connection. Ask the Connector administrator to check attachment support.",
 			error_code_CLIENT_ACTION_UPLOADS_NOT_ALLOWED: "Attachment uploads are not allowed on this connection. Ask the Connector administrator to allow uploads, then try again.",
-			error_code_CLIENT_ACTION_NATIVE_PASTE_UNSUPPORTED: "Image paste is not supported in the desktop app. Use Choose files, or Enable file drop and drop the file.",
+			error_code_NATIVE_CLIPBOARD_REFUSED: "The clipboard image could not be read. Focus this attachment form and paste again, or choose a file.",
+			error_code_CLIENT_ACTION_NATIVE_PASTE_UNSUPPORTED: "This platform or clipboard image format does not support image paste. Use Choose files or Enable file drop.",
 			ui_switch_workspace: "Switch workspace",
 			ui_new_workspace: "New workspace",
 			ui_report: "Report",
@@ -2330,7 +2331,8 @@ var init_ui_strings = __esmMin((() => {
 			error_code_CLIENT_ACTION_MANAGE_REQUIRED: "此附件操作需要管理權限。請向 Connector 管理員申請管理權限，再試一次。",
 			error_code_CLIENT_ACTION_ATTACHMENTS_UNAVAILABLE: "目前連線無法使用附件。請聯絡 Connector 管理員確認附件支援。",
 			error_code_CLIENT_ACTION_UPLOADS_NOT_ALLOWED: "目前連線未允許附件上傳。請聯絡 Connector 管理員開放上傳，再試一次。",
-			error_code_CLIENT_ACTION_NATIVE_PASTE_UNSUPPORTED: "桌面版不支援貼上圖片。請使用「選擇檔案」，或先「啟用拖放」再拖入檔案。",
+			error_code_NATIVE_CLIPBOARD_REFUSED: "無法讀取剪貼簿圖片。請將焦點移回此附件表單後重新貼上，或選擇檔案。",
+			error_code_CLIENT_ACTION_NATIVE_PASTE_UNSUPPORTED: "此平台或剪貼簿圖片格式不支援貼上。請使用「選擇檔案」，或先「啟用拖放」。",
 			ui_switch_workspace: "切換工作空間",
 			ui_new_workspace: "新增工作空間",
 			ui_report: "報告",
@@ -14183,10 +14185,6 @@ function centralServiceStatus({ token, pollHealth, online, managedRecovery }) {
 	};
 }
 function clientActionGate(facts, requirements) {
-	if (requirements.paste && facts.nativeDesktop) return {
-		allowed: false,
-		reason: "native_paste_unsupported"
-	};
 	const ready = requirements.post || requirements.attachment;
 	if (!(requirements.post && (!facts.token || facts.nativeBusy) || ready && (!facts.online || !facts.viewReady) || requirements.supported && !facts.attachmentsSupported || requirements.manage && !facts.manageAllowed || requirements.uploads && !facts.uploadsAllowed)) return {
 		allowed: true,
@@ -25552,7 +25550,7 @@ async function connectorUploadArtifact(operationId, bytes, browserToken) {
 		data: await res.json().catch(() => ({}))
 	};
 }
-var nativeDesktop, nativeFileSupport, nativeBriefExportSupport, browserSessionToken, browserCsrf, nativeDiagnosticsSave, nativeFilesStatus, nativeFilesPick, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeBriefSave, nativeFilesPreview, nativeSelectRole, nativeConnect, managedControl, nativeDisconnect, nativeDialogLocale, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
+var nativeDesktop, nativeFileSupport, nativeBriefExportSupport, browserSessionToken, browserCsrf, nativeDiagnosticsSave, nativeFilesStatus, nativeFilesPick, nativeFilesPasteArm, nativeFilesPaste, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeBriefSave, nativeFilesPreview, nativeSelectRole, nativeConnect, managedControl, nativeDisconnect, nativeDialogLocale, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
 var init_transport = __esmMin((() => {
 	init_core();
 	init_i18n();
@@ -25564,6 +25562,8 @@ var init_transport = __esmMin((() => {
 	nativeDiagnosticsSave = (input) => invoke("native_diagnostics_save", { input });
 	nativeFilesStatus = () => invoke("native_files_status");
 	nativeFilesPick = (draftId) => invoke("native_files_pick", { draftId });
+	nativeFilesPasteArm = (draftId) => invoke("native_files_paste_arm", { draftId });
+	nativeFilesPaste = (draftId) => invoke("native_files_paste", { draftId });
 	nativeFilesUpload = (handleId) => invoke("native_files_upload", { handleId });
 	nativeFilesDropTarget = (draftId, enabled) => invoke("native_files_drop_target", {
 		draftId,
@@ -61817,7 +61817,8 @@ function nativeAttachments({ h, t, guard, canWrite, draftId, onReceipt, onDiscar
 	const failure = (error) => {
 		try {
 			live();
-			notice.textContent = String(error?.message || error);
+			const key = error?.code && `error_code_${error.code}`;
+			notice.textContent = key && t(key) !== key ? t(key) : String(error?.message || error);
 		} catch {}
 	};
 	const writable = () => {
@@ -61922,27 +61923,36 @@ function nativeAttachments({ h, t, guard, canWrite, draftId, onReceipt, onDiscar
 			if (refreshing === task) refreshing = null;
 		}
 	};
-	const pick = async () => {
+	const select = async (read, rethrow = false) => {
 		if (picking) return;
 		try {
 			writable();
 			picking = true;
-			const receipts = await nativeFilesPick(draftId);
+			const receipts = await read();
 			live();
 			for (const receipt of receipts) {
 				adopt(receipt);
+				render();
 				writable();
 				await nativeFilesUpload(receipt.transfer_id);
 				live();
 			}
 			await refresh();
 		} catch (error) {
-			failure(error);
-			await refresh().catch(failure);
+			const present = rethrow ? () => {} : failure;
+			present(error);
+			await refresh().catch(present);
+			if (rethrow) throw error;
 		} finally {
 			picking = false;
 		}
 	};
+	const pick = () => select(() => nativeFilesPick(draftId));
+	const paste = () => select(async () => {
+		await nativeFilesPasteArm(draftId);
+		writable();
+		return [await nativeFilesPaste(draftId)];
+	}, true);
 	const drop = h("button", {
 		class: "secondary",
 		"aria-pressed": false,
@@ -62034,6 +62044,7 @@ function nativeAttachments({ h, t, guard, canWrite, draftId, onReceipt, onDiscar
 	return {
 		box,
 		pick,
+		paste,
 		drop,
 		actions,
 		refresh,
@@ -70246,6 +70257,41 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		const cd = e.clipboardData;
 		if (!cd) return;
 		const items = cd.items ? Array.from(cd.items) : [];
+		if (nativeDesktop) {
+			if (!items.some((item) => item.kind === "file" && item.type.startsWith("image/"))) return;
+			e.preventDefault();
+			const gate = attachmentGate({
+				attachment: true,
+				supported: true,
+				manage: true,
+				uploads: true
+			});
+			if (!gate.allowed) {
+				refuseAttachment(gate.reason);
+				return;
+			}
+			if (!native) {
+				refuseAttachment("attachments_unavailable");
+				return;
+			}
+			pendingSelections++;
+			changed();
+			fill(status);
+			native.paste().catch((error) => {
+				try {
+					guard(true);
+					if (error?.code === "CLIENT_ACTION_NATIVE_PASTE_UNSUPPORTED") refuseAttachment("native_paste_unsupported");
+					else fill(status, errorBox(error?.code ? new ApiError(0, error.code, error.reason || "") : error, {
+						sourceRefresh: false,
+						within: status
+					}));
+				} catch {}
+			}).finally(() => {
+				pendingSelections--;
+				changed();
+			});
+			return;
+		}
 		const cdFiles = cd.files ? Array.from(cd.files) : [];
 		const imageCandidates = [];
 		if (cdFiles.length > 0) {
