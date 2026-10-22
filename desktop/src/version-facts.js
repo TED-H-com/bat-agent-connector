@@ -18,6 +18,7 @@ export function versionFacts({h, t, projection}) {
           ' · ', row.observed_at || t('diag_version_time_unknown')),
         row.id === 'connector_installed' ? h('div', {},
           row.state !== 'reported' ? h('p', {class:'muted'}, t('diag_version_update_'+row.state), row.code ? ' · '+row.code : '') : null,
+          row.installed_at ? h('p',{class:'muted'},t('diag_version_installed_at',{time:row.installed_at})) : null,
           row.channel ? h('p', {class:'muted'}, t('diag_version_update_channel',{channel:t('diag_version_channel_'+row.channel)})) : null,
           row.enabled !== null ? h('p', {class:'muted'}, t('diag_version_update_'+(row.enabled?'enabled':'disabled'))) : null,
           row.pending === true ? h('p', {class:'muted'}, t('diag_version_update_pending')) : null,

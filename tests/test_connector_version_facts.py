@@ -17,6 +17,7 @@ from bat_agent_connector.task_daemon import TaskDaemon
 from bat_agent_connector.update_release import UpdateError
 from tests.test_connector_updates import (  # noqa: F401
     deployment,
+    make_deployment,
     make_package,
     publication,
     release,
@@ -212,6 +213,7 @@ async def test_completed_release_check_retains_three_independent_builds_and_cloc
     assert check == {"completed_at": completed, "candidate": {
         "version": "0.2.9", "commit": "c" * 40, "published_at": "2026-10-17T00:00:00Z"}}
     assert caps["build"] == build
+    assert caps["connector_update"]["installed_at"] == AT
     assert caps["connector_update"]["installed"] == {"version": "0.2.8", "commit": "b" * 40}
     monkeypatch.setattr(updater, "timestamp", lambda: "2026-10-22T14:00:00+00:00")
     assert (await read_capabilities(tmp_path)) == caps
@@ -246,7 +248,8 @@ async def test_identified_mcp_compares_only_its_own_next_launch_installation(pro
             u.install = lambda root, candidate, **_: make_package(root, candidate)
             u.apply()
         elif scenario == "foreign":
-            other = updater.Updater(u.home.parent / "other-home")
+            other, other_receipt, _ = make_deployment(u.home.parent / "other-installation")
+            other.enroll(other_receipt, "preview")
             monkeypatch.setenv("HOME", str(other.home))
         elif scenario == "not_managed":
             monkeypatch.setattr(updater, "_PROCESS_INSTALLATION", None)
@@ -264,6 +267,8 @@ async def test_identified_mcp_compares_only_its_own_next_launch_installation(pro
     next_launch = result["next_launch"]
     expected = scenario if scenario in {"same", "differs"} else "unknown"
     assert next_launch["difference"] == expected
+    if scenario == "foreign":
+        assert next_launch["state"] == "not_managed"
     assert next_launch["restart_notice"] == ({"en": "Restart to load 0.2.8", "zh-TW": "重新啟動以載入 0.2.8"}
                                                if scenario == "differs" else None)
     assert next_launch["installed"] == ({"version": "0.2.8" if scenario == "differs" else "0.2.7",
@@ -271,3 +276,18 @@ async def test_identified_mcp_compares_only_its_own_next_launch_installation(pro
                                           if expected != "unknown" else None)
     assert update_tree(u.root) == before
     assert "private central" not in contents[0].content
+
+
+async def test_older_private_state_does_not_invent_release_or_installation_clocks(process, tmp_path, monkeypatch):
+    u, receipt, _ = process
+    u.enroll(receipt, "preview")
+    monkeypatch.setattr(updater, "_PROCESS_INSTALLATION", updater._capture_process_installation())
+    state = u.read()
+    state.pop("installed_at")
+    assert "release_check" not in state
+    u.save(state)
+    before = update_tree(u.root)
+    result = (await read_capabilities(tmp_path))["connector_update"]
+    assert result["state"] == "reported"
+    assert result["release_check"] is None and result["installed_at"] is None
+    assert update_tree(u.root) == before

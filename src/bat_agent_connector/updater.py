@@ -207,6 +207,7 @@ class Updater:
                     replace_link(path, target, enrollment[str(path)])
             state.pop("enrollment")
             state["last"] = {"status": "enrolled_for_next_launch", "at": timestamp()}
+            state["installed_at"] = state["last"]["at"]
             self.save(state)
         pending = state.get("pending")
         if pending:
@@ -222,6 +223,7 @@ class Updater:
             state["previous"] = pending["from"]
             state["current"] = pending["to"]
             state["last"] = self.outcome(pending)
+            state["installed_at"] = state["last"]["at"]
             state.pop("pending")
             self.save(state)
         self.check_links()
@@ -295,6 +297,7 @@ class Updater:
         result = {"enabled": state["enabled"], "channel": state["channel"],
                   "installed": current["release"] if matches else None, "installation_matches_state": matches,
                   "previous": state["previous"], "last": state.get("last"),
+                  "installed_at": state.get("installed_at"),
                   "release_check": (state.get("release_check")
                                     if state.get("release_check", {}).get("channel") == state["channel"] else None),
                   "pending": bool(state.get("pending") or state.get("enrollment")),
@@ -419,12 +422,19 @@ class Updater:
             return self.status(state)
 
 
+def _public_time(at):
+    if at is not None:
+        require(isinstance(at, str) and len(at) <= 40
+                and datetime.fromisoformat(at.replace("Z", "+00:00")).tzinfo is not None,
+                "update_state_unreadable")
+    return at
+
+
 def _public_release_check(check):
     if check is None:
         return None
-    at = check["completed_at"]
-    require(isinstance(at, str) and len(at) <= 40
-            and datetime.fromisoformat(at.replace("Z", "+00:00")).tzinfo is not None, "update_state_unreadable")
+    at = _public_time(check["completed_at"])
+    require(at is not None, "update_state_unreadable")
     candidate = check["candidate"]
     if candidate is not None:
         version(candidate["version"])
@@ -433,9 +443,7 @@ def _public_release_check(check):
         # Older private state has no supported publication observation.
         if published is None:
             return None
-        require(isinstance(published, str) and len(published) <= 40
-                and datetime.fromisoformat(published.replace("Z", "+00:00")).tzinfo is not None,
-                "update_state_unreadable")
+        _public_time(published)
         candidate = {key: candidate[key] for key in ("version", "commit", "published_at")}
     return {"completed_at": at, "candidate": candidate}
 
@@ -463,7 +471,7 @@ def _public_status(result):
         last = public_last
     return {"state": "reported", "enabled": result["enabled"], "channel": result["channel"],
             "installed": {"version": installed["version"], "commit": sha}, "pending": result["pending"],
-            "last": last, "activation": "next_launch",
+            "last": last, "activation": "next_launch", "installed_at": _public_time(result.get("installed_at")),
             "release_check": _public_release_check(result.get("release_check"))}
 
 

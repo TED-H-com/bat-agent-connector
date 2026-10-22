@@ -10,6 +10,7 @@ const bootstrap = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-
 const runtime = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-runtime-identity.json', import.meta.url), 'utf8'));
 const adapter = JSON.parse(readFileSync(new URL('../../tests/fixtures/pm-version-facts.json', import.meta.url), 'utf8'));
 const connectorUpdates = JSON.parse(readFileSync(new URL('../../tests/fixtures/connector-update-facts.json', import.meta.url), 'utf8'));
+const desktopCandidate = JSON.parse(readFileSync(new URL('../../tests/fixtures/desktop-update-candidate.json', import.meta.url), 'utf8'));
 const at = '2026-10-20T12:00:00.000Z';
 const input = name => ({caps:bootstrap.capabilities, managedRuntime:runtime[name], desktop:true,
   capabilitiesReadAt:at, managedReadAt:at, online:true, exportedAt:at});
@@ -85,7 +86,7 @@ test('an older Connector leaves the next-launch installation explicitly unknown'
   assert.deepEqual(row(bundle,'connector_installed'),{
     id:'connector_installed',version:null,commit:null,digest:null,source:'not_reported',
     observed_at:null,period:'unknown',build_source:null,state:'not_reported',code:null,
-    enabled:null,channel:null,pending:null,last:null,
+    enabled:null,channel:null,pending:null,last:null,installed_at:null,
   });
   assert.equal(bundle.versions.connector_installation_difference,'unknown');
 });
@@ -201,9 +202,9 @@ test('released, installed and answering Connector facts retain their independent
   assert.equal(installed.version,'0.2.8');assert.equal(answering.version,'0.2.7');
   assert.equal(released.observed_at,caps.connector_update.release_check.completed_at);
   assert.equal(released.published_at,caps.connector_update.release_check.candidate.published_at);
-  assert.equal(installed.last.at,caps.connector_update.last.at);
+  assert.equal(installed.installed_at,caps.connector_update.last.at);
   assert.equal(answering.observed_at,at);
-  assert.equal(new Set([released.observed_at,installed.last.at,answering.observed_at]).size,3);
+  assert.equal(new Set([released.observed_at,installed.installed_at,answering.observed_at]).size,3);
   const later=row(buildDiagnostics({...input('differs'),caps,capabilitiesReadAt:'2026-10-23T00:00:00Z'}),'connector_released');
   assert.deepEqual(later,released);
   for(const caps of [connectorUpdates.same,connectorUpdates.failed,connectorUpdates.outside_root]) {
@@ -218,4 +219,20 @@ for(const locale of ['en','zh-TW'])test(`released Connector facts agree with dia
   for(const value of ['0.2.9','c'.repeat(40),'2026-10-22T13:00:00.123456+00:00','2026-10-17T00:00:00Z'])assert.ok(text.includes(value),value);
   assert.ok(text.includes(locale==='en'?'Released Connector':'已發布的 Connector'));
   assert.ok(text.includes(locale==='en'?'Release check completed at':'發布檢查完成時間'));
+});
+
+
+test('native completed candidate stays independent of status reads and incomplete or failed reads',()=>{
+  const value={...input('differs'),updater:{candidate:desktopCandidate,current_version:'0.1.0'},updaterReadAt:at};
+  const first=row(buildDiagnostics(value),'desktop_released');
+  assert.equal(first.version,desktopCandidate.version);assert.equal(first.commit,desktopCandidate.source_sha);
+  assert.equal(first.observed_at,time(desktopCandidate.checked_at));
+  assert.equal(row(buildDiagnostics(value),'desktop_update').version,'0.1.0');
+  assert.deepEqual(row(buildDiagnostics({...value,updaterReadAt:'2026-10-23T00:00:00Z'}),'desktop_released'),first);
+  for(const candidate of [null,{...desktopCandidate,checked_at:undefined}]) {
+    const unknown=row(buildDiagnostics({...value,updater:{...value.updater,candidate}}),'desktop_released');
+    assert.equal(unknown.version,null);assert.equal(unknown.observed_at,null);assert.equal(unknown.source,'not_reported');
+  }
+  assert.equal(row(buildDiagnostics({...value,updaterReadFailed:true}),'desktop_released').source,'not_reported');
+  assert.deepEqual(row(buildDiagnostics({...value,updater:{...value.updater,phase:'check_failed'}}),'desktop_released'),first);
 });

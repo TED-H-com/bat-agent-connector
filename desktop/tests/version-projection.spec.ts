@@ -117,7 +117,7 @@ for(const locale of ['en-US','zh-TW'])for(const width of [390,1440])for(const na
         for(const row of bundle.versions.rows){
           const rendered=page.locator(`[data-diagnostics-summary] [data-version-row=${row.id}]`);
           if(!native&&['desktop','desktop_update','desktop_released'].includes(row.id)){await expect(rendered).toHaveCount(0);continue;}
-          for(const value of [row.version,row.commit,row.digest,row.observed_at,row.recorded_at].filter(Boolean)){
+          for(const value of [row.version,row.commit,row.digest,row.observed_at,row.recorded_at,row.installed_at].filter(Boolean)){
             await expect(rendered).toContainText(value);
             await expect(about.locator(`[data-version-row=${row.id}]`)).toContainText(value);
           }
@@ -147,6 +147,7 @@ for(const locale of ['en-US','zh-TW'])for(const width of [390,1440])for(const na
 
 for(const locale of ['en-US','zh-TW'])test(`released Connector and unknown MCP agree across screen and export ${locale}`,async({browser})=>{
   const context=await browser.newContext({locale}),page=await context.newPage();
+  await page.clock.setFixedTime(Date.UTC(2026,9,23));
   const producer=structuredClone(bootstrap);
   Object.assign(producer.capabilities,connectorUpdates.released);
   const state=await diagnosticsFixture(page,false,true,producer);
@@ -164,15 +165,18 @@ for(const locale of ['en-US','zh-TW'])test(`released Connector and unknown MCP a
     await expect(mcp).toContainText(en?'Source: not reported':'來源：未回報');
     await page.locator('[data-export-diagnostics]').click();
     const summary=page.locator('[data-diagnostics-summary]');
+    await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');
     const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
     for(const id of ['connector_released','connector_installed','connector','mcp']){
       const fact=bundle.versions.rows.find(row=>row.id===id);
-      for(const value of [fact.version,fact.commit,fact.observed_at,fact.published_at].filter(Boolean)) {
+      for(const value of [fact.version,fact.commit,fact.observed_at,fact.published_at,fact.installed_at].filter(Boolean)) {
         await expect(about.locator(`[data-version-row=${id}]`)).toContainText(value);
         await expect(summary.locator(`[data-version-row=${id}]`)).toContainText(value);
       }
     }
-    expect(bundle.versions.rows.find(row=>row.id==='mcp').source).toBe('not_reported');
+    const facts=Object.fromEntries(bundle.versions.rows.map(row=>[row.id,row]));
+    expect(new Set([facts.connector_released.observed_at,facts.connector_installed.installed_at,facts.connector.observed_at]).size).toBe(3);
+    expect(facts.mcp.source).toBe('not_reported');
     expect(state.reads.some(path=>path.includes('identity')||path.includes('mcp'))).toBe(false);
   }finally{await context.close();}
 });

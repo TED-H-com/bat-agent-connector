@@ -30,6 +30,7 @@
         "at": "2026-10-22T12:00:00.123456+00:00"
       },
       "activation": "next_launch",
+      "installed_at": "2026-10-22T12:00:00.123456+00:00",
       "release_check": null
     }
   },
@@ -54,6 +55,7 @@
         "code": "fixture_install_failed"
       },
       "activation": "next_launch",
+      "installed_at": "2026-10-22T12:00:00.123456+00:00",
       "release_check": null
     }
   },
@@ -134,6 +136,7 @@
         "at": "2026-10-22T12:00:00.123456+00:00"
       },
       "activation": "next_launch",
+      "installed_at": "2026-10-22T12:00:00.123456+00:00",
       "release_check": null
     }
   },
@@ -157,6 +160,7 @@
         "at": "2026-10-22T12:00:00.123456+00:00"
       },
       "activation": "next_launch",
+      "installed_at": "2026-10-22T12:00:00.123456+00:00",
       "release_check": null
     }
   },
@@ -180,6 +184,7 @@
         "at": "2026-10-22T12:00:00.123456+00:00"
       },
       "activation": "next_launch",
+      "installed_at": "2026-10-22T12:00:00.123456+00:00",
       "release_check": null
     }
   },
@@ -203,6 +208,7 @@
         "at": "2026-10-22T12:00:00.123456+00:00"
       },
       "activation": "next_launch",
+      "installed_at": "2026-10-22T12:00:00.123456+00:00",
       "release_check": {
         "completed_at": "2026-10-22T13:00:00.123456+00:00",
         "candidate": {

@@ -506,7 +506,11 @@ mod tests {
         let mut candidate = serde_json::to_value(candidate).unwrap();
         candidate["candidate_id"] = serde_json::json!("opaque-native-candidate");
         candidate["checked_at"] = serde_json::json!(1792670400.125);
-        println!("NATIVE_UPDATE_CANDIDATE={candidate}");
+        let golden: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/desktop-update-candidate.json"
+        ))
+        .unwrap();
+        assert_eq!(candidate, golden);
     }
 
     // The real updater verifies ephemeral signatures against a bounded loopback peer.
@@ -622,7 +626,10 @@ mod tests {
         let (updates, _directory, _peer) = download_fixture(false, Some("2.0.0")).await;
         let first = serde_json::to_value(updates.status().unwrap()).unwrap();
         assert!(first["candidate"]["checked_at"].as_f64().is_some());
-        assert_eq!(serde_json::to_value(updates.status().unwrap()).unwrap(), first);
+        assert_eq!(
+            serde_json::to_value(updates.status().unwrap()).unwrap(),
+            first
+        );
         let failed = serde_json::to_value(updates.finish_check(Err(())).unwrap()).unwrap();
         assert_eq!(failed["candidate"], first["candidate"]);
         assert!(updates.finish_check(Ok(None)).unwrap().candidate.is_none());

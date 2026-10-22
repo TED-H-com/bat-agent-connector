@@ -58,6 +58,7 @@ export function versionProjection(input = {}) {
       'capabilities', caps ? input.capabilitiesReadAt : null, 'read'),
     fact('connector_installed', reported ? update.installed : null, 'connector_update',
       reported ? input.capabilitiesReadAt : null, 'next_launch', {
+        installed_at:reported ? time(update.installed_at) : null,
         state:updateStates.includes(update?.state) ? update.state : 'not_reported',
         code:update?.state === 'unreadable' ? updateCode(update.code) : null,
         enabled:reported && typeof update.enabled === 'boolean' ? update.enabled : null,

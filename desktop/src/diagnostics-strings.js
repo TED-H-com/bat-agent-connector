@@ -5,6 +5,7 @@ export const diagnosticsStrings = {
     diag_version_mcp:'Loaded MCP process (not observed by Dashboard)',
     diag_version_source_connector_release_check:'Source: validated Connector release check',
     diag_version_period_release_check:'Release check completed at',
+    diag_version_installed_at:'Installation pointer confirmed at {time}',
     diag_version_published:'Release published at {time}',
 
     diag_version_connector_installed:'Connector installed for the next launch',
@@ -82,6 +83,7 @@ export const diagnosticsStrings = {
     diag_version_mcp:'已載入的 MCP 程序（Dashboard 尚無觀察資料）',
     diag_version_source_connector_release_check:'來源：已驗證的 Connector 發布檢查',
     diag_version_period_release_check:'發布檢查完成時間',
+    diag_version_installed_at:'安裝指標確認時間：{time}',
     diag_version_published:'發布時間：{time}',
 
     diag_version_connector_installed:'供下次啟動的 Connector 安裝',

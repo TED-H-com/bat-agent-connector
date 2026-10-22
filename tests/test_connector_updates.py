@@ -115,8 +115,7 @@ def make_package(root, candidate):
             "python_files": digest_files(package_files(package, python_only=True)), "skill_sha256": SKILL_SHA}
 
 
-@pytest.fixture
-def deployment(tmp_path):
+def make_deployment(tmp_path):
     home = tmp_path / "home"
     files.ensure_private_directory(home)
     root = home / ".local/share/bat-agent-connector/releases" / ("a" * 40)
@@ -145,6 +144,11 @@ def deployment(tmp_path):
                 "python_files": digest_files(package_files(package, python_only=True)), "skill_sha256": SKILL_SHA}
     u = updater.Updater(home, inspect=inspect, find_release=lambda channel: candidate)
     return u, receipt, inspections
+
+
+@pytest.fixture
+def deployment(tmp_path):
+    return make_deployment(tmp_path)
 
 
 def test_enrollment_switches_future_launches_and_rollback_disables_updates(deployment):
@@ -406,12 +410,17 @@ def test_install_persists_pending_then_reconciled_state_without_rewriting(deploy
     with state_replacements(u.root) as replacements:
         result = u.apply()
     assert result["installed"]["commit"] == candidate["commit"] and not result["pending"]
-    assert len(replacements) == 2
-    assert [reconciled for _, reconciled in replacements] == [False, True]
-    published = json.loads(replacements[0][0][0])
+    # Completed release discovery is durable independently of installation.
+    assert len(replacements) == 3
+    assert [reconciled for _, reconciled in replacements] == [False, False, True]
+    checked = json.loads(replacements[0][0][0])
+    assert checked["release_check"]["candidate"] == candidate
+    assert checked["current"] == "a" * 40 and not checked.get("pending")
+    published = json.loads(replacements[1][0][0])
     assert published["pending"]["to"] == candidate["commit"] and published["current"] == "a" * 40
-    assert json.loads(replacements[1][0][0]) == u.read()
-    assert policy_file_snapshot(path) == replacements[1][0]
+    assert published["release_check"] == checked["release_check"]
+    assert json.loads(replacements[2][0][0]) == u.read()
+    assert policy_file_snapshot(path) == replacements[2][0]
     assert u.status() == result
 
 

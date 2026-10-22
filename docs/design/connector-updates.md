@@ -228,3 +228,8 @@ the selected channel completes. Older states have no released observation.
 `batc://identity` reuses this installation status for the calling MCP process,
 independently from any central service; only its captured startup installation
 proof permits a next-launch comparison and process-specific restart notice.
+
+`installed_at` retains the successful enrollment/switch/rollback receipt time
+independently of later check failures or policy changes. Older state without that
+clock reports it unknown. The shared installation row keeps its separate client
+read time as well; neither clock fills the released or answering slot.
