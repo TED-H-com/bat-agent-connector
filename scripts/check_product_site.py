@@ -224,8 +224,8 @@ def main() -> None:
             check_link(path, value, errors)
             links += 1
     manifest = read_screenshot_manifest(SITE / "images/manifest.json")
-    if manifest.get("frontend_source_commit") != "14c62830240148b14a4d28a9c428f7f8b5ba8bf3":
-        errors.append("Public screenshots must pin merged release source at 14c62830.")
+    if manifest.get("frontend_source_commit") != "437ee6a7143a82e32eae1d6a008203b2df072aaf":
+        errors.append("Public screenshots must pin published preview source at 437ee6a7.")
     errors.extend(screenshot_errors(manifest, SITE / "images"))
     git = shutil.which("git")
     if git is None:

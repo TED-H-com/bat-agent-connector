@@ -76,8 +76,8 @@ release_note = (
     '<div class="release-note">'
     + bi("Development preview", "開發預覽", "strong")
     + bi(
-        "Screenshots pin merged main at 14c62830240148b14a4d28a9c428f7f8b5ba8bf3, through #314 on October 19, 2026. They show the synthetic Dashboard in Development: Needs attention, a four-section live charter, an unadopted discussion proposal, twelve register records, and a manual session whose host is not set up for managed work. The gallery does not open Start work or the Result section. Gallery images do not establish installation or live acceptance. Match the package to its source before installing.",
-        "截圖固定於已合併主線的 14c62830240148b14a4d28a9c428f7f8b5ba8bf3，包含 2026 年 10 月 19 日的 #314。畫面是開發階段的合成 Dashboard：需要關注、四段即時專案章程、一份尚未採用的討論提案、十二筆登記，以及人工工作階段寫明此主機尚未設定受管工作。圖庫沒有打開「開始工作」或成果區。圖庫不代表安裝或實機驗收；安裝前請核對套件來源。",
+        "Screenshots pin merged main at 437ee6a7143a82e32eae1d6a008203b2df072aaf, the published 0.2.13 / 0.1.9 prerelease through #395 on October 22, 2026. They show the synthetic Dashboard in Development: Needs attention, a four-section live charter, an unadopted discussion proposal, twelve register records, and a manual session whose host is not set up for managed work. The gallery does not open Start work or the Result section. Gallery images do not establish installation or live acceptance. Match the package to its source before installing.",
+        "截圖固定於已合併主線的 437ee6a7143a82e32eae1d6a008203b2df072aaf，即 2026 年 10 月 22 日已發布的 0.2.13／0.1.9 預覽版（截至 #395）。畫面是開發階段的合成 Dashboard：需要關注、四段即時專案章程、一份尚未採用的討論提案、十二筆登記，以及人工工作階段寫明此主機尚未設定受管工作。圖庫沒有打開「開始工作」或成果區。圖庫不代表安裝或實機驗收；安裝前請核對套件來源。",
     )
     + link("#status", "Current scope", "目前範圍")
     + "</div>"
@@ -89,8 +89,8 @@ shots = [
      "Live Overview in Development: Needs attention, honest progress and a four-section charter. Saved reports stay separate.",
      "開發階段的即時總覽：需要關注、誠實進度與四段專案章程。已存報告另外保留。"),
     ("discussions", "Discussions", "討論",
-     "The proposal stays in the conversation, Proposed and Unresolved. Discussion info is not open over it. Save note only and Make a plan are shown. This synthetic session says ordinary PM replies are unavailable.",
-     "提案留在對話中，狀態是建議、未決。討論資料沒有蓋在上面。畫面提供只存筆記與整理計畫。這個合成工作階段顯示一般 PM 對話目前無法使用。"),
+     "The proposal stays in the conversation, Proposed and Unresolved. Discussion info is not open over it. Save note only and Make a plan are shown. This synthetic session says PM availability is unknown.",
+     "提案留在對話中，狀態是建議、未決。討論資料沒有蓋在上面。畫面提供只存筆記與整理計畫。這個合成工作階段顯示 PM 可用性未知。"),
     ("requirements", "Requirements", "需求",
      "Expand the email sign-in row and read its work inspector. Acceptance, merged PRs and partial delivery each retain their evidence.",
      "展開電子郵件登入需求與工作詳情，分開查看驗收、已合併 PR 及部分交付證據。"),
