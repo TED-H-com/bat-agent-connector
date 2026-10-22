@@ -10,7 +10,7 @@ function store() {
 }
 
 test('prepared credential lookups and retries are synchronous and domain separated', () => {
-  for (const token of ['example', '權杖🙂', 'x'.repeat(120), 'x'.repeat(1000)]) {
+  for (const token of ['example', '權杖🙂', 'x'.repeat(1000), ...Array.from({length: 128}, (_, i) => 'x'.repeat(i + 1))]) {
     const storage = store(); storage.setItem(BROWSER_TOKEN_KEY, token);
     const gate = credentialRefusals({stores: () => [storage], endpoint: () => 'http://localhost'});
     gate.prepare(token);
@@ -22,6 +22,14 @@ test('prepared credential lookups and retries are synchronous and domain separat
     gate.retry(token);
     assert.equal(gate.read(token), null);
   }
+});
+
+test('an unavailable owning store retains the in-memory refusal', () => {
+  const session = store(), local = store(); local.setItem(BROWSER_TOKEN_KEY, 'example');
+  const gate = credentialRefusals({stores: () => [session, local], endpoint: () => 'http://localhost'});
+  gate.refuse('example', 401, 'GET', '/events');
+  local.getItem = () => {throw Error('Unavailable');};
+  assert.equal(gate.read('example')?.status, 401);
 });
 
 test('another tab can clear a persisted refusal without leaving the original tab paused', () => {

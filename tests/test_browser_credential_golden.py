@@ -4,7 +4,8 @@ import os
 from pathlib import Path
 
 from bat_agent_connector import api_auth
-from tests.test_browser_sessions import browser as browser, http
+from tests.test_browser_sessions import browser as browser
+from tests.test_browser_sessions import http
 
 GOLDEN = Path(__file__).parent / "fixtures" / "browser-credential-responses.json"
 

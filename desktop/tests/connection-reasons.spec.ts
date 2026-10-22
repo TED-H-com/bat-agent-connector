@@ -32,6 +32,30 @@ async function abortNetwork(page: Page, failed: () => boolean) {
 
 for (const locale of ['en-US', 'zh-TW']) {
   const copy = STRINGS[locale === 'zh-TW' ? 'zh-TW' : 'en'];
+  test(`Connect verifies the token before any event poll ${locale}`, async ({browser}) => {
+    const context = await browser.newContext({locale}), page = await context.newPage();
+    const fixture = conversationFixture();
+    let polls = 0, release!: () => void;
+    const pending = new Promise<void>(resolve => {release = resolve;});
+    await mountConversation(page, false, async input => {
+      if (input.path === '/capabilities') await pending;
+      if (input.path.startsWith('/events?')) polls++;
+      return fixture.dispatch(input);
+    });
+    await page.addInitScript(() => sessionStorage.clear());
+    await page.clock.install();
+    try {
+      await page.goto('/dashboard/');
+      await page.locator('input[type=password]').fill('fixture-token');
+      await page.getByRole('button', {name: copy.connect, exact: true}).click();
+      await page.clock.runFor(3000);
+      await expect(page.locator('#live')).toHaveText(copy.ui_connecting);
+      expect(polls).toBe(0);
+      release();
+      await expect(page.locator('#live')).toHaveText(copy.ui_connected);
+      await expect.poll(() => polls).toBeGreaterThan(0);
+    } finally {release(); await context.close();}
+  });
   test(`inventory permission refusal stays visible while bearer polling continues ${locale}`, async ({browser}) => {
     const context = await browser.newContext({locale}), page = await context.newPage();
     const fixture = conversationFixture();

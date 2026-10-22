@@ -218,7 +218,10 @@ async function refusedAccess(active, workUrl) {
       name: frame.functionName, location: frame.location})), source_path: sourcePath};
     context.off('response', observePage);
   }
-  const refusal = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/events'
+  // The first refused read pauses the bearer. A source refresh can be that
+  // read, so a subsequent event poll must not be required to reach the server.
+  const refusalPath = refreshRace?.source_path || '/api/v1/events';
+  const refusal = page.waitForResponse(response => new URL(response.url()).pathname === refusalPath
     && response.status() === 401);
   send({stage: 'revoke-access'});
   assert.equal((await receive()).revoked, true);
@@ -312,7 +315,7 @@ async function refusedAccess(active, workUrl) {
   await shot('04-refused-work-return');
   const proof = {surface, target, draft_key: draftKey, draft_unchanged: true, attempt: active.attempt, result_href: resultHref,
     result_outcome: resultOutcome, late_refresh: refreshRace,
-    events_status: response.status(), server_code: body.error.code,
+    refusal_path: refusalPath, refusal_status: response.status(), server_code: body.error.code,
     header_reason: await header.innerText(), settings_reason: settingsReason, draft_has_intent: false,
     reason_key: 'ui_connection_refused', gate_code: 'CLIENT_ACTION_REFUSED', operation_posts: 0};
   writeFileSync(resolve(f.shots, 'refused-access.json'), JSON.stringify({proof, requests: allRequests.slice(since)}, null, 2) + '\n');

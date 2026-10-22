@@ -128,3 +128,31 @@ for (const locale of ['en-US', 'zh-TW']) {
     } finally {await context.close(); await central.close();}
   });
 }
+
+for (const locale of ['en-US', 'zh-TW']) {
+  const copy = STRINGS[locale === 'zh-TW' ? 'zh-TW' : 'en'];
+  test(`explicit retry in another tab resumes the remembered credential ${locale}`, async ({browser}) => {
+    const central = await service(), context = await browser.newContext({locale});
+    try {
+      const first = await context.newPage();
+      await first.goto(central.origin + '/dashboard/');
+      await first.locator('input[type=password]').fill(central.token);
+      await first.locator('input[type=checkbox]').check();
+      await first.getByRole('button', {name: copy.connect, exact: true}).click();
+      await expect(first.locator('#live')).toHaveText(copy.ui_connected);
+      await central.status(401);
+      await expect(first.locator('#live')).toHaveText(copy.ui_connection_refused);
+      await first.locator('#live').click();
+      await expect(first.getByRole('button', {name: copy.connection_retry_remembered, exact: true})).toBeVisible();
+      const second = await context.newPage();
+      await second.goto(central.origin + '/dashboard/');
+      await expect(second.getByRole('alert')).toContainText(copy.global_token_rejected);
+      await central.status(200);
+      await second.getByRole('button', {name: copy.connection_retry_remembered, exact: true}).click();
+      await expect(second.locator('#live')).toHaveText(copy.ui_connected);
+      await first.bringToFront();
+      await expect(first.locator('#live')).toHaveText(copy.ui_connected);
+      await expect(first.getByRole('button', {name: copy.connection_retry_remembered, exact: true})).toHaveCount(0);
+    } finally {await context.close(); await central.close();}
+  });
+}

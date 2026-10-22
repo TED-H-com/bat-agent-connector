@@ -12,7 +12,7 @@ from bat_agent_connector.task_daemon import TaskDaemon
 
 
 async def main():
-    root = Path.home() / "agent-work" / "tmp"
+    root = Path(os.environ["TMPDIR"])
     root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="browser-auth-", dir=root) as directory:
         os.environ.update(BATC_CONFIG_DIR=str(Path(directory) / "config"),
