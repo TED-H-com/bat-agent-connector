@@ -73446,15 +73446,11 @@ function viewBrowserSignedOut(main) {
 }
 function viewSettings(main) {
 	if (state.caps?.managed_installation) return viewManagedSettings(main);
-	if (nativeDesktop) return viewNativeEntry(main);
+	if (nativeDesktop) return viewNativeSettings(main);
 	if (state.token && state.caps) return viewBrowserSettings(main);
 	viewBrowserSignedOut(main);
 }
-async function viewNativeEntry(main) {
-	const mine = generation;
-	const status = await nativeStatus().catch(() => null);
-	if (mine !== generation) return;
-	if (status?.startup_role?.role !== null) return viewNativeSettings(main);
+function viewStartupRole(main, snapshot, mine) {
 	const root = firstRunCard({
 		h,
 		t,
@@ -73462,7 +73458,7 @@ async function viewNativeEntry(main) {
 			h,
 			t,
 			errorBox,
-			snapshot: status.startup_role,
+			snapshot,
 			select: async (input) => {
 				const guard = () => {
 					if (mine !== generation) throw new Error(t("desktop_role_changed"));
@@ -73794,6 +73790,11 @@ async function viewNativeSettings(main) {
 	try {
 		const status = await nativeStatus();
 		if (mine !== generation || !main.contains(details)) return;
+		const startup = status?.startup_role;
+		if (startup && startup.role === null) {
+			main.replaceChildren();
+			return viewStartupRole(main, startup, mine);
+		}
 		if (status.updates === true) disposeUpdates = await mountUpdates(updateRoot, {
 			h,
 			t,

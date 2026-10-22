@@ -3661,17 +3661,13 @@ function viewBrowserSignedOut(main) {
 }
 function viewSettings(main) {
   if (state.caps?.managed_installation) return viewManagedSettings(main);
-  if (nativeDesktop) return viewNativeEntry(main);
+  if (nativeDesktop) return viewNativeSettings(main);
   if (state.token && state.caps) return viewBrowserSettings(main);
   viewBrowserSignedOut(main);
 }
 
-async function viewNativeEntry(main) {
-  const mine = generation;
-  const status = await nativeStatus().catch(() => null);
-  if (mine !== generation) return;
-  if (status?.startup_role?.role !== null) return viewNativeSettings(main);
-  const body = startupRoleChoice({h, t, errorBox, snapshot: status.startup_role, select: async input => {
+function viewStartupRole(main, snapshot, mine) {
+  const body = startupRoleChoice({h, t, errorBox, snapshot, select: async input => {
     const guard = () => {if (mine !== generation) throw new Error(t('desktop_role_changed'));};
     guard();
     try {
@@ -3867,6 +3863,13 @@ async function viewNativeSettings(main) {
   try {
     const status = await nativeStatus();
     if (mine !== generation || !main.contains(details)) return;
+    // Reuse the settings read: another await before openSettings would move its
+    // capability refresh into the interval before native bootstrap validation.
+    const startup = status?.startup_role;
+    if (startup && startup.role === null) {
+      main.replaceChildren();
+      return viewStartupRole(main, startup, mine);
+    }
     if (status.updates === true) disposeUpdates = await mountUpdates(updateRoot, {h, t, versionInput:diagnosticsClient,
       onRead:(value,at)=>rememberVersionRead('updater',value,at),
       onVersions:paint=>{versionPainters.add(paint);return()=>versionPainters.delete(paint);}});
