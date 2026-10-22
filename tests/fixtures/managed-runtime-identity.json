@@ -6,7 +6,7 @@
       "commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "observed_at": 1790000000.0,
       "source": "this_process",
-      "version": "0.2.12"
+      "version": "0.2.13"
     },
     "endpoint": "http://127.0.0.1:45123",
     "principal_id": "fixture-principal",
@@ -16,10 +16,10 @@
       "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "observed_at": 1790000001.0,
       "source": "capabilities",
-      "version": "0.2.12"
+      "version": "0.2.13"
     },
     "runtime_difference": "differs",
-    "runtime_version": "0.2.12",
+    "runtime_version": "0.2.13",
     "server_id": "fixture-server",
     "token": "fixture-token"
   },
@@ -30,7 +30,7 @@
       "commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "observed_at": 1790000000.0,
       "source": "this_process",
-      "version": "0.2.12"
+      "version": "0.2.13"
     },
     "endpoint": "http://127.0.0.1:45123",
     "principal_id": "fixture-principal",
@@ -43,7 +43,7 @@
       "version": null
     },
     "runtime_difference": "unknown",
-    "runtime_version": "0.2.12",
+    "runtime_version": "0.2.13",
     "server_id": "fixture-server",
     "token": "fixture-token"
   },
@@ -54,7 +54,7 @@
       "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "observed_at": 1790000000.0,
       "source": "this_process",
-      "version": "0.2.12"
+      "version": "0.2.13"
     },
     "endpoint": "http://127.0.0.1:45123",
     "principal_id": "fixture-principal",
@@ -64,10 +64,10 @@
       "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "observed_at": 1790000001.0,
       "source": "capabilities",
-      "version": "0.2.12"
+      "version": "0.2.13"
     },
     "runtime_difference": "same",
-    "runtime_version": "0.2.12",
+    "runtime_version": "0.2.13",
     "server_id": "fixture-server",
     "token": "fixture-token"
   },
@@ -78,7 +78,7 @@
       "commit": null,
       "observed_at": 1790000000.0,
       "source": "this_process",
-      "version": "0.2.12"
+      "version": "0.2.13"
     },
     "endpoint": "http://127.0.0.1:45123",
     "principal_id": "fixture-principal",
@@ -88,10 +88,10 @@
       "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "observed_at": 1790000001.0,
       "source": "capabilities",
-      "version": "0.2.12"
+      "version": "0.2.13"
     },
     "runtime_difference": "unknown",
-    "runtime_version": "0.2.12",
+    "runtime_version": "0.2.13",
     "server_id": "fixture-server",
     "token": "fixture-token"
   },
@@ -102,7 +102,7 @@
       "commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "observed_at": 1790000000.0,
       "source": "this_process",
-      "version": "0.2.12"
+      "version": "0.2.13"
     },
     "endpoint": "http://127.0.0.1:45123",
     "principal_id": "fixture-principal",
@@ -112,10 +112,10 @@
       "commit": null,
       "observed_at": 1790000001.0,
       "source": "capabilities",
-      "version": "0.2.12"
+      "version": "0.2.13"
     },
     "runtime_difference": "unknown",
-    "runtime_version": "0.2.12",
+    "runtime_version": "0.2.13",
     "server_id": "fixture-server",
     "token": "fixture-token"
   }
