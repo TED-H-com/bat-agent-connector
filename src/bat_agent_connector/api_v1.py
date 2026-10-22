@@ -246,6 +246,7 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/dependencies/revisions", self.pm_dependency_revisions, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/dependencies/impact", self.pm_dependency_impact, "observe"),
             ("GET", r"/api/v1/managed/setup", self.managed_setup_state, "manage"),
+            ("POST", r"/api/v1/managed/setup/preview", self.managed_setup_preview, "manage"),
             ("POST", r"/api/v1/managed/setup/secrets", self.managed_setup_secret, "manage"),
             ("POST", r"/api/v1/approval-previews", self.approval_preview, "observe"),
             ("POST", r"/api/v1/repository-previews", self.repository_preview, "observe"),
@@ -1391,6 +1392,12 @@ class ApiV1:
         if query:
             raise ApiError(422, "INVALID_REQUEST", "setup accepts no query")
         return 200, managed_setup.state(self.daemon, principal)
+
+    async def managed_setup_preview(self, principal, query, body, **_):
+        from . import managed_setup
+        if query:
+            raise OperationError("INVALID_QUERY", "Setup preview does not accept query parameters")
+        return 200, managed_setup.preview(self.daemon, principal, body)
 
     async def managed_setup_secret(self, principal, query, body, **_):
         from . import managed_setup
