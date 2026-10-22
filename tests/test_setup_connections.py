@@ -954,3 +954,206 @@ async def test_r2_s1_published_configuration_survives_source_drift(installed, se
         await restored.fleet.close()
         await restored.inventory.close()
         restored.journal.close()
+
+
+async def test_configuration_uncertainty_cancel_names_its_own_step(installed, served_setup, source, mock, monkeypatch):
+    from urllib.parse import urlsplit
+
+    from bat_agent_connector import setup_connections
+    from bat_agent_connector.operations import UNCERTAIN_RETRY_S
+    daemon, principal, root = installed
+    index_path = root / "profiles/index.json"
+    index = json.loads(index_path.read_text())
+    endpoint = urlsplit(mock.url)
+    index["profiles"][0].update(remoteHost=endpoint.hostname, remotePort=endpoint.port, remoteFingerprint=mock.fingerprint)
+    index_path.write_text(json.dumps(index))
+    platform_files.atomic_write(root / "profiles/remote-tokens.enc.json", json.dumps({"enc": False,
+        "data": json.dumps({"tokens": {"profile-a": mock.token}})}).encode())
+    descriptor = setup_connections.source_descriptor(daemon.ops, principal, source["source"])
+    body = intent({**source, "source_reference": descriptor["reference"], "service_ref": "fixture",
+        "server_configuration": {"target": {"host": "fixture"}, "params": {"import_profile_id": "profile-a"},
+            "preconditions": {"config_revision": setup._configuration(daemon)[3]}}}, action="setup.connection.apply")
+    original = daemon.ops._step_done
+    hosts = root / "config/hosts.toml"
+    def lost(operation, step, response, **kwargs):
+        if step == "managed_configuration":
+            # Receipt lost after publication, and an operator then edits hosts.toml (third revision).
+            platform_files.atomic_write(hosts, hosts.read_bytes() + b"\n# operator edit\n")
+            raise OSError("synthetic receipt loss")
+        return original(operation, step, response, **kwargs)
+    monkeypatch.setattr(daemon.ops, "_step_done", lost)
+    _, ident = await accept(served_setup, body)
+    await settle_operations(daemon.ops)
+    for _ in range(len(UNCERTAIN_RETRY_S) + 1):
+        daemon.journal.db.execute("UPDATE operations SET next_run_at=0 WHERE operation_id=?", (ident,))
+        await settle_operations(daemon.ops)
+    assert daemon.ops.get(ident)["status"] == "needs_attention"
+    status, response = await served_setup("POST", f"/api/v1/operations/{ident}/cancel", {})
+    assert status == 200
+    assert "managed_configuration" in (response["operation"]["status_reason"] or ""), response["operation"]["status_reason"]
+
+
+async def _created_connection(daemon, request, source):
+    _, ident = await accept(request, intent(source), key="create")
+    await settle_operations(daemon.ops)
+    return daemon.ops.get(ident)["result"]["connection_id"]
+
+
+def _update_intent(source, connection, *, action="setup.connection.apply", label="Desktop label"):
+    body = intent(source, action=action, connection=connection)
+    body["preconditions"]["expected_revision"] = 1
+    body["params"]["label"] = label
+    return body
+
+
+@pytest.mark.parametrize("order", ["claimed_then_reference", "unclaimed_then_reference", "two_personal"])
+async def test_connection_updates_serialize_before_native_effects(installed, served_setup, source, tmp_path, order):
+    daemon, _, root = installed
+    connection = await _created_connection(daemon, served_setup, source)
+    second = _update_intent(source, connection, action="setup.connection.apply" if order == "two_personal" else
+        "connection.reference.apply", label="Other label")
+    cached = await review(served_setup, second)
+    first, ident = await accept(served_setup, _update_intent(source, connection), key="first-update")
+    await settle_operations(daemon.ops)
+    config = (root / "config/hosts.toml").read_bytes()
+    native = await _r2_dispatch(served_setup, ident) if order == "claimed_then_reference" else None
+    for route, body, key in ((PREVIEW, second, None), ("/api/v1/operations", cached, "second-update")):
+        status, response = await served_setup("POST", route, body, key=key)
+        assert status == 409, response
+        assert response["error"]["code"] == "CONNECTION_BUSY"
+        assert ident in response["error"]["message"] and "尚未完成" in response["error"]["message"]
+    assert daemon.journal.db.execute("SELECT count(*) FROM operations").fetchone()[0] == 2
+    assert (root / "config/hosts.toml").read_bytes() == config
+    assert not (tmp_path / "participant.json").exists()
+    # Original-key replay is still the same intent, even while its gate is held.
+    assert (await served_setup("POST", "/api/v1/operations", first, key="first-update"))[1]["operation"]["operation_id"] == ident
+    if native:
+        participant = DiskParticipant(tmp_path / "participant.json")
+        assert (await participant.send(served_setup, native))[0][0] == 200
+        await settle_operations(daemon.ops)
+        assert daemon.ops.get(ident)["status"] == "succeeded" and participant.writes == 1
+
+
+@pytest.mark.parametrize("action", ["connection.reference.apply", "setup.connection.apply"])
+async def test_cancel_unclaimed_update_releases_connection_admission(installed, served_setup, source, action):
+    daemon, _, _ = installed
+    connection = await _created_connection(daemon, served_setup, source)
+    _, ident = await accept(served_setup, _update_intent(source, connection), key="first-update")
+    await settle_operations(daemon.ops)
+    assert (await served_setup("POST", f"/api/v1/operations/{ident}/cancel", {}))[1]["operation"]["status"] == "cancelled"
+    _, second = await accept(served_setup, _update_intent(source, connection, action=action), key="next-update")
+    await settle_operations(daemon.ops)
+    assert second != ident
+    assert daemon.ops.get(second)["status"] == ("succeeded" if action == "connection.reference.apply" else "waiting_external")
+
+
+@pytest.mark.parametrize("claimed", [False, True])
+@pytest.mark.parametrize("outcome", ["applied", "unchanged"])
+async def test_legacy_interleaved_update_checks_revision_and_preserves_evidence(
+        installed, served_setup, source, tmp_path, monkeypatch, claimed, outcome):
+    from bat_agent_connector import setup_connections
+    daemon, _, _ = installed
+    connection = await _created_connection(daemon, served_setup, source)
+    # Simulate operations admitted before the serialization rule, keeping real HTTP admission/execution.
+    monkeypatch.setattr(setup_connections, "_require_connection_available", lambda *args: None, raising=False)
+    _, ident = await accept(served_setup, _update_intent(source, connection), key="personal-update")
+    await settle_operations(daemon.ops)
+    native = await _r2_dispatch(served_setup, ident) if claimed else None
+    _, reference = await accept(served_setup, _update_intent(source, connection,
+        action="connection.reference.apply", label="Browser label"), key="reference-update")
+    await settle_operations(daemon.ops)
+    assert daemon.ops.get(reference)["status"] == "succeeded"
+    if not claimed:
+        status, response = await served_setup("POST", HANDOFF, {"operation_id": ident, "installation_ref": "desktop-a"})
+        assert status == 409 and response["error"]["code"] == "SETUP_REVIEW_CHANGED"
+        operation = daemon.ops.get(ident)
+        assert operation["status"] == "failed" and operation["error_code"] == "SETUP_REVIEW_CHANGED"
+        assert operation["external_refs"]["native_effects_sent"] is False
+        assert not (tmp_path / "participant.json").exists()
+    else:
+        participant = DiskParticipant(tmp_path / "participant.json")
+        (status, response), receipt = await participant.send(served_setup, native, outcome=outcome)
+        assert status == 200, response
+        receipt_ref = response["receipt"]["receipt_ref"]
+        await settle_operations(daemon.ops)
+        status, response = await served_setup("GET", f"/api/v1/operations/{ident}")
+        operation = response["operation"]
+        assert status == 200 and operation["status"] == "needs_attention", operation
+        assert operation["error_code"] == "CONNECTION_PROJECTION_CHANGED"
+        assert response["operation"]["external_refs"]["connection_id"] == connection
+        assert response["operation"]["external_refs"]["receipt_refs"] == [receipt_ref]
+        step = next(step for step in operation["steps"] if step["name"] == "native_effects")
+        assert step["status"] == "succeeded" and step["response"]["receipts"][-1]["outcome"] == outcome
+        assert participant.writes <= 1
+    row = daemon.journal.db.execute("SELECT revision,label,operation_id FROM connection_bindings").fetchone()
+    assert tuple(row) == (2, "Browser label", reference)
+
+
+@pytest.mark.parametrize("outcome", ["applied", "unchanged"])
+async def test_projection_receipt_io_failure_cannot_abandon_proven_native_effect(
+        installed, served_setup, source, tmp_path, monkeypatch, outcome):
+    from bat_agent_connector.operations import UNCERTAIN_RETRY_S
+    daemon, _, _ = installed
+    _, ident = await _r2_waiting(installed, served_setup, source)
+    native = await _r2_dispatch(served_setup, ident)
+    participant = DiskParticipant(tmp_path / "participant.json")
+    assert (await participant.send(served_setup, native, outcome=outcome))[0][0] == 200
+    original = daemon.ops._step_done
+    def lost(operation_id, name, response, **kwargs):
+        if operation_id == ident and name == "connection_binding":
+            raise OSError("Synthetic projection receipt I/O failure")
+        return original(operation_id, name, response, **kwargs)
+    monkeypatch.setattr(daemon.ops, "_step_done", lost)
+    for _ in range(len(UNCERTAIN_RETRY_S) + 1):
+        daemon.journal.db.execute("UPDATE operations SET next_run_at=0 WHERE operation_id=?", (ident,))
+        await settle_operations(daemon.ops)
+    before = daemon.ops.get(ident)
+    assert before["status"] == "needs_attention"
+    status, response = await served_setup("POST", f"/api/v1/operations/{ident}/cancel", {})
+    assert status == 409 and response["error"]["code"] == "CONNECTION_EFFECT_PROVEN"
+    assert daemon.ops.get(ident) == before
+    assert not daemon.journal.db.execute("SELECT 1 FROM connection_bindings").fetchone()
+    monkeypatch.setattr(daemon.ops, "_step_done", original)
+    assert (await served_setup("POST", f"/api/v1/operations/{ident}/resume", {}))[0] == 200
+    await settle_operations(daemon.ops)
+    assert daemon.ops.get(ident)["status"] == "succeeded" and participant.writes <= 1
+
+
+async def test_pending_native_wait_message_does_not_claim_projection_is_saved(installed, served_setup, source):
+    _, ident = await _r2_waiting(installed, served_setup, source)
+    status, response = await served_setup("GET", f"/api/v1/operations/{ident}")
+    reason = response["operation"]["status_reason"]
+    assert status == 200 and "saved" not in reason.lower() and "等待" in reason
+    assert not installed[0].journal.db.execute("SELECT 1 FROM connection_bindings").fetchone()
+
+
+async def test_native_abandonment_refuses_cancel_until_runner_has_exited(installed, served_setup, source, monkeypatch):
+    from bat_agent_connector import connection_handoff
+    from bat_agent_connector.operations import UNCERTAIN_RETRY_S
+    daemon, _, _ = installed
+    _, ident = await _r2_waiting(installed, served_setup, source)
+    native = await _r2_dispatch(served_setup, ident)
+    reached, release = asyncio.Event(), asyncio.Event()
+    execute = daemon.ops._execute
+    async def hold_worker(operation_id):
+        await execute(operation_id)
+        if operation_id == ident and daemon.ops.get(ident)["status"] == "needs_attention":
+            reached.set()
+            await release.wait()
+    with patch.object(connection_handoff, "now", return_value=native["expires_at"] + 1):
+        for _ in range(len(UNCERTAIN_RETRY_S)):
+            daemon.journal.db.execute("UPDATE operations SET next_run_at=0 WHERE operation_id=?", (ident,))
+            await settle_operations(daemon.ops)
+        monkeypatch.setattr(daemon.ops, "_execute", hold_worker)
+        daemon.journal.db.execute("UPDATE operations SET next_run_at=0 WHERE operation_id=?", (ident,))
+        await daemon.ops.run_due()
+        try:
+            await asyncio.wait_for(reached.wait(), 10)
+            assert daemon.ops._running(ident)
+            status, response = await served_setup("POST", f"/api/v1/operations/{ident}/cancel", {})
+            assert status == 409 and response["error"]["code"] == "CONNECTION_OPERATION_RUNNING"
+            assert daemon.ops.get(ident)["status"] == "needs_attention"
+        finally:
+            release.set()
+            await settle_operations(daemon.ops)
+    assert (await served_setup("POST", f"/api/v1/operations/{ident}/cancel", {}))[1]["operation"]["status"] == "cancelled"

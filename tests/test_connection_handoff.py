@@ -148,3 +148,54 @@ async def test_r2_claim_replay_after_completion_keeps_original_challenge(install
     assert status == 200, response
     assert all(response["native_handoff"][key] == native[key] for key in native if key != "receipt")
     assert response["native_handoff"]["receipt"]["outcome"] == "applied"
+
+
+async def test_claim_key_change_refuses_unverifiable_envelope_but_keeps_original_evidence(
+        installed, served_setup, source, tmp_path):
+    daemon, _, _ = installed
+    _, ident = await connections._r2_waiting(installed, served_setup, source)
+    native = await connections._r2_dispatch(served_setup, ident)
+    before = daemon.ops.get(ident)
+    daemon._admin_token = "R" * 64
+    status, response = await served_setup("POST", connections.HANDOFF, {"operation_id": ident, "installation_ref": "desktop-a"})
+    assert status == 409 and response["error"]["code"] == "CONNECTION_HANDOFF_KEY_CHANGED"
+    assert daemon.ops.get(ident) == before  # Key loss alone makes no assertion about the original local effect.
+    assert (await connections.DiskParticipant(tmp_path / "participant.json").send(served_setup, native))[0][0] == 200
+    await settle_operations(daemon.ops)
+    assert daemon.ops.get(ident)["status"] == "succeeded"
+
+
+async def test_background_polling_never_reissues_unclaimed_challenge(installed, served_setup, source):
+    daemon, _, _ = installed
+    _, ident = await connections._r2_waiting(installed, served_setup, source)
+    first = daemon.journal.db.execute("SELECT request FROM operation_steps WHERE operation_id=? AND name='native_effects'", (ident,)).fetchone()[0]
+    for offset in range(1, 13):
+        with patch.object(handoff, "now", return_value=json.loads(first)["expires_at"] + offset * 300):
+            daemon.journal.db.execute("UPDATE operations SET next_run_at=0 WHERE operation_id=?", (ident,))
+            await settle_operations(daemon.ops)
+    assert daemon.journal.db.execute("SELECT count(*) FROM api_events WHERE resource_id=? AND kind='connection.handoff.issued'", (ident,)).fetchone()[0] == 0
+    assert daemon.journal.db.execute("SELECT request FROM operation_steps WHERE operation_id=? AND name='native_effects'", (ident,)).fetchone()[0] == first
+    assert (await served_setup("POST", connections.HANDOFF, {"operation_id": ident, "installation_ref": "desktop-a"}))[0] == 200
+
+
+@pytest.mark.parametrize("terminal", ["succeeded", "failed", "cancelled"])
+async def test_identical_receipt_replay_is_idempotent_in_every_terminal_state(installed, served_setup, source, tmp_path, terminal):
+    from bat_agent_connector.operations import UNCERTAIN_RETRY_S
+    daemon, _, _ = installed
+    _, ident = await connections._r2_waiting(installed, served_setup, source)
+    native = await connections._r2_dispatch(served_setup, ident)
+    outcome = {"succeeded": "applied", "failed": "refused", "cancelled": "uncertain"}[terminal]
+    (status, response), receipt = await connections.DiskParticipant(tmp_path / "participant.json").send(served_setup, native, outcome=outcome)
+    assert status == 200, response
+    for _ in range(len(UNCERTAIN_RETRY_S) + 1):
+        daemon.journal.db.execute("UPDATE operations SET next_run_at=0 WHERE operation_id=?", (ident,))
+        await settle_operations(daemon.ops)
+    if terminal == "cancelled":
+        assert (await served_setup("POST", f"/api/v1/operations/{ident}/cancel", {}))[0] == 200
+    assert daemon.ops.get(ident)["status"] == terminal
+    status, replay = await served_setup("POST", connections.RECEIPT, receipt)
+    assert status == 200 and replay["replayed"] is True
+    different = {**receipt, "roles": [{"role": "inventory", "before_digest": "e" * 64, "after_digest": "e" * 64}]}
+    status, refused = await served_setup("POST", connections.RECEIPT, different)
+    assert status == 409 and refused["error"]["code"] == "CONNECTION_OPERATION_TERMINAL"
+    assert daemon.ops.get(ident)["status"] == terminal
