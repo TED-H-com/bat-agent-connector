@@ -23,6 +23,7 @@ try {
   for (const page of [web, desktop]) page.on('pageerror', e => errors.push(e.message));
   await web.addInitScript(token => sessionStorage.setItem('batc.dashboard.token', token), fixture.token);
   await web.goto(origin+'/dashboard/#/projects');
+  await webEvents.pause();
   await web.getByRole('button', {name: 'New project', exact: true}).click();
   await web.getByRole('textbox', {name: 'New project name'}).fill('First project');
   const repository = web.getByRole('combobox', {name: 'Repository for dispatch (optional)'});
@@ -66,6 +67,7 @@ try {
   for (const page of [web, desktop]) {
     const events = page === web ? webEvents : desktopEvents;
     await page.goto(origin+'/dashboard/#/project/'+project.project_id);
+    await events.pause();
     try {await page.getByRole('link', {name: 'Quick project dispatch'}).click();}
     catch (error) {console.error({client: page === web ? 'HTTP' : 'IPC', errors, body: await page.locator('body').innerText()}); throw error;}
     const form = page.locator('[data-published-start]');
@@ -89,7 +91,7 @@ try {
       await expect.poll(async () => (await central({method: 'GET', path: '/operations/' + lostOperation})).data.operation.status,
         {timeout: 30000}).toBe('succeeded');
       await control({action: 'archive-project', project_id: project.project_id, archived: true});
-      await control({action: 'writes', enabled: false}); await page.reload();
+      await control({action: 'writes', enabled: false}); await page.reload();await events.pause();
       await events.post(form.getByRole('button', {name: 'Retry original request'}), {resume:false});
       assert.deepEqual(posts[0], posts[1]);
     }
@@ -97,7 +99,7 @@ try {
     await expect(form).toContainText('Initial instructions were accepted', {timeout: 30000});
     const id = (await form.locator('a[href^="#/op/"]').getAttribute('href')).split('/').at(-1);
     operations.push(id);
-    await page.reload(); await expect(form).toContainText('Start confirmed');
+    await page.reload();await events.pause(); await expect(form).toContainText('Start confirmed');
     count++;
     await control({action: 'verify-project', ...project, operation_id: id, operations: count, frames: count * 2,
       status: 'succeeded', prompt: original, version: page === web ? 1 : 3});
@@ -111,6 +113,7 @@ try {
   for (const [index, page] of [web, desktop].entries()) {
     const events = page === web ? webEvents : desktopEvents;
     await page.goto(origin+'/dashboard/#/project/'+project.project_id);
+    await events.pause();
     await page.locator('.workspace-tree a[href="#/work/'+project.project_id+'/execution/'+operations[index]+'"]').click();
     await expect(page.locator('.workspace-conversation')).toBeVisible();
     await expect(page.locator('.workspace-nav')).toBeVisible();
@@ -118,6 +121,9 @@ try {
     await expect(work).toContainText('Result unverified');
     await expect(work).not.toContainText('done');
     await work.getByRole('link', {name: 'Review result', exact: true}).click();
+    // Delivery defers renders while this PR editor is open. Hold its poll
+    // before filling fields, rather than waiting for that editor to close.
+    await events.pause();
     await expect(page.getByPlaceholder('owner/name')).toHaveValue('o/r');
     await page.getByRole('textbox', {name: 'Repository or GitHub PR URL'}).fill('https://github.com/o/r/pull/1');
     await page.getByRole('button', {name: 'Load PR', exact: true}).click();
