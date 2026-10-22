@@ -863,6 +863,40 @@ mod tests {
         result["readiness"] = native_readiness(Some(&snapshot), 1_791_460_800_000).unwrap();
         result
     }
+    fn stop_cases() -> Value {
+        let cases: Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/fleet-stop.json")).unwrap();
+        let mut output = json!({});
+        for (name, case) in cases.as_object().unwrap() {
+            let snapshot = serde_json::from_value(case["snapshot"].clone()).unwrap();
+            let mut result = fixture()["result"].clone();
+            result["selection"]["revision"] = case["selection_revision"].clone();
+            result["readiness"] =
+                native_readiness(Some(&snapshot), case["now"].as_u64().unwrap()).unwrap();
+            output[name] = sanitize_result(&result, "status").unwrap();
+        }
+        output
+    }
+    #[test]
+    fn stop_evidence_survives_native_projection_and_sanitizer() {
+        for (name, status) in stop_cases().as_object().unwrap() {
+            let row = status["readiness"]["hosts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|row| row["name"] == "node-1")
+                .unwrap();
+            assert_eq!(row["code"], "STOP_UNCONFIRMED", "{name}");
+            assert_eq!(row["level"], "down");
+            assert_eq!(status["readiness"]["state"], "stale");
+            assert_eq!(row["layers"]["tunnel"], false);
+        }
+    }
+    #[test]
+    #[ignore = "explicit fixture regeneration only"]
+    fn stop_generate_golden() {
+        println!("FLEET_STOP_GOLDEN={}", stop_cases());
+    }
     #[test]
     fn sanitized_status_matches_shared_frontend_golden() {
         let raw = producer_status();

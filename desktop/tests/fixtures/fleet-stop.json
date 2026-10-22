@@ -1,0 +1,246 @@
+{
+  "aged": {
+    "now": 62001,
+    "selection_revision": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "snapshot": {
+      "applied_selection_revision": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "configuration_binding": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "entries": [
+        {
+          "blocking": "stale",
+          "code": "PROBE_STALE",
+          "label": "Fixture Dashboard",
+          "layers": {
+            "auth": null,
+            "bat": false,
+            "tls": false,
+            "tunnel": false,
+            "version": null,
+            "workspace": false
+          },
+          "level": "degraded",
+          "name": "connector",
+          "observed_at": null,
+          "selected": true,
+          "stale": true
+        },
+        {
+          "blocking": "stale",
+          "code": "PROBE_STALE",
+          "label": "Fixture 1",
+          "layers": {
+            "auth": null,
+            "bat": false,
+            "tls": false,
+            "tunnel": false,
+            "version": null,
+            "workspace": false
+          },
+          "level": "degraded",
+          "name": "node-1",
+          "observed_at": null,
+          "selected": true,
+          "stale": true
+        },
+        {
+          "blocking": "stale",
+          "code": "PROBE_STALE",
+          "label": "Fixture 2",
+          "layers": {
+            "auth": null,
+            "bat": false,
+            "tls": false,
+            "tunnel": false,
+            "version": null,
+            "workspace": false
+          },
+          "level": "degraded",
+          "name": "node-2",
+          "observed_at": null,
+          "selected": true,
+          "stale": true
+        },
+        {
+          "blocking": "stale",
+          "code": "PROBE_STALE",
+          "label": "Fixture 3",
+          "layers": {
+            "auth": null,
+            "bat": false,
+            "tls": false,
+            "tunnel": false,
+            "version": null,
+            "workspace": false
+          },
+          "level": "degraded",
+          "name": "node-3",
+          "observed_at": null,
+          "selected": true,
+          "stale": true
+        },
+        {
+          "blocking": "stale",
+          "code": "PROBE_STALE",
+          "label": "Fixture 4",
+          "layers": {
+            "auth": null,
+            "bat": false,
+            "tls": false,
+            "tunnel": false,
+            "version": null,
+            "workspace": false
+          },
+          "level": "degraded",
+          "name": "node-4",
+          "observed_at": null,
+          "selected": true,
+          "stale": true
+        },
+        {
+          "blocking": null,
+          "code": null,
+          "label": "Fixture 5",
+          "layers": {
+            "auth": null,
+            "bat": false,
+            "tls": false,
+            "tunnel": false,
+            "version": null,
+            "workspace": false
+          },
+          "level": "off",
+          "name": "node-5",
+          "observed_at": null,
+          "selected": false,
+          "stale": false
+        }
+      ],
+      "lifecycle": "stop_unconfirmed",
+      "monitor_epoch": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "observed_at": "1970-01-01T00:00:01.2Z",
+      "schema_version": 1
+    }
+  },
+  "deselected": {
+    "now": 1300,
+    "selection_revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "snapshot": {
+      "applied_selection_revision": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "configuration_binding": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "entries": [
+        {
+          "blocking": "connector",
+          "code": "PROBE_PENDING",
+          "label": "Fixture Dashboard",
+          "layers": {
+            "auth": null,
+            "bat": false,
+            "tls": false,
+            "tunnel": false,
+            "version": null,
+            "workspace": false
+          },
+          "level": "degraded",
+          "name": "connector",
+          "observed_at": null,
+          "selected": true,
+          "stale": false
+        },
+        {
+          "blocking": null,
+          "code": null,
+          "label": "Fixture 1",
+          "layers": {
+            "auth": null,
+            "bat": false,
+            "tls": false,
+            "tunnel": false,
+            "version": null,
+            "workspace": false
+          },
+          "level": "off",
+          "name": "node-1",
+          "observed_at": null,
+          "selected": false,
+          "stale": false
+        },
+        {
+          "blocking": null,
+          "code": null,
+          "label": "Fixture 2",
+          "layers": {
+            "auth": null,
+            "bat": false,
+            "tls": false,
+            "tunnel": false,
+            "version": null,
+            "workspace": false
+          },
+          "level": "off",
+          "name": "node-2",
+          "observed_at": null,
+          "selected": false,
+          "stale": false
+        },
+        {
+          "blocking": null,
+          "code": null,
+          "label": "Fixture 3",
+          "layers": {
+            "auth": null,
+            "bat": false,
+            "tls": false,
+            "tunnel": false,
+            "version": null,
+            "workspace": false
+          },
+          "level": "off",
+          "name": "node-3",
+          "observed_at": null,
+          "selected": false,
+          "stale": false
+        },
+        {
+          "blocking": null,
+          "code": null,
+          "label": "Fixture 4",
+          "layers": {
+            "auth": null,
+            "bat": false,
+            "tls": false,
+            "tunnel": false,
+            "version": null,
+            "workspace": false
+          },
+          "level": "off",
+          "name": "node-4",
+          "observed_at": null,
+          "selected": false,
+          "stale": false
+        },
+        {
+          "blocking": null,
+          "code": null,
+          "label": "Fixture 5",
+          "layers": {
+            "auth": null,
+            "bat": false,
+            "tls": false,
+            "tunnel": false,
+            "version": null,
+            "workspace": false
+          },
+          "level": "off",
+          "name": "node-5",
+          "observed_at": null,
+          "selected": false,
+          "stale": false
+        }
+      ],
+      "lifecycle": "selection_pending",
+      "monitor_epoch": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "observed_at": "1970-01-01T00:00:01.2Z",
+      "schema_version": 1
+    }
+  }
+}

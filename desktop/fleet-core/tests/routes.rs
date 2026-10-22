@@ -180,6 +180,25 @@ async fn direct_only_and_no_cf_have_no_legacy_unproven_default() {
         RouteKind::Lan
     );
 }
+#[tokio::test]
+async fn direct_requirement_explains_unknown_evidence_without_extra_attempts() {
+    let routes = routes(&["direct"]);
+    let policy = HostPolicy::new(&routes, generation());
+    let probe = Mock::new(false, true, true);
+    let failure = SelectionRequest::new(&routes, &policy, generation(), 1000)
+        .unwrap()
+        .run(&probe, Duration::from_secs(1))
+        .await
+        .err()
+        .unwrap();
+    assert_eq!(*probe.calls.lock().unwrap(), vec!["tailscale"]);
+    assert_eq!(
+        serde_json::to_value(failure).unwrap(),
+        json!({
+            "code": "ROUTE_UNAVAILABLE", "route_requirement": "DIRECT_PEER_UNKNOWN"
+        })
+    );
+}
 async fn fail(
     routes: &Routes,
     policy: &mut HostPolicy,

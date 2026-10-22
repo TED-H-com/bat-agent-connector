@@ -595,6 +595,96 @@ async fn uncertain_stop_is_not_resent_and_is_cleaned_only_after_positive_death()
     assert_eq!(r.shutdown(1400).await.unwrap().lifecycle, "stopped");
     assert_eq!(s.lock().unwrap().stops.len(), attempts);
 }
+
+async fn unresolved_stop_fixture(deselect: bool) -> serde_json::Value {
+    let (f, s, mut r) = fixture();
+    advance(&mut r, 1000).await;
+    let dir = f.0.join("BetterAgentTerminal");
+    let receipt_path = dir.join("fleet-tunnel-owners/node-1.json");
+    let receipt = std::fs::read(&receipt_path).unwrap();
+    let monitor = std::fs::read(dir.join("fleet-monitor.json")).unwrap();
+    let launches = s.lock().unwrap().launches.clone();
+    s.lock().unwrap().unknown_stop = true;
+    if deselect {
+        let path = dir.join("fleet-client.json");
+        let mut selection: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        selection["connections"] = json!(["connector"]);
+        std::fs::write(path, serde_json::to_vec(&selection).unwrap()).unwrap();
+        assert_eq!(r.tick(1200).await.unwrap().lifecycle, "selection_pending");
+    } else {
+        assert_eq!(
+            r.shutdown(1200).await.unwrap().lifecycle,
+            "stop_unconfirmed"
+        );
+    }
+    let stops = s.lock().unwrap().stops.clone();
+    assert!(!stops.is_empty());
+    let bytes = std::fs::read(dir.join("fleet-desktop-status.json")).unwrap();
+    let now = if deselect { 1300 } else { 62001 };
+    let parsed = Status::parse(&bytes, &f.load(), r.epoch(), now).unwrap();
+    let reread = Status::parse(
+        &serde_json::to_vec(&parsed).unwrap(),
+        &f.load(),
+        r.epoch(),
+        now,
+    )
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(&parsed).unwrap(),
+        serde_json::to_value(&reread).unwrap()
+    );
+    if deselect {
+        r.tick(1300).await.unwrap();
+    } else {
+        r.shutdown(1300).await.unwrap();
+    }
+    assert_eq!(s.lock().unwrap().launches, launches);
+    assert_eq!(s.lock().unwrap().stops, stops);
+    assert_eq!(std::fs::read(receipt_path).unwrap(), receipt);
+    assert_eq!(
+        std::fs::read(dir.join("fleet-monitor.json")).unwrap(),
+        monitor
+    );
+    let mut snapshot = serde_json::to_value(parsed).unwrap();
+    // Only nondeterministic/native binding metadata is de-identified. Rows are
+    // the actual file producer -> parse -> re-read result, never invented states.
+    snapshot["monitor_epoch"] = json!("a".repeat(32));
+    snapshot["configuration_binding"] = json!("c".repeat(64));
+    snapshot["applied_selection_revision"] = json!("d".repeat(64));
+    json!({"now":now, "snapshot":snapshot, "selection_revision":
+        if deselect { "e".repeat(64) } else { "d".repeat(64) }})
+}
+#[tokio::test]
+async fn unresolved_stop_survives_age_and_deselection() {
+    for deselect in [false, true] {
+        let case = unresolved_stop_fixture(deselect).await;
+        let row = case["snapshot"]["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["name"] == "node-1")
+            .unwrap();
+        assert_eq!(row["code"], "STOP_UNCONFIRMED", "deselect={deselect}");
+        assert_eq!(row["level"], "down");
+        assert_eq!(row["selected"], !deselect);
+        assert_eq!(row["layers"]["tunnel"], false);
+        if !deselect {
+            assert_eq!(row["stale"], true);
+        }
+    }
+}
+#[tokio::test]
+#[ignore = "explicit fixture regeneration only"]
+async fn generate_unresolved_stop_fixture() {
+    println!(
+        "FLEET_STOP={}",
+        json!({
+            "aged": unresolved_stop_fixture(false).await,
+            "deselected": unresolved_stop_fixture(true).await,
+        })
+    );
+}
 #[tokio::test]
 async fn unrelated_quit_and_replaced_monitor_record_are_preserved() {
     let (f, s, mut r) = fixture();
