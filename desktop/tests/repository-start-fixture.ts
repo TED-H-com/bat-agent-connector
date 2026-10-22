@@ -118,7 +118,10 @@ export async function publishedFixture(page: Page, native: boolean, options: any
     await page.exposeFunction('publishedInvoke', async (command: string, args: any) => {
       state.invokes.push({command, method: args?.input?.method, path: args?.input?.path, args});
       if (command === 'native_files_status') return {supported: true, transfers: receipts, drop_error: null};
-      if (command === 'native_files_paste_arm') return null;
+      if (command === 'native_files_paste_arm') {
+        if (state.holdPasteArm) await new Promise<void>(resolve => {state.releasePasteArm = resolve;});
+        return null;
+      }
       if (command === 'native_files_paste') {
         if (state.pasteUnsupported) return {clipboardError: {code: 'CLIENT_ACTION_NATIVE_PASTE_UNSUPPORTED', reason: 'platform'}};
         const receipt = selectedReceipt(args.draftId);
@@ -126,6 +129,10 @@ export async function publishedFixture(page: Page, native: boolean, options: any
       }
       if (command === 'native_files_upload') {
         const receipt = receipts.find(r => r.transfer_id === args.handleId);
+        if (state.failNativeUpload) {
+          Object.assign(receipt, {stage: 'stopped', error: 'Native upload interrupted'});
+          return {nativeError: 'Native upload interrupted'};
+        }
         Object.assign(receipt, {stage: 'ready', transferred_bytes: receipt.size_bytes,
           operation_id: uploadId, operation_status: 'succeeded', artifact: {artifact_id: aid, revision: 1, digest: receipt.digest}});
         state.uploaded = true; return receipt;
@@ -134,6 +141,7 @@ export async function publishedFixture(page: Page, native: boolean, options: any
     await page.addInitScript(() => Object.assign(window, {isTauri: true, __TAURI_INTERNALS__: {invoke: async (command: string, args: any) => {
       const result = await (window as any).publishedInvoke(command, args);
       if (result?.clipboardError) throw result.clipboardError;
+      if (result?.nativeError) throw new Error(result.nativeError);
       if (command.startsWith('native_files_')) return result;
       if (command === 'native_status') return {endpoint: 'https://fixture.example', credential_available: true, file_transfers: true};
       if (command === 'connector_connect') return (await (window as any).publishedFixture({method: 'GET', path: '/capabilities'})).data;

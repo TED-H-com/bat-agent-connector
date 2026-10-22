@@ -212,3 +212,42 @@ fn clipboard_reuses_spool_capacity_and_record_limits() {
         .is_err());
     assert!(files.state.lock().unwrap().records.is_empty());
 }
+
+#[test]
+fn clipboard_png_padding_is_trimmed_before_hashing_and_spooling() {
+    let (_root, _bridge, files) = fixture();
+    let exact = clipboard_png();
+    let mut allocation = exact.clone();
+    allocation.extend_from_slice(&[0, 0, 0, 0, 0xab, 0xcd]);
+    let mut reader = FakeClipboard {
+        image: ClipboardImage::Png(&allocation),
+        reads: 0,
+        disconnect: None,
+    };
+    files.paste_arm("draft".into(), true).unwrap();
+    let receipt = files
+        .paste_with("draft", true, &mut reader, MAX_ARTIFACT_BYTES as u64)
+        .unwrap();
+    assert_eq!(receipt.size_bytes, exact.len() as u64);
+    assert_eq!(receipt.digest, format!("{:x}", Sha256::digest(&exact)));
+    assert_eq!(
+        files
+            .root
+            .read(format!("{}.bin", receipt.transfer_id))
+            .unwrap(),
+        exact
+    );
+}
+
+#[test]
+fn clipboard_truncated_png_is_invalid_image() {
+    use crate::clipboard::encode_image;
+    let exact = clipboard_png();
+    for missing in [1, 4, 12] {
+        let result = encode_image(
+            ClipboardImage::Png(&exact[..exact.len() - missing]),
+            MAX_ARTIFACT_BYTES,
+        );
+        assert_eq!(result.unwrap_err().reason, "invalid_image");
+    }
+}

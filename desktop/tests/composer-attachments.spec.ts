@@ -356,3 +356,50 @@ for (const locale of ['en-US', 'zh-TW']) for (const target of ['.attachments', '
     } finally {await context.close();}
   });
 }
+
+for (const locale of ['en-US', 'zh-TW']) {
+  test(`IPC: back-to-back pastes use one native selection ${locale}`, async ({browser}) => {
+    const context = await browser.newContext({locale}), page = await context.newPage();
+    const state = await publishedFixture(page, true, {dispatch: true, bindings: [selected], holdPasteArm: true});
+    try {
+      await page.goto('/dashboard/#/dispatch/' + dispatchProject);
+      await expect.poll(() => state.reads.some(path => path.startsWith('/events'))).toBe(true);
+      await page.evaluate(() => {
+        const el = document.querySelector('[data-published-start] textarea')!;
+        for (let n = 0; n < 2; n++) {
+          const event = new Event('paste', {bubbles: true, cancelable: true});
+          Object.defineProperty(event, 'clipboardData', {value: {items: [{kind: 'file', type: 'image/png'}]}});
+          el.dispatchEvent(event);
+        }
+      });
+      await expect.poll(() => Boolean(state.releasePasteArm)).toBe(true);
+      expect(state.invokes.filter(call => call.command === 'native_files_paste_arm')).toHaveLength(1);
+      state.holdPasteArm = false; state.releasePasteArm();
+      await expect(form(page).locator('.attachment-list')).toContainText('pasted-image-20261022T120000Z.png');
+      await expect(form(page).locator('.attachment-list')).toContainText(aid);
+      expect(state.invokes.filter(call => ['native_files_paste_arm', 'native_files_paste', 'native_files_upload'].includes(call.command))
+        .map(call => call.command)).toEqual(['native_files_paste_arm', 'native_files_paste', 'native_files_upload']);
+      expect(state.errors).toEqual([]);
+    } finally {state.releasePasteArm?.(); await context.close();}
+  });
+
+  test(`IPC: paste upload failure refreshes its native row ${locale}`, async ({browser}) => {
+    const context = await browser.newContext({locale}), page = await context.newPage();
+    const state = await publishedFixture(page, true, {dispatch: true, bindings: [selected], failNativeUpload: true});
+    try {
+      await page.goto('/dashboard/#/dispatch/' + dispatchProject);
+      await expect.poll(() => state.reads.some(path => path.startsWith('/events'))).toBe(true);
+      // Pause the periodic refresh so this checks the failure path's own readback.
+      await page.clock.install();
+      await pasteFile(page, '[data-published-start] textarea', 'screenshot.png', 'image/png', pngBuffer);
+      await expect(form(page).locator('.attachments [data-error-summary]')).toHaveText('Native upload interrupted');
+      await expect(form(page).locator('.native-transfers')).toContainText(locale === 'zh-TW'
+        ? '已停止，結果保留 · 0 / 1024 B' : 'Stopped; original result retained · 0 / 1024 B');
+      await expect(form(page).locator('.native-files > [role="status"]')).toHaveText('Native upload interrupted');
+      const upload = state.invokes.findIndex(call => call.command === 'native_files_upload');
+      expect(state.invokes.slice(upload + 1).some(call => call.command === 'native_files_status')).toBe(true);
+      expect(state.invokes.filter(call => call.command === 'native_files_upload')).toHaveLength(1);
+      expect(state.errors).toEqual([]);
+    } finally {await context.close();}
+  });
+}
