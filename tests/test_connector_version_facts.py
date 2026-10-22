@@ -9,12 +9,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from bat_agent_connector import api_auth, api_v1, updater
+from bat_agent_connector import api_auth, api_v1, mcp_identity, updater
+from mcp.server.mcpserver import MCPServer
 from bat_agent_connector import build_identity as identity_module
 from bat_agent_connector.config import Config
 from bat_agent_connector.task_daemon import TaskDaemon
 from bat_agent_connector.update_release import UpdateError
-from tests.test_connector_updates import deployment, make_package, release, update_tree  # noqa: F401
+from tests.test_connector_updates import deployment, make_package, publication, release, update_tree  # noqa: F401
 
 pytestmark = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux updater producer")
 GOLDEN = Path(__file__).parent / "fixtures" / "connector-update-facts.json"
@@ -181,3 +182,86 @@ async def test_launch_evidence_does_not_attach_an_old_process_to_a_new_current(p
     # from current. A matching retained version alone is insufficient.
     monkeypatch.setattr(updater, "_PROCESS_INSTALLATION", updater._capture_process_installation())
     assert (await read_capabilities(tmp_path))["connector_update"]["state"] == "not_managed"
+
+
+async def test_completed_release_check_retains_three_independent_builds_and_clocks(process, tmp_path, monkeypatch):
+    u, receipt, build = process
+    u.enroll(receipt, "preview")
+    monkeypatch.setattr(updater, "_PROCESS_INSTALLATION", updater._capture_process_installation())
+    # Real manifest validation, followed by the existing check and pointer switch.
+    def validated(sha, ver):
+        item, raw = publication(release(sha, ver))
+        return updater.discover("preview", download=lambda url: json.dumps([item]).encode()
+                                if url == "https://api.github.com/repos/TED-H-com/bat-agent-connector/releases?per_page=30" else raw)
+    u.find_release = lambda channel: validated("b" * 40, "0.2.8")
+    u.install = lambda root, candidate, **_: make_package(root, candidate)
+    u.apply()
+    completed = "2026-10-22T13:00:00.123456+00:00"
+    monkeypatch.setattr(updater, "timestamp", lambda: completed)
+    u.find_release = lambda channel: validated("c" * 40, "0.2.9")
+    u.check()
+    before = update_tree(u.root)
+    caps = await read_capabilities(tmp_path)
+    check = caps["connector_update"]["release_check"]
+    assert check == {"completed_at": completed, "candidate": {
+        "version": "0.2.9", "commit": "c" * 40, "published_at": "2026-10-17T00:00:00Z"}}
+    assert caps["build"] == build
+    assert caps["connector_update"]["installed"] == {"version": "0.2.8", "commit": "b" * 40}
+    monkeypatch.setattr(updater, "timestamp", lambda: "2026-10-22T14:00:00+00:00")
+    assert (await read_capabilities(tmp_path)) == caps
+    assert update_tree(u.root) == before
+    def failed(channel):
+        raise UpdateError("release_network_unavailable")
+    u.find_release = failed
+    with pytest.raises(UpdateError):
+        u.check()
+    assert (await read_capabilities(tmp_path))["connector_update"]["release_check"] == check
+    u.policy(True, "stable")
+    assert (await read_capabilities(tmp_path))["connector_update"]["release_check"] is None
+    u.find_release = lambda channel: None
+    u.check()
+    assert (await read_capabilities(tmp_path))["connector_update"]["release_check"]["candidate"] is None
+    golden = json.loads(GOLDEN.read_text())
+    if os.environ.get("BATC_UPDATE_CONNECTOR_GOLDEN") == "1":
+        golden["released"] = caps
+        GOLDEN.write_text(json.dumps(golden, indent=2) + "\n")
+    assert caps == golden["released"]
+
+
+@pytest.mark.parametrize("scenario", ["same", "differs", "foreign", "unreadable", "not_enrolled", "not_managed"])
+async def test_identified_mcp_compares_only_its_own_next_launch_installation(process, monkeypatch, scenario):
+    u, receipt, build = process
+    monkeypatch.setattr(mcp_identity, "build_identity", lambda: dict(build))
+    if scenario != "not_enrolled":
+        u.enroll(receipt, "preview")
+        monkeypatch.setattr(updater, "_PROCESS_INSTALLATION", updater._capture_process_installation())
+        if scenario == "differs":
+            u.find_release = lambda channel: release("b" * 40, "0.2.8")
+            u.install = lambda root, candidate, **_: make_package(root, candidate)
+            u.apply()
+        elif scenario == "foreign":
+            other = updater.Updater(u.home.parent / "other-home")
+            monkeypatch.setenv("HOME", str(other.home))
+        elif scenario == "not_managed":
+            monkeypatch.setattr(updater, "_PROCESS_INSTALLATION", None)
+        elif scenario == "unreadable":
+            (u.root / "current").unlink()
+    before = update_tree(u.root)
+    async def refused():
+        raise PermissionError("private central endpoint")
+    server = MCPServer("identified-process-fixture")
+    mcp_identity.register(server, refused)
+    contents = list(await server.read_resource("batc://identity"))
+    result = json.loads(contents[0].content)
+    assert result["mcp"]["build"] == build
+    assert result["central"]["status"] == "unavailable"
+    next_launch = result["next_launch"]
+    expected = scenario if scenario in {"same", "differs"} else "unknown"
+    assert next_launch["difference"] == expected
+    assert next_launch["restart_notice"] == ({"en": "Restart to load 0.2.8", "zh-TW": "重新啟動以載入 0.2.8"}
+                                               if scenario == "differs" else None)
+    assert next_launch["installed"] == ({"version": "0.2.8" if scenario == "differs" else "0.2.7",
+                                           "commit": ("b" if scenario == "differs" else "a") * 40}
+                                          if expected != "unknown" else None)
+    assert update_tree(u.root) == before
+    assert "private central" not in contents[0].content

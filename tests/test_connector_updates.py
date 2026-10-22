@@ -60,6 +60,7 @@ def test_release_downloads_only_constructed_publisher_urls_and_checks_integrity(
     assert discover("stable", download=download) is None
     result = discover("preview", download=download)
     assert result["commit"] == "a" * 40
+    assert result["published_at"] == item["published_at"]
     assert calls[-1] == REPOSITORY + "/releases/download/" + item["tag_name"] + "/release-manifest.json"
     item["assets"][0]["digest"] = "sha256:" + "0" * 64
     with pytest.raises(UpdateError, match="digest_mismatch"):

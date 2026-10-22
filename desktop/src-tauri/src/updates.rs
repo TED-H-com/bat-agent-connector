@@ -609,6 +609,17 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn released_candidate_keeps_its_completed_check_clock() {
+        let (updates, _directory, _peer) = download_fixture(false, Some("2.0.0")).await;
+        let first = serde_json::to_value(updates.status().unwrap()).unwrap();
+        assert!(first["candidate"]["checked_at"].as_f64().is_some());
+        assert_eq!(serde_json::to_value(updates.status().unwrap()).unwrap(), first);
+        let failed = serde_json::to_value(updates.finish_check(Err(())).unwrap()).unwrap();
+        assert_eq!(failed["candidate"], first["candidate"]);
+        assert!(updates.finish_check(Ok(None)).unwrap().candidate.is_none());
+    }
+
+    #[tokio::test]
     async fn verified_download_survives_failed_recheck_and_restores_install_review() {
         let (updates, _directory, peer) = download_fixture(false, Some("2.0.0")).await;
         let id = updates.status().unwrap().candidate.unwrap().candidate_id;

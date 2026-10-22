@@ -180,3 +180,14 @@ test('all version strings have both locales and matching placeholders', () => {
     assert.deepEqual(diagnosticsStrings.en[key].match(/\{\w+\}/g),diagnosticsStrings['zh-TW'][key].match(/\{\w+\}/g),key);
   }
 });
+
+
+test('released slots and the unobserved MCP process are explicitly unknown by default',()=>{
+  const bundle=buildDiagnostics(input('differs'));
+  for(const id of ['desktop_released','connector_released','mcp']) {
+    assert.ok(row(bundle,id),id);
+    assert.equal(row(bundle,id).version,null);
+    assert.equal(row(bundle,id).observed_at,null);
+    assert.equal(row(bundle,id).source,'not_reported');
+  }
+});
