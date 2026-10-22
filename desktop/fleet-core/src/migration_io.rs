@@ -1,10 +1,6 @@
 //! Narrow local journal/config/startup file operations; never a WebView file API.
 use crate::Result;
-use std::{
-    fs::OpenOptions,
-    io::{Read, Write},
-    path::Path,
-};
+use std::{fs::OpenOptions, io::Read, path::Path};
 pub(crate) const MAX_SLOT: usize = 1_048_576;
 pub(crate) const MAX_JOURNAL: usize = 6_000_000;
 pub(crate) fn directory(path: &Path) -> Result<()> {
@@ -74,48 +70,23 @@ pub(crate) fn replace(
     next: Option<&[u8]>,
     limit: usize,
 ) -> Result<()> {
-    if next.is_some_and(|b| b.len() > limit) {
-        return Err("MIGRATION_TOO_LARGE");
-    }
-    if read(path, limit)?.as_deref() != expected {
-        return Err("MIGRATION_CHANGED");
-    }
-    if next == expected {
-        return Ok(());
-    }
-    let Some(next) = next else {
-        std::fs::remove_file(path).map_err(|_| "MIGRATION_UNAVAILABLE")?;
-        return Ok(());
-    };
-    let parent = path.parent().ok_or("MIGRATION_INVALID_PATH")?;
-    let temp = parent.join(format!(
-        ".fleet-migration-{:032x}.tmp",
-        rand::random::<u128>()
-    ));
-    let mut opts = OpenOptions::new();
-    opts.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        opts.mode(0o600);
-    }
-    let mut file = opts.open(&temp).map_err(|_| "MIGRATION_UNAVAILABLE")?;
-    let result = (|| {
-        file.write_all(next).map_err(|_| "MIGRATION_UNAVAILABLE")?;
-        file.sync_all().map_err(|_| "MIGRATION_UNAVAILABLE")?;
-        if read(path, limit)?.as_deref() != expected {
-            return Err("MIGRATION_CHANGED");
-        }
-        drop(file);
-        std::fs::rename(&temp, path).map_err(|_| "MIGRATION_UNAVAILABLE")?;
-        #[cfg(unix)]
-        std::fs::File::open(parent)
-            .and_then(|f| f.sync_all())
-            .map_err(|_| "MIGRATION_UNAVAILABLE")?;
-        Ok(())
-    })();
-    if result.is_err() {
-        let _ = std::fs::remove_file(temp);
-    }
-    result
+    crate::compare_replace::replace(
+        path,
+        expected,
+        next,
+        crate::compare_replace::Policy {
+            limit,
+            too_large: "MIGRATION_TOO_LARGE",
+            invalid_path: "MIGRATION_INVALID_PATH",
+            changed: "MIGRATION_CHANGED",
+            unavailable: "MIGRATION_UNAVAILABLE",
+            prefix: ".fleet-migration",
+            create_only: false,
+            skip_equal: true,
+            sync_directory: true,
+            private: false,
+        },
+        || read(path, limit),
+        None,
+    )
 }

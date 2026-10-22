@@ -9,7 +9,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::{
     fs::OpenOptions,
-    io::{Read, Write},
+    io::Read,
     path::{Path, PathBuf},
 };
 
@@ -80,42 +80,26 @@ pub(crate) fn replace(
     if bytes.len() > BOUND {
         return Err("STATUS_TOO_LARGE");
     }
-    let parent = path.parent().ok_or("SUPERVISOR_FILE_UNPROVEN")?;
-    directory(parent)?;
-    verify()?;
-    if read(path)?.as_deref() != expected {
-        return Err("SUPERVISOR_FILE_CHANGED");
-    }
-    let temporary = parent.join(format!("fleet-stage-{:032x}.tmp", rand::random::<u128>()));
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options
-        .open(&temporary)
-        .map_err(|_| "SUPERVISOR_FILE_UNPROVEN")?;
-    let result = (|| {
-        file.write_all(bytes)
-            .and_then(|_| file.sync_all())
-            .map_err(|_| "SUPERVISOR_FILE_UNPROVEN")?;
-        verify()?;
-        if read(path)?.as_deref() != expected {
-            return Err("SUPERVISOR_FILE_CHANGED");
-        }
-        if expected.is_none() {
-            std::fs::hard_link(&temporary, path).map_err(|_| "SUPERVISOR_FILE_CHANGED")
-        } else {
-            // The owner mutex excludes cooperative writers. Ordinary filesystems do not
-            // offer compare-and-swap against a local editor between this check and rename.
-            std::fs::rename(&temporary, path).map_err(|_| "SUPERVISOR_FILE_UNPROVEN")
-        }
-    })();
-    drop(file);
-    let _ = std::fs::remove_file(temporary);
-    result
+    directory(path.parent().ok_or("SUPERVISOR_FILE_UNPROVEN")?)?;
+    crate::compare_replace::replace(
+        path,
+        expected,
+        Some(bytes),
+        crate::compare_replace::Policy {
+            limit: BOUND,
+            too_large: "STATUS_TOO_LARGE",
+            invalid_path: "SUPERVISOR_FILE_UNPROVEN",
+            changed: "SUPERVISOR_FILE_CHANGED",
+            unavailable: "SUPERVISOR_FILE_UNPROVEN",
+            prefix: "fleet-stage",
+            create_only: true,
+            skip_equal: false,
+            sync_directory: false,
+            private: false,
+        },
+        || read(path),
+        Some(&mut verify),
+    )
 }
 pub(crate) fn remove(path: &Path, expected: &[u8]) -> Result<()> {
     if read(path)?.as_deref() != Some(expected) {
