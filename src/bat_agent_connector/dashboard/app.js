@@ -314,9 +314,14 @@ var init_earlier_drafts_strings = __esmMin((() => {
 	earlierDraftStrings = {
 		en: {
 			earlier_title: "Drafts from earlier local addresses",
+			earlier_draft_group: "Draft text",
+			earlier_pending_group: "Possibly sent requests",
+			earlier_pending_warning: "May already have been sent — check it before sending it again",
+			earlier_check_operation: "Check operation",
+			earlier_check_form: "Check session or form",
 			earlier_notice: "Drafts from an earlier local address are available.",
-			earlier_help: "Review and copy text you want to keep. Hide only dismisses an entry here; the original stays in local storage.",
-			earlier_address: "Written at {address}",
+			earlier_help: "Ordinary draft text can be copied. Check possibly sent requests first. Hide only dismisses an entry here; the original stays in local storage.",
+			earlier_address: "Original address: {address}",
 			earlier_copy: "Copy text",
 			earlier_hide: "Hide",
 			earlier_copied: "Text copied.",
@@ -329,15 +334,20 @@ var init_earlier_drafts_strings = __esmMin((() => {
 			earlier_discussion: "PM discussion",
 			earlier_pm: "PM form",
 			earlier_start: "Start work",
-			earlier_orchestration: "Orchestration form",
+			earlier_orchestration: "Orchestrate work",
 			earlier_labels: "Session labels",
 			earlier_review: "Artifact review"
 		},
 		"zh-TW": {
+			earlier_draft_group: "草稿文字",
+			earlier_pending_group: "可能已送出的請求",
+			earlier_pending_warning: "可能已經送出 — 再次送出前請先確認",
+			earlier_check_operation: "查看操作",
+			earlier_check_form: "查看工作階段或表單",
 			earlier_title: "先前本機位址的草稿",
 			earlier_notice: "找到先前本機位址留下的草稿。",
-			earlier_help: "檢視並複製想保留的文字。隱藏只會收起此處的項目，原始資料仍保留在本機儲存空間。",
-			earlier_address: "撰寫時的位址：{address}",
+			earlier_help: "一般草稿文字可以複製。可能已送出的請求，請先確認。隱藏只會收起此處的項目，原始資料仍保留在本機儲存空間。",
+			earlier_address: "原始位址：{address}",
 			earlier_copy: "複製文字",
 			earlier_hide: "隱藏",
 			earlier_copied: "已複製文字。",
@@ -350,11 +360,361 @@ var init_earlier_drafts_strings = __esmMin((() => {
 			earlier_discussion: "PM 討論",
 			earlier_pm: "PM 表單",
 			earlier_start: "開始工作",
-			earlier_orchestration: "協作編排表單",
+			earlier_orchestration: "安排工作執行",
 			earlier_labels: "工作階段標籤",
-			earlier_review: "成品審閱"
+			earlier_review: "附件成果與審閱"
 		}
 	};
+	for (const [name, en, zh] of [
+		[
+			"text",
+			"Text",
+			"文字"
+		],
+		[
+			"answers",
+			"Answers",
+			"回答"
+		],
+		[
+			"title",
+			"Title",
+			"標題"
+		],
+		[
+			"content",
+			"Content",
+			"內容"
+		],
+		[
+			"name",
+			"Name",
+			"名稱"
+		],
+		[
+			"description",
+			"Description",
+			"說明"
+		],
+		[
+			"value",
+			"Value",
+			"內容值"
+		],
+		[
+			"reference",
+			"Reference",
+			"參考資料"
+		],
+		[
+			"markdown",
+			"Plan text",
+			"計畫文字"
+		],
+		[
+			"instruction",
+			"Instructions",
+			"指示"
+		],
+		[
+			"purpose",
+			"Purpose",
+			"目的"
+		],
+		[
+			"rationale",
+			"Rationale",
+			"理由"
+		],
+		[
+			"reason",
+			"Reason",
+			"原因"
+		],
+		[
+			"public_title",
+			"Public title",
+			"公開標題"
+		],
+		[
+			"public_body",
+			"Public description",
+			"公開說明"
+		],
+		[
+			"body",
+			"Description",
+			"說明"
+		],
+		[
+			"publicReason",
+			"Public reason",
+			"公開理由"
+		],
+		[
+			"ecosystem",
+			"Ecosystem",
+			"生態系統"
+		],
+		[
+			"version",
+			"Version",
+			"版本"
+		],
+		[
+			"path",
+			"Path",
+			"路徑"
+		],
+		[
+			"url",
+			"URL",
+			"網址"
+		],
+		[
+			"note",
+			"Note",
+			"備註"
+		],
+		[
+			"date",
+			"Date",
+			"日期"
+		],
+		[
+			"goal",
+			"Goal",
+			"目標"
+		],
+		[
+			"capacity_note",
+			"Capacity note",
+			"容量備註"
+		],
+		[
+			"discussion_summary",
+			"Discussion summary",
+			"討論摘要"
+		],
+		[
+			"result",
+			"Result",
+			"結果"
+		],
+		[
+			"trigger",
+			"Trigger",
+			"觸發條件"
+		],
+		[
+			"response",
+			"Response",
+			"回應"
+		],
+		[
+			"alternatives",
+			"Alternatives",
+			"替代方案"
+		],
+		[
+			"distinction",
+			"Distinction",
+			"區別"
+		],
+		[
+			"problem",
+			"Problem",
+			"問題"
+		],
+		[
+			"goal_relation",
+			"Relation to goal",
+			"與目標的關係"
+		],
+		[
+			"expected_effect",
+			"Expected effect",
+			"預期效果"
+		],
+		[
+			"options",
+			"Options",
+			"選項"
+		],
+		[
+			"hypotheses",
+			"Hypotheses",
+			"假設"
+		],
+		[
+			"direction_rationale",
+			"Direction rationale",
+			"方向理由"
+		],
+		[
+			"next_observation_focus",
+			"Next observation focus",
+			"下次觀察重點"
+		],
+		[
+			"limitations",
+			"Limitations",
+			"限制"
+		],
+		[
+			"basis",
+			"Basis",
+			"依據"
+		],
+		[
+			"prompt",
+			"Instructions",
+			"指示"
+		],
+		[
+			"why",
+			"Purpose",
+			"目的"
+		],
+		[
+			"delivery_approach",
+			"Delivery approach",
+			"交付方式"
+		],
+		[
+			"capacity_discussion",
+			"Capacity discussion",
+			"容量討論"
+		],
+		[
+			"dependency_notes",
+			"Dependency notes",
+			"相依性備註"
+		],
+		[
+			"goal_review",
+			"Goal review",
+			"目標檢視"
+		],
+		[
+			"feedback",
+			"Feedback",
+			"回饋"
+		],
+		[
+			"environment_changes",
+			"Environment changes",
+			"環境變化"
+		],
+		[
+			"next_steps",
+			"Next steps",
+			"後續步驟"
+		],
+		[
+			"observations",
+			"Observations",
+			"觀察"
+		],
+		[
+			"previous_improvement_review",
+			"Previous improvement review",
+			"前次改善檢視"
+		],
+		[
+			"no_improvement_rationale",
+			"Reason for no improvement",
+			"不進行改善的理由"
+		],
+		[
+			"unresolved_questions",
+			"Unresolved questions",
+			"未解問題"
+		],
+		[
+			"decisions",
+			"Decisions",
+			"決定"
+		],
+		[
+			"follow_ups",
+			"Follow-ups",
+			"後續追蹤"
+		],
+		[
+			"verification",
+			"Verification",
+			"驗證"
+		],
+		[
+			"outcomes",
+			"Outcomes",
+			"成果"
+		],
+		[
+			"observation",
+			"Observation",
+			"觀察"
+		],
+		[
+			"public_sources",
+			"Public sources",
+			"公開來源"
+		],
+		[
+			"claim",
+			"Claim",
+			"主張"
+		],
+		[
+			"milestones",
+			"Milestones",
+			"里程碑"
+		],
+		[
+			"baseline_date",
+			"Baseline date",
+			"基準日期"
+		],
+		[
+			"request",
+			"Request",
+			"需求"
+		],
+		[
+			"acceptance",
+			"Acceptance criteria",
+			"驗收條件"
+		],
+		[
+			"task_project",
+			"Task project",
+			"任務專案"
+		],
+		[
+			"steps",
+			"Steps",
+			"步驟"
+		],
+		[
+			"message",
+			"Message",
+			"訊息"
+		],
+		[
+			"items",
+			"Items",
+			"項目"
+		],
+		[
+			"reviewText",
+			"Review",
+			"審閱"
+		]
+	]) {
+		earlierDraftStrings.en["earlier_field_" + name] = en;
+		earlierDraftStrings["zh-TW"]["earlier_field_" + name] = zh;
+	}
 }));
 //#endregion
 //#region src/pm-external-history-strings.js
@@ -15598,7 +15958,7 @@ var action = (value) => typeof value === "string" && /^(?:session|checkpoint|int
 var protocols = ["bat-remote/v2", "bat-remote/legacy-v1"];
 var contractVersion = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
 var bool = (value) => typeof value === "boolean" ? value : null;
-var operationId$4 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
+var operationId$5 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
 var select = (value, values) => values.includes(value) ? value : null;
 var routeWords = new Set("v1 hosts sessions projects work-items tasks operations capabilities bootstrap events managed setup secrets observation status pending attention reading permissions labels checkpoints checkpoint-preview instructions artifacts uploads content delivery receipts discovery pm workspaces plans threads messages snapshots brief-export resources roadmap dependencies registers governance".split(" "));
 var resourceNames = {
@@ -15640,7 +16000,7 @@ function failedCall({ at, method, path, status, code: errorCode, admissionRefuse
 		status: Number.isInteger(status) && status >= 100 && status <= 599 ? status : null,
 		code: code(errorCode) || (status >= 100 ? "HTTP_ERROR" : "NETWORK_ERROR"),
 		admission_refused: admissionRefused === true,
-		operation_id: operationId$4(operation?.operation_id)
+		operation_id: operationId$5(operation?.operation_id)
 	};
 }
 function errorRing(limit = 50) {
@@ -15727,7 +16087,7 @@ function scrubDiagnostics(text) {
 		} catch {}
 		if (/^\/v1(?:\/(?:[a-z-]+|:[a-z_]+))*$/.test(value) && value.split("/").filter(Boolean).every((x) => x.startsWith(":") || routeWords.has(x)) || safeLogs.has(value) || time(value) || contractVersion(value) || protocols.includes(value)) return value;
 		value = value.replace(/(?:authorization\s*:\s*(?:basic|bearer)\s+\S+|bearer\s+\S+|batc_[\w-]+|gh[pousr]_[\w-]+|github_pat_[\w-]+|sk-[\w-]+|(?:token|secret|password|passwd|api[_-]?key|fp)\s*[=:]\s*\S+)/gi, "[redacted]").replace(/SHA256:[^\s"',;]+/gi, "[redacted]").replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"<>]+/gi, "[redacted]").replace(/\b[\w.+-]+@[\w.-]+\b/gi, "[redacted]").replace(/\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|dev|app|internal|local|lan|corp|example|invalid)\b(?::\d+)?(?:[/?#]\S*)?/gi, "[redacted]").replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[redacted]").replace(/(?:\b(?:[a-f0-9]{1,4}:){2,}[a-f0-9:]+\b|\[?[a-f0-9]*::[a-f0-9:]*\]?)/gi, "[redacted]").replace(/(?:[a-z]:[\\/]|\\\\|~(?:[\w.-]+)?[\\/]|\/)[^\r\n]*/gi, "[redacted]");
-		return code(value) || reason(value) || version$2(value) || commit(value) || operationId$4(value) || action(value) || /^host-[1-9]\d*$/.test(value) || ["batc.diagnostics.v1", "zh-TW"].includes(value) ? value : "[redacted]";
+		return code(value) || reason(value) || version$2(value) || commit(value) || operationId$5(value) || action(value) || /^host-[1-9]\d*$/.test(value) || ["batc.diagnostics.v1", "zh-TW"].includes(value) ? value : "[redacted]";
 	}));
 }
 function sessionFacts(session) {
@@ -15872,7 +16232,7 @@ function buildDiagnostics(input) {
 			].map((key) => [key, sessions ? sessions.filter((s) => s[key] === null).length : null]))
 		},
 		operations: Array.isArray(input.operations) ? input.operations.filter((op) => ["failed", "uncertain"].includes(op.status)).slice(0, 50).map((op) => ({
-			id: operationId$4(op.operation_id),
+			id: operationId$5(op.operation_id),
 			action: action(op.action),
 			status: op.status,
 			error_code: code(op.error_code ?? op.error?.code),
@@ -17477,12 +17837,12 @@ function sourceSentence(t, envelope, candidate) {
 	if (receipt && receipt === candidate && receipt !== fixed?.commit_sha) return t("wpub_commit_from_receipt");
 	return t("wpub_commit_from_result");
 }
-function operationId$3(value) {
+function operationId$4(value) {
 	return typeof value === "string" && OP_ID.test(value) ? value : "";
 }
 function publicationPrLine(h, t, pr) {
 	if (!pr || typeof pr !== "object") return null;
-	const opId = operationId$3(pr.publication_operation_id);
+	const opId = operationId$4(pr.publication_operation_id);
 	const number = Number.isSafeInteger(pr.pull_number) ? pr.pull_number : null;
 	const repo = text$5(pr.repository) ? pr.repository : "";
 	const label = number != null && repo ? `PR #${number} · ${repo}` : "";
@@ -17499,7 +17859,7 @@ function publicationPrLine(h, t, pr) {
 	return item;
 }
 function publicationDeliveryLine(h, t, pr, envelope, attempt) {
-	if (!operationId$3(pr?.publication_operation_id)) return null;
+	if (!operationId$4(pr?.publication_operation_id)) return null;
 	const host = text$5(attempt?.session?.host) ? attempt.session.host : text$5(attempt?.native_session?.host) ? attempt.native_session.host : "";
 	const source = text$5(pr.child_operation_id) ? pr.child_operation_id : text$5(envelope?.identity?.execution_operation_id) ? envelope.identity.execution_operation_id : "";
 	const repo = text$5(pr.repository) ? pr.repository : "";
@@ -61234,7 +61594,7 @@ async function mountUpdates(main, { h, t, versionInput = () => ({ desktop: true 
 //#region src/capture.js
 var record$3 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var digest$2 = (value) => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
-var operationId$2 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
+var operationId$3 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
 var previewId = (value) => typeof value === "string" && /^acpv_[0-9a-f]{32}$/.test(value);
 var previewToken = (value) => typeof value === "string" && value.length > 0 && value.length <= 24576;
 var validPreview$3 = (doc) => record$3(doc) && record$3(doc.source) && record$3(doc.evidence) && [
@@ -61261,10 +61621,10 @@ function restore$2(value, source) {
 	if (validPreview$3(value.preview)) saved.preview = value.preview;
 	const intent = value.intent, request = intent?.request;
 	const usable = request?.action === "artifact.capture" && previewId(request.target?.preview_id) && previewToken(request.params?.preview_token) && digest$2(request.preconditions?.expected_fingerprint) && typeof intent.key === "string" && intent.key.length > 0 && intent.key.length <= 200;
-	if (usable || operationId$2(intent?.operation_id)) saved.intent = {
+	if (usable || operationId$3(intent?.operation_id)) saved.intent = {
 		key: usable ? intent.key : null,
 		request: usable ? request : null,
-		operation_id: operationId$2(intent.operation_id) ? intent.operation_id : null,
+		operation_id: operationId$3(intent.operation_id) ? intent.operation_id : null,
 		reviewed_digest: digest$2(intent.reviewed_digest) ? intent.reviewed_digest : saved.preview?.evidence.digest
 	};
 	return saved;
@@ -61377,7 +61737,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 	const accept = async (operation) => {
 		guard();
 		const intent = saved.intent;
-		if (!intent || !operationId$2(operation?.operation_id) || operation.action !== "artifact.capture" || intent.operation_id && intent.operation_id !== operation.operation_id || intent.request && operation.target?.preview_id !== intent.request.target.preview_id) throw new Error(t("capture_invalid_result"));
+		if (!intent || !operationId$3(operation?.operation_id) || operation.action !== "artifact.capture" || intent.operation_id && intent.operation_id !== operation.operation_id || intent.request && operation.target?.preview_id !== intent.request.target.preview_id) throw new Error(t("capture_invalid_result"));
 		saved.operation = operation;
 		saved.intent.operation_id = operation.operation_id;
 		persist();
@@ -62248,7 +62608,7 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 //#region src/permissions.js
 var record$2 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var modeValue = (value) => ["default", "allow_all"].includes(value);
-var operationId$1 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
+var operationId$2 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
 var terminal$5 = (operation) => [
 	"succeeded",
 	"failed",
@@ -62273,7 +62633,7 @@ function restore$1(value, target) {
 			params: { mode: request.params.mode },
 			preconditions: {}
 		} : null,
-		operation_id: operationId$1(intent.operation_id) ? intent.operation_id : null
+		operation_id: operationId$2(intent.operation_id) ? intent.operation_id : null
 	};
 	if (valid && !saved.intent.operation_id && admissionRefusals$2.has(intent.refused)) saved.intent.refused = intent.refused;
 	if (valid) saved.mode = request.params.mode;
@@ -62306,7 +62666,7 @@ function permissionsPanel({ h, t, api, caps, guard, errorBox, opStatus, storageK
 	const writable = () => ready() && session()?.api_access === "managed" && session()?.provenance === "connector_managed" && (caps()?.scopes || []).includes("operate") && caps()?.hosts?.some((host) => host.host === target.host && host.writes === true) && caps()?.actions?.some((action) => action.action === "session.permissions" && action.allowed === true);
 	const accept = (candidate) => {
 		guard();
-		if (!saved.intent || !operationId$1(candidate?.operation_id) || candidate.action !== "session.permissions" || candidate.target?.host !== target.host || candidate.target?.session_id !== target.session_id || !modeValue(candidate.params?.mode) || saved.intent.request && candidate.params.mode !== saved.intent.request.params.mode || saved.intent.key && candidate.idempotency_key !== saved.intent.key || saved.intent.operation_id && candidate.operation_id !== saved.intent.operation_id) throw new Error(t("permissions_invalid_result"));
+		if (!saved.intent || !operationId$2(candidate?.operation_id) || candidate.action !== "session.permissions" || candidate.target?.host !== target.host || candidate.target?.session_id !== target.session_id || !modeValue(candidate.params?.mode) || saved.intent.request && candidate.params.mode !== saved.intent.request.params.mode || saved.intent.key && candidate.idempotency_key !== saved.intent.key || saved.intent.operation_id && candidate.operation_id !== saved.intent.operation_id) throw new Error(t("permissions_invalid_result"));
 		operation = candidate;
 		saved.intent.operation_id = candidate.operation_id;
 		saved.mode = candidate.params.mode;
@@ -62812,7 +63172,7 @@ function approvalsPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, sto
 //#endregion
 //#region src/session-start.js
 var object$2 = (v) => v && typeof v === "object" && !Array.isArray(v);
-var operationId = (v) => typeof v === "string" && /^op_[0-9a-f]{32}$/.test(v);
+var operationId$1 = (v) => typeof v === "string" && /^op_[0-9a-f]{32}$/.test(v);
 var terminal$3 = (op) => [
 	"succeeded",
 	"failed",
@@ -62892,7 +63252,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 		saved.intent = {
 			request: valid ? raw.intent.request : null,
 			key: valid ? raw.intent.key : null,
-			operation_id: operationId(raw.intent.operation_id) ? raw.intent.operation_id : null,
+			operation_id: operationId$1(raw.intent.operation_id) ? raw.intent.operation_id : null,
 			refused: !raw.intent.operation_id && admissionRefusals$1.has(raw.intent.refused) ? raw.intent.refused : null
 		};
 		if (valid) Object.assign(saved, raw.intent.request.target, {
@@ -63021,7 +63381,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 	const accept = (candidate) => {
 		guard();
 		const intent = saved.intent;
-		if (!intent || !intent.request || !intent.key || !operationId(candidate?.operation_id) || candidate.actor !== caps()?.actor || candidate.idempotency_key !== intent.key || !equal$3({
+		if (!intent || !intent.request || !intent.key || !operationId$1(candidate?.operation_id) || candidate.actor !== caps()?.actor || candidate.idempotency_key !== intent.key || !equal$3({
 			action: candidate.action,
 			target: candidate.target,
 			params: candidate.params,
@@ -65926,6 +66286,16 @@ function legacyIdentity(scope) {
 		return null;
 	}
 }
+function matchingLegacySources(identity, keys) {
+	const candidates = keys.filter((key) => key.startsWith("batc.sync.")).map((key) => key.slice(10));
+	return candidates.flatMap((scope) => {
+		const old = legacyIdentity(scope);
+		return old?.server_id === identity.server_id && old.principal_id === identity.principal_id && old.actor === identity.actor ? [{
+			scope,
+			ambiguous: candidates.some((other) => other !== scope && (other.startsWith(scope + ".") || scope.startsWith(other + ".")))
+		}] : [];
+	});
+}
 function migrateManagedStorage(identity, local, session) {
 	const target = managedStorageScope(identity), marker = `batc.storage-migration.${target}`;
 	const receipt = local.getItem(marker);
@@ -65936,13 +66306,9 @@ function migrateManagedStorage(identity, local, session) {
 	}
 	const areas = [local, session], allKeys = areas.map(keys);
 	if (allKeys.some((list) => list.some((key) => rebase(key, target, target) !== null))) return;
-	const candidates = allKeys[0].filter((key) => key.startsWith("batc.sync.")).map((key) => key.slice(10));
-	const matching = candidates.filter((scope) => {
-		const old = legacyIdentity(scope);
-		return old?.server_id === identity.server_id && old.principal_id === identity.principal_id && old.actor === identity.actor;
-	});
-	if (matching.length !== 1) return;
-	const source = matching[0];
+	const matching = matchingLegacySources(identity, allKeys[0]);
+	if (matching.length !== 1 || matching[0].ambiguous) return;
+	const source = matching[0].scope;
 	for (const key of allKeys.flat()) {
 		const endpoint = key.match(/^batc\.[a-z.-]+\.(https?%3A%2F%2F[^:]+):/)?.[1];
 		if (!endpoint) continue;
@@ -65954,7 +66320,6 @@ function migrateManagedStorage(identity, local, session) {
 		}
 		if (possible !== source && legacyIdentity(possible) && rebase(key, possible, possible) !== null) return;
 	}
-	if (candidates.some((scope) => scope !== source && (scope.startsWith(source + ".") || source.startsWith(scope + ".")))) return;
 	const copies = areas.flatMap((storage, area) => allKeys[area].flatMap((key) => {
 		const destination = rebase(key, source, target), value = storage.getItem(key);
 		return destination !== null && value !== null ? [{
@@ -66012,12 +66377,12 @@ forms("pm.run.prepare pm.run.analyze pm.run.bat.analyze pm.follow_up.analyze pm.
 forms("pm.thread.plan pm.thread.plan.revise pm.input.confirm pm.plan.adopt pm.conversation.adopt pm.workspace.adapter.select pm.work.bind pm.project.bind", "rationale");
 forms("pm.work_input.defer", "reason");
 forms("github.pr.publish github.pr.update", "public_title public_body");
-forms("pm.issue.publish pm.issue.update", "title body");
+forms("pm.issue.publish", "title body");
 forms("pm.issue.cancel", "reason publicReason");
 forms("pm.dependencies.declare", "name ecosystem version path url note");
 forms("pm.roadmap.baseline.set", "title rationale");
 forms("pm.roadmap.forecast.set", "date rationale");
-forms("pm.product_goal.revise pm.dod.revise", "text rationale");
+forms("pm.product_goal.revise pm.dod.revise", "rationale");
 forms("pm.backlog.revise pm.sprint.select pm.sprint.start pm.sprint.close pm.sprint.cancel", "rationale");
 forms("pm.sprint.create", "title goal capacity_note rationale");
 forms("pm.sprint.goal.revise", "goal rationale");
@@ -66059,8 +66424,9 @@ var collections = {
 	] },
 	"pm.roadmap.baseline.set": { milestones: ["title", "baseline_date"] }
 };
-function draftText(family, suffix, raw) {
+function draftText(family, suffix, raw, report = diagnostic) {
 	const result = [];
+	if (suffix === "shortcut" || suffix.endsWith(".shortcut") || family === "draft" && suffix.startsWith("continue.") || family === "dispatch" && /^prj_[0-9a-f]{20}\.wi_[0-9a-f]{20}$/.test(suffix)) return result;
 	const add = (field, value, label, action) => {
 		if (typeof value === "string" && value.trim()) result.push({
 			field,
@@ -66099,20 +66465,23 @@ function draftText(family, suffix, raw) {
 			"request",
 			"acceptance"
 		], value.fields, "earlier_work");
-		else if (/^continue\./.test(suffix)) add("text", value.text, "earlier_continue");
 		else if (suffix === "published" || /^dispatch\./.test(suffix)) add("text", value.text, "earlier_start");
 	} else if (family === "pm") {
 		if (/^discussion-send\./.test(suffix)) add("content", value.content, "earlier_discussion");
 		else if (value.version === 1 && record(value.values)) {
 			if (action && Object.hasOwn(pmText, action)) {
-				fields(pmText[action], value.values, "earlier_pm", action);
+				fields(action === "pm.thread.create" && suffix.startsWith("overview-assessment.") ? pmText[action].filter((name) => name !== "title") : pmText[action], value.values, "earlier_pm", action);
 				if (action === "pm.quality.review.record") fields(Object.keys(value.values).filter((name) => /^reason_\d+$/.test(name)), value.values, "earlier_pm", action);
 				for (const [name, names] of Object.entries(collections[action] || {})) {
 					if (!value.values[name]) continue;
-					const rows = JSON.parse(value.values[name]);
-					if (Array.isArray(rows)) rows.forEach((row, index) => {
-						if (record(row)) for (const field of names) add(`${name}.${index}.${field}`, row[field], "earlier_pm", action);
-					});
+					try {
+						const rows = JSON.parse(value.values[name]);
+						if (Array.isArray(rows)) rows.forEach((row, index) => {
+							if (record(row)) for (const field of names) add(`${name}.${index}.${field}`, row[field], "earlier_pm", action);
+						});
+					} catch {
+						report(problem$1);
+					}
 				}
 			}
 		}
@@ -66148,6 +66517,61 @@ async function entryId(key, field) {
 	const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify([key, field])));
 	return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
+var operationId = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
+function evidence(value) {
+	const intents = record(value) ? [
+		value.intent,
+		value.submission,
+		value.accept,
+		value.capture
+	].filter((item) => item != null) : [];
+	return {
+		pending: intents.length > 0,
+		operations: intents.flatMap((intent) => operationId(intent?.operation_id) ? [intent.operation_id] : [])
+	};
+}
+function formHref(family, suffix) {
+	const part = (value) => encodeURIComponent(typeof value === "string" ? value : "");
+	let target = {};
+	try {
+		const json = suffix.indexOf("{");
+		if (json >= 0) target = JSON.parse(suffix.slice(json));
+	} catch {}
+	if (family === "pm") {
+		const workspace = target.workspace_id || (suffix.startsWith("discussion-send.") ? suffix.slice(16) : "");
+		return "#/pm" + (workspace ? "/" + part(workspace) : "") + (target.thread_id ? "/discussions/" + part(target.thread_id) : "");
+	}
+	if (family === "draft") {
+		const session = suffix.split(".");
+		if (session[0] === "send" && session.length === 3 || session[0] === "answer" && session.length === 4) return `#/session/${part(session[1])}/${part(session[2])}`;
+		if (suffix.startsWith("wi.edit.")) return "#/item/" + part(suffix.slice(8));
+		if (suffix.startsWith("dispatch.")) return "#/dispatch/" + part(suffix.slice(9));
+		if (suffix === "published") return "#/published";
+	}
+	if (family === "labels") try {
+		const [host, sid] = JSON.parse(suffix);
+		return `#/session/${part(host)}/${part(sid)}`;
+	} catch {
+		return "#/sessions";
+	}
+	if (family === "create") return suffix.startsWith("work_item.") ? "#/project/" + part(suffix.slice(10)) : "#/projects";
+	if (family === "dispatch") return "#/dispatch/" + part(suffix);
+	if (family === "orchestrate") return "#/orchestrate/" + part(suffix.split(".")[0]);
+	if (family === "artifact-review") return "#/artifact-review" + (target.kind === "session" ? [
+		target.kind,
+		target.host,
+		target.session_id
+	] : [
+		"artifact",
+		"operation",
+		"task"
+	].includes(target.kind) ? [
+		target.kind,
+		target.artifact_id || target.operation_id || target.task_id,
+		...target.kind === "artifact" ? [String(target.revision)] : []
+	] : []).map((value) => "/" + part(value)).join("");
+	return ["start", "published"].includes(family) ? "#/" + family : "#/sessions";
+}
 async function earlierDrafts(identity, local, report = diagnostic) {
 	let keys, migrated;
 	try {
@@ -66158,39 +66582,67 @@ async function earlierDrafts(identity, local, report = diagnostic) {
 		report(problem$1);
 		return [];
 	}
-	const candidates = keys.filter((key) => key.startsWith("batc.sync.")).map((key) => key.slice(10));
-	const sources = candidates.filter((source) => {
-		const old = legacyIdentity(source);
-		return source !== migrated && old?.server_id === identity.server_id && old.principal_id === identity.principal_id && old.actor === identity.actor && !candidates.some((other) => other !== source && (other.startsWith(source + ".") || source.startsWith(other + ".")));
-	});
+	const sources = matchingLegacySources(identity, keys).filter((row) => !row.ambiguous && row.scope !== migrated).map((row) => row.scope);
 	const entries = [];
 	for (const [index, key] of keys.entries()) {
 		if (index % 32 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
 		const source = sources.find((source) => rebase(key, source, source) !== null);
 		if (!source) continue;
 		const boundary = key.indexOf(source), family = key.slice(5, boundary - 1), suffix = key.slice(boundary + source.length + 1);
+		if (![
+			"draft",
+			"pm",
+			"create",
+			"start",
+			"published",
+			"dispatch",
+			"orchestrate",
+			"labels",
+			"artifact-review"
+		].includes(family) || suffix === "shortcut" || suffix.endsWith(".shortcut")) continue;
 		try {
 			const raw = local.getItem(key);
 			if (raw === null) continue;
-			for (const field of draftText(family, suffix, raw)) {
-				if (family === "draft" && (suffix === "published" || suffix.startsWith("dispatch."))) {
-					const formKey = suffix === "published" ? `batc.published.${source}` : `batc.dispatch.${source}.${suffix.slice(9)}`;
-					let mirrored = false;
+			const fields = draftText(family, suffix, raw, report);
+			if (!fields.length) continue;
+			const retained = evidence(family === "draft" && suffix.startsWith("send.") ? null : JSON.parse(raw));
+			if (family === "draft") {
+				const sibling = `batc.key.${source}.${suffix}`;
+				for (const key of keys.filter((key) => key === sibling || key.startsWith(sibling + ".") && /^[0-9a-f]{24}$/.test(key.slice(sibling.length + 1)))) {
+					retained.pending = true;
 					try {
-						mirrored = JSON.parse(local.getItem(formKey) || "null")?.prompt === field.text;
+						const saved = JSON.parse(local.getItem(key) || "null");
+						if (operationId(saved?.op)) retained.operations.push(saved.op);
 					} catch {
 						report(problem$1);
 					}
-					if (mirrored) continue;
 				}
+			}
+			let mirror = null;
+			const mirrorKey = family === "draft" && suffix === "published" ? `batc.published.${source}` : family === "draft" && suffix.startsWith("dispatch.") ? `batc.dispatch.${source}.${suffix.slice(9)}` : family === "published" && !suffix ? `batc.draft.${source}.published` : family === "dispatch" ? `batc.draft.${source}.dispatch.${suffix}` : null;
+			if (mirrorKey && keys.includes(mirrorKey)) {
+				try {
+					mirror = JSON.parse(local.getItem(mirrorKey) || "null");
+				} catch {
+					retained.pending = true;
+					report(problem$1);
+				}
+				const mirrored = evidence(mirror);
+				retained.pending ||= mirrored.pending;
+				retained.operations.push(...mirrored.operations);
+			}
+			const operations = [...new Set(retained.operations)].sort();
+			for (const field of fields) {
+				if (family === "draft" && mirror?.prompt === field.text) continue;
 				const id = await entryId(key, field.field);
 				if (local.getItem(marker(identity, id)) !== null) continue;
 				entries.push({
+					...field,
 					id,
-					text: field.text,
-					label: field.label,
-					action: field.action,
-					address: decodeURIComponent(source.split(":")[0])
+					address: decodeURIComponent(source.split(":")[0]),
+					state: retained.pending ? "possibly-sent" : "draft",
+					operations,
+					href: operations.length ? "#/op/" + operations[0] : formHref(family, suffix)
 				});
 			}
 		} catch {
@@ -66210,26 +66662,40 @@ function hideEarlierDraft(identity, local, entry, report = diagnostic) {
 }
 function firstEarlierDraftNotice(identity, local, report = diagnostic) {
 	try {
-		const key = marker(identity, "noticed");
-		if (local.getItem(key) !== null) return false;
-		local.setItem(key, "shown");
-		return true;
+		return local.getItem(marker(identity, "noticed")) === null;
 	} catch {
 		report(problem$1);
 		return false;
 	}
 }
+function markEarlierDraftNotice(identity, local, report = diagnostic) {
+	try {
+		local.setItem(marker(identity, "noticed"), "opened");
+	} catch {
+		report(problem$1);
+	}
+}
 //#endregion
 //#region src/earlier-drafts.js
-function earlierDraftPanel({ h, t, entries, current, hide, expanded = false }) {
+function earlierFieldLabel(t, field) {
+	if (/^reason_\d+$/.test(field)) return `${t("earlier_field_reason")} ${Number(field.slice(7)) + 1}`;
+	return field.split(".").map((part) => /^\d+$/.test(part) ? String(Number(part) + 1) : t("earlier_field_" + part)).join(" · ");
+}
+function earlierDraftPanel({ h, t, entries, current, hide, opened, emptyFocus, expanded = false }) {
 	const root = h("details", {
 		"data-earlier-drafts": "",
 		class: "earlier-drafts",
 		open: expanded
 	}, h("summary", {}, t("earlier_title")), h("p", { class: "muted" }, t("earlier_help")));
+	const groups = new Map();
+	for (const state of ["draft", "possibly-sent"]) if (entries.some((entry) => entry.state === state)) {
+		const group = h("section", { "data-earlier-group": state }, h("h3", {}, t(state === "draft" ? "earlier_draft_group" : "earlier_pending_group")));
+		groups.set(state, group);
+		root.append(group);
+	}
 	let position = 0, rendering = false;
 	function append(entry) {
-		const name = t(actionMessageKey(entry.action) || entry.label);
+		const name = `${t(actionMessageKey(entry.action) || entry.label)} · ${earlierFieldLabel(t, entry.field)}`;
 		const text = h("textarea", {
 			readonly: true,
 			rows: 4,
@@ -66243,8 +66709,12 @@ function earlierDraftPanel({ h, t, entries, current, hide, expanded = false }) {
 		const row = h("article", {
 			"data-earlier-draft": "",
 			class: "panel"
-		}, h("h3", {}, name), h("p", { class: "muted" }, t("earlier_address", { address: entry.address })), text);
-		row.append(h("div", { class: "actions" }, h("button", {
+		}, h("h4", {}, name), h("p", { class: "muted" }, t("earlier_address", { address: entry.address })), text);
+		const actions = h("div", { class: "actions" });
+		if (entry.state === "possibly-sent") {
+			row.insertBefore(h("p", {}, t("earlier_pending_warning")), text);
+			for (const href of entry.operations.length ? entry.operations.map((id) => "#/op/" + id) : [entry.href]) actions.append(h("a", { href }, t(entry.operations.length ? "earlier_check_operation" : "earlier_check_form")));
+		} else actions.append(h("button", {
 			type: "button",
 			class: "secondary",
 			onclick: async () => {
@@ -66260,42 +66730,51 @@ function earlierDraftPanel({ h, t, entries, current, hide, expanded = false }) {
 					}
 				}
 			}
-		}, t("earlier_copy")), h("button", {
+		}, t("earlier_copy")));
+		actions.append(h("button", {
 			type: "button",
 			class: "secondary",
 			onclick: () => {
 				if (!current() || !hide(entry)) return;
-				const next = row.nextElementSibling?.querySelector("button") || row.previousElementSibling?.querySelector("button") || root.querySelector("summary");
+				const rows = [...root.querySelectorAll("[data-earlier-draft]")], index = rows.indexOf(row);
+				const next = rows[index + 1]?.querySelector("button") || rows[index - 1]?.querySelector("button");
+				const group = row.parentElement;
 				row.remove();
-				next?.focus();
-				if (position === entries.length && !root.querySelector("[data-earlier-draft]")) root.remove();
+				if (!group.querySelector("[data-earlier-draft]") && position === entries.length) group.remove();
+				if (position === entries.length && !root.querySelector("[data-earlier-draft]")) {
+					root.remove();
+					emptyFocus();
+				} else (next || root.querySelector("summary"))?.focus({ preventScroll: true });
 			}
-		}, t("earlier_hide")), status));
-		root.append(row);
+		}, t("earlier_hide")), status);
+		row.append(actions);
+		groups.get(entry.state).append(row);
 	}
 	function render() {
 		if (!current() || !root.isConnected || !root.open) {
 			rendering = false;
 			return;
 		}
-		const first = position === 0;
 		const end = Math.min(position + 16, entries.length);
 		while (position < end) append(entries[position++]);
-		if (first && expanded) {
-			root.scrollIntoView({ block: "start" });
-			root.querySelector("summary").focus({ preventScroll: true });
-		}
 		if (position < entries.length) setTimeout(render, 0);
 		else rendering = false;
 	}
 	const schedule = () => {
+		if (root.open && root.isConnected && current()) opened();
 		if (!rendering && root.open && position < entries.length) {
 			rendering = true;
 			setTimeout(render, 0);
 		}
 	};
 	root.addEventListener("toggle", schedule);
-	schedule();
+	root.reveal = () => {
+		root.open = true;
+		schedule();
+		root.scrollIntoView({ block: "start" });
+		root.querySelector("summary").focus({ preventScroll: true });
+	};
+	root.resume = schedule;
 	return root;
 }
 //#endregion
@@ -66795,62 +67274,116 @@ async function openDiagnostics() {
 var earlierEntries = [];
 var earlierIdentity = null;
 var earlierScan = 0;
-function clearEarlierDrafts() {
+var earlierPanel = null;
+var earlierPanelLocale = null;
+var earlierScanState = nativeDesktop ? "waiting" : "skipped";
+var earlierJump = false;
+function clearEarlierDrafts(status = nativeDesktop ? "waiting" : "skipped") {
 	earlierScan++;
 	earlierEntries = [];
 	earlierIdentity = null;
+	earlierPanel = null;
+	earlierJump = false;
+	earlierScanState = status;
 	document.querySelector("[data-earlier-drafts-notice]")?.remove();
 	document.querySelector("[data-earlier-drafts]")?.remove();
+	paintEarlierDrafts();
+}
+function acknowledgeEarlierDrafts() {
+	if (!earlierIdentity) return;
+	markEarlierDraftNotice(earlierIdentity, localStorage);
+	document.querySelector("[data-earlier-drafts-notice]")?.remove();
+}
+function paintEarlierNotice() {
+	document.querySelector("[data-earlier-drafts-notice]")?.remove();
+	if (!state.token || !earlierIdentity || !earlierEntries.length || !firstEarlierDraftNotice(earlierIdentity, localStorage)) return;
+	document.getElementById("main")?.prepend(h("aside", {
+		"data-earlier-drafts-notice": "",
+		class: "earlier-drafts-notice",
+		role: "status"
+	}, h("span", {}, t("earlier_notice")), " ", h("a", {
+		href: "#/settings?section=about&drafts=earlier",
+		onclick: () => {
+			earlierJump = false;
+			acknowledgeEarlierDrafts();
+		}
+	}, t("earlier_title"))));
 }
 function paintEarlierDrafts() {
 	const slot = document.querySelector("[data-earlier-drafts-slot]");
 	if (!slot) return;
-	slot.replaceChildren();
-	if (!earlierIdentity || !earlierEntries.length) return;
-	const identity = earlierIdentity, scan = earlierScan, epoch = state.epoch;
-	const current = () => scan === earlierScan && epoch === state.epoch && identity === earlierIdentity && !!state.token;
-	slot.append(earlierDraftPanel({
-		h,
-		t,
-		entries: earlierEntries,
-		current,
-		expanded: new URLSearchParams(location.hash.split("?")[1] || "").get("drafts") === "earlier",
-		hide: (entry) => {
-			if (!current() || !hideEarlierDraft(identity, localStorage, entry)) return false;
-			earlierEntries = earlierEntries.filter((row) => row.id !== entry.id);
-			if (!earlierEntries.length) document.querySelector("[data-earlier-drafts-notice]")?.remove();
-			return true;
-		}
-	}));
+	slot.dataset.scanState = earlierScanState;
+	if (!earlierIdentity || !earlierEntries.length) {
+		slot.replaceChildren();
+		return;
+	}
+	const identity = earlierIdentity, scope = managedStorageScope(identity), signature = JSON.stringify(earlierEntries);
+	const current = () => !!state.token && state.online && !state.nativeBusy && state.namespace === scope && earlierIdentity && managedStorageScope(earlierIdentity) === scope;
+	if (!earlierPanel || earlierPanelLocale !== locale || earlierPanel.signature !== signature) {
+		const expanded = earlierPanel?.open || false;
+		earlierPanel = earlierDraftPanel({
+			h,
+			t,
+			entries: earlierEntries,
+			current,
+			expanded,
+			opened: acknowledgeEarlierDrafts,
+			emptyFocus: () => {
+				const heading = document.querySelector("[data-settings-panel=\"about\"] h2");
+				if (heading) {
+					heading.tabIndex = -1;
+					heading.focus({ preventScroll: true });
+				}
+			},
+			hide: (entry) => {
+				if (!current() || !hideEarlierDraft(identity, localStorage, entry)) return false;
+				earlierEntries = earlierEntries.filter((row) => row.id !== entry.id);
+				earlierPanel.signature = JSON.stringify(earlierEntries);
+				if (!earlierEntries.length) document.querySelector("[data-earlier-drafts-notice]")?.remove();
+				return true;
+			}
+		});
+		earlierPanel.signature = signature;
+		earlierPanelLocale = locale;
+	}
+	if (earlierPanel.parentElement !== slot) slot.replaceChildren(earlierPanel);
+	earlierPanel.resume();
+	if (!earlierJump && new URLSearchParams(location.hash.split("?")[1] || "").get("drafts") === "earlier") {
+		earlierJump = true;
+		const panel = earlierPanel;
+		setTimeout(() => {
+			if (panel === earlierPanel && panel.isConnected && current()) panel.reveal();
+		}, 0);
+	}
 }
 function scanEarlierDrafts(identity) {
 	const scan = earlierScan;
+	earlierScanState = "scanning";
+	paintEarlierDrafts();
 	setTimeout(async () => {
 		try {
 			if (scan !== earlierScan) return;
 			const entries = await earlierDrafts(identity, localStorage);
-			if (scan !== earlierScan || !state.token) return;
+			if (scan !== earlierScan || !state.token || state.namespace !== managedStorageScope(identity)) return;
 			earlierIdentity = identity;
 			earlierEntries = entries;
+			earlierScanState = "complete";
 			paintEarlierDrafts();
-			if (entries.length && firstEarlierDraftNotice(identity, localStorage)) {
-				const notice = h("aside", {
-					"data-earlier-drafts-notice": "",
-					class: "earlier-drafts-notice",
-					role: "status"
-				}, h("span", {}, t("earlier_notice")), " ", h("a", {
-					href: "#/settings?section=about&drafts=earlier",
-					onclick: () => notice.remove()
-				}, t("earlier_title")));
-				document.getElementById("live")?.closest("header")?.after(notice);
-			}
+			paintEarlierNotice();
 		} catch {
 			console.debug("draft_recovery_unreadable");
+			if (scan === earlierScan) {
+				earlierScanState = "complete";
+				paintEarlierDrafts();
+			}
 		}
 	}, 0);
 }
 async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource, retainView = false) {
-	clearEarlierDrafts();
+	if (reset && earlierIdentity) {
+		earlierScan++;
+		earlierScanState = "waiting";
+	} else clearEarlierDrafts();
 	withdrawDiagnostics();
 	recentErrors.clear();
 	const retained = retainView ? {
@@ -66882,6 +67415,7 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
 			principal_id: sync.principal_id
 		};
 		const managed = nativeDesktop && configurationSource === "managed";
+		if (!managed || earlierIdentity && managedStorageScope(earlierIdentity) !== managedStorageScope(identity)) clearEarlierDrafts(managed ? "waiting" : "skipped");
 		if (managed) migrateManagedStorage(identity, localStorage, sessionStorage);
 		state.scopeIdentity = {
 			...identity,
@@ -66896,6 +67430,7 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
 		state.lastEvent = state.sync.cursor;
 		if (managed) scanEarlierDrafts(identity);
 	} else {
+		clearEarlierDrafts("skipped");
 		state.scopeIdentity = null;
 		state.namespace = storageScope(endpoint, caps.actor);
 		state.lastEvent = 0;
@@ -68065,6 +68600,7 @@ async function streamEvents() {
 				};
 				const accessChanged = error.reason === "access_changed";
 				if (accessChanged) {
+					clearEarlierDrafts();
 					generation++;
 					state.viewReady = false;
 					teardown?.();
@@ -72202,7 +72738,6 @@ async function nativeTransition(kind, config = null) {
 	const attempt = ++state.nativeAttempt;
 	const previousOnline = state.online;
 	const previousToken = state.token;
-	clearEarlierDrafts();
 	state.nativeBusy = true;
 	state.epoch++;
 	state.online = false;
@@ -74569,6 +75104,7 @@ async function route() {
 	mountWorkspace(name);
 	paintConnection(true);
 	const main = document.getElementById("main");
+	const recoveryPanel = earlierPanel, recoveryFocus = earlierPanel?.contains(document.activeElement) ? document.activeElement : null, recoveryScroll = main.scrollTop;
 	main.replaceChildren();
 	if (!state.token && name !== "settings") {
 		const off = await viewSettings(main);
@@ -74662,6 +75198,12 @@ async function route() {
 	};
 	if (off?.navigate) teardown.navigate = off.navigate;
 	state.viewReady = true;
+	paintEarlierDrafts();
+	paintEarlierNotice();
+	if (recoveryPanel === earlierPanel && recoveryFocus?.isConnected && document.activeElement === document.body) {
+		main.scrollTop = recoveryScroll;
+		recoveryFocus.focus({ preventScroll: true });
+	}
 }
 async function start() {
 	setLocale(locale);

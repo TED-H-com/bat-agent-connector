@@ -1,6 +1,7 @@
-import {legacyIdentity, managedStorageScope, rebase, type StorageIdentity} from './storage-identity.ts';
+import {matchingLegacySources, managedStorageScope, rebase, type StorageIdentity} from './storage-identity.ts';
 
-export interface EarlierDraft {id: string; text: string; label: string; action?: string; address: string}
+export interface EarlierDraft {id: string; text: string; field: string; label: string; action?: string; address: string;
+  state: 'draft' | 'possibly-sent'; href: string; operations: string[]}
 type Diagnostic = (code: string) => void;
 const diagnostic: Diagnostic = code => console.debug(code);
 const problem = 'draft_recovery_unreadable';
@@ -24,12 +25,12 @@ forms('pm.run.prepare pm.run.analyze pm.run.bat.analyze pm.follow_up.analyze pm.
 forms('pm.thread.plan pm.thread.plan.revise pm.input.confirm pm.plan.adopt pm.conversation.adopt pm.workspace.adapter.select pm.work.bind pm.project.bind', 'rationale');
 forms('pm.work_input.defer', 'reason');
 forms('github.pr.publish github.pr.update', 'public_title public_body');
-forms('pm.issue.publish pm.issue.update', 'title body');
+forms('pm.issue.publish', 'title body');
 forms('pm.issue.cancel', 'reason publicReason');
 forms('pm.dependencies.declare', 'name ecosystem version path url note');
 forms('pm.roadmap.baseline.set', 'title rationale');
 forms('pm.roadmap.forecast.set', 'date rationale');
-forms('pm.product_goal.revise pm.dod.revise', 'text rationale');
+forms('pm.product_goal.revise pm.dod.revise', 'rationale');
 forms('pm.backlog.revise pm.sprint.select pm.sprint.start pm.sprint.close pm.sprint.cancel', 'rationale');
 forms('pm.sprint.create', 'title goal capacity_note rationale');
 forms('pm.sprint.goal.revise', 'goal rationale');
@@ -58,8 +59,10 @@ const collections: Record<string, Record<string, string[]>> = {
 };
 
 type TextField = {field: string; text: string; label: string; action?: string};
-export function draftText(family: string, suffix: string, raw: string): TextField[] {
+export function draftText(family: string, suffix: string, raw: string, report: Diagnostic = diagnostic): TextField[] {
   const result: TextField[] = [];
+  if ((suffix === 'shortcut' || suffix.endsWith('.shortcut')) || family === 'draft' && suffix.startsWith('continue.')
+    || family === 'dispatch' && /^prj_[0-9a-f]{20}\.wi_[0-9a-f]{20}$/.test(suffix)) return result;
   const add = (field: string, value: unknown, label: string, action?: string) => {
     if (typeof value === 'string' && value.trim()) result.push({field, text: value, label, action});
   };
@@ -79,20 +82,23 @@ export function draftText(family: string, suffix: string, raw: string): TextFiel
     if (/^answer\./.test(suffix) && Array.isArray(value.answers))
       value.answers.forEach((answer: unknown, index: number) => add(`answers.${index}`, answer, 'earlier_answers'));
     else if (/^wi\.edit\./.test(suffix)) fields(['title', 'goal', 'request', 'acceptance'], value.fields, 'earlier_work');
-    else if (/^continue\./.test(suffix)) add('text', value.text, 'earlier_continue');
     else if (suffix === 'published' || /^dispatch\./.test(suffix)) add('text', value.text, 'earlier_start');
   } else if (family === 'pm') {
     if (/^discussion-send\./.test(suffix)) add('content', value.content, 'earlier_discussion');
     else if (value.version === 1 && record(value.values)) {
       if (action && Object.hasOwn(pmText, action)) {
-        fields(pmText[action], value.values, 'earlier_pm', action);
+        const names = action === 'pm.thread.create' && suffix.startsWith('overview-assessment.')
+          ? pmText[action].filter(name => name !== 'title') : pmText[action];
+        fields(names, value.values, 'earlier_pm', action);
         if (action === 'pm.quality.review.record') fields(Object.keys(value.values).filter(name => /^reason_\d+$/.test(name)), value.values, 'earlier_pm', action);
         for (const [name, names] of Object.entries(collections[action] || {})) {
           if (!value.values[name]) continue;
-          const rows = JSON.parse(value.values[name]);
-          if (Array.isArray(rows)) rows.forEach((row: unknown, index: number) => {
-            if (record(row)) for (const field of names) add(`${name}.${index}.${field}`, row[field], 'earlier_pm', action);
-          });
+          try {
+            const rows = JSON.parse(value.values[name]);
+            if (Array.isArray(rows)) rows.forEach((row: unknown, index: number) => {
+              if (record(row)) for (const field of names) add(`${name}.${index}.${field}`, row[field], 'earlier_pm', action);
+            });
+          } catch {report(problem);}
         }
       }
     }
@@ -116,6 +122,42 @@ async function entryId(key: string, field: string): Promise<string> {
   return Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
+const operationId = (value: unknown): value is string => typeof value === 'string' && /^op_[0-9a-f]{32}$/.test(value);
+function evidence(value: unknown) {
+  // Artifact review names its frozen requests accept/capture, not intent.
+  const intents = record(value) ? [value.intent, value.submission, value.accept, value.capture].filter(item => item != null) : [];
+  return {pending: intents.length > 0, operations: intents.flatMap(intent => operationId(intent?.operation_id) ? [intent.operation_id] : [])};
+}
+function formHref(family: string, suffix: string): string {
+  const part = (value: unknown) => encodeURIComponent(typeof value === 'string' ? value : '');
+  let target: Record<string, any> = {};
+  try {const json = suffix.indexOf('{'); if (json >= 0) target = JSON.parse(suffix.slice(json));} catch { /* use the form landing */ }
+  if (family === 'pm') {
+    const workspace = target.workspace_id || (suffix.startsWith('discussion-send.') ? suffix.slice('discussion-send.'.length) : '');
+    return '#/pm' + (workspace ? '/' + part(workspace) : '') + (target.thread_id ? '/discussions/' + part(target.thread_id) : '');
+  }
+  if (family === 'draft') {
+    const session = suffix.split('.');
+    if (session[0] === 'send' && session.length === 3 || session[0] === 'answer' && session.length === 4)
+      return `#/session/${part(session[1])}/${part(session[2])}`;
+    if (suffix.startsWith('wi.edit.')) return '#/item/' + part(suffix.slice('wi.edit.'.length));
+    if (suffix.startsWith('dispatch.')) return '#/dispatch/' + part(suffix.slice('dispatch.'.length));
+    if (suffix === 'published') return '#/published';
+  }
+  if (family === 'labels') {
+    try {const [host, sid] = JSON.parse(suffix); return `#/session/${part(host)}/${part(sid)}`;} catch {return '#/sessions';}
+  }
+  if (family === 'create') return suffix.startsWith('work_item.') ? '#/project/' + part(suffix.slice('work_item.'.length)) : '#/projects';
+  if (family === 'dispatch') return '#/dispatch/' + part(suffix);
+  if (family === 'orchestrate') return '#/orchestrate/' + part(suffix.split('.')[0]);
+  if (family === 'artifact-review') {
+    const route = target.kind === 'session' ? [target.kind, target.host, target.session_id]
+      : ['artifact', 'operation', 'task'].includes(target.kind) ? [target.kind, target.artifact_id || target.operation_id || target.task_id, ...(target.kind === 'artifact' ? [String(target.revision)] : [])] : [];
+    return '#/artifact-review' + route.map(value => '/' + part(value)).join('');
+  }
+  return ['start', 'published'].includes(family) ? '#/' + family : '#/sessions';
+}
+
 // The caller supplies only the identity accepted by native managed bootstrap.
 // Yield between reads; the scan is optional and never holds up a view mount.
 export async function earlierDrafts(identity: StorageIdentity, local: Storage, report: Diagnostic = diagnostic): Promise<EarlierDraft[]> {
@@ -125,32 +167,50 @@ export async function earlierDrafts(identity: StorageIdentity, local: Storage, r
     const receipt = JSON.parse(local.getItem(`batc.storage-migration.${managedStorageScope(identity)}`) || 'null');
     if (receipt?.version === 1 && receipt.target === managedStorageScope(identity) && receipt.status === 'complete') migrated = receipt.source;
   } catch {report(problem); return [];}
-  const candidates = keys.filter(key => key.startsWith('batc.sync.')).map(key => key.slice('batc.sync.'.length));
-  const sources = candidates.filter(source => {
-    const old = legacyIdentity(source);
-    return source !== migrated && old?.server_id === identity.server_id && old.principal_id === identity.principal_id && old.actor === identity.actor
-      && !candidates.some(other => other !== source && (other.startsWith(source + '.') || source.startsWith(other + '.')));
-  });
+  const sources = matchingLegacySources(identity, keys).filter(row => !row.ambiguous && row.scope !== migrated).map(row => row.scope);
   const entries: EarlierDraft[] = [];
   for (const [index, key] of keys.entries()) {
     if (index % 32 === 0) await new Promise(resolve => setTimeout(resolve, 0));
     const source = sources.find(source => rebase(key, source, source) !== null);
     if (!source) continue;
     const boundary = key.indexOf(source), family = key.slice('batc.'.length, boundary - 1), suffix = key.slice(boundary + source.length + 1);
+    if (!['draft', 'pm', 'create', 'start', 'published', 'dispatch', 'orchestrate', 'labels', 'artifact-review'].includes(family) || (suffix === 'shortcut' || suffix.endsWith('.shortcut'))) continue;
     try {
       const raw = local.getItem(key); if (raw === null) continue;
-      for (const field of draftText(family, suffix, raw)) {
-        // These two writers mirror the same editable prompt. Retain an orphan
-        // attachment draft, but show an identical form prompt only once.
-        if (family === 'draft' && (suffix === 'published' || suffix.startsWith('dispatch.'))) {
-          const formKey = suffix === 'published' ? `batc.published.${source}` : `batc.dispatch.${source}.${suffix.slice('dispatch.'.length)}`;
-          let mirrored = false;
-          try {mirrored = JSON.parse(local.getItem(formKey) || 'null')?.prompt === field.text;} catch {report(problem);}
-          if (mirrored) continue;
+      const fields = draftText(family, suffix, raw, report); if (!fields.length) continue;
+      const isMessage = family === 'draft' && suffix.startsWith('send.');
+      const retained = evidence(isMessage ? null : JSON.parse(raw));
+      if (family === 'draft') {
+        const sibling = `batc.key.${source}.${suffix}`;
+        // Current writers append a request digest; older writers used the bare scope.
+        for (const key of keys.filter(key => key === sibling || key.startsWith(sibling + '.') && /^[0-9a-f]{24}$/.test(key.slice(sibling.length + 1)))) {
+          retained.pending = true; // A missing/unreadable result never proves no send.
+          try {
+            const saved = JSON.parse(local.getItem(key) || 'null');
+            if (operationId(saved?.op)) retained.operations.push(saved.op);
+          } catch {report(problem);}
         }
+      }
+      // Mirrored attachment prompts may hold the only submission evidence.
+      let mirror: any = null;
+      const mirrorKey = family === 'draft' && suffix === 'published' ? `batc.published.${source}`
+        : family === 'draft' && suffix.startsWith('dispatch.') ? `batc.dispatch.${source}.${suffix.slice('dispatch.'.length)}`
+        : family === 'published' && !suffix ? `batc.draft.${source}.published`
+        : family === 'dispatch' ? `batc.draft.${source}.dispatch.${suffix}` : null;
+      if (mirrorKey && keys.includes(mirrorKey)) {
+        try {mirror = JSON.parse(local.getItem(mirrorKey) || 'null');}
+        catch {retained.pending = true; report(problem);}
+        const mirrored = evidence(mirror);
+        retained.pending ||= mirrored.pending; retained.operations.push(...mirrored.operations);
+      }
+      const operations = [...new Set(retained.operations)].sort();
+      for (const field of fields) {
+        if (family === 'draft' && mirror?.prompt === field.text) continue;
         const id = await entryId(key, field.field);
         if (local.getItem(marker(identity, id)) !== null) continue;
-        entries.push({id, text: field.text, label: field.label, action: field.action, address: decodeURIComponent(source.split(':')[0])});
+        entries.push({...field, id, address: decodeURIComponent(source.split(':')[0]),
+          state: retained.pending ? 'possibly-sent' : 'draft', operations,
+          href: operations.length ? '#/op/' + operations[0] : formHref(family, suffix)});
       }
     } catch {report(problem);}
   }
@@ -163,9 +223,10 @@ export function hideEarlierDraft(identity: StorageIdentity, local: Storage, entr
 }
 
 export function firstEarlierDraftNotice(identity: StorageIdentity, local: Storage, report: Diagnostic = diagnostic): boolean {
-  try {
-    const key = marker(identity, 'noticed');
-    if (local.getItem(key) !== null) return false;
-    local.setItem(key, 'shown'); return true;
-  } catch {report(problem); return false;}
+  try {return local.getItem(marker(identity, 'noticed')) === null;}
+  catch {report(problem); return false;}
+}
+export function markEarlierDraftNotice(identity: StorageIdentity, local: Storage, report: Diagnostic = diagnostic): void {
+  try {local.setItem(marker(identity, 'noticed'), 'opened');}
+  catch {report(problem);}
 }
