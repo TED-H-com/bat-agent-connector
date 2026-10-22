@@ -1,0 +1,32 @@
+{
+  "operation_id": "op_cccccccccccccccccccccccccccccccc",
+  "actor": "operator-dashboard",
+  "entry": "http",
+  "action": "checkpoint.continue",
+  "target": {
+    "checkpoint_id": "cp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "params": {
+    "instructions": "Continue from this version"
+  },
+  "preconditions": {},
+  "status": "failed",
+  "status_reason": "checkpoint destination appeared; staging retained",
+  "error_code": "GIT_FAILED",
+  "result": null,
+  "created_at": 1790000000,
+  "external_refs": {
+    "clone_path": "/srv/managed/app-11111111"
+  },
+  "steps": [
+    {
+      "seq": 1,
+      "name": "worktree.prepare",
+      "status": "failed",
+      "error": {
+        "code": "GIT_FAILED",
+        "message": "checkpoint destination appeared; staging retained"
+      }
+    }
+  ]
+}
