@@ -74,6 +74,24 @@ async def test_work_profile_readiness_matches_producer_golden(world, mock, tmp_p
         assert native["reason"] == "PM_NATIVE_EXECUTABLE_UNAVAILABLE"
         assert body["calls_bat"] is False
         assert before == (len(mock.invokes), len(write_frames(mock)), ops.db.total_changes)
+        # Compare both public producers on this same temporary journal; a read
+        # must never manufacture a later host observation or deadline.
+        host_status, host_body = await http(port, "GET", "/api/v1/hosts", tok=auth)
+        assert host_status == 200
+        host = next(item for item in host_body["hosts"] if item["host"] == "h1")
+        for key, state in body["states"].items():
+            dependent = (key == "discovered" and state["value"] == "ready"
+                or key == "can_observe" and (state["value"] == "ready"
+                    or state["reason"] in {"never_observed", "host_unreachable", "host_not_refreshed"})
+                or key == "can_start_own" and state["reason"] in {"host_unreachable", "host_not_refreshed"})
+            if dependent:
+                assert "valid_until" in state, (name, key, state)
+                assert state["valid_until"] == host["valid_until"]
+                success = host["last_success_at"]
+                assert (int(state["observed_at"]) if state["observed_at"] is not None else None) == (
+                    int(datetime.fromisoformat(success.replace("Z", "+00:00")).timestamp()) if success else None)
+            else:
+                assert "valid_until" not in state and "observed_at" not in state
         cases[name] = body
         return body
 
@@ -114,6 +132,8 @@ async def test_work_profile_readiness_matches_producer_golden(world, mock, tmp_p
     owned = await capture("owned_execution")
     for name in ("can_continue_own", "last_verified_execution"):
         assert owned["states"][name]["verified"]["evidence_ref"]["operation_id"] == execution["operation_id"]
+    await daemon.inventory._refresh_scheduled("h1")
+    await capture("renewed_observation")
     await mock.stop()
     await daemon.inventory._refresh_scheduled("h1")
     failed = await capture("host_unreachable")
@@ -137,6 +157,11 @@ async def test_work_profile_readiness_matches_producer_golden(world, mock, tmp_p
         for key, item in value.items():
             if key == "scan_id" and item is not None:
                 result[key] = "scan_fixture"
+            elif key == "valid_until" and item is not None:
+                # Redact the epoch, preserving the producer's validity window.
+                deadline = datetime.fromisoformat(item.replace("Z", "+00:00")).timestamp()
+                window = deadline - int(value["observed_at"])
+                result[key] = datetime.fromtimestamp(observed + window, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             elif key in {"observed_at", "last_success_at", "finished_at", "created_at", "updated_at"} and item is not None:
                 epoch = stamp if key == "observed_at" else observed
                 result[key] = datetime.fromtimestamp(epoch, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if isinstance(item, str) else epoch
@@ -146,10 +171,19 @@ async def test_work_profile_readiness_matches_producer_golden(world, mock, tmp_p
 
     bundle["profile"] = normalize(bundle["profile"])
     for name, body in bundle["cases"].items():
-        bundle["cases"][name] = normalize(body, 1790000000.0 if name == "host_not_refreshed" else 1790000540.0)
+        bundle["cases"][name] = normalize(body, {"host_not_refreshed": 1790000000.0, "renewed_observation": 1790000720.0}.get(name, 1790000540.0))
         bundle["cases"][name]["observed_at"] = 1790000600.0
     raw = json.dumps(bundle, ensure_ascii=False, indent=2) + "\n"
     assert mock.token not in raw and str(tmp_path) not in raw
     if os.environ.get("BATC_UPDATE_PROFILE_GOLDEN") == "1":
         GOLDEN.write_text(raw, encoding="utf-8")
     assert bundle == json.loads(GOLDEN.read_text(encoding="utf-8"))
+
+
+def test_readiness_golden_declares_host_deadlines():
+    bundle = json.loads(GOLDEN.read_text(encoding="utf-8"))
+    for name in ("credential_required", "unauthorized", "owned_execution"):
+        for key in ("discovered", "can_observe"):
+            state = bundle["cases"][name]["states"][key]
+            assert "valid_until" in state, (name, key)
+            assert state["observed_at"] != bundle["cases"][name]["observed_at"]

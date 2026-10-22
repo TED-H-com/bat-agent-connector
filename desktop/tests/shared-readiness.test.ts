@@ -73,13 +73,19 @@ for (const locale of ['en', 'zh-TW']) {
     assert.equal(view.attrs['data-fleet-state'], 'stale');
     assert.equal(view.attrs['data-freshness'], 'stale');
   });
-  test(`Work producer has no per-capability validity; reported values and reasons remain unchanged ${locale}`, () => {
+  test(`Work observation expires at its producer deadline; undeclared values stay plain ${locale}`, () => {
     for (const body of Object.values(profiles.cases) as any[]) for (const state of Object.values(body.states) as any[]) {
-      const facts = profileStateFacts(state);
-      assert.equal(t(facts.valueKey), labels.values[state.value]);
-      assert.equal(facts.reasonCode, state.reason);
-      assert.equal(Object.hasOwn(state, 'valid_until'), false);
+      for (const now of [1790000540000, 1790000720000, 1790100720000]) {
+        const facts = profileStateFacts(state, {now});
+        assert.equal(facts.reasonCode, state.reason);
+        if (!state.valid_until) assert.equal(facts.fact ? healthLabel(facts.fact, t) : t(facts.valueKey), labels.values[state.value]);
+      }
     }
+    const state = profiles.cases.owned_execution.states.can_observe;
+    const text = now => {const facts = profileStateFacts(state, {now}); return facts.fact ? healthLabel(facts.fact, t) : t(facts.valueKey);};
+    assert.equal(text(1790000540000), labels.values.ready);
+    assert.equal(text(1790000719999), labels.values.ready);
+    assert.equal(text(1790000720000), locale === 'en' ? 'Ready · 3 min ago · Checking' : '已就緒 · 3 分鐘前 · 檢查中');
   });
 }
 
@@ -139,14 +145,14 @@ test('unconfirmed stop and unsupported version reasons survive display expiry', 
   }
 });
 
-test('Work retains its reported value and past verification while per-capability validity is absent', () => {
+test('Work validity is separate from past verification', () => {
   const body = profiles.cases.owned_execution, state = body.states.can_observe;
   const facts = profileStateFacts(state);
   assert.equal(facts.valueKey, 'wpf_ready');
   assert.equal(facts.lastSuccessAt, null); // The existing past section already shows this instant.
   assert.equal(facts.past.at, state.verified.observed_at);
-  assert.equal(Object.hasOwn(state, 'observed_at'), false);
-  assert.equal(Object.hasOwn(state, 'valid_until'), false);
+  assert.equal(Object.hasOwn(state, 'observed_at'), true);
+  assert.equal(Object.hasOwn(state, 'valid_until'), true);
 });
 
 test('Fleet expiry is per row, with no cross-host or cross-domain inference', () => {

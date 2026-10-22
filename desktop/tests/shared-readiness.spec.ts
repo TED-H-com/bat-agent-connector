@@ -26,27 +26,113 @@ for (const locale of ['en-US', 'zh-TW']) test.describe(`shared readiness ${local
     await expect(page.locator('[data-check-state="passed"]')).toHaveCount(0);
   });
 
-  for (const [name, body] of Object.entries(profiles.cases) as [string, any][]) {
-    test(`Work ${name}: producer lacks per-capability validity, so value text stays unchanged`, async ({page}) => {
-      await page.clock.install({time: new Date(body.observed_at * 1000)});
-      const {facts, reads, posts} = await mountProfilePicker(page, body, profiles.profile, locale);
-      const values = locale === 'en-US'
-        ? {ready: 'Ready', missing: 'Setup still missing', unknown: 'Not verified yet', unavailable: 'Unavailable'}
-        : {ready: '已就緒', missing: '還缺設定', unknown: '尚未驗證', unavailable: '不可用'};
-      // There is no deadline or automatic renewal in this producer/picker.
-      // Reading or waiting cannot justify adding "Checking" to any capability.
-      for (const elapsed of [0, 60_000]) {
+  const body = profiles.cases.owned_execution;
+  const deadline = 1790000720000;
+  const copy = locale === 'en-US' ? {
+    ready: 'Ready', checking: 'Ready · 3 min ago · Checking',
+    failed: 'Ready · 3 min ago · Could not confirm (FIXTURE_READ_FAILED)',
+    unchanged: 'Ready · 3 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)',
+    values: {ready: 'Ready', missing: 'Setup still missing', unknown: 'Not verified yet', unavailable: 'Unavailable'},
+  } : {
+    ready: '已就緒', checking: '已就緒 · 3 分鐘前 · 檢查中',
+    failed: '已就緒 · 3 分鐘前 · 無法確認（FIXTURE_READ_FAILED）',
+    unchanged: '已就緒 · 3 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）',
+    values: {ready: '已就緒', missing: '還缺設定', unknown: '尚未驗證', unavailable: '不可用'},
+  };
+  const value = facts => facts.locator('[data-work-profile-state="can_observe"] [data-work-profile-value]');
+  const count = reads => reads.filter(path => path.endsWith('/readiness')).length;
+  async function heldPicker(page) {
+    await page.clock.install({time: new Date(1790000540000)});
+    await page.clock.pauseAt(1790000540000);
+    let release;
+    const held = new Promise<void>(resolve => release = resolve);
+    const response = {body: profiles.cases.renewed_observation || body, status: 200};
+    const fixture = await mountProfilePicker(page, body, profiles.profile, locale, async (route, n) => {
+      if (n > 1) await held;
+      await route.fulfill({status: n === 1 ? 200 : response.status, json: n === 1 ? body : response.body});
+    });
+    await expect(value(fixture.facts)).toHaveText(copy.ready);
+    return {...fixture, release, response};
+  }
+  test('Work renews once at the deadline and retains focus, scroll and disclosure', async ({page}) => {
+    const f = await heldPicker(page);
+    await page.evaluate(() => {
+      const box = document.querySelector('[data-work-profile-picker]')!;
+      const details = document.createElement('details'); details.open = true;
+      const summary = document.createElement('summary'); summary.textContent = 'Profile';
+      box.before(details); details.append(summary, box);
+    });
+    const link = f.facts.locator('[data-work-profile-state="last_verified_execution"] a');
+    await link.focus();
+    const scroll = await page.evaluate(() => scrollY);
+    await page.clock.runFor(deadline - 1790000540000 - 1);
+    expect(count(f.reads)).toBe(1);
+    await page.clock.runFor(1);
+    await expect(value(f.facts)).toHaveText(copy.checking);
+    await expect.poll(() => count(f.reads)).toBe(2);
+    await expect(link).toBeFocused();
+    expect(await page.evaluate(() => scrollY)).toBe(scroll);
+    f.release();
+    await expect(value(f.facts)).toHaveText(copy.ready);
+    await expect(link).toBeFocused();
+    await expect(page.locator('details')).toHaveAttribute('open', '');
+    expect(await page.evaluate(() => scrollY)).toBe(scroll);
+    expect(count(f.reads)).toBe(2); expect(f.posts).toEqual([]);
+    await expect(f.facts.locator('[data-work-profile-state]')).toHaveCount(6);
+    await expect(f.facts).toContainText(locale === 'en-US' ? 'PM analysis' : 'PM 分析');
+    await expect(f.facts).toContainText(locale === 'en-US' ? 'A saved setting is not a ready check.' : '已設定不等於就緒。');
+    await expect(f.facts.locator('[data-work-profile-state="can_observe"] [data-work-profile-past]')).toContainText(locale === 'en-US' ? 'Last verified' : '上次驗證');
+  });
+  for (const failure of ['failed', 'unchanged']) test(`Work ${failure} renewal never retries on later clocks`, async ({page}) => {
+    const f = await heldPicker(page);
+    f.response.body = failure === 'failed' ? {error: {code: 'FIXTURE_READ_FAILED'}} : body;
+    f.response.status = failure === 'failed' ? 503 : 200;
+    await page.clock.runFor(deadline - 1790000540000);
+    await expect(value(f.facts)).toHaveText(copy.checking);
+    await expect.poll(() => count(f.reads)).toBe(2);
+    f.release();
+    await expect(value(f.facts)).toHaveText(copy[failure]);
+    for (const elapsed of [60_000, 600_000, 3_600_000]) {
+      await page.clock.fastForward(elapsed);
+      expect(count(f.reads)).toBe(2);
+      await expect(value(f.facts)).not.toContainText(locale === 'en-US' ? 'Checking' : '檢查中');
+    }
+    expect(f.posts).toEqual([]);
+  });
+  test('Work waits while hidden and renews once on return', async ({page}) => {
+    const f = await heldPicker(page);
+    await page.evaluate(() => {Object.defineProperty(document, 'hidden', {configurable: true, value: true}); document.dispatchEvent(new Event('visibilitychange'));});
+    await page.clock.runFor(600_000);
+    expect(count(f.reads)).toBe(1);
+    await page.evaluate(() => {Object.defineProperty(document, 'hidden', {configurable: true, value: false}); document.dispatchEvent(new Event('visibilitychange'));});
+    await expect.poll(() => count(f.reads)).toBe(2);
+    f.release();
+  });
+  test('Work ignores a held renewal after selection changes', async ({page}) => {
+    const f = await heldPicker(page);
+    await page.clock.runFor(deadline - 1790000540000);
+    await expect.poll(() => count(f.reads)).toBe(2);
+    const select = page.locator('[data-work-profile-picker] select');
+    await select.selectOption('');
+    const response = page.waitForResponse(response => response.url().endsWith('/readiness'));
+    f.release();
+    // Wait for the response to be processed before checking the stale ticket.
+    await response;
+    await page.clock.runFor(1);
+    await expect(select).toHaveValue(''); await expect(f.facts).toBeEmpty();
+    expect(count(f.reads)).toBe(2);
+  });
+  for (const [name, data] of Object.entries(profiles.cases) as [string, any][]) {
+    test(`Work ${name}: undeclared states never show Checking`, async ({page}) => {
+      await page.clock.install({time: new Date(1790000540000)});
+      await page.clock.pauseAt(1790000540000);
+      const {facts, posts} = await mountProfilePicker(page, data, profiles.profile, locale);
+      for (const elapsed of [0, 60_000, 600_000, 3_600_000]) {
         await page.clock.fastForward(elapsed);
-        for (const [key, state] of Object.entries(body.states) as [string, any][]) {
-          await expect(facts.locator(`[data-work-profile-state="${key}"] [data-work-profile-value]`)).toHaveText(values[state.value]);
+        for (const [key, state] of Object.entries(data.states) as [string, any][]) if (!state.valid_until) {
+          await expect(facts.locator(`[data-work-profile-state="${key}"] [data-work-profile-value]`)).toHaveText(copy.values[state.value]);
         }
       }
-      if (body.states.can_observe.reason) await expect(facts.locator('[data-work-profile-state="can_observe"]'))
-        .toContainText(body.states.can_observe.reason);
-      await expect(facts.locator('[data-work-profile-state]')).toHaveCount(6);
-      await expect(facts).toContainText(locale === 'en-US' ? 'PM analysis' : 'PM 分析');
-      await expect(facts).toContainText(locale === 'en-US' ? 'A saved setting is not a ready check.' : '已設定不等於就緒。');
-      expect(reads.filter(path => path.endsWith('/readiness'))).toHaveLength(1);
       expect(posts).toEqual([]);
     });
   }
