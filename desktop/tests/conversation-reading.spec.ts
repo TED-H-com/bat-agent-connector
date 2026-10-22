@@ -155,3 +155,50 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) {
     expect(data.writes).toHaveLength(1); await context.close();
   });
 }
+
+for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) for (const width of [390, 768]) {
+  test(`short session keeps reading diagnostics separate from controls ${locale} ${native ? 'IPC' : 'Web'} ${width}`, async ({browser, baseURL}, testInfo) => {
+    const context = await browser.newContext({baseURL, locale, viewport: {width, height: 844}}), page = await context.newPage();
+    const {data, dispatch} = fixture();
+    try {
+      await mountConversation(page, native, dispatch); await page.goto('/dashboard/#/session/demo/session-1');
+      await expect(page.locator('#installation-health')).toBeVisible();
+      const mark = page.getByRole('button', {name: locale === 'zh-TW' ? '標為已讀' : 'Mark read', exact: true});
+      await mark.scrollIntoViewIfNeeded(); await expect(mark).toBeEnabled();
+      data.failReceipt = true; await mark.click();
+      const failure = page.locator('.conversation-toolbar [data-api-error]');
+      await expect(failure).toContainText(locale === 'zh-TW' ? '無法儲存閱讀狀態' : 'Reading state unavailable');
+      // A short viewport forces the same space pressure regardless of installed fonts.
+      await page.setViewportSize({width, height: 480});
+      const toggle = failure.locator('details > summary');
+      for (const expanded of [false, true]) {
+        await toggle.scrollIntoViewIfNeeded();
+        const geometry = await toggle.evaluate(node => {
+          const rect = (el: Element) => el.getBoundingClientRect().toJSON();
+          const toolbar = node.closest('.conversation-toolbar')!;
+          const conversation = toolbar.parentElement!;
+          const reading = conversation.querySelector('[data-conversation-reading]')!.parentElement!;
+          const bounds = node.getBoundingClientRect();
+          return {failure: rect(node.closest('[data-api-error]')!), toggle: rect(node), reading: rect(reading),
+            toolbar: rect(toolbar), transcript: rect(conversation.querySelector('.conversation-scroll')!),
+            conversation: rect(conversation), composer: rect(document.querySelector('.workspace-composer')!),
+            toolbarShrink: getComputedStyle(toolbar).flexShrink, toolbarMinHeight: getComputedStyle(toolbar).minHeight,
+            toggleReceivesPointer: node.contains(document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2))};
+        });
+        await testInfo.attach(`reading-geometry-${expanded ? 'expanded' : 'collapsed'}`, {body: JSON.stringify(geometry, null, 2), contentType: 'application/json'});
+        expect.soft(geometry.failure.bottom).toBeLessThanOrEqual(geometry.reading.top + 1);
+        expect.soft(geometry.toggle.bottom).toBeLessThanOrEqual(geometry.reading.top + 1);
+        expect.soft(geometry.toggleReceivesPointer).toBe(true);
+        expect.soft(geometry.transcript.bottom).toBeLessThanOrEqual(geometry.toolbar.top + 1);
+        expect.soft(geometry.reading.bottom).toBeLessThanOrEqual(geometry.composer.top + 1);
+        if (!expanded) {
+          // Do not force the click: the diagnostic must actually receive pointer input.
+          await toggle.click();
+          await expect(failure).toContainText('Private receipt diagnostic');
+          await expect(failure.locator('[data-error-details] code')).toHaveText('RECEIPT_FAILURE');
+        }
+      }
+      expect(data.writes).toHaveLength(1);
+    } finally {await context.close();}
+  });
+}
