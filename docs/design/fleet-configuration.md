@@ -418,3 +418,39 @@ client 與非正式環境 Linux BAT host 的指派由整合者私下保存，不
 | D4 v1 不重綁 | endpoint、pin、principal、remote profile 或 Git transport 改變時保留拒絕，要求新增一條連線；不合併舊草稿、歷史、checkpoint 或原 key。理由：v1 不新增可驗證信任遷移，先維持來源隔離；相同 server_id 字串不授權重綁。 | 既有 setup 的拒絕及 principal 邊界見上方共用變更表；中央身分仍須 native 認證／bootstrap。[bridge.rs:1115](../../desktop/src-tauri/src/bridge.rs#L1115) | 不提供換址／pin rotation／principal 遷移；不以保留草稿為由降低信任。不同連線保留各自引用與原操作查回。 |
 | D5 自動配置與 schema | v1 保留必要 schema 及 connector_endpoint，不退役欄位；只從明確可信的既有關聯產生引用，版本常數由整合者版本化。新 loopback 分配須在 native owned 邊界內檢查衝突；沒有已審分配器或 target／route 映射就停在需要資料，不要求使用者手填技術 ID。理由：不把 BAT 連結中沒有的資料補成事實，也避免升級破壞既有設定。 | 連結 parser 只有 endpoint／token／pin；inventory 另外驗 fleet_version、loopback、target 及 routes。[managed-setup.js:10](../../desktop/src/managed-setup.js#L10)、[inventory.rs:189](../../desktop/fleet-core/src/inventory.rs#L189)、[inventory.rs:271](../../desktop/fleet-core/src/inventory.rs#L271) | 未審來源／分配及衝突規則前不配置新映射、不發明 allocator 或 fallback；既有值無變更則保持。 |
 | D7 共用健康投影 | 四畫面共用唯讀投影／formatter，以服務、principal、workspace 與 revision 區分；保留原生 IPC／HTTP producer schema，缺失 metadata 顯示未知。標頭只呈 Connector 範圍，reason 對照與版本規則集中維護。理由：共用語意而不創造第二本 health 帳或讓替身發明欄位。 | producer、來源差異及標頭判準只維護於上方責任表與健康投影表；正式 IPC sanitizer 是資料形狀邊界。[fleet.rs:597](../../desktop/src-tauri/src/fleet.rs#L597) | metadata／envelope 接線未完成前不宣稱已有完整共同 payload；golden 取正式 producer 的去識別輸出，不補 native-only 欄位到 HTTP。 |
+
+### D3 source descriptor v1（固定契約）
+
+`connection_source_descriptor.py` 建立以下精確 JSON 形狀，供 discovery 與後續 durable connection operations 共用：
+
+```json
+{
+  "reference": "source_<64 lowercase hex>",
+  "kind": "bat_profile",
+  "policy_version": 1,
+  "source_digest": "<64 lowercase hex>",
+  "profile_reference": "profile-a",
+  "association": {"url": "wss://bat.example:9876/", "fingerprint": "<64 uppercase hex>"},
+  "availability_reason": "SOURCE_AVAILABLE"
+}
+```
+
+只有這七個頂層欄位。`reference` 是不透明字串（`source_` 加 `source_digest`，71 字元）；
+`kind` 為 `bat_profile` 或 `staged_secret`；`policy_version` 是整數 `BAT_SOURCE_POLICY=1`。
+`profile_reference` 為 BAT 設定索引中的 profile ID（1–256 字元、無前後空白或控制字元），
+staged secret 時為 JSON null。它不是伺服器中所選的 `profile_id`。
+`association` 只有 `url`（最多 512 字元、帶明確 port 的 wss origin、尾斜線、無 credentials/query/fragment）
+及 `fingerprint`（64 位大寫十六進位 SHA-256 pin）。`availability_reason` 為 1–64 字元的固定機器碼，
+符合 `[A-Z][A-Z0-9_]{0,63}`；成功讀取為 `SOURCE_AVAILABLE`，不可放例外訊息或路徑。
+
+`source_digest` 是 UTF-8 canonical JSON（排序 keys、`ensure_ascii=False`、分隔符 `(',', ':')`）的 SHA-256。
+內容為 `policy_version`、`kind`、`profile_reference`、`association`、`availability_reason` 與內部 `source_state`。
+`source_state` 是 1–16 個命名雜湊；key 符合 `[a-z][a-z0-9_]{0,63}`，value 為 64 位小寫十六進位 SHA-256。
+BAT 來源快照涵蓋重新依 D3 選定的目錄身分、完整 index bytes 與 token store bytes；
+staged 來源涵蓋 opaque staging reference、完整 metadata（含到期及擁有者綁定）與 credential bytes 的雜湊。
+不把原始憑證、token 路徑、目錄路徑、TOML 或內部 `source_state` 回傳。
+新 BAT 資料目錄出現而改變 D3 選擇時，目錄身分雜湊也改變，舊 snapshot 失效。
+
+刻意排除伺服器回報的 profiles/workspaces、所選伺服器 profile/workspace、UI 草稿、連線檢查時間、
+setup revision 與 operation key：這些由 discovery 回應或既有 preview／apply 意圖綁定；
+本 descriptor 只描述可信來源，不能授予寫入權或證明伺服器／workspace 仍可用。
