@@ -64,6 +64,26 @@ async function open(page:Page,locale="en-US"){
 }
 async function choose(page:Page){await page.getByRole("button",{name:"Choose files",exact:true}).click();await expect(page.getByRole("progressbar")).toBeVisible();}
 
+for (const locale of ['en-US', 'zh-TW']) test(`native picker failure stays in its notice ${locale}`, async ({browser}) => {
+  const context = await browser.newContext({locale}), page = await context.newPage();
+  const state = await fixture(page);
+  try {
+    await open(page, locale);
+    await page.evaluate(() => {
+      const bridge = (window as any).__TAURI_INTERNALS__, invoke = bridge.invoke;
+      // Match native_files_pick's string rejection when its dialog is interrupted.
+      bridge.invoke = (command: string, args: any) => command === 'native_files_pick'
+        ? Promise.reject('File dialog interrupted') : invoke(command, args);
+    });
+    await page.getByRole('button', {name: locale === 'zh-TW' ? '選擇檔案' : 'Choose files', exact: true}).click();
+    await expect(page.locator('.native-files > [role="status"]')).toHaveText('File dialog interrupted');
+    await expect(page.getByText('File dialog interrupted', {exact: true}).and(page.locator(':visible'))).toHaveCount(1);
+    await expect(page.locator('.attachments [data-api-error]')).toHaveCount(0);
+    expect(state.calls.some(call => call.command === 'native_files_upload')).toBe(false);
+    expect(state.errors).toEqual([]);
+  } finally {await context.close();}
+});
+
 for (const locale of ['en-US', 'zh-TW']) test(`native picker rechecks the view reason before uploading ${locale}`, async ({browser}) => {
   const context = await browser.newContext({locale}), page = await context.newPage();
   const copy = STRINGS[locale === 'zh-TW' ? 'zh-TW' : 'en'];

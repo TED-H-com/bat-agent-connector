@@ -61554,8 +61554,9 @@ function nativeAttachments({ h, t, guard, canWrite, draftId, onReceipt, onDiscar
 			}
 			await refresh();
 		} catch (error) {
-			failure(error);
-			await refresh().catch(failure);
+			const present = rethrow ? () => {} : failure;
+			present(error);
+			await refresh().catch(present);
 			if (rethrow) throw error;
 		} finally {
 			picking = false;

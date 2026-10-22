@@ -89,7 +89,8 @@ export function nativeAttachments({h, t, guard, canWrite, draftId, onReceipt, on
       }
       await refresh();
     } catch (error) {
-      failure(error); await refresh().catch(failure);
+      const present = rethrow ? () => {} : failure;
+      present(error); await refresh().catch(present);
       if (rethrow) throw error; // The composer retains its typed unsupported/error presentation.
     } finally {picking = false;}
   };

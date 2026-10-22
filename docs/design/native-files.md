@@ -21,6 +21,8 @@ retain their existing operation semantics. Manage, upload-allowed and attachment
 before either native call. Picker and paste share one in-flight selection guard; another paste while
 selection/upload/readback is pending makes no native call. A selection/upload failure displays the
 error and re-reads native status so the existing row reflects its retained transfer stage.
+Paste errors are presented by the composer, including its typed unsupported refusal. Picker errors
+stay in the native attachment notice. Both paths still re-read native status after failure.
 Text paste and browser attachment flows are unchanged.
 
 The native lease binds the current file scope (including generation) and a valid draft ID, lasts less
