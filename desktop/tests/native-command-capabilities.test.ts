@@ -66,16 +66,9 @@ test('frontend commands agree with the packaged main-window command ACL', t => {
     [name, [...commands].sort()]))));
   const failures: string[] = [];
   for (const command of new Set([...invoked, ...registered, ...manifest, ...allowed])) {
-    for (const [name, commands] of Object.entries({registered, manifest, allowed})) {
+    for (const [name, commands] of Object.entries(sets)) {
       if (!commands.has(command)) failures.push(`${command}: missing from ${name}`);
     }
   }
-  // Existing on main b3e2c894: the legacy binary-upload frontend route has no
-  // native implementation. Keep that separate defect visible and do not grant
-  // a permission or invent its handler in the startup-role change. Any change
-  // to this exact baseline, including a partial repair, requires review here.
-  const baseline = ['registered', 'manifest', 'allowed'].map(name =>
-    `connector_upload_artifact: missing from ${name}`);
-  t.diagnostic(`Known main-branch gap: ${baseline.join('; ')}`);
-  assert.deepEqual(failures.sort(), baseline.sort(), failures.join('\n'));
+  assert.deepEqual(failures.sort(), [], failures.join('\n'));
 });
