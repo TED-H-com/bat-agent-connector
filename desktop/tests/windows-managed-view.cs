@@ -131,7 +131,8 @@ internal static class ManagedViewProbe
 
     internal sealed class Readiness
     {
-        internal bool WebContent, Authenticated, Setup, ConfigurationLoaded, SaveEnabled, RoleChoice;
+        internal bool WebContent, Authenticated, Setup, ConfigurationLoaded, SaveEnabled, RoleChoice, ProviderEnabled;
+        internal string ErrorSummary;
 
         internal void Observe(Func<AutomationProperty, object> read)
         {
@@ -158,7 +159,15 @@ internal static class ManagedViewProbe
             // Commit evidence only after every needed property of this node was
             // read. A disappearing button must not contribute even its label.
             if (type == ControlType.Document) { WebContent = true; return; }
-            if (type == ControlType.Button && ProviderSelection.IsLabel(label)) RoleChoice = true;
+            if (type == ControlType.Button && ProviderSelection.IsLabel(label))
+            {
+                RoleChoice = true;
+                if (enabled) ProviderEnabled = true;
+            }
+            // Only these fixed public summaries may leave the probe. Never emit
+            // arbitrary UI names, text-entry values or native error messages.
+            if (label == "This request could not be completed. Check Details." || label == "無法完成此要求，請查看詳細資料。")
+                ErrorSummary = label;
             if (label == "Ready to set up" || label == "可以開始設定了") Authenticated = true;
             if (label == "Get ready to work" || label == "準備開始工作") Setup = true;
             if (label == "Ready to set up" || label == "可以開始設定了") ConfigurationLoaded = true;
@@ -171,6 +180,8 @@ internal static class ManagedViewProbe
             return "{\"webContent\":" + Bit(WebContent) + ",\"authenticated\":" + Bit(Authenticated)
                 + ",\"setup\":" + Bit(Setup) + ",\"configurationLoaded\":" + Bit(ConfigurationLoaded)
                 + ",\"saveEnabled\":" + Bit(SaveEnabled) + ",\"roleChoice\":" + Bit(RoleChoice)
+                + ",\"providerEnabled\":" + Bit(ProviderEnabled)
+                + ",\"errorSummary\":" + (ErrorSummary == null ? "null" : "\"" + ErrorSummary + "\"")
                 + ",\"bounded\":" + Bit(bounded) + "}";
         }
     }

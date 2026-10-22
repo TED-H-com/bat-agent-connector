@@ -52,12 +52,13 @@ func pressProvider(_ pid: pid_t) {
     else { fail("Owned provider role button press failed") }
     emit(["role": "provider", "pressed": true, "matches": 1])
 }
-func managedView(_ pid: pid_t) -> [String: Bool] {
+func managedView(_ pid: pid_t) -> [String: Any] {
     guard AXIsProcessTrusted() else { fail("Existing Accessibility trust is required; fixture does not change privacy settings") }
     let application = AXUIElementCreateApplication(pid)
     AXUIElementSetMessagingTimeout(application, 0.2)
-    var result = ["webContent": false, "authenticated": false, "setup": false,
-                  "configurationLoaded": false, "saveEnabled": false, "roleChoice": false, "bounded": true]
+    var result: [String: Any] = ["webContent": false, "authenticated": false, "setup": false,
+                  "configurationLoaded": false, "saveEnabled": false, "roleChoice": false, "bounded": true,
+                  "providerEnabled": false, "errorSummary": NSNull()]
     var pending = [application]
     var visited = 0
     let deadline = Date().addingTimeInterval(2)
@@ -70,12 +71,19 @@ func managedView(_ pid: pid_t) -> [String: Bool] {
         }
         let role = attribute(kAXRoleAttribute) as? String ?? ""
         if role == "AXWebArea" { result["webContent"] = true }
-        // Never inspect text-entry values or emit any accessibility text.
+        // Never inspect text-entry values. Only fixed, public error summaries
+        // may leave this probe; arbitrary accessibility text stays private.
         if ["AXStaticText", "AXHeading", "AXButton"].contains(role) {
             let labels = [attribute(kAXTitleAttribute), attribute(kAXDescriptionAttribute),
                           role == "AXStaticText" ? attribute(kAXValueAttribute) : nil].compactMap { $0 as? String }
             for label in labels {
-                if role == "AXButton" && providerRoleLabels.contains(label) { result["roleChoice"] = true }
+                if role == "AXButton" && providerRoleLabels.contains(label) {
+                    result["roleChoice"] = true
+                    if (attribute(kAXEnabledAttribute) as? Bool) == true { result["providerEnabled"] = true }
+                }
+                if ["This request could not be completed. Check Details.", "無法完成此要求，請查看詳細資料。"].contains(label) {
+                    result["errorSummary"] = label
+                }
                 if ["Ready to set up", "可以開始設定了"].contains(label) { result["authenticated"] = true }
                 if ["Get ready to work", "準備開始工作"].contains(label) { result["setup"] = true }
                 if ["Ready to set up", "可以開始設定了"].contains(label) { result["configurationLoaded"] = true }

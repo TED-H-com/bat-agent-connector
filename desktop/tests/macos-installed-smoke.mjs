@@ -205,7 +205,17 @@ try {
   await waitManagedView("managed-role-choice", true);
   assert.deepEqual(JSON.parse(native("select-provider")), { role: "provider", pressed: true, matches: 1 });
   steps.push("Clean managed first-run selected provider (Provide a local workspace / 提供本機工作區) through the owned Accessibility button");
-  const managedIdentity = await probeManaged(statePaths[0], { wait: true });
+  let managedIdentity;
+  try {
+    managedIdentity = await probeManaged(statePaths[0], { wait: true });
+  } catch (error) {
+    // One bounded, read-only AX snapshot before cleanup; preserve the original
+    // startup failure even if the owned window/provider is no longer available.
+    let state = {available: false};
+    try { state = JSON.parse(native("managed-view")); } catch { /* No arbitrary error text. */ }
+    await writeFile(join(evidence, "managed-startup-failed-readiness.json"), JSON.stringify(state, null, 2));
+    throw error;
+  }
   const servicePointer = join(statePaths[0], "managed-central/state/task-service.json");
   const serviceBefore = await readFile(servicePointer, "utf8");
   await waitManagedView("managed-first-run");

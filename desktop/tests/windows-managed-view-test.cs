@@ -108,7 +108,7 @@ internal static class ManagedViewProbeTests
                 Check(!state.SaveEnabled, "Button lacked a positive enabled boolean");
             }
             Observe(state, ControlType.Button, labels[3], true);
-            Check(state.ToJson(true) == "{\"webContent\":true,\"authenticated\":true,\"setup\":true,\"configurationLoaded\":true,\"saveEnabled\":true,\"roleChoice\":false,\"bounded\":true}",
+            Check(state.ToJson(true) == "{\"webContent\":true,\"authenticated\":true,\"setup\":true,\"configurationLoaded\":true,\"saveEnabled\":true,\"roleChoice\":false,\"providerEnabled\":false,\"errorSummary\":null,\"bounded\":true}",
                 "Complete localized readiness changed");
             Check(state.ToJson(false).Contains("\"bounded\":false"), "Read bound was lost");
         }
@@ -132,6 +132,17 @@ internal static class ManagedViewProbeTests
             var readiness = new ManagedViewProbe.Readiness();
             Observe(readiness, ControlType.Button, label, false);
             Check(readiness.RoleChoice, "Disabled provider chooser was hidden from relaunch evidence");
+            Check(!readiness.ProviderEnabled, "Disabled provider button reported enabled");
+            Observe(readiness, ControlType.Button, label, true);
+            Check(readiness.ProviderEnabled, "Enabled provider button missing from diagnostic");
+        }
+        foreach (string summary in new string[] { "This request could not be completed. Check Details.", "無法完成此要求，請查看詳細資料。" })
+        {
+            var state = new ManagedViewProbe.Readiness();
+            Observe(state, ControlType.Text, "private token/path/native error", null);
+            Check(state.ErrorSummary == null && !state.ToJson(true).Contains("private"), "Arbitrary UI text escaped the probe");
+            Observe(state, ControlType.Text, summary, null);
+            Check(state.ErrorSummary == summary && state.ToJson(true).Contains(summary), "Visible public error summary was lost");
         }
         {
             int presses = 0;

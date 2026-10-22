@@ -182,6 +182,31 @@ function Wait-ManagedView([Diagnostics.Process]$Process, [IntPtr]$Window, [strin
         $diagnostics | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Evidence "$Name-probe-phases.json") -Encoding utf8
     }
 }
+function Save-ManagedStartupView([Diagnostics.Process]$Process, [IntPtr]$Window) {
+    # One read only, outside the success/retry path. Never repeat the role action.
+    $state = @{available = $false}
+    $info = [Diagnostics.ProcessStartInfo]::new($managedViewProbe)
+    $info.UseShellExecute = $false
+    $info.CreateNoWindow = $true
+    $info.RedirectStandardOutput = $true
+    $info.RedirectStandardError = $true
+    foreach ($arg in @($Window.ToInt64().ToString(), $Process.Id.ToString())) { $info.ArgumentList.Add($arg) }
+    $probe = $null
+    try {
+        $probe = [Diagnostics.Process]::Start($info)
+        $output = $probe.StandardOutput.ReadToEndAsync()
+        $errors = $probe.StandardError.ReadToEndAsync()
+        if (-not $probe.WaitForExit(8000)) {
+            $probe.Kill()
+            if (-not $probe.WaitForExit(5000)) { throw 'Owned diagnostic UIA probe did not exit' }
+        }
+        if ($probe.ExitCode -eq 0) { $state = $output.GetAwaiter().GetResult() | ConvertFrom-Json }
+    } catch { Write-Warning 'Managed startup UIA diagnostic was unavailable' }
+    finally {
+        if ($null -ne $probe) { $probe.Dispose() }
+        $state | ConvertTo-Json | Set-Content (Join-Path $Evidence 'managed-startup-failed-readiness.json') -Encoding utf8
+    }
+}
 function Select-ProviderRole([Diagnostics.Process]$Process, [IntPtr]$Window) {
     # Invoke once, outside the readiness retry loop. An uncertain action is fatal.
     $info = [Diagnostics.ProcessStartInfo]::new($managedViewProbe)
@@ -294,7 +319,10 @@ try {
         # central never reaches bootstrap and the UIA readiness probe cannot run.
         try {
             $failedWindows = @([DashboardWindows]::Find($app.Id))
-            if ($failedWindows.Count -eq 1) { Save-Window $failedWindows[0] 'managed-startup-failed.png' }
+            if ($failedWindows.Count -eq 1) {
+                Save-ManagedStartupView $app $failedWindows[0]
+                Save-Window $failedWindows[0] 'managed-startup-failed.png'
+            }
         } catch { Write-Warning 'Managed startup failure screenshot was unavailable' }
         throw 'Managed clean-profile first-run failed'
     }
