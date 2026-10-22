@@ -283,6 +283,8 @@ dependencies = [
  "libc",
  "minisign",
  "minisign-verify",
+ "objc2-app-kit",
+ "objc2-foundation",
  "png 0.18.1",
  "regex",
  "reqwest 0.12.28",

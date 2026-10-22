@@ -211,6 +211,7 @@ struct State {
     busy: HashSet<String>,
     stopped: HashSet<String>,
     drop_target: Option<(FileScope, String, std::time::Instant)>,
+    paste_lease: Option<(FileScope, String, std::time::Instant)>,
     drop_error: Option<(String, String)>,
 }
 pub struct Files {
@@ -601,6 +602,70 @@ impl Files {
         }
         Ok(())
     }
+    pub fn paste_arm(
+        &self,
+        draft: String,
+        focused: bool,
+    ) -> Result<(), crate::clipboard::ClipboardError> {
+        let mut state = self.state.lock().unwrap();
+        state.paste_lease = None;
+        validate_draft(&draft)?;
+        if !focused {
+            return Err(crate::clipboard::ClipboardError::refused(
+                "window_not_focused",
+            ));
+        }
+        state.paste_lease = Some((self.scope()?, draft, std::time::Instant::now()));
+        Ok(())
+    }
+    pub(crate) fn paste_with(
+        &self,
+        draft: &str,
+        focused: bool,
+        reader: &mut impl crate::clipboard::ClipboardReader,
+        limit: u64,
+    ) -> Result<Receipt, crate::clipboard::ClipboardError> {
+        use crate::clipboard::{encode_image, ClipboardError};
+        // Consume even an invalid attempt, before invoking any clipboard API.
+        let lease = self.state.lock().unwrap().paste_lease.take();
+        let (scope, owner, armed) =
+            lease.ok_or_else(|| ClipboardError::refused("paste_lease_required"))?;
+        validate_draft(draft)?;
+        if !focused || owner != draft || armed.elapsed() >= Duration::from_secs(2) {
+            return Err(ClipboardError::refused("paste_lease_invalid"));
+        }
+        self.bridge.check_file_scope(&scope)?;
+        let bytes = reader.read(|image| encode_image(image, limit as usize))?;
+        self.bridge.check_file_scope(&scope)?;
+        // UTC Unix milliseconds; no local timezone or source filename enters the receipt.
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|_| ClipboardError::refused("clock_unavailable"))?
+            .as_millis();
+        let name = format!("pasted-image-{timestamp}Z.png");
+        let receipt = self.spool_source(
+            &scope,
+            draft,
+            &name,
+            bytes.len() as u64,
+            limit,
+            std::io::Cursor::new(bytes),
+            |_| Ok(()),
+        )?;
+        self.bridge.check_file_scope(&scope)?;
+        Ok(receipt)
+    }
+    pub async fn paste_limit(&self) -> Result<u64, crate::clipboard::ClipboardError> {
+        let scope = self.scope()?;
+        let (limit, count, total) = self.limits(&scope).await?;
+        if count == 0 {
+            return Err(crate::clipboard::ClipboardError::refused(
+                "selection_not_allowed",
+            ));
+        }
+        self.bridge.check_file_scope(&scope)?;
+        Ok(limit.min(total))
+    }
     pub async fn dropped(self: Arc<Self>, paths: Vec<PathBuf>) {
         let target = self.state.lock().unwrap().drop_target.take();
         if let Some((scope, draft, armed)) = target {
@@ -680,7 +745,7 @@ impl Files {
             use std::os::windows::fs::OpenOptionsExt;
             options.share_mode(1).custom_flags(0x00200000); /* read sharing, OPEN_REPARSE_POINT */
         }
-        let mut source = options.open(path).map_err(io_error)?;
+        let source = options.open(path).map_err(io_error)?;
         let metadata = source.metadata().map_err(io_error)?;
         #[cfg(windows)]
         {
@@ -695,6 +760,41 @@ impl Files {
         {
             return Err("Selected file changed".into());
         }
+        self.spool_source(
+            scope,
+            draft,
+            &name,
+            metadata.len(),
+            limit,
+            source,
+            |source| {
+                let after = source.metadata().map_err(io_error)?;
+                if after.len() != metadata.len()
+                    || after.modified().ok() != metadata.modified().ok()
+                {
+                    return Err("Selected file changed during selection".into());
+                }
+                Ok(())
+            },
+        )
+    }
+    // Picker and clipboard share capacity accounting, hashing, persistence and cleanup.
+    #[allow(clippy::too_many_arguments)]
+    fn spool_source<R: Read>(
+        &self,
+        scope: &FileScope,
+        draft: &str,
+        name: &str,
+        expected_size: u64,
+        limit: u64,
+        mut source: R,
+        verify: impl FnOnce(&R) -> Result<(), String>,
+    ) -> Result<Receipt, String> {
+        validate_draft(draft)?;
+        self.bridge.check_file_scope(scope)?;
+        if expected_size > limit {
+            return Err("Selected file exceeded its limit".into());
+        }
         let mut state = self.state.lock().unwrap();
         let reserved: u64 = state
             .records
@@ -706,7 +806,7 @@ impl Files {
             .map(|r| r.receipt.size_bytes)
             .sum();
         let used = self.cache_bytes()?.saturating_add(reserved);
-        if used.saturating_add(metadata.len()) > MAX_SPOOL || state.records.len() >= MAX_RECORDS {
+        if used.saturating_add(expected_size) > MAX_SPOOL || state.records.len() >= MAX_RECORDS {
             return Err("Native file cache is full; finish or discard local transfers".into());
         }
         let key = id();
@@ -734,28 +834,26 @@ impl Files {
                     break;
                 }
                 size += n as u64;
-                if size > limit || size > metadata.len() {
+                if size > limit || size > expected_size {
                     return Err("Selected file changed or exceeded its limit".into());
                 }
                 digest.update(&buffer[..n]);
                 target.write_all(&buffer[..n]).map_err(io_error)?;
             }
-            let after = source.metadata().map_err(io_error)?;
-            if size != metadata.len()
-                || after.len() != metadata.len()
-                || after.modified().ok() != metadata.modified().ok()
-            {
+            verify(&source)?;
+            if size != expected_size {
                 return Err("Selected file changed during selection".into());
             }
+            self.bridge.check_file_scope(scope)?;
             target.sync_all().map_err(io_error)?;
             let receipt = Receipt {
                 transfer_id: key.clone(),
                 direction: "upload".into(),
                 draft_id: draft.into(),
-                display_name: name.clone(),
+                display_name: name.to_owned(),
                 size_bytes: size,
                 digest: format!("{:x}", digest.finalize()),
-                media_type: mime(&name).into(),
+                media_type: mime(name).into(),
                 stage: "selected".into(),
                 transferred_bytes: 0,
                 error: None,

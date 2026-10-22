@@ -1,6 +1,6 @@
 // Native paths, tokens, source bytes and credential bindings never enter this module.
 import {nativeFilesPick, nativeFilesStatus, nativeFilesUpload, nativeFilesControl,
-  nativeFilesSave, nativeFilesPreview, nativeFilesDropTarget} from "./transport/index.ts";
+  nativeFilesSave, nativeFilesPreview, nativeFilesDropTarget, nativeFilesPasteArm, nativeFilesPaste} from "./transport/index.ts";
 import {clientActionError} from './error-presentation.js';
 
 const pending = new Set(["checking", "uploading", "verifying", "downloading", "saving"]);
@@ -83,6 +83,15 @@ export function nativeAttachments({h, t, guard, canWrite, draftId, onReceipt, on
     } catch (error) {failure(error); await refresh().catch(failure);}
     finally {picking = false;}
   };
+  const paste = async () => {
+    writable();
+    await nativeFilesPasteArm(draftId);
+    writable();
+    const receipt = await nativeFilesPaste(draftId); live();
+    adopt(receipt); render(); writable();
+    await nativeFilesUpload(receipt.transfer_id); live();
+    await refresh();
+  };
   const drop = h("button", {class: "secondary", "aria-pressed": false, onclick: async () => {
     try {
       writable(); armed = !armed; await nativeFilesDropTarget(draftId, armed); live();
@@ -126,5 +135,5 @@ export function nativeAttachments({h, t, guard, canWrite, draftId, onReceipt, on
     if (!stopped) timer = setTimeout(tick, 1000);
   };
   queueMicrotask(tick);
-  return {box, pick, drop, actions, refresh, has: id => known.has(id)};
+  return {box, pick, paste, drop, actions, refresh, has: id => known.has(id)};
 }

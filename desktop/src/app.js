@@ -827,6 +827,23 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
     const cd = e.clipboardData;
     if (!cd) return;
     const items = cd.items ? Array.from(cd.items) : [];
+    if (nativeDesktop) {
+      // MIME metadata only: never materialize a WebView clipboard File or read its bytes.
+      if (!items.some(item => item.kind === "file" && item.type.startsWith("image/"))) return;
+      e.preventDefault();
+      const gate = attachmentGate({attachment: true, supported: true, manage: true, uploads: true});
+      if (!gate.allowed) {refuseAttachment(gate.reason); return;}
+      if (!native) {refuseAttachment("attachments_unavailable"); return;}
+      pendingSelections++; changed(); fill(status);
+      native.paste().catch(error => {
+        try {
+          guard(true);
+          if (error?.code === "CLIENT_ACTION_NATIVE_PASTE_UNSUPPORTED") refuseAttachment("native_paste_unsupported");
+          else fill(status, errorBox(error?.code ? new ApiError(0, error.code, error.reason || "") : error, {sourceRefresh:false, within:status}));
+        } catch { /* old view */ }
+      }).finally(() => {pendingSelections--; changed();});
+      return;
+    }
     const cdFiles = cd.files ? Array.from(cd.files) : [];
     const imageCandidates = [];
     if (cdFiles.length > 0) {

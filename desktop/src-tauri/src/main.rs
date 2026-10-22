@@ -2,6 +2,7 @@
 
 mod bridge;
 mod brief_files;
+mod clipboard;
 mod credentials;
 mod desktop_preferences;
 mod diagnostics_files;
@@ -435,6 +436,43 @@ async fn native_files_pick(
         })
         .collect::<Result<Vec<_>, _>>()?;
     files.pick_paths(scope, &draft_id, paths).await
+}
+#[tauri::command]
+fn native_files_paste_arm(
+    window: WebviewWindow,
+    state: State<'_, NativeFiles>,
+    draft_id: String,
+) -> Result<(), clipboard::ClipboardError> {
+    local_main(&window)?;
+    state
+        .get()?
+        .paste_arm(draft_id, window.is_focused().unwrap_or(false))
+}
+#[tauri::command]
+async fn native_files_paste(
+    window: WebviewWindow,
+    state: State<'_, NativeFiles>,
+    draft_id: String,
+) -> Result<files::Receipt, clipboard::ClipboardError> {
+    local_main(&window)?;
+    let files = state.get()?;
+    let limit = files.paste_limit().await?;
+    // Execute on the window thread (AppKit and Win32 clipboard ownership).
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let owner = window.clone();
+    window
+        .run_on_main_thread(move || {
+            let result = files.paste_with(
+                &draft_id,
+                owner.is_focused().unwrap_or(false),
+                &mut clipboard::SystemClipboard,
+                limit,
+            );
+            let _ = tx.send(result);
+        })
+        .map_err(|_| clipboard::ClipboardError::refused("window_unavailable"))?;
+    rx.await
+        .map_err(|_| clipboard::ClipboardError::refused("paste_interrupted"))?
 }
 #[tauri::command]
 fn native_files_drop_target(
@@ -929,6 +967,8 @@ fn main() {
             desktop_update,
             native_files_status,
             native_files_pick,
+            native_files_paste_arm,
+            native_files_paste,
             native_files_drop_target,
             native_files_upload,
             native_files_save,

@@ -290,7 +290,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const target of ['.attachments', '
       expect(state.bytes).toEqual([]);
       expect(state.uploaded).toBe(false);
       expect(state.invokes.slice(before).filter(call => !(call.command === 'native_files_status'
-        || call.command === 'connector_request' && call.method === 'GET'))).map(call => call.command)).toEqual(['native_files_paste_arm', 'native_files_paste']);
+        || call.command === 'connector_request' && call.method === 'GET')).map(call => call.command)).toEqual(['native_files_paste_arm', 'native_files_paste']);
       await page.reload();
       await expect(form(page).locator('textarea')).toHaveValue(original);
       await expect(form(page).locator('.attachment-list')).toBeEmpty();
