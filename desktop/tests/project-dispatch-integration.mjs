@@ -1,3 +1,4 @@
+import {eventDelivery, httpEventDelivery} from './event-delivery.mjs';
 // Shared project composer against actual central receipts and temporary Git/artifact bytes.
 import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
@@ -18,6 +19,7 @@ try {
   const fixture = await next(), origin = `http://127.0.0.1:${fixture.port}`;
   const posts = [], errors = [];
   const web = await browser.newPage(), desktop = await browser.newPage();
+  const webEvents = await httpEventDelivery(web, {initiallyPaused:true}), desktopEvents = eventDelivery(desktop, {initiallyPaused:true});
   for (const page of [web, desktop]) page.on('pageerror', e => errors.push(e.message));
   await web.addInitScript(token => sessionStorage.setItem('batc.dashboard.token', token), fixture.token);
   await web.goto(origin+'/dashboard/#/projects');
@@ -26,7 +28,7 @@ try {
   const repository = web.getByRole('combobox', {name: 'Repository for dispatch (optional)'});
   await expect(repository).toHaveValue('');
   await repository.selectOption('o/r');
-  await web.getByRole('textbox', {name: 'New project name'}).press('Enter');
+  await webEvents.post(() => web.getByRole('textbox', {name: 'New project name'}).press('Enter'), {resume:false});
   await expect(web).toHaveURL(/#\/project\/prj_[a-f0-9]{20}$/);
   const project = await control({action: 'prepare-project', project_id: web.url().split('/').at(-1)});
   const central = async input => {
@@ -38,7 +40,7 @@ try {
     return {status: response.status, data: await response.json()};
   };
   const caps = (await central({method: 'GET', path: '/capabilities'})).data;
-  await desktop.exposeFunction('dispatchCentral', central);
+  await desktop.exposeFunction('dispatchCentral', input => desktopEvents.forward(input, central));
   await desktop.addInitScript(({caps, origin}) => Object.assign(window, {isTauri: true, __TAURI_INTERNALS__: {
     invoke: async (command, args) => {
       if (command === 'native_status') return {endpoint: origin, credential_available: true};
@@ -62,13 +64,14 @@ try {
   let count = 0;
   const operations = [];
   for (const page of [web, desktop]) {
+    const events = page === web ? webEvents : desktopEvents;
     await page.goto(origin+'/dashboard/#/project/'+project.project_id);
     try {await page.getByRole('link', {name: 'Quick project dispatch'}).click();}
     catch (error) {console.error({client: page === web ? 'HTTP' : 'IPC', errors, body: await page.locator('body').innerText()}); throw error;}
     const form = page.locator('[data-published-start]');
     await expect(form.getByRole('combobox', {name: 'Repository · host · workspace ID'})).toHaveValue(JSON.stringify({repository:'o/r',host:'h1',workspace_id:'ws-1'}));
     await form.getByRole('textbox', {name: 'Published branch ref'}).fill('main');
-    await form.getByRole('button', {name: 'Preview published version'}).click();
+    await events.post(form.getByRole('button', {name: 'Preview published version'}), {resume:false});
     await expect(form.locator('[data-published-preview]')).toContainText(fixture.sha);
     await form.getByRole('textbox', {name: 'Original instructions', exact: true}).fill(original);
     await form.getByText('Advanced settings', {exact: true}).click();
@@ -78,7 +81,7 @@ try {
     await inputs.selectOption(`${project.artifact.artifact_id}:1`);
     await form.getByRole('button', {name: 'Add attachment', exact: true}).click();
     await expect(form.locator('.attachment-list')).toContainText('notes.txt');
-    await form.getByRole('button', {name: 'Start from this version', exact: true}).click();
+    await events.post(form.getByRole('button', {name: 'Start from this version', exact: true}), {resume:false});
     if (page === web) {
       await expect(form.locator('.error')).toBeVisible({timeout: 30000});
       // The response wait limit is not a completion barrier. Archive only after
@@ -87,7 +90,7 @@ try {
         {timeout: 30000}).toBe('succeeded');
       await control({action: 'archive-project', project_id: project.project_id, archived: true});
       await control({action: 'writes', enabled: false}); await page.reload();
-      await form.getByRole('button', {name: 'Retry original request'}).click();
+      await events.post(form.getByRole('button', {name: 'Retry original request'}), {resume:false});
       assert.deepEqual(posts[0], posts[1]);
     }
     await expect(form).toContainText('Start confirmed', {timeout: 30000});
@@ -106,6 +109,7 @@ try {
   assert.equal(posts.length, 3); assert.notEqual(posts[1].idempotency_key, posts[2].idempotency_key);
   const delivered = await control({action: 'prepare-delivery', operations});
   for (const [index, page] of [web, desktop].entries()) {
+    const events = page === web ? webEvents : desktopEvents;
     await page.goto(origin+'/dashboard/#/project/'+project.project_id);
     await page.locator('.workspace-tree a[href="#/work/'+project.project_id+'/execution/'+operations[index]+'"]').click();
     await expect(page.locator('.workspace-conversation')).toBeVisible();
@@ -126,7 +130,7 @@ try {
       console.error(await page.locator('[data-integration-review]').innerText());
       throw error;
     }
-    await page.getByRole('button', {name: 'Update PR results', exact: true}).click();
+    await events.post(page.getByRole('button', {name: 'Update PR results', exact: true}), {resume:false});
     await expect(source.getByRole('link', {name: 'sent to #1', exact: true})).toBeVisible({timeout: 30000});
   }
   await control({action: 'verify-delivery', results: delivered.results});

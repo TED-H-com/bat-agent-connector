@@ -1,3 +1,4 @@
+import {httpEventDelivery} from './event-delivery.mjs';
 import {openPmPanel, openThreadTab, openThreadBrief, revealPmView} from './pm-navigation.ts';
 // One browser flow against actual PM HTTP actions; the central has no BAT hosts.
 import {spawn} from 'node:child_process';
@@ -59,6 +60,7 @@ try {
   failureDetails=async()=>({requests,errors,forms:await page.locator('[data-pm-action]').evaluateAll(forms=>forms.map(form=>({
     action:form.getAttribute('data-pm-action'),status:form.querySelector('[role=status]')?.textContent,
     disabled:form.querySelector('button[type=submit]')?.disabled}))),status:await page.locator('.pm-status').allTextContents()});
+  const events = await httpEventDelivery(page);
   page.on('pageerror', error => errors.push(error.message));
   // Test this checkout's exact generated frontend even when the backend is supplied by an integration worktree.
   for (const file of ['app.js', 'app.css']) await page.route(`**/dashboard/${file}`, route =>
@@ -66,7 +68,7 @@ try {
   await page.addInitScript(token => sessionStorage.setItem('batc.dashboard.token', token), fixture.token);
   await page.goto(origin + '/dashboard/#/pm');
   await page.getByLabel('Workspace name', {exact:true}).fill('PM contract fixture');
-  await page.getByRole('button', {name:'Create workspace', exact:true}).click();
+  await events.post(page.getByRole('button', {name:'Create workspace', exact:true}), {resume:false});
   await expect(page).toHaveURL(/#\/pm\/ws_[a-f0-9]{32}$/);
   await page.getByRole('link', {name:'Discuss', exact:true}).click();
   await expect(page).toHaveURL(/#\/pm\/ws_[a-f0-9]{32}\/discussions\/new(?:\?|$)/);
@@ -76,7 +78,7 @@ try {
   await page.getByLabel('Discussion title', {exact:true}).fill('Choose a first improvement');
   await page.getByRole('button', {name:'Save',exact:true}).click();
   await page.locator('[data-discussion-composer]').fill('Keep the first action visible; retain a guided tour as an alternative.');
-  await page.getByRole('button', {name:'Save note only', exact:true}).click();
+  await events.post(page.getByRole('button', {name:'Save note only', exact:true}), {resume:false});
   await expect(page).toHaveURL(/#\/pm\/ws_[a-f0-9]{32}\/discussions\/pmt_[a-f0-9]{32}$/);
   const [workspaceId, , threadId] = page.url().split('/').slice(-3);
   const read = async () => {
@@ -85,10 +87,11 @@ try {
   };
   const note = page.locator('[data-pm-action="pm.message.append"]');
   await expect(page.locator('.pm-notes')).toContainText('Keep the first action visible');
+  events.resume();
   await page.getByRole('button',{name:'Rename',exact:true}).click();
   const rename=page.locator('[data-pm-action="pm.thread.rename"]');
   await rename.getByLabel('Discussion title',{exact:true}).fill('Choose the first useful improvement');
-  await rename.getByRole('button',{name:'Save',exact:true}).click();
+  await events.post(rename.getByRole('button',{name:'Save',exact:true}), {resume:false});
   await expect.poll(async()=>(await read()).thread.title).toBe('Choose the first useful improvement');
   const message = (await read()).messages[0];
   assert.equal(typeof message.created_at, 'number');
@@ -100,7 +103,7 @@ try {
     await input.getByLabel('Topic', {exact:true}).selectOption(slot);
     await input.getByLabel('Statement or question', {exact:true}).fill(value);
     await input.getByLabel('Source type or saved note', {exact:true}).selectOption('message:' + message.message_id);
-    await input.getByRole('button', {name:'Save input', exact:true}).click();
+    await events.post(input.getByRole('button', {name:'Save input', exact:true}), {resume:false});
     await expect(page.locator('.pm-facts')).toContainText(value);
   }
   const original = (await read()).inputs.find(item => item.slot === 'problem');
@@ -108,7 +111,7 @@ try {
   await openDisclosure(page.locator(`[data-input-id="${original.input_id}"] details:has([data-pm-action="pm.input.confirm"]) > summary`));
   const confirm = page.locator(`[data-input-id="${original.input_id}"] [data-pm-action="pm.input.confirm"]`);
   await confirm.getByLabel('Why this statement is confirmed', {exact:true}).fill('The owner selected this outcome');
-  await confirm.getByRole('button', {name:'Confirm statement', exact:true}).click();
+  await events.post(confirm.getByRole('button', {name:'Confirm statement', exact:true}), {resume:false});
   await expect(page.locator('[data-pm-missing-selection]')).toBeVisible();
   const confirmed = (await read()).inputs.find(item => item.slot === 'problem');
   assert.notEqual(confirmed.input_id, original.input_id); assert.equal(confirmed.supersedes_input_id, original.input_id);
@@ -118,7 +121,7 @@ try {
   await openDisclosure(page.locator('[data-pm-plan] > summary'));
   const plan = page.locator('[data-pm-action="pm.thread.plan"]');
   await plan.getByLabel('Why this direction', {exact:true}).fill('Prepare one change and retain the alternative');
-  await plan.getByRole('button', {name:'Save Planning draft', exact:true}).click();
+  await events.post(plan.getByRole('button', {name:'Save Planning draft', exact:true}), {resume:false});
   await expect(page.locator('.pm-draft')).toContainText('Offer a guided tour later');
   await page.reload(); await openThreadTab(page,'plan'); await expect(page.locator('.pm-draft')).toContainText('Make the first action visible');
   const data = await read(); assert.equal(data.thread.mode, 'planning'); assert.equal(data.draft.execution_authorized, false);
@@ -127,7 +130,7 @@ try {
   assert.equal(data.draft.candidate_inputs.length, 1); assert.equal(data.messages.length, 1);
   await openDisclosure(page.locator('[data-pm-revision-editor] > summary'));
   await page.getByLabel('Plan title', {exact:true}).fill('First useful action');
-  await page.getByRole('button', {name:'Save plan revision', exact:true}).click();
+  await events.post(page.getByRole('button', {name:'Save plan revision', exact:true}), {resume:false});
   await expect(page.locator('[data-pm-revision]')).toHaveCount(1);
   await page.locator('[data-pm-revision-open]').click();
   await expect(page.locator('.pm-plan-document')).toContainText('First useful action');
@@ -145,7 +148,7 @@ try {
   await openDisclosure(page.locator('[data-pm-add-input] > summary'));
   await input.getByLabel('Topic', {exact:true}).selectOption('finance');
   await input.getByLabel('Statement or question', {exact:true}).fill('Budget still needs an owner decision');
-  await input.getByRole('button', {name:'Save input', exact:true}).click();
+  await events.post(input.getByRole('button', {name:'Save input', exact:true}), {resume:false});
   await expect(page.locator('.pm-facts')).toContainText('Budget still needs an owner decision');
   const later = (await read()).inputs.find(item=>item.slot==='finance');
   await page.locator(`[data-input-id="${later.input_id}"] input[type=checkbox]`).check();
@@ -153,10 +156,10 @@ try {
   await openDisclosure(page.locator('[data-pm-planning-revision] > summary'));
   const revise = page.locator('[data-pm-action="pm.thread.plan.revise"]');
   await revise.getByLabel('Why update this direction?', {exact:true}).fill('Include the new financial question without treating it as settled.');
-  await revise.getByRole('button', {name:'Save updated Planning draft', exact:true}).click();
+  await events.post(revise.getByRole('button', {name:'Save updated Planning draft', exact:true}), {resume:false});
   await expect(page.locator('.pm-draft')).toContainText('Budget still needs an owner decision');
   await page.getByLabel('Plan title', {exact:true}).fill('First action with financial unknown');
-  await page.getByRole('button', {name:'Save plan revision', exact:true}).click();
+  await events.post(page.getByRole('button', {name:'Save plan revision', exact:true}), {resume:false});
   await expect(page.locator('[data-pm-revision]')).toHaveCount(2);
   const updatedPlans = await (await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/plans`, {headers:{Authorization:'Bearer '+fixture.token}})).json();
   const newRevision = await (await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/plans/${updatedPlans.head.latest_revision_id}`, {headers:{Authorization:'Bearer '+fixture.token}})).json();
@@ -195,6 +198,8 @@ try {
   // Hold every overlapping refresh until this gate is released. A one-shot
   // route lets a later load enable Refresh while the first read is still held.
   await page.route(catalogUrl,blockCatalog);
+  // This deliberate background-read assertion owns the next event delivery.
+  events.resume();
   let refreshClick;
   try {
     await submit('pm.message.append', {workspace_id:workspaceId,thread_id:threadId},
@@ -214,15 +219,17 @@ try {
   console.log('PM fixture recovered the Refresh click after a deliberately earlier background catalog read.');
   await openPmPanel(page,'ui_workspace_settings');
   await expect(projectForm.getByLabel('Why associate this work?',{exact:true})).toHaveValue('Track this existing project in the PM workspace');
-  await projectForm.getByRole('button',{name:'Associate project',exact:true}).click();
+  await events.post(projectForm.getByRole('button',{name:'Associate project',exact:true}), {resume:false});
+  // The successful binding rebuilds the catalog rows; open the new row once.
+  await expect(projectForm).toBeHidden();
   await page.locator('[data-pm-work] > summary').click();
   await page.getByText('Track this work',{exact:true}).first().click();
   const workForm=page.locator('[data-pm-action="pm.work.bind"]');
   await workForm.getByLabel('Why associate this work?',{exact:true}).fill('Preserve the actual work identity');
-  await workForm.getByRole('button',{name:'Track this work',exact:true}).click();
+  await events.post(workForm.getByRole('button',{name:'Track this work',exact:true}), {resume:false});
   await expect(page.locator('[data-pm-work] > summary')).toContainText('Tracked here');
   await page.locator('[data-pm-work] > summary').click();
-  await page.locator('[data-pm-action="pm.evidence.capture"] button[type="submit"]').click();
+  await events.post(page.locator('[data-pm-action="pm.evidence.capture"] button[type="submit"]'), {resume:false});
   await expect(page.locator('[data-pm-evidence]')).toContainText('Definition of Done has not been assessed.');
   await page.locator('[data-pm-fact] > summary').click();
   await expect(page.locator('[data-pm-fact]')).toContainText('To do');
@@ -265,7 +272,7 @@ try {
   await comparisonResult.locator('summary').filter({hasText:'Review candidate'}).click();
   await expect(comparisonResult).toContainText('Title and work state were not saved');
   await openThreadBrief(page);
-  await page.locator('[data-pm-action="pm.snapshot.create"] button[type="submit"]').click();
+  await events.post(page.locator('[data-pm-action="pm.snapshot.create"] button[type="submit"]'), {resume:false});
   await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
   await expect(page.locator('[data-pm-brief-section="delivery"]')).toContainText('quality unassessed');
   const brief=await (await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/snapshots/latest`, {headers:{Authorization:'Bearer '+fixture.token}})).json();
@@ -316,7 +323,7 @@ try {
     const editor=activity.locator(`[data-pm-action="pm.lifecycle.${kind}"]`);
     if(kind==='reopen')await editor.getByLabel('Management phase',{exact:true}).selectOption('development');
     await editor.getByLabel('Reason and retained context',{exact:true}).fill(reason);
-    await editor.getByRole('button',{name:label,exact:true}).click();
+    await events.post(editor.getByRole('button',{name:label,exact:true}), {resume:false});
     await expect(activity.locator('.pm-lifecycle-stage')).toHaveText(stage);
     if(kind==='pause'){
       await expect(page.locator('[data-pm-action="pm.run.prepare"] button[type=submit]')).toBeDisabled();
@@ -351,6 +358,7 @@ try {
   await expect(page.locator(`[data-rtm-select="${work.work_item_id}"]`)).toBeFocused();
   child.stdin.write(JSON.stringify({action:'verify'})+'\n'); const result = await next();
   assert.deepEqual(result.actions.sort(), ['pm.workspace.create','pm.thread.create','pm.message.append','pm.thread.rename','pm.input.record','pm.input.record','pm.input.confirm','pm.thread.plan','pm.plan.draft','pm.input.record','pm.thread.plan.revise','pm.plan.draft','project.create','work_item.create','pm.message.append','pm.project.bind','pm.work.bind','pm.evidence.capture','pm.snapshot.create','pm.lifecycle.pause','pm.lifecycle.close','pm.lifecycle.reopen'].sort());
+  events.resume();
   assert.deepEqual(errors, []);
   console.log('Actual central PM browser flow passed: workspace, Idea, source confirmation, retained candidate, Planning and immutable professional plan draft, explicit work association, fixed plan comparison with unchanged work, evidence, five-section Brief and exact Markdown/HTML/SVG downloads, independent pause/close/reopen, fixed Charter, unassigned RTM work and recurring local usage through the central resource API; zero hosts or tasks.');
 } catch(error) {

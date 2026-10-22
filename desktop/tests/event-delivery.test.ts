@@ -56,3 +56,14 @@ test('a write runs once at the quiet point and releases only after its request',
   await writing; await poll;
   assert.deepEqual(calls, ['click','POST','poll']);
 });
+
+
+test('resuming releases an obsolete poll as well as its renewed read', async () => {
+  const {gate} = fixture(), calls: number[] = [];
+  const quiet = gate.pause();
+  const old = gate.through(() => {calls.push(1);});
+  await quiet;
+  const renewed = gate.through(() => {calls.push(2);});
+  gate.resume(); await Promise.all([old,renewed]);
+  assert.deepEqual(calls,[1,2]);
+});
