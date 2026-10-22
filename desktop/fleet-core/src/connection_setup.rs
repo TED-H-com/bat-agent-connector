@@ -30,6 +30,7 @@ pub enum Gap {
     UnsupportedInclude,
     UnsupportedMatch,
     UnsupportedSshSyntax,
+    ForwardCompletenessUnproven,
     SshTooLarge,
     SshTooManyLines,
     SshLineTooLong,
@@ -85,23 +86,54 @@ impl ForwardAssociation {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SshReferences {
     source_digest: String,
-    blocks: Vec<(String, Vec<(SocketAddrV4, String)>)>,
+    blocks: Vec<HostBlock>,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum HostScope {
+    Literals(Vec<String>),
+    Pattern,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Forward {
+    Parsed { local: SocketAddrV4, target: String },
+    Unrepresentable,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct HostBlock {
+    scope: HostScope,
+    forwards: Vec<Forward>,
 }
 impl SshReferences {
     /// Multiple blocks/forwards are not deduplicated: OpenSSH may bind both.
     pub fn association(&self, alias: &str) -> SetupResult<ForwardAssociation> {
-        let blocks: Vec<_> = self
-            .blocks
+        let mut selected = Vec::new();
+        for block in &self.blocks {
+            match &block.scope {
+                HostScope::Pattern if !block.forwards.is_empty() => {
+                    return Err(Gap::ForwardCompletenessUnproven);
+                }
+                HostScope::Literals(names) => {
+                    if let Some(name) = names.iter().find(|name| name.eq_ignore_ascii_case(alias)) {
+                        selected.extend(block.forwards.iter().map(|forward| (name, forward)));
+                    }
+                }
+                _ => (),
+            }
+        }
+        if selected
             .iter()
-            .filter(|(name, _)| name.eq_ignore_ascii_case(alias))
-            .collect();
-        if blocks.len() > 1 || blocks.iter().any(|(_, forwards)| forwards.len() > 1) {
+            .any(|(_, forward)| matches!(forward, Forward::Unrepresentable))
+        {
+            return Err(Gap::UnsupportedSshSyntax);
+        }
+        if selected.len() > 1 {
             return Err(Gap::DuplicateForwards);
         }
-        let (name, forwards) = blocks.first().ok_or(Gap::MissingMapping)?;
-        let (local, target) = forwards.first().ok_or(Gap::MissingMapping)?;
+        let Some((name, Forward::Parsed { local, target })) = selected.first() else {
+            return Err(Gap::MissingMapping);
+        };
         Ok(ForwardAssociation {
-            alias: name.clone(),
+            alias: (*name).clone(),
             local: *local,
             target: target.clone(),
             source_digest: self.source_digest.clone(),
@@ -109,9 +141,42 @@ impl SshReferences {
     }
 }
 
+fn without_comment(line: &str) -> &str {
+    let mut token_start = true;
+    for (index, character) in line.char_indices() {
+        if character == '#' && token_start {
+            return &line[..index];
+        }
+        token_start = character.is_ascii_whitespace();
+    }
+    line
+}
+
+fn read_forward(value: &str) -> Forward {
+    let parts: Vec<_> = value.split_ascii_whitespace().collect();
+    let [local, target] = parts.as_slice() else {
+        return Forward::Unrepresentable;
+    };
+    let Ok(local) = endpoint(local, true) else {
+        return Forward::Unrepresentable;
+    };
+    let Ok(address) = local.address.parse() else {
+        return Forward::Unrepresentable;
+    };
+    if endpoint(target, false).is_err() {
+        return Forward::Unrepresentable;
+    }
+    Forward::Parsed {
+        local: SocketAddrV4::new(address, local.port),
+        target: (*target).into(),
+    }
+}
+
 /// A conservative subset, not an OpenSSH evaluator. Includes (including cycles)
 /// and Match are refused without opening another file or executing a directive.
-/// Other directives remain solely in the original authority's exact bytes.
+/// Literal alias lists share a block. Patterns are never evaluated; a forward in
+/// any pattern block prevents proving a selected alias's complete forward set.
+/// Unsupported forwards in unrelated literal blocks remain reference-only.
 pub fn read_ssh(bytes: &[u8]) -> SetupResult<SshReferences> {
     if bytes.len() > SSH_BYTE_LIMIT {
         return Err(Gap::SshTooLarge);
@@ -131,7 +196,7 @@ pub fn read_ssh(bytes: &[u8]) -> SetupResult<SshReferences> {
         if line.chars().any(|c| c.is_control() && c != '\t') {
             return Err(Gap::UnsupportedSshSyntax);
         }
-        let line = line.split('#').next().unwrap().trim();
+        let line = without_comment(line).trim();
         if line.is_empty() {
             continue;
         }
@@ -147,23 +212,20 @@ pub fn read_ssh(bytes: &[u8]) -> SetupResult<SshReferences> {
             "include" => return Err(Gap::UnsupportedInclude),
             "match" => return Err(Gap::UnsupportedMatch),
             "host" => {
-                if !literal(value, 128) {
-                    return Err(Gap::UnsupportedSshSyntax);
-                }
-                out.blocks.push((value.into(), vec![]));
+                let names: Vec<_> = value.split_ascii_whitespace().collect();
+                let scope = if !names.is_empty() && names.iter().all(|name| literal(name, 128)) {
+                    HostScope::Literals(names.into_iter().map(str::to_owned).collect())
+                } else {
+                    HostScope::Pattern
+                };
+                out.blocks.push(HostBlock {
+                    scope,
+                    forwards: vec![],
+                });
             }
             "localforward" => {
-                let parts: Vec<_> = value.split_whitespace().collect();
-                if parts.len() != 2 {
-                    return Err(Gap::UnsupportedSshSyntax);
-                }
-                let local = endpoint(parts[0], true).map_err(|_| Gap::UnsupportedSshSyntax)?;
-                endpoint(parts[1], false).map_err(|_| Gap::UnsupportedSshSyntax)?;
                 let block = out.blocks.last_mut().ok_or(Gap::UnsupportedSshSyntax)?;
-                block.1.push((
-                    SocketAddrV4::new(local.address.parse().unwrap(), local.port),
-                    parts[1].into(),
-                ));
+                block.forwards.push(read_forward(value));
             }
             _ => (),
         }

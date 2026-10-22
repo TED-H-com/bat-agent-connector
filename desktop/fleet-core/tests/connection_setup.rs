@@ -755,6 +755,146 @@ fn duplicate_forwards_are_not_reduced_to_one_mapping() {
 }
 
 #[test]
+fn ordinary_unrelated_ssh_blocks_remain_references_while_the_selected_route_builds() {
+    let mut input = setup();
+    input.ssh_source = b"# ordinary account defaults\nHost *\n ServerAliveInterval 30\n IdentityAgent ~/.ssh/agent.sock\nHost storage storage.example.test\n Port 2222\nHost legacy\n LocalForward 19002 other.example.test:9000\nHost ipv6-only\n LocalForward [::1]:19003 [::1]:9000\nHost sockets\n LocalForward /example/socket /example/target\n".to_vec();
+    input.ssh_source.extend_from_slice(&source("127.0.0.2"));
+    input.forward = Some(
+        read_ssh(&input.ssh_source)
+            .unwrap()
+            .association("bat-example")
+            .unwrap(),
+    );
+    let plan = build(&input).unwrap();
+    assert_eq!(
+        document(&plan, Artifact::Inventory)["hosts"][0]["local"],
+        "127.0.0.2:19001"
+    );
+    assert_round_trip(input);
+}
+
+#[test]
+fn literal_alias_lists_and_repeated_blocks_collect_only_their_forwards() {
+    let bytes = b"Host bat-example bat-other # literal names\n IdentityAgent agent.sock\nHost bat-other\n LocalForward 127.0.0.2:19001 127.0.0.1:9000\n";
+    let parsed = read_ssh(bytes).unwrap();
+    assert_eq!(parsed.association("bat-example"), Err(Gap::MissingMapping));
+    assert_eq!(
+        parsed.association("bat-other").unwrap().local().to_string(),
+        "127.0.0.2:19001"
+    );
+    let shared = b"Host bat-example bat-other\n LocalForward 127.0.0.2:19001 127.0.0.1:9000\n";
+    let parsed = read_ssh(shared).unwrap();
+    assert_eq!(
+        parsed.association("bat-example").unwrap().local(),
+        parsed.association("bat-other").unwrap().local()
+    );
+    let duplicate = [
+        shared.as_slice(),
+        b"Host BAT-EXAMPLE\n LocalForward 127.0.0.2:19001 127.0.0.1:9000\n",
+    ]
+    .concat();
+    assert_eq!(
+        read_ssh(&duplicate).unwrap().association("bat-example"),
+        Err(Gap::DuplicateForwards)
+    );
+}
+
+#[test]
+fn inline_hash_is_not_a_host_name_prefix_or_forward_comment() {
+    assert_eq!(
+        read_ssh(b"Host bat-example#x\n")
+            .unwrap()
+            .association("bat-example"),
+        Err(Gap::MissingMapping)
+    );
+    let valid = b"# comment\nHost bat-example # comment\n LocalForward 127.0.0.2:19001 127.0.0.1:9000\t# comment\n";
+    assert!(read_ssh(valid).unwrap().association("bat-example").is_ok());
+    let invalid = b"Host bat-example\n LocalForward 127.0.0.2:19001 127.0.0.1:9000#x\n";
+    assert_eq!(
+        read_ssh(invalid).unwrap().association("bat-example"),
+        Err(Gap::UnsupportedSshSyntax)
+    );
+}
+
+#[test]
+fn global_forward_and_topology_directives_still_refuse_the_file() {
+    for (bytes, gap) in [
+        (
+            b"LocalForward 127.0.0.2:19001 127.0.0.1:9000\n".as_slice(),
+            Gap::UnsupportedSshSyntax,
+        ),
+        (
+            b"Host unrelated\n Include config\n",
+            Gap::UnsupportedInclude,
+        ),
+        (
+            b"Host unrelated\n Match exec never-execute\n",
+            Gap::UnsupportedMatch,
+        ),
+    ] {
+        assert_eq!(read_ssh(bytes), Err(gap));
+    }
+}
+
+#[test]
+fn forwards_in_unevaluated_host_patterns_make_every_association_unproven() {
+    for host in [
+        "*",
+        "*.example.test",
+        "!bat-example",
+        "\"bat-example\"",
+        "bat-example#x",
+        "literal *",
+    ] {
+        for forward in ["127.0.0.2:19001 127.0.0.1:9000", "19001 example.test:9000"] {
+            let bytes = [
+                format!("Host {host}\n LocalForward {forward}\n").into_bytes(),
+                source("127.0.0.2"),
+            ]
+            .concat();
+            let parsed = read_ssh(&bytes).unwrap();
+            for alias in ["bat-example", "absent"] {
+                assert_eq!(
+                    parsed.association(alias),
+                    Err(Gap::ForwardCompletenessUnproven)
+                );
+            }
+            let mut input = setup();
+            input.ssh_source = bytes;
+            assert_eq!(build(&input), Err(Gap::ForwardCompletenessUnproven));
+        }
+    }
+}
+
+#[test]
+fn unsupported_selected_forwards_are_gaps_without_rejecting_unrelated_aliases() {
+    for forward in [
+        "19001 example.test:9000",
+        "[::1]:19001 [::1]:9000",
+        "/example/socket /example/target",
+        "${PORT} %h:9000",
+    ] {
+        let bytes = [
+            source("127.0.0.2"),
+            format!("Host other\n LocalForward {forward}\n").into_bytes(),
+        ]
+        .concat();
+        let parsed = read_ssh(&bytes).unwrap();
+        assert!(parsed.association("bat-example").is_ok());
+        assert_eq!(parsed.association("other"), Err(Gap::UnsupportedSshSyntax));
+        let repeated = [
+            bytes,
+            b"Host other\n LocalForward 127.0.0.3:19001 127.0.0.1:9000\n".to_vec(),
+        ]
+        .concat();
+        assert_eq!(
+            read_ssh(&repeated).unwrap().association("other"),
+            Err(Gap::UnsupportedSshSyntax)
+        );
+    }
+}
+
+#[test]
 fn reader_bounds_and_unrepresentable_topology_are_reference_only() {
     for (bytes, gap) in [
         (vec![b'a'; SSH_BYTE_LIMIT + 1], Gap::SshTooLarge),
@@ -766,11 +906,6 @@ fn reader_bounds_and_unrepresentable_topology_are_reference_only() {
         (
             b"Include child.conf\n# child.conf includes config\n".to_vec(),
             Gap::UnsupportedInclude,
-        ),
-        (b"Host *.test\n".to_vec(), Gap::UnsupportedSshSyntax),
-        (
-            b"Host example\n LocalForward ${PORT} %h:9000\n".to_vec(),
-            Gap::UnsupportedSshSyntax,
         ),
     ] {
         assert_eq!(read_ssh(&bytes), Err(gap));
