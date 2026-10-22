@@ -7,6 +7,7 @@ No migration, key rewriting, alternate-account search or encrypted-store fallbac
 from __future__ import annotations
 
 import json
+import math
 import os
 import stat
 from collections.abc import Mapping
@@ -138,13 +139,35 @@ def _invalid_constant(_value):
     raise ValueError
 
 
+def _native_json_values(value, depth=0):
+    """Admission must also fit serde_json's Unicode, number and nesting limits."""
+    if isinstance(value, (dict, list)):
+        # serde_json's default recursion budget refuses the 128th container.
+        if depth >= 127:
+            raise ValueError
+        if isinstance(value, dict):
+            for key in value:
+                key.encode("utf-8")
+            values = value.values()
+        else:
+            values = value
+        for child in values:
+            _native_json_values(child, depth + 1)
+    elif isinstance(value, str):
+        value.encode("utf-8")
+    elif isinstance(value, (int, float)) and not math.isfinite(value):
+        raise ValueError
+
+
 def parse_token_store(contents: str, *, mode: TokenMode) -> TokenStore:
     """Decode once; all states/reasons/reprs are free of credential material."""
     strict = mode is TokenMode.ADMISSION
 
     def decode(value):
         if strict:
-            return json.loads(value, object_pairs_hook=_unique_object, parse_constant=_invalid_constant)
+            decoded = json.loads(value, object_pairs_hook=_unique_object, parse_constant=_invalid_constant)
+            _native_json_values(decoded)
+            return decoded
         return json.loads(value)
 
     try:
@@ -170,7 +193,7 @@ def parse_token_store(contents: str, *, mode: TokenMode) -> TokenStore:
         return TokenStore("available", "TOKEN_STORE_AVAILABLE", mode, tokens or {})
     except _AmbiguousStore:
         return TokenStore("unsupported", "TOKEN_STORE_AMBIGUOUS", mode)
-    except (ValueError, UnicodeError, RecursionError):
+    except (ValueError, OverflowError, RecursionError):
         return TokenStore("unsupported", "TOKEN_STORE_FORMAT", mode)
 
 

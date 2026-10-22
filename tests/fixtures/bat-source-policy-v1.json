@@ -780,6 +780,63 @@
           "reason": "TOKEN_MISSING"
         }
       }
+    },
+    {
+      "id": "overflow-number",
+      "profile_id": "remote-1",
+      "store": "{\"enc\": false, \"data\": \"{\\\"tokens\\\":{\\\"remote-1\\\":\\\"synthetic-token\\\"},\\\"metadata\\\":1e999}\"}",
+      "expected": {
+        "rust_legacy_fleet": {
+          "state": "unavailable",
+          "reason": "CREDENTIAL_MISSING"
+        },
+        "python_admission": {
+          "state": "unsupported",
+          "reason": "TOKEN_STORE_FORMAT"
+        },
+        "python_runtime": {
+          "state": "available",
+          "reason": "TOKEN_AVAILABLE"
+        }
+      }
+    },
+    {
+      "id": "escaped-surrogate",
+      "profile_id": "remote-1",
+      "store": "{\"enc\": false, \"data\": \"{\\\"tokens\\\":{\\\"remote-1\\\":\\\"synthetic-token\\\"},\\\"metadata\\\":\\\"\\\\ud800\\\"}\"}",
+      "expected": {
+        "rust_legacy_fleet": {
+          "state": "unavailable",
+          "reason": "CREDENTIAL_MISSING"
+        },
+        "python_admission": {
+          "state": "unsupported",
+          "reason": "TOKEN_STORE_FORMAT"
+        },
+        "python_runtime": {
+          "state": "available",
+          "reason": "TOKEN_AVAILABLE"
+        }
+      }
+    },
+    {
+      "id": "native-depth-bound",
+      "profile_id": "remote-1",
+      "store": "{\"enc\": false, \"data\": \"{\\\"tokens\\\":{\\\"remote-1\\\":\\\"synthetic-token\\\"},\\\"metadata\\\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}\"}",
+      "expected": {
+        "rust_legacy_fleet": {
+          "state": "unavailable",
+          "reason": "CREDENTIAL_MISSING"
+        },
+        "python_admission": {
+          "state": "unsupported",
+          "reason": "TOKEN_STORE_FORMAT"
+        },
+        "python_runtime": {
+          "state": "available",
+          "reason": "TOKEN_AVAILABLE"
+        }
+      }
     }
   ]
 }
