@@ -140,7 +140,7 @@ def _plan(ops, principal, action, target, params, pre):
             or before["remote_profile_id"] != params["remote_profile_id"]):
         _changed("Endpoint, pin or remote profile changed; add a separate connection")
     configuration = params.get("server_configuration")
-    config_binding, candidate = {}, None
+    config_binding, candidate, config_plan = {}, None, None
     if "server_configuration" in params:
         if action != "setup.connection.apply":
             raise OperationError("FORBIDDEN", "Reference associations cannot change server configuration", 403)
@@ -155,6 +155,11 @@ def _plan(ops, principal, action, target, params, pre):
                 or descriptor["kind"] == "bat_profile" and configuration["params"].get("import_profile_id") != descriptor["profile_reference"]
                 or descriptor["kind"] == "staged_secret" and configuration["params"].get("secret_ref") != params["source"]["secret_ref"]):
             _changed("Server configuration must use the selected source and profile")
+        config_preview = setup.preview(ops.context["daemon"], principal, {"action": "setup.host",
+            "target": configuration["target"], "params": configuration["params"],
+            "preconditions": {"config_revision": config_binding["before_revision"]}})["preview"]
+        config_plan = {"target": configuration["target"], "changes": config_preview["changes"],
+            **{key: config_binding[key] for key in ("before_revision", "after_revision")}}
     _choices(ops, params, descriptor, candidate)
     binding = {**config_binding, **identity, "installation_ref": target["installation_ref"],
         "connection_id": target.get("connection_id"), "create_intent": None if before else handoff.digest([target, params]),
@@ -162,7 +167,7 @@ def _plan(ops, principal, action, target, params, pre):
     changes = {key: params[key] for key in ("label", "preferences", "service_ref", "workspace_ref", "remote_profile_id")}
     plan = {"contract_version": 1, "action": action, "target": target, "expected_revision": pre["expected_revision"],
         "source": descriptor, "before": {key: before[key] for key in changes} if before else None,
-        "after": changes, "server_configuration": ({key: config_binding[key] for key in ("before_revision", "after_revision")} if configuration else None),
+        "after": changes, "server_configuration": config_plan,
         "effects": {"configuration_written": False, "operation_created": False, "probe_started": False,
             "on_apply": (["guarded_configuration"] if configuration else []) + ["connection_binding"] +
                 (["native_effects"] if action == "setup.connection.apply" else [])}}

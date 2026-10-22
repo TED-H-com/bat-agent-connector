@@ -594,6 +594,9 @@ The optional `server_configuration` contains `{target:{host},params,precondition
 using the existing `setup.host` allowlist and guards. Its source must match the selected
 descriptor. Preview recomputes the source and returns bounded semantic before/after,
 configuration revision digests and `review_digest`, with all effect flags false.
+Its `server_configuration` plan reuses the existing `setup.host` preview producer's
+semantic `changes` array, alongside target and before/after revision digests, so
+permission and root choices remain reviewable without resolved credential paths.
 It creates no operation/step, writes no configuration and starts no BAT/SSH probe.
 Apply requires `preconditions:{expected_revision,review_digest}` (revision 0 for create).
 Source, configuration, choices or revision changes refuse admission with the existing

@@ -386,6 +386,11 @@ async def test_configuration_is_guarded_inside_same_operation_then_native_wait(i
     source = {**source, "source": selected, "source_reference": descriptor["reference"], "service_ref": "fixture",
         "server_configuration": {"target": {"host": "fixture"}, "params": params,
             "preconditions": {"config_revision": setup._configuration(daemon)[3]}}}
+    status, response = await served_setup("POST", PREVIEW, intent(source, action="setup.connection.apply"))
+    assert status == 200
+    assert {change["field"] for change in response["preview"]["server_configuration"]["changes"]} >= {
+        "url", "fingerprint", "writes", "orchestrate", "managed_roots"}
+    assert not mock.auth_frames and not daemon.journal.db.execute("SELECT 1 FROM operations").fetchone()
     body, ident = await accept(served_setup, intent(source, action="setup.connection.apply"))
     await settle_operations(daemon.ops)
     result = daemon.ops.get(ident)
