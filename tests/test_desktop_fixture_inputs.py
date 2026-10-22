@@ -45,6 +45,10 @@ def test_computed_golden_read_is_not_silently_omitted(desktop_inputs):
         'desktop/tests/version-projection.test.ts:8: computed golden path must be resolved or rejected')
 
 
+def test_bat_source_policy_is_a_shared_native_build_input(desktop_inputs):
+    assert 'tests/fixtures/bat-source-policy-v1.json' in desktop_inputs['files']
+
+
 @pytest.mark.parametrize('path,pattern,expected', [
     ('desktop/src/app.js', 'desktop/**', True),
     ('desktop/src/app.js', 'desktop/*', False),
@@ -77,6 +81,7 @@ def test_unsupported_pattern_syntax_fails_closed(pattern):
     ('tests/conftest.py', True, 'all', 4),
     ('tests/test_api_v1.py', True, 'all', 4),
     ('tests/fixtures/pm-version-facts.json', True, 'all', 4),
+    ('tests/fixtures/bat-source-policy-v1.json', True, 'all', 4),
     ('tests/test_ci_scope.py', False, 'all', 0),
     ('.github/actions/bounded-apt/action.yml', True, 'all', 4),
     ('desktop/src/app.js', True, 'none', 0),

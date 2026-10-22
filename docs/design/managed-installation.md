@@ -29,7 +29,7 @@ A succeeded `setup.host` receipt is evidence of that operation's verification an
 ## 與「加入機器」共用的契約（已定，尚未實作）
 
 本節補充上方現行首次設定，未實作新的角色精靈。程式查核包含 main `511fc618`
-與本分支的連線預覽實作；下列 `file:line` 已重核位置。預覽 API 見 [setup API 契約](api-v1.md#managed-setup連線預覽與受理)。
+與合併後的連線預覽實作；下列 `file:line` 已重核位置。預覽 API 見 [setup API 契約](api-v1.md#managed-setup連線預覽與受理)。
 責任分工只維護於 [Fleet 唯一責任表](fleet-configuration.md#責任表與退休條件)；
 共用欄位、狀態、變更、lifecycle、健康投影、驗收與 D1–D8 的產品決定／技術預設
 均引用 [Fleet 共用契約](fleet-configuration.md#加入機器共用契約已定尚未實作)，本處不另訂一份。

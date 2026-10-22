@@ -112,7 +112,7 @@ async def test_changed_review_is_refused_before_journal_or_probe(installed, serv
         index = {"profiles": [{"id": "profile-a", "type": "remote", "remoteHost": endpoint.hostname,
                  "remotePort": endpoint.port, "remoteFingerprint": mock.fingerprint, "remoteProfileId": "default"}]}
         (directory / "index.json").write_text(json.dumps(index))
-        platform_files.atomic_write(directory / "remote-tokens.enc.json", json.dumps({"enc": False, "data": {"tokens": {"profile-a": mock.token}}}).encode())
+        platform_files.atomic_write(directory / "remote-tokens.enc.json", json.dumps({"enc": False, "data": json.dumps({"tokens": {"profile-a": mock.token}})}).encode())
         path = root / "config/hosts.toml"
         document = setup.tomllib.loads(path.read_text())
         document["bat"] = {"profiles_dir": str(directory)}

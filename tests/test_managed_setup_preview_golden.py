@@ -22,7 +22,7 @@ async def test_setup_preview_matches_shared_golden(installed):
         "type": "remote", "remoteHost": "host-a.example.invalid", "remotePort": 9876,
         "remoteFingerprint": "A" * 64, "remoteProfileId": "default"}]}))
     platform_files.atomic_write(directory / "remote-tokens.enc.json", json.dumps({"enc": False,
-        "data": {"tokens": {"profile-demo": "synthetic-bat-secret"}}}).encode())
+        "data": json.dumps({"tokens": {"profile-demo": "synthetic-bat-secret"}})}).encode())
     path = root / "config/hosts.toml"
     document = setup.tomllib.loads(path.read_text())
     document["bat"] = {"profiles_dir": str(directory)}

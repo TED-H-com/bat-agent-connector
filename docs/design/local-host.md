@@ -119,10 +119,10 @@ synthetic tests establish what the Connector accepts. The following
 | Question | Evidence and limit |
 | --- | --- |
 | Server mode | `docs/PROTOCOL.md:3–9,16` describes BAT v3.2.12's Rust remote server and standalone headless `bat-server` bundle. The Connector uses that remote WebSocket protocol even for a same-computer connection; it has no in-process/local IPC BAT adapter. A local desktop profile alone does not establish that a remote listener is enabled. Current enablement is established in the upstream facts below. |
-| Port and URL | Protocol notes name default port **9876**. `config.py:606–613` requires a configured `wss://` URL; guided setup additionally requires an explicit port and a bare origin (`managed_setup.py:104–114`). There is no client-side assumption that every running BAT listens on 9876. SSH port forwarding can use another loopback port. |
-| Certificate | Protocol notes describe a self-signed certificate. `client.py:176–181,212–218` disables CA/hostname validation, reads the peer DER certificate and compares its SHA-256 fingerprint before sending authentication. `config.py:87–94` normalizes 64 hex digits, optional colons and `SHA256:`. Certificate storage is established by upstream code below, not this client. |
+| Port and URL | Protocol notes name default port **9876**. `config.py:632–633` requires a configured `wss://` URL; guided setup additionally requires an explicit port and a bare origin (`managed_setup.py:97–107`). There is no client-side assumption that every running BAT listens on 9876. SSH port forwarding can use another loopback port. |
+| Certificate | Protocol notes describe a self-signed certificate. `client.py:176–181,212–218` disables CA/hostname validation, reads the peer DER certificate and compares its SHA-256 fingerprint before sending authentication. `config.py:95–102` normalizes 64 hex digits, optional colons and `SHA256:`. Certificate storage is established by upstream code below, not this client. |
 | Token | `client.py:190–235` resolves a token in central memory and sends it in the first `auth` frame, advertising only `bat-remote/v2` and no compression. It does not use an HTTP Authorization header for BAT. `docs/PROTOCOL.md:37` describes comparison with the server's current token. Upstream generation, storage and rotation are described below. |
-| Profile identity | A connection's `profile_id` names the workspace profile reported by that server. It differs from the client profile ID in `bat-profile:ID` (`managed_setup.py:154–161,269–274`). Headless `default` is documented in `docs/PROTOCOL.md:71–72`; guided setup verifies the actual profile list instead of assuming it (`managed_setup.py:388–401`). |
+| Profile identity | A connection's `profile_id` names the workspace profile reported by that server. It differs from the client profile ID in `bat-profile:ID` (`managed_setup.py:137–146,287–294`). Headless `default` is documented in `docs/PROTOCOL.md:71–72`; guided setup verifies the actual profile list instead of assuming it (`managed_setup.py:475–490`). |
 | Existing manual route | `docs/getting-started.md:26–32` and its zh-TW counterpart require trusted endpoint/fingerprint/token, managed permissions/roots and an existing SSH alias where needed. Setup probes with writes/orchestration disabled. Pin/profile failure prevents publication (`tests/test_managed_setup.py:91–104`). |
 
 `tests/test_client.py:67,159,167,273` covers v2 authentication, rejected token
@@ -134,21 +134,22 @@ These are mock tests, not desktop/server-mode or OS credential acceptance.
 
 | Location or reference | Current interpretation |
 | --- | --- |
-| Linux profiles | `config.py:62` defaults to `~/.local/share/org.tonyq.better-agent-terminal/profiles`. It is a literal default, not an XDG-aware BAT discovery algorithm. Guided setup uses it on Linux (`managed_setup.py:93–101`). |
-| macOS profiles | Guided setup tries `~/Library/Application Support/org.tonyq.better-agent-terminal/profiles` (`managed_setup.py:99–100`). This is a Connector lookup convention, not verified current BAT storage evidence. |
-| Windows profiles | Guided setup tries `%APPDATA%\org.tonyq.better-agent-terminal\profiles` (`managed_setup.py:97–98`). Missing APPDATA must not turn a future discovery attempt into a relative-directory search. This is also a lookup convention, not proof of BAT's installed layout. |
-| Overrides | `[bat] profiles_dir` overrides guided discovery; a host's `bat_profiles_dir` can override token resolution (`managed_setup.py:93–96`; `config.py:598–599,683`). Outside guided setup, the general config/importer default remains the Linux-style path on every OS. |
-| `index.json` | Guided import accepts only `type: remote` with `remoteHost`, `remotePort`, `remoteFingerprint`, and optional `remoteProfileId` (`managed_setup.py:123–165`). CLI import has the same filter (`importer.py:32–55`). It knows a remote endpoint from these fields. There is no supported mapping from a local profile to a local server endpoint. |
-| `token_ref = "env:NAME"` | Resolve the selected environment value in central, strip it and reject empty values (`config.py:141–150`). This existing operator option is not a desktop discovery source. |
-| `token_ref = "file:PATH"` | Read a private UTF-8 token file, at most 64 KiB, strip surrounding whitespace and reject empty values (`config.py:151–159`). This is a Connector reference, not a claim that BAT writes such a file. |
-| `token_ref = "bat-profile:ID"` | Read `remote-tokens.enc.json` under the selected profiles directory, at most 1 MiB (`config.py:165–192`). The supported unencrypted shape is a JSON object whose `data` is an object or JSON string containing a `tokens` object, selecting exactly that client profile ID. Encrypted data is refused. This does not establish where the local BAT **server** token lives. |
+| Linux profiles | The shared `connection_sources.py` policy defaults to `~/.local/share/org.tonyq.better-agent-terminal/profiles` for setup and runtime. This remains a literal convention, not XDG-aware BAT discovery. |
+| macOS profiles | Setup and runtime use `~/Library/Application Support/org.tonyq.better-agent-terminal/profiles`. This is a Connector convention, not verified current BAT storage evidence. |
+| Windows profiles | Setup and runtime select `%APPDATA%/BetterAgentTerminal/profiles`, then the old `org.tonyq.better-agent-terminal` root only when the new root is absent. Selection is evaluated on each call; an invalid or unreadable directory does not fall back. Missing APPDATA is unavailable, never a relative search. |
+| Overrides | `[bat] profiles_dir` wins over platform defaults; a host’s `bat_profiles_dir` overrides runtime lookup. Setup saves its selected path in that host field. No default lookup scans other accounts. The separate CLI importer retains its explicit/default argument behavior. |
+| `index.json` | Guided import accepts only `type: remote` with `remoteHost`, `remotePort`, `remoteFingerprint`, and optional `remoteProfileId` (`managed_setup.py:116–149`). CLI import has the same filter (`importer.py:32–55`). It knows a remote endpoint from these fields. There is no supported mapping from a local profile to a local server endpoint. |
+| `token_ref = "env:NAME"` | Resolve the selected environment value in central, strip it and reject empty values (`config.py:164–173`). This existing operator option is not a desktop discovery source. |
+| `token_ref = "file:PATH"` | Read a private UTF-8 token file, at most 64 KiB, strip surrounding whitespace and reject empty values (`config.py:174–181`). This is a Connector reference, not a claim that BAT writes such a file. |
+| `token_ref = "bat-profile:ID"` | Read a private `remote-tokens.enc.json` of at most 1 MiB from the selected directory. Existing `resolve_token()` and configured-host `token_available()` share the runtime resolver and use the shared parser’s legacy Python mode: object or JSON-string `data`, exact profile key, and the historical `enc` acceptance (false, absent/null or numeric zero). Only the setup profile listing and new `import_profile_id` selection use admission: exactly false, JSON-string data, exact unambiguous key and native token bounds. This does not establish where the local BAT **server** token lives. |
 | Private-file protection | `_private_files.py:8–51` rejects symlinks, nonregular files, excessive sizes, owner mismatch where `getuid` exists, and group/other access on non-Windows; checks opened-file identity too. Unix mode checks are skipped on Windows. Managed storage instead uses `platform_files` and Windows ACL/handle checks; do not call the older helper equivalent to Windows OS protection. `docs/getting-started.md:230–234` documents these distinctions. |
 
-There is a small existing reader discrepancy: token resolution accepts absent
-`enc` as unencrypted (`config.py:173`), while guided discovery requires exactly
-`enc: false` (`managed_setup.py:139–140`). A new native importer should require an
-explicit supported unencrypted marker; do not silently expand formats. Any change
-to the existing reader's compatibility is a separately reviewed change.
+The two Python modes are intentional compatibility boundaries in
+`BAT_SOURCE_POLICY = 1`, with shared vectors also checked by Rust's legacy Fleet
+reader. An admission failure does not narrow an existing Python reference's
+runtime decoding or configured-host readiness. Retiring that mode requires evidence
+about supported BAT writers; the server-store audit below is not evidence for every client store.
+See [the trusted-source contract](fleet-configuration.md).
 
 `tests/test_mcp_and_config.py:71–101` supplies both local and remote profile
 fixtures, imports only the remote one, keeps the token out of TOML and resolves
@@ -167,7 +168,7 @@ Native capabilities already exist, but do not imply BAT decryption support:
   supports the Kit's Windows DPAPI export format. That is not a general reader
   for encrypted BAT token stores or BAT server secrets.
 - Today's BAT setup password input lives in page memory until staging
-  (`desktop/src/managed-setup.js:81,202–206`). `managed_setup.py:200–252` stages
+  (`desktop/src/managed-setup.js:81,202–206`). `managed_setup.py:207–259` stages
   it privately and returns an opaque `secret_ref`. The first local increment
   deliberately reuses this flow, per the setup decision. It does **not** satisfy
   “secrets never reach the page.” Native enrollment can later remove that exposure
@@ -417,7 +418,7 @@ manual checkout.
 Do not substitute `profile:load`: that handler requests activation and emits a
 profile change (`BAT v3.2.15 src-tauri/src/commands/profile.rs:154–160`). The
 existing Connector probe uses `profile:list` and workspace observation
-(`managed_setup.py:388–401`; `client.py:487–492`), which the quick start preserves.
+(`managed_setup.py:475–490`; `client.py:487–492`), which the quick start preserves.
 
 BAT's own host-identity helper is the running certificate fingerprint
 (`BAT v3.2.15 src-tauri/src/remote_server.rs:296–305`). A distinct authenticated
@@ -541,7 +542,7 @@ establish that a particular installed server is stopped.
 This deliberately keeps today's staged-token exposure
 (`desktop/src/managed-setup.js:202–206`). The raw paste is briefly in page memory
 while split, then only the token field remains until staging.
-`managed_setup.py:200–252` registers redaction, privately stores the secret and
+`managed_setup.py:207–259` registers redaction, privately stores the secret and
 returns an opaque reference. Clear both secret fields on cancellation/teardown;
 never save secret bytes in drafts, localStorage, URLs, command arguments,
 diagnostics, events or operation bodies. Password masking is not protection from
@@ -658,7 +659,7 @@ Availability consumers are `checkpoints.py:203,382`, `integration.py:86,1508`,
 `cleanup.py:710`, `repository_sync.py:86`, `worktree_merge_operations.py:50` and
 `api_v1.py:1270–1273`. PM reads reach the same prerequisites through carrier
 binding. Installation wiring is `task_daemon.py:245–258`, setup activation is
-`managed_setup.py:464–501`, and the confinement fallback constructor is
+`managed_setup.py:551–589`, and the confinement fallback constructor is
 `confinement.py:294–301`. Change all three consistently, including both fleets.
 Update transport-specific reasons and `requires_verifier_ssh` in the merge
 capability (`worktree_merge_operations.py:59–63`) when local proof is supported.
@@ -692,7 +693,7 @@ git = "local"
 
 Do not introduce a second alias authority. Today guided `ssh_alias` is saved in
 `[managed_setup] ssh_hosts`, overlaid on verifier `ssh_hosts`
-(`managed_setup.py:296–300,435–442,469–475`). Keep that representation. With
+(`managed_setup.py:316–320,522–529,556–563`). Keep that representation. With
 `git = "ssh"`, use the same mapping; with `git = "local"`, retain any existing
 mapping but do not use it for Git or delete it to force other services local.
 The trusted confinement auditor mapping remains independent.
@@ -813,7 +814,7 @@ Extend the existing registered `setup.host` action, scope `manage`; use the
 installation's original principal, `config_revision` and existing-key replay
 before admission. Do not add a chat confirmation or separate start action.
 Current authority/admission/publication/recovery are
-`managed_setup.py:47–57,356–385,504–567`.
+`managed_setup.py:46–56,383–465,602–667`.
 
 Proposed fields for the local route:
 

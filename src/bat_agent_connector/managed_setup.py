@@ -23,10 +23,10 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from . import dashboard_sync, platform_files, service
-from ._private_files import read_private
 from .artifact_host import ArtifactHost
 from .client import BatClient
-from .config import DEFAULT_BAT_PROFILES_DIR, git_transport, normalize_fingerprint, parse_config, tomllib
+from .config import git_transport, normalize_fingerprint, parse_config, tomllib
+from .connection_sources import SourceUnavailable, TokenMode, read_token_store, select_profiles_directory
 from .errors import ConfigError, TokenUnavailable
 from .github import GitHubClient
 from .operations import RERUN, TERMINAL, ActionDef, NeedsAttention, OperationError, Uncertain
@@ -90,14 +90,8 @@ def _encode(document):
 
 
 def _profile_directory(document):
-    configured = document.get("bat", {}).get("profiles_dir")
-    if configured:
-        return Path(configured).expanduser()
-    if sys.platform == "win32":
-        return Path(os.environ.get("APPDATA", "")) / "org.tonyq.better-agent-terminal" / "profiles"
-    if sys.platform == "darwin":
-        return Path.home() / "Library/Application Support/org.tonyq.better-agent-terminal/profiles"
-    return Path(DEFAULT_BAT_PROFILES_DIR).expanduser()
+    return select_profiles_directory(document.get("bat", {}).get("profiles_dir"),
+        platform=sys.platform, environment=os.environ, home=Path.home())
 
 
 def _url(value):
@@ -120,7 +114,10 @@ def _text(value, field, maximum=256):
 
 
 def _profiles(document):
-    directory = _profile_directory(document)
+    try:
+        directory = _profile_directory(document)
+    except SourceUnavailable as error:
+        return [], str(error)
     try:
         path = directory / "index.json"
         if path.is_symlink() or path.stat().st_size > MAX_CONFIG:
@@ -131,34 +128,22 @@ def _profiles(document):
             raise ValueError
     except (OSError, ValueError, AttributeError):
         return [], "BAT profiles are unavailable; enter the host and its trusted fingerprint"
-    token_state, tokens = "unavailable", {}
-    try:
-        path = directory / "remote-tokens.enc.json"
-        store = json.loads(read_private(path, MAX_CONFIG))  # same private-file rules as token resolution
-        token_state = "encrypted" if store.get("enc") is not False else "available"
-        if token_state == "available":  # noqa: S105 - a UI availability state, not a secret
-            data = store.get("data", {})
-            data = json.loads(data) if isinstance(data, str) else data
-            tokens = data.get("tokens", {})
-            if not isinstance(tokens, dict):
-                tokens = {}
-                token_state = "unavailable"  # noqa: S105 - UI availability state
-    except (OSError, ValueError, AttributeError):
-        token_state, tokens = "unavailable", {}
+    store = read_token_store(directory, mode=TokenMode.ADMISSION)
     result = []
     for profile in profiles:
         if not isinstance(profile, dict) or profile.get("type") != "remote":
             continue
         try:
             ident = _text(profile.get("id"), "profile ID")
+            token = store.lookup(ident)
             host = _text(profile.get("remoteHost"), "profile host")
             host = f"[{host}]" if ":" in host and not host.startswith("[") else host
             result.append({"id": ident, "name": _text(profile.get("name") or ident, "profile name"),
                 "url": _url(f"wss://{host}:{int(profile['remotePort'])}/"),
                 "fingerprint": normalize_fingerprint(_text(profile["remoteFingerprint"], "profile fingerprint", 200)),
                 "profile_id": _text(profile.get("remoteProfileId") or "default", "remote profile ID"),
-                "token_available": token_state == "available" and isinstance(tokens.get(ident), str) and bool(tokens[ident]),  # noqa: S105
-                "token_state": token_state})
+                "token_available": token.state == "available",
+                "token_state": token.state})
         except (ValueError, TypeError, KeyError, OperationError, ConfigError):
             continue
     return result, (None if result else "No complete remote BAT profiles were found")
