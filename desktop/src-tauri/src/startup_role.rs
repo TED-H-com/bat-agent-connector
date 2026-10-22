@@ -294,6 +294,50 @@ mod tests {
     use std::fs;
 
     #[test]
+    fn selection_is_typed_and_cannot_supply_process_inputs() {
+        for input in [
+            serde_json::json!({"role": "unknown", "expected_generation": 0}),
+            serde_json::json!({"role": "provider", "expected_generation": 0, "executable": "untrusted"}),
+            serde_json::json!({"role": "provider", "expected_generation": 0, "environment": {}}),
+            serde_json::json!({"role": "client", "expected_generation": -1}),
+        ] {
+            assert!(serde_json::from_value::<Selection>(input).is_err());
+        }
+    }
+
+    #[test]
+    fn concurrent_publication_keeps_one_choice_and_installation_reference() {
+        use std::sync::Barrier;
+        let root = tempfile::tempdir().unwrap();
+        let data = root.path().join("data");
+        let config = root.path().join("config");
+        let barrier = Barrier::new(2);
+        let results = std::thread::scope(|threads| {
+            let workers: Vec<_> = [Role::Client, Role::Provider]
+                .into_iter()
+                .map(|role| {
+                    let data = &data;
+                    let config = &config;
+                    let barrier = &barrier;
+                    threads.spawn(move || {
+                        barrier.wait();
+                        select(data, config, role, 0)
+                    })
+                })
+                .collect();
+            workers
+                .into_iter()
+                .map(|worker| worker.join().unwrap())
+                .collect::<Vec<_>>()
+        });
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        let winner = results.into_iter().find_map(Result::ok).unwrap();
+        assert_eq!(load_or_infer(&data, &config).unwrap(), winner);
+        assert_eq!(fs::read_dir(data.join("startup-role")).unwrap().count(), 1);
+        assert!(!data.join("managed-central").exists());
+    }
+
+    #[test]
     fn clean_role_is_pending_and_selection_is_stable_and_generation_guarded() {
         for role in [Role::Client, Role::Provider, Role::Both] {
             let root = tempfile::tempdir().unwrap();
