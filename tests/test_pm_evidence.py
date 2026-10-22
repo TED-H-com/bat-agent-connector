@@ -601,3 +601,11 @@ async def test_legacy_sources_pointing_at_private_pm_session_do_not_expose_its_i
     await capture(ops, target)
     assert "private-session" not in json.dumps(facts(ops, target))
     assert pm_evidence.latest_capture(ops, OWNER, **target)["capture"]["coverage"]["unavailable_sources"] >= 1
+
+
+async def test_optional_github_sync_does_not_change_evidence_only_service_reads(ops):
+    work = await prepared(ops)
+    result = pm_evidence.list_projects(ops, OWNER, work['workspace_id'])
+    assert len(result['bindings']) == 1
+    assert 'github_sync' not in result
+    assert ops.db.execute("SELECT 1 FROM sqlite_master WHERE name='board_github_sync'").fetchone() is None

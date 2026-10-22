@@ -19,88 +19,6 @@ var __exportAll = (all, no_symbols) => {
 	return target;
 };
 //#endregion
-//#region src/managed-recovery.js
-function managedRecoveryKey(code) {
-	if (!code) return null;
-	if (code === "MANAGED_RECOVERING") return "managed_service_recovering";
-	if (code === "MANAGED_RECOVERY_IDENTITY_CHANGED") return "managed_service_identity";
-	return "managed_service_retry";
-}
-//#endregion
-//#region src/central-service-status.js
-function pollFailure(error, at) {
-	const status = Number.isFinite(error.status) ? error.status : 200;
-	const code = error.code || "INVALID_EVENT_PAGE";
-	return {
-		kind: code === "EVENT_CURSOR_RESET" ? "continuity" : status === 401 || status === 403 ? "refused" : status >= 500 ? "service_error" : status === 0 ? "transport" : "invalid_response",
-		status,
-		code,
-		at
-	};
-}
-var pollKeys = {
-	transport: "ui_reconnecting",
-	refused: "ui_connection_refused",
-	service_error: "ui_service_error",
-	invalid_response: "ui_invalid_response",
-	continuity: "ui_connecting"
-};
-var pollReasons = {
-	ui_reconnecting: "reconnecting",
-	ui_connection_refused: "refused",
-	ui_service_error: "service_error",
-	ui_invalid_response: "invalid_response"
-};
-function centralServiceStatus({ token, pollHealth, online, managedRecovery }) {
-	const connection = !token ? "offline" : pollHealth === "connected" || pollHealth === "initial" && online ? "connected" : "reconnecting";
-	const recoveryKey = managedRecoveryKey(managedRecovery);
-	const key = recoveryKey || (!token ? "ui_not_connected" : connection === "connected" ? "ui_connected" : pollHealth === "initial" ? "ui_connecting" : pollKeys[pollHealth?.kind] || (pollHealth === "reconnecting" ? "ui_reconnecting" : "ui_connecting"));
-	return {
-		key,
-		tone: key === "ui_connected" ? "ok" : pollReasons[key] ? "warn" : "neutral",
-		connection,
-		recoveryKey
-	};
-}
-function clientActionGate(facts, requirements) {
-	const ready = requirements.post || requirements.attachment;
-	if (!(requirements.post && (!facts.token || facts.nativeBusy) || ready && (!facts.online || !facts.viewReady) || requirements.supported && !facts.attachmentsSupported || requirements.manage && !facts.manageAllowed || requirements.uploads && !facts.uploadsAllowed)) return {
-		allowed: true,
-		reason: null
-	};
-	const key = centralServiceStatus(facts).key;
-	return {
-		allowed: false,
-		reason: requirements.post && !facts.token || key === "ui_not_connected" ? "not_connected" : requirements.post && facts.nativeBusy ? "connection_changing" : requirements.supported && !facts.attachmentsSupported ? "attachments_unavailable" : requirements.manage && !facts.manageAllowed ? "manage_required" : requirements.uploads && !facts.uploadsAllowed ? "uploads_not_allowed" : !facts.online && pollReasons[key] ? pollReasons[key] : !facts.online && key === "ui_connecting" ? "connecting" : !facts.viewReady || key === "ui_connected" ? "view_not_ready" : "connecting"
-	};
-}
-var clientReasons = [
-	"not_connected",
-	"connecting",
-	...Object.values(pollReasons),
-	"connection_changing",
-	"view_not_ready",
-	"manage_required",
-	"attachments_unavailable",
-	"uploads_not_allowed"
-];
-var clientActionCode = (reason) => `CLIENT_ACTION_${reason.toUpperCase()}`;
-var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}`;
-var clientActionReason = (code) => clientReasons.find((reason) => clientActionCode(reason) === code) || null;
-//#endregion
-//#region src/workbench-mode.js
-function decideLayout({ search = "", policy } = {}) {
-	const requested = new URLSearchParams(search).get("workbench");
-	const blocked = requested === "1" && policy?.allowWorkbench === false;
-	return Object.freeze({
-		layout: requested === "1" && !blocked ? "workbench" : "classic",
-		source: blocked ? "policy" : requested === null ? "default" : "url",
-		status: "preview",
-		reason: blocked ? "policy_disabled" : requested !== null && !["0", "1"].includes(requested) ? "unrecognized_workbench_value" : null
-	});
-}
-var layoutDecision = decideLayout({ search: globalThis.location?.search || "" });
-//#endregion
 //#region src/ui/dom.js
 function place(node, method, ...children) {
 	const kept = children.flat(Infinity).filter((child) => child !== null && child !== void 0 && child !== false);
@@ -124,169 +42,6 @@ function h$1(tag, attrs = {}, ...children) {
 		if (!el.hasAttribute("aria-label")) el.setAttribute("aria-label", el.textContent);
 	}
 	return el;
-}
-//#endregion
-//#region src/session-navigation.js
-var projectViews$2 = new Set([
-	"overview",
-	"discussions",
-	"requirements",
-	"schedule",
-	"dependencies",
-	"issues",
-	"agents",
-	"board"
-]);
-function workSessionContext(params) {
-	const fields = {
-		workspaceId: "workspace",
-		workItemId: "work",
-		attemptId: "attempt"
-	};
-	const patterns = {
-		workspaceId: /^ws_[0-9a-f]{32}$/,
-		workItemId: /^wi_[0-9a-f]{20}$/,
-		attemptId: /^att_[0-9a-f]{32}$/
-	};
-	const context = {};
-	for (const [key, name] of Object.entries(fields)) {
-		if (params.getAll(name).length !== 1 || !patterns[key].test(params.get(name))) return null;
-		context[key] = params.get(name);
-	}
-	return context;
-}
-function sessionHref$1({ host, sessionId, from = "", workspaceId, workItemId, attemptId }) {
-	const query = new URLSearchParams(projectViews$2.has(from) ? { from } : {});
-	const context = new URLSearchParams({
-		workspace: workspaceId || "",
-		work: workItemId || "",
-		attempt: attemptId || ""
-	});
-	if (workSessionContext(context)) for (const [key, value] of context) query.set(key, value);
-	return `#/session/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}${query.size ? "?" + query : ""}`;
-}
-function sessionOrigin(value) {
-	if (typeof value !== "string" || value.length > 4096) return "";
-	const match = /^#\/session\/([^/?#]+)\/([^/?#]+)(?:\?([^#]*))?$/.exec(value);
-	if (!match) return "";
-	try {
-		const host = decodeURIComponent(match[1]), sessionId = decodeURIComponent(match[2]);
-		if (!host || !sessionId || /[\u0000-\u001f\u007f]/.test(host + sessionId)) return "";
-		const query = new URLSearchParams(match[3] || "");
-		if ([...query.keys()].some((key) => ![
-			"from",
-			"workspace",
-			"work",
-			"attempt"
-		].includes(key)) || query.getAll("from").length > 1) return "";
-		const from = query.get("from") || "";
-		if (from && !projectViews$2.has(from)) return "";
-		const context = workSessionContext(query);
-		if ([
-			"workspace",
-			"work",
-			"attempt"
-		].some((key) => query.has(key)) && !context) return "";
-		return sessionHref$1({
-			host,
-			sessionId,
-			from,
-			...context
-		});
-	} catch {
-		return "";
-	}
-}
-var contextFields = {
-	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
-	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
-	requirement: {
-		id: /^[a-z][a-z0-9_.-]{0,79}$/,
-		revision_id: /^pmrev_[0-9a-f]{32}$/
-	},
-	milestone: {
-		id: /^[a-z][a-z0-9_.-]{0,79}$/,
-		revision_id: /^pmrb_[0-9a-f]{32}$/
-	},
-	work_item: { id: /^wi_[0-9a-f]{20}$/ },
-	work_input: { id: /^op_[0-9a-f]{32}$/ },
-	quality_assessment: {
-		id: /^op_[0-9a-f]{32}$/,
-		review_id: /^pmqr_[0-9a-f]{32}$/,
-		document_digest: /^[0-9a-f]{64}$/
-	},
-	governance: { id: /^pmgov_[0-9a-f]{32}$/ },
-	finding: {
-		id: /^pmfn_[0-9a-f]{32}$/,
-		observation_id: /^pmgh_[0-9a-f]{32}$/,
-		document_digest: /^[0-9a-f]{64}$/
-	},
-	repair: { id: /^pmrp_[0-9a-f]{32}$/ },
-	follow_up: { id: /^pmfu_[0-9a-f]{32}$/ },
-	proposal: { id: /^pmcp_[0-9a-f]{32}$/ },
-	issue_mapping: { id: /^pmim_[0-9a-f]{32}$/ },
-	meeting: { id: /^pmmeet_[0-9a-f]{32}$/ },
-	lifecycle_transition: { id: /^pmlt_[0-9a-f]{32}$/ }
-};
-var projectViews$1 = new Set([
-	"overview",
-	"discussions",
-	"requirements",
-	"schedule",
-	"dependencies",
-	"issues",
-	"agents",
-	"board"
-]);
-function fullMatch(value, pattern) {
-	return typeof value === "string" && pattern.exec(value)?.[0] === value;
-}
-function isContextRef(ref) {
-	if (!ref || typeof ref !== "object" || Array.isArray(ref) || typeof ref.kind !== "string" || !Object.hasOwn(contextFields, ref.kind)) return false;
-	const fields = Object.entries(contextFields[ref.kind]);
-	return Object.hasOwn(ref, "kind") && Object.keys(ref).length === fields.length + 1 && fields.every(([key, pattern]) => Object.hasOwn(ref, key) && fullMatch(ref[key], pattern));
-}
-function normalizeRefs(refs) {
-	const result = [], seen = new Set();
-	if (!Array.isArray(refs)) return result;
-	for (const ref of refs) {
-		if (!isContextRef(ref)) continue;
-		const item = { kind: ref.kind };
-		for (const key of Object.keys(contextFields[ref.kind])) item[key] = ref[key];
-		const identity = JSON.stringify(item);
-		if (seen.has(identity)) continue;
-		seen.add(identity);
-		result.push(item);
-		if (result.length === 8) break;
-	}
-	return result;
-}
-function normalizeDetails(title, from, report) {
-	return {
-		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
-		from: projectViews$1.has(from) ? from : sessionOrigin(from),
-		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
-	};
-}
-function discussHref({ workspaceId, refs = [], title = "", from = "", report = "" }) {
-	const query = new URLSearchParams();
-	for (const ref of normalizeRefs(refs)) query.append("ref", JSON.stringify(ref));
-	for (const [key, value] of Object.entries(normalizeDetails(title, from, report))) if (value) query.set(key, value);
-	const search = query.toString();
-	return `#/pm/${encodeURIComponent(workspaceId)}/discussions/new${search ? "?" + search : ""}`;
-}
-function parseDiscussRefs(query) {
-	const params = new URLSearchParams(typeof query === "string" || query instanceof URLSearchParams ? query : "");
-	return {
-		refs: normalizeRefs(params.getAll("ref").map((value) => {
-			try {
-				return JSON.parse(value);
-			} catch {
-				return null;
-			}
-		})),
-		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
-	};
 }
 //#endregion
 //#region src/result-sources-strings.js
@@ -1717,6 +1472,21 @@ var init_ui_strings = __esmMin((() => {
 			"zh-TW": "已回復",
 			tone: "warn"
 		},
+		github_closed: {
+			en: "Closed (not completed)",
+			"zh-TW": "已關閉（未完成）",
+			tone: "neutral"
+		},
+		github_completed: {
+			en: "Completed · GitHub",
+			"zh-TW": "完成議題 · GitHub",
+			tone: "neutral"
+		},
+		github_done: {
+			en: "Done · GitHub",
+			"zh-TW": "完成 · GitHub",
+			tone: "neutral"
+		},
 		unconfirmed: {
 			en: "Unconfirmed",
 			"zh-TW": "待確認",
@@ -2113,6 +1883,7 @@ var init_ui_strings = __esmMin((() => {
 		terminal_time_unrecorded: ["End time not recorded", "尚無結束時間紀錄"],
 		state_time_unrecorded: ["State time not recorded", "尚無狀態時間紀錄"],
 		multiple_explicit_parents: ["Linked to several parents", "已連結多個上層項目"],
+		github_source_closed_is_not_delivery: ["GitHub closure does not prove delivery", "GitHub 關閉不代表已有交付證據"],
 		attempt_finished_is_not_work_completion: ["Attempt finished; work completion unknown", "執行嘗試已結束，工作是否完成仍未知"],
 		inconsistent_dates: ["End precedes start; end omitted", "結束早於開始，已省略結束日期"],
 		mapping_page_truncated: ["Some issues were not loaded", "部分議題尚未載入"],
@@ -2156,11 +1927,108 @@ var init_ui_strings = __esmMin((() => {
 	}
 }));
 //#endregion
+//#region src/board-github-strings.js
+var boardGitHubStrings;
+var init_board_github_strings = __esmMin((() => {
+	boardGitHubStrings = {
+		en: {
+			bgh_issue: "Issue",
+			bgh_pr: "PR",
+			bgh_draft: "Draft",
+			bgh_closed: "Closed (not completed)",
+			bgh_completed: "Completed · GitHub",
+			bgh_missing_card: "Source missing",
+			bgh_history: "Include closed history",
+			bgh_missing: "Some sources are missing from GitHub. Their last observations are retained; no closure was inferred.",
+			bgh_invalid_source: "GitHub returned invalid source data. No partial changes were applied; sync will retry later.",
+			bgh_apply_failed: "GitHub data could not be applied. Your cards are safe; sync will retry later.",
+			bgh_sync_failed: "Automatic sync could not run. Your cards are safe; sync will retry later.",
+			bgh_lifecycle_stopped: "Automatic sync paused because the workspace lifecycle stopped new work. Reopen it and save settings to authorize sync again.",
+			bgh_identity_conflict: "The repository identity changed. Existing cards are preserved; check the repository binding.",
+			bgh_action_import: "Import GitHub board",
+			bgh_action_configure: "Configure GitHub board sync",
+			bgh_action_sync: "Sync GitHub board",
+			bgh_title: "GitHub board sync",
+			bgh_repo: "GitHub repository",
+			bgh_project: "Board project",
+			bgh_new: "Create a project for this board",
+			bgh_import: "Import from GitHub",
+			bgh_sync: "Sync now",
+			bgh_keep: "Keep in sync",
+			bgh_save: "Save settings",
+			bgh_no_repo: "Link a GitHub repository to bring its issues and pull requests onto this board.",
+			bgh_not_synced: "This repository has not been imported yet. Import its issues and pull requests to get started.",
+			bgh_empty: "This repository has no open issues or pull requests to import.",
+			bgh_no_open: "This repository has no open issues or pull requests. Closed cards retain their source status.",
+			bgh_synced: "Up to date with GitHub. Open issues go to To do, pull requests to Doing, with separate source lanes for merged, completed and other closed items.",
+			bgh_rate_limited: "GitHub is limiting requests. Your cards are safe. Try syncing after the limit resets. Signing in with gh on the Connector can increase the public repository limit.",
+			bgh_unreachable: "GitHub could not be reached. Your cards are safe. Try syncing later.",
+			bgh_auth_required: "GitHub could not open this repository. Check its name and your GitHub access on the Connector (gh auth login or the existing token setting).",
+			bgh_authorization_required: "Automatic sync paused because its original access changed. Turn on Keep in sync and save settings to authorize it again.",
+			bgh_too_large: "This repository exceeds the bounded import size. Existing cards are preserved; no partial import was applied.",
+			bgh_conflicts: "Some GitHub identities match more than one legacy card or have changed. Existing cards were preserved; review their GitHub links.",
+			bgh_public: "Using public GitHub access. GitHub allows fewer requests without signing in.",
+			bgh_help: "Sync runs about every five minutes while the Connector is running, even with this board closed. Your edits and manual lane moves are preserved; later closures use separate source lanes. Closed history is optional. GitHub changes never claim or approve local completion.",
+			bgh_checked: "GitHub check finished. See the sync status above.",
+			bgh_saved: "Settings saved",
+			bgh_done: "Done · GitHub",
+			bgh_last: "Last synced",
+			bgh_read_failed: "GitHub sync settings could not be loaded. Try refreshing the board."
+		},
+		"zh-TW": {
+			bgh_issue: "議題",
+			bgh_pr: "PR",
+			bgh_draft: "草稿",
+			bgh_closed: "已關閉（未完成）",
+			bgh_completed: "完成議題 · GitHub",
+			bgh_missing_card: "來源已消失",
+			bgh_history: "包含已關閉的歷史",
+			bgh_missing: "部分 GitHub 來源已消失。保留上次觀察，不會推定為已關閉。",
+			bgh_invalid_source: "GitHub 來源資料無效。本次未套用任何部分變更，稍後會重試同步。",
+			bgh_apply_failed: "無法套用 GitHub 資料。現有卡片會保留，稍後會重試同步。",
+			bgh_sync_failed: "自動同步無法執行。現有卡片會保留，稍後會重試同步。",
+			bgh_lifecycle_stopped: "工作區生命週期已停止新工作，自動同步已暫停。重新開啟工作區並儲存設定，才能重新授權同步。",
+			bgh_identity_conflict: "儲存庫身分已變更。現有卡片會保留，請檢查儲存庫綁定。",
+			bgh_action_import: "匯入 GitHub 看板",
+			bgh_action_configure: "設定 GitHub 看板同步",
+			bgh_action_sync: "同步 GitHub 看板",
+			bgh_title: "GitHub 看板同步",
+			bgh_repo: "GitHub 儲存庫",
+			bgh_project: "看板專案",
+			bgh_new: "為這個看板建立專案",
+			bgh_import: "從 GitHub 匯入",
+			bgh_sync: "立即同步",
+			bgh_keep: "持續同步",
+			bgh_save: "儲存設定",
+			bgh_no_repo: "連結 GitHub 儲存庫，即可將議題與 PR 匯入這個看板。",
+			bgh_not_synced: "這個儲存庫尚未匯入。匯入議題與 PR，即可開始使用看板。",
+			bgh_empty: "這個儲存庫目前沒有開啟中的議題或 PR 可匯入。",
+			bgh_no_open: "這個儲存庫目前沒有開啟中的議題或 PR。已關閉的卡片會保留其來源狀態。",
+			bgh_synced: "已與 GitHub 同步。開啟中的議題放入「待辦」，PR 放入「進行中」，合併、完成議題與其他關閉項目各自顯示來源狀態。",
+			bgh_rate_limited: "GitHub 暫時限制請求次數。現有卡片會保留，請在限制解除後再次同步。在 Connector 以 gh 登入可提高公開儲存庫的請求額度。",
+			bgh_unreachable: "目前無法連線至 GitHub。現有卡片會保留，請稍後再次同步。",
+			bgh_auth_required: "GitHub 無法開啟這個儲存庫。請確認名稱，以及 Connector 上的 GitHub 存取權限（gh auth login 或既有權杖設定）。",
+			bgh_authorization_required: "原本的存取權限已變更，自動同步已暫停。請開啟「持續同步」並儲存設定，以重新授權。",
+			bgh_too_large: "這個儲存庫超過單次匯入的大小上限。現有卡片會保留，本次未套用不完整的匯入。",
+			bgh_conflicts: "部分 GitHub 身分對應到多張舊卡片，或身分已變更。現有卡片會保留，請檢查其 GitHub 連結。",
+			bgh_public: "目前使用 GitHub 公開存取，未登入時可用的請求額度較少。",
+			bgh_help: "Connector 執行時約每五分鐘同步一次，關閉看板後仍會繼續。文字編輯與手動移動會保留；GitHub 後續關閉時，卡片使用各自的來源狀態欄。歷史匯入可自行選擇。同步不會回報本機工作完成或核可內容。",
+			bgh_checked: "已完成 GitHub 查核，請查看上方同步狀態。",
+			bgh_saved: "已儲存設定",
+			bgh_done: "完成 · GitHub",
+			bgh_last: "上次同步",
+			bgh_read_failed: "無法讀取 GitHub 同步設定，請重新整理看板。"
+		}
+	};
+}));
+//#endregion
 //#region src/global-strings.js
 var globalStrings;
 var init_global_strings = __esmMin((() => {
+	init_board_github_strings();
 	globalStrings = {
 		en: {
+			...boardGitHubStrings.en,
 			global_product: "BAT Dashboard",
 			global_first_sentence: "Connect this dashboard to your Connector.",
 			global_setup_guide: "Setup guide",
@@ -2366,6 +2234,7 @@ var init_global_strings = __esmMin((() => {
 			action_work_item_pin: "Pin work item"
 		},
 		"zh-TW": {
+			...boardGitHubStrings["zh-TW"],
 			global_product: "BAT Dashboard",
 			global_first_sentence: "將這個儀表板連到你的 Connector。",
 			global_setup_guide: "設定說明",
@@ -11206,8 +11075,13 @@ var init_i18n = __esmMin((() => {
 			link_session: "工作階段",
 			link_checkpoint: "檢查點",
 			link_operation: "操作",
+			wi_state_github_closed: "已關閉（未完成）",
+			wi_state_github_completed: "完成議題 · GitHub",
+			wi_state_github_done: "完成 · GitHub",
 			link_task: "任務",
 			link_pull_request: "PR",
+			link_github_source: "GitHub 主要來源",
+			link_ref_github_source: "https://github.com/owner/repo/issues/123",
 			link_ref_hint: "對象",
 			link_ref_session: "host/session_id",
 			link_ref_checkpoint: "cp_…",
@@ -12898,9 +12772,14 @@ var init_i18n = __esmMin((() => {
 			new_step: "New step",
 			link_session: "Session",
 			link_checkpoint: "Checkpoint",
+			wi_state_github_closed: "Closed (not completed)",
+			wi_state_github_completed: "Completed · GitHub",
+			wi_state_github_done: "Done · GitHub",
 			link_operation: "Operation",
 			link_task: "Task",
 			link_pull_request: "PR",
+			link_github_source: "Primary GitHub source",
+			link_ref_github_source: "https://github.com/owner/repo/issues/123",
 			link_ref_hint: "Target",
 			link_ref_session: "host/session_id",
 			link_ref_checkpoint: "cp_…",
@@ -13327,8 +13206,497 @@ var init_i18n = __esmMin((() => {
 	if (globalThis.document) document.documentElement.lang = locale;
 }));
 //#endregion
-//#region src/ui/icons.js
+//#region src/board-github.js
 init_i18n();
+init_board_github_strings();
+var boardGitHubText = (key, fallback = key) => (boardGitHubStrings[locale] || boardGitHubStrings.en)[key] || fallback;
+function boardGitHubLink(external) {
+	if (!external || typeof external.repository !== "string" || !/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(external.repository) || !Number.isSafeInteger(external.number) || external.number < 1 || !["issue", "pull_request"].includes(external.kind)) return null;
+	const url = `https://github.com/${external.repository}/${external.kind === "pull_request" ? "pull" : "issues"}/${external.number}`;
+	if (external.url !== url) return null;
+	const stage = external.state === "closed" && (external.kind === "pull_request" || external.state_reason !== "completed") ? "bgh_closed" : external.state === "closed" && external.state_reason === "completed" ? "bgh_completed" : external.state === "merged" ? "bgh_done" : null;
+	const markers = external.availability === "missing" ? ["bgh_missing_card"] : [stage, external.draft ? "bgh_draft" : null].filter(Boolean);
+	return {
+		url,
+		label: [`${boardGitHubText(external.kind === "pull_request" ? "bgh_pr" : "bgh_issue")} #${external.number}`, ...markers.map((key) => boardGitHubText(key))].join(" · "),
+		repository: external.repository
+	};
+}
+function boardGitHubPanel({ t, api, alive, caps, form, permitted, workspaceId = null, projectId = null, onSaved }) {
+	const bt = (key, values) => boardGitHubText(key, t(key, values));
+	let current = null, projects = [], forms = [], loaded = false, serial = 0, preferredProject = null;
+	let repository = h$1("input", {
+		type: "text",
+		maxlength: 200,
+		placeholder: "owner/repo",
+		required: true,
+		"aria-label": bt("bgh_repo")
+	});
+	let project = h$1("select", { "aria-label": bt("bgh_project") });
+	let enabled = h$1("input", {
+		type: "hidden",
+		value: "true"
+	});
+	let toggle = h$1("input", {
+		type: "checkbox",
+		checked: true
+	});
+	let includeClosed = h$1("input", {
+		type: "hidden",
+		value: "false"
+	});
+	let history = h$1("input", { type: "checkbox" });
+	const status = h$1("p", {
+		role: "status",
+		class: "muted",
+		"data-github-sync-status": ""
+	});
+	const controls = h$1("div"), description = h$1("p", { class: "muted" }), stamp = h$1("p", { class: "ui-meta" });
+	const element = h$1("section", {
+		class: "panel",
+		"data-board-github": "",
+		hidden: true
+	}, h$1("h3", {}, bt("bgh_title")), status, controls, description, stamp, h$1("details", {}, h$1("summary", {}, bt("bgh_title")), h$1("p", {}, bt("bgh_help"))));
+	const selected = () => projectId || project.value || null;
+	const allowed = () => loaded && permitted() && !forms.some((f) => f.locked());
+	const updateStatus = () => {
+		const repo = current?.repository;
+		status.textContent = bt(!repo ? "bgh_no_repo" : "bgh_" + (current?.status || "not_synced"));
+		description.textContent = current?.authenticated === false ? bt("bgh_public") : "";
+		stamp.textContent = current?.last_sync ? `${bt("bgh_last")} · ${new Date(current.last_sync * 1e3).toLocaleString()}` : "";
+	};
+	function build() {
+		const repoValue = repository.value, projectValue = project.value;
+		for (const f of forms) f.dispose();
+		forms = [];
+		repository = repository.cloneNode(true);
+		repository.disabled = false;
+		repository.value = repoValue;
+		project = project.cloneNode(true);
+		project.disabled = false;
+		project.value = projectValue;
+		enabled = enabled.cloneNode(true);
+		enabled.disabled = false;
+		toggle = toggle.cloneNode(true);
+		toggle.disabled = false;
+		includeClosed = includeClosed.cloneNode(true);
+		includeClosed.disabled = false;
+		history = history.cloneNode(true);
+		history.disabled = false;
+		current = projects.find((p) => p.project_id === selected()) || null;
+		repository.value = current?.repository || repository.value || "";
+		toggle.checked = current?.revision ? current.enabled : true;
+		enabled.value = String(toggle.checked);
+		repository.dataset.pmDefault = repository.value;
+		enabled.dataset.pmDefault = enabled.value;
+		history.checked = Boolean(current?.include_closed);
+		includeClosed.value = String(history.checked);
+		includeClosed.dataset.pmDefault = includeClosed.value;
+		const fields = {
+			repository,
+			enabled,
+			include_closed: includeClosed,
+			...workspaceId ? { project_id: project } : {}
+		};
+		let importForm, submittedValues = null;
+		const refreshSaved = async (result) => {
+			preferredProject = result.project_id || selected();
+			await refresh(null, true);
+			await onSaved();
+		};
+		const saved = async (result) => {
+			if ([
+				"unreachable",
+				"rate_limited",
+				"auth_required",
+				"invalid_source",
+				"apply_failed",
+				"sync_failed",
+				"too_large",
+				"identity_conflict"
+			].includes(result.status)) {
+				for (const [name, input] of Object.entries(fields)) input.value = submittedValues?.[name] ?? input.value;
+				history.checked = includeClosed.value === "true";
+				toggle.checked = enabled.value === "true";
+				status.textContent = bt("bgh_" + result.status);
+				setTimeout(() => {
+					if (element.isConnected && forms.includes(importForm)) importForm.changed();
+				}, 0);
+				return;
+			}
+			await refreshSaved(result);
+		};
+		importForm = form({
+			t: bt,
+			action: workspaceId ? "pm.github.import" : "project.github.import",
+			target: workspaceId ? { workspace_id: workspaceId } : { project_id: projectId },
+			fields,
+			params: (values) => ({
+				repository: values.repository.trim(),
+				enabled: values.enabled === "true",
+				include_closed: values.include_closed === "true",
+				...workspaceId ? { project_id: values.project_id || null } : {}
+			}),
+			preconditions: () => ({ expected_revision: current?.revision || 0 }),
+			permitted: () => loaded && permitted() && !forms.some((f) => f !== importForm && f.locked()),
+			recoverPermitted: permitted,
+			label: current?.last_sync ? "bgh_sync" : "bgh_import",
+			extra: h$1("div", { class: "capture-fields" }, workspaceId ? h$1("label", {}, bt("bgh_project"), project) : null, h$1("label", {}, bt("bgh_repo"), repository), h$1("label", { class: "capture-choice" }, toggle, bt("bgh_keep")), h$1("label", { class: "capture-choice" }, history, bt("bgh_history")), enabled, includeClosed),
+			onBeforeSaved: (_result, values) => {
+				submittedValues = { ...values };
+			},
+			onSaved: saved,
+			savedText: "bgh_checked"
+		});
+		toggle.checked = enabled.value === "true";
+		history.checked = includeClosed.value === "true";
+		current = projects.find((p) => p.project_id === selected()) || null;
+		forms.push(importForm);
+		const save = h$1("div");
+		if (current?.project_id) {
+			const pid = current.project_id;
+			const configForm = form({
+				t: bt,
+				action: "project.github.configure",
+				target: { project_id: pid },
+				fields: {},
+				params: () => ({
+					repository: repository.value.trim(),
+					enabled: toggle.checked,
+					include_closed: history.checked
+				}),
+				preconditions: () => ({ expected_revision: current.revision }),
+				permitted: () => loaded && permitted() && !importForm.locked(),
+				recoverPermitted: permitted,
+				label: "bgh_save",
+				extra: h$1("span"),
+				savedText: "bgh_saved",
+				onSaved: refreshSaved
+			});
+			configForm.box.querySelector("button[type=submit]").classList.replace("primary", "secondary");
+			forms.push(configForm);
+			save.append(configForm.box);
+		}
+		toggle.addEventListener("change", () => {
+			enabled.value = String(toggle.checked);
+			forms[0]?.changed();
+		});
+		history.addEventListener("change", () => {
+			includeClosed.value = String(history.checked);
+			forms[0]?.changed();
+		});
+		project.addEventListener("change", () => {
+			if (allowed()) {
+				repository.value = "";
+				build();
+			}
+		});
+		controls.replaceChildren(importForm.box, save);
+		updateStatus();
+		for (const f of forms) f.update();
+	}
+	async function refresh(data = null, force = false) {
+		if (caps()?.features?.board_github_sync?.version !== 1) return;
+		const ticket = ++serial;
+		element.hidden = false;
+		try {
+			data ||= await api("GET", workspaceId ? `/pm/workspaces/${encodeURIComponent(workspaceId)}/projects?limit=100` : `/projects/${projectId}`);
+			alive();
+			if (ticket !== serial) return;
+			const settings = data.github_sync;
+			if (!settings) throw Error();
+			projects = workspaceId ? settings.projects : [{
+				...settings,
+				name: data.project?.name
+			}];
+			if (!Array.isArray(projects)) throw Error();
+			loaded = true;
+			if (force || !forms.some((f) => f.locked() || f.hasDraft())) {
+				if (workspaceId) {
+					const previous = preferredProject || project.value;
+					preferredProject = null;
+					project.replaceChildren(...projects.map((p) => h$1("option", { value: p.project_id }, p.name)), h$1("option", { value: "" }, bt("bgh_new")));
+					project.value = projects.some((p) => p.project_id === previous) ? previous : projects[0]?.project_id || "";
+					project.dataset.pmDefault = project.value;
+					if (!repository.value) repository.value = settings.suggested_repository || "";
+				}
+				build();
+			} else {
+				current = projects.find((p) => p.project_id === selected()) || null;
+				updateStatus();
+				for (const f of forms) f.update();
+			}
+		} catch {
+			try {
+				alive();
+				if (ticket === serial) {
+					loaded = false;
+					status.textContent = bt("bgh_read_failed");
+					for (const f of forms) f.update();
+				}
+			} catch {}
+		}
+	}
+	return {
+		element,
+		refresh,
+		update: () => {
+			for (const f of forms) f.update();
+		},
+		message: () => status.textContent,
+		dispose: () => {
+			serial++;
+			for (const f of forms) f.dispose();
+		}
+	};
+}
+//#endregion
+//#region src/managed-recovery.js
+function managedRecoveryKey(code) {
+	if (!code) return null;
+	if (code === "MANAGED_RECOVERING") return "managed_service_recovering";
+	if (code === "MANAGED_RECOVERY_IDENTITY_CHANGED") return "managed_service_identity";
+	return "managed_service_retry";
+}
+//#endregion
+//#region src/central-service-status.js
+function pollFailure(error, at) {
+	const status = Number.isFinite(error.status) ? error.status : 200;
+	const code = error.code || "INVALID_EVENT_PAGE";
+	return {
+		kind: code === "EVENT_CURSOR_RESET" ? "continuity" : status === 401 || status === 403 ? "refused" : status >= 500 ? "service_error" : status === 0 ? "transport" : "invalid_response",
+		status,
+		code,
+		at
+	};
+}
+var pollKeys = {
+	transport: "ui_reconnecting",
+	refused: "ui_connection_refused",
+	service_error: "ui_service_error",
+	invalid_response: "ui_invalid_response",
+	continuity: "ui_connecting"
+};
+var pollReasons = {
+	ui_reconnecting: "reconnecting",
+	ui_connection_refused: "refused",
+	ui_service_error: "service_error",
+	ui_invalid_response: "invalid_response"
+};
+function centralServiceStatus({ token, pollHealth, online, managedRecovery }) {
+	const connection = !token ? "offline" : pollHealth === "connected" || pollHealth === "initial" && online ? "connected" : "reconnecting";
+	const recoveryKey = managedRecoveryKey(managedRecovery);
+	const key = recoveryKey || (!token ? "ui_not_connected" : connection === "connected" ? "ui_connected" : pollHealth === "initial" ? "ui_connecting" : pollKeys[pollHealth?.kind] || (pollHealth === "reconnecting" ? "ui_reconnecting" : "ui_connecting"));
+	return {
+		key,
+		tone: key === "ui_connected" ? "ok" : pollReasons[key] ? "warn" : "neutral",
+		connection,
+		recoveryKey
+	};
+}
+function clientActionGate(facts, requirements) {
+	const ready = requirements.post || requirements.attachment;
+	if (!(requirements.post && (!facts.token || facts.nativeBusy) || ready && (!facts.online || !facts.viewReady) || requirements.supported && !facts.attachmentsSupported || requirements.manage && !facts.manageAllowed || requirements.uploads && !facts.uploadsAllowed)) return {
+		allowed: true,
+		reason: null
+	};
+	const key = centralServiceStatus(facts).key;
+	return {
+		allowed: false,
+		reason: requirements.post && !facts.token || key === "ui_not_connected" ? "not_connected" : requirements.post && facts.nativeBusy ? "connection_changing" : requirements.supported && !facts.attachmentsSupported ? "attachments_unavailable" : requirements.manage && !facts.manageAllowed ? "manage_required" : requirements.uploads && !facts.uploadsAllowed ? "uploads_not_allowed" : !facts.online && pollReasons[key] ? pollReasons[key] : !facts.online && key === "ui_connecting" ? "connecting" : !facts.viewReady || key === "ui_connected" ? "view_not_ready" : "connecting"
+	};
+}
+var clientReasons = [
+	"not_connected",
+	"connecting",
+	...Object.values(pollReasons),
+	"connection_changing",
+	"view_not_ready",
+	"manage_required",
+	"attachments_unavailable",
+	"uploads_not_allowed"
+];
+var clientActionCode = (reason) => `CLIENT_ACTION_${reason.toUpperCase()}`;
+var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}`;
+var clientActionReason = (code) => clientReasons.find((reason) => clientActionCode(reason) === code) || null;
+//#endregion
+//#region src/workbench-mode.js
+function decideLayout({ search = "", policy } = {}) {
+	const requested = new URLSearchParams(search).get("workbench");
+	const blocked = requested === "1" && policy?.allowWorkbench === false;
+	return Object.freeze({
+		layout: requested === "1" && !blocked ? "workbench" : "classic",
+		source: blocked ? "policy" : requested === null ? "default" : "url",
+		status: "preview",
+		reason: blocked ? "policy_disabled" : requested !== null && !["0", "1"].includes(requested) ? "unrecognized_workbench_value" : null
+	});
+}
+var layoutDecision = decideLayout({ search: globalThis.location?.search || "" });
+//#endregion
+//#region src/session-navigation.js
+var projectViews$2 = new Set([
+	"overview",
+	"discussions",
+	"requirements",
+	"schedule",
+	"dependencies",
+	"issues",
+	"agents",
+	"board"
+]);
+function workSessionContext(params) {
+	const fields = {
+		workspaceId: "workspace",
+		workItemId: "work",
+		attemptId: "attempt"
+	};
+	const patterns = {
+		workspaceId: /^ws_[0-9a-f]{32}$/,
+		workItemId: /^wi_[0-9a-f]{20}$/,
+		attemptId: /^att_[0-9a-f]{32}$/
+	};
+	const context = {};
+	for (const [key, name] of Object.entries(fields)) {
+		if (params.getAll(name).length !== 1 || !patterns[key].test(params.get(name))) return null;
+		context[key] = params.get(name);
+	}
+	return context;
+}
+function sessionHref$1({ host, sessionId, from = "", workspaceId, workItemId, attemptId }) {
+	const query = new URLSearchParams(projectViews$2.has(from) ? { from } : {});
+	const context = new URLSearchParams({
+		workspace: workspaceId || "",
+		work: workItemId || "",
+		attempt: attemptId || ""
+	});
+	if (workSessionContext(context)) for (const [key, value] of context) query.set(key, value);
+	return `#/session/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}${query.size ? "?" + query : ""}`;
+}
+function sessionOrigin(value) {
+	if (typeof value !== "string" || value.length > 4096) return "";
+	const match = /^#\/session\/([^/?#]+)\/([^/?#]+)(?:\?([^#]*))?$/.exec(value);
+	if (!match) return "";
+	try {
+		const host = decodeURIComponent(match[1]), sessionId = decodeURIComponent(match[2]);
+		if (!host || !sessionId || /[\u0000-\u001f\u007f]/.test(host + sessionId)) return "";
+		const query = new URLSearchParams(match[3] || "");
+		if ([...query.keys()].some((key) => ![
+			"from",
+			"workspace",
+			"work",
+			"attempt"
+		].includes(key)) || query.getAll("from").length > 1) return "";
+		const from = query.get("from") || "";
+		if (from && !projectViews$2.has(from)) return "";
+		const context = workSessionContext(query);
+		if ([
+			"workspace",
+			"work",
+			"attempt"
+		].some((key) => query.has(key)) && !context) return "";
+		return sessionHref$1({
+			host,
+			sessionId,
+			from,
+			...context
+		});
+	} catch {
+		return "";
+	}
+}
+var contextFields = {
+	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
+	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
+	requirement: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrev_[0-9a-f]{32}$/
+	},
+	milestone: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrb_[0-9a-f]{32}$/
+	},
+	work_item: { id: /^wi_[0-9a-f]{20}$/ },
+	work_input: { id: /^op_[0-9a-f]{32}$/ },
+	quality_assessment: {
+		id: /^op_[0-9a-f]{32}$/,
+		review_id: /^pmqr_[0-9a-f]{32}$/,
+		document_digest: /^[0-9a-f]{64}$/
+	},
+	governance: { id: /^pmgov_[0-9a-f]{32}$/ },
+	finding: {
+		id: /^pmfn_[0-9a-f]{32}$/,
+		observation_id: /^pmgh_[0-9a-f]{32}$/,
+		document_digest: /^[0-9a-f]{64}$/
+	},
+	repair: { id: /^pmrp_[0-9a-f]{32}$/ },
+	follow_up: { id: /^pmfu_[0-9a-f]{32}$/ },
+	proposal: { id: /^pmcp_[0-9a-f]{32}$/ },
+	issue_mapping: { id: /^pmim_[0-9a-f]{32}$/ },
+	meeting: { id: /^pmmeet_[0-9a-f]{32}$/ },
+	lifecycle_transition: { id: /^pmlt_[0-9a-f]{32}$/ }
+};
+var projectViews$1 = new Set([
+	"overview",
+	"discussions",
+	"requirements",
+	"schedule",
+	"dependencies",
+	"issues",
+	"agents",
+	"board"
+]);
+function fullMatch(value, pattern) {
+	return typeof value === "string" && pattern.exec(value)?.[0] === value;
+}
+function isContextRef(ref) {
+	if (!ref || typeof ref !== "object" || Array.isArray(ref) || typeof ref.kind !== "string" || !Object.hasOwn(contextFields, ref.kind)) return false;
+	const fields = Object.entries(contextFields[ref.kind]);
+	return Object.hasOwn(ref, "kind") && Object.keys(ref).length === fields.length + 1 && fields.every(([key, pattern]) => Object.hasOwn(ref, key) && fullMatch(ref[key], pattern));
+}
+function normalizeRefs(refs) {
+	const result = [], seen = new Set();
+	if (!Array.isArray(refs)) return result;
+	for (const ref of refs) {
+		if (!isContextRef(ref)) continue;
+		const item = { kind: ref.kind };
+		for (const key of Object.keys(contextFields[ref.kind])) item[key] = ref[key];
+		const identity = JSON.stringify(item);
+		if (seen.has(identity)) continue;
+		seen.add(identity);
+		result.push(item);
+		if (result.length === 8) break;
+	}
+	return result;
+}
+function normalizeDetails(title, from, report) {
+	return {
+		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
+		from: projectViews$1.has(from) ? from : sessionOrigin(from),
+		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
+	};
+}
+function discussHref({ workspaceId, refs = [], title = "", from = "", report = "" }) {
+	const query = new URLSearchParams();
+	for (const ref of normalizeRefs(refs)) query.append("ref", JSON.stringify(ref));
+	for (const [key, value] of Object.entries(normalizeDetails(title, from, report))) if (value) query.set(key, value);
+	const search = query.toString();
+	return `#/pm/${encodeURIComponent(workspaceId)}/discussions/new${search ? "?" + search : ""}`;
+}
+function parseDiscussRefs(query) {
+	const params = new URLSearchParams(typeof query === "string" || query instanceof URLSearchParams ? query : "");
+	return {
+		refs: normalizeRefs(params.getAll("ref").map((value) => {
+			try {
+				return JSON.parse(value);
+			} catch {
+				return null;
+			}
+		})),
+		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
+	};
+}
+//#endregion
+//#region src/ui/icons.js
 /*!
 ISC License
 
@@ -13753,6 +14121,7 @@ function sheetHistory({ show, hide, canRestore = () => true }) {
 }
 //#endregion
 //#region src/ui/components.js
+init_i18n();
 init_ui_strings();
 var sequence = 0;
 var uid = () => `ui-${++sequence}`;
@@ -14793,7 +15162,8 @@ function workbenchProjection(data, record = null) {
 		id: item?.work_item_id || JSON.stringify([session.host, session.session_id]),
 		title: item?.title || session.title,
 		goal: item?.goal || item?.request || "",
-		recordState: item?.completion?.display_state || item?.state || null,
+		recordState: item?.display_state || item?.completion?.display_state || item?.state || null,
+		external: item?.external || null,
 		href: item ? "#/item/" + encodeURIComponent(item.work_item_id) : href,
 		source,
 		host: session.host,
@@ -14815,6 +15185,11 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 	const summary = h$1("p", {
 		class: "wc-summary",
 		"data-workbench-summary": ""
+	});
+	const source = h$1("p", {
+		class: "ui-meta",
+		hidden: true,
+		"data-workbench-github": ""
 	});
 	const goal = h$1("p", {
 		class: "wc-goal",
@@ -14850,7 +15225,7 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 	});
 	controls.dataset.workbenchViews = "";
 	const bar = h$1("div", { class: "wc-view-bar" }, controls);
-	head.append(goal, responsibility, summary);
+	head.append(goal, responsibility, summary, source);
 	head.before(bar);
 	work.after(lineage, live, evidence);
 	function select(value) {
@@ -14927,6 +15302,13 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 	}
 	function paint() {
 		if (!projection) return;
+		const github = boardGitHubLink(projection.external);
+		source.replaceChildren(...github ? [h$1("a", {
+			href: github.url,
+			target: "_blank",
+			rel: "noopener noreferrer"
+		}, github.label)] : []);
+		source.hidden = !github;
 		goal.textContent = projection.goal;
 		goal.hidden = !projection.goal;
 		responsibility.textContent = [
@@ -14973,6 +15355,8 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 			projection = null;
 			signature = "";
 			panel?.close();
+			source.replaceChildren();
+			source.hidden = true;
 			goal.textContent = "";
 			goal.hidden = true;
 			responsibility.textContent = "";
@@ -14983,6 +15367,8 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 			projection = null;
 			signature = "";
 			panel?.close();
+			source.replaceChildren();
+			source.hidden = true;
 			goal.textContent = "";
 			goal.hidden = true;
 			responsibility.textContent = "";
@@ -16920,6 +17306,10 @@ function joinLabel(parts, separator = " · ") {
 init_i18n();
 init_ui_strings();
 var ACTIONS = {
+	"pm.github.import": "bgh_action_import",
+	"project.github.import": "bgh_action_import",
+	"project.github.configure": "bgh_action_configure",
+	"project.github.sync": "bgh_action_sync",
 	"checkpoint.continue": "action_checkpoint_continue",
 	"checkpoint.continue.revalidate": "action_checkpoint_revalidate",
 	"artifact.upload": "action_artifact_upload",
@@ -17076,6 +17466,9 @@ var OPERATION_STATUS = {
 	cancelled: "historical"
 };
 var WORK_STATUS = {
+	github_closed: "github_closed",
+	github_completed: "github_completed",
+	github_done: "github_done",
 	todo: "not_started",
 	doing: "in_progress",
 	waiting: "waiting",
@@ -20354,9 +20747,20 @@ var workStatus = (card) => ({
 	waiting: "waiting",
 	review: "in_review",
 	accepted: "done",
+	github_done: "done",
+	github_closed: "historical",
+	github_completed: "historical",
 	archived: "historical"
 })[typeof card?.column === "string" ? card.column : ""] || "unknown";
-var workStatusLabel = (t, card) => card?.column === "accepted" ? t("wv_content_approved") : t("ui_status_" + workStatus(card));
+var workStatusLabel = (t, card) => [
+	"github_done",
+	"github_closed",
+	"github_completed"
+].includes(card?.column) ? boardGitHubText({
+	github_done: "bgh_done",
+	github_closed: "bgh_closed",
+	github_completed: "bgh_completed"
+}[card.column]) : card?.column === "accepted" ? t("wv_content_approved") : t("ui_status_" + workStatus(card));
 function workStatusPill(t, card) {
 	const pill = statusPill(workStatus(card));
 	pill.textContent = workStatusLabel(t, card);
@@ -20598,6 +21002,12 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 				from
 			}) }, firstLabel(session.title, t("wv_session"))), " ", session.api_access === "managed" && session.provenance === "connector_managed" ? null : statusPill("read_only")));
 			if (!workAgents(source).length) state.append(paragraph(t("wv_agent"), " · ", unknown()));
+			const external = boardGitHubLink(card.work.external);
+			if (external) state.append(paragraph(h$1("a", {
+				href: external.url,
+				target: "_blank",
+				rel: "noopener noreferrer"
+			}, `${external.repository} · ${external.label}`)));
 			if (workHref(card.binding)) state.append(h$1("a", { href: workHref(card.binding) }, t("wv_work_details")));
 			if (source.errors?.some((row) => row.kind === "session")) state.append(paragraph(t("wv_session_unavailable")));
 			if (card.quality?.selected_assessment) result.append(qualityFact({
@@ -41396,6 +41806,16 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		caps,
 		errorBox
 	});
+	const github = form && caps()?.features?.board_github_sync?.version === 1 ? boardGitHubPanel({
+		t,
+		api,
+		alive,
+		caps,
+		form,
+		permitted: () => permitted(true),
+		workspaceId,
+		onSaved: () => refresh()
+	}) : null;
 	const meta = h$1("span"), status = h$1("div", { role: "status" }), list = h$1("div", { class: "pm-kanban-list" }), boardInfo = h$1("div");
 	const refreshButton = iconButton({
 		icon: "refresh-cw",
@@ -41459,7 +41879,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		title: t("ui_board"),
 		meta,
 		actions: [refreshButton]
-	}) : null, h$1("div", { class: "pm-board-toolbar" }, searchField(search, { class: "pm-work-search" }), requirementFilter, agentFilter, h$1("label", {}, t("wv_group"), group)), status, landing.element, layout, h$1("footer", { class: "pm-kanban-footer" }, more, disclosure({
+	}) : null, h$1("div", { class: "pm-board-toolbar" }, searchField(search, { class: "pm-work-search" }), requirementFilter, agentFilter, h$1("label", {}, t("wv_group"), group)), status, ...github ? [github.element] : [], landing.element, layout, h$1("footer", { class: "pm-kanban-footer" }, more, disclosure({
 		label: t("pm_kanban_board_details"),
 		body: h$1("div", {}, boardInfo, h$1("p", {}, t("pm_kanban_wip_basis")), h$1("p", {}, t("pm_kanban_quality")), h$1("p", {}, t("pm_kanban_limits")))
 	})));
@@ -41659,6 +42079,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		more.disabled = reading;
 	}
 	function preview(card) {
+		const external = boardGitHubLink(card.work.external);
 		const source = sources.get(card.work_item_id), reqs = requirements(card), coverage = card.execution?.coverage || {};
 		const earlier = card.binding.plan_revision_id !== plan?.revision_id;
 		const chip = (text) => {
@@ -41684,7 +42105,14 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 				title: text,
 				href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?select=${encodeURIComponent(req.id)}`
 			}, text);
-		}) : [chip(card.binding.requirement_ids?.length ? t("wv_earlier_plan") : t("wv_no_requirement"))]), h$1("div", { class: "pm-kanban-card-meta" }, ...workAgents(source).map(agentMark).filter((mark) => mark.textContent !== "?"), ...prGroups(source?.deliveries).map(({ target, rows }) => {
+		}) : [chip(card.binding.requirement_ids?.length ? t("wv_earlier_plan") : t("wv_no_requirement"))]), h$1("div", { class: "pm-kanban-card-meta" }, external ? h$1("a", {
+			class: "ui-context-chip",
+			href: external.url,
+			target: "_blank",
+			rel: "noopener noreferrer",
+			title: `${external.repository} · ${external.label}`,
+			"data-github-card-link": ""
+		}, external.label) : null, ...workAgents(source).map(agentMark).filter((mark) => mark.textContent !== "?"), ...prGroups(source?.deliveries).map(({ target, rows }) => {
 			const node = contextChip({ text: `PR #${target.pull_number}` });
 			node.title = joinLabel([
 				node.textContent,
@@ -41750,7 +42178,13 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 	const locked = (lane) => lane && (lane.matches(":hover") || lane.contains(document.activeElement));
 	function laneKey(card) {
 		if (group.value === "milestone") return milestones.find((row) => row.plan_revision_id === card.binding.plan_revision_id && row.requirement_ids?.some((id) => card.binding.requirement_ids?.includes(id)))?.milestone_id || "unassigned";
-		return [...columns, "archived"].includes(card.column) ? card.column : "unknown";
+		return [
+			...columns,
+			"github_done",
+			"github_closed",
+			"github_completed",
+			"archived"
+		].includes(card.column) ? card.column : "unknown";
 	}
 	function renderColumns(force = false) {
 		if (!page) return;
@@ -42057,6 +42491,9 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 				if (data.next_cursor == null) break;
 				after = data.next_cursor;
 			}
+			await github?.refresh();
+			alive();
+			if (ticket !== serial) return;
 			const features = caps()?.features?.pm_workspaces;
 			const [accepted, roadmap, read] = await Promise.all([
 				features?.plan_drafting ? api("GET", `${endpoint}/plans/accepted`) : null,
@@ -42219,6 +42656,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		dispose: () => {
 			rememberScroll();
 			window.removeEventListener("scroll", onScroll);
+			github?.dispose();
 			landing.dispose();
 			startPanel?.dispose();
 			startPanel = null;
@@ -43428,6 +43866,11 @@ var scheduleFirstLine = (row) => scheduleTitle(row).split(/\r?\n/)[0];
 init_i18n();
 init_ui_strings();
 function rowStatus(row, data) {
+	if ([
+		"github_closed",
+		"github_completed",
+		"github_done"
+	].includes(row.refs?.source_lane)) return h$1("span", {}, statusPill(row.refs.source_lane), ...["merged", "deployed"].includes(row.status) ? [" ", statusPill(row.status)] : []);
 	return notObserved(row, data) ? h$1("span", { class: "ui-pill tone-neutral" }, t("sched_not_observed")) : statusPill(row.status);
 }
 function dateRange(span) {
@@ -54142,7 +54585,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 				...current.context
 			}) : `#/item/${encodeURIComponent(item.work_item_id)}`;
 			const itemActivity = {
-				key: "wi_state_" + (item.completion?.display_state || item.state),
+				key: "wi_state_" + (item.display_state || item.completion?.display_state || item.state),
 				tone: item.completion?.pending ? "stale" : ""
 			};
 			const row = link(href, item.title, current && !item.completion?.pending ? workActivity(current.source) : itemActivity, current?.source.reading);
@@ -72488,7 +72931,34 @@ async function viewProject(main, pid) {
 	create.box.hidden = true;
 	const note = manageNote();
 	if (note) note.hidden = true;
-	main.append(note || "", out, head, work, itemCard);
+	const github = boardGitHubPanel({
+		t,
+		api,
+		alive: () => assertView(connection),
+		caps: () => state.caps,
+		form: (options) => durableForm({
+			h,
+			t,
+			api,
+			caps: () => state.caps,
+			namespace: connection.namespace,
+			guard: () => assertView(connection),
+			errorBox,
+			...options,
+			canSend: () => state.online && !state.nativeBusy && state.viewReady,
+			clientGate: () => clientActionGate(state, { post: true })
+		}),
+		permitted: () => may("manage"),
+		projectId: pid,
+		onSaved: () => render()
+	});
+	const offGitHubOnline = onOnline(() => {
+		try {
+			assertView(connection);
+			github.update();
+		} catch {}
+	});
+	main.append(note || "", out, head, github.element, work, itemCard);
 	const rememberEditors = () => {
 		if (currentEditor && !currentEditor.drawer.box.hidden) draft = currentEditor.values();
 		for (const [id, editor] of workEditors) if (!editor.drawer.box.hidden) workDrafts.set(id, {
@@ -72560,6 +73030,7 @@ async function viewProject(main, pid) {
 		workEditors = new Map();
 		freshPage();
 		const p = data.project;
+		await github.refresh(data);
 		if (note) note.hidden = false;
 		itemCard.hidden = false;
 		const mayCreate = may("manage") && !p.archived && state.caps?.actions?.find((row) => row.action === "work_item.create")?.allowed !== false;
@@ -72732,7 +73203,7 @@ async function viewProject(main, pid) {
 	};
 	showArchived.onchange = () => render();
 	await render();
-	return liveReload(render, [
+	const off = liveReload(render, [
 		"project",
 		"work_item",
 		"operation",
@@ -72741,6 +73212,11 @@ async function viewProject(main, pid) {
 		"session",
 		"integration"
 	], prepare);
+	return () => {
+		off?.();
+		offGitHubOnline();
+		github.dispose();
+	};
 }
 function linkTarget(l) {
 	const x = l.target || {};
@@ -72814,7 +73290,8 @@ async function viewWorkItem(main, wid) {
 		"checkpoint",
 		"operation",
 		"task",
-		"pull_request"
+		"pull_request",
+		"github_source"
 	].map((k) => h("option", { value: k }, t("link_" + k))));
 	const ref = h("input", { placeholder: t("link_ref_hint") });
 	kind.onchange = () => {
@@ -73204,14 +73681,14 @@ function workItemRow(w, open) {
 		title,
 		href,
 		meta,
-		pill: statusPill(workStatusKey(w.completion?.display_state)),
+		pill: statusPill(workStatusKey(w.display_state || w.completion?.display_state)),
 		action: h("a", {
 			class: "ui-button secondary ui-sm",
 			href
 		}, t("global_review")),
 		detailsLabel: t("global_details_for", { title }),
 		onOpen: () => open?.(key, title, [
-			statusPill(workStatusKey(w.completion?.display_state)),
+			statusPill(workStatusKey(w.display_state || w.completion?.display_state)),
 			meta ? h("p", {}, meta) : null,
 			w.completion?.pending ? h("p", {}, t("needs_decision")) : null,
 			disclosure({

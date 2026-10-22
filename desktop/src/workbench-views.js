@@ -2,6 +2,7 @@ import {h, place} from './ui/dom.js';
 import {tabs, button, inspector} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
 import {viewState} from './ui/view-state.js';
+import {boardGitHubLink} from './board-github.js';
 import {workbenchProjection} from './workbench-projection.js';
 
 // All three views retain the original conversation/composer DOM and event reader.
@@ -9,6 +10,7 @@ export function workbenchViews({main, head, work, results, namespace, workspace,
   const memory = viewState(namespace, workspace, 'workbench:' + (workId || JSON.stringify([host, sessionId])));
   let projection = null, panel = null, signature = '', inspected = null, updateInspector = null;
   const summary = h('p', {class: 'wc-summary', 'data-workbench-summary': ''});
+  const source = h('p', {class: 'ui-meta', hidden: true, 'data-workbench-github': ''});
   const goal = h('p', {class: 'wc-goal', hidden: true});
   const responsibility = h('p', {class: 'ui-meta wc-responsibility'});
   const lineage = h('section', {class: 'wc-perspective', hidden: true, 'data-workbench-lineage': ''});
@@ -22,7 +24,7 @@ export function workbenchViews({main, head, work, results, namespace, workspace,
     onChange: select});
   controls.dataset.workbenchViews = '';
   const bar = h('div', {class: 'wc-view-bar'}, controls);
-  head.append(goal, responsibility, summary); head.before(bar); work.after(lineage, live, evidence);
+  head.append(goal, responsibility, summary, source); head.before(bar); work.after(lineage, live, evidence);
   function select(value) {
     if (!Object.hasOwn(regions, value)) return;
     memory.scroll ||= {};
@@ -76,6 +78,8 @@ export function workbenchViews({main, head, work, results, namespace, workspace,
   }
   function paint() {
     if (!projection) return;
+    const github = boardGitHubLink(projection.external);
+    source.replaceChildren(...(github ? [h('a', {href: github.url, target: '_blank', rel: 'noopener noreferrer'}, github.label)] : [])); source.hidden = !github;
     goal.textContent = projection.goal; goal.hidden = !projection.goal;
     responsibility.textContent = [t(projection.managed ? 'managed' : 'read_only'), projection.runtime, projection.host].filter(Boolean).join(' · ');
     summary.textContent = t(summaryKey());
@@ -112,12 +116,12 @@ export function workbenchViews({main, head, work, results, namespace, workspace,
       paint();
     },
     fail() {
-      projection = null; signature = ''; panel?.close(); goal.textContent = ''; goal.hidden = true;
+      projection = null; signature = ''; panel?.close(); source.replaceChildren(); source.hidden = true; goal.textContent = ''; goal.hidden = true;
       responsibility.textContent = '';
       summary.textContent = t('wc_unavailable');
       for (const region of [lineage, live]) region.replaceChildren(h('p', {role: 'status'}, t('wc_unavailable')));
     },
-    withdraw() {projection = null; signature = ''; panel?.close(); goal.textContent = ''; goal.hidden = true; responsibility.textContent = ''; summary.textContent = ''; lineage.replaceChildren(); live.replaceChildren(); bar.hidden = true;},
+    withdraw() {projection = null; signature = ''; panel?.close(); source.replaceChildren(); source.hidden = true; goal.textContent = ''; goal.hidden = true; responsibility.textContent = ''; summary.textContent = ''; lineage.replaceChildren(); live.replaceChildren(); bar.hidden = true;},
     restore() {bar.hidden = false; select(current);},
     dispose() {panel?.dispose();},
   };

@@ -189,6 +189,8 @@ class ApiV1:
         from . import pm_workspace_adapter
         pm_workspace_adapter.install(daemon.ops)
         pm_evidence.install(daemon.ops)
+        from . import board_github
+        board_github.install(daemon.ops)
         pm_snapshots.install(daemon.ops)
         pm_roadmap.install(daemon.ops)
         pm_sprints.install(daemon.ops)
@@ -1360,6 +1362,7 @@ class ApiV1:
                                   "cleanup": True, "cleanup_task": True, "inventory": True, "session_history": True, "session_observation": {"read": True, "wait": True, "max_wait_s": 1800}, "resource_relations": True, "discovery_scope": True,
                                   "worktree_history": {"known_bindings_only": True}, "history": {"source": "journal", "legacy_transitions": "may_be_incomplete", "optional_adapters": ["delivery_part_a", "delivery_part_b"],
                                       "observed_event_kinds": [r[0] for r in self.daemon.journal.db.execute("SELECT DISTINCT kind FROM api_events ORDER BY kind")]}, "events_stream": True, "operations": True, "work_items": True,
+                                  "board_github_sync": {"version": 1, "interval_s": 300},
                                   "github": self.daemon.ops.context.get("github") is not None,
                                   "deploy": self.daemon.ops.context.get("github") is not None and any(r.verification for r in gh_cfg.recipes.values()),
                                   "deployment_history": True, "environment_generation": True,

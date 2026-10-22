@@ -185,3 +185,11 @@ proved the next read and write revalidation see changed source evidence.
 These fixtures measure bounded payload/read behavior. Real source-collector
 cost, multi-client deployment latency and physical-mobile behavior remain
 EC-1.1 T3/T4 acceptance work.
+
+## GitHub board source
+
+The optional [GitHub board sync](board-github-sync.md) imports and adopts GitHub
+issues/PRs through registered project/item actions, with stable external identity,
+legacy URL deduplication and retained history. Its Connector-owned schedule and
+provider reads live outside this journal-only module. External closure has a
+separate board lane and never grants content approval or completes local steps.
