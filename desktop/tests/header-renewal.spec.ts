@@ -6,6 +6,58 @@ import {hostGolden} from './header-hosts-fixture';
 test.describe.configure({mode: 'parallel'});
 
 for (const locale of ['en-US', 'zh-TW']) {
+  test(`header same-scope reconnect preserves the deadline renewal ${locale}`, async ({browser}) => {
+    const context = await browser.newContext({locale}), page = await context.newPage();
+    const fixture = conversationFixture(), doc = structuredClone(hostGolden.host_not_refreshed);
+    const host = doc.hosts[0], at = Date.parse(host.last_attempt_at), deadline = Date.parse(host.valid_until);
+    const session = structuredClone(runtimeGolden.ended_runtime.listed);
+    for (const axis of ['activity', 'connection']) Object.assign(session.state.evidence[axis], {
+      observed_at: host.last_attempt_at, valid_until: host.valid_until});
+    const path = '/sessions/fixture-host/fixture-session';
+    let gets = 0, posts = 0, reset = false, issued = false, bootstraps = 0;
+    await page.clock.install({time: at + 8_000}); await page.clock.pauseAt(at + 8_000);
+    await mountConversation(page, false, async input => {
+      if (input.method !== 'GET') posts++;
+      if (input.path === path) {gets++; return {status: 200, data: {session}};}
+      if (input.path.startsWith('/events') && reset && !issued) {
+        issued = true;
+        return {status: 409, data: {error: {code: 'EVENT_CURSOR_RESET', reason: 'cursor_expired', resnapshot: true, preserve_drafts: true}}};
+      }
+      if (input.path === '/bootstrap') bootstraps++;
+      return fixture.dispatch(input);
+    });
+    try {
+      await page.goto('/dashboard/#/session/fixture-host/fixture-session');
+      const activity = page.locator('#installation-health .health-last-value');
+      const connection = page.locator('#installation-health .health-installation-connection');
+      await expect(connection).toHaveText(locale === 'en-US' ? 'Connected' : '已連線');
+      await expect(activity).toHaveCount(0);
+      // A live draft uses the existing same-scope bootstrap path without remounting the view.
+      await page.locator('#main textarea').first().fill('Keep this draft through reconnect');
+      expect(gets).toBe(1);
+      reset = true;
+      await Promise.all([page.waitForResponse('**/api/v1/bootstrap'), page.clock.fastForward(1_000)]);
+      await expect.poll(() => bootstraps).toBe(2);
+      await page.clock.fastForward(1_000);
+      await expect.poll(() => gets).toBe(2);
+      await expect.soft(activity).toHaveCount(0);
+      await expect.soft(connection).toHaveText(locale === 'en-US' ? 'Connected' : '已連線');
+      expect(await page.evaluate(() => Date.now())).toBe(deadline - 170_000);
+      await page.clock.fastForward(170_000);
+      await expect.poll(() => gets).toBe(3);
+      await expect(activity).toHaveText(locale === 'en-US'
+        ? 'Idle · 3 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)'
+        : '閒置 · 3 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）');
+      await expect(connection).toHaveText(locale === 'en-US'
+        ? 'Connected · 3 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)'
+        : '已連線 · 3 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）');
+      await page.clock.fastForward(600_000);
+      await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+      expect(gets).toBe(3); expect(posts).toBe(0);
+      await expect(page.locator('#main textarea').first()).toHaveValue('Keep this draft through reconnect');
+    } finally {await context.close();}
+  });
+
   test(`header unchanged renewal retains unreachable host wording ${locale}`, async ({browser}) => {
     const context = await browser.newContext({locale}), page = await context.newPage();
     const fixture = conversationFixture(), now = 1790000900000;

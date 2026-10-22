@@ -53,10 +53,39 @@ for (const locale of ['en-US', 'zh-TW']) for (const controls of [false, true]) {
       const baseline = await page.evaluate(() => {const s = (window as any).__clockFleet; s.hold = true; return s.reads;});
       await page.getByRole('button', {name: locale === 'en-US' ? 'Read status' : '重新讀取狀態', exact: true}).first().click();
       await expect.poll(() => page.evaluate(() => (window as any).__clockFleet.reads)).toBe(baseline + 1);
-      await page.clock.fastForward(60_000);
+      // Hold the existing action read so only display ticks can change this DOM.
+      await page.evaluate(controls => {
+        const checkbox = document.querySelector('.fleet-machine input') as HTMLInputElement;
+        const backend = document.querySelector('[data-fleet-backend]') as HTMLSelectElement;
+        const details = document.querySelector('.fleet-diagnosis details') as HTMLDetailsElement;
+        const advanced = document.querySelector('.fleet-advanced') as HTMLDetailsElement;
+        if (advanced) advanced.open = true;
+        details.open = true;
+        const nodes = [checkbox, backend, details, advanced, document.querySelector('.fleet-machine')?.closest('section')?.querySelector('[role="status"]')].filter(Boolean);
+        for (const node of nodes) (node as any).clockMarker = 'retained';
+        const focused = controls ? backend : checkbox;
+        focused.focus();
+        (window as any).__clockFleet.retained = {nodes, checkbox, backend, details, advanced, focused};
+      }, controls);
+      const retained = async () => expect(await page.evaluate(() => {
+        const r = (window as any).__clockFleet.retained;
+        return {nodes: r.nodes.every((node: any) => node.isConnected && node.clockMarker === 'retained'),
+          checkbox: document.querySelector('.fleet-machine input') === r.checkbox,
+          backend: document.querySelector('[data-fleet-backend]') === r.backend,
+          focused: document.activeElement === r.focused, open: r.details.open && (!r.advanced || r.advanced.open)};
+      })).toEqual({nodes: true, checkbox: true, backend: true, focused: true, open: true});
+      await retained();
+      await page.clock.runFor(3_000);
+      await retained();
+      await page.clock.fastForward(57_000);
       await expect(title).toHaveText(locale === 'en-US' ? 'Connected · 1 min ago · Checking' : '已連線 · 1 分鐘前 · 檢查中');
       await page.clock.fastForward(600_000);
       await expect(title).toHaveText(locale === 'en-US' ? 'Connected · 11 min ago · Checking' : '已連線 · 11 分鐘前 · 檢查中');
+      await retained();
+      await expect(row).toHaveAttribute('data-fleet-state', 'stale');
+      await expect(row).toHaveAttribute('data-freshness', 'stale');
+      await expect(row.locator('[data-check-state="passed"]')).toHaveCount(0);
+      await expect(row.locator('[data-fleet-check]').first()).toHaveText(locale === 'en-US' ? 'Not yet confirmed' : '尚未確認');
       expect(await page.evaluate(() => (window as any).__clockFleet.reads)).toBe(baseline + 1);
       expect(await page.evaluate(() => (window as any).__clockFleet.writes)).toBe(0);
       expect(await page.evaluate(() => (window as any).__clockFleet.listeners.size)).toBe(1);

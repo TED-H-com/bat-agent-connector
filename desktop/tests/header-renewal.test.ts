@@ -8,6 +8,75 @@ import {runtimeGolden} from './session-runtime-fixture.ts';
 const translate = locale => (key, args = {}) => Object.entries(args).reduce((s, [k, v]) => s.replaceAll(`{${k}}`, String(v)), STRINGS[locale][key]);
 const input = health => ({health, token: 'fixture', namespace: 'fixture', online: true, caps: {}});
 
+for (const locale of ['en', 'zh-TW']) for (const source of ['host', 'session']) {
+  test(`header reconnect preserves current ${source} until its deadline ${locale}`, () => {
+    const doc = structuredClone(hostGolden.host_not_refreshed), host = doc.hosts[0];
+    const deadline = Date.parse(host.valid_until), now = deadline - 170_000;
+    const session = structuredClone(runtimeGolden.ended_runtime.listed);
+    for (const axis of ['activity', 'connection']) Object.assign(session.state.evidence[axis], {
+      observed_at: host.last_attempt_at, valid_until: host.valid_until});
+    const current = structuredClone(doc);
+    // Inventory marks this observation host_not_refreshed only once it expires.
+    Object.assign(current.hosts[0], {stale: false, stale_reason: null});
+    const path = source === 'host' ? '/hosts' : '/sessions?order=id';
+    const response = source === 'host' ? current : {sessions: [session], next_cursor: null};
+    const previous: any = {selected: {host: session.host, sessionId: session.session_id}};
+    rememberHealthRead(previous, path, response);
+    const health: any = resetHealthBootstrap(previous, {sameScope: true, caps: {}, now});
+    assert.equal(takeHealthRenewal(health, now), path);
+    rememberHealthRead(health, path, response, {renewalDeadline: health.renewalDeadline});
+    const facts = at => {
+      const projection = healthDisplay(input(health), at);
+      return source === 'host' ? [{...projection.hosts[0], key: 'wpf_unavailable'}]
+        : [{...projection.summary.facts[0].activity, key: 'health_idle'}, {...projection.summary.connection, key: 'ui_connected'}];
+    };
+    for (const fact of facts(now)) {assert.equal(fact.freshness, 'current'); assert.ok(!fact.error);}
+    assert.deepEqual(facts(now).map(fact => healthLabel(fact, translate(locale))), source === 'host'
+      ? [locale === 'en' ? 'Unavailable' : '不可用'] : locale === 'en' ? ['Idle', 'Connected'] : ['閒置', '已連線']);
+    assert.equal(takeHealthRenewal(health, now + 1_000), null);
+    assert.equal(takeHealthRenewal(health, deadline), path);
+    rememberHealthRead(health, path, source === 'host' ? doc : response, {renewalDeadline: health.renewalDeadline});
+    const expected = locale === 'en'
+      ? ['Unavailable · 3 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)', 'Idle · 3 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)', 'Connected · 3 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)']
+      : ['不可用 · 3 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）', '閒置 · 3 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）', '已連線 · 3 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）'];
+    assert.deepEqual(facts(deadline).map(fact => healthLabel(fact, translate(locale))), source === 'host' ? expected.slice(0, 1) : expected.slice(1));
+    assert.equal(takeHealthRenewal(health, deadline + 600_000), null);
+  });
+}
+
+test('a forced reconnect read does not spend a future deadline, even if its response arrives after it', () => {
+  const doc = structuredClone(hostGolden.host_not_refreshed), deadline = Date.parse(doc.hosts[0].valid_until);
+  const previous = {};
+  rememberHealthRead(previous, '/hosts', doc);
+  const health: any = resetHealthBootstrap(previous, {sameScope: true, caps: {}, now: deadline - 170_000});
+  assert.equal(takeHealthRenewal(health, deadline - 170_000), '/hosts');
+  const startedCutoff = health.renewalDeadline;
+  assert.equal(takeHealthRenewal(health, deadline - 1), null);
+  assert.equal(takeHealthRenewal(health, deadline), '/hosts');
+  rememberHealthRead(health, '/hosts', doc, {renewalDeadline: startedCutoff});
+  assert.ok(!healthDisplay(input(health), deadline + 1).hosts[0].error);
+  assert.equal(takeHealthRenewal(health, deadline + 600_000), null);
+});
+
+test('an expired reconnect read spends the deadline; an advancing normal read replaces a future deadline', () => {
+  const doc = structuredClone(hostGolden.host_not_refreshed), deadline = Date.parse(doc.hosts[0].valid_until);
+  const previous = {};
+  rememberHealthRead(previous, '/hosts', doc);
+  const expired: any = resetHealthBootstrap(previous, {sameScope: true, caps: {}, now: deadline});
+  assert.equal(takeHealthRenewal(expired, deadline), '/hosts');
+  rememberHealthRead(expired, '/hosts', doc, {renewalDeadline: expired.renewalDeadline});
+  assert.equal(healthDisplay(input(expired), deadline).hosts[0].error.code, 'OBSERVATION_NOT_RENEWED');
+  assert.equal(takeHealthRenewal(expired, deadline + 600_000), null);
+  const current: any = resetHealthBootstrap(previous, {sameScope: true, caps: {}, now: deadline - 170_000});
+  assert.equal(takeHealthRenewal(current, deadline - 170_000), '/hosts');
+  rememberHealthRead(current, '/hosts', doc, {renewalDeadline: current.renewalDeadline});
+  Object.assign(doc.hosts[0], {last_attempt_at: new Date(deadline).toISOString(), last_success_at: new Date(deadline).toISOString(),
+    valid_until: new Date(deadline + 180_000).toISOString(), stale: false, stale_reason: null});
+  rememberHealthRead(current, '/hosts', doc);
+  assert.equal(takeHealthRenewal(current, deadline), null);
+  assert.equal(takeHealthRenewal(current, deadline + 180_000), '/hosts');
+});
+
 for (const locale of ['en', 'zh-TW']) for (const scenario of ['host_not_refreshed', 'host_unreachable']) {
   test(`header unchanged host renewal ${scenario} ${locale}`, () => {
     const health: any = {}, doc = structuredClone(hostGolden[scenario]), row = doc.hosts[0];
