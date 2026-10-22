@@ -16,16 +16,18 @@ const h = (tag, attrs, ...children) => ({tag, attrs, children});
 const translate = locale => (key, args = {}) => Object.entries(args).reduce((s, [k, v]) => s.replaceAll(`{${k}}`, String(v)), STRINGS[locale][key]);
 const input = () => ({token: 'fixture', online: true, pollHealth: 'connected', namespace: 'fixture',
   lastPoll: {at, namespace: 'fixture'}, caps: bootstrap.capabilities, health: {fleet}});
-const render = (row, t, now) => fleetStatus(row, {h, t, now, snapshot: fleet, readable: true,
-  entry: fleet.configuration.connections.find(entry => entry.name === row.name), detailsState: new Map()});
+const render = (row, t, now, snapshot = fleet) => fleetStatus(row, {h, t, now, snapshot, readable: true,
+  entry: snapshot.configuration.connections.find(entry => entry.name === row.name), detailsState: new Map()});
 
 for (const locale of ['en', 'zh-TW']) {
   const t = translate(locale);
   const labels = locale === 'en' ? {
     expired: 'Connected · 1 min ago · Checking', unknown: 'unknown · Checking',
+    staleUnknown: 'unknown · 1 min ago · Checking',
     values: {ready: 'Ready', missing: 'Setup still missing', unknown: 'Not verified yet', unavailable: 'Unavailable'},
   } : {
     expired: '已連線 · 1 分鐘前 · 檢查中', unknown: '未知 · 檢查中',
+    staleUnknown: '未知 · 1 分鐘前 · 檢查中',
     values: {ready: '已就緒', missing: '還缺設定', unknown: '尚未驗證', unavailable: '不可用'},
   };
   test(`Fleet and Connector use the same last connected value and age at expiry ${locale}`, () => {
@@ -45,6 +47,31 @@ for (const locale of ['en', 'zh-TW']) {
     const view = render(row, t, at);
     assert.equal(view.children[0].children[0], labels.unknown);
     assert.doesNotMatch(view.children[0].children[0], /offline|down|離線|停機/i);
+  });
+  for (const scenario of ['degraded without a code', 'monitor starting', 'unmapped code']) {
+    test(`Fleet unestablished value stays checking: ${scenario} ${locale}`, () => {
+      const snapshot = structuredClone(fleet), row = snapshot.readiness.hosts[0];
+      if (scenario === 'degraded without a code') row.level = 'degraded';
+      else if (scenario === 'monitor starting') snapshot.monitor.state = 'starting';
+      else Object.assign(row, {level: 'down', code: 'SOMETHING_NEW'});
+      // A probe timestamp does not establish a value, whether recent or old.
+      for (const now of [at + 5_000, at + 61_000]) {
+        const view = render(row, t, now, snapshot);
+        assert.equal(view.children[0].children[0], labels.unknown);
+        assert.equal(view.attrs['data-fleet-state'], scenario === 'unmapped code' ? 'unknown' : 'checking');
+        assert.equal(view.attrs['data-freshness'], 'unknown');
+      }
+    });
+  }
+  test(`Fleet producer PROBE_STALE keeps the observation age ${locale}`, () => {
+    // supervisor_status clears the layers but retains the old observation time.
+    const row = {...fleet.readiness.hosts[0], level: 'degraded', code: 'PROBE_STALE',
+      blocking: 'stale', stale: true,
+      layers: {tunnel: false, tls: false, bat: false, workspace: false}};
+    const view = render(row, t, at + 61_000);
+    assert.equal(view.children[0].children[0], labels.staleUnknown);
+    assert.equal(view.attrs['data-fleet-state'], 'stale');
+    assert.equal(view.attrs['data-freshness'], 'stale');
   });
   test(`Work producer has no per-capability validity; reported values and reasons remain unchanged ${locale}`, () => {
     for (const body of Object.values(profiles.cases) as any[]) for (const state of Object.values(body.states) as any[]) {
