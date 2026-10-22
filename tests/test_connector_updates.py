@@ -319,7 +319,7 @@ def policy_file_snapshot(path):
     return content, info.st_ino, info.st_mtime_ns
 
 
-def test_install_with_unchanged_reconcile_persists_pending_once(deployment, monkeypatch):
+def test_install_persists_pending_then_reconciled_state_without_rewriting(deployment):
     u, receipt, _ = deployment
     u.enroll(receipt, "preview")
     candidate = release("b" * 40, "0.2.8")
@@ -327,37 +327,33 @@ def test_install_with_unchanged_reconcile_persists_pending_once(deployment, monk
     u.install = lambda root, candidate, **kwargs: make_package(root, candidate)
     path = u.root / "state.json"
     directory = u.root.stat()
-    replacements, pending = [], []
+    replacements = []
     observing = True
     def observe(event, args):
         if observing and event == "os.rename" and args[1] == "state.json" and args[3] >= 0:
             parent = os.fstat(args[3])
             if (parent.st_dev, parent.st_ino) == (directory.st_dev, directory.st_ino):
-                replacements.append(args[0])
+                with os.fdopen(os.open(args[0], os.O_RDONLY, dir_fd=args[2]), "rb") as source:
+                    info = os.fstat(source.fileno())
+                    saved = (source.read(), info.st_ino, info.st_mtime_ns)
+                frame, reconciled = sys._getframe(1), False
+                while frame:
+                    reconciled |= frame.f_code.co_name == "reconcile"
+                    frame = frame.f_back
+                replacements.append((saved, reconciled))
     sys.addaudithook(observe)
-    original = u.reconcile
-    def unchanged_reconcile(state):
-        if state.get("pending"):
-            # Controlled no-change outcome after the real pending publication.
-            assert u.read() == state and state["pending"]["to"] == candidate["commit"]
-            assert len(replacements) == 1
-            pending.append(policy_file_snapshot(path))
-        else:
-            original(state)
     try:
-        with monkeypatch.context() as patch:
-            patch.setattr(u, "reconcile", unchanged_reconcile)
-            result = u.apply()
+        result = u.apply()
     finally:
         observing = False
-    assert result["pending"] and len(pending) == 1
-    assert path.read_bytes() == pending[0][0]
-    assert path.stat().st_ino == pending[0][1]
-    assert path.stat().st_mtime_ns == pending[0][2]
-    assert len(replacements) == 1
-    original(u.read())
-    assert u.status()["installed"]["commit"] == candidate["commit"]
-    assert not u.status()["pending"]
+    assert result["installed"]["commit"] == candidate["commit"] and not result["pending"]
+    assert len(replacements) == 2
+    assert [reconciled for _, reconciled in replacements] == [False, True]
+    published = json.loads(replacements[0][0][0])
+    assert published["pending"]["to"] == candidate["commit"] and published["current"] == "a" * 40
+    assert json.loads(replacements[1][0][0]) == u.read()
+    assert policy_file_snapshot(path) == replacements[1][0]
+    assert u.status() == result
 
 
 @pytest.mark.parametrize("candidate", [None, release(), release("c" * 40, "0.2.6")])
