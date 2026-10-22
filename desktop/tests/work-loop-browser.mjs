@@ -73,13 +73,10 @@ const operation = async response => {
   const data = await response.json(); operations.push(data.operation.operation_id); return data.operation;
 };
 const clickOperation = async (action, button) => {
-  // Observe both promises immediately so a response timeout reaches diagnostics.
-  await expect(button).toBeEnabled();
-  await eventWrites.pause();
-  try {
-    const [response] = await Promise.all([post(action), button.click()]);
-    return await operation(response);
-  } finally {eventWrites.resume();}
+  // Keep a sequence of normal writes quiet; stage handoffs below explicitly
+  // release real event delivery when their server-side changes must be read.
+  const [response] = await Promise.all([post(action), eventWrites.post(button, {resume:false})]);
+  return operation(response);
 };
 const shot = name => page.screenshot({path: resolve(f.shots, name + '.png'), animations: 'disabled'});
 const deferred = () => {
@@ -477,7 +474,7 @@ async function foregroundRecovery(active, workUrl) {
     await shot('02-foreground-recovered');
     holdAdmission = true;
     step = 'explicit-send';
-    const sending = Promise.all([post('session.send'), eventWrites.post(submit)]);
+    const sending = Promise.all([post('session.send'), eventWrites.post(submit, {resume:false})]);
     await expect.poll(() => operationPosts(recoveryStart).length).toBe(1);
     intent = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).intent, draftKey);
     const request = operationPosts(recoveryStart)[0];
@@ -552,7 +549,7 @@ try {
     const row = page.locator(`[data-adopt-work="${f.work}"]`);
     await row.locator('.pm-adopt-choice > input').first().check();
     await row.getByLabel('付費會員可使用 Email 登入', {exact: true}).check();
-    await eventWrites.post(page.getByRole('button', {name: zh ? '檢查就緒' : 'Check readiness', exact: true}));
+    await eventWrites.post(page.getByRole('button', {name: zh ? '檢查就緒' : 'Check readiness', exact: true}), {resume:false});
     const submit = page.getByRole('button', {name: zh ? '採用並開始' : 'Adopt and start', exact: true});
     await expect(submit).toBeEnabled();
     await submit.scrollIntoViewIfNeeded();
@@ -565,7 +562,7 @@ try {
     const instruction = page.locator('[data-work-start-instruction]');
     await expect(instruction).toBeVisible();
     await instruction.fill(zh ? '修正登入重複送出，補測試，先開 PR。' : 'Fix duplicate login submission, add tests and prepare a PR.');
-    await eventWrites.post(page.locator('[data-work-start-check]'));
+    await eventWrites.post(page.locator('[data-work-start-check]'), {resume:false});
     const submit = page.locator('[data-pm-action="work.start"] button[type="submit"]');
     await expect(submit).toBeEnabled();
     start = await clickOperation('work.start', submit);
@@ -574,6 +571,7 @@ try {
     await expect(page.locator('[data-work-start-item]')).toBeVisible();
     await shot('01-started');
   }
+  eventWrites.resume();
   send({stage: 'started', operation_id: start.operation_id});
   let active = await receive();
   if (f.lost_start_reply) {
