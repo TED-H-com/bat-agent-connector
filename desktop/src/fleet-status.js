@@ -87,8 +87,15 @@ export function fleetHealth(row, options = {}) {
     : diagnosis.steps.map(step => ({...step, state: 'unchecked'}))};
 }
 
+function diagnosisPresentation(row, {t, snapshot, readable, entry, now}) {
+  const health = fleetHealth(row, {snapshot, readable, kind: entry.kind, now});
+  const {state, kind} = health;
+  const helpKey = ['ready', 'identity', 'service', 'version'].includes(state) ? `${state}_${kind === 'connector' ? 'connector' : 'bat'}` : state;
+  return {...health, title: healthLabel(health.fact, t), help: t('fleet_check_help_' + helpKey)};
+}
+
 export function fleetStatus(row, {h, t, snapshot, readable, entry, detailsState, now = Date.now()}) {
-  const {state, kind, steps, fact} = fleetHealth(row, {snapshot, readable, kind: entry.kind, now});
+  const {state, steps, fact, title, help} = diagnosisPresentation(row, {t, snapshot, readable, entry, now});
   const key = `${snapshot.configuration.binding}:machine:${entry.name}`;
   const details = h('details', {open: detailsState?.get(key) === true, 'data-fleet-details-key': key},
   h('summary', {'data-fleet-details': entry.name}, t('fleet_status_details')),
@@ -98,8 +105,34 @@ export function fleetStatus(row, {h, t, snapshot, readable, entry, detailsState,
   ])),
   ...[row?.code, row?.blocking].filter((value, index, all) => value && all.indexOf(value) === index)
     .map(value => h('code', {}, value)));
-  const helpKey = ['ready', 'identity', 'service', 'version'].includes(state) ? `${state}_${kind === 'connector' ? 'connector' : 'bat'}` : state;
   return h('div', {class: 'fleet-diagnosis', 'data-fleet-diagnosis': entry.name, 'data-fleet-state': state, 'data-freshness': fact.freshness},
-    h('p', {class: 'fleet-diagnosis-title'}, healthLabel(fact, t)),
-    h('p', {class: 'muted'}, t('fleet_check_help_' + helpKey)), details);
+    h('p', {class: 'fleet-diagnosis-title'}, title),
+    h('p', {class: 'muted fleet-diagnosis-help'}, help), details);
+}
+
+function paintDiagnosis(node, {state, steps, fact, title, help}, t) {
+  const text = (selector, value) => {
+    const target = node.querySelector(selector);
+    if (target.textContent !== value) target.textContent = value;
+  };
+  node.dataset.fleetState = state;
+  node.dataset.freshness = fact.freshness;
+  text('.fleet-diagnosis-title', title);
+  text('.fleet-diagnosis-help', help);
+  for (const step of steps) {
+    const selector = `[data-fleet-check="${step.id}"]`;
+    node.querySelector(selector).dataset.checkState = step.state;
+    text(selector, t('fleet_check_' + step.state));
+  }
+}
+
+// Clock-only paint: retain every control, disclosure and message node. The
+// status/action renders still own replacing snapshots and their full content.
+export function paintFleetHealth(content, {t, snapshot, readable, now = Date.now()}) {
+  const ready = new Map([...snapshot.readiness.hosts, snapshot.readiness.connector].filter(Boolean).map(row => [row.name, row]));
+  const entries = new Map(snapshot.configuration.connections.map(entry => [entry.name, entry]));
+  for (const node of content.querySelectorAll('[data-fleet-diagnosis]')) {
+    const entry = entries.get(node.dataset.fleetDiagnosis);
+    if (entry) paintDiagnosis(node, diagnosisPresentation(ready.get(entry.name), {t, snapshot, readable, entry, now}), t);
+  }
 }

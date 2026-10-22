@@ -217,11 +217,17 @@ export function takeHealthRenewal(health, now = Date.now()) {
   }
   for (const row of health.hosts || []) add(health.hostSources?.get(row.host), row.valid_until);
   health.renewed ||= new Map();
+  health.bootstrapReads ||= new Set();
   for (const [path, deadline] of sources) {
     const key = `${health.bootstrap || 0}:${deadline}`;
-    if ((now >= deadline || health.bootstrapRenewal) && health.renewed.get(path) !== key) {
-      health.renewed.set(path, key);
-      health.renewalDeadline = deadline;
+    const expired = now >= deadline && health.renewed.get(path) !== key;
+    const reconnect = health.bootstrapRenewal && !health.bootstrapReads.has(path);
+    if (expired || reconnect) {
+      health.bootstrapReads.add(path);
+      // A pre-deadline reconnect read neither spends that deadline nor reports
+      // current facts as unrenewed, even if its response arrives after expiry.
+      if (expired) health.renewed.set(path, key);
+      health.renewalDeadline = Math.min(deadline, now);
       return path;
     }
   }

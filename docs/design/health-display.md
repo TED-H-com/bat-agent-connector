@@ -89,8 +89,10 @@ observation age.
 
 Mounted Fleet status and overview painters subscribe to the existing
 `health-display-tick` event and remove that listener on unmount. They repaint
-only the last snapshot, including while a native read is pending; ticks add no
-read, IPC call, timer or retry.
+the last snapshot in place through `fleet-status.js::paintFleetHealth`, including
+while a native read is pending. Only diagnosis text, freshness and layer states
+change; controls, disclosures, focus and the message area retain their nodes.
+Ticks add no read, IPC call, timer or retry.
 
 The 60-second display rule uses the same `observed_at` and observation window as
 the native producer: `desktop/fleet-core/src/supervisor_status.rs` marks a selected ready
@@ -173,6 +175,14 @@ stores the successful response and a source-path deadline cutoff alongside
 still at or before that cutoff is not renewed. Session axes have no host-reason
 exception. A normal read advancing a fact's deadline clears its outcome;
 bootstrap, namespace changes and inventory withdrawal discard the outcomes.
+Only a read started at or after a fact's deadline can classify it as not renewed.
+`health-display.js::takeHealthRenewal` bounds the source cutoff by the read's
+start time. A verified same-scope reconnect forces one re-read of each retained
+source, but a read before its deadline neither records an outcome for current
+facts nor spends that deadline's renewal. At the deadline the source gets one
+renewal GET, unless a normal read already advanced its deadline. A reconnect
+read started after expiry counts as that renewal. A response arriving after
+expiry cannot turn a read started before expiry into a renewal.
 Fleet continues to use its existing native status/overview reads and diagnosis;
 it has no Connector deadline renewal or synthetic not-renewed outcome.
 Failed or unchanged Connector renewals do not retry on ticks or visibility

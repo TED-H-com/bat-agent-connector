@@ -86,6 +86,8 @@ for (const locale of ['en-US', 'zh-TW']) for (const controls of [false, true]) {
       await expect(row).toHaveAttribute('data-freshness', 'stale');
       await expect(row.locator('[data-check-state="passed"]')).toHaveCount(0);
       await expect(row.locator('[data-fleet-check]').first()).toHaveText(locale === 'en-US' ? 'Not yet confirmed' : '尚未確認');
+      await expect(row.locator('.fleet-diagnosis-help')).toHaveText(locale === 'en-US'
+        ? 'Choose Read status to get a current result before continuing.' : '按「重新讀取狀態」取得新結果，再繼續操作。');
       expect(await page.evaluate(() => (window as any).__clockFleet.reads)).toBe(baseline + 1);
       expect(await page.evaluate(() => (window as any).__clockFleet.writes)).toBe(0);
       expect(await page.evaluate(() => (window as any).__clockFleet.listeners.size)).toBe(1);

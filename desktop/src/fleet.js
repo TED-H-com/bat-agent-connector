@@ -1,4 +1,4 @@
-import {fleetStatus, rememberFleetDetails} from "./fleet-status.js";
+import {fleetStatus, paintFleetHealth, rememberFleetDetails} from "./fleet-status.js";
 import {button} from './ui/components.js';
 import {fleetAvailability, fleetRequest} from "./transport/index.ts";
 
@@ -144,7 +144,7 @@ export async function mountFleet(main, {h, t, onStatus = () => {}}) {
       if (alive()) message.textContent = `${t("fleet_unknown")} ${String(error)}`;
     } finally {busy = false; pressed = null; render();}
   };
-  const paintHealth = () => {if (snapshot) render();};
+  const paintHealth = () => {if (alive() && snapshot) paintFleetHealth(content, {t, snapshot, readable});};
   try {
     const availability = await fleetAvailability();
     if (!alive()) return () => {disposed = true;};
