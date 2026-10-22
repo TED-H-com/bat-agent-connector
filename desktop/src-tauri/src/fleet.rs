@@ -921,7 +921,7 @@ mod tests {
             let row = &cases[name]["pending"]["readiness"]["hosts"][0];
             assert_eq!(row["code"], "PROBE_PENDING");
             assert_eq!(row["route_requirement"], expected, "{name}");
-            assert!(row.get("observed_at").is_none());
+            assert!(row["observed_at"].is_null());
             assert_eq!(
                 cases[name]["pending"]["readiness"]["hosts"][1]["level"],
                 "ready"
@@ -940,6 +940,14 @@ mod tests {
     #[ignore = "explicit fixture regeneration only"]
     fn pending_generate_golden() {
         println!("FLEET_PENDING_GOLDEN={}", pending_cases());
+    }
+    #[test]
+    fn pending_evidence_matches_shared_frontend_golden() {
+        let expected: Value = serde_json::from_str(include_str!(
+            "../../tests/fixtures/fleet-pending.golden.json"
+        ))
+        .unwrap();
+        assert_eq!(pending_cases(), expected);
     }
     #[test]
     fn stop_aged_evidence_survives_native_projection_and_sanitizer() {

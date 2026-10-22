@@ -1967,7 +1967,8 @@ async fn direct_requirement_survives_between_and_during_route_attempts() {
             let row = requirement_row(&status);
             assert_eq!(row.code.as_deref(), Some("PROBE_PENDING"));
             assert_eq!(row.route_requirement, Some(f.expected));
-            f.assert_effects(&status, 2, tcp, lan, wakes);
+            // LAN probes run alongside the held second direct probe.
+            f.assert_effects(&status, 2, tcp, lan * 2, wakes);
         }
         f.runtime.shutdown(16002).await.unwrap();
     }
@@ -1982,6 +1983,10 @@ async fn route_requirement_clears_on_success_before_a_probe_arrives() {
         let status = f.runtime.tick(16000).await.unwrap();
         let row = requirement_row(&status);
         if row.route.is_some() {
+            if !saw_chosen {
+                assert!(row.observed_at.is_none());
+                assert_eq!(row.code.as_deref(), Some("PROBE_PENDING"));
+            }
             assert!(row.route_requirement.is_none());
             saw_chosen = true;
         }
@@ -1991,17 +1996,18 @@ async fn route_requirement_clears_on_success_before_a_probe_arrives() {
     let status = f.runtime.tick(16001).await.unwrap();
     assert_eq!(requirement_row(&status).level, "ready");
     assert!(requirement_row(&status).route_requirement.is_none());
-    let state = f.state.lock().unwrap();
-    assert_eq!(
-        state
-            .launches
-            .iter()
-            .filter(|name| *name == "node-1")
-            .count(),
-        1
-    );
-    assert!(state.stops.is_empty());
-    drop(state);
+    {
+        let state = f.state.lock().unwrap();
+        assert_eq!(
+            state
+                .launches
+                .iter()
+                .filter(|name| *name == "node-1")
+                .count(),
+            1
+        );
+        assert!(state.stops.is_empty());
+    }
     f.runtime.shutdown(16002).await.unwrap();
 }
 #[tokio::test]

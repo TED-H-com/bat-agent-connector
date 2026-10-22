@@ -1,6 +1,7 @@
 import {test, expect} from '@playwright/test';
 import {readFileSync} from 'node:fs';
 const requirements = JSON.parse(readFileSync(new URL('./fixtures/fleet-requirement.golden.json', import.meta.url), 'utf8'));
+const pending = JSON.parse(readFileSync(new URL('./fixtures/fleet-pending.golden.json', import.meta.url), 'utf8'));
 const stops = JSON.parse(readFileSync(new URL('./fixtures/fleet-stop.golden.json', import.meta.url), 'utf8'));
 const words = {
   en: ['Only Tailscale direct is configured. The peer evidence is unknown.',
@@ -62,5 +63,24 @@ for (const locale of ['en', 'zh-TW']) test.describe(`Fleet evidence ${locale}`, 
     await row.locator('summary').click();
     await expect(row.locator('code').filter({hasText: 'PROBE_STALE'})).toBeVisible();
     await expect(row.locator('[data-check-state="passed"]')).toHaveCount(0);
+  });
+  test('between-attempts rows show Checking and the last failed selection', async ({page}) => {
+    for (const [name, index] of [['unknown', 0], ['tcp', 2], ['exhausted', 3]] as const) {
+      await mount(page, pending[name].pending);
+      const row = page.locator('[data-fleet-diagnosis="node-1"]');
+      await expect(row).toHaveAttribute('data-fleet-state', 'checking');
+      await expect(row.locator('.fleet-diagnosis-title')).toHaveText(locale === 'en' ? 'unknown · Checking' : '未知 · 檢查中');
+      await expect(row.locator('[data-fleet-route-requirement="node-1"]')).toHaveText(words[locale][index]);
+      await expect(page.locator('[data-fleet-diagnosis="node-2"]')).toHaveAttribute('data-fleet-state', 'ready');
+    }
+  });
+  test('expiry withdraws between-attempts explanations', async ({page}) => {
+    for (const [name, index] of [['unknown', 0], ['tcp', 2], ['exhausted', 3]] as const) {
+      await mount(page, pending[name].aged, 60_001);
+      const row = page.locator('[data-fleet-diagnosis="node-1"]');
+      await expect(row).toHaveAttribute('data-fleet-state', 'stale');
+      await expect(row.locator('[data-fleet-route-requirement="node-1"]')).toHaveCount(0);
+      await expect(row).not.toContainText(words[locale][index]);
+    }
   });
 });
