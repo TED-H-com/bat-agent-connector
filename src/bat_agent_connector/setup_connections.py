@@ -149,6 +149,9 @@ def _plan(ops, principal, action, target, params, pre):
         raise OperationError("INVALID_TARGET", "Use a server-created connection ID", 422)
     if not params or set(params) - PARAMS:
         raise OperationError("INVALID_PARAMS", "Use the bounded connection choices", 422)
+    if "source_reference" in params and (not isinstance(params["source_reference"], str)
+            or not re.fullmatch(r"source_[0-9a-f]{64}", params["source_reference"])):
+        raise OperationError("INVALID_PARAMS", "Use a bounded source reference", 422)
     if "server_configuration" in params and not personal:
         raise OperationError("FORBIDDEN", "Reference associations cannot change server configuration", 403)
     if (set(pre) not in ({"expected_revision"}, {"expected_revision", "review_digest"})
@@ -179,10 +182,19 @@ def _plan(ops, principal, action, target, params, pre):
                 raise OperationError("INVALID_PARAMS", "Use a typed source claim", 422)
             if "source_digest" in offered:
                 association = _public_descriptor(offered)["association"]
-            elif offered.get("kind") == "staged_secret" and {"url", "fingerprint"} <= offered.keys():
-                association = {"url": setup._url(offered["url"]), "fingerprint": setup.normalize_fingerprint(offered["fingerprint"])}
-            else:
+            elif offered.get("kind") == "staged_secret" and set(offered) == {"kind", "secret_ref", "url", "fingerprint"}:
+                if not isinstance(offered["secret_ref"], str) or not setup.SECRET_REF.fullmatch(offered["secret_ref"]):
+                    raise OperationError("INVALID_PARAMS", "Use an opaque staged reference", 422)
+                try:
+                    association = {"url": setup._url(offered["url"]),
+                        "fingerprint": setup.normalize_fingerprint(setup._text(offered["fingerprint"], "fingerprint", 200))}
+                except setup.ConfigError:
+                    raise OperationError("INVALID_PARAMS", "Use a bounded fingerprint", 422) from None
+            elif offered.get("kind") == "bat_profile" and set(offered) == {"kind", "profile_reference"}:
+                setup._text(offered["profile_reference"], "profile reference")
                 association = descriptor["association"]  # A selector is not a request to re-resolve/rebind.
+            else:
+                raise OperationError("INVALID_PARAMS", "Use only the bounded public descriptor or source selector fields", 422)
             if association != descriptor["association"]:
                 _changed("Endpoint or pin changed; add a separate connection")
     elif not personal and isinstance(params.get("source"), dict) and "source_digest" in params["source"]:

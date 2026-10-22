@@ -858,6 +858,18 @@ async def test_r2_s4_reference_update_preserves_receipt_refs(installed, served_s
     assert daemon.journal.db.execute("SELECT receipt_refs FROM connection_bindings").fetchone()[0] == before["receipt_refs"]
 
 
+async def test_r2_reference_update_rejects_secret_fields_in_selector(installed, served_setup, source):
+    daemon, _, _ = installed
+    _, first = await accept(served_setup, intent(source), key="first")
+    await settle_operations(daemon.ops)
+    connection = daemon.ops.get(first)["result"]["connection_id"]
+    body = intent(source, connection=connection)
+    body["preconditions"]["expected_revision"] = 1
+    body["params"]["source"] = {"kind": "bat_profile", "profile_reference": "profile-a", "token": "synthetic-forbidden"}
+    assert (await served_setup("POST", PREVIEW, body))[0] == 422
+    assert daemon.journal.db.execute("SELECT count(*) FROM operations").fetchone()[0] == 1
+
+
 async def test_r2_create_intent_binding_is_enforced_on_replay(installed, served_setup, source):
     daemon, _, _ = installed
     body, ident = await accept(served_setup, intent(source))
