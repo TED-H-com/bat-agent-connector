@@ -712,7 +712,7 @@ printf '%s' '{"protocol":1,"endpoint":"http://127.0.0.1:41001/","actor":"fixture
     #[cfg(unix)]
     #[test]
     fn provider_and_both_prepare_one_service_and_preserve_existing_blank_installations() {
-        for role in [Role::Provider, Role::Both] {
+        for role in (0..10).flat_map(|_| [Role::Provider, Role::Both]) {
             let root = tempfile::tempdir().unwrap();
             let resources = startup_fixture(root.path());
             let data = root.path().join("app");
