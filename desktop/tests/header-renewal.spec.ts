@@ -1,0 +1,87 @@
+import {test, expect} from '@playwright/test';
+import {conversationFixture, mountConversation} from './conversation-fixture';
+import {runtimeGolden} from './session-runtime-fixture';
+import {hostGolden} from './header-hosts-fixture';
+
+test.describe.configure({mode: 'parallel'});
+
+for (const locale of ['en-US', 'zh-TW']) {
+  test(`header unchanged renewal retains unreachable host wording ${locale}`, async ({browser}) => {
+    const context = await browser.newContext({locale}), page = await context.newPage();
+    const fixture = conversationFixture(), now = 1790000900000;
+    let gets = 0, posts = 0, release: () => void = () => {};
+    const held = new Promise<void>(resolve => {release = resolve;});
+    await page.clock.install({time: now}); await page.clock.pauseAt(now);
+    await mountConversation(page, false, async input => {
+      if (input.method !== 'GET') posts++;
+      if (input.path === '/hosts') {
+        if (++gets === 2) await held;
+        return {status: 200, data: hostGolden.host_unreachable};
+      }
+      return fixture.dispatch(input);
+    });
+    try {
+      await page.goto('/dashboard/#/sessions');
+      const other = page.locator('#installation-health [data-health-other]');
+      await expect(other).toHaveText(locale === 'en-US'
+        ? '1 other machine needs attention · Last attempt: 1 min ago; host unreachable, last successful observation is stale'
+        : '另有 1 台機器需要處理 · 上次嘗試：1 分鐘前；無法連至主機，上次成功觀察已過期');
+      await page.clock.fastForward(1_000);
+      await expect.poll(() => gets).toBe(2);
+      release();
+      await page.clock.fastForward(1_000);
+      await expect(other).toHaveText(locale === 'en-US'
+        ? '1 other machine needs attention · Last attempt: 1 min ago; host unreachable, last successful observation is stale'
+        : '另有 1 台機器需要處理 · 上次嘗試：1 分鐘前；無法連至主機，上次成功觀察已過期');
+      await page.clock.fastForward(600_000);
+      await expect(other).toHaveText(locale === 'en-US'
+        ? '1 other machine needs attention · Last attempt: 11 min ago; host unreachable, last successful observation is stale'
+        : '另有 1 台機器需要處理 · 上次嘗試：11 分鐘前；無法連至主機，上次成功觀察已過期');
+      await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+      expect(gets).toBe(2); expect(posts).toBe(0);
+    } finally {release(); await context.close();}
+  });
+
+  test(`header unchanged session renewal records both evidence axes ${locale}`, async ({browser}) => {
+    const context = await browser.newContext({locale}), page = await context.newPage();
+    const fixture = conversationFixture(), doc = hostGolden.host_not_refreshed, host = doc.hosts[0];
+    const session = structuredClone(runtimeGolden.ended_runtime.listed);
+    for (const axis of ['activity', 'connection']) Object.assign(session.state.evidence[axis], {
+      observed_at: host.last_attempt_at, valid_until: host.valid_until, stale: true});
+    const path = '/sessions/fixture-host/fixture-session', counts = new Map<string, number>();
+    let posts = 0, completed = false, release: () => void = () => {};
+    const held = new Promise<void>(resolve => {release = resolve;});
+    await page.clock.install({time: 1790000600000}); await page.clock.pauseAt(1790000600000);
+    await mountConversation(page, false, async input => {
+      if (input.method !== 'GET') posts++;
+      if (input.path === '/hosts' || input.path === path) {
+        counts.set(input.path, (counts.get(input.path) || 0) + 1);
+        if (counts.get(input.path) === 2) {await held; completed = true;}
+        return {status: 200, data: input.path === '/hosts' ? doc : {session}};
+      }
+      return fixture.dispatch(input);
+    });
+    try {
+      await page.goto('/dashboard/#/sessions');
+      await expect.poll(() => counts.get('/hosts')).toBe(1);
+      await page.evaluate(() => {location.hash = '#/session/fixture-host/fixture-session';});
+      const activity = page.locator('#installation-health .health-last-value');
+      await expect(activity).toHaveText(locale === 'en-US' ? 'Idle · 10 min ago · Checking' : '閒置 · 10 分鐘前 · 檢查中');
+      await page.clock.fastForward(1_000);
+      await expect.poll(() => counts.get(path)).toBe(2);
+      release(); await expect.poll(() => completed).toBe(true);
+      await expect(activity).toHaveText(locale === 'en-US'
+        ? 'Idle · 10 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)'
+        : '閒置 · 10 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）');
+      await expect(page.locator('#installation-health .health-installation-connection')).toHaveText(locale === 'en-US'
+        ? 'Connected · 10 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)'
+        : '已連線 · 10 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）');
+      await page.clock.fastForward(1_000);
+      await expect.poll(() => counts.get('/hosts')).toBe(2);
+      await page.clock.fastForward(600_000);
+      await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+      expect(Object.fromEntries(counts)).toEqual({'/hosts': 2, [path]: 2});
+      expect(posts).toBe(0);
+    } finally {release(); await context.close();}
+  });
+}
