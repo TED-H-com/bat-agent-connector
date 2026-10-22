@@ -14148,6 +14148,9 @@ var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}
 var clientActionReason = (code) => clientReasons.find((reason) => clientActionCode(reason) === code) || null;
 //#endregion
 //#region src/health-fact.js
+function healthReadError(reason, error) {
+	return reason === "host_unreachable" && error?.unchangedDeadline === true ? null : error;
+}
 function displayFact(fact = {}, { now = Date.now(), bootstrap, version } = {}) {
 	const observed = time$2(fact.observed_at), deadline = time$2(fact.valid_until);
 	const ageSeconds = Number.isFinite(observed) ? Math.max(0, Math.floor((now - observed) / 1e3)) : null;
@@ -14423,11 +14426,32 @@ function fleetHealth(row, options = {}) {
 		}))
 	};
 }
-function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState, now = Date.now() }) {
-	const { state, kind, steps, fact } = fleetHealth(row, {
+function diagnosisPresentation(row, { t, snapshot, readable, entry, now }) {
+	const health = fleetHealth(row, {
 		snapshot,
 		readable,
 		kind: entry.kind,
+		now
+	});
+	const { state, kind } = health;
+	const helpKey = [
+		"ready",
+		"identity",
+		"service",
+		"version"
+	].includes(state) ? `${state}_${kind === "connector" ? "connector" : "bat"}` : state;
+	return {
+		...health,
+		title: healthLabel(health.fact, t),
+		help: t("fleet_check_help_" + helpKey)
+	};
+}
+function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState, now = Date.now() }) {
+	const { state, steps, fact, title, help } = diagnosisPresentation(row, {
+		t,
+		snapshot,
+		readable,
+		entry,
 		now
 	});
 	const key = `${snapshot.configuration.binding}:machine:${entry.name}`;
@@ -14438,18 +14462,12 @@ function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState, now =
 		"data-fleet-check": step.id,
 		"data-check-state": step.state
 	}, t("fleet_check_" + step.state))])), ...[row?.code, row?.blocking].filter((value, index, all) => value && all.indexOf(value) === index).map((value) => h("code", {}, value)));
-	const helpKey = [
-		"ready",
-		"identity",
-		"service",
-		"version"
-	].includes(state) ? `${state}_${kind === "connector" ? "connector" : "bat"}` : state;
 	return h("div", {
 		class: "fleet-diagnosis",
 		"data-fleet-diagnosis": entry.name,
 		"data-fleet-state": state,
 		"data-freshness": fact.freshness
-	}, h("p", { class: "fleet-diagnosis-title" }, healthLabel(fact, t)), h("p", { class: "muted" }, t("fleet_check_help_" + helpKey)), details, ...fleetRoute(row, {
+	}, h("p", { class: "fleet-diagnosis-title" }, title), h("p", { class: "muted fleet-diagnosis-help" }, help), details, ...fleetRoute(row, {
 		h,
 		t,
 		snapshot,
@@ -14458,23 +14476,72 @@ function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState, now =
 		now
 	}));
 }
-function fleetRoute(row, { h, t, snapshot, readable, entry, now }) {
+function paintDiagnosis(node, { state, steps, fact, title, help }, t) {
+	const text = (selector, value) => {
+		const target = node.querySelector(selector);
+		if (target.textContent !== value) target.textContent = value;
+	};
+	node.dataset.fleetState = state;
+	node.dataset.freshness = fact.freshness;
+	text(".fleet-diagnosis-title", title);
+	text(".fleet-diagnosis-help", help);
+	for (const step of steps) {
+		const selector = `[data-fleet-check="${step.id}"]`;
+		node.querySelector(selector).dataset.checkState = step.state;
+		text(selector, t("fleet_check_" + step.state));
+	}
+}
+function paintFleetHealth(content, { t, snapshot, readable, now = Date.now() }) {
+	const ready = new Map([...snapshot.readiness.hosts, snapshot.readiness.connector].filter(Boolean).map((row) => [row.name, row]));
+	const entries = new Map(snapshot.configuration.connections.map((entry) => [entry.name, entry]));
+	for (const node of content.querySelectorAll("[data-fleet-diagnosis]")) {
+		const entry = entries.get(node.dataset.fleetDiagnosis);
+		if (!entry) continue;
+		const row = ready.get(entry.name), options = {
+			t,
+			snapshot,
+			readable,
+			entry,
+			now
+		};
+		paintDiagnosis(node, diagnosisPresentation(row, options), t);
+		const routeNode = node.querySelector("[data-fleet-route]");
+		const route = routeNode && routePresentation(row, options);
+		if (route) {
+			routeNode.dataset.freshness = route.freshness;
+			if (routeNode.textContent !== route.label) routeNode.textContent = route.label;
+		}
+	}
+}
+function routePresentation(row, { t, snapshot, readable, now }) {
 	const route = row?.route;
 	if (!route || ![
 		"direct",
 		"lan",
 		"cf",
 		"configured"
-	].includes(route.kind) || !readable || row.selected !== true || ["off", "down"].includes(row.level) || snapshot.monitor.state !== "running" || snapshot.readiness.state === "unavailable" || snapshot.selection.applied_revision !== snapshot.selection.revision) return [];
+	].includes(route.kind) || !readable || row.selected !== true || ["off", "down"].includes(row.level) || snapshot.monitor.state !== "running" || snapshot.readiness.state === "unavailable" || snapshot.selection.applied_revision !== snapshot.selection.revision) return null;
 	const fact = displayFact({
 		key: "fleet_route_" + route.kind,
 		observed_at: route.observed_at
 	}, { now });
-	return [h("p", {
+	return {
+		...fact,
+		label: healthLabel(fact, t)
+	};
+}
+function fleetRoute(row, { h, t, snapshot, readable, entry, now }) {
+	const route = routePresentation(row, {
+		t,
+		snapshot,
+		readable,
+		now
+	});
+	return route ? [h("p", {
 		class: "muted",
 		"data-fleet-route": entry.name,
-		"data-freshness": fact.freshness
-	}, healthLabel(fact, t))];
+		"data-freshness": route.freshness
+	}, route.label)] : [];
 }
 var codeReason, layerReason, layerStep, lookup;
 var init_fleet_status = __esmMin((() => {
@@ -14547,6 +14614,21 @@ var healthRevision = (caps) => JSON.stringify([
 var rowId = (row) => JSON.stringify([row.host, row.session_id]);
 var gone = (row) => Boolean(row.gone_at) || row.state?.enumeration === "gone";
 var selectedRows = (health) => (health.sessions || []).filter((row) => !gone(row) && row.host === health.selected?.host && (health.selected.workspaceId ? row.workspace_id === health.selected.workspaceId : row.session_id === health.selected.sessionId));
+function sourceError(health, path, deadline, reason) {
+	const error = health.readErrors?.get(path);
+	const unchanged = time$1(deadline) <= health.renewalOutcomes?.get(path);
+	return healthReadError(reason, error || (unchanged ? {
+		code: "OBSERVATION_NOT_RENEWED",
+		unchangedDeadline: true
+	} : null));
+}
+function clearRenewedSource(health, path) {
+	const cutoff = health.renewalOutcomes?.get(path);
+	if (!Number.isFinite(cutoff)) return;
+	const hostPending = (health.hosts || []).some((row) => health.hostSources?.get(row.host) === path && time$1(row.valid_until) <= cutoff);
+	const sessionPending = (health.sessions || []).some((row) => health.rowSources?.get(rowId(row)) === path && ["activity", "connection"].some((axis) => time$1(row.state?.evidence?.[axis]?.valid_until) <= cutoff));
+	if (!hostPending && !sessionPending) health.renewalOutcomes.delete(path);
+}
 function compactHealth({ attention, stale, unknown, activity }) {
 	return attention ? "attention" : stale ? "stale" : unknown || activity === "unknown" ? "unknown" : activity === "working" ? "working" : "idle";
 }
@@ -14561,7 +14643,7 @@ function runtimeSummary$1(health, now) {
 			value: row.state?.activity ?? facets.activity,
 			observed_at: evidence ? evidence.observed_at : row.observed_at,
 			valid_until: evidence?.valid_until,
-			error: health.readErrors?.get(health.rowSources?.get(rowId(row))),
+			error: sourceError(health, health.rowSources?.get(rowId(row)), evidence?.valid_until),
 			stale: Object.values(facets.staleness).some(Boolean)
 		}, { now });
 		return {
@@ -14579,7 +14661,8 @@ function runtimeSummary$1(health, now) {
 	});
 	const connection = rows.filter((row) => row.state?.connection).map((row) => displayFact({
 		value: row.state.connection,
-		...row.state.evidence?.connection
+		...row.state.evidence?.connection,
+		error: sourceError(health, health.rowSources?.get(rowId(row)), row.state.evidence?.connection?.valid_until)
 	}, { now })).sort((a, b) => (time$1(b.observed_at) || 0) - (time$1(a.observed_at) || 0))[0] || null;
 	const attention = facts.some((row) => row.attention);
 	const stale = facts.some((row) => row.activity.freshness === "stale") || connection?.freshness === "stale";
@@ -14610,17 +14693,16 @@ function countFact(rows, now, href = null) {
 			stale: facts.some((row) => row.freshness === "stale")
 		}, { now }),
 		href,
+		error: rows.find((row) => row.error)?.error,
 		stale_reason: rows.length && rows.every((row) => row.stale_reason === "host_unreachable") ? "host_unreachable" : null,
 		freshness: facts.some((row) => row.freshness === "stale") ? "stale" : facts.some((row) => row.freshness === "unknown") ? "unknown" : "current"
 	};
 }
-function otherMachines(health, now) {
-	if (health.hostsLoaded) return countFact((health.hosts || []).filter((row) => row.host !== health.selected?.host && (row.error || row.reachable === false && row.last_attempt_at)).map((row) => ({
-		observed_at: row.last_attempt_at,
-		valid_until: row.valid_until,
-		stale: row.stale,
-		stale_reason: row.stale_reason
-	})), now);
+function otherMachines(health, now, hosts) {
+	if (health.hostsLoaded) {
+		const attention = new Set((health.hosts || []).filter((row) => row.host !== health.selected?.host && (row.error || row.reachable === false && row.last_attempt_at)).map((row) => row.host));
+		return countFact(hosts.filter((row) => attention.has(row.host)), now);
+	}
 	const snapshot = health.fleet;
 	return countFact((health.selected ? [] : snapshot?.readiness?.hosts || []).filter((row) => {
 		return fleetDiagnosis(row, {
@@ -14657,10 +14739,19 @@ function healthDisplay(input, now = Date.now()) {
 	});
 	if (!receipt) capabilities.freshness = "unknown";
 	capabilities.refresh = health.capabilityRefresh;
-	const other = otherMachines(health, now);
+	const hosts = (health.hosts || []).map((row) => displayFact({
+		host: row.host,
+		observed_at: row.last_attempt_at,
+		valid_until: row.valid_until,
+		stale: row.stale,
+		stale_reason: row.stale_reason,
+		error: sourceError(health, health.hostSources?.get(row.host), row.valid_until, row.stale_reason)
+	}, { now }));
+	const other = otherMachines(health, now, hosts);
 	return {
 		connection,
 		capabilities,
+		hosts,
 		summary: runtimeSummary$1(health, now),
 		otherAttention: other.value,
 		other
@@ -14711,11 +14802,15 @@ function resetHealthBootstrap(previous = {}, { sameScope, caps, now = Date.now()
 	});
 	return result;
 }
-function rememberHealthRead(health, path, data) {
+function rememberHealthRead(health, path, data, { renewalDeadline } = {}) {
 	if (!data || typeof data !== "object") return;
 	path = path.replace(/\?$/, "");
 	const [pathname, query = ""] = path.split("?"), params = new URLSearchParams(query);
 	health.readErrors?.delete(path);
+	if (Number.isFinite(renewalDeadline)) {
+		health.renewalOutcomes ||= new Map();
+		health.renewalOutcomes.set(path, renewalDeadline);
+	}
 	if (Array.isArray(data.hosts) && ["/hosts", "/sessions"].includes(pathname)) {
 		const full = pathname === "/sessions" || ![...params.keys()].some((key) => key !== "limit");
 		const hosts = new Map((full ? [] : health.hosts || []).map((row) => [row.host, row]));
@@ -14727,7 +14822,10 @@ function rememberHealthRead(health, path, data) {
 		health.hosts = [...hosts.values()];
 		if (full) health.hostsLoaded = true;
 	}
-	if (!/^\/sessions(?:\/[^/]+\/[^/]+)?$/.test(pathname)) return;
+	if (!/^\/sessions(?:\/[^/]+\/[^/]+)?$/.test(pathname)) {
+		clearRenewedSource(health, path);
+		return;
+	}
 	const rows = Array.isArray(data.sessions) ? data.sessions : data.session ? [data.session] : [];
 	const sessions = new Map((health.sessions || []).map((row) => [rowId(row), row]));
 	health.rowSources ||= new Map();
@@ -14782,6 +14880,7 @@ function rememberHealthRead(health, path, data) {
 	const retained = new Set(kept.map(rowId));
 	for (const id of health.rowSources.keys()) if (!retained.has(id)) health.rowSources.delete(id);
 	if (health.selected) selectHealthSession(health, health.selected.host, health.selected.sessionId);
+	clearRenewedSource(health, path);
 }
 function withdrawHealthRead(health, method, path, error) {
 	path = path.replace(/\?$/, "");
@@ -14797,7 +14896,8 @@ function withdrawHealthRead(health, method, path, error) {
 		chains: new Map(),
 		rowSources: new Map(),
 		hostSources: new Map(),
-		readErrors: new Map()
+		readErrors: new Map(),
+		renewalOutcomes: new Map()
 	});
 	else if (error.status === 404 && method === "GET" && health.selected && pathname === `/sessions/${encodeURIComponent(health.selected.host)}/${encodeURIComponent(health.selected.sessionId)}`) health.sessions = (health.sessions || []).filter((row) => row.host !== health.selected.host || row.session_id !== health.selected.sessionId);
 	else if (inventoryRead) {
@@ -14821,10 +14921,15 @@ function takeHealthRenewal(health, now = Date.now()) {
 	}
 	for (const row of health.hosts || []) add(health.hostSources?.get(row.host), row.valid_until);
 	health.renewed ||= new Map();
+	health.bootstrapReads ||= new Set();
 	for (const [path, deadline] of sources) {
 		const key = `${health.bootstrap || 0}:${deadline}`;
-		if ((now >= deadline || health.bootstrapRenewal) && health.renewed.get(path) !== key) {
-			health.renewed.set(path, key);
+		const expired = now >= deadline && health.renewed.get(path) !== key;
+		const reconnect = health.bootstrapRenewal && !health.bootstrapReads.has(path);
+		if (expired || reconnect) {
+			health.bootstrapReads.add(path);
+			if (expired) health.renewed.set(path, key);
+			health.renewalDeadline = Math.min(deadline, now);
 			return path;
 		}
 	}
@@ -41602,7 +41707,6 @@ function profileStateFacts(state, { now = Date.now(), error = null } = {}) {
 	const past = state?.verified && typeof state.verified === "object" && !Array.isArray(state.verified) ? state.verified : null;
 	const pastAt = profileTimestamp(past?.observed_at), lastSuccessAt = profileTimestamp(state?.evidence_ref?.last_success_at);
 	const observed = profileTimestamp(state?.observed_at), deadline = typeof state?.valid_until === "string" ? Date.parse(state.valid_until) : NaN;
-	const readError = reason === "host_unreachable" && error?.unchangedDeadline === true ? null : error;
 	return {
 		fact: observed !== null && Number.isFinite(deadline) ? displayFact({
 			key: valueKey(state?.value),
@@ -41610,7 +41714,7 @@ function profileStateFacts(state, { now = Date.now(), error = null } = {}) {
 			valid_until: deadline,
 			stale: ["host_unreachable", "host_not_refreshed"].includes(reason),
 			stale_reason: reason,
-			error: readError
+			error: healthReadError(reason, error)
 		}, { now }) : null,
 		valueKey: valueKey(state?.value),
 		reasonKey: reasons.has(reason) ? "wpf_reason_" + reason : "wpf_unverified",
@@ -62292,7 +62396,15 @@ async function mountFleetDesktop(main, { h, t, onStatus = () => {} }) {
 		if (again && !again.disabled) again.focus();
 		else if (previous) successor(previous).focus();
 	};
+	const paintHealth = () => {
+		if (alive() && snapshot) paintFleetHealth(content, {
+			t,
+			snapshot,
+			readable
+		});
+	};
 	await run(read);
+	if (alive()) document.addEventListener("health-display-tick", paintHealth);
 	const poll = async () => {
 		if (!alive()) return;
 		if (!busy) await run(read, true);
@@ -62302,6 +62414,7 @@ async function mountFleetDesktop(main, { h, t, onStatus = () => {} }) {
 	return () => {
 		disposed = true;
 		clearTimeout(timer);
+		document.removeEventListener("health-display-tick", paintHealth);
 		panel.remove();
 	};
 }
@@ -62716,6 +62829,13 @@ async function mountFleet(main, { h, t, onStatus = () => {} }) {
 			render();
 		}
 	};
+	const paintHealth = () => {
+		if (alive() && snapshot) paintFleetHealth(content, {
+			t,
+			snapshot,
+			readable
+		});
+	};
 	try {
 		const availability = await fleetAvailability();
 		if (!alive()) return () => {
@@ -62747,6 +62867,7 @@ async function mountFleet(main, { h, t, onStatus = () => {} }) {
 			}
 		} else {
 			await read();
+			if (alive()) document.addEventListener("health-display-tick", paintHealth);
 			const poll = async () => {
 				if (!alive()) return;
 				await read();
@@ -62760,6 +62881,7 @@ async function mountFleet(main, { h, t, onStatus = () => {} }) {
 	return () => {
 		disposed = true;
 		clearTimeout(timer);
+		document.removeEventListener("health-display-tick", paintHealth);
 		nativeCleanup?.();
 		bootstrapCleanup?.();
 		panel.remove();
@@ -69227,16 +69349,16 @@ function dropKey(scope, namespace) {
 		localStorage.removeItem(`batc.key.${namespace}.${scope}`);
 	} catch {}
 }
-async function api(method, path, body, key, collectReceipt) {
+async function api(method, path, body, key, collectReceipt, renewalDeadline) {
 	const revision = diagnosticRevision, epoch = state.epoch, readHealth = state.health, inventoryRevision = state.health?.inventoryRevision;
 	try {
 		const data = await apiRequest(method, path, body, key, collectReceipt);
 		if (epoch === state.epoch && method === "GET") {
 			if (state.health && state.health === readHealth && state.health.inventoryRevision === inventoryRevision) {
-				rememberHealthRead(state.health, path, data);
+				rememberHealthRead(state.health, path, data, { renewalDeadline });
 				if (data && (Array.isArray(data.hosts) || Array.isArray(data.sessions) || data.session)) {
 					state.health.readers ||= new Map();
-					state.health.readers.set(path, api.bind(null, "GET", path));
+					state.health.readers.set(path.replace(/\?$/, ""), api.bind(null, "GET", path, void 0, void 0, void 0));
 				}
 				if (/^\/(hosts|sessions)(?:[/?]|$)/.test(path)) paintConnection(...connectionPaintFlags);
 			}
@@ -70300,7 +70422,7 @@ function tickHealth() {
 	if (healthRenewal || !state.health || !state.token) return;
 	const path = takeHealthRenewal(state.health);
 	const read = state.health.readers?.get(path);
-	if (read) healthRenewal = read().catch(() => {}).finally(() => {
+	if (read) healthRenewal = read(state.health.renewalDeadline).catch(() => {}).finally(() => {
 		healthRenewal = null;
 		paintConnection(...connectionPaintFlags);
 	});

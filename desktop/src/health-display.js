@@ -1,4 +1,4 @@
-import {displayFact} from './health-fact.js';
+import {displayFact, healthReadError} from './health-fact.js';
 export {displayFact, healthAge, healthLabel} from './health-fact.js';
 import {centralServiceStatus} from './central-service-status.js';
 import {sessionFacets} from './state/sessions.js';
@@ -12,6 +12,21 @@ const rowId = row => JSON.stringify([row.host, row.session_id]);
 const gone = row => Boolean(row.gone_at) || row.state?.enumeration === 'gone';
 const selectedRows = health => (health.sessions || []).filter(row => !gone(row) && row.host === health.selected?.host &&
   (health.selected.workspaceId ? row.workspace_id === health.selected.workspaceId : row.session_id === health.selected.sessionId));
+
+function sourceError(health, path, deadline, reason) {
+  const error = health.readErrors?.get(path);
+  const unchanged = time(deadline) <= health.renewalOutcomes?.get(path);
+  return healthReadError(reason, error || (unchanged ? {code: 'OBSERVATION_NOT_RENEWED', unchangedDeadline: true} : null));
+}
+
+function clearRenewedSource(health, path) {
+  const cutoff = health.renewalOutcomes?.get(path);
+  if (!Number.isFinite(cutoff)) return;
+  const hostPending = (health.hosts || []).some(row => health.hostSources?.get(row.host) === path && time(row.valid_until) <= cutoff);
+  const sessionPending = (health.sessions || []).some(row => health.rowSources?.get(rowId(row)) === path &&
+    ['activity', 'connection'].some(axis => time(row.state?.evidence?.[axis]?.valid_until) <= cutoff));
+  if (!hostPending && !sessionPending) health.renewalOutcomes.delete(path);
+}
 
 export function compactHealth({attention, stale, unknown, activity}) {
   return attention ? 'attention' : stale ? 'stale' : unknown || activity === 'unknown' ? 'unknown'
@@ -27,7 +42,7 @@ function runtimeSummary(health, now) {
     const facets = sessionFacets(row), evidence = row.state?.evidence?.activity;
     const activity = displayFact({value: row.state?.activity ?? facets.activity,
       observed_at: evidence ? evidence.observed_at : row.observed_at, valid_until: evidence?.valid_until,
-      error: health.readErrors?.get(health.rowSources?.get(rowId(row))),
+      error: sourceError(health, health.rowSources?.get(rowId(row)), evidence?.valid_until),
       stale: Object.values(facets.staleness).some(Boolean)}, {now});
     return {attention: facets.attention !== 'none' || row.api_access === 'managed' &&
       ['blocked', 'failed', 'error', 'needs_attention', 'awaiting_approval'].includes(row.runtime_status), activity,
@@ -35,7 +50,8 @@ function runtimeSummary(health, now) {
       idle: ['not_streaming', 'ended'].includes(activity.value)};
   });
   const connections = rows.filter(row => row.state?.connection).map(row => displayFact({value: row.state.connection,
-    ...row.state.evidence?.connection}, {now}));
+    ...row.state.evidence?.connection,
+    error: sourceError(health, health.rowSources?.get(rowId(row)), row.state.evidence?.connection?.valid_until)}, {now}));
   const connection = connections.sort((a, b) => (time(b.observed_at) || 0) - (time(a.observed_at) || 0))[0] || null;
   const attention = facts.some(row => row.attention);
   const stale = facts.some(row => row.activity.freshness === 'stale') || connection?.freshness === 'stale';
@@ -50,17 +66,18 @@ function countFact(rows, now, href = null) {
   const facts = rows.map(row => displayFact(row, {now}));
   return {...displayFact({value: rows.length, observed_at: rows.length ? Math.min(...rows.map(row => time(row.observed_at))) : null,
     stale: facts.some(row => row.freshness === 'stale')}, {now}), href,
+    error: rows.find(row => row.error)?.error,
     // Each producer's deadline has already been evaluated above.
     stale_reason: rows.length && rows.every(row => row.stale_reason === 'host_unreachable') ? 'host_unreachable' : null,
     freshness: facts.some(row => row.freshness === 'stale') ? 'stale' : facts.some(row => row.freshness === 'unknown') ? 'unknown' : 'current'};
 }
 
-function otherMachines(health, now) {
+function otherMachines(health, now, hosts) {
   if (health.hostsLoaded) {
-    const rows = (health.hosts || []).filter(row => row.host !== health.selected?.host &&
-      (row.error || row.reachable === false && row.last_attempt_at));
+    const attention = new Set((health.hosts || []).filter(row => row.host !== health.selected?.host &&
+      (row.error || row.reachable === false && row.last_attempt_at)).map(row => row.host));
     // No existing Fleet view lists central Inventory host identities.
-    return countFact(rows.map(row => ({observed_at: row.last_attempt_at, valid_until: row.valid_until, stale: row.stale, stale_reason: row.stale_reason})), now);
+    return countFact(hosts.filter(row => attention.has(row.host)), now);
   }
   const snapshot = health.fleet;
   const rows = health.selected ? [] : snapshot?.readiness?.hosts || [];
@@ -83,8 +100,11 @@ export function healthDisplay(input, now = Date.now()) {
     bootstrap: receipt?.bootstrap, version: healthRevision(receipt?.data)}, {now, bootstrap: health.bootstrap, version: healthRevision(health.currentCaps || input.caps)});
   if (!receipt) capabilities.freshness = 'unknown';
   capabilities.refresh = health.capabilityRefresh;
-  const other = otherMachines(health, now);
-  return {connection, capabilities, summary: runtimeSummary(health, now), otherAttention: other.value, other};
+  const hosts = (health.hosts || []).map(row => displayFact({host: row.host, observed_at: row.last_attempt_at,
+    valid_until: row.valid_until, stale: row.stale, stale_reason: row.stale_reason,
+    error: sourceError(health, health.hostSources?.get(row.host), row.valid_until, row.stale_reason)}, {now}));
+  const other = otherMachines(health, now, hosts);
+  return {connection, capabilities, hosts, summary: runtimeSummary(health, now), otherAttention: other.value, other};
 }
 
 export function selectHealthSession(health, host, sessionId) {
@@ -109,11 +129,15 @@ export function resetHealthBootstrap(previous = {}, {sameScope, caps, now = Date
 
 // Cache source reads, not receipt timestamps. A complete chain may be global or
 // host-only; pagination controls do not filter, attention/orchestration do.
-export function rememberHealthRead(health, path, data) {
+export function rememberHealthRead(health, path, data, {renewalDeadline} = {}) {
   if (!data || typeof data !== 'object') return;
   path = path.replace(/\?$/, '');
   const [pathname, query = ''] = path.split('?'), params = new URLSearchParams(query);
   health.readErrors?.delete(path);
+  if (Number.isFinite(renewalDeadline)) {
+    health.renewalOutcomes ||= new Map();
+    health.renewalOutcomes.set(path, renewalDeadline);
+  }
   if (Array.isArray(data.hosts) && ['/hosts', '/sessions'].includes(pathname)) {
     const full = pathname === '/sessions' || ![...params.keys()].some(key => key !== 'limit');
     const hosts = new Map((full ? [] : health.hosts || []).map(row => [row.host, row]));
@@ -122,7 +146,7 @@ export function rememberHealthRead(health, path, data) {
     health.hosts = [...hosts.values()];
     if (full) health.hostsLoaded = true;
   }
-  if (!/^\/sessions(?:\/[^/]+\/[^/]+)?$/.test(pathname)) return;
+  if (!/^\/sessions(?:\/[^/]+\/[^/]+)?$/.test(pathname)) {clearRenewedSource(health, path); return;}
   const rows = Array.isArray(data.sessions) ? data.sessions : data.session ? [data.session] : [];
   const sessions = new Map((health.sessions || []).map(row => [rowId(row), row]));
   health.rowSources ||= new Map();
@@ -159,6 +183,8 @@ export function rememberHealthRead(health, path, data) {
   const retained = new Set(kept.map(rowId));
   for (const id of health.rowSources.keys()) if (!retained.has(id)) health.rowSources.delete(id);
   if (health.selected) selectHealthSession(health, health.selected.host, health.selected.sessionId);
+  // A normal read can advance one axis while another retains its old deadline.
+  clearRenewedSource(health, path);
 }
 
 export function withdrawHealthRead(health, method, path, error) {
@@ -167,7 +193,7 @@ export function withdrawHealthRead(health, method, path, error) {
   if (error.status === 401 || error.status === 403 && inventoryRead) {
     Object.assign(health, {sessions: [], hosts: [], hostsLoaded: false, sessionsComplete: false,
       inventoryRevision: (health.inventoryRevision || 0) + 1, readers: new Map(),
-      completeHosts: new Set(), chains: new Map(), rowSources: new Map(), hostSources: new Map(), readErrors: new Map()});
+      completeHosts: new Set(), chains: new Map(), rowSources: new Map(), hostSources: new Map(), readErrors: new Map(), renewalOutcomes: new Map()});
   } else if (error.status === 404 && method === 'GET' && health.selected && pathname ===
     `/sessions/${encodeURIComponent(health.selected.host)}/${encodeURIComponent(health.selected.sessionId)}`) {
     health.sessions = (health.sessions || []).filter(row => row.host !== health.selected.host || row.session_id !== health.selected.sessionId);
@@ -191,10 +217,18 @@ export function takeHealthRenewal(health, now = Date.now()) {
   }
   for (const row of health.hosts || []) add(health.hostSources?.get(row.host), row.valid_until);
   health.renewed ||= new Map();
+  health.bootstrapReads ||= new Set();
   for (const [path, deadline] of sources) {
     const key = `${health.bootstrap || 0}:${deadline}`;
-    if ((now >= deadline || health.bootstrapRenewal) && health.renewed.get(path) !== key) {
-      health.renewed.set(path, key); return path;
+    const expired = now >= deadline && health.renewed.get(path) !== key;
+    const reconnect = health.bootstrapRenewal && !health.bootstrapReads.has(path);
+    if (expired || reconnect) {
+      health.bootstrapReads.add(path);
+      // A pre-deadline reconnect read neither spends that deadline nor reports
+      // current facts as unrenewed, even if its response arrives after expiry.
+      if (expired) health.renewed.set(path, key);
+      health.renewalDeadline = Math.min(deadline, now);
+      return path;
     }
   }
   health.bootstrapRenewal = false;

@@ -1,6 +1,12 @@
 const time = value => typeof value === 'number' && Number.isFinite(value) ? value
   : typeof value === 'string' && value ? Date.parse(value) : NaN;
 
+// A validated read can confirm a newer failed host attempt without advancing
+// its success-based deadline. Actual read failures always retain their code.
+export function healthReadError(reason, error) {
+  return reason === 'host_unreachable' && error?.unchangedDeadline === true ? null : error;
+}
+
 // Display evidence only. This clock never participates in an action gate.
 export function displayFact(fact = {}, {now = Date.now(), bootstrap, version} = {}) {
   const observed = time(fact.observed_at), deadline = time(fact.valid_until);
