@@ -83,7 +83,111 @@ pub struct FrozenPlanRef {
     pub sha256: String,
 }
 
+/// Immutable result of the original frozen-plan validator (32 MiB maximum).
+/// Decoding establishes consistency, not provenance or permission to execute.
+pub struct FrozenHistory {
+    pub(crate) reference: FrozenPlanRef,
+    pub(crate) plan: PublicationPlan,
+}
+impl FrozenHistory {
+    pub fn decode(reference: &FrozenPlanRef, bytes: &[u8]) -> Result<Self> {
+        if !hash_valid(&reference.review_digest)
+            || !hash_valid(&reference.sha256)
+            || bytes.len() > FROZEN_PLAN_LIMIT
+            || digest(bytes) != reference.sha256
+        {
+            return Err(Error::InvalidPlan);
+        }
+        Ok(Self {
+            reference: reference.clone(),
+            plan: frozen::decode(bytes, &reference.review_digest)?,
+        })
+    }
+    pub fn plan(&self) -> &PublicationPlan {
+        &self.plan
+    }
+    pub fn reference(&self) -> &FrozenPlanRef {
+        &self.reference
+    }
+}
+
+/// Read-only validated history. Fields cannot be supplied by a deserializer.
+/// Storage provenance and guarded freshness remain the native caller's duty.
+pub struct PublicationHistory {
+    pub(crate) frozen: FrozenHistory,
+    pub(crate) pointer: PathBuf,
+    pub(crate) journal_sha256: Option<String>,
+    pub(crate) reached: Vec<(Artifact, bool)>,
+    pub(crate) complete: bool,
+    pub(crate) decision: Option<(String, Vec<ArtifactObservation>)>,
+}
+impl PublicationHistory {
+    pub fn frozen(&self) -> &FrozenHistory {
+        &self.frozen
+    }
+    pub fn journal_sha256(&self) -> Option<&str> {
+        self.journal_sha256.as_deref()
+    }
+    /// None: unreached; Some(false): Intended; Some(true): Published.
+    pub fn reached(&self, artifact: Artifact) -> Option<bool> {
+        self.reached
+            .iter()
+            .find(|(a, _)| *a == artifact)
+            .map(|(_, published)| *published)
+    }
+    pub fn complete(&self) -> bool {
+        self.complete
+    }
+    pub fn decision(&self) -> Option<(&str, &[ArtifactObservation])> {
+        self.decision
+            .as_ref()
+            .map(|(hash, observations)| (hash.as_str(), observations.as_slice()))
+    }
+}
+
 impl Publisher {
+    /// Caller holds Launcher then Monitor on this thread. This accessor acquires
+    /// no nested guards, writes nothing, and never calls ownership(). The original
+    /// journal/decision validators retain their 32 KiB and 1024-entry bounds.
+    pub fn read_history(
+        &self,
+        frozen: FrozenHistory,
+        p: &mut impl Platform,
+    ) -> Result<PublicationHistory> {
+        self.validate_plan(&frozen.plan)?;
+        let original = self.original_journal(&frozen.plan, p)?;
+        let mut history = PublicationHistory {
+            frozen,
+            pointer: self.pointer.clone(),
+            journal_sha256: None,
+            reached: Vec::new(),
+            complete: false,
+            decision: None,
+        };
+        if let Some((journal, bytes)) = original {
+            history.journal_sha256 = Some(digest(&bytes));
+            history.complete = journal.complete();
+            history.reached = journal
+                .receipts
+                .iter()
+                .map(|r| (r.artifact, r.state == State::Published))
+                .collect();
+            if let Some((record, path)) = self.settled(p, &journal, &bytes)? {
+                // The original validator binds the filename to these exact bytes.
+                let encoded = read(&path, DECISION_LIMIT)?.ok_or(Error::DecisionConflict)?;
+                let hash = digest(&encoded);
+                if path
+                    != self
+                        .decision_directory(&journal.review_digest)
+                        .join(format!("abandon-{hash}.json"))
+                {
+                    return Err(Error::DecisionConflict);
+                }
+                history.decision = Some((hash, record.observations));
+            }
+        }
+        Ok(history)
+    }
     fn scope(&self, owner: &OwnerEvidence) -> Scope {
         Scope {
             pointer: self.pointer.clone(),

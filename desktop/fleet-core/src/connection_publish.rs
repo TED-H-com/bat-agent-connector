@@ -17,6 +17,7 @@ pub use recovery::{
     AbandonDecision, ArtifactObservation, ArtifactState, AuthorizationPoint, DecisionBoundary,
     FrozenPlanRef, Inspection, FROZEN_PLAN_LIMIT,
 };
+pub use recovery::{FrozenHistory, PublicationHistory};
 
 const JOURNAL_LIMIT: usize = 32768;
 const ARTIFACTS: [Artifact; 4] = [

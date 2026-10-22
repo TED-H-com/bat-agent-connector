@@ -198,7 +198,60 @@ pub struct Store {
     startup: PathBuf,
     directory: PathBuf,
 }
+/// Immutable history validated by Store's original bounded Saved reader. This
+/// record proves no creation authority; consumers must separately anchor it.
+pub struct SavedHistory {
+    saved: Saved,
+    sha256: String,
+}
+impl SavedHistory {
+    pub fn sha256(&self) -> &str {
+        &self.sha256
+    }
+    pub fn id(&self) -> &str {
+        &self.saved.id
+    }
+    pub fn config_path(&self) -> &Path {
+        &self.saved.config_path
+    }
+    pub fn startup_path(&self) -> &Path {
+        &self.saved.startup_path
+    }
+    pub fn login(&self) -> LoginIdentity {
+        LoginIdentity {
+            owner_sid: self.saved.sid.clone(),
+            session_id: self.saved.session,
+        }
+    }
+    pub fn phase(&self) -> Phase {
+        self.saved.phase
+    }
+    pub fn review_fingerprint(&self) -> &str {
+        &self.saved.review_fingerprint
+    }
+    pub fn restores(&self) -> Option<&str> {
+        self.saved.restores.as_deref()
+    }
+    pub fn from(&self) -> Backend {
+        self.saved.from
+    }
+    pub fn to(&self) -> Backend {
+        self.saved.to
+    }
+    pub fn config(&self, next: bool) -> Result<Vec<u8>> {
+        self.saved.config(next)
+    }
+}
 impl Store {
+    /// Reads at most MAX_JOURNAL (6,000,000 bytes), with the original strict
+    /// validator and 1 MiB decoded-slot bounds. No begin, advance or writes.
+    pub fn read_history(&self, id: &str) -> Result<SavedHistory> {
+        let (saved, bytes) = self.read(id)?;
+        Ok(SavedHistory {
+            saved,
+            sha256: crate::digest(&bytes),
+        })
+    }
     pub fn new(config: &Path, startup_directory: &Path) -> Result<Self> {
         if !config.is_absolute()
             || config.file_name().is_none_or(|n| n != "fleet.json")
