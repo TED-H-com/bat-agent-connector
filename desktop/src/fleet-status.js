@@ -1,3 +1,5 @@
+import {displayFact, healthLabel} from './health-fact.js';
+
 // Presentation of existing native evidence only. A check never starts work or
 // changes trust, credentials, selection, ownership or a pending receipt.
 const codeReason = {
@@ -69,8 +71,24 @@ export function rememberFleetDetails(content, detailsState) {
   }
 }
 
-export function fleetStatus(row, {h, t, snapshot, readable, entry, detailsState}) {
-  const {state, kind, steps} = fleetDiagnosis(row, {snapshot, readable, name: entry.name, kind: entry.kind});
+// Native identity stays in this snapshot. No central host, address or workspace
+// lookup can upgrade a native row. The original diagnosis owns reasons/steps;
+// the shared fact projection owns currentness and its localized wording.
+export function fleetHealth(row, options = {}) {
+  const diagnosis = fleetDiagnosis(row, options);
+  // A probe time cannot establish a value while the diagnosis is still unknown.
+  const observedAt = ['checking', 'unknown'].includes(diagnosis.state) ? null : row?.observed_at;
+  const fact = displayFact({key: ['checking', 'unknown', 'stale'].includes(diagnosis.state) ? 'health_unknown'
+    : diagnosis.state === 'ready' ? 'ui_connected' : 'fleet_check_title_' + diagnosis.state,
+    observed_at: observedAt, stale: diagnosis.state === 'stale'}, {now: options.now});
+  const state = diagnosis.state === 'ready' && fact.freshness !== 'current'
+    ? fact.freshness === 'stale' ? 'stale' : 'checking' : diagnosis.state;
+  return {...diagnosis, state, fact, steps: fact.freshness === 'current' ? diagnosis.steps
+    : diagnosis.steps.map(step => ({...step, state: 'unchecked'}))};
+}
+
+export function fleetStatus(row, {h, t, snapshot, readable, entry, detailsState, now = Date.now()}) {
+  const {state, kind, steps, fact} = fleetHealth(row, {snapshot, readable, kind: entry.kind, now});
   const key = `${snapshot.configuration.binding}:machine:${entry.name}`;
   const details = h('details', {open: detailsState?.get(key) === true, 'data-fleet-details-key': key},
   h('summary', {'data-fleet-details': entry.name}, t('fleet_status_details')),
@@ -81,7 +99,7 @@ export function fleetStatus(row, {h, t, snapshot, readable, entry, detailsState}
   ...[row?.code, row?.blocking].filter((value, index, all) => value && all.indexOf(value) === index)
     .map(value => h('code', {}, value)));
   const helpKey = ['ready', 'identity', 'service', 'version'].includes(state) ? `${state}_${kind === 'connector' ? 'connector' : 'bat'}` : state;
-  return h('div', {class: 'fleet-diagnosis', 'data-fleet-diagnosis': entry.name, 'data-fleet-state': state},
-    h('p', {class: 'fleet-diagnosis-title'}, t('fleet_check_title_' + state)),
+  return h('div', {class: 'fleet-diagnosis', 'data-fleet-diagnosis': entry.name, 'data-fleet-state': state, 'data-freshness': fact.freshness},
+    h('p', {class: 'fleet-diagnosis-title'}, healthLabel(fact, t)),
     h('p', {class: 'muted'}, t('fleet_check_help_' + helpKey)), details);
 }

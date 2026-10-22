@@ -14,6 +14,8 @@ for (const native of [false,true]) {
     await expect(draft).toHaveValue('Keep this draft'); await expect(draft).toBeFocused();
     await expect(tree.getByRole('link',{name:/Improve empty search results/})).toHaveAttribute('aria-current','page');
     await expect(page.locator('.workspace-session-heading')).not.toContainText('Completed');
+    // No further event is produced after this acknowledged fixture page.
+    await expect.poll(()=>f.data.after).toBe(1);
     await tree.getByRole('link',{name:/^Documentation search$/}).click();await page.goBack(); await expect(draft).toHaveValue('Keep this draft');
     await draft.fill('Continue with the tests'); await page.getByRole('button',{name:'Send',exact:true}).click();
     await expect.poll(()=>f.data.posts.length).toBe(1);

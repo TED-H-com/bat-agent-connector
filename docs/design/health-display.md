@@ -68,14 +68,89 @@ but cannot claim output is currently arriving. Gone rows are historical and supp
 neither aggregate attention/activity nor last-value spans. Connection problems are
 separate facts; only pending interactions or managed runtime status produce attention. Both locales preserve these meanings.
 
-The first consumer is `healthDisplay` in `desktop/src/health-display.js`, shared by
-the header and Connection settings. It reuses existing reads and `sessionFacets`;
+The header and Connection settings use `healthDisplay` in
+`desktop/src/health-display.js`. It reuses existing reads and `sessionFacets`;
 the local display clock also expires observations while a request is pending.
 It replaces those consumers' direct transport-label projection. Action admission
 continues using `clientActionGate`; no TTL relaxes or adds a mutation requirement.
-Fleet rows, Work, Workbench, Diagnostics and Result sources still need adoption of
-this freshness/compact contract. Existing source-specific facets are not replaced
-by a global boolean. Native and backend lifecycle behavior is unchanged here.
+Fleet rows also use its `displayFact` and `healthLabel` projection/formatter,
+now in the shared `desktop/src/health-fact.js` module and
+re-exported from `health-display.js`. Fleet retains `fleetDiagnosis` as the single
+native reason/step interpretation. `fleetHealth` applies the same local display
+clock at render time: an expired connected observation keeps Connected, its age
+and Checking; missing observations use Unknown and Checking. Expired layers cannot
+claim current success. Unconfirmed stop and unsupported-version reasons remain
+visible, and each row expires independently. Native Fleet identities are never
+joined to central hosts by name, port, address or server string.
+
+Checking and unknown diagnoses establish no value even with a recent probe
+timestamp, so they always use Unknown and Checking; stale diagnoses retain the
+observation age.
+
+The 60-second display rule uses the same `observed_at` and observation window as
+the native producer: `desktop/fleet-core/src/supervisor_status.rs` marks a selected ready
+row `PROBE_STALE` after 60 seconds. Both Fleet views (`fleet.js` and
+`fleet-desktop.js`) schedule their existing status/overview re-read after 5 seconds.
+Checking describes those ongoing reads and the supervisor's probes; this adoption
+adds neither a probe nor a polling loop.
+
+Work adopts the shared `displayFact` / `healthLabel` projection for the
+observation-derived states in `work-profile-readiness/v1`. Each declares
+`observed_at` (the host's `last_attempt_at`, epoch seconds, matching Inventory's
+connection evidence and the header) and `valid_until` (the last successful
+observation plus `stale_after_s`, Inventory's ISO deadline from the same
+`_valid_until` helper). Inventory and Work also share `_observation_reason` for
+missing, unreachable and expired host facts, including expiry at the deadline.
+`discovered` declares them only for `ready`, since discovery is ready only while
+the host observation is current. `can_observe` declares them for `ready` via
+`hosts_observed` and for `never_observed`, `host_unreachable` and
+`host_not_refreshed`. `can_start_own` declares them when its winning blocker is
+`host_unreachable` or `host_not_refreshed`. With no attempt, `observed_at` is null;
+with no successful observation, `valid_until` is null and establishes no deadline.
+`host_unknown` is a configuration reason, not an observation. All other states omit validity: authentication,
+`configured_unverified`, execution-based states and `action_unavailable` retain
+their existing text and never acquire Checking. This adoption declares no static facts.
+
+Work preserves all six independent values, producer reasons, separate PM analysis
+and the saved-setting warning. Past `verified` evidence remains history; neither
+it nor the response's top-level read timestamp establishes currentness. A current
+declared state shows its value; expiry shows the last value, age and Checking.
+`host_unreachable` uses the shared unreachable wording and retains its reason.
+Its "Last attempt" age dates the failed attempt, while the success-based deadline
+and past verification keep their older instants. Successful observations update
+both attempt and success times together, so ready and unrefreshed ages are unchanged.
+
+The picker renews through its existing `read()` and contract/workspace/profile/
+revision/digest/ticket checks, following the delegated renewal rule below. One
+scheduled wakeup at the earliest declared deadline re-reads that same readiness
+path once per producer deadline. No renewal starts while hidden; returning to the
+page checks that same deadline. Every validated renewal response is stored and
+painted, even when its deadline is unchanged. With an unchanged deadline,
+`host_unreachable` keeps the shared unreachable wording and the newest attempt's
+age without a read error;
+other declared states show `health_read_failed` with `OBSERVATION_NOT_RENEWED`.
+An actual failed read preserves the last response and shows `health_read_failed`
+with the read's code for every reason, including `host_unreachable`. Each attempted
+deadline remains spent, with no retry on clock ticks or visibility changes.
+A later normal read with a new deadline permits renewal again. The existing shell
+display clock only repaints ages; it cannot
+start reads. Selection changes invalidate pending renewal tickets, disposal clears
+the wakeup/listeners, and renewal patches mounted content without changing the
+selection, focus, scroll or open disclosure. No new endpoint, probe, authorization,
+DDL, data step or action admission rule is involved.
+
+The header still shows Checking after an unchanged renewal of a non-unreachable
+fact; that known difference remains an orchestrator-owned follow-up and is
+unchanged here.
+
+Fleet's existing status/overview renders consume the projection; updating mounted
+rows while a native read is pending still requires wiring the existing `app.js`
+display clock to the Fleet painter. `fleetHealth(row, {snapshot, readable, kind,
+now})` is the tested pure entry point; the remaining call site is `app.js`'s
+`tickHealth`. This change does not add another timer or alter those mounts.
+Workbench, Diagnostics and Result sources still need adoption of this
+freshness/compact contract. Existing source-specific facets are not replaced by
+a global boolean. Native and backend lifecycle behavior is unchanged here.
 
 ## Delegated production display decisions
 

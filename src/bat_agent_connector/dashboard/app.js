@@ -14074,7 +14074,53 @@ var clientActionCode = (reason) => `CLIENT_ACTION_${reason.toUpperCase()}`;
 var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}`;
 var clientActionReason = (code) => clientReasons.find((reason) => clientActionCode(reason) === code) || null;
 //#endregion
+//#region src/health-fact.js
+function displayFact(fact = {}, { now = Date.now(), bootstrap, version } = {}) {
+	const observed = time$2(fact.observed_at), deadline = time$2(fact.valid_until);
+	const ageSeconds = Number.isFinite(observed) ? Math.max(0, Math.floor((now - observed) / 1e3)) : null;
+	const freshness = fact.static && (fact.bootstrap !== bootstrap || fact.version !== version) ? "invalidated" : fact.static ? "current" : fact.stale ? "stale" : !Number.isFinite(observed) ? "unknown" : Number.isFinite(deadline) ? now >= deadline ? "stale" : "current" : now - observed >= 6e4 ? "stale" : "current";
+	return {
+		...fact,
+		freshness,
+		ageSeconds
+	};
+}
+function healthAge(seconds, t) {
+	return seconds === null ? t("health_age_unknown") : seconds < 60 ? t("health_age_recent") : t("health_age_minutes", { count: Math.floor(seconds / 60) });
+}
+function healthLabel(fact, t, { age = true } = {}) {
+	const label = t(fact.key === "health_unknown" ? "obs_unknown" : fact.key || fact.value);
+	if (fact.error) return t("health_read_failed", {
+		value: label,
+		age: healthAge(fact.ageSeconds, t),
+		reason: fact.error.code || fact.error.status
+	});
+	if (fact.stale_reason === "host_unreachable") return t("health_unreachable_value", {
+		value: label,
+		age: healthAge(fact.ageSeconds, t)
+	});
+	if (fact.freshness === "stale" && age) return t("health_stale_value", {
+		value: label,
+		age: healthAge(fact.ageSeconds, t),
+		checking: t("health_checking")
+	});
+	if ([
+		"stale",
+		"unknown",
+		"invalidated"
+	].includes(fact.freshness) && fact.key !== "ui_connecting") return label.includes(t("health_checking")) ? label : t("health_unknown_value", {
+		value: label,
+		checking: t("health_checking")
+	});
+	return label;
+}
+var time$2;
+var init_health_fact = __esmMin((() => {
+	time$2 = (value) => typeof value === "number" && Number.isFinite(value) ? value : typeof value === "string" && value ? Date.parse(value) : NaN;
+}));
+//#endregion
 //#region src/state/sessions.js
+init_health_fact();
 var text$6 = (value) => typeof value === "string" ? value : "";
 function workspaceGroup(session) {
 	const host = text$6(session.host), id = text$6(session.workspace_id), name = text$6(session.workspace);
@@ -14281,12 +14327,35 @@ function fleetDiagnosis(row, { snapshot, readable, kind = "host" } = {}) {
 function rememberFleetDetails(content, detailsState) {
 	for (const details of content.querySelectorAll("details[data-fleet-details-key]")) detailsState.set(details.dataset.fleetDetailsKey, details.open);
 }
-function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState }) {
-	const { state, kind, steps } = fleetDiagnosis(row, {
+function fleetHealth(row, options = {}) {
+	const diagnosis = fleetDiagnosis(row, options);
+	const observedAt = ["checking", "unknown"].includes(diagnosis.state) ? null : row?.observed_at;
+	const fact = displayFact({
+		key: [
+			"checking",
+			"unknown",
+			"stale"
+		].includes(diagnosis.state) ? "health_unknown" : diagnosis.state === "ready" ? "ui_connected" : "fleet_check_title_" + diagnosis.state,
+		observed_at: observedAt,
+		stale: diagnosis.state === "stale"
+	}, { now: options.now });
+	const state = diagnosis.state === "ready" && fact.freshness !== "current" ? fact.freshness === "stale" ? "stale" : "checking" : diagnosis.state;
+	return {
+		...diagnosis,
+		state,
+		fact,
+		steps: fact.freshness === "current" ? diagnosis.steps : diagnosis.steps.map((step) => ({
+			...step,
+			state: "unchecked"
+		}))
+	};
+}
+function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState, now = Date.now() }) {
+	const { state, kind, steps, fact } = fleetHealth(row, {
 		snapshot,
 		readable,
-		name: entry.name,
-		kind: entry.kind
+		kind: entry.kind,
+		now
 	});
 	const key = `${snapshot.configuration.binding}:machine:${entry.name}`;
 	const details = h("details", {
@@ -14305,8 +14374,9 @@ function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState }) {
 	return h("div", {
 		class: "fleet-diagnosis",
 		"data-fleet-diagnosis": entry.name,
-		"data-fleet-state": state
-	}, h("p", { class: "fleet-diagnosis-title" }, t("fleet_check_title_" + state)), h("p", { class: "muted" }, t("fleet_check_help_" + helpKey)), details);
+		"data-fleet-state": state,
+		"data-freshness": fact.freshness
+	}, h("p", { class: "fleet-diagnosis-title" }, healthLabel(fact, t)), h("p", { class: "muted" }, t("fleet_check_help_" + helpKey)), details);
 }
 var codeReason, layerReason, layerStep, lookup;
 var init_fleet_status = __esmMin((() => {
@@ -14366,6 +14436,7 @@ var init_fleet_status = __esmMin((() => {
 }));
 //#endregion
 //#region src/health-display.js
+init_health_fact();
 init_fleet_status();
 var time$1 = (value) => typeof value === "number" && Number.isFinite(value) ? value : typeof value === "string" && value ? Date.parse(value) : NaN;
 var healthRevision = (caps) => JSON.stringify([
@@ -14378,16 +14449,6 @@ var healthRevision = (caps) => JSON.stringify([
 var rowId = (row) => JSON.stringify([row.host, row.session_id]);
 var gone = (row) => Boolean(row.gone_at) || row.state?.enumeration === "gone";
 var selectedRows = (health) => (health.sessions || []).filter((row) => !gone(row) && row.host === health.selected?.host && (health.selected.workspaceId ? row.workspace_id === health.selected.workspaceId : row.session_id === health.selected.sessionId));
-function displayFact(fact = {}, { now = Date.now(), bootstrap, version } = {}) {
-	const observed = time$1(fact.observed_at), deadline = time$1(fact.valid_until);
-	const ageSeconds = Number.isFinite(observed) ? Math.max(0, Math.floor((now - observed) / 1e3)) : null;
-	const freshness = fact.static && (fact.bootstrap !== bootstrap || fact.version !== version) ? "invalidated" : fact.static ? "current" : fact.stale ? "stale" : !Number.isFinite(observed) ? "unknown" : Number.isFinite(deadline) ? now >= deadline ? "stale" : "current" : now - observed >= 6e4 ? "stale" : "current";
-	return {
-		...fact,
-		freshness,
-		ageSeconds
-	};
-}
 function compactHealth({ attention, stale, unknown, activity }) {
 	return attention ? "attention" : stale ? "stale" : unknown || activity === "unknown" ? "unknown" : activity === "working" ? "working" : "idle";
 }
@@ -14671,35 +14732,6 @@ function takeHealthRenewal(health, now = Date.now()) {
 	}
 	health.bootstrapRenewal = false;
 	return null;
-}
-function healthAge(seconds, t) {
-	return seconds === null ? t("health_age_unknown") : seconds < 60 ? t("health_age_recent") : t("health_age_minutes", { count: Math.floor(seconds / 60) });
-}
-function healthLabel(fact, t, { age = true } = {}) {
-	const label = t(fact.key === "health_unknown" ? "obs_unknown" : fact.key || fact.value);
-	if (fact.error) return t("health_read_failed", {
-		value: label,
-		age: healthAge(fact.ageSeconds, t),
-		reason: fact.error.code || fact.error.status
-	});
-	if (fact.stale_reason === "host_unreachable") return t("health_unreachable_value", {
-		value: label,
-		age: healthAge(fact.ageSeconds, t)
-	});
-	if (fact.freshness === "stale" && age) return t("health_stale_value", {
-		value: label,
-		age: healthAge(fact.ageSeconds, t),
-		checking: t("health_checking")
-	});
-	if ([
-		"stale",
-		"unknown",
-		"invalidated"
-	].includes(fact.freshness) && fact.key !== "ui_connecting") return label.includes(t("health_checking")) ? label : t("health_unknown_value", {
-		value: label,
-		checking: t("health_checking")
-	});
-	return label;
 }
 //#endregion
 //#region src/credential-storage-key.js
@@ -41437,6 +41469,7 @@ function kanbanObservation({ h, t, api, alive, workspaceId, workId, caps, permit
 }
 //#endregion
 //#region src/pm-work-profile-state.js
+init_health_fact();
 var values$1 = new Set([
 	"ready",
 	"missing",
@@ -41468,11 +41501,21 @@ var reasons = new Set([
 var operation = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
 var valueKey = (value) => "wpf_" + (values$1.has(value) ? value : "unknown");
 var profileTimestamp = (value) => typeof value === "number" && Number.isFinite(value) && value > 0 && value < 253402300800 ? value : null;
-function profileStateFacts(state) {
+function profileStateFacts(state, { now = Date.now(), error = null } = {}) {
 	const reason = typeof state?.reason === "string" && /^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(state.reason) ? state.reason : null;
 	const past = state?.verified && typeof state.verified === "object" && !Array.isArray(state.verified) ? state.verified : null;
 	const pastAt = profileTimestamp(past?.observed_at), lastSuccessAt = profileTimestamp(state?.evidence_ref?.last_success_at);
+	const observed = profileTimestamp(state?.observed_at), deadline = typeof state?.valid_until === "string" ? Date.parse(state.valid_until) : NaN;
+	const readError = reason === "host_unreachable" && error?.unchangedDeadline === true ? null : error;
 	return {
+		fact: observed !== null && Number.isFinite(deadline) ? displayFact({
+			key: valueKey(state?.value),
+			observed_at: observed * 1e3,
+			valid_until: deadline,
+			stale: ["host_unreachable", "host_not_refreshed"].includes(reason),
+			stale_reason: reason,
+			error: readError
+		}, { now }) : null,
 		valueKey: valueKey(state?.value),
 		reasonKey: reasons.has(reason) ? "wpf_reason_" + reason : "wpf_unverified",
 		reasonCode: reason,
@@ -41487,6 +41530,7 @@ function profileStateFacts(state) {
 }
 //#endregion
 //#region src/pm-work-profile-picker.js
+init_health_fact();
 var identity = (value) => typeof value === "string" && /^wpf_[0-9a-f]{32}$/.test(value);
 var states$1 = [
 	"discovered",
@@ -41541,6 +41585,51 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 	const box = h$1("section", { "data-work-profile-picker": "" }, h$1("label", {}, t("wpf_label"), select), more, status, announcement, facts);
 	const returnKey = `batc.pm.${namespace}.profile-return.${workspaceId}.${workId}`;
 	let serial = 0, loading = false, disposed = false, rows = new Map(), cursor = null, verified = null;
+	let observation = null, expiryTimer = null;
+	const renewed = new Map();
+	const renewalKey = (row, at) => `${row.profile_id}:${row.revision}:${row.digest}:${at}`;
+	const deadline = (data) => Math.min(...states$1.map((name) => profileStateFacts(data.states[name]).fact?.valid_until ?? Infinity));
+	function clearObservation() {
+		clearTimeout(expiryTimer);
+		expiryTimer = null;
+		observation = null;
+	}
+	function paintValues() {
+		if (!observation || !valid(observation.ticket) || document.hidden) return;
+		for (const name of states$1) {
+			const state = profileStateFacts(observation.data.states[name], { error: observation.error });
+			const node = facts.querySelector(`[data-work-profile-state="${name}"] [data-work-profile-value]`);
+			const text = state.fact ? healthLabel(state.fact, t) : t(state.valueKey);
+			if (node && node.textContent !== text) node.textContent = text;
+		}
+	}
+	function scheduleExpiry() {
+		clearTimeout(expiryTimer);
+		expiryTimer = null;
+		if (!observation || document.hidden || !valid(observation.ticket)) return;
+		paintValues();
+		const at = deadline(observation.data);
+		if (!Number.isFinite(at) || renewed.has(renewalKey(observation.row, at))) return;
+		if (Date.now() < at) expiryTimer = setTimeout(scheduleExpiry, Math.min(at - Date.now(), 2147483647));
+		else renew(observation, at);
+	}
+	async function renew(current, at) {
+		const attempt = { error: {
+			code: "OBSERVATION_NOT_RENEWED",
+			unchangedDeadline: true
+		} };
+		renewed.set(renewalKey(current.row, at), attempt);
+		try {
+			await read(current.row, current.ticket, true);
+		} catch (error) {
+			if (!valid(current.ticket) || observation !== current) return;
+			attempt.error = { code: error.code || error.status || "READ_FAILED" };
+			current.error = attempt.error;
+			paintValues();
+		}
+	}
+	document.addEventListener("health-display-tick", paintValues);
+	document.addEventListener("visibilitychange", scheduleExpiry);
 	const available = () => caps()?.features?.pm_workspaces?.work_profiles?.version === 1 && caps()?.features?.pm_workspaces?.work_profiles?.available === true && caps()?.scopes?.includes("observe");
 	const selected = () => {
 		try {
@@ -41577,6 +41666,7 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		const row = selected();
 		select.value = row?.profile_id || "";
 		if (!row) {
+			clearObservation();
 			facts.replaceChildren();
 			announcement.textContent = "";
 			verified = null;
@@ -41587,6 +41677,7 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		more.disabled = loading || Boolean(request()?.locked());
 	}
 	function forget(message) {
+		clearObservation();
 		const current = selected();
 		if (current) rows.delete(current.profile_id);
 		verified = null;
@@ -41599,7 +41690,30 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		status.replaceChildren(h$1("p", { class: "muted" }, t(message)));
 		options();
 	}
-	function display(data, row) {
+	function patch(current, next) {
+		if (current.isEqualNode(next)) return;
+		if (current.nodeType !== next.nodeType || current.nodeName !== next.nodeName) {
+			current.replaceWith(next);
+			return;
+		}
+		if (current.nodeType === Node.TEXT_NODE) {
+			current.data = next.data;
+			return;
+		}
+		for (const attr of [...current.attributes]) if (!next.hasAttribute(attr.name) && attr.name !== "open") current.removeAttribute(attr.name);
+		for (const attr of next.attributes) if (attr.name !== "open") current.setAttribute(attr.name, attr.value);
+		const old = [...current.childNodes], fresh = [...next.childNodes];
+		for (let i = 0; i < Math.max(old.length, fresh.length); i++) if (!old[i]) current.append(fresh[i]);
+		else if (!fresh[i]) old[i].remove();
+		else patch(old[i], fresh[i]);
+	}
+	function display(data, row, renewal = false) {
+		const scroll = [];
+		if (renewal) for (let node = facts; node; node = node.parentElement) scroll.push([
+			node,
+			node.scrollLeft,
+			node.scrollTop
+		]);
 		const next = data.work_follow_up;
 		let nextKey = "wpf_next_unknown";
 		if (next?.route === "bat_work_start" && next.agent === row.agent && next.admission_checked === false) {
@@ -41609,8 +41723,8 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		}
 		const list = h$1("dl", { class: "pm-work-profile-states" }), shownTimes = new Set();
 		for (const name of states$1) {
-			const state = profileStateFacts(data.states[name]);
-			const value = h$1("dd", { "data-work-profile-state": name }, h$1("p", { "data-work-profile-value": "" }, t(state.valueKey)), h$1("p", { "data-work-profile-reason": "" }, t(state.reasonKey), " · ", h$1("code", {}, state.reasonCode || t("wpf_reason_absent"))));
+			const state = profileStateFacts(data.states[name], { error: observation?.error });
+			const value = h$1("dd", { "data-work-profile-state": name }, h$1("p", { "data-work-profile-value": "" }, state.fact ? healthLabel(state.fact, t) : t(state.valueKey)), h$1("p", { "data-work-profile-reason": "" }, t(state.reasonKey), " · ", h$1("code", {}, state.reasonCode || t("wpf_reason_absent"))));
 			list.append(h$1("dt", {}, t("wpf_" + name)), value);
 			const operationLink = (op) => h$1("a", { href: `#/op/${op}` }, t("pm_operation"));
 			if (state.operationId) value.append(h$1("p", {}, operationLink(state.operationId)));
@@ -41646,7 +41760,10 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 			if (gapAt !== null && !shownTimes.has(gapAt)) details.push(timeStamp(gapAt));
 		}
 		const readAt = profileTimestamp(data.observed_at);
-		facts.replaceChildren(h$1("h4", {}, t("wpf_coding")), ...readAt === null ? [] : [h$1("p", { "data-work-profile-read-at": "" }, timeLabel(t, "wpf_read_at", { time: timeStamp(readAt) }))], h$1("p", {
+		const content = h$1("div", {
+			"data-work-profile-readiness": "",
+			tabindex: -1
+		}, h$1("h4", {}, t("wpf_coding")), ...readAt === null ? [] : [h$1("p", { "data-work-profile-read-at": "" }, timeLabel(t, "wpf_read_at", { time: timeStamp(readAt) }))], h$1("p", {
 			class: "muted",
 			"data-work-profile-next-turn": ""
 		}, h$1("strong", {}, t("wpf_next_turn") + " · "), t(nextKey)), h$1("p", { class: "muted" }, t("wpf_locked")), list, ...data.states.can_start_own.value !== "ready" ? [h$1("p", { class: "muted" }, t("wpf_unverified"))] : [], ...gap ? [h$1("div", { "data-work-profile-gap": "" }, ...details)] : [], h$1("h4", {}, t("wpf_pm")), hasEffectivePmRoute(data.pm_analysis) ? renderEffectivePmRoute(h$1("div", { "data-work-profile-pm": "" }), {
@@ -41655,6 +41772,8 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 			document: data.pm_analysis,
 			readyKey: "wpf_pm_preflight"
 		}) : h$1("p", {}, t(data.pm_analysis?.pm_ready === true ? "wpf_pm_preflight" : "wpf_pm_unverified")));
+		if (renewal) patch(facts, content);
+		else facts.replaceChildren(...content.childNodes);
 		const gapName = states$1.find((name) => data.states[name].value !== "ready");
 		announcement.textContent = [`${t("wpf_next_turn")}: ${t(nextKey)}`, gapName ? `${t("wpf_" + gapName)}: ${t("wpf_" + data.states[gapName].value)}. ${t("wpf_unverified")}` : ""].filter(Boolean).join(" ");
 		verified = {
@@ -41663,12 +41782,24 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 			digest: row.digest
 		};
 		request()?.update();
+		for (const [node, left, top] of scroll) {
+			node.scrollLeft = left;
+			node.scrollTop = top;
+		}
 	}
-	async function read(row, ticket) {
+	async function read(row, ticket, renewal = false) {
 		const data = await api("GET", `${base}/${row.profile_id}/readiness`);
 		if (!valid(ticket)) return;
 		if (data.contract !== "work-profile-readiness/v1" || data.workspace_id !== workspaceId || data.profile_id !== row.profile_id || data.revision !== row.revision || data.digest !== row.digest || data.calls_bat !== false || states$1.some((name) => !values.includes(data.states?.[name]?.value))) throw Error(t("wpf_invalid"));
-		display(data, row);
+		const at = deadline(data);
+		observation = {
+			data,
+			row,
+			ticket,
+			error: renewed.get(renewalKey(row, at))?.error || null
+		};
+		display(data, row, Boolean(renewal));
+		scheduleExpiry();
 	}
 	select.addEventListener("change", async () => {
 		if (request()?.locked()) {
@@ -41676,6 +41807,7 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 			return;
 		}
 		const ticket = ++serial, row = select.value ? checkedWorkProfile(rows.get(select.value)) : null;
+		clearObservation();
 		verified = null;
 		facts.replaceChildren();
 		status.replaceChildren();
@@ -41689,6 +41821,7 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		}
 	});
 	function handle(error) {
+		clearObservation();
 		verified = null;
 		facts.replaceChildren();
 		announcement.textContent = "";
@@ -41697,6 +41830,7 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 	}
 	async function load(append = false) {
 		const ticket = ++serial;
+		clearObservation();
 		verified = null;
 		facts.replaceChildren();
 		announcement.textContent = "";
@@ -41757,6 +41891,7 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		},
 		withdraw() {
 			serial++;
+			clearObservation();
 			loading = false;
 			verified = null;
 			rows.clear();
@@ -41768,6 +41903,9 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		dispose() {
 			disposed = true;
 			serial++;
+			clearObservation();
+			document.removeEventListener("health-display-tick", paintValues);
+			document.removeEventListener("visibilitychange", scheduleExpiry);
 			facts.replaceChildren();
 		},
 		focusOnReturn() {
@@ -42976,9 +43114,10 @@ function adoptStartLanding({ t, api, alive, namespace, workspaceId, caps, errorB
 			}
 		}
 	}
-	function withdraw() {
+	function withdraw({ preserveNavigation = false } = {}) {
+		const keep = preserveNavigation && current && requestedWork(current.operation_id) === current.work_item_ids[0] && selectedWork() === current.work_item_ids[0];
 		serial++;
-		if (current) stopFollowing(current.operation_id);
+		if (current && !keep) stopFollowing(current.operation_id);
 		current = null;
 		shown = null;
 		body.replaceChildren();
@@ -42992,7 +43131,7 @@ function adoptStartLanding({ t, api, alive, namespace, workspaceId, caps, errorB
 		pending: () => Boolean(current) && !shown,
 		dispose: () => {
 			disposed = true;
-			withdraw();
+			withdraw({ preserveNavigation: true });
 		}
 	};
 }
@@ -70185,6 +70324,7 @@ async function refreshHealthCapabilities() {
 }
 function tickHealth() {
 	if (document.hidden) return;
+	document.dispatchEvent(new Event("health-display-tick"));
 	const verification = state.health?.capabilityRefresh;
 	if (verification?.state === "loading" && Date.now() - verification.startedAt >= 6e4) {
 		verification.state = "failed";

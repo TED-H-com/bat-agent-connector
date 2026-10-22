@@ -1,3 +1,4 @@
+import {eventDelivery} from './event-delivery.mjs';
 import {test, expect} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {workStartFixture, workspaceId, workId, route, revisionId} from './work-start-fixture.ts';
@@ -160,6 +161,8 @@ test.describe('Work Start UI (v1.3 P3)', () => {
     const f = workStartFixture();
     f.state.lostReply = true;
 
+    const events=eventDelivery(page), originalDispatch=f.dispatch;
+    f.dispatch=input=>events.forward(input,originalDispatch);
     await mountConversation(page, false, f.dispatch);
     await page.goto(route);
     await page.locator('[data-pm-view="board"]').click();
@@ -172,7 +175,7 @@ test.describe('Work Start UI (v1.3 P3)', () => {
 
     const submitBtn = inspector.locator('[data-work-section="start"] [data-pm-action="work.start"] button[type="submit"]');
     await expect(submitBtn).toBeEnabled();
-    await submitBtn.click();
+    await events.post(submitBtn);
 
     // After 503, button changes to "Check original request"
     await expect(submitBtn).toHaveText('Check original request');
@@ -182,7 +185,7 @@ test.describe('Work Start UI (v1.3 P3)', () => {
     const originalBody = structuredClone(f.state.writes[0].body);
 
     // Click "Check original request"
-    await submitBtn.click();
+    await events.post(submitBtn);
     await expect.poll(() => f.state.writes.length).toBe(2);
 
     expect(f.state.writes[1].idempotency_key).toBe(originalKey);

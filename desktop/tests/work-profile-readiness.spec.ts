@@ -1,3 +1,4 @@
+import {eventDelivery} from './event-delivery.mjs';
 import {mountProfilePicker} from './work-profile-picker-fixture.ts';
 import {effectiveGolden,effectiveExpected,effectiveReasonKeys,mountEffectiveGate} from './pm-effective-route-fixture.ts';
 import {pmEffectiveRouteStrings} from '../src/pm-effective-route-strings.js';
@@ -48,6 +49,8 @@ for(const locale of ['en-US','zh-TW'])test.describe(`${locale} producer profile 
   test.use({locale});
   for(const width of [390,1440])for(const [name,body] of [...goldenCases,['unknown_reason',future]])
     test(`golden ${name} ${width}`,async({page})=>{
+      await page.clock.install({time:new Date(body.observed_at*1000)});
+      await page.clock.pauseAt(body.observed_at*1000);
       await page.setViewportSize({width,height:900});
       const lang=locale==='en-US'?'en':locale,copy=(key:string)=>workProfileStrings[lang][key];
       const {facts,reads,posts}=await mountGoldenPicker(page,body,locale);
@@ -64,7 +67,16 @@ for(const locale of ['en-US','zh-TW'])test.describe(`${locale} producer profile 
         if(state.reason)await expect(cell).toContainText(state.reason);
         const reasonKey='wpf_reason_'+state.reason;
         await expect(cell).toContainText(copy(reasonKey)||copy('wpf_unverified'));
-        await expect(cell.locator('[data-work-profile-value]')).toHaveText(copy('wpf_'+state.value));
+        const value=copy('wpf_'+state.value);
+        // Literal locale expectations for the producer's fixed golden instants.
+        // These expired cases have completed their one unchanged renewal; the
+        // held unreachable response and its attempt wording are in shared-readiness.
+        const expected=state.valid_until&&state.reason==='host_not_refreshed'
+          ?(locale==='en-US'?'Unavailable · 10 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)':'不可用 · 10 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）')
+          :state.valid_until&&state.reason==='host_unreachable'
+            ?(locale==='en-US'?'Unavailable · Last attempt: 1 min ago; host unreachable, last successful observation is stale':'不可用 · 上次嘗試：1 分鐘前；無法連至主機，上次成功觀察已過期')
+            :value;
+        await expect(cell.locator('[data-work-profile-value]')).toHaveText(expected);
         expect((await cell.innerText()).trim().startsWith(copy('wpf_'+state.value))).toBe(true);
         if(state.verified){
           const past=cell.locator('[data-work-profile-past]');await expect(past).toBeVisible();
@@ -95,7 +107,7 @@ for(const locale of ['en-US','zh-TW'])test.describe(`${locale} producer profile 
       }
       expect(await facts.innerText()).not.toMatch(/scan_fixture|fixture-bat|\/srv\/|\/tmp\//);
       expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-      expect(reads.filter(path=>path.endsWith('/readiness'))).toHaveLength(1);expect(posts).toEqual([]);
+      expect(reads.filter(path=>path.endsWith('/readiness'))).toHaveLength(['host_not_refreshed','host_unreachable'].includes(name)?2:1);expect(posts).toEqual([]);
       expect(await page.evaluate(()=>(window as any).__csp)).toEqual([]);
     });
 });
@@ -195,14 +207,14 @@ test('late readiness cannot restore the previously selected profile',async({page
 });
 
 test('lost start reply retains the original profile, request and key across reload',async({page})=>{
-  const {f,state}=fixture();f.state.lostReply=true;let panel=await mount(page,f);
+  const {f,state}=fixture(),events=eventDelivery(page),dispatch=f.dispatch;f.dispatch=input=>events.forward(input,dispatch);f.state.lostReply=true;let panel=await mount(page,f);
   await panel.getByLabel('Saved profile',{exact:true}).selectOption(first);
   await panel.getByRole('button',{name:'Start work',exact:true}).click();
   await expect(panel.getByRole('button',{name:'Check original request',exact:true})).toBeVisible();
   const original=structuredClone(f.state.writes[0]);state.profiles[0].revision=2;state.profiles[0].digest='3'.repeat(64);
   await page.reload();await page.locator(`[data-pm-kanban-work="${workId(1)}"] [data-board-open]`).click();panel=page.locator('[data-work-inspector]');
   await expect(panel.getByLabel('Saved profile',{exact:true})).toBeDisabled();expect(f.state.writes).toHaveLength(1);
-  await panel.getByRole('button',{name:'Check original request',exact:true}).click();await expect.poll(()=>f.state.writes.length).toBe(2);
+  await events.post(panel.getByRole('button',{name:'Check original request',exact:true}));await expect.poll(()=>f.state.writes.length).toBe(2);
   expect(f.state.writes[1].idempotency_key).toBe(original.idempotency_key);expect(f.state.writes[1].body).toEqual(original.body);
   await expect(panel.locator('[data-pm-saved]')).toBeVisible();
 });

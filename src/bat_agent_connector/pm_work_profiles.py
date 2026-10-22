@@ -12,6 +12,7 @@ from . import pm_source_reads
 from .api_auth import Principal
 from .errors import TokenUnavailable
 from .host_git import LOCAL_GIT_REASONS
+from .inventory import _observation_reason, _valid_until
 from .operations import ActionDef, OperationError
 from .pm_workspace import admitted_principal, principal_binding, require_member
 
@@ -664,20 +665,10 @@ def _stale_after_s(ops) -> float:
 def _host_observation(db, host):
     if not _table(db, "hosts_observed"):
         return None
-    return db.execute(
-        "SELECT reachable, last_success_at FROM hosts_observed WHERE host=?", (host,)
+    row = db.execute(
+        "SELECT reachable, last_attempt_at, last_success_at FROM hosts_observed WHERE host=?", (host,),
     ).fetchone()
-
-
-def _observation_reason(row, now: float, stale_after_s: float):
-    """Same three reasons as Inventory._host_stale. This read does not call hosts()."""
-    if row is None:
-        return "never_observed"
-    if not row["reachable"]:
-        return "host_unreachable"
-    if now - (row["last_success_at"] or 0) > stale_after_s:
-        return "host_not_refreshed"
-    return None
+    return dict(row) if row is not None else None
 
 
 def _discovery_bodies(db, host) -> list:
@@ -844,6 +835,7 @@ def _readiness_body(ops, principal: Principal, workspace_id: str, row) -> dict:
     stale_after = _stale_after_s(ops)
     observed_reason = _observation_reason(host_row, observed_at, stale_after)
     last_success = host_row["last_success_at"] if host_row is not None else None
+    last_attempt = host_row["last_attempt_at"] if host_row is not None else None
     bodies = _discovery_bodies(ops.db, host)
     covering = [body for body in bodies if _covers(body, bat_workspace)]
     provider = _usage_provider(ops.db, host, agent)
@@ -942,6 +934,17 @@ def _readiness_body(ops, principal: Principal, workspace_id: str, row) -> dict:
         "can_continue_own": can_continue,
         "last_verified_execution": last_execution,
     }
+    # Only host-observation-derived values declare validity. Configuration,
+    # authentication and execution history have no time-based readiness claim.
+    observation_states = [state for state in (can_observe, can_start)
+        if state["reason"] in {"never_observed", "host_unreachable", "host_not_refreshed"}]
+    if can_observe["value"] == "ready":
+        observation_states.append(can_observe)
+    if discovered["value"] == "ready":
+        observation_states.append(discovered)
+    for state in observation_states:
+        state.update(observed_at=last_attempt, valid_until=_valid_until(last_success, stale_after))
+
     if not bound:
         smallest = _gap("REPOSITORY_NOT_BOUND", "setup.repository")
     elif host_cfg is None:

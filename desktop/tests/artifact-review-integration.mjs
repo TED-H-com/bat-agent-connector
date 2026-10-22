@@ -1,3 +1,4 @@
+import {httpEventDelivery} from './event-delivery.mjs';
 // Exact shared UI against real central managed capture and review, without live providers.
 import {spawn} from 'node:child_process';
 import {createHash} from 'node:crypto';
@@ -19,7 +20,8 @@ try {
  const sourceResponse=await fetch(`${origin}/api/v1/sessions/h1/${fixture.session_id}`,{headers:{Authorization:`Bearer ${fixture.token}`}});
  assert.equal(sourceResponse.status,200);const source=(await sourceResponse.json()).session;
  assert.equal(source.provenance,'connector_managed');assert.equal(source.api_access,'read_only');assert.equal(source.read_only_code,'FOREIGN_CONTROLLER');
- const page=await browser.newPage({locale:'en-US'});page.on('pageerror',error=>errors.push(error.message));
+ const page=await browser.newPage({locale:'en-US'});const events = await httpEventDelivery(page);
+  page.on('pageerror',error=>errors.push(error.message));
  const lost=new Set();await page.route('**/api/v1/operations?wait=3',async route=>{
   const request=route.request(),body=request.postDataJSON();writes.push({body,key:request.headers()['idempotency-key']});
   const response=await route.fetch();if(!lost.has(body.action)){lost.add(body.action);await route.abort('failed');}else await route.fulfill({response});
@@ -31,16 +33,16 @@ try {
  await expect(sourceLink).toBeVisible();await sourceLink.click();
  let capture=page.locator('[data-managed-capture]');
  await capture.getByRole('combobox',{name:'Connector execution evidence'}).selectOption(JSON.stringify({execution_operation_id:fixture.execution_id}));
- await capture.getByRole('textbox',{name:'Relative file path'}).fill('result.bin');await capture.getByRole('button',{name:'Preview source file',exact:true}).click();await expect(capture).toContainText(fixture.digest);
- await capture.getByRole('checkbox').check();await capture.getByRole('button',{name:'Save reviewed file',exact:true}).click();await expect(page.locator('.error')).toBeVisible();
- await page.reload();capture=page.locator('[data-managed-capture]');await capture.getByRole('button',{name:'Check original capture',exact:true}).click();await expect(page.locator('[data-artifact-ready]')).toBeVisible({timeout:30000});
+ await capture.getByRole('textbox',{name:'Relative file path'}).fill('result.bin');await events.post(capture.getByRole('button',{name:'Preview source file',exact:true}));await expect(capture).toContainText(fixture.digest);
+ await capture.getByRole('checkbox').check();await events.post(capture.getByRole('button',{name:'Save reviewed file',exact:true}));await expect(page.locator('.error')).toBeVisible();
+ await page.reload();capture=page.locator('[data-managed-capture]');await events.post(capture.getByRole('button',{name:'Check original capture',exact:true}));await expect(page.locator('[data-artifact-ready]')).toBeVisible({timeout:30000});
  const captureId=(await page.locator('a[href^="#/op/"]').first().getAttribute('href')).split('/').at(-1);
  const exactRoute=await page.getByRole('link',{name:'result.bin · r1',exact:true}).getAttribute('href');
  await page.goto(origin+'/dashboard/#/settings');await page.getByRole('button',{name:'Disconnect',exact:true}).click();await page.getByPlaceholder('batc_…').fill(fixture.reviewer);await page.getByRole('button',{name:'Connect',exact:true}).click();await expect(page).toHaveURL(/#\/home$/);await page.goto(origin+'/dashboard/'+exactRoute);
  await page.getByRole('button',{name:'Preview',exact:true}).click();await expect(page.locator('.artifact-content')).toContainText('Preview is unavailable');
  const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download this revision',exact:true}).click();const downloaded=await readFile(await (await download).path());assert.equal(createHash('sha256').update(downloaded).digest('hex'),fixture.digest);assert.equal(writes.length,2);
- let review=page.locator('[data-artifact-accept]');await review.getByRole('textbox').fill('Reviewed this exact binary fixture against the expected result.');await review.getByRole('button',{name:'Record review of this revision',exact:true}).click();await expect(page.locator('.error')).toBeVisible();
- await page.reload();review=page.locator('[data-artifact-accept]');await review.getByRole('button',{name:'Check original review submission',exact:true}).click();await expect(page.locator('[data-artifact-accepted]')).toBeVisible({timeout:30000});
+ let review=page.locator('[data-artifact-accept]');await review.getByRole('textbox').fill('Reviewed this exact binary fixture against the expected result.');await events.post(review.getByRole('button',{name:'Record review of this revision',exact:true}));await expect(page.locator('.error')).toBeVisible();
+ await page.reload();review=page.locator('[data-artifact-accept]');await events.post(review.getByRole('button',{name:'Check original review submission',exact:true}));await expect(page.locator('[data-artifact-accepted]')).toBeVisible({timeout:30000});
  const ids=await page.locator('a[href^="#/op/"]').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('href').split('/').at(-1)));const acceptId=ids.find(id=>id!==captureId);
  assert.ok(acceptId);await page.reload();await expect(page.locator('[data-artifact-accepted]')).toBeVisible();assert.equal(writes.length,4);assert.deepEqual(writes[1],writes[0]);assert.deepEqual(writes[3],writes[2]);assert.deepEqual(errors,[]);
  child.stdin.write(JSON.stringify({action:'verify',capture_id:captureId,accept_id:acceptId})+'\n');assert.equal((await next()).verified,true);

@@ -98,6 +98,8 @@ test('a failed send line cannot start a second send', async ({browser}) => {
     await page.locator('#workspace-message-input textarea').fill('First failure, then hold');
     await send.click();
     await expect(page.locator('.session-retry')).toBeVisible();
+    // The first completed POST emitted one controlled session event.
+    await expect.poll(()=>s.log.some(row=>row.path.startsWith('/events?after=1&'))).toBe(true);
     hold = true;
     await press(page, 'Send', '.composer-row');
     const sent = () => s.writes.filter(row => row.body?.action === 'session.send').length;

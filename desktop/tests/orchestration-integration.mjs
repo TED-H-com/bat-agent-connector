@@ -1,3 +1,4 @@
+import {httpEventDelivery} from './event-delivery.mjs';
 // Browser recovery against real central preparation, child authority and receipts; MockBat only.
 import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
@@ -17,6 +18,7 @@ const browser = await chromium.launch();
 try {
   const fixture = await next(), origin = `http://127.0.0.1:${fixture.port}`;
   const page = await browser.newPage({locale: 'en-US'}), posts = [], errors = [];
+  const events = await httpEventDelivery(page);
   page.on('pageerror', e => errors.push(e.message));
   await page.addInitScript(token => sessionStorage.setItem('batc.dashboard.token', token), fixture.token);
   let lose = true;
@@ -32,11 +34,11 @@ try {
     await selection.selectOption(mode === 'relay' ? fixture.relay : mode === 'failover' ? fixture.source : 'ws-1');
     return form;
   };
-  const submit = async form => {await form.locator('.orch-check input').last().check(); await form.locator('button.primary').click();};
+  const submit = async form => {await form.locator('.orch-check input').last().check(); await events.post(form.locator('button.primary'));};
   const id = async form => (await form.locator('a[href^="#/op/"]').first().getAttribute('href')).split('/').at(-1);
   let form = await open('relay'); await form.getByRole('textbox').fill('  Exact original relay.\nPreserve this text.  ');
   await submit(form); await expect(form.locator('.error')).toBeVisible(); await control({action: 'writes', enabled: false}); await page.reload();
-  await form.getByRole('button', {name: 'Retry original request'}).click(); await expect(form).toContainText('target accepted the relayed instructions', {timeout: 30000});
+  await events.post(form.getByRole('button', {name: 'Retry original request'})); await expect(form).toContainText('target accepted the relayed instructions', {timeout: 30000});
   assert.deepEqual(posts[0], posts[1]); const relay = await id(form); await page.reload(); await expect(form).toContainText('target accepted'); assert.equal(posts.length, 2);
   await control({action: 'verify', operation_id: relay, operation_action: 'session.relay', status: 'succeeded', frames: 1});
   await control({action: 'writes', enabled: true});
