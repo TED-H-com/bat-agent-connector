@@ -107,6 +107,413 @@ var init_result_sources_strings = __esmMin((() => {
 	};
 }));
 //#endregion
+//#region src/earlier-drafts-strings.js
+var earlierDraftStrings;
+var init_earlier_drafts_strings = __esmMin((() => {
+	earlierDraftStrings = {
+		en: {
+			earlier_title: "Drafts from earlier local addresses",
+			earlier_draft_group: "Draft text",
+			earlier_pending_group: "Possibly sent requests",
+			earlier_pending_warning: "May already have been sent — check it before sending it again",
+			earlier_check_operation: "Check operation",
+			earlier_check_form: "Check session or form",
+			earlier_notice: "Drafts from an earlier local address are available.",
+			earlier_help: "Ordinary draft text can be copied. Check possibly sent requests first. Hide only dismisses an entry here; the original stays in local storage.",
+			earlier_address: "Original address: {address}",
+			earlier_copy: "Copy text",
+			earlier_hide: "Hide",
+			earlier_copied: "Text copied.",
+			earlier_copy_manual: "Select and copy the text manually.",
+			earlier_session: "Session message",
+			earlier_answers: "Session answers",
+			earlier_work: "Work form",
+			earlier_project: "Project form",
+			earlier_discussion: "PM discussion",
+			earlier_pm: "PM form",
+			earlier_start: "Start work",
+			earlier_orchestration: "Orchestrate work",
+			earlier_labels: "Session labels",
+			earlier_review: "Artifacts and review"
+		},
+		"zh-TW": {
+			earlier_draft_group: "草稿文字",
+			earlier_pending_group: "可能已送出的請求",
+			earlier_pending_warning: "可能已經送出 — 再次送出前請先確認",
+			earlier_check_operation: "查看操作",
+			earlier_check_form: "查看工作階段或表單",
+			earlier_title: "先前本機位址的草稿",
+			earlier_notice: "找到先前本機位址留下的草稿。",
+			earlier_help: "一般草稿文字可以複製。可能已送出的請求，請先確認。隱藏只會收起此處的項目，原始資料仍保留在本機儲存空間。",
+			earlier_address: "原始位址：{address}",
+			earlier_copy: "複製文字",
+			earlier_hide: "隱藏",
+			earlier_copied: "已複製文字。",
+			earlier_copy_manual: "請選取文字並手動複製。",
+			earlier_session: "工作階段訊息",
+			earlier_answers: "工作階段回答",
+			earlier_work: "工作表單",
+			earlier_project: "專案表單",
+			earlier_discussion: "PM 討論",
+			earlier_pm: "PM 表單",
+			earlier_start: "開始工作",
+			earlier_orchestration: "安排工作執行",
+			earlier_labels: "工作階段標籤",
+			earlier_review: "附件成果與審閱"
+		}
+	};
+	for (const [name, en, zh] of [
+		[
+			"text",
+			"Text",
+			"文字"
+		],
+		[
+			"answers",
+			"Answers",
+			"回答"
+		],
+		[
+			"title",
+			"Title",
+			"標題"
+		],
+		[
+			"content",
+			"Content",
+			"內容"
+		],
+		[
+			"name",
+			"Name",
+			"名稱"
+		],
+		[
+			"description",
+			"Description",
+			"說明"
+		],
+		[
+			"value",
+			"Value",
+			"內容值"
+		],
+		[
+			"reference",
+			"Reference",
+			"參考資料"
+		],
+		[
+			"markdown",
+			"Plan text",
+			"計畫文字"
+		],
+		[
+			"instruction",
+			"Instructions",
+			"指示"
+		],
+		[
+			"purpose",
+			"Purpose",
+			"目的"
+		],
+		[
+			"rationale",
+			"Rationale",
+			"理由"
+		],
+		[
+			"reason",
+			"Reason",
+			"原因"
+		],
+		[
+			"public_title",
+			"Public title",
+			"公開標題"
+		],
+		[
+			"public_body",
+			"Public description",
+			"公開說明"
+		],
+		[
+			"body",
+			"Description",
+			"說明"
+		],
+		[
+			"publicReason",
+			"Public reason",
+			"公開理由"
+		],
+		[
+			"ecosystem",
+			"Ecosystem",
+			"生態系統"
+		],
+		[
+			"version",
+			"Version",
+			"版本"
+		],
+		[
+			"path",
+			"Path",
+			"路徑"
+		],
+		[
+			"url",
+			"URL",
+			"網址"
+		],
+		[
+			"note",
+			"Note",
+			"備註"
+		],
+		[
+			"date",
+			"Date",
+			"日期"
+		],
+		[
+			"goal",
+			"Goal",
+			"目標"
+		],
+		[
+			"capacity_note",
+			"Capacity note",
+			"容量備註"
+		],
+		[
+			"discussion_summary",
+			"Discussion summary",
+			"討論摘要"
+		],
+		[
+			"result",
+			"Result",
+			"結果"
+		],
+		[
+			"trigger",
+			"Trigger",
+			"觸發條件"
+		],
+		[
+			"response",
+			"Response",
+			"回應"
+		],
+		[
+			"alternatives",
+			"Alternatives",
+			"替代方案"
+		],
+		[
+			"distinction",
+			"Distinction",
+			"區別"
+		],
+		[
+			"problem",
+			"Problem",
+			"問題"
+		],
+		[
+			"goal_relation",
+			"Relation to goal",
+			"與目標的關係"
+		],
+		[
+			"expected_effect",
+			"Expected effect",
+			"預期效果"
+		],
+		[
+			"options",
+			"Options",
+			"選項"
+		],
+		[
+			"hypotheses",
+			"Hypotheses",
+			"假設"
+		],
+		[
+			"direction_rationale",
+			"Direction rationale",
+			"方向理由"
+		],
+		[
+			"next_observation_focus",
+			"Next observation focus",
+			"下次觀察重點"
+		],
+		[
+			"limitations",
+			"Limitations",
+			"限制"
+		],
+		[
+			"basis",
+			"Basis",
+			"依據"
+		],
+		[
+			"prompt",
+			"Instructions",
+			"指示"
+		],
+		[
+			"why",
+			"Purpose",
+			"目的"
+		],
+		[
+			"delivery_approach",
+			"Delivery approach",
+			"交付方式"
+		],
+		[
+			"capacity_discussion",
+			"Capacity discussion",
+			"容量討論"
+		],
+		[
+			"dependency_notes",
+			"Dependency notes",
+			"相依性備註"
+		],
+		[
+			"goal_review",
+			"Goal review",
+			"目標檢視"
+		],
+		[
+			"feedback",
+			"Feedback",
+			"回饋"
+		],
+		[
+			"environment_changes",
+			"Environment changes",
+			"環境變化"
+		],
+		[
+			"next_steps",
+			"Next steps",
+			"後續步驟"
+		],
+		[
+			"observations",
+			"Observations",
+			"觀察"
+		],
+		[
+			"previous_improvement_review",
+			"Previous improvement review",
+			"前次改善檢視"
+		],
+		[
+			"no_improvement_rationale",
+			"Reason for no improvement",
+			"不進行改善的理由"
+		],
+		[
+			"unresolved_questions",
+			"Unresolved questions",
+			"未解問題"
+		],
+		[
+			"decisions",
+			"Decisions",
+			"決定"
+		],
+		[
+			"follow_ups",
+			"Follow-ups",
+			"後續追蹤"
+		],
+		[
+			"verification",
+			"Verification",
+			"驗證"
+		],
+		[
+			"outcomes",
+			"Outcomes",
+			"成果"
+		],
+		[
+			"observation",
+			"Observation",
+			"觀察"
+		],
+		[
+			"public_sources",
+			"Public sources",
+			"公開來源"
+		],
+		[
+			"claim",
+			"Claim",
+			"主張"
+		],
+		[
+			"milestones",
+			"Milestones",
+			"里程碑"
+		],
+		[
+			"baseline_date",
+			"Baseline date",
+			"基準日期"
+		],
+		[
+			"request",
+			"Request",
+			"需求"
+		],
+		[
+			"acceptance",
+			"Acceptance criteria",
+			"驗收條件"
+		],
+		[
+			"task_project",
+			"Task project",
+			"任務專案"
+		],
+		[
+			"steps",
+			"Steps",
+			"步驟"
+		],
+		[
+			"message",
+			"Message",
+			"訊息"
+		],
+		[
+			"items",
+			"Items",
+			"項目"
+		],
+		[
+			"reviewText",
+			"Review",
+			"審閱"
+		]
+	]) {
+		earlierDraftStrings.en["earlier_field_" + name] = en;
+		earlierDraftStrings["zh-TW"]["earlier_field_" + name] = zh;
+	}
+}));
+//#endregion
 //#region src/pm-external-history-strings.js
 var externalHistoryStrings;
 var init_pm_external_history_strings = __esmMin((() => {
@@ -9817,6 +10224,7 @@ function t(key, vars = {}) {
 var STRINGS, locale;
 var init_i18n = __esmMin((() => {
 	init_result_sources_strings();
+	init_earlier_drafts_strings();
 	init_pm_external_history_strings();
 	init_pm_adopt_start_strings();
 	init_pm_work_profile_strings();
@@ -9860,6 +10268,7 @@ var init_i18n = __esmMin((() => {
 			...resultSourcesStrings["zh-TW"],
 			...externalHistoryStrings["zh-TW"],
 			...diagnosticsStrings["zh-TW"],
+			...earlierDraftStrings["zh-TW"],
 			...workStartStrings["zh-TW"],
 			...workProfileStrings["zh-TW"],
 			...workResultStrings["zh-TW"],
@@ -11575,6 +11984,7 @@ var init_i18n = __esmMin((() => {
 			...resultSourcesStrings.en,
 			...externalHistoryStrings.en,
 			...diagnosticsStrings.en,
+			...earlierDraftStrings.en,
 			...workStartStrings.en,
 			...workProfileStrings.en,
 			...workResultStrings.en,
@@ -16247,7 +16657,7 @@ var action = (value) => typeof value === "string" && /^(?:session|checkpoint|int
 var protocols = ["bat-remote/v2", "bat-remote/legacy-v1"];
 var contractVersion = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
 var bool = (value) => typeof value === "boolean" ? value : null;
-var operationId$4 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
+var operationId$5 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
 var select = (value, values) => values.includes(value) ? value : null;
 var routeWords = new Set("v1 hosts sessions projects work-items tasks operations capabilities bootstrap events managed setup secrets observation status pending attention reading permissions labels checkpoints checkpoint-preview instructions artifacts uploads content delivery receipts discovery pm workspaces plans threads messages snapshots brief-export resources roadmap dependencies registers governance".split(" "));
 var resourceNames = {
@@ -16289,7 +16699,7 @@ function failedCall({ at, method, path, status, code: errorCode, admissionRefuse
 		status: Number.isInteger(status) && status >= 100 && status <= 599 ? status : null,
 		code: code(errorCode) || (status >= 100 ? "HTTP_ERROR" : "NETWORK_ERROR"),
 		admission_refused: admissionRefused === true,
-		operation_id: operationId$4(operation?.operation_id)
+		operation_id: operationId$5(operation?.operation_id)
 	};
 }
 function errorRing(limit = 50) {
@@ -16376,7 +16786,7 @@ function scrubDiagnostics(text) {
 		} catch {}
 		if (/^\/v1(?:\/(?:[a-z-]+|:[a-z_]+))*$/.test(value) && value.split("/").filter(Boolean).every((x) => x.startsWith(":") || routeWords.has(x)) || safeLogs.has(value) || time(value) || contractVersion(value) || protocols.includes(value)) return value;
 		value = value.replace(/(?:authorization\s*:\s*(?:basic|bearer)\s+\S+|bearer\s+\S+|batc_[\w-]+|gh[pousr]_[\w-]+|github_pat_[\w-]+|sk-[\w-]+|(?:token|secret|password|passwd|api[_-]?key|fp)\s*[=:]\s*\S+)/gi, "[redacted]").replace(/SHA256:[^\s"',;]+/gi, "[redacted]").replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"<>]+/gi, "[redacted]").replace(/\b[\w.+-]+@[\w.-]+\b/gi, "[redacted]").replace(/\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|dev|app|internal|local|lan|corp|example|invalid)\b(?::\d+)?(?:[/?#]\S*)?/gi, "[redacted]").replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[redacted]").replace(/(?:\b(?:[a-f0-9]{1,4}:){2,}[a-f0-9:]+\b|\[?[a-f0-9]*::[a-f0-9:]*\]?)/gi, "[redacted]").replace(/(?:[a-z]:[\\/]|\\\\|~(?:[\w.-]+)?[\\/]|\/)[^\r\n]*/gi, "[redacted]");
-		return code(value) || reason(value) || version$2(value) || commit(value) || operationId$4(value) || action(value) || /^host-[1-9]\d*$/.test(value) || ["batc.diagnostics.v1", "zh-TW"].includes(value) ? value : "[redacted]";
+		return code(value) || reason(value) || version$2(value) || commit(value) || operationId$5(value) || action(value) || /^host-[1-9]\d*$/.test(value) || ["batc.diagnostics.v1", "zh-TW"].includes(value) ? value : "[redacted]";
 	}));
 }
 function sessionFacts(session) {
@@ -16521,7 +16931,7 @@ function buildDiagnostics(input) {
 			].map((key) => [key, sessions ? sessions.filter((s) => s[key] === null).length : null]))
 		},
 		operations: Array.isArray(input.operations) ? input.operations.filter((op) => ["failed", "uncertain"].includes(op.status)).slice(0, 50).map((op) => ({
-			id: operationId$4(op.operation_id),
+			id: operationId$5(op.operation_id),
 			action: action(op.action),
 			status: op.status,
 			error_code: code(op.error_code ?? op.error?.code),
@@ -17790,6 +18200,9 @@ var WORK_STATUS = {
 	done: "done",
 	awaiting_approval: "in_review"
 };
+function actionMessageKey(action) {
+	return ACTIONS[action] || "";
+}
 function humanizeAction(action) {
 	const words = String(action || "").split(/[._]+/).filter(Boolean);
 	if (!words.length) return "";
@@ -18130,12 +18543,12 @@ function sourceSentence(t, envelope, candidate) {
 	if (receipt && receipt === candidate && receipt !== fixed?.commit_sha) return t("wpub_commit_from_receipt");
 	return t("wpub_commit_from_result");
 }
-function operationId$3(value) {
+function operationId$4(value) {
 	return typeof value === "string" && OP_ID.test(value) ? value : "";
 }
 function publicationPrLine(h, t, pr) {
 	if (!pr || typeof pr !== "object") return null;
-	const opId = operationId$3(pr.publication_operation_id);
+	const opId = operationId$4(pr.publication_operation_id);
 	const number = Number.isSafeInteger(pr.pull_number) ? pr.pull_number : null;
 	const repo = text$5(pr.repository) ? pr.repository : "";
 	const label = number != null && repo ? `PR #${number} · ${repo}` : "";
@@ -18152,7 +18565,7 @@ function publicationPrLine(h, t, pr) {
 	return item;
 }
 function publicationDeliveryLine(h, t, pr, envelope, attempt) {
-	if (!operationId$3(pr?.publication_operation_id)) return null;
+	if (!operationId$4(pr?.publication_operation_id)) return null;
 	const host = text$5(attempt?.session?.host) ? attempt.session.host : text$5(attempt?.native_session?.host) ? attempt.native_session.host : "";
 	const source = text$5(pr.child_operation_id) ? pr.child_operation_id : text$5(envelope?.identity?.execution_operation_id) ? envelope.identity.execution_operation_id : "";
 	const repo = text$5(pr.repository) ? pr.repository : "";
@@ -30956,7 +31369,7 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 var ADOPT_START = "work.adopt_and_start";
 var wi = (value) => typeof value === "string" && /^wi_[0-9a-f]{20}$/.test(value);
 var opId$6 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
-var record$5 = (value) => value && typeof value === "object" && !Array.isArray(value);
+var record$6 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var same$9 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 var copy$1 = (value) => structuredClone(value);
 var workKeys = [
@@ -30976,15 +31389,15 @@ var planKeys = [
 	"expected_accepted_revision_id",
 	"expected_proposal_digest"
 ];
-var exact = (value, keys) => record$5(value) && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+var exact = (value, keys) => record$6(value) && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 var landingPrefix = (namespace, workspaceId) => `batc.pm.${namespace}.adopt-start-landing.${workspaceId}.`;
 var landingNavigationKey = (namespace, workspaceId, id) => `batc.pm.${namespace}.adopt-start-live.${workspaceId}.${id}`;
 function checkedAdoptPreview(value, body, target, baseline) {
-	if (!record$5(value) || value.workspace_id !== target.workspace_id || value.thread_id !== target.thread_id || value.proposal_id !== body.proposal_id || typeof value.adoptable !== "boolean" || !Array.isArray(value.works) || value.works.length !== body.works.length || !exact(value.preconditions, [...planKeys, "works"]) || !Array.isArray(value.preconditions.works) || value.preconditions.works.length !== body.works.length || planKeys.some((key) => value.preconditions[key] !== baseline[key])) throw Error("loop_preview_mismatch");
+	if (!record$6(value) || value.workspace_id !== target.workspace_id || value.thread_id !== target.thread_id || value.proposal_id !== body.proposal_id || typeof value.adoptable !== "boolean" || !Array.isArray(value.works) || value.works.length !== body.works.length || !exact(value.preconditions, [...planKeys, "works"]) || !Array.isArray(value.preconditions.works) || value.preconditions.works.length !== body.works.length || planKeys.some((key) => value.preconditions[key] !== baseline[key])) throw Error("loop_preview_mismatch");
 	const works = [], conditions = [];
 	value.works.forEach((row, index) => {
 		const selected = body.works[index], pre = value.preconditions.works[index];
-		if (!record$5(row) || row.work_item_id !== selected.work_item_id || !same$9(row.requirement_ids, selected.requirement_ids) || typeof row.readiness?.ready !== "boolean") throw Error("loop_preview_mismatch");
+		if (!record$6(row) || row.work_item_id !== selected.work_item_id || !same$9(row.requirement_ids, selected.requirement_ids) || typeof row.readiness?.ready !== "boolean") throw Error("loop_preview_mismatch");
 		if (!row.readiness.ready) return;
 		if (!exact(pre, ["work_item_id", ...workKeys]) || pre.work_item_id !== row.work_item_id || !["claude", "codex"].includes(row.agent) || !["pull_request", "reviewable_changes"].includes(row.delivery) || typeof row.instruction !== "string" || !row.instruction.trim() || row.instruction.length > 4e3 || selected.instruction !== void 0 && row.instruction !== selected.instruction || row.model != null && (typeof row.model !== "string" || !row.model.trim() || row.model.length > 128) || !exact(row.code_target, [
 			"repository",
@@ -31032,7 +31445,7 @@ function adoptStartReview({ t, api, alive, form, caps, namespace, workspaceId, t
 	const draft = () => {
 		try {
 			const value = JSON.parse(request?.values().selection || "null");
-			return record$5(value) && Array.isArray(value.works) ? value : {
+			return record$6(value) && Array.isArray(value.works) ? value : {
 				proposal_id: null,
 				works: [],
 				drafts: {}
@@ -31436,7 +31849,7 @@ var defaults = {
 	conflict: "conflicting",
 	excluded: "not_applicable"
 };
-var record$4 = (value) => value && typeof value === "object" && !Array.isArray(value);
+var record$5 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var key$1 = (value, max) => typeof value === "string" && value.length <= max && /^[a-z][a-z0-9_.-]*$/.test(value);
 var text$4 = (value, max) => typeof value === "string" && !!value.trim() && [...value].length <= max && !value.includes("\0");
 var refs$1 = (values, allowed, min = 1) => Array.isArray(values) && values.length >= min && values.length <= 20 && new Set(values).size === values.length && values.every((value) => allowed.has(value));
@@ -31454,7 +31867,7 @@ function cyclic(requirements) {
 	return [...graph.keys()].some(visit);
 }
 function validRequirements(values, included) {
-	if (!Array.isArray(values) || values.length > 20 || values.some((row) => !record$4(row) || !key$1(row.id, 80))) return false;
+	if (!Array.isArray(values) || values.length > 20 || values.some((row) => !record$5(row) || !key$1(row.id, 80))) return false;
 	const ids = new Set(values.map((row) => row.id));
 	return ids.size === values.length && values.every((row) => included.has(row.source_key) && refs$1(row.acceptance_keys, included) && [
 		"must",
@@ -31699,10 +32112,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 		choose(picker.value);
 	});
 	function checked(value) {
-		if (value?.workspace_id !== workspaceId || !record$4(value.proposal)) throw fail();
+		if (value?.workspace_id !== workspaceId || !record$5(value.proposal)) throw fail();
 		const p = value.proposal, c = p.context;
-		if (p.thread_id !== threadId || p.workspace_id !== void 0 && p.workspace_id !== workspaceId || typeof p.proposal_id !== "string" || !/^op_[0-9a-f]{32}$/.test(p.operation_id) || !record$4(c) || !Number.isInteger(c.thread_version) || !record$4(c.plan_head) || !Number.isInteger(c.plan_head.version) || !Object.hasOwn(c.plan_head, "accepted_revision_id") || !record$4(c.source_references) || typeof p.raw_reply !== "string" || !["format_valid", "needs_review"].includes(p.validation?.status)) throw fail();
-		for (const ref of Object.values(c.source_references)) if (!record$4(ref) || typeof ref.quote !== "string" || !ref.quote || typeof ref.id !== "string" || !/^[0-9a-f]{64}$/.test(ref.digest)) throw fail();
+		if (p.thread_id !== threadId || p.workspace_id !== void 0 && p.workspace_id !== workspaceId || typeof p.proposal_id !== "string" || !/^op_[0-9a-f]{32}$/.test(p.operation_id) || !record$5(c) || !Number.isInteger(c.thread_version) || !record$5(c.plan_head) || !Number.isInteger(c.plan_head.version) || !Object.hasOwn(c.plan_head, "accepted_revision_id") || !record$5(c.source_references) || typeof p.raw_reply !== "string" || !["format_valid", "needs_review"].includes(p.validation?.status)) throw fail();
+		for (const ref of Object.values(c.source_references)) if (!record$5(ref) || typeof ref.quote !== "string" || !ref.quote || typeof ref.id !== "string" || !/^[0-9a-f]{64}$/.test(ref.digest)) throw fail();
 		if (p.validation.status === "needs_review") {
 			if (p.document !== null || p.document_digest !== null) throw fail();
 		} else {
@@ -31710,7 +32123,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 			if (!/^[0-9a-f]{64}$/.test(p.document_digest) || d?.version !== 1 || !text$4(d.title, 160) || !text$4(d.summary, 8e3) || !Array.isArray(d.candidates) || !d.candidates.length || d.candidates.length > 20 || !Array.isArray(d.requirements) || d.requirements.length > 20 || !Array.isArray(d.questions) || d.questions.length > 3) throw fail();
 			const keys = new Set();
 			for (const row of d.candidates) {
-				if (!record$4(row) || !key$1(row.key, 60) || keys.has(row.key) || !text$4(row.text, 4e3) || !Object.hasOwn(defaults, row.kind) || !Array.isArray(row.source_refs) || !row.source_refs.length || row.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
+				if (!record$5(row) || !key$1(row.key, 60) || keys.has(row.key) || !text$4(row.text, 4e3) || !Object.hasOwn(defaults, row.kind) || !Array.isArray(row.source_refs) || !row.source_refs.length || row.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
 				keys.add(row.key);
 			}
 			if (!validRequirements(d.requirements, new Set(d.candidates.filter((row) => row.kind !== "excluded").map((row) => row.key)))) throw fail();
@@ -31733,13 +32146,13 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 		};
 	}
 	function reviewIssue(value) {
-		if (!active || !record$4(value) || !text$4(value.title, 160) || !Array.isArray(value.rows) || value.rows.some((row) => !record$4(row)) || !Array.isArray(value.requirements) || value.requirements.length > 20 || value.requirements.some((row) => !record$4(row))) return "pcp_missing";
+		if (!active || !record$5(value) || !text$4(value.title, 160) || !Array.isArray(value.rows) || value.rows.some((row) => !record$5(row)) || !Array.isArray(value.requirements) || value.requirements.length > 20 || value.requirements.some((row) => !record$5(row))) return "pcp_missing";
 		const keys = active.document?.candidates?.map((row) => row.key) || [];
 		if (value.rows.length !== keys.length || new Set(value.rows.map((row) => row.key)).size !== keys.length || value.rows.some((row) => !keys.includes(row.key) || !key$1(row.key, 60) || !text$4(row.text, 4e3) || !statuses.includes(row.status) || typeof row.include !== "boolean")) return "pcp_missing";
 		const included = new Set(value.rows.filter((row) => row.include).map((row) => row.key));
 		if (!included.size) return "pcp_empty_selection";
 		if (value.requirements.some((row) => Array.isArray(row.acceptance_keys) && !row.acceptance_keys.length)) return "pcp_acceptance_missing";
-		if (value.requirements.every((row) => record$4(row) && Array.isArray(row.depends_on)) && cyclic(value.requirements)) return "pcp_cycle";
+		if (value.requirements.every((row) => record$5(row) && Array.isArray(row.depends_on)) && cyclic(value.requirements)) return "pcp_cycle";
 		if (!validRequirements(value.requirements, included) || !Array.isArray(value.removed_requirement_ids) || !same$8([...value.removed_requirement_ids].sort(), removed(active, value.requirements).sort())) return "pcp_missing";
 		return null;
 	}
@@ -31925,7 +32338,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 		let saved = original();
 		if (saved?.proposal_id !== p.proposal_id) {
 			if (adopt.locked()) throw fail();
-			const drafts = { ...record$4(saved?.drafts) ? saved.drafts : {} };
+			const drafts = { ...record$5(saved?.drafts) ? saved.drafts : {} };
 			if (saved?.proposal_id) drafts[saved.proposal_id] = {
 				review: saved.review,
 				preconditions: saved.preconditions,
@@ -32295,7 +32708,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 					const [list, plans] = await Promise.all([api("GET", `${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=0&limit=20`), api("GET", base + "/plans?limit=1")]);
 					alive();
 					if (own !== ticket) return;
-					if (plans.workspace_id !== workspaceId || !record$4(plans.head)) throw fail();
+					if (plans.workspace_id !== workspaceId || !record$5(plans.head)) throw fail();
 					head = plans.head;
 					visible = true;
 					box.hidden = false;
@@ -58561,7 +58974,7 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 //#region src/project-skills.js
 var digest$4 = (value) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
 var refs = (value) => Array.isArray(value) && value.length <= 20 && value.every((ref) => ref && typeof ref.skill_id === "string" && digest$4(ref.digest)) && new Set(value.map((ref) => ref.skill_id)).size === value.length;
-var record$3 = (value) => value && refs(value.selected) && Number.isInteger(value.revision) && value.revision >= 0 && digest$4(value.digest);
+var record$4 = (value) => value && refs(value.selected) && Number.isInteger(value.revision) && value.revision >= 0 && digest$4(value.digest);
 var key = (host, workspace) => JSON.stringify([host, workspace]);
 var same$1 = (a, b) => a.skill_id === b.skill_id && a.digest === b.digest;
 function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storageKey, onEvents, errorBox }) {
@@ -58822,13 +59235,13 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 			if (next.version !== 1 || next.project_id !== projectId || next.host !== selectedHost || next.workspace_id !== selectedWorkspace || !Array.isArray(next.catalog?.skills) || !refs(next.selection?.selected) || !Number.isInteger(next.selection.revision)) throw Error(t("skills_invalid"));
 			doc = next;
 			const draftKey = key(selectedHost, selectedWorkspace), stored = saved.drafts[draftKey];
-			draft = record$3(stored) ? stored : {
+			draft = record$4(stored) ? stored : {
 				selected: next.selection.host === selectedHost && next.selection.workspace_id === selectedWorkspace ? structuredClone(next.selection.selected) : [],
 				revision: next.selection.revision,
 				digest: next.catalog.catalog_digest,
 				intent: null
 			};
-			if (draft.intent && !record$3(draft.intent)) draft.intent = null;
+			if (draft.intent && !record$4(draft.intent)) draft.intent = null;
 			saved.drafts[draftKey] = draft;
 			if (draft.revision !== next.selection.revision || draft.digest !== next.catalog.catalog_digest) status.textContent = t("skills_conflict");
 			clearError();
@@ -61955,12 +62368,12 @@ async function mountUpdates(main, { h, t, versionInput = () => ({ desktop: true 
 }
 //#endregion
 //#region src/capture.js
-var record$2 = (value) => value && typeof value === "object" && !Array.isArray(value);
+var record$3 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var digest$2 = (value) => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
-var operationId$2 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
+var operationId$3 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
 var previewId = (value) => typeof value === "string" && /^acpv_[0-9a-f]{32}$/.test(value);
 var previewToken = (value) => typeof value === "string" && value.length > 0 && value.length <= 24576;
-var validPreview$3 = (doc) => record$2(doc) && record$2(doc.source) && record$2(doc.evidence) && [
+var validPreview$3 = (doc) => record$3(doc) && record$3(doc.source) && record$3(doc.evidence) && [
 	doc.relative_path,
 	doc.source.host,
 	doc.source.session_id,
@@ -61973,8 +62386,8 @@ function restore$2(value, source) {
 		...source,
 		relative_path: ""
 	} };
-	if (!record$2(value)) return saved;
-	if (record$2(value.input)) {
+	if (!record$3(value)) return saved;
+	if (record$3(value.input)) {
 		for (const key of [
 			"host",
 			"session_id",
@@ -61984,10 +62397,10 @@ function restore$2(value, source) {
 	if (validPreview$3(value.preview)) saved.preview = value.preview;
 	const intent = value.intent, request = intent?.request;
 	const usable = request?.action === "artifact.capture" && previewId(request.target?.preview_id) && previewToken(request.params?.preview_token) && digest$2(request.preconditions?.expected_fingerprint) && typeof intent.key === "string" && intent.key.length > 0 && intent.key.length <= 200;
-	if (usable || operationId$2(intent?.operation_id)) saved.intent = {
+	if (usable || operationId$3(intent?.operation_id)) saved.intent = {
 		key: usable ? intent.key : null,
 		request: usable ? request : null,
-		operation_id: operationId$2(intent.operation_id) ? intent.operation_id : null,
+		operation_id: operationId$3(intent.operation_id) ? intent.operation_id : null,
 		reviewed_digest: digest$2(intent.reviewed_digest) ? intent.reviewed_digest : saved.preview?.evidence.digest
 	};
 	return saved;
@@ -62100,7 +62513,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 	const accept = async (operation) => {
 		guard();
 		const intent = saved.intent;
-		if (!intent || !operationId$2(operation?.operation_id) || operation.action !== "artifact.capture" || intent.operation_id && intent.operation_id !== operation.operation_id || intent.request && operation.target?.preview_id !== intent.request.target.preview_id) throw new Error(t("capture_invalid_result"));
+		if (!intent || !operationId$3(operation?.operation_id) || operation.action !== "artifact.capture" || intent.operation_id && intent.operation_id !== operation.operation_id || intent.request && operation.target?.preview_id !== intent.request.target.preview_id) throw new Error(t("capture_invalid_result"));
 		saved.operation = operation;
 		saved.intent.operation_id = operation.operation_id;
 		persist();
@@ -62969,9 +63382,9 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 }
 //#endregion
 //#region src/permissions.js
-var record$1 = (value) => value && typeof value === "object" && !Array.isArray(value);
+var record$2 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var modeValue = (value) => ["default", "allow_all"].includes(value);
-var operationId$1 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
+var operationId$2 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
 var terminal$5 = (operation) => [
 	"succeeded",
 	"failed",
@@ -62985,9 +63398,9 @@ var admissionRefusals$2 = new Set([
 ]);
 function restore$1(value, target) {
 	const saved = { mode: modeValue(value?.mode) ? value.mode : "default" };
-	if (!record$1(value) || !value.intent) return saved;
+	if (!record$2(value) || !value.intent) return saved;
 	const intent = value.intent, request = intent.request;
-	const valid = request?.action === "session.permissions" && request.target?.host === target.host && request.target?.session_id === target.session_id && modeValue(request.params?.mode) && record$1(request.preconditions) && Object.keys(request.preconditions).length === 0 && typeof intent.key === "string" && intent.key.length > 0 && intent.key.length <= 200;
+	const valid = request?.action === "session.permissions" && request.target?.host === target.host && request.target?.session_id === target.session_id && modeValue(request.params?.mode) && record$2(request.preconditions) && Object.keys(request.preconditions).length === 0 && typeof intent.key === "string" && intent.key.length > 0 && intent.key.length <= 200;
 	saved.intent = {
 		key: valid ? intent.key : null,
 		request: valid ? {
@@ -62996,7 +63409,7 @@ function restore$1(value, target) {
 			params: { mode: request.params.mode },
 			preconditions: {}
 		} : null,
-		operation_id: operationId$1(intent.operation_id) ? intent.operation_id : null
+		operation_id: operationId$2(intent.operation_id) ? intent.operation_id : null
 	};
 	if (valid && !saved.intent.operation_id && admissionRefusals$2.has(intent.refused)) saved.intent.refused = intent.refused;
 	if (valid) saved.mode = request.params.mode;
@@ -63029,7 +63442,7 @@ function permissionsPanel({ h, t, api, caps, guard, errorBox, opStatus, storageK
 	const writable = () => ready() && session()?.api_access === "managed" && session()?.provenance === "connector_managed" && (caps()?.scopes || []).includes("operate") && caps()?.hosts?.some((host) => host.host === target.host && host.writes === true) && caps()?.actions?.some((action) => action.action === "session.permissions" && action.allowed === true);
 	const accept = (candidate) => {
 		guard();
-		if (!saved.intent || !operationId$1(candidate?.operation_id) || candidate.action !== "session.permissions" || candidate.target?.host !== target.host || candidate.target?.session_id !== target.session_id || !modeValue(candidate.params?.mode) || saved.intent.request && candidate.params.mode !== saved.intent.request.params.mode || saved.intent.key && candidate.idempotency_key !== saved.intent.key || saved.intent.operation_id && candidate.operation_id !== saved.intent.operation_id) throw new Error(t("permissions_invalid_result"));
+		if (!saved.intent || !operationId$2(candidate?.operation_id) || candidate.action !== "session.permissions" || candidate.target?.host !== target.host || candidate.target?.session_id !== target.session_id || !modeValue(candidate.params?.mode) || saved.intent.request && candidate.params.mode !== saved.intent.request.params.mode || saved.intent.key && candidate.idempotency_key !== saved.intent.key || saved.intent.operation_id && candidate.operation_id !== saved.intent.operation_id) throw new Error(t("permissions_invalid_result"));
 		operation = candidate;
 		saved.intent.operation_id = candidate.operation_id;
 		saved.mode = candidate.params.mode;
@@ -63535,7 +63948,7 @@ function approvalsPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, sto
 //#endregion
 //#region src/session-start.js
 var object$2 = (v) => v && typeof v === "object" && !Array.isArray(v);
-var operationId = (v) => typeof v === "string" && /^op_[0-9a-f]{32}$/.test(v);
+var operationId$1 = (v) => typeof v === "string" && /^op_[0-9a-f]{32}$/.test(v);
 var terminal$3 = (op) => [
 	"succeeded",
 	"failed",
@@ -63615,7 +64028,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 		saved.intent = {
 			request: valid ? raw.intent.request : null,
 			key: valid ? raw.intent.key : null,
-			operation_id: operationId(raw.intent.operation_id) ? raw.intent.operation_id : null,
+			operation_id: operationId$1(raw.intent.operation_id) ? raw.intent.operation_id : null,
 			refused: !raw.intent.operation_id && admissionRefusals$1.has(raw.intent.refused) ? raw.intent.refused : null
 		};
 		if (valid) Object.assign(saved, raw.intent.request.target, {
@@ -63744,7 +64157,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 	const accept = (candidate) => {
 		guard();
 		const intent = saved.intent;
-		if (!intent || !intent.request || !intent.key || !operationId(candidate?.operation_id) || candidate.actor !== caps()?.actor || candidate.idempotency_key !== intent.key || !equal$3({
+		if (!intent || !intent.request || !intent.key || !operationId$1(candidate?.operation_id) || candidate.actor !== caps()?.actor || candidate.idempotency_key !== intent.key || !equal$3({
 			action: candidate.action,
 			target: candidate.target,
 			params: candidate.params,
@@ -65756,8 +66169,8 @@ function artifactContent({ h, t, api, guard, getArtifact, canRead, validArtifact
 }
 //#endregion
 //#region src/artifact-review.js
-var record = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
-var ordered = (value) => record(value) ? Object.fromEntries(Object.keys(value).sort().map((k) => [k, ordered(value[k])])) : Array.isArray(value) ? value.map(ordered) : value;
+var record$1 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+var ordered = (value) => record$1(value) ? Object.fromEntries(Object.keys(value).sort().map((k) => [k, ordered(value[k])])) : Array.isArray(value) ? value.map(ordered) : value;
 var stable = (value) => JSON.stringify(ordered(value));
 var equal = (a, b) => stable(a ?? null) === stable(b ?? null);
 var digest = (value) => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
@@ -65780,7 +66193,7 @@ var executions = [
 ];
 var managedCaptureExecution = (op) => oid(op?.operation_id) && op.status === "succeeded" && executions.includes(op.action) && (op.action !== "session.start" || op.result?.started === true && op.result.prompt_sent === true && op.result.message_id === `batc-${op.operation_id}`) && (op.action !== "repository.continue" || op.result?.message_id === `batc-${op.operation_id}` && sha40(op.result.source_sha));
 var safePath = (path) => typeof path === "string" && path && new TextEncoder().encode(path).length <= 4096 && !/[\\\x00-\x1f\x7f-\x9f]/.test(path) && path.split("/").every((p) => p && p !== "." && p !== ".." && p.toLowerCase() !== ".git");
-var selectorValid = (s) => record(s) && (equal(Object.keys(s).sort(), ["execution_operation_id"]) && oid(s.execution_operation_id) || equal(Object.keys(s).sort(), ["command_id", "task_id"]) && tid(s.task_id) && commandId(s.command_id));
+var selectorValid = (s) => record$1(s) && (equal(Object.keys(s).sort(), ["execution_operation_id"]) && oid(s.execution_operation_id) || equal(Object.keys(s).sort(), ["command_id", "task_id"]) && tid(s.task_id) && commandId(s.command_id));
 var validRef = (ref) => aid(ref?.artifact_id) && Number.isSafeInteger(ref.revision) && ref.revision > 0 && ref.revision <= 999999999 && digest(ref.digest);
 var refOf = (value) => ({
 	artifact_id: value.artifact_id,
@@ -65789,11 +66202,11 @@ var refOf = (value) => ({
 });
 var sourceFromOperation = (op) => op.action === "session.send" ? op.external_refs?.resolved_target || op.target : op.result;
 function validPreview(doc, input) {
-	return record(doc) && /^acpv_[0-9a-f]{32}$/.test(doc.preview_id) && typeof doc.preview_token === "string" && doc.preview_token.length > 0 && doc.preview_token.length <= 24576 && digest(doc.fingerprint) && doc.snapshot === false && Number.isFinite(doc.expires_at) && doc.source?.provenance === "connector_managed" && doc.source.host === input.host && doc.source.session_id === input.session_id && equal(doc.source.selector, input.selector) && doc.relative_path === input.relative_path && typeof doc.source.root === "string" && typeof doc.source.repository_root === "string" && record(doc.source.lineage) && digest(doc.evidence?.digest) && /^[0-9a-f]{40}$/.test(doc.evidence.head_sha) && Number.isSafeInteger(doc.evidence.size_bytes) && doc.evidence.size_bytes >= 0;
+	return record$1(doc) && /^acpv_[0-9a-f]{32}$/.test(doc.preview_id) && typeof doc.preview_token === "string" && doc.preview_token.length > 0 && doc.preview_token.length <= 24576 && digest(doc.fingerprint) && doc.snapshot === false && Number.isFinite(doc.expires_at) && doc.source?.provenance === "connector_managed" && doc.source.host === input.host && doc.source.session_id === input.session_id && equal(doc.source.selector, input.selector) && doc.relative_path === input.relative_path && typeof doc.source.root === "string" && typeof doc.source.repository_root === "string" && record$1(doc.source.lineage) && digest(doc.evidence?.digest) && /^[0-9a-f]{40}$/.test(doc.evidence.head_sha) && Number.isSafeInteger(doc.evidence.size_bytes) && doc.evidence.size_bytes >= 0;
 }
 function validArtifact(row, expected) {
 	const proof = row?.source;
-	return validRef(row) && row.state === "ready" && record(proof) && proof.kind === "managed_capture" && oid(proof.operation_id) && row.operation_id === proof.operation_id && digest(proof.fingerprint) && proof.source?.provenance === "connector_managed" && record(proof.source.lineage) && selectorValid(proof.source.selector) && safePath(proof.relative_path) && proof.evidence?.digest === row.digest && proof.evidence.size_bytes === row.size_bytes && /^[0-9a-f]{40}$/.test(proof.evidence.head_sha) && (!expected || equal(refOf(row), expected));
+	return validRef(row) && row.state === "ready" && record$1(proof) && proof.kind === "managed_capture" && oid(proof.operation_id) && row.operation_id === proof.operation_id && digest(proof.fingerprint) && proof.source?.provenance === "connector_managed" && record$1(proof.source.lineage) && selectorValid(proof.source.selector) && safePath(proof.relative_path) && proof.evidence?.digest === row.digest && proof.evidence.size_bytes === row.size_bytes && /^[0-9a-f]{40}$/.test(proof.evidence.head_sha) && (!expected || equal(refOf(row), expected));
 }
 function restore(raw) {
 	const saved = {
@@ -65801,14 +66214,14 @@ function restore(raw) {
 		selector: null,
 		reviewText: ""
 	};
-	if (!record(raw)) return saved;
+	if (!record$1(raw)) return saved;
 	if (typeof raw.relative_path === "string") saved.relative_path = raw.relative_path;
 	if (selectorValid(raw.selector)) saved.selector = raw.selector;
 	if (typeof raw.reviewText === "string") saved.reviewText = raw.reviewText;
-	if (record(raw.preview)) saved.preview = raw.preview;
+	if (record$1(raw.preview)) saved.preview = raw.preview;
 	for (const kind of ["capture", "accept"]) if (raw[kind]) {
 		const intent = raw[kind];
-		const usable = record(intent.request) && typeof intent.key === "string" && intent.key.length > 0 && intent.key.length <= 200 && typeof intent.actor === "string" && record(intent.request.target) && record(intent.request.params) && record(intent.request.preconditions) && intent.request.action === (kind === "capture" ? "artifact.capture.managed" : "artifact.accept");
+		const usable = record$1(intent.request) && typeof intent.key === "string" && intent.key.length > 0 && intent.key.length <= 200 && typeof intent.actor === "string" && record$1(intent.request.target) && record$1(intent.request.params) && record$1(intent.request.preconditions) && intent.request.action === (kind === "capture" ? "artifact.capture.managed" : "artifact.accept");
 		saved[kind] = {
 			request: usable ? intent.request : null,
 			key: usable ? intent.key : null,
@@ -66649,6 +67062,16 @@ function legacyIdentity(scope) {
 		return null;
 	}
 }
+function matchingLegacySources(identity, keys) {
+	const candidates = keys.filter((key) => key.startsWith("batc.sync.")).map((key) => key.slice(10));
+	return candidates.flatMap((scope) => {
+		const old = legacyIdentity(scope);
+		return old?.server_id === identity.server_id && old.principal_id === identity.principal_id && old.actor === identity.actor ? [{
+			scope,
+			ambiguous: candidates.some((other) => other !== scope && (other.startsWith(scope + ".") || scope.startsWith(other + ".")))
+		}] : [];
+	});
+}
 function migrateManagedStorage(identity, local, session) {
 	const target = managedStorageScope(identity), marker = `batc.storage-migration.${target}`;
 	const receipt = local.getItem(marker);
@@ -66659,13 +67082,9 @@ function migrateManagedStorage(identity, local, session) {
 	}
 	const areas = [local, session], allKeys = areas.map(keys);
 	if (allKeys.some((list) => list.some((key) => rebase(key, target, target) !== null))) return;
-	const candidates = allKeys[0].filter((key) => key.startsWith("batc.sync.")).map((key) => key.slice(10));
-	const matching = candidates.filter((scope) => {
-		const old = legacyIdentity(scope);
-		return old?.server_id === identity.server_id && old.principal_id === identity.principal_id && old.actor === identity.actor;
-	});
-	if (matching.length !== 1) return;
-	const source = matching[0];
+	const matching = matchingLegacySources(identity, allKeys[0]);
+	if (matching.length !== 1 || matching[0].ambiguous) return;
+	const source = matching[0].scope;
 	for (const key of allKeys.flat()) {
 		const endpoint = key.match(/^batc\.[a-z.-]+\.(https?%3A%2F%2F[^:]+):/)?.[1];
 		if (!endpoint) continue;
@@ -66677,7 +67096,6 @@ function migrateManagedStorage(identity, local, session) {
 		}
 		if (possible !== source && legacyIdentity(possible) && rebase(key, possible, possible) !== null) return;
 	}
-	if (candidates.some((scope) => scope !== source && (scope.startsWith(source + ".") || source.startsWith(scope + ".")))) return;
 	const copies = areas.flatMap((storage, area) => allKeys[area].flatMap((key) => {
 		const destination = rebase(key, source, target), value = storage.getItem(key);
 		return destination !== null && value !== null ? [{
@@ -66713,6 +67131,439 @@ function migrateManagedStorage(identity, local, session) {
 		local.removeItem(marker);
 		throw error;
 	}
+}
+//#endregion
+//#region src/state/earlier-drafts.ts
+var diagnostic = (code) => console.debug(code);
+var problem$1 = "draft_recovery_unreadable";
+var record = (value) => !!value && typeof value === "object" && !Array.isArray(value);
+var pmText = {};
+function forms(actions, fields) {
+	for (const action of actions.split(" ")) pmText[action] = fields.split(" ");
+}
+forms("session.send", "text");
+forms("work.start", "instruction");
+forms("pm.message.append", "content");
+forms("pm.thread.create", "title content");
+forms("pm.thread.rename pm.snapshot.create", "title");
+forms("pm.workspace.create", "name");
+forms("pm.input.record", "value reference");
+forms("pm.plan.draft", "title markdown");
+forms("pm.run.prepare pm.run.analyze pm.run.bat.analyze pm.follow_up.analyze pm.conversation.propose pm.continuation.prepare", "purpose");
+forms("pm.thread.plan pm.thread.plan.revise pm.input.confirm pm.plan.adopt pm.conversation.adopt pm.workspace.adapter.select pm.work.bind pm.project.bind", "rationale");
+forms("pm.work_input.defer", "reason");
+forms("github.pr.publish github.pr.update", "public_title public_body");
+forms("pm.issue.publish", "title body");
+forms("pm.issue.cancel", "reason publicReason");
+forms("pm.dependencies.declare", "name ecosystem version path url note");
+forms("pm.roadmap.baseline.set", "title rationale");
+forms("pm.roadmap.forecast.set", "date rationale");
+forms("pm.product_goal.revise pm.dod.revise", "rationale");
+forms("pm.backlog.revise pm.sprint.select pm.sprint.start pm.sprint.close pm.sprint.cancel", "rationale");
+forms("pm.sprint.create", "title goal capacity_note rationale");
+forms("pm.sprint.goal.revise", "goal rationale");
+forms("pm.meeting.create", "title rationale");
+forms("pm.meeting.note pm.maintenance_review.note", "content rationale");
+forms("pm.meeting.complete", "discussion_summary rationale");
+forms("pm.meeting.context.revise", "rationale");
+forms("pm.meeting.follow_up.record pm.maintenance_review.follow_up.record", "result rationale");
+forms("pm.governance.record pm.governance.revise", "title description rationale trigger response alternatives distinction");
+forms("pm.governance.decide pm.governance.adoption.link", "rationale");
+forms("pm.lifecycle.set_stage pm.lifecycle.pause pm.lifecycle.close pm.lifecycle.reopen pm.lifecycle.retain_inflight", "reason");
+forms("pm.maintenance_review.prepare", "title");
+forms("pm.maintenance_review.candidate.record", "title problem goal_relation expected_effect options hypotheses rationale");
+forms("pm.maintenance_review.complete", "discussion_summary direction_rationale next_observation_focus rationale");
+forms("pm.release_baseline.register", "rationale limitations");
+forms("pm.work_batch.start pm.work_batch.evidence.record pm.quality.review.create pm.quality.review.record pm.maintenance_policy.adopt", "rationale");
+forms("pm.quality.review.revoke", "reason");
+forms("repository.continue", "basis prompt title");
+forms("pm.meeting.draft", "why delivery_approach capacity_discussion dependency_notes goal_review feedback environment_changes next_steps observations previous_improvement_review no_improvement_rationale unresolved_questions rationale");
+var collections = {
+	"pm.meeting.draft": {
+		decisions: ["text", "rationale"],
+		follow_ups: [
+			"text",
+			"expected_effect",
+			"verification"
+		],
+		outcomes: ["observation"]
+	},
+	"pm.maintenance_review.complete": { follow_ups: [
+		"text",
+		"expected_effect",
+		"verification"
+	] },
+	"pm.maintenance_review.candidate.record": { public_sources: [
+		"url",
+		"title",
+		"claim"
+	] },
+	"pm.roadmap.baseline.set": { milestones: ["title", "baseline_date"] }
+};
+var formText = {
+	session: ["text"],
+	answers: ["answers"],
+	work: [
+		"title",
+		"goal",
+		"request",
+		"acceptance"
+	],
+	attachment: ["text"],
+	discussion: ["content"],
+	project: [
+		"name",
+		"description",
+		"task_project"
+	],
+	createWork: [
+		"title",
+		"goal",
+		"request",
+		"acceptance",
+		"steps"
+	],
+	start: ["title", "prompt"],
+	orchestration: ["message"],
+	items: ["title", "prompt"],
+	labels: ["text"],
+	review: ["reviewText"]
+};
+var formTypes = [
+	"draft",
+	"pm",
+	"create",
+	"start",
+	"published",
+	"dispatch",
+	"orchestrate",
+	"labels",
+	"artifact-review"
+];
+var pmAction = (suffix) => suffix.match(/(?:^|\.)(pm\.[a-z_.]+|session\.send|work\.start|repository\.continue|github\.pr\.(?:publish|update))\.\{/);
+function draftText(family, suffix, raw, report = diagnostic) {
+	const result = [];
+	if (suffix === "shortcut" || suffix.endsWith(".shortcut") || family === "draft" && /^continue\.[^.]+\.[^.]+$/.test(suffix) || family === "dispatch" && /^prj_[0-9a-f]{20}\.wi_[0-9a-f]{20}$/.test(suffix)) return result;
+	const add = (field, value, label, action) => {
+		if (typeof value === "string" && value.trim()) result.push({
+			field,
+			text: value,
+			label,
+			action
+		});
+	};
+	if (family === "draft" && /^send\..+/.test(suffix) && !suffix.endsWith(".queue")) {
+		add(formText.session[0], raw, "earlier_session");
+		return result;
+	}
+	if (!formTypes.includes(family)) return result;
+	const action = family === "pm" ? pmAction(suffix)?.[1] : void 0;
+	if (family === "pm" && !action && !/^discussion-send\./.test(suffix)) return result;
+	const value = JSON.parse(raw);
+	if (!record(value)) return result;
+	const fields = (names, source, label, action) => {
+		if (record(source)) for (const name of names) add(name, source[name], label, action);
+	};
+	if (family === "draft") {
+		if (/^answer\./.test(suffix) && Array.isArray(value.answers)) value.answers.forEach((answer, index) => add(`${formText.answers[0]}.${index}`, answer, "earlier_answers"));
+		else if (/^wi\.edit\./.test(suffix)) fields(formText.work, value.fields, "earlier_work");
+		else if (/^continue\.[^.]+$/.test(suffix)) fields(formText.attachment, value, "continue_from_checkpoint");
+		else if (suffix === "published" || /^dispatch\./.test(suffix)) fields(formText.attachment, value, "earlier_start");
+	} else if (family === "pm") {
+		if (/^discussion-send\./.test(suffix)) fields(formText.discussion, value, "earlier_discussion");
+		else if (value.version === 1 && record(value.values)) {
+			if (action && Object.hasOwn(pmText, action)) {
+				fields(action === "pm.thread.create" && suffix.startsWith("overview-assessment.") ? pmText[action].filter((name) => name !== "title") : pmText[action], value.values, "earlier_pm", action);
+				if (action === "pm.quality.review.record") fields(Object.keys(value.values).filter((name) => /^reason_\d+$/.test(name)), value.values, "earlier_pm", action);
+				for (const [name, names] of Object.entries(collections[action] || {})) {
+					if (!value.values[name]) continue;
+					try {
+						const rows = JSON.parse(value.values[name]);
+						if (Array.isArray(rows)) rows.forEach((row, index) => {
+							if (record(row)) for (const field of names) add(`${name}.${index}.${field}`, row[field], "earlier_pm", action);
+						});
+					} catch {
+						report(problem$1);
+					}
+				}
+			}
+		}
+	} else if (family === "create" && value.version === 1) {
+		if (/^project\./.test(suffix)) fields(formText.project, value.values, "earlier_project");
+		else if (/^work_item\./.test(suffix)) fields(formText.createWork, value.values, "earlier_work");
+	} else if ([
+		"start",
+		"published",
+		"dispatch"
+	].includes(family)) fields(formText.start, value, "earlier_start");
+	else if (family === "orchestrate") {
+		fields(formText.orchestration, value, "earlier_orchestration");
+		if (Array.isArray(value.items)) value.items.forEach((item, index) => {
+			if (record(item)) for (const field of formText.items) add(`items.${index}.${field}`, item[field], "earlier_orchestration");
+		});
+	} else if (family === "labels") fields(formText.labels, value, "earlier_labels");
+	else if (family === "artifact-review") fields(formText.review, value, "earlier_review");
+	return result;
+}
+var marker = (identity, id) => `batc.earlier-drafts.${managedStorageScope(identity)}.${id}`;
+async function entryId(key, field) {
+	const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify([key, field])));
+	return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+var operationId = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
+function evidence(value) {
+	const intents = record(value) ? [
+		value.intent,
+		value.submission,
+		value.accept
+	].filter((item) => item != null) : [];
+	return {
+		pending: intents.length > 0,
+		operations: intents.flatMap((intent) => operationId(intent?.operation_id) ? [intent.operation_id] : [])
+	};
+}
+function formHref(family, suffix) {
+	const part = (value) => encodeURIComponent(typeof value === "string" ? value : "");
+	let target = {};
+	try {
+		const match = family === "pm" ? pmAction(suffix) : null;
+		const json = match ? match.index + match[0].length - 1 : suffix.indexOf("{");
+		if (json >= 0) target = JSON.parse(suffix.slice(json));
+	} catch {}
+	if (family === "pm") {
+		const workspace = target.workspace_id || (suffix.startsWith("discussion-send.") ? suffix.slice(16) : "");
+		return "#/pm" + (workspace ? "/" + part(workspace) : "") + (target.thread_id ? "/discussions/" + part(target.thread_id) : "");
+	}
+	if (family === "draft") {
+		const session = suffix.split(".");
+		if (session[0] === "send" && session.length === 3 || session[0] === "answer" && session.length === 4) return `#/session/${part(session[1])}/${part(session[2])}`;
+		if (suffix.startsWith("wi.edit.")) return "#/item/" + part(suffix.slice(8));
+		if (suffix.startsWith("dispatch.")) return "#/dispatch/" + part(suffix.slice(9));
+		if (suffix === "published") return "#/published";
+	}
+	if (family === "labels") try {
+		const [host, sid] = JSON.parse(suffix);
+		return `#/session/${part(host)}/${part(sid)}`;
+	} catch {
+		return "#/sessions";
+	}
+	if (family === "create") return suffix.startsWith("work_item.") ? "#/project/" + part(suffix.slice(10)) : "#/projects";
+	if (family === "dispatch") return "#/dispatch/" + part(suffix);
+	if (family === "orchestrate") return "#/orchestrate/" + part(suffix.split(".")[0]);
+	if (family === "artifact-review") return "#/artifact-review" + (target.kind === "session" ? [
+		target.kind,
+		target.host,
+		target.session_id
+	] : [
+		"artifact",
+		"operation",
+		"task"
+	].includes(target.kind) ? [
+		target.kind,
+		target.artifact_id || target.operation_id || target.task_id,
+		...target.kind === "artifact" ? [String(target.revision)] : []
+	] : []).map((value) => "/" + part(value)).join("");
+	return ["start", "published"].includes(family) ? "#/" + family : "#/sessions";
+}
+async function earlierDrafts(identity, local, report = diagnostic) {
+	let keys, migrated;
+	try {
+		keys = Array.from({ length: local.length }, (_, index) => local.key(index)).filter(Boolean).sort();
+		const receipt = JSON.parse(local.getItem(`batc.storage-migration.${managedStorageScope(identity)}`) || "null");
+		if (receipt?.version === 1 && receipt.target === managedStorageScope(identity) && receipt.status === "complete") migrated = receipt.source;
+	} catch {
+		report(problem$1);
+		return [];
+	}
+	const sources = matchingLegacySources(identity, keys).filter((row) => !row.ambiguous && row.scope !== migrated).map((row) => row.scope);
+	const entries = [];
+	for (const [index, key] of keys.entries()) {
+		if (index % 32 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+		const source = sources.find((source) => rebase(key, source, source) !== null);
+		if (!source) continue;
+		const boundary = key.indexOf(source), family = key.slice(5, boundary - 1), suffix = key.slice(boundary + source.length + 1);
+		if (!formTypes.includes(family) || suffix === "shortcut" || suffix.endsWith(".shortcut")) continue;
+		try {
+			const raw = local.getItem(key);
+			if (raw === null) continue;
+			const fields = draftText(family, suffix, raw, report);
+			if (!fields.length) continue;
+			const retained = evidence(family === "draft" && suffix.startsWith("send.") ? null : JSON.parse(raw));
+			if (family === "draft") {
+				const sibling = `batc.key.${source}.${suffix}`;
+				for (const key of keys.filter((key) => key === sibling || key.startsWith(sibling + ".") && /^[0-9a-f]{24}$/.test(key.slice(sibling.length + 1)))) {
+					retained.pending = true;
+					try {
+						const saved = JSON.parse(local.getItem(key) || "null");
+						if (operationId(saved?.op)) retained.operations.push(saved.op);
+					} catch {
+						report(problem$1);
+					}
+				}
+			}
+			let mirror = null;
+			const mirrorKey = family === "draft" && suffix === "published" ? `batc.published.${source}` : family === "draft" && suffix.startsWith("dispatch.") ? `batc.dispatch.${source}.${suffix.slice(9)}` : family === "published" && !suffix ? `batc.draft.${source}.published` : family === "dispatch" ? `batc.draft.${source}.dispatch.${suffix}` : null;
+			if (mirrorKey && keys.includes(mirrorKey)) {
+				try {
+					mirror = JSON.parse(local.getItem(mirrorKey) || "null");
+				} catch {
+					retained.pending = true;
+					report(problem$1);
+				}
+				const mirrored = evidence(mirror);
+				retained.pending ||= mirrored.pending;
+				retained.operations.push(...mirrored.operations);
+			}
+			const operations = [...new Set(retained.operations)].sort();
+			for (const field of fields) {
+				if (family === "draft" && mirror?.prompt === field.text) continue;
+				const id = await entryId(key, field.field);
+				if (local.getItem(marker(identity, id)) !== null) continue;
+				entries.push({
+					...field,
+					id,
+					address: decodeURIComponent(source.split(":")[0]),
+					state: retained.pending ? "possibly-sent" : "draft",
+					operations,
+					href: operations.length ? "#/op/" + operations[0] : formHref(family, suffix)
+				});
+			}
+		} catch {
+			report(problem$1);
+		}
+	}
+	return entries;
+}
+function hideEarlierDraft(identity, local, entry, report = diagnostic) {
+	try {
+		local.setItem(marker(identity, entry.id), "hidden");
+		return true;
+	} catch {
+		report(problem$1);
+		return false;
+	}
+}
+function firstEarlierDraftNotice(identity, local, report = diagnostic) {
+	try {
+		return local.getItem(marker(identity, "noticed")) === null;
+	} catch {
+		report(problem$1);
+		return false;
+	}
+}
+function markEarlierDraftNotice(identity, local, report = diagnostic) {
+	try {
+		local.setItem(marker(identity, "noticed"), "opened");
+	} catch {
+		report(problem$1);
+	}
+}
+//#endregion
+//#region src/earlier-drafts.js
+function earlierFieldLabel(t, field) {
+	if (/^reason_\d+$/.test(field)) return `${t("earlier_field_reason")} ${Number(field.slice(7)) + 1}`;
+	return field.split(".").map((part) => /^\d+$/.test(part) ? String(Number(part) + 1) : t("earlier_field_" + part)).join(" · ");
+}
+function earlierDraftPanel({ h, t, entries, current, hide, opened, emptyFocus, expanded = false }) {
+	const root = h("details", {
+		"data-earlier-drafts": "",
+		class: "earlier-drafts",
+		open: expanded
+	}, h("summary", {}, t("earlier_title")), h("p", { class: "muted" }, t("earlier_help")));
+	const groups = new Map();
+	for (const state of ["draft", "possibly-sent"]) if (entries.some((entry) => entry.state === state)) {
+		const group = h("section", { "data-earlier-group": state }, h("h3", {}, t(state === "draft" ? "earlier_draft_group" : "earlier_pending_group")));
+		groups.set(state, group);
+		root.append(group);
+	}
+	let position = 0, rendering = false;
+	function append(entry) {
+		const name = `${t(actionMessageKey(entry.action) || entry.label)} · ${earlierFieldLabel(t, entry.field)}`;
+		const addressId = "earlier-address-" + entry.id;
+		const text = h("textarea", {
+			readonly: true,
+			rows: 4,
+			"aria-label": name,
+			"aria-describedby": addressId
+		});
+		text.value = entry.text;
+		const status = h("span", {
+			role: "status",
+			class: "muted"
+		});
+		const row = h("article", {
+			"data-earlier-draft": "",
+			class: "panel"
+		}, h("h4", {}, name), h("p", {
+			id: addressId,
+			class: "muted"
+		}, t("earlier_address", { address: entry.address })), text);
+		const actions = h("div", { class: "actions" });
+		if (entry.state === "possibly-sent") {
+			row.insertBefore(h("p", {}, t("earlier_pending_warning")), text);
+			for (const href of entry.operations.length ? entry.operations.map((id) => "#/op/" + id) : [entry.href]) actions.append(h("a", { href }, t(entry.operations.length ? "earlier_check_operation" : "earlier_check_form")));
+		} else actions.append(h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: async () => {
+				if (!current()) return;
+				try {
+					await navigator.clipboard.writeText(entry.text);
+					if (current() && row.isConnected) status.textContent = t("earlier_copied");
+				} catch {
+					if (current() && row.isConnected) {
+						status.textContent = t("earlier_copy_manual");
+						text.focus();
+						text.select();
+					}
+				}
+			}
+		}, t("earlier_copy")));
+		actions.append(h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: () => {
+				if (!current() || !hide(entry)) return;
+				const rows = [...root.querySelectorAll("[data-earlier-draft]")], index = rows.indexOf(row);
+				const next = rows[index + 1]?.querySelector("button") || rows[index - 1]?.querySelector("button");
+				const group = row.parentElement;
+				row.remove();
+				if (!group.querySelector("[data-earlier-draft]") && position === entries.length) group.remove();
+				if (position === entries.length && !root.querySelector("[data-earlier-draft]")) {
+					root.remove();
+					emptyFocus();
+				} else (next || root.querySelector("summary"))?.focus({ preventScroll: true });
+			}
+		}, t("earlier_hide")), status);
+		row.append(actions);
+		groups.get(entry.state).append(row);
+	}
+	function render() {
+		if (!current() || !root.isConnected || !root.open) {
+			rendering = false;
+			return;
+		}
+		const end = Math.min(position + 16, entries.length);
+		while (position < end) append(entries[position++]);
+		if (position < entries.length) setTimeout(render, 0);
+		else rendering = false;
+	}
+	const schedule = () => {
+		if (root.open && root.isConnected && current()) opened();
+		if (!rendering && root.open && position < entries.length) {
+			rendering = true;
+			setTimeout(render, 0);
+		}
+	};
+	root.addEventListener("toggle", schedule);
+	root.reveal = () => {
+		root.open = true;
+		schedule();
+		root.scrollIntoView({ block: "start" });
+		root.querySelector("summary").focus({ preventScroll: true });
+	};
+	root.resume = schedule;
+	return root;
 }
 //#endregion
 //#region src/observed-resource.js
@@ -67208,7 +68059,120 @@ async function openDiagnostics() {
 		}
 	});
 }
+var earlierEntries = [];
+var earlierIdentity = null;
+var earlierScan = 0;
+var earlierPanel = null;
+var earlierPanelLocale = null;
+var earlierScanState = nativeDesktop ? "waiting" : "skipped";
+var earlierJump = false;
+function clearEarlierDrafts(status = nativeDesktop ? "waiting" : "skipped") {
+	earlierScan++;
+	earlierEntries = [];
+	earlierIdentity = null;
+	earlierPanel = null;
+	earlierJump = false;
+	earlierScanState = status;
+	document.querySelector("[data-earlier-drafts-notice]")?.remove();
+	document.querySelector("[data-earlier-drafts]")?.remove();
+	paintEarlierDrafts();
+}
+function acknowledgeEarlierDrafts() {
+	if (!earlierIdentity) return;
+	markEarlierDraftNotice(earlierIdentity, localStorage);
+	document.querySelector("[data-earlier-drafts-notice]")?.remove();
+}
+function paintEarlierNotice() {
+	document.querySelector("[data-earlier-drafts-notice]")?.remove();
+	if (!state.token || !earlierIdentity || !earlierEntries.length || !firstEarlierDraftNotice(earlierIdentity, localStorage)) return;
+	document.getElementById("main")?.prepend(h("aside", {
+		"data-earlier-drafts-notice": "",
+		class: "earlier-drafts-notice",
+		role: "status"
+	}, h("span", {}, t("earlier_notice")), " ", h("a", {
+		href: "#/settings?section=about&drafts=earlier",
+		onclick: () => {
+			earlierJump = false;
+			acknowledgeEarlierDrafts();
+		}
+	}, t("earlier_title"))));
+}
+function paintEarlierDrafts() {
+	const slot = document.querySelector("[data-earlier-drafts-slot]");
+	if (!slot) return;
+	slot.dataset.scanState = earlierScanState;
+	if (!earlierIdentity || !earlierEntries.length) {
+		slot.replaceChildren();
+		return;
+	}
+	const identity = earlierIdentity, scope = managedStorageScope(identity), signature = JSON.stringify(earlierEntries);
+	const current = () => earlierScanState === "complete" && !!state.token && !state.nativeBusy && state.namespace === scope && earlierIdentity && managedStorageScope(earlierIdentity) === scope;
+	if (!earlierPanel || earlierPanelLocale !== locale || earlierPanel.signature !== signature) {
+		const expanded = earlierPanel?.open || false;
+		earlierPanel = earlierDraftPanel({
+			h,
+			t,
+			entries: earlierEntries,
+			current,
+			expanded,
+			opened: acknowledgeEarlierDrafts,
+			emptyFocus: () => {
+				const heading = document.querySelector("[data-settings-panel=\"about\"] h2");
+				if (heading) {
+					heading.tabIndex = -1;
+					heading.focus({ preventScroll: true });
+				}
+			},
+			hide: (entry) => {
+				if (!current() || !hideEarlierDraft(identity, localStorage, entry)) return false;
+				earlierEntries = earlierEntries.filter((row) => row.id !== entry.id);
+				earlierPanel.signature = JSON.stringify(earlierEntries);
+				if (!earlierEntries.length) document.querySelector("[data-earlier-drafts-notice]")?.remove();
+				return true;
+			}
+		});
+		earlierPanel.signature = signature;
+		earlierPanelLocale = locale;
+	}
+	if (earlierPanel.parentElement !== slot) slot.replaceChildren(earlierPanel);
+	earlierPanel.resume();
+	if (!earlierJump && new URLSearchParams(location.hash.split("?")[1] || "").get("drafts") === "earlier") {
+		earlierJump = true;
+		const panel = earlierPanel;
+		setTimeout(() => {
+			if (panel === earlierPanel && panel.isConnected && current()) panel.reveal();
+		}, 0);
+	}
+}
+function scanEarlierDrafts(identity) {
+	const scan = earlierScan;
+	earlierScanState = "scanning";
+	paintEarlierDrafts();
+	setTimeout(async () => {
+		try {
+			if (scan !== earlierScan) return;
+			const entries = await earlierDrafts(identity, localStorage);
+			if (scan !== earlierScan || !state.token || state.namespace !== managedStorageScope(identity)) return;
+			earlierIdentity = identity;
+			earlierEntries = entries;
+			earlierScanState = "complete";
+			paintEarlierDrafts();
+			paintEarlierNotice();
+		} catch {
+			console.debug("draft_recovery_unreadable");
+			if (scan === earlierScan) {
+				earlierScanState = "failed";
+				paintEarlierDrafts();
+			}
+		}
+	}, 0);
+}
 async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource, retainView = false) {
+	if (reset && earlierIdentity) {
+		earlierScan++;
+		earlierScanState = "waiting";
+		paintEarlierDrafts();
+	} else clearEarlierDrafts();
 	withdrawDiagnostics();
 	recentErrors.clear();
 	const retained = retainView ? {
@@ -67240,6 +68204,7 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
 			principal_id: sync.principal_id
 		};
 		const managed = nativeDesktop && configurationSource === "managed";
+		if (!managed || earlierIdentity && managedStorageScope(earlierIdentity) !== managedStorageScope(identity)) clearEarlierDrafts(managed ? "waiting" : "skipped");
 		if (managed) migrateManagedStorage(identity, localStorage, sessionStorage);
 		state.scopeIdentity = {
 			...identity,
@@ -67252,7 +68217,9 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
 			if (Number.isSafeInteger(saved?.cursor) && saved.cursor >= 0 && typeof saved.token === "string" && saved.token) state.sync = saved;
 		} catch {}
 		state.lastEvent = state.sync.cursor;
+		if (managed) scanEarlierDrafts(identity);
 	} else {
+		clearEarlierDrafts("skipped");
 		state.scopeIdentity = null;
 		state.namespace = storageScope(endpoint, caps.actor);
 		state.lastEvent = 0;
@@ -67272,6 +68239,7 @@ function saveCursor() {
 	} catch {}
 }
 function resetConnection() {
+	clearEarlierDrafts();
 	withdrawDiagnostics();
 	recentErrors.clear();
 	state.epoch++;
@@ -68432,6 +69400,12 @@ function foregroundChanged() {
 	}
 	wakeEventPoll?.();
 }
+var IDENTITY_PRESERVING_RESETS = new Set([
+	"cursor_expired",
+	"cursor_ahead",
+	"history_changed",
+	"checkpoint_cursor_mismatch"
+]);
 async function streamEvents() {
 	for (;;) {
 		await refreshManagedRecovery();
@@ -68509,8 +69483,9 @@ async function streamEvents() {
 					namespace: state.namespace,
 					sync: state.sync
 				};
-				const accessChanged = error.reason === "access_changed";
+				const accessChanged = !IDENTITY_PRESERVING_RESETS.has(error.reason);
 				if (accessChanged) {
+					clearEarlierDrafts();
 					generation++;
 					state.viewReady = false;
 					teardown?.();
@@ -72350,6 +73325,8 @@ function openSettings(main, { exclusive = false, refreshButton } = {}) {
 		"data-export-diagnostics": ""
 	}), h("a", { href: setupGuide() }, t("global_setup_guide")))));
 	main.append(languageSwitch(), frame.root);
+	frame.panel("about").append(h("div", { "data-earlier-drafts-slot": "" }));
+	paintEarlierDrafts();
 	const identityEpoch = state.epoch;
 	const paintBuild = () => {
 		if (!frame.root.isConnected || identityEpoch !== state.epoch) {
@@ -75101,6 +76078,7 @@ async function route() {
 	mountWorkspace(name);
 	paintConnection(true);
 	const main = document.getElementById("main");
+	const recoveryPanel = earlierPanel, recoveryFocus = earlierPanel?.contains(document.activeElement) ? document.activeElement : null, recoveryScroll = main.scrollTop;
 	main.replaceChildren();
 	if (!state.token && name !== "settings") {
 		const off = await viewSettings(main);
@@ -75194,6 +76172,12 @@ async function route() {
 	};
 	if (off?.navigate) teardown.navigate = off.navigate;
 	state.viewReady = true;
+	paintEarlierDrafts();
+	paintEarlierNotice();
+	if (recoveryPanel === earlierPanel && recoveryFocus?.isConnected && document.activeElement === document.body) {
+		main.scrollTop = recoveryScroll;
+		recoveryFocus.focus({ preventScroll: true });
+	}
 }
 async function start() {
 	setLocale(locale);
