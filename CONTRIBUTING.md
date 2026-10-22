@@ -106,12 +106,21 @@ still execute the whole suite once per version. `central-ui` also runs the Conne
 on Python 3.13. Frontend, browser UI, central UI and Windows endpoint jobs are not
 gated by scope.
 
+All CI apt installs use `.github/actions/bounded-apt`. Completed `.deb` files
+are cached in `/var/cache/bat-ci-apt/<package-set>`, outside the runner's private
+home and workspace. The runner owns the `0755` archive directory for cache
+restore/save; `_apt` owns its `0700` `partial/` directory. Setup fails if `_apt`
+cannot reach that directory. The pinned cache action restores before installation
+and saves after a successful job; a cold cache still downloads normally with
+three retries and 15-second HTTP/HTTPS stall timeouts.
+
 The full Python matrix is required by any `.py`/`.pyi` file, Python environment or
 test configuration (`pyproject.toml`, `uv.lock`, `uv.toml`, `.python-version`,
 `pytest.ini`, `tox.ini`, `setup.cfg`, `.coveragerc`, `requirements*.txt`), or anything
-under `tests/`, `scripts/`, `desktop/scripts/` or `.github/workflows/`. This includes
-conftests, the shard plugin, measured weights, fixture data and Python invocation
-scripts. Other PR changes use the oldest supported Python, 3.10.
+under `tests/`, `scripts/`, `desktop/scripts/`, `.github/workflows/` or
+`.github/actions/`. This includes conftests, the shard plugin, measured weights,
+fixture data and Python invocation scripts. Other PR changes use the oldest
+supported Python, 3.10.
 
 Native level `none` skips builds when **every** changed path matches this allowlist:
 
@@ -159,7 +168,8 @@ scope classifier uses only the standard library.
 Desktop PR and main-push path filters also contain generated, exact fixture inputs.
 Run `uv run python scripts/desktop_fixture_inputs.py --write` after changing a
 fixture's dependencies. The ordinary pytest guard follows workflow/npm entrypoints,
-local imports and script references, and checks imports and file reads in a fresh
+local composite action steps and their metadata, local imports and script
+references, and checks imports and file reads in a fresh
 process, including the publication seed. It checks both identical path lists and
 their generated blocks. A shared fixture test change runs desktop CI and retains
 all four native builds; an unrelated test change runs Python CI without starting

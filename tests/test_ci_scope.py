@@ -67,6 +67,7 @@ def test_classification_table(paths, pythons, native):
     "requirements-dev.txt", "tools/requirements.txt", "tests/conftest.py",
     "tests/ci_shard_plugin.py", "tests/ci_durations.json", "tests/fixtures/example.json",
     "scripts/run-tests.sh", "scripts/ci_scope.py", "desktop/scripts/ci-central-ui.sh",
+    ".github/actions/bounded-apt/action.yml", ".github/actions/example/setup.sh",
 ])
 def test_python_tooling_and_fixture_data_keep_full_matrix(path):
     assert select_scope([path])[:2] == (FULL_PYTHONS, "all")

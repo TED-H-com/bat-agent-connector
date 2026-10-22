@@ -1,3 +1,4 @@
+import {eventDelivery} from './event-delivery.mjs';
 import {mkdirSync} from 'node:fs';
 import {test, expect} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
@@ -5,27 +6,33 @@ import {nativeFixture, answer} from './pm-analysis-fixture.ts';
 import {proposalFixture} from './pm-plan-proposals-fixture.ts';
 import {workspaceId, threadId} from './pm-fixture.ts';
 
+function guardedFixture(page: any) {
+  const f = nativeFixture(), events = eventDelivery(page), dispatch = f.dispatch;
+  f.dispatch = input => events.forward(input, dispatch);
+  return {...f, events};
+}
+
 const route = `/dashboard/#/pm/${workspaceId}/discussions/${threadId}`;
 for (const native of [false, true]) for (const adapter of ['native', 'bat'] as const) {
   test(`main composer sends ordinary PM requests and keeps notes separate ${adapter} ${native}`, async ({page}) => {
-    const f = nativeFixture(); f.native.available = adapter === 'native'; f.bat.available = adapter === 'bat';
+    const f = guardedFixture(page); f.native.available = adapter === 'native'; f.bat.available = adapter === 'bat';
     await mountConversation(page, native, f.dispatch); await page.goto(route);
     const composer = page.locator('[data-discussion-composer]'), reply = page.locator('[data-discussion-reply]');
     await expect(reply).toBeDisabled();
     await composer.fill('Explain the missing acceptance evidence.');
     await expect(reply).toHaveText('Send to PM');
-    await reply.click();
+    await f.events.post(reply);
     await expect(page.locator('[data-pm-role=assistant]')).toContainText(answer);
     await expect(page.locator('[data-pm-request]')).toContainText('Explain the missing acceptance evidence.');
     await expect(composer).toHaveValue('');
     expect(f.state.writes.map(input => input.body.action)).toEqual([adapter === 'bat' ? 'pm.run.bat.analyze' : 'pm.run.analyze']);
-    await composer.fill('What should we verify next?'); await reply.click();
+    await composer.fill('What should we verify next?'); await f.events.post(reply);
     await expect(page.locator('[data-pm-request]')).toHaveCount(2);
     await expect(page.locator('[data-pm-role=assistant]')).toHaveCount(2);
     expect(f.state.writes[1].body.preconditions.expected_version).toBe(2);
     expect(new Set(f.state.writes.map(input => input.idempotency_key)).size).toBe(2);
     await composer.fill('Keep this as a note, without running the PM.');
-    await page.getByRole('button', {name: 'Save note only', exact: true}).click();
+    await f.events.post(page.getByRole('button', {name: 'Save note only', exact: true}));
     await expect(page.locator('.pm-notes')).toContainText('Keep this as a note');
     expect(f.state.writes.map(input => input.body.action)).toEqual([
       adapter === 'bat' ? 'pm.run.bat.analyze' : 'pm.run.analyze',
@@ -38,10 +45,10 @@ for (const native of [false, true]) for (const adapter of ['native', 'bat'] as c
 }
 
 for (const native of [false, true]) test(`lost reply recovers the original request and preserves a newer composer draft ${native ? 'IPC' : 'HTTP'}`, async ({page}) => {
-  const f = nativeFixture(); f.state.lost = true;
+  const f = guardedFixture(page); f.state.lost = true;
   await mountConversation(page, native, f.dispatch); await page.goto(route);
   const composer = page.locator('[data-discussion-composer]'), reply = page.locator('[data-discussion-reply]');
-  await composer.fill('Original question'); await reply.click();
+  await composer.fill('Original question'); await f.events.post(reply);
   await expect(page.locator('[data-discussion-reply-working]')).toContainText('Check Details');
   await page.locator('[data-discussion-reply-details]').click();
   await expect(page.locator('[data-pm-native-analysis]')).toBeVisible();
@@ -50,7 +57,7 @@ for (const native of [false, true]) test(`lost reply recovers the original reque
   await page.keyboard.press('Escape');
   await composer.fill('A new question that must survive recovery');
   await page.reload(); await expect(reply).toHaveText('Check original request');
-  await reply.click();
+  await f.events.post(reply);
   await expect(page.locator('[data-pm-role=assistant]')).toHaveCount(1);
   await expect(composer).toHaveValue('A new question that must survive recovery');
   expect(f.state.writes).toHaveLength(2);
@@ -59,7 +66,7 @@ for (const native of [false, true]) test(`lost reply recovers the original reque
 });
 
 test('unavailable PM and oversized requests retain the note without silently running anything', async ({page}) => {
-  const f = nativeFixture(); f.native.eligible = false;
+  const f = guardedFixture(page); f.native.eligible = false;
   await mountConversation(page, false, f.dispatch); await page.goto(route);
   await page.locator('[data-discussion-composer]').fill('Keep this draft');
   await expect(page.locator('[data-discussion-reply]')).toBeHidden();
@@ -77,7 +84,7 @@ test('unavailable PM and oversized requests retain the note without silently run
 for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) {
   test(`ordinary reply composer remains readable ${locale} ${width}`, async ({browser, baseURL}) => {
     const context = await browser.newContext({baseURL, locale, viewport: {width, height: 900}});
-    const page = await context.newPage(); const f = nativeFixture();
+    const page = await context.newPage(); const f = guardedFixture(page);
     await mountConversation(page, false, f.dispatch); await page.goto(route);
     await page.locator('[data-discussion-composer]').fill(locale === 'en' ? 'What evidence is still missing?' : '目前還缺哪些驗收證據？');
     await expect(page.locator('[data-discussion-reply]')).toHaveText(locale === 'en' ? 'Send to PM' : '傳送給 PM');
@@ -94,7 +101,9 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) {
 
 
 test('ordinary replies and explicit plan requests coexist in the same composer', async ({page}) => {
-  const f = nativeFixture(), p = proposalFixture();
+  const f = guardedFixture(page), p = proposalFixture();
+  // Both halves of this composed fixture answer for the same principal.
+  p.state.actor = f.state.actor;
   f.state.packages = false;
   p.state.thread.thread = f.state.thread; p.state.head = f.state.planHead;
   await mountConversation(page, false, async input => {
@@ -110,12 +119,12 @@ test('ordinary replies and explicit plan requests coexist in the same composer',
   await page.goto(route);
   const composer = page.locator('[data-discussion-composer]');
   await composer.fill('Explain the delivery risks.');
-  await page.getByRole('button', {name: 'Send to PM', exact: true}).click();
+  await f.events.post(page.getByRole('button', {name: 'Send to PM', exact: true}));
   await expect(page.locator('[data-pm-role=assistant]')).toContainText(answer);
   await expect(page.locator('[data-pm-request]')).toContainText('Explain the delivery risks.');
   expect(p.state.writes).toHaveLength(0);
   await composer.fill('Organize a plan from this discussion.');
-  await page.getByRole('button', {name: 'Make a plan', exact: true}).click();
+  await f.events.post(page.getByRole('button', {name: 'Make a plan', exact: true}));
   await expect(page.locator('[data-pm-plan-proposals]')).toContainText('Paid member access');
   await expect(page.locator('.ui-button.primary:visible')).toHaveCount(1);
   await expect(page.locator('.ui-button.primary:visible')).toHaveText('Review & adopt');
@@ -126,7 +135,7 @@ test('ordinary replies and explicit plan requests coexist in the same composer',
 
 
 test('a failed PM request offers retry without a dead primary action', async ({page}) => {
-  const f = nativeFixture(); f.native.pending = true;
+  const f = guardedFixture(page); f.native.pending = true;
   await mountConversation(page, false, async input => {
     const result = await f.dispatch(input);
     if (input.method === 'POST' && input.body?.action === 'pm.run.analyze' && f.native.pending) {
@@ -142,7 +151,7 @@ test('a failed PM request offers retry without a dead primary action', async ({p
   const status = page.locator('[data-discussion-reply-working]');
   await expect(status.getByRole('button', {name: 'Retry', exact: true})).toBeEnabled();
   f.native.pending = false;
-  await status.getByRole('button', {name: 'Retry', exact: true}).click();
+  await f.events.post(status.getByRole('button', {name: 'Retry', exact: true}));
   await expect(page.locator('[data-pm-role=assistant]')).toHaveCount(1);
   expect(f.state.writes).toHaveLength(2);
   expect(f.state.writes[0].idempotency_key).not.toBe(f.state.writes[1].idempotency_key);

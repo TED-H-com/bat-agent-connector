@@ -12,6 +12,7 @@ on:
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/desktop*.yml"
+      - ".github/actions/**"
       # BEGIN generated fixture inputs
       - ".gitignore"
       - "LICENSE"
@@ -27,12 +28,14 @@ on:
       - "tests/conftest.py"
       - "tests/fakegithub.py"
       - "tests/fakeverifier.py"
+      - "tests/fixtures/bat-source-policy-v1.json"
       - "tests/fixtures/browser-credential-responses.json"
       - "tests/fixtures/checkpoint-refusal-destination.json"
       - "tests/fixtures/checkpoint-refusal-staging.json"
       - "tests/fixtures/managed-bootstrap.json"
       - "tests/fixtures/managed-runtime-identity.json"
       - "tests/fixtures/managed-setup-evidence.json"
+      - "tests/fixtures/managed-setup-preview.json"
       - "tests/fixtures/pm-availability.json"
       - "tests/fixtures/pm-effective-route.json"
       - "tests/fixtures/pm-version-facts.json"
@@ -116,6 +119,7 @@ on:
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/desktop*.yml"
+      - ".github/actions/**"
       # BEGIN generated fixture inputs
       - ".gitignore"
       - "LICENSE"
@@ -131,12 +135,14 @@ on:
       - "tests/conftest.py"
       - "tests/fakegithub.py"
       - "tests/fakeverifier.py"
+      - "tests/fixtures/bat-source-policy-v1.json"
       - "tests/fixtures/browser-credential-responses.json"
       - "tests/fixtures/checkpoint-refusal-destination.json"
       - "tests/fixtures/checkpoint-refusal-staging.json"
       - "tests/fixtures/managed-bootstrap.json"
       - "tests/fixtures/managed-runtime-identity.json"
       - "tests/fixtures/managed-setup-evidence.json"
+      - "tests/fixtures/managed-setup-preview.json"
       - "tests/fixtures/pm-availability.json"
       - "tests/fixtures/pm-effective-route.json"
       - "tests/fixtures/pm-version-facts.json"
@@ -304,6 +310,11 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+      - name: Bound stalled apt downloads
+        uses: ./.github/actions/bounded-apt
+        with:
+          package-set: playwright-chromium-fonts
+          package-set-hash: ${{ hashFiles('desktop/package-lock.json', '.github/workflows/desktop.yml') }}
       - name: Chromium dependencies and existing DejaVu font environment
         run: |
           npx playwright install-deps chromium
@@ -354,6 +365,11 @@ jobs:
         working-directory: .
         run: uv sync --locked --extra dev
       - run: npm ci
+      - name: Bound stalled apt downloads
+        uses: ./.github/actions/bounded-apt
+        with:
+          package-set: playwright-chromium
+          package-set-hash: ${{ hashFiles('desktop/package-lock.json') }}
       - run: npx playwright install --with-deps chromium
       - name: Start shared ten-minute UI script budget
         run: echo "BATC_CENTRAL_UI_DEADLINE=$(($(date +%s) + 600))" >> "$GITHUB_ENV"
@@ -399,11 +415,16 @@ jobs:
         run: bash scripts/ci-central-ui.sh test:labels
       - name: test:attention
         run: bash scripts/ci-central-ui.sh test:attention
-      - name: PM decision walkthrough with actual central service (English and zh-TW)
+      - name: PM decision walkthrough with actual central service (English)
         timeout-minutes: 2
         env:
           BATC_WALKTHROUGH_SHOTS: test-results/walkthrough
-        run: npm run test:walkthrough
+        run: npm run test:walkthrough -- --locale=en
+      - name: PM decision walkthrough with actual central service (zh-TW)
+        timeout-minutes: 2
+        env:
+          BATC_WALKTHROUGH_SHOTS: test-results/walkthrough
+        run: npm run test:walkthrough -- --locale=zh-TW
       - name: Preserve shared UI fixture evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -426,7 +447,9 @@ jobs:
       matrix:
         include:
           - part: work
-            selection: not fixed_result and not foreground_recovery and not lost_start_reply and not refused_access and not other_form_refusal and not browser_credentials
+            selection: not fixed_result and not foreground_recovery and not lost_start_reply and not refused_access and not other_form_refusal and not discussion_adopt_start and not browser_credentials
+          - part: adoption
+            selection: discussion_adopt_start
           - part: evidence
             selection: fixed_result or other_form_refusal
           - part: recovery
@@ -462,13 +485,10 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
       - name: Bound stalled apt downloads
-        run: |
-          # Shorter connection/data waits allow faster mirror failover; keep three retries.
-          sudo tee /etc/apt/apt.conf.d/99-playwright-ci > /dev/null <<'EOF'
-          Acquire::Retries "3";
-          Acquire::http::Timeout "15";
-          Acquire::https::Timeout "15";
-          EOF
+        uses: ./.github/actions/bounded-apt
+        with:
+          package-set: playwright-chromium
+          package-set-hash: ${{ hashFiles('desktop/package-lock.json') }}
       - name: Chromium system dependencies
         working-directory: desktop
         run: npx playwright install-deps chromium
@@ -535,11 +555,23 @@ jobs:
         with:
           toolchain: "1.98.1"
           components: rustfmt, clippy
+      - name: Bound apt for Linux native libraries
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/bounded-apt
+        with:
+          package-set: native-linux
+          package-set-hash: ${{ hashFiles('desktop/package-lock.json', '.github/workflows/desktop.yml') }}
       - name: Linux native build libraries
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xvfb xdotool x11-utils dbus-x11 python3-pil
       - run: npm ci
       - run: npm run build
+      - name: Bound apt for packaged Chromium
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/bounded-apt
+        with:
+          package-set: native-linux
+          package-set-hash: ${{ hashFiles('desktop/package-lock.json', '.github/workflows/desktop.yml') }}
       - name: Chromium for packaged managed setup
         if: runner.os == 'Linux'
         run: npx playwright install --with-deps chromium

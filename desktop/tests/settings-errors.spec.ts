@@ -1,6 +1,6 @@
-import {test, expect} from '@playwright/test';
+import {test, expect, type Page} from '@playwright/test';
 import {expectNoNestedErrorDetails} from './api-error-assertions.ts';
-import {managedSetupFixture, openSetupAdvanced} from './managed-setup-fixture.ts';
+import {managedSetupFixture, openSetupAdvanced, applySetupReview} from './managed-setup-fixture.ts';
 const cases = [
   [404,'NOT_FOUND','This record is unavailable. Refresh the view.','找不到這筆資料，請重新整理。'],
   [409,'VERSION_CONFLICT','The record changed. Refresh before trying again.','資料版本已變更，請重新整理後再試。'],
@@ -9,18 +9,56 @@ const cases = [
   [504,'TIMEOUT','The connection timed out. Check the original request.','連線逾時，請查回原請求。'],
   [422,'UNKNOWN_FIXTURE_CODE','This request could not be completed. Check Details.','無法完成此要求，請查看詳細資料。'],
 ] as const;
+function trackSetupApplies(page: Page) {
+  const posts: string[] = [];
+  page.on('request', request => {
+    const path = new URL(request.url()).pathname;
+    if (request.method() === 'POST' && ['/api/v1/managed/setup', '/api/v1/operations'].includes(path)) posts.push(path);
+  });
+  return posts;
+}
 for(const locale of ['en','zh-TW'])test.describe(`${locale} Settings`,()=>{
   test.use({locale});
   for(const [status,code,en,zh] of cases)test(`readable ${status} ${code} with technical details hidden`,async({page})=>{
     const state=await managedSetupFixture(page,false,locale);state.refused=true;state.refusalCode=code;state.refusalStatus=status;
+    const applies=trackSetupApplies(page);
     await page.goto('/dashboard/'); await openSetupAdvanced(page);
     const form=page.locator('[data-setup-host]');await form.locator('[data-setup-field=connection_url]').fill(`wss://localhost?token=synthetic-bat-secret&fp=${'ab'.repeat(32)}`);
-    await form.locator('button[type=submit]').click();const error=page.locator('[data-api-error]');
+    await form.locator('button[type=submit]').click();
+    await expect(page.locator('[data-setup-review]')).toBeVisible();
+    expect(state.previews).toHaveLength(1); expect(state.posts).toEqual([]); expect(applies).toEqual([]);
+    await applySetupReview(page);const error=page.locator('[data-api-error]');
     await expect(error.locator('[data-error-summary]')).toHaveText(locale==='en'?en:zh);
     expect(await error.innerText()).not.toContain(code);await expect(error.locator('details')).not.toHaveAttribute('open','');
     await error.locator('summary').click();await expect(error.locator('[data-error-details] code')).toHaveText(code);
     await expect(error.locator('[data-error-details]')).toContainText('Read the new configuration.');
     await expectNoNestedErrorDetails(error);
+    expect(state.posts).toHaveLength(1); expect(state.posts[0].body.action).toBe('setup.host');
+    expect(applies).toEqual(['/api/v1/operations']);
+  });
+  test('preview refusal is readable without applying a connection',async({page})=>{
+    const state=await managedSetupFixture(page,false,locale);state.previewRefused=true;
+    state.refusalMessage='Configuration changed; review setup again';
+    const applies=trackSetupApplies(page);
+    await page.goto('/dashboard/'); await openSetupAdvanced(page);
+    const form=page.locator('[data-setup-host]');
+    await form.locator('[data-setup-field=connection_url]').fill(`wss://host-a.example.invalid?token=synthetic-bat-secret&fp=${'ab'.repeat(32)}`);
+    await form.locator('button[type=submit]').click();
+    const error=page.locator('[data-managed-setup] [data-api-error]');
+    await expect(error.locator('[data-error-summary]')).toHaveText(locale==='en'
+      ? 'Configuration changed elsewhere. Refresh before trying again.' : '設定已在別處變更，請重新整理後再試。');
+    expect(await error.innerText()).not.toContain(state.refusalCode);
+    expect(await error.innerText()).not.toContain(state.refusalMessage);
+    await expect(error.locator('details')).not.toHaveAttribute('open','');
+    await expect(error.locator('[data-error-details]')).toBeHidden();
+    await expect(form).toBeVisible(); await expect(page.locator('[data-setup-review]')).toBeHidden();
+    await expect(page.getByRole('button',{name:locale==='en'?'Apply connection':'套用連線',exact:true})).toBeHidden();
+    expect(state.previews).toHaveLength(1); expect(state.posts).toEqual([]); expect(applies).toEqual([]); expect(state.saved).toBe(false);
+    await error.locator('summary').click();
+    await expect(error.locator('[data-error-details] code')).toHaveText(state.refusalCode);
+    await expect(error.locator('[data-error-details]')).toContainText(state.refusalMessage);
+    await expectNoNestedErrorDetails(error);
+    expect(state.posts).toEqual([]); expect(applies).toEqual([]);
   });
   for(const native of [false,true])test(`quiet connection access and translated setup ${native?'native':'web'}`,async({page})=>{
     const state=await managedSetupFixture(page,native,locale);state.scopes=['observe','operate','manage','start','approve','cleanup','cleanup_discard','deploy','integrate','merge'];

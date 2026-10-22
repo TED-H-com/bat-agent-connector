@@ -108,7 +108,7 @@ internal static class ManagedViewProbe
             if (label == "Get ready to work" || label == "準備開始工作") Setup = true;
             if (label == "Ready to set up" || label == "可以開始設定了") ConfigurationLoaded = true;
             if (type == ControlType.Button && enabled &&
-                (label == "Set up automatically" || label == "自動設定")) SaveEnabled = true;
+                (label == "Review connection" || label == "預覽連線")) SaveEnabled = true;
         }
 
         internal string ToJson(bool bounded)

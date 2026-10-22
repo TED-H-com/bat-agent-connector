@@ -1,3 +1,4 @@
+import {httpEventDelivery} from './event-delivery.mjs';
 // Actual central admission and receipts; browser reply loss is injected after its request reached central.
 import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
@@ -17,6 +18,7 @@ const browser = await chromium.launch();
 try {
   const fixture = await next(), origin = `http://127.0.0.1:${fixture.port}`;
   const page = await browser.newPage({locale: 'en-US'}), posts = [], errors = [];
+  const events = await httpEventDelivery(page);
   page.on('pageerror', e => errors.push(e.message));
   await page.addInitScript(token => sessionStorage.setItem('batc.dashboard.token', token), fixture.token);
   let lose = true;
@@ -28,25 +30,25 @@ try {
   await page.goto(origin+'/dashboard/#/published'); const form = page.locator('[data-published-start]');
   await form.getByRole('combobox', {name: 'Repository · host · workspace ID'}).selectOption(JSON.stringify({repository:'o/r',host:'h1',workspace_id:'ws-1'}));
   await form.getByRole('textbox', {name: 'Published branch ref'}).fill('refs/heads/main');
-  await form.getByRole('button', {name: 'Preview published version'}).click();
+  await events.post(form.getByRole('button', {name: 'Preview published version'}));
   await expect(form.locator('[data-published-preview]')).toContainText(fixture.sha);
   const original = '  Keep my original words.\nDo not replace them.  ';
   await form.getByRole('textbox', {name: 'Original instructions', exact: true}).fill(original);
-  await form.getByRole('button', {name: 'Start from this version', exact: true}).click(); await expect(form.locator('.error')).toBeVisible();
+  await events.post(form.getByRole('button', {name: 'Start from this version', exact: true})); await expect(form.locator('.error')).toBeVisible();
   await control({action: 'writes', enabled: false}); await page.reload();
-  await form.getByRole('button', {name: 'Retry original request'}).click(); await expect(form).toContainText('Initial instructions were accepted');
+  await events.post(form.getByRole('button', {name: 'Retry original request'})); await expect(form).toContainText('Initial instructions were accepted');
   const id = async () => (await form.locator('a[href^="#/op/"]').getAttribute('href')).split('/').at(-1);
   const first = await id(); assert.deepEqual(posts[0], posts[1]);
   await page.reload(); await expect(form).toContainText('Start confirmed'); assert.equal(posts.length, 2);
   await control({action: 'verify', operation_id: first, operations: 1, frames: 2, status: 'succeeded', prompt: original});
   await control({action: 'writes', enabled: true}); await page.reload();
   await form.getByRole('button', {name: 'Prepare another published version'}).click();
-  await form.getByRole('button', {name: 'Preview published version'}).click();
+  await events.post(form.getByRole('button', {name: 'Preview published version'}));
   await expect(form.locator('[data-published-preview]')).toContainText(fixture.sha);
   await form.getByRole('combobox', {name: 'Agent', exact: true}).selectOption('codex');
   await form.getByRole('textbox', {name: 'Original instructions', exact: true}).fill('second original');
   await control({action: 'lose-send'});
-  await form.getByRole('button', {name: 'Start from this version', exact: true}).click();
+  await events.post(form.getByRole('button', {name: 'Start from this version', exact: true}));
   await expect(form).toContainText('Started, but acceptance of the initial instructions is unconfirmed', {timeout: 30000});
   const second = await id(); assert.notEqual(first, second);
   await page.reload(); await expect(form).toContainText('Started, but acceptance');

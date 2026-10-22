@@ -1,3 +1,4 @@
+import {httpEventDelivery} from './event-delivery.mjs';
 // Shared generated UI against actual central operations. Every BAT frame goes to MockBat.
 import {spawn} from "node:child_process";
 import {createInterface} from "node:readline";
@@ -19,6 +20,7 @@ const browser = await chromium.launch();
 try {
   const fixture = await next(), origin = `http://127.0.0.1:${fixture.port}`;
   const page = await browser.newPage({locale: "en-US"}), errors = [], posts = [];
+  const events = await httpEventDelivery(page);
   page.on("pageerror", error => errors.push(error.message));
   // This portable UI commit can exercise another compatible backend checkout without modifying it.
   await page.route("**/dashboard/**", async route => {
@@ -45,12 +47,12 @@ try {
   await expect(form.getByRole("combobox")).toHaveValue("default");
   await control({action: "policy-default"});
   await form.getByRole("combobox").selectOption("allow_all");
-  await form.getByRole("button", {name: "Apply permissions", exact: true}).click();
+  await events.post(form.getByRole("button", {name: "Apply permissions", exact: true}));
   await expect(form).toContainText("PERMISSIONS_HOST_POLICY");
   await control({action: "verify-refused-admission"});
   await form.getByRole("button", {name: "Start another change"}).click();
   await expect(form.getByRole("combobox")).toHaveValue("default");
-  await form.getByRole("button", {name: "Apply permissions", exact: true}).click();
+  await events.post(form.getByRole("button", {name: "Apply permissions", exact: true}));
   await expect(form).toContainText("Claude is streaming", {timeout: 30000});
   const refused = await id(form);
   await control({action: "verify", operation_id: refused, session_id: fixture.claude,
@@ -60,14 +62,14 @@ try {
   await form.getByRole("button", {name: "Start another change"}).click();
   await form.getByRole("combobox").selectOption("allow_all");
   loseReply = true;
-  await form.getByRole("button", {name: "Apply permissions", exact: true}).click();
+  await events.post(form.getByRole("button", {name: "Apply permissions", exact: true}));
   await expect(form.locator(".error")).toBeVisible();
   await expect(form.getByRole("combobox")).toBeDisabled();
   // Replay must find the already accepted key before evaluating changed admission policy.
   await control({action: "policy-default"});
   await page.reload(); form = page.locator("[data-permissions]"); await form.locator("summary").click();
   await expect(form.getByRole("combobox")).toHaveValue("allow_all");
-  await form.getByRole("button", {name: "Retry original request"}).click();
+  await events.post(form.getByRole("button", {name: "Retry original request"}));
   await expect(form).toContainText("BAT accepted the requested configuration", {timeout: 30000});
   const accepted = await id(form);
   assert.notEqual(accepted, refused);
@@ -80,7 +82,7 @@ try {
 
   await control({action: "codex-partial"});
   form = await open(fixture.codex);
-  await form.getByRole("button", {name: "Apply permissions", exact: true}).click();
+  await events.post(form.getByRole("button", {name: "Apply permissions", exact: true}));
   await expect(form.locator(".status-uncertain")).toBeVisible({timeout: 30000});
   const partial = await id(form);
   await form.getByRole("link", {name: "View operation and step receipts"}).click();

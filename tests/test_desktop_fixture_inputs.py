@@ -45,6 +45,10 @@ def test_computed_golden_read_is_not_silently_omitted(desktop_inputs):
         'desktop/tests/version-projection.test.ts:8: computed golden path must be resolved or rejected')
 
 
+def test_bat_source_policy_is_a_shared_native_build_input(desktop_inputs):
+    assert 'tests/fixtures/bat-source-policy-v1.json' in desktop_inputs['files']
+
+
 @pytest.mark.parametrize('path,pattern,expected', [
     ('desktop/src/app.js', 'desktop/**', True),
     ('desktop/src/app.js', 'desktop/*', False),
@@ -77,7 +81,9 @@ def test_unsupported_pattern_syntax_fails_closed(pattern):
     ('tests/conftest.py', True, 'all', 4),
     ('tests/test_api_v1.py', True, 'all', 4),
     ('tests/fixtures/pm-version-facts.json', True, 'all', 4),
+    ('tests/fixtures/bat-source-policy-v1.json', True, 'all', 4),
     ('tests/test_ci_scope.py', False, 'all', 0),
+    ('.github/actions/bounded-apt/action.yml', True, 'all', 4),
     ('desktop/src/app.js', True, 'none', 0),
     ('docs/design/workbench.md', False, 'none', 0),
 ])
@@ -113,6 +119,35 @@ def test_discovery_follows_new_npm_entrypoint_and_function_import(tmp_path):
     assert 'tests/future_fixture.py' in referenced_files(tmp_path, entry.read_text(), entry.parent, tracked)
     from scripts.desktop_fixture_inputs import local_imports
     assert local_imports(tmp_path, 'tests/future_fixture.py') == {'tests/future_helper.py'}
+
+
+def test_discovery_follows_local_composite_actions(tmp_path):
+    import yaml
+
+    sources = {
+        '.github/workflows/desktop.yml': {'jobs': {'example': {
+            'defaults': {'run': {'working-directory': 'desktop'}},
+            'steps': [{'uses': './.github/actions/outer'}],
+        }}},
+        '.github/actions/outer/action.yml': {'runs': {'using': 'composite', 'steps': [
+            {'uses': './.github/actions/inner'},
+        ]}},
+        '.github/actions/inner/action.yaml': {'runs': {'using': 'composite', 'steps': [
+            {'shell': 'bash', 'run': 'python tests/action_fixture.py'},
+        ]}},
+    }
+    for name, value in sources.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(yaml.safe_dump(value))
+    desktop = tmp_path / 'desktop'
+    desktop.mkdir()
+    (desktop / 'package.json').write_text('{"scripts": {}}')
+    fixture = tmp_path / 'tests/action_fixture.py'
+    fixture.parent.mkdir()
+    fixture.write_text('# Fixture input executed from the workspace root.\n')
+    tracked = {*sources, 'tests/action_fixture.py'}
+    assert command_inputs(tmp_path, tracked)['example'] == tracked
 
 
 @pytest.mark.parametrize('name,source,line', [

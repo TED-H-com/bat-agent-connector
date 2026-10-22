@@ -5,7 +5,9 @@ const fixture = JSON.parse(readFileSync(new URL("./fixtures/fleet-status.golden.
 fleetDiagnosticsTests(setup, false);
 
 async function setup(page: any, options: any = {}) {
-  if (options.clock) await page.clock.install();
+  // Freshness uses the producer's golden clock, never the test runner's date.
+  if (options.clock) await page.clock.install({time: new Date(fixture.readiness.observed_at)});
+  else await page.clock.setFixedTime(new Date(fixture.readiness.observed_at));
   await page.addInitScript(({doc, options}: any) => {
     const env = {doc, calls: [] as any[], lose: false, failReads: false, statusCalls: 0, fleetReads: 0, availabilityReads: 0, releaseStatus: null as any, hold: null as string | null, release: null as null | (() => void), ...options};
     const caps = {actor: "fleet-fixture", scopes: ["observe"], api_version: 1, contract_version: "2026-10-08", features: {}, hosts: [], actions: []};

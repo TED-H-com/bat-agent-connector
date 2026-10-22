@@ -1,0 +1,181 @@
+{
+  "staged": {
+    "request": {
+      "action": "setup.host",
+      "target": {
+        "host": "bat"
+      },
+      "params": {
+        "url": "wss://host-a.example.invalid:9876",
+        "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "profile_id": "default",
+        "secret_ref": "setup_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "writes": false,
+        "orchestrate": false,
+        "shared_clone_worktrees": false,
+        "managed_roots": []
+      },
+      "preconditions": {
+        "config_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "preview": {
+      "contract_version": 1,
+      "action": "setup.host",
+      "target": {
+        "host": "bat"
+      },
+      "config_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "after_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "review_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "changes": [
+        {
+          "field": "url",
+          "before": null,
+          "after": "wss://host-a.example.invalid:9876/"
+        },
+        {
+          "field": "fingerprint",
+          "before": null,
+          "after": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "field": "profile_id",
+          "before": null,
+          "after": "default"
+        },
+        {
+          "field": "git",
+          "before": null,
+          "after": "ssh"
+        },
+        {
+          "field": "writes",
+          "before": null,
+          "after": false
+        },
+        {
+          "field": "orchestrate",
+          "before": null,
+          "after": false
+        },
+        {
+          "field": "shared_clone_worktrees",
+          "before": null,
+          "after": false
+        },
+        {
+          "field": "managed_roots",
+          "before": null,
+          "after": []
+        }
+      ],
+      "source": {
+        "kind": "staged_secret",
+        "reference": "setup_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "available": true
+      },
+      "warnings": [
+        "READ_ONLY_VERIFICATION_ON_APPLY"
+      ],
+      "effects": {
+        "configuration_written": false,
+        "operation_created": false,
+        "probe_started": false,
+        "credential_staged": true,
+        "on_apply": [
+          "read_only_verification",
+          "save_configuration"
+        ]
+      }
+    }
+  },
+  "profile": {
+    "request": {
+      "action": "setup.host",
+      "target": {
+        "host": "bat"
+      },
+      "params": {
+        "import_profile_id": "profile-demo",
+        "writes": false,
+        "orchestrate": false,
+        "shared_clone_worktrees": false,
+        "managed_roots": []
+      },
+      "preconditions": {
+        "config_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "preview": {
+      "contract_version": 1,
+      "action": "setup.host",
+      "target": {
+        "host": "bat"
+      },
+      "config_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "after_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "review_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "changes": [
+        {
+          "field": "url",
+          "before": null,
+          "after": "wss://host-a.example.invalid:9876/"
+        },
+        {
+          "field": "fingerprint",
+          "before": null,
+          "after": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "field": "profile_id",
+          "before": null,
+          "after": "default"
+        },
+        {
+          "field": "git",
+          "before": null,
+          "after": "ssh"
+        },
+        {
+          "field": "writes",
+          "before": null,
+          "after": false
+        },
+        {
+          "field": "orchestrate",
+          "before": null,
+          "after": false
+        },
+        {
+          "field": "shared_clone_worktrees",
+          "before": null,
+          "after": false
+        },
+        {
+          "field": "managed_roots",
+          "before": null,
+          "after": []
+        }
+      ],
+      "source": {
+        "kind": "bat_profile",
+        "reference": "profile-demo",
+        "available": true
+      },
+      "warnings": [
+        "READ_ONLY_VERIFICATION_ON_APPLY"
+      ],
+      "effects": {
+        "configuration_written": false,
+        "operation_created": false,
+        "probe_started": false,
+        "credential_staged": false,
+        "on_apply": [
+          "read_only_verification",
+          "save_configuration"
+        ]
+      }
+    }
+  }
+}

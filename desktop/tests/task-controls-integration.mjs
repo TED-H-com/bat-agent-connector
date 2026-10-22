@@ -1,3 +1,4 @@
+import {httpEventDelivery} from './event-delivery.mjs';
 // Real central control versions/receipts with MockBat; no remote or installed effects.
 import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
@@ -16,6 +17,7 @@ const control=async command=>{child.stdin.write(JSON.stringify(command)+'\n');re
 const browser=await chromium.launch();
 try {
   const fixture=await next(), page=await browser.newPage({locale:'en-US'}), errors=[],posts=[];
+  const events = await httpEventDelivery(page);
   page.on('pageerror',e=>errors.push(e.message));
   let loseReply=true, changeVersion=false;
   await page.route('**/api/v1/operations?wait=3',async route=>{
@@ -27,7 +29,8 @@ try {
   await page.addInitScript(token=>sessionStorage.setItem('batc.dashboard.token',token),fixture.token);
   await page.goto(`http://127.0.0.1:${fixture.port}/dashboard/#/task/${fixture.task_id}`);
   const panel=page.locator('[data-task-controls]');
-  const apply=name=>panel.getByRole('button',{name,exact:true}).click();
+  const apply=name=>name==='Prepare another control' ? panel.getByRole('button',{name,exact:true}).click()
+    : events.post(panel.getByRole('button',{name,exact:true}));
   const id=async()=> (await panel.locator('a[href^="#/op/"]').getAttribute('href')).split('/').at(-1);
   await apply('Pause dispatch'); await expect(panel.locator('.error')).toBeVisible();
   await control({action:'change-version'}); await page.reload();

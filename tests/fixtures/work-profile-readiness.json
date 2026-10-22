@@ -60,7 +60,9 @@
           "value": "unknown",
           "reason": "never_observed",
           "evidence_ref": null,
-          "verified": null
+          "verified": null,
+          "observed_at": null,
+          "valid_until": null
         },
         "can_start_own": {
           "value": "unknown",
@@ -218,13 +220,17 @@
             },
             "verified": null,
             "observed_at": 1790000000.0
-          }
+          },
+          "observed_at": 1790000000.0,
+          "valid_until": "2026-09-21T14:16:20Z"
         },
         "can_start_own": {
           "value": "unavailable",
           "reason": "host_not_refreshed",
           "evidence_ref": null,
-          "verified": null
+          "verified": null,
+          "observed_at": 1790000000.0,
+          "valid_until": "2026-09-21T14:16:20Z"
         },
         "can_continue_own": {
           "value": "unknown",
@@ -361,7 +367,9 @@
             },
             "verified": null,
             "observed_at": 1790000540.0
-          }
+          },
+          "observed_at": 1790000540.0,
+          "valid_until": "2026-09-21T14:25:20Z"
         },
         "signed_in_or_available": {
           "value": "missing",
@@ -385,7 +393,9 @@
             },
             "verified": null,
             "observed_at": 1790000540.0
-          }
+          },
+          "observed_at": 1790000540.0,
+          "valid_until": "2026-09-21T14:25:20Z"
         },
         "can_start_own": {
           "value": "unknown",
@@ -530,7 +540,9 @@
             },
             "verified": null,
             "observed_at": 1790000540.0
-          }
+          },
+          "observed_at": 1790000540.0,
+          "valid_until": "2026-09-21T14:25:20Z"
         },
         "signed_in_or_available": {
           "value": "unavailable",
@@ -554,7 +566,9 @@
             },
             "verified": null,
             "observed_at": 1790000540.0
-          }
+          },
+          "observed_at": 1790000540.0,
+          "valid_until": "2026-09-21T14:25:20Z"
         },
         "can_start_own": {
           "value": "unknown",
@@ -691,7 +705,9 @@
             },
             "verified": null,
             "observed_at": 1790000540.0
-          }
+          },
+          "observed_at": 1790000540.0,
+          "valid_until": "2026-09-21T14:25:20Z"
         },
         "signed_in_or_available": {
           "value": "unknown",
@@ -855,7 +871,9 @@
             },
             "verified": null,
             "observed_at": 1790000540.0
-          }
+          },
+          "observed_at": 1790000540.0,
+          "valid_until": "2026-09-21T14:25:20Z"
         },
         "signed_in_or_available": {
           "value": "unknown",
@@ -881,7 +899,197 @@
             },
             "verified": null,
             "observed_at": 1790000540.0
+          },
+          "observed_at": 1790000540.0,
+          "valid_until": "2026-09-21T14:25:20Z"
+        },
+        "can_start_own": {
+          "value": "unknown",
+          "reason": "configured_unverified",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "can_continue_own": {
+          "value": "unknown",
+          "reason": "no_owned_session_verified",
+          "evidence_ref": null,
+          "verified": {
+            "value": "ready",
+            "reason": null,
+            "evidence_ref": {
+              "kind": "operation",
+              "operation_id": "op_cccccccccccccccccccccccccccccccc"
+            },
+            "verified": null,
+            "observed_at": 1790000500.0
           }
+        },
+        "last_verified_execution": {
+          "value": "ready",
+          "reason": null,
+          "evidence_ref": {
+            "kind": "operation",
+            "operation_id": "op_cccccccccccccccccccccccccccccccc"
+          },
+          "verified": {
+            "value": "ready",
+            "reason": null,
+            "evidence_ref": {
+              "kind": "operation",
+              "operation_id": "op_cccccccccccccccccccccccccccccccc"
+            },
+            "verified": null,
+            "observed_at": 1790000500.0
+          }
+        }
+      },
+      "smallest_gap": null,
+      "unverified": [
+        "signed_in_or_available",
+        "can_start_own",
+        "can_continue_own"
+      ],
+      "resume": {
+        "kind": "client_draft",
+        "stored_on_server": false
+      },
+      "pm_analysis": {
+        "pm_ready": false,
+        "native_analysis": {
+          "adapter": "codex-native-linux",
+          "contract": "codex-pm-linux-v1",
+          "required_version": "0.160.0",
+          "execution_scope": "frozen_context_only",
+          "execution_location": "connector_service",
+          "eligible_for_preflight": false,
+          "options_confirmed": false,
+          "version_verification": "per_run",
+          "auth_validity": "unverified",
+          "model_execution_verified": false,
+          "auth_file_readable": false,
+          "reason": "PM_NATIVE_EXECUTABLE_UNAVAILABLE",
+          "action_registered": true,
+          "authorized": false
+        },
+        "bat_analysis": {
+          "adapter": "bat-pm-linux-v1",
+          "contract": "codex-pm-linux-v1",
+          "action_registered": true,
+          "authorized": false,
+          "eligible_for_preflight": false,
+          "reason": "PM_WORKTREE_REQUIRED",
+          "selected_binding": null,
+          "execution_scope": "frozen_context_only",
+          "runtime_attestation_required": true,
+          "options_confirmed": false,
+          "auth_validity": "unverified",
+          "model_execution_verified": false
+        },
+        "effective_pm_route": {
+          "version": 1,
+          "scope": "workspace_selected_route",
+          "choice_source": "unset",
+          "adapter": null,
+          "choice_ref": null,
+          "ready": false,
+          "reason": "scope_required",
+          "eligible_adapters": [],
+          "adapters": [
+            {
+              "adapter": "codex-native-linux",
+              "ready": false,
+              "reason": "scope_required"
+            },
+            {
+              "adapter": "bat-pm-linux-v1",
+              "ready": false,
+              "reason": "scope_required"
+            }
+          ],
+          "model_execution_verified": false,
+          "execution_authorized": false
+        }
+      }
+    },
+    "renewed_observation": {
+      "contract": "work-profile-readiness/v1",
+      "workspace_id": "ws_11111111111111111111111111111111",
+      "profile_id": "wpf_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "revision": 1,
+      "digest": "ddb1f798456a5df8cab824894efe2c0e950b7f48d3bd1d126c741130b16ca0a8",
+      "observed_at": 1790000780.0,
+      "calls_bat": false,
+      "coding_route_ready": false,
+      "work_follow_up": {
+        "route": "bat_work_start",
+        "agent": "claude",
+        "state": "requires_attempt",
+        "reason": "owned_attempt_required",
+        "admission_checked": false
+      },
+      "configured": {
+        "agent": "claude",
+        "model": null,
+        "delivery_goal": "pull_request",
+        "binding": {
+          "repository": "o/r",
+          "host": "h1",
+          "workspace_id": "ws-1"
+        }
+      },
+      "states": {
+        "discovered": {
+          "value": "ready",
+          "reason": null,
+          "evidence_ref": {
+            "kind": "discovery_latest",
+            "host": "h1",
+            "scan_id": "scan_fixture",
+            "status": "succeeded"
+          },
+          "verified": {
+            "value": "ready",
+            "reason": null,
+            "evidence_ref": {
+              "kind": "discovery_latest",
+              "host": "h1",
+              "scan_id": "scan_fixture",
+              "status": "succeeded",
+              "finished_at": "2026-09-21T14:25:20Z"
+            },
+            "verified": null,
+            "observed_at": 1790000720.0
+          },
+          "observed_at": 1790000720.0,
+          "valid_until": "2026-09-21T14:28:20Z"
+        },
+        "signed_in_or_available": {
+          "value": "unknown",
+          "reason": "auth_validity_unverified",
+          "evidence_ref": {
+            "auth_validity": "unverified"
+          },
+          "verified": null
+        },
+        "can_observe": {
+          "value": "ready",
+          "reason": null,
+          "evidence_ref": {
+            "kind": "hosts_observed",
+            "last_success_at": 1790000720.0
+          },
+          "verified": {
+            "value": "ready",
+            "reason": null,
+            "evidence_ref": {
+              "kind": "hosts_observed",
+              "last_success_at": 1790000720.0
+            },
+            "verified": null,
+            "observed_at": 1790000720.0
+          },
+          "observed_at": 1790000720.0,
+          "valid_until": "2026-09-21T14:28:20Z"
         },
         "can_start_own": {
           "value": "unknown",
@@ -997,7 +1205,7 @@
       "profile_id": "wpf_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "revision": 1,
       "digest": "ddb1f798456a5df8cab824894efe2c0e950b7f48d3bd1d126c741130b16ca0a8",
-      "observed_at": 1790000600.0,
+      "observed_at": 1790000900.0,
       "calls_bat": false,
       "coding_route_ready": false,
       "work_follow_up": {
@@ -1045,13 +1253,17 @@
             },
             "verified": null,
             "observed_at": 1790000540.0
-          }
+          },
+          "observed_at": 1790000840.0,
+          "valid_until": "2026-09-21T14:25:20Z"
         },
         "can_start_own": {
           "value": "unavailable",
           "reason": "host_unreachable",
           "evidence_ref": null,
-          "verified": null
+          "verified": null,
+          "observed_at": 1790000840.0,
+          "valid_until": "2026-09-21T14:25:20Z"
         },
         "can_continue_own": {
           "value": "unknown",
