@@ -29,12 +29,26 @@ pub enum RouteKind {
 }
 /// Explanation of existing eligibility only; no routing input leaves the producer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE", try_from = "String")]
 pub enum RouteRequirement {
     DirectPeerUnknown,
     DirectNotConfirmed,
     DirectTcpUnreachable,
     ConfiguredRoutesExhausted,
+}
+impl TryFrom<String> for RouteRequirement {
+    type Error = &'static str;
+    fn try_from(value: String) -> Result<Self> {
+        // Serde's default enum decoder also accepts externally tagged objects.
+        // Status and IPC carry only a code string, never an object representation.
+        match value.as_str() {
+            "DIRECT_PEER_UNKNOWN" => Ok(Self::DirectPeerUnknown),
+            "DIRECT_NOT_CONFIRMED" => Ok(Self::DirectNotConfirmed),
+            "DIRECT_TCP_UNREACHABLE" => Ok(Self::DirectTcpUnreachable),
+            "CONFIGURED_ROUTES_EXHAUSTED" => Ok(Self::ConfiguredRoutesExhausted),
+            _ => Err("ROUTE_REQUIREMENT_INVALID"),
+        }
+    }
 }
 #[derive(Debug, Serialize)]
 pub struct RouteFailure {

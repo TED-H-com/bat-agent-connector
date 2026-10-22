@@ -955,6 +955,7 @@ mod tests {
     fn requirement_allowlist_rejects_anything_outside_the_closed_vocabulary() {
         for value in [
             Value::Null,
+            json!({"DIRECT_PEER_UNKNOWN": null}),
             json!("relay"),
             json!("DIRECT_PEER_UNKNOWN private output"),
             json!("constructor"),

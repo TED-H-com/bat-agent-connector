@@ -14,6 +14,18 @@ fn generation() -> ProbeGeneration {
         generation: 1,
     }
 }
+#[test]
+fn route_requirement_wire_codes_reject_non_strings() {
+    for value in [
+        json!({"DIRECT_PEER_UNKNOWN": null}),
+        json!(["DIRECT_PEER_UNKNOWN"]),
+        Value::Null,
+        json!(false),
+        json!("UNKNOWN_REQUIREMENT"),
+    ] {
+        assert!(serde_json::from_value::<RouteRequirement>(value).is_err());
+    }
+}
 fn routes(kinds: &[&str]) -> Routes {
     let mut doc: Value = serde_json::from_slice(include_bytes!("fixtures/inventory.json")).unwrap();
     doc["hosts"][0]["routes"] =
