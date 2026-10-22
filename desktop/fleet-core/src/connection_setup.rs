@@ -597,15 +597,17 @@ fn index_parse(bytes: &[u8]) -> SetupResult<ProfileIndex> {
     ProfileIndex::parse(bytes, &fields).map_err(|_| Gap::InvalidExisting(Artifact::ProfileIndex))
 }
 
-// Versioned generator policy, matching the existing public inventory contract.
+// Select compatibility fields from the compile-time shipped policy. Never copy
+// its example host identity, credentials, routes or aliases into a proposal.
 // Inactive values are parser-required placeholders, never advertised live routes.
-fn initial_inventory() -> Value {
-    json!({"schema_version":1,"fleet_version":"3.2.5","direct_probe_ms":600,
+fn initial_inventory(policy: &Value) -> Value {
+    let connector = &policy["connector"];
+    json!({"schema_version":1,"fleet_version":policy["fleet_version"],"direct_probe_ms":policy["direct_probe_ms"],
         "cloudflare_access_hosts":[],"credentials":{"inactive-connector-observe":{"kind":"windows-dpapi","name":"inactive-connector-observe"}},
         "fingerprints":{},"hosts":[],"provisioning_profiles":[],
-        "connector":{"name":"connector","label":"Connector","local":"127.0.0.1:19796","target":"127.0.0.1:18796",
-        "ssh_alias":null,"dashboard_path":"/dashboard/","credential_ref":"inactive-connector-observe",
-        "supported_api_versions":[1],"min_contract_version":"2026-10-08","required_features":["inventory","events_stream"]}})
+        "connector":{"name":"connector","label":"Connector","local":connector["local"],"target":connector["target"],
+        "ssh_alias":null,"dashboard_path":connector["dashboard_path"],"credential_ref":"inactive-connector-observe",
+        "supported_api_versions":connector["supported_api_versions"],"min_contract_version":connector["min_contract_version"],"required_features":connector["required_features"]}})
 }
 
 fn validate_inputs(input: &ReviewedSetup) -> SetupResult<()> {
@@ -681,6 +683,7 @@ fn update_inventory(
     input: &ReviewedSetup,
     inventory: &mut Value,
     forward: &ForwardAssociation,
+    policy: &Value,
 ) -> SetupResult<()> {
     let p = &input.selected;
     let route = input.route.document(&forward.alias);
@@ -728,7 +731,7 @@ fn update_inventory(
         inventory["hosts"].as_array_mut().unwrap().push(json!({"name":name,"profile":p.profile.id,"label":input.label,
             "local":forward.local.to_string(),"target":forward.target,"probe":top_probe,"routes":[route],"provision_route":kind,
             "bat":{"remote_profile_id":p.profile.remote_profile_id,"credential_ref":p.credential_ref,"fingerprint_ref":p.fingerprint_ref,
-            "protocol":"bat-remote/v2","min_version":"3.2.5"},"workspace_bindings":input.bindings,"connector_endpoint":null}));
+            "protocol":policy["hosts"][0]["bat"]["protocol"],"min_version":policy["hosts"][0]["bat"]["min_version"]},"workspace_bindings":input.bindings,"connector_endpoint":null}));
         inventory["provisioning_profiles"]
             .as_array_mut()
             .unwrap()
@@ -793,12 +796,17 @@ pub fn build(input: &ReviewedSetup) -> SetupResult<PublicationPlan> {
     }
     let proven = ProvenAssociation::new(&input.selected, Some(forward))?;
     let installation = installation_document(input)?;
+    let policy = strict_json::parse(
+        include_bytes!("../../fleet.example/client/fleet-inventory.json"),
+        crate::profile_files::LIMIT,
+    )
+    .map_err(|_| Gap::InvalidInput)?;
     let mut inventory = match input.existing.get(&Artifact::Inventory) {
         Some(file) => Inventory::parse(&file.bytes)
             .map_err(|_| Gap::InvalidExisting(Artifact::Inventory))?
             .document()
             .clone(),
-        None => initial_inventory(),
+        None => initial_inventory(&policy),
     };
     let mut index = match input.existing.get(&Artifact::ProfileIndex) {
         Some(file) => index_parse(&file.bytes)?.document().clone(),
@@ -840,7 +848,7 @@ pub fn build(input: &ReviewedSetup) -> SetupResult<PublicationPlan> {
     if !retained && addresses.occupied(&forward.local) {
         return Err(Gap::OccupiedEndpoint);
     }
-    update_inventory(input, &mut inventory, forward)?;
+    update_inventory(input, &mut inventory, forward, &policy)?;
     update_index(input, &mut index)?;
     let inventory_bytes = encode(&inventory, Artifact::Inventory)?;
     let inventory =

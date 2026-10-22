@@ -544,6 +544,60 @@ fn route_kinds_are_only_explicit_authorized_routes_and_keep_policy_defaults() {
     }
 }
 
+fn compatibility_values(inventory: &Value) -> Value {
+    let mut values = json!({"fleet_version":inventory["fleet_version"],"direct_probe_ms":inventory["direct_probe_ms"],
+        "protocol":inventory["hosts"][0]["bat"]["protocol"],"min_version":inventory["hosts"][0]["bat"]["min_version"]});
+    for field in [
+        "local",
+        "target",
+        "dashboard_path",
+        "supported_api_versions",
+        "min_contract_version",
+        "required_features",
+    ] {
+        values[field] = inventory["connector"][field].clone();
+    }
+    values
+}
+
+#[test]
+fn generated_compatibility_follows_the_shipped_policy_without_importing_example_identity() {
+    let example: Value = serde_json::from_slice(include_bytes!(
+        "../../fleet.example/client/fleet-inventory.json"
+    ))
+    .unwrap();
+    let mut input = setup();
+    input.ssh_source = String::from_utf8(input.ssh_source)
+        .unwrap()
+        .replace("bat-example", "reviewed-example")
+        .into_bytes();
+    input.forward = Some(
+        read_ssh(&input.ssh_source)
+            .unwrap()
+            .association("reviewed-example")
+            .unwrap(),
+    );
+    let plan = build(&input).unwrap();
+    let inventory = document(&plan, Artifact::Inventory);
+    assert_eq!(
+        compatibility_values(&inventory),
+        compatibility_values(&example)
+    );
+    assert_ne!(inventory["hosts"][0]["name"], example["hosts"][0]["name"]);
+    assert_ne!(inventory["credentials"], example["credentials"]);
+    assert_ne!(inventory["fingerprints"], example["fingerprints"]);
+    assert_eq!(
+        inventory["hosts"][0]["routes"][0]["alias"],
+        "reviewed-example"
+    );
+    assert_eq!(inventory["connector"]["ssh_alias"], Value::Null);
+    assert_eq!(
+        inventory["connector"]["credential_ref"],
+        "inactive-connector-observe"
+    );
+    assert_eq!(inventory["cloudflare_access_hosts"], json!([]));
+}
+
 #[test]
 fn rebinds_and_occupied_configured_addresses_do_not_generate_steps() {
     let mut input = setup();
