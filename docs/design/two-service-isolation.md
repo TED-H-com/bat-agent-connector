@@ -1,5 +1,8 @@
 # Two independent services in one client (M04)
 
+The [health display contract](health-display.md) keeps observations and summaries
+within these verified source boundaries and defines when displayed facts expire.
+
 The client must select one verified source at a time. Identical host/session IDs,
 names and actor labels cannot establish identity. `activate`
 (`desktop/src/app.js:119`) verifies `/bootstrap`, then assigns the namespace before
@@ -140,11 +143,31 @@ operation keys stay in their original namespace. Recovery must not automatically
 POST; an explicit retry must reuse the original key and return the original
 operation.
 
-A same-identity resnapshot must keep an editing view's connection epoch and
-readiness so events continue to be read and the checkpoint is saved. When editing
-ends, the view must remount from fresh reads. A different namespace or
-`access_changed` must invalidate and remount; an access change must hide old facts
-and pause actions immediately, without waiting for editing to end.
+For checkpointed event polling, only `cursor_expired`, `cursor_ahead`,
+`history_changed` and `checkpoint_cursor_mismatch` are identity-proven reset
+reasons: `dashboard_sync.check` has already established the server and principal.
+The client keeps this set in `IDENTITY_PRESERVING_RESETS`. A resnapshot with the
+same verified namespace keeps an editing view's connection epoch and readiness
+so events continue to be read and the refreshed checkpoint is saved. When editing
+ends, the view must remount from fresh reads.
+
+Every other reset reason, including unknown reasons, hides old facts and pauses
+actions immediately, just like `access_changed`; editing does not defer this
+invalidation. This includes a changed principal or server, unavailable identity
+metadata and an invalid checkpoint. See the [producer reset-reason
+table](dashboard-sync.md#身份持久化與恢復) for their definitions. The client tears
+down the old view, shell and workspace navigation and shows the localized
+sync-waiting text in `#main` before attempting bootstrap. If managed bootstrap
+rejects the new identity, the old facts stay hidden. A different verified
+namespace also requires invalidation and remounting.
+
+Withdrawing a view does not delete or move its namespace: typed drafts and
+original operation keys remain there unchanged, and no request is automatically
+sent. The [managed view-reset tests](../../desktop/tests/managed-reset-view.spec.ts)
+verify immediate withdrawal before and after a failed identity comparison,
+byte-identical original localStorage entries and zero POSTs in both languages.
+They also verify that a same-identity editing view retains its editor, draft and
+selection through a completed resnapshot and a subsequent checkpointed poll.
 
 Rust identity tests must derive valid and identity-negative bootstrap/capabilities
 documents from the [producer golden](../../tests/fixtures/managed-bootstrap.json)

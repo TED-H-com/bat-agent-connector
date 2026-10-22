@@ -78,8 +78,20 @@ def list_principals(db) -> list[dict]:
             for r in rows]
 
 
-def authenticate(db, token: str, admin_token: str) -> Principal | None:
+def authenticate(db, token: str, admin_token: str, *, browser_session: bool = False) -> Principal | None:
+    """Authenticate an API bearer, or a session already checked by the cookie adapter."""
     if not token:
+        return None
+    session = db.execute("SELECT parent_hash,expires_at FROM browser_sessions WHERE token_hash=?",
+                         (_digest(token),)).fetchone()
+    if browser_session:
+        if not session or session["expires_at"] <= time.time():
+            return None
+        parent = db.execute("SELECT expires_at,revoked_at FROM api_principals WHERE token_hash=?",
+                            (session["parent_hash"],)).fetchone()
+        if not parent or parent["revoked_at"] is not None or (parent["expires_at"] and parent["expires_at"] <= time.time()):
+            return None
+    elif session:
         return None
     if hmac.compare_digest(token, admin_token):
         return Principal(ADMIN_ACTOR, frozenset(SCOPES), admin=True, credential_id=_digest(token))

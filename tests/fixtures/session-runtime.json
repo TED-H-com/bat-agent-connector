@@ -3,6 +3,8 @@
     "listed": {
       "host": "fixture-host",
       "session_id": "fixture-session",
+      "workspace": "demo-project",
+      "workspace_id": "ws-1",
       "title": "Claude Agent",
       "api_access": "managed",
       "provenance": "connector_managed",
@@ -28,7 +30,9 @@
           "connection": {
             "observed_at": "2026-09-21T14:13:21Z",
             "source_ref": "hosts_observed:fixture-host",
-            "stale": false
+            "stale": false,
+            "valid_until": "2026-09-21T14:16:21Z",
+            "stale_reason": null
           },
           "loading": {
             "observed_at": "2026-09-21T14:13:21Z",
@@ -43,7 +47,8 @@
           "activity": {
             "observed_at": "2026-09-21T14:13:21Z",
             "source_ref": "sessions_observed:fixture-host/fixture-session",
-            "stale": false
+            "stale": false,
+            "valid_until": "2026-09-21T14:16:21Z"
           },
           "lifecycle": {
             "observed_at": null,
@@ -67,6 +72,8 @@
       "session": {
         "host": "fixture-host",
         "session_id": "fixture-session",
+        "workspace": "demo-project",
+        "workspace_id": "ws-1",
         "title": "Claude Agent",
         "api_access": "managed",
         "provenance": "connector_managed",
@@ -92,7 +99,9 @@
             "connection": {
               "observed_at": "2026-09-21T14:13:21Z",
               "source_ref": "hosts_observed:fixture-host",
-              "stale": false
+              "stale": false,
+              "valid_until": "2026-09-21T14:16:21Z",
+              "stale_reason": null
             },
             "loading": {
               "observed_at": "2026-09-21T14:13:21Z",
@@ -107,7 +116,8 @@
             "activity": {
               "observed_at": "2026-09-21T14:13:21Z",
               "source_ref": "sessions_observed:fixture-host/fixture-session",
-              "stale": false
+              "stale": false,
+              "valid_until": "2026-09-21T14:16:21Z"
             },
             "lifecycle": {
               "observed_at": null,
@@ -143,6 +153,8 @@
     "listed": {
       "host": "fixture-host",
       "session_id": "fixture-session",
+      "workspace": "demo-project",
+      "workspace_id": "ws-1",
       "title": "Claude Agent",
       "api_access": "managed",
       "provenance": "connector_managed",
@@ -168,7 +180,9 @@
           "connection": {
             "observed_at": "2026-09-21T14:13:22Z",
             "source_ref": "hosts_observed:fixture-host",
-            "stale": false
+            "stale": false,
+            "valid_until": "2026-09-21T14:16:22Z",
+            "stale_reason": null
           },
           "loading": {
             "observed_at": "2026-09-21T14:13:22Z",
@@ -183,7 +197,8 @@
           "activity": {
             "observed_at": "2026-09-21T14:13:22Z",
             "source_ref": "sessions_observed:fixture-host/fixture-session",
-            "stale": false
+            "stale": false,
+            "valid_until": "2026-09-21T14:16:22Z"
           },
           "lifecycle": {
             "observed_at": null,
@@ -207,6 +222,8 @@
       "session": {
         "host": "fixture-host",
         "session_id": "fixture-session",
+        "workspace": "demo-project",
+        "workspace_id": "ws-1",
         "title": "Claude Agent",
         "api_access": "managed",
         "provenance": "connector_managed",
@@ -232,7 +249,9 @@
             "connection": {
               "observed_at": "2026-09-21T14:13:22Z",
               "source_ref": "hosts_observed:fixture-host",
-              "stale": false
+              "stale": false,
+              "valid_until": "2026-09-21T14:16:22Z",
+              "stale_reason": null
             },
             "loading": {
               "observed_at": "2026-09-21T14:13:22Z",
@@ -247,7 +266,8 @@
             "activity": {
               "observed_at": "2026-09-21T14:13:22Z",
               "source_ref": "sessions_observed:fixture-host/fixture-session",
-              "stale": false
+              "stale": false,
+              "valid_until": "2026-09-21T14:16:22Z"
             },
             "lifecycle": {
               "observed_at": null,
@@ -283,6 +303,8 @@
     "listed": {
       "host": "fixture-host",
       "session_id": "fixture-session",
+      "workspace": "demo-project",
+      "workspace_id": "ws-1",
       "title": "Claude Agent",
       "api_access": "managed",
       "provenance": "connector_managed",
@@ -308,7 +330,9 @@
           "connection": {
             "observed_at": "2026-09-21T14:13:23Z",
             "source_ref": "hosts_observed:fixture-host",
-            "stale": false
+            "stale": false,
+            "valid_until": "2026-09-21T14:16:23Z",
+            "stale_reason": null
           },
           "loading": {
             "observed_at": "2026-09-21T14:13:23Z",
@@ -323,7 +347,8 @@
           "activity": {
             "observed_at": null,
             "source_ref": "sessions_observed:fixture-host/fixture-session",
-            "stale": false
+            "stale": false,
+            "valid_until": null
           },
           "lifecycle": {
             "observed_at": null,
@@ -347,6 +372,8 @@
       "session": {
         "host": "fixture-host",
         "session_id": "fixture-session",
+        "workspace": "demo-project",
+        "workspace_id": "ws-1",
         "title": "Claude Agent",
         "api_access": "managed",
         "provenance": "connector_managed",
@@ -372,7 +399,9 @@
             "connection": {
               "observed_at": "2026-09-21T14:13:23Z",
               "source_ref": "hosts_observed:fixture-host",
-              "stale": false
+              "stale": false,
+              "valid_until": "2026-09-21T14:16:23Z",
+              "stale_reason": null
             },
             "loading": {
               "observed_at": "2026-09-21T14:13:23Z",
@@ -387,7 +416,8 @@
             "activity": {
               "observed_at": null,
               "source_ref": "sessions_observed:fixture-host/fixture-session",
-              "stale": false
+              "stale": false,
+              "valid_until": null
             },
             "lifecycle": {
               "observed_at": null,
@@ -423,6 +453,8 @@
     "listed": {
       "host": "fixture-host",
       "session_id": "fixture-session",
+      "workspace": "demo-project",
+      "workspace_id": "ws-1",
       "title": "Claude Agent",
       "api_access": "managed",
       "provenance": "connector_managed",
@@ -453,7 +485,9 @@
           "connection": {
             "observed_at": "2026-09-21T14:13:24Z",
             "source_ref": "hosts_observed:fixture-host",
-            "stale": false
+            "stale": false,
+            "valid_until": "2026-09-21T14:16:24Z",
+            "stale_reason": null
           },
           "loading": {
             "observed_at": "2026-09-21T14:13:24Z",
@@ -468,7 +502,8 @@
           "activity": {
             "observed_at": "2026-09-21T14:13:24Z",
             "source_ref": "sessions_observed:fixture-host/fixture-session",
-            "stale": false
+            "stale": false,
+            "valid_until": "2026-09-21T14:16:24Z"
           },
           "lifecycle": {
             "observed_at": "2026-09-21T14:13:24Z",
@@ -492,6 +527,8 @@
       "session": {
         "host": "fixture-host",
         "session_id": "fixture-session",
+        "workspace": "demo-project",
+        "workspace_id": "ws-1",
         "title": "Claude Agent",
         "api_access": "managed",
         "provenance": "connector_managed",
@@ -522,7 +559,9 @@
             "connection": {
               "observed_at": "2026-09-21T14:13:24Z",
               "source_ref": "hosts_observed:fixture-host",
-              "stale": false
+              "stale": false,
+              "valid_until": "2026-09-21T14:16:24Z",
+              "stale_reason": null
             },
             "loading": {
               "observed_at": "2026-09-21T14:13:24Z",
@@ -537,7 +576,8 @@
             "activity": {
               "observed_at": "2026-09-21T14:13:24Z",
               "source_ref": "sessions_observed:fixture-host/fixture-session",
-              "stale": false
+              "stale": false,
+              "valid_until": "2026-09-21T14:16:24Z"
             },
             "lifecycle": {
               "observed_at": "2026-09-21T14:13:24Z",
@@ -578,6 +618,8 @@
     "listed": {
       "host": "fixture-host",
       "session_id": "fixture-session",
+      "workspace": "demo-project",
+      "workspace_id": "ws-1",
       "title": "Claude Agent",
       "api_access": "managed",
       "provenance": "connector_managed",
@@ -608,7 +650,9 @@
           "connection": {
             "observed_at": "2026-09-21T14:13:25Z",
             "source_ref": "hosts_observed:fixture-host",
-            "stale": true
+            "stale": true,
+            "valid_until": "2026-09-21T14:16:24Z",
+            "stale_reason": "host_unreachable"
           },
           "loading": {
             "observed_at": "2026-09-21T14:13:24Z",
@@ -623,7 +667,8 @@
           "activity": {
             "observed_at": "2026-09-21T14:13:24Z",
             "source_ref": "sessions_observed:fixture-host/fixture-session",
-            "stale": true
+            "stale": true,
+            "valid_until": "2026-09-21T14:16:24Z"
           },
           "lifecycle": {
             "observed_at": "2026-09-21T14:13:24Z",
@@ -647,6 +692,8 @@
       "session": {
         "host": "fixture-host",
         "session_id": "fixture-session",
+        "workspace": "demo-project",
+        "workspace_id": "ws-1",
         "title": "Claude Agent",
         "api_access": "managed",
         "provenance": "connector_managed",
@@ -677,7 +724,9 @@
             "connection": {
               "observed_at": "2026-09-21T14:13:25Z",
               "source_ref": "hosts_observed:fixture-host",
-              "stale": true
+              "stale": true,
+              "valid_until": "2026-09-21T14:16:24Z",
+              "stale_reason": "host_unreachable"
             },
             "loading": {
               "observed_at": "2026-09-21T14:13:24Z",
@@ -692,7 +741,8 @@
             "activity": {
               "observed_at": "2026-09-21T14:13:24Z",
               "source_ref": "sessions_observed:fixture-host/fixture-session",
-              "stale": true
+              "stale": true,
+              "valid_until": "2026-09-21T14:16:24Z"
             },
             "lifecycle": {
               "observed_at": "2026-09-21T14:13:24Z",
@@ -733,6 +783,8 @@
     "listed": {
       "host": "fixture-host",
       "session_id": "fixture-session",
+      "workspace": "demo-project",
+      "workspace_id": "ws-1",
       "title": "Claude Agent",
       "api_access": "managed",
       "provenance": "connector_managed",
@@ -769,7 +821,9 @@
           "connection": {
             "observed_at": "2026-09-21T14:13:26Z",
             "source_ref": "hosts_observed:fixture-host",
-            "stale": false
+            "stale": false,
+            "valid_until": "2026-09-21T14:16:26Z",
+            "stale_reason": null
           },
           "loading": {
             "observed_at": "2026-09-21T14:13:26Z",
@@ -784,7 +838,8 @@
           "activity": {
             "observed_at": "2026-09-21T14:13:26Z",
             "source_ref": "sessions_observed:fixture-host/fixture-session",
-            "stale": false
+            "stale": false,
+            "valid_until": "2026-09-21T14:16:26Z"
           },
           "lifecycle": {
             "observed_at": null,
@@ -808,6 +863,8 @@
       "session": {
         "host": "fixture-host",
         "session_id": "fixture-session",
+        "workspace": "demo-project",
+        "workspace_id": "ws-1",
         "title": "Claude Agent",
         "api_access": "managed",
         "provenance": "connector_managed",
@@ -844,7 +901,9 @@
             "connection": {
               "observed_at": "2026-09-21T14:13:26Z",
               "source_ref": "hosts_observed:fixture-host",
-              "stale": false
+              "stale": false,
+              "valid_until": "2026-09-21T14:16:26Z",
+              "stale_reason": null
             },
             "loading": {
               "observed_at": "2026-09-21T14:13:26Z",
@@ -859,7 +918,8 @@
             "activity": {
               "observed_at": "2026-09-21T14:13:26Z",
               "source_ref": "sessions_observed:fixture-host/fixture-session",
-              "stale": false
+              "stale": false,
+              "valid_until": "2026-09-21T14:16:26Z"
             },
             "lifecycle": {
               "observed_at": null,
@@ -906,6 +966,8 @@
     "listed": {
       "host": "fixture-host",
       "session_id": "fixture-session",
+      "workspace": "demo-project",
+      "workspace_id": "ws-1",
       "title": "Claude Agent",
       "api_access": "managed",
       "provenance": "connector_managed",
@@ -931,7 +993,9 @@
           "connection": {
             "observed_at": "2026-09-21T14:13:28Z",
             "source_ref": "hosts_observed:fixture-host",
-            "stale": false
+            "stale": false,
+            "valid_until": "2026-09-21T14:16:28Z",
+            "stale_reason": null
           },
           "loading": {
             "observed_at": "2026-09-21T14:13:27Z",
@@ -946,7 +1010,8 @@
           "activity": {
             "observed_at": "2026-09-21T14:13:27Z",
             "source_ref": "sessions_observed:fixture-host/fixture-session",
-            "stale": true
+            "stale": true,
+            "valid_until": "2026-09-21T14:16:27Z"
           },
           "lifecycle": {
             "observed_at": "2026-09-21T14:13:28Z",
@@ -970,6 +1035,8 @@
       "session": {
         "host": "fixture-host",
         "session_id": "fixture-session",
+        "workspace": "demo-project",
+        "workspace_id": "ws-1",
         "title": "Claude Agent",
         "api_access": "managed",
         "provenance": "connector_managed",
@@ -995,7 +1062,9 @@
             "connection": {
               "observed_at": "2026-09-21T14:13:28Z",
               "source_ref": "hosts_observed:fixture-host",
-              "stale": false
+              "stale": false,
+              "valid_until": "2026-09-21T14:16:28Z",
+              "stale_reason": null
             },
             "loading": {
               "observed_at": "2026-09-21T14:13:27Z",
@@ -1010,7 +1079,8 @@
             "activity": {
               "observed_at": "2026-09-21T14:13:27Z",
               "source_ref": "sessions_observed:fixture-host/fixture-session",
-              "stale": true
+              "stale": true,
+              "valid_until": "2026-09-21T14:16:27Z"
             },
             "lifecycle": {
               "observed_at": "2026-09-21T14:13:28Z",

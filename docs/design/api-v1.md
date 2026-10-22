@@ -39,7 +39,7 @@ Scopes：`observe`（讀目錄、操作、事件、政策）、`operate`（驅�
 
 Controller 由持久 `server_id` 與已認證 actor 產生；同 actor 的多 client、換 token 與重啟維持身分。Session reservation 保存 `controller_authority` 與 `controller_incarnation`；BAT `workspace_id` 和可選 `pm_workspace_id` 分開。新操作受理及最後 BAT frame 都核對原建立者，背景 task／reviewer／failover／清理沿用持久 authority。缺少建立證據的舊資源維持唯讀；已送出但不明的舊效果仍可回查，不重新認領或重送。`features.controller_isolation` 宣告此契約，inventory 的 `api_access` 依目前 caller 計算，`provenance` 保留客觀來源。
 
-瀏覽器防護：Host 必須是 loopback（擋 DNS rebinding）；有 Origin 時須是 loopback 或 `[api] allowed_origins`；只接受 bearer token，不用 cookie，所以沒有 CSRF 面。只有列在 `allowed_origins` 的 Origin 會收到 CORS 標頭（含 `OPTIONS` preflight）；Dashboard 與 API 同源，不需要它。
+瀏覽器防護：Host 必須是 loopback（擋 DNS rebinding）；有 Origin 時須是 loopback 或 `[api] allowed_origins`。API token 透過 bearer 驗證；managed browser session 僅接受 cookie 路徑，並核對來源、fetch metadata 與 CSRF，不接受作為 HTTP 或 `/rpc` bearer。既有 cookie session、拒絕後的連線恢復與同 host 不同埠限制見 [Managed installation](managed-installation.md#credentials-and-browser-connections)。只有列在 `allowed_origins` 的 Origin 會收到 CORS 標頭（含 `OPTIONS` preflight）；Dashboard 與 API 同源，不需要它。
 
 MCP 的 `operation_submit`、`operation_cancel`、`operation_resume` 要 `confirm=true`，而且只以 `BATC_API_TOKEN` 的主體執行，不退回本機 admin token：這個 client 能做什麼由它自己的 token scopes 決定，不是由 MCP server 啟動時的主機 tier 決定。PM 及共用 operation／event 讀取也要求 `BATC_API_TOKEN`；legacy Fleet 觀察保留原本唯讀方式。
 
@@ -105,6 +105,7 @@ Metadata uncertain write 從 step.started_at 起滿 600 秒，GET 仍為 before 
 - 一列要連續兩次成功列舉都沒出現，才標 `gone`。`workspace:load` 回 null 或格式不對時算失敗，不當成空清單。
 - 一次輪詢沒觀測到的欄位沿用上次的值：讀 meta 失敗的 session 保留上一列；這次沒重讀 state（`auto` 只在 session 執行中才讀）時保留上次的 pending；活動時間只會往後。
 - 每台主機各自排程輪詢，慢的主機不會拖住其他主機。已從設定移除的主機不出現在列表。
+- Inventory 的 host row 與 session `state.evidence.connection` 新增 `valid_until`（上次成功觀察 + `stale_after_s`）；`state.evidence.activity.valid_until` 使用活動軸自己的成功觀察時間。未知觀察為 null；到期（含邊界）或既有 stale flag 都不得宣稱 current。欄位為 additive，不增加 probe 或 timestamp-only 事件；GET 只讀取快取。
 - Host stale 在讀取時推導，不向 sessions 發送 host flap 事件；只有 session-specific 缺席／gone／scope change 記 stale/fresh。
 - 首次觀測寫 `session.added`；值或非時間欄位 freshness 改變寫 `session.updated`，gone 後重現寫 `session.reappeared`。三者的 body 都帶 `fields_stale` 與 `field_evidence`；digest 與 `changed_fields` 包含這兩欄，即使沿用的 loaded／streaming 值相同，meta 失敗及恢復也會通知。`field_observed_at`、`last_activity_ms` 等時間單獨變動不寫 update；連續相同失敗／成功不寫事件。
 - 欄位 freshness 與 `session.stale`／`session.fresh` 的單一 specific reason 分開，可同時 stale。成功列舉缺席的 `session.gone` 規則沿用上文。

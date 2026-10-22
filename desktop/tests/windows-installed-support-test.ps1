@@ -33,6 +33,62 @@ foreach ($phase in @('enumerate', 'read')) {
 }
 Write-Host 'Passed helper: concurrent registration removal is absent; remaining products and access failures stay visible'
 
+# RegistryKey.Win32Error passes the raw Win32 code to IOException(message, hresult),
+# not HRESULT_FROM_WIN32. RegistryProvider writes that exception in an ErrorRecord;
+# -ErrorAction Stop exposes it to catch without an inner exception.
+function Write-FixtureRegistryError([Exception]$Exception, [string]$Path) {
+    $category = if ($Exception -is [UnauthorizedAccessException] -or $Exception -is [Security.SecurityException]) {
+        [System.Management.Automation.ErrorCategory]::PermissionDenied
+    } else { [System.Management.Automation.ErrorCategory]::ReadError }
+    $record = [System.Management.Automation.ErrorRecord]::new($Exception, $Exception.GetType().FullName, $category, $Path)
+    Write-Error -ErrorRecord $record -ErrorAction Stop
+}
+$deletedKey = [IO.IOException]::new('Synthetic key marked for deletion', 1018)
+Assert-Fixture ($deletedKey.HResult -eq 1018 -and $null -eq $deletedKey.InnerException) 'Deleted-key fixture has the wrong .NET exception shape'
+$deletedRoot = @(Get-FixtureRegistration 'fixture-root' 'Fixture Dashboard' {
+    param($Root)
+    Write-FixtureRegistryError $deletedKey $Root
+} { throw 'A deleted root must not be read' })
+Assert-Fixture ($deletedRoot.Count -eq 0) 'A root deleted during name enumeration was not absent'
+$deletedOnly = @(Get-FixtureRegistration 'fixture-root' 'Fixture Dashboard' {
+    [pscustomobject]@{PSPath='deleted'}
+} { param($Path) Write-FixtureRegistryError $deletedKey $Path })
+Assert-Fixture ($deletedOnly.Count -eq 0) 'A key deleted during its property read was not absent'
+foreach ($product in @('Fixture Dashboard', 'Another app')) {
+    $reads = [Collections.Generic.List[string]]::new()
+    $remaining = @(Get-FixtureRegistration 'fixture-root' $product {
+        @('before', 'deleted', 'unrelated', 'after') | ForEach-Object { [pscustomobject]@{PSPath=$_} }
+    } {
+        param($Path)
+        $reads.Add($Path)
+        if ($Path -eq 'deleted') { Write-FixtureRegistryError $deletedKey $Path }
+        [pscustomobject]@{DisplayName=$(if ($Path -eq 'unrelated') {'Another app'} else {'Fixture Dashboard'}); Marker=$Path}
+    })
+    $expected = if ($product -eq 'Fixture Dashboard') { 'before,after' } else { 'unrelated' }
+    Assert-Fixture (($remaining.Marker -join ',') -ceq $expected) 'A deleted key hid another registration or leaked partial properties'
+    Assert-Fixture (($reads -join ',') -ceq 'before,deleted,unrelated,after') 'A deleted key stopped subsequent registration reads'
+}
+foreach ($failure in @(
+    [UnauthorizedAccessException]::new('Synthetic denied registration'),
+    [Security.SecurityException]::new('Synthetic registry security failure'),
+    [IO.IOException]::new('Synthetic registry I/O failure', 1016),
+    [IO.IOException]::new('Synthetic other I/O failure'),
+    [InvalidOperationException]::new('Synthetic unrecognized provider failure')
+)) {
+    foreach ($phase in @('enumerate', 'read')) {
+        $propagated = $false
+        try {
+            Get-FixtureRegistration 'fixture-root' 'Fixture Dashboard' {
+                param($Root)
+                [pscustomobject]@{PSPath='partial'}
+                if ($phase -eq 'enumerate') { Write-FixtureRegistryError $failure $Root }
+            } { param($Path) Write-FixtureRegistryError $failure $Path } | Out-Null
+        } catch { $propagated = [object]::ReferenceEquals($_.Exception, $failure) }
+        Assert-Fixture $propagated "Registration $phase failure was swallowed or replaced: $($failure.GetType().FullName)"
+    }
+}
+Write-Host 'Passed helper: ERROR_KEY_DELETED is absent; all remaining registrations and other provider failures stay visible'
+
 function New-FakeClock([DateTime]$StartTime = [DateTime]::UtcNow) {
     $state = [ordered]@{ current = $StartTime }
     return [pscustomobject]@{

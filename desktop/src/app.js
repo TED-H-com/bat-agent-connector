@@ -1,4 +1,7 @@
-import {centralServiceStatus, clientActionGate, pollFailure} from "./central-service-status.js";
+import {boardGitHubPanel} from './board-github.js';
+import {clientActionGate, pollFailure} from "./central-service-status.js";
+import {healthDisplay, healthLabel, healthAge, healthRevision, rememberHealthRead, withdrawHealthRead, selectHealthSession, resetHealthBootstrap, takeHealthRenewal} from './health-display.js';
+import {browserCredentialRefusals, isCredentialRefusal, BROWSER_TOKEN_KEY as TOKEN_KEY} from './credential-refusals.js';
 import {layoutDecision} from './workbench-mode.js';
 import {workbenchViews} from './workbench-views.js';
 import {settingsAgents} from './settings-agents.js';
@@ -29,7 +32,7 @@ import {workspaceNavigation} from "./workspace-nav.js";
 import {managedSetupPanel, setupFormValidity} from "./managed-setup.js";
 import {ApiError, errorPresentation, clientActionError, sessionErrorLine} from "./error-presentation.js";
 import {managedControl, fleetAvailability} from "./transport/index.ts";
-import {restoreBrowserSession, browserSessionToken, forgetBrowserSession} from "./transport/index.ts";
+import {restoreBrowserSession, browserSessionToken, forgetBrowserSession, browserCredentialError} from "./transport/index.ts";
 import {setupSidebarResizer, setupMobileSessionLayout} from "./workspace-layout.js";
 import {observeViewport} from './ui/viewport.js';
 import {attentionView} from "./attention.js";
@@ -69,10 +72,11 @@ import { mountArtifactReview, managedCaptureExecution } from "./artifact-review.
 import {retiredRead, readThroughResume, retiredReadError} from "./state/retired-read.ts";
 import { consumePageAsync, settleRefreshes, storageScope } from "./state/events.ts";
 import {managedStorageScope, migrateManagedStorage} from './state/storage-identity.ts';
+import {earlierDrafts, hideEarlierDraft, firstEarlierDraftNotice, markEarlierDraftNotice} from './state/earlier-drafts.ts';
+import {earlierDraftPanel} from './earlier-drafts.js';
 import {renderDeliveryWork, renderObservedResource, unavailableProject} from "./observed-resource.js";
 import {observedText} from "./observed-resource-strings.js";
 
-const TOKEN_KEY = "batc.dashboard.token";
 const isWorkbench = layoutDecision.layout === 'workbench';
 
 const state = { token: null, caps: null, lastEvent: 0, lastEventAt: 0, lastPoll: null, listeners: new Set(), namespace: "", scopeIdentity: null, epoch: 0, online: false, pollHealth: 'initial', viewReady: false, sync: null, endpoint: "", connectionError: null, nativeBusy: false, nativeAttempt: 0, connectionNotice: null, refreshCycle: null };
@@ -87,6 +91,7 @@ function rememberVersionRead(key, data, at = new Date().toISOString(), epoch = s
   if(epoch !== state.epoch)return;
   if(versionReads.epoch !== epoch)versionReads = {epoch};
   versionReads[key] = {data,at};
+  if (key === 'capabilities' && data && state.health) state.health.currentCaps = data;
   paintVersions();
 }
 async function readNativeVersions() {
@@ -149,31 +154,107 @@ async function openDiagnostics() {
     setTimeout(()=>URL.revokeObjectURL(url),1000);return true;
   }});
 }
-async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource, retainView = false) {
+let earlierEntries = [], earlierIdentity = null, earlierScan = 0, earlierPanel = null, earlierPanelLocale = null;
+let earlierScanState = nativeDesktop ? 'waiting' : 'skipped', earlierJump = false;
+function clearEarlierDrafts(status = nativeDesktop ? 'waiting' : 'skipped') {
+  earlierScan++; earlierEntries = []; earlierIdentity = null; earlierPanel = null; earlierJump = false; earlierScanState = status;
+  document.querySelector('[data-earlier-drafts-notice]')?.remove();
+  document.querySelector('[data-earlier-drafts]')?.remove();
+  paintEarlierDrafts();
+}
+function acknowledgeEarlierDrafts() {
+  if (!earlierIdentity) return;
+  markEarlierDraftNotice(earlierIdentity, localStorage);
+  document.querySelector('[data-earlier-drafts-notice]')?.remove();
+}
+function paintEarlierNotice() {
+  document.querySelector('[data-earlier-drafts-notice]')?.remove();
+  if (!state.token || !earlierIdentity || !earlierEntries.length || !firstEarlierDraftNotice(earlierIdentity, localStorage)) return;
+  document.getElementById('main')?.prepend(h('aside', {'data-earlier-drafts-notice': '', class: 'earlier-drafts-notice', role: 'status'},
+    h('span', {}, t('earlier_notice')), ' ', h('a', {href: '#/settings?section=about&drafts=earlier', onclick: () => {
+      earlierJump = false; acknowledgeEarlierDrafts();
+    }}, t('earlier_title'))));
+}
+function paintEarlierDrafts() {
+  const slot = document.querySelector('[data-earlier-drafts-slot]');
+  if (!slot) return;
+  slot.dataset.scanState = earlierScanState;
+  if (!earlierIdentity || !earlierEntries.length) {slot.replaceChildren(); return;}
+  const identity = earlierIdentity, scope = managedStorageScope(identity), signature = JSON.stringify(earlierEntries);
+  const current = () => earlierScanState === 'complete' && !!state.token && !state.nativeBusy && state.namespace === scope
+    && earlierIdentity && managedStorageScope(earlierIdentity) === scope;
+  if (!earlierPanel || earlierPanelLocale !== locale || earlierPanel.signature !== signature) {
+    const expanded = earlierPanel?.open || false;
+    earlierPanel = earlierDraftPanel({h, t, entries: earlierEntries, current, expanded, opened: acknowledgeEarlierDrafts,
+      emptyFocus: () => {const heading = document.querySelector('[data-settings-panel="about"] h2'); if (heading) {heading.tabIndex = -1; heading.focus({preventScroll: true});}},
+      hide: entry => {
+        if (!current() || !hideEarlierDraft(identity, localStorage, entry)) return false;
+        earlierEntries = earlierEntries.filter(row => row.id !== entry.id);
+        earlierPanel.signature = JSON.stringify(earlierEntries);
+        if (!earlierEntries.length) document.querySelector('[data-earlier-drafts-notice]')?.remove();
+        return true;
+      }});
+    earlierPanel.signature = signature; earlierPanelLocale = locale;
+  }
+  if (earlierPanel.parentElement !== slot) slot.replaceChildren(earlierPanel);
+  earlierPanel.resume();
+  if (!earlierJump && new URLSearchParams(location.hash.split('?')[1] || '').get('drafts') === 'earlier') {
+    earlierJump = true;
+    const panel = earlierPanel;
+    setTimeout(() => {if (panel === earlierPanel && panel.isConnected && current()) panel.reveal();}, 0);
+  }
+}
+function scanEarlierDrafts(identity) {
+  const scan = earlierScan; earlierScanState = 'scanning'; paintEarlierDrafts();
+  setTimeout(async () => {
+    try {
+      if (scan !== earlierScan) return;
+      const entries = await earlierDrafts(identity, localStorage);
+      if (scan !== earlierScan || !state.token || state.namespace !== managedStorageScope(identity)) return;
+      earlierIdentity = identity; earlierEntries = entries; earlierScanState = 'complete'; paintEarlierDrafts(); paintEarlierNotice();
+    } catch {
+      console.debug('draft_recovery_unreadable');
+      if (scan === earlierScan) {earlierScanState = 'failed'; paintEarlierDrafts();}
+    }
+  }, 0);
+}
+function validateHealthBootstrap(caps, bootstrap) {
+  const sync = bootstrap?.sync;
+  if (sync?.version !== 1 || !sync.server_id || !sync.principal_id ||
+    !Number.isSafeInteger(sync.checkpoint?.cursor) || sync.checkpoint.cursor < 0 || !sync.checkpoint.token ||
+    bootstrap.capabilities?.actor !== caps.actor ||
+    (caps.desktop_identity && (caps.desktop_identity.server_id !== sync.server_id || caps.desktop_identity.principal_id !== sync.principal_id)))
+    throw new Error('Invalid central bootstrap identity');
+}
+async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource, retainView = false, verifiedBootstrap) {
+  if (reset && earlierIdentity) {earlierScan++; earlierScanState = 'waiting'; paintEarlierDrafts();}
+  else clearEarlierDrafts();
   withdrawDiagnostics(); recentErrors.clear();
+  const previousHealthScope = {namespace: state.namespace, health: state.health};
   const retained = retainView ? {namespace: state.namespace, ready: state.viewReady} : null;
   // A same-identity resnapshot can retain an editing view and its guarded reads.
   // A different namespace still invalidates every old callback before mounting.
   if (!retained) state.epoch++;
   if (!retained) state.observations = new Map();
-  state.connectionError = null;
+  // A verified health refresh does not dismiss an explicit credential-replacement outcome.
+  if (!verifiedBootstrap) state.connectionError = null;
   state.online = false; state.pollHealth = 'initial'; state.viewReady = false;
+  // Continuity verification retains its display; identity resets withdraw it before activation.
+  state.health ||= {sessions: [], hosts: []};
   state.caps = caps; state.endpoint = endpoint; state.sync = null;
   let bootstrap;
-  try { bootstrap = await api("GET", "/bootstrap"); }
+  try { bootstrap = verifiedBootstrap || await api("GET", "/bootstrap"); }
   catch (e) { if (nativeDesktop || e.status !== 404) throw e; } // only browser clients support older contracts without bootstrap
   if (bootstrap) {
     const sync = bootstrap.sync;
-    if (sync?.version !== 1 || !sync.server_id || !sync.principal_id ||
-      !Number.isSafeInteger(sync.checkpoint?.cursor) || sync.checkpoint.cursor < 0 || !sync.checkpoint.token ||
-      bootstrap.capabilities?.actor !== caps.actor ||
-      (caps.desktop_identity && (caps.desktop_identity.server_id !== sync.server_id || caps.desktop_identity.principal_id !== sync.principal_id))) throw new Error("Invalid central bootstrap identity");
+    validateHealthBootstrap(caps, bootstrap);
     state.caps = bootstrap.capabilities;
     // Managed capabilities include desktop_identity; external centrals may omit
     // it. The bridge verifies bootstrap in both cases. Only the native managed
     // route treats a random loopback port as transport rather than storage identity.
     const identity = {actor: caps.actor, server_id: sync.server_id, principal_id: sync.principal_id};
     const managed = nativeDesktop && configurationSource === 'managed';
+    if (!managed || earlierIdentity && managedStorageScope(earlierIdentity) !== managedStorageScope(identity)) clearEarlierDrafts(managed ? 'waiting' : 'skipped');
     if (managed) migrateManagedStorage(identity, localStorage, sessionStorage);
     state.scopeIdentity = {...identity, configurationSource};
     state.namespace = managed ? managedStorageScope(identity) : storageScope(endpoint, caps.actor, sync.server_id, sync.principal_id);
@@ -186,7 +267,9 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
       } catch { /* use the bootstrap checkpoint */ }
     }
     state.lastEvent = state.sync.cursor;
+    if (managed) scanEarlierDrafts(identity);
   } else {
+    clearEarlierDrafts('skipped');
     state.scopeIdentity = null;
     state.namespace = storageScope(endpoint, caps.actor);
     // A legacy central has no continuity proof; always read current views after reconnect.
@@ -197,33 +280,83 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
     else {state.epoch++; state.observations = new Map();}
   }
   state.online = true;
+  state.health = resetHealthBootstrap(previousHealthScope.health, {
+    sameScope: state.namespace === previousHealthScope.namespace, caps: state.caps});
 }
 function saveCursor() {
   if (state.sync) {
     try { localStorage.setItem(`batc.sync.${state.namespace}`, JSON.stringify(state.sync)); } catch { /* unavailable */ }
   }
 }
+function resetConnection() {
+  clearEarlierDrafts();
+  withdrawDiagnostics(); recentErrors.clear();
+  state.epoch++; state.token = null; state.caps = null; state.lastEvent = 0; state.lastEventAt = 0;
+  state.scopeIdentity = null;
+  state.health = null;
+  state.online = false; state.viewReady = false; state.sync = null;
+  state.namespace = ""; state.endpoint = ""; state.lastPoll = null;
+  state.pollHealth = 'initial'; state.connectionError = null; state.refreshCycle = null;
+}
 function disconnect() {
   if (state.token === browserSessionToken) forgetBrowserSession()?.catch(() => {});
-  withdrawDiagnostics(); recentErrors.clear();
-  state.epoch++; clearToken(); state.token = null; state.caps = null; state.lastEvent = 0; state.lastEventAt = 0;
-  state.scopeIdentity = null;
-  state.online = false; state.viewReady = false; state.sync = null;
+  clearToken(); resetConnection();
+}
+async function connectBrowserToken(token) {
+  resetConnection();
+  browserCredentialRefusals.prepare(token);
+  browserCredentialRefusals.retry(token);
+  state.token = token;
+  paintConnection();
+  const connection = {epoch: state.epoch, namespace: state.namespace};
+  const caps = await api('GET', '/capabilities');
+  assertConnection(connection);
+  await activate(caps);
+}
+function retryRememberedTokenButton() {
+  const retry = h('button', {onclick: async () => {
+    try {await connectBrowserToken(state.token);}
+    catch (error) {if (error.code !== 'CONNECTION_CHANGED') {state.caps = null; state.connectionError = error;}}
+    await route();
+  }}, t('connection_retry_remembered'));
+  const render = () => {retry.hidden = !state.token || state.token === browserSessionToken || !state.connectionError?.credentialRefused;};
+  render();
+  const paint = () => {
+    if (!retry.isConnected) connectionPainters.delete(paint);
+    else render();
+  };
+  connectionPainters.add(paint);
+  return retry;
 }
 
 function loadToken() {
   if (nativeDesktop) return null;
-  try { return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY); } catch { return null; }
+  try { const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY); browserCredentialRefusals.prepare(token); return token; } catch { return null; }
 }
 function saveToken(token, remember) {
   if (nativeDesktop) return;
+  const previous = new Set();
+  try {
+    for (const store of [sessionStorage, localStorage]) {
+      const old = store.getItem(TOKEN_KEY); if (old && old !== token) previous.add(old);
+    }
+  } catch { /* unavailable */ }
+  for (const old of previous) browserCredentialRefusals.forget(old);
+  browserCredentialRefusals.prepare(token);
   try {
     sessionStorage.setItem(TOKEN_KEY, token);
     if (remember) localStorage.setItem(TOKEN_KEY, token); else localStorage.removeItem(TOKEN_KEY);
   } catch { /* storage may be unavailable; the token stays in memory */ }
 }
 function clearToken() {
-  try { sessionStorage.removeItem(TOKEN_KEY); localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
+  const forgotten = new Set();
+  if (!nativeDesktop && state.token && state.token !== browserSessionToken) forgotten.add(state.token);
+  try {
+    for (const store of [sessionStorage, localStorage]) {
+      const token = store.getItem(TOKEN_KEY); if (token) forgotten.add(token); store.removeItem(TOKEN_KEY);
+    }
+  } catch { /* unavailable */ }
+  for (const token of forgotten) browserCredentialRefusals.forget(token);
 }
 
 // ------------------------------------------------------------------ DOM helpers
@@ -294,10 +427,19 @@ function dropKey(scope, namespace) { try { localStorage.removeItem(`batc.key.${n
 
 // ------------------------------------------------------------------ API
 async function api(method, path, body, key, collectReceipt) {
-  const revision=diagnosticRevision, epoch=state.epoch;
+  const revision=diagnosticRevision, epoch=state.epoch, readHealth=state.health, inventoryRevision=state.health?.inventoryRevision;
   try {
     const data=await apiRequest(method,path,body,key,collectReceipt);
     if(epoch===state.epoch && method==='GET') {
+      if (state.health && state.health === readHealth && state.health.inventoryRevision === inventoryRevision) {
+        rememberHealthRead(state.health, path, data);
+        if (data && (Array.isArray(data.hosts) || Array.isArray(data.sessions) || data.session)) {
+          state.health.readers ||= new Map();
+          // Replay this existing GET exactly; do not synthesize a new route or BAT check.
+          state.health.readers.set(path, api.bind(null, 'GET', path));
+        }
+        if (/^\/(hosts|sessions)(?:[/?]|$)/.test(path)) paintConnection(...connectionPaintFlags);
+      }
       if(path==='/capabilities' || path==='/bootstrap')rememberVersionRead('capabilities',path==='/bootstrap'?data.capabilities:data,undefined,epoch);
       if(/^\/pm\/(?:installation-capabilities|workspaces\/[^/?]+\/capabilities)(?:\?|$)/.test(path))
         rememberVersionRead('adapter',{native_analysis:{required_version:data.native_analysis?.required_version}},undefined,epoch);
@@ -330,9 +472,18 @@ async function api(method, path, body, key, collectReceipt) {
     return data;
   } catch(error) {
     if(epoch===state.epoch && !["VIEW_CHANGED", "FOREGROUND_READ_RETIRED"].includes(error.code)) {
+      if (!nativeDesktop && state.token && state.token !== browserSessionToken && (error.credentialRefused || isCredentialRefusal(error.status, method, path))) {
+        error.credentialRefused = true;
+        state.connectionError = error;
+        state.pollHealth = pollFailure(error, Date.now());
+        updateOnline(false); paintConnection();
+      }
       if(method==='GET' && (path==='/capabilities' || path==='/bootstrap'))rememberVersionRead('capabilities',null,undefined,epoch);
       recentErrors.record({at:new Date().toISOString(),method,path,status:error.status,code:error.code,admissionRefused:error.admissionRefused,operation:error.operation});
-      if([401,403,404].includes(error.status))withdrawDiagnostics();
+      if (state.health && state.health === readHealth) withdrawHealthRead(state.health, method, path, error);
+      if([401,403,404].includes(error.status)) {
+        withdrawDiagnostics();
+      }
     }
     throw error;
   }
@@ -359,6 +510,7 @@ async function apiRequest(method, path, body, key, collectReceipt) {
   }
   catch (cause) {
     if (['FOREGROUND_READ_RETIRED', 'CONNECTION_CHANGED'].includes(cause?.code)) throw cause;
+    if (cause?.credentialRefused) throw Object.assign(new ApiError(cause.status, cause.code, cause.message, {localized: cause.localized === true}), {credentialRefused: true});
     const timeout = ['AbortError', 'TimeoutError'].includes(cause?.name) || /timed?\s*out|timeout/i.test(cause?.message || String(cause));
     throw new ApiError(0, timeout ? 'TIMEOUT' : 'NETWORK_ERROR', cause?.message || String(cause));
   }
@@ -403,7 +555,8 @@ async function submit(action, target, params, preconditions, scope) {
     else rememberOp(scope, key, out.operation.operation_id, connection.namespace);
     return out.operation;
   } catch (e) {
-    if (e.status && e.status < 500 && e.status !== 409) dropKey(scope, connection.namespace); // a conflict retains its original intent key
+    // A local credential gate has not resolved an earlier uncertain submission.
+    if (!e.credentialRefused && e.status && e.status < 500 && e.status !== 409) dropKey(scope, connection.namespace);
     throw e;
   }
 }
@@ -602,6 +755,8 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
         const response = await connectorUploadArtifact(op.operation_id, bytes, state.token);
         guard(true);
         if (epoch !== state.epoch) throw new ApiError(0, "CONNECTION_CHANGED", "Connection changed during upload");
+        if (response.status === 401) throw browserCredentialError({status: 401, code: 'UNAUTHORIZED',
+          credentialRefused: !nativeDesktop && state.token !== browserSessionToken});
         if (response.status < 200 || response.status >= 300)
           throw new ApiError(response.status, response.data.error?.code, response.data.error?.message);
         do {op = await readNext();} while (["accepted", "running", "waiting_external"].includes(op.status));
@@ -869,13 +1024,20 @@ function updateOnline(value) {
 }
 // Transport health is independent of view readiness and mutation gates.
 const connectionPainters = new Set();
+let connectionPaintFlags = [false, false];
 function paintConnection(waiting = false, paused = false) {
+  connectionPaintFlags = [waiting, paused];
   const live = document.getElementById('live');
-  const {key, tone, connection: status, recoveryKey} = centralServiceStatus(state);
+  const projection = healthDisplay(state);
+  const {key, tone, connection: status, recoveryKey, freshness} = projection.connection;
+  const label = healthLabel(projection.connection, t, {age: false});
   live.dataset.connection = status;
-  live.className = 'live tone-' + tone;
-  live.replaceChildren(h('span', {class: 'central-service-state'}, t(key)));
-  const scoped = t('ui_connector_status', {status: t(key)});
+  live.dataset.freshness = freshness;
+  live.className = 'live tone-' + (['stale', 'unknown'].includes(freshness) ? 'neutral' : tone);
+  let labelNode = live.querySelector('.central-service-state');
+  if (!labelNode) {labelNode = h('span', {class: 'central-service-state'}); live.append(labelNode);}
+  if (labelNode.textContent !== label) labelNode.textContent = label;
+  const scoped = t('ui_connector_status', {status: label});
   live.setAttribute('aria-label', scoped);
   const central = document.getElementById('central-service-status');
   central.title = scoped;
@@ -901,8 +1063,112 @@ function paintConnection(waiting = false, paused = false) {
     : key === 'ui_invalid_response' ? 'error_code_CLIENT_ACTION_INVALID_RESPONSE'
     : paused ? 'sync_actions_paused' : waiting ? 'sync_waiting' : 'desktop_polling';
   live.title = scoped + ' — ' + t(helpKey);
+  paintHealthSummary(projection);
   for (const paint of [...connectionPainters]) paint();
   paintVersions();
+}
+function healthSummaryContent(projection) {
+  const summary = projection.summary;
+  const pair = (label, value) => t('health_pair', {label: t(label), value});
+  const join = values => values.reduce((left, right) => t('health_join', {left, right}));
+  const last = summary?.facts.filter(row => row.activity.freshness === 'stale')
+    .sort((a, b) => (b.activity.ageSeconds || 0) - (a.activity.ageSeconds || 0))[0];
+  const refresh = projection.capabilities.refresh;
+  return [summary ? h('span', {'data-health-key': 'selected', 'data-health-selected': '', class: 'health-selected'},
+    h('span', {}, pair(summary.selected.workspaceId ? 'health_selected_workspace' : 'health_selected_work', summary.selected.label || summary.selected.host)),
+    h('span', {class: 'ui-pill', 'data-health-compact': summary.compact}, t('health_' + summary.compact)),
+    summary.connection ? h('span', {class: 'health-installation-connection'}, healthLabel({...summary.connection,
+      key: summary.connection.value === 'connected' ? 'ui_connected' : summary.connection.value === 'not_connected' ? 'health_connection_problem' : 'health_unknown'}, t)) : null,
+    h('span', {class: 'health-facets'}, join([
+      pair('health_attention_label', t(summary.attention ? 'health_attention' : 'health_none')),
+      pair('health_activity', t('health_' + summary.activity)),
+      pair('health_freshness', t(summary.stale ? 'health_stale' : summary.unknown ? 'health_unknown' : 'health_current'))])),
+    last ? h('span', {class: 'health-last-value'}, healthLabel({...last.activity,
+      key: ['streaming', 'starting'].includes(last.activity.value) ? 'health_working'
+        : last.activity.value === 'not_streaming' ? 'health_idle' : 'health_unknown'}, t)) : null) : null,
+    projection.connection.freshness === 'stale' ? h('span', {'data-health-key': 'connection-age', 'data-health-age': '', 'aria-live': 'off'},
+      healthAge(projection.connection.ageSeconds, t)) : null,
+    projection.capabilities.freshness === 'invalidated' ? h('span', {'data-health-key': 'capabilities'},
+      t(refresh?.state === 'loading' ? 'health_capabilities_checking' : 'health_capabilities_reload', {reason: refresh?.reason || 'IDENTITY_UNVERIFIED'})) : null,
+    projection.capabilities.freshness === 'invalidated' && refresh?.state !== 'loading'
+      ? h('button', {'data-health-key': 'reload', onclick: () => location.reload()}, t('health_reload')) : null,
+    projection.otherAttention ? h(projection.other.href ? 'a' : 'span', {href: projection.other.href, 'data-health-key': 'other', 'data-health-other': ''},
+      healthLabel({...projection.other, key: projection.otherAttention === 1 ? 'health_other_machines_one' : 'health_other_machines_many'},
+        (key, vars) => t(key, {count: projection.otherAttention, ...vars}))) : null].filter(Boolean);
+}
+function renderHealthContent(container, projection) {
+  const content = healthSummaryContent(projection), signature = content.map(node => node.outerHTML).join('');
+  if (container.dataset.signature === signature) return;
+  const focused = container.contains(document.activeElement) ? document.activeElement.dataset.healthKey : null;
+  const existing = new Map([...container.children].map(node => [node.dataset.healthKey, node]));
+  const next = content.map(node => {
+    const previous = existing.get(node.dataset.healthKey);
+    // Keep interactive nodes attached: age updates must never re-focus a link.
+    if (previous && previous.tagName === node.tagName && ['A', 'BUTTON'].includes(node.tagName)) {
+      if (previous.textContent !== node.textContent) previous.textContent = node.textContent;
+      if (node.hasAttribute('href')) previous.setAttribute('href', node.getAttribute('href'));
+      return previous;
+    }
+    return previous?.outerHTML === node.outerHTML ? previous : node;
+  });
+  for (const child of [...container.children]) if (!next.includes(child)) child.remove();
+  next.forEach((node, i) => {if (container.children[i] !== node) container.insertBefore(node, container.children[i] || null);});
+  container.dataset.signature = signature;
+  if (focused && !container.contains(document.activeElement)) container.querySelector(`[data-health-key="${focused}"]`)?.focus({preventScroll: true});
+}
+let healthResize;
+function paintHealthSummary(projection) {
+  let summary = document.getElementById('installation-health');
+  if (!summary) {
+    summary = h('div', {id: 'installation-health', class: 'health-summary', role: 'group'});
+    document.querySelector('header.top').after(summary);
+    healthResize = new ResizeObserver(() => {
+      const height = document.querySelector('header.top').getBoundingClientRect().height + summary.getBoundingClientRect().height;
+      document.documentElement.style.setProperty('--shell-header-height', `${height}px`);
+    });
+    healthResize.observe(summary); healthResize.observe(document.querySelector('header.top'));
+  }
+  summary.setAttribute('aria-label', t('health_summary'));
+  renderHealthContent(summary, projection); summary.hidden = !summary.children.length;
+}
+let healthRenewal = null;
+async function refreshHealthCapabilities() {
+  const health = state.health, epoch = state.epoch;
+  if (!health || healthDisplay(state).capabilities.freshness !== 'invalidated') return;
+  const revision = healthRevision(health.currentCaps);
+  if (health.capabilityRefresh?.revision === revision) return;
+  const refresh = health.capabilityRefresh = {revision, state: 'loading', startedAt: Date.now()};
+  try {
+    if (!state.scopeIdentity || state.nativeBusy) throw {code: 'IDENTITY_UNVERIFIED'};
+    const bootstrap = await api('GET', '/bootstrap');
+    if (epoch !== state.epoch || state.health !== health) return;
+    validateHealthBootstrap(state.caps, bootstrap);
+    if (bootstrap.sync.server_id !== state.scopeIdentity.server_id || bootstrap.sync.principal_id !== state.scopeIdentity.principal_id)
+      throw {code: 'CONNECTION_CHANGED'};
+    await activate(bootstrap.capabilities, state.endpoint, false, state.scopeIdentity.configurationSource, true, bootstrap);
+  } catch (error) {
+    refresh.revision = healthRevision(health.currentCaps);
+    refresh.state = 'failed'; refresh.reason = error.code || 'BOOTSTRAP_VERIFICATION_FAILED';
+  }
+}
+function tickHealth() {
+  if (document.hidden) return;
+  const verification = state.health?.capabilityRefresh;
+  if (verification?.state === 'loading' && Date.now() - verification.startedAt >= 60_000) {
+    verification.state = 'failed'; verification.reason = 'VERIFICATION_PENDING';
+  }
+  paintConnection(...connectionPaintFlags);
+  void refreshHealthCapabilities();
+  if (healthRenewal || !state.health || !state.token) return;
+  const path = takeHealthRenewal(state.health);
+  const read = state.health.readers?.get(path);
+  if (read) healthRenewal = read().catch(() => {}).finally(() => {healthRenewal = null; paintConnection(...connectionPaintFlags);});
+}
+function rememberFleetHealth(snapshot) {
+  // Native Fleet status belongs to its own configuration, not a Connector token.
+  state.health ||= {sessions: [], hosts: []};
+  state.health.fleet = snapshot;
+  paintConnection(...connectionPaintFlags);
 }
 let managedStatusAt = 0;
 async function refreshManagedRecovery() {
@@ -913,8 +1179,9 @@ async function refreshManagedRecovery() {
     const status = await nativeStatus();
     if (epoch !== state.epoch) return;
     state.managedRecovery = status.managed_recovery || null;
+    state.managedObservedAt = Date.now();
     if (status.configuration_source === 'managed' && status.endpoint) state.endpoint = status.endpoint;
-    paintConnection();
+    paintConnection(...connectionPaintFlags);
     if (status.configuration_source === 'managed' && Number.isSafeInteger(status.managed_rebind)
       && status.managed_rebind > (state.managedRebind || 0)) {
       state.managedRebind = status.managed_rebind;
@@ -956,10 +1223,24 @@ function foregroundChanged() {
   if (state.token) {updateOnline(false); paintConnection(true, true);}
   wakeEventPoll?.();
 }
+// For checkpointed polls, dashboard_sync.check proves server/principal identity
+// before these continuity failures. All other or unknown reasons withdraw the
+// whole view immediately; they cannot retain facts or an editing view.
+const IDENTITY_PRESERVING_RESETS = new Set(['cursor_expired', 'cursor_ahead', 'history_changed', 'checkpoint_cursor_mismatch']);
 async function streamEvents() {
   for (;;) {
     await refreshManagedRecovery();
-    if (state.nativeBusy || !state.token || !state.viewReady || document.visibilityState === 'hidden') {
+    if (!nativeDesktop && state.token && state.token !== browserSessionToken) {
+      const token = state.token, epoch = state.epoch;
+      const refusal = browserCredentialRefusals.read(token);
+      if (token !== state.token || epoch !== state.epoch) continue;
+      if (refusal) {
+        state.connectionError = refusal; state.pollHealth = pollFailure(refusal, Date.now());
+        updateOnline(false); paintConnection();
+        await waitForEventPoll(1000); continue;
+      }
+    }
+    if (state.nativeBusy || !state.token || !state.namespace || !state.viewReady || document.visibilityState === 'hidden') {
       paintConnection(true);
       await waitForEventPoll(1000); continue;
     }
@@ -972,6 +1253,7 @@ async function streamEvents() {
       const page = await api("GET", `/events?after=${before}&limit=100${checkpoint}`);
       if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
       pollSucceeded = true; state.pollHealth = 'connected';
+      if (state.connectionError?.credentialRefused) state.connectionError = null;
       state.lastPoll = {at: Date.now(), namespace: state.namespace}; paintConnection(true);
       if (view !== generation || !state.viewReady) continue;
       cycle = {error: null}; state.refreshCycle = cycle;
@@ -1012,8 +1294,12 @@ async function streamEvents() {
       paintConnection(false, pollSucceeded);
       if (error.code === "EVENT_CURSOR_RESET") {
         const previous = { namespace: state.namespace, sync: state.sync };
-        const accessChanged = error.reason === "access_changed";
+        const accessChanged = !IDENTITY_PRESERVING_RESETS.has(error.reason);
         if (accessChanged) {
+          state.health = null;
+          state.lastPoll = null; state.pollHealth = 'initial';
+          paintConnection(true);
+          clearEarlierDrafts();
           // A changed access boundary invalidates displayed facts immediately. Drafts stay
           // in their original principal namespace, even when bootstrap is unavailable.
           generation++; state.viewReady = false;
@@ -3233,6 +3519,9 @@ async function viewOperation(main, id) {
         main.append(repair.box);
       }
       const refs = op.external_refs || {};
+      const retainedCheckpoint = op.action === "checkpoint.continue" && op.status === "failed" &&
+        ["CHECKPOINT_STAGING_RETAINED", "CHECKPOINT_DESTINATION_APPEARED"].includes(op.error_code);
+      const reason = retainedCheckpoint ? t("error_code_" + op.error_code) : op.status_reason;
       const retry = refs.merged_sha && op.action === "delivery.merge_and_deploy" && op.status === "failed"
         ? h("button", { class: "primary", onclick: async () => {
           let sourceRefresh = true;
@@ -3289,11 +3578,22 @@ async function viewOperation(main, id) {
           h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")),
           h("dt", {}, t("actor")), h("dd", {}, `${op.actor} (${op.entry})`),
           h("dt", {}, t("created")), h("dd", {}, when(epoch(op.created_at))),
-          op.status_reason ? [h("dt", {}, t("reason")), h("dd", {}, op.status_reason)] : null,
+          reason ? [h("dt", {}, t("reason")), h("dd", {}, reason)] : null,
           op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, h("code", {}, op.error_code))] : null,
           h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target))),
           Object.keys(refs).length && op.action !== "worktree.merge" ? [h("dt", {}, t("global_refs")), h("dd", {}, h("code", {}, JSON.stringify(refs)))] : null,
           op.result && op.action !== "worktree.merge" ? [h("dt", {}, t("global_result")), h("dd", {}, h("code", {}, JSON.stringify(op.result)))] : null),
+        retainedCheckpoint ? h("div", {class: "note warn", "data-checkpoint-retained": ""},
+          h("dl", {class: "kv"},
+            typeof refs.retained_staging_path === "string" ? [h("dt", {}, t("checkpoint_retained_path")),
+              h("dd", {}, h("code", {}, refs.retained_staging_path))] : null,
+            op.error_code === "CHECKPOINT_DESTINATION_APPEARED" && typeof refs.clone_path === "string"
+              ? [h("dt", {}, t("checkpoint_destination_path")), h("dd", {}, h("code", {}, refs.clone_path))] : null),
+          h("p", {}, t("checkpoint_retained_why")),
+          h("p", {}, t(op.error_code === "CHECKPOINT_DESTINATION_APPEARED" ? "checkpoint_destination_next" : "checkpoint_retained_next")),
+          typeof refs.source_host === "string" && refs.source_host && typeof refs.source_session_id === "string" && refs.source_session_id
+            ? h("a", {href: sessionHref({host: refs.source_host, sessionId: refs.source_session_id})}, t("source_session")) : null,
+          h("p", {}, t("checkpoint_retained_cleanup"))) : null,
         ...(receipts || []),
         mergeRecovery(op),
         op.action === "worktree.merge" ? h("details", {}, h("summary", {}, t("sessions_details")),
@@ -3353,9 +3653,10 @@ function fleetEmpty() {
 }
 function connectionFacts() {
   const endpoint = state.endpoint || (state.token ? location.origin : "");
-  const stateCell = h("dd");
+  const statePill = h('span', {class: 'ui-pill'}), stateCell = h("dd", {}, statePill);
   const eventCell = h("dd", {'data-last-event': ''});
   const pollCell = h("dd", {'data-last-successful-poll': ''});
+  const summaryCell = h('div', {'data-health-settings': ''});
   const dl = h("dl", {class: "kv global-connection-facts"},
     h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"),
     h("dt", {}, t("global_state")), stateCell,
@@ -3363,8 +3664,11 @@ function connectionFacts() {
     h("dt", {}, t("ui_last_poll")), pollCell,
     h("dt", {}, t("connection_access")), connectionAccess());
   const render = () => {
-    const {key, tone} = centralServiceStatus(state);
-    stateCell.replaceChildren(h("span", {class: `ui-pill tone-${tone}`}, t(key)));
+    const projection = healthDisplay(state);
+    const {tone, freshness} = projection.connection;
+    statePill.className = `ui-pill tone-${freshness === 'current' ? tone : 'neutral'}`;
+    statePill.textContent = healthLabel(projection.connection, t);
+    renderHealthContent(summaryCell, projection);
     eventCell.replaceChildren(state.lastEventAt ? when(state.lastEventAt) : t("global_no_event"));
     eventCell.dataset.observedAt = state.lastEventAt ? new Date(state.lastEventAt).toISOString() : '';
     const pollAt = state.lastPoll?.namespace === state.namespace ? state.lastPoll.at : 0;
@@ -3377,7 +3681,7 @@ function connectionFacts() {
     render();
   };
   connectionPainters.add(paint);
-  return dl;
+  return h('div', {}, dl, summaryCell);
 }
 function connectionAccess() {
   const known = ['observe', 'operate', 'manage', 'start', 'approve', 'cleanup', 'cleanup_discard', 'deploy', 'integrate', 'merge'];
@@ -3428,6 +3732,8 @@ function openSettings(main, {exclusive = false, refreshButton} = {}) {
     h('div',{class:'actions'},button({label:t('diag_export'),onClick:openDiagnostics,'data-export-diagnostics':''}),
       h("a", {href: setupGuide()}, t("global_setup_guide")))));
   main.append(languageSwitch(), frame.root);
+  frame.panel('about').append(h('div', {'data-earlier-drafts-slot': ''}));
+  paintEarlierDrafts();
   const identityEpoch = state.epoch;
   const paintBuild = () => {
     if(!frame.root.isConnected || identityEpoch !== state.epoch){versionPainters.delete(paintBuild);return;}
@@ -3455,7 +3761,8 @@ function viewBrowserSettings(main) {
     facts,
     managed ? h("h2", {}, t("ui_local_connector")) : null,
     disclosure({label: t("global_details"), body: h('div', {}, connectionIdentity(), managed ? h("p", {}, t("managed_browser_help")) : null)}),
-    h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect"))));
+    retryRememberedTokenButton(),
+    h("button", {class: "danger", onclick: async () => {await disconnect(); route();}}, t("disconnect"))));
   frame.show("fleet");
   frame.panel("fleet").append(fleetEmpty());
   return () => {};
@@ -3466,23 +3773,30 @@ function viewBrowserSignedOut(main) {
   const info = h("div", {class: "global-connect-status"});
   const showConnectError = error => {
     info.setAttribute("role", "alert");
-    info.replaceChildren(error?.status === 401 ? h("p", {class: "error"}, t("global_token_rejected")) : errorBox(error, {within:info}));
+    info.replaceChildren(error?.credentialRefused ? h("p", {class: "error"}, t("global_token_rejected")) : errorBox(error, {within:info}));
   };
   if (state.connectionError) showConnectError(state.connectionError);
-  const form = h("form", {class: "global-connect-form", onsubmit: async event => {
-    event.preventDefault();
-    disconnect();
-    state.token = input.value.trim();
+  const connect = async (token, saved = false) => {
+    if (!token) return;
     try {
-      await activate(await api("GET", "/capabilities"));
-      saveToken(state.token, remember.checked);
+      await connectBrowserToken(token);
+      if (!saved) saveToken(token, remember.checked);
       location.hash = "#/home";
       await route();
-    } catch (e) {state.token = null; showConnectError(e);}
+    } catch (error) {
+      if (error.code !== 'CONNECTION_CHANGED') {
+        state.token = null; state.caps = null; state.connectionError = error; showConnectError(error);
+      }
+    }
+  };
+  const form = h("form", {class: "global-connect-form", onsubmit: async event => {
+    event.preventDefault();
+    await connect(input.value.trim());
   }}, h("label", {class: "connection-token"}, t("token"), input),
     h("label", {class: "global-remember"}, remember, " ", t("remember")),
     h("div", {class: "global-connect-actions"},
       h("button", {class: "primary", type: "submit"}, t("connect")),
+      loadToken() ? h('button', {type: 'button', onclick: () => connect(loadToken(), true)}, t('connection_retry_remembered')) : null,
       h("a", {class: "global-quiet-link", href: setupGuide()}, t("global_setup_guide"))),
     disclosure({label: t("global_details"), body: h("p", {}, t("token_help"))}), info);
   const root = firstRunCard({h, t, body: form});
@@ -3561,10 +3875,10 @@ async function viewManagedSettings(main) {
         frame.show("desktop");
       }
     } catch (error) {if (connection.generation === generation) status.append(errorBox(error, {within:status}));}
-    disposeFleet = await mountFleet(fleetRoot, {h, t});
+    disposeFleet = await mountFleet(fleetRoot, {h, t, onStatus: rememberFleetHealth});
     disposeTailscale = await fleetTailscale(fleetRoot, guard);
   } else {
-    local.append(h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect")));
+    local.append(...[retryRememberedTokenButton(), h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect"))].filter(Boolean));
     fleetRoot.append(fleetEmpty());
   }
   return () => {setup.dispose(); disposeFleet?.(); disposeTailscale?.();};
@@ -3736,7 +4050,7 @@ async function viewNativeSettings(main) {
     return () => disposeUpdates?.();
   }
   frame.show("desktop");
-  const disposeFleet = await mountFleet(fleetRoot, {h, t});
+  const disposeFleet = await mountFleet(fleetRoot, {h, t, onStatus: rememberFleetHealth});
   if (mine !== generation || !main.isConnected) { disposeFleet?.(); disposeUpdates?.(); return; }
   const disposeTailscale = await fleetTailscale(fleetRoot, () => {
     if (mine !== generation || !main.isConnected) throw new Error('VIEW_CHANGED');
@@ -4001,7 +4315,14 @@ async function viewProject(main, pid) {
   const itemCard = sectionCard({title: t("work_items"), actions: [filter], body: h("div", {class: "or-item-list"}, create.actions, create.box, items, archived)});
   itemCard.dataset.projectItemCard = ""; itemCard.hidden = true; create.box.hidden = true;
   const note = manageNote(); if (note) note.hidden = true;
-  main.append(note || "", out, head, work, itemCard);
+  const github = boardGitHubPanel({t, api, alive: () => assertView(connection), caps: () => state.caps,
+    form: options => pmDurableForm({h, t, api, caps: () => state.caps, namespace: connection.namespace,
+      guard: () => assertView(connection), errorBox, ...options,
+      canSend: () => state.online && !state.nativeBusy && state.viewReady,
+      clientGate: () => clientActionGate(state, {post: true})}),
+    permitted: () => may('manage'), projectId: pid, onSaved: () => render()});
+  const offGitHubOnline = onOnline(() => {try {assertView(connection); github.update();} catch { /* retired view */ }});
+  main.append(note || "", out, head, github.element, work, itemCard);
   const rememberEditors = () => {
     if (currentEditor && !currentEditor.drawer.box.hidden) draft = currentEditor.values();
     for (const [id, editor] of workEditors) if (!editor.drawer.box.hidden)
@@ -4045,6 +4366,7 @@ async function viewProject(main, pid) {
     rememberEditors(); workEditors = new Map();
     freshPage();
     const p = data.project;
+    await github.refresh(data);
     if (note) note.hidden = false;
     itemCard.hidden = false;
     const mayCreate = may("manage") && !p.archived && state.caps?.actions?.find(row => row.action === "work_item.create")?.allowed !== false;
@@ -4141,7 +4463,8 @@ async function viewProject(main, pid) {
   };
   showArchived.onchange = () => render();
   await render();
-  return liveReload(render, ["project", "work_item", "operation", "task", "execution", "session", "integration"], prepare);
+  const off = liveReload(render, ["project", "work_item", "operation", "task", "execution", "session", "integration"], prepare);
+  return () => {off?.(); offGitHubOnline(); github.dispose();};
 }
 
 function linkTarget(l) {
@@ -4205,7 +4528,7 @@ async function viewWorkItem(main, wid) {
   let draft = null; // the edit form's values after a stale save, put back into the reloaded form
   // Fields made once and moved into each render: a re-render never throws away what is being typed.
   const newStep = h("input", { placeholder: t("new_step"), maxlength: 300 });
-  const kind = h("select", {}, ...["session", "checkpoint", "operation", "task", "pull_request"].map(k =>
+  const kind = h("select", {}, ...["session", "checkpoint", "operation", "task", "pull_request", "github_source"].map(k =>
     h("option", { value: k }, t("link_" + k))));
   const ref = h("input", { placeholder: t("link_ref_hint") });
   kind.onchange = () => { ref.placeholder = t("link_ref_" + kind.value); };
@@ -4463,11 +4786,11 @@ function workItemRow(w, open) {
     w.reading?.unread ? t("reading_unread") : ""]);
   return inboxRow({
     h, key, title, href, meta,
-    pill: statusPill(workStatusKey(w.completion?.display_state)),
+    pill: statusPill(workStatusKey(w.display_state || w.completion?.display_state)),
     action: h("a", {class: "ui-button secondary ui-sm", href}, t("global_review")),
     detailsLabel: t("global_details_for", {title}),
     onOpen: () => open?.(key, title, [
-      statusPill(workStatusKey(w.completion?.display_state)),
+      statusPill(workStatusKey(w.display_state || w.completion?.display_state)),
       meta ? h("p", {}, meta) : null,
       w.completion?.pending ? h("p", {}, t("needs_decision")) : null,
       disclosure({label: t("global_details"), body: h("dl", {class: "kv"},
@@ -4926,6 +5249,10 @@ let generation = 0;
 async function route() {
   diagnosticsPreview?.close();
   let [nextName, nextWorkspace, nextView, nextThread] = (location.hash.split('?')[0].replace(/^#\//, '') || 'home').split('/').map(decodeURIComponent);
+  if (state.health && nextName !== 'settings') {
+    if (nextName === 'session') selectHealthSession(state.health, nextWorkspace, nextView);
+    else state.health.selected = null;
+  }
   if (nextName === 'pm') {
     if (nextView?.startsWith('pmt_')) {nextThread = nextView; nextView = 'discussions';
       history.replaceState(null, '', `#/pm/${encodeURIComponent(nextWorkspace)}/discussions/${encodeURIComponent(nextThread)}`);}
@@ -4959,6 +5286,7 @@ async function route() {
   // immediately instead of leaving the connection control blank during startup.
   paintConnection(true);
   const main = document.getElementById("main");
+  const recoveryPanel = earlierPanel, recoveryFocus = earlierPanel?.contains(document.activeElement) ? document.activeElement : null, recoveryScroll = main.scrollTop;
   main.replaceChildren();
   if (!state.token && name !== "settings") {
     const off = await viewSettings(main);
@@ -4997,6 +5325,10 @@ async function route() {
   teardown = () => {off?.(); preferences?.dispose(); skills?.dispose();};
   if (off?.navigate) teardown.navigate = off.navigate;
   state.viewReady = true;
+  paintEarlierDrafts(); paintEarlierNotice();
+  if (recoveryPanel === earlierPanel && recoveryFocus?.isConnected && document.activeElement === document.body) {
+    main.scrollTop = recoveryScroll; recoveryFocus.focus({preventScroll: true});
+  }
 }
 
 async function start() {
@@ -5004,10 +5336,15 @@ async function start() {
   setLocale(locale);
   observeViewport();
   window.addEventListener("hashchange", route);
+  window.addEventListener('storage', event => {
+    if (event.key && !event.key.startsWith('batc.credential-refused.')) return;
+    browserCredentialRefusals.storageChanged(event);
+    wakeEventPoll?.();
+  });
   document.addEventListener('visibilitychange', foregroundChanged);
   window.addEventListener('pageshow', event => {if (event.persisted) foregroundChanged();});
   if (nativeDesktop) {
-    clearToken(); // discard obsolete browser credentials if an older build ever stored them
+    await clearToken(); // discard obsolete browser credentials if an older build ever stored them
     const attempt = ++state.nativeAttempt;
     let startupManaged = false;
     try {
@@ -5034,13 +5371,15 @@ async function start() {
     } finally { if (attempt === state.nativeAttempt) state.nativeBusy = false; }
   } else {
     const browserSession = await restoreBrowserSession().catch(() => false);
-    if (browserSession) clearToken();
+    if (browserSession) await clearToken();
     state.token = browserSession ? browserSessionToken : loadToken();
     if (state.token) {
       try { await activate(await api("GET", "/capabilities")); }
-      catch { state.token = null; }
+      catch (error) { state.token = null; state.caps = null; state.connectionError = error; }
     }
   }
+  // Start before the first view: a hung source read must not freeze freshness.
+  setInterval(tickHealth, 1000);
   await route();
   streamEvents();
 }

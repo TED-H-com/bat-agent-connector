@@ -29,9 +29,6 @@ class BrowserSessions:
             daemon.journal.db.execute("""CREATE TABLE IF NOT EXISTS browser_handoffs (
                 digest TEXT PRIMARY KEY, actor TEXT NOT NULL, scopes TEXT NOT NULL,
                 parent_hash TEXT NOT NULL, expires_at REAL NOT NULL, filename TEXT NOT NULL)""")
-            daemon.journal.db.execute("""CREATE TABLE IF NOT EXISTS browser_sessions (
-                token_hash TEXT PRIMARY KEY, csrf TEXT NOT NULL, parent_hash TEXT NOT NULL,
-                expires_at REAL NOT NULL)""")
 
     @property
     def origin(self):
@@ -137,7 +134,7 @@ class BrowserSessions:
     def describe(self, token):
         row = self.daemon.journal.db.execute("SELECT csrf,expires_at FROM browser_sessions WHERE token_hash=?",
                                            (api_auth._digest(token),)).fetchone()
-        principal = api_auth.authenticate(self.daemon.journal.db, token, self.daemon._admin_token)
+        principal = api_auth.authenticate(self.daemon.journal.db, token, self.daemon._admin_token, browser_session=True)
         if not row or not principal:
             raise OperationError("UNAUTHORIZED", "open Dashboard from the desktop menu", 401)
         return {"csrf": row["csrf"], "expires_at": row["expires_at"],

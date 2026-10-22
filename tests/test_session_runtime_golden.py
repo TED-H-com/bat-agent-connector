@@ -16,7 +16,7 @@ from tests.test_api_v1 import served as api_served
 
 daemon, served = api_daemon, api_served
 GOLDEN = Path(__file__).parent / "fixtures" / "session-runtime.json"
-FIELDS = ("host", "session_id", "title", "api_access", "provenance", "loaded", "streaming", "pending",
+FIELDS = ("host", "session_id", "workspace", "workspace_id", "title", "api_access", "provenance", "loaded", "streaming", "pending",
           "runtime_status", "stale", "fields_stale", "gone_at", "observed_at", "state")
 
 
