@@ -465,6 +465,7 @@ jobs:
             desktop/test-results/work-loop/
             desktop/test-results/managed-setup-reading/
             desktop/test-results/credential-service/
+            desktop/test-results/credential-service.log
           if-no-files-found: ignore
           retention-days: 7
 
