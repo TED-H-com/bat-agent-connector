@@ -169,6 +169,7 @@ async function walkthrough(locale, width, {lostAcknowledgement = false} = {}) {
     await composer.fill(l.message);
     await screenshot(3, 'discussion-draft');
     step = 'draft-reload';
+    events.resume();
     await page.reload();
     await expect(composer).toHaveValue(l.message);
     await expect(composer).toBeEnabled();
@@ -182,7 +183,6 @@ async function walkthrough(locale, width, {lostAcknowledgement = false} = {}) {
     await events.post(page.getByRole('button', {name: l.send, exact: true}), {resume:false});
     await expect(page).toHaveURL(/\/discussions\/pmt_[a-f0-9]{32}$/);
     await expect(page.locator('.pm-notes')).toContainText(l.message);
-    events.resume();
     await expect(page.locator('[data-discussion-context="governance"]:visible').first()).toContainText(locale === 'en' ? 'Issue ·' : '問題 ·');
     await expect(page.locator('[data-discussion-details]')).not.toHaveAttribute('open', '');
     await expect(composer).toHaveValue('');
@@ -200,13 +200,13 @@ async function walkthrough(locale, width, {lostAcknowledgement = false} = {}) {
       await expect(page.locator('[data-pm-role=assistant]')).toHaveCount(index + 1);
       await expect(page.locator('[data-pm-role=assistant]').last()).toContainText(copy.summary);
       await expect(composer).toHaveValue('');
-      events.resume();
     }
     const analysisRequests = requests.filter(row => row.body.action === 'pm.run.analyze');
     assert.equal(analysisRequests.length, 2);
     assert.notEqual(analysisRequests[0].key, analysisRequests[1].key);
     assert.equal(analysisRequests[1].body.preconditions.expected_version,
       analysisRequests[0].body.preconditions.expected_version + 1);
+    events.resume();
     await page.reload();
     await expect(page.locator('[data-pm-request]')).toHaveCount(2);
     await expect(page.locator('[data-pm-role=assistant]')).toHaveCount(2);
@@ -214,7 +214,7 @@ async function walkthrough(locale, width, {lostAcknowledgement = false} = {}) {
     await screenshot(5, 'ordinary-pm-replies');
 
     step = 'proposal';
-    await events.post(page.locator('[data-discussion-ask]'));
+    await events.post(page.locator('[data-discussion-ask]'), {resume:false});
     const proposal = page.locator('[data-pm-plan-proposals]');
     await expect(proposal).toContainText(copy.summary);
     await expect(page.locator('[data-discussion-panel]')).toBeHidden();
@@ -240,13 +240,13 @@ async function walkthrough(locale, width, {lostAcknowledgement = false} = {}) {
     await screenshot(7, 'review');
 
     step = lostAcknowledgement ? 'adoption-retry' : 'adopt';
-    await events.post(proposal.getByRole('button', {name: l.adopt, exact: true}));
+    await events.post(proposal.getByRole('button', {name: l.adopt, exact: true}), {resume:false});
     const adopted = proposal.locator('[data-proposal-adopted]');
     const savedReceipt = proposal.locator('[data-pm-action="pm.conversation.adopt"] [data-pm-saved]');
     if (lostAcknowledgement) {
       const retry = proposal.getByRole('button', {name: l.retry, exact: true});
       await expect(retry).toBeVisible();
-      await events.post(retry);
+      await events.post(retry, {resume:false});
       // The single original-key check completes through the UI's receipt/readback.
       const originalReceipt = proposal.getByRole('button', {name: l.retry, exact: true, includeHidden: true});
       await expect(adopted).toBeVisible();
@@ -289,9 +289,9 @@ async function walkthrough(locale, width, {lostAcknowledgement = false} = {}) {
     await expect(page.locator('.pm-discussion .ui-button.primary:visible')).toHaveCount(1);
     await resolutionForm.getByRole('button', {name: l.resolve, exact: true}).scrollIntoViewIfNeeded();
     await screenshot(9, 'resolution-review');
-    await events.post(resolutionForm.getByRole('button', {name: l.resolve, exact: true}));
+    await events.post(resolutionForm.getByRole('button', {name: l.resolve, exact: true}), {resume:false});
     if (lostAcknowledgement) {
-      await events.post(resolutionForm.getByRole('button', {name: l.retry, exact: true}));
+      await events.post(resolutionForm.getByRole('button', {name: l.retry, exact: true}), {resume:false});
     }
     await expect(proposal.locator('[data-issue-resolved]')).toContainText(l.resolved);
     await expect(proposal.locator('[data-issue-resolved]')).toContainText(l.unassessed);
