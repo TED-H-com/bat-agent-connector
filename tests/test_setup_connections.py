@@ -590,3 +590,41 @@ async def test_observer_reference_does_not_require_personal_managed_installation
     assert (root / "config/hosts.toml").read_bytes() == before
     status, _ = await served_setup("POST", PREVIEW, intent(source, action="setup.connection.apply"))
     assert status == 403
+
+
+@pytest.mark.parametrize("phase", ["before_execution", "during_probe"])
+async def test_source_snapshot_guard_precedes_configuration_publication(installed, served_setup, source, mock, monkeypatch, phase):
+    from urllib.parse import urlsplit
+
+    from bat_agent_connector import setup_connections
+    daemon, principal, root = installed
+    path = root / "profiles/index.json"
+    index = json.loads(path.read_text())
+    endpoint = urlsplit(mock.url)
+    index["profiles"][0].update(remoteHost=endpoint.hostname, remotePort=endpoint.port, remoteFingerprint=mock.fingerprint)
+    path.write_text(json.dumps(index))
+    platform_files.atomic_write(root / "profiles/remote-tokens.enc.json", json.dumps({"enc": False,
+        "data": json.dumps({"tokens": {"profile-a": mock.token}})}).encode())
+    descriptor = setup_connections.source_descriptor(daemon.ops, principal, source["source"])
+    source = {**source, "source_reference": descriptor["reference"], "service_ref": "fixture",
+        "server_configuration": {"target": {"host": "fixture"}, "params": {"import_profile_id": "profile-a"},
+            "preconditions": {"config_revision": setup._configuration(daemon)[3]}}}
+    _, ident = await accept(served_setup, intent(source, action="setup.connection.apply"))
+    before = (root / "config/hosts.toml").read_bytes()
+    def drift():
+        index["profiles"][0]["name"] = "Changed source snapshot"
+        path.write_text(json.dumps(index))
+    if phase == "before_execution":
+        drift()
+    else:
+        original = setup._probe_host
+        async def probe(config, host):
+            result = await original(config, host)
+            drift()
+            return result
+        monkeypatch.setattr(setup, "_probe_host", probe)
+    await settle_operations(daemon.ops)
+    assert daemon.ops.get(ident)["status"] == "failed"
+    assert (root / "config/hosts.toml").read_bytes() == before
+    if phase == "before_execution":
+        assert not mock.auth_frames

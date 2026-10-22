@@ -600,7 +600,7 @@ def _require_setup_identity(daemon, binding):
         raise NeedsAttention("SETUP_IDENTITY_CHANGED", "Original setup installation is unavailable")
 
 
-async def _run(ctx, *, action=None, target=None, params=None):
+async def _run(ctx, *, action=None, target=None, params=None, source_guard=None):
     action = action or ctx.op["action"]
     target = target if target is not None else ctx.target
     params = params if params is not None else ctx.params
@@ -624,6 +624,8 @@ async def _run(ctx, *, action=None, target=None, params=None):
         async def apply():
             if _busy(daemon, ctx.operation_id):
                 raise _error("SETUP_BUSY", "Central work began; review setup again after it settles", 409)
+            if source_guard:
+                source_guard()
             config, document, encoded, before, after = _candidate(daemon, action, target, params, expired=True)
             if before != binding["before_revision"] or after != binding["after_revision"]:
                 raise _error("CONFIGURATION_CHANGED", "Setup inputs or configuration changed; review again", 409)
@@ -650,6 +652,8 @@ async def _run(ctx, *, action=None, target=None, params=None):
             ctx.check_cancel()
             # No await between the final guards, publication and activating the parsed config.
             _require_setup_identity(daemon, binding)
+            if source_guard:
+                source_guard()
             if _busy(daemon, ctx.operation_id) or _configuration(daemon)[3] != before:
                 raise _error("CONFIGURATION_CHANGED", "Work or configuration changed during verification; review again", 409)
             # Equal revisions mean these exact bytes are already on disk.

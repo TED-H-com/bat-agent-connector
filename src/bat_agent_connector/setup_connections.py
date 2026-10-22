@@ -201,6 +201,11 @@ def _authorize(ops, principal, operation, verb):
                 raise OperationError("CONNECTION_EFFECT_PENDING", "Read back the dispatched native effect before cancelling", 409)
 
 
+def _source_guard(ctx):
+    if source_descriptor(ctx.service, None, ctx.params["source"], expired=True) != ctx.admission_binding["source_descriptor"]:
+        _changed("Source changed before saving; review again")
+
+
 def _save(ctx):
     binding = ctx.admission_binding
     if binding["server_id"] != dashboard_sync._metadata(ctx.service.journal)["server_id"]:
@@ -210,8 +215,7 @@ def _save(ctx):
     if (before["revision"] if before else 0) != ctx.preconditions["expected_revision"]:
         _changed("Connection revision changed before saving; review again")
     descriptor = binding["source_descriptor"]
-    if source_descriptor(ctx.service, None, ctx.params["source"], expired=True) != descriptor:
-        _changed("Source changed before saving; review again")
+    _source_guard(ctx)
     _choices(ctx.service, ctx.params, descriptor)
     revision = ctx.preconditions["expected_revision"] + 1
     values = (revision, ctx.params["service_ref"], ctx.params["workspace_ref"], ctx.params["label"],
@@ -268,7 +272,8 @@ async def _run(ctx):
         setup._require_setup_identity(ctx.service.context["daemon"], ctx.admission_binding)
         configuration = ctx.params.get("server_configuration")
         if configuration:
-            await setup._run(ctx, action="setup.host", target=configuration["target"], params=configuration["params"])
+            await setup._run(ctx, action="setup.host", target=configuration["target"], params=configuration["params"],
+                source_guard=lambda: _source_guard(ctx))
     result = ctx.effect("connection_binding", lambda: _save(ctx), request={
         "installation_ref": ctx.target["installation_ref"], "expected_revision": ctx.preconditions["expected_revision"]})
     if ctx.op["action"] == "setup.connection.apply":

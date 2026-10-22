@@ -598,6 +598,11 @@ It creates no operation/step, writes no configuration and starts no BAT/SSH prob
 Apply requires `preconditions:{expected_revision,review_digest}` (revision 0 for create).
 Source, configuration, choices or revision changes refuse admission with the existing
 changed-review path, rather than silently accepting a new source.
+The configuration step checks the accepted source snapshot before probing and again
+at its final publication guard. A changed index/store during verification cannot
+publish configuration and then discover the mismatch only while saving the projection.
+Digest reconciliation of an already published configuration still reads the original
+effect back; this guard cannot reinterpret an uncertain sent effect as unsent.
 
 Read `GET /api/v1/connections?installation_ref=…` with `observe` for only the calling
 principal's rows. `limit` is 1–200 (default 50), `after` is an opaque connection ID,
