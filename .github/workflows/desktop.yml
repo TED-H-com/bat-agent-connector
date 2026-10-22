@@ -391,11 +391,16 @@ jobs:
         run: bash scripts/ci-central-ui.sh test:labels
       - name: test:attention
         run: bash scripts/ci-central-ui.sh test:attention
-      - name: PM decision walkthrough with actual central service (English and zh-TW)
+      - name: PM decision walkthrough with actual central service (English)
         timeout-minutes: 2
         env:
           BATC_WALKTHROUGH_SHOTS: test-results/walkthrough
-        run: npm run test:walkthrough
+        run: npm run test:walkthrough -- --locale=en
+      - name: PM decision walkthrough with actual central service (zh-TW)
+        timeout-minutes: 2
+        env:
+          BATC_WALKTHROUGH_SHOTS: test-results/walkthrough
+        run: npm run test:walkthrough -- --locale=zh-TW
       - name: Preserve shared UI fixture evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

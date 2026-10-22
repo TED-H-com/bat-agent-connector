@@ -407,15 +407,18 @@ async function walkthrough(locale, width, {lostAcknowledgement = false} = {}) {
   }
 }
 
+const selectedLocale = process.argv.find(argument => argument.startsWith('--locale='))?.slice('--locale='.length);
+if (selectedLocale && !['en', 'zh-TW'].includes(selectedLocale)) throw Error('Unsupported walkthrough locale');
 const failures = [];
-for (const [locale, width, options] of [
+const scenarios = [
   ['en', 1440, {}],
   ['en', 390, {}],
   ['zh-TW', 1440, {}],
   ['zh-TW', 390, {}],
   ['en', 1440, {lostAcknowledgement: true}],
   ['zh-TW', 1440, {lostAcknowledgement: true}],
-]) {
+];
+for (const [locale, width, options] of scenarios.filter(([locale]) => !selectedLocale || locale === selectedLocale)) {
   try {await walkthrough(locale, width, options);}
   catch (error) {failures.push(error); console.error(`${locale} ${width} walkthrough failed:`, error);}
 }
