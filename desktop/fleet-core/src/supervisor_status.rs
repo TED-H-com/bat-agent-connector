@@ -55,6 +55,9 @@ fn observation_time(observed_ms: u64, clock_ms: u64, unix_ms: u64) -> Result<Str
     let age = clock_ms.checked_sub(observed_ms).ok_or("CLOCK_UNPROVEN")?;
     timestamp(unix_ms.checked_sub(age).ok_or("CLOCK_UNPROVEN")?)
 }
+fn route_failure(code: Option<&str>) -> bool {
+    matches!(code, Some("ROUTE_UNAVAILABLE" | "TAILSCALE_WAKING"))
+}
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Entry {
@@ -104,7 +107,7 @@ impl Entry {
             stale: state.blocking == Some(Layer::Stale),
             layers: Layers::default(),
             route: None,
-            route_requirement: if selected { route_requirement } else { None },
+            route_requirement: None,
         };
         if let Some(probe) = observation.filter(|p| {
             crate::ownership::probe_current(&p.generation, generation, p.observed_ms, now)
@@ -145,6 +148,9 @@ impl Entry {
                 row.code = Some(code.into());
                 row.blocking = Some(layer);
                 row.layers = Layers::default();
+                if selected && route_failure(Some(code)) {
+                    row.route_requirement = route_requirement;
+                }
             }
         }
         Ok(row)
@@ -244,6 +250,8 @@ impl Snapshot {
                 || !["off", "ready", "degraded", "down"].contains(&row.level.as_str())
                 || row.selected == (row.level == "off")
                     && !(stop_unconfirmed && !row.selected && row.level == "down")
+                || row.route_requirement.is_some()
+                    && !(row.selected && route_failure(row.code.as_deref()))
                 || row.code.as_ref().is_some_and(|s| {
                     s.is_empty()
                         || s.len() > 80
@@ -258,7 +266,6 @@ impl Snapshot {
             // independently of the legacy sparse readiness-layer contract.
             if !row.selected {
                 row.route = None;
-                row.route_requirement = None;
             }
             if let Some(route) = &row.route {
                 if route.generation == 0
@@ -281,6 +288,7 @@ impl Snapshot {
                     row.level = "degraded".into();
                     row.blocking = Some(Layer::Stale);
                     row.code = Some("PROBE_STALE".into());
+                    row.route_requirement = None;
                 }
                 row.stale = true;
                 row.layers = Layers::default();

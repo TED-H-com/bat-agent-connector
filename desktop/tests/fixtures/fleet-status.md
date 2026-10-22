@@ -62,6 +62,11 @@ separately after deselection, then another parse. It checks unchanged original
 owner/stop receipts and monitor record, with no additional launches or stops.
 Only nondeterministic binding metadata is de-identified.
 
+The requirement fixture's `aged` case writes those real producer rows to a status
+file and calls `Snapshot::parse` at publication time plus 60,001 ms. Its `now` is
+the reader clock used by native projection; the other cases use publication time.
+Expiry replaces the route failure with `PROBE_STALE` and withdraws its explanation.
+
 The matching `.golden.json` files pass those rows through `native_readiness` and
 `sanitize_result` in `fleet.rs`; both Node and Playwright consume that output.
 Regenerate with the ignored core tests above and `regenerate-fleet-status.mjs`

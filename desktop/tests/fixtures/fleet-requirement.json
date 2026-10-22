@@ -1091,7 +1091,6 @@
             "level": "degraded",
             "name": "node-1",
             "observed_at": null,
-            "route_requirement": "DIRECT_TCP_UNREACHABLE",
             "selected": true,
             "stale": true
           },
