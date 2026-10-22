@@ -2,7 +2,9 @@
 //! Configuration is native-only; callers project an explicitly safe status model.
 pub mod bootstrap;
 pub mod bootstrap_policy;
+mod compare_replace;
 pub mod configuration;
+pub mod connection_publish;
 pub mod connection_setup;
 pub mod credential;
 pub mod discovery;
@@ -20,6 +22,7 @@ mod probe_wire;
 pub mod process_adapter;
 mod profile_files;
 pub mod profile_launch;
+mod publication_state;
 pub mod route;
 mod route_probe;
 pub mod selection;
