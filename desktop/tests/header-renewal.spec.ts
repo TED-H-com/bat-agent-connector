@@ -9,6 +9,8 @@ for (const locale of ['en-US', 'zh-TW']) {
   test(`header unchanged renewal retains unreachable host wording ${locale}`, async ({browser}) => {
     const context = await browser.newContext({locale}), page = await context.newPage();
     const fixture = conversationFixture(), now = 1790000900000;
+    const previous = structuredClone(hostGolden.host_unreachable);
+    previous.hosts[0].last_attempt_at = previous.hosts[0].last_success_at;
     let gets = 0, posts = 0, release: () => void = () => {};
     const held = new Promise<void>(resolve => {release = resolve;});
     await page.clock.install({time: now}); await page.clock.pauseAt(now);
@@ -16,7 +18,7 @@ for (const locale of ['en-US', 'zh-TW']) {
       if (input.method !== 'GET') posts++;
       if (input.path === '/hosts') {
         if (++gets === 2) await held;
-        return {status: 200, data: hostGolden.host_unreachable};
+        return {status: 200, data: gets === 1 ? previous : hostGolden.host_unreachable};
       }
       return fixture.dispatch(input);
     });
@@ -24,8 +26,8 @@ for (const locale of ['en-US', 'zh-TW']) {
       await page.goto('/dashboard/#/sessions');
       const other = page.locator('#installation-health [data-health-other]');
       await expect(other).toHaveText(locale === 'en-US'
-        ? '1 other machine needs attention · Last attempt: 1 min ago; host unreachable, last successful observation is stale'
-        : '另有 1 台機器需要處理 · 上次嘗試：1 分鐘前；無法連至主機，上次成功觀察已過期');
+        ? '1 other machine needs attention · Last attempt: 6 min ago; host unreachable, last successful observation is stale'
+        : '另有 1 台機器需要處理 · 上次嘗試：6 分鐘前；無法連至主機，上次成功觀察已過期');
       await page.clock.fastForward(1_000);
       await expect.poll(() => gets).toBe(2);
       release();

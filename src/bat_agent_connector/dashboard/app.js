@@ -62032,8 +62032,11 @@ async function mountFleetDesktop(main, { h, t, onStatus = () => {} }) {
 		if (again && !again.disabled) again.focus();
 		else if (previous) successor(previous).focus();
 	};
-	document.addEventListener("health-display-tick", render);
+	const paintHealth = () => {
+		if (snapshot) render();
+	};
 	await run(read);
+	if (alive()) document.addEventListener("health-display-tick", paintHealth);
 	const poll = async () => {
 		if (!alive()) return;
 		if (!busy) await run(read, true);
@@ -62043,7 +62046,7 @@ async function mountFleetDesktop(main, { h, t, onStatus = () => {} }) {
 	return () => {
 		disposed = true;
 		clearTimeout(timer);
-		document.removeEventListener("health-display-tick", render);
+		document.removeEventListener("health-display-tick", paintHealth);
 		panel.remove();
 	};
 }
@@ -62458,6 +62461,9 @@ async function mountFleet(main, { h, t, onStatus = () => {} }) {
 			render();
 		}
 	};
+	const paintHealth = () => {
+		if (snapshot) render();
+	};
 	try {
 		const availability = await fleetAvailability();
 		if (!alive()) return () => {
@@ -62488,8 +62494,8 @@ async function mountFleet(main, { h, t, onStatus = () => {} }) {
 				}
 			}
 		} else {
-			document.addEventListener("health-display-tick", render);
 			await read();
+			if (alive()) document.addEventListener("health-display-tick", paintHealth);
 			const poll = async () => {
 				if (!alive()) return;
 				await read();
@@ -62503,7 +62509,7 @@ async function mountFleet(main, { h, t, onStatus = () => {} }) {
 	return () => {
 		disposed = true;
 		clearTimeout(timer);
-		document.removeEventListener("health-display-tick", render);
+		document.removeEventListener("health-display-tick", paintHealth);
 		nativeCleanup?.();
 		bootstrapCleanup?.();
 		panel.remove();

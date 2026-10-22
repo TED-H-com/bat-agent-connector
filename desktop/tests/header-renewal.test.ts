@@ -51,18 +51,19 @@ test('header renewal outcomes are per source and deadline; read errors override 
 test('one source classifies each host independently at or before the attempted deadline', () => {
   const health: any = {}, old = hostGolden.host_not_refreshed.hosts[0];
   const deadline = Date.parse(old.valid_until);
+  const row = (host, expires) => ({...old, host, valid_until: new Date(expires).toISOString(),
+    last_success_at: new Date(expires - 180_000).toISOString(), last_attempt_at: new Date(expires - 180_000).toISOString()});
   const doc = {hosts: [
-    {...old, host: 'older', valid_until: new Date(deadline - 1_000).toISOString()},
-    {...old, host: 'equal'},
-    {...old, host: 'newer', valid_until: new Date(deadline + 1_000).toISOString()},
-    {...hostGolden.host_unreachable.hosts[0], host: 'unreachable', valid_until: old.valid_until},
+    row('older', deadline - 1_000), row('equal', deadline), row('newer', deadline + 1_000),
+    {...hostGolden.host_unreachable.hosts[0], ...row('unreachable', deadline), reachable: false,
+      error: 'CONNECTION_FAILED', stale_reason: 'host_unreachable', last_attempt_at: new Date(deadline + 540_000).toISOString()},
   ]};
   rememberHealthRead(health, '/hosts', doc, {renewalDeadline: deadline});
-  const facts = healthDisplay(input(health), deadline).hosts;
+  const facts = healthDisplay(input(health), deadline + 600_000).hosts;
   assert.deepEqual(facts.map(fact => fact.error?.code || null),
     ['OBSERVATION_NOT_RENEWED', 'OBSERVATION_NOT_RENEWED', null, null]);
   rememberHealthRead(health, '/hosts?host=equal', {hosts: [doc.hosts[1]]});
-  assert.ok(!healthDisplay(input(health), deadline).hosts.find(fact => fact.host === 'equal').error);
+  assert.ok(!healthDisplay(input(health), deadline + 600_000).hosts.find(fact => fact.host === 'equal').error);
 });
 
 test('session axes keep independent deadlines and never inherit the host unreachable exception', () => {

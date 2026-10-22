@@ -224,9 +224,10 @@ export async function mountFleetDesktop(main, {h, t, onStatus = () => {}}) {
     if (again && !again.disabled) again.focus();
     else if (previous) successor(previous).focus();
   };
-  document.addEventListener('health-display-tick', render);
+  const paintHealth = () => {if (snapshot) render();};
   await run(read);
+  if (alive()) document.addEventListener('health-display-tick', paintHealth);
   const poll=async()=>{if(!alive())return;if(!busy)await run(read,true);if(alive())timer=setTimeout(poll,5000);};
   timer=setTimeout(poll,5000);
-  return ()=>{disposed=true;clearTimeout(timer);document.removeEventListener('health-display-tick',render);panel.remove();};
+  return ()=>{disposed=true;clearTimeout(timer);document.removeEventListener('health-display-tick',paintHealth);panel.remove();};
 }

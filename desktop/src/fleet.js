@@ -144,6 +144,7 @@ export async function mountFleet(main, {h, t, onStatus = () => {}}) {
       if (alive()) message.textContent = `${t("fleet_unknown")} ${String(error)}`;
     } finally {busy = false; pressed = null; render();}
   };
+  const paintHealth = () => {if (snapshot) render();};
   try {
     const availability = await fleetAvailability();
     if (!alive()) return () => {disposed = true;};
@@ -158,11 +159,11 @@ export async function mountFleet(main, {h, t, onStatus = () => {}}) {
         }
       }
     } else {
-      document.addEventListener('health-display-tick', render);
       await read();
+      if (alive()) document.addEventListener('health-display-tick', paintHealth);
       const poll = async () => {if (!alive()) return; await read(); if (alive()) timer = setTimeout(poll, 5000);};
       timer = setTimeout(poll, 5000);
     }
   } catch { message.textContent = t("fleet_unavailable"); }
-  return () => {disposed = true; clearTimeout(timer); document.removeEventListener('health-display-tick', render); nativeCleanup?.(); bootstrapCleanup?.(); panel.remove();};
+  return () => {disposed = true; clearTimeout(timer); document.removeEventListener('health-display-tick', paintHealth); nativeCleanup?.(); bootstrapCleanup?.(); panel.remove();};
 }
