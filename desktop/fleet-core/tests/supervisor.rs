@@ -1786,7 +1786,7 @@ impl RouteProbe for RequirementRoutes {
     }
 }
 #[tokio::test]
-async fn direct_requirement_survives_supervisor_publication_without_new_route_attempts() {
+async fn direct_requirement_tracks_published_route_failure_without_new_route_attempts() {
     use bat_fleet_core::route::{RouteRequirement, TailscalePeer};
     for (peer, expected) in [
         (TailscalePeer::Unknown, RouteRequirement::DirectPeerUnknown),
@@ -1806,10 +1806,27 @@ async fn direct_requirement_survives_supervisor_publication_without_new_route_at
             .retain(|route| route["kind"] == "direct");
         inventory["hosts"][0]["provision_route"] = "direct".into();
         std::fs::write(path, serde_json::to_vec(&inventory).unwrap()).unwrap();
+        let mut saw_route_failure = false;
         for _ in 0..20 {
-            r.tick(1000).await.unwrap();
+            let published = r.tick(1000).await.unwrap();
+            let row = published
+                .entries
+                .iter()
+                .find(|row| row.name == "node-1")
+                .unwrap();
+            // Wake can become active before its worker result is harvested.
+            // Once that observed explanation is published, it needs this code.
+            if row.route_requirement.is_some() {
+                assert!(matches!(
+                    row.code.as_deref(),
+                    Some("ROUTE_UNAVAILABLE" | "TAILSCALE_WAKING")
+                ));
+                assert_eq!(row.route_requirement, Some(expected));
+                saw_route_failure = true;
+            }
             tokio::time::sleep(Duration::from_millis(1)).await;
         }
+        assert!(saw_route_failure);
         let status = r.tick(1200).await.unwrap();
         let bytes =
             std::fs::read(f.0.join("BetterAgentTerminal/fleet-desktop-status.json")).unwrap();
@@ -1823,7 +1840,15 @@ async fn direct_requirement_survives_supervisor_publication_without_new_route_at
             .iter()
             .find(|row| row.name == "node-1")
             .unwrap();
-        assert_eq!(row.route_requirement, Some(expected));
+        // With no wake active, the existing next tick replaces the route
+        // failure with PROBE_PENDING. Its explanation must leave with it.
+        if peer == TailscalePeer::Unknown {
+            assert_eq!(row.code.as_deref(), Some("PROBE_PENDING"));
+            assert_eq!(row.route_requirement, None);
+        } else {
+            assert_eq!(row.code.as_deref(), Some("TAILSCALE_WAKING"));
+            assert_eq!(row.route_requirement, Some(expected));
+        }
         assert!(row.route.is_none());
         assert_ne!(row.level, "ready");
         assert_eq!(
