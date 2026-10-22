@@ -125,8 +125,11 @@ struct Fixture {
 }
 impl Fixture {
     fn new() -> Self {
-        let root =
-            std::env::temp_dir().join(format!("fleet-publish-{:032x}", rand::random::<u128>()));
+        // macOS /var and caller-supplied TMPDIR may alias a real directory.
+        let root = std::env::temp_dir()
+            .canonicalize()
+            .unwrap()
+            .join(format!("fleet-publish-{:032x}", rand::random::<u128>()));
         for relative in ["kit/client/bat-profiles", "native", "Startup", "user/.ssh"] {
             std::fs::create_dir_all(root.join(relative)).unwrap();
         }
@@ -500,6 +503,28 @@ fn unavailable_existing_locks_have_no_publication_effect() {
         assert!(!f.path(output.artifact).exists());
     }
     assert!(!f.journal(&plan).exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn symlinked_kit_ancestor_refuses_before_writes_or_receipt_directory_creation() {
+    let mut f = Fixture::new();
+    let ancestor = f.root.join("linked-parent");
+    std::os::unix::fs::symlink(&f.root, &ancestor).unwrap();
+    f.input.root = ancestor.join("kit");
+    // The kit root itself is a directory; only its ancestor is a symlink.
+    assert!(std::fs::symlink_metadata(&f.input.root).unwrap().is_dir());
+    let plan = build(&f.input).unwrap();
+    assert_eq!(
+        f.publisher().publish(&plan, &mut f.native, &mut |_, _| {
+            panic!("publication must refuse before reaching a write boundary")
+        }),
+        Err(Error::Gate("MIGRATION_INVALID_PATH"))
+    );
+    for output in &plan.outputs {
+        assert!(!f.path(output.artifact).exists());
+    }
+    assert!(!f.root.join("native/fleet-publications").exists());
 }
 
 #[cfg(unix)]

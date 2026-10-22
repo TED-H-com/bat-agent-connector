@@ -99,6 +99,12 @@ An absent file still needs independent creation authority. The mandatory native
 adapter must re-read creation evidence and prove protected state ancestors; this
 core supplies no path-based ownership adapter or enrollment flow.
 
+Publication refuses a symlinked or reparse-point ancestor of any kit, pointer,
+startup or user path, checking all ancestors up to the filesystem root, with
+`connection_publish::Error::Gate("MIGRATION_INVALID_PATH")`. `Snapshot::load`
+resolves such ancestors for reading, so an installation that loads may still be
+refused for publication. That installation keeps the manual configuration path.
+
 Publication writes one file at a time in plan order. Before publishing the pointer,
 the three kit files must match their output digests and pass `Configuration::load`
 together, including an empty issues list. These checks repeat before and after
@@ -120,7 +126,9 @@ The same plan resumes from disk bytes: after bytes reconcile a lagging receipt;
 before bytes permit replacement; any third bytes stop with `ThirdBytes { artifact }`
 and retain completed receipts. An unfinished journal, including the gap between
 two steps, blocks a different review with `UnfinishedPlan { review_digest }`.
-Completed journals remain available. The shared `compare_replace` primitive also
+The `fleet-publications` directory permits at most 1024 entries; beyond that,
+publication refuses with `ReceiptConflict`. Completed journals remain available;
+their retention policy is follow-up work. The shared `compare_replace` primitive also
 serves profile, migration and supervisor writes, preserving their error codes,
 read policies and creation/deletion behavior. Each replacement is durable on its
 own; neither a cross-file transaction nor a filesystem compare-and-swap against a
@@ -136,8 +144,13 @@ owner/reparse and replacement behavior; Linux tests do not prove those semantics
 **繁體中文摘要：** 發布核心沿用既有安裝／遷移 guards 與 pending gate，持鎖重查
 建立證據、owner 和目前位元組，逐檔寫入 intended／published 回執。第三種內容立即
 停止；同 plan 依磁碟恢復，未完成 plan 阻擋另一份審閱。三個 kit 檔讀回並通過既有
-loader 後才寫 native application-data 指標。一般使用者流程仍待接線，手動設定
-說明尚不能退休；不宣稱 E01／E03／E11、R0–R5 或 A01–A40 的實機驗收完成。
+loader 後才寫 native application-data 指標。kit、指標、startup 或使用者路徑直到
+檔案系統根目錄的任一祖先若是 symlink／reparse point，發布即以
+`connection_publish::Error::Gate("MIGRATION_INVALID_PATH")` 拒絕。
+`Snapshot::load` 讀取時會解析這些祖先，因此能載入的安裝仍可能無法發布，須保留
+手動設定路徑。`fleet-publications` 最多容許 1024 個目錄項目，超過即以
+`ReceiptConflict` 拒絕；已完成 journal 的保留政策仍待後續實作。一般使用者流程
+仍待接線；不宣稱 E01／E03／E11、R0–R5 或 A01–A40 的實機驗收完成。
 
 ## Pure configuration generator — implemented; native apply and UI wiring pending
 
@@ -209,9 +222,9 @@ allocation does not create a profile or rewrite SSH. Preview recheck reports a c
 without selecting a replacement. Every plan is **reference-route only**: current SSH
 launch adds `-L`, so native wiring must settle the duplicate-listener boundary before
 publication/activation. Independent observe-handle enrollment, safe overlay consumption,
-native apply wiring, preference persistence and UI remain open. The publication/readback core below is implemented.
+native apply wiring, preference persistence and UI remain open. The publication/readback core above is implemented.
 
-**繁體中文狀態：產生器與逐檔發布核心已實作；native apply 與 UI 接線尚未完成。**
+**繁體中文狀態：產生器與上方的逐檔發布核心已實作；native apply 與 UI 接線尚未完成。**
 四檔由已審來源及版本化政策產生，缺關聯回傳具型別缺口，不猜 endpoint、不接管手寫檔。
 使用者仍選標籤、既有 profile／route／workspace 與四種獨立偏好；一般安裝流程的手填
 步驟尚未退休。測試以合成資料驗證正式 loaders；Tauri sanitizer
