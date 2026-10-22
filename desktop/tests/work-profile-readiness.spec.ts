@@ -73,7 +73,7 @@ for(const locale of ['en-US','zh-TW'])test.describe(`${locale} producer profile 
         const expected=state.valid_until&&state.reason==='host_not_refreshed'
           ?(locale==='en-US'?'Unavailable · 10 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)':'不可用 · 10 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）')
           :state.valid_until&&state.reason==='host_unreachable'
-            ?(locale==='en-US'?'Unavailable · 1 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)':'不可用 · 1 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）')
+            ?(locale==='en-US'?'Unavailable · Last attempt: 1 min ago; host unreachable, last successful observation is stale':'不可用 · 上次嘗試：1 分鐘前；無法連至主機，上次成功觀察已過期')
             :value;
         await expect(cell.locator('[data-work-profile-value]')).toHaveText(expected);
         expect((await cell.innerText()).trim().startsWith(copy('wpf_'+state.value))).toBe(true);

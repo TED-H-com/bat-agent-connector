@@ -100,6 +100,44 @@ for (const locale of ['en', 'zh-TW']) {
     const past = profileStateFacts(profiles.cases.owned_execution.states.last_verified_execution, {now:1791000600000});
     assert.equal(past.fact, null); assert.equal(t(past.valueKey), labels.values.ready);
   });
+  for (const scenario of ['host_unreachable', 'host_not_refreshed', 'owned_execution']) {
+    test(`Work unchanged renewal preserves per-reason wording: ${scenario} ${locale}`, () => {
+      const body = profiles.cases[scenario];
+      const now = scenario === 'owned_execution' ? 1790000720000 : body.observed_at * 1000;
+      const error = {code: 'OBSERVATION_NOT_RENEWED', unchangedDeadline: true};
+      const keys = scenario === 'owned_execution' ? ['can_observe', 'discovered'] : ['can_observe', 'can_start_own'];
+      const expected = locale === 'en' ? {
+        host_unreachable: 'Unavailable · Last attempt: 1 min ago; host unreachable, last successful observation is stale',
+        host_not_refreshed: 'Unavailable · 10 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)',
+        owned_execution: 'Ready · 3 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)',
+      } : {
+        host_unreachable: '不可用 · 上次嘗試：1 分鐘前；無法連至主機，上次成功觀察已過期',
+        host_not_refreshed: '不可用 · 10 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）',
+        owned_execution: '已就緒 · 3 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）',
+      };
+      for (const key of keys) {
+        const facts = profileStateFacts(body.states[key], {now, error});
+        assert.equal(healthLabel(facts.fact, t), expected[scenario]);
+        assert.equal(facts.reasonCode, body.states[key].reason);
+      }
+    });
+  }
+  test(`Work actual renewal errors override unreachable wording ${locale}`, () => {
+    // A real read error has no unchangedDeadline marker, even if its code happens
+    // to match the synthetic unchanged-renewal code.
+    for (const [code, expected] of locale === 'en' ? [
+      ['503', 'Unavailable · 1 min ago · Could not confirm (503)'],
+      ['OBSERVATION_NOT_RENEWED', 'Unavailable · 1 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)'],
+    ] : [
+      ['503', '不可用 · 1 分鐘前 · 無法確認（503）'],
+      ['OBSERVATION_NOT_RENEWED', '不可用 · 1 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）'],
+    ]) {
+      const facts = profileStateFacts(profiles.cases.host_unreachable.states.can_observe,
+        {now: 1790000900000, error: {code}});
+      assert.equal(healthLabel(facts.fact, t), expected);
+      assert.equal(facts.reasonCode, 'host_unreachable');
+    }
+  });
 
 }
 

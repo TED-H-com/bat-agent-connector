@@ -26,15 +26,19 @@ for (const locale of ['en-US', 'zh-TW']) test.describe(`shared readiness ${local
     await expect(page.locator('[data-check-state="passed"]')).toHaveCount(0);
   });
 
-  test('Work unreachable shows the last attempt age while success is five minutes older', async ({page}) => {
+  test('Work unreachable accepts the newer attempt after an unchanged renewal', async ({page}) => {
     const body = profiles.cases.host_unreachable;
+    // Keep the real producer golden body; only the declared states' observed_at
+    // changes, by 60 seconds for a newer failed attempt. The deadline stays put.
+    const renewed = structuredClone(body);
+    for (const state of Object.values(renewed.states) as any[]) if (state.valid_until) state.observed_at += 60;
     await page.clock.install({time: new Date(1790000900000)});
     await page.clock.pauseAt(1790000900000);
     let release;
     const held = new Promise<void>(resolve => release = resolve);
     const {facts, reads, posts} = await mountProfilePicker(page, body, profiles.profile, locale, async (route, n) => {
       if (n > 1) await held;
-      await route.fulfill({status: 200, json: body});
+      await route.fulfill({status: 200, json: n === 1 ? body : renewed});
     });
     try {
       for (const name of ['can_observe', 'can_start_own']) {
@@ -45,14 +49,53 @@ for (const locale of ['en-US', 'zh-TW']) test.describe(`shared readiness ${local
       }
       expect(body.states.can_observe.verified.observed_at).toBe(1790000540);
       await expect.poll(() => reads.filter(path => path.endsWith('/readiness')).length).toBe(2);
-      release();
+      await page.clock.fastForward(60_000);
       await expect(facts.locator('[data-work-profile-state="can_observe"] [data-work-profile-value]')).toHaveText(locale === 'en-US'
-        ? 'Unavailable · 1 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)'
-        : '不可用 · 1 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）');
+        ? 'Unavailable · Last attempt: 2 min ago; host unreachable, last successful observation is stale'
+        : '不可用 · 上次嘗試：2 分鐘前；無法連至主機，上次成功觀察已過期');
+      release();
+      for (const name of ['can_observe', 'can_start_own']) {
+        await expect(facts.locator(`[data-work-profile-state="${name}"] [data-work-profile-value]`)).toHaveText(locale === 'en-US'
+          ? 'Unavailable · Last attempt: 1 min ago; host unreachable, last successful observation is stale'
+          : '不可用 · 上次嘗試：1 分鐘前；無法連至主機，上次成功觀察已過期');
+      }
+      await expect(facts).not.toContainText(locale === 'en-US' ? 'Could not confirm' : '無法確認');
       await page.clock.fastForward(600_000);
+      await expect(facts.locator('[data-work-profile-state="can_observe"] [data-work-profile-value]')).toHaveText(locale === 'en-US'
+        ? 'Unavailable · Last attempt: 11 min ago; host unreachable, last successful observation is stale'
+        : '不可用 · 上次嘗試：11 分鐘前；無法連至主機，上次成功觀察已過期');
+      await page.evaluate(() => {
+        for (const hidden of [true, false]) {
+          Object.defineProperty(document, 'hidden', {configurable: true, value: hidden});
+          document.dispatchEvent(new Event('visibilitychange'));
+        }
+      });
       expect(reads.filter(path => path.endsWith('/readiness'))).toHaveLength(2);
       expect(posts).toEqual([]);
     } finally {release();}
+  });
+  for (const failure of ['HTTP 503', 'invalid contract']) test(`Work unreachable renewal reports ${failure}`, async ({page}) => {
+    const body = profiles.cases.host_unreachable;
+    await page.clock.install({time: new Date(1790000900000)});
+    await page.clock.pauseAt(1790000900000);
+    const {facts, reads, posts} = await mountProfilePicker(page, body, profiles.profile, locale, async (route, n) => {
+      await route.fulfill(n === 1 ? {status: 200, json: body} : failure === 'HTTP 503'
+        ? {status: 503, json: {}} : {status: 200, json: {...body, contract: 'invalid'}});
+    });
+    const expected = locale === 'en-US' ? {
+      'HTTP 503': 'Unavailable · 1 min ago · Could not confirm (503)',
+      'invalid contract': 'Unavailable · 1 min ago · Could not confirm (READ_FAILED)',
+    } : {
+      'HTTP 503': '不可用 · 1 分鐘前 · 無法確認（503）',
+      'invalid contract': '不可用 · 1 分鐘前 · 無法確認（READ_FAILED）',
+    };
+    for (const name of ['can_observe', 'can_start_own']) {
+      await expect(facts.locator(`[data-work-profile-state="${name}"] [data-work-profile-value]`)).toHaveText(expected[failure]);
+    }
+    expect(reads.filter(path => path.endsWith('/readiness'))).toHaveLength(2);
+    await page.clock.fastForward(600_000);
+    expect(reads.filter(path => path.endsWith('/readiness'))).toHaveLength(2);
+    expect(posts).toEqual([]);
   });
 
   const body = profiles.cases.owned_execution;
