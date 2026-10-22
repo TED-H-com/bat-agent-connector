@@ -14,6 +14,7 @@ import contextlib
 import hashlib
 import json
 import logging
+import re
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -396,8 +397,12 @@ class OperationService:
         return op
 
     def list(self, *, statuses: list[str] | None = None, actor: str | None = None, action: str | None = None,
-             before: float | None = None, limit: int = 50, principal: Principal | None = None) -> dict:
+             before: float | None = None, before_id: str | None = None, limit: int = 50, principal: Principal | None = None) -> dict:
         limit = max(1, min(200, int(limit)))
+        if before_id is not None and (before is None or not isinstance(before_id, str)
+                or not re.fullmatch(r"op_[0-9a-f]{32}", before_id)):
+            raise OperationError("INVALID_FILTER", "Use before and its bounded operation before_id together / "
+                "請同時提供 before 與對應且符合格式的操作 before_id", 422)
         sql, args = "SELECT * FROM operations WHERE 1=1", []
         if statuses:
             bad = [s for s in statuses if s not in STATES]
@@ -410,14 +415,19 @@ class OperationService:
         if action:
             sql, args = sql + " AND action=?", [*args, action]
         if before is not None:
-            sql, args = sql + " AND created_at<?", [*args, float(before)]
-        rows = self.db.execute(sql + " ORDER BY created_at DESC LIMIT ?", (*args, limit + 1)).fetchall()
+            if before_id is not None:
+                sql += " AND (created_at<? OR (created_at=? AND operation_id<?))"
+                args += [float(before), float(before), before_id]
+            else:
+                sql, args = sql + " AND created_at<?", [*args, float(before)]
+        rows = self.db.execute(sql + " ORDER BY created_at DESC, operation_id DESC LIMIT ?", (*args, limit + 1)).fetchall()
         ops = [self._decode(r) for r in rows[:limit]]
         next_before = ops[-1]["created_at"] if len(rows) > limit else None
+        next_before_id = ops[-1]["operation_id"] if len(rows) > limit else None
         if principal is not None:
             from .pm_access import visible
             ops = [op for op in ops if visible(self.db, principal, op)]
-        return {"operations": ops, "next_before": next_before}
+        return {"operations": ops, "next_before": next_before, "next_before_id": next_before_id}
 
     def _transition(self, operation_id: str, status: str, *, reason: str | None = None,
                     error_code: str | None = None, result: dict | None = None, next_run_at: float = 0.0,

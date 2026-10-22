@@ -1639,7 +1639,7 @@ class ApiV1:
         before = self._q(query, "before")
         return 200, self.daemon.ops.list(statuses=statuses or None, actor=self._q(query, "actor"),
                                          action=self._q(query, "action"),
-                                         before=float(before) if before else None,
+                                         before=float(before) if before else None, before_id=self._q(query, "before_id"),
                                          limit=self._int(query, "limit", 50), principal=principal)
 
     async def create_operation(self, principal, query, body, headers, **_):

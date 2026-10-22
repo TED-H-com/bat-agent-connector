@@ -332,7 +332,7 @@ step 2 之後；backfilled snapshot 的 occurred_at=null，原事件不改寫。
 | `POST /api/v1/managed/setup/preview` | 同一 route table／認證邊界，scope 為 `manage`；無 query，只接受 `{action,target,params,preconditions}`，action 必須為 `setup.host`，target 為 `{host}`，params 沿用候選 builder 的 allowlist，preconditions 只能含 `{config_revision}`。原安裝／personal identity、busy、revision、來源、型別與 parser roundtrip 均先驗；不建立 operation／step、不寫設定、不連 BAT／SSH／Git。[api_v1.py:255](../../src/bat_agent_connector/api_v1.py#L255)、[api_v1.py:1427](../../src/bat_agent_connector/api_v1.py#L1427)、[managed_setup.py:246](../../src/bat_agent_connector/managed_setup.py#L246)、[managed_setup.py:374](../../src/bat_agent_connector/managed_setup.py#L374) |
 | 成功回應 | `{preview:{contract_version:1,action,target,config_revision,after_revision,review_digest,changes,source,warnings,effects}}`。changes 是 allowlist 的 `{field,before,after}`，source 是 `{kind,reference,available}`；kind 為 `bat_profile`、`staged_secret` 或 `existing_connection`。不含原始 TOML、秘密本文或解析後的 `file:` 憑證路徑；正式形狀見 [producer golden](../../tests/fixtures/managed-setup-preview.json)。[managed_setup.py:403](../../src/bat_agent_connector/managed_setup.py#L403)、[test_managed_setup_preview_golden.py:16](../../tests/test_managed_setup_preview_golden.py#L16) |
 | `review_digest` | SHA-256 綁版本、server／principal／actor、literal action／target／params（只有不透明秘密引用）及 before／after revisions。不是操作授權或加密簽章；Apply 仍重跑原安裝／scope／來源／busy guards。來源或請求改變須重新預覽。[managed_setup.py:396](../../src/bat_agent_connector/managed_setup.py#L396)、[managed_setup.py:441](../../src/bat_agent_connector/managed_setup.py#L441) |
-| `POST /api/v1/operations` 的 `setup.host` | 新 UI 帶原 target／params、原 `config_revision` 與 `review_digest`；不符回 `409 SETUP_REVIEW_CHANGED`，在建立 operation 與 probe 前拒絕。沿用 `manage`、既有 action／journal／step；舊客戶端僅帶 `config_revision` 仍受支援，`setup.repository`／`setup.verification` 不接受 digest。已受理的重送仍先依原 key／request hash 查回，不能改成新意圖。[managed_setup.py:441](../../src/bat_agent_connector/managed_setup.py#L441)、[operations.py:556](../../src/bat_agent_connector/operations.py#L556)、[managed_setup.py:630](../../src/bat_agent_connector/managed_setup.py#L630) |
+| `POST /api/v1/operations` 的 `setup.host` | 新 UI 帶原 target／params、原 `config_revision` 與 `review_digest`；不符回 `409 SETUP_REVIEW_CHANGED`，在建立 operation 與 probe 前拒絕。沿用 `manage`、既有 action／journal／step；舊客戶端僅帶 `config_revision` 仍受支援，`setup.repository`／`setup.verification` 不接受 digest。已受理的重送仍先依原 key／request hash 查回，不能改成新意圖。[managed_setup.py:441](../../src/bat_agent_connector/managed_setup.py#L441)、[operations.py:566](../../src/bat_agent_connector/operations.py#L566)、[managed_setup.py:630](../../src/bat_agent_connector/managed_setup.py#L630) |
 | `connection.reference.apply`／`setup.connection.apply` | 既有 observe／manage scopes；target 為 installation_ref 與 optional existing connection_id，preconditions 為 expected_revision／review_digest。Create ID 由 accepted operation 決定，既有 endpoint／pin／remote profile 不重綁。setup.connection.apply 必須有產生器 native_plan；reference action 拒絕 native_plan。固定交接 JSON、雙摘要、JSON 詞彙矩陣、readback、放棄、Windows-only 發布與恢復規則見 [Durable connection operations](fleet-configuration.md#durable-connection-operations)。`GET /managed/setup` 與 capabilities 皆宣告 connection_contract_version:1。 |
 | 秘密與取消 | 已存 BAT profile 的預覽不 staging；貼上秘密可先走既有 `POST /managed/setup/secrets`，畫面必須顯示已發生的私密暫存。取消不建立 operation、不存連線、不 probe／啟動服務，未用秘密仍按既有到期清理規則處理。預覽只在記憶體；新 Apply 才保存原 request／key。已知 operation ID 恢復只 GET，尚未取得 ID 才以原 key／request 重送查回。[managed_setup.py:191](../../src/bat_agent_connector/managed_setup.py#L191)、[managed-setup.js:604](../../desktop/src/managed-setup.js#L604)、[managed-setup.js:633](../../desktop/src/managed-setup.js#L633)、[managed-setup.js:647](../../desktop/src/managed-setup.js#L647) |
 
@@ -356,3 +356,18 @@ Endpoint 在 digest 前共用同一個 canonical validator；空 query／fragmen
 不送 discovery 或重貼 token。要探索或改選既有連線的 profile，必須另貼 BAT token；
 禁用按鈕旁以雙語說明原因。本輪不以儲存的憑證建立 server-side discovery 路徑。
 既有 `HOST_IDENTITY_CHANGED` 拒絕與新 host name 要求仍保留。
+
+
+### Operation list continuation / 操作清單續頁
+
+`GET /api/v1/operations` orders by `(created_at DESC, operation_id DESC)`. Follow
+`next_before` together with `next_before_id` as query `before` plus `before_id` to
+include equal-timestamp operations on subsequent pages. Both continuation fields
+come from the raw bounded page before visibility filtering; even an empty visible
+page can have a continuation. Stop only when the cursor is null. A timestamp-only
+`before` keeps the existing strict `created_at < before` behavior. `before_id` needs
+a timestamp and a bounded operation ID; invalid pairs return `422 INVALID_FILTER`.
+
+繁體中文：清單以時間、操作 ID 遞減排序；請成對使用兩個續頁值，避免同時刻的操作
+漏頁。可見清單為空時仍須依 cursor 續頁；單獨的時間 cursor 維持原本嚴格小於行為。
+這只修正既有讀取，不新增操作、意圖帳本或執行權限。

@@ -508,9 +508,9 @@ stateDiagram-v2
 
 | 原步驟讀回／排程（現況） | 實際轉移與限制 |
 | --- | --- |
-| setup 已送步驟：目前 revision 等於 after／before | after 回傳已完成結果；before 回傳 `RERUN`，由原 operation 接續該步，不建立新意圖。[managed_setup.py:641](../../src/bat_agent_connector/managed_setup.py#L641)、[operations.py:285](../../src/bat_agent_connector/operations.py#L285) |
-| setup 已送步驟：目前 revision 既非 before 也非 after | reconcile 回傳 `None`，step 標為 uncertain 並拋出 `Uncertain`；operation 仍為 `uncertain`，按 30／60／120／300／600 秒退避查回。[managed_setup.py:650](../../src/bat_agent_connector/managed_setup.py#L650)、[operations.py:279](../../src/bat_agent_connector/operations.py#L279)、[operations.py:49](../../src/bat_agent_connector/operations.py#L49)、[operations.py:938](../../src/bat_agent_connector/operations.py#L938) |
-| setup 的 Uncertain 重試預算耗盡 | 才轉為 `needs_attention`／`UNCERTAIN_UNRESOLVED`。`uncertain` 及 `needs_attention` 都不屬 TERMINAL；`_busy` 持續阻擋新 setup，受理時回 `SETUP_BUSY`，不是耗盡後即可重新送出。[operations.py:941](../../src/bat_agent_connector/operations.py#L941)、[operations.py:36](../../src/bat_agent_connector/operations.py#L36)、[managed_setup.py:136](../../src/bat_agent_connector/managed_setup.py#L136)、[managed_setup.py:385](../../src/bat_agent_connector/managed_setup.py#L385) |
+| setup 已送步驟：目前 revision 等於 after／before | after 回傳已完成結果；before 回傳 `RERUN`，由原 operation 接續該步，不建立新意圖。[managed_setup.py:641](../../src/bat_agent_connector/managed_setup.py#L641)、[operations.py:286](../../src/bat_agent_connector/operations.py#L286) |
+| setup 已送步驟：目前 revision 既非 before 也非 after | reconcile 回傳 `None`，step 標為 uncertain 並拋出 `Uncertain`；operation 仍為 `uncertain`，按 30／60／120／300／600 秒退避查回。[managed_setup.py:650](../../src/bat_agent_connector/managed_setup.py#L650)、[operations.py:280](../../src/bat_agent_connector/operations.py#L280)、[operations.py:50](../../src/bat_agent_connector/operations.py#L50)、[operations.py:948](../../src/bat_agent_connector/operations.py#L948) |
+| setup 的 Uncertain 重試預算耗盡 | 才轉為 `needs_attention`／`UNCERTAIN_UNRESOLVED`。`uncertain` 及 `needs_attention` 都不屬 TERMINAL；`_busy` 持續阻擋新 setup，受理時回 `SETUP_BUSY`，不是耗盡後即可重新送出。[operations.py:951](../../src/bat_agent_connector/operations.py#L951)、[operations.py:37](../../src/bat_agent_connector/operations.py#L37)、[managed_setup.py:136](../../src/bat_agent_connector/managed_setup.py#L136)、[managed_setup.py:385](../../src/bat_agent_connector/managed_setup.py#L385) |
 | Fleet migration 的 config／startup 讀回第三值 | 此路徑直接拒絕 `MIGRATION_CHANGED`；與上述 setup journal 的退避查回不同。[migration.rs:319](../../desktop/fleet-core/src/migration.rs#L319) |
 
 以下 UI 轉移是**規範**；顯示差異不得取代上表的原 operation 查回流程。
@@ -943,6 +943,13 @@ first claim refuses the pending native instruction even if an earlier configurat
 step is already proven; that successful configuration receipt is preserved.
 Reference preferences
 allow only `favorite` (boolean) and `order` (integer 0–10000); label is 1–100 characters.
+
+Native operation enumeration uses the existing operations list, ordered by descending
+created time then operation ID. Follow paired `next_before` / `next_before_id` as
+`before` / `before_id`, including an empty visibility-filtered page with continuation.
+Timestamp-only cursors retain strict less-than behavior. This read capability does
+not imply that a native participant is available. 本機操作清單須成對使用兩個續頁值；
+可見結果為空仍可能有下一頁，不能當作已讀完或 native 已可用。
 
 Lost acceptance replies are read back with the identical request/key; known IDs use
 pure GET. A claimed uncertain effect is never resent and never rotates its epoch.
