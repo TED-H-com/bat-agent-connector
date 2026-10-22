@@ -81,14 +81,16 @@ async function until(check, message) {
   }
   throw new Error(`${message}\n${diagnostic}`);
 }
-async function waitManagedView(name) {
+async function waitManagedView(name, roleChoice = false) {
   let state = {};
   try {
     await until(() => {
       state = JSON.parse(native("managed-view"));
+      if (roleChoice) return state.bounded === true && state.roleChoice === true;
       return ["webContent", "authenticated", "setup", "configurationLoaded", "saveEnabled", "bounded"]
         .every(key => state[key] === true);
-    }, "Managed WKWebView did not render authenticated first-run configuration");
+    }, roleChoice ? "Managed WKWebView did not show the role choice" : "Managed WKWebView did not render authenticated first-run configuration");
+    assert.equal(state.roleChoice, roleChoice, "Role chooser must disappear after selection and stay absent on relaunch");
   } finally {
     await writeFile(join(evidence, `${name}-readiness.json`), JSON.stringify(state, null, 2));
   }
@@ -195,10 +197,17 @@ try {
     assert(requests.some(item => item.path === path), `Missing ${path}`);
   }
   steps.push("Normal system Quit and relaunch preserved configuration and resumed WebView polling");
-  await rm(join(statePaths[0], "central.json"));
+  // These directories were absent before this fixture. Start a fresh profile;
+  // the external-client phase has already persisted its own installation role.
+  for (const path of statePaths) await rm(path, { recursive: true, force: true });
   app = JSON.parse(run(helper, ["launch-managed", installed]));
-  const managedIdentity = await probeManaged(statePaths[0], { wait: true });
   await until(() => JSON.parse(native("inspect")).windows.length === 1, "Managed first-run window missing");
+  await waitManagedView("managed-role-choice", true);
+  assert.deepEqual(JSON.parse(native("select-provider")), { role: "provider", pressed: true, matches: 1 });
+  steps.push("Clean managed first-run selected provider (Provide a local workspace / 提供本機工作區) through the owned Accessibility button");
+  const managedIdentity = await probeManaged(statePaths[0], { wait: true });
+  const servicePointer = join(statePaths[0], "managed-central/state/task-service.json");
+  const serviceBefore = await readFile(servicePointer, "utf8");
   await waitManagedView("managed-first-run");
   run("screencapture", ["-x", "-l", String(JSON.parse(native("inspect")).windows[0].id), join(evidence, "managed-first-run.png")]);
   native("close");
@@ -211,11 +220,12 @@ try {
   assert.deepEqual(await probeManaged(statePaths[0], { wait: true }), managedIdentity);
   await until(() => JSON.parse(native("inspect")).windows.length === 1, "Reopened managed window missing");
   await waitManagedView("managed-reopened");
+  assert.equal(await readFile(servicePointer, "utf8"), serviceBefore, "Relaunch must retain the same running service");
   run("screencapture", ["-x", "-l", String(JSON.parse(native("inspect")).windows[0].id), join(evidence, "managed-reopened.png")]);
   native("quit");
   await until(() => JSON.parse(native("inspect")).terminated, "Reopened managed UI did not quit");
   await stopManaged(statePaths[0]);
-  steps.push("Clean managed first-run and relaunch rendered authenticated, enabled setup in WKWebView via Accessibility; same identity survived close and Quit; owned service stopped");
+  steps.push("Provider first-run and relaunch rendered authenticated, enabled setup in WKWebView via Accessibility; chooser stayed absent; same identity and service survived close and Quit; owned service stopped");
   receipt = { status: "passed", evidence_level: "native-installed-fixture", live_accepted: false,
     hide_request_reported_success: hideRequest.reportedSuccess,
     launch_method: "NSWorkspace Launch Services", quit_method: "NSRunningApplication normal terminate request and observed termination",
