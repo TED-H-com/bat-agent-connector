@@ -99,14 +99,26 @@ class DiskParticipant:
     def __init__(self, path):
         self.path = path
 
+    @property
+    def writes(self):
+        counter = self.path.with_suffix(".count")
+        return int(counter.read_text()) if counter.exists() else 0
+
     def effect(self, handoff, *, outcome="applied"):
         if self.path.exists():
             body = json.loads(self.path.read_text())
         else:
+            role = self.path.with_suffix(".role")
+            before = role.read_bytes() if role.exists() else b""
+            after = (b"fixture-third-value" if outcome == "uncertain" else b"fixture-after") if outcome in {"applied", "uncertain"} else before
+            assert len(before) <= 512
+            if after != before:
+                self.path.with_suffix(".count").write_text(str(self.writes + 1))
+                role.write_bytes(after)
             body = {key: handoff[key] for key in ("contract_version", "installation_ref", "operation_id",
                 "step", "review_digest", "expected_revision", "epoch", "effect_id", "challenge")}
-            body.update(outcome=outcome, roles=[{"role": "inventory", "before_digest": "a" * 64,
-                "after_digest": ("a" if outcome in {"unchanged", "refused"} else "b") * 64}])
+            body.update(outcome=outcome, roles=[{"role": "inventory", "before_digest": digest(before),
+                "after_digest": digest(after)}])
             self.path.write_text(json.dumps(body))
         assert self.path.stat().st_size < 4096
         return body
@@ -162,7 +174,7 @@ async def test_e_same_key_lost_reply_and_two_installations(installed, served_set
 
 @pytest.mark.parametrize("fault", ["principal", "installation", "endpoint", "pin", "profile", "revision"])
 async def test_e_existing_binding_refuses_rebind_or_foreign_access(installed, served_setup, source, fault):
-    daemon, _, root = installed
+    daemon, principal, root = installed
     _, ident = await accept(served_setup, intent(source))
     await settle_operations(daemon.ops)
     connection = daemon.ops.get(ident)["result"]["connection_id"]
@@ -179,12 +191,17 @@ async def test_e_existing_binding_refuses_rebind_or_foreign_access(installed, se
         index["profiles"][0]["remoteHost" if fault == "endpoint" else "remoteFingerprint"] = (
             "other.example" if fault == "endpoint" else "B" * 64)
         path.write_text(json.dumps(index))
+        from bat_agent_connector import setup_connections
+        body["params"]["source_reference"] = setup_connections.source_descriptor(
+            daemon.ops, principal, body["params"]["source"])["reference"]
     elif fault == "profile":
         body["params"]["remote_profile_id"] = "other-profile"
     else:
         body["preconditions"]["expected_revision"] = 0
-    status, _ = await served_setup("POST", PREVIEW, body, **kwargs)
+    status, response = await served_setup("POST", PREVIEW, body, **kwargs)
     assert status in {404, 409}
+    if fault in {"endpoint", "pin", "profile"}:
+        assert "add a separate connection" in response["error"]["message"]
     assert daemon.journal.db.execute("SELECT count(*) FROM operations").fetchone()[0] == 1
 
 
@@ -237,6 +254,7 @@ async def test_h_disk_participant_disconnect_expiry_and_third_value(installed, s
     status, replay = await served_setup("POST", "/api/v1/operations", body, key="original-key")
     assert status == 200 and replay["operation"]["operation_id"] == ident
     assert daemon.journal.db.execute("SELECT count(*) FROM operations").fetchone()[0] == 1
+    assert participant.writes == 1
 
 
 async def test_preview_zero_effect_and_update_revision_cas(installed, served_setup, source, monkeypatch):
@@ -444,6 +462,7 @@ async def test_restart_recovers_original_challenge_receipt_and_projection(instal
         _, page = await request("GET", "/api/v1/connections?installation_ref=desktop-a")
         assert len(page["connections"]) == 1 and page["connections"][0]["receipt_refs"]
         assert participant.path.stat().st_mtime_ns == written
+        assert participant.writes == 1
         assert restarted.journal.db.execute("SELECT count(*) FROM operations").fetchone()[0] == 1
         assert restarted.journal.db.execute("SELECT count(*) FROM operation_steps WHERE name='connection_binding'").fetchone()[0] == 1
     finally:
