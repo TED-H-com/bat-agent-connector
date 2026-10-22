@@ -32,6 +32,8 @@ export async function mountProfilePicker(page:any,body:any,profile:any,locale:st
     request:()=>({locked:()=>false,set:(_key,value)=>{field.value=value;},update:()=>{}}),active:()=>true,onChange:()=>{},
     errorBox:error=>h('p',{},String(error))});
     (window as any).__profilePicker=picker;
+    // Mirror app.js's existing display-only clock in this isolated component mount.
+    setInterval(()=>{if(!document.hidden)document.dispatchEvent(new Event('health-display-tick'));},1000);
     document.getElementById('fixture')!.append(picker.box,field);await picker.load();
   },{body,locale});
   await page.locator('[data-work-profile-picker] select').selectOption(body.profile_id);

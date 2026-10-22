@@ -675,7 +675,7 @@ def _observation_reason(row, now: float, stale_after_s: float):
         return "never_observed"
     if not row["reachable"]:
         return "host_unreachable"
-    if now - (row["last_success_at"] or 0) > stale_after_s:
+    if now - (row["last_success_at"] or 0) >= stale_after_s:
         return "host_not_refreshed"
     return None
 
@@ -942,6 +942,18 @@ def _readiness_body(ops, principal: Principal, workspace_id: str, row) -> dict:
         "can_continue_own": can_continue,
         "last_verified_execution": last_execution,
     }
+    # Only host-observation-derived values declare validity. Configuration,
+    # authentication and execution history have no time-based readiness claim.
+    from .inventory import _valid_until
+    observation_states = [state for state in (can_observe, can_start)
+        if state["reason"] in {"never_observed", "host_unreachable", "host_not_refreshed"}]
+    if can_observe["value"] == "ready":
+        observation_states.append(can_observe)
+    if discovered["value"] == "ready":
+        observation_states.append(discovered)
+    for state in observation_states:
+        state.update(observed_at=last_success, valid_until=_valid_until(last_success, stale_after))
+
     if not bound:
         smallest = _gap("REPOSITORY_NOT_BOUND", "setup.repository")
     elif host_cfg is None:

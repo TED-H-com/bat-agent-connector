@@ -96,8 +96,44 @@ for (const locale of ['en-US', 'zh-TW']) test.describe(`shared readiness ${local
       await page.clock.fastForward(elapsed);
       expect(count(f.reads)).toBe(2);
       await expect(value(f.facts)).not.toContainText(locale === 'en-US' ? 'Checking' : '檢查中');
+      if(elapsed===60_000)await expect(value(f.facts)).toHaveText(copy[failure].replace('3 min ago','4 min ago').replace('3 分鐘前','4 分鐘前'));
     }
     expect(f.posts).toEqual([]);
+  });
+  test('Work permits a new renewal only after a normal read supplies a new deadline', async ({page}) => {
+    const f = await heldPicker(page);
+    f.response.body = body;
+    await page.clock.runFor(deadline - 1790000540000);
+    await expect.poll(() => count(f.reads)).toBe(2);
+    f.release();
+    await expect(value(f.facts)).toHaveText(copy.unchanged);
+    await page.evaluate(() => (window as any).__profilePicker.load());
+    expect(count(f.reads)).toBe(3);
+    await expect(value(f.facts)).toHaveText(copy.unchanged);
+    f.response.body = profiles.cases.renewed_observation;
+    await page.evaluate(() => (window as any).__profilePicker.load());
+    expect(count(f.reads)).toBe(4);
+    await expect(value(f.facts)).toHaveText(copy.ready);
+    await page.clock.runFor(180_000);
+    await expect.poll(() => count(f.reads)).toBe(5);
+    await expect(value(f.facts)).toHaveText(copy.unchanged);
+    await page.clock.fastForward(3_600_000);
+    expect(count(f.reads)).toBe(5);
+  });
+  test('Work rejects a renewal for another workspace and removes the timer on disposal', async ({page}) => {
+    const f = await heldPicker(page);
+    f.response.body = {...profiles.cases.renewed_observation, workspace_id: 'ws_' + '2'.repeat(32)};
+    await page.clock.runFor(deadline - 1790000540000);
+    await expect.poll(() => count(f.reads)).toBe(2);
+    f.release();
+    await expect(value(f.facts)).toHaveText(locale === 'en-US'
+      ? 'Ready · 3 min ago · Could not confirm (READ_FAILED)' : '已就緒 · 3 分鐘前 · 無法確認（READ_FAILED）');
+    f.response.body = profiles.cases.renewed_observation;
+    await page.evaluate(() => (window as any).__profilePicker.load());
+    expect(count(f.reads)).toBe(3);
+    await page.evaluate(() => (window as any).__profilePicker.dispose());
+    await page.clock.fastForward(3_600_000);
+    expect(count(f.reads)).toBe(3); await expect(f.facts).toBeEmpty();
   });
   test('Work waits while hidden and renews once on return', async ({page}) => {
     const f = await heldPicker(page);
@@ -121,6 +157,20 @@ for (const locale of ['en-US', 'zh-TW']) test.describe(`shared readiness ${local
     await page.clock.runFor(1);
     await expect(select).toHaveValue(''); await expect(f.facts).toBeEmpty();
     expect(count(f.reads)).toBe(2);
+  });
+  test('Work returning to a selection cannot leave a discarded renewal permanently Checking', async ({page}) => {
+    const f = await heldPicker(page);
+    f.response.body = body;
+    await page.clock.runFor(deadline - 1790000540000);
+    await expect.poll(() => count(f.reads)).toBe(2);
+    const select = page.locator('[data-work-profile-picker] select');
+    await select.selectOption('');
+    f.release();
+    await select.selectOption(body.profile_id);
+    await expect(value(f.facts)).toHaveText(copy.unchanged);
+    expect(count(f.reads)).toBe(3);
+    await page.clock.fastForward(600_000);
+    expect(count(f.reads)).toBe(3);
   });
   for (const [name, data] of Object.entries(profiles.cases) as [string, any][]) {
     test(`Work ${name}: undeclared states never show Checking`, async ({page}) => {

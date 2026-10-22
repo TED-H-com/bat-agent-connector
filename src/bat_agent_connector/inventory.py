@@ -86,6 +86,13 @@ def _iso(ts: float | None) -> str | None:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ts))
 
 
+def _valid_until(observed, stale_after_s):
+    """Host observation validity, shared by Inventory and Work readiness."""
+    if isinstance(observed, str):
+        observed = datetime.fromisoformat(observed.replace("Z", "+00:00")).timestamp()
+    return _iso(observed + stale_after_s) if observed is not None else None
+
+
 class Inventory:
     def __init__(self, journal, config: Config, settings: InventorySettings | None = None,
                  fleet: Fleet | None = None) -> None:
@@ -390,9 +397,7 @@ class Inventory:
         return out
 
     def _valid_until(self, observed):
-        if isinstance(observed, str):
-            observed = datetime.fromisoformat(observed.replace("Z", "+00:00")).timestamp()
-        return _iso(observed + self.settings.stale_after_s) if observed is not None else None
+        return _valid_until(observed, self.settings.stale_after_s)
 
     def _host_stale(self, r: dict, now: float) -> tuple[bool, str | None]:
         if not r:

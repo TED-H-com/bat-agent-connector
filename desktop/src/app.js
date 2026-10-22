@@ -1153,6 +1153,7 @@ async function refreshHealthCapabilities() {
 }
 function tickHealth() {
   if (document.hidden) return;
+  document.dispatchEvent(new Event('health-display-tick'));
   const verification = state.health?.capabilityRefresh;
   if (verification?.state === 'loading' && Date.now() - verification.startedAt >= 60_000) {
     verification.state = 'failed'; verification.reason = 'VERIFICATION_PENDING';

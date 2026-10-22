@@ -99,6 +99,15 @@ async def test_work_profile_readiness_matches_producer_golden(world, mock, tmp_p
     assert never["states"]["can_observe"]["reason"] == "never_observed"
     await daemon.inventory._refresh_scheduled("h1")
     assert daemon.inventory.hosts()[0]["reachable"] is True
+    original_window = daemon.inventory.settings.stale_after_s
+    daemon.inventory.settings.stale_after_s = 311
+    try:
+        custom = await capture("custom_window")
+        state = custom["states"]["can_observe"]
+        assert datetime.fromisoformat(state["valid_until"].replace("Z", "+00:00")).timestamp() == int(state["observed_at"]) + 311
+        del cases["custom_window"]
+    finally:
+        daemon.inventory.settings.stale_after_s = original_window
     with daemon.journal.tx():
         ops.db.execute("UPDATE hosts_observed SET last_success_at=? WHERE host=?",
             (time.time() - daemon.inventory.settings.stale_after_s - 1, "h1"))
@@ -172,7 +181,7 @@ async def test_work_profile_readiness_matches_producer_golden(world, mock, tmp_p
     bundle["profile"] = normalize(bundle["profile"])
     for name, body in bundle["cases"].items():
         bundle["cases"][name] = normalize(body, {"host_not_refreshed": 1790000000.0, "renewed_observation": 1790000720.0}.get(name, 1790000540.0))
-        bundle["cases"][name]["observed_at"] = 1790000600.0
+        bundle["cases"][name]["observed_at"] = 1790000780.0 if name == "renewed_observation" else 1790000600.0
     raw = json.dumps(bundle, ensure_ascii=False, indent=2) + "\n"
     assert mock.token not in raw and str(tmp_path) not in raw
     if os.environ.get("BATC_UPDATE_PROFILE_GOLDEN") == "1":
@@ -187,3 +196,9 @@ def test_readiness_golden_declares_host_deadlines():
             state = bundle["cases"][name]["states"][key]
             assert "valid_until" in state, (name, key)
             assert state["observed_at"] != bundle["cases"][name]["observed_at"]
+
+
+def test_work_observation_expires_inclusively():
+    assert pm_work_profiles._observation_reason(
+        {"reachable": True, "last_success_at": 1000.0}, 1180.0, 180.0,
+    ) == "host_not_refreshed"

@@ -87,6 +87,18 @@ for (const locale of ['en', 'zh-TW']) {
     assert.equal(text(1790000719999), labels.values.ready);
     assert.equal(text(1790000720000), locale === 'en' ? 'Ready · 3 min ago · Checking' : '已就緒 · 3 分鐘前 · 檢查中');
   });
+  test(`Work unreachable and history remain distinct from checking ${locale}`, () => {
+    for (const key of ['can_observe', 'can_start_own']) {
+      const facts = profileStateFacts(profiles.cases.host_unreachable.states[key], {now:1790000600000});
+      assert.equal(healthLabel(facts.fact, t), locale === 'en'
+        ? 'Unavailable · Last attempt: 1 min ago; host unreachable, last successful observation is stale'
+        : '不可用 · 上次嘗試：1 分鐘前；無法連至主機，上次成功觀察已過期');
+      assert.equal(facts.reasonCode, 'host_unreachable');
+    }
+    const past = profileStateFacts(profiles.cases.owned_execution.states.last_verified_execution, {now:1791000600000});
+    assert.equal(past.fact, null); assert.equal(t(past.valueKey), labels.values.ready);
+  });
+
 }
 
 test('reachable Connector does not supply an unavailable Work capability or PM readiness', () => {
