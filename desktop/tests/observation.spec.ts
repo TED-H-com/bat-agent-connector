@@ -1,3 +1,4 @@
+import {managedStatusFixture} from './managed-status-fixture.ts';
 import {test, expect, type Page} from "@playwright/test";
 
 const cp = (cursor: number) => ({cursor, token: `observation-proof-${cursor}`});
@@ -6,13 +7,14 @@ const caps = {actor: "observer", scopes: ["observe", "operate", "manage"], api_v
 async function mount(page: Page, native: boolean, dispatch: (request: any) => Promise<any>) {
   if (native) {
     await page.exposeFunction("fixtureConnector", dispatch);
-    await page.addInitScript(caps => Object.assign(window, {isTauri: true, __TAURI_INTERNALS__: {invoke: async (command: string, args: any) => {
+    await page.addInitScript(({caps, managed}) => Object.assign(window, {isTauri: true, __TAURI_INTERNALS__: {invoke: async (command: string, args: any) => {
+      if (command === "managed_control" && args.input.action === "status") return managed;
       if (command === "native_status") return {endpoint: "https://central.example/", credential_available: true};
       if (command === "connector_connect") return caps;
       if (command === "connector_disconnect") return null;
       if (command === "connector_request") return (window as any).fixtureConnector(args.input);
       throw new Error(`Unexpected native command ${command}`);
-    }}}), caps);
+    }}}), {caps, managed: managedStatusFixture(false)});
   } else await page.addInitScript(() => sessionStorage.setItem("batc.dashboard.token", "fixture-token"));
   await page.route("**/api/v1/**", async route => {
     if (native) throw new Error("Native requests must use IPC");

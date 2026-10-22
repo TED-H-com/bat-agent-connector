@@ -1,7 +1,9 @@
+import {managedStatusFixture} from './managed-status-fixture.ts';
 import {test, expect, type Page} from '@playwright/test';
 
 async function pending(page: Page, role: string | null = null) {
-  await page.addInitScript(role => {
+  await page.addInitScript(({role: initialRole, managed, external}) => {
+    let role = initialRole;
     role = sessionStorage.getItem('native-role-fixture') || role;
     const fixture = {role, generation: role ? 1 : 0, calls: [] as any[], busy: false, fail: false};
     const status = () => ({endpoint: fixture.role && fixture.role !== 'client' ? 'http://127.0.0.1:41001/' : null,
@@ -15,6 +17,7 @@ async function pending(page: Page, role: string | null = null) {
         installation_ref: fixture.role ? '00000000-0000-4000-8000-000000000001' : null}});
     Object.assign(window, {isTauri: true, __startupRole: fixture, __TAURI_INTERNALS__: {invoke: async (command: string, args: any) => {
       fixture.calls.push({command, args});
+      if (command === 'managed_control' && args.input.action === 'status') return fixture.role && fixture.role !== 'client' ? managed : external;
       if (command === 'native_status') return status();
       if (command === 'managed_select_role') {
         if (fixture.fail) throw 'MANAGED_CONFIGURATION_UNREADABLE';
@@ -29,7 +32,7 @@ async function pending(page: Page, role: string | null = null) {
       if (command === 'connector_setup_configuration') return null; // Existing native confirmation cancelled.
       throw new Error('Unexpected command ' + command);
     }}});
-  }, role);
+  }, {role, managed: managedStatusFixture(true), external: managedStatusFixture(false)});
   await page.goto('/dashboard/');
 }
 
@@ -85,12 +88,13 @@ for (const locale of ['en-US', 'zh-TW']) for (const roleShape of ['missing', 'nu
     const context = await browser.newContext({locale}), page = await context.newPage();
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
-    await page.addInitScript(roleShape => {
+    await page.addInitScript(({roleShape, managed}) => {
       const trace: any[] = [], requests: string[] = [];
       let phase = 'starting';
       Object.assign(window, {isTauri: true, __entryTrace: trace, __entryRequests: requests,
         __TAURI_INTERNALS__: {invoke: async (command: string, args: any) => {
           trace.push({command, phase, mounted: !!document.querySelector('.native-connection')});
+          if (command === 'managed_control' && args.input.action === 'status') return managed;
           if (command === 'native_status') return {endpoint: 'https://central.example/', credential_available: true,
             error: null, ...(roleShape === 'null' ? {startup_role: null} : {})};
           if (command === 'connector_connect') {phase = 'connecting'; return {actor: 'expected-actor', scopes: ['observe']};}
@@ -105,7 +109,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const roleShape of ['missing', 'nu
           }
           throw new Error('Unexpected native command ' + command);
         }}});
-    }, roleShape);
+    }, {roleShape, managed: managedStatusFixture(false)});
     try {
       await page.goto('/dashboard/');
       await expect(page.locator('.native-connection')).toBeVisible();
