@@ -4,7 +4,10 @@ import {browserCredentialRefusals} from "../credential-refusals.js";
 
 export const nativeDesktop = isTauri();
 export interface ConnectorResponse { status: number; data: any }
+export type StartupRole = "client" | "provider" | "both";
+export interface StartupRoleStatus {role: StartupRole | null; generation: number; installation_ref: string | null}
 export interface NativeStatus {
+  startup_role?: StartupRoleStatus | null;
   configuration_source?: "managed" | "external";
   managed_recovery?: string | null;
   managed_rebind?: number | null;
@@ -73,6 +76,8 @@ export interface BriefExportReceipt {
 export const nativeBriefSave = (reference: BriefExportReference) =>
   invoke<BriefExportReceipt | null>("native_brief_save", {reference});
 export const nativeFilesPreview = (reference: unknown) => invoke<any>("native_files_preview", {reference});
+export const nativeSelectRole = (input: {role: StartupRole; expected_generation: number}) =>
+  invoke<NativeStatus>("managed_select_role", {input});
 export const nativeConnect = () => invoke<any>("connector_connect");
 export const managedControl = (input: {action: "status" | "open_browser"} | {action: "set_login"; enabled: boolean}) =>
   invoke<any>("managed_control", {input});

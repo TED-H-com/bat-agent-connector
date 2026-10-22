@@ -1,3 +1,4 @@
+import {startupRoleChoice} from "./startup-role.js";
 import {boardGitHubPanel} from './board-github.js';
 import {centralServiceStatus, clientActionGate, pollFailure} from "./central-service-status.js";
 import {browserCredentialRefusals, isCredentialRefusal, BROWSER_TOKEN_KEY as TOKEN_KEY} from './credential-refusals.js';
@@ -52,7 +53,7 @@ import {createRecordDisclosure} from "./create-record.js";
 // sessions is always set with textContent (never parsed as HTML).
 import { t, locale, setLocale } from "./i18n.js";
 import {timeStamp, timeText, timeLabel, startTimeTicker} from "./ui/stamps.js";
-import { connectorRequest, connectorUploadArtifact, nativeDiagnosticsSave, nativeDesktop, nativeFileSupport, nativeStatus, nativeConnect, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal } from "./transport/index.ts";
+import { connectorRequest, connectorUploadArtifact, nativeDiagnosticsSave, nativeDesktop, nativeFileSupport, nativeStatus, nativeConnect, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, nativeSelectRole, openExternal } from "./transport/index.ts";
 import { nativeAttachments } from "./native-files.js";
 import { mountFleet } from "./fleet.js";
 import { mountTailscale } from "./tailscale.js";
@@ -3581,9 +3582,35 @@ function viewBrowserSignedOut(main) {
 }
 function viewSettings(main) {
   if (state.caps?.managed_installation) return viewManagedSettings(main);
-  if (nativeDesktop) return viewNativeSettings(main);
+  if (nativeDesktop) return viewNativeEntry(main);
   if (state.token && state.caps) return viewBrowserSettings(main);
   viewBrowserSignedOut(main);
+}
+
+async function viewNativeEntry(main) {
+  const mine = generation;
+  const status = await nativeStatus().catch(() => null);
+  if (mine !== generation) return;
+  if (status?.startup_role?.role !== null) return viewNativeSettings(main);
+  const body = startupRoleChoice({h, t, errorBox, snapshot: status.startup_role, select: async input => {
+    const guard = () => {if (mine !== generation) throw new Error(t('desktop_role_changed'));};
+    guard();
+    try {
+      const selected = await nativeSelectRole(input);
+      guard();
+      if (selected.credential_available) await nativeTransition('connect');
+      else await route();
+    } catch (error) {
+      guard();
+      const current = await nativeStatus();
+      guard();
+      if (current.startup_role?.role) {state.connectionError = error; await route();}
+      else throw error;
+    }
+  }});
+  const root = firstRunCard({h, t, body});
+  root.querySelector('.global-first-card').prepend(languageSwitch());
+  main.append(root);
 }
 
 async function viewManagedSettings(main) {
@@ -3791,7 +3818,7 @@ async function viewNativeSettings(main) {
         setup.append(h("h3", {}, t("managed_recovery_title")), h("p", {}, t("managed_recovery_help")),
           h("details", {}, h("summary", {}, t("setup_advanced")), h("h3", {}, t("managed_join_existing")), form));
         introduction.hidden = true;
-      } else setup.append(form);
+      } else setup.append(status.startup_role?.role === "client" ? h("h3", {}, t("managed_join_existing")) : null, form);
       // Keep configuration recovery accessible without making it compete with the first step.
       connectionDetails.append(h("div", {class: "actions"}, reload));
     }

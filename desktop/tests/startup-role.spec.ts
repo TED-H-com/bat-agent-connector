@@ -1,0 +1,67 @@
+import {test, expect, type Page} from '@playwright/test';
+
+async function pending(page: Page, role: string | null = null) {
+  await page.addInitScript(role => {
+    role = sessionStorage.getItem('native-role-fixture') || role;
+    const fixture = {role, generation: role ? 1 : 0, calls: [] as any[], busy: false, fail: false};
+    const status = () => ({endpoint: fixture.role && fixture.role !== 'client' ? 'http://127.0.0.1:41001/' : null,
+      expected_actor: fixture.role && fixture.role !== 'client' ? 'fixture-user' : null,
+      configuration_source: fixture.role === 'client' ? 'external' : 'managed',
+      error: fixture.role ? null : 'STARTUP_ROLE_PENDING', credential_available: false,
+      credential_saved: false, enrollment_supported: true, configuration_reload: fixture.role === 'client',
+      configuration_setup: fixture.role === 'client', configuration_file: 'example/central.json', connected: false,
+      startup_role: {role: fixture.role, generation: fixture.generation,
+        installation_ref: fixture.role ? '00000000-0000-4000-8000-000000000001' : null}});
+    Object.assign(window, {isTauri: true, __startupRole: fixture, __TAURI_INTERNALS__: {invoke: async (command: string, args: any) => {
+      fixture.calls.push({command, args});
+      if (command === 'native_status') return status();
+      if (command === 'managed_select_role') {
+        if (fixture.fail) throw 'MANAGED_CONFIGURATION_UNREADABLE';
+        if (args.input.expected_generation !== fixture.generation || fixture.role) throw 'STARTUP_ROLE_CHANGED';
+        fixture.role = args.input.role; fixture.generation++;
+        sessionStorage.setItem('native-role-fixture', fixture.role!);
+        return status();
+      }
+      if (command === 'fleet_availability') return {configured: false, platform_supported: false};
+      if (command === 'connector_connect') throw 'Fixture credential not yet enrolled';
+      if (command === 'connector_disconnect') return;
+      if (command === 'connector_setup_configuration') return null; // Existing native confirmation cancelled.
+      throw new Error('Unexpected command ' + command);
+    }}});
+  }, role);
+  await page.goto('/dashboard/');
+}
+
+for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 1440]) {
+  test(`native role choice precedes external setup (${locale}, ${width})`, async ({browser}, testInfo) => {
+    const context = await browser.newContext({locale, viewport: {width, height: 900}}), page = await context.newPage();
+    await pending(page);
+    const choice = page.locator('[data-startup-role]');
+    await expect(choice).toBeVisible();
+    await expect(page.locator('[data-native-setup]')).toHaveCount(0);
+    await expect(choice.getByRole('button')).toHaveCount(3);
+    expect(await page.evaluate(() => (window as any).__startupRole.calls.filter((c: any) =>
+      ['managed_select_role', 'connector_setup_configuration', 'connector_connect'].includes(c.command)))).toEqual([]);
+    await page.screenshot({path: testInfo.outputPath(`role-${locale}-${width}.png`), fullPage: true});
+    await choice.getByRole('button', {name: locale === 'zh-TW' ? '使用既有服務' : 'Use existing services', exact: true}).click();
+    await expect(choice).toHaveCount(0);
+    await expect(page.locator('[data-native-setup]')).toBeVisible();
+    await expect(page.getByRole('heading', {name: locale === 'zh-TW' ? '加入既有的 Connector' : 'Join another Connector'})).toBeVisible();
+    const calls = await page.evaluate(() => (window as any).__startupRole.calls.filter((c: any) => c.command === 'managed_select_role'));
+    expect(calls).toEqual([{command: 'managed_select_role', args: {input: {role: 'client', expected_generation: 0}}}]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.reload();
+    await expect(choice).toHaveCount(0);
+    await context.close();
+  });
+  for (const role of ['provider', 'both']) test(`native ${role} prepares via fixed command (${locale}, ${width})`, async ({browser}) => {
+    const context = await browser.newContext({locale, viewport: {width, height: 900}}), page = await context.newPage();
+    await pending(page);
+    const button = page.locator(`[data-startup-role] [data-role=${role}]`);
+    await button.click();
+    await expect(page.locator('[data-startup-role]')).toHaveCount(0);
+    expect(await page.evaluate(() => (window as any).__startupRole.calls.filter((c: any) => c.command === 'managed_select_role')))
+      .toEqual([{command: 'managed_select_role', args: {input: {role, expected_generation: 0}}}]);
+    await context.close();
+  });
+}
