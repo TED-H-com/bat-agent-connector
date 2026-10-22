@@ -27,6 +27,15 @@ async def main():
         try:
             while line := await asyncio.to_thread(sys.stdin.readline):
                 command = json.loads(line)
+                if command.get("action") == "observe_operation":
+                    other = api_auth.issue(daemon.journal.db, "other-operator", api_auth.SCOPES)
+                    principal = api_auth.authenticate(daemon.journal.db, other, daemon._admin_token)
+                    operation, _ = daemon.ops.create(principal, action="project.create", params={"name": "Example"},
+                                                     idempotency_key="example-project")
+                    daemon.journal.db.execute("UPDATE api_principals SET scopes=? WHERE token_hash=?",
+                                              (json.dumps(["observe"]), api_auth._digest(token)))
+                    print(json.dumps({"operation_id": operation["operation_id"]}), flush=True)
+                    continue
                 daemon.journal.db.execute(
                     "UPDATE api_principals SET revoked_at=?,scopes=? WHERE token_hash=?",
                     (1 if command.get("status") == 401 else None,

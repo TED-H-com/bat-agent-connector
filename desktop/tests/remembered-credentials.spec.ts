@@ -1,26 +1,9 @@
 import {test, expect} from '@playwright/test';
-import {spawn} from 'node:child_process';
-import {createInterface} from 'node:readline';
-import {once} from 'node:events';
+import {browserAuthService as service} from './browser-auth-service';
 import {STRINGS} from '../src/i18n.js';
 
 test.describe.configure({mode: 'parallel'});
 const tokenKey = 'batc.dashboard.token';
-
-async function service() {
-  const child = spawn('../.venv/bin/python', ['tests/browser-auth-fixture.py'], {stdio: ['pipe', 'pipe', 'pipe']});
-  const lines = createInterface({input: child.stdout})[Symbol.asyncIterator]();
-  const first = await lines.next();
-  if (first.done) throw new Error('Auth fixture did not start');
-  const identity = JSON.parse(first.value);
-  return {...identity, async status(status: number) {
-    child.stdin.write(JSON.stringify({status}) + '\n');
-    expect(JSON.parse((await lines.next()).value!).updated).toBe(true);
-  }, async close() {
-    const closed = once(child, 'exit'); child.stdin.end();
-    const [code] = await closed; expect(code).toBe(0);
-  }};
-}
 
 for (const locale of ['en-US', 'zh-TW']) for (const status of [401, 403]) {
   const copy = STRINGS[locale === 'zh-TW' ? 'zh-TW' : 'en'];
@@ -44,6 +27,9 @@ for (const locale of ['en-US', 'zh-TW']) for (const status of [401, 403]) {
         await page.reload();
         await expect(page.getByRole('alert')).toContainText(copy.global_token_rejected);
         expect(presentations).toBe(1);
+        expect(await page.evaluate(() => [sessionStorage, localStorage].map(store => Object.keys(store)
+          .filter(key => key.startsWith('batc.credential-refused.')).length)))
+          .toEqual(storage === 'sessionStorage' ? [1, 0] : [0, 1]);
         await page.reload();
         await expect(page.getByRole('alert')).toContainText(copy.global_token_rejected);
         if (storage === 'localStorage') {
@@ -85,6 +71,8 @@ for (const locale of ['en-US', 'zh-TW']) for (const status of [401, 403]) {
       await page.getByRole('button', {name: copy.connect, exact: true}).click();
       await expect(page.locator('#live')).toHaveText(copy.ui_connected);
       expect(await page.evaluate(key => sessionStorage.getItem(key), tokenKey)).toBe(central.replacement);
+      expect(await page.evaluate(() => [localStorage, sessionStorage].flatMap(store => Object.keys(store))
+        .filter(key => key.startsWith('batc.credential-refused.')))).toEqual([]);
     } finally {await context.close(); await central.close();}
   });
 
@@ -112,6 +100,28 @@ for (const locale of ['en-US', 'zh-TW']) for (const status of [401, 403]) {
       await page.reload();
       await expect(page.getByRole('alert')).toContainText(copy.global_token_rejected);
       expect(presentations).toBe(3);
+    } finally {await context.close(); await central.close();}
+  });
+}
+
+for (const locale of ['en-US', 'zh-TW']) {
+  const copy = STRINGS[locale === 'zh-TW' ? 'zh-TW' : 'en'];
+  test(`disconnect forgets the refused credential record ${locale}`, async ({browser}) => {
+    const central = await service(), context = await browser.newContext({locale});
+    try {
+      const page = await context.newPage();
+      await page.goto(central.origin + '/dashboard/');
+      await page.locator('input[type=password]').fill(central.token);
+      await page.locator('input[type=checkbox]').check();
+      await page.getByRole('button', {name: copy.connect, exact: true}).click();
+      await expect(page.locator('#live')).toHaveText(copy.ui_connected);
+      await central.status(401);
+      await expect(page.locator('#live')).toHaveText(copy.ui_connection_refused);
+      await page.locator('#live').click();
+      await page.getByRole('button', {name: copy.disconnect, exact: true}).click();
+      await expect(page.locator('input[type=password]')).toBeVisible();
+      expect(await page.evaluate(() => [localStorage, sessionStorage].flatMap(store => Object.keys(store))
+        .filter(key => key.startsWith('batc.credential-refused.') || key === 'batc.dashboard.token'))).toEqual([]);
     } finally {await context.close(); await central.close();}
   });
 }

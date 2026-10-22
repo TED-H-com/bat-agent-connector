@@ -14,19 +14,23 @@ from bat_agent_connector.task_daemon import TaskDaemon
 
 
 async def http(port, method, path, headers=None, raw=b""):
-    reader, writer = await asyncio.open_connection("127.0.0.1", port)
+    reader, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", port), 5)
     lines = [f"{method} {path} HTTP/1.1", f"Host: 127.0.0.1:{port}", f"Content-Length: {len(raw)}"]
     lines += [f"{key}: {value}" for key, value in (headers or {}).items()]
-    writer.write(("\r\n".join(lines) + "\r\n\r\n").encode() + raw)
-    await writer.drain()
     try:
-        response = await asyncio.wait_for(reader.read(), 10)
+        writer.write(("\r\n".join(lines) + "\r\n\r\n").encode() + raw)
+        await asyncio.wait_for(writer.drain(), 5)
+        head = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 10)
+        rows = head.decode().strip().split("\r\n")
+        response_headers = dict(row.split(": ", 1) for row in rows[1:])
+        # Authentication assertions need the status, even if the handler opens
+        # a stream. Never wait for a successful event stream to reach EOF.
+        length = int(response_headers.get("Content-Length", "0"))
+        body = await asyncio.wait_for(reader.readexactly(length), 10)
+        return int(rows[0].split()[1]), response_headers, json.loads(body) if body else None
     finally:
         writer.close()
-        await writer.wait_closed()
-    head, _, body = response.partition(b"\r\n\r\n")
-    rows = head.decode().split("\r\n")
-    return int(rows[0].split()[1]), dict(row.split(": ", 1) for row in rows[1:]), json.loads(body) if body else None
+        await asyncio.wait_for(writer.wait_closed(), 5)
 
 
 @pytest.fixture
@@ -34,7 +38,17 @@ async def browser(tmp_path):
     d = TaskDaemon(Config(hosts={}), tmp_path / "state" / "tasks.db")
     token = api_auth.issue(d.journal.db, "desktop-test", api_auth.SCOPES)
     principal = api_auth.authenticate(d.journal.db, token, d._admin_token)
-    service = await asyncio.start_server(d._handle, "127.0.0.1", 0)
+    handlers = set()
+
+    async def handle(reader, writer):
+        task = asyncio.current_task()
+        handlers.add(task)
+        try:
+            await d._handle(reader, writer)
+        finally:
+            handlers.discard(task)
+
+    service = await asyncio.start_server(handle, "127.0.0.1", 0)
     port = service.sockets[0].getsockname()[1]
     d._endpoint = f"http://127.0.0.1:{port}/rpc"
     d.managed_installation = {"installation_id": "test", "actor": principal.actor, "runtime_version": "test"}
@@ -42,6 +56,8 @@ async def browser(tmp_path):
     yield d, principal, token, port
     service.close()
     await service.wait_closed()
+    if handlers:
+        await asyncio.wait_for(asyncio.gather(*handlers), 5)
     await d.fleet.close()
     await d.inventory.close()
     d.journal.close()
