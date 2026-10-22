@@ -485,8 +485,8 @@ The [simple first-run flow](managed-installation.md#implemented-first-use-journe
 
 Use one shared connection screen on browser and desktop, including Linux and
 Windows, with one dedicated password-type **BAT connection URL / BAT 連線網址**
-field. Apply follows the explicit connection review. The main path is one paste from BAT's trusted
-screen/output; it applies to local and remote servers alike. No separate native
+field. Apply follows the explicit connection review. When no saved connection is available,
+paste a connection from BAT's trusted screen/output; this fallback applies to local and remote servers alike. No separate native
 enrollment wizard or discovered-certificate trust dialog is required. Technical
 evidence belongs in Details; the parsed endpoint and fingerprint are nonsecret.
 The stable logical host ID is allocated once by central with collision checking;
