@@ -371,7 +371,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       for (const name of ['url', 'fingerprint', 'profile_id']) fields.get(name).value = saved[name] = selected[name] || '';
     }
     defaultHost(); persist();
-    if (snapshot.discovery_contract_version === 1 && !discovery) await findSources();
+    if (snapshot.discovery_contract_version === 1 && !discovery?.profile_id) await findSources();
     else await run('host', true);
   }
   function suggestLocal() {
@@ -538,7 +538,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   }
   function invalidateReview() {
     reviewSerial++;
-    reviewChanged = !!review || reviewing;
+    reviewChanged ||= !!review || reviewing;
     review = null;
     if (typeof reviewBox !== 'undefined') {reviewBox.hidden = true; update();}
   }

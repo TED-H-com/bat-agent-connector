@@ -58,6 +58,7 @@ for (const locale of ['en', 'zh-TW']) test.describe(`${locale} source discovery`
     await page.locator('[data-setup-field=url]').fill('wss://host-b.example.invalid:9876');
     await expect(picker).toBeHidden();
     await expect(page.locator('[data-setup-review]')).toBeHidden();
+    await expect(page.locator('[data-setup-progress]')).toHaveText(locale === 'en' ? 'Settings changed; review again' : '設定已變更，請重新預覽');
     const draft = await page.evaluate(() => JSON.stringify({...localStorage, ...sessionStorage}));
     expect(draft).not.toContain('synthetic-bat-secret'); expect(draft).not.toContain('source_digest');
   });
@@ -67,6 +68,23 @@ for (const locale of ['en', 'zh-TW']) test.describe(`${locale} source discovery`
     await page.locator('[data-setup-manual] > summary').click();
     await expect(page.locator('[data-setup-field=profile_id]')).toBeVisible();
     await expect(page.getByRole('button', {name: find, exact: true})).toBeHidden();
+  });
+  test('the simple entry can refresh ambiguous choices before Review', async ({page}) => {
+    const state = await fixture(page, locale); await page.goto('/dashboard/');
+    await page.locator('.setup-automatic').click();
+    const copy = page.locator('[data-setup-copy]');
+    await copy.locator('input').fill(`wss://host-a.example.invalid:9876?token=synthetic-bat-secret&fp=${'A'.repeat(64)}`);
+    await expect(copy.locator('button')).toHaveText(find);
+    await copy.locator('button').click();
+    await expect(page.locator('[data-setup-discovered-profile]')).toBeVisible();
+    await expect(page.locator('.setup-automatic')).toHaveText(find);
+    await page.locator('.setup-automatic').click();
+    await expect.poll(() => state.reads.length).toBe(2);
+    await page.locator('[data-setup-discovered-profile]').selectOption('work');
+    await expect(page.locator('.setup-automatic')).toHaveText(locale === 'en' ? 'Review connection' : '預覽連線');
+    await page.locator('.setup-automatic').click();
+    await expect(page.locator('[data-setup-review]')).toContainText('work');
+    expect(state.posts).toEqual([]);
   });
   test('staged credential expiry clears discovery and review', async ({page}) => {
     await page.clock.install();

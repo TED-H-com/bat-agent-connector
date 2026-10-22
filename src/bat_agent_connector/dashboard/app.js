@@ -56833,7 +56833,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		}
 		defaultHost();
 		persist();
-		if (snapshot.discovery_contract_version === 1 && !discovery) await findSources();
+		if (snapshot.discovery_contract_version === 1 && !discovery?.profile_id) await findSources();
 		else await run("host", true);
 	}
 	function suggestLocal() {
@@ -57088,7 +57088,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}
 	function invalidateReview() {
 		reviewSerial++;
-		reviewChanged = !!review || reviewing;
+		reviewChanged ||= !!review || reviewing;
 		review = null;
 		if (typeof reviewBox !== "undefined") {
 			reviewBox.hidden = true;
