@@ -14068,7 +14068,53 @@ var clientActionCode = (reason) => `CLIENT_ACTION_${reason.toUpperCase()}`;
 var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}`;
 var clientActionReason = (code) => clientReasons.find((reason) => clientActionCode(reason) === code) || null;
 //#endregion
+//#region src/health-fact.js
+function displayFact(fact = {}, { now = Date.now(), bootstrap, version } = {}) {
+	const observed = time$2(fact.observed_at), deadline = time$2(fact.valid_until);
+	const ageSeconds = Number.isFinite(observed) ? Math.max(0, Math.floor((now - observed) / 1e3)) : null;
+	const freshness = fact.static && (fact.bootstrap !== bootstrap || fact.version !== version) ? "invalidated" : fact.static ? "current" : fact.stale ? "stale" : !Number.isFinite(observed) ? "unknown" : Number.isFinite(deadline) ? now >= deadline ? "stale" : "current" : now - observed >= 6e4 ? "stale" : "current";
+	return {
+		...fact,
+		freshness,
+		ageSeconds
+	};
+}
+function healthAge(seconds, t) {
+	return seconds === null ? t("health_age_unknown") : seconds < 60 ? t("health_age_recent") : t("health_age_minutes", { count: Math.floor(seconds / 60) });
+}
+function healthLabel(fact, t, { age = true } = {}) {
+	const label = t(fact.key === "health_unknown" ? "obs_unknown" : fact.key || fact.value);
+	if (fact.error) return t("health_read_failed", {
+		value: label,
+		age: healthAge(fact.ageSeconds, t),
+		reason: fact.error.code || fact.error.status
+	});
+	if (fact.stale_reason === "host_unreachable") return t("health_unreachable_value", {
+		value: label,
+		age: healthAge(fact.ageSeconds, t)
+	});
+	if (fact.freshness === "stale" && age) return t("health_stale_value", {
+		value: label,
+		age: healthAge(fact.ageSeconds, t),
+		checking: t("health_checking")
+	});
+	if ([
+		"stale",
+		"unknown",
+		"invalidated"
+	].includes(fact.freshness) && fact.key !== "ui_connecting") return label.includes(t("health_checking")) ? label : t("health_unknown_value", {
+		value: label,
+		checking: t("health_checking")
+	});
+	return label;
+}
+var time$2;
+var init_health_fact = __esmMin((() => {
+	time$2 = (value) => typeof value === "number" && Number.isFinite(value) ? value : typeof value === "string" && value ? Date.parse(value) : NaN;
+}));
+//#endregion
 //#region src/state/sessions.js
+init_health_fact();
 var text$6 = (value) => typeof value === "string" ? value : "";
 function workspaceGroup(session) {
 	const host = text$6(session.host), id = text$6(session.workspace_id), name = text$6(session.workspace);
@@ -14275,12 +14321,35 @@ function fleetDiagnosis(row, { snapshot, readable, kind = "host" } = {}) {
 function rememberFleetDetails(content, detailsState) {
 	for (const details of content.querySelectorAll("details[data-fleet-details-key]")) detailsState.set(details.dataset.fleetDetailsKey, details.open);
 }
-function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState }) {
-	const { state, kind, steps } = fleetDiagnosis(row, {
+function fleetHealth(row, options = {}) {
+	const diagnosis = fleetDiagnosis(row, options);
+	const observedAt = ["checking", "unknown"].includes(diagnosis.state) ? null : row?.observed_at;
+	const fact = displayFact({
+		key: [
+			"checking",
+			"unknown",
+			"stale"
+		].includes(diagnosis.state) ? "health_unknown" : diagnosis.state === "ready" ? "ui_connected" : "fleet_check_title_" + diagnosis.state,
+		observed_at: observedAt,
+		stale: diagnosis.state === "stale"
+	}, { now: options.now });
+	const state = diagnosis.state === "ready" && fact.freshness !== "current" ? fact.freshness === "stale" ? "stale" : "checking" : diagnosis.state;
+	return {
+		...diagnosis,
+		state,
+		fact,
+		steps: fact.freshness === "current" ? diagnosis.steps : diagnosis.steps.map((step) => ({
+			...step,
+			state: "unchecked"
+		}))
+	};
+}
+function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState, now = Date.now() }) {
+	const { state, kind, steps, fact } = fleetHealth(row, {
 		snapshot,
 		readable,
-		name: entry.name,
-		kind: entry.kind
+		kind: entry.kind,
+		now
 	});
 	const key = `${snapshot.configuration.binding}:machine:${entry.name}`;
 	const details = h("details", {
@@ -14299,8 +14368,9 @@ function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState }) {
 	return h("div", {
 		class: "fleet-diagnosis",
 		"data-fleet-diagnosis": entry.name,
-		"data-fleet-state": state
-	}, h("p", { class: "fleet-diagnosis-title" }, t("fleet_check_title_" + state)), h("p", { class: "muted" }, t("fleet_check_help_" + helpKey)), details);
+		"data-fleet-state": state,
+		"data-freshness": fact.freshness
+	}, h("p", { class: "fleet-diagnosis-title" }, healthLabel(fact, t)), h("p", { class: "muted" }, t("fleet_check_help_" + helpKey)), details);
 }
 var codeReason, layerReason, layerStep, lookup;
 var init_fleet_status = __esmMin((() => {
@@ -14360,6 +14430,7 @@ var init_fleet_status = __esmMin((() => {
 }));
 //#endregion
 //#region src/health-display.js
+init_health_fact();
 init_fleet_status();
 var time$1 = (value) => typeof value === "number" && Number.isFinite(value) ? value : typeof value === "string" && value ? Date.parse(value) : NaN;
 var healthRevision = (caps) => JSON.stringify([
@@ -14372,16 +14443,6 @@ var healthRevision = (caps) => JSON.stringify([
 var rowId = (row) => JSON.stringify([row.host, row.session_id]);
 var gone = (row) => Boolean(row.gone_at) || row.state?.enumeration === "gone";
 var selectedRows = (health) => (health.sessions || []).filter((row) => !gone(row) && row.host === health.selected?.host && (health.selected.workspaceId ? row.workspace_id === health.selected.workspaceId : row.session_id === health.selected.sessionId));
-function displayFact(fact = {}, { now = Date.now(), bootstrap, version } = {}) {
-	const observed = time$1(fact.observed_at), deadline = time$1(fact.valid_until);
-	const ageSeconds = Number.isFinite(observed) ? Math.max(0, Math.floor((now - observed) / 1e3)) : null;
-	const freshness = fact.static && (fact.bootstrap !== bootstrap || fact.version !== version) ? "invalidated" : fact.static ? "current" : fact.stale ? "stale" : !Number.isFinite(observed) ? "unknown" : Number.isFinite(deadline) ? now >= deadline ? "stale" : "current" : now - observed >= 6e4 ? "stale" : "current";
-	return {
-		...fact,
-		freshness,
-		ageSeconds
-	};
-}
 function compactHealth({ attention, stale, unknown, activity }) {
 	return attention ? "attention" : stale ? "stale" : unknown || activity === "unknown" ? "unknown" : activity === "working" ? "working" : "idle";
 }
@@ -14665,35 +14726,6 @@ function takeHealthRenewal(health, now = Date.now()) {
 	}
 	health.bootstrapRenewal = false;
 	return null;
-}
-function healthAge(seconds, t) {
-	return seconds === null ? t("health_age_unknown") : seconds < 60 ? t("health_age_recent") : t("health_age_minutes", { count: Math.floor(seconds / 60) });
-}
-function healthLabel(fact, t, { age = true } = {}) {
-	const label = t(fact.key === "health_unknown" ? "obs_unknown" : fact.key || fact.value);
-	if (fact.error) return t("health_read_failed", {
-		value: label,
-		age: healthAge(fact.ageSeconds, t),
-		reason: fact.error.code || fact.error.status
-	});
-	if (fact.stale_reason === "host_unreachable") return t("health_unreachable_value", {
-		value: label,
-		age: healthAge(fact.ageSeconds, t)
-	});
-	if (fact.freshness === "stale" && age) return t("health_stale_value", {
-		value: label,
-		age: healthAge(fact.ageSeconds, t),
-		checking: t("health_checking")
-	});
-	if ([
-		"stale",
-		"unknown",
-		"invalidated"
-	].includes(fact.freshness) && fact.key !== "ui_connecting") return label.includes(t("health_checking")) ? label : t("health_unknown_value", {
-		value: label,
-		checking: t("health_checking")
-	});
-	return label;
 }
 //#endregion
 //#region src/credential-storage-key.js

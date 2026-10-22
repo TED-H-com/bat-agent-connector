@@ -68,14 +68,55 @@ but cannot claim output is currently arriving. Gone rows are historical and supp
 neither aggregate attention/activity nor last-value spans. Connection problems are
 separate facts; only pending interactions or managed runtime status produce attention. Both locales preserve these meanings.
 
-The first consumer is `healthDisplay` in `desktop/src/health-display.js`, shared by
-the header and Connection settings. It reuses existing reads and `sessionFacets`;
+The header and Connection settings use `healthDisplay` in
+`desktop/src/health-display.js`. It reuses existing reads and `sessionFacets`;
 the local display clock also expires observations while a request is pending.
 It replaces those consumers' direct transport-label projection. Action admission
 continues using `clientActionGate`; no TTL relaxes or adds a mutation requirement.
-Fleet rows, Work, Workbench, Diagnostics and Result sources still need adoption of
-this freshness/compact contract. Existing source-specific facets are not replaced
-by a global boolean. Native and backend lifecycle behavior is unchanged here.
+Fleet rows also use its `displayFact` and `healthLabel` projection/formatter,
+now in the shared `desktop/src/health-fact.js` module and
+re-exported from `health-display.js`. Fleet retains `fleetDiagnosis` as the single
+native reason/step interpretation. `fleetHealth` applies the same local display
+clock at render time: an expired connected observation keeps Connected, its age
+and Checking; missing observations use Unknown and Checking. Expired layers cannot
+claim current success. Unconfirmed stop and unsupported-version reasons remain
+visible, and each row expires independently. Native Fleet identities are never
+joined to central hosts by name, port, address or server string.
+
+Checking and unknown diagnoses establish no value even with a recent probe
+timestamp, so they always use Unknown and Checking; stale diagnoses retain the
+observation age.
+
+The 60-second display rule uses the same `observed_at` and observation window as
+the native producer: `desktop/fleet-core/src/supervisor_status.rs` marks a selected ready
+row `PROBE_STALE` after 60 seconds. Both Fleet views (`fleet.js` and
+`fleet-desktop.js`) schedule their existing status/overview re-read after 5 seconds.
+Checking describes those ongoing reads and the supervisor's probes; this adoption
+adds neither a probe nor a polling loop.
+
+Work retains six independent producer values, reason codes and past verification,
+separate from PM analysis and from the saved profile. The profile response's
+`observed_at` dates the read, not a BAT observation. Its states currently lack
+`valid_until` and Inventory's `stale_after_s`; current evidence sometimes includes
+only `last_success_at`. Work has not adopted the shared freshness display: its
+existing value text, producer reasons (including `host_not_refreshed` and
+`host_unreachable`) and timestamps remain unchanged. Nothing renews these values
+automatically, so missing validity must not produce a permanent Checking label.
+Adoption requires a producer validity envelope per capability: `observed_at` and
+`valid_until` from the underlying Inventory host observation, or an explicitly
+`static` fact with bootstrap/version invalidation. The existing readiness re-read
+must then serve as renewal. Past verification never becomes current evidence,
+and a reachable Connector never supplies a missing capability. No readiness
+display changes admission, starts a check or adds a cache policy.
+
+Fleet's existing status/overview renders consume the projection; updating mounted
+rows while a native read is pending still requires wiring the existing `app.js`
+display clock to the Fleet painter. `fleetHealth(row, {snapshot, readable, kind,
+now})` is the tested pure entry point; the remaining call site is `app.js`'s
+`tickHealth`. This change does not add another timer or alter those mounts.
+Work, Workbench, Diagnostics and Result sources still need adoption of this
+freshness/compact contract. Existing source-specific facets are not replaced by
+a global boolean. Native and backend lifecycle behavior is unchanged here.
 
 ## Delegated production display decisions
 
