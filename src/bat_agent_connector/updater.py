@@ -311,9 +311,17 @@ class Updater:
     def _check_release(self, state):
         # Only the existing release producer can supply this observation. Persist
         # completion before installation; status/capabilities never renew it.
-        candidate = self.find_release(state["channel"])
+        observation = {}
+        if self.find_release is discover:
+            candidate = self.find_release(state["channel"], observation=observation)
+        else:
+            candidate = self.find_release(state["channel"])
+        # Preserve the shared install candidate. The selected release item's
+        # display clock belongs only to this completed check's observation.
+        recorded = ({**candidate, "published_at": observation["published_at"]}
+                    if candidate is not None and observation.get("published_at") is not None else candidate)
         state["release_check"] = {"channel": state["channel"], "completed_at": timestamp(),
-                                  "candidate": candidate}
+                                  "candidate": recorded}
         self.save(state)
         return candidate
 

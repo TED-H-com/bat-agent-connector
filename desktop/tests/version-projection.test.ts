@@ -5,7 +5,7 @@ import {buildDiagnostics, buildLine} from '../src/diagnostics.js';
 import {diagnosticsStrings} from '../src/diagnostics-strings.js';
 import {versionFactText, versionFacts} from '../src/version-facts.js';
 import {frontendBuild} from '../src/frontend-identity.js';
-import {time} from '../src/version-projection.js';
+import {time, versionProjection, versionRow} from '../src/version-projection.js';
 const bootstrap = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-bootstrap.json', import.meta.url), 'utf8'));
 const runtime = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-runtime-identity.json', import.meta.url), 'utf8'));
 const adapter = JSON.parse(readFileSync(new URL('../../tests/fixtures/pm-version-facts.json', import.meta.url), 'utf8'));
@@ -99,7 +99,7 @@ for(const [name,caps] of Object.entries(connectorUpdates) as [string,any][])test
   assert.equal(installed.observed_at,reported?at:null);
   assert.equal(installed.version,reported?caps.connector_update.installed.version:null);
   assert.equal(installed.commit,reported?caps.connector_update.installed.commit:null);
-  assert.equal(bundle.versions.connector_installation_difference,reported?(['differs','rollback_differs','released'].includes(name)?'differs':'same'):'unknown');
+  assert.equal(bundle.versions.connector_installation_difference,reported?(['differs','rollback_differs','released','publication_unknown'].includes(name)?'differs':'same'):'unknown');
   assert.equal(installed.channel,reported?'preview':null);
   assert.equal(installed.last?.status??null,reported?caps.connector_update.last.status:null);
   assert.equal(installed.last?.at??null,reported?'2026-10-22T12:00:00.123456+00:00':null);
@@ -235,4 +235,21 @@ test('native completed candidate stays independent of status reads and incomplet
   }
   assert.equal(row(buildDiagnostics({...value,updaterReadFailed:true}),'desktop_released').source,'not_reported');
   assert.deepEqual(row(buildDiagnostics({...value,updater:{...value.updater,phase:'check_failed'}}),'desktop_released'),first);
+});
+
+
+for(const locale of ['en','zh-TW'])test(`malformed publication time keeps installation and leaves release unknown in ${locale}`,()=>{
+  const value={...input('differs'),caps:connectorUpdates.publication_unknown};
+  const projection=versionProjection(value),bundle=buildDiagnostics(value);
+  const released=versionRow(projection,'connector_released');
+  assert.deepEqual(released,row(bundle,'connector_released'));
+  for(const key of ['version','commit','observed_at','published_at'])assert.equal(released[key],null,key);
+  assert.equal(released.source,'not_reported');
+  assert.equal(versionRow(projection,'connector_installed').version,'0.2.9');
+  assert.equal(versionRow(projection,'connector').version,'0.2.7');
+  const t=(key,vars={})=>diagnosticsStrings[locale][key]?.replace(/\{(\w+)\}/g,(_,k)=>vars[k]??'')??key;
+  assert.ok(versionFactText(released,t).includes(t('diag_unknown')));
+  const screen=versionFacts({h:(_tag,_props,...children)=>children.flat(Infinity).filter(value=>value!==null).join(' '),t,projection});
+  assert.ok(screen.includes(locale==='en'?'Released Connector':'已發布的 Connector'));
+  assert.ok(!screen.includes(locale==='en'?'Release published at':'發布時間：'));
 });

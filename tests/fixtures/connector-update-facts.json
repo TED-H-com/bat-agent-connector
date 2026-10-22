@@ -218,5 +218,29 @@
         }
       }
     }
+  },
+  "publication_unknown": {
+    "build": {
+      "version": "0.2.7",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source": "vcs"
+    },
+    "connector_update": {
+      "state": "reported",
+      "enabled": true,
+      "channel": "preview",
+      "installed": {
+        "version": "0.2.9",
+        "commit": "cccccccccccccccccccccccccccccccccccccccc"
+      },
+      "pending": false,
+      "last": {
+        "status": "installed_for_next_launch",
+        "at": "2026-10-22T12:00:00.123456+00:00"
+      },
+      "activation": "next_launch",
+      "installed_at": "2026-10-22T12:00:00.123456+00:00",
+      "release_check": null
+    }
   }
 }

@@ -58,9 +58,11 @@ def test_release_downloads_only_constructed_publisher_urls_and_checks_integrity(
         return json.dumps([item]).encode() if url == API else raw
 
     assert discover("stable", download=download) is None
-    result = discover("preview", download=download)
+    observation = {}
+    result = discover("preview", download=download, observation=observation)
     assert result["commit"] == "a" * 40
-    assert result["published_at"] == item["published_at"]
+    assert "published_at" not in result
+    assert observation["published_at"] == item["published_at"]
     assert calls[-1] == REPOSITORY + "/releases/download/" + item["tag_name"] + "/release-manifest.json"
     item["assets"][0]["digest"] = "sha256:" + "0" * 64
     with pytest.raises(UpdateError, match="digest_mismatch"):

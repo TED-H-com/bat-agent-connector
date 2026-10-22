@@ -221,7 +221,12 @@ are reported explicitly. No root service or unrelated scheduler is modified.
 Completed `check` and automatic `run` release discovery retain `release_check`
 in the existing private updater state, before any installation. The public
 projection contains only completion time and the validated candidate's version,
-commit and publication time. A completed check with no candidate reports a null
+commit and publication time. Publication time is display-only: the existing
+check records a timezone-aware ISO string of at most 40 characters from the same
+selected release item. Other values record no clock and leave the released slot
+unknown. This step never rejects a release or changes its installation candidate;
+the shared manifest fields and bootstrap publication acceptance remain identical.
+Existing private records retain their shape and meaning. A completed check with no candidate reports a null
 candidate. A failed check preserves the earlier completed observation without
 renewing its time; changing channels withdraws that observation until a check of
 the selected channel completes. Older states have no released observation.

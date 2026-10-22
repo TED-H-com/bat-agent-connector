@@ -180,3 +180,27 @@ for(const locale of ['en-US','zh-TW'])test(`released Connector and unknown MCP a
     expect(state.reads.some(path=>path.includes('identity')||path.includes('mcp'))).toBe(false);
   }finally{await context.close();}
 });
+
+
+for(const locale of ['en-US','zh-TW'])test(`publication display failure preserves next launch and stays unknown in export ${locale}`,async({browser})=>{
+  const context=await browser.newContext({locale}),page=await context.newPage();
+  const producer=structuredClone(bootstrap);
+  Object.assign(producer.capabilities,connectorUpdates.publication_unknown);
+  await diagnosticsFixture(page,false,true,producer);
+  try{
+    await page.goto('/dashboard/#/settings?section=about');
+    const about=page.locator('#settings-panel-about');
+    const released=about.locator('[data-version-row=connector_released]');
+    await expect(released).toContainText(locale==='en-US'?'unknown':'未知');
+    await expect(released).toContainText(locale==='en-US'?'Source: not reported':'來源：未回報');
+    await expect(about.locator('[data-version-row=connector_installed]')).toContainText('0.2.9');
+    await expect(about.locator('[data-version-row=connector]')).toContainText('0.2.7');
+    await page.locator('[data-export-diagnostics]').click();
+    await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');
+    const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
+    const fact=bundle.versions.rows.find(row=>row.id==='connector_released');
+    expect(fact).toMatchObject({version:null,commit:null,published_at:null,observed_at:null,source:'not_reported'});
+    await expect(page.locator('[data-diagnostics-summary] [data-version-row=connector_released]')).toContainText(locale==='en-US'?'unknown':'未知');
+    expect(bundle.versions.rows.find(row=>row.id==='connector_installed').version).toBe('0.2.9');
+  }finally{await context.close();}
+});

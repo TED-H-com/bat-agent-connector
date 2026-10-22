@@ -91,14 +91,7 @@ def manifest(release, raw):
         doc = json.loads(raw)
         tag = release["tag_name"]
         require(isinstance(tag, str) and re.fullmatch(r"v[0-9][A-Za-z0-9.+-]{0,95}", tag), "invalid_release_tag")
-        published_at = release.get("published_at")
-        require(not release.get("draft") and isinstance(published_at, str) and len(published_at) <= 40,
-                "release_unpublished")
-        try:
-            published = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
-        except ValueError as exc:
-            raise UpdateError("release_unpublished") from exc
-        require(published.tzinfo is not None, "release_unpublished")
+        require(not release.get("draft") and release.get("published_at"), "release_unpublished")
         require(doc["format"] == 1 and doc["repository"] == REPOSITORY and doc["release"] == tag,
                 "release_manifest_mismatch")
         update = doc["connector_update"]
@@ -114,13 +107,24 @@ def manifest(release, raw):
         require(doc["validation"]["status"] == "passed", "release_not_validated")
         return {"commit": sha, "version": ver, "tag": tag, "epoch": EPOCH,
                 "skill_sha256": skill, "manifest_sha256": hashlib.sha256(raw).hexdigest(),
-                "prerelease": bool(release.get("prerelease")), "published_at": published_at}
+                "prerelease": bool(release.get("prerelease"))}
     except (KeyError, TypeError, json.JSONDecodeError) as exc:
         raise UpdateError("release_manifest_invalid") from exc
 
 
-def discover(channel, *, download=fetch):
+def publication_time(value):
+    """Optional display clock; never part of release acceptance or selection."""
+    if not isinstance(value, str) or len(value) > 40:
+        return None
+    try:
+        return value if datetime.fromisoformat(value.replace("Z", "+00:00")).tzinfo is not None else None
+    except ValueError:
+        return None
+
+
+def discover(channel, *, download=None, observation=None):
     require(channel in {"stable", "preview"}, "invalid_channel")
+    download = fetch if download is None else download
     try:
         releases = json.loads(download(API))
         require(isinstance(releases, list) and len(releases) <= 30, "release_list_invalid")
@@ -145,13 +149,17 @@ def discover(channel, *, download=fetch):
             doc = json.loads(raw)
             if "connector_update" not in doc:
                 continue  # Older releases did not opt in to unattended installation.
-            candidates.append(manifest(item, raw))
-        candidates.sort(key=lambda r: version(r["version"]), reverse=True)
+            candidates.append((manifest(item, raw), item))
+        candidates.sort(key=lambda entry: version(entry[0]["version"]), reverse=True)
         if candidates:
-            best = candidates[0]
-            require(all(r["commit"] == best["commit"] for r in candidates if r["version"] == best["version"]),
+            best, item = candidates[0]
+            require(all(r["commit"] == best["commit"] for r, _ in candidates if r["version"] == best["version"]),
                     "release_version_republished")
+            if observation is not None:
+                observation["published_at"] = publication_time(item.get("published_at"))
             return best
+        if observation is not None:
+            observation["published_at"] = None
         return None
     except (KeyError, TypeError, AttributeError, json.JSONDecodeError) as exc:
         raise UpdateError("release_list_invalid") from exc

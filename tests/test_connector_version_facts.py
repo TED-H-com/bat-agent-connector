@@ -198,16 +198,16 @@ async def test_completed_release_check_retains_three_independent_builds_and_cloc
     u.enroll(receipt, "preview")
     monkeypatch.setattr(updater, "_PROCESS_INSTALLATION", updater._capture_process_installation())
     # Real manifest validation, followed by the existing check and pointer switch.
-    def validated(sha, ver):
-        item, raw = publication(release(sha, ver))
-        return updater.discover("preview", download=lambda url: json.dumps([item]).encode()
-                                if url == "https://api.github.com/repos/TED-H-com/bat-agent-connector/releases?per_page=30" else raw)
-    u.find_release = lambda channel: validated("b" * 40, "0.2.8")
+    item, raw = publication(release("b" * 40, "0.2.8"))
+    def download(url, **kwargs):
+        return json.dumps([item]).encode() if url == update_release.API else raw
+    monkeypatch.setattr(update_release, "fetch", download)
+    u.find_release = updater.discover
     u.install = lambda root, candidate, **_: make_package(root, candidate)
     u.apply()
     completed = "2026-10-22T13:00:00.123456+00:00"
     monkeypatch.setattr(updater, "timestamp", lambda: completed)
-    u.find_release = lambda channel: validated("c" * 40, "0.2.9")
+    item, raw = publication(release("c" * 40, "0.2.9"))
     u.check()
     before = update_tree(u.root)
     caps = await read_capabilities(tmp_path)
@@ -343,3 +343,43 @@ async def test_publication_display_clock_never_changes_release_acceptance_or_ins
         golden["publication_unknown"] = caps
         GOLDEN.write_text(json.dumps(golden, indent=2) + "\n")
     assert caps == golden["publication_unknown"]
+
+
+@pytest.mark.parametrize("case", ["draft", "missing", "empty", "null", "false", "empty_array", "empty_object"])
+def test_shared_publication_acceptance_still_refuses_unpublished_releases(case):
+    item, raw, download = transport()
+    if case == "draft":
+        item["draft"] = True
+    elif case == "missing":
+        item.pop("published_at")
+    else:
+        item["published_at"] = {"empty": "", "null": None, "false": False,
+                                "empty_array": [], "empty_object": {}}[case]
+    with pytest.raises(bootstrap.InstallError, match="release_unpublished"):
+        bootstrap.resolve(item["tag_name"], "preview", download)
+    with pytest.raises(UpdateError, match="release_unpublished"):
+        update_release.manifest(item, raw)
+
+
+async def test_prior_release_record_shape_is_preserved_by_read_only_observation(process, tmp_path, monkeypatch):
+    u, receipt, _ = process
+    u.enroll(receipt, "preview")
+    monkeypatch.setattr(updater, "_PROCESS_INSTALLATION", updater._capture_process_installation())
+    item, raw, download = transport(candidate=release("b" * 40, "0.2.8"))
+    monkeypatch.setattr(update_release, "fetch", lambda url, **kwargs: json.dumps([item]).encode()
+                        if url == update_release.API else download(url))
+    u.find_release = updater.discover
+    u.install = lambda root, candidate, **_: make_package(root, candidate)
+    u.apply()
+    state = u.read()
+    # Prior builds also retained the publication field in installation records.
+    # Derive that legacy shape from this real completed check, without a new envelope.
+    state["versions"][state["current"]]["release"] = state["release_check"]["candidate"]
+    u.save(state)
+    before = update_tree(u.root)
+    caps = await read_capabilities(tmp_path)
+    assert caps["connector_update"]["installed"] == {"version": "0.2.8", "commit": "b" * 40}
+    assert caps["connector_update"]["release_check"] == {"completed_at": AT, "candidate": {
+        "version": "0.2.8", "commit": "b" * 40, "published_at": item["published_at"]}}
+    assert u.read() == state
+    assert update_tree(u.root) == before
