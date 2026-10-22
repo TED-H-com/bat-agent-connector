@@ -45888,7 +45888,10 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		"data-pm-schedule": "",
 		class: "pm-schedule"
 	}, toolbar, layout, labelTip);
-	viewport.addEventListener("scroll", hideLabel, { passive: true });
+	viewport.addEventListener("scroll", () => {
+		if (tipCell?.contains(document.activeElement)) showLabel(tipCell, tipCell.title);
+		else hideLabel();
+	}, { passive: true });
 	viewport.addEventListener("scroll", saveScroll, { passive: true });
 	function fitViewport() {
 		if (!data || fitting) return;
@@ -46290,13 +46293,16 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 				class: "schedule-date-range"
 			}, ...dateChildren)), pill);
 			cell.title = scheduleTitle(row);
-			cell.addEventListener("mouseenter", () => showLabel(cell, scheduleTitle(row)));
+			cell.addEventListener("mouseenter", () => {
+				const focused = document.activeElement?.closest(".schedule-tree-cell");
+				if (!focused || focused === cell) showLabel(cell, scheduleTitle(row));
+			});
 			cell.addEventListener("mouseleave", () => {
-				if (!cell.contains(document.activeElement)) hideLabel();
+				if (tipCell === cell && !cell.contains(document.activeElement)) hideLabel();
 			});
 			cell.addEventListener("focusin", () => showLabel(cell, scheduleTitle(row)));
 			cell.addEventListener("focusout", (event) => {
-				if (!cell.contains(event.relatedTarget)) hideLabel();
+				if (tipCell === cell && !cell.contains(event.relatedTarget)) hideLabel();
 			});
 			cell.addEventListener("keydown", (event) => {
 				if (event.key === "Escape") hideLabel();

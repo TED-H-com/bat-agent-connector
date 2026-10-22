@@ -7,12 +7,14 @@ test.describe.configure({mode: 'parallel'});
 
 // The same producer-shaped demo responses used by the reviewed gallery, mounted
 // in the real Dashboard bundle. No copied view or screenshot-site dependency.
-async function start(page: Page, locale: string, view: string) {
+async function start(page: Page, locale: string, view: string, graphNames?: string[]) {
   await page.addInitScript(locale => Object.defineProperty(navigator, 'language', {value: locale}), locale);
   await page.clock.setFixedTime(DEMO_NOW);
   const f = demoFixture({locale, discussions: true});
   await mountConversation(page, false, async input => {
     const result = await f.dispatch(input);
+    if (graphNames && input.path.endsWith('/dependencies'))
+      result.data.components.forEach((row: any, index: number) => {row.name = graphNames[index];});
     // OperationService._decode exposes updated_at (epoch seconds), not an
     // operation-level finished_at. The discussion fixture omits this optional field.
     if (result.data?.operation) {
@@ -27,6 +29,25 @@ async function start(page: Page, locale: string, view: string) {
   else if (view === 'discussions') await expect(page.locator('[data-discussion-composer]')).toBeVisible();
   else await expect(page.locator(`[data-pm-region="${view}"]`)).toBeVisible();
   return f;
+}
+for (const locale of ['en', 'zh-TW']) for (const duplicate of [false, true]) {
+  test(`graph keeps long producer names distinct ${locale} duplicate=${duplicate}`, async ({page}) => {
+    await page.setViewportSize({width: 390, height: 960});
+    const prefix = locale === 'en' ? 'membership-service-with-a-long-common-prefix-' : '會員服務共用的完整長名稱前綴';
+    const names = [prefix + 'api', prefix + (duplicate ? 'api' : 'web')];
+    await start(page, locale, 'dependencies', names);
+    await page.getByRole('radio', {name: locale === 'en' ? 'Graph' : '關係圖', exact: true}).click();
+    const nodes = page.locator('[data-dep-node^="c:"]:not([data-dep-external=true])');
+    await expect(nodes).toHaveCount(2);
+    const labels = await nodes.locator('.dep-node-name').allTextContents();
+    expect(new Set(labels).size).toBe(2);
+    for (let index = 0; index < 2; index++) {
+      expect(labels.some(label => label.startsWith(names[index]))).toBe(true);
+      const node = nodes.nth(index); await node.focus();
+      await expect(page.locator('[data-dep-node-name]')).toHaveText((await node.getAttribute('aria-label'))!);
+      expect(await node.locator('tspan').count()).toBeGreaterThan(1);
+    }
+  });
 }
 async function shot(page: Page, defect: string, locale: string, width: number) {
   const root = process.env.BATC_GALLERY_SHOTS;

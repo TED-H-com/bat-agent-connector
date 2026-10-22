@@ -51,7 +51,10 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
   mountZoom();
   const layout = h('div', {class: 'schedule-layout'}, main);
   const element = h('section', {'data-pm-schedule': '', class: 'pm-schedule'}, toolbar, layout, labelTip);
-  viewport.addEventListener('scroll', hideLabel, {passive: true});
+  viewport.addEventListener('scroll', () => {
+    if (tipCell?.contains(document.activeElement)) showLabel(tipCell, tipCell.title);
+    else hideLabel();
+  }, {passive: true});
   viewport.addEventListener('scroll', saveScroll, {passive: true});
   function fitViewport() {
     if (!data || fitting) return;
@@ -315,10 +318,13 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
         expand, h('span', {class: 'schedule-tree-copy'}, h('span', {class: 'schedule-title', title: scheduleTitle(row)}, label(row)), h('span', {id: descId, class: 'schedule-date-range'}, ...dateChildren)),
         pill);
       cell.title = scheduleTitle(row);
-      cell.addEventListener('mouseenter', () => showLabel(cell, scheduleTitle(row)));
-      cell.addEventListener('mouseleave', () => {if (!cell.contains(document.activeElement)) hideLabel();});
+      cell.addEventListener('mouseenter', () => {
+        const focused = document.activeElement?.closest('.schedule-tree-cell');
+        if (!focused || focused === cell) showLabel(cell, scheduleTitle(row));
+      });
+      cell.addEventListener('mouseleave', () => {if (tipCell === cell && !cell.contains(document.activeElement)) hideLabel();});
       cell.addEventListener('focusin', () => showLabel(cell, scheduleTitle(row)));
-      cell.addEventListener('focusout', event => {if (!cell.contains(event.relatedTarget)) hideLabel();});
+      cell.addEventListener('focusout', event => {if (tipCell === cell && !cell.contains(event.relatedTarget)) hideLabel();});
       cell.addEventListener('keydown', event => {if (event.key === 'Escape') hideLabel();});
       cell.style.paddingLeft = `${8 + (depth - 1) * 16}px`;
       const lane = h('div', {class: 'schedule-lane'}, track(row));
