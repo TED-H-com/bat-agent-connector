@@ -68546,6 +68546,12 @@ function foregroundChanged() {
 	}
 	wakeEventPoll?.();
 }
+var IDENTITY_PRESERVING_RESETS = new Set([
+	"cursor_expired",
+	"cursor_ahead",
+	"history_changed",
+	"checkpoint_cursor_mismatch"
+]);
 async function streamEvents() {
 	for (;;) {
 		await refreshManagedRecovery();
@@ -68609,12 +68615,7 @@ async function streamEvents() {
 					namespace: state.namespace,
 					sync: state.sync
 				};
-				const accessChanged = ![
-					"cursor_expired",
-					"cursor_ahead",
-					"history_changed",
-					"checkpoint_cursor_mismatch"
-				].includes(error.reason);
+				const accessChanged = !IDENTITY_PRESERVING_RESETS.has(error.reason);
 				if (accessChanged) {
 					clearEarlierDrafts();
 					generation++;

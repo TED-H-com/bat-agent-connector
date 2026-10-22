@@ -1028,6 +1028,10 @@ function foregroundChanged() {
   if (state.token) {updateOnline(false); paintConnection(true, true);}
   wakeEventPoll?.();
 }
+// For checkpointed polls, dashboard_sync.check proves server/principal identity
+// before these continuity failures. All other or unknown reasons withdraw the
+// whole view immediately; they cannot retain facts or an editing view.
+const IDENTITY_PRESERVING_RESETS = new Set(['cursor_expired', 'cursor_ahead', 'history_changed', 'checkpoint_cursor_mismatch']);
 async function streamEvents() {
   for (;;) {
     await refreshManagedRecovery();
@@ -1084,10 +1088,7 @@ async function streamEvents() {
       paintConnection(false, pollSucceeded);
       if (error.code === "EVENT_CURSOR_RESET") {
         const previous = { namespace: state.namespace, sync: state.sync };
-        // dashboard_sync.check proves identity before these continuity failures.
-        // Other reasons (including an invalid checkpoint or unknown reason) do
-        // not establish that cached recovery still belongs to this connection.
-        const accessChanged = !['cursor_expired', 'cursor_ahead', 'history_changed', 'checkpoint_cursor_mismatch'].includes(error.reason);
+        const accessChanged = !IDENTITY_PRESERVING_RESETS.has(error.reason);
         if (accessChanged) {
           clearEarlierDrafts();
           // A changed access boundary invalidates displayed facts immediately. Drafts stay
