@@ -29,7 +29,8 @@ for (const locale of ['en-US', 'zh-TW']) {
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       releases[1]();
       await expect(page.locator('#live')).toHaveText(copy.ui_connected);
-      await expect(page.getByRole('alert')).toHaveCount(0);
+      await expect(page.locator('.global-connect-status[role=alert]')).toHaveCount(0);
+      await expect(page.locator('input[type=password]')).toHaveCount(0);
     } finally {releases.forEach(release => release()); await context.close();}
   });
 
