@@ -3,6 +3,17 @@ import assert from 'node:assert/strict';
 import {relativeAge, relativeAgeStrings} from '../src/relative-age.js';
 import {displayFact, healthAge, healthLabel} from '../src/health-fact.js';
 import {STRINGS} from '../src/i18n.js';
+import * as ageModule from '../src/relative-age.js';
+
+for (const locale of ['en', 'zh-TW']) test(`locale-bound age translation follows i18n interpolation ${locale}`, () => {
+  assert.equal(typeof ageModule.relativeAgeTranslator, 'function');
+  const t = ageModule.relativeAgeTranslator(locale);
+  assert.equal(t('age_minute'), locale === 'en' ? ' min' : ' 分鐘');
+  assert.equal(t('age_minute', {n: null}), locale === 'en' ? ' min' : ' 分鐘');
+  assert.equal(t('age_minute', {n: 0}), locale === 'en' ? '0 min' : '0 分鐘');
+  assert.equal(t('age_past', {age: '{n}', n: 4}), locale === 'en' ? '{n} ago' : '{n}前');
+  assert.equal(t('unknown_{name}', {name: 'key'}), 'unknown_key');
+});
 
 for (const locale of ['en', 'zh-TW']) test(`relative ages share minute/hour/day boundaries ${locale}`, () => {
   const t = (key: string, vars = {}) => Object.entries(vars).reduce((text, [key, value]) => text.replaceAll(`{${key}}`, String(value)), STRINGS[locale][key]);
