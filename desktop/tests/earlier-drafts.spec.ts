@@ -26,6 +26,7 @@ async function writeForms(page: Page, suffix: string) {
     const create = createRecordForm({...base, kind: 'work_item', projectId: 'prj_' + 'a'.repeat(20)});
     document.body.append(create.box);
     const title = create.box.querySelector('input'); title.value = `Work title ${suffix}`; title.dispatchEvent(new Event('input'));
+    if (suffix === 'fields') {const goal = create.box.querySelector('textarea'); goal.value = 'Authored goal'; goal.dispatchEvent(new Event('input'));}
     for (const [action, name, text] of [['pm.message.append', 'content', `PM draft ${suffix}`], ['session.send', 'text', `Follow-up ${suffix}`]]) {
       const input = h('textarea');
       const target = {workspace_id: 'ws_' + 'c'.repeat(32), ...(action === 'session.send'
@@ -257,7 +258,7 @@ for (const locale of ['en-US', 'zh-TW']) {
     await page.addInitScript(() => {
       const bridge = (window as any).__TAURI_INTERNALS__, invoke = bridge.invoke;
       bridge.invoke = async (command: string, args: any) => command === 'native_status'
-        ? {...await invoke(command, args), configuration_setup: true} : invoke(command, args);
+        ? {...await invoke(command, args), configuration_setup: (window as any).__storage.source === 'managed'} : invoke(command, args);
       const digest = crypto.subtle.digest.bind(crypto.subtle); let held = false;
       crypto.subtle.digest = async (algorithm: any, bytes: any) => {
         if (!held && new TextDecoder().decode(bytes).startsWith('["batc.')) {
@@ -265,7 +266,7 @@ for (const locale of ['en-US', 'zh-TW']) {
           await new Promise(resolve => {(window as any).__releaseScan = resolve;});
         }
         const value = await digest(algorithm, bytes);
-        if (held) (window as any).__digestReleased = true;
+        if (held) (window as any).__digestsReleased = ((window as any).__digestsReleased || 0) + 1;
         return value;
       };
     });
@@ -281,7 +282,7 @@ for (const locale of ['en-US', 'zh-TW']) {
     await page.evaluate(() => {location.hash = '#/settings?section=about';});
     await expect(page.locator('[data-earlier-drafts-slot]')).toHaveAttribute('data-scan-state', 'skipped');
     await page.evaluate(() => (window as any).__releaseScan());
-    await expect.poll(() => page.evaluate(() => (window as any).__digestReleased)).toBe(true);
+    await expect.poll(() => page.evaluate(() => (window as any).__digestsReleased)).toBe(4);
     await expect(page.locator('[data-earlier-drafts], [data-earlier-drafts-notice]')).toHaveCount(0);
     expect(await page.evaluate(() => (window as any).__storage.writes)).toBe(0);
     await context.close();
@@ -290,17 +291,17 @@ for (const locale of ['en-US', 'zh-TW']) {
 
 for (const locale of ['en-US', 'zh-TW']) test(`authored markup stays literal and fields have distinct labels (${locale})`, async ({browser}) => {
   const context = await browser.newContext({locale}); const page = await context.newPage();
-  await setup(page, {source: 'external'}); await writeForms(page, 'one');
+  await setup(page, {source: 'external'}); await writeForms(page, 'fields');
   await page.locator('textarea').first().fill('<img src=x onerror="window.draftExecuted=true">');
   await changeIdentity(page, {endpoint: 'http://127.0.0.1:41002/'}); await page.reload(); await writeForms(page, 'two');
   await changeIdentity(page, {source: 'managed', endpoint: 'http://127.0.0.1:41003/'}); await page.reload();
   await page.evaluate(() => {location.hash = '#/settings?section=about&drafts=earlier';});
   await expect(page.locator('[data-earlier-drafts-slot]')).toHaveAttribute('data-scan-state', 'complete');
-  await expect(page.locator('[data-earlier-draft]')).toHaveCount(8);
+  await expect(page.locator('[data-earlier-draft]')).toHaveCount(9);
   const panel = page.locator('[data-earlier-drafts]');
   const names = await panel.locator('textarea').evaluateAll(nodes => nodes.map(node => node.getAttribute('aria-label')));
   expect(names.every(name => name && name.includes(' · '))).toBe(true);
-  expect(new Set(names).size).toBe(4);
+  expect(new Set(names).size).toBe(5);
   await expect(panel.locator('img, script')).toHaveCount(0);
   expect(await page.evaluate(() => (window as any).draftExecuted)).toBeUndefined();
   expect(await page.evaluate(() => (window as any).__storage.writes)).toBe(0);
