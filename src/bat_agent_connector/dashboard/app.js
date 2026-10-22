@@ -11455,6 +11455,10 @@ var init_i18n = __esmMin((() => {
 			fleet_start: "啟動連線監控",
 			fleet_quit: "停止本機連線監控",
 			fleet_status_details: "詳細資料",
+			fleet_route_direct: "路徑：Tailscale 直連",
+			fleet_route_lan: "路徑：區域網路",
+			fleet_route_cf: "路徑：Cloudflare",
+			fleet_route_configured: "路徑：已設定的 SSH",
 			fleet_monitor_running: "監控執行中",
 			fleet_monitor_stopped: "監控已停止",
 			fleet_ready: "就緒",
@@ -13186,6 +13190,10 @@ var init_i18n = __esmMin((() => {
 			fleet_start: "Start connection monitor",
 			fleet_quit: "Stop local connection monitor",
 			fleet_status_details: "Details",
+			fleet_route_direct: "Route: Tailscale direct",
+			fleet_route_lan: "Route: LAN",
+			fleet_route_cf: "Route: Cloudflare",
+			fleet_route_configured: "Route: Configured SSH",
 			fleet_monitor_running: "Monitor running",
 			fleet_monitor_stopped: "Monitor stopped",
 			fleet_ready: "Ready",
@@ -14370,7 +14378,32 @@ function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState, now =
 		"data-fleet-diagnosis": entry.name,
 		"data-fleet-state": state,
 		"data-freshness": fact.freshness
-	}, h("p", { class: "fleet-diagnosis-title" }, healthLabel(fact, t)), h("p", { class: "muted" }, t("fleet_check_help_" + helpKey)), details);
+	}, h("p", { class: "fleet-diagnosis-title" }, healthLabel(fact, t)), h("p", { class: "muted" }, t("fleet_check_help_" + helpKey)), details, ...fleetRoute(row, {
+		h,
+		t,
+		snapshot,
+		readable,
+		entry,
+		now
+	}));
+}
+function fleetRoute(row, { h, t, snapshot, readable, entry, now }) {
+	const route = row?.route;
+	if (!route || ![
+		"direct",
+		"lan",
+		"cf",
+		"configured"
+	].includes(route.kind) || !readable || row.selected !== true || ["off", "down"].includes(row.level) || snapshot.monitor.state !== "running" || snapshot.readiness.state === "unavailable" || snapshot.selection.applied_revision !== snapshot.selection.revision) return [];
+	const fact = displayFact({
+		key: "fleet_route_" + route.kind,
+		observed_at: route.observed_at
+	}, { now });
+	return [h("p", {
+		class: "muted",
+		"data-fleet-route": entry.name,
+		"data-freshness": fact.freshness
+	}, healthLabel(fact, t))];
 }
 var codeReason, layerReason, layerStep, lookup;
 var init_fleet_status = __esmMin((() => {
