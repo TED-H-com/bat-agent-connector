@@ -50,3 +50,24 @@ The log writer only preserves JSON key order; every value comes from Rust output
 Never edit expected values by hand. The regular core and native golden tests check
 both boundaries, including absence of alias/address/payload fields. Browser and Node
 route tests consume the same golden with literal English and zh-TW expectations.
+
+`fleet-requirement.json` comes from
+`supervisor_status::contract_tests::generate_requirement_fixture`: real peer
+classification and route selection feed `Entry::observed` for missing, unreadable,
+idle and direct-with-failed-TCP evidence, plus exhausted configured routes. The
+other hosts retain their real successful producer rows. `fleet-stop.json` comes
+from `supervisor::generate_unresolved_stop_fixture`, using the real supervisor's
+unknown-stop fixture, disk publication, `Snapshot::parse` after 60 seconds and
+separately after deselection, then another parse. It checks unchanged original
+owner/stop receipts and monitor record, with no additional launches or stops.
+Only nondeterministic binding metadata is de-identified.
+
+The matching `.golden.json` files pass those rows through `native_readiness` and
+`sanitize_result` in `fleet.rs`; both Node and Playwright consume that output.
+Regenerate with the ignored core tests above and `regenerate-fleet-status.mjs`
+using `requirement` / `stop`. On the native build host, run the ignored
+`fleet::tests::requirement_generate_golden` / `stop_generate_golden`, then use
+`requirement-golden` / `stop-golden`. Regular producer and sanitizer tests compare
+all values to the checked-in files. These fixtures exercise real production code
+with synthetic processes, peers, inventory and local files, not live BAT,
+Tailscale, SSH or installed Windows process ownership.

@@ -974,6 +974,18 @@ mod tests {
         println!("FLEET_REQUIREMENT_GOLDEN={}", requirement_cases());
     }
     #[test]
+    fn evidence_matches_shared_frontend_goldens() {
+        let requirements: Value = serde_json::from_str(include_str!(
+            "../../tests/fixtures/fleet-requirement.golden.json"
+        ))
+        .unwrap();
+        let stops: Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/fleet-stop.golden.json"))
+                .unwrap();
+        assert_eq!(requirement_cases(), requirements);
+        assert_eq!(stop_cases(), stops);
+    }
+    #[test]
     fn sanitized_status_matches_shared_frontend_golden() {
         let raw = producer_status();
         assert_eq!(raw, fixture()["result"]);

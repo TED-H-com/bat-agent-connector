@@ -639,7 +639,7 @@ async fn unresolved_stop_fixture(deselect: bool) -> serde_json::Value {
     if deselect {
         r.tick(1300).await.unwrap();
     } else {
-        r.shutdown(1300).await.unwrap();
+        r.shutdown(now + 1).await.unwrap();
     }
     assert_eq!(s.lock().unwrap().launches, launches);
     assert_eq!(s.lock().unwrap().stops, stops);

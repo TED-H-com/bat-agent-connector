@@ -10208,6 +10208,10 @@ var FLEET_STRINGS;
 var init_fleet_strings = __esmMin((() => {
 	FLEET_STRINGS = {
 		"zh-TW": {
+			fleet_route_requirement_peer_unknown: "僅設定 Tailscale 直連。目前的 peer 證據未知。",
+			fleet_route_requirement_direct_unconfirmed: "僅設定 Tailscale 直連。尚未確認 peer 的直連連線。",
+			fleet_route_requirement_tcp_unconfirmed: "僅設定 Tailscale 直連。直連 TCP 檢查未成功。",
+			fleet_route_requirement_exhausted: "所有已設定的路徑都未滿足連線條件。",
 			fleet_check_advanced: "進階：開機自動連線與連線方式",
 			fleet_check_advanced_pending: "進階：檢視連線設定變更",
 			fleet_check_network: "網路",
@@ -10263,6 +10267,10 @@ var init_fleet_strings = __esmMin((() => {
 			fleet_check_help_unknown: "先重新讀取狀態；若仍無法確認，展開詳細資料取得錯誤代碼。"
 		},
 		en: {
+			fleet_route_requirement_peer_unknown: "Only Tailscale direct is configured. The peer evidence is unknown.",
+			fleet_route_requirement_direct_unconfirmed: "Only Tailscale direct is configured. A direct peer connection was not confirmed.",
+			fleet_route_requirement_tcp_unconfirmed: "Only Tailscale direct is configured. The direct TCP check did not succeed.",
+			fleet_route_requirement_exhausted: "None of the configured routes met the connection requirements.",
 			fleet_check_advanced: "Advanced: automatic connections and connection method",
 			fleet_check_advanced_pending: "Advanced: review connection setting changes",
 			fleet_check_network: "Network",
@@ -14409,6 +14417,7 @@ function fleetDiagnosis(row, { snapshot, readable, kind = "host" } = {}) {
 	const reason = row?.code || row?.blocking;
 	let state;
 	if (!readable) state = "unavailable";
+	else if (reason === "STOP_UNCONFIRMED") state = "ownership";
 	else if (row?.selected === false || row?.level === "off") state = "off";
 	else if (lookup(codeReason, reason) === "ownership") state = "ownership";
 	else if (snapshot.monitor.state === "stopped") state = "stopped";
@@ -14527,7 +14536,13 @@ function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState, now =
 		"data-fleet-diagnosis": entry.name,
 		"data-fleet-state": state,
 		"data-freshness": fact.freshness
-	}, h("p", { class: "fleet-diagnosis-title" }, title), h("p", { class: "muted fleet-diagnosis-help" }, help), details, ...fleetRoute(row, {
+	}, h("p", { class: "fleet-diagnosis-title" }, title), h("p", { class: "muted fleet-diagnosis-help" }, help), details, ...fleetRequirement(row, {
+		h,
+		t,
+		snapshot,
+		readable,
+		entry
+	}), ...fleetRoute(row, {
 		h,
 		t,
 		snapshot,
@@ -14535,6 +14550,14 @@ function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState, now =
 		entry,
 		now
 	}));
+}
+function fleetRequirement(row, { h, t, snapshot, readable, entry }) {
+	const reason = lookup(routeRequirement, row?.route_requirement);
+	if (!reason || !readable || row.selected !== true || snapshot.monitor.state !== "running" || snapshot.readiness.state === "unavailable" || snapshot.selection.applied_revision !== snapshot.selection.revision) return [];
+	return [h("p", {
+		class: "muted",
+		"data-fleet-route-requirement": entry.name
+	}, t("fleet_route_requirement_" + reason))];
 }
 function paintDiagnosis(node, { state, steps, fact, title, help }, t) {
 	const text = (selector, value) => {
@@ -14603,7 +14626,7 @@ function fleetRoute(row, { h, t, snapshot, readable, entry, now }) {
 		"data-freshness": route.freshness
 	}, route.label)] : [];
 }
-var codeReason, layerReason, layerStep, lookup;
+var codeReason, layerReason, layerStep, lookup, routeRequirement;
 var init_fleet_status = __esmMin((() => {
 	codeReason = {
 		TAILSCALE_WAKING: "waking",
@@ -14658,6 +14681,12 @@ var init_fleet_status = __esmMin((() => {
 		workspace: "workspace"
 	};
 	lookup = (table, key) => Object.hasOwn(table, key) ? table[key] : void 0;
+	routeRequirement = {
+		DIRECT_PEER_UNKNOWN: "peer_unknown",
+		DIRECT_NOT_CONFIRMED: "direct_unconfirmed",
+		DIRECT_TCP_UNREACHABLE: "tcp_unconfirmed",
+		CONFIGURED_ROUTES_EXHAUSTED: "exhausted"
+	};
 }));
 //#endregion
 //#region src/health-display.js
