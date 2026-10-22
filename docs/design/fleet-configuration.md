@@ -2,7 +2,7 @@
 
 [Windows guide](../windows.md) · [繁體中文摘要](#繁體中文設定摘要)
 
-「加入機器」的共用契約（已定，尚未實作）見[下方章節](#加入機器共用契約已定尚未實作)。下列手動設定
+「加入機器」的共用契約（來源政策已實作，其餘流程待完成）見[下方章節](#加入機器共用契約已定尚未實作)。下列手動設定
 仍作現有格式的參考；新流程的完成條件是退休重複填寫，不是另加一份設定表單。
 
 The packaged Windows client contains the Rust Fleet runtime. A new installation can
@@ -182,10 +182,10 @@ Dashboard 不需要先設定 Fleet。
 
 ## 加入機器：共用契約（已定，尚未實作）
 
-本節是文件提案，沒有實作精靈。程式查核基線為 `5615d6c0`（合併 main `f7a71405`）；
-所有 `file:line` 已按此基線重核，本輪修訂只改文件。「現況」表示程式可證實；
+本節尚未實作完整精靈；D3 來源政策已實作，見決策表與可信來源表。其餘程式查核基線為 `5615d6c0`（合併 main `f7a71405`）；
+既有 `file:line` 保留該基線，D3 改以共用模組及向量為準。「現況」表示程式可證實；
 「規範」表示後續驗收要求；2026-10-22 經 owner 授權由整合者決定 D1＝A、D6＝A、D8＝A，
-D2／D3／D4／D5／D7 的整合者技術預設維持原文，均不能當成已支援或已驗收行為。
+D2／D4／D5／D7 的整合者技術預設維持原文；D3 僅下列來源讀取部分已實作，不代表 enrollment 或實機驗收完成。
 本節沿 E01／E03／E11、T3／T8、K02／K08／K16 接續，不增加平行 backlog。
 
 ### 現況：兩條入口與邊界
@@ -274,8 +274,8 @@ digest，沒有逐欄比較所有 metadata。[supervisor_probe.rs:103](../../des
 | 來源 | 現況可取得／不可推論 | 規範 |
 | --- | --- | --- |
 | 使用者貼上 BAT 連線網址 | UI parser 拆出 endpoint／token／fp；不回傳 workspace／SSH user／中央身分。[managed-setup.js:10](../../desktop/src/managed-setup.js#L10) | 只由使用者貼入遮蔽欄位，不主動讀剪貼簿；秘密只進既有 staging／native credential 邊界，不進草稿或收據。公開範例只寫 `wss://example.invalid:9876?token=…&fp=…`（語法示意，不可連線值）。 |
-| BAT 已存 profile | Python 讀 `index.json` 與非加密 token store，回報 token_available；Rust 要求 `enc:false` 且 data 是 JSON 字串，Python 還接受 object。[managed_setup.py:122](../../src/bat_agent_connector/managed_setup.py#L122)、[credential.rs:209](../../desktop/fleet-core/src/credential.rs#L209) | BAT 管登入／profile；不掃其他帳號或繞過加密 store。共同支援形狀與目錄選擇依 D3 預設，不把「找不到」當作可建立另一份身分。 |
-| BAT token key 大小寫差異 | Rust 以 `eq_ignore_ascii_case` 找 token key；Python 用 profile ID 作 exact key lookup，兩者現況不同。[credential.rs:224](../../desktop/fleet-core/src/credential.rs#L224)、[managed_setup.py:160](../../src/bat_agent_connector/managed_setup.py#L160) | 共用契約須依 D3 明訂匹配規則；不得把 Rust 可讀直接當成 Python 也可讀，或靜默改寫 BAT key。 |
+| BAT 已存 profile | `connection_sources.py` 的 `BAT_SOURCE_POLICY = 1` 統一 Python 目錄及 token 解析。setup 清單與 `HostConfig.token_available()` 用 admission：僅 `enc:false`、JSON 字串 `data`、完全相符且無歧義的 key；既存 Python `resolve_token()` 用 legacy runtime，保留 object `data`、缺省／null／數值零 `enc` 與既有 JSON 解碼相容性。[共用政策](../../src/bat_agent_connector/connection_sources.py)、[共享向量](../../tests/fixtures/bat-source-policy-v1.json) | 明確目錄優先；Windows 每次選擇新根目錄，再於其不存在時選舊根目錄。無法讀取或類型錯誤不換來源；setup 寫入選定的明確路徑供 runtime 引用。BAT 管登入／profile，不掃其他帳號、不繞加密、不改寫 store。來源探索與選擇器仍待完成。 |
+| BAT token key 大小寫差異 | Python admission 要求 exact key，拒絕重複、escape 等價及大小寫競爭 key；Python legacy runtime 保留 exact lookup 與既有 last-key-wins。Rust **legacy Fleet runtime** 保留 PowerShell 相容的 ASCII 忽略大小寫 lookup，`strict_json` 拒絕歧義；同一份向量分欄驗證三者。[native reader](../../desktop/fleet-core/src/credential.rs)、[共享向量](../../tests/fixtures/bat-source-policy-v1.json) | Rust legacy 可讀不代表可供新 admission。未新增未使用的 Rust admission API；後續來源探索在使用點接入。legacy Python 模式待支援 BAT writer 格式證據齊備後另行退休，不靜默改寫或合併 key。 |
 | SSH alias | setup 以 strict host-key probe 驗 alias；Fleet validator 只讀 literal Host。[managed_setup.py:446](../../src/bat_agent_connector/managed_setup.py#L446)、[inventory.rs:553](../../desktop/fleet-core/src/inventory.rs#L553) | 不產生 SSH key、不自動批准 host key；未信任時停在需要 SSH 設定，不以 `StrictHostKeyChecking=no` 繞過。 |
 | Tailscale peer | 現有 parser 對已指定 IP 查 Peer／TailscaleIPs；多 peer 同 IP 為未知，不是自動加入所有 peer。[route.rs:124](../../desktop/fleet-core/src/route.rs#L124) | 只作已授權 route 的候選證據，不當 BAT／Connector 登入；不猜 SSH 帳號、workspace、pin。 |
 
@@ -401,7 +401,7 @@ client 與非正式環境 Linux BAT host 的指派由整合者私下保存，不
 | 決策 | 預設做法及理由（規範） | 現況依據 | 決定前的限制 |
 | --- | --- | --- | --- |
 | D2 設定協調與收據 | 延伸既有 Python operation／journal 作唯一業務意圖權威，沿既有 action／scope 審查接線；native 只做受限 owned 子步驟並回傳可引用收據。每步綁 expected bytes／revision，未知 SSH 檔只引用。理由：同一原 key 可查回，不增加第二份 journal 或任意寫檔 IPC。 | setup registry 只有 host／repository／verification；migration Saved 只管 backend config／startup，不能當一般 Fleet writer。[managed_setup.py:623](../../src/bat_agent_connector/managed_setup.py#L623)、[migration.rs:113](../../desktop/fleet-core/src/migration.rs#L113) | 未完成 action／scope、native 收據引用及斷線查回設計前，不實作四檔寫入；不假裝跨檔原子交易。 |
-| D3 BAT 來源、token 與 enrollment | 在獲授權帳號中先選定一次資料來源；明確 profiles_dir 優先，未指定時統一採 Windows native 的新目錄→舊目錄選擇順序。共用可用格式先限 `enc:false`、data 為 JSON 字串、profile ID 與 token key 完全相符；大小寫不符／歧義視為不可用，不改寫或合併 key。新增 BAT profile 交 BAT 自有流程；尚無已驗 enrollment 路徑時只保留既有 setup 連結入口，不宣稱 Fleet 已完成。理由：採兩端共同可驗子集，避免一端可讀、另一端失敗。 | 目錄現況不同：native 選新／舊，Python 有 override 及 Windows 舊預設。[configuration.rs:269](../../desktop/fleet-core/src/configuration.rs#L269)、[managed_setup.py:92](../../src/bat_agent_connector/managed_setup.py#L92) token 形狀與 key 差異只維護於上方「可信來源、用途與權限」表。 | 這是未來共同規則，未改動現有 Rust 忽略大小寫讀法；不繞加密、不掃其他帳號、不寫 BAT profile／token store。若無共同可讀來源，顯示缺口而非猜 fallback。 |
+| D3 BAT 來源、token 與 enrollment | 在獲授權帳號中選定資料來源；明確 `profiles_dir` 優先，Windows 未指定時每次依新目錄→舊目錄選擇，僅不存在才試下一個；macOS app support 與 Linux 原預設由同一模組處理。新 admission 限 `enc:false`、JSON 字串 `data`、完全相符且無歧義的 token key。 | 已實作 `BAT_SOURCE_POLICY = 1`：setup 清單與 `token_available()` 用 admission；既存 Python token 引用解析用 legacy runtime，Rust 用 legacy Fleet runtime。三者差異及目錄規則由同一份 Python 產生期望值／Rust 驗證的向量記錄。[共用政策](../../src/bat_agent_connector/connection_sources.py)、[共享向量](../../tests/fixtures/bat-source-policy-v1.json) | 來源探索、descriptor、picker 與 native admission 使用點仍待接入；legacy Python 相容模式尚未退休。新增 BAT profile 交 BAT 自有流程；未驗 enrollment 不宣稱 Fleet 完成。不繞加密、不掃其他帳號、不寫 BAT store。無共同可讀來源就保留缺口，不猜 fallback。 |
 | D4 v1 不重綁 | endpoint、pin、principal、remote profile 或 Git transport 改變時保留拒絕，要求新增一條連線；不合併舊草稿、歷史、checkpoint 或原 key。理由：v1 不新增可驗證信任遷移，先維持來源隔離；相同 server_id 字串不授權重綁。 | 既有 setup 的拒絕及 principal 邊界見上方共用變更表；中央身分仍須 native 認證／bootstrap。[bridge.rs:1115](../../desktop/src-tauri/src/bridge.rs#L1115) | 不提供換址／pin rotation／principal 遷移；不以保留草稿為由降低信任。不同連線保留各自引用與原操作查回。 |
 | D5 自動配置與 schema | v1 保留必要 schema 及 connector_endpoint，不退役欄位；只從明確可信的既有關聯產生引用，版本常數由整合者版本化。新 loopback 分配須在 native owned 邊界內檢查衝突；沒有已審分配器或 target／route 映射就停在需要資料，不要求使用者手填技術 ID。理由：不把 BAT 連結中沒有的資料補成事實，也避免升級破壞既有設定。 | 連結 parser 只有 endpoint／token／pin；inventory 另外驗 fleet_version、loopback、target 及 routes。[managed-setup.js:10](../../desktop/src/managed-setup.js#L10)、[inventory.rs:189](../../desktop/fleet-core/src/inventory.rs#L189)、[inventory.rs:271](../../desktop/fleet-core/src/inventory.rs#L271) | 未審來源／分配及衝突規則前不配置新映射、不發明 allocator 或 fallback；既有值無變更則保持。 |
 | D7 共用健康投影 | 四畫面共用唯讀投影／formatter，以服務、principal、workspace 與 revision 區分；保留原生 IPC／HTTP producer schema，缺失 metadata 顯示未知。標頭只呈 Connector 範圍，reason 對照與版本規則集中維護。理由：共用語意而不創造第二本 health 帳或讓替身發明欄位。 | producer、來源差異及標頭判準只維護於上方責任表與健康投影表；正式 IPC sanitizer 是資料形狀邊界。[fleet.rs:597](../../desktop/src-tauri/src/fleet.rs#L597) | metadata／envelope 接線未完成前不宣稱已有完整共同 payload；golden 取正式 producer 的去識別輸出，不補 native-only 欄位到 HTTP。 |

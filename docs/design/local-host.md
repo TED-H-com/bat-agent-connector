@@ -134,21 +134,22 @@ These are mock tests, not desktop/server-mode or OS credential acceptance.
 
 | Location or reference | Current interpretation |
 | --- | --- |
-| Linux profiles | `config.py:62` defaults to `~/.local/share/org.tonyq.better-agent-terminal/profiles`. It is a literal default, not an XDG-aware BAT discovery algorithm. Guided setup uses it on Linux (`managed_setup.py:93–101`). |
-| macOS profiles | Guided setup tries `~/Library/Application Support/org.tonyq.better-agent-terminal/profiles` (`managed_setup.py:99–100`). This is a Connector lookup convention, not verified current BAT storage evidence. |
-| Windows profiles | Guided setup tries `%APPDATA%\org.tonyq.better-agent-terminal\profiles` (`managed_setup.py:97–98`). Missing APPDATA must not turn a future discovery attempt into a relative-directory search. This is also a lookup convention, not proof of BAT's installed layout. |
-| Overrides | `[bat] profiles_dir` overrides guided discovery; a host's `bat_profiles_dir` can override token resolution (`managed_setup.py:93–96`; `config.py:598–599,683`). Outside guided setup, the general config/importer default remains the Linux-style path on every OS. |
+| Linux profiles | The shared `connection_sources.py` policy defaults to `~/.local/share/org.tonyq.better-agent-terminal/profiles` for setup and runtime. This remains a literal convention, not XDG-aware BAT discovery. |
+| macOS profiles | Setup and runtime use `~/Library/Application Support/org.tonyq.better-agent-terminal/profiles`. This is a Connector convention, not verified current BAT storage evidence. |
+| Windows profiles | Setup and runtime select `%APPDATA%/BetterAgentTerminal/profiles`, then the old `org.tonyq.better-agent-terminal` root only when the new root is absent. Selection is evaluated on each call; an invalid or unreadable directory does not fall back. Missing APPDATA is unavailable, never a relative search. |
+| Overrides | `[bat] profiles_dir` wins over platform defaults; a host’s `bat_profiles_dir` overrides runtime lookup. Setup saves its selected path in that host field. No default lookup scans other accounts. The separate CLI importer retains its explicit/default argument behavior. |
 | `index.json` | Guided import accepts only `type: remote` with `remoteHost`, `remotePort`, `remoteFingerprint`, and optional `remoteProfileId` (`managed_setup.py:123–165`). CLI import has the same filter (`importer.py:32–55`). It knows a remote endpoint from these fields. There is no supported mapping from a local profile to a local server endpoint. |
 | `token_ref = "env:NAME"` | Resolve the selected environment value in central, strip it and reject empty values (`config.py:141–150`). This existing operator option is not a desktop discovery source. |
 | `token_ref = "file:PATH"` | Read a private UTF-8 token file, at most 64 KiB, strip surrounding whitespace and reject empty values (`config.py:151–159`). This is a Connector reference, not a claim that BAT writes such a file. |
-| `token_ref = "bat-profile:ID"` | Read `remote-tokens.enc.json` under the selected profiles directory, at most 1 MiB (`config.py:165–192`). The supported unencrypted shape is a JSON object whose `data` is an object or JSON string containing a `tokens` object, selecting exactly that client profile ID. Encrypted data is refused. This does not establish where the local BAT **server** token lives. |
+| `token_ref = "bat-profile:ID"` | Read a private `remote-tokens.enc.json` of at most 1 MiB from the selected directory. Existing `resolve_token()` uses the shared parser’s legacy Python mode: object or JSON-string `data`, exact profile key, and the historical `enc` acceptance (false, absent/null or numeric zero). Setup and `token_available()` use admission: exactly false, JSON-string data, exact unambiguous key and native token bounds. This does not establish where the local BAT **server** token lives. |
 | Private-file protection | `_private_files.py:8–51` rejects symlinks, nonregular files, excessive sizes, owner mismatch where `getuid` exists, and group/other access on non-Windows; checks opened-file identity too. Unix mode checks are skipped on Windows. Managed storage instead uses `platform_files` and Windows ACL/handle checks; do not call the older helper equivalent to Windows OS protection. `docs/getting-started.md:230–234` documents these distinctions. |
 
-There is a small existing reader discrepancy: token resolution accepts absent
-`enc` as unencrypted (`config.py:173`), while guided discovery requires exactly
-`enc: false` (`managed_setup.py:139–140`). A new native importer should require an
-explicit supported unencrypted marker; do not silently expand formats. Any change
-to the existing reader's compatibility is a separately reviewed change.
+The two Python modes are intentional compatibility boundaries in
+`BAT_SOURCE_POLICY = 1`, with shared vectors also checked by Rust's legacy Fleet
+reader. An admission failure does not narrow an existing Python reference's
+runtime decoding. Retiring that mode requires evidence about supported BAT
+writers; the server-store audit below is not evidence for every client store.
+See [the trusted-source contract](fleet-configuration.md).
 
 `tests/test_mcp_and_config.py:71–101` supplies both local and remote profile
 fixtures, imports only the remote one, keeps the token out of TOML and resolves
