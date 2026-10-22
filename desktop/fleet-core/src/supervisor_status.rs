@@ -349,12 +349,16 @@ mod contract_tests {
             )
             .unwrap();
             let policy = crate::route::HostPolicy::new(&routes, generation.clone());
-            let choice =
-                crate::route::SelectionRequest::new(&routes, &policy, generation.clone(), now)
-                    .unwrap()
-                    .run(&FixtureRoutes, std::time::Duration::from_secs(2))
-                    .await
-                    .unwrap();
+            let choice = crate::route::SelectionRequest::new(
+                &routes,
+                &policy,
+                generation.clone(),
+                now - 300_000,
+            )
+            .unwrap()
+            .run(&FixtureRoutes, std::time::Duration::from_secs(2))
+            .await
+            .unwrap();
             let route = choice.observation();
             let row = Entry::observed(
                 (
@@ -385,6 +389,47 @@ mod contract_tests {
     #[ignore = "explicit fixture regeneration only"]
     async fn generate_route_status_fixture() {
         println!("FLEET_RAW={}", observed_fixture().await);
+    }
+    #[test]
+    fn future_route_time_omits_only_the_route() {
+        let generation = ProbeGeneration {
+            epoch: "a".repeat(32),
+            configuration_binding: "c".repeat(64),
+            selection_revision: "d".repeat(64),
+            generation: 1,
+        };
+        let route = RouteObservation {
+            kind: RouteKind::Direct,
+            generation: generation.clone(),
+            observed_ms: 2001,
+        };
+        let plain = Entry::observed(
+            ("node-1", "Fixture 1"),
+            true,
+            ProbeKind::Bat,
+            (None, None),
+            &generation,
+            2000,
+            None,
+        )
+        .unwrap();
+        let with_route = Entry::observed(
+            ("node-1", "Fixture 1"),
+            true,
+            ProbeKind::Bat,
+            (None, Some(&route)),
+            &generation,
+            2000,
+            None,
+        );
+        assert!(
+            with_route.is_ok(),
+            "a future route must not fail the status row"
+        );
+        assert_eq!(
+            serde_json::to_value(with_route.unwrap()).unwrap(),
+            serde_json::to_value(plain).unwrap()
+        );
     }
     #[test]
     fn observation_clock_is_translated_against_the_producers_unix_anchor() {

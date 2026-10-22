@@ -1486,3 +1486,20 @@ async fn replacement_route_never_retains_the_previous_choices_time_or_generation
     assert_eq!(after.kind, before.kind);
     runtime.shutdown(9000).await.unwrap();
 }
+
+#[tokio::test]
+async fn live_route_is_dated_by_the_latest_ownership_check() {
+    let (_f, _shared, mut runtime) = fixture();
+    advance(&mut runtime, 1000).await;
+    let checked = runtime.tick(301_000).await.unwrap();
+    let route = checked
+        .entries
+        .iter()
+        .find(|row| row.name == "node-1")
+        .unwrap()
+        .route
+        .as_ref()
+        .unwrap();
+    assert_eq!(route.observed_at, "1970-01-01T00:05:01Z");
+    runtime.shutdown(302_000).await.unwrap();
+}

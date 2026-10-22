@@ -18,10 +18,11 @@ for (const locale of ['en-US', 'zh-TW']) test.describe(`Fleet route ${locale}`, 
         entry: fixture.configuration.connections[0], detailsState: new Map()}));
     }, {fixture, locale, elapsed, down});
   }
-  test('current route from the producer golden', async ({page}) => {
+  test('last verified use keeps a five-minute-old route current in the producer golden', async ({page}) => {
     await mount(page, 0);
     await expect(page.locator('[data-fleet-route]')).toHaveText(locale === 'en-US'
       ? 'Route: Tailscale direct' : '路徑：Tailscale 直連');
+    await expect(page.locator('[data-fleet-route]')).toHaveAttribute('data-freshness', 'current');
   });
   test('at the route deadline, retain its value and age with Checking', async ({page}) => {
     await mount(page, 60_000);
