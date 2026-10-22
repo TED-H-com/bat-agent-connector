@@ -2,7 +2,7 @@
 
 [Windows guide](../windows.md) · [繁體中文摘要](#繁體中文設定摘要)
 
-「加入機器」的共用契約（來源政策已實作，其餘流程待完成）見[下方章節](#加入機器共用契約已定尚未實作)。下列手動設定
+「加入機器」的共用契約（來源政策與純產生器已實作，發布、native apply 與 UI 尚未完成）見[下方章節](#加入機器共用契約已定尚未實作)。下列手動設定
 仍作現有格式的參考；新流程的完成條件是退休重複填寫，不是另加一份設定表單。
 
 The packaged Windows client contains the Rust Fleet runtime. A new installation can
@@ -85,6 +85,59 @@ The example's required features are `inventory` and `events_stream` with contrac
 `2026-10-08`. A configured central credential must reference `windows-dpapi` and its
 API identity must have **exactly observe scope**. A running service or listening port
 alone does not establish API readiness.
+
+## Pure configuration generator — implemented; publication, native apply and UI pending
+
+The native-only [generator](../../desktop/fleet-core/src/connection_setup.rs) accepts a
+reviewed setup: a selected [BAT catalog](bat-source-catalog.md) profile with admission
+policy 1, credential/pin reference keys, an explicit literal SSH `Host`/`LocalForward`
+association, an authorized route reference, stable workspace bindings, label and four
+independent preferences (background connections, BAT windows, Dashboard, login).
+The caller supplies the protected installation root, exact existing bytes/digests,
+creation/owner evidence and configured/listening addresses. The generator does no IO,
+enrollment, environment expansion or process execution, and accepts no token body.
+
+| Output | Generated or preserved source (A); remaining user choice (U) |
+| --- | --- |
+| `fleet.json` | A: native-selected root and explicit Rust backend for a new installation; an existing root/backend, including omitted legacy backend, stays unchanged. The pointer belongs at the existing native application-data location, separately from `kit_root`. |
+| `client/fleet-inventory.json` | A: stable host/reference keys, catalog profile/remote profile, `source_policy:1`, explicit forwarding local→target, reviewed route/probe/access-host, supplied binding IDs and workspace IDs, derived provisioning profiles, versioned compatibility defaults. U: label, authorized profile/route/workspaces and `required`. Existing policy and `connector_endpoint` metadata are retained. New external Connector routes stay inactive: null alias and explicit parser-required template values, including an inactive DPAPI reference, are not live endpoints or enrolled credentials. |
+| `client/bat-profiles/index.json` | A: selected catalog profile, endpoint/pin and BAT metadata (`remoteProfileName`, `createdAt`, `updatedAt` when present); existing root metadata and unrelated profiles are retained. U: the selected BAT window independently controls its `activeProfileIds` membership. No BAT live index is written. |
+| `client/ssh-config` | A: an owned alias-only validation/reference artifact, with no copied key, login, forwarding or security directives. Existing bytes are retained as a prefix; every external SSH byte remains with its original authority. No manual `Include` is needed by this artifact. |
+
+The deterministic plan contains all four bounded outputs as bytes plus SHA-256,
+source bindings, independent preferences, a review digest and ordered single-file
+steps with before/after digests and owner evidence. Existing JSON with no semantic
+change retains its exact bytes; already-applied inputs yield no publication steps.
+The installation pointer is last, after inventory/profile/alias cross-validation.
+Preferences are returned for the existing selection/startup owners; only BAT window
+membership is represented in these four files. There is no cross-file transaction,
+receipt persistence or automatic resume in this module.
+
+Typed gaps return **no plan**: missing mapping, duplicate forwards, unavailable or
+ambiguous profile/credential, profile/endpoint mismatch, occupied endpoint, exhausted
+pool, changed source/review, unknown owner, reference-only file requiring modification,
+identity change, invalid input/output, and unsupported SSH syntax/Include/Match or
+reader bounds/encoding. The reader allows at most 1 MiB, 8,192 lines and 4,096 bytes per
+line. It never follows Includes (including cycles), evaluates Match or calls `ssh -G`.
+Handwritten files remain references; the current fixed loaders cannot consume a new
+overlay for a required edit, so that case stops with `ReferenceOnly` instead of adoption.
+
+Allocation policy 1 scans `127.0.0.2`–`127.0.0.254`, retaining the reviewed service port
+and excluding configured/listening addresses; `.1` is reserved for new allocation.
+It requires a proven profile/forward pair. A generated configuration still requires
+the chosen address to match both the existing BAT profile and explicit forward:
+allocation does not create a profile or rewrite SSH. Preview recheck reports a conflict
+without selecting a replacement. Every plan is **reference-route only**: current SSH
+launch adds `-L`, so native wiring must settle the duplicate-listener boundary before
+publication/activation. Independent observe-handle enrollment, safe overlay consumption,
+native publication/readback, preference persistence and UI remain open.
+
+**繁體中文狀態：產生器已實作；發布、native apply 與 UI 尚未完成。**
+四檔由已審來源及版本化政策產生，缺關聯回傳具型別缺口，不猜 endpoint、不接管手寫檔。
+使用者仍選標籤、既有 profile／route／workspace 與四種獨立偏好；一般安裝流程的手填
+步驟尚未退休。測試以合成資料驗證正式 loaders；Tauri sanitizer
+(`src-tauri/src/fleet.rs`) 不在 fleet-core，產生 inventory 的 status-golden 檢查留待接線。
+本節不宣稱 Windows、真 BAT／SSH 或 E01／E03／E11、R0–R5／A01–A40 驗收完成。
 
 ## Credentials and optional bootstrap
 
