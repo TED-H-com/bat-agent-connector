@@ -22,7 +22,7 @@ export function shellReviewFixture() {
     if (path === endpoint + '/lifecycle/transitions') return {status: 200, data: {workspace_id: workspaceId, transitions: [], next_cursor: null}};
     if (path === endpoint + '/projects' || path === endpoint + '/work') return {status: 200, data: {workspace_id: workspaceId, bindings: [], next_cursor: null}};
     if (path === '/projects' && state.projectError) return {status: state.projectError,
-      data: {error: {code: state.projectError === 403 ? 'FORBIDDEN' : state.projectError === 404 ? 'NOT_FOUND' : 'UNAVAILABLE', message: 'Fixture source unavailable'}}};
+      data: {error: {code: state.projectError === 401 ? 'UNAUTHORIZED' : state.projectError === 403 ? 'FORBIDDEN' : state.projectError === 404 ? 'NOT_FOUND' : 'UNAVAILABLE', message: 'Fixture source unavailable'}}};
     if (path === '/projects') {
       if (state.holdEvidence) await state.holdEvidence;
       return {status: 200, data: {projects: []}};

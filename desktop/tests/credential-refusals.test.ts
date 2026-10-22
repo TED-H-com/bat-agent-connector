@@ -1,5 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {BROWSER_TOKEN_KEY, credentialRefusals, isCredentialRefusal} from '../src/credential-refusals.js';
 
 function store() {
@@ -7,6 +8,32 @@ function store() {
   return {values, getItem: (key: string) => values.get(key) ?? null,
     setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key)};
 }
+
+test('prepared credential lookups and retries are synchronous and domain separated', () => {
+  for (const token of ['example', '權杖🙂', 'x'.repeat(120), 'x'.repeat(1000)]) {
+    const storage = store(); storage.setItem(BROWSER_TOKEN_KEY, token);
+    const gate = credentialRefusals({stores: () => [storage], endpoint: () => 'http://localhost'});
+    gate.prepare(token);
+    assert.equal(gate.read(token), null);
+    gate.refuse(token, 401, 'GET', '/capabilities');
+    const digest = createHash('sha256').update('batc.dashboard.credential-refusal.v1\0' + token).digest('hex');
+    assert.equal(JSON.parse(storage.getItem('batc.credential-refused.http%3A%2F%2Flocalhost.' + digest)!).status, 401);
+    assert.equal(gate.read(token)?.status, 401);
+    gate.retry(token);
+    assert.equal(gate.read(token), null);
+  }
+});
+
+test('another tab can clear a persisted refusal without leaving the original tab paused', () => {
+  const storage = store(); storage.setItem(BROWSER_TOKEN_KEY, 'example');
+  const options = {stores: () => [storage], endpoint: () => 'http://localhost'};
+  const first = credentialRefusals(options), second = credentialRefusals(options);
+  first.prepare('example'); second.prepare('example');
+  first.refuse('example', 401, 'GET', '/events');
+  assert.equal(second.read('example')?.status, 401);
+  second.retry('example');
+  assert.equal(first.read('example'), null);
+});
 
 test('refusal persists for its credential and endpoint until an explicit retry', async () => {
   const storage = store();

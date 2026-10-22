@@ -290,17 +290,23 @@ async function refusedAccess(active, workUrl) {
   await unchanged();
   await shot('03-refused-settings');
   if (surface === 'work') {
+    // Navigation must not re-present a paused credential. Only this explicit
+    // retry may verify it again; the principal remains revoked in this journey.
+    const retry = page.waitForResponse(response => response.status() === 401
+      && new URL(response.url()).pathname === '/api/v1/capabilities');
+    await page.getByRole('button', {name: zh ? '重試已記住的權杖' : 'Retry remembered token', exact: true}).click();
+    await retry;
+    await unchanged();
     step = 'refused-work-return';
-    const returned = page.waitForResponse(response => response.status() === 401
-      && new URL(response.url()).pathname === `/api/v1/work-items/${f.work}`);
+    const beforeReturn = allRequests.length;
     await page.evaluate(hash => {location.hash = hash;}, new URL(workUrl).hash);
-    await returned;
     await expect(page).toHaveURL(workUrl);
     // Refused source reads cannot recreate actionable controls from cached data.
     await expect(page.locator('#main [data-api-error]')).toContainText('UNAUTHORIZED');
     await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
     await headerRefused();
     await unchanged();
+    assert.equal(allRequests.length, beforeReturn, 'Paused navigation must not send the remembered bearer');
   }
   assert.deepEqual(errors, []);
   await shot('04-refused-work-return');

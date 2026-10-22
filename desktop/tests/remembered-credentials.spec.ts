@@ -51,6 +51,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const status of [401, 403]) {
     const central = await service(), context = await browser.newContext({locale});
     try {
       const page = await context.newPage();
+      await page.clock.install();
       await page.goto(central.origin + '/dashboard/');
       await page.locator('input[type=password]').fill(central.token);
       await page.locator('input[type=checkbox]').check();
@@ -62,7 +63,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const status of [401, 403]) {
       await expect(page.locator('#live')).toHaveText(copy.ui_connection_refused);
       const refusedCount = presentations;
       // Advance beyond multiple normal poll and retry intervals without resending.
-      await page.clock.install(); await page.clock.runFor(10_000);
+      await page.clock.runFor(10_000);
       expect(presentations).toBe(refusedCount);
       await page.reload();
       await expect(page.getByRole('alert')).toContainText(copy.global_token_rejected);
@@ -117,6 +118,8 @@ for (const locale of ['en-US', 'zh-TW']) {
       await expect(page.locator('#live')).toHaveText(copy.ui_connected);
       await central.status(401);
       await expect(page.locator('#live')).toHaveText(copy.ui_connection_refused);
+      await expect.poll(() => page.evaluate(() => Object.keys(localStorage)
+        .filter(key => key.startsWith('batc.credential-refused.')).length)).toBe(1);
       await page.locator('#live').click();
       await page.getByRole('button', {name: copy.disconnect, exact: true}).click();
       await expect(page.locator('input[type=password]')).toBeVisible();
