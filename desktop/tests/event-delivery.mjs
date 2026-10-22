@@ -59,6 +59,7 @@ export function eventDelivery(page, {initiallyPaused = false} = {}) {
         await expect(control).toBeEnabled();
         // A failed page can close the gate before its next retry. Let the
         // existing reader finish recovery before holding a writable boundary.
+        // This observes its recovery polls; it never repeats the user action.
         ready = async () => await control.count() === 1 && await control.isEnabled();
         action = () => control.click();
       }
@@ -78,4 +79,3 @@ export async function httpEventDelivery(page, options) {
   await page.route('**/api/v1/events?*', route => gate.through(() => route.fallback()));
   return gate;
 }
-
