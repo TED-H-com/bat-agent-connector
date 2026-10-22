@@ -136,6 +136,10 @@ impl Drop for DiskFixture {
 
 #[test]
 fn generated_bytes_round_trip_through_real_installation_and_configuration_loaders() {
+    assert_round_trip(setup());
+}
+
+fn assert_round_trip(mut input: ReviewedSetup) {
     // Only tests publish. TMPDIR is set to a unique disk directory by the test command.
     let directory = std::env::temp_dir().join(format!(
         "fleet-generated-{}-{:032x}",
@@ -144,7 +148,6 @@ fn generated_bytes_round_trip_through_real_installation_and_configuration_loader
     ));
     std::fs::create_dir(&directory).unwrap();
     let fixture = DiskFixture(directory);
-    let mut input = setup();
     input.root = fixture.0.join("installation");
     let plan = build(&input).unwrap();
     assert!(!input.root.exists());
@@ -178,6 +181,93 @@ fn generated_bytes_round_trip_through_real_installation_and_configuration_loader
     );
     // The Tauri sanitizer (src-tauri/src/fleet.rs) is outside fleet-core.
     // Status-golden verification of this inventory waits for native wiring.
+}
+
+#[test]
+fn listener_ports_do_not_reserve_unrelated_services() {
+    let mut input = setup();
+    for socket in [
+        "0.0.0.0:135",
+        "0.0.0.0:445",
+        "127.0.0.2:19002",
+        "127.0.0.9:19001",
+    ] {
+        input.addresses.listening.insert(socket.parse().unwrap());
+    }
+    assert!(build(&input).is_ok());
+    input.endpoint_choice = EndpointChoice::Allocate;
+    let plan = build(&input).unwrap();
+    let allocation = plan.allocation.as_ref().unwrap();
+    assert_eq!(allocation.local.to_string(), "127.0.0.2:19001");
+    assert_eq!(allocation.recheck(&input.addresses), Ok(()));
+    assert_eq!(plan.recheck(&input), Ok(()));
+}
+
+#[test]
+fn wildcard_listener_on_the_service_port_blocks_build_allocation_and_recheck() {
+    let mut input = setup();
+    let proven = ProvenAssociation::new(&input.selected, input.forward.as_ref()).unwrap();
+    let allocation = allocate_loopback(&proven, &input.addresses).unwrap();
+    input
+        .addresses
+        .listening
+        .insert("0.0.0.0:19001".parse().unwrap());
+    assert_eq!(build(&input), Err(Gap::OccupiedEndpoint));
+    assert_eq!(
+        allocate_loopback(&proven, &input.addresses),
+        Err(Gap::PoolExhausted)
+    );
+    assert_eq!(
+        allocation.recheck(&input.addresses),
+        Err(Gap::ReviewChanged)
+    );
+    input.endpoint_choice = EndpointChoice::Allocate;
+    assert_eq!(build(&input), Err(Gap::PoolExhausted));
+}
+
+fn setup_at(address: &str, port: u16) -> ReviewedSetup {
+    let mut input = setup();
+    let mut index: Value =
+        serde_json::from_slice(&profile_index("example-profile", address)).unwrap();
+    index["profiles"][0]["remotePort"] = json!(port);
+    input.selected = select(&serde_json::to_vec(&index).unwrap(), "example-profile").unwrap();
+    input.ssh_source = source(address);
+    input.ssh_source = String::from_utf8(input.ssh_source)
+        .unwrap()
+        .replace(":19001 ", &format!(":{port} "))
+        .into_bytes();
+    input.forward = Some(
+        read_ssh(&input.ssh_source)
+            .unwrap()
+            .association("bat-example")
+            .unwrap(),
+    );
+    input
+}
+
+#[test]
+fn a_validated_first_loopback_forward_is_preserved_and_loads() {
+    let input = setup_at("127.0.0.1", 19001);
+    let plan = build(&input).unwrap();
+    assert_eq!(
+        document(&plan, Artifact::Inventory)["hosts"][0]["local"],
+        "127.0.0.1:19001"
+    );
+    assert_round_trip(input);
+}
+
+#[test]
+fn connector_reserves_its_exact_socket_while_bat_hosts_reserve_their_address() {
+    assert_eq!(
+        build(&setup_at("127.0.0.1", 19796)),
+        Err(Gap::OccupiedEndpoint)
+    );
+    let mut input = setup_at("127.0.0.2", 19002);
+    input
+        .addresses
+        .configured
+        .insert("127.0.0.2".parse().unwrap());
+    assert_eq!(build(&input), Err(Gap::OccupiedEndpoint));
 }
 
 #[test]
@@ -248,7 +338,7 @@ fn required_gaps_return_errors_instead_of_partial_steps() {
     input
         .addresses
         .listening
-        .insert("127.0.0.2".parse().unwrap());
+        .insert("127.0.0.2:19001".parse().unwrap());
     assert_eq!(build(&input), Err(Gap::OccupiedEndpoint));
     let mut input = setup();
     input
@@ -346,7 +436,7 @@ fn review_binds_all_sources_preferences_and_owner_evidence() {
     changed
         .addresses
         .listening
-        .insert("127.0.0.2".parse().unwrap());
+        .insert("127.0.0.2:19001".parse().unwrap());
     assert_eq!(plan.recheck(&changed), Err(Gap::ReviewChanged));
     let mut changed = input.clone();
     changed.preferences.login = true;
@@ -605,11 +695,13 @@ fn allocation_is_bounded_deterministic_and_never_reselects_at_recheck() {
     let proven = ProvenAssociation::new(&selected, Some(&forward)).unwrap();
     let mut addresses = AddressUse::default();
     addresses.configured.insert("127.0.0.2".parse().unwrap());
-    addresses.listening.insert("127.0.0.3".parse().unwrap());
+    addresses
+        .listening
+        .insert("127.0.0.3:19001".parse().unwrap());
     let allocation = allocate_loopback(&proven, &addresses).unwrap();
     assert_eq!(allocation.local.to_string(), "127.0.0.4:19001");
     assert_eq!(allocation, allocate_loopback(&proven, &addresses).unwrap());
-    addresses.listening.insert(*allocation.local.ip());
+    addresses.listening.insert(allocation.local);
     assert_eq!(allocation.recheck(&addresses), Err(Gap::ReviewChanged));
     assert_eq!(allocation.local.to_string(), "127.0.0.4:19001");
     let empty = AddressUse::default();

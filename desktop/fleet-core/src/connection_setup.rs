@@ -268,18 +268,21 @@ impl ProvenAssociation {
     }
 }
 
-/// Addresses, not just ports: inventory requires distinct BAT loopback addresses.
-/// Include wildcard listeners as 0.0.0.0; adapters must also map dual-stack binds.
+/// Configured BAT hosts reserve addresses, as required by inventory uniqueness.
+/// Listeners reserve sockets: 0.0.0.0 conflicts with all addresses on that port
+/// only. Adapters map a dual-stack [::]:port listener to 0.0.0.0:port.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct AddressUse {
     pub configured: BTreeSet<Ipv4Addr>,
-    pub listening: BTreeSet<Ipv4Addr>,
+    pub listening: BTreeSet<SocketAddrV4>,
 }
 impl AddressUse {
-    fn occupied(&self, address: &Ipv4Addr) -> bool {
-        self.configured.contains(address)
-            || self.listening.contains(address)
-            || self.listening.contains(&Ipv4Addr::UNSPECIFIED)
+    fn occupied(&self, local: &SocketAddrV4) -> bool {
+        self.configured.contains(local.ip())
+            || self.listening.contains(local)
+            || self
+                .listening
+                .contains(&SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, local.port()))
     }
 }
 
@@ -291,7 +294,7 @@ pub struct Allocation {
 impl Allocation {
     /// Preview binds this choice. Recheck cannot choose a different address.
     pub fn recheck(&self, addresses: &AddressUse) -> SetupResult<()> {
-        if addresses.occupied(self.local.ip()) {
+        if addresses.occupied(&self.local) {
             Err(Gap::ReviewChanged)
         } else {
             Ok(())
@@ -305,11 +308,11 @@ pub fn allocate_loopback(
     addresses: &AddressUse,
 ) -> SetupResult<Allocation> {
     (2..=254)
-        .map(|last| Ipv4Addr::new(127, 0, 0, last))
-        .find(|ip| !addresses.occupied(ip))
-        .map(|ip| Allocation {
+        .map(|last| SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, last), proven.forward.local.port()))
+        .find(|local| !addresses.occupied(local))
+        .map(|local| Allocation {
             version: ALLOCATION_VERSION,
-            local: SocketAddrV4::new(ip, proven.forward.local.port()),
+            local,
         })
         .ok_or(Gap::PoolExhausted)
 }
@@ -438,7 +441,8 @@ pub struct ReviewedSetup {
     pub preferences: Preferences,
     pub endpoint_choice: EndpointChoice,
     /// Additional configured addresses outside the retained connection, plus
-    /// all current listener addresses. Existing inventory addresses are added.
+    /// all current listener sockets. Existing BAT addresses and the Connector's
+    /// exact socket are also reserved by the builder.
     pub addresses: AddressUse,
     pub existing: BTreeMap<Artifact, ExistingFile>,
 }
@@ -753,13 +757,13 @@ pub fn build(input: &ReviewedSetup) -> SetupResult<PublicationPlan> {
             );
         }
     }
-    addresses.configured.insert(
-        endpoint(inventory["connector"]["local"].as_str().unwrap(), true)
-            .unwrap()
-            .address
-            .parse()
-            .unwrap(),
-    );
+    // Unlike BAT hosts, the Connector reserves only its exact endpoint, even
+    // when its required inactive template is present. It is not a live listener.
+    let connector = endpoint(inventory["connector"]["local"].as_str().unwrap(), true).unwrap();
+    addresses.listening.insert(SocketAddrV4::new(
+        connector.address.parse().unwrap(),
+        connector.port,
+    ));
     let allocation = if input.endpoint_choice == EndpointChoice::Allocate && !retained {
         let allocation = allocate_loopback(&proven, &addresses)?;
         // Allocating a new address cannot rewrite the catalog or source SSH. The
@@ -771,7 +775,7 @@ pub fn build(input: &ReviewedSetup) -> SetupResult<PublicationPlan> {
     } else {
         None
     };
-    if !retained && addresses.occupied(forward.local.ip()) {
+    if !retained && addresses.occupied(&forward.local) {
         return Err(Gap::OccupiedEndpoint);
     }
     update_inventory(input, &mut inventory, forward)?;
