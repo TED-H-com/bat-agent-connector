@@ -61,6 +61,8 @@ export const nativeDiagnosticsSave = (input: {content: string; filename: string;
   invoke<{display_name: string} | null>("native_diagnostics_save", {input});
 export const nativeFilesStatus = () => invoke<any>("native_files_status");
 export const nativeFilesPick = (draftId: string) => invoke<any[]>("native_files_pick", {draftId});
+export const nativeFilesPasteArm = (draftId: string) => invoke<void>("native_files_paste_arm", {draftId});
+export const nativeFilesPaste = (draftId: string) => invoke<any>("native_files_paste", {draftId});
 export const nativeFilesUpload = (handleId: string) => invoke<any>("native_files_upload", {handleId});
 export const nativeFilesDropTarget = (draftId: string, enabled: boolean) => invoke<void>("native_files_drop_target", {draftId, enabled});
 export const nativeFilesControl = (transferId: string, action: string) => invoke<void>("native_files_control", {transferId, action});

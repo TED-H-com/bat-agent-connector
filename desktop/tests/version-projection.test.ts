@@ -3,15 +3,20 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {buildDiagnostics, buildLine} from '../src/diagnostics.js';
 import {diagnosticsStrings} from '../src/diagnostics-strings.js';
-import {versionFactText} from '../src/version-facts.js';
+import {versionFactText, versionFacts} from '../src/version-facts.js';
 import {frontendBuild} from '../src/frontend-identity.js';
+import {time} from '../src/version-projection.js';
 const bootstrap = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-bootstrap.json', import.meta.url), 'utf8'));
 const runtime = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-runtime-identity.json', import.meta.url), 'utf8'));
 const adapter = JSON.parse(readFileSync(new URL('../../tests/fixtures/pm-version-facts.json', import.meta.url), 'utf8'));
+const connectorUpdates = JSON.parse(readFileSync(new URL('../../tests/fixtures/connector-update-facts.json', import.meta.url), 'utf8'));
 const at = '2026-10-20T12:00:00.000Z';
 const input = name => ({caps:bootstrap.capabilities, managedRuntime:runtime[name], desktop:true,
   capabilitiesReadAt:at, managedReadAt:at, online:true, exportedAt:at});
 const row = (bundle, id) => bundle.versions?.rows.find(value => value.id === id);
+test('updater datetime.isoformat timestamps retain their microseconds',()=>{
+  assert.equal(time('2026-10-22T12:00:00.123456+00:00'),'2026-10-22T12:00:00.123456+00:00');
+});
 test('UI compatibility fields and rows share the producer digest and their own clocks', () => {
   const loadedAt='2026-10-20T11:00:00.000Z';
   const digest=bootstrap.capabilities.frontend.digest;
@@ -73,6 +78,53 @@ test('unread rows do not claim that a load, launch or successful read occurred',
     assert.equal(row.source,'not_reported');assert.equal(row.period,'unknown');
     assert.equal(row.observed_at,null);
   }
+});
+test('an older Connector leaves the next-launch installation explicitly unknown', () => {
+  const caps=structuredClone(bootstrap.capabilities);delete caps.connector_update;
+  const bundle=buildDiagnostics({...input('differs'),caps});
+  assert.deepEqual(row(bundle,'connector_installed'),{
+    id:'connector_installed',version:null,commit:null,digest:null,source:'not_reported',
+    observed_at:null,period:'unknown',build_source:null,state:'not_reported',code:null,
+    enabled:null,channel:null,pending:null,last:null,
+  });
+  assert.equal(bundle.versions.connector_installation_difference,'unknown');
+});
+for(const [name,caps] of Object.entries(connectorUpdates) as [string,any][])test(`real updater capability projection: ${name}`,()=>{
+  const value={...input('differs'),caps};
+  const bundle=buildDiagnostics(value),installed=row(bundle,'connector_installed');
+  const reported=caps.connector_update.state==='reported';
+  assert.equal(installed.source,reported?'connector_update':'not_reported');
+  assert.equal(installed.period,reported?'next_launch':'unknown');
+  assert.equal(installed.observed_at,reported?at:null);
+  assert.equal(installed.version,reported?caps.connector_update.installed.version:null);
+  assert.equal(installed.commit,reported?caps.connector_update.installed.commit:null);
+  assert.equal(bundle.versions.connector_installation_difference,reported?(['differs','rollback_differs'].includes(name)?'differs':'same'):'unknown');
+  assert.equal(installed.channel,reported?'preview':null);
+  assert.equal(installed.last?.status??null,reported?caps.connector_update.last.status:null);
+  assert.equal(installed.last?.at??null,reported?'2026-10-22T12:00:00.123456+00:00':null);
+  const without={...caps};delete without.connector_update;
+  assert.equal(JSON.stringify(bundle.client),JSON.stringify(buildDiagnostics({...value,caps:without}).client));
+  assert.equal(row(buildDiagnostics({...value,online:false}),'connector_installed').source,'not_reported');
+});
+for(const locale of ['en','zh-TW'])for(const desktop of [false,true])test(`literal next-launch details ${locale} ${desktop}`,()=>{
+  const t=(key,vars={})=>diagnosticsStrings[locale][key]?.replace(/\{(\w+)\}/g,(_,k)=>vars[k]??'')??key;
+  const render=name=>versionFacts({h:(_tag,_props,...children)=>children.flat(Infinity).filter(value=>value!==null).join(' '),t,
+    projection:buildDiagnostics({...input('differs'),desktop,caps:connectorUpdates[name]}).versions});
+  const expected=locale==='en'?[
+    'Connector installed for the next launch','Source: Connector update status','Installed for the next launch',
+    'Version: 0.2.8','Update channel: Preview','Last update result: Installed for the next launch · 2026-10-22T12:00:00.123456+00:00',
+    'A different Connector installation waits for the next launch; updating does not restart the service.',
+  ]:[
+    '供下次啟動的 Connector 安裝','來源：Connector 更新狀態','已安裝，供下次啟動使用',
+    '版本：0.2.8','更新頻道：預覽版','上次更新結果：已安裝，供下次啟動使用 · 2026-10-22T12:00:00.123456+00:00',
+    '另一個不同的 Connector 安裝正等待下次啟動；更新不會重新啟動服務。',
+  ];
+  for(const text of expected)assert.ok(render('differs').includes(text),text);
+  assert.ok(render('failed').includes(locale==='en'?'Last update result: Failed':'上次更新結果：失敗'));
+  assert.ok(render('failed').includes('fixture_install_failed'));
+  assert.ok(render('same').includes(locale==='en'?'The next-launch installation matches the answering Connector.':'供下次啟動的安裝與回應中的 Connector 相同。'));
+  assert.ok(render('not_enrolled').includes(locale==='en'?'Connector automatic updates are not enrolled.':'Connector 尚未登記自動更新。'));
+  assert.ok(render('outside_root').includes(locale==='en'?'This Connector was not identified as running from the updater-managed installation.':'尚未確認此 Connector 是從更新器管理的安裝啟動。'));
 });
 for(const locale of ['en','zh-TW']) test(`projection renders the same build line and facts in ${locale}`, () => {
   const bundle=buildDiagnostics(input('differs'));

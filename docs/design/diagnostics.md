@@ -168,11 +168,24 @@ native abilities, reachability, or a readable release name.
 `desktop/src/version-projection.js` selects the version facts used by About,
 Diagnostics (summary and JSON) and Updates. The existing readable build line and
 its order remain unchanged. Desktop build, loaded UI digest, served UI digest,
-answering Connector build, bundled/runtime launch observations, PM adapter
+answering Connector build, Connector installed for the next launch,
+bundled/runtime launch observations, PM adapter
 requirements, read BAT-run revisions and the Desktop updater version are separate
 rows; none supplies a missing value for another. Inputs live only in this window
 and connection epoch. Each row names its source and retains the client read time
 or the producer's observation time. Unknown values and times remain null.
+
+`connector_installed` reads only the sanitized `capabilities.connector_update`
+block, with source `connector_update`, period `next_launch` and the capabilities
+read time. Its details retain channel, policy, pending transition and the last
+result's separate timestamp. Absent or non-`reported` evidence remains unknown
+with source `not_reported`, including `not_enrolled`, `not_managed`, `unsupported`
+and coded `unreadable` states. The row and its reason appear in both browser and
+desktop. `connector_installation_difference` compares this commit with the loaded
+answering Connector as `same`, `differs` or `unknown`; a different installation
+waits for the next launch, and updating does not restart the service. A rollback
+can also differ. Settings, Diagnostics summary/export and Updates share this
+projection; the existing `projectionBuild` compatibility fields remain unchanged.
 
 The loaded UI row reads the immutable `frontendBuild` in
 `frontend-identity.js`; its client load time is captured once with that module

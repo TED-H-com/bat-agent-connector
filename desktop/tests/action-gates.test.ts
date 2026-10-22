@@ -43,7 +43,6 @@ export const reasons = [
   ['manage_required', {...ready, manageAllowed: false}, {attachment: true, manage: true}],
   ['attachments_unavailable', {...ready, attachmentsSupported: false}, {attachment: true, supported: true}],
   ['uploads_not_allowed', {...ready, uploadsAllowed: false}, {attachment: true, uploads: true}],
-  ['native_paste_unsupported', {...ready, nativeDesktop: true}, {attachment: true, paste: true}],
   ...failedPolls.filter(([, , kind]) => kind !== 'transport').map(([status, code, kind, , reason]) =>
     [reason, {...ready, online: false, pollHealth: {kind, status, code, at: 1234}}, {post: true}] as const),
 ] as const;
@@ -76,10 +75,10 @@ for (const locale of ['en', 'zh-TW'] as const) test(`${locale}: session server/t
   assert.equal(refusal.status, 401, 'preserve the existing missing-token draft-key classification');
 });
 
-test('native image paste always refuses, regardless of connection or upload permissions', () => {
+test('native image paste uses the existing attachment gates', () => {
   for (let bits = 0; bits < 2 ** fields.length; bits++) {
     const facts = {...Object.fromEntries(fields.map((field, i) => [field, !!(bits & (1 << i))])), nativeDesktop: true};
-    assert.deepEqual(gate(facts, {attachment: true, paste: true, supported: true, manage: true, uploads: true}),
-      {allowed: false, reason: 'native_paste_unsupported'});
+    const requirements = {attachment: true, supported: true, manage: true, uploads: true};
+    assert.deepEqual(gate(facts, {...requirements, paste: true}), gate(facts, requirements));
   }
 });
