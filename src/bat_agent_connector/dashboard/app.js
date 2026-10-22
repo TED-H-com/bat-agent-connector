@@ -88,7 +88,56 @@ var clientActionCode = (reason) => `CLIENT_ACTION_${reason.toUpperCase()}`;
 var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}`;
 var clientActionReason = (code) => clientReasons.find((reason) => clientActionCode(reason) === code) || null;
 //#endregion
+//#region src/credential-refusals.js
+function credentialRefusals({ stores = () => [sessionStorage, localStorage], endpoint = () => location.origin } = {}) {
+	const memory = new Map(), digests = new Map();
+	const keyFor = async (token) => {
+		if (!digests.has(token)) digests.set(token, crypto.subtle.digest("SHA-256", new TextEncoder().encode(token)).then((bytes) => [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("")));
+		return `batc.credential-refused.${encodeURIComponent(endpoint())}.${await digests.get(token)}`;
+	};
+	const storage = () => {
+		try {
+			return stores();
+		} catch {
+			return [];
+		}
+	};
+	return {
+		async read(token) {
+			const key = await keyFor(token);
+			for (const store of storage()) try {
+				const value = JSON.parse(store.getItem(key));
+				if (value?.status === 401 || value?.status === 403) return value;
+			} catch {}
+			return memory.get(key) || null;
+		},
+		async refuse(token, status) {
+			if (status !== 401 && status !== 403) return;
+			const key = await keyFor(token), value = {
+				status,
+				code: status === 401 ? "UNAUTHORIZED" : "FORBIDDEN"
+			};
+			memory.set(key, value);
+			for (const store of storage()) try {
+				store.setItem(key, JSON.stringify(value));
+			} catch {}
+		},
+		async retry(token) {
+			const key = await keyFor(token);
+			memory.delete(key);
+			for (const store of storage()) try {
+				store.removeItem(key);
+			} catch {}
+		}
+	};
+}
+var browserCredentialRefusals;
+var init_credential_refusals = __esmMin((() => {
+	browserCredentialRefusals = credentialRefusals();
+}));
+//#endregion
 //#region src/workbench-mode.js
+init_credential_refusals();
 function decideLayout({ search = "", policy } = {}) {
 	const requested = new URLSearchParams(search).get("workbench");
 	const blocked = requested === "1" && policy?.allowWorkbench === false;
@@ -2250,6 +2299,7 @@ var init_global_strings = __esmMin((() => {
 			global_empty_unread: "No unread updates",
 			global_attempts: "Attempts",
 			global_token_rejected: "Token not accepted.",
+			connection_retry_remembered: "Retry remembered token",
 			global_discussion: "Discussion",
 			global_plan: "Plan",
 			global_plan_version: "Plan v{n}",
@@ -2455,6 +2505,7 @@ var init_global_strings = __esmMin((() => {
 			global_empty_unread: "沒有未讀更新",
 			global_attempts: "嘗試次數",
 			global_token_rejected: "權杖無效。",
+			connection_retry_remembered: "重試已記住的權杖",
 			global_discussion: "討論",
 			global_plan: "計畫",
 			global_plan_version: "計畫 v{n}",
@@ -23455,15 +23506,19 @@ async function restoreBrowserSession() {
 	browserCsrf = data.csrf;
 	return true;
 }
-function browserAuthHeaders(token) {
-	if (token !== "managed-browser-session") return { Authorization: `Bearer ${token}` };
+async function browserAuthHeaders(token) {
+	if (token !== "managed-browser-session") {
+		const refusal = await browserCredentialRefusals.read(token);
+		if (refusal) throw Object.assign(new Error("Token not accepted."), refusal);
+		return { Authorization: `Bearer ${token}` };
+	}
 	if (!browserCsrf) throw new Error("Browser session needs to be restored");
 	return { "X-Batc-CSRF": browserCsrf };
 }
-function forgetBrowserSession() {
+async function forgetBrowserSession() {
 	if (!browserCsrf) return;
 	const headers = {
-		...browserAuthHeaders(browserSessionToken),
+		...await browserAuthHeaders(browserSessionToken),
 		"Content-Type": "application/json"
 	};
 	browserCsrf = null;
@@ -23489,7 +23544,7 @@ async function connectorRequest(method, path, body, key, browserToken, signal) {
 		body: body ?? null,
 		idempotency_key: key ?? null
 	} });
-	const headers = browserAuthHeaders(browserToken);
+	const headers = await browserAuthHeaders(browserToken);
 	if (body !== void 0) headers["Content-Type"] = "application/json";
 	if (key) headers["Idempotency-Key"] = key;
 	const res = await fetch(`/api/v1${path}`, {
@@ -23500,6 +23555,7 @@ async function connectorRequest(method, path, body, key, browserToken, signal) {
 		body: body === void 0 ? void 0 : JSON.stringify(body),
 		signal
 	});
+	if (browserToken !== "managed-browser-session") await browserCredentialRefusals.refuse(browserToken, res.status);
 	return {
 		status: res.status,
 		data: await res.json().catch(() => ({}))
@@ -23516,11 +23572,12 @@ async function connectorUploadArtifact(operationId, bytes, browserToken) {
 		redirect: "error",
 		credentials: "same-origin",
 		headers: {
-			...browserAuthHeaders(browserToken),
+			...await browserAuthHeaders(browserToken),
 			"Content-Type": "application/octet-stream"
 		},
 		body: bytes
 	});
+	if (browserToken !== "managed-browser-session") await browserCredentialRefusals.refuse(browserToken, res.status);
 	return {
 		status: res.status,
 		data: await res.json().catch(() => ({}))
@@ -56583,17 +56640,19 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 //#endregion
 //#region src/transport/artifact-content.ts
 init_transport();
+init_credential_refusals();
 async function readArtifactContent(reference, size, token, signal) {
 	if (nativeDesktop || !/^art_[0-9a-f]{32}$/.test(reference.artifact_id) || !Number.isSafeInteger(reference.revision) || reference.revision < 1 || !/^[0-9a-f]{64}$/.test(reference.digest) || !Number.isSafeInteger(size) || size < 0 || size > 16777216) throw new Error("Artifact content exceeds the supported bound or has an invalid reference");
 	const response = await fetch(`/api/v1/artifacts/${reference.artifact_id}/revisions/${reference.revision}/content`, {
 		method: "GET",
-		headers: browserAuthHeaders(token),
+		headers: await browserAuthHeaders(token),
 		redirect: "error",
 		cache: "no-store",
 		credentials: token === "managed-browser-session" ? "same-origin" : "omit",
 		mode: "same-origin",
 		signal: AbortSignal.any([signal, AbortSignal.timeout(3e4)])
 	});
+	if (token !== "managed-browser-session") await browserCredentialRefusals.refuse(token, response.status);
 	if (response.status !== 200 || response.redirected || response.headers.get("Content-Length") !== String(size) || !response.body) {
 		await response.body?.cancel();
 		throw new Error("Artifact content response does not match the exact revision");
@@ -66242,6 +66301,7 @@ function renderDeliveryWork(item, repositories = [], compact = false, { h, caps,
 }
 //#endregion
 //#region src/app.js
+init_credential_refusals();
 init_transport();
 init_i18n();
 var TOKEN_KEY = "batc.dashboard.token";
@@ -66665,6 +66725,12 @@ async function api(method, path, body, key, collectReceipt) {
 		return data;
 	} catch (error) {
 		if (epoch === state.epoch && !["VIEW_CHANGED", "FOREGROUND_READ_RETIRED"].includes(error.code)) {
+			if (!nativeDesktop && state.token !== "managed-browser-session" && [401, 403].includes(error.status)) {
+				state.connectionError = error;
+				state.pollHealth = pollFailure(error, Date.now());
+				updateOnline(false);
+				paintConnection();
+			}
 			if (method === "GET" && (path === "/capabilities" || path === "/bootstrap")) rememberVersionRead("capabilities", null, void 0, epoch);
 			recentErrors.record({
 				at: new Date().toISOString(),
@@ -66701,6 +66767,7 @@ async function apiRequest(method, path, body, key, collectReceipt) {
 		response = !resumable ? await request() : /^\/events(?:\?|$)/.test(path) ? await retiredRead(request(foregroundReads.signal), foregroundReads.signal) : await readThroughResume(request, () => foregroundReads.signal, guard);
 	} catch (cause) {
 		if (["FOREGROUND_READ_RETIRED", "CONNECTION_CHANGED"].includes(cause?.code)) throw cause;
+		if ([401, 403].includes(cause?.status)) throw new ApiError(cause.status, cause.code, cause.message);
 		throw new ApiError(0, ["AbortError", "TimeoutError"].includes(cause?.name) || /timed?\s*out|timeout/i.test(cause?.message || String(cause)) ? "TIMEOUT" : "NETWORK_ERROR", cause?.message || String(cause));
 	}
 	const { status, data } = response;
@@ -67581,6 +67648,17 @@ function foregroundChanged() {
 async function streamEvents() {
 	for (;;) {
 		await refreshManagedRecovery();
+		if (!nativeDesktop && state.token && state.token !== "managed-browser-session") {
+			const refusal = await browserCredentialRefusals.read(state.token);
+			if (refusal) {
+				state.connectionError = refusal;
+				state.pollHealth = pollFailure(refusal, Date.now());
+				updateOnline(false);
+				paintConnection();
+				await waitForEventPoll(1e3);
+				continue;
+			}
+		}
 		if (state.nativeBusy || !state.token || !state.viewReady || document.visibilityState === "hidden") {
 			paintConnection(true);
 			await waitForEventPoll(1e3);
@@ -71525,7 +71603,16 @@ function viewBrowserSettings(main) {
 	frame.panel("connection").append(h("section", { class: "panel" }, facts, managed ? h("h2", {}, t("ui_local_connector")) : null, disclosure({
 		label: t("global_details"),
 		body: h("div", {}, connectionIdentity(), managed ? h("p", {}, t("managed_browser_help")) : null)
-	}), h("button", {
+	}), !managed && state.connectionError && [401, 403].includes(state.connectionError.status) ? h("button", { onclick: async () => {
+		const token = state.token;
+		await browserCredentialRefusals.retry(token);
+		try {
+			await activate(await api("GET", "/capabilities"));
+		} catch (error) {
+			state.connectionError = error;
+		}
+		await route();
+	} }, t("connection_retry_remembered")) : null, h("button", {
 		class: "danger",
 		onclick: () => {
 			disconnect();
@@ -71546,9 +71633,28 @@ function viewBrowserSignedOut(main) {
 	const info = h("div", { class: "global-connect-status" });
 	const showConnectError = (error) => {
 		info.setAttribute("role", "alert");
-		info.replaceChildren(error?.status === 401 ? h("p", { class: "error" }, t("global_token_rejected")) : errorBox(error, { within: info }));
+		info.replaceChildren([401, 403].includes(error?.status) ? h("p", { class: "error" }, t("global_token_rejected")) : errorBox(error, { within: info }));
 	};
 	if (state.connectionError) showConnectError(state.connectionError);
+	const connect = async (token, saved = false) => {
+		if (!token) return;
+		state.epoch++;
+		state.token = token;
+		state.caps = null;
+		state.connectionError = null;
+		await browserCredentialRefusals.retry(token);
+		try {
+			await activate(await api("GET", "/capabilities"));
+			if (!saved) saveToken(token, remember.checked);
+			location.hash = "#/home";
+			await route();
+		} catch (error) {
+			state.token = null;
+			state.caps = null;
+			state.connectionError = error;
+			showConnectError(error);
+		}
+	};
 	const root = firstRunCard({
 		h,
 		t,
@@ -71556,22 +71662,15 @@ function viewBrowserSignedOut(main) {
 			class: "global-connect-form",
 			onsubmit: async (event) => {
 				event.preventDefault();
-				disconnect();
-				state.token = input.value.trim();
-				try {
-					await activate(await api("GET", "/capabilities"));
-					saveToken(state.token, remember.checked);
-					location.hash = "#/home";
-					await route();
-				} catch (e) {
-					state.token = null;
-					showConnectError(e);
-				}
+				await connect(input.value.trim());
 			}
 		}, h("label", { class: "connection-token" }, t("token"), input), h("label", { class: "global-remember" }, remember, " ", t("remember")), h("div", { class: "global-connect-actions" }, h("button", {
 			class: "primary",
 			type: "submit"
-		}, t("connect")), h("a", {
+		}, t("connect")), loadToken() ? h("button", {
+			type: "button",
+			onclick: () => connect(loadToken(), true)
+		}, t("connection_retry_remembered")) : null, h("a", {
 			class: "global-quiet-link",
 			href: setupGuide()
 		}, t("global_setup_guide"))), disclosure({
@@ -74277,8 +74376,10 @@ async function start() {
 		state.token = browserSession ? browserSessionToken : loadToken();
 		if (state.token) try {
 			await activate(await api("GET", "/capabilities"));
-		} catch {
+		} catch (error) {
 			state.token = null;
+			state.caps = null;
+			state.connectionError = error;
 		}
 	}
 	await route();

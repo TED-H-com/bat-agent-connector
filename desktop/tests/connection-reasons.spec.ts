@@ -174,6 +174,9 @@ for (const locale of ['en-US', 'zh-TW']) {
         const lastEvent = await event.getAttribute('data-observed-at');
         expect(lastSuccess).toBeTruthy(); expect(lastEvent).toBe('');
         failed = false; release();
+        if (failure === 'unauthorized' || failure === 'forbidden') {
+          await page.getByRole('button', {name: copy.connection_retry_remembered, exact: true}).click();
+        }
         await expect(page.locator('#live')).toHaveText(copy.ui_connected);
         await expect(page.locator('#live')).toHaveAttribute('title', `${copy.ui_connector_status.replace('{status}', copy.ui_connected)} — ${copy.desktop_polling}`);
         await expect(page.locator('.global-connection-facts .ui-pill')).toHaveText(copy.ui_connected);

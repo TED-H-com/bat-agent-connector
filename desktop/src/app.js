@@ -1,4 +1,5 @@
 import {centralServiceStatus, clientActionGate, pollFailure} from "./central-service-status.js";
+import {browserCredentialRefusals} from './credential-refusals.js';
 import {layoutDecision} from './workbench-mode.js';
 import {workbenchViews} from './workbench-views.js';
 import {settingsAgents} from './settings-agents.js';
@@ -330,6 +331,11 @@ async function api(method, path, body, key, collectReceipt) {
     return data;
   } catch(error) {
     if(epoch===state.epoch && !["VIEW_CHANGED", "FOREGROUND_READ_RETIRED"].includes(error.code)) {
+      if (!nativeDesktop && state.token !== browserSessionToken && [401,403].includes(error.status)) {
+        state.connectionError = error;
+        state.pollHealth = pollFailure(error, Date.now());
+        updateOnline(false); paintConnection();
+      }
       if(method==='GET' && (path==='/capabilities' || path==='/bootstrap'))rememberVersionRead('capabilities',null,undefined,epoch);
       recentErrors.record({at:new Date().toISOString(),method,path,status:error.status,code:error.code,admissionRefused:error.admissionRefused,operation:error.operation});
       if([401,403,404].includes(error.status))withdrawDiagnostics();
@@ -359,6 +365,7 @@ async function apiRequest(method, path, body, key, collectReceipt) {
   }
   catch (cause) {
     if (['FOREGROUND_READ_RETIRED', 'CONNECTION_CHANGED'].includes(cause?.code)) throw cause;
+    if ([401,403].includes(cause?.status)) throw new ApiError(cause.status, cause.code, cause.message);
     const timeout = ['AbortError', 'TimeoutError'].includes(cause?.name) || /timed?\s*out|timeout/i.test(cause?.message || String(cause));
     throw new ApiError(0, timeout ? 'TIMEOUT' : 'NETWORK_ERROR', cause?.message || String(cause));
   }
@@ -959,6 +966,14 @@ function foregroundChanged() {
 async function streamEvents() {
   for (;;) {
     await refreshManagedRecovery();
+    if (!nativeDesktop && state.token && state.token !== browserSessionToken) {
+      const refusal = await browserCredentialRefusals.read(state.token);
+      if (refusal) {
+        state.connectionError = refusal; state.pollHealth = pollFailure(refusal, Date.now());
+        updateOnline(false); paintConnection();
+        await waitForEventPoll(1000); continue;
+      }
+    }
     if (state.nativeBusy || !state.token || !state.viewReady || document.visibilityState === 'hidden') {
       paintConnection(true);
       await waitForEventPoll(1000); continue;
@@ -3455,6 +3470,14 @@ function viewBrowserSettings(main) {
     facts,
     managed ? h("h2", {}, t("ui_local_connector")) : null,
     disclosure({label: t("global_details"), body: h('div', {}, connectionIdentity(), managed ? h("p", {}, t("managed_browser_help")) : null)}),
+    !managed && state.connectionError && [401,403].includes(state.connectionError.status)
+      ? h('button', {onclick: async () => {
+        const token = state.token;
+        await browserCredentialRefusals.retry(token);
+        try {await activate(await api('GET', '/capabilities'));}
+        catch (error) {state.connectionError = error;}
+        await route();
+      }}, t('connection_retry_remembered')) : null,
     h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect"))));
   frame.show("fleet");
   frame.panel("fleet").append(fleetEmpty());
@@ -3466,23 +3489,29 @@ function viewBrowserSignedOut(main) {
   const info = h("div", {class: "global-connect-status"});
   const showConnectError = error => {
     info.setAttribute("role", "alert");
-    info.replaceChildren(error?.status === 401 ? h("p", {class: "error"}, t("global_token_rejected")) : errorBox(error, {within:info}));
+    info.replaceChildren([401,403].includes(error?.status) ? h("p", {class: "error"}, t("global_token_rejected")) : errorBox(error, {within:info}));
   };
   if (state.connectionError) showConnectError(state.connectionError);
-  const form = h("form", {class: "global-connect-form", onsubmit: async event => {
-    event.preventDefault();
-    disconnect();
-    state.token = input.value.trim();
+  const connect = async (token, saved = false) => {
+    if (!token) return;
+    state.epoch++; state.token = token; state.caps = null;
+    state.connectionError = null;
+    await browserCredentialRefusals.retry(token);
     try {
       await activate(await api("GET", "/capabilities"));
-      saveToken(state.token, remember.checked);
+      if (!saved) saveToken(token, remember.checked);
       location.hash = "#/home";
       await route();
-    } catch (e) {state.token = null; showConnectError(e);}
+    } catch (error) {state.token = null; state.caps = null; state.connectionError = error; showConnectError(error);}
+  };
+  const form = h("form", {class: "global-connect-form", onsubmit: async event => {
+    event.preventDefault();
+    await connect(input.value.trim());
   }}, h("label", {class: "connection-token"}, t("token"), input),
     h("label", {class: "global-remember"}, remember, " ", t("remember")),
     h("div", {class: "global-connect-actions"},
       h("button", {class: "primary", type: "submit"}, t("connect")),
+      loadToken() ? h('button', {type: 'button', onclick: () => connect(loadToken(), true)}, t('connection_retry_remembered')) : null,
       h("a", {class: "global-quiet-link", href: setupGuide()}, t("global_setup_guide"))),
     disclosure({label: t("global_details"), body: h("p", {}, t("token_help"))}), info);
   const root = firstRunCard({h, t, body: form});
@@ -5038,7 +5067,7 @@ async function start() {
     state.token = browserSession ? browserSessionToken : loadToken();
     if (state.token) {
       try { await activate(await api("GET", "/capabilities")); }
-      catch { state.token = null; }
+      catch (error) { state.token = null; state.caps = null; state.connectionError = error; }
     }
   }
   await route();

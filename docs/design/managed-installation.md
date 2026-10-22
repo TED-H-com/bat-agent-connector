@@ -79,6 +79,41 @@ that have not been made.
 - Browser handoff is short-lived and single-use. The resulting session uses an HttpOnly SameSite cookie plus origin/CSRF checks; this is not a public unauthenticated hosting mode.
 - Setup mutations use central durable actions, opaque staged credential references and the reviewed configuration revision. Publication is atomic. Recovery reads the original revision/receipt rather than inventing a new intent; live configuration changes wait for a safe point.
 
+### Credentials and browser connections
+
+API tokens are bearer credentials for HTTP and `/rpc`, with their existing actor
+and scopes. A managed browser-session credential is accepted only through the
+browser cookie path. It requires the existing exact-origin, fetch-metadata and
+CSRF checks. Only the session restore GET omits the CSRF header; it still requires
+the origin and fetch metadata. Browser-session credentials presented as bearers
+receive exactly the same status and error as unknown credentials on that path.
+Managed browser entry and service stop continue to require an API bearer.
+
+Existing session records identify the cookie-only credentials, including sessions
+created before an upgrade. Opening the journal creates the session table
+idempotently without changing the schema data-step version or rewriting tokens.
+Cookie sessions retain their lifetime, parent binding, actor and scopes. Long
+reads recheck the same credential class, expiry and revocation. This corrects the
+credential acceptance boundary; it adds no protocol channel or capability and
+does not change API request/response shapes or the contract version.
+
+When a remembered bearer receives HTTP 401 or 403, the Dashboard displays its
+localized refusal state and pauses further automatic presentations. This includes
+startup, page restore, polling, retries and file requests. The token remains in
+its original storage because it may still be valid for the original service.
+A separate refusal record contains only its digest, endpoint and refusal status.
+It survives reloads; remembered credentials also remain paused in new tabs.
+The person can Connect with a new token or choose Retry remembered token. Only
+that explicit action permits another attempt for the refused credential. Work
+drafts, pending intents and operation keys stay in their original namespaces.
+If browser storage is unavailable, the current page retains the pause in memory.
+
+Cookies are scoped to a host, not a port: browsers can send them to other ports
+of the same host. Origin checks and HttpOnly do not provide port isolation or
+prove which installation is listening. Per-installation channel binding remains
+future work. Pausing after a refusal also does not prevent the first credential
+presentation or establish server identity.
+
 On Windows, a private reader can temporarily block replacement of a manifest or
 endpoint pointer. Atomic replacement retries only native rename errors 5 and 32,
 with at most six attempts and a 500 ms retry deadline. Every attempt checks the
