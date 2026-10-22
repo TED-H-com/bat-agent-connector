@@ -1,6 +1,9 @@
 //! Installation lifecycle only. Python owns identity, locking, journal and operations.
 //! Secrets travel in a bounded anonymous stdout pipe and never cross WebView IPC.
-use crate::{bridge, credentials};
+use crate::{
+    bridge, credentials,
+    startup_role::{self, Role, Snapshot},
+};
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -16,6 +19,35 @@ use zeroize::Zeroizing;
 
 const MAX_RUNTIME: u64 = 512 * 1024 * 1024;
 const MAX_REPLY: u64 = 16384;
+
+fn runtime_executable_busy(error: &std::io::Error) -> bool {
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        error.raw_os_error() == Some(libc::ETXTBSY)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        let _ = error;
+        false
+    }
+}
+
+fn spawn_runtime<T>(mut spawn: impl FnMut() -> std::io::Result<T>) -> std::io::Result<T> {
+    let mut delays = [10, 20, 40, 80, 160].into_iter();
+    loop {
+        match spawn() {
+            Err(error) if runtime_executable_busy(&error) => {
+                let Some(delay) = delays.next() else {
+                    return Err(error);
+                };
+                // ETXTBSY means execve never ran the runtime or sent ensure; this
+                // retries only that failed spawn, never an uncertain start.
+                std::thread::sleep(Duration::from_millis(delay));
+            }
+            result => return result,
+        }
+    }
+}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -146,22 +178,30 @@ impl RuntimeFacts {
 }
 
 pub struct Managed {
-    executable: Option<PathBuf>,
+    executable: Mutex<Option<PathBuf>>,
     data_dir: PathBuf,
-    status: Status,
+    resources: PathBuf,
+    app_data: PathBuf,
+    config: PathBuf,
+    role: Mutex<Option<Snapshot>>,
+    status: Mutex<Status>,
     pub serial: Mutex<()>,
     runtime_facts: Mutex<RuntimeFacts>,
 }
 
 impl Managed {
     pub fn prepare(resources: &Path, app_data: &Path, config: &Path) -> (Self, Option<Launch>) {
-        let mut state = Self {
-            executable: None,
+        let state = Self {
+            executable: Mutex::new(None),
             data_dir: app_data.join("managed-central"),
-            status: Status {
-                mode: "managed",
+            resources: resources.to_owned(),
+            app_data: app_data.to_owned(),
+            config: config.to_owned(),
+            role: Mutex::new(None),
+            status: Mutex::new(Status {
+                mode: "role_pending",
                 ready: false,
-                background: true,
+                background: false,
                 runtime_version: None,
                 server_id: None,
                 principal_id: None,
@@ -170,57 +210,88 @@ impl Managed {
                 bundled_runtime: None,
                 running_runtime: None,
                 runtime_difference: None,
-            },
+            }),
             serial: Mutex::new(()),
             runtime_facts: Mutex::new(RuntimeFacts::default()),
         };
-        // An advanced central always remains the selected client binding. Only an
-        // already saved installation can additionally recover its background service;
-        // a remote connection failure never provisions a second journal.
-        match fs::symlink_metadata(config.join("central.json")) {
-            Ok(_) => {
-                state.status.mode = "external";
-                state.status.background = false;
-                match fs::symlink_metadata(state.data_dir.join("installation.json")) {
-                    Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => {
-                        // Python verifies the private manifest, identity and ownership
-                        // challenge before reconnecting. Its failure is never a fallback.
-                        state.status.background = true;
-                    }
-                    _ => return (state, None),
-                }
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(_) => {
-                state.status.error = Some("MANAGED_CONFIGURATION_UNREADABLE".into());
-                return (state, None);
-            }
-        }
         let result = (|| {
-            let (executable, version) = materialize(&resources.join("managed-runtime"), app_data)?;
-            state.executable = Some(executable);
-            state.status.runtime_version = Some(version.clone());
-            let bytes = state.request("ensure")?;
-            let launch: Launch = serde_json::from_slice(&bytes)
-                .map_err(|_| "MANAGED_RUNTIME_REPLY_INVALID".to_string())?;
-            launch.validate(&version)?;
-            state.status.ready = true;
-            state.status.server_id = Some(launch.server_id.clone());
-            state.status.principal_id = Some(launch.principal_id.clone());
-            state.remember_runtime(&launch);
-            Ok::<_, String>(launch)
+            let _serial = state.serial.lock().map_err(|_| "MANAGED_SERVICE_BUSY")?;
+            let snapshot = startup_role::load_or_infer(app_data, config)?;
+            *state.role.lock().unwrap() = Some(snapshot.clone());
+            state.prepare_role(snapshot)
         })();
-        match result {
-            Ok(launch) => (state, Some(launch)),
+        let launch = match result {
+            Ok(launch) => launch,
             Err(error) => {
-                state.status.error = Some(error);
-                (state, None)
+                state.status.lock().unwrap().error = Some(error);
+                None
             }
+        };
+        (state, launch)
+    }
+
+    pub fn startup_role(&self) -> Option<Snapshot> {
+        self.role.lock().unwrap().clone()
+    }
+
+    // The fixed native command is the only selector. Persist before any materialize/ensure.
+    pub fn select_role(
+        &self,
+        role: Role,
+        expected_generation: u64,
+    ) -> Result<Option<Launch>, String> {
+        let _serial = self.serial.try_lock().map_err(|_| "MANAGED_SERVICE_BUSY")?;
+        let snapshot =
+            startup_role::select(&self.app_data, &self.config, role, expected_generation)?;
+        *self.role.lock().unwrap() = Some(snapshot.clone());
+        let result = self.prepare_role(snapshot);
+        if let Err(error) = &result {
+            self.status.lock().unwrap().error = Some(error.clone());
         }
+        result
+    }
+
+    // Caller holds serial. Existing external selection wins, including malformed config;
+    // a selected client cannot become a provider due to a missing/unreachable endpoint.
+    fn prepare_role(&self, snapshot: Snapshot) -> Result<Option<Launch>, String> {
+        let Some(role) = snapshot.role else {
+            return Ok(None);
+        };
+        let external = startup_role::external(&self.config)?;
+        {
+            let mut status = self.status.lock().unwrap();
+            status.mode = if external || role == Role::Client {
+                "external"
+            } else {
+                "managed"
+            };
+            status.background = role.provides();
+            status.error = None;
+        }
+        if !role.provides() {
+            return Ok(None);
+        }
+        let (executable, version) =
+            materialize(&self.resources.join("managed-runtime"), &self.app_data)?;
+        *self.executable.lock().unwrap() = Some(executable);
+        self.status.lock().unwrap().runtime_version = Some(version.clone());
+        let bytes = self.request("ensure")?;
+        let launch: Launch =
+            serde_json::from_slice(&bytes).map_err(|_| "MANAGED_RUNTIME_REPLY_INVALID")?;
+        launch.validate(&version)?;
+        {
+            let mut status = self.status.lock().unwrap();
+            status.ready = true;
+            status.server_id = Some(launch.server_id.clone());
+            status.principal_id = Some(launch.principal_id.clone());
+        }
+        self.remember_runtime(&launch);
+        Ok(Some(launch))
     }
 
     pub fn recover(&self) -> Result<Launch, String> {
-        if self.status.mode != "managed" || !self.status.ready {
+        let status = self.status();
+        if status.mode != "managed" || !status.ready {
             return Err("MANAGED_RECOVERY_UNAVAILABLE".into());
         }
         let _guard = self
@@ -231,13 +302,13 @@ impl Managed {
         let launch: Launch =
             serde_json::from_slice(&bytes).map_err(|_| "MANAGED_RUNTIME_REPLY_INVALID")?;
         launch.validate(
-            self.status
+            status
                 .runtime_version
                 .as_deref()
                 .ok_or("MANAGED_RUNTIME_UNAVAILABLE")?,
         )?;
-        if Some(&launch.server_id) != self.status.server_id.as_ref()
-            || Some(&launch.principal_id) != self.status.principal_id.as_ref()
+        if Some(&launch.server_id) != status.server_id.as_ref()
+            || Some(&launch.principal_id) != status.principal_id.as_ref()
         {
             return Err("MANAGED_RECOVERY_IDENTITY_CHANGED".into());
         }
@@ -253,7 +324,7 @@ impl Managed {
     }
 
     pub fn status(&self) -> Status {
-        let mut status = self.status.clone();
+        let mut status = self.status.lock().unwrap().clone();
         if let Ok(facts) = self.runtime_facts.lock() {
             facts.apply(&mut status);
         }
@@ -265,7 +336,7 @@ impl Managed {
     }
 
     pub fn set_login(&self, enabled: bool) -> Result<Status, String> {
-        if !self.status.ready {
+        if !self.status().ready {
             return Err("MANAGED_SERVICE_UNAVAILABLE".into());
         }
         crate::managed_login::set_enabled(enabled)?;
@@ -273,7 +344,7 @@ impl Managed {
     }
 
     pub fn browser_file(&self) -> Result<PathBuf, String> {
-        if !self.status.ready {
+        if !self.status().ready {
             return Err("MANAGED_SERVICE_UNAVAILABLE".into());
         }
         #[derive(Deserialize)]
@@ -310,9 +381,11 @@ impl Managed {
     fn request(&self, action: &str) -> Result<Zeroizing<Vec<u8>>, String> {
         let executable = self
             .executable
-            .as_ref()
+            .lock()
+            .unwrap()
+            .clone()
             .ok_or("MANAGED_RUNTIME_UNAVAILABLE")?;
-        let mut command = Command::new(executable);
+        let mut command = Command::new(&executable);
         command
             .args([action, "--data-dir"])
             .arg(&self.data_dir)
@@ -324,9 +397,8 @@ impl Managed {
             use std::os::windows::process::CommandExt;
             command.creation_flags(0x08000000); // CREATE_NO_WINDOW; serve detaches itself.
         }
-        let mut child = command
-            .spawn()
-            .map_err(|_| "MANAGED_RUNTIME_START_FAILED")?;
+        let mut child =
+            spawn_runtime(|| command.spawn()).map_err(|_| "MANAGED_RUNTIME_START_FAILED")?;
         let output = child.stdout.take().ok_or("MANAGED_RUNTIME_PIPE_FAILED")?;
         let (sender, receiver) = std::sync::mpsc::sync_channel(1);
         std::thread::spawn(move || {
@@ -517,6 +589,9 @@ fn materialize(resources: &Path, app_data: &Path) -> Result<(PathBuf, String), S
                 writer
                     .sync_all()
                     .map_err(|_| "MANAGED_RUNTIME_WRITE_FAILED")?;
+                // Close our writer before publication. A concurrent fork can
+                // retain its CLOEXEC copy; spawn_runtime bounds that exec-only race.
+                drop(writer);
                 if count != document.size || digest(&temporary)? != document.sha256 {
                     return Err("MANAGED_RUNTIME_INTEGRITY_FAILED".into());
                 }
@@ -544,6 +619,443 @@ fn materialize(resources: &Path, app_data: &Path) -> Result<(PathBuf, String), S
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clean_install_waits_for_role_before_touching_runtime_or_python_data() {
+        let root = tempfile::tempdir().unwrap();
+        let data = root.path().join("application");
+        let config = root.path().join("configuration");
+        // An absent package must not even be inspected until a provider is chosen.
+        let (managed, launch) = Managed::prepare(&root.path().join("resources"), &data, &config);
+        assert_eq!(managed.status().mode, "role_pending");
+        assert!(managed.status().error.is_none());
+        assert!(launch.is_none());
+        assert!(!data.join("managed-runtimes").exists());
+        assert!(!data.join("managed-central").exists());
+        assert!(!config.exists());
+    }
+
+    #[cfg(unix)]
+    fn startup_fixture(root: &Path) -> PathBuf {
+        // Real materialize + subprocess request boundary. Only the Python owner is doubled.
+        // Production launch fields use the same parser/validation as packaged runtime replies.
+        let resources = root.join("resources");
+        fs::create_dir(&resources).unwrap();
+        let script = br##"#!/bin/sh
+set -eu
+[ "$1" = ensure ]
+root="$3"
+mkdir -p "$root/state"
+printf 'ensure\n' >> "$root/ensure-count"
+if [ ! -f "$root/installation.json" ]; then
+  printf 'original-manifest' > "$root/installation.json"
+  printf 'original-identity' > "$root/identity.token"
+  printf 'original-journal' > "$root/state/tasks.sqlite3"
+  printf 'original-project' > "$root/state/project-fixture"
+  printf 'service\n' >> "$root/service-count"
+fi
+if [ -f "$root/fail-once" ]; then rm "$root/fail-once"; exit 1; fi
+printf '%s' '{"protocol":1,"endpoint":"http://127.0.0.1:41001/","actor":"fixture-user","server_id":"fixture-server","principal_id":"fixture-principal","token":"fixture-token","runtime_version":"fixture-1"}'
+"##;
+        let package = fixture(root, script);
+        fs::rename(package.join("runtime.gz"), package.join("payload.gz")).unwrap();
+        fs::create_dir(package.join("managed-runtime")).unwrap();
+        fs::rename(
+            package.join("payload.gz"),
+            package.join("managed-runtime/runtime.gz"),
+        )
+        .unwrap();
+        fs::rename(
+            package.join("manifest.json"),
+            package.join("managed-runtime/manifest.json"),
+        )
+        .unwrap();
+        resources
+    }
+
+    #[cfg(unix)]
+    fn spawn_fixture_runtime(
+        executable: &Path,
+        data: &Path,
+        mut observed: impl FnMut(&std::io::Result<std::process::Child>),
+    ) -> std::io::Result<std::process::Child> {
+        let mut command = Command::new(executable);
+        command
+            .args(["ensure", "--data-dir"])
+            .arg(data)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        spawn_runtime(|| {
+            let result = command.spawn();
+            observed(&result);
+            result
+        })
+    }
+
+    #[cfg(target_os = "linux")]
+    fn busy_runtime_fixture(root: &Path) -> (Managed, File) {
+        use std::os::unix::fs::PermissionsExt;
+        let resources = startup_fixture(root);
+        let data = root.join("app");
+        let (managed, _) = Managed::prepare(&resources, &data, &root.join("config"));
+        let (executable, _) = materialize(&resources.join("managed-runtime"), &data).unwrap();
+        // A forked child's CLOEXEC copy has the same effect as this held writer.
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+        let writer = OpenOptions::new().write(true).open(&executable).unwrap();
+        *managed.executable.lock().unwrap() = Some(executable);
+        (managed, writer)
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn runtime_spawn_busy_held_returns_bounded_error_without_running_runtime() {
+        let root = tempfile::tempdir().unwrap();
+        let (managed, writer) = busy_runtime_fixture(root.path());
+        assert_eq!(
+            managed.request("ensure").unwrap_err(),
+            "MANAGED_RUNTIME_START_FAILED"
+        );
+        assert!(!managed.data_dir.join("ensure-count").exists());
+        let executable = managed.executable.lock().unwrap().clone().unwrap();
+        let mut attempts = 0;
+        let error = spawn_fixture_runtime(&executable, &managed.data_dir, |result| {
+            attempts += 1;
+            assert_eq!(
+                result.as_ref().unwrap_err().raw_os_error(),
+                Some(libc::ETXTBSY)
+            );
+        })
+        .unwrap_err();
+        assert_eq!(error.raw_os_error(), Some(libc::ETXTBSY));
+        assert_eq!(attempts, 6);
+        assert!(!managed.data_dir.join("ensure-count").exists());
+        assert!(!managed.data_dir.join("installation.json").exists());
+        drop(writer);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn runtime_spawn_busy_released_after_first_error_runs_runtime_exactly_once() {
+        let root = tempfile::tempdir().unwrap();
+        let (managed, writer) = busy_runtime_fixture(root.path());
+        let executable = managed.executable.lock().unwrap().clone().unwrap();
+        let (release, held) = std::sync::mpsc::channel();
+        let mut first_error = None;
+        let mut attempts = 0;
+        let result = std::thread::scope(|threads| {
+            threads.spawn(move || {
+                held.recv().unwrap();
+                std::thread::sleep(Duration::from_millis(20));
+                drop(writer);
+            });
+            spawn_fixture_runtime(&executable, &managed.data_dir, |result| {
+                attempts += 1;
+                if attempts == 1 {
+                    first_error = result.as_ref().err().and_then(std::io::Error::raw_os_error);
+                    // Release cannot start until a real exec has failed with the writer held.
+                    release.send(()).unwrap();
+                }
+            })
+        });
+        assert_eq!(first_error, Some(libc::ETXTBSY));
+        assert!(result.unwrap().wait().unwrap().success());
+        assert!((2..=6).contains(&attempts));
+        assert_eq!(
+            fs::read(managed.data_dir.join("ensure-count")).unwrap(),
+            b"ensure\n"
+        );
+        assert_eq!(
+            fs::read(managed.data_dir.join("service-count")).unwrap(),
+            b"service\n"
+        );
+    }
+
+    #[test]
+    fn runtime_spawn_never_retries_other_errors() {
+        for code in [1, 2, 13, 16, 22, 24, 27] {
+            let mut attempts = 0;
+            let result = spawn_runtime(|| {
+                attempts += 1;
+                Err::<(), _>(std::io::Error::from_raw_os_error(code))
+            });
+            assert_eq!(result.unwrap_err().raw_os_error(), Some(code));
+            assert_eq!(attempts, 1);
+        }
+        for kind in [
+            std::io::ErrorKind::Interrupted,
+            std::io::ErrorKind::WouldBlock,
+            std::io::ErrorKind::ExecutableFileBusy,
+        ] {
+            let mut attempts = 0;
+            let result = spawn_runtime(|| {
+                attempts += 1;
+                Err::<(), _>(std::io::Error::from(kind))
+            });
+            assert_eq!(result.unwrap_err().kind(), kind);
+            assert_eq!(attempts, 1);
+        }
+    }
+
+    #[test]
+    fn runtime_spawn_busy_retry_is_platform_specific() {
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        let code = libc::ETXTBSY;
+        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        let code = 26;
+        let mut attempts = 0;
+        let result = spawn_runtime(|| {
+            attempts += 1;
+            if attempts == 1 {
+                Err(std::io::Error::from_raw_os_error(code))
+            } else {
+                Ok(())
+            }
+        });
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        {
+            assert!(result.is_ok());
+            assert_eq!(attempts, 2);
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        {
+            assert_eq!(result.unwrap_err().raw_os_error(), Some(code));
+            assert_eq!(attempts, 1);
+        }
+    }
+
+    #[test]
+    fn runtime_spawn_success_does_not_make_an_extra_attempt() {
+        let mut attempts = 0;
+        let result = spawn_runtime(|| {
+            attempts += 1;
+            Ok::<_, std::io::Error>("started")
+        });
+        assert_eq!(result.unwrap(), "started");
+        assert_eq!(attempts, 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn selected_client_never_materializes_or_calls_ensure_even_after_reopen_or_external_failure() {
+        let root = tempfile::tempdir().unwrap();
+        let resources = startup_fixture(root.path());
+        let data = root.path().join("app");
+        let config = root.path().join("config");
+        let (managed, _) = Managed::prepare(&resources, &data, &config);
+        assert!(managed.select_role(Role::Client, 0).unwrap().is_none());
+        fs::create_dir(&config).unwrap();
+        fs::write(
+            config.join("central.json"),
+            b"unreadable external connection",
+        )
+        .unwrap();
+        let (reopened, launch) = Managed::prepare(&resources, &data, &config);
+        assert!(launch.is_none());
+        assert_eq!(reopened.status().mode, "external");
+        for path in [
+            "managed-runtimes",
+            "managed-central/ensure-count",
+            "managed-central/identity.token",
+            "managed-central/state/tasks.sqlite3",
+            "managed-central/state/project-fixture",
+        ] {
+            assert!(!data.join(path).exists(), "{path}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn provider_and_both_prepare_one_service_and_preserve_existing_blank_installations() {
+        for role in (0..10).flat_map(|_| [Role::Provider, Role::Both]) {
+            let root = tempfile::tempdir().unwrap();
+            let resources = startup_fixture(root.path());
+            let data = root.path().join("app");
+            let config = root.path().join("config");
+            let (managed, _) = Managed::prepare(&resources, &data, &config);
+            assert!(!data.join("managed-runtimes").exists());
+            assert!(managed.select_role(role, 0).unwrap().is_some());
+            assert!(managed.select_role(role, 0).is_err());
+            let original = managed.startup_role().unwrap();
+            let files = [
+                "installation.json",
+                "identity.token",
+                "state/tasks.sqlite3",
+                "state/project-fixture",
+                "service-count",
+            ];
+            let before: Vec<_> = files
+                .iter()
+                .map(|path| fs::read(data.join("managed-central").join(path)).unwrap())
+                .collect();
+            assert_eq!(
+                fs::read_to_string(data.join("managed-central/ensure-count")).unwrap(),
+                "ensure\n"
+            );
+            // Both uses the existing external configuration path after local readiness.
+            if role == Role::Both {
+                fs::create_dir(&config).unwrap();
+                fs::write(config.join("central.json"), b"original-external-config").unwrap();
+            }
+            let (reopened, launch) = Managed::prepare(&resources, &data, &config);
+            assert!(launch.is_some());
+            assert_eq!(reopened.startup_role().unwrap(), original);
+            assert_eq!(
+                reopened.status().mode,
+                if role == Role::Both {
+                    "external"
+                } else {
+                    "managed"
+                }
+            );
+            assert_eq!(
+                fs::read_to_string(data.join("managed-central/ensure-count")).unwrap(),
+                "ensure\nensure\n"
+            );
+            for (path, original) in files.iter().zip(before) {
+                assert_eq!(
+                    fs::read(data.join("managed-central").join(path)).unwrap(),
+                    original
+                );
+            }
+            if role == Role::Both {
+                assert_eq!(
+                    fs::read(config.join("central.json")).unwrap(),
+                    b"original-external-config"
+                );
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn interruption_after_persistence_resumes_provider_once_and_client_never_ensures() {
+        for role in [Role::Client, Role::Provider, Role::Both] {
+            let root = tempfile::tempdir().unwrap();
+            let resources = startup_fixture(root.path());
+            let data = root.path().join("app");
+            let config = root.path().join("config");
+            let original = startup_role::select(&data, &config, role, 0).unwrap();
+            // Simulate process exit after publication, before the first ensure.
+            assert!(!data.join("managed-runtimes").exists());
+            let (reopened, launch) = Managed::prepare(&resources, &data, &config);
+            assert_eq!(reopened.startup_role().unwrap(), original);
+            assert_eq!(launch.is_some(), role.provides());
+            if role.provides() {
+                assert_eq!(
+                    fs::read_to_string(data.join("managed-central/ensure-count")).unwrap(),
+                    "ensure\n"
+                );
+                assert_eq!(
+                    fs::read_to_string(data.join("managed-central/service-count")).unwrap(),
+                    "service\n"
+                );
+            } else {
+                assert!(!data.join("managed-central").exists());
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn old_installation_is_adopted_without_changing_its_manifest_identity_journal_or_service() {
+        for external in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let resources = startup_fixture(root.path());
+            let data = root.path().join("app");
+            let config = root.path().join("config");
+            // An original installation predates the role record.
+            let (executable, _) = materialize(&resources.join("managed-runtime"), &data).unwrap();
+            assert!(
+                spawn_fixture_runtime(&executable, &data.join("managed-central"), |_| {})
+                    .unwrap()
+                    .wait()
+                    .unwrap()
+                    .success()
+            );
+            if external {
+                fs::create_dir(&config).unwrap();
+                fs::write(config.join("central.json"), b"original-external").unwrap();
+            }
+            let names = [
+                "installation.json",
+                "identity.token",
+                "state/tasks.sqlite3",
+                "state/project-fixture",
+                "service-count",
+            ];
+            let original: Vec<_> = names
+                .iter()
+                .map(|name| fs::read(data.join("managed-central").join(name)).unwrap())
+                .collect();
+            assert!(!startup_role::record_path(&data).exists());
+            let (managed, launch) = Managed::prepare(&resources, &data, &config);
+            assert!(launch.is_some());
+            assert_eq!(
+                managed.startup_role().unwrap().role,
+                Some(if external { Role::Both } else { Role::Provider })
+            );
+            for (name, bytes) in names.iter().zip(original) {
+                assert_eq!(
+                    fs::read(data.join("managed-central").join(name)).unwrap(),
+                    bytes
+                );
+            }
+            if external {
+                assert_eq!(
+                    fs::read(config.join("central.json")).unwrap(),
+                    b"original-external"
+                );
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn failed_ensure_after_service_creation_reopens_the_same_service_and_original_data() {
+        let root = tempfile::tempdir().unwrap();
+        let resources = startup_fixture(root.path());
+        let data = root.path().join("app");
+        let config = root.path().join("config");
+        let (managed, _) = Managed::prepare(&resources, &data, &config);
+        fs::create_dir_all(data.join("managed-central")).unwrap();
+        fs::write(data.join("managed-central/fail-once"), b"interrupt reply").unwrap();
+        assert!(managed.select_role(Role::Provider, 0).is_err());
+        assert!(managed.select_role(Role::Provider, 0).is_err());
+        let reference = managed.startup_role().unwrap();
+        let (reopened, launch) = Managed::prepare(&resources, &data, &config);
+        assert!(launch.is_some());
+        assert_eq!(reopened.startup_role().unwrap(), reference);
+        assert_eq!(
+            fs::read(data.join("managed-central/state/tasks.sqlite3")).unwrap(),
+            b"original-journal"
+        );
+        assert_eq!(
+            fs::read_to_string(data.join("managed-central/ensure-count")).unwrap(),
+            "ensure\nensure\n"
+        );
+        assert_eq!(
+            fs::read_to_string(data.join("managed-central/service-count")).unwrap(),
+            "service\n"
+        );
+    }
+
+    #[test]
+    fn unreadable_role_record_refuses_before_any_package_or_python_request() {
+        let root = tempfile::tempdir().unwrap();
+        let config = root.path().join("config");
+        startup_role::select(root.path(), &config, Role::Provider, 0).unwrap();
+        fs::write(startup_role::record_path(root.path()), b"broken").unwrap();
+        let (managed, launch) =
+            Managed::prepare(&root.path().join("missing-resources"), root.path(), &config);
+        assert!(launch.is_none());
+        assert_eq!(
+            managed.status().error.as_deref(),
+            Some("MANAGED_CONFIGURATION_UNREADABLE")
+        );
+        assert!(!root.path().join("managed-runtimes").exists());
+        assert!(!root.path().join("managed-central").exists());
+    }
 
     #[test]
     fn produced_manifest_has_optional_build_identity_and_rejects_unknown_fields() {
@@ -621,16 +1133,20 @@ mod tests {
     fn refreshed_runtime_facts_replace_the_previous_observation() {
         let golden = identity_golden();
         let managed = Managed {
-            executable: None,
+            executable: Mutex::new(None),
             data_dir: PathBuf::new(),
-            status: identity_status(),
+            resources: PathBuf::new(),
+            app_data: PathBuf::new(),
+            config: PathBuf::new(),
+            role: Mutex::new(None),
+            status: Mutex::new(identity_status()),
             serial: Mutex::new(()),
             runtime_facts: Mutex::new(RuntimeFacts::default()),
         };
         for name in ["same", "differs", "unknown_running"] {
             let launch: Launch = serde_json::from_value(golden[name].clone()).unwrap();
             managed.remember_runtime(&launch);
-            let mut status = managed.status.clone();
+            let mut status = managed.status.lock().unwrap().clone();
             managed.runtime_facts.lock().unwrap().apply(&mut status);
             assert_eq!(status.runtime_difference, launch.runtime_difference);
             assert_eq!(status.running_runtime, launch.running_runtime);
@@ -724,9 +1240,9 @@ mod tests {
         .unwrap();
         let (managed, launch) =
             Managed::prepare(&root.path().join("missing-package"), &data, &config);
-        assert_eq!(managed.status.mode, "external");
-        assert!(managed.status.background);
-        assert!(!managed.status.ready && managed.status.error.is_some() && launch.is_none());
+        assert_eq!(managed.status().mode, "external");
+        assert!(managed.status().background);
+        assert!(!managed.status().ready && managed.status().error.is_some() && launch.is_none());
         assert_eq!(
             fs::read(installation).unwrap(),
             b"saved installation evidence for Python to verify"
@@ -746,9 +1262,10 @@ mod tests {
         .unwrap();
         let data = root.path().join("application");
         let (state, launch) = Managed::prepare(&root.path().join("resources"), &data, &config);
-        assert_eq!(state.status.mode, "external");
+        assert_eq!(state.status().mode, "external");
         assert!(launch.is_none());
-        assert!(!data.exists());
+        assert!(!data.join("managed-central").exists());
+        assert!(!data.join("managed-runtimes").exists());
     }
 
     #[test]

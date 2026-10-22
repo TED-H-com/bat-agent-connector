@@ -121,8 +121,10 @@ def native_facts(files):
     mac_module = _proof(files, "desktop/src-tauri/src/credentials.rs",
                         '#[cfg(target_os = "macos")]\n#[path = "credentials_macos.rs"]\nmod macos;')
     tray = _proof(files, "desktop/src-tauri/src/main.rs", "let mut tray = TrayIconBuilder::new()")
+    # Provider/both materialize after role.provides(); this proves the coded
+    # bundled path, not preparation for a pending or client installation.
     bundled = _proof(files, "desktop/src-tauri/src/managed.rs",
-                     'let (executable, version) = materialize(&resources.join("managed-runtime"), app_data)?;')
+                     'let (executable, version) =\n            materialize(&self.resources.join("managed-runtime"), &self.app_data)?;')
     shared = _proof(files, "desktop/src-tauri/tauri.conf.json", '"frontendDist": "../dist"')
     # Inventory registration only. It says nothing about a platform command's
     # runtime permission, configuration, return value, or successful execution.

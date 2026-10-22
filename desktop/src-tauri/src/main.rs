@@ -16,6 +16,7 @@ mod fleet_readiness;
 mod managed;
 mod managed_login;
 mod managed_recovery;
+mod startup_role;
 mod tailscale_control;
 mod updates;
 mod workflow_version;
@@ -38,6 +39,8 @@ enum ManagedRequest {
     SetLogin { enabled: bool },
     OpenBrowser,
 }
+
+struct ManagedBrowserMenu(MenuItem<tauri::Wry>);
 
 #[tauri::command]
 async fn managed_control(
@@ -272,9 +275,31 @@ fn local_main(window: &WebviewWindow) -> Result<(), String> {
 fn native_status(
     window: WebviewWindow,
     state: State<'_, Arc<Bridge>>,
+    managed: State<'_, Arc<managed::Managed>>,
 ) -> Result<NativeStatus, String> {
     local_main(&window)?;
-    Ok(state.status())
+    let mut status = state.status();
+    status.startup_role = managed.startup_role();
+    Ok(status)
+}
+
+#[tauri::command]
+async fn managed_select_role(
+    window: WebviewWindow,
+    state: State<'_, Arc<Bridge>>,
+    managed: State<'_, Arc<managed::Managed>>,
+    browser: State<'_, ManagedBrowserMenu>,
+    input: startup_role::Selection,
+) -> Result<NativeStatus, String> {
+    local_main(&window)?;
+    state
+        .select_startup_role(managed.inner().clone(), input)
+        .await?;
+    // The menu was built while a clean installation was still role pending.
+    let _ = browser.0.set_enabled(managed.status().ready);
+    let mut status = state.status();
+    status.startup_role = managed.startup_role();
+    Ok(status)
 }
 
 #[tauri::command]
@@ -750,6 +775,9 @@ fn main() {
                     launch.token.clone(),
                     launch.identity(),
                 ),
+                None if managed_status.mode == "role_pending" && managed_status.error.is_none() => {
+                    Bridge::role_pending(&app.path().app_config_dir()?)
+                }
                 None => Bridge::managed_failure(
                     &app.path().app_config_dir()?,
                     managed_status
@@ -791,7 +819,8 @@ fn main() {
             bootstrap.start_auto(control.clone());
             app.manage(QuitState::default());
             let mut config = app.config().app.windows[0].clone();
-            config.visible = update_pending
+            config.visible = managed_status.mode == "role_pending"
+                || update_pending
                 || managed_status.error.is_some()
                 || !managed_login && !matches!(login_options, Some(Ok((false, false))));
             let window = tauri::WebviewWindowBuilder::from_config(app, &config)?
@@ -833,6 +862,7 @@ fn main() {
                 managed_status.ready,
                 None::<&str>,
             )?;
+            app.manage(ManagedBrowserMenu(browser.clone()));
             let settings =
                 MenuItem::with_id(app, "settings", "Background Settings", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit Dashboard", true, None::<&str>)?;
@@ -895,6 +925,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             managed_control,
+            managed_select_role,
             desktop_update,
             native_files_status,
             native_files_pick,
