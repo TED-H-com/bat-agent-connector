@@ -3,6 +3,7 @@
 pub mod bootstrap;
 pub mod bootstrap_policy;
 pub mod configuration;
+pub mod connection_setup;
 pub mod credential;
 pub mod discovery;
 pub mod installation;
