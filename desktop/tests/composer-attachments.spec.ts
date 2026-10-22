@@ -278,6 +278,8 @@ for (const locale of ['en-US', 'zh-TW']) for (const target of ['.attachments', '
     try {
       await page.goto('/dashboard/#/dispatch/' + dispatchProject);
       await expect(form(page)).toBeVisible();
+      // The event loop starts after the initial view read; DOM mounting alone is earlier.
+      await expect.poll(() => state.reads.some(path => path.startsWith('/events'))).toBe(true);
       await form(page).locator('textarea').fill(original);
       const before = state.invokes.length;
       await pasteFile(page, '[data-published-start] ' + target, 'screenshot.png', 'image/png', pngBuffer);
@@ -329,6 +331,8 @@ for (const locale of ['en-US', 'zh-TW']) for (const target of ['.attachments', '
     try {
       await page.goto('/dashboard/#/dispatch/' + dispatchProject);
       await expect(form(page)).toBeVisible();
+      // The event loop starts after the initial view read; DOM mounting alone is earlier.
+      await expect.poll(() => state.reads.some(path => path.startsWith('/events'))).toBe(true);
       // Desktop may inspect MIME metadata only, even when file APIs are poisoned.
       await page.evaluate(target => {
         const el = document.querySelector('[data-published-start] ' + target)!;
