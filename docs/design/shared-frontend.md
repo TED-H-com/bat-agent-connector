@@ -66,6 +66,9 @@ reference, not a new dependency or copied runtime.
   output only when the reader is near its bottom. An explicit latest button resumes
   following. Refresh captures the reading position when applying the result, not
   before its network request; unchanged message nodes retain selection/focus.
+  The reader samples movement before changing message geometry, even when the
+  browser has not yet delivered its scroll event. Applied programmatic positions
+  remain distinguishable from reader movement so layout changes can still re-pin.
 - Prefer supplied message IDs for reading anchors. Without IDs, match exact message
   content/metadata and duplicate occurrence only for presentation, never as domain
   identity. If an anchor leaves the loaded window, show that limitation rather than
