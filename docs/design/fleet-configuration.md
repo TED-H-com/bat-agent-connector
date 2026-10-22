@@ -295,7 +295,7 @@ digest，沒有逐欄比較所有 metadata。[supervisor_probe.rs:103](../../des
 | 用途選擇（規範） | 本機資料／服務 | 完成判準與現況差額 |
 | --- | --- | --- |
 | 只查看與操作既有服務 | 引用所選中央及 workspace，依該 principal 權限操作；依 D1 可跳過本機 Connector，不得為此建立第二份專案、身分或 journal | 可閱讀合法歷史；沒有寫權限仍能完成加入。現行 managed prepare 仍先 ensure 本機中央，setup 限 personal identity；D1 已決定將既有加入入口移至服務準備前，尚未實作。[managed.rs:157](../../desktop/src-tauri/src/managed.rs#L157)、[managed_setup.py:46](../../src/bat_agent_connector/managed_setup.py#L46) |
-| 本機提供 workspace 執行能力 | 只有明確選擇後才準備自有服務；驗證安裝／server／principal／workspace，不因安裝就取得 BAT 寫權限 | 讀歷史只需觀察能力；要開始自有工作時一次檢查其完整必要條件。現有自動設定刻意關閉 writes／orchestrate／shared_clone；不能把此成功叫作可開工。[managed-setup.js:551](../../desktop/src/managed-setup.js#L551)、[pm_work_profiles.py:39](../../src/bat_agent_connector/pm_work_profiles.py#L39) |
+| 本機提供 workspace 執行能力 | 只有明確選擇後才準備自有服務；驗證安裝／server／principal／workspace，不因安裝就取得 BAT 寫權限 | 讀歷史只需觀察能力；要開始自有工作時一次檢查其完整必要條件。現有簡易連線預覽刻意關閉 writes／orchestrate／shared_clone；不能把此成功叫作可開工。[managed-setup.js:551](../../desktop/src/managed-setup.js#L551)、[pm_work_profiles.py:39](../../src/bat_agent_connector/pm_work_profiles.py#L39) |
 | 兩者兼有 | 各服務的資料、principal、workspace 清楚分開；同 repo 或同名 host 不合併 | 切換只選來源，不移動工作／草稿／已送操作；只在明確啟用的本機角色 ensure。身分依 bootstrap 驗證。[bridge.rs:1097](../../desktop/src-tauri/src/bridge.rs#L1097) |
 | 已設定安裝 | 沿用已驗證原角色、ID、history、credential refs 及原 key；變更用途是另外的明確意圖 | 不在升級／重開時偷偷改角色。現有 external config 保留選取，只有已有 managed manifest 才附帶恢復原背景服務。[managed.rs:177](../../desktop/src-tauri/src/managed.rs#L177) |
 

@@ -49,6 +49,8 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test.d
     state.profiles = ['one', 'two'].map(id => ({id, name: id, url: `wss://${id}.example:9876`, fingerprint: 'ab'.repeat(32), profile_id: 'default', token_available: true}));
     await page.goto('/dashboard/'); await page.getByRole('button', {name: automatic, exact: true}).click();
     expect(state.posts).toEqual([]);
+    await expect(page.locator('[data-setup-simple] label').filter({has: page.locator('select')})).toContainText(locale === 'en'
+      ? 'Choose the one you want, then select Review connection.' : '請選擇要使用的連線，再按「預覽連線」。');
     await page.locator('[data-setup-simple] select').selectOption('two');
     await page.getByRole('button', {name: automatic, exact: true}).click(); await applySetupReview(page);
     await expect(page.locator('[data-setup-sessions]')).toBeVisible();
