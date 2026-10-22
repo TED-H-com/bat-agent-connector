@@ -3,7 +3,7 @@ use crate::{
     configuration::Configuration,
     ownership::{epoch_valid, ProbeGeneration},
     probe::{self, Authentication, Layer, Level, ProbeKind, ProbeObservation},
-    route::{RouteKind, RouteObservation},
+    route::{RouteKind, RouteObservation, RouteRequirement},
     strict_json, Result,
 };
 use serde::{Deserialize, Serialize};
@@ -69,13 +69,19 @@ pub struct Entry {
     pub layers: Layers,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub route: Option<Route>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_requirement: Option<RouteRequirement>,
 }
 impl Entry {
     pub(crate) fn observed(
         identity: (&str, &str),
         selected: bool,
         kind: ProbeKind,
-        (observation, route): (Option<&ProbeObservation>, Option<&RouteObservation>),
+        (observation, route, route_requirement): (
+            Option<&ProbeObservation>,
+            Option<&RouteObservation>,
+            Option<RouteRequirement>,
+        ),
         generation: &ProbeGeneration,
         now: u64,
         failure: Option<(&'static str, Layer)>,
@@ -98,6 +104,7 @@ impl Entry {
             stale: state.blocking == Some(Layer::Stale),
             layers: Layers::default(),
             route: None,
+            route_requirement: if selected { route_requirement } else { None },
         };
         if let Some(probe) = observation.filter(|p| {
             crate::ownership::probe_current(&p.generation, generation, p.observed_ms, now)
@@ -375,7 +382,7 @@ mod contract_tests {
                 ),
                 true,
                 probe.kind,
-                (Some(&probe), Some(&route)),
+                (Some(&probe), Some(&route), None),
                 &generation,
                 now,
                 None,
@@ -386,6 +393,73 @@ mod contract_tests {
         raw["result"]["readiness"]["connector"] = rows.pop().unwrap();
         raw["result"]["readiness"]["hosts"] = rows.into();
         raw
+    }
+    struct RequirementProbe {
+        peer: crate::route::TailscalePeer,
+    }
+    impl crate::route::RouteProbe for RequirementProbe {
+        fn tailscale_direct<'a>(
+            &'a self,
+            _: &'a str,
+            _: tokio::time::Instant,
+        ) -> crate::route::ProbeFuture<'a> {
+            Box::pin(async { false })
+        }
+        fn tailscale_peer<'a>(
+            &'a self,
+            _: &'a str,
+            _: tokio::time::Instant,
+        ) -> crate::route::PeerFuture<'a> {
+            Box::pin(async move { self.peer })
+        }
+        fn tcp<'a>(
+            &'a self,
+            _: &'a crate::inventory::Endpoint,
+            _: tokio::time::Instant,
+        ) -> crate::route::ProbeFuture<'a> {
+            Box::pin(async { false })
+        }
+    }
+    async fn requirement_fixture() -> Value {
+        let mut cases = serde_json::json!({});
+        for (name, peer, exhausted) in [
+            ("missing", b"{\"Peer\":{}}".as_slice(), false),
+            ("unknown", b"unreadable fixture status".as_slice(), false),
+            ("idle", br#"{"Peer":{"fixture":{"TailscaleIPs":["100.64.0.1"],"Online":true,"CurAddr":""}}}"#.as_slice(), false),
+            ("tcp", br#"{"Peer":{"fixture":{"TailscaleIPs":["100.64.0.1"],"Online":true,"CurAddr":"203.0.113.1:1234"}}}"#.as_slice(), false),
+            ("exhausted", b"{\"Peer\":{}}".as_slice(), true),
+        ] {
+            let mut raw = observed_fixture().await;
+            let now = millis(raw["result"]["readiness"]["observed_at"].as_str().unwrap()).unwrap();
+            let generation = ProbeGeneration { epoch: "a".repeat(32), configuration_binding: "c".repeat(64), selection_revision: "d".repeat(64), generation: 1 };
+            let mut inventory: Value = serde_json::from_str(include_str!("../tests/fixtures/inventory.json")).unwrap();
+            inventory["hosts"][0]["routes"] = serde_json::json!([{"kind":"direct","alias":"fixture-direct","probe":"100.64.0.1:22"}]);
+            inventory["hosts"][0]["provision_route"] = "direct".into();
+            if exhausted { inventory["hosts"][0]["routes"].as_array_mut().unwrap().push(serde_json::json!({"kind":"lan","alias":"fixture-lan","probe":"192.0.2.1:22"})); }
+            let inventory = crate::inventory::Inventory::parse(&serde_json::to_vec(&inventory).unwrap()).unwrap();
+            let routes = crate::route::Routes::from_inventory(&inventory, "node-1").unwrap();
+            let policy = crate::route::HostPolicy::new(&routes, generation.clone());
+            let probe = RequirementProbe { peer: crate::route::tailscale_peer(peer, "100.64.0.1") };
+            let failure = crate::route::SelectionRequest::new(&routes, &policy, generation.clone(), now).unwrap()
+                .run(&probe, std::time::Duration::from_secs(2)).await.err().unwrap();
+            let row = Entry::observed(("node-1", "Fixture 1"), true, ProbeKind::Bat,
+                (None, None, failure.route_requirement), &generation, now, Some((failure.code, Layer::Tunnel))).unwrap();
+            raw["result"]["readiness"]["hosts"][0] = serde_json::to_value(row).unwrap();
+            cases[name] = raw;
+        }
+        cases
+    }
+    #[tokio::test]
+    async fn requirement_rows_match_native_status_fixture() {
+        let expected: Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/fleet-requirement.json"))
+                .unwrap();
+        assert_eq!(requirement_fixture().await, expected);
+    }
+    #[tokio::test]
+    #[ignore = "explicit fixture regeneration only"]
+    async fn generate_requirement_fixture() {
+        println!("FLEET_REQUIREMENT={}", requirement_fixture().await);
     }
     #[tokio::test]
     async fn observed_rows_match_native_status_fixture() {
@@ -430,7 +504,7 @@ mod contract_tests {
             ("node-1", "Fixture 1"),
             true,
             ProbeKind::Bat,
-            (Some(&probe), None),
+            (Some(&probe), None, None),
             &generation,
             2000,
             None,
@@ -441,7 +515,7 @@ mod contract_tests {
             ("node-1", "Fixture 1"),
             true,
             ProbeKind::Bat,
-            (Some(&probe), Some(&route)),
+            (Some(&probe), Some(&route), None),
             &generation,
             2000,
             None,

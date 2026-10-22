@@ -5,7 +5,10 @@ use crate::{
     ownership::{origin_state, ProbeGeneration, ProcessState},
     probe::{Layer, ProbeKind, ProbeObservation},
     process_adapter::{HeldProcess, StopMode, StopOutcome, TunnelRecord},
-    route::{HostPolicy, RouteChoice, RouteProbe, Routes, Run, SelectionRequest},
+    route::{
+        HostPolicy, RouteChoice, RouteFailure, RouteProbe, RouteRequirement, Routes, Run,
+        SelectionRequest,
+    },
     selection::launch_plan,
     selection_io::{Snapshot, Store},
     supervisor_io::{self as files, MonitorLease, TunnelFile},
@@ -44,7 +47,7 @@ pub trait Effects: Observation {
     fn stop(&mut self, record: &TunnelRecord, mode: StopMode<'_>) -> Result<StopOutcome>;
 }
 enum Work {
-    Route(JoinHandle<Result<RouteChoice>>),
+    Route(JoinHandle<std::result::Result<RouteChoice, RouteFailure>>),
     Probe(JoinHandle<ProbeObservation>),
 }
 impl Work {
@@ -82,6 +85,7 @@ struct Host<C> {
     worker: Option<Work>,
     observation: Option<ProbeObservation>,
     route: Option<crate::route::RouteObservation>,
+    route_requirement: Option<RouteRequirement>,
     owned: Option<Owned<C>>,
     failure: Option<(&'static str, Layer)>,
     next_probe: u64,
@@ -94,6 +98,7 @@ impl<C> Host<C> {
         self.policy.stop_wake().await;
         self.observation = None;
         self.route = None;
+        self.route_requirement = None;
         self.next_probe = 0;
     }
 }
@@ -236,6 +241,7 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                     worker: None,
                     observation: None,
                     route: None,
+                    route_requirement: None,
                     owned: None,
                     failure: None,
                     next_probe: 0,
@@ -730,6 +736,7 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                 Work::Route(handle) => match handle.await {
                     Ok(Ok(choice)) => {
                         host.route = None;
+                        host.route_requirement = None;
                         let alias = choice.alias(&host.policy, &host.generation, now)?;
                         self.verify()?;
                         let plan = Plan::new(
@@ -769,8 +776,12 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                             }
                         }
                     }
-                    _ => {
+                    result => {
                         host.route = None;
+                        host.route_requirement = result
+                            .ok()
+                            .and_then(|r| r.err())
+                            .and_then(|e| e.route_requirement);
                         host.failure = Some(("ROUTE_UNAVAILABLE", Layer::Tunnel));
                         host.next_probe = now.saturating_add(15000);
                     }
@@ -847,7 +858,11 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                     (name, &h.label),
                     h.selected,
                     h.kind,
-                    (h.observation.as_ref(), h.route.as_ref()),
+                    (
+                        h.observation.as_ref(),
+                        h.route.as_ref(),
+                        h.route_requirement,
+                    ),
                     &h.generation,
                     now,
                     if h.policy.waking() {
@@ -937,7 +952,7 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                     (name, &h.label),
                     h.selected,
                     h.kind,
-                    (None, None),
+                    (None, None, None),
                     &h.generation,
                     now,
                     if h.policy.waking() {

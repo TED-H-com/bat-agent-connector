@@ -847,7 +847,9 @@ mod tests {
         serde_json::from_str(include_str!("../../tests/fixtures/fleet-status.json")).unwrap()
     }
     fn producer_status() -> Value {
-        let mut result = fixture()["result"].clone();
+        project_status(fixture()["result"].clone())
+    }
+    fn project_status(mut result: Value) -> Value {
         let readiness = &result["readiness"];
         let mut entries = readiness["hosts"].as_array().unwrap().clone();
         entries.push(readiness["connector"].clone());
@@ -896,6 +898,62 @@ mod tests {
     #[ignore = "explicit fixture regeneration only"]
     fn stop_generate_golden() {
         println!("FLEET_STOP_GOLDEN={}", stop_cases());
+    }
+    fn requirement_cases() -> Value {
+        let cases: Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/fleet-requirement.json"))
+                .unwrap();
+        cases
+            .as_object()
+            .unwrap()
+            .iter()
+            .map(|(name, case)| {
+                (
+                    name.clone(),
+                    sanitize_result(&project_status(case["result"].clone()), "status").unwrap(),
+                )
+            })
+            .collect()
+    }
+    #[test]
+    fn requirement_evidence_survives_native_projection_and_sanitizer() {
+        let cases = requirement_cases();
+        for (name, expected) in [
+            ("missing", "DIRECT_PEER_UNKNOWN"),
+            ("unknown", "DIRECT_PEER_UNKNOWN"),
+            ("idle", "DIRECT_NOT_CONFIRMED"),
+            ("tcp", "DIRECT_TCP_UNREACHABLE"),
+            ("exhausted", "CONFIGURED_ROUTES_EXHAUSTED"),
+        ] {
+            let row = &cases[name]["readiness"]["hosts"][0];
+            assert_eq!(row["route_requirement"], expected, "{name}");
+            assert!(row.get("route").is_none());
+            assert_eq!(
+                cases[name]["readiness"]["hosts"][1],
+                sanitize_result(&producer_status(), "status").unwrap()["readiness"]["hosts"][1]
+            );
+        }
+    }
+    #[test]
+    fn requirement_allowlist_rejects_anything_outside_the_closed_vocabulary() {
+        for value in [
+            json!("relay"),
+            json!("DIRECT_PEER_UNKNOWN private output"),
+            json!("constructor"),
+            json!({"peer":{"CurAddr":"192.0.2.1"}}),
+            json!(["DIRECT_PEER_UNKNOWN"]),
+            json!(1),
+            json!(false),
+        ] {
+            let mut raw = producer_status();
+            raw["readiness"]["hosts"][0]["route_requirement"] = value;
+            assert!(sanitize_result(&raw, "status").is_err());
+        }
+    }
+    #[test]
+    #[ignore = "explicit fixture regeneration only"]
+    fn requirement_generate_golden() {
+        println!("FLEET_REQUIREMENT_GOLDEN={}", requirement_cases());
     }
     #[test]
     fn sanitized_status_matches_shared_frontend_golden() {

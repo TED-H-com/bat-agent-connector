@@ -656,8 +656,15 @@ async fn unresolved_stop_fixture(deselect: bool) -> serde_json::Value {
         if deselect { "e".repeat(64) } else { "d".repeat(64) }})
 }
 #[tokio::test]
-async fn unresolved_stop_survives_age_and_deselection() {
-    for deselect in [false, true] {
+async fn unresolved_stop_survives_age() {
+    assert_unresolved_stop(false).await;
+}
+#[tokio::test]
+async fn unresolved_stop_survives_deselection() {
+    assert_unresolved_stop(true).await;
+}
+async fn assert_unresolved_stop(deselect: bool) {
+    {
         let case = unresolved_stop_fixture(deselect).await;
         let row = case["snapshot"]["entries"]
             .as_array()
@@ -1669,4 +1676,119 @@ async fn unknown_ownership_keeps_route_age_despite_fresh_probe_and_snapshot_read
         "1970-01-01T00:05:02Z"
     );
     runtime.shutdown(303_000).await.unwrap();
+}
+
+struct RequirementRoutes {
+    peer: bat_fleet_core::route::TailscalePeer,
+    calls: Mutex<Vec<String>>,
+}
+impl RouteProbe for RequirementRoutes {
+    fn tailscale_direct<'a>(&'a self, _: &'a str, _: Instant) -> ProbeFuture<'a> {
+        Box::pin(async { false })
+    }
+    fn tailscale_peer<'a>(
+        &'a self,
+        ip: &'a str,
+        _: Instant,
+    ) -> bat_fleet_core::route::PeerFuture<'a> {
+        Box::pin(async move {
+            self.calls.lock().unwrap().push(ip.into());
+            self.peer
+        })
+    }
+    fn tcp<'a>(
+        &'a self,
+        endpoint: &'a bat_fleet_core::inventory::Endpoint,
+        _: Instant,
+    ) -> ProbeFuture<'a> {
+        Box::pin(async move {
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("tcp:{}", endpoint.address));
+            false
+        })
+    }
+    fn tailscale_wake<'a>(&'a self, ip: &'a str, _: Instant) -> ProbeFuture<'a> {
+        Box::pin(async move {
+            self.calls.lock().unwrap().push(format!("wake:{ip}"));
+            std::future::pending().await
+        })
+    }
+}
+#[tokio::test]
+async fn direct_requirement_survives_supervisor_publication_without_new_route_attempts() {
+    use bat_fleet_core::route::{RouteRequirement, TailscalePeer};
+    for (peer, expected) in [
+        (TailscalePeer::Unknown, RouteRequirement::DirectPeerUnknown),
+        (TailscalePeer::Idle, RouteRequirement::DirectNotConfirmed),
+    ] {
+        let probe = Arc::new(RequirementRoutes {
+            peer,
+            calls: Mutex::new(Vec::new()),
+        });
+        let (f, s, mut r) = fixture_with_routes(probe.clone());
+        let path = f.0.join("kit/fleet-inventory.json");
+        let mut inventory: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        inventory["hosts"][0]["routes"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|route| route["kind"] == "direct");
+        inventory["hosts"][0]["provision_route"] = "direct".into();
+        std::fs::write(path, serde_json::to_vec(&inventory).unwrap()).unwrap();
+        for _ in 0..20 {
+            r.tick(1000).await.unwrap();
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+        let status = r.tick(1200).await.unwrap();
+        let bytes =
+            std::fs::read(f.0.join("BetterAgentTerminal/fleet-desktop-status.json")).unwrap();
+        let parsed = Status::parse(&bytes, &f.load(), r.epoch(), 1200).unwrap();
+        assert_eq!(
+            serde_json::to_value(&status).unwrap(),
+            serde_json::to_value(&parsed).unwrap()
+        );
+        let row = parsed
+            .entries
+            .iter()
+            .find(|row| row.name == "node-1")
+            .unwrap();
+        assert_eq!(row.route_requirement, Some(expected));
+        assert!(row.route.is_none());
+        assert_ne!(row.level, "ready");
+        assert_eq!(
+            parsed
+                .entries
+                .iter()
+                .find(|row| row.name == "connector")
+                .unwrap()
+                .level,
+            "ready"
+        );
+        assert!(!s
+            .lock()
+            .unwrap()
+            .launches
+            .iter()
+            .any(|name| name == "node-1"));
+        assert!(s.lock().unwrap().stops.is_empty());
+        let calls = probe.calls.lock().unwrap().clone();
+        assert_eq!(calls.iter().filter(|call| *call == "100.64.0.1").count(), 1);
+        assert_eq!(
+            calls
+                .iter()
+                .filter(|call| *call == "tcp:100.64.0.1")
+                .count(),
+            0
+        );
+        assert_eq!(
+            calls
+                .iter()
+                .filter(|call| *call == "wake:100.64.0.1")
+                .count(),
+            usize::from(peer == TailscalePeer::Idle)
+        );
+        r.shutdown(1300).await.unwrap();
+    }
 }

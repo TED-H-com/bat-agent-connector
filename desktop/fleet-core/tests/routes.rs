@@ -31,6 +31,7 @@ fn routes(kinds: &[&str]) -> Routes {
 }
 struct Mock {
     direct: bool,
+    peer: Option<TailscalePeer>,
     direct_tcp: bool,
     lan: bool,
     calls: Mutex<Vec<&'static str>>,
@@ -40,6 +41,7 @@ impl Mock {
     fn new(direct: bool, direct_tcp: bool, lan: bool) -> Self {
         Self {
             direct,
+            peer: None,
             direct_tcp,
             lan,
             calls: Mutex::new(Vec::new()),
@@ -48,6 +50,18 @@ impl Mock {
     }
 }
 impl RouteProbe for Mock {
+    fn tailscale_peer<'a>(&'a self, ip: &'a str, deadline: Instant) -> PeerFuture<'a> {
+        Box::pin(async move {
+            if let Some(peer) = self.peer {
+                self.calls.lock().unwrap().push("tailscale");
+                peer
+            } else if self.tailscale_direct(ip, deadline).await {
+                TailscalePeer::Direct
+            } else {
+                TailscalePeer::Unknown
+            }
+        })
+    }
     fn tailscale_direct<'a>(&'a self, _: &'a str, _: Instant) -> ProbeFuture<'a> {
         Box::pin(async move {
             self.calls.lock().unwrap().push("tailscale");
@@ -198,6 +212,55 @@ async fn direct_requirement_explains_unknown_evidence_without_extra_attempts() {
             "code": "ROUTE_UNAVAILABLE", "route_requirement": "DIRECT_PEER_UNKNOWN"
         })
     );
+}
+#[tokio::test]
+async fn route_requirements_keep_missing_idle_unknown_tcp_and_exhaustion_distinct() {
+    for (peer, kinds, expected, code, calls) in [
+        (
+            TailscalePeer::Unknown,
+            vec!["direct"],
+            "DIRECT_PEER_UNKNOWN",
+            "ROUTE_UNAVAILABLE",
+            vec!["tailscale"],
+        ),
+        (
+            TailscalePeer::Idle,
+            vec!["direct"],
+            "DIRECT_NOT_CONFIRMED",
+            "TAILSCALE_WAKING",
+            vec!["tailscale"],
+        ),
+        (
+            TailscalePeer::Direct,
+            vec!["direct"],
+            "DIRECT_TCP_UNREACHABLE",
+            "ROUTE_UNAVAILABLE",
+            vec!["tailscale", "direct_tcp"],
+        ),
+        (
+            TailscalePeer::Unknown,
+            vec!["direct", "lan"],
+            "CONFIGURED_ROUTES_EXHAUSTED",
+            "ROUTE_UNAVAILABLE",
+            vec!["tailscale", "lan_tcp"],
+        ),
+    ] {
+        let routes = routes(&kinds);
+        let policy = HostPolicy::new(&routes, generation());
+        let mut probe = Mock::new(false, false, false);
+        probe.peer = Some(peer);
+        let failure = SelectionRequest::new(&routes, &policy, generation(), 1000)
+            .unwrap()
+            .run(&probe, Duration::from_secs(1))
+            .await
+            .err()
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(failure).unwrap(),
+            json!({"code":code,"route_requirement":expected})
+        );
+        assert_eq!(*probe.calls.lock().unwrap(), calls);
+    }
 }
 async fn fail(
     routes: &Routes,
@@ -810,7 +873,10 @@ async fn generation_change_cancels_owned_wake_and_rejects_stale_selection_intent
     assert!(!policy.waking());
     assert_eq!(probe.active.load(std::sync::atomic::Ordering::SeqCst), 0);
     assert!(matches!(
-        stale.run(probe.as_ref(), Duration::from_secs(2)).await,
+        stale
+            .run(probe.as_ref(), Duration::from_secs(2))
+            .await
+            .map_err(|failure| failure.code),
         Err("ROUTE_UNAVAILABLE")
     ));
     assert!(select(
