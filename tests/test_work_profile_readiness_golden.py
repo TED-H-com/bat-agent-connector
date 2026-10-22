@@ -37,7 +37,7 @@ async def test_work_profile_readiness_matches_producer_golden(world, mock, tmp_p
     directory = tmp_path / "bat-profiles"
     platform_files.ensure_private_directory(directory)
     store = directory / "remote-tokens.enc.json"
-    credentials = json.dumps({"enc": False, "data": json.dumps({"tokens": {"fixture": mock.token}})})
+    credentials = json.dumps({"enc": False, "data": {"tokens": {"fixture": mock.token}}})
     platform_files.atomic_write(store, credentials.encode())
     host = daemon.fleet.config.hosts["h1"]
     host.token_ref, host.bat_profiles_dir = "bat-profile:fixture", str(directory)
@@ -87,7 +87,7 @@ async def test_work_profile_readiness_matches_producer_golden(world, mock, tmp_p
     stale = await capture("host_not_refreshed")
     assert stale["states"]["can_observe"]["reason"] == "host_not_refreshed"
     await daemon.inventory._refresh_scheduled("h1")
-    platform_files.atomic_write(store, json.dumps({"enc": False, "data": json.dumps({"tokens": {}})}).encode())
+    platform_files.atomic_write(store, b'{"enc":false,"data":{"tokens":{}}}')
     missing = await capture("credential_required")
     assert missing["states"]["signed_in_or_available"]["reason"] == "CREDENTIAL_REQUIRED"
     platform_files.atomic_write(store, credentials.encode())

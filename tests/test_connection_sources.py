@@ -90,7 +90,7 @@ def test_all_python_readers_match_vectors(tmp_path, row):
     assert profiles[0]["token_available"] is admitted
     host = config.HostConfig("fixture", profiles[0]["url"], profiles[0]["fingerprint"],
         "bat-profile:" + row["profile_id"], bat_profiles_dir=str(tmp_path))
-    assert host.token_available() is admitted
+    assert host.token_available() is (expected["python_runtime"]["state"] == "available")
     if expected["python_runtime"]["state"] == "available":
         assert host.resolve_token() == read_token_store(tmp_path, mode=TokenMode.LEGACY_RUNTIME).lookup(row["profile_id"]).token
     else:
@@ -132,7 +132,7 @@ def test_directory_failure_is_specific_and_does_not_expose_path(tmp_path, monkey
     new = tmp_path / "BetterAgentTerminal"
     new.write_text("not a directory")
     assert setup._profiles({}) == ([], "DATA_DIRECTORY_INVALID")
-    with pytest.raises(config.TokenUnavailable, match="^DATA_DIRECTORY_INVALID$"):
+    with pytest.raises(config.TokenUnavailable, match="^DATA_DIRECTORY_INVALID:"):
         config._token_from_bat_profiles(None, "remote-1")
 
 
@@ -214,9 +214,106 @@ def test_windows_runtime_and_setup_use_same_default(tmp_path, monkeypatch):
     assert host.resolve_token() == "synthetic-token"
 
 
-def test_token_available_is_admission_but_existing_resolution_is_legacy(tmp_path):
+def test_setup_admission_is_separate_from_existing_host_readiness(tmp_path):
     write_profile(tmp_path, {"tokens": {"remote-1": "synthetic-token"}})
     host = config.HostConfig("fixture", "wss://127.0.0.1:9876/", "AA" * 32,
                              "bat-profile:remote-1", bat_profiles_dir=str(tmp_path))
     assert host.resolve_token() == "synthetic-token"
-    assert not host.token_available()
+    assert host.token_available()
+    assert not setup._profiles({"bat": {"profiles_dir": str(tmp_path)}})[0][0]["token_available"]
+
+
+@pytest.mark.parametrize("row", VECTORS["token_stores"], ids=lambda row: row["id"])
+def test_configured_host_readiness_matches_runtime(tmp_path, row):
+    write_profile(tmp_path, "", profile_id=row["profile_id"])
+    path = tmp_path / "remote-tokens.enc.json"
+    path.write_text(row["store"])
+    before = path.read_bytes(), path.stat().st_mtime_ns
+    host = config.HostConfig("fixture", "wss://127.0.0.1:9876/", "AA" * 32,
+        "bat-profile:" + row["profile_id"], bat_profiles_dir=str(tmp_path))
+    try:
+        host.resolve_token()
+        resolves = True
+    except config.TokenUnavailable:
+        resolves = False
+    assert host.token_available() is resolves
+    assert (path.read_bytes(), path.stat().st_mtime_ns) == before
+
+
+@pytest.mark.parametrize("condition,reason,guidance", [
+    ("encrypted", "TOKEN_STORE_ENCRYPTED",
+     "BAT token store is encrypted (OS keychain); use token_ref env: or file: instead"),
+    ("missing", "TOKEN_MISSING", "no token for BAT profile"),
+    ("unreadable", "TOKEN_STORE_UNREADABLE",
+     "cannot read BAT token store: validate private file permissions, type, size and JSON format"),
+    ("format", "TOKEN_STORE_FORMAT", "BAT token store has an unexpected format"),
+])
+def test_runtime_errors_keep_actionable_guidance_without_secrets(tmp_path, condition, reason, guidance):
+    write_profile(tmp_path, {"tokens": {"remote-1": "synthetic-token"}}, enc=condition == "encrypted")
+    store = tmp_path / "remote-tokens.enc.json"
+    if condition == "unreadable":
+        store.unlink()
+    elif condition == "format":
+        store.write_text('["synthetic-token"]')
+    ident = "missing-profile" if condition == "missing" else "remote-1"
+    with pytest.raises(config.TokenUnavailable) as error:
+        config._token_from_bat_profiles(tmp_path, ident)
+    message = str(error.value)
+    assert reason in message
+    assert guidance in message
+    assert "synthetic-token" not in message
+    assert str(tmp_path) not in message
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Named POSIX home lookup uses pwd")
+def test_named_home_override_keeps_expanduser_semantics(tmp_path):
+    import pwd
+
+    account = pwd.getpwuid(os.getuid())
+    # Use only the current account and this test's tree; never inspect another
+    # account's profiles. relpath also works with CI basetemps outside the home.
+    configured = f"~{account.pw_name}/" + os.path.relpath(tmp_path, account.pw_dir)
+    selected = select_profiles_directory(configured, platform="linux", environment={}, home=tmp_path / "injected")
+    assert selected == Path(configured).expanduser()
+    assert selected.is_absolute() and selected.samefile(tmp_path)
+
+
+def test_github_bat_reference_uses_platform_default(tmp_path, monkeypatch):
+    windows_readers(monkeypatch, tmp_path)
+    directory = tmp_path / "BetterAgentTerminal" / "profiles"
+    write_profile(directory, {"tokens": {"remote-1": "synthetic-token"}})
+    assert config.GitHubConfig(token_ref="bat-profile:remote-1").token() == "synthetic-token"
+
+
+@pytest.mark.parametrize("condition,reason,guidance", [
+    ("unavailable", "DATA_DIRECTORY_UNAVAILABLE", "set APPDATA"),
+    ("invalid", "DATA_DIRECTORY_INVALID", "point to a directory"),
+    ("unreadable", "DATA_DIRECTORY_UNREADABLE", "check directory permissions"),
+])
+def test_runtime_directory_errors_give_safe_guidance(tmp_path, monkeypatch, condition, reason, guidance):
+    windows_readers(monkeypatch, tmp_path)
+    root = tmp_path / "BetterAgentTerminal"
+    if condition == "unavailable":
+        monkeypatch.delenv("APPDATA")
+    elif condition == "invalid":
+        root.write_text("not a directory")
+    else:
+        root.mkdir()
+        root.chmod(0)
+    try:
+        with pytest.raises(config.TokenUnavailable) as error:
+            config._token_from_bat_profiles(None, "remote-1")
+        message = str(error.value)
+        assert message.startswith(reason + ":")
+        assert guidance in message
+        assert str(tmp_path) not in message
+    finally:
+        if condition == "unreadable":
+            root.chmod(0o700)
+
+
+@pytest.mark.parametrize("override", ["~", "~/profiles", "~\\profiles"])
+def test_current_home_override_uses_injected_home(tmp_path, override):
+    (tmp_path / "profiles").mkdir()
+    selected = select_profiles_directory(override, platform="linux", environment={}, home=tmp_path)
+    assert selected == (tmp_path if override == "~" else tmp_path / "profiles")
