@@ -2,11 +2,12 @@
 
 ## Next release (unreleased)
 
-- Checkpoint preparation preserves an existing staging file, directory or link
-  when its creation is unproven. If the destination appears during cloning, keep
-  both paths for inspection instead of deleting the staged copy. These refusals
-  report their own codes, the kept path and recovery guidance in English and
-  Traditional Chinese.
+- Checkpoint preparation preserves existing staging files, directories and links.
+  A destination found during cloning keeps both paths for inspection. Refusal
+  codes survive login-shell notices and report the kept path, source-session link
+  and recovery guidance in English and Traditional Chinese, including Cleanup's
+  existing review of creation evidence. Existing broken destination links fail
+  before cloning, and clones consistently use the `origin` remote name.
 
 - Recover a dead local managed Connector in Dashboard without restarting the app, retaining the installation identity and original operation keys. Windows background Connector and native Fleet supervisor launches request job breakaway when permitted, with a bounded lifetime warning when the launching job prevents it. Recovery failures and identity changes have English and zh-TW status messages.
 

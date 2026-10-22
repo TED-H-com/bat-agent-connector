@@ -3304,7 +3304,10 @@ async function viewOperation(main, id) {
             op.error_code === "CHECKPOINT_DESTINATION_APPEARED" && typeof refs.clone_path === "string"
               ? [h("dt", {}, t("checkpoint_destination_path")), h("dd", {}, h("code", {}, refs.clone_path))] : null),
           h("p", {}, t("checkpoint_retained_why")),
-          h("p", {}, t(op.error_code === "CHECKPOINT_DESTINATION_APPEARED" ? "checkpoint_destination_next" : "checkpoint_retained_next"))) : null,
+          h("p", {}, t(op.error_code === "CHECKPOINT_DESTINATION_APPEARED" ? "checkpoint_destination_next" : "checkpoint_retained_next")),
+          typeof refs.source_host === "string" && refs.source_host && typeof refs.source_session_id === "string" && refs.source_session_id
+            ? h("a", {href: sessionHref({host: refs.source_host, sessionId: refs.source_session_id})}, t("source_session")) : null,
+          h("p", {}, t("checkpoint_retained_cleanup"))) : null,
         ...(receipts || []),
         mergeRecovery(op),
         op.action === "worktree.merge" ? h("details", {}, h("summary", {}, t("sessions_details")),

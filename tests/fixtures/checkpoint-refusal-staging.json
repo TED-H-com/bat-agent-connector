@@ -11,13 +11,15 @@
   },
   "preconditions": {},
   "status": "failed",
-  "status_reason": "An earlier attempt may have left an incomplete copy. It has been kept.",
+  "status_reason": "An earlier attempt may have left an incomplete copy. It has been kept. Start a new checkpoint.continue operation with a new idempotency key to use a new staging path.",
   "error_code": "CHECKPOINT_STAGING_RETAINED",
   "result": null,
   "created_at": 1790000000,
   "external_refs": {
     "clone_path": "/srv/managed/app-11111111",
-    "retained_staging_path": "/srv/managed/app-11111111.batc-tmp-cccccccccccc"
+    "retained_staging_path": "/srv/managed/app-11111111.batc-tmp-cccccccccccc",
+    "source_host": "h1",
+    "source_session_id": "sess-claude-0001"
   },
   "steps": [
     {
@@ -26,7 +28,7 @@
       "status": "failed",
       "error": {
         "code": "CHECKPOINT_STAGING_RETAINED",
-        "message": "An earlier attempt may have left an incomplete copy. It has been kept."
+        "message": "An earlier attempt may have left an incomplete copy. It has been kept. Start a new checkpoint.continue operation with a new idempotency key to use a new staging path."
       }
     }
   ]
