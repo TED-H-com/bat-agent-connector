@@ -1,5 +1,14 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+2026-10-22：[最新進度與發布紀錄](progress-2026-10-22.md)列出主線至 `793c6541` 的合併內容。
+已發布預覽版為 Connector 0.2.13／desktop 0.1.9（`437ee6a7`），穩定版仍為 0.2.12／0.1.8。
+#399–#403 不在預覽版內；本預覽版尚未安裝或實機驗收。下方日期紀錄保留歷史狀態。
+
+October 22: the [latest progress and publication note](progress-2026-10-22.md) records merges through
+`793c6541`. The published preview is Connector 0.2.13 / desktop 0.1.9 (`437ee6a7`);
+stable remains 0.2.12 / 0.1.8. The preview excludes #399–#403 and has not been installed or live-tested.
+The dated entries below retain their historical status.
+
 ## 2026-10-19 發布與接續狀態
 
 本輪開工核對主線 `5fa1d1552945988394f0d3fe41db380a831717a5`，已包含
