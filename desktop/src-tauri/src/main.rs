@@ -38,6 +38,8 @@ enum ManagedRequest {
     Status,
     SetLogin { enabled: bool },
     OpenBrowser,
+    Stop,
+    Start,
 }
 
 struct ManagedBrowserMenu(MenuItem<tauri::Wry>);
@@ -47,16 +49,33 @@ async fn managed_control(
     window: WebviewWindow,
     app: tauri::AppHandle,
     state: State<'_, Arc<managed::Managed>>,
+    bridge: State<'_, Arc<Bridge>>,
     input: ManagedRequest,
 ) -> Result<managed::Status, String> {
     local_main(&window)?;
     let state = state.inner().clone();
+    if matches!(input, ManagedRequest::Stop | ManagedRequest::Start) {
+        let result = bridge
+            .managed_lifecycle(state.clone(), matches!(input, ManagedRequest::Start))
+            .await;
+        if let Some(browser) = app.try_state::<ManagedBrowserMenu>() {
+            let _ = browser.0.set_enabled(
+                state
+                    .status()
+                    .lifecycle
+                    .as_ref()
+                    .is_some_and(|v| v.state == "running"),
+            );
+        }
+        return result;
+    }
     tokio::task::spawn_blocking(move || {
         let _serial = state
             .serial
             .try_lock()
             .map_err(|_| "MANAGED_SERVICE_BUSY")?;
         match input {
+            ManagedRequest::Stop | ManagedRequest::Start => unreachable!(),
             ManagedRequest::Status => Ok(state.status()),
             ManagedRequest::SetLogin { enabled } => state.set_login(enabled),
             ManagedRequest::OpenBrowser => {
@@ -775,6 +794,13 @@ fn main() {
                     launch.token.clone(),
                     launch.identity(),
                 ),
+                None if managed_status
+                    .lifecycle
+                    .as_ref()
+                    .is_some_and(|v| v.state != "running") =>
+                {
+                    Bridge::managed_failure(&app.path().app_config_dir()?, "SERVICE_STOPPED".into())
+                }
                 None if managed_status.mode == "role_pending" && managed_status.error.is_none() => {
                     Bridge::role_pending(&app.path().app_config_dir()?)
                 }
@@ -819,16 +845,23 @@ fn main() {
             bootstrap.start_auto(control.clone());
             app.manage(QuitState::default());
             let mut config = app.config().app.windows[0].clone();
-            config.visible = managed_status.mode == "role_pending"
+            config.visible = managed::show_on_login(&managed_status)
                 || update_pending
-                || managed_status.error.is_some()
                 || !managed_login && !matches!(login_options, Some(Ok((false, false))));
             let window = tauri::WebviewWindowBuilder::from_config(app, &config)?
-                .initialization_script(if login_path.is_some() || update_pending {
-                    "location.hash = '/settings';"
-                } else {
-                    ""
-                })
+                .initialization_script(
+                    if login_path.is_some()
+                        || update_pending
+                        || managed_status
+                            .lifecycle
+                            .as_ref()
+                            .is_some_and(|v| v.state != "running")
+                    {
+                        "location.hash = '/settings';"
+                    } else {
+                        ""
+                    },
+                )
                 .on_navigation(|url| {
                     url.scheme() == "tauri" && url.host_str() == Some("localhost")
                         || matches!(url.scheme(), "http" | "https")
@@ -977,7 +1010,10 @@ mod managed_stop_tests {
     #[test]
     fn existing_managed_command_accepts_stop_and_start() {
         for action in ["stop", "start"] {
-            assert!(serde_json::from_value::<ManagedRequest>(serde_json::json!({"action": action})).is_ok());
+            assert!(serde_json::from_value::<ManagedRequest>(
+                serde_json::json!({"action": action})
+            )
+            .is_ok());
         }
     }
 }

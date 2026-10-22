@@ -59,11 +59,17 @@ def main() -> None:
     # PyInstaller one-file extraction is also explicitly disk-backed.
     env["TMPDIR"] = env["TEMP"] = env["TMP"] = str(directory)
 
-    def command(action: str) -> dict:
+    def command(action: str, *, refused: str | None = None) -> dict:
         result = subprocess.run(  # noqa: S603 - hash-verified bundled fixture executable
             [str(runtime), action, "--data-dir", str(data)], env=env,
             stdin=subprocess.DEVNULL, capture_output=True, timeout=90,
         )
+        if refused is not None:
+            assert result.returncode != 0, "Held service must refuse automatic start"
+            document = json.loads(result.stdout)
+            assert document["protocol"] == 1 and document["error"] == refused
+            assert document["lifecycle"]["state"] == "stopped"
+            return document
         if result.returncode:
             try:
                 reply = json.loads(result.stdout)
@@ -117,7 +123,10 @@ def main() -> None:
         assert original["token"] not in handoff.read_text(), "Bearer must not enter browser handoff"
         assert command("stop")["stopped"] is True
         stopped = True
-        restarted = command("ensure")
+        command("ensure", refused="SERVICE_STOPPED")
+        command("browser", refused="SERVICE_STOPPED")
+        assert command("status")["lifecycle"]["state"] == "stopped"
+        restarted = command("resume")
         stopped = False
         assert identity(restarted) == identity(original), "Restart must preserve journal identities"
         assert bootstrap(restarted)["sync"]["server_id"] == original["server_id"]
@@ -129,7 +138,7 @@ def main() -> None:
             "runtime_sha256": manifest["sha256"], "no_python_on_path": True,
             "concurrent_clients": 3, "stable_identity_after_restart": True,
             "authenticated_bootstrap": True, "browser_handoff_contains_no_bearer": True,
-            "owned_service_stopped": True,
+            "owned_service_stopped": True, "stop_hold_blocks_ensure_and_browser": True, "explicit_resume": True,
             "fixture_directory_removed": True,
         }
     finally:

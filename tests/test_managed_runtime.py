@@ -212,7 +212,8 @@ def test_older_package_never_downgrades_a_running_service(versioned_installation
 def test_older_package_never_downgrades_a_stopped_installation(versioned_installation, monkeypatch):
     root, children = versioned_installation
     runtime.ensure(root, timeout=15)
-    assert runtime.stop(root)["stopped"] is True
+    launch = runtime._verify(root, runtime._manifest(root))
+    runtime._request(launch["endpoint"], "/api/v1/managed/stop", token=launch["token"], body={})
     children[0].wait(timeout=10)
     manifest = (root / runtime.MANIFEST).read_bytes()
     monkeypatch.setattr(runtime, "__version__", "0.9.0")

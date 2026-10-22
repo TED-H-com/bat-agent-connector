@@ -485,3 +485,74 @@ separate plain-updater rollback cases cannot stand in for a managed rollback.
 The owner explicitly excluded formal signing, Mac notarization, production update channels and Linux persistent native credential enrollment from this delivery. Full human execution of the 46-item real-environment acceptance matrix is user-owned and is not an outstanding agent task. Exclusion does not mean these capabilities or checks were completed. Unknown native BAT merge acknowledgements preserve original work under the [merge contract](worktree-merge.md); its separate human-adjudication API is not a delivery gate.
 
 See [first use](../getting-started.md), [implementation status](../product/implementation-status.md), [acceptance reference](../product/acceptance-v2.md) and [shared frontend lifecycle](shared-frontend.md).
+
+## Deliberately stopping the owned background service
+
+Provider and Both installations offer **Stop background service** in native Settings.
+The preview explains that the local Connector stops, unsettled work blocks shutdown,
+external connections are unaffected, and app open, sign-in, recovery and **Open in
+browser** will keep it stopped until **Start background service**. One confirmation
+sends the request. Client installations own no service and offer neither control;
+native Stop/Start also refuse them before calling the launcher.
+
+Python remains the sole start/stop owner. Under `launcher.lock`, it writes a private,
+versioned `state/lifecycle.json` stop hold (`version: 1`, `state`, `requested_at`,
+`stopped_at`) before sending the proven installation owner's authenticated
+`/api/v1/managed/stop` request. The existing operations, tasks and active-work busy
+gates are unchanged. An authoritative HTTP 409 removes the hold and returns
+`SERVICE_BUSY` with the existing reason; the service remains running. An
+acknowledgement followed by release of the service's kernel lease records `stopped`
+and its time. No PID or port is used to stop a service.
+
+An acknowledgement without lease release at the deadline, or a transport failure
+once the request may have been sent, retains `stop_pending`. This means **stopping**,
+not running or failed. It never resends shutdown to repair uncertainty. Status reads
+are read-only, even if the service subsequently exits. Only stop, ensure or resume,
+while holding `launcher.lock`, may reconcile `stop_pending` to `stopped`.
+
+Every ensure path honours the hold before starting: ordinary native startup, the
+background recovery loop, `--managed-login`, browser handoff and CLI `ensure` or
+`browser`. They receive `SERVICE_STOPPED` with the lifecycle and its times. Native
+startup opens Settings normally with the stopped state; login entry stays quiet.
+Recovery settles without retries, backoff growth or a recovering failure. The
+internal CLI `serve` also refuses an existing hold. Unreadable, symlinked,
+foreign-owned or unknown-version holds return `SERVICE_LIFECYCLE_UNPROVEN`; none
+falls back to provisioning.
+
+Only explicit **Start background service** / CLI `resume` clears the hold, under
+`launcher.lock`. While the previous service retains its lease, resume returns
+`SERVICE_STILL_STOPPING` and keeps the hold. Once the lease is free, it removes and
+syncs the hold, then runs ordinary ensure once under that same lock. Both-role
+external connections retain their existing endpoint, credentials and selection.
+This runtime-root file adds no SQL DDL or journal data step.
+
+## 主動停止自有背景服務
+
+Provider 與 Both 安裝在原生設定提供「停止背景服務」。預覽先說明本機 Connector
+會停止、尚未完成或核對的工作會阻擋停止、外部連線不受影響，以及開啟程式、登入電腦、
+自動恢復或「在瀏覽器開啟」都不會重新啟動，直到選擇「啟動背景服務」。確認一次後才送出。
+Client 沒有自有服務，不顯示這兩個控制；原生 Stop／Start 也會在呼叫 launcher 前拒絕。
+
+Python 是唯一啟停 owner。在 `launcher.lock` 內，先寫私有、具版本的
+`state/lifecycle.json`（`version: 1`、`state`、`requested_at`、`stopped_at`），
+再以已證明的安裝 owner 憑證呼叫 `/api/v1/managed/stop`。既有操作、任務及執行中工作的
+busy gate 完全保留。HTTP 409 是副作用前的明確拒絕：移除 hold，回傳 `SERVICE_BUSY`
+與原有原因，服務維持運作。收到停止確認且 kernel lease 已釋放，才記錄 `stopped` 與時間。
+不使用 PID 或 port 終止服務。
+
+若已確認但 deadline 到時 lease 仍未釋放，或請求可能送出後 transport 失敗，保留
+`stop_pending`，顯示「停止中」，不宣稱運作中或失敗，也不重送停止來修復不確定結果。
+Status 讀取不寫檔；稍後程序退出也一樣。只有 stop、ensure 或 resume 在持有
+`launcher.lock` 時，才能將 `stop_pending` 對帳為 `stopped`。
+
+所有 ensure 入口在啟動前遵守 hold：原生開啟程式、自動恢復、`--managed-login`、瀏覽器
+handoff，以及 CLI `ensure`／`browser`，都回傳含 lifecycle 與時間的 `SERVICE_STOPPED`。
+原生開啟正常進入設定並顯示已停止；登入啟動保持安靜、不顯示視窗。恢復流程將 hold 視為穩定
+狀態，不重試、不增加 backoff、不顯示恢復失敗。內部 CLI `serve` 也拒絕既有 hold。
+不可讀、symlink、非目前使用者所有或未知版本的 hold 回傳 `SERVICE_LIFECYCLE_UNPROVEN`，
+不會退回建立服務。
+
+只有明確選擇「啟動背景服務」或 CLI `resume` 能在 `launcher.lock` 內解除 hold。
+舊服務仍持有 lease 時回傳 `SERVICE_STILL_STOPPING` 並保留 hold；lease 釋放後才刪除並
+同步 hold，在同一把 lock 內執行一次普通 ensure。Both 角色的外部連線位址、憑證與選擇
+維持原狀。此檔案只屬 runtime root，不新增 SQL DDL 或 journal data step。

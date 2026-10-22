@@ -135,6 +135,39 @@ impl Launch {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Lifecycle {
+    pub state: String,
+    pub requested_at: Option<f64>,
+    pub stopped_at: Option<f64>,
+}
+impl Lifecycle {
+    fn running() -> Self {
+        Self {
+            state: "running".into(),
+            requested_at: None,
+            stopped_at: None,
+        }
+    }
+    fn valid(&self) -> bool {
+        let time = |value: Option<f64>| value.is_some_and(|v| v.is_finite() && v > 0.0);
+        match self.state.as_str() {
+            "running" => self.requested_at.is_none() && self.stopped_at.is_none(),
+            "stop_pending" => time(self.requested_at) && self.stopped_at.is_none(),
+            "stopped" => time(self.requested_at) && time(self.stopped_at),
+            _ => false,
+        }
+    }
+}
+pub fn held(error: &str) -> bool {
+    matches!(error, "SERVICE_STOPPED" | "SERVICE_STILL_STOPPING")
+}
+// Shared with startup visibility: a held login launch is quiet.
+pub fn show_on_login(status: &Status) -> bool {
+    status.mode == "role_pending" || status.error.is_some()
+}
+
 #[derive(Clone, Serialize)]
 pub struct Status {
     pub mode: &'static str,
@@ -145,6 +178,7 @@ pub struct Status {
     pub principal_id: Option<String>,
     pub error: Option<String>,
     pub login_enabled: bool,
+    pub lifecycle: Option<Lifecycle>,
     pub bundled_runtime: Option<RuntimeIdentity>,
     pub running_runtime: Option<RuntimeIdentity>,
     pub runtime_difference: Option<RuntimeDifference>,
@@ -207,6 +241,7 @@ impl Managed {
                 principal_id: None,
                 error: None,
                 login_enabled: false,
+                lifecycle: None,
                 bundled_runtime: None,
                 running_runtime: None,
                 runtime_difference: None,
@@ -223,7 +258,9 @@ impl Managed {
         let launch = match result {
             Ok(launch) => launch,
             Err(error) => {
-                state.status.lock().unwrap().error = Some(error);
+                if !held(&error) {
+                    state.status.lock().unwrap().error = Some(error);
+                }
                 None
             }
         };
@@ -266,6 +303,7 @@ impl Managed {
                 "managed"
             };
             status.background = role.provides();
+            status.lifecycle = role.provides().then(Lifecycle::running);
             status.error = None;
         }
         if !role.provides() {
@@ -275,7 +313,10 @@ impl Managed {
             materialize(&self.resources.join("managed-runtime"), &self.app_data)?;
         *self.executable.lock().unwrap() = Some(executable);
         self.status.lock().unwrap().runtime_version = Some(version.clone());
-        let bytes = self.request("ensure")?;
+        let bytes = match self.request("ensure") {
+            Err(error) if held(&error) => return Ok(None),
+            result => result?,
+        };
         let launch: Launch =
             serde_json::from_slice(&bytes).map_err(|_| "MANAGED_RUNTIME_REPLY_INVALID")?;
         launch.validate(&version)?;
@@ -291,6 +332,13 @@ impl Managed {
 
     pub fn recover(&self) -> Result<Launch, String> {
         let status = self.status();
+        if status
+            .lifecycle
+            .as_ref()
+            .is_some_and(|v| v.state != "running")
+        {
+            return Err("SERVICE_STOPPED".into());
+        }
         if status.mode != "managed" || !status.ready {
             return Err("MANAGED_RECOVERY_UNAVAILABLE".into());
         }
@@ -335,15 +383,91 @@ impl Managed {
         status
     }
 
-    pub fn set_login(&self, enabled: bool) -> Result<Status, String> {
-        if !self.status().ready {
-            return Err("MANAGED_SERVICE_UNAVAILABLE".into());
+    fn require_owned(&self) -> Result<(), String> {
+        if !self
+            .role
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(|s| s.role)
+            .is_some_and(Role::provides)
+        {
+            return Err("MANAGED_SERVICE_NOT_OWNED".into());
         }
+        Ok(())
+    }
+
+    // Caller holds serial, as for browser/login. Python owns both lifecycle effects.
+    pub fn stop(&self) -> Result<Status, String> {
+        self.require_owned()?;
+        let bytes = self.request("stop")?;
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Reply {
+            protocol: u8,
+            stopped: bool,
+            lifecycle: Lifecycle,
+        }
+        let reply: Reply =
+            serde_json::from_slice(&bytes).map_err(|_| "MANAGED_RUNTIME_REPLY_INVALID")?;
+        if reply.protocol != 1
+            || !reply.lifecycle.valid()
+            || reply.stopped != (reply.lifecycle.state == "stopped")
+        {
+            return Err("MANAGED_RUNTIME_REPLY_INVALID".into());
+        }
+        self.status.lock().unwrap().lifecycle = Some(reply.lifecycle);
+        Ok(self.status())
+    }
+
+    pub fn start(&self) -> Result<Launch, String> {
+        self.require_owned()?;
+        let bytes = self.request("resume")?;
+        let launch: Launch =
+            serde_json::from_slice(&bytes).map_err(|_| "MANAGED_RUNTIME_REPLY_INVALID")?;
+        let mut status = self.status.lock().unwrap();
+        launch.validate(
+            status
+                .runtime_version
+                .as_deref()
+                .ok_or("MANAGED_RUNTIME_UNAVAILABLE")?,
+        )?;
+        if status
+            .server_id
+            .as_ref()
+            .is_some_and(|v| v != &launch.server_id)
+            || status
+                .principal_id
+                .as_ref()
+                .is_some_and(|v| v != &launch.principal_id)
+        {
+            return Err("MANAGED_RECOVERY_IDENTITY_CHANGED".into());
+        }
+        status.ready = true;
+        status.error = None;
+        status.server_id = Some(launch.server_id.clone());
+        status.principal_id = Some(launch.principal_id.clone());
+        status.lifecycle = Some(Lifecycle::running());
+        drop(status);
+        self.remember_runtime(&launch);
+        Ok(launch)
+    }
+
+    pub fn set_login(&self, enabled: bool) -> Result<Status, String> {
+        self.require_owned()?;
         crate::managed_login::set_enabled(enabled)?;
         Ok(self.status())
     }
 
     pub fn browser_file(&self) -> Result<PathBuf, String> {
+        if self
+            .status()
+            .lifecycle
+            .as_ref()
+            .is_some_and(|v| v.state != "running")
+        {
+            return Err("SERVICE_STOPPED".into());
+        }
         if !self.status().ready {
             return Err("MANAGED_SERVICE_UNAVAILABLE".into());
         }
@@ -436,11 +560,49 @@ impl Managed {
             return Err("MANAGED_RUNTIME_START_FAILED".into());
         }
         if !result.success() {
+            if let Some((code, lifecycle)) = lifecycle_failure(&bytes) {
+                if let Some(lifecycle) = lifecycle {
+                    self.status.lock().unwrap().lifecycle = Some(lifecycle);
+                }
+                return Err(code);
+            }
             return Err(journal_startup_failure(&bytes)
                 .unwrap_or_else(|| "MANAGED_RUNTIME_START_FAILED".into()));
         }
         Ok(bytes)
     }
+}
+
+fn lifecycle_failure(bytes: &[u8]) -> Option<(String, Option<Lifecycle>)> {
+    let failure: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    if failure.get("protocol")?.as_u64()? != 1 {
+        return None;
+    }
+    let code = failure.get("error")?.as_str()?;
+    if held(code) {
+        let lifecycle: Lifecycle =
+            serde_json::from_value(failure.get("lifecycle")?.clone()).ok()?;
+        if !lifecycle.valid() || lifecycle.state == "running" {
+            return None;
+        }
+        return Some((code.into(), Some(lifecycle)));
+    }
+    if code == "SERVICE_LIFECYCLE_UNPROVEN" {
+        return Some((code.into(), None));
+    }
+    if code == "SERVICE_BUSY" {
+        let message = failure.get("message")?.as_str()?;
+        if [
+            "finish or reconcile current operations before stopping",
+            "finish or pause service shutdown until current tasks settle",
+            "current work is still running",
+        ]
+        .contains(&message)
+        {
+            return Some((format!("SERVICE_BUSY: {message}"), None));
+        }
+    }
+    None
 }
 
 fn journal_startup_failure(bytes: &[u8]) -> Option<String> {
@@ -632,18 +794,59 @@ mod tests {
         fs::write(data.join("managed-central/held"), b"hold").unwrap();
         let (managed, launch) = Managed::prepare(&resources, &data, &config);
         assert!(launch.is_none());
+        assert!(!show_on_login(&managed.status()));
+        assert_eq!(managed.browser_file().unwrap_err(), "SERVICE_STOPPED");
         let value = serde_json::to_value(managed.status()).unwrap();
         assert_eq!(value["lifecycle"]["state"], "stopped");
         assert_eq!(value["error"], serde_json::Value::Null);
-        assert_eq!(fs::read(data.join("managed-central/ensure-count")).unwrap(), b"ensure\n");
+        assert_eq!(
+            fs::read(data.join("managed-central/ensure-count")).unwrap(),
+            b"ensure\n"
+        );
         assert!(!data.join("managed-central/service-count").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn recovery_hold_is_cached_without_further_launcher_calls() {
+        let root = tempfile::tempdir().unwrap();
+        let resources = startup_fixture(root.path());
+        let data = root.path().join("app");
+        let config = root.path().join("config");
+        let (managed, _) = Managed::prepare(&resources, &data, &config);
+        managed.select_role(Role::Provider, 0).unwrap();
+        fs::write(data.join("managed-central/held"), b"hold").unwrap();
+        for _ in 0..5 {
+            assert_eq!(managed.recover().err().unwrap(), "SERVICE_STOPPED");
+            assert!(!show_on_login(&managed.status()));
+        }
+        assert_eq!(
+            fs::read(data.join("managed-central/ensure-count")).unwrap(),
+            b"ensure\nensure\n"
+        );
+        assert_eq!(
+            fs::read(data.join("managed-central/service-count")).unwrap(),
+            b"service\n"
+        );
     }
 
     #[test]
     fn status_serialization_keeps_all_existing_fields_and_adds_lifecycle() {
         let value = serde_json::to_value(identity_status()).unwrap();
-        for key in ["mode", "ready", "background", "runtime_version", "server_id", "principal_id",
-            "error", "login_enabled", "bundled_runtime", "running_runtime", "runtime_difference", "lifecycle"] {
+        for key in [
+            "mode",
+            "ready",
+            "background",
+            "runtime_version",
+            "server_id",
+            "principal_id",
+            "error",
+            "login_enabled",
+            "bundled_runtime",
+            "running_runtime",
+            "runtime_difference",
+            "lifecycle",
+        ] {
             assert!(value.get(key).is_some(), "{key}");
         }
         assert_eq!(value["ready"], true);
@@ -878,6 +1081,8 @@ printf '%s' '{"protocol":1,"endpoint":"http://127.0.0.1:41001/","actor":"fixture
         let config = root.path().join("config");
         let (managed, _) = Managed::prepare(&resources, &data, &config);
         assert!(managed.select_role(Role::Client, 0).unwrap().is_none());
+        assert_eq!(managed.stop().err().unwrap(), "MANAGED_SERVICE_NOT_OWNED");
+        assert_eq!(managed.start().err().unwrap(), "MANAGED_SERVICE_NOT_OWNED");
         fs::create_dir(&config).unwrap();
         fs::write(
             config.join("central.json"),
@@ -1124,6 +1329,7 @@ printf '%s' '{"protocol":1,"endpoint":"http://127.0.0.1:41001/","actor":"fixture
             principal_id: None,
             error: None,
             login_enabled: false,
+            lifecycle: Some(Lifecycle::running()),
             bundled_runtime: None,
             running_runtime: None,
             runtime_difference: None,
