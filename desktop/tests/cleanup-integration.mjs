@@ -1,3 +1,4 @@
+import {httpEventDelivery} from './event-delivery.mjs';
 // Run the canonical generated UI against an independently integrated cleanup backend.
 import {spawn} from "node:child_process";
 import {createInterface} from "node:readline";
@@ -20,6 +21,7 @@ try {
   const fixture = JSON.parse(first.value), origin = `http://127.0.0.1:${fixture.port}`;
   const page = await browser.newPage({locale: "en-US"});
   const errors = [], writes = [];
+  const events = await httpEventDelivery(page);
   page.on("pageerror", e => errors.push(e.message));
   page.on("request", req => {
     if (req.method() === "POST" && req.url().includes("/api/v1/operations")) writes.push(req.postDataJSON());
@@ -36,11 +38,11 @@ try {
   await page.goto(origin + "/dashboard/#/cleanup");
   await page.getByRole("combobox", {name: "Choose a scope"}).selectOption("checkpoint");
   await page.getByRole("textbox", {name: "Host name or original ID"}).fill(fixture.checkpoint_id);
-  await page.getByRole("button", {name: "Preview cleanup", exact: true}).click();
+  await events.post(page.getByRole("button", {name: "Preview cleanup", exact: true}));
   await expect(page.getByText("Plan:", {exact: false}).first()).toBeVisible();
   await page.getByRole("checkbox", {name: "I reviewed the resources", exact: false}).check();
   await expect(page.getByRole("button", {name: "Apply reviewed cleanup"})).toBeEnabled();
-  await page.getByRole("button", {name: "Apply reviewed cleanup"}).click();
+  await events.post(page.getByRole("button", {name: "Apply reviewed cleanup"}));
   const receipt = page.getByRole("link", {name: "View item receipts"});
   await expect(receipt).toBeVisible({timeout: 30000});
   const href = await receipt.getAttribute("href");

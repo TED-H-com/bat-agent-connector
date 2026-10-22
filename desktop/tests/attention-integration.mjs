@@ -1,3 +1,4 @@
+import {eventDelivery, httpEventDelivery} from './event-delivery.mjs';
 import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
 import {resolve, delimiter} from 'node:path';
@@ -17,6 +18,7 @@ const browser = await chromium.launch();
 try {
   const fixture = await next(), origin = `http://127.0.0.1:${fixture.port}`;
   const web = await browser.newPage(), desktop = await browser.newPage(), other = await browser.newPage();
+  const webEvents = await httpEventDelivery(web), desktopEvents = eventDelivery(desktop);
   const errors = [], posts = [];
   for (const page of [web, desktop, other]) page.on('pageerror', e => errors.push(e.message));
   await web.addInitScript(token => sessionStorage.setItem('batc.dashboard.token', token), fixture.token);
@@ -29,7 +31,7 @@ try {
     return {status: response.status, data: await response.json()};
   };
   const caps = (await central({method: 'GET', path: '/capabilities'})).data;
-  await desktop.exposeFunction('centralFixture', central);
+  await desktop.exposeFunction('centralFixture', input => desktopEvents.forward(input, central));
   await desktop.addInitScript(({caps, origin}) => Object.assign(window, {isTauri: true, __TAURI_INTERNALS__: {
     invoke: async (command, args) => {
       if (command === 'native_status') return {endpoint: origin, credential_available: true};
@@ -44,13 +46,13 @@ try {
     await page.goto(url); await expect(page.locator('.reading-state')).toContainText('Unread update');
   }
   assert.equal((await control('verify')).markers, 0);
-  await web.getByRole('button', {name: 'Mark this version read'}).click();
+  await webEvents.post(web.getByRole('button', {name: 'Mark this version read'}));
   await expect(desktop.locator('.reading-state')).toContainText('This version is read');
   await expect(other.locator('.reading-state')).toContainText('Unread update');
   let evidence = await control('verify'); assert.equal(evidence.read_events, 1); assert.equal(evidence.version, 2);
   await control('edit');
   for (const page of [web, desktop]) await expect(page.locator('.reading-state')).toContainText('Unread update');
-  await desktop.getByRole('button', {name: 'Mark this version read'}).click();
+  await desktopEvents.post(desktop.getByRole('button', {name: 'Mark this version read'}));
   await expect(web.locator('.reading-state')).toContainText('This version is read');
   evidence = await control('verify'); assert.equal(evidence.read_events, 2); assert.equal(evidence.reading.read_version, 3);
   assert.equal(await desktop.evaluate(() => JSON.stringify({...localStorage, ...sessionStorage}).includes('batc.dashboard.token')), false);
@@ -60,7 +62,7 @@ try {
     const req = route.request(); posts.push({method: req.method(), path: '/operations?wait=3', body: req.postDataJSON(), idempotency_key: req.headers()['idempotency-key']});
     await route.fetch(); await route.abort('failed');
   });
-  await web.getByRole('button', {name: 'Mark this version read'}).click();
+  await webEvents.post(web.getByRole('button', {name: 'Mark this version read'}));
   await expect(web.locator('.reading-state')).toContainText('This version is read'); // readback, not the lost receipt
   await expect(desktop.locator('.reading-state')).toContainText('This version is read');
   const replay = await central(posts[0]); assert.equal(replay.data.operation.status, 'succeeded');
