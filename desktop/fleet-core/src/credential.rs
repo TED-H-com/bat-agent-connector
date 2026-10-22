@@ -15,6 +15,20 @@ const STORE_BOUND: usize = 1024 * 1024;
 const PROTECTED_BOUND: usize = 256 * 1024;
 const TOKEN_BOUND: usize = 64 * 1024;
 
+// Red baseline adapter: this demonstrates why the existing runtime is not admission.
+#[cfg(test)]
+struct AdmissionStore(Vec<u8>);
+#[cfg(test)]
+impl AdmissionStore {
+    fn parse(bytes: &[u8]) -> Self { Self(bytes.to_vec()) }
+    fn lookup(&self, id: &str) -> serde_json::Value {
+        match profile_token(&self.0, id) {
+            Ok(_) => serde_json::json!({"state":"available","reason":"TOKEN_AVAILABLE"}),
+            Err(reason) => serde_json::json!({"state":"unavailable","reason":reason}),
+        }
+    }
+}
+
 // Neither the reference (private profile/name) nor resolved credential implements
 // Debug/Serialize. A caller can obtain references only from a validated inventory.
 enum Source {

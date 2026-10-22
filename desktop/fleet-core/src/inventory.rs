@@ -220,8 +220,11 @@ impl Inventory {
             identifier(&Value::String(key.clone()), 64, b"_-")?;
             match value["kind"].as_str() {
                 Some("bat-profile-token") => {
-                    fields(value, &["kind", "profile_id"], &[])?;
+                    fields(value, &["kind", "profile_id"], &["source_policy"])?;
                     text(&value["profile_id"])?;
+                    if value.get("source_policy").is_some_and(|v| v.as_u64() != Some(1)) {
+                        return Err(INVALID);
+                    }
                 }
                 Some("windows-dpapi") => {
                     fields(value, &["kind", "name"], &[])?;

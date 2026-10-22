@@ -60,6 +60,43 @@ fn shared_source_policy_vectors_describe_legacy_fleet_runtime() {
         }
     }
 }
+
+#[test]
+fn native_admission_matches_shared_token_vectors() {
+    let vectors: Value = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/bat-source-policy-v1.json"
+    )).unwrap();
+    for row in vectors["token_stores"].as_array().unwrap() {
+        let store = AdmissionStore::parse(row["store"].as_str().unwrap().as_bytes());
+        let result = store.lookup(row["profile_id"].as_str().unwrap());
+        assert_eq!(serde_json::to_value(result).unwrap(), row["expected"]["python_admission"], "{}", row["id"]);
+    }
+}
+
+#[test]
+fn listing_accepts_additive_bat_fields_without_relaxing_kit_drift() {
+    let bytes = br#"{"profiles":[{"id":"remote-1","name":"Fixture","type":"remote","remoteHost":"example.test","remotePort":9876,"remoteFingerprint":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","futureDisplayOption":true}],"activeProfileIds":[]}"#;
+    let result = crate::inventory::ProfileIndex::parse(bytes, &[]);
+    eprintln!("baseline native listing via kit reader: {:?}", result.as_ref().map(|index| index.document()).map_err(|reason| *reason));
+    assert!(result.is_ok(), "a listing needs to retain this complete remote choice");
+}
+
+#[test]
+fn policy_bound_reference_refuses_case_only_store_replacement() {
+    let bytes = include_bytes!("../tests/fixtures/inventory.json");
+    let mut doc: Value = serde_json::from_slice(bytes).unwrap();
+    let key = doc["hosts"][0]["bat"]["credential_ref"].as_str().unwrap().to_owned();
+    doc["credentials"][&key]["source_policy"] = json!(1);
+    let inv = Inventory::parse(&serde_json::to_vec(&doc).unwrap()).unwrap();
+    let reference = CredentialRef::for_bat(&inv, "node-1").unwrap();
+    let temp = Temporary::new();
+    let path = temp.write("profiles/remote-tokens.enc.json", &profile_store(json!({"tokens":{"profile-1":"fixture-secret"}})));
+    assert!(resolve(&temp.0, &reference).is_ok());
+    std::fs::write(path, profile_store(json!({"tokens":{"PROFILE-1":"fixture-secret"}}))).unwrap();
+    let result = resolve(&temp.0, &reference);
+    eprintln!("case-only replacement resolves: {}", result.is_ok());
+    assert!(matches!(result, Err("TOKEN_KEY_MISMATCH")));
+}
 #[test]
 fn fixed_profile_reference_reads_exact_kit_format_without_changing_bytes() {
     let temp = Temporary::new();
