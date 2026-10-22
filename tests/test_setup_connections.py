@@ -101,9 +101,9 @@ async def accept(request, body, *, key="original-key", **kwargs):
 
 
 async def read_handoff(request, operation, installation="desktop-a", **kwargs):
-    status, response = await request("GET", f"/api/v1/operations/{operation}?installation_ref={installation}", **kwargs)
+    status, response = await request("POST", HANDOFF, {"operation_id": operation, "installation_ref": installation}, **kwargs)
     assert status == 200, response
-    return response["operation"].get("native_handoff")
+    return response["native_handoff"]
 
 
 class DiskParticipant:
@@ -129,7 +129,7 @@ class DiskParticipant:
                 role.write_bytes(after)
             body = {key: handoff[key] for key in ("contract_version", "installation_ref", "operation_id",
                 "step", "review_digest", "expected_revision", "epoch", "effect_id", "challenge")}
-            body.update(outcome=outcome, roles=[{"role": "inventory", "before_digest": digest(before),
+            body.update(outcome=outcome, code=None, roles=[{"role": "inventory", "before_digest": digest(before),
                 "after_digest": digest(after)}])
             self.path.write_text(json.dumps(body))
         assert self.path.stat().st_size < 4096
@@ -227,7 +227,7 @@ async def test_h_disk_participant_disconnect_expiry_and_third_value(installed, s
         assert daemon.ops.get(ident)["external_refs"].get("native_effects_sent") is False
         await served_setup.disconnect()
         assert not (tmp_path / "participant.json").exists()
-        status, _ = await served_setup("GET", f"/api/v1/operations/{ident}?installation_ref=desktop-b")
+        status, _ = await served_setup("POST", HANDOFF, {"operation_id": ident, "installation_ref": "desktop-b"})
         assert status == 403
     handoff = await read_handoff(served_setup, ident)
     assert handoff and handoff["step"] == "native_effects"
@@ -383,7 +383,7 @@ async def test_cancel_cannot_hide_dispatched_effect_or_dispatch_cancelled_step(i
         assert not daemon.ops.get(ident)["cancel_requested"]
     else:
         assert status == 200 and response["operation"]["status"] == "cancelled"
-        status, _ = await served_setup("GET", f"/api/v1/operations/{ident}?installation_ref=desktop-a")
+        status, _ = await served_setup("POST", HANDOFF, {"operation_id": ident, "installation_ref": "desktop-a"})
         assert status == 409
         assert daemon.ops.get(ident)["external_refs"]["native_effects_sent"] is False
 
@@ -438,7 +438,7 @@ async def test_expiry_preserves_unsent_versus_uncertain_transport_fence(installe
     with patch.object(connection_handoff, "now", return_value=request["expires_at"] + 1):
         await settle_operations(daemon.ops)
     op = daemon.ops.get(ident)
-    assert op["status"] == ("uncertain" if dispatched else "needs_attention")
+    assert op["status"] == ("uncertain" if dispatched else "waiting_external")
     assert op["external_refs"]["native_effects_sent"] is dispatched
     assert daemon.journal.db.execute("SELECT count(*) FROM operations").fetchone()[0] == 1
     assert daemon.journal.db.execute("SELECT count(*) FROM operation_steps WHERE name='native_effects'").fetchone()[0] == 1
@@ -582,9 +582,9 @@ async def test_challenge_is_private_and_dispatch_read_reports_persisted_fence(in
     daemon, _, _ = installed
     _, ident = await accept(served_setup, intent(source, action="setup.connection.apply"))
     await settle_operations(daemon.ops)
-    status, response = await served_setup("GET", f"/api/v1/operations/{ident}?installation_ref=desktop-a")
-    assert status == 200 and response["operation"]["external_refs"]["native_effects_sent"] is True
-    native = response["operation"]["native_handoff"]
+    status, response = await served_setup("POST", HANDOFF, {"operation_id": ident, "installation_ref": "desktop-a"})
+    assert status == 200 and daemon.ops.get(ident)["external_refs"]["native_effects_sent"] is True
+    native = response["native_handoff"]
     assert set(native) == {"contract_version", "server_id", "principal_id", "installation_ref", "operation_id", "step",
         "review_digest", "expected_revision", "epoch", "effect_id", "expires_at", "challenge", "receipt"}
     assert native["challenge"] not in "\n".join(daemon.journal.db.iterdump())
@@ -649,8 +649,6 @@ async def test_source_snapshot_guard_precedes_configuration_publication(installe
 
 async def _r2_dispatch(request, ident):
     status, response = await request("POST", HANDOFF, {"operation_id": ident, "installation_ref": "desktop-a"})
-    if status == 404:  # Red evidence on the reviewed r1 contract, removed when POST is introduced.
-        return await read_handoff(request, ident)
     assert status == 200, response
     return response["native_handoff"]
 
@@ -710,7 +708,7 @@ async def test_r2_a_abandonment_releases_busy_and_stop(installed, served_setup, 
         assert rows[0]["revision"] == 1 and rows[0]["connection_id"] == connection
     body = {key: native[key] for key in ("contract_version", "installation_ref", "operation_id", "step",
         "review_digest", "expected_revision", "epoch", "effect_id", "challenge")}
-    body.update(outcome="refused", roles=[{"role": "inventory", "before_digest": "a" * 64, "after_digest": "a" * 64}])
+    body.update(outcome="refused", code=None, roles=[{"role": "inventory", "before_digest": "a" * 64, "after_digest": "a" * 64}])
     status, response = await served_setup("POST", RECEIPT, body)
     assert status == 409 and response["error"]["code"] == "CONNECTION_OPERATION_TERMINAL"
     assert daemon.ops.get(ident)["status"] == "cancelled"

@@ -170,7 +170,7 @@ History／relations 的 opaque cursor 在任何 journal read 前驗證 version�
 | `GET /api/v1/connections?installation_ref=…&after=…&limit=…` | observe | 僅目前 principal 與 installation 的投影；limit 1–200，預設 50，`next_after` 分頁 |
 | `POST /api/v1/connections/preview` | observe；setup 另需 manage 與原 personal identity | 唯讀連線 before／after 與 review_digest；不 probe、不寫入、不建立 operation |
 | `POST /api/v1/connections/receipt` | manage 與原 personal identity | 固定 v1 native 收據；只能完成原 operation 的 native_effects，不能受理新意圖 |
-| `GET /api/v1/operations/{id}?installation_ref=…` | observe 與原 effective principal | setup.connection.apply 的明確 installation 讀取可取得原 native_handoff，回傳前先記錄派送 fence |
+| `POST /api/v1/connections/handoff` | manage 與原 personal identity | exact body `{installation_ref,operation_id}`；claim 記錄 fence 並回傳 native_handoff；TTL 從 claim 起算，未 claim 的過期 epoch 可重發 |
 | `GET /api/v1/operations/{id}`、`POST …/cancel`、`POST …/resume` | observe／actor 或 action scope | 含步驟；取消見上；resume 只用於 `needs_attention` |
 | `GET /api/v1/events`、`/events/stream` | observe | 事件分頁、SSE |
 | `GET /api/v1/tasks/{task_id}` | observe | 既有 `work_status` |

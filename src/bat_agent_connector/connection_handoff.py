@@ -11,7 +11,6 @@ import json
 import re
 import time
 
-from . import dashboard_sync
 from .operations import OperationError
 
 VERSION = 1
@@ -23,7 +22,8 @@ DIGEST = re.compile(r"[0-9a-f]{64}")
 CLAIMS = ("contract_version", "server_id", "principal_id", "installation_ref", "operation_id", "step",
           "review_digest", "expected_revision", "epoch", "effect_id", "expires_at")
 RECEIPT_FIELDS = frozenset({"contract_version", "installation_ref", "operation_id", "step", "review_digest",
-                          "expected_revision", "epoch", "effect_id", "challenge", "outcome", "roles"})
+                          "expected_revision", "epoch", "effect_id", "challenge", "outcome", "roles", "code"})
+RECEIPT_LIMIT = 8192
 
 
 def now():
@@ -53,7 +53,7 @@ def visible(db, principal, operation):
 
 
 def _challenge(ops, claims):
-    key = bytes.fromhex(dashboard_sync._metadata(ops.journal)["signing_key"])
+    key = ops.context["daemon"]._admin_token.encode()
     return hmac.new(key, b"connection-native-handoff-v1\0" + canonical(claims), hashlib.sha256).hexdigest()
 
 
@@ -71,38 +71,72 @@ def prepare(ctx):
         ctx.set_refs(native_effects_sent=False)
 
 
-def read(ops, principal, operation, installation_ref):
-    """Explicit installation-scoped operation read dispatches the original effect."""
-    if operation["action"] != "setup.connection.apply" or installation_ref is None:
-        return operation
-    if not visible(ops.db, principal, operation) or installation_ref != operation["target"]["installation_ref"]:
-        raise OperationError("FORBIDDEN", "Handoff belongs to the original principal and installation", 403)
-    if operation["status"] in {"cancelled", "failed"} or operation["cancel_requested"]:
-        _refuse("A cancelled or failed operation cannot dispatch a native effect")
-    row = ops.db.execute("SELECT request,response FROM operation_steps WHERE operation_id=? AND name=?",
-                         (operation["operation_id"], STEP)).fetchone()
-    if not row:
-        return operation
-    request = json.loads(row["request"])
+def _renew(ops, operation_id, request, *, claiming=False):
+    """Only an undispatched challenge may change; its effect identity never does."""
     claims = {key: request[key] for key in CLAIMS}
-    # Expiry prevents a new dispatch. Existing effect readback retains the same challenge.
-    sent = (operation.get("external_refs") or {}).get("native_effects_sent")
-    if not sent and now() > claims["expires_at"]:
-        _refuse("Handoff expired before dispatch; review the original operation")
-    ops._merge_refs(operation["operation_id"], {"native_effects_sent": True})
-    return {**operation, "external_refs": {**(operation.get("external_refs") or {}), "native_effects_sent": True},
-        "native_handoff": {**claims, "challenge": _challenge(ops, claims),
-        "receipt": json.loads(row["response"]) if row["response"] else None}}
+    expired = now() >= claims["expires_at"]
+    if expired or claiming:
+        claims.update(epoch=claims["epoch"] + int(expired), expires_at=now() + TTL_S)
+        request = {**claims, "challenge_hash": digest(_challenge(ops, claims))}
+        ops.db.execute("UPDATE operation_steps SET request=?,status='started',error=NULL WHERE operation_id=? AND name=?",
+            (canonical(request).decode(), operation_id, STEP))
+        ops.journal.api_event("operation", operation_id, "connection.handoff.issued",
+            {"step": STEP, "epoch": claims["epoch"]}, actor=ops.get(operation_id, steps=False)["actor"])
+    return request
+
+
+def renew_unclaimed(ctx, request):
+    operation = ctx.service.get(ctx.operation_id, steps=False)
+    if not (operation.get("external_refs") or {}).get("native_effects_sent"):
+        with ctx.service.journal.tx():
+            return _renew(ctx.service, ctx.operation_id, request)
+    return request
+
+
+def receipts(row):
+    value = json.loads(row["response"]) if row["response"] else None
+    return value.get("receipts", []) if isinstance(value, dict) and "receipts" in value else ([value] if value else [])
+
+
+def claim(ops, principal, body):
+    from .managed_setup import _installation, _text
+    _installation(ops.context["daemon"], principal)
+    if (not isinstance(body, dict) or set(body) != {"installation_ref", "operation_id"}
+            or not isinstance(body["operation_id"], str) or not re.fullmatch(r"op_[0-9a-f]{32}", body["operation_id"])):
+        raise OperationError("INVALID_CONNECTION_HANDOFF", "Use operation_id and installation_ref only", 422)
+    _text(body["installation_ref"], "installation reference", 128)
+    with ops.journal.tx():
+        operation = ops.get(body["operation_id"], principal=principal)
+        if (operation["action"] != "setup.connection.apply"
+                or body["installation_ref"] != operation["target"]["installation_ref"]):
+            raise OperationError("FORBIDDEN", "Handoff belongs to the original principal and installation", 403)
+        if operation["status"] in {"cancelled", "failed", "succeeded"} or operation["cancel_requested"]:
+            _refuse("A terminal operation cannot claim a native effect")
+        row = ops.db.execute("SELECT request,response FROM operation_steps WHERE operation_id=? AND name=?",
+            (operation["operation_id"], STEP)).fetchone()
+        if not row:
+            _refuse("The native step is not ready")
+        request = json.loads(row["request"])
+        sent = (operation.get("external_refs") or {}).get("native_effects_sent")
+        if sent and now() >= request["expires_at"]:
+            raise OperationError("CONNECTION_HANDOFF_EXPIRED", "A claimed effect cannot be claimed again after expiry", 409)
+        if not sent:
+            request = _renew(ops, operation["operation_id"], request, claiming=True)
+            ops._merge_refs(operation["operation_id"], {"native_effects_sent": True})
+        claims = {key: request[key] for key in CLAIMS}
+        history = receipts(row)
+        return {"native_handoff": {**claims, "challenge": _challenge(ops, claims), "receipt": history[-1] if history else None}}
 
 
 def validate_receipt(body):
-    if not isinstance(body, dict) or set(body) != RECEIPT_FIELDS or len(canonical(body)) > 8192:
+    if not isinstance(body, dict) or set(body) != RECEIPT_FIELDS or len(canonical(body)) > RECEIPT_LIMIT:
         raise OperationError("INVALID_CONNECTION_RECEIPT", "Receipt must use the bounded v1 shape", 422)
     if (type(body["contract_version"]) is not int or body["contract_version"] != VERSION
             or not isinstance(body["operation_id"], str) or not re.fullmatch(r"op_[0-9a-f]{32}", body["operation_id"])
             or not isinstance(body["challenge"], str) or not DIGEST.fullmatch(body["challenge"])
             or type(body["expected_revision"]) is not int or body["expected_revision"] < 0
             or type(body["epoch"]) is not int or body["epoch"] < 1
+            or body["code"] is not None and (body["code"] != "LOCAL_EFFECT_EXPIRED" or body["outcome"] != "refused")
             or not isinstance(body["outcome"], str) or body["outcome"] not in {"applied", "unchanged", "refused", "uncertain"}):
         raise OperationError("INVALID_CONNECTION_RECEIPT", "Invalid receipt identity or outcome", 422)
     roles = body["roles"]
@@ -133,7 +167,7 @@ def receive(ops, principal, body):
         if not row:
             _refuse()
         request = json.loads(row["request"])
-        if any(body[key] != request[key] for key in RECEIPT_FIELDS - {"challenge", "outcome", "roles"}):
+        if any(body[key] != request[key] for key in RECEIPT_FIELDS - {"challenge", "outcome", "roles", "code"}):
             _refuse()
         if not hmac.compare_digest(digest(body["challenge"]), request["challenge_hash"]):
             _refuse()

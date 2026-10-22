@@ -403,6 +403,7 @@ class ApiV1:
             ("GET", r"/api/v1/connections", self.connections, "observe"),
             ("POST", r"/api/v1/connections/preview", self.connections_preview, None),
             ("POST", r"/api/v1/connections/receipt", self.connections_receipt, "manage"),
+            ("POST", r"/api/v1/connections/handoff", self.connections_handoff, "manage"),
             ("GET", r"/api/v1/operations", self.operations, "observe"),
             ("POST", r"/api/v1/operations", self.create_operation, None),
             ("GET", r"/api/v1/operations/(?P<op>op_[0-9a-f]{32})", self.operation, "observe"),
@@ -514,7 +515,8 @@ class ApiV1:
                     writer.write(head.encode() + data)
                     await writer.drain()
                 return
-            body = await self._read_body(method, headers, reader)
+            body = await self._read_body(method, headers, reader,
+                max_body=8192 if path == "/api/v1/connections/receipt" else MAX_BODY)
             if method == "POST" and getattr(self.daemon, "managed_stopping", False):
                 raise ApiError(503, "SERVICE_STOPPING", "owned service is stopping; reopen Dashboard to reconnect")
             principal = api_auth.authenticate(self.daemon.journal.db, token, self.daemon._admin_token,
@@ -673,14 +675,14 @@ class ApiV1:
         return auth[7:].strip() if auth.startswith("Bearer ") else ""
 
     @staticmethod
-    async def _read_body(method: str, headers: dict[str, str], reader) -> dict:
+    async def _read_body(method: str, headers: dict[str, str], reader, *, max_body=MAX_BODY) -> dict:
         if method != "POST":
             return {}
         raw_length = headers.get("content-length", "0").strip()
         if not raw_length.isdigit():
             raise ApiError(400, "BAD_LENGTH", "invalid Content-Length")
         length = int(raw_length)
-        if length > MAX_BODY:
+        if length > max_body:
             raise ApiError(413, "TOO_LARGE", "request body is too large")
         if length == 0:
             return {}
@@ -1605,6 +1607,11 @@ class ApiV1:
         self._exact_query(query, set())
         return 200, connection_handoff.receive(self.daemon.ops, principal, body)
 
+    async def connections_handoff(self, query, principal, body, **_):
+        from . import connection_handoff
+        self._exact_query(query, set())
+        return 200, connection_handoff.claim(self.daemon.ops, principal, body)
+
     async def operations(self, query, principal, **_):
         statuses = [s for s in (self._q(query, "status") or "").split(",") if s]
         before = self._q(query, "before")
@@ -1658,8 +1665,6 @@ class ApiV1:
         operation = await pm_operation_loop.attach(
             self.daemon.ops, principal, pm_work_follow_up.enrich_operation(
                 self.daemon.ops.db, self.daemon.ops.get(op, principal=principal)))
-        from . import connection_handoff
-        operation = connection_handoff.read(self.daemon.ops, principal, operation, self._q(query or {}, "installation_ref"))
         return 200, {"operation": operation,
                      "work_items": work_items.work_items_for(self.daemon.journal.db, "operation", op),
                      "cleanup_receipts": cleanup.receipts(self.daemon.ops, op)}

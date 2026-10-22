@@ -1,6 +1,6 @@
 """Frozen native wire shapes; no native transport, file generator or live BAT."""
-import copy
 import asyncio
+import copy
 import json
 from unittest.mock import patch
 
@@ -21,7 +21,7 @@ def receipt():
     return {"contract_version": 1, "installation_ref": "desktop-a", "operation_id": "op_" + "a" * 32,
         "step": "native_effects", "review_digest": "b" * 64, "expected_revision": 0,
         "epoch": 1, "effect_id": "effect_" + "c" * 64, "challenge": "d" * 64,
-        "outcome": "applied", "roles": [{"role": "inventory", "before_digest": "e" * 64, "after_digest": "f" * 64}]}
+        "outcome": "applied", "code": None, "roles": [{"role": "inventory", "before_digest": "e" * 64, "after_digest": "f" * 64}]}
 
 
 def test_frozen_receipt_exact_shape_and_challenge_excluded_from_evidence():

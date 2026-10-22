@@ -251,13 +251,13 @@ async def _native(ctx):
         handoff.prepare(ctx)
         raise Wait("waiting_external", "Connector association saved; native connection receipt pending")
     request = json.loads(row["request"])
+    request = handoff.renew_unclaimed(ctx, request)
     if not row["response"]:
         if handoff.now() > request["expires_at"]:
             sent = (ctx.service.get(ctx.operation_id)["external_refs"] or {}).get("native_effects_sent")
             if sent:
                 ctx.service._step_status(ctx.operation_id, handoff.STEP, "uncertain")
                 raise Uncertain(handoff.STEP, "Dispatched native effect has no receipt; read back the original effect")
-            raise NeedsAttention("CONNECTION_HANDOFF_EXPIRED", "Handoff expired before dispatch; no native effect was sent")
         raise Wait("waiting_external", "Waiting for the original native effect receipt")
     receipt = json.loads(row["response"])
     if receipt["outcome"] == "uncertain":
