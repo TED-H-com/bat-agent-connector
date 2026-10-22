@@ -126,16 +126,31 @@ function Remove-FixturePath {
 }
 function Get-FixtureRegistration {
     param([string]$RegistryRoot, [string]$ProductName,
-        [scriptblock]$Enumerate = { param($Root) Get-ChildItem -LiteralPath $Root -ErrorAction Stop },
+        [scriptblock]$Enumerate = {
+            param($Root)
+            Get-ChildItem -LiteralPath $Root -Name -ErrorAction Stop | ForEach-Object {
+                [pscustomobject]@{PSPath=(Join-Path $Root $_)}
+            }
+        },
         [scriptblock]$Read = { param($Path) Get-ItemProperty -LiteralPath $Path -ErrorAction Stop })
-    # NSIS removes its registration asynchronously. Enumeration is a snapshot:
-    # a key can disappear before its properties are read. Only absence is normal;
-    # access denial and every other provider failure must still fail the fixture.
+    # Enumerate names only: Get-ChildItem without -Name opens every child and
+    # reads its value names, so one deleted child can abort the entire snapshot.
+    # With -Name, ERROR_KEY_DELETED during enumeration refers to the root itself.
+    # NSIS removes keys asynchronously. Only absence is normal; .NET's registry
+    # IOException carries raw Win32 1018, not HRESULT_FROM_WIN32(1018).
     try { $keys = @(& $Enumerate $RegistryRoot) }
     catch [System.Management.Automation.ItemNotFoundException] { return }
+    catch [IO.IOException] {
+        if ($_.Exception.HResult -ne 1018) { throw }
+        return
+    }
     foreach ($key in $keys) {
         try { $properties = & $Read $key.PSPath }
         catch [System.Management.Automation.ItemNotFoundException] { continue }
+        catch [IO.IOException] {
+            if ($_.Exception.HResult -ne 1018) { throw }
+            continue
+        }
         if ($properties.PSObject.Properties['DisplayName'] -and $properties.DisplayName -eq $ProductName) {
             $properties
         }
