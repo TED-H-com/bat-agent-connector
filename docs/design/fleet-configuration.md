@@ -182,10 +182,10 @@ Dashboard 不需要先設定 Fleet。
 
 ## 加入機器：共用契約（待審查）
 
-本節是文件提案，沒有實作精靈。程式查核基線為 `ebee8196`（含 #323 的 `2df805ed`）；
+本節是文件提案，沒有實作精靈。程式查核基線為 `5615d6c0`（合併 main `f7a71405`）；
 所有 `file:line` 已按此基線重核，本輪修訂只改文件。「現況」表示程式可證實；
-「規範」表示後續驗收要求；D1／D6／D8 是產品待決，D2／D3／D4／D5／D7 是
-整合者技術預設建議，均不能當成已支援行為。
+「規範」表示後續驗收要求；owner 已於 2026-10-22 採用 D1／D6／D8 的 A 選項，
+D2／D3／D4／D5／D7 的整合者技術預設維持原文，均不能當成已支援或已驗收行為。
 本節沿 E01／E03／E11、T3／T8、K02／K08／K16 接續，不增加平行 backlog。
 
 ### 現況：兩條入口與邊界
@@ -193,12 +193,12 @@ Dashboard 不需要先設定 Fleet。
 | 入口 | 實際資料流與限制（現況） | 收斂規範 |
 | --- | --- | --- |
 | Windows Fleet | `fleet.json` 載入安裝根目錄；native 再讀 inventory、設定用 profile index、Fleet SSH 與使用者 SSH 的原始 bytes。[installation.rs:120](../../desktop/fleet-core/src/installation.rs#L120)、[configuration.rs:170](../../desktop/fleet-core/src/configuration.rs#L170) | 入口共用下述意圖、預覽與收據；一般路徑不再手改四檔。 |
-| 首次設定（#319 路徑） | 共用 UI 選可讀 token 的 BAT profile，無可用項目時要求使用者貼連結；`setup.host` 寫 managed 安裝的 `config/hosts.toml`，不是 Fleet inventory。[managed-setup.js:318](../../desktop/src/managed-setup.js#L318)、[managed_setup.py:59](../../src/bat_agent_connector/managed_setup.py#L59)、[managed_setup.py:555](../../src/bat_agent_connector/managed_setup.py#L555) | 沿用同一來源選擇與驗證，不另做 BAT 登入或 profile store。 |
-| 既有中央 | native 外部中央設定與 credential enrollment 是獨立邊界；現有 `central.json` 不可被首次設定入口覆寫。[bridge.rs:878](../../desktop/src-tauri/src/bridge.rs#L878) | BAT 連線網址不得被解讀為 Connector 中央網址；純 client 路徑待 D1。 |
+| 首次設定（#319 路徑） | 共用 UI 選可讀 token 的 BAT profile，無可用項目時要求使用者貼連結；`setup.host` 寫 managed 安裝的 `config/hosts.toml`，不是 Fleet inventory。[managed-setup.js:332](../../desktop/src/managed-setup.js#L332)、[managed_setup.py:59](../../src/bat_agent_connector/managed_setup.py#L59)、[managed_setup.py:555](../../src/bat_agent_connector/managed_setup.py#L555) | 沿用同一來源選擇與驗證，不另做 BAT 登入或 profile store。 |
+| 既有中央 | native 外部中央設定與 credential enrollment 是獨立邊界；現有 `central.json` 不可被首次設定入口覆寫。[bridge.rs:878](../../desktop/src-tauri/src/bridge.rs#L878) | BAT 連線網址不得被解讀為 Connector 中央網址；純 client 依 D1 在本機服務準備前進入既有加入入口。 |
 
 ### 責任表與退休條件
 
-維護責任以下列模組角色分配；實作前由 integrator 登錄具名負責人（待 D8），共同核心
+維護責任以下列模組角色分配；具名負責人依 D8 由 orchestrator 私下保存，共同核心
 只由同一整合者合流。每列的「退休」都是完成後的要求，不宣稱本輪已移除程式。
 
 | 事實／維護責任 | 現行權威及重複／推論點（現況） | 收斂後契約、可退休項目（規範） |
@@ -206,9 +206,9 @@ Dashboard 不需要先設定 Fleet。
 | 可驗證身分／Connector 認證維護者 | Python journal 產生 server／principal 身分；native 以 credential 驗證 capabilities 與 bootstrap。Fleet 的 BAT pin／profile 是另一種信任證據，不能當中央身分。[dashboard_sync.py:81](../../src/bat_agent_connector/dashboard_sync.py#L81)、[bridge.rs:1097](../../desktop/src-tauri/src/bridge.rs#L1097)、[supervisor_probe.rs:89](../../desktop/fleet-core/src/supervisor_probe.rs#L89) | 身分與 endpoint／route 分離；相同名稱、port 或 `server_id` 字串不單獨授權重綁。退休各畫面以位址推定同身分的邏輯；v1 換址／換 pin 不重綁（D4 預設）。 |
 | 已加入機器與信任／setup 契約維護者 | `setup.host` 與 Fleet inventory 各保存主機／profile 關聯；Fleet 還比對 BAT live index。setup 只接受原安裝 personal identity 的 manage 權限。[managed_setup.py:46](../../src/bat_agent_connector/managed_setup.py#L46)、[managed_setup.py:277](../../src/bat_agent_connector/managed_setup.py#L277)、[inventory.rs:245](../../desktop/fleet-core/src/inventory.rs#L245)、[supervisor_probe.rs:114](../../desktop/fleet-core/src/supervisor_probe.rs#L114) | 同一受保護設定協調入口保存一次意圖，各 consumer 引用；退休手填相同 ID／pin／endpoint。BAT 管登入及 profile，SSH 管 host trust；寫入界面待 D2／D3。 |
 | 執行位置與 routes／來源服務及 native transport 維護者 | Fleet 從 inventory 產生本機 SSH routes；setup 的 Git transport 另外保存 execution binding。兩者不是工作位置的替代證明。[route.rs:44](../../desktop/fleet-core/src/route.rs#L44)、[managed_setup.py:412](../../src/bat_agent_connector/managed_setup.py#L412)、[managed_setup.py:579](../../src/bat_agent_connector/managed_setup.py#L579) | 工作固定在已選服務／workspace；只在明確配置的路線內選擇。退休把 SSH alias、Tailscale peer 或本機 loopback 當 workspace／權限的推論；不新增自動替代路線。 |
-| 本機程序 lifecycle／平台 lifecycle 維護者 | managed `ensure` 用 launcher／service lease；Fleet supervisor／tunnel 另有 ownership 與 migration gate，不能互相取代。adapter 未確認退出回 `STOP_UNCONFIRMED`。[managed_runtime.py:217](../../src/bat_agent_connector/managed_runtime.py#L217)、[fleet_native.rs:186](../../desktop/src-tauri/src/fleet_native.rs#L186)、[windows_tunnel.rs:113](../../desktop/fleet-core/src/windows_tunnel.rs#L113)、[windows_tunnel.rs:62](../../desktop/fleet-core/src/windows_tunnel.rs#L62) | 每種資源只經其正式 ensure／stop owner；退休 UI 自行 spawn、以 PID 或 port 猜所有權的修復。缺乏 exit 證據不得另啟；平台承諾待 D8。 |
-| health／capabilities 投影／共用讀取契約維護者 | Fleet 有逐層 readiness；setup 有近期 inventory evidence；Work 有細分能力；標頭另依 token／pollHealth 算狀態。[supervisor_status.rs:44](../../desktop/fleet-core/src/supervisor_status.rs#L44)、[managed_setup.py:175](../../src/bat_agent_connector/managed_setup.py#L175)、[pm_work_profiles.py:970](../../src/bat_agent_connector/pm_work_profiles.py#L970)、[app.js:789](../../desktop/src/app.js#L789) | 共用下述投影及文案，不用一個 socket bool 代表全部能力。退休每個畫面各自把未知／拒絕寫成離線；投影傳輸形式待 D7。 |
-| 發布／安裝／執行版本／release 與 runtime 維護者 | release parser 驗 manifest；updater status 報 installed 與 next_launch；managed Launch 回報 runtime_version；native build info 另有 desktop version／commit。[update_release.py:75](../../src/bat_agent_connector/update_release.py#L75)、[updater.py:267](../../src/bat_agent_connector/updater.py#L267)、[managed.rs:36](../../desktop/src-tauri/src/managed.rs#L36)、[diagnostics_files.rs:10](../../desktop/src-tauri/src/diagnostics_files.rs#L10) | 診斷並列發布、磁碟安裝、執行中三份證據；缺少就標未知。退休以 release 或安裝成功推定目前程序版本的單欄顯示。 |
+| 本機程序 lifecycle／平台 lifecycle 維護者 | managed `ensure` 用 launcher／service lease；Fleet supervisor／tunnel 另有 ownership 與 migration gate，不能互相取代。adapter 未確認退出回 `STOP_UNCONFIRMED`。[managed_runtime.py:257](../../src/bat_agent_connector/managed_runtime.py#L257)、[fleet_native.rs:186](../../desktop/src-tauri/src/fleet_native.rs#L186)、[windows_tunnel.rs:113](../../desktop/fleet-core/src/windows_tunnel.rs#L113)、[windows_tunnel.rs:62](../../desktop/fleet-core/src/windows_tunnel.rs#L62) | 每種資源只經其正式 ensure／stop owner；退休 UI 自行 spawn、以 PID 或 port 猜所有權的修復。缺乏 exit 證據不得另啟；平台承諾須通過 D8 的五事件驗收。 |
+| health／capabilities 投影／共用讀取契約維護者 | Fleet 有逐層 readiness；setup 有近期 inventory evidence；Work 有細分能力；標頭使用 `centralServiceStatus` 的 Connector 連線投影。[supervisor_status.rs:44](../../desktop/fleet-core/src/supervisor_status.rs#L44)、[managed_setup.py:175](../../src/bat_agent_connector/managed_setup.py#L175)、[pm_work_profiles.py:967](../../src/bat_agent_connector/pm_work_profiles.py#L967)、[app.js:874](../../desktop/src/app.js#L874) | 共用下述投影及文案，不用一個 socket bool 代表全部能力。退休每個畫面各自把未知／拒絕寫成離線；投影傳輸形式待 D7。 |
+| 發布／安裝／執行版本／release 與 runtime 維護者 | release parser 驗 manifest；updater status 報 installed 與 next_launch；managed Launch 回報 runtime_version；native build info 另有 desktop version／commit。[update_release.py:88](../../src/bat_agent_connector/update_release.py#L88)、[updater.py:278](../../src/bat_agent_connector/updater.py#L278)、[managed.rs:58](../../desktop/src-tauri/src/managed.rs#L58)、[diagnostics_files.rs:10](../../desktop/src-tauri/src/diagnostics_files.rs#L10) | 診斷並列發布、磁碟安裝、執行中三份證據；缺少就標未知。退休以 release 或安裝成功推定目前程序版本的單欄顯示。 |
 | 已排指令與工作執行 | 本輪不動 | 本輪不動。 |
 | CLI transcript／turn／diff | 本輪不動 | 本輪不動。 |
 | 需求接受與 PM 建議 | 本輪不動 | 本輪不動。 |
@@ -273,7 +273,7 @@ digest，沒有逐欄比較所有 metadata。[supervisor_probe.rs:103](../../des
 
 | 來源 | 現況可取得／不可推論 | 規範 |
 | --- | --- | --- |
-| 使用者貼上 BAT 連線網址 | UI parser 拆出 endpoint／token／fp；不回傳 workspace／SSH user／中央身分。[managed-setup.js:9](../../desktop/src/managed-setup.js#L9) | 只由使用者貼入遮蔽欄位，不主動讀剪貼簿；秘密只進既有 staging／native credential 邊界，不進草稿或收據。公開範例只寫 `wss://example.invalid:9876?token=…&fp=…`（語法示意，不可連線值）。 |
+| 使用者貼上 BAT 連線網址 | UI parser 拆出 endpoint／token／fp；不回傳 workspace／SSH user／中央身分。[managed-setup.js:10](../../desktop/src/managed-setup.js#L10) | 只由使用者貼入遮蔽欄位，不主動讀剪貼簿；秘密只進既有 staging／native credential 邊界，不進草稿或收據。公開範例只寫 `wss://example.invalid:9876?token=…&fp=…`（語法示意，不可連線值）。 |
 | BAT 已存 profile | Python 讀 `index.json` 與非加密 token store，回報 token_available；Rust 要求 `enc:false` 且 data 是 JSON 字串，Python 還接受 object。[managed_setup.py:122](../../src/bat_agent_connector/managed_setup.py#L122)、[credential.rs:209](../../desktop/fleet-core/src/credential.rs#L209) | BAT 管登入／profile；不掃其他帳號或繞過加密 store。共同支援形狀與目錄選擇依 D3 預設，不把「找不到」當作可建立另一份身分。 |
 | BAT token key 大小寫差異 | Rust 以 `eq_ignore_ascii_case` 找 token key；Python 用 profile ID 作 exact key lookup，兩者現況不同。[credential.rs:224](../../desktop/fleet-core/src/credential.rs#L224)、[managed_setup.py:160](../../src/bat_agent_connector/managed_setup.py#L160) | 共用契約須依 D3 明訂匹配規則；不得把 Rust 可讀直接當成 Python 也可讀，或靜默改寫 BAT key。 |
 | SSH alias | setup 以 strict host-key probe 驗 alias；Fleet validator 只讀 literal Host。[managed_setup.py:446](../../src/bat_agent_connector/managed_setup.py#L446)、[inventory.rs:553](../../desktop/fleet-core/src/inventory.rs#L553) | 不產生 SSH key、不自動批准 host key；未信任時停在需要 SSH 設定，不以 `StrictHostKeyChecking=no` 繞過。 |
@@ -281,17 +281,17 @@ digest，沒有逐欄比較所有 metadata。[supervisor_probe.rs:103](../../des
 
 | 用途選擇（規範） | 本機資料／服務 | 完成判準與現況差額 |
 | --- | --- | --- |
-| 只查看與操作既有服務 | 引用所選中央及 workspace，依該 principal 權限操作；不得為此建立第二份專案、身分或 journal | 可閱讀合法歷史；沒有寫權限仍能完成加入。現行 managed prepare 會先 ensure 本機中央，與 setup personal-only 限制須由 D1 決定改接方式。[managed.rs:98](../../desktop/src-tauri/src/managed.rs#L98)、[managed_setup.py:46](../../src/bat_agent_connector/managed_setup.py#L46) |
-| 本機提供 workspace 執行能力 | 只有明確選擇後才準備自有服務；驗證安裝／server／principal／workspace，不因安裝就取得 BAT 寫權限 | 讀歷史只需觀察能力；要開始自有工作時一次檢查其完整必要條件。現有自動設定刻意關閉 writes／orchestrate／shared_clone；不能把此成功叫作可開工。[managed-setup.js:465](../../desktop/src/managed-setup.js#L465)、[pm_work_profiles.py:39](../../src/bat_agent_connector/pm_work_profiles.py#L39) |
+| 只查看與操作既有服務 | 引用所選中央及 workspace，依該 principal 權限操作；依 D1 可跳過本機 Connector，不得為此建立第二份專案、身分或 journal | 可閱讀合法歷史；沒有寫權限仍能完成加入。現行 managed prepare 仍先 ensure 本機中央，setup 限 personal identity；D1 已決定將既有加入入口移至服務準備前，尚未實作。[managed.rs:157](../../desktop/src-tauri/src/managed.rs#L157)、[managed_setup.py:46](../../src/bat_agent_connector/managed_setup.py#L46) |
+| 本機提供 workspace 執行能力 | 只有明確選擇後才準備自有服務；驗證安裝／server／principal／workspace，不因安裝就取得 BAT 寫權限 | 讀歷史只需觀察能力；要開始自有工作時一次檢查其完整必要條件。現有自動設定刻意關閉 writes／orchestrate／shared_clone；不能把此成功叫作可開工。[managed-setup.js:481](../../desktop/src/managed-setup.js#L481)、[pm_work_profiles.py:39](../../src/bat_agent_connector/pm_work_profiles.py#L39) |
 | 兩者兼有 | 各服務的資料、principal、workspace 清楚分開；同 repo 或同名 host 不合併 | 切換只選來源，不移動工作／草稿／已送操作；只在明確啟用的本機角色 ensure。身分依 bootstrap 驗證。[bridge.rs:1097](../../desktop/src-tauri/src/bridge.rs#L1097) |
-| 已設定安裝 | 沿用已驗證原角色、ID、history、credential refs 及原 key；變更用途是另外的明確意圖 | 不在升級／重開時偷偷改角色。現有 external config 保留選取，只有已有 managed manifest 才附帶恢復原背景服務。[managed.rs:114](../../desktop/src-tauri/src/managed.rs#L114) |
+| 已設定安裝 | 沿用已驗證原角色、ID、history、credential refs 及原 key；變更用途是另外的明確意圖 | 不在升級／重開時偷偷改角色。現有 external config 保留選取，只有已有 managed manifest 才附帶恢復原背景服務。[managed.rs:177](../../desktop/src-tauri/src/managed.rs#L177) |
 
 ### 預覽 → 套用 → 讀回
 
 以下為**邏輯狀態**，不是新增 API enum。後續 endpoint／schema／權限與 central operation
 到 native 收據的引用形式須先經 D2 審查；不可假裝現有 `setup.host` 已支援四檔交易。
 現有 setup 是單一 `managed_configuration` step；Fleet migration 只處理 backend／startup，
-不會代寫 inventory。[managed_setup.py:609](../../src/bat_agent_connector/managed_setup.py#L609)、[migration.rs:113](../../desktop/fleet-core/src/migration.rs#L113)
+不會代寫 inventory。[managed_setup.py:611](../../src/bat_agent_connector/managed_setup.py#L611)、[migration.rs:113](../../desktop/fleet-core/src/migration.rs#L113)
 
 | 原步驟讀回／排程（現況） | 實際轉移與限制 |
 | --- | --- |
@@ -317,11 +317,11 @@ digest，沒有逐欄比較所有 metadata。[supervisor_probe.rs:103](../../des
 | 變更情境 | 必須成立（規範） | 現況依據／待決 |
 | --- | --- | --- |
 | 修改標籤、workspace、偏好／權限 | 同 ID 新預覽，顯示受影響引用；自動連線、BAT 視窗、Dashboard、登入啟動各自選，不暗中啟用 managed writes | selection 有三種獨立選擇；有效連線會補視窗依賴，不能只讀 saved connections 推算。[selection.rs:9](../../desktop/fleet-core/src/selection.rs#L9)、[selection.rs:163](../../desktop/fleet-core/src/selection.rs#L163) |
-| 刪除連線 | 定義為解除所選連線引用；先預覽 Work／repo／workspace／視窗依賴及未結操作。保留原歷史，不刪遠端服務、BAT profile、SSH key／known_hosts 或共用 credential。busy／未知效果先查回，無法安全解除則拒絕 | 現有 setup actions 沒有 remove；支援方式與保留標記待 D6。[managed_setup.py:621](../../src/bat_agent_connector/managed_setup.py#L621) |
+| 刪除連線 | 依 D6 只解除所選本機連線引用；先預覽 Work／repo／workspace／視窗依賴及未結操作。保留歷史、收據與憑證引用的追溯紀錄，不撤銷憑證、不改服務狀態；不刪遠端服務、BAT profile、SSH key／known_hosts 或共用 credential。busy／未知效果先查回，無法安全解除則拒絕 | 現有 setup actions 沒有 remove；D6 已定契約尚未實作，停止或撤銷仍由各資源正式管理入口處理。[managed_setup.py:623](../../src/bat_agent_connector/managed_setup.py#L623) |
 | 同身分更新 credential | 透過同來源 credential 邊界更新，重驗後才發布引用，保留原 principal 隔離及原操作；不把新 token 本文寫進 journal | 現有 setup 可 stage secret 並存 ref，但原 actor／principal 必須相符。[managed_setup.py:222](../../src/bat_agent_connector/managed_setup.py#L222)、[managed_setup.py:314](../../src/bat_agent_connector/managed_setup.py#L314)、[managed_setup.py:421](../../src/bat_agent_connector/managed_setup.py#L421) |
 | 換 endpoint／pin／remote profile／principal／Git transport | v1 不重綁（D4 預設），改變即拒絕並新增連線；不能為保草稿放鬆信任。不同身分使用分離範圍 | 現在 `setup.host` 對既有 host 的 Git transport 模式改變，以及 endpoint／pin／profile 改變，均拒絕 `HOST_IDENTITY_CHANGED`；principal 另受原安裝 personal identity 的授權限制。[managed_setup.py:295](../../src/bat_agent_connector/managed_setup.py#L295)、[managed_setup.py:318](../../src/bat_agent_connector/managed_setup.py#L318)、[managed_setup.py:46](../../src/bat_agent_connector/managed_setup.py#L46) |
 | 已有手寫設定、第三方檔案或套用中被編輯 | 先辨識及比較；不能證明 owned 的檔案只引用，不寫入／刪除；不改其餘 profiles／SSH directives | 現有 snapshot 能偵測 drift，profile replace 會重核 expected bytes；沒有跨檔原子交易保證。[configuration.rs:123](../../desktop/fleet-core/src/configuration.rs#L123)、[profile_files.rs:67](../../desktop/fleet-core/src/profile_files.rs#L67) |
-| 回復／重開／服務未啟動 | 查原操作／migration；只接續未完成步驟。回復另作已審意圖，只有仍等於我們寫入 bytes 才能回寫；原秘密／歷史不抹除 | Fleet restore 是明確反向意圖；setup 遺失最終收據會保留 Uncertain 以 digest 對帳。[migration.rs:501](../../desktop/fleet-core/src/migration.rs#L501)、[managed_setup.py:614](../../src/bat_agent_connector/managed_setup.py#L614) |
+| 回復／重開／服務未啟動 | 查原操作／migration；只接續未完成步驟。回復另作已審意圖，只有仍等於我們寫入 bytes 才能回寫；原秘密／歷史不抹除 | Fleet restore 是明確反向意圖；setup 遺失最終收據會保留 Uncertain 以 digest 對帳。[migration.rs:501](../../desktop/fleet-core/src/migration.rs#L501)、[managed_setup.py:616](../../src/bat_agent_connector/managed_setup.py#L616) |
 
 禁止假裝跨檔交易：每一步列出 before／after、收據、owner 與查回結果；同一次意圖內
 可停在「Connector 已儲存／Fleet 待套用」。既有 migration 只供 backend／startup 子步驟，
@@ -340,8 +340,8 @@ digest，沒有逐欄比較所有 metadata。[supervisor_probe.rs:103](../../des
 | transport、服務、信任／登入、workspace | Fleet entry 有 selected／level／blocking／code／observed_at／stale／layers；外層有 monitor、revision、readiness freshness。[supervisor_status.rs:44](../../desktop/fleet-core/src/supervisor_status.rs#L44)、[fleet_native.rs:176](../../desktop/src-tauri/src/fleet_native.rs#L176) | 逐層顯示，不由 TCP、tunnel=true 或登入成功推定 workspace／managed start 就緒。 |
 | 網路路徑品質／政策 | route 來源只含已配置的 direct／lan／cf；Tailscale parser 對指定 peer 回傳路徑證據，與 BAT／Connector probe 分開。[route.rs:44](../../desktop/fleet-core/src/route.rs#L44)、[route.rs:124](../../desktop/fleet-core/src/route.rs#L124)、[probe.rs:50](../../desktop/fleet-core/src/probe.rs#L50) | 直連／中繼品質不等於 app readiness。若採 direct-only 政策，明示「路徑政策阻擋」，不說全部服務離線；僅使用已授權路線，不自動新增替代路線。 |
 | 設定頁的 BAT 連線 | setup 的 connection_status 只有 connected／checking／unreachable；近期證據須匹配 endpoint／pin／profile／binding，GET 不開第二個 probe。[managed_setup.py:175](../../src/bat_agent_connector/managed_setup.py#L175) | 保留原時間與來源；`connected:null`／沒有 observation 不轉成離線，也不推導全部能力。 |
-| 歷史讀取、開始自有工作、第二輪、Git／驗證／PR、PM 分析 | Work readiness 有 states、smallest_gap、work_follow_up、pm_analysis 等獨立項；不是 Fleet level 的別名。[pm_work_profiles.py:39](../../src/bat_agent_connector/pm_work_profiles.py#L39)、[pm_work_profiles.py:970](../../src/bat_agent_connector/pm_work_profiles.py#L970) | 逐項使用 server allowed actions／readiness；已加入／可閱讀不代表可開工；PM 能力不由 coding route 猜測。 |
-| 標頭的 Connector 連線 | 目前 `!state.token` 就選 offline，否則看 pollHealth，沒有涵蓋所有 BAT host。[app.js:789](../../desktop/src/app.js#L789) | 標頭必須寫「Connector：…」（en：`Connector: …`），沿用共用 UI 命名規則。[connector-copy.test.ts:8](../../desktop/tests/connector-copy.test.ts#L8) 機器列寫「host-a 的 BAT：…」。Connector 未登入、BAT 已連線可同時成立；同來源同 principal 同觀察版本不許矛盾。 |
+| 歷史讀取、開始自有工作、第二輪、Git／驗證／PR、PM 分析 | Work readiness 有 states、smallest_gap、work_follow_up、pm_analysis 等獨立項；不是 Fleet level 的別名。[pm_work_profiles.py:39](../../src/bat_agent_connector/pm_work_profiles.py#L39)、[pm_work_profiles.py:967](../../src/bat_agent_connector/pm_work_profiles.py#L967) | 逐項使用 server allowed actions／readiness；已加入／可閱讀不代表可開工；PM 能力不由 coding route 猜測。 |
+| 標頭的 Connector 連線 | 目前由 `centralServiceStatus(state)` 提供 key／tone／connection／recoveryKey，標頭加上 Connector 範圍，沒有涵蓋所有 BAT host。[app.js:874](../../desktop/src/app.js#L874)、[app.js:878](../../desktop/src/app.js#L878) | 標頭必須寫「Connector：…」（en：`Connector: …`），沿用共用 UI 命名規則。[connector-copy.test.ts:8](../../desktop/tests/connector-copy.test.ts#L8) 機器列寫「host-a 的 BAT：…」。Connector 未登入、BAT 已連線可同時成立；同來源同 principal 同觀察版本不許矛盾。 |
 
 下列狀態是 UI 語意，**不是准許測試替身新增 wire 欄位或 enum**；後續英／繁中須
 同義呈現。對同一觀察，四個畫面使用相同狀態與 reason，只有詳細程度不同。
@@ -377,20 +377,21 @@ digest，沒有逐欄比較所有 metadata。[supervisor_probe.rs:103](../../des
 | 測試資料守則 | 現況可用 producer／測試位置 | 後續必要斷言（規範） |
 | --- | --- | --- |
 | Fleet 正式 IPC 形狀 | native status → sanitizer；不是 PowerShell raw `issues` document。[fleet_native.rs:133](../../desktop/src-tauri/src/fleet_native.rs#L133)、[fleet.rs:597](../../desktop/src-tauri/src/fleet.rs#L597) | golden 必須從正式 sanitizer 去識別輸出，含 issue_count、kind、真實 connector layers；不能加 HTTP 不存在的 native identity。 |
-| setup／bootstrap／Work 正式形狀 | setup state、bootstrap sync identity、Work readiness 的原 producer。[managed_setup.py:198](../../src/bat_agent_connector/managed_setup.py#L198)、[dashboard_sync.py:81](../../src/bat_agent_connector/dashboard_sync.py#L81)、[pm_work_profiles.py:970](../../src/bat_agent_connector/pm_work_profiles.py#L970) | 同一份去識別 response 供兩端 contract tests 使用；缺欄位／舊版本／拒絕／過期皆測；不自行塞入方便測試的 desktop-only 欄位。 |
+| setup／bootstrap／Work 正式形狀 | setup state、bootstrap sync identity、Work readiness 的原 producer。[managed_setup.py:198](../../src/bat_agent_connector/managed_setup.py#L198)、[dashboard_sync.py:81](../../src/bat_agent_connector/dashboard_sync.py#L81)、[pm_work_profiles.py:967](../../src/bat_agent_connector/pm_work_profiles.py#L967) | 同一份去識別 response 供兩端 contract tests 使用；缺欄位／舊版本／拒絕／過期皆測；不自行塞入方便測試的 desktop-only 欄位。 |
 
 以上未代表 R0–R5 或 A01–A40 通過；維持原矩陣，這些切片只提供其中的加入／恢復證據。
 
-### 需要 owner 決定
+### owner 已決定的產品契約（2026-10-22）
 
-以下三題由 owner 決定產品承諾；選項都是提案。公開文件只留示例代號，具名負責人、
-實際設備與帳號對應記在私人驗收登錄，不提交到公開倉庫。
+owner 於 2026-10-22 決定 D1＝A、D6＝A、D8＝A。以下保留已採用選項，作為實作與
+驗收契約；決定不代表已實作或已驗收。公開只留示例代號；具名整合者、實際 Windows
+client 與非正式環境 Linux BAT host 的指派由 orchestrator 私下保存，不提交到公開倉庫。
 
-| 決策／owner 可直接回答的問題 | 具體選項及後果 | 建議及理由 | 決定前的限制 |
+| 決策／適用範圍 | 已採用選項與契約（2026-10-22） | 採用理由 | 實作／驗收前的限制 |
 | --- | --- | --- | --- |
-| D1 只想查看、操作既有服務的人，是否可不安裝本機 Connector？從哪裡進入？已有空白本機安裝怎麼辦？ | A：允許，將既有「進階／加入既有的 Connector」入口前移到準備本機服務之前；已有空白安裝保留原資料、身分及服務，另由使用者明確選擇是否停止可證屬於本安裝且閒置的服務。後果：新安裝可純 client，舊安裝不自動變角色，停止服務須另作安全預覽。<br>B：先只讓乾淨安裝走同一入口免建本機服務；已有安裝保留原角色，轉換延後。後果：較少遷移風險，但舊使用者暫時仍保留本機服務。 | 建議 A：讓新舊使用者都有清楚入口，並保留既有資料及可追溯停止步驟。 | 不為純 client 建第二份 journal／身分／專案；不自動刪除或轉換空白安裝。既有入口存在，但不宣稱目前已能跳過 managed prepare。[app.js:3415](../../desktop/src/app.js#L3415)、[managed.rs:98](../../desktop/src-tauri/src/managed.rs#L98) |
-| D6 移除一台機器的連線時，要留下哪些歷史、登入憑證的引用，以及正在運作或已停止的服務？ | A：只解除本機連線引用；保留歷史、收據及憑證引用的追溯紀錄，不撤銷憑證、不改服務狀態（已停止的仍停止）。後果：遠端與其他 client 不受影響，需另處管理憑證。<br>B：同 A，另提供明確選擇，停止已證屬於本安裝、無依賴且無未知效果的本機服務／tunnel。後果：可回收本機資源，但需獨立停止收據及依賴檢查；不改已停止的服務。 | 建議 A：解除連線的效果最清楚，停止或撤銷可留給各資源正式管理入口。 | 依共用變更表先限解除引用；不刪歷史、BAT profile、SSH key／known_hosts，不撤銷外部共用憑證、不停止非 owned 服務。現有 setup registry 沒有 remove action。[managed_setup.py:621](../../src/bat_agent_connector/managed_setup.py#L621) |
-| D8 請指定哪一位整合者負責、哪台 Windows client 與哪台非正式環境的 Linux BAT host 驗收，並選擇關視窗、鎖屏、登出、重開機、主動停止的產品承諾。 | A：指定一位具名整合者與一組設備（公開示例 `integrator-a`／`client-a`／`host-a`），同候選完成五事件驗收後才承諾：關視窗／鎖屏繼續背景工作；登出／重開機中斷後於支援的正常登入方式恢復原 queue／Work，不重播已送效果；主動停止只停本安裝自有資源且確認退出。後果：完整背景承諾須等五格及平台政策都通過。<br>B：同樣指定一位具名整合者及一組設備，分期驗收；先只承諾通過的關視窗／鎖屏，登出／重開機仍標待驗，主動停止仍須確認資源屬於本安裝且已退出。後果：可先交窄範圍候選，完整背景能力延後，不能宣稱整體驗收完成。 | 建議 A：由同一人負責同一候選的完整證據，避免不同安裝或政策的結果拼成通過。owner 須在私人登錄填入實際姓名與設備；示例不是已指定人機。 | 五事件逐格記正式安裝／登入方式、OS 政策及原操作讀回；停機期間不承諾運算。未指定人機或未實測時只交 fixture 證據。程式能證明 lease／owned 邊界，不能證明各 OS 生存性。[managed_runtime.py:217](../../src/bat_agent_connector/managed_runtime.py#L217)、[windows_tunnel.rs:113](../../desktop/fleet-core/src/windows_tunnel.rs#L113) |
+| D1 純 client 入口與既有空白安裝 | 已決定 A：允許，將既有「進階／加入既有的 Connector」入口前移到準備本機服務之前；已有空白安裝保留原資料、身分及服務，另由使用者明確選擇是否停止可證屬於本安裝且閒置的服務。後果：新安裝可純 client，舊安裝不自動變角色，停止服務須另作安全預覽。 | 讓新舊使用者都有清楚入口，並保留既有資料及可追溯停止步驟。 | 不為純 client 建第二份 journal／身分／專案；不自動刪除或轉換空白安裝。既有入口存在，但不宣稱目前已能跳過 managed prepare。[app.js:3560](../../desktop/src/app.js#L3560)、[managed.rs:157](../../desktop/src-tauri/src/managed.rs#L157) |
+| D6 移除機器連線的保留範圍 | 已決定 A：只解除本機連線引用；保留歷史、收據及憑證引用的追溯紀錄，不撤銷憑證、不改服務狀態（已停止的仍停止）。後果：遠端與其他 client 不受影響，需另處管理憑證。 | 解除連線的效果最清楚，停止或撤銷留給各資源正式管理入口。 | 依共用變更表只解除引用；不刪歷史、BAT profile、SSH key／known_hosts，不撤銷外部共用憑證、不停止非 owned 服務。現有 setup registry 沒有 remove action，尚未實作本契約。[managed_setup.py:623](../../src/bat_agent_connector/managed_setup.py#L623) |
+| D8 整合者、設備與五事件承諾 | 已決定 A：指定一位具名整合者與一組設備（公開示例 `integrator-a`／`client-a`／`host-a`），同候選完成五事件驗收後才承諾：關視窗／鎖屏繼續背景工作；登出／重開機中斷後於支援的正常登入方式恢復原 queue／Work，不重播已送效果；主動停止只停本安裝自有資源且確認退出。後果：完整背景承諾須等五格及平台政策都通過。 | 由同一人負責同一候選的完整證據，避免不同安裝或政策的結果拼成通過。真實指派由 orchestrator 私下保存；公開只用示例名稱。 | 五事件逐格記正式安裝／登入方式、OS 政策及原操作讀回；停機期間不承諾運算。未完成五事件實測前只交 fixture 證據、不作平台承諾。程式能證明 lease／owned 邊界，不能證明各 OS 生存性。[managed_runtime.py:257](../../src/bat_agent_connector/managed_runtime.py#L257)、[windows_tunnel.rs:113](../../desktop/fleet-core/src/windows_tunnel.rs#L113) |
 
 ### 整合者技術決定（預設建議）
 
@@ -399,8 +400,8 @@ digest，沒有逐欄比較所有 metadata。[supervisor_probe.rs:103](../../des
 
 | 決策 | 預設做法及理由（規範） | 現況依據 | 決定前的限制 |
 | --- | --- | --- | --- |
-| D2 設定協調與收據 | 延伸既有 Python operation／journal 作唯一業務意圖權威，沿既有 action／scope 審查接線；native 只做受限 owned 子步驟並回傳可引用收據。每步綁 expected bytes／revision，未知 SSH 檔只引用。理由：同一原 key 可查回，不增加第二份 journal 或任意寫檔 IPC。 | setup registry 只有 host／repository／verification；migration Saved 只管 backend config／startup，不能當一般 Fleet writer。[managed_setup.py:621](../../src/bat_agent_connector/managed_setup.py#L621)、[migration.rs:113](../../desktop/fleet-core/src/migration.rs#L113) | 未完成 action／scope、native 收據引用及斷線查回設計前，不實作四檔寫入；不假裝跨檔原子交易。 |
+| D2 設定協調與收據 | 延伸既有 Python operation／journal 作唯一業務意圖權威，沿既有 action／scope 審查接線；native 只做受限 owned 子步驟並回傳可引用收據。每步綁 expected bytes／revision，未知 SSH 檔只引用。理由：同一原 key 可查回，不增加第二份 journal 或任意寫檔 IPC。 | setup registry 只有 host／repository／verification；migration Saved 只管 backend config／startup，不能當一般 Fleet writer。[managed_setup.py:623](../../src/bat_agent_connector/managed_setup.py#L623)、[migration.rs:113](../../desktop/fleet-core/src/migration.rs#L113) | 未完成 action／scope、native 收據引用及斷線查回設計前，不實作四檔寫入；不假裝跨檔原子交易。 |
 | D3 BAT 來源、token 與 enrollment | 在獲授權帳號中先選定一次資料來源；明確 profiles_dir 優先，未指定時統一採 Windows native 的新目錄→舊目錄選擇順序。共用可用格式先限 `enc:false`、data 為 JSON 字串、profile ID 與 token key 完全相符；大小寫不符／歧義視為不可用，不改寫或合併 key。新增 BAT profile 交 BAT 自有流程；尚無已驗 enrollment 路徑時只保留既有 setup 連結入口，不宣稱 Fleet 已完成。理由：採兩端共同可驗子集，避免一端可讀、另一端失敗。 | 目錄現況不同：native 選新／舊，Python 有 override 及 Windows 舊預設。[configuration.rs:269](../../desktop/fleet-core/src/configuration.rs#L269)、[managed_setup.py:92](../../src/bat_agent_connector/managed_setup.py#L92) token 形狀與 key 差異只維護於上方「可信來源、用途與權限」表。 | 這是未來共同規則，未改動現有 Rust 忽略大小寫讀法；不繞加密、不掃其他帳號、不寫 BAT profile／token store。若無共同可讀來源，顯示缺口而非猜 fallback。 |
 | D4 v1 不重綁 | endpoint、pin、principal、remote profile 或 Git transport 改變時保留拒絕，要求新增一條連線；不合併舊草稿、歷史、checkpoint 或原 key。理由：v1 不新增可驗證信任遷移，先維持來源隔離；相同 server_id 字串不授權重綁。 | 既有 setup 的拒絕及 principal 邊界見上方共用變更表；中央身分仍須 native 認證／bootstrap。[bridge.rs:1115](../../desktop/src-tauri/src/bridge.rs#L1115) | 不提供換址／pin rotation／principal 遷移；不以保留草稿為由降低信任。不同連線保留各自引用與原操作查回。 |
-| D5 自動配置與 schema | v1 保留必要 schema 及 connector_endpoint，不退役欄位；只從明確可信的既有關聯產生引用，版本常數由整合者版本化。新 loopback 分配須在 native owned 邊界內檢查衝突；沒有已審分配器或 target／route 映射就停在需要資料，不要求使用者手填技術 ID。理由：不把 BAT 連結中沒有的資料補成事實，也避免升級破壞既有設定。 | 連結 parser 只有 endpoint／token／pin；inventory 另外驗 fleet_version、loopback、target 及 routes。[managed-setup.js:9](../../desktop/src/managed-setup.js#L9)、[inventory.rs:189](../../desktop/fleet-core/src/inventory.rs#L189)、[inventory.rs:271](../../desktop/fleet-core/src/inventory.rs#L271) | 未審來源／分配及衝突規則前不配置新映射、不發明 allocator 或 fallback；既有值無變更則保持。 |
+| D5 自動配置與 schema | v1 保留必要 schema 及 connector_endpoint，不退役欄位；只從明確可信的既有關聯產生引用，版本常數由整合者版本化。新 loopback 分配須在 native owned 邊界內檢查衝突；沒有已審分配器或 target／route 映射就停在需要資料，不要求使用者手填技術 ID。理由：不把 BAT 連結中沒有的資料補成事實，也避免升級破壞既有設定。 | 連結 parser 只有 endpoint／token／pin；inventory 另外驗 fleet_version、loopback、target 及 routes。[managed-setup.js:10](../../desktop/src/managed-setup.js#L10)、[inventory.rs:189](../../desktop/fleet-core/src/inventory.rs#L189)、[inventory.rs:271](../../desktop/fleet-core/src/inventory.rs#L271) | 未審來源／分配及衝突規則前不配置新映射、不發明 allocator 或 fallback；既有值無變更則保持。 |
 | D7 共用健康投影 | 四畫面共用唯讀投影／formatter，以服務、principal、workspace 與 revision 區分；保留原生 IPC／HTTP producer schema，缺失 metadata 顯示未知。標頭只呈 Connector 範圍，reason 對照與版本規則集中維護。理由：共用語意而不創造第二本 health 帳或讓替身發明欄位。 | producer、來源差異及標頭判準只維護於上方責任表與健康投影表；正式 IPC sanitizer 是資料形狀邊界。[fleet.rs:597](../../desktop/src-tauri/src/fleet.rs#L597) | metadata／envelope 接線未完成前不宣稱已有完整共同 payload；golden 取正式 producer 的去識別輸出，不補 native-only 欄位到 HTTP。 |
