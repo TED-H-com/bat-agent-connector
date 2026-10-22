@@ -20,6 +20,13 @@ internal static class ManagedViewProbeTests
             property == AutomationElement.NameProperty ? name : enabled);
     }
 
+    private static void ObserveProvider(ManagedViewProbe.ProviderSelection selection, object type, object name,
+        object enabled, Action press)
+    {
+        selection.Observe(property => property == AutomationElement.ControlTypeProperty ? type :
+            property == AutomationElement.NameProperty ? name : enabled, press);
+    }
+
     private static int Main()
     {
         foreach (uint code in new uint[] { 0x80040201, 0x80010108, 0x80010001, 0x8001010A })
@@ -101,9 +108,55 @@ internal static class ManagedViewProbeTests
                 Check(!state.SaveEnabled, "Button lacked a positive enabled boolean");
             }
             Observe(state, ControlType.Button, labels[3], true);
-            Check(state.ToJson(true) == "{\"webContent\":true,\"authenticated\":true,\"setup\":true,\"configurationLoaded\":true,\"saveEnabled\":true,\"bounded\":true}",
+            Check(state.ToJson(true) == "{\"webContent\":true,\"authenticated\":true,\"setup\":true,\"configurationLoaded\":true,\"saveEnabled\":true,\"roleChoice\":false,\"providerEnabled\":false,\"errorSummary\":null,\"bounded\":true}",
                 "Complete localized readiness changed");
             Check(state.ToJson(false).Contains("\"bounded\":false"), "Read bound was lost");
+        }
+        foreach (string label in new string[] { "Provide a local workspace", "提供本機工作區" })
+        {
+            int presses = 0;
+            var selection = new ManagedViewProbe.ProviderSelection();
+            foreach (object disabled in new object[] { false, null, AutomationElement.NotSupported, "true" })
+                ObserveProvider(selection, ControlType.Button, label, disabled, () => presses++);
+            ObserveProvider(selection, ControlType.Text, label, true, () => presses++);
+            ObserveProvider(selection, ControlType.Button, label + " suffix", true, () => presses++);
+            bool refused = false;
+            try { selection.Press(); } catch (InvalidOperationException) { refused = true; }
+            Check(refused && presses == 0, "Absent exact enabled provider button was pressed");
+            ObserveProvider(selection, ControlType.Button, label, true, () => presses++);
+            selection.Press();
+            Check(presses == 1, "Provider button was not invoked exactly once");
+            refused = false;
+            try { selection.Press(); } catch (InvalidOperationException) { refused = true; }
+            Check(refused && presses == 1, "Provider action was repeated");
+            var readiness = new ManagedViewProbe.Readiness();
+            Observe(readiness, ControlType.Button, label, false);
+            Check(readiness.RoleChoice, "Disabled provider chooser was hidden from relaunch evidence");
+            Check(!readiness.ProviderEnabled, "Disabled provider button reported enabled");
+            Observe(readiness, ControlType.Button, label, true);
+            Check(readiness.ProviderEnabled, "Enabled provider button missing from diagnostic");
+        }
+        foreach (string summary in new string[] { "This request could not be completed. Check Details.", "無法完成此要求，請查看詳細資料。" })
+        {
+            var state = new ManagedViewProbe.Readiness();
+            Observe(state, ControlType.Text, "private token/path/native error", null);
+            Check(state.ErrorSummary == null && !state.ToJson(true).Contains("private"), "Arbitrary UI text escaped the probe");
+            Observe(state, ControlType.Text, summary, null);
+            Check(state.ErrorSummary == summary && state.ToJson(true).Contains(summary), "Visible public error summary was lost");
+        }
+        {
+            int presses = 0;
+            var ambiguous = new ManagedViewProbe.ProviderSelection();
+            for (int i = 0; i < 2; i++)
+                ObserveProvider(ambiguous, ControlType.Button, "Provide a local workspace", true, () => presses++);
+            bool refused = false;
+            try { ambiguous.Press(); } catch (InvalidOperationException) { refused = true; }
+            Check(refused && presses == 0, "Several provider matches caused an action");
+            var unavailable = new ManagedViewProbe.ProviderSelection();
+            refused = false;
+            try { unavailable.Observe(property => { throw new ElementNotAvailableException(); }, () => presses++); }
+            catch (ElementNotAvailableException) { refused = true; }
+            Check(refused && presses == 0, "Unavailable action target was silently skipped");
         }
         Console.WriteLine("Passed UIA probe assertions: " + assertions);
         return 0;

@@ -3,6 +3,7 @@ fn main() {
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "managed_control",
+            "managed_select_role",
             "desktop_update",
             "native_files_status",
             "native_files_pick",

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-managed-select-role"
+description = "Enables the managed_select_role command without any pre-configured scope."
+commands.allow = ["managed_select_role"]
+
+[[permission]]
+identifier = "deny-managed-select-role"
+description = "Denies the managed_select_role command without any pre-configured scope."
+commands.deny = ["managed_select_role"]

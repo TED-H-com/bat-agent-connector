@@ -332,7 +332,7 @@ step 2 之後；backfilled snapshot 的 occurred_at=null，原事件不改寫。
 | 秘密與取消 | 已存 BAT profile 的預覽不 staging；貼上秘密可先走既有 `POST /managed/setup/secrets`，畫面必須顯示已發生的私密暫存。取消不建立 operation、不存連線、不 probe／啟動服務，未用秘密仍按既有到期清理規則處理。預覽只在記憶體；新 Apply 才保存原 request／key。已知 operation ID 恢復只 GET，尚未取得 ID 才以原 key／request 重送查回。[managed_setup.py:190](../../src/bat_agent_connector/managed_setup.py#L190)、[managed-setup.js:604](../../desktop/src/managed-setup.js#L604)、[managed-setup.js:633](../../desktop/src/managed-setup.js#L633)、[managed-setup.js:647](../../desktop/src/managed-setup.js#L647) |
 
 此處只實作既有 managed setup 的連線預覽；角色選擇、四檔協調與 native apply 仍依
-[Fleet 共用契約](fleet-configuration.md#加入機器共用契約已定尚未實作) 的已定／尚未實作界線，不能視為實機驗收。
+[Fleet 共用契約](fleet-configuration.md#加入機器共用契約) 的已定／尚未實作界線，不能視為實機驗收。
 
 Discovery 的 capability 為 `GET /managed/setup` 的 `discovery_contract_version:1`。
 `/capabilities` 沒有 HTTP route 清單，因此不增加另一份 route advertisement。

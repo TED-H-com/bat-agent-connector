@@ -15,12 +15,50 @@ func fail(_ message: String) -> Never {
 func emit(_ value: [String: Any]) {
     print(String(data: try! JSONSerialization.data(withJSONObject: value), encoding: .utf8)!)
 }
-func managedView(_ pid: pid_t) -> [String: Bool] {
+let providerRoleLabels = ["Provide a local workspace", "提供本機工作區"]
+func pressProvider(_ pid: pid_t) {
     guard AXIsProcessTrusted() else { fail("Existing Accessibility trust is required; fixture does not change privacy settings") }
     let application = AXUIElementCreateApplication(pid)
     AXUIElementSetMessagingTimeout(application, 0.2)
-    var result = ["webContent": false, "authenticated": false, "setup": false,
-                  "configurationLoaded": false, "saveEnabled": false, "bounded": true]
+    var value: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(application, kAXWindowsAttribute as CFString, &value) == .success,
+          let windows = value as? [AXUIElement], windows.count == 1
+    else { fail("Expected one owned Accessibility window") }
+    var pending = windows
+    var matches = [AXUIElement]()
+    var visited = 0
+    let deadline = Date().addingTimeInterval(2)
+    while let element = pending.popLast() {
+        visited += 1
+        guard visited <= 2000 && Date() < deadline else { fail("Provider button scan exceeded its bound") }
+        func attribute(_ name: String) -> CFTypeRef? {
+            var value: CFTypeRef?
+            let error = AXUIElementCopyAttributeValue(element, name as CFString, &value)
+            guard error == .success || error == .attributeUnsupported || error == .noValue
+            else { fail("Provider button scan could not read an owned element") }
+            return value
+        }
+        if (attribute(kAXRoleAttribute) as? String) == "AXButton" {
+            let labels = [attribute(kAXTitleAttribute), attribute(kAXDescriptionAttribute)].compactMap { $0 as? String }
+            if labels.contains(where: { providerRoleLabels.contains($0) }),
+               (attribute(kAXEnabledAttribute) as? Bool) == true,
+               !matches.contains(where: { CFEqual($0, element) }) { matches.append(element) }
+        }
+        if let children = attribute(kAXChildrenAttribute) as? [AXUIElement] { pending.append(contentsOf: children.reversed()) }
+    }
+    guard Date() < deadline, matches.count == 1 else { fail("Expected exactly one enabled provider role button") }
+    // Do not repeat an action after an uncertain Accessibility result.
+    guard AXUIElementPerformAction(matches[0], kAXPressAction as CFString) == .success
+    else { fail("Owned provider role button press failed") }
+    emit(["role": "provider", "pressed": true, "matches": 1])
+}
+func managedView(_ pid: pid_t) -> [String: Any] {
+    guard AXIsProcessTrusted() else { fail("Existing Accessibility trust is required; fixture does not change privacy settings") }
+    let application = AXUIElementCreateApplication(pid)
+    AXUIElementSetMessagingTimeout(application, 0.2)
+    var result: [String: Any] = ["webContent": false, "authenticated": false, "setup": false,
+                  "configurationLoaded": false, "saveEnabled": false, "roleChoice": false, "bounded": true,
+                  "providerEnabled": false, "errorSummary": NSNull()]
     var pending = [application]
     var visited = 0
     let deadline = Date().addingTimeInterval(2)
@@ -33,11 +71,19 @@ func managedView(_ pid: pid_t) -> [String: Bool] {
         }
         let role = attribute(kAXRoleAttribute) as? String ?? ""
         if role == "AXWebArea" { result["webContent"] = true }
-        // Never inspect text-entry values or emit any accessibility text.
+        // Never inspect text-entry values. Only fixed, public error summaries
+        // may leave this probe; arbitrary accessibility text stays private.
         if ["AXStaticText", "AXHeading", "AXButton"].contains(role) {
             let labels = [attribute(kAXTitleAttribute), attribute(kAXDescriptionAttribute),
                           role == "AXStaticText" ? attribute(kAXValueAttribute) : nil].compactMap { $0 as? String }
             for label in labels {
+                if role == "AXButton" && providerRoleLabels.contains(label) {
+                    result["roleChoice"] = true
+                    if (attribute(kAXEnabledAttribute) as? Bool) == true { result["providerEnabled"] = true }
+                }
+                if ["This request could not be completed. Check Details.", "無法完成此要求，請查看詳細資料。"].contains(label) {
+                    result["errorSummary"] = label
+                }
                 if ["Ready to set up", "可以開始設定了"].contains(label) { result["authenticated"] = true }
                 if ["Get ready to work", "準備開始工作"].contains(label) { result["setup"] = true }
                 if ["Ready to set up", "可以開始設定了"].contains(label) { result["configurationLoaded"] = true }
@@ -87,6 +133,8 @@ func perform() {
     else { fail("Fixture app identity does not match") }
     let state = "finished=\(app.isFinishedLaunching) policy=\(app.activationPolicy.rawValue) hidden=\(app.isHidden) terminated=\(app.isTerminated)"
     switch args[1] {
+    case "select-provider":
+        pressProvider(pid)
     case "managed-view":
         emit(managedView(pid))
     case "hide":
