@@ -134,19 +134,23 @@ section.section + section.section { border-top: 1px solid var(--line); }
 .resource-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s5); }
 .resource-row > div { padding: var(--s4); background: var(--paper); }
 .delivery-node { margin-top: var(--s5); padding-top: var(--s5); border-top: 1px solid var(--line); text-align: center; }
+.delivery-node p { margin-inline: auto; }
 .architecture figcaption { color: var(--muted); font-size: var(--text-sm); margin-top: var(--s5); }
 .two-column { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s6) var(--s7); margin-top: var(--s6); }
 .installation-band { background: var(--paper); color: var(--ink); border-block: 1px solid var(--line); }
 .installation-band .eyebrow, .installation-band a.text-link { color: var(--accent); }
 .installation-band .lede, .install-steps p, .install-current p { color: var(--muted); }
-.install-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s6); padding-left: var(--s5); margin: var(--s7) 0; }
-.install-steps li { padding-left: var(--s2); }
+.install-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s6); padding-left: var(--s5); margin: var(--s7) 0; }
+.install-steps li { min-width: 0; padding-left: var(--s2); overflow-wrap: anywhere; }
 .install-steps li::marker { color: var(--accent); font-family: var(--mono); }
 .install-steps p { font-size: var(--text-sm); margin-top: var(--s3); }
 .install-current { border-top: 1px solid var(--muted); padding-top: var(--s6); }
 .install-current p { margin-top: var(--s3); }
+.install-current p code { font-family: var(--mono); white-space: nowrap; }
+.install-command { max-width: 100%; margin: var(--s2) 0 var(--s4); padding: var(--s3) var(--s4); overflow-x: auto; border: 1px solid var(--line); border-radius: var(--control-radius); background: var(--panel); font: var(--text-sm)/1.5 var(--mono); white-space: pre; overflow-wrap: normal; word-break: normal; }
+.install-command code { font: inherit; }
 .installation-band :focus-visible { outline-color: var(--accent); }
-.table-wrap { overflow-x: auto; }
+.table-label { display: none; }
 table { border-collapse: collapse; width: 100%; font-size: var(--text-sm); }
 th, td { text-align: left; padding: var(--s4); border-bottom: 1px solid var(--line); vertical-align: top; }
 thead th { background: var(--panel); font-size: var(--text-xs); color: var(--muted); }
@@ -163,6 +167,10 @@ tbody td { width: 39.5%; color: var(--muted); }
 .doc-list p { font-size: var(--text-sm); color: var(--muted); }
 .faq details { border-top: 1px solid var(--line); padding-block: var(--s2); }
 summary { cursor: pointer; padding-block: var(--s4); min-height: 44px; font-weight: 600; }
+.faq summary { display: grid; grid-template-columns: 1em minmax(0, 1fr); gap: var(--s2); list-style: none; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::before { content: '▶'; font-size: var(--text-xs); line-height: 2.15; }
+.faq details[open] > summary::before { content: '▼'; }
 .faq details p { color: var(--muted); padding: 0 var(--s5) var(--s5); }
 .site-footer { border-top: 1px solid var(--line); background: var(--panel); }
 .footer-inner { display: flex; justify-content: space-between; gap: var(--s7); padding-block: var(--s7); }
@@ -213,7 +221,12 @@ summary { cursor: pointer; padding-block: var(--s4); min-height: 44px; font-weig
   .central-node strong { font-size: var(--text-body); }
   .resource-row { grid-template-columns: 1fr; gap: var(--s3); }
   .install-steps { gap: var(--s5); margin-block: var(--s6); }
-  table { min-width: 620px; }
+  .table-wrap table, .table-wrap tbody, .table-wrap tr, .table-wrap th, .table-wrap td { display: block; width: 100%; }
+  .table-wrap thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .table-wrap tbody tr { padding-block: var(--s5); border-bottom: 1px solid var(--line); }
+  .table-wrap tbody th { padding: 0; border: 0; font-size: var(--text-body); }
+  .table-wrap td { padding: var(--s3) 0 0; border: 0; }
+  .table-label { display: block; color: var(--ink); font-size: var(--text-xs); font-weight: 600; margin-bottom: var(--s1); }
   .readiness > div { grid-template-columns: 1fr; gap: var(--s3); }
   .footer-inner { flex-direction: column; gap: var(--s5); }
   .footer-links { column-gap: var(--s4); }

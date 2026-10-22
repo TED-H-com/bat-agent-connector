@@ -20,7 +20,15 @@
     }
   }
   document.querySelectorAll('[data-language]').forEach(button => {
-    button.addEventListener('click', () => applyLanguage(button.dataset.language, true));
+    button.addEventListener('click', () => {
+      applyLanguage(button.dataset.language, true);
+      const wasOpen = nav?.classList.contains('is-open');
+      closeMenu();
+      if (wasOpen) menu?.focus({ preventScroll: true });
+      // Translation changes section heights. Restore the named section after
+      // closing the mobile menu so its heading stays below the sticky header.
+      document.getElementById(location.hash.slice(1))?.scrollIntoView({ block: 'start', behavior: 'instant' });
+    });
   });
   applyLanguage(root.dataset.lang, false);
   const menu = document.querySelector('.menu-button');

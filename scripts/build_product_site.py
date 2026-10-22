@@ -305,7 +305,7 @@ parts.append(
     )
     + "</div>"
     + bi("↓ Governed BAT operations ↓", "↓ 受控 BAT 操作 ↓", "p", "flow-label")
-    + bi("Selected BAT host and workspace", "選定的 BAT 主機與 workspace", "h3", "bat-node")
+    + bi("Selected BAT host and workspace", "選定的 BAT 主機與工作區", "h3", "bat-node")
     + '<div class="resource-row">'
 )
 for en, zh, d, dz in [
@@ -389,9 +389,9 @@ for en, zh, d, dz, path in [
     ),
     (
         "One connection owner",
-        "明確的連線 owner",
+        "明確的連線擁有者",
         "Use public Rust configuration or explicitly migrate an existing PowerShell setup after proving the old owner stopped.",
-        "使用公開 Rust 設定，或證明舊 owner 已停止後明確遷移既有 PowerShell 配置。",
+        "使用公開 Rust 設定，或證明原連線擁有者已停止執行後明確遷移既有 PowerShell 配置。",
         "fleet-migration.md",
     ),
     (
@@ -464,8 +464,17 @@ parts.append(
         "p",
     )
     + bi(
-        "For Connector, use the verified installer from the same tag: --tag v0.2.12 --channel-check stable, or --tag v0.2.13-preview.20261022 --channel-check preview. A tag is required; the default preview check accepts stable releases and prereleases, while stable refuses previews. On Linux, --enable-updates enrolls and schedules that channel. The updater offers eligible newer stable releases on stable, and eligible newer stable releases or prereleases on preview. Updates affect future launches; existing processes keep running.",
-        "Connector 使用同一 tag 的驗證安裝器：穩定版為 --tag v0.2.12 --channel-check stable，預覽版為 --tag v0.2.13-preview.20261022 --channel-check preview。必須指定 tag；預設 preview 可接受穩定版與預覽版，stable 拒絕預覽版。Linux 加上 --enable-updates 才會登記該通道並啟用排程。更新器在 stable 提供符合條件的較新穩定版，在 preview 提供符合條件的較新穩定版或預覽版。更新供下次啟動使用，既有程序繼續執行。",
+        "For Connector, use the verified installer from the same tag with these arguments. Scroll the command blocks to read or copy the full arguments on a narrow screen.",
+        "Connector 使用同一 tag 的驗證安裝器，參數如下。窄螢幕可橫向捲動命令區塊，閱讀或複製完整參數。",
+        "p",
+    )
+    + bi("Stable", "穩定版", "p")
+    + '<pre class="install-command" tabindex="0" aria-label="Stable installer arguments / 穩定版安裝器參數"><code>--tag v0.2.12 --channel-check stable</code></pre>'
+    + bi("Prerelease", "預覽版", "p")
+    + '<pre class="install-command" tabindex="0" aria-label="Preview installer arguments / 預覽版安裝器參數"><code>--tag v0.2.13-preview.20261022 --channel-check preview</code></pre>'
+    + bi(
+        "A tag is required; the default preview check accepts stable releases and prereleases, while stable refuses previews. On Linux, <code>--enable-updates</code> enrolls and schedules that channel. The updater offers eligible newer stable releases on stable, and eligible newer stable releases or prereleases on preview. Updates affect future launches; existing processes keep running.",
+        "必須指定 tag；預設 preview 可接受穩定版與預覽版，stable 拒絕預覽版。Linux 加上 <code>--enable-updates</code> 才會登記該通道並啟用排程。更新器在 stable 提供符合條件的較新穩定版，在 preview 提供符合條件的較新穩定版或預覽版。更新供下次啟動使用，既有程序繼續執行。",
         "p",
     )
     + '<div class="actions">'
@@ -497,11 +506,11 @@ parts.append(
     + heading(
         "Entry points", "使用入口", "One Dashboard across your screens.", "不同螢幕，同一份 Dashboard。"
     )
-    + '<div class="table-wrap" role="region" aria-label="Platform support / 平台支援" tabindex="0"><table><thead><tr>'
+    + '<div class="table-wrap" role="region" aria-label="Platform support / 平台支援"><table role="table"><thead role="rowgroup"><tr role="row">'
     + bi("Entry", "入口", "th")
     + bi("Local facilities", "本機能力", "th")
     + bi("Current boundary", "目前界線", "th")
-    + "</tr></thead><tbody>"
+    + '</tr></thead><tbody role="rowgroup">'
 )
 for en, zh, d, dz, bound, bz in [
     (
@@ -537,15 +546,22 @@ for en, zh, d, dz, bound, bz in [
         "外部中央的原生憑證只留記憶體。",
     ),
 ]:
-    parts.append("<tr>" + bi(en, zh, "th") + bi(d, dz, "td") + bi(bound, bz, "td") + "</tr>")
+    parts.append(
+        '<tr role="row"><th scope="row" role="rowheader">' + bi(en, zh) + '</th><td role="cell">'
+        + '<span class="table-label" aria-hidden="true">' + bi("Local facilities", "本機能力") + "</span>"
+        + bi(d, dz) + '</td><td role="cell">'
+        + '<span class="table-label" aria-hidden="true">' + bi("Current boundary", "目前界線") + "</span>"
+        + bi(bound, bz) + "</td></tr>"
+    )
 parts.append(
     "</tbody></table></div>"
     + bi(
-        "Formal signing, Mac notarization, production updates and Linux persistent native credential storage are outside the agreed delivery.",
-        "正式簽章、Mac 公證、正式更新通道與 Linux 原生憑證持久儲存，已排除於本次交付。",
+        "Connector automatic updates are in scope for explicitly enrolled per-user Linux installations; eligible published releases apply to future launches. Formal signing, Mac notarization, signed desktop updates and Linux persistent native credential storage remain outside the agreed delivery.",
+        "Connector 自動更新已納入範圍，適用於明確登記的 Linux 使用者安裝；符合條件的已發布版本供下次啟動使用。正式簽章、Mac 公證、桌面版簽章更新與 Linux 原生憑證持久儲存仍排除於交付範圍。",
         "p",
         "section-note",
     )
+    + doc("docs/design/connector-updates.md", "Connector update contract →", "Connector 更新契約 →")
     + "</section>"
 )
 
@@ -610,7 +626,7 @@ for label, lz, en, zh in [
         "Merged workspace",
         "已合併工作台",
         "Published preview source 437ee6a7 (through #395, October 22, 2026) connects reviewed plans to Work, queued follow-ups, fixed Results, verification and PR delivery. Workbench provides mobile navigation and foreground recovery; profiles show route limits before start. PM can discuss two fixed assessments, save continuation briefs and explicitly assess the Overview. Resources reads separately authorized local Codex/Claude histories. Lists load summaries first; unsent instructions can return to Idea. Core UI actions share HTTP/MCP contracts. Classic remains the default. Integration fixtures use real Connector and disk Git with mock BAT/providers; live BAT/model and physical-device acceptance remain separate.",
-        "已發布預覽版來源 437ee6a7（截至 #395，2026 年 10 月 22 日）接通計畫採用、建立工作、持久第二句、固定成果、驗證與 PR 交付。Workbench 提供手機導航與前景恢復，profile 在開始前顯示路線限制。PM 可討論兩份固定評估、保存接續摘要，並依明確要求判讀總覽；資源頁可讀取另行授權的本機 Codex／Claude 對話。清單先載入摘要，未送指令可留成 Idea；核心 UI 操作共用 HTTP／MCP 契約。Classic 仍為預設。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；真 BAT／模型及實體裝置仍需另行驗收。",
+        "已發布預覽版來源 437ee6a7（截至 #395，2026 年 10 月 22 日）接通計畫採用、建立工作、排隊中的追加指令、固定成果、驗證與 PR 交付。Workbench 提供手機導航與前景恢復，profile 在開始前顯示路線限制。PM 可討論兩份固定評估、保存接續摘要，並依明確要求判讀總覽；資源頁可讀取另行授權的本機 Codex／Claude 對話。清單先載入摘要，未送指令可留成 Idea；核心 UI 操作共用 HTTP／MCP 契約。Classic 仍為預設。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；真 BAT／模型及實體裝置仍需另行驗收。",
     ),
     (
         "Still ahead",
@@ -741,7 +757,7 @@ for q, qz, a, az in [
         "Is this an official BAT product?",
         "這是 BAT 官方產品嗎？",
         "It is an unofficial MIT-licensed companion. BAT is by TonyQ and contributors. Project Hub informs selected interaction patterns without a runtime or importer dependency.",
-        "這是 MIT 授權的非官方 companion。BAT 由 TonyQ 與貢獻者開發；部分互動參考 Project Hub，沒有 runtime 或 importer 依賴。",
+        "這是 MIT 授權的非官方輔助工具。BAT 由 TonyQ 與貢獻者開發；部分互動參考 Project Hub，沒有 runtime 或 importer 依賴。",
     ),
 ]:
     parts.append("<details><summary>" + bi(q, qz) + "</summary>" + bi(a, az, "p") + "</details>")
@@ -749,7 +765,7 @@ parts.append(
     '</section></main><footer class="site-footer"><div class="section footer-inner"><div><a class="brand" href="#top"><img src="logo.svg" width="32" height="32" alt=""><span>Better Agent Dashboard</span></a>'
     + bi(
         "Project management on bat-agent-connector. An unofficial BAT companion.",
-        "以 bat-agent-connector 為中央的專案管理工具，BAT 的非官方 companion。",
+        "以 bat-agent-connector 為中央的專案管理工具，BAT 的非官方輔助工具。",
         "p",
     )
     + '</div><div class="footer-links">'
