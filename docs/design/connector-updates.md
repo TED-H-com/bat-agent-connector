@@ -61,6 +61,24 @@ installed for next launch and failed; installation is not live acceptance.
 Normal client reconnection loads the installed version. A central service update
 must still use its existing safe-stop/lifecycle protocol.
 
+The answering Connector exposes sanitized `capabilities.connector_update` beside
+its loaded `build`: enrollment/readability state, policy/channel, installed version
+and commit for the next launch, pending transition and last result with its time.
+At process startup, it establishes ownership only when the loaded commit equals
+the updater's `current` commit and the resolved imported package is inside that
+installation's root. It retains that process evidence across pointer switches,
+while every capabilities call reads the current state afresh through the same
+read-only snapshot as `Updater.status()`. Without that launch evidence, or if its
+record no longer matches, it reports `not_managed`; a bundled runtime or checkout
+cannot borrow another installation's facts by version or port. A missing enrollment,
+unsupported platform or unreadable state is explicit. The read takes no lease,
+creates no directories, reconciles nothing, writes no state/receipt and performs
+no network requests; it reads at most one bounded private state file per call.
+Paths, receipt IDs and package proofs remain private. Settings and Diagnostics
+share a separate installed-for-next-launch row and commit comparison with its own
+source/read time; a different installation can be an upgrade or a rollback and
+does not imply that the running service restarted.
+
 Rollback selects only a previously verified updater-managed installation in the
 same compatibility epoch. It disables automatic application until explicitly
 re-enabled, and changes only the package pointer. It never restores or downgrades

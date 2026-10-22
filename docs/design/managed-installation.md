@@ -29,16 +29,16 @@ A succeeded `setup.host` receipt is evidence of that operation's verification an
 ## 與「加入機器」共用的契約（已定，尚未實作）
 
 本節補充上方現行首次設定，未實作新的角色精靈。程式查核包含 main `511fc618`
-與合併後的連線預覽實作；下列 `file:line` 已重核位置。預覽 API 見 [setup API 契約](api-v1.md#managed-setup連線預覽與受理)。
+與合併後的連線預覽實作；下列 `file:line` 已於合併 main `94dbddc8` 後重核位置。預覽 API 見 [setup API 契約](api-v1.md#managed-setup連線預覽與受理)。
 責任分工只維護於 [Fleet 唯一責任表](fleet-configuration.md#責任表與退休條件)；
 共用欄位、狀態、變更、lifecycle、健康投影、驗收與 D1–D8 的產品決定／技術預設
 均引用 [Fleet 共用契約](fleet-configuration.md#加入機器共用契約)，本處不另訂一份。
 
 | 首次設定特有行為（現況） | 可核對的輸入／輸出 |
 | --- | --- |
-| UI 選 BAT 來源 | 自動模式沿用可讀 BAT profile，多項時選擇，無可用項目時貼遮蔽連結；parser 拆出 endpoint／pin／token。[managed-setup.js:10](../../desktop/src/managed-setup.js#L10)、[managed-setup.js:342](../../desktop/src/managed-setup.js#L342) |
-| 簡易連線預覽送出值 | writes／orchestrate／shared_clone_worktrees 為 false，managed_roots 為空；advanced 才送 SSH／管理選擇。[managed-setup.js:551](../../desktop/src/managed-setup.js#L551) |
-| UI 恢復原請求及接受收據 | 已知 operation ID 時用 GET 查原操作，否則帶原 request／key 送出；接受收據前核對 operation ID、actor、action、target、params、preconditions 及 key。[managed-setup.js:507](../../desktop/src/managed-setup.js#L507)、[managed-setup.js:522](../../desktop/src/managed-setup.js#L522) |
+| UI 選 BAT 來源 | 自動模式沿用可讀 BAT profile，多項時選擇，無可用項目時貼遮蔽連結；parser 拆出 endpoint／pin／token。[managed-setup.js:10](../../desktop/src/managed-setup.js#L10)、[managed-setup.js:360](../../desktop/src/managed-setup.js#L360) |
+| 簡易連線預覽送出值 | writes／orchestrate／shared_clone_worktrees 為 false，managed_roots 為空；advanced 才送 SSH／管理選擇。[managed-setup.js:677](../../desktop/src/managed-setup.js#L677) |
+| UI 恢復原請求及接受收據 | 已知 operation ID 時用 GET 查原操作，否則帶原 request／key 送出；接受收據前核對 operation ID、actor、action、target、params、preconditions 及 key。[managed-setup.js:618](../../desktop/src/managed-setup.js#L618)、[managed-setup.js:635](../../desktop/src/managed-setup.js#L635) |
 
 2026-10-22 經 owner 授權由整合者決定 D1＝A、D6＝A、D8＝A，角色入口須移至本機服務準備前，
 完整保留與驗收規則只維護於 [已定契約](fleet-configuration.md#已決定的產品契約2026-10-22經-owner-授權)。
@@ -74,6 +74,17 @@ observation `source` and an epoch-seconds `observed_at`. The bundle fact is the
 an installed receipt. The running fact comes from the proven owner's existing
 authenticated capabilities read (`capabilities`), whose build is that service's loaded snapshot.
 Missing identity fields remain null, including for an older service.
+
+The shared version projection also distinguishes the answering Connector's loaded
+build from its updater's `connector_installed` row, sourced only from
+`capabilities.connector_update`. It describes the installation for the next launch,
+with its own capabilities read time, channel and last result/time; it is visible in
+both browser and desktop. `connector_installation_difference` compares commits as
+`same`, `differs` or `unknown`. Missing or non-`reported` update evidence leaves this
+row unknown with `not_reported` as its source, while the explicit reason remains
+visible. This is separate from `running_runtime` and its launch observation; it
+does not start, stop or replace a service. Updater ownership is established at
+process startup as specified in the [update contract](connector-updates.md).
 
 `runtime_difference` is `same`, `differs` or `unknown`; either missing commit
 makes it unknown. `differs` means the running service is not that bundle and the

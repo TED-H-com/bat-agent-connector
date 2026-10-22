@@ -1313,6 +1313,30 @@ var diagnosticsStrings;
 var init_diagnostics_strings = __esmMin((() => {
 	diagnosticsStrings = {
 		en: {
+			diag_version_connector_installed: "Connector installed for the next launch",
+			diag_version_source_connector_update: "Source: Connector update status",
+			diag_version_period_next_launch: "Installed for the next launch",
+			diag_version_installation_same: "The next-launch installation matches the answering Connector.",
+			diag_version_installation_differs: "A different Connector installation waits for the next launch; updating does not restart the service.",
+			diag_version_installation_unknown: "The next-launch installation comparison is unknown.",
+			diag_version_update_not_reported: "This Connector did not report its update status.",
+			diag_version_update_not_enrolled: "Connector automatic updates are not enrolled.",
+			diag_version_update_not_managed: "This Connector was not identified as running from the updater-managed installation.",
+			diag_version_update_unsupported: "Connector automatic updates are unsupported on this platform.",
+			diag_version_update_unreadable: "Connector update status could not be read.",
+			diag_version_update_channel: "Update channel: {channel}",
+			diag_version_channel_stable: "Stable",
+			diag_version_channel_preview: "Preview",
+			diag_version_update_enabled: "Automatic updates are enabled.",
+			diag_version_update_disabled: "Automatic updates are disabled.",
+			diag_version_update_pending: "An update transition is pending.",
+			diag_version_update_last: "Last update result: {result} · {at}",
+			diag_version_result_enrolled_for_next_launch: "Enrolled for the next launch",
+			diag_version_result_installed_for_next_launch: "Installed for the next launch",
+			diag_version_result_rolled_back_updates_disabled: "Rolled back; automatic updates disabled",
+			diag_version_result_no_newer_release: "No newer release available",
+			diag_version_result_up_to_date: "Up to date",
+			diag_version_result_failed: "Failed",
 			diag_version_number: "Version: {version}",
 			diag_version_commit: "Commit: {commit}",
 			diag_version_digest: "Digest: {digest}",
@@ -1398,6 +1422,30 @@ var init_diagnostics_strings = __esmMin((() => {
 			diag_state_unknown: "Unknown"
 		},
 		"zh-TW": {
+			diag_version_connector_installed: "供下次啟動的 Connector 安裝",
+			diag_version_source_connector_update: "來源：Connector 更新狀態",
+			diag_version_period_next_launch: "已安裝，供下次啟動使用",
+			diag_version_installation_same: "供下次啟動的安裝與回應中的 Connector 相同。",
+			diag_version_installation_differs: "另一個不同的 Connector 安裝正等待下次啟動；更新不會重新啟動服務。",
+			diag_version_installation_unknown: "供下次啟動的安裝比較結果未知。",
+			diag_version_update_not_reported: "此 Connector 未回報更新狀態。",
+			diag_version_update_not_enrolled: "Connector 尚未登記自動更新。",
+			diag_version_update_not_managed: "尚未確認此 Connector 是從更新器管理的安裝啟動。",
+			diag_version_update_unsupported: "此平台不支援 Connector 自動更新。",
+			diag_version_update_unreadable: "無法讀取 Connector 更新狀態。",
+			diag_version_update_channel: "更新頻道：{channel}",
+			diag_version_channel_stable: "穩定版",
+			diag_version_channel_preview: "預覽版",
+			diag_version_update_enabled: "已啟用自動更新。",
+			diag_version_update_disabled: "已停用自動更新。",
+			diag_version_update_pending: "更新切換尚未完成。",
+			diag_version_update_last: "上次更新結果：{result} · {at}",
+			diag_version_result_enrolled_for_next_launch: "已登記，供下次啟動使用",
+			diag_version_result_installed_for_next_launch: "已安裝，供下次啟動使用",
+			diag_version_result_rolled_back_updates_disabled: "已回退並停用自動更新",
+			diag_version_result_no_newer_release: "沒有較新的發布版本",
+			diag_version_result_up_to_date: "已是最新版本",
+			diag_version_result_failed: "失敗",
 			diag_version_number: "版本：{version}",
 			diag_version_commit: "Commit：{commit}",
 			diag_version_digest: "摘要：{digest}",
@@ -2312,7 +2360,8 @@ var init_ui_strings = __esmMin((() => {
 			error_code_CLIENT_ACTION_MANAGE_REQUIRED: "This attachment action needs Manage access. Ask the Connector administrator for Manage access, then try again.",
 			error_code_CLIENT_ACTION_ATTACHMENTS_UNAVAILABLE: "Attachments are unavailable on this connection. Ask the Connector administrator to check attachment support.",
 			error_code_CLIENT_ACTION_UPLOADS_NOT_ALLOWED: "Attachment uploads are not allowed on this connection. Ask the Connector administrator to allow uploads, then try again.",
-			error_code_CLIENT_ACTION_NATIVE_PASTE_UNSUPPORTED: "Image paste is not supported in the desktop app. Use Choose files, or Enable file drop and drop the file.",
+			error_code_NATIVE_CLIPBOARD_REFUSED: "The clipboard image could not be read. Focus this attachment form and paste again, or choose a file.",
+			error_code_CLIENT_ACTION_NATIVE_PASTE_UNSUPPORTED: "This platform or clipboard image format does not support image paste. Use Choose files or Enable file drop.",
 			ui_switch_workspace: "Switch workspace",
 			ui_new_workspace: "New workspace",
 			ui_report: "Report",
@@ -2418,7 +2467,8 @@ var init_ui_strings = __esmMin((() => {
 			error_code_CLIENT_ACTION_MANAGE_REQUIRED: "此附件操作需要管理權限。請向 Connector 管理員申請管理權限，再試一次。",
 			error_code_CLIENT_ACTION_ATTACHMENTS_UNAVAILABLE: "目前連線無法使用附件。請聯絡 Connector 管理員確認附件支援。",
 			error_code_CLIENT_ACTION_UPLOADS_NOT_ALLOWED: "目前連線未允許附件上傳。請聯絡 Connector 管理員開放上傳，再試一次。",
-			error_code_CLIENT_ACTION_NATIVE_PASTE_UNSUPPORTED: "桌面版不支援貼上圖片。請使用「選擇檔案」，或先「啟用拖放」再拖入檔案。",
+			error_code_NATIVE_CLIPBOARD_REFUSED: "無法讀取剪貼簿圖片。請將焦點移回此附件表單後重新貼上，或選擇檔案。",
+			error_code_CLIENT_ACTION_NATIVE_PASTE_UNSUPPORTED: "此平台或剪貼簿圖片格式不支援貼上。請使用「選擇檔案」，或先「啟用拖放」。",
 			ui_switch_workspace: "切換工作空間",
 			ui_new_workspace: "新增工作空間",
 			ui_report: "報告",
@@ -10664,7 +10714,7 @@ var init_i18n = __esmMin((() => {
 			setup_copy_help: "請在 BAT 開啟「設定 → 遠端 → 遠端存取」，複製連線網址後貼到下方。如果尚未啟動，請先按「啟動伺服器」。",
 			setup_copy_label: "貼上從 BAT 複製的連線網址",
 			setup_continue: "繼續設定",
-			setup_choose_connection: "找到多個已儲存的連線。請選擇要使用的連線，再按「預覽連線」。",
+			setup_choose_connection: "找到多個已儲存的連線。請選擇要使用的連線，再按「尋找設定檔與工作區」。",
 			setup_connection_choice: "要使用的連線",
 			setup_choose_placeholder: "請選擇連線",
 			setup_failed_operation: "設定尚未完成，請查看詳細資料。",
@@ -10712,6 +10762,13 @@ var init_i18n = __esmMin((() => {
 			setup_allow_integrate: "允許整合成果到 PR",
 			setup_allow_merge: "允許合併 PR",
 			setup_allow_pr_update: "允許更新 PR 資料",
+			setup_choose_profile: "請選擇設定檔",
+			setup_discovery_required: "請先尋找設定檔與工作區，再預覽此連線。",
+			setup_profile_token_required: "若要為此連線選擇其他 BAT 設定檔，請貼上 BAT 連線權杖，再尋找設定檔與工作區。",
+			error_code_SETUP_DISCOVERY_TIMEOUT: "探索逾時，請重新尋找設定檔與工作區。",
+			setup_discover: "尋找設定檔與工作區",
+			setup_discovered_profile: "BAT 設定檔",
+			setup_discovery_read: "Connector 已唯讀查詢伺服器。選擇設定檔；工作區可帶入下方儲存庫設定。",
 			setup_find_workspaces: "讀取主機工作區",
 			setup_save_repository: "驗證並連結儲存庫",
 			setup_refresh: "重新檢查設定",
@@ -12420,7 +12477,7 @@ var init_i18n = __esmMin((() => {
 			setup_copy_help: "In BAT, open Settings → Remote → Remote Access, copy the connection URL and paste it below. If it is not running, choose Start Server first.",
 			setup_copy_label: "Paste the connection link copied from BAT",
 			setup_continue: "Continue setup",
-			setup_choose_connection: "More than one saved connection was found. Choose the one you want, then select Review connection.",
+			setup_choose_connection: "More than one saved connection was found. Choose the one you want, then select Find profiles and workspaces.",
 			setup_connection_choice: "Connection to use",
 			setup_choose_placeholder: "Choose a connection",
 			setup_failed_operation: "Setup hasn’t finished. See details for more information.",
@@ -12468,6 +12525,13 @@ var init_i18n = __esmMin((() => {
 			setup_allow_integrate: "Allow result integration into PRs",
 			setup_allow_merge: "Allow PR merges",
 			setup_allow_pr_update: "Allow PR metadata updates",
+			setup_choose_profile: "Choose a profile",
+			setup_discovery_required: "Find profiles and workspaces before reviewing this connection.",
+			setup_profile_token_required: "To choose another BAT profile for this connection, paste its BAT connection token, then find profiles and workspaces.",
+			error_code_SETUP_DISCOVERY_TIMEOUT: "Discovery timed out. Find profiles and workspaces again.",
+			setup_discover: "Find profiles and workspaces",
+			setup_discovered_profile: "BAT profile",
+			setup_discovery_read: "Connector read the server without making changes. Choose a profile; a workspace can fill the repository settings below.",
 			setup_find_workspaces: "Read this host's workspaces",
 			setup_save_repository: "Verify and bind repository",
 			setup_refresh: "Recheck configuration",
@@ -14277,10 +14341,6 @@ function centralServiceStatus({ token, pollHealth, online, managedRecovery }) {
 	};
 }
 function clientActionGate(facts, requirements) {
-	if (requirements.paste && facts.nativeDesktop) return {
-		allowed: false,
-		reason: "native_paste_unsupported"
-	};
 	const ready = requirements.post || requirements.attachment;
 	if (!(requirements.post && (!facts.token || facts.nativeBusy) || ready && (!facts.online || !facts.viewReady) || requirements.supported && !facts.attachmentsSupported || requirements.manage && !facts.manageAllowed || requirements.uploads && !facts.uploadsAllowed)) return {
 		allowed: true,
@@ -14308,6 +14368,9 @@ var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}
 var clientActionReason = (code) => clientReasons.find((reason) => clientActionCode(reason) === code) || null;
 //#endregion
 //#region src/health-fact.js
+function healthReadError(reason, error) {
+	return reason === "host_unreachable" && error?.unchangedDeadline === true ? null : error;
+}
 function displayFact(fact = {}, { now = Date.now(), bootstrap, version } = {}) {
 	const observed = time$2(fact.observed_at), deadline = time$2(fact.valid_until);
 	const ageSeconds = Number.isFinite(observed) ? Math.max(0, Math.floor((now - observed) / 1e3)) : null;
@@ -14583,11 +14646,32 @@ function fleetHealth(row, options = {}) {
 		}))
 	};
 }
-function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState, now = Date.now() }) {
-	const { state, kind, steps, fact } = fleetHealth(row, {
+function diagnosisPresentation(row, { t, snapshot, readable, entry, now }) {
+	const health = fleetHealth(row, {
 		snapshot,
 		readable,
 		kind: entry.kind,
+		now
+	});
+	const { state, kind } = health;
+	const helpKey = [
+		"ready",
+		"identity",
+		"service",
+		"version"
+	].includes(state) ? `${state}_${kind === "connector" ? "connector" : "bat"}` : state;
+	return {
+		...health,
+		title: healthLabel(health.fact, t),
+		help: t("fleet_check_help_" + helpKey)
+	};
+}
+function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState, now = Date.now() }) {
+	const { state, steps, fact, title, help } = diagnosisPresentation(row, {
+		t,
+		snapshot,
+		readable,
+		entry,
 		now
 	});
 	const key = `${snapshot.configuration.binding}:machine:${entry.name}`;
@@ -14598,18 +14682,12 @@ function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState, now =
 		"data-fleet-check": step.id,
 		"data-check-state": step.state
 	}, t("fleet_check_" + step.state))])), ...[row?.code, row?.blocking].filter((value, index, all) => value && all.indexOf(value) === index).map((value) => h("code", {}, value)));
-	const helpKey = [
-		"ready",
-		"identity",
-		"service",
-		"version"
-	].includes(state) ? `${state}_${kind === "connector" ? "connector" : "bat"}` : state;
 	return h("div", {
 		class: "fleet-diagnosis",
 		"data-fleet-diagnosis": entry.name,
 		"data-fleet-state": state,
 		"data-freshness": fact.freshness
-	}, h("p", { class: "fleet-diagnosis-title" }, healthLabel(fact, t)), h("p", { class: "muted" }, t("fleet_check_help_" + helpKey)), details, ...fleetRoute(row, {
+	}, h("p", { class: "fleet-diagnosis-title" }, title), h("p", { class: "muted fleet-diagnosis-help" }, help), details, ...fleetRoute(row, {
 		h,
 		t,
 		snapshot,
@@ -14618,23 +14696,72 @@ function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState, now =
 		now
 	}));
 }
-function fleetRoute(row, { h, t, snapshot, readable, entry, now }) {
+function paintDiagnosis(node, { state, steps, fact, title, help }, t) {
+	const text = (selector, value) => {
+		const target = node.querySelector(selector);
+		if (target.textContent !== value) target.textContent = value;
+	};
+	node.dataset.fleetState = state;
+	node.dataset.freshness = fact.freshness;
+	text(".fleet-diagnosis-title", title);
+	text(".fleet-diagnosis-help", help);
+	for (const step of steps) {
+		const selector = `[data-fleet-check="${step.id}"]`;
+		node.querySelector(selector).dataset.checkState = step.state;
+		text(selector, t("fleet_check_" + step.state));
+	}
+}
+function paintFleetHealth(content, { t, snapshot, readable, now = Date.now() }) {
+	const ready = new Map([...snapshot.readiness.hosts, snapshot.readiness.connector].filter(Boolean).map((row) => [row.name, row]));
+	const entries = new Map(snapshot.configuration.connections.map((entry) => [entry.name, entry]));
+	for (const node of content.querySelectorAll("[data-fleet-diagnosis]")) {
+		const entry = entries.get(node.dataset.fleetDiagnosis);
+		if (!entry) continue;
+		const row = ready.get(entry.name), options = {
+			t,
+			snapshot,
+			readable,
+			entry,
+			now
+		};
+		paintDiagnosis(node, diagnosisPresentation(row, options), t);
+		const routeNode = node.querySelector("[data-fleet-route]");
+		const route = routeNode && routePresentation(row, options);
+		if (route) {
+			routeNode.dataset.freshness = route.freshness;
+			if (routeNode.textContent !== route.label) routeNode.textContent = route.label;
+		}
+	}
+}
+function routePresentation(row, { t, snapshot, readable, now }) {
 	const route = row?.route;
 	if (!route || ![
 		"direct",
 		"lan",
 		"cf",
 		"configured"
-	].includes(route.kind) || !readable || row.selected !== true || ["off", "down"].includes(row.level) || snapshot.monitor.state !== "running" || snapshot.readiness.state === "unavailable" || snapshot.selection.applied_revision !== snapshot.selection.revision) return [];
+	].includes(route.kind) || !readable || row.selected !== true || ["off", "down"].includes(row.level) || snapshot.monitor.state !== "running" || snapshot.readiness.state === "unavailable" || snapshot.selection.applied_revision !== snapshot.selection.revision) return null;
 	const fact = displayFact({
 		key: "fleet_route_" + route.kind,
 		observed_at: route.observed_at
 	}, { now });
-	return [h("p", {
+	return {
+		...fact,
+		label: healthLabel(fact, t)
+	};
+}
+function fleetRoute(row, { h, t, snapshot, readable, entry, now }) {
+	const route = routePresentation(row, {
+		t,
+		snapshot,
+		readable,
+		now
+	});
+	return route ? [h("p", {
 		class: "muted",
 		"data-fleet-route": entry.name,
-		"data-freshness": fact.freshness
-	}, healthLabel(fact, t))];
+		"data-freshness": route.freshness
+	}, route.label)] : [];
 }
 var codeReason, layerReason, layerStep, lookup;
 var init_fleet_status = __esmMin((() => {
@@ -14707,6 +14834,21 @@ var healthRevision = (caps) => JSON.stringify([
 var rowId = (row) => JSON.stringify([row.host, row.session_id]);
 var gone = (row) => Boolean(row.gone_at) || row.state?.enumeration === "gone";
 var selectedRows = (health) => (health.sessions || []).filter((row) => !gone(row) && row.host === health.selected?.host && (health.selected.workspaceId ? row.workspace_id === health.selected.workspaceId : row.session_id === health.selected.sessionId));
+function sourceError(health, path, deadline, reason) {
+	const error = health.readErrors?.get(path);
+	const unchanged = time$1(deadline) <= health.renewalOutcomes?.get(path);
+	return healthReadError(reason, error || (unchanged ? {
+		code: "OBSERVATION_NOT_RENEWED",
+		unchangedDeadline: true
+	} : null));
+}
+function clearRenewedSource(health, path) {
+	const cutoff = health.renewalOutcomes?.get(path);
+	if (!Number.isFinite(cutoff)) return;
+	const hostPending = (health.hosts || []).some((row) => health.hostSources?.get(row.host) === path && time$1(row.valid_until) <= cutoff);
+	const sessionPending = (health.sessions || []).some((row) => health.rowSources?.get(rowId(row)) === path && ["activity", "connection"].some((axis) => time$1(row.state?.evidence?.[axis]?.valid_until) <= cutoff));
+	if (!hostPending && !sessionPending) health.renewalOutcomes.delete(path);
+}
 function compactHealth({ attention, stale, unknown, activity }) {
 	return attention ? "attention" : stale ? "stale" : unknown || activity === "unknown" ? "unknown" : activity === "working" ? "working" : "idle";
 }
@@ -14721,7 +14863,7 @@ function runtimeSummary$1(health, now) {
 			value: row.state?.activity ?? facets.activity,
 			observed_at: evidence ? evidence.observed_at : row.observed_at,
 			valid_until: evidence?.valid_until,
-			error: health.readErrors?.get(health.rowSources?.get(rowId(row))),
+			error: sourceError(health, health.rowSources?.get(rowId(row)), evidence?.valid_until),
 			stale: Object.values(facets.staleness).some(Boolean)
 		}, { now });
 		return {
@@ -14739,7 +14881,8 @@ function runtimeSummary$1(health, now) {
 	});
 	const connection = rows.filter((row) => row.state?.connection).map((row) => displayFact({
 		value: row.state.connection,
-		...row.state.evidence?.connection
+		...row.state.evidence?.connection,
+		error: sourceError(health, health.rowSources?.get(rowId(row)), row.state.evidence?.connection?.valid_until)
 	}, { now })).sort((a, b) => (time$1(b.observed_at) || 0) - (time$1(a.observed_at) || 0))[0] || null;
 	const attention = facts.some((row) => row.attention);
 	const stale = facts.some((row) => row.activity.freshness === "stale") || connection?.freshness === "stale";
@@ -14770,17 +14913,16 @@ function countFact(rows, now, href = null) {
 			stale: facts.some((row) => row.freshness === "stale")
 		}, { now }),
 		href,
+		error: rows.find((row) => row.error)?.error,
 		stale_reason: rows.length && rows.every((row) => row.stale_reason === "host_unreachable") ? "host_unreachable" : null,
 		freshness: facts.some((row) => row.freshness === "stale") ? "stale" : facts.some((row) => row.freshness === "unknown") ? "unknown" : "current"
 	};
 }
-function otherMachines(health, now) {
-	if (health.hostsLoaded) return countFact((health.hosts || []).filter((row) => row.host !== health.selected?.host && (row.error || row.reachable === false && row.last_attempt_at)).map((row) => ({
-		observed_at: row.last_attempt_at,
-		valid_until: row.valid_until,
-		stale: row.stale,
-		stale_reason: row.stale_reason
-	})), now);
+function otherMachines(health, now, hosts) {
+	if (health.hostsLoaded) {
+		const attention = new Set((health.hosts || []).filter((row) => row.host !== health.selected?.host && (row.error || row.reachable === false && row.last_attempt_at)).map((row) => row.host));
+		return countFact(hosts.filter((row) => attention.has(row.host)), now);
+	}
 	const snapshot = health.fleet;
 	return countFact((health.selected ? [] : snapshot?.readiness?.hosts || []).filter((row) => {
 		return fleetDiagnosis(row, {
@@ -14817,10 +14959,19 @@ function healthDisplay(input, now = Date.now()) {
 	});
 	if (!receipt) capabilities.freshness = "unknown";
 	capabilities.refresh = health.capabilityRefresh;
-	const other = otherMachines(health, now);
+	const hosts = (health.hosts || []).map((row) => displayFact({
+		host: row.host,
+		observed_at: row.last_attempt_at,
+		valid_until: row.valid_until,
+		stale: row.stale,
+		stale_reason: row.stale_reason,
+		error: sourceError(health, health.hostSources?.get(row.host), row.valid_until, row.stale_reason)
+	}, { now }));
+	const other = otherMachines(health, now, hosts);
 	return {
 		connection,
 		capabilities,
+		hosts,
 		summary: runtimeSummary$1(health, now),
 		otherAttention: other.value,
 		other
@@ -14871,11 +15022,15 @@ function resetHealthBootstrap(previous = {}, { sameScope, caps, now = Date.now()
 	});
 	return result;
 }
-function rememberHealthRead(health, path, data) {
+function rememberHealthRead(health, path, data, { renewalDeadline } = {}) {
 	if (!data || typeof data !== "object") return;
 	path = path.replace(/\?$/, "");
 	const [pathname, query = ""] = path.split("?"), params = new URLSearchParams(query);
 	health.readErrors?.delete(path);
+	if (Number.isFinite(renewalDeadline)) {
+		health.renewalOutcomes ||= new Map();
+		health.renewalOutcomes.set(path, renewalDeadline);
+	}
 	if (Array.isArray(data.hosts) && ["/hosts", "/sessions"].includes(pathname)) {
 		const full = pathname === "/sessions" || ![...params.keys()].some((key) => key !== "limit");
 		const hosts = new Map((full ? [] : health.hosts || []).map((row) => [row.host, row]));
@@ -14887,7 +15042,10 @@ function rememberHealthRead(health, path, data) {
 		health.hosts = [...hosts.values()];
 		if (full) health.hostsLoaded = true;
 	}
-	if (!/^\/sessions(?:\/[^/]+\/[^/]+)?$/.test(pathname)) return;
+	if (!/^\/sessions(?:\/[^/]+\/[^/]+)?$/.test(pathname)) {
+		clearRenewedSource(health, path);
+		return;
+	}
 	const rows = Array.isArray(data.sessions) ? data.sessions : data.session ? [data.session] : [];
 	const sessions = new Map((health.sessions || []).map((row) => [rowId(row), row]));
 	health.rowSources ||= new Map();
@@ -14942,6 +15100,7 @@ function rememberHealthRead(health, path, data) {
 	const retained = new Set(kept.map(rowId));
 	for (const id of health.rowSources.keys()) if (!retained.has(id)) health.rowSources.delete(id);
 	if (health.selected) selectHealthSession(health, health.selected.host, health.selected.sessionId);
+	clearRenewedSource(health, path);
 }
 function withdrawHealthRead(health, method, path, error) {
 	path = path.replace(/\?$/, "");
@@ -14957,7 +15116,8 @@ function withdrawHealthRead(health, method, path, error) {
 		chains: new Map(),
 		rowSources: new Map(),
 		hostSources: new Map(),
-		readErrors: new Map()
+		readErrors: new Map(),
+		renewalOutcomes: new Map()
 	});
 	else if (error.status === 404 && method === "GET" && health.selected && pathname === `/sessions/${encodeURIComponent(health.selected.host)}/${encodeURIComponent(health.selected.sessionId)}`) health.sessions = (health.sessions || []).filter((row) => row.host !== health.selected.host || row.session_id !== health.selected.sessionId);
 	else if (inventoryRead) {
@@ -14981,10 +15141,15 @@ function takeHealthRenewal(health, now = Date.now()) {
 	}
 	for (const row of health.hosts || []) add(health.hostSources?.get(row.host), row.valid_until);
 	health.renewed ||= new Map();
+	health.bootstrapReads ||= new Set();
 	for (const [path, deadline] of sources) {
 		const key = `${health.bootstrap || 0}:${deadline}`;
-		if ((now >= deadline || health.bootstrapRenewal) && health.renewed.get(path) !== key) {
-			health.renewed.set(path, key);
+		const expired = now >= deadline && health.renewed.get(path) !== key;
+		const reconnect = health.bootstrapRenewal && !health.bootstrapReads.has(path);
+		if (expired || reconnect) {
+			health.bootstrapReads.add(path);
+			if (expired) health.renewed.set(path, key);
+			health.renewalDeadline = Math.min(deadline, now);
 			return path;
 		}
 	}
@@ -17409,13 +17574,29 @@ var digest$10 = frontendDigest;
 var frontendLoadedAt = new Date().toISOString();
 var time = (value) => {
 	if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value < 253402300800) return new Date(value * 1e3).toISOString();
-	return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
+	return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
 };
 var buildSource = (value) => [
 	"vcs",
 	"package",
 	"bundled"
 ].includes(value) ? value : null;
+var updateCode = (value) => typeof value === "string" && /^[a-z][a-z0-9_]{0,95}$/.test(value) ? value : null;
+var updateStates = [
+	"reported",
+	"not_enrolled",
+	"not_managed",
+	"unsupported",
+	"unreadable"
+];
+var updateResults = [
+	"enrolled_for_next_launch",
+	"installed_for_next_launch",
+	"rolled_back_updates_disabled",
+	"no_newer_release",
+	"up_to_date",
+	"failed"
+];
 var fact$1 = (id, value, source, at, period, extra = {}) => {
 	const selected = {
 		version: version$2(value?.version),
@@ -17439,6 +17620,13 @@ function versionProjection(input = {}) {
 	const descriptor = input.adapterRead?.document?.native_analysis;
 	const run = input.adapterRunRead?.run;
 	const frontend = input.frontendBuild === void 0 ? frontendBuild : input.frontendBuild;
+	const update = caps?.connector_update;
+	const reported = update?.state === "reported";
+	const last = reported && updateResults.includes(update.last?.status) ? {
+		status: update.last.status,
+		code: updateCode(update.last.code),
+		at: time(update.last.at)
+	} : null;
 	const loadedAt = input.frontendLoadedAt === void 0 && frontend === frontendBuild && digest$10(frontend?.frontend_digest) ? frontendLoadedAt : input.frontendLoadedAt;
 	const rows = [
 		fact$1("desktop", input.desktop ? input.appBuild : null, "native_app_build", input.nativeReadAt, "loaded"),
@@ -17448,6 +17636,14 @@ function versionProjection(input = {}) {
 			...caps.build,
 			version: caps.build?.version ?? caps.connector
 		} : null, "capabilities", caps ? input.capabilitiesReadAt : null, "read"),
+		fact$1("connector_installed", reported ? update.installed : null, "connector_update", reported ? input.capabilitiesReadAt : null, "next_launch", {
+			state: updateStates.includes(update?.state) ? update.state : "not_reported",
+			code: update?.state === "unreadable" ? updateCode(update.code) : null,
+			enabled: reported && typeof update.enabled === "boolean" ? update.enabled : null,
+			channel: reported && ["stable", "preview"].includes(update.channel) ? update.channel : null,
+			pending: reported && typeof update.pending === "boolean" ? update.pending : null,
+			last
+		}),
 		...["bundled_runtime", "running_runtime"].map((id) => fact$1(id, managed?.[id] ? {
 			version: managed[id].version,
 			commit: managed[id].commit,
@@ -17459,9 +17655,12 @@ function versionProjection(input = {}) {
 		fact$1("bat_observed", { commit: run?.bat_runtime_provenance?.bat_source_revision }, "pm_run_provenance", input.adapterRunRead?.at, "run", { recorded_at: time(run?.updated_at) }),
 		fact$1("desktop_update", input.updaterReadFailed ? null : { version: input.updater?.current_version }, "desktop_updater", input.updaterReadFailed ? null : input.updaterReadAt, "read")
 	];
+	const installedCommit = rows.find((row) => row.id === "connector_installed").commit;
+	const answeringCommit = rows.find((row) => row.id === "connector").commit;
 	return {
 		platform: input.desktop ? "desktop" : "browser",
 		rows,
+		connector_installation_difference: installedCommit && answeringCommit ? installedCommit === answeringCommit ? "same" : "differs" : "unknown",
 		runtime_difference: ["same", "differs"].includes(managed?.runtime_difference) ? managed.runtime_difference : "unknown"
 	};
 }
@@ -17804,6 +18003,7 @@ function versionFactText(row, t) {
 	if ([
 		"desktop",
 		"connector",
+		"connector_installed",
 		"bundled_runtime",
 		"running_runtime"
 	].includes(row.id)) return t("diag_version_number", { version: row.version || unknown }) + " · " + t("diag_version_commit", { commit: row.commit || unknown });
@@ -17816,7 +18016,10 @@ function versionFacts({ h, t, projection }) {
 	return h("section", {
 		class: "version-facts",
 		"data-version-facts": ""
-	}, h("h3", {}, t("diag_versions")), h("dl", {}, ...rows.map((row) => h("div", { "data-version-row": row.id }, h("dt", {}, t("diag_version_" + row.id)), h("dd", {}, h("p", { class: "mono" }, versionFactText(row, t)), h("p", { class: "muted" }, t("diag_version_source_" + row.source), " · ", t("diag_version_period_" + row.period), " · ", row.observed_at || t("diag_version_time_unknown")), row.recorded_at ? h("p", { class: "muted" }, t("diag_version_run_updated", { time: row.recorded_at })) : null)))), h("p", { "data-runtime-difference": "" }, t("diag_runtime_" + projection.runtime_difference)), h("p", { class: "muted" }, t("diag_adapter_observed_unknown")));
+	}, h("h3", {}, t("diag_versions")), h("dl", {}, ...rows.map((row) => h("div", { "data-version-row": row.id }, h("dt", {}, t("diag_version_" + row.id)), h("dd", {}, h("p", { class: "mono" }, versionFactText(row, t)), h("p", { class: "muted" }, t("diag_version_source_" + row.source), " · ", t("diag_version_period_" + row.period), " · ", row.observed_at || t("diag_version_time_unknown")), row.id === "connector_installed" ? h("div", {}, row.state !== "reported" ? h("p", { class: "muted" }, t("diag_version_update_" + row.state), row.code ? " · " + row.code : "") : null, row.channel ? h("p", { class: "muted" }, t("diag_version_update_channel", { channel: t("diag_version_channel_" + row.channel) })) : null, row.enabled !== null ? h("p", { class: "muted" }, t("diag_version_update_" + (row.enabled ? "enabled" : "disabled"))) : null, row.pending === true ? h("p", { class: "muted" }, t("diag_version_update_pending")) : null, row.last ? h("p", { class: "muted" }, t("diag_version_update_last", {
+		result: t("diag_version_result_" + row.last.status),
+		at: row.last.at || t("diag_version_time_unknown")
+	}), row.last.code ? " · " + row.last.code : "") : null, h("p", { "data-connector-installation-difference": "" }, t("diag_version_installation_" + projection.connector_installation_difference))) : null, row.recorded_at ? h("p", { class: "muted" }, t("diag_version_run_updated", { time: row.recorded_at })) : null)))), h("p", { "data-runtime-difference": "" }, t("diag_runtime_" + projection.runtime_difference)), h("p", { class: "muted" }, t("diag_adapter_observed_unknown")));
 }
 //#endregion
 //#region src/diagnostics-dialog.js
@@ -25501,7 +25704,7 @@ async function connectorUploadArtifact(operationId, bytes, browserToken) {
 		data: await res.json().catch(() => ({}))
 	};
 }
-var nativeDesktop, nativeFileSupport, nativeBriefExportSupport, browserSessionToken, browserCsrf, nativeDiagnosticsSave, nativeFilesStatus, nativeFilesPick, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeBriefSave, nativeFilesPreview, nativeSelectRole, nativeConnect, managedControl, nativeDisconnect, nativeDialogLocale, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
+var nativeDesktop, nativeFileSupport, nativeBriefExportSupport, browserSessionToken, browserCsrf, nativeDiagnosticsSave, nativeFilesStatus, nativeFilesPick, nativeFilesPasteArm, nativeFilesPaste, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeBriefSave, nativeFilesPreview, nativeSelectRole, nativeConnect, managedControl, nativeDisconnect, nativeDialogLocale, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
 var init_transport = __esmMin((() => {
 	init_core();
 	init_i18n();
@@ -25513,6 +25716,8 @@ var init_transport = __esmMin((() => {
 	nativeDiagnosticsSave = (input) => invoke("native_diagnostics_save", { input });
 	nativeFilesStatus = () => invoke("native_files_status");
 	nativeFilesPick = (draftId) => invoke("native_files_pick", { draftId });
+	nativeFilesPasteArm = (draftId) => invoke("native_files_paste_arm", { draftId });
+	nativeFilesPaste = (draftId) => invoke("native_files_paste", { draftId });
 	nativeFilesUpload = (handleId) => invoke("native_files_upload", { handleId });
 	nativeFilesDropTarget = (draftId, enabled) => invoke("native_files_drop_target", {
 		draftId,
@@ -41762,7 +41967,6 @@ function profileStateFacts(state, { now = Date.now(), error = null } = {}) {
 	const past = state?.verified && typeof state.verified === "object" && !Array.isArray(state.verified) ? state.verified : null;
 	const pastAt = profileTimestamp(past?.observed_at), lastSuccessAt = profileTimestamp(state?.evidence_ref?.last_success_at);
 	const observed = profileTimestamp(state?.observed_at), deadline = typeof state?.valid_until === "string" ? Date.parse(state.valid_until) : NaN;
-	const readError = reason === "host_unreachable" && error?.unchangedDeadline === true ? null : error;
 	return {
 		fact: observed !== null && Number.isFinite(deadline) ? displayFact({
 			key: valueKey(state?.value),
@@ -41770,7 +41974,7 @@ function profileStateFacts(state, { now = Date.now(), error = null } = {}) {
 			valid_until: deadline,
 			stale: ["host_unreachable", "host_not_refreshed"].includes(reason),
 			stale_reason: reason,
-			error: readError
+			error: healthReadError(reason, error)
 		}, { now }) : null,
 		valueKey: valueKey(state?.value),
 		reasonKey: reasons.has(reason) ? "wpf_reason_" + reason : "wpf_unverified",
@@ -56652,6 +56856,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	let saved = {}, snapshot = null, busy = false, disposed = false, operation = null, readSerial = 0, readReady = false, hostDisclosureReady = false;
 	const stagedSecrets = new Map();
 	let review = null, reviewing = false, reviewSerial = 0, reviewChanged = false;
+	let discovery = null, discovering = false, discoverySerial = 0, secretTimer;
 	try {
 		saved = JSON.parse(localStorage.getItem(key) || "{}");
 	} catch {}
@@ -56766,6 +56971,12 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				"remote_url",
 				"github_secret"
 			].includes(name)) invalidateReview();
+			if ([
+				"url",
+				"fingerprint",
+				"connection_url",
+				"bat_secret"
+			].includes(name)) invalidateDiscovery();
 			if (name === "bat_secret") stagedSecrets.delete("host");
 			if ([
 				"url",
@@ -56846,7 +57057,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}, h("span", {}, t("setup_profile")), profile, profilesError);
 	profile.addEventListener("change", () => {
 		if (!alive() || saved.intent) return;
-		invalidateReview();
+		invalidateDiscovery();
 		stagedSecrets.delete("host");
 		const selected = snapshot?.profiles?.find((row) => row.id === profile.value);
 		if (selected) clearPasteRead();
@@ -56895,7 +57106,21 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		required: true,
 		maxlength: 64,
 		hint: "setup_host_hint"
-	})), manual, h("details", {}, h("summary", {}, t("setup_managed_work")), checkbox("writes", "setup_allow_messages"), checkbox("orchestrate", "setup_allow_start"), checkbox("shared_clone_worktrees", "setup_shared_clone"), h("p", { class: "muted" }, t("setup_shared_clone_help")), h("div", { class: "capture-fields" }, input("managed_roots", "setup_managed_roots"), input("ssh_alias", "setup_ssh_alias")), h("p", { class: "muted" }, t("setup_roots_help"))), h("button", {
+	})), manual, h("button", {
+		type: "button",
+		class: "secondary",
+		"data-setup-discover": "",
+		hidden: true,
+		onclick: () => findSources().catch(showError)
+	}, t("setup_discover")), h("p", {
+		class: "note",
+		hidden: true,
+		"data-setup-discovery-reason": ""
+	}), h("details", {}, h("summary", {}, t("setup_managed_work")), checkbox("writes", "setup_allow_messages"), checkbox("orchestrate", "setup_allow_start"), checkbox("shared_clone_worktrees", "setup_shared_clone"), h("p", { class: "muted" }, t("setup_shared_clone_help")), h("div", { class: "capture-fields" }, input("managed_roots", "setup_managed_roots"), input("ssh_alias", "setup_ssh_alias")), h("p", { class: "muted" }, t("setup_roots_help"))), h("p", {
+		class: "note",
+		hidden: true,
+		"data-setup-review-reason": ""
+	}), h("button", {
 		type: "submit",
 		class: "primary"
 	}, t("setup_review_connection")));
@@ -57047,7 +57272,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	const connectionChoice = h("select", { "aria-label": t("setup_connection_choice") });
 	connectionChoice.addEventListener("change", () => {
 		if (!alive() || busy || saved.intent) return;
-		invalidateReview();
+		invalidateDiscovery();
 		stagedSecrets.delete("host");
 		fields.get("bat_secret").value = "";
 		saved.import_profile_id = "";
@@ -57111,7 +57336,8 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			if (!copyReady || !alive() || busy || saved.intent || !readReady) return;
 			copyReady = false;
 			copyRead.hidden = true;
-			run("host", true);
+			if (snapshot.discovery_contract_version === 1) findSources().catch(showError);
+			else run("host", true);
 		}
 	}, h("p", { id: "setup-copy-help" }, t("setup_copy_help")), h("label", { class: "setup-field" }, t("setup_copy_label"), copyInput), copyError, copyRead, h("button", {
 		type: "submit",
@@ -57129,10 +57355,24 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		"data-setup-review": "",
 		"aria-label": t("setup_review_connection")
 	});
+	const discoveredProfile = h("select", {
+		"aria-label": t("setup_discovered_profile"),
+		"data-setup-discovered-profile": ""
+	});
+	discoveredProfile.addEventListener("change", () => {
+		if (!alive() || busy || saved.intent || discovering) return;
+		invalidateReview();
+		findSources(discoveredProfile.value).catch(showError);
+	});
+	const discoveredWorkspaces = h("div", { "data-setup-discovered-workspaces": "" });
+	const discoveryBox = h("section", {
+		hidden: true,
+		"data-setup-discovery": ""
+	}, h("label", { class: "setup-field" }, t("setup_discovered_profile"), discoveredProfile), h("p", { class: "muted" }, t("setup_discovery_read")), discoveredWorkspaces);
 	const box = h("section", {
 		class: "panel ui-section-card managed-setup",
 		"data-managed-setup": ""
-	}, h("header", {}, h("h2", {}, t("setup_title"), " ", unsaved)), simple, automaticStatus, reviewBox, connectionStatus, actions, message, receipt, advanced, h("details", { "data-setup-details": "" }, h("summary", {}, t("global_details")), summary, operationReceipt, h("p", {}, t("setup_resume_help"))));
+	}, h("header", {}, h("h2", {}, t("setup_title"), " ", unsaved)), simple, automaticStatus, discoveryBox, reviewBox, connectionStatus, actions, message, receipt, advanced, h("details", { "data-setup-details": "" }, h("summary", {}, t("global_details")), summary, operationReceipt, h("p", {}, t("setup_resume_help"))));
 	function defaultHost() {
 		if (fields.get("host").value || saved.intent) return;
 		const names = new Set((snapshot?.hosts || []).map((row) => row.name));
@@ -57149,7 +57389,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		fields.get("host").value = saved.host = name;
 	}
 	function applyConnection(parsed) {
-		invalidateReview();
+		invalidateDiscovery();
 		fields.get("connection_url").value = "";
 		for (const [name, value] of Object.entries({
 			url: parsed.endpoint,
@@ -57200,7 +57440,8 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		}
 		defaultHost();
 		persist();
-		await run("host", true);
+		if (snapshot.discovery_contract_version === 1 && !discovery?.profile_id) await findSources();
+		else await run("host", true);
 	}
 	function suggestLocal() {
 		if (!snapshot || snapshot.hosts?.length !== 0 || fields.get("host").value) return;
@@ -57250,8 +57491,110 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		const secret = stagedSecrets.get(kind);
 		if (secret && secret.expiresAt > Date.now()) return secret.ref;
 		stagedSecrets.delete(kind);
+		if (secret && kind === "host") invalidateDiscovery();
 		return null;
 	};
+	function invalidateDiscovery() {
+		discoverySerial++;
+		discovery = null;
+		clearTimeout(secretTimer);
+		invalidateReview();
+		if (typeof discoveryBox !== "undefined") {
+			discoveryBox.hidden = true;
+			update();
+		}
+	}
+	const hasFreshCredential = () => !!fields.get("bat_secret").value || (stagedSecrets.get("host")?.expiresAt || 0) > Date.now();
+	const configuredHost = () => snapshot?.hosts?.find((row) => row.name === fields.get("host").value.trim());
+	const profileId = () => fields.get("profile_id").value.trim() || configuredHost()?.profile_id || "default";
+	function reuseExistingConnection() {
+		const host = configuredHost();
+		return !!host?.token_available && !saved.import_profile_id && !hasFreshCredential() && host.url?.replace(/\/$/, "") === fields.get("url").value.trim().replace(/\/$/, "") && normalizeSetupFingerprint(host.fingerprint || "") === normalizeSetupFingerprint(fields.get("fingerprint").value) && (host.profile_id || "default") === profileId();
+	}
+	const needsDiscovery = () => snapshot?.discovery_contract_version === 1 && !reuseExistingConnection() && !discovery?.profile_id;
+	const discoveryReason = () => configuredHost() && !hasFreshCredential() ? "setup_profile_token_required" : "setup_discovery_required";
+	async function findSources(selected) {
+		if (!alive() || busy || reviewing || discovering || saved.intent || !readReady || snapshot?.busy || !allowed("host") || snapshot.discovery_contract_version !== 1) return;
+		defaultHost();
+		if (configuredHost() && !hasFreshCredential()) {
+			showError(Error(t("setup_profile_token_required")), { sourceRefresh: false });
+			return;
+		}
+		if (!validateHost(void 0, true)) return;
+		const serial = ++discoverySerial;
+		invalidateReview();
+		discovering = true;
+		update();
+		message.replaceChildren();
+		try {
+			const tokenField = fields.get("bat_secret");
+			let ref = usableSecret("host");
+			if (tokenField.value) {
+				const result = await api("POST", "/managed/setup/secrets", {
+					kind: "bat",
+					value: tokenField.value
+				});
+				guard();
+				if (serial !== discoverySerial) return;
+				ref = result.secret_ref;
+				tokenField.value = "";
+				stagedSecrets.set("host", {
+					ref,
+					expiresAt: Date.now() + 36e5
+				});
+				fieldHint("bat_secret", t("setup_secret_staged"));
+			}
+			const body = {
+				revision: snapshot.revision,
+				...saved.import_profile_id && !ref ? { import_profile_id: saved.import_profile_id } : {
+					url: fields.get("url").value.trim(),
+					fingerprint: fields.get("fingerprint").value.trim(),
+					secret_ref: ref
+				},
+				...selected ? { profile_id: selected } : {}
+			};
+			const result = await api("POST", "/managed/setup/discover", body);
+			guard();
+			if (serial !== discoverySerial || body.revision !== snapshot?.revision) return;
+			const row = (value, keys) => object(value) && Object.keys(value).length === keys.length && keys.every((key) => typeof value[key] === "string" && value[key].length > 0 && value[key].length <= 256 && value[key] === value[key].trim() && !/[\x00-\x1f]/.test(value[key]));
+			if (!result.source || !/^[a-f0-9]{64}$/.test(result.source.source_digest) || !Array.isArray(result.profiles) || result.profiles.length > 200 || !Array.isArray(result.workspaces) || result.workspaces.length > 200 || !result.profiles.every((value) => row(value, ["id", "name"])) || !result.workspaces.every((value) => row(value, ["workspace_id", "name"])) || result.profile_id !== null && !result.profiles.some((row) => row.id === result.profile_id)) throw Error(t("setup_receipt_mismatch"));
+			discovery = result;
+			discoveredProfile.replaceChildren(h("option", { value: "" }, t("setup_choose_profile")), ...result.profiles.map((row) => h("option", { value: row.id }, `${row.name} · ${row.id}`)));
+			discoveredProfile.value = result.profile_id || "";
+			fields.get("profile_id").value = saved.profile_id = result.profile_id || "";
+			discoveredWorkspaces.replaceChildren(...result.workspaces.map((row) => h("button", {
+				type: "button",
+				class: "secondary",
+				onclick: () => {
+					if (!alive() || busy || saved.intent) return;
+					fields.get("workspace_id").value = saved.workspace_id = row.workspace_id;
+					persist();
+					unsaved.hidden = false;
+				}
+			}, `${row.name} · ${row.workspace_id}`)));
+			discoveryBox.hidden = false;
+			persist();
+			clearTimeout(secretTimer);
+			const secret = stagedSecrets.get("host");
+			if (secret) secretTimer = setTimeout(() => {
+				if (!alive()) return;
+				stagedSecrets.delete("host");
+				invalidateDiscovery();
+				fieldHint("bat_secret", t("setup_paste_token_again"));
+			}, Math.max(0, secret.expiresAt - Date.now()));
+		} catch (error) {
+			if (serial !== discoverySerial) return;
+			invalidateDiscovery();
+			if (error.code === "INVALID_SECRET") {
+				stagedSecrets.delete("host");
+				fieldHint("bat_secret", t("setup_paste_token_again"));
+			}
+			showError(error, { sourceRefresh: false });
+		} finally {
+			discovering = false;
+			if (alive()) update();
+		}
+	}
 	function validateHost(only, defaults = false) {
 		const value = (name) => fields.get(name).value.trim(), faults = {};
 		if (fields.get("connection_url").value) faults.connection_url = "setup_invalid_connection_url";
@@ -57282,7 +57625,17 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	function showError(error, options) {
 		if (alive()) {
 			const codeKey = `error_code_${error?.code}`;
-			const summary = error?.code && t(codeKey) !== codeKey ? t(codeKey) : [t("setup_verification_invalid"), t("setup_receipt_mismatch")].includes(error?.message) ? error.message : t("error_generic");
+			const summary = error?.code && t(codeKey) !== codeKey ? t(codeKey) : [
+				"setup_verification_invalid",
+				"setup_receipt_mismatch",
+				"setup_discovery_required",
+				"setup_profile_token_required",
+				"setup_scope_required",
+				"setup_busy",
+				"setup_loading",
+				"setup_uncertain",
+				"setup_review_unsupported"
+			].some((key) => t(key) === error?.message) ? error.message : t("error_generic");
 			message.replaceChildren(errorBox(error, {
 				summary,
 				...options,
@@ -57311,11 +57664,26 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			scope.hidden = !!allowed(kind);
 		}
 		const supported = snapshot?.preview_contract_version === 1;
-		hostForm.querySelector("button[type=submit]").disabled ||= !supported || reviewing;
-		automaticButton.disabled = !!locked || !allowed("host") || !supported || reviewing;
+		const discoverySupported = snapshot?.discovery_contract_version === 1;
+		fields.get("profile_id").closest("label").hidden = discoverySupported;
+		const find = hostForm.querySelector("[data-setup-discover]");
+		find.hidden = !discoverySupported;
+		find.disabled ||= discovering || reviewing || !!configuredHost() && !hasFreshCredential();
+		const tokenReason = hostForm.querySelector("[data-setup-discovery-reason]");
+		tokenReason.hidden = !discoverySupported || !configuredHost() || hasFreshCredential();
+		tokenReason.textContent = t("setup_profile_token_required");
+		const reviewReason = hostForm.querySelector("[data-setup-review-reason]");
+		reviewReason.hidden = !needsDiscovery();
+		reviewReason.textContent = t(discoveryReason());
+		hostForm.querySelector("button[type=submit]").disabled ||= !supported || reviewing || discovering || needsDiscovery();
+		automaticButton.textContent = t(discoverySupported && !discovery?.profile_id ? "setup_discover" : "setup_review_connection");
+		automaticButton.disabled = !!locked || !allowed("host") || !supported || reviewing || discovering;
+		discoveredProfile.disabled = !!locked || discovering;
+		for (const button of discoveredWorkspaces.querySelectorAll("button")) button.disabled = !!locked || discovering;
 		automaticButton.hidden = !!review;
 		for (const field of copyForm.querySelectorAll("input,button")) field.disabled = !!locked || !allowed("host");
-		copyForm.querySelector("button").disabled ||= !supported || reviewing;
+		copyForm.querySelector("button").disabled ||= !supported || reviewing || discovering;
+		copyForm.querySelector("button").textContent = t(discoverySupported ? "setup_discover" : "setup_continue");
 		connectionChoice.disabled = !!locked || !allowed("host");
 		simple.hidden = !!snapshot?.hosts?.length;
 		connectionStatus.hidden = !readReady;
@@ -57356,7 +57724,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}
 	function invalidateReview() {
 		reviewSerial++;
-		reviewChanged = !!review || reviewing;
+		reviewChanged ||= !!review || reviewing;
 		review = null;
 		if (typeof reviewBox !== "undefined") {
 			reviewBox.hidden = true;
@@ -57387,7 +57755,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			digest: preview.review_digest
 		};
 		reviewChanged = false;
-		reviewBox.replaceChildren(h("h3", {}, t("setup_review_connection")), h("p", {}, t(`setup_review_source_${preview.source.kind}`, { reference: preview.source.reference })), h("p", {}, t(preview.source.available ? "setup_review_source_available" : "setup_review_source_unavailable")), preview.changes.length ? h("table", {}, h("thead", {}, h("tr", {}, ...[
+		reviewBox.replaceChildren(h("h3", {}, t("setup_review_connection")), request.params.profile_id ? h("p", {}, `${t("setup_workspace_profile")}: ${request.params.profile_id}`) : null, h("p", {}, t(`setup_review_source_${preview.source.kind}`, { reference: preview.source.reference })), h("p", {}, t(preview.source.available ? "setup_review_source_available" : "setup_review_source_unavailable")), preview.changes.length ? h("table", {}, h("thead", {}, h("tr", {}, ...[
 			"field",
 			"before",
 			"after"
@@ -57487,7 +57855,12 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}
 	async function run(kind, defaults = false) {
 		const form = kind === "host" ? hostForm : kind === "repository" ? repoForm : verificationForm;
-		if (!alive() || busy || reviewing || composing.size || !snapshot || !readReady || snapshot.busy || saved.intent || !allowed(kind) || kind === "host" && snapshot.preview_contract_version !== 1 || kind === "host" && !validateHost(void 0, defaults) || !setupFormValidity(form, t)) return;
+		const blocked = !allowed(kind) ? "setup_scope_required" : saved.intent ? "setup_uncertain" : busy || reviewing || composing.size || snapshot?.busy ? "setup_busy" : !snapshot || !readReady ? "setup_loading" : kind === "host" && snapshot.preview_contract_version !== 1 ? "setup_review_unsupported" : kind === "host" && needsDiscovery() ? discoveryReason() : null;
+		if (!alive() || blocked) {
+			showError(Error(t(blocked || "setup_loading")), { sourceRefresh: false });
+			return;
+		}
+		if (kind === "host" && !validateHost(void 0, defaults) || !setupFormValidity(form, t)) return;
 		const serial = ++reviewSerial;
 		if (kind === "host") {
 			reviewing = true;
@@ -57524,7 +57897,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				...imported ? { import_profile_id: imported } : {
 					url: value("url"),
 					fingerprint: value("fingerprint"),
-					profile_id: value("profile_id") || "default"
+					profile_id: profileId()
 				},
 				writes: checked("writes"),
 				orchestrate: checked("orchestrate"),
@@ -57547,6 +57920,10 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			};
 			if (kind === "verification" && !validVerification(params)) throw Error(t("setup_verification_invalid"));
 			if (secretRef) params.secret_ref = secretRef;
+			if (kind === "host" && snapshot.discovery_contract_version === 1 && !reuseExistingConnection()) {
+				params.profile_id = discovery.profile_id;
+				params.source_digest = discovery.source.source_digest;
+			}
 			const request = {
 				action: `setup.${kind}`,
 				target: kind === "host" ? { host: value("host") } : kind === "repository" ? { repository: value("repository") } : {},
@@ -57580,6 +57957,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}
 	function handleSubmissionError(error, kind, options = { sourceRefresh: false }) {
 		if (!alive()) return;
+		if (kind === "host" && ["INVALID_SECRET", "SETUP_REVIEW_CHANGED"].includes(error.code)) invalidateDiscovery();
 		let field;
 		if (saved.intent && !saved.intent.operation_id && error.admissionRefused === true) {
 			const previous = saved.intent;
@@ -57686,7 +58064,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				timeout_s: 600
 			};
 		}
-		if (snapshot && (snapshot.revision !== result.revision || !equal(snapshot.profiles, result.profiles) || result.preview_contract_version !== 1)) invalidateReview();
+		if (snapshot && (snapshot.revision !== result.revision || !equal(snapshot.profiles, result.profiles) || result.preview_contract_version !== 1 || snapshot.discovery_contract_version !== result.discovery_contract_version)) invalidateDiscovery();
 		snapshot = result;
 		readReady = true;
 		if (!hostDisclosureReady) {
@@ -57739,6 +58117,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		dispose() {
 			copyInput.value = "";
 			disposed = true;
+			clearTimeout(secretTimer);
 			stagedSecrets.clear();
 			for (const name of [
 				"connection_url",
@@ -61592,7 +61971,8 @@ function nativeAttachments({ h, t, guard, canWrite, draftId, onReceipt, onDiscar
 	const failure = (error) => {
 		try {
 			live();
-			notice.textContent = String(error?.message || error);
+			const key = error?.code && `error_code_${error.code}`;
+			notice.textContent = key && t(key) !== key ? t(key) : String(error?.message || error);
 		} catch {}
 	};
 	const writable = () => {
@@ -61697,27 +62077,36 @@ function nativeAttachments({ h, t, guard, canWrite, draftId, onReceipt, onDiscar
 			if (refreshing === task) refreshing = null;
 		}
 	};
-	const pick = async () => {
+	const select = async (read, rethrow = false) => {
 		if (picking) return;
 		try {
 			writable();
 			picking = true;
-			const receipts = await nativeFilesPick(draftId);
+			const receipts = await read();
 			live();
 			for (const receipt of receipts) {
 				adopt(receipt);
+				render();
 				writable();
 				await nativeFilesUpload(receipt.transfer_id);
 				live();
 			}
 			await refresh();
 		} catch (error) {
-			failure(error);
-			await refresh().catch(failure);
+			const present = rethrow ? () => {} : failure;
+			present(error);
+			await refresh().catch(present);
+			if (rethrow) throw error;
 		} finally {
 			picking = false;
 		}
 	};
+	const pick = () => select(() => nativeFilesPick(draftId));
+	const paste = () => select(async () => {
+		await nativeFilesPasteArm(draftId);
+		writable();
+		return [await nativeFilesPaste(draftId)];
+	}, true);
 	const drop = h("button", {
 		class: "secondary",
 		"aria-pressed": false,
@@ -61809,6 +62198,7 @@ function nativeAttachments({ h, t, guard, canWrite, draftId, onReceipt, onDiscar
 	return {
 		box,
 		pick,
+		paste,
 		drop,
 		actions,
 		refresh,
@@ -62452,7 +62842,15 @@ async function mountFleetDesktop(main, { h, t, onStatus = () => {} }) {
 		if (again && !again.disabled) again.focus();
 		else if (previous) successor(previous).focus();
 	};
+	const paintHealth = () => {
+		if (alive() && snapshot) paintFleetHealth(content, {
+			t,
+			snapshot,
+			readable
+		});
+	};
 	await run(read);
+	if (alive()) document.addEventListener("health-display-tick", paintHealth);
 	const poll = async () => {
 		if (!alive()) return;
 		if (!busy) await run(read, true);
@@ -62462,6 +62860,7 @@ async function mountFleetDesktop(main, { h, t, onStatus = () => {} }) {
 	return () => {
 		disposed = true;
 		clearTimeout(timer);
+		document.removeEventListener("health-display-tick", paintHealth);
 		panel.remove();
 	};
 }
@@ -62876,6 +63275,13 @@ async function mountFleet(main, { h, t, onStatus = () => {} }) {
 			render();
 		}
 	};
+	const paintHealth = () => {
+		if (alive() && snapshot) paintFleetHealth(content, {
+			t,
+			snapshot,
+			readable
+		});
+	};
 	try {
 		const availability = await fleetAvailability();
 		if (!alive()) return () => {
@@ -62907,6 +63313,7 @@ async function mountFleet(main, { h, t, onStatus = () => {} }) {
 			}
 		} else {
 			await read();
+			if (alive()) document.addEventListener("health-display-tick", paintHealth);
 			const poll = async () => {
 				if (!alive()) return;
 				await read();
@@ -62920,6 +63327,7 @@ async function mountFleet(main, { h, t, onStatus = () => {} }) {
 	return () => {
 		disposed = true;
 		clearTimeout(timer);
+		document.removeEventListener("health-display-tick", paintHealth);
 		nativeCleanup?.();
 		bootstrapCleanup?.();
 		panel.remove();
@@ -69387,16 +69795,16 @@ function dropKey(scope, namespace) {
 		localStorage.removeItem(`batc.key.${namespace}.${scope}`);
 	} catch {}
 }
-async function api(method, path, body, key, collectReceipt) {
+async function api(method, path, body, key, collectReceipt, renewalDeadline) {
 	const revision = diagnosticRevision, epoch = state.epoch, readHealth = state.health, inventoryRevision = state.health?.inventoryRevision;
 	try {
 		const data = await apiRequest(method, path, body, key, collectReceipt);
 		if (epoch === state.epoch && method === "GET") {
 			if (state.health && state.health === readHealth && state.health.inventoryRevision === inventoryRevision) {
-				rememberHealthRead(state.health, path, data);
+				rememberHealthRead(state.health, path, data, { renewalDeadline });
 				if (data && (Array.isArray(data.hosts) || Array.isArray(data.sessions) || data.session)) {
 					state.health.readers ||= new Map();
-					state.health.readers.set(path, api.bind(null, "GET", path));
+					state.health.readers.set(path.replace(/\?$/, ""), api.bind(null, "GET", path, void 0, void 0, void 0));
 				}
 				if (/^\/(hosts|sessions)(?:[/?]|$)/.test(path)) paintConnection(...connectionPaintFlags);
 			}
@@ -70003,6 +70411,41 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		const cd = e.clipboardData;
 		if (!cd) return;
 		const items = cd.items ? Array.from(cd.items) : [];
+		if (nativeDesktop) {
+			if (!items.some((item) => item.kind === "file" && item.type.startsWith("image/"))) return;
+			e.preventDefault();
+			const gate = attachmentGate({
+				attachment: true,
+				supported: true,
+				manage: true,
+				uploads: true
+			});
+			if (!gate.allowed) {
+				refuseAttachment(gate.reason);
+				return;
+			}
+			if (!native) {
+				refuseAttachment("attachments_unavailable");
+				return;
+			}
+			pendingSelections++;
+			changed();
+			fill(status);
+			native.paste().catch((error) => {
+				try {
+					guard(true);
+					if (error?.code === "CLIENT_ACTION_NATIVE_PASTE_UNSUPPORTED") refuseAttachment("native_paste_unsupported");
+					else fill(status, errorBox(error?.code ? new ApiError(0, error.code, error.reason || "") : error, {
+						sourceRefresh: false,
+						within: status
+					}));
+				} catch {}
+			}).finally(() => {
+				pendingSelections--;
+				changed();
+			});
+			return;
+		}
 		const cdFiles = cd.files ? Array.from(cd.files) : [];
 		const imageCandidates = [];
 		if (cdFiles.length > 0) {
@@ -70460,7 +70903,7 @@ function tickHealth() {
 	if (healthRenewal || !state.health || !state.token) return;
 	const path = takeHealthRenewal(state.health);
 	const read = state.health.readers?.get(path);
-	if (read) healthRenewal = read().catch(() => {}).finally(() => {
+	if (read) healthRenewal = read(state.health.renewalDeadline).catch(() => {}).finally(() => {
 		healthRenewal = null;
 		paintConnection(...connectionPaintFlags);
 	});

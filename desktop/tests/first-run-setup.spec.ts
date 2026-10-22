@@ -1,5 +1,5 @@
 import {test, expect, type Page} from '@playwright/test';
-import {managedSetupFixture, openSetupAdvanced, applySetupReview} from './managed-setup-fixture.ts';
+import {managedSetupFixture, reviewSetupConnection, openSetupAdvanced, applySetupReview} from './managed-setup-fixture.ts';
 const url = `ws://127.0.0.1?token=synthetic-bat-secret&fp=${'ab'.repeat(32)}`;
 const formFor = (page: Page) => page.locator('[data-setup-host]');
 const field = (page: Page, name: string) => formFor(page).locator(`[data-setup-field=${name}]`);
@@ -19,7 +19,7 @@ for (const locale of ['en','zh-TW']) for (const native of [false,true]) test.des
     await expect(field(page,'host')).toHaveValue('local'); await expect(formFor(page).locator('[data-setup-manual]')).not.toHaveAttribute('open','');
     expect(state.staged).toEqual([]);expect(state.posts).toEqual([]);
     expect(await storage(page)).not.toMatch(/synthetic-bat-secret|token=/);
-    await formFor(page).locator('button[type=submit]').click(); await applySetupReview(page);
+    await reviewSetupConnection(page,locale); await applySetupReview(page);
     await expect(page.locator('[data-setup-sessions]')).toBeVisible();
     await expect(page.locator('[data-setup-connect]')).not.toHaveAttribute('open', '');
     expect(state.posts).toHaveLength(1);expect(state.staged).toHaveLength(1);
@@ -48,7 +48,7 @@ for (const locale of ['en','zh-TW']) for (const native of [false,true]) test.des
     await input.pressSequentially('wss'); await expect(error).toBeHidden();
     await input.dispatchEvent('change'); await expect(error).toBeVisible();
     await input.fill('ws'); await expect(error).toBeHidden();
-    await formFor(page).locator('button[type=submit]').click(); await expect(error).toBeVisible();
+    await formFor(page).locator('[data-setup-discover]').click(); await expect(error).toBeVisible();
     await input.fill('');
     await input.evaluate(node=>{
       const event=new Event('paste',{bubbles:true,cancelable:true});
@@ -59,7 +59,7 @@ for (const locale of ['en','zh-TW']) for (const native of [false,true]) test.des
   });
   test('completed connection collapses, and Change settings reopens its editable form',async({page})=>{
     const state=await managedSetupFixture(page,native,locale); await page.goto('/dashboard/'); await openSetupAdvanced(page);await field(page,'connection_url').fill(url);
-    await formFor(page).locator('button[type=submit]').click(); await applySetupReview(page);await expect(page.locator('[data-setup-sessions]')).toBeVisible();
+    await reviewSetupConnection(page,locale); await applySetupReview(page);await expect(page.locator('[data-setup-sessions]')).toBeVisible();
     await expect(page.locator('[data-setup-connect]')).not.toHaveAttribute('open','');
     await page.getByRole('button',{name:locale==='en'?'Change settings':'修改設定',exact:true}).click();
     await expect(field(page,'host')).toBeEditable();await expect(field(page,'connection_url')).toBeVisible();
@@ -70,7 +70,7 @@ for (const locale of ['en','zh-TW']) for (const native of [false,true]) test.des
     await field(page,'host').dispatchEvent('compositionstart');await field(page,'host').fill('本機');
     await expect(page.locator('[data-setup-error=host]')).toBeHidden();
     await field(page,'host').dispatchEvent('compositionend');await expect(page.locator('[data-setup-error=host]')).toBeVisible();
-    await formFor(page).locator('button[type=submit]').click();
+    await formFor(page).locator('[data-setup-discover]').click();
     await expect(field(page,'host')).toBeFocused();await expect(field(page,'host')).toBeEditable();
     await expect(field(page,'bat_secret')).toHaveValue('synthetic-bat-secret');expect(state.posts).toEqual([]);expect(state.staged).toEqual([]);
     await expect(page.locator('[data-setup-error=host]')).toContainText(locale==='en'?'Host ID must':'主機代號須');
@@ -79,28 +79,28 @@ for (const locale of ['en','zh-TW']) for (const native of [false,true]) test.des
   });
   test('proven refusal unlocks immediately, focuses the fault and retries with only a memory reference',async({page})=>{
     const state = await managedSetupFixture(page,native,locale);state.refused=true;state.refusalCode='INVALID_TARGET';state.refusalStatus=422;
-    await page.goto('/dashboard/'); await openSetupAdvanced(page);await field(page,'connection_url').fill(url);await formFor(page).locator('button[type=submit]').click(); await applySetupReview(page);
+    await page.goto('/dashboard/'); await openSetupAdvanced(page);await field(page,'connection_url').fill(url);await reviewSetupConnection(page,locale); await applySetupReview(page);
     await expect(field(page,'host')).toBeEditable();await expect(field(page,'host')).toBeFocused();
     await expect(page.locator('[data-error-summary]')).toHaveText(locale==='en'?'Setup was not saved. Correct the marked field.':'設定未儲存，請修正標示的欄位。');
     await expect(page.locator('[data-setup-error=host]')).toContainText(locale==='en'?'Host ID must':'主機代號須');
     const recover=page.getByRole('button',{name:locale==='en'?'Check request':'查回請求',exact:true});await expect(recover).toBeHidden();
     expect((await draft(page)).intent).toBeUndefined();
     await expect(page.locator('[data-managed-setup]')).not.toContainText(locale==='en'?'request is unconfirmed':'原設定請求尚未確認');
-    state.refused=false;await field(page,'host').fill('local-retry');await formFor(page).locator('button[type=submit]').click(); await applySetupReview(page);
+    state.refused=false;await field(page,'host').fill('local-retry');await reviewSetupConnection(page,locale); await applySetupReview(page);
     await expect(page.locator('[data-setup-sessions]')).toBeVisible();expect(state.posts).toHaveLength(2);expect(state.staged).toHaveLength(1);
     expect(state.posts[1].idempotency_key).not.toBe(state.posts[0].idempotency_key);
     expect(state.posts[1].body.params.secret_ref).toBe(state.posts[0].body.params.secret_ref);
   });
   test('a reload after proven refusal stays editable with no stored intent or token',async({page})=>{
     const state = await managedSetupFixture(page,native,locale);state.refused=true;state.refusalCode='INVALID_TARGET';state.refusalStatus=422;
-    await page.goto('/dashboard/'); await openSetupAdvanced(page);await field(page,'connection_url').fill(url);await formFor(page).locator('button[type=submit]').click(); await applySetupReview(page);
+    await page.goto('/dashboard/'); await openSetupAdvanced(page);await field(page,'connection_url').fill(url);await reviewSetupConnection(page,locale); await applySetupReview(page);
     await expect(field(page,'host')).toBeEditable();await page.reload(); await openSetupAdvanced(page);await expect(field(page,'host')).toBeEditable();
     expect((await draft(page)).intent).toBeUndefined();expect(await storage(page)).not.toMatch(/synthetic-bat-secret|token=/);
     await expect(field(page,'bat_secret')).toHaveValue('');expect(state.posts).toHaveLength(1);
   });
   test('422 without admission proof retains the intent and recovers with the original key',async({page})=>{
     const state = await managedSetupFixture(page,native,locale);state.refused=true;state.admissionRefused=false;state.refusalStatus=422;
-    await page.goto('/dashboard/'); await openSetupAdvanced(page);await field(page,'connection_url').fill(url);await formFor(page).locator('button[type=submit]').click(); await applySetupReview(page);
+    await page.goto('/dashboard/'); await openSetupAdvanced(page);await field(page,'connection_url').fill(url);await reviewSetupConnection(page,locale); await applySetupReview(page);
     await expect(formFor(page).locator('button[type=submit]')).toBeDisabled();
     await expect(page.locator('[data-error-summary]')).toContainText(locale==='en'?'Configuration changed elsewhere':'設定已在別處變更');
     await expect(page.locator('[data-managed-setup]')).not.toContainText(locale==='en'?'request is unconfirmed':'原設定請求尚未確認');
@@ -113,17 +113,18 @@ for (const locale of ['en','zh-TW']) for (const native of [false,true]) test.des
 
 test('a dropped network reply retains the exact request and key after reload',async({page})=>{
   const state=await managedSetupFixture(page,false);state.drop=true;await page.goto('/dashboard/'); await openSetupAdvanced(page);await field(page,'connection_url').fill(url);
-  await formFor(page).locator('button[type=submit]').click(); await applySetupReview(page);await expect(page.locator('[data-error-summary]')).toHaveText('Connection failed. Check your network and the original request.');
+  await reviewSetupConnection(page,'en'); await applySetupReview(page);await expect(page.locator('[data-error-summary]')).toHaveText('Connection failed. Check your network and the original request.');
   const original=structuredClone(state.posts[0]);await page.reload(); await openSetupAdvanced(page);await expect(formFor(page).locator('button[type=submit]')).toBeDisabled();
   await page.getByRole('button',{name:'Check request',exact:true}).click();await expect(page.locator('[data-setup-sessions]')).toBeVisible();
   expect(state.posts[1]).toEqual(original);expect(state.staged).toHaveLength(1);
 });
-for(const locale of ['en','zh-TW']) test(`required fields, endpoint and fingerprint fail before sending in ${locale}`,async({page})=>{
+for(const locale of ['en','zh-TW']) test(`older Connector validates required fields, endpoint and fingerprint in ${locale}`,async({page})=>{
   // Override navigator before modules load, since this test uses the shared page fixture.
   await page.addInitScript(value=>Object.defineProperty(navigator,'language',{get:()=>value}),locale);
-  const state=await managedSetupFixture(page,false,locale);await page.goto('/dashboard/'); await openSetupAdvanced(page);
+  const state=await managedSetupFixture(page,false,locale);state.discoveryVersion=0;await page.goto('/dashboard/'); await openSetupAdvanced(page);
   await formFor(page).locator('button[type=submit]').click();await expect(page.locator('[data-setup-error=host]')).toBeVisible();
   await field(page,'connection_url').fill(url);await formFor(page).locator('[data-setup-manual]>summary').click();
+  await expect(field(page,'profile_id')).toBeVisible();
   for(const [name,value] of [['url','ws://localhost:9876'],['url','wss://localhost:9876?token=never-save-this'],['fingerprint','bad']]) {
     await field(page,name).fill(value);await formFor(page).locator('button[type=submit]').click();await expect(page.locator(`[data-setup-error=${name}]`)).toBeVisible();
     if(name==='url')await field(page,'url').fill('wss://localhost:9876');
@@ -144,11 +145,11 @@ for(const status of [403,404])test(`setup withdrawal ${status} clears host rows,
 });
 test('an expired or rejected staged credential requires a fresh paste while keeping non-secret drafts',async({page})=>{
   const state=await managedSetupFixture(page,false);state.refused=true;state.refusalCode='INVALID_SECRET';state.refusalStatus=422;
-  await page.goto('/dashboard/'); await openSetupAdvanced(page);await field(page,'connection_url').fill(url);await formFor(page).locator('button[type=submit]').click(); await applySetupReview(page);
+  await page.goto('/dashboard/'); await openSetupAdvanced(page);await field(page,'connection_url').fill(url);await reviewSetupConnection(page,'en'); await applySetupReview(page);
   await expect(field(page,'bat_secret')).toBeEditable();await expect(field(page,'bat_secret')).toBeFocused();await expect(field(page,'bat_secret')).toHaveValue('');
   await expect(page.locator('#setup-bat_secret-hint')).toContainText('Paste the connection URL or token again');
   expect((await draft(page)).intent).toBeUndefined();
-  state.refused=false;await field(page,'bat_secret').fill('fresh-synthetic-secret');await formFor(page).locator('button[type=submit]').click(); await applySetupReview(page);await expect(page.locator('[data-setup-sessions]')).toBeVisible();
+  state.refused=false;await field(page,'bat_secret').fill('fresh-synthetic-secret');await reviewSetupConnection(page,'en'); await applySetupReview(page);await expect(page.locator('[data-setup-sessions]')).toBeVisible();
   expect(state.staged).toHaveLength(2);expect(state.posts[1].body.params.secret_ref).not.toBe(state.posts[0].body.params.secret_ref);
   expect(await storage(page)).not.toContain('fresh-synthetic-secret');
 });
@@ -162,7 +163,7 @@ test('a malformed setup refresh cannot enable a new submission',async({page})=>{
   expect(state.posts).toEqual([]);expect(state.staged).toEqual([]);
   state.verification.timeout_s=300;
   await page.locator('#main > .ui-page-header').getByRole('button',{name:'Refresh',exact:true}).click();
-  await expect(formFor(page).locator('button[type=submit]')).toBeEnabled();
+  await expect(formFor(page).locator('[data-setup-discover]')).toBeEnabled();
   await expect(field(page,'bat_secret')).toHaveValue('synthetic-bat-secret');
   expect(state.posts).toEqual([]);expect(state.staged).toEqual([]);
 });

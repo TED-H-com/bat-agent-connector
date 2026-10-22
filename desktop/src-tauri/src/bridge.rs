@@ -1800,7 +1800,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             r"delivery/previews/mpv_[0-9a-f]{32}|integrations/previews/ipv_[0-9a-f]{32}|integrations/op_[0-9a-f]{32})$")).unwrap())
     } else if input.method == "POST" {
         POST.get_or_init(|| {
-            Regex::new(r"^/(?:managed/setup/(?:secrets|preview)|repository-previews|approval-previews|artifact-capture-previews|artifact-managed-capture-previews|cleanup-previews|operations(?:/op_[0-9a-f]{32}/(?:cancel|resume))?|pm/workspaces/ws_[0-9a-f]{32}/(?:work/wi_[0-9a-f]{20}/start-preview|threads/pmt_[0-9a-f]{32}/adopt-and-start-preview))$")
+            Regex::new(r"^/(?:managed/setup/(?:secrets|preview|discover)|repository-previews|approval-previews|artifact-capture-previews|artifact-managed-capture-previews|cleanup-previews|operations(?:/op_[0-9a-f]{32}/(?:cancel|resume))?|pm/workspaces/ws_[0-9a-f]{32}/(?:work/wi_[0-9a-f]{20}/start-preview|threads/pmt_[0-9a-f]{32}/adopt-and-start-preview))$")
                 .unwrap()
         })
     } else {
@@ -1811,7 +1811,10 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     }
     if matches!(
         path,
-        "/managed/setup" | "/managed/setup/secrets" | "/managed/setup/preview"
+        "/managed/setup"
+            | "/managed/setup/secrets"
+            | "/managed/setup/preview"
+            | "/managed/setup/discover"
     ) {
         if input.path != path || input.idempotency_key.is_some() {
             return Err("Managed setup accepts no query or operation key".into());
@@ -2771,6 +2774,25 @@ mod tests {
         }
         assert!(validate_request(&request("GET", "/managed/setup?host=other")).is_err());
         assert!(validate_request(&request("GET", "/managed/setup/secrets")).is_err());
+    }
+    #[test]
+    fn setup_discovery_uses_the_existing_fixed_http_forwarder() {
+        let mut input = request("POST", "/managed/setup/discover");
+        input.body =
+            Some(serde_json::json!({"revision": "a".repeat(64), "import_profile_id": "profile-a"}));
+        assert!(validate_request(&input).is_ok());
+        for path in [
+            "/managed/setup/discover?",
+            "/managed/setup/discover?host=other",
+            "/managed/setup/discover/other",
+        ] {
+            input.path = path.into();
+            assert!(validate_request(&input).is_err());
+        }
+        input.path = "/managed/setup/discover".into();
+        input.idempotency_key = Some("discovery-is-a-read".into());
+        assert!(validate_request(&input).is_err());
+        assert!(validate_request(&request("GET", "/managed/setup/discover")).is_err());
     }
     #[test]
     fn setup_preview_uses_the_existing_fixed_http_forwarder() {

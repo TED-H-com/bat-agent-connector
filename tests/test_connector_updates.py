@@ -171,6 +171,57 @@ def test_enrollment_switches_future_launches_and_rollback_disables_updates(deplo
     assert installs == [candidate["commit"]]
 
 
+def update_tree(root):
+    """Names, modes and bytes (including link targets), without following links."""
+    if not root.exists():
+        return None
+    paths = [root, *root.rglob("*")]
+    return {str(path.relative_to(root)): (
+        path.lstat().st_mode,
+        os.readlink(path) if path.is_symlink() else path.read_bytes() if path.is_file() else None,
+    ) for path in paths}
+
+
+@pytest.mark.parametrize("phase", ["not_enrolled", "enrolled", "installed", "failed", "pending"])
+def test_status_is_byte_identical_and_does_not_create_a_lease(deployment, monkeypatch, phase):
+    u, receipt, inspections = deployment
+    if phase != "not_enrolled":
+        u.enroll(receipt, "preview")
+        u.find_release = lambda channel: release("b" * 40, "0.2.8")
+        u.install = lambda root, candidate, **_: make_package(root, candidate)
+        if phase == "pending":
+            reconcile = u.reconcile
+            def interrupt(state):
+                if state.get("pending"):
+                    raise KeyboardInterrupt()
+                return reconcile(state)
+            monkeypatch.setattr(u, "reconcile", interrupt)
+            with pytest.raises(KeyboardInterrupt):
+                u.apply()
+        elif phase == "failed":
+            def fail(*args, **kwargs):
+                raise UpdateError("fixture_install_failed")
+            u.install = fail
+            with pytest.raises(UpdateError):
+                u.apply()
+        elif phase == "installed":
+            u.apply()
+        (u.root / "lease").unlink()
+    before = update_tree(u.root)
+    inspected = len(inspections)
+    def forbidden(*args, **kwargs):
+        pytest.fail("status must not lock, reconcile, inspect, save, install or use the network")
+    for name in ("locked", "reconcile", "save", "outcome", "install", "inspect", "find_release", "command"):
+        monkeypatch.setattr(u, name, forbidden)
+    if phase == "not_enrolled":
+        with pytest.raises(FileNotFoundError):
+            u.status()
+    else:
+        assert u.status()["pending"] == (phase == "pending")
+    assert update_tree(u.root) == before
+    assert len(inspections) == inspected
+
+
 @pytest.mark.parametrize("change,code", [
     ("skill", "canonical_skill_changed"), ("source", "deployment_source_changed"),
     ("entrypoint", "deployment_entrypoint_changed"), ("receipt", "private"),

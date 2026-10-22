@@ -20,12 +20,12 @@ import sys
 import time
 import urllib.request
 from pathlib import Path
-from urllib.parse import urlsplit
 
 from . import dashboard_sync, platform_files, service
 from .artifact_host import ArtifactHost
 from .client import BatClient
 from .config import git_transport, normalize_fingerprint, parse_config, tomllib
+from .connection_endpoints import setup_endpoint
 from .connection_sources import (
     SourceUnavailable,
     TokenMode,
@@ -101,16 +101,10 @@ def _profile_directory(document):
 
 
 def _url(value):
-    if not isinstance(value, str) or len(value) > 512 or any(char.isspace() for char in value):
-        raise _error("INVALID_HOST", "A pinned BAT wss origin is required")
     try:
-        parsed = urlsplit(value)
-        if (parsed.scheme != "wss" or not parsed.hostname or not parsed.port
-                or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in {"", "/"}):
-            raise ValueError
+        return setup_endpoint(value)
     except ValueError:
         raise _error("INVALID_HOST", "A pinned BAT wss origin without credentials or query is required") from None
-    return value.rstrip("/") + "/"
 
 
 def _text(value, field, maximum=256):
@@ -187,7 +181,7 @@ def state(daemon, principal):
         "allow_pr_update": repo.allow_pr_update, "allow_integrate": repo.integrate is not None}
         for repo in daemon.fleet.config.github.repos.values()]
     verification = _verification(document)
-    return {"revision": revision, "preview_contract_version": 1, "hosts": hosts, "repositories": repos, "profiles": profiles,
+    return {"revision": revision, "preview_contract_version": 1, "discovery_contract_version": 1, "hosts": hosts, "repositories": repos, "profiles": profiles,
             "verification": {"commands": {name: list(argv) for name, argv in verification.commands.items()},
                              "timeout_s": verification.timeout_s},
             "profiles_error": profiles_error, "busy": _busy(daemon)}
@@ -255,9 +249,12 @@ def _candidate(daemon, action, target, params, *, expired=False):
         name = target.get("host")
         if set(target) != {"host"} or not isinstance(name, str) or not HOST.fullmatch(name):
             raise _error("INVALID_TARGET", "Choose a stable logical host name")
-        allowed = {"url", "fingerprint", "profile_id", "secret_ref", "import_profile_id", "writes", "orchestrate", "managed_roots", "ssh_alias", "shared_clone_worktrees", "git", "local_confirmation"}
+        allowed = {"url", "fingerprint", "profile_id", "secret_ref", "import_profile_id", "writes", "orchestrate", "managed_roots", "ssh_alias", "shared_clone_worktrees", "git", "local_confirmation", "source_digest"}
         if set(params) - allowed:
             raise _error("INVALID_PARAMS", "Only reviewed host connection and permission fields are accepted")
+        if "source_digest" in params:
+            from .setup_source_discovery import validate_source
+            validate_source(daemon, source, params)
         existing = document.setdefault("hosts", {}).get(name, {})
         host = copy.deepcopy(existing)
         try:
@@ -277,9 +274,11 @@ def _candidate(daemon, action, target, params, *, expired=False):
         if selected is not None:
             profiles, _ = _profiles(document)
             profile = next((item for item in profiles if item["id"] == selected), None)
-            if not profile or not profile["token_available"] or set(params) & {"url", "fingerprint", "profile_id", "secret_ref"}:
+            if not profile or not profile["token_available"] or set(params) & {"url", "fingerprint", "secret_ref"} or "profile_id" in params and "source_digest" not in params:
                 raise _error("PROFILE_UNAVAILABLE", "Select a readable BAT profile or enter its connection and credential", 409)
             host.update({key: profile[key] for key in ("url", "fingerprint", "profile_id")})
+            if "profile_id" in params:
+                host["profile_id"] = _text(params["profile_id"], "profile ID")
             host.update(token_ref="bat-profile:" + selected, bat_profiles_dir=str(_profile_directory(document)))
         else:
             host.update(url=_url(params.get("url", host.get("url"))),
@@ -366,6 +365,8 @@ def _candidate(daemon, action, target, params, *, expired=False):
             raise ValueError
     except (ValueError, TypeError, KeyError, ConfigError) as error:
         raise _error("INVALID_CONFIGURATION", "The reviewed configuration is invalid: " + type(error).__name__) from None
+    if action == "setup.host" and "source_digest" in params:
+        validate_source(daemon, source, params)
     return config, document, encoded, revision, hashlib.sha256(encoded).hexdigest()
 
 
@@ -461,22 +462,59 @@ def _authorize_existing(ops, principal, op, _verb):
         raise _error("FORBIDDEN", "Setup belongs to the original personal identity", 403)
 
 
-async def _probe_host(config, name):
-    client = BatClient(config.host(name), device_id="managed-setup-probe", client_label="Better Agent Dashboard setup",
+async def _read_host(host, *, discovery=False, selected=None, deadline=None):
+    """The only setup BAT reader, shared by explicit discovery and Apply."""
+    client = BatClient(host, device_id="managed-setup-probe", client_label="Better Agent Dashboard setup",
                        allow_writes=False, allow_orchestrate=False)
+    async def read_step(awaitable):
+        if deadline is None:
+            return await awaitable
+        return await asyncio.wait_for(awaitable, max(0, deadline - asyncio.get_running_loop().time()))
     try:
-        await client.ping(timeout=10)
-        profiles = await client.invoke("profile:list", {})
-        if not isinstance(profiles, dict) or config.host(name).profile_id not in {
-            item.get("id") for item in profiles.get("profiles", []) if isinstance(item, dict)
-        }:
+        await read_step(client.ping(timeout=10))
+        raw = await read_step(client.invoke("profile:list", {}))
+        rows = raw.get("profiles", []) if isinstance(raw, dict) else []
+        # Preserve Apply's refusals, including TypeError for a null collection
+        # or an unhashable ID. Discovery must not silently sanitize these away.
+        reported = {p.get("id") for p in rows if isinstance(p, dict)}
+        profiles = []
+        for item in rows if isinstance(rows, list) else []:
+            if not isinstance(item, dict):
+                continue
+            try:
+                ident = _text(item.get("id"), "profile ID")
+                name = item.get("name")
+                try:
+                    name = _text(name, "profile name")
+                except OperationError:
+                    name = ident
+            except OperationError:
+                continue
+            if not any(p["id"] == ident for p in profiles):
+                profiles.append({"id": ident, "name": name})
+            if len(profiles) == 200:
+                break
+        profile_id = (selected or (profiles[0]["id"] if len(profiles) == 1 else None)) if discovery else host.profile_id
+        if discovery and profile_id is None:
+            return {"profiles": profiles, "profile_id": None, "workspaces": []}
+        if profile_id not in ({p["id"] for p in profiles} if discovery else reported):
             raise _error("PROFILE_NOT_FOUND", "The selected BAT server did not report that profile", 409)
-        document = await service._workspace(client)
+        client.host = dataclasses.replace(host, profile_id=profile_id)
+        document = await read_step(service._workspace(client))
         workspaces = [{"workspace_id": item["id"], "name": item.get("name", item["id"])}
                       for item in document.get("workspaces", []) if isinstance(item, dict) and isinstance(item.get("id"), str)]
-        return {"host": name, "connected": True, "workspaces": workspaces[:200]}
+        return {"profiles": profiles, "profile_id": profile_id, "workspaces": workspaces[:200]}
     finally:
-        await client.close()
+        if deadline is None:
+            await client.close()
+        else:
+            # Budget cleanup too. Cancellation aborts BatClient's transport.
+            await asyncio.wait_for(client.close(), max(0.01, min(2, deadline - asyncio.get_running_loop().time())))
+
+
+async def _probe_host(config, name):
+    result = await _read_host(config.host(name))
+    return {"host": name, "connected": True, "workspaces": result["workspaces"]}
 
 
 async def _probe_ssh(alias):
@@ -637,6 +675,9 @@ async def _run(ctx):
             _require_setup_identity(daemon, binding)
             if _busy(daemon, ctx.operation_id) or _configuration(daemon)[3] != before:
                 raise _error("CONFIGURATION_CHANGED", "Work or configuration changed during verification; review again", 409)
+            if "source_digest" in ctx.params:
+                from .setup_source_discovery import validate_source
+                validate_source(daemon, document, ctx.params)
             # Equal revisions mean these exact bytes are already on disk.
             if before != after:
                 platform_files.atomic_write(path, encoded)

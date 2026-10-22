@@ -7,7 +7,7 @@ import {openPmSection} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {workStartFixture,workspaceId,workId,route} from './work-start-fixture.ts';
-import {managedSetupFixture} from './managed-setup-fixture.ts';
+import {managedSetupFixture, expectLegacyProfileFallback} from './managed-setup-fixture.ts';
 import {readFileSync} from 'node:fs';
 import {workProfileStrings} from '../src/pm-work-profile-strings.js';
 const readinessGolden=JSON.parse(readFileSync(new URL('../../tests/fixtures/work-profile-readiness.json',import.meta.url),'utf8'));
@@ -346,4 +346,8 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test(`
     await expect(note).toContainText(locale === 'en' ? 'This connection has not reported next-turn support' : '這次連線尚未回報');
     expect(f.state.writes).toEqual([]);
   } finally {await context.close();}
+});
+
+for (const locale of ['en', 'zh-TW']) test(`${locale} older Connector keeps the typed profile fallback`, async ({page}) => {
+  await expectLegacyProfileFallback(page, locale);
 });
