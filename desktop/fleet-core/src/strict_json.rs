@@ -68,10 +68,27 @@ impl<'de> Deserialize<'de> for Strict {
 }
 
 pub fn parse(bytes: &[u8], bound: usize) -> crate::Result<Value> {
+    parse_classified(bytes, bound).map_err(|reason| {
+        if reason == "JSON_BOUND" {
+            reason
+        } else {
+            "JSON_INVALID"
+        }
+    })
+}
+
+/// Fixed classification for admission; never expose serde's input-bearing error.
+pub(crate) fn parse_classified(bytes: &[u8], bound: usize) -> crate::Result<Value> {
     if bytes.len() > bound {
         return Err("JSON_BOUND");
     }
     serde_json::from_slice::<Strict>(bytes)
         .map(|v| v.0)
-        .map_err(|_| "JSON_INVALID")
+        .map_err(|error| {
+            if error.is_data() && error.to_string().starts_with("duplicate object key") {
+                "JSON_AMBIGUOUS"
+            } else {
+                "JSON_INVALID"
+            }
+        })
 }

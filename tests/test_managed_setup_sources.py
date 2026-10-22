@@ -34,7 +34,7 @@ async def test_admission_to_saved_runtime_on_windows(installed, mock, tmp_path, 
     original_config = config_path.read_bytes()
     state = setup.state(daemon, principal)
     assert state["profiles_error"] is None
-    available = row["expected"]["python_admission"]["state"] == "available"
+    available = row["expected"]["admission"]["state"] == "available"
     assert state["profiles"][0]["token_available"] is available
     params = {"import_profile_id": row["profile_id"]}
     if not available:

@@ -15,25 +15,133 @@ const STORE_BOUND: usize = 1024 * 1024;
 const PROTECTED_BOUND: usize = 256 * 1024;
 const TOKEN_BOUND: usize = 64 * 1024;
 
-// Red baseline adapter: this demonstrates why the existing runtime is not admission.
-#[cfg(test)]
-struct AdmissionStore(Vec<u8>);
-#[cfg(test)]
+/// Shared BAT admission version. Absent references retain legacy Fleet semantics.
+pub const BAT_SOURCE_POLICY: u64 = 1;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct TokenStatus {
+    pub state: &'static str,
+    pub reason: &'static str,
+}
+impl TokenStatus {
+    fn new(state: &'static str, reason: &'static str) -> Self {
+        Self { state, reason }
+    }
+}
+
+/// The secret tree deliberately has no Debug or serialization implementation.
+/// Only fixed status codes leave lookup; resolution copies one zeroizing token.
+pub struct AdmissionStore {
+    status: TokenStatus,
+    inner: Option<SecretJson>,
+}
 impl AdmissionStore {
-    fn parse(bytes: &[u8]) -> Self { Self(bytes.to_vec()) }
-    fn lookup(&self, id: &str) -> serde_json::Value {
-        match profile_token(&self.0, id) {
-            Ok(_) => serde_json::json!({"state":"available","reason":"TOKEN_AVAILABLE"}),
-            Err(reason) => serde_json::json!({"state":"unavailable","reason":reason}),
+    fn status(state: &'static str, reason: &'static str) -> Self {
+        Self {
+            status: TokenStatus::new(state, reason),
+            inner: None,
         }
+    }
+    pub fn unreadable() -> Self {
+        Self::status("unavailable", "TOKEN_STORE_UNREADABLE")
+    }
+    pub fn parse(bytes: &[u8]) -> Self {
+        if bytes.len() > STORE_BOUND {
+            return Self::unreadable();
+        }
+        match Self::decode(bytes) {
+            Ok(store) => store,
+            Err(reason) => Self::status("unsupported", reason),
+        }
+    }
+    fn decode(bytes: &[u8]) -> Result<Self> {
+        fn decode(bytes: &[u8]) -> Result<SecretJson> {
+            strict_json::parse_classified(bytes, STORE_BOUND)
+                .map(SecretJson)
+                .map_err(|reason| {
+                    if reason == "JSON_AMBIGUOUS" {
+                        "TOKEN_STORE_AMBIGUOUS"
+                    } else {
+                        "TOKEN_STORE_FORMAT"
+                    }
+                })
+        }
+        // Unlike legacy Fleet, admission does not remove an outer or inner BOM.
+        let outer = decode(bytes)?;
+        if !outer.0.is_object() {
+            return Err("TOKEN_STORE_FORMAT");
+        }
+        if outer.0.get("enc") != Some(&Value::Bool(false)) {
+            return Ok(Self::status("encrypted", "TOKEN_STORE_ENCRYPTED"));
+        }
+        let data = outer.0["data"].as_str().ok_or("TOKEN_DATA_NOT_STRING")?;
+        let inner = decode(data.as_bytes())?;
+        if !inner.0.is_object() && !inner.0.is_null() {
+            return Err("TOKEN_STORE_FORMAT");
+        }
+        if let Some(tokens) = inner.0.get("tokens") {
+            if !tokens.is_object() && !tokens.is_null() {
+                return Err("TOKEN_STORE_FORMAT");
+            }
+        }
+        Ok(Self {
+            status: TokenStatus::new("available", "TOKEN_STORE_AVAILABLE"),
+            inner: Some(inner),
+        })
+    }
+    fn tokens(&self) -> Option<&serde_json::Map<String, Value>> {
+        self.inner.as_ref()?.0.get("tokens")?.as_object()
+    }
+    pub fn lookup(&self, profile_id: &str) -> TokenStatus {
+        if self.status.state != "available" {
+            return self.status;
+        }
+        let Some(tokens) = self.tokens() else {
+            return TokenStatus::new("unavailable", "TOKEN_MISSING");
+        };
+        let Some(token) = tokens.get(profile_id) else {
+            let reason = if tokens
+                .keys()
+                .any(|key| key.to_lowercase() == profile_id.to_lowercase())
+            {
+                "TOKEN_KEY_MISMATCH"
+            } else {
+                "TOKEN_MISSING"
+            };
+            return TokenStatus::new("unavailable", reason);
+        };
+        let Some(token) = token.as_str().filter(|token| !token.is_empty()) else {
+            return TokenStatus::new("unavailable", "TOKEN_INVALID");
+        };
+        if token.len() > TOKEN_BOUND || token.contains('\0') {
+            return TokenStatus::new("unsupported", "TOKEN_INVALID");
+        }
+        TokenStatus::new("available", "TOKEN_AVAILABLE")
+    }
+    fn token(&self, profile_id: &str) -> Result<Zeroizing<String>> {
+        let status = self.lookup(profile_id);
+        if status.state != "available" {
+            return Err(status.reason);
+        }
+        let token = self
+            .tokens()
+            .and_then(|tokens| tokens.get(profile_id))
+            .and_then(Value::as_str)
+            .ok_or("TOKEN_MISSING")?;
+        Ok(Zeroizing::new(token.to_owned()))
     }
 }
 
 // Neither the reference (private profile/name) nor resolved credential implements
 // Debug/Serialize. A caller can obtain references only from a validated inventory.
 enum Source {
-    BatProfile { profile_id: String },
-    Dpapi { name: String },
+    BatProfile {
+        profile_id: String,
+        source_policy: Option<u64>,
+    },
+    Dpapi {
+        name: String,
+    },
 }
 pub struct CredentialRef {
     source: Source,
@@ -58,6 +166,14 @@ impl CredentialRef {
         Ok(Self {
             source: Source::BatProfile {
                 profile_id: profile.into(),
+                source_policy: value
+                    .get("source_policy")
+                    .map(|v| {
+                        v.as_u64()
+                            .filter(|v| *v == BAT_SOURCE_POLICY)
+                            .ok_or(REFERENCE)
+                    })
+                    .transpose()?,
             },
         })
     }
@@ -105,9 +221,23 @@ pub fn resolve(data_dir: &Path, reference: &CredentialRef) -> Result<ProbeCreden
         return Err(MISSING);
     }
     let token = match &reference.source {
-        Source::BatProfile { profile_id } => {
-            let bytes = read_fixed(data_dir, "profiles", "remote-tokens.enc.json", STORE_BOUND)?;
-            profile_token(&bytes, profile_id)?
+        Source::BatProfile {
+            profile_id,
+            source_policy,
+        } => {
+            let bytes = read_fixed(data_dir, "profiles", "remote-tokens.enc.json", STORE_BOUND)
+                .map_err(|reason| {
+                    if source_policy.is_some() {
+                        "TOKEN_STORE_UNREADABLE"
+                    } else {
+                        reason
+                    }
+                })?;
+            if source_policy.is_some() {
+                AdmissionStore::parse(&bytes).token(profile_id)?
+            } else {
+                profile_token(&bytes, profile_id)?
+            }
         }
         Source::Dpapi { name } => {
             if !valid_name(name) {

@@ -222,7 +222,10 @@ impl Inventory {
                 Some("bat-profile-token") => {
                     fields(value, &["kind", "profile_id"], &["source_policy"])?;
                     text(&value["profile_id"])?;
-                    if value.get("source_policy").is_some_and(|v| v.as_u64() != Some(1)) {
+                    if value
+                        .get("source_policy")
+                        .is_some_and(|v| v.as_u64() != Some(1))
+                    {
                         return Err(INVALID);
                     }
                 }
