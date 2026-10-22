@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from bat_agent_connector import managed_runtime as runtime
-from desktop.tests.managed_runtime_assertions import stable_launch
+from desktop.tests.managed_runtime_assertions import assert_stopped_reply, stable_launch
 
 
 def test_stable_launch_ignores_observation_clocks_without_mutating_replies():
@@ -383,14 +383,15 @@ def test_lost_stop_reply_keeps_pending(slow_stopping_installation, monkeypatch):
 def test_cli_hold_never_starts(installation, monkeypatch, capsys, command):
     root, children = installation
     runtime.ensure(root, timeout=15)
-    runtime.stop(root)
+    stopped = runtime.stop(root)
     children[0].wait(timeout=10)
     monkeypatch.setattr(sys, 'argv', ['runtime', command, '--data-dir', str(root)])
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit) as exited:
         runtime.main()
     failure = json.loads(capsys.readouterr().out)
     assert failure['error'] == 'SERVICE_STOPPED'
     assert failure['lifecycle']['state'] == 'stopped'
+    assert_stopped_reply(exited.value.code, failure, stopped['lifecycle'])
     assert len(children) == 1
 
 

@@ -29,7 +29,12 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from managed_runtime_assertions import stable_launch
+from managed_runtime_assertions import (
+    assert_stopped_reply,
+    service_files,
+    service_stays_stopped,
+    stable_launch,
+)
 
 continuity = runpy.run_path(str(Path(__file__).resolve().parents[2] / 'tests/upgrade_continuity_helpers.py'))
 snapshot_rows = continuity['snapshot_rows']
@@ -61,7 +66,7 @@ def package(resources, directory):
     return manifest, executable
 
 
-def command(executable, data, env, *, action='ensure', refused=False):
+def command(executable, data, env, *, action='ensure', refused=False, stopped=None):
     result = subprocess.run(  # noqa: S603 - digest-verified fixture executable, fixed argv
         [str(executable), action, '--data-dir', str(data)], env=env,
         stdin=subprocess.DEVNULL, capture_output=True, timeout=90)
@@ -70,7 +75,9 @@ def command(executable, data, env, *, action='ensure', refused=False):
         reply = json.loads(result.stdout)
     except ValueError:
         raise AssertionError('Invalid packaged runtime reply') from None
-    if refused:
+    if stopped is not None:
+        assert_stopped_reply(result.returncode, reply, stopped)
+    elif refused:
         # Native IPC deliberately returns no arbitrary exception text. Verify
         # refusal and its phase, then check owner/data preservation separately.
         assert result.returncode != 0 and reply.get('error') == 'MANAGED_RUNTIME_UNAVAILABLE'
@@ -264,10 +271,20 @@ def idle_upgrade(previous, current, old_manifest, new_manifest, root, env):
         assert_history(data, operation['operation_id'], saved)
         command(previous, data, env, refused=True)
         assert stable_launch(command(current, data, env)) == stable_launch(upgraded)
-        assert command(current, data, env, action='stop')['stopped'] is True
+        stop_reply = command(current, data, env, action='stop')
+        assert stop_reply['stopped'] is True
         stopped = True
-        restarted = command(current, data, env)
-        stopped = False
+        with service_stays_stopped(data):
+            command(current, data, env, stopped=stop_reply['lifecycle'])
+            assert command(current, data, env, action='status')['lifecycle'] == stop_reply['lifecycle']
+        # The old fixture assumed stop -> ensure restarted. The product's durable
+        # hold is intentional; only an explicit resume can clear it.
+        stopped = False  # cleanup must also cover a partly completed resume
+        restarted = command(current, data, env, action='resume')
+        assert not (data / 'state/lifecycle.json').exists()
+        resumed_owner = service_files(data)
+        assert stable_launch(command(current, data, env)) == stable_launch(restarted)
+        assert service_files(data) == resumed_owner, 'Ensure must reuse the one resumed service'
         assert identity(restarted) == identity(original)
         assert restarted['runtime_version'] == new_manifest['runtime_version']
         assert_history(data, operation['operation_id'], saved)
@@ -592,6 +609,7 @@ def main():
             'platform': new['platform'], 'architecture': new['architecture'], 'no_python_on_child_path': True,
             'stable_identity_and_workspace': True, 'original_operation_key_and_history': True,
             'concurrent_upgrade_clients': 3, 'new_version_read_back': True, 'downgrade_refused': True,
+            'stop_hold_refuses_ensure_without_spawn_or_lease': True, 'explicit_resume_reuses_one_owner': True,
             'uncertain_effect_blocks_upgrade': True, 'unknown_key_and_old_owner_retained': True,
             'publication_continuity': publication,
             'task_owned_processes_stopped': True, 'fixture_directory_removed': True}

@@ -18,6 +18,8 @@ import time
 import urllib.request
 from pathlib import Path
 
+from managed_runtime_assertions import assert_stopped_reply, service_files, service_stays_stopped
+
 
 def remove_stopped_fixture(directory: Path, *, timeout: float = 30) -> None:
     # The owned stop receipt already proves the daemon released its service lease.
@@ -59,16 +61,15 @@ def main() -> None:
     # PyInstaller one-file extraction is also explicitly disk-backed.
     env["TMPDIR"] = env["TEMP"] = env["TMP"] = str(directory)
 
-    def command(action: str, *, refused: str | None = None) -> dict:
+    def command(action: str, *, stopped: dict | None = None) -> dict:
         result = subprocess.run(  # noqa: S603 - hash-verified bundled fixture executable
             [str(runtime), action, "--data-dir", str(data)], env=env,
             stdin=subprocess.DEVNULL, capture_output=True, timeout=90,
         )
-        if refused is not None:
+        if stopped is not None:
             assert result.returncode != 0, "Held service must refuse automatic start"
             document = json.loads(result.stdout)
-            assert document["protocol"] == 1 and document["error"] == refused
-            assert document["lifecycle"]["state"] == "stopped"
+            assert_stopped_reply(result.returncode, document, stopped)
             return document
         if result.returncode:
             try:
@@ -121,13 +122,19 @@ def main() -> None:
         assert handoff.parent.resolve() == (data / "browser-handoffs").resolve()
         assert handoff.suffix == ".html" and not handoff.is_symlink()
         assert original["token"] not in handoff.read_text(), "Bearer must not enter browser handoff"
-        assert command("stop")["stopped"] is True
+        stop_reply = command("stop")
+        assert stop_reply["stopped"] is True
         stopped = True
-        command("ensure", refused="SERVICE_STOPPED")
-        command("browser", refused="SERVICE_STOPPED")
-        assert command("status")["lifecycle"]["state"] == "stopped"
+        with service_stays_stopped(data):
+            command("ensure", stopped=stop_reply["lifecycle"])
+            command("browser", stopped=stop_reply["lifecycle"])
+            assert command("status")["lifecycle"]["state"] == "stopped"
+        stopped = False  # A partial resume must still be stopped in finally.
         restarted = command("resume")
-        stopped = False
+        assert not (data / "state/lifecycle.json").exists()
+        resumed_owner = service_files(data)
+        assert identity(command("ensure")) == identity(restarted)
+        assert service_files(data) == resumed_owner
         assert identity(restarted) == identity(original), "Restart must preserve journal identities"
         assert bootstrap(restarted)["sync"]["server_id"] == original["server_id"]
         assert command("stop")["stopped"] is True

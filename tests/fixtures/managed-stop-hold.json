@@ -1,0 +1,19 @@
+{
+  "exit": 1,
+  "reply": {
+    "protocol": 1,
+    "error": "SERVICE_STOPPED",
+    "message": "background service stays stopped until Start",
+    "errno": null,
+    "winerror": null,
+    "location": {
+      "phase": "ensure",
+      "storage": "none"
+    },
+    "lifecycle": {
+      "state": "stopped",
+      "requested_at": 1800000000,
+      "stopped_at": 1800000001
+    }
+  }
+}
