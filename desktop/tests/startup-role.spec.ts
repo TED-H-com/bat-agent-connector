@@ -79,3 +79,42 @@ for (const locale of ['en-US', 'zh-TW']) test(`selection refusal keeps the pendi
     c.command === 'connector_setup_configuration' || c.command === 'connector_enroll'))).toEqual([]);
   await context.close();
 });
+
+for (const locale of ['en-US', 'zh-TW']) for (const roleShape of ['missing', 'null'])
+  test(`legacy native entry keeps bootstrap isolation (${locale}, ${roleShape})`, async ({browser}, testInfo) => {
+    const context = await browser.newContext({locale}), page = await context.newPage();
+    const errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.addInitScript(roleShape => {
+      const trace: any[] = [], requests: string[] = [];
+      let phase = 'starting';
+      Object.assign(window, {isTauri: true, __entryTrace: trace, __entryRequests: requests,
+        __TAURI_INTERNALS__: {invoke: async (command: string, args: any) => {
+          trace.push({command, phase, mounted: !!document.querySelector('.native-connection')});
+          if (command === 'native_status') return {endpoint: 'https://central.example/', credential_available: true,
+            error: null, ...(roleShape === 'null' ? {startup_role: null} : {})};
+          if (command === 'connector_connect') {phase = 'connecting'; return {actor: 'expected-actor', scopes: ['observe']};}
+          if (command === 'connector_disconnect') {phase = 'disconnected'; return;}
+          if (command === 'fleet_availability') return {configured: false, platform_supported: false};
+          if (command === 'connector_request') {
+            requests.push(args.input.path);
+            trace.push({path: args.input.path, phase, stack: new Error().stack});
+            phase = 'validating-bootstrap';
+            return {status: 200, data: {sync: {version: 1, server_id: 'server', principal_id: 'principal', checkpoint: {cursor: 0, token: 'proof'}},
+              capabilities: {actor: 'different-actor', scopes: ['observe']}}};
+          }
+          throw new Error('Unexpected native command ' + command);
+        }}});
+    }, roleShape);
+    try {
+      await page.goto('/dashboard/');
+      await expect(page.locator('.native-connection')).toBeVisible();
+      await expect(page.locator('[data-error-summary]').filter({hasText: 'Invalid central bootstrap identity'})).toBeVisible();
+      await expect(page.locator('[data-startup-role]')).toHaveCount(0);
+      expect(await page.evaluate(() => (window as any).__entryRequests)).toEqual(['/bootstrap']);
+      expect(errors).toEqual([]);
+    } finally {
+      await testInfo.attach('native-entry-trace', {body: JSON.stringify(await page.evaluate(() => (window as any).__entryTrace), null, 2), contentType: 'application/json'});
+      await context.close();
+    }
+  });
