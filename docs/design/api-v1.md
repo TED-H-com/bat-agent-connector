@@ -324,6 +324,7 @@ step 2 之後；backfilled snapshot 的 occurred_at=null，原事件不改寫。
 | 路徑／欄位 | 已實作契約 |
 | --- | --- |
 | `GET /api/v1/managed/setup` | 原安裝 personal identity 與 `manage`；新增 `preview_contract_version:1`，其餘 setup state 保留。未宣告此版本時，新 UI 要求先更新 Connector，不自動退回舊式套用。[managed_setup.py:183](../../src/bat_agent_connector/managed_setup.py#L183)、[managed-setup.js:424](../../desktop/src/managed-setup.js#L424) |
+| `POST /api/v1/managed/setup/discover` | 明確唯讀查詢，與 preview 相同的 `manage`／personal installation 邊界，固定 route、無 query。輸入 `{revision, import_profile_id, profile_id?}` 或 `{revision, url, fingerprint, secret_ref, profile_id?}`，只能選一種來源。回傳 `{source, profiles:[{id,name}], profile_id:string或null, workspaces:[{workspace_id,name}]}`。`source` 是 [D3 固定 descriptor v1](fleet-configuration.md#d3-source-descriptor-v1固定契約)。只呼叫與 Apply 共用的 `_read_host`，pinned connect、10 秒 ping、既有 channel deadlines；profiles/workspaces 各最多 200。唯一有效 profile 可預選，多個則待選擇後再次明確查詢該 profile 的 workspaces。不建立 operation／journal、不消耗 staging、不寫設定，兩個 write gates 都關閉。 |
 | `POST /api/v1/managed/setup/preview` | 同一 route table／認證邊界，scope 為 `manage`；無 query，只接受 `{action,target,params,preconditions}`，action 必須為 `setup.host`，target 為 `{host}`，params 沿用候選 builder 的 allowlist，preconditions 只能含 `{config_revision}`。原安裝／personal identity、busy、revision、來源、型別與 parser roundtrip 均先驗；不建立 operation／step、不寫設定、不連 BAT／SSH／Git。[api_v1.py:249](../../src/bat_agent_connector/api_v1.py#L249)、[api_v1.py:1401](../../src/bat_agent_connector/api_v1.py#L1401)、[managed_setup.py:262](../../src/bat_agent_connector/managed_setup.py#L262)、[managed_setup.py:383](../../src/bat_agent_connector/managed_setup.py#L383) |
 | 成功回應 | `{preview:{contract_version:1,action,target,config_revision,after_revision,review_digest,changes,source,warnings,effects}}`。changes 是 allowlist 的 `{field,before,after}`，source 是 `{kind,reference,available}`；kind 為 `bat_profile`、`staged_secret` 或 `existing_connection`。不含原始 TOML、秘密本文或解析後的 `file:` 憑證路徑；正式形狀見 [producer golden](../../tests/fixtures/managed-setup-preview.json)。[managed_setup.py:412](../../src/bat_agent_connector/managed_setup.py#L412)、[test_managed_setup_preview_golden.py:16](../../tests/test_managed_setup_preview_golden.py#L16) |
 | `review_digest` | SHA-256 綁版本、server／principal／actor、literal action／target／params（只有不透明秘密引用）及 before／after revisions。不是操作授權或加密簽章；Apply 仍重跑原安裝／scope／來源／busy guards。來源或請求改變須重新預覽。[managed_setup.py:405](../../src/bat_agent_connector/managed_setup.py#L405)、[managed_setup.py:450](../../src/bat_agent_connector/managed_setup.py#L450) |
@@ -332,3 +333,14 @@ step 2 之後；backfilled snapshot 的 occurred_at=null，原事件不改寫。
 
 此處只實作既有 managed setup 的連線預覽；角色選擇、四檔協調與 native apply 仍依
 [Fleet 共用契約](fleet-configuration.md#加入機器共用契約已定尚未實作) 的已定／尚未實作界線，不能視為實機驗收。
+
+Discovery 的 capability 為 `GET /managed/setup` 的 `discovery_contract_version:1`。
+`/capabilities` 沒有 HTTP route 清單，因此不增加另一份 route advertisement。
+WebView 透過既有 `connector_request` 的固定 HTTP allowlist 存取 `/managed/setup/discover`；沒有新增 IPC。
+新版 UI 將選定的伺服器 `profile_id` 與 `source_digest` 放進既有 `setup.host` preview params，
+import 來源也可以攜帶這兩欄；未帶 discovery snapshot 的舊請求維持原有欄位限制。
+既有 review digest 繼續綁定 params、來源及候選設定；preview、admission、執行與寫檔前均重新依 D3
+讀來源快照，不一致或 staging 到期時走 `SETUP_REVIEW_CHANGED`。首次 discovery 到期則為 `INVALID_SECRET`；
+不符合 admission 的 import 為 `PROFILE_UNAVAILABLE`。唯讀 discovery／preview 的 operation refusals 帶
+`admission_refused:true`，證明沒有建立 durable intent。
+`GET /managed/setup` 與 preview 仍不執行 BAT／SSH 探測。

@@ -1,0 +1,172 @@
+{
+  "initial": {
+    "request": {
+      "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "url": "wss://host-a.example.invalid:9876/",
+      "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "secret_ref": "setup_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "response": {
+      "source": {
+        "reference": "source_dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "kind": "staged_secret",
+        "policy_version": 1,
+        "source_digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "profile_reference": null,
+        "association": {
+          "url": "wss://host-a.example.invalid:9876/",
+          "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        "availability_reason": "SOURCE_AVAILABLE"
+      },
+      "profiles": [
+        {
+          "id": "default",
+          "name": "Default"
+        },
+        {
+          "id": "work",
+          "name": "Work"
+        }
+      ],
+      "profile_id": null,
+      "workspaces": []
+    }
+  },
+  "work": {
+    "request": {
+      "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "url": "wss://host-a.example.invalid:9876/",
+      "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "secret_ref": "setup_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "profile_id": "work"
+    },
+    "response": {
+      "source": {
+        "reference": "source_dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "kind": "staged_secret",
+        "policy_version": 1,
+        "source_digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "profile_reference": null,
+        "association": {
+          "url": "wss://host-a.example.invalid:9876/",
+          "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        "availability_reason": "SOURCE_AVAILABLE"
+      },
+      "profiles": [
+        {
+          "id": "default",
+          "name": "Default"
+        },
+        {
+          "id": "work",
+          "name": "Work"
+        }
+      ],
+      "profile_id": "work",
+      "workspaces": [
+        {
+          "workspace_id": "ws-1",
+          "name": "demo-project"
+        },
+        {
+          "workspace_id": "ws-2",
+          "name": "other"
+        }
+      ]
+    },
+    "preview_request": {
+      "action": "setup.host",
+      "target": {
+        "host": "bat"
+      },
+      "params": {
+        "url": "wss://host-a.example.invalid:9876/",
+        "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "secret_ref": "setup_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "profile_id": "work",
+        "source_digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "writes": false,
+        "orchestrate": false,
+        "shared_clone_worktrees": false,
+        "managed_roots": []
+      },
+      "preconditions": {
+        "config_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "review": {
+      "preview": {
+        "contract_version": 1,
+        "action": "setup.host",
+        "target": {
+          "host": "bat"
+        },
+        "config_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "after_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "review_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "changes": [
+          {
+            "field": "url",
+            "before": null,
+            "after": "wss://host-a.example.invalid:9876/"
+          },
+          {
+            "field": "fingerprint",
+            "before": null,
+            "after": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          },
+          {
+            "field": "profile_id",
+            "before": null,
+            "after": "work"
+          },
+          {
+            "field": "git",
+            "before": null,
+            "after": "ssh"
+          },
+          {
+            "field": "writes",
+            "before": null,
+            "after": false
+          },
+          {
+            "field": "orchestrate",
+            "before": null,
+            "after": false
+          },
+          {
+            "field": "shared_clone_worktrees",
+            "before": null,
+            "after": false
+          },
+          {
+            "field": "managed_roots",
+            "before": null,
+            "after": []
+          }
+        ],
+        "source": {
+          "kind": "staged_secret",
+          "reference": "setup_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "available": true
+        },
+        "warnings": [
+          "READ_ONLY_VERIFICATION_ON_APPLY"
+        ],
+        "effects": {
+          "configuration_written": false,
+          "operation_created": false,
+          "probe_started": false,
+          "credential_staged": true,
+          "on_apply": [
+            "read_only_verification",
+            "save_configuration"
+          ]
+        }
+      }
+    }
+  }
+}
