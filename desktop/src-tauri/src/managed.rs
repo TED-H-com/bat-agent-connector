@@ -546,6 +546,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn clean_install_waits_for_role_before_touching_runtime_or_python_data() {
+        let root = tempfile::tempdir().unwrap();
+        let data = root.path().join("application");
+        let config = root.path().join("configuration");
+        // An absent package must not even be inspected until a provider is chosen.
+        let (managed, launch) = Managed::prepare(&root.path().join("resources"), &data, &config);
+        assert_eq!(managed.status().mode, "role_pending");
+        assert!(managed.status().error.is_none());
+        assert!(launch.is_none());
+        assert!(!data.join("managed-runtimes").exists());
+        assert!(!data.join("managed-central").exists());
+        assert!(!config.exists());
+    }
+
+    #[test]
     fn produced_manifest_has_optional_build_identity_and_rejects_unknown_fields() {
         let mut document: serde_json::Value = serde_json::from_str(include_str!(
             "../../../tests/fixtures/runtime-manifest.json"
