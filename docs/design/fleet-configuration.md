@@ -506,7 +506,9 @@ browser intent pending for six minutes is supported. When a never-claimed prepar
 challenge has expired, claim or resumed execution reissues it under the same
 operation, step and effect ID, with epoch + 1 and a new expiry; the old challenge is
 invalidated. A first claim also sets expiry to claim time + 300 seconds. It never
-creates another intent or key. Cancelled/failed operations cannot claim a step.
+creates another intent or key. Terminal operations cannot claim a new step. An
+already claimed, unexpired envelope can still be replayed after definitive
+completion, with its recorded receipt; cancelled/abandoned operations cannot claim.
 
 All claims above, except `receipt`, bind a domain-separated HMAC using the existing
 Connector-local `task-admin.token`, held in its protected file outside the journal.

@@ -134,3 +134,17 @@ async def test_r2_handoff_key_is_outside_journal(installed, served_setup, source
 async def test_r2_receipt_wire_limit_precedes_json_parsing(installed, served_setup):
     status, _ = await served_setup.raw_request(connections.RECEIPT, b"not-json" + b" " * 8192)
     assert status == 413
+
+
+async def test_r2_claim_replay_after_completion_keeps_original_challenge(installed, served_setup, source, tmp_path):
+    daemon, _, _ = installed
+    _, ident = await connections._r2_waiting(installed, served_setup, source)
+    native = await connections._r2_dispatch(served_setup, ident)
+    assert (await connections.DiskParticipant(tmp_path / "participant.json").send(served_setup, native))[0][0] == 200
+    await settle_operations(daemon.ops)
+    assert daemon.ops.get(ident)["status"] == "succeeded"
+    status, response = await served_setup("POST", connections.HANDOFF,
+        {"operation_id": ident, "installation_ref": "desktop-a"})
+    assert status == 200, response
+    assert all(response["native_handoff"][key] == native[key] for key in native if key != "receipt")
+    assert response["native_handoff"]["receipt"]["outcome"] == "applied"

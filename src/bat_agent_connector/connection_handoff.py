@@ -110,7 +110,7 @@ def claim(ops, principal, body):
         if (operation["action"] != "setup.connection.apply"
                 or body["installation_ref"] != operation["target"]["installation_ref"]):
             raise OperationError("FORBIDDEN", "Handoff belongs to the original principal and installation", 403)
-        if operation["status"] in {"cancelled", "failed", "succeeded"} or operation["cancel_requested"]:
+        if operation["status"] == "cancelled" or operation["cancel_requested"]:
             _refuse("A terminal operation cannot claim a native effect")
         row = ops.db.execute("SELECT request,response FROM operation_steps WHERE operation_id=? AND name=?",
             (operation["operation_id"], STEP)).fetchone()
@@ -118,13 +118,15 @@ def claim(ops, principal, body):
             _refuse("The native step is not ready")
         request = json.loads(row["request"])
         sent = (operation.get("external_refs") or {}).get("native_effects_sent")
+        history = receipts(row)
+        if operation["status"] in {"succeeded", "failed"} and (not sent or not history):
+            _refuse("A terminal operation cannot claim a new native effect")
         if sent and now() >= request["expires_at"]:
             raise OperationError("CONNECTION_HANDOFF_EXPIRED", "A claimed effect cannot be claimed again after expiry", 409)
         if not sent:
             request = _renew(ops, operation["operation_id"], request, claiming=True)
             ops._merge_refs(operation["operation_id"], {"native_effects_sent": True})
         claims = {key: request[key] for key in CLAIMS}
-        history = receipts(row)
         return {"native_handoff": {**claims, "challenge": _challenge(ops, claims), "receipt": history[-1] if history else None}}
 
 
