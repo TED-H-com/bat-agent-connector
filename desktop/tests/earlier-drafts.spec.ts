@@ -29,8 +29,12 @@ async function writeForms(page: Page, suffix: string) {
     const title = create.box.querySelector('input'); title.value = `Work title ${suffix}`; title.dispatchEvent(new Event('input'));
     for (const [action, name, text] of [['pm.message.append', 'content', `PM draft ${suffix}`], ['session.send', 'text', `Follow-up ${suffix}`]]) {
       const input = h('textarea');
-      const form = durableForm({...base, action, target: {workspace_id: 'ws_' + 'c'.repeat(32), work_item_id: 'wi_' + 'd'.repeat(20)},
-        fields: {[name]: input}, params: () => ({}), preconditions: () => ({}), permitted: () => false, label: 'send', extra: input});
+      const target = {workspace_id: 'ws_' + 'c'.repeat(32), ...(action === 'session.send'
+        ? {work_item_id: 'wi_' + 'd'.repeat(20)} : {thread_id: 'pmt_' + 'e'.repeat(32)})};
+      const form = durableForm({...base, action, target, fields: {[name]: input},
+        params: (values: any) => action === 'session.send' ? {text: values.text.trim(), schedule: 'after_current'} : {content: values.content},
+        preconditions: () => action === 'session.send' ? {expected_attempt_id: 'att_' + 'f'.repeat(32)} : {expected_version: 1},
+        permitted: () => false, label: 'send', extra: input});
       document.body.append(form.box); input.value = text; input.dispatchEvent(new Event('input')); form.dispose(); form.box.remove();
     }
     create.box.remove();
