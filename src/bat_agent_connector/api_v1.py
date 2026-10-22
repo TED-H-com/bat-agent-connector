@@ -1412,10 +1412,7 @@ class ApiV1:
         from . import managed_setup
         if query:
             raise ApiError(422, "INVALID_REQUEST", "setup preview accepts no query")
-        try:
-            return 200, managed_setup.preview(self.daemon, principal, body)
-        except OperationError as error:
-            return error.status, {"error": {"code": error.code, "message": error.message, "admission_refused": True}}
+        return 200, managed_setup.preview(self.daemon, principal, body)
 
     async def managed_setup_secret(self, principal, query, body, **_):
         from . import managed_setup

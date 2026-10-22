@@ -1,5 +1,5 @@
 import {test, expect, type Page} from '@playwright/test';
-import {managedSetupFixture, openSetupAdvanced, applySetupReview} from './managed-setup-fixture.ts';
+import {managedSetupFixture, reviewSetupConnection, expectLegacyProfileFallback, openSetupAdvanced, applySetupReview} from './managed-setup-fixture.ts';
 
 const connectionUrl = `ws://127.0.0.1?token=synthetic-bat-secret&fp=${'ab'.repeat(32)}`;
 const field = (page: Page, name: string) => page.locator(`[data-setup-field=${name}]`);
@@ -69,7 +69,7 @@ for (const locale of ['en', 'zh-TW']) test.describe(`${locale} setup review`, ()
       return step.nextElementSibling!.getBoundingClientRect().top - submit.bottom;
     });
     expect(firstGap).toBe(16);
-    await paste(page, connectionUrl); await page.locator('[data-setup-host] button[type=submit]').click(); await applySetupReview(page);
+    await paste(page, connectionUrl); await reviewSetupConnection(page,locale); await applySetupReview(page);
     const sessions = panel.getByRole('link', {name: locale === 'en' ? 'View sessions' : '查看工作階段', exact: true});
     const change = panel.getByRole('button', {name: locale === 'en' ? 'Change settings' : '修改設定', exact: true});
     await expect(sessions).toBeVisible(); await expect(change).toBeVisible();
@@ -110,7 +110,7 @@ for (const locale of ['en', 'zh-TW']) test.describe(`${locale} setup review`, ()
     await expect(panel.locator('[data-setup-actions]')).toBeHidden();
     expect(await gaps()).toEqual({afterAction: 16, betweenSteps: 0});
     state.refused = true; state.refusalCode = 'HOST_IDENTITY_CHANGED'; state.refusalStatus = 409;
-    await panel.locator('[data-setup-host] button[type=submit]').click(); await applySetupReview(page);
+    await reviewSetupConnection(page,locale); await applySetupReview(page);
     await expect(panel.locator('[data-setup-error=host]')).toHaveText(locale === 'en'
       ? 'Use a new host ID for changed connection or trust settings.' : '此主機的連線設定已變更，請使用新的主機代號。');
     await expect(field(page, 'host')).toBeEditable(); await expect(panel.locator('[data-setup-actions]')).toBeHidden();
@@ -135,16 +135,20 @@ for (const locale of ['en', 'zh-TW']) test.describe(`${locale} setup review`, ()
     const state = await managedSetupFixture(page, false, locale);
     state.refused = true; state.refusalCode = 'HOST_IDENTITY_CHANGED'; state.refusalStatus = 409;
     await page.goto('/dashboard/'); await openSetupAdvanced(page); await paste(page, connectionUrl);
-    await page.locator('[data-setup-host] button[type=submit]').click(); await applySetupReview(page);
+    await reviewSetupConnection(page,locale); await applySetupReview(page);
     await expect(field(page, 'host')).toHaveValue('local'); await expect(field(page, 'host')).toBeEditable();
     await expect(page.locator('[data-setup-error=host]')).toHaveText(locale === 'en'
       ? 'Use a new host ID for changed connection or trust settings.'
       : '此主機的連線設定已變更，請使用新的主機代號。');
     await expect(page.getByRole('button', {name: locale === 'en' ? 'Check request' : '查回請求', exact: true})).toBeHidden();
     state.refused = false; await field(page, 'host').fill('local-new');
-    await page.locator('[data-setup-host] button[type=submit]').click(); await applySetupReview(page);
+    await reviewSetupConnection(page,locale); await applySetupReview(page);
     await expect(page.locator('[data-managed-setup]')).toContainText(locale === 'en' ? 'local-new · Connected' : 'local-new · 已連線');
     expect(state.posts).toHaveLength(2); expect(state.staged).toHaveLength(1);
     expect(state.posts[1].idempotency_key).not.toBe(state.posts[0].idempotency_key);
   });
+});
+
+for (const locale of ['en', 'zh-TW']) test(`${locale} older Connector keeps the typed profile fallback`, async ({page}) => {
+  await expectLegacyProfileFallback(page, locale);
 });

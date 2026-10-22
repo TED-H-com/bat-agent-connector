@@ -10482,7 +10482,7 @@ var init_i18n = __esmMin((() => {
 			setup_copy_help: "請在 BAT 開啟「設定 → 遠端 → 遠端存取」，複製連線網址後貼到下方。如果尚未啟動，請先按「啟動伺服器」。",
 			setup_copy_label: "貼上從 BAT 複製的連線網址",
 			setup_continue: "繼續設定",
-			setup_choose_connection: "找到多個已儲存的連線。請選擇要使用的連線，再按「預覽連線」。",
+			setup_choose_connection: "找到多個已儲存的連線。請選擇要使用的連線，再按「尋找設定檔與工作區」。",
 			setup_connection_choice: "要使用的連線",
 			setup_choose_placeholder: "請選擇連線",
 			setup_failed_operation: "設定尚未完成，請查看詳細資料。",
@@ -10530,6 +10530,10 @@ var init_i18n = __esmMin((() => {
 			setup_allow_integrate: "允許整合成果到 PR",
 			setup_allow_merge: "允許合併 PR",
 			setup_allow_pr_update: "允許更新 PR 資料",
+			setup_choose_profile: "請選擇設定檔",
+			setup_discovery_required: "請先尋找設定檔與工作區，再預覽此連線。",
+			setup_profile_token_required: "若要為此連線選擇其他 BAT 設定檔，請貼上 BAT 連線權杖，再尋找設定檔與工作區。",
+			error_code_SETUP_DISCOVERY_TIMEOUT: "探索逾時，請重新尋找設定檔與工作區。",
 			setup_discover: "尋找設定檔與工作區",
 			setup_discovered_profile: "BAT 設定檔",
 			setup_discovery_read: "Connector 已唯讀查詢伺服器。選擇設定檔；工作區可帶入下方儲存庫設定。",
@@ -12215,7 +12219,7 @@ var init_i18n = __esmMin((() => {
 			setup_copy_help: "In BAT, open Settings → Remote → Remote Access, copy the connection URL and paste it below. If it is not running, choose Start Server first.",
 			setup_copy_label: "Paste the connection link copied from BAT",
 			setup_continue: "Continue setup",
-			setup_choose_connection: "More than one saved connection was found. Choose the one you want, then select Review connection.",
+			setup_choose_connection: "More than one saved connection was found. Choose the one you want, then select Find profiles and workspaces.",
 			setup_connection_choice: "Connection to use",
 			setup_choose_placeholder: "Choose a connection",
 			setup_failed_operation: "Setup hasn’t finished. See details for more information.",
@@ -12263,6 +12267,10 @@ var init_i18n = __esmMin((() => {
 			setup_allow_integrate: "Allow result integration into PRs",
 			setup_allow_merge: "Allow PR merges",
 			setup_allow_pr_update: "Allow PR metadata updates",
+			setup_choose_profile: "Choose a profile",
+			setup_discovery_required: "Find profiles and workspaces before reviewing this connection.",
+			setup_profile_token_required: "To choose another BAT profile for this connection, paste its BAT connection token, then find profiles and workspaces.",
+			error_code_SETUP_DISCOVERY_TIMEOUT: "Discovery timed out. Find profiles and workspaces again.",
 			setup_discover: "Find profiles and workspaces",
 			setup_discovered_profile: "BAT profile",
 			setup_discovery_read: "Connector read the server without making changes. Choose a profile; a workspace can fill the repository settings below.",
@@ -56652,7 +56660,15 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		"data-setup-discover": "",
 		hidden: true,
 		onclick: () => findSources().catch(showError)
-	}, t("setup_discover")), h("details", {}, h("summary", {}, t("setup_managed_work")), checkbox("writes", "setup_allow_messages"), checkbox("orchestrate", "setup_allow_start"), checkbox("shared_clone_worktrees", "setup_shared_clone"), h("p", { class: "muted" }, t("setup_shared_clone_help")), h("div", { class: "capture-fields" }, input("managed_roots", "setup_managed_roots"), input("ssh_alias", "setup_ssh_alias")), h("p", { class: "muted" }, t("setup_roots_help"))), h("button", {
+	}, t("setup_discover")), h("p", {
+		class: "note",
+		hidden: true,
+		"data-setup-discovery-reason": ""
+	}), h("details", {}, h("summary", {}, t("setup_managed_work")), checkbox("writes", "setup_allow_messages"), checkbox("orchestrate", "setup_allow_start"), checkbox("shared_clone_worktrees", "setup_shared_clone"), h("p", { class: "muted" }, t("setup_shared_clone_help")), h("div", { class: "capture-fields" }, input("managed_roots", "setup_managed_roots"), input("ssh_alias", "setup_ssh_alias")), h("p", { class: "muted" }, t("setup_roots_help"))), h("p", {
+		class: "note",
+		hidden: true,
+		"data-setup-review-reason": ""
+	}), h("button", {
 		type: "submit",
 		class: "primary"
 	}, t("setup_review_connection")));
@@ -57036,10 +57052,22 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			update();
 		}
 	}
+	const hasFreshCredential = () => !!fields.get("bat_secret").value || (stagedSecrets.get("host")?.expiresAt || 0) > Date.now();
+	const configuredHost = () => snapshot?.hosts?.find((row) => row.name === fields.get("host").value.trim());
+	function reuseExistingConnection() {
+		const host = configuredHost();
+		return !!host?.token_available && !saved.import_profile_id && !hasFreshCredential() && host.url?.replace(/\/$/, "") === fields.get("url").value.trim().replace(/\/$/, "") && normalizeSetupFingerprint(host.fingerprint || "") === normalizeSetupFingerprint(fields.get("fingerprint").value) && (host.profile_id || "default") === (fields.get("profile_id").value.trim() || "default");
+	}
+	const needsDiscovery = () => snapshot?.discovery_contract_version === 1 && !reuseExistingConnection() && !discovery?.profile_id;
+	const discoveryReason = () => configuredHost() && !hasFreshCredential() ? "setup_profile_token_required" : "setup_discovery_required";
 	async function findSources(selected) {
 		if (!alive() || busy || reviewing || discovering || saved.intent || !readReady || snapshot?.busy || !allowed("host") || snapshot.discovery_contract_version !== 1) return;
 		defaultHost();
-		if (!validateHost()) return;
+		if (configuredHost() && !hasFreshCredential()) {
+			showError(Error(t("setup_profile_token_required")), { sourceRefresh: false });
+			return;
+		}
+		if (!validateHost(void 0, true)) return;
 		const serial = ++discoverySerial;
 		invalidateReview();
 		discovering = true;
@@ -57075,9 +57103,10 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			const result = await api("POST", "/managed/setup/discover", body);
 			guard();
 			if (serial !== discoverySerial || body.revision !== snapshot?.revision) return;
-			if (!result.source || !/^[a-f0-9]{64}$/.test(result.source.source_digest) || !Array.isArray(result.profiles) || result.profiles.length > 200 || !Array.isArray(result.workspaces) || result.workspaces.length > 200 || result.profile_id !== null && !result.profiles.some((row) => row.id === result.profile_id)) throw Error(t("setup_receipt_mismatch"));
+			const row = (value, keys) => object(value) && Object.keys(value).length === keys.length && keys.every((key) => typeof value[key] === "string" && value[key].length > 0 && value[key].length <= 256 && value[key] === value[key].trim() && !/[\x00-\x1f]/.test(value[key]));
+			if (!result.source || !/^[a-f0-9]{64}$/.test(result.source.source_digest) || !Array.isArray(result.profiles) || result.profiles.length > 200 || !Array.isArray(result.workspaces) || result.workspaces.length > 200 || !result.profiles.every((value) => row(value, ["id", "name"])) || !result.workspaces.every((value) => row(value, ["workspace_id", "name"])) || result.profile_id !== null && !result.profiles.some((row) => row.id === result.profile_id)) throw Error(t("setup_receipt_mismatch"));
 			discovery = result;
-			discoveredProfile.replaceChildren(h("option", { value: "" }, t("setup_choose_placeholder")), ...result.profiles.map((row) => h("option", { value: row.id }, `${row.name} · ${row.id}`)));
+			discoveredProfile.replaceChildren(h("option", { value: "" }, t("setup_choose_profile")), ...result.profiles.map((row) => h("option", { value: row.id }, `${row.name} · ${row.id}`)));
 			discoveredProfile.value = result.profile_id || "";
 			fields.get("profile_id").value = saved.profile_id = result.profile_id || "";
 			discoveredWorkspaces.replaceChildren(...result.workspaces.map((row) => h("button", {
@@ -57143,7 +57172,17 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	function showError(error, options) {
 		if (alive()) {
 			const codeKey = `error_code_${error?.code}`;
-			const summary = error?.code && t(codeKey) !== codeKey ? t(codeKey) : [t("setup_verification_invalid"), t("setup_receipt_mismatch")].includes(error?.message) ? error.message : t("error_generic");
+			const summary = error?.code && t(codeKey) !== codeKey ? t(codeKey) : [
+				"setup_verification_invalid",
+				"setup_receipt_mismatch",
+				"setup_discovery_required",
+				"setup_profile_token_required",
+				"setup_scope_required",
+				"setup_busy",
+				"setup_loading",
+				"setup_uncertain",
+				"setup_review_unsupported"
+			].some((key) => t(key) === error?.message) ? error.message : t("error_generic");
 			message.replaceChildren(errorBox(error, {
 				summary,
 				...options,
@@ -57176,9 +57215,14 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		fields.get("profile_id").closest("label").hidden = discoverySupported;
 		const find = hostForm.querySelector("[data-setup-discover]");
 		find.hidden = !discoverySupported;
-		find.disabled ||= discovering || reviewing;
-		const needsDiscovery = discoverySupported && !discovery?.profile_id;
-		hostForm.querySelector("button[type=submit]").disabled ||= !supported || reviewing || discovering || needsDiscovery;
+		find.disabled ||= discovering || reviewing || !!configuredHost() && !hasFreshCredential();
+		const tokenReason = hostForm.querySelector("[data-setup-discovery-reason]");
+		tokenReason.hidden = !discoverySupported || !configuredHost() || hasFreshCredential();
+		tokenReason.textContent = t("setup_profile_token_required");
+		const reviewReason = hostForm.querySelector("[data-setup-review-reason]");
+		reviewReason.hidden = !needsDiscovery();
+		reviewReason.textContent = t(discoveryReason());
+		hostForm.querySelector("button[type=submit]").disabled ||= !supported || reviewing || discovering || needsDiscovery();
 		automaticButton.textContent = t(discoverySupported && !discovery?.profile_id ? "setup_discover" : "setup_review_connection");
 		automaticButton.disabled = !!locked || !allowed("host") || !supported || reviewing || discovering;
 		discoveredProfile.disabled = !!locked || discovering;
@@ -57358,7 +57402,12 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}
 	async function run(kind, defaults = false) {
 		const form = kind === "host" ? hostForm : kind === "repository" ? repoForm : verificationForm;
-		if (!alive() || busy || reviewing || composing.size || !snapshot || !readReady || snapshot.busy || saved.intent || !allowed(kind) || kind === "host" && snapshot.preview_contract_version !== 1 || kind === "host" && snapshot.discovery_contract_version === 1 && (!usableSecret("host") && !saved.import_profile_id || !discovery?.profile_id) || kind === "host" && !validateHost(void 0, defaults) || !setupFormValidity(form, t)) return;
+		const blocked = !allowed(kind) ? "setup_scope_required" : saved.intent ? "setup_uncertain" : busy || reviewing || composing.size || snapshot?.busy ? "setup_busy" : !snapshot || !readReady ? "setup_loading" : kind === "host" && snapshot.preview_contract_version !== 1 ? "setup_review_unsupported" : kind === "host" && needsDiscovery() ? discoveryReason() : null;
+		if (!alive() || blocked) {
+			showError(Error(t(blocked || "setup_loading")), { sourceRefresh: false });
+			return;
+		}
+		if (kind === "host" && !validateHost(void 0, defaults) || !setupFormValidity(form, t)) return;
 		const serial = ++reviewSerial;
 		if (kind === "host") {
 			reviewing = true;
@@ -57418,7 +57467,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			};
 			if (kind === "verification" && !validVerification(params)) throw Error(t("setup_verification_invalid"));
 			if (secretRef) params.secret_ref = secretRef;
-			if (kind === "host" && snapshot.discovery_contract_version === 1) {
+			if (kind === "host" && snapshot.discovery_contract_version === 1 && !reuseExistingConnection()) {
 				params.profile_id = discovery.profile_id;
 				params.source_digest = discovery.source.source_digest;
 			}

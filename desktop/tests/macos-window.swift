@@ -41,7 +41,7 @@ func managedView(_ pid: pid_t) -> [String: Bool] {
                 if ["Ready to set up", "可以開始設定了"].contains(label) { result["authenticated"] = true }
                 if ["Get ready to work", "準備開始工作"].contains(label) { result["setup"] = true }
                 if ["Ready to set up", "可以開始設定了"].contains(label) { result["configurationLoaded"] = true }
-                if role == "AXButton" && ["Review connection", "預覽連線"].contains(label),
+                if role == "AXButton" && ["Find profiles and workspaces", "尋找設定檔與工作區"].contains(label),
                    (attribute(kAXEnabledAttribute) as? Bool) == true { result["saveEnabled"] = true }
             }
         }

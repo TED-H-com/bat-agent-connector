@@ -1,6 +1,6 @@
 import {test, expect, type Page} from '@playwright/test';
 import {expectNoNestedErrorDetails} from './api-error-assertions.ts';
-import {managedSetupFixture, openSetupAdvanced, applySetupReview} from './managed-setup-fixture.ts';
+import {managedSetupFixture, reviewSetupConnection, expectLegacyProfileFallback, openSetupAdvanced, applySetupReview} from './managed-setup-fixture.ts';
 const cases = [
   [404,'NOT_FOUND','This record is unavailable. Refresh the view.','找不到這筆資料，請重新整理。'],
   [409,'VERSION_CONFLICT','The record changed. Refresh before trying again.','資料版本已變更，請重新整理後再試。'],
@@ -24,7 +24,7 @@ for(const locale of ['en','zh-TW'])test.describe(`${locale} Settings`,()=>{
     const applies=trackSetupApplies(page);
     await page.goto('/dashboard/'); await openSetupAdvanced(page);
     const form=page.locator('[data-setup-host]');await form.locator('[data-setup-field=connection_url]').fill(`wss://localhost?token=synthetic-bat-secret&fp=${'ab'.repeat(32)}`);
-    await form.locator('button[type=submit]').click();
+    await reviewSetupConnection(page,locale);
     await expect(page.locator('[data-setup-review]')).toBeVisible();
     expect(state.previews).toHaveLength(1); expect(state.posts).toEqual([]); expect(applies).toEqual([]);
     await applySetupReview(page);const error=page.locator('[data-api-error]');
@@ -43,7 +43,7 @@ for(const locale of ['en','zh-TW'])test.describe(`${locale} Settings`,()=>{
     await page.goto('/dashboard/'); await openSetupAdvanced(page);
     const form=page.locator('[data-setup-host]');
     await form.locator('[data-setup-field=connection_url]').fill(`wss://host-a.example.invalid?token=synthetic-bat-secret&fp=${'ab'.repeat(32)}`);
-    await form.locator('button[type=submit]').click();
+    await reviewSetupConnection(page,locale);
     const error=page.locator('[data-managed-setup] [data-api-error]');
     await expect(error.locator('[data-error-summary]')).toHaveText(locale==='en'
       ? 'Configuration changed elsewhere. Refresh before trying again.' : '設定已在別處變更，請重新整理後再試。');
@@ -111,7 +111,12 @@ for(const locale of ['en','zh-TW'])test.describe(`${locale} Settings`,()=>{
     await expect(page.locator('[data-managed-setup] header button')).toHaveCount(0);
     expect(geometry.hintGap).toBe(4);expect(geometry.fieldGap).toBeGreaterThanOrEqual(12);expect(geometry.fieldGap).toBeLessThanOrEqual(16);
     await page.locator('[data-setup-manual]>summary').click();
-    const heights=await page.locator('[data-setup-manual] input').evaluateAll(inputs=>inputs.map(node=>node.getBoundingClientRect().height));
+    await expect(page.locator('[data-setup-field=profile_id]')).toBeHidden();
+    const heights=await page.locator('[data-setup-manual] input:visible').evaluateAll(inputs=>inputs.map(node=>node.getBoundingClientRect().height));
     expect(new Set(heights).size).toBe(1);
   });
+});
+
+for (const locale of ['en', 'zh-TW']) test(`${locale} older Connector keeps the typed profile fallback`, async ({page}) => {
+  await expectLegacyProfileFallback(page, locale);
 });

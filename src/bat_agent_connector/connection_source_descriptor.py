@@ -4,8 +4,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from urllib.parse import urlsplit
 
+from .connection_endpoints import setup_endpoint
 from .connection_sources import BAT_SOURCE_POLICY
 
 
@@ -19,15 +19,8 @@ def source_digest(*, kind, profile_reference, association, availability_reason, 
     if not isinstance(association, dict) or set(association) != {"url", "fingerprint"}:
         raise ValueError("Invalid endpoint association")
     url, pin = association["url"], association["fingerprint"]
-    if not isinstance(url, str) or len(url) > 512 or any(c.isspace() for c in url):
+    if setup_endpoint(url) != url:
         raise ValueError("Invalid endpoint")
-    try:
-        parsed = urlsplit(url)
-        if (parsed.scheme != "wss" or not parsed.hostname or not parsed.port or parsed.username or parsed.password
-                or parsed.path != "/" or parsed.query or parsed.fragment or "?" in url or "#" in url):
-            raise ValueError
-    except ValueError:
-        raise ValueError("Invalid endpoint") from None
     if not isinstance(pin, str) or not re.fullmatch(r"[0-9A-F]{64}", pin):
         raise ValueError("Invalid fingerprint")
     if not isinstance(availability_reason, str) or not re.fullmatch(r"[A-Z][A-Z0-9_]{0,63}", availability_reason):

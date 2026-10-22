@@ -1,9 +1,12 @@
 """Explicit source snapshots and discovery; no staging or durable effects."""
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import hmac
 import json
 import os
+import re
 import secrets
 import stat
 
@@ -14,12 +17,22 @@ from .connection_sources import SourceUnavailable
 from .errors import ConfigError
 from .operations import OperationError
 
+DISCOVERY_TIMEOUT_S = 25
+
 
 def _sha(value):
     return hashlib.sha256(value).hexdigest()
 
 
-def _profile_snapshot(directory):
+def _secret_digest(daemon, value):
+    # Already persisted by Dashboard sync installation; this read creates no key
+    # or row. Domain separation keeps source commitments apart from sync MACs.
+    row = daemon.journal.db.execute("SELECT signing_key FROM api_sync_metadata WHERE singleton=1").fetchone()
+    key = bytes.fromhex(row["signing_key"])
+    return hmac.digest(key, b"bat-setup-source-state/v1\0" + value, "sha256").hex()
+
+
+def _profile_snapshot(daemon, directory):
     # BAT's index is public metadata, unlike the private token store.
     path = directory / "index.json"
     if path.is_symlink():
@@ -33,7 +46,7 @@ def _profile_snapshot(directory):
         raise ValueError
     store_bytes = platform_files.read_private(directory / "remote-tokens.enc.json")  # Default bound: 1 MiB.
     return {"directory": _sha(json.dumps([str(directory.absolute()), str(directory.resolve())]).encode()), "index": _sha(index),
-        "credential": _sha(store_bytes)}
+        "credential": _secret_digest(daemon, store_bytes)}
 
 
 def resolve_source(daemon, document, params):
@@ -46,13 +59,13 @@ def resolve_source(daemon, document, params):
         setup._text(selected, "profile reference")
         try:
             directory = setup._profile_directory(document)
-            snapshot = _profile_snapshot(directory)
+            snapshot = _profile_snapshot(daemon, directory)
             profiles, _ = setup._profiles(document)
             profile = next((p for p in profiles if p["id"] == selected and p["token_available"]), None)
             if not profile:
                 raise ValueError
             # Refuse an inconsistent read instead of blessing a newer snapshot.
-            if setup._profile_directory(document) != directory or _profile_snapshot(directory) != snapshot:
+            if setup._profile_directory(document) != directory or _profile_snapshot(daemon, directory) != snapshot:
                 raise ValueError
         except (OSError, ValueError, SourceUnavailable):
             raise setup._error("PROFILE_UNAVAILABLE", "Select a readable BAT profile", 409) from None
@@ -68,8 +81,8 @@ def resolve_source(daemon, document, params):
         ref = params["secret_ref"]
         try:
             snapshot = {"reference": _sha(ref.encode()),
-                "metadata": _sha(platform_files.read_private(path / (ref + ".json"), max_bytes=4096)),
-                "credential": _sha(platform_files.read_private(path / (ref + ".token"), max_bytes=4096))}
+                "metadata": _secret_digest(daemon, platform_files.read_private(path / (ref + ".json"), max_bytes=4096)),
+                "credential": _secret_digest(daemon, platform_files.read_private(path / (ref + ".token"), max_bytes=4096))}
         except (OSError, ValueError):
             raise setup._error("INVALID_SECRET", "Staged credential is unavailable", 409) from None
         url = setup._url(params["url"])
@@ -87,6 +100,24 @@ def validate_source(daemon, document, params):
     """The same refusal at preview, admission, execution and final publication."""
     from . import managed_setup as setup
     digest = params.get("source_digest")
+    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise setup._error("INVALID_PARAMS", "Supply a source digest from discovery")
+    if "profile_id" in params:
+        setup._text(params["profile_id"], "profile ID")
+    if "import_profile_id" in params:
+        setup._text(params["import_profile_id"], "profile reference")
+        if set(params) & {"url", "fingerprint", "secret_ref"}:
+            raise setup._error("INVALID_PARAMS", "Choose exactly one connection source")
+    else:
+        if not {"url", "fingerprint", "secret_ref"} <= params.keys():
+            raise setup._error("INVALID_PARAMS", "Supply the complete discovered source")
+        if not isinstance(params["secret_ref"], str) or not setup.SECRET_REF.fullmatch(params["secret_ref"]):
+            raise setup._error("INVALID_PARAMS", "Supply a staged credential reference")
+        setup._url(params["url"])
+        try:
+            normalize_fingerprint(setup._text(params["fingerprint"], "fingerprint", 200))
+        except ConfigError:
+            raise setup._error("INVALID_PARAMS", "Supply a valid fingerprint") from None
     try:
         current, _ = resolve_source(daemon, document, params)
         if not isinstance(digest, str) or not secrets.compare_digest(digest, current["source_digest"]):
@@ -108,7 +139,10 @@ async def discover(daemon, principal, body):
     except ConfigError:
         raise setup._error("INVALID_CONFIGURATION", "Check the selected host trust and connection settings") from None
     try:
-        result = await setup._read_host(host, discovery=True, selected=body.get("profile_id"))
+        deadline = asyncio.get_running_loop().time() + DISCOVERY_TIMEOUT_S
+        result = await setup._read_host(host, discovery=True, selected=body.get("profile_id"), deadline=deadline)
+    except asyncio.TimeoutError:
+        raise setup._error("SETUP_DISCOVERY_TIMEOUT", "Discovery timed out; find profiles and workspaces again", 409) from None
     except OperationError:
         raise
     except Exception:

@@ -214,7 +214,7 @@ async function readExistingSession() {
     const setup = page.locator('[data-managed-setup]');
     await expect(setup).toBeVisible();
     await expect(page.locator('[data-setup-advanced]')).not.toHaveAttribute('open', '');
-    await setup.getByRole('button', {name: zh ? '預覽連線' : 'Review connection', exact: true}).click();
+    await setup.getByRole('button', {name: zh ? '尋找設定檔與工作區' : 'Find profiles and workspaces', exact: true}).click();
     const copy = setup.locator('[data-setup-copy]');
     await expect(copy.locator('input')).toHaveAttribute('type', 'password');
     // This is the only user input: a connection copied from BAT, never an internal ID.
@@ -225,6 +225,8 @@ async function readExistingSession() {
       await expect(setup.locator(`[data-setup-field=${name}]`)).toBeHidden();
     assert.deepEqual(operations, []); // Review precedes secret staging and apply.
     await copy.locator('button[type=submit]').click();
+    await expect(setup.locator('[data-setup-discovered-profile]')).toHaveValue('default');
+    await setup.getByRole('button', {name: zh ? '預覽連線' : 'Review connection', exact: true}).first().click();
     await expect(setup.locator('[data-setup-review]')).toBeVisible();
     assert.deepEqual(operations, []);
     await setup.getByRole('button', {name: zh ? '套用連線' : 'Apply connection', exact: true}).click();
@@ -264,7 +266,7 @@ async function readExistingSession() {
     await expect(page.locator('.conversation')).toContainText('live message 9');
     await expect(page.locator('.conversation')).toContainText('archived 49');
     assert.deepEqual((await read('/bootstrap')).capabilities.identity, fixture.identity);
-    assert.deepEqual(posts, ['/api/v1/browser-handoff', '/api/v1/managed/setup/secrets', '/api/v1/managed/setup/preview', '/api/v1/operations']);
+    assert.deepEqual(posts, ['/api/v1/browser-handoff', '/api/v1/managed/setup/secrets', '/api/v1/managed/setup/discover', '/api/v1/managed/setup/preview', '/api/v1/operations']);
     assert.deepEqual(bearer, []);
     assert.deepEqual(errors, []);
     const cookies = await context.cookies();
@@ -370,6 +372,8 @@ try {
   await form.getByLabel("Paste BAT connection URL", {exact: true}).fill(`${bat.url}?token=${encodeURIComponent(bat.token)}&fp=${encodeURIComponent(bat.fingerprint)}`);
   await expect(form.getByLabel("Paste BAT connection URL", {exact: true})).toHaveValue("");
   await form.getByLabel("Host ID", {exact: true}).fill("fixture");
+  await form.getByRole("button", {name: "Find profiles and workspaces", exact: true}).click();
+  await expect(page.locator('[data-setup-discovered-profile]')).toHaveValue('default');
   await form.getByRole("button", {name: "Review connection", exact: true}).click();
   await page.getByRole("button", {name: "Apply connection", exact: true}).click();
   await expect.poll(async () => (await call("GET", "/managed/setup")).body.hosts.length, {timeout: 20000}).toBe(1);

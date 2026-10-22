@@ -168,5 +168,81 @@
         }
       }
     }
+  },
+  "default": {
+    "request": {
+      "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "url": "wss://host-a.example.invalid:9876/",
+      "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "secret_ref": "setup_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "response": {
+      "source": {
+        "reference": "source_dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "kind": "staged_secret",
+        "policy_version": 1,
+        "source_digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "profile_reference": null,
+        "association": {
+          "url": "wss://host-a.example.invalid:9876/",
+          "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        "availability_reason": "SOURCE_AVAILABLE"
+      },
+      "profiles": [
+        {
+          "id": "default",
+          "name": "Default"
+        }
+      ],
+      "profile_id": "default",
+      "workspaces": [
+        {
+          "workspace_id": "ws-1",
+          "name": "demo-project"
+        },
+        {
+          "workspace_id": "ws-2",
+          "name": "other"
+        }
+      ]
+    }
+  },
+  "imported": {
+    "request": {
+      "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "import_profile_id": "profile-demo"
+    },
+    "response": {
+      "source": {
+        "reference": "source_dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "kind": "bat_profile",
+        "policy_version": 1,
+        "source_digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "profile_reference": "profile-demo",
+        "association": {
+          "url": "wss://host-a.example.invalid:9876/",
+          "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        "availability_reason": "SOURCE_AVAILABLE"
+      },
+      "profiles": [
+        {
+          "id": "default",
+          "name": "Default"
+        }
+      ],
+      "profile_id": "default",
+      "workspaces": [
+        {
+          "workspace_id": "ws-1",
+          "name": "demo-project"
+        },
+        {
+          "workspace_id": "ws-2",
+          "name": "other"
+        }
+      ]
+    }
   }
 }

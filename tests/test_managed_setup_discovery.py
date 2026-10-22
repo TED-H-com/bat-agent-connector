@@ -81,7 +81,7 @@ async def test_discovery_source_change_refuses_review(installed, served_setup, m
     route = "/api/v1/managed/setup/preview" if at == "preview" else "/api/v1/operations"
     status, response = await served_setup("POST", route, request, key="changed-source")
     assert status == 409 and response["error"]["code"] == "SETUP_REVIEW_CHANGED", response
-    assert response["error"]["admission_refused"] is True
+    assert response["error"].get("admission_refused") is (None if at == "preview" else True)
     assert not installed[0].journal.db.execute("SELECT 1 FROM operations").fetchone()
     assert len(mock.auth_frames) == probes
 
@@ -171,7 +171,7 @@ async def test_expiry_invalidates_discovered_snapshot(installed, served_setup, m
         route = "/api/v1/managed/setup/preview" if at == "preview" else "/api/v1/operations"
         status, response = await served_setup("POST", route, request, key="expiry")
         assert status == 409 and response["error"]["code"] == "SETUP_REVIEW_CHANGED", response
-        assert response["error"]["admission_refused"] is True
+        assert response["error"].get("admission_refused") is (None if at == "preview" else True)
 
 
 async def test_new_windows_data_directory_invalidates_discovery(installed, served_setup, mock, monkeypatch):

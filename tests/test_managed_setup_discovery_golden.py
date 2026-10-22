@@ -15,8 +15,13 @@ async def test_discovery_matches_shared_golden(installed, served_setup, mock):
     mock.handlers["profile:list"] = lambda _: {"profiles": [{"id": "default", "name": "Default", "type": "local"},
         {"id": "work", "name": "Work", "type": "local"}], "activeProfileIds": ["default"]}
     result = {}
-    for key, selection in [("initial", {}), ("work", {"profile_id": "work"})]:
-        request = {**body, **selection}
+    for key, selection in [("initial", {}), ("work", {"profile_id": "work"}), ("default", {}), ("imported", {})]:
+        if key == "default":
+            mock.handlers.pop("profile:list")
+        if key == "imported":
+            imported, _ = producer.import_source(installed, mock)
+            body = {**body, **imported}
+        request = ({k: body[k] for k in ("revision", "import_profile_id")} if key == "imported" else {**body, **selection})
         status, response = await served_setup("POST", producer.ROUTE, request)
         assert status == 200, response
         record = {"request": request, "response": response}
@@ -34,7 +39,7 @@ async def test_discovery_matches_shared_golden(installed, served_setup, mock):
             normalized = normalized.replace(actual, example)
         if selection:
             normalized = normalized.replace(review["preview"]["after_revision"], "b" * 64).replace(review["preview"]["review_digest"], "c" * 64)
-        result[key] = json.loads(normalized)
+        result[key] = json.loads(normalized.replace("profile-a", "profile-demo"))
     if os.environ.get("BATC_UPDATE_DISCOVERY_GOLDEN") == "1":
         GOLDEN.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     assert result == json.loads(GOLDEN.read_text())

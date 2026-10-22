@@ -81,12 +81,12 @@ internal static class ManagedViewProbeTests
             var state = new ManagedViewProbe.Readiness();
             Observe(state, absent, "Ready to set up", true);
             Observe(state, ControlType.Text, absent, true);
-            Observe(state, ControlType.Button, "Review connection", absent);
+            Observe(state, ControlType.Button, "Find profiles and workspaces", absent);
             Check(!state.WebContent && !state.Authenticated && !state.SaveEnabled, "Absent property became readiness evidence");
         }
         foreach (string[] labels in new string[][] {
-            new string[] { "Ready to set up", "Get ready to work", "Ready to set up", "Review connection" },
-            new string[] { "可以開始設定了", "準備開始工作", "可以開始設定了", "預覽連線" } })
+            new string[] { "Ready to set up", "Get ready to work", "Ready to set up", "Find profiles and workspaces" },
+            new string[] { "可以開始設定了", "準備開始工作", "可以開始設定了", "尋找設定檔與工作區" } })
         {
             var state = new ManagedViewProbe.Readiness();
             Observe(state, ControlType.Document, null, null);
