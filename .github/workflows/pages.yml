@@ -70,9 +70,9 @@ jobs:
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
       - name: Bound stalled apt downloads
         run: |
-          # APT applies Timeout to connection and data waits; retry a failed file once.
+          # Shorter connection/data waits allow faster mirror failover; keep three retries.
           sudo tee /etc/apt/apt.conf.d/99-playwright-ci > /dev/null <<'EOF'
-          Acquire::Retries "1";
+          Acquire::Retries "3";
           Acquire::http::Timeout "15";
           Acquire::https::Timeout "15";
           EOF
