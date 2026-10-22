@@ -4,6 +4,57 @@ import {readFileSync} from 'node:fs';
 import {demoFixture} from './demo/index.ts';
 import {mountConversation} from './conversation-fixture.ts';
 import {workStartFixture, workspaceId, workId} from './work-start-fixture.ts';
+import {STRINGS} from '../src/i18n.js';
+
+for (const locale of ['en', 'zh-TW'] as const) for (const native of [false, true]) for (const surface of ['project', 'board']) {
+  test(`GitHub forms pause quietly and retain their draft ${surface} ${locale} ${native ? 'IPC' : 'HTTP'}`, async ({page}) => {
+    const fixture = demoFixture({locale, managedSession: true}), {ids} = fixture;
+    let paused = false;
+    const writes: any[] = [];
+    const settings = {project_id: ids.projectId, name: 'Example board', repository: 'example/board', workspace_id: ids.workspaceId,
+      revision: 1, enabled: true, include_closed: false, status: 'synced', last_sync: 1700000000};
+    await page.addInitScript(value => Object.defineProperty(navigator, 'language', {value}), locale);
+    await mountConversation(page, native, async input => {
+      const path = new URL(input.path, 'http://fixture').pathname;
+      if (input.method !== 'GET') {writes.push(input); throw Error('Paused form reached write transport');}
+      if (path === '/events' && paused) return {status: 503, data: {error: {code: 'UNAVAILABLE', message: 'Events unavailable'}}};
+      if (path === `/pm/workspaces/${ids.workspaceId}/projects`) return {status: 200, data: {
+        version: 1, workspace_id: ids.workspaceId, bindings: [], next_cursor: null,
+        github_sync: {projects: [settings], suggested_repository: 'example/board'}}};
+      const result: any = await fixture.dispatch(input);
+      const caps = path === '/capabilities' ? result.data : path === '/bootstrap' ? result.data.capabilities : null;
+      if (caps) {
+        caps.features.board_github_sync = {version: 1}; caps.scopes.push('manage');
+        caps.actions.push(...['pm.github.import', 'project.github.import', 'project.github.configure'].map(action => ({action, allowed: true, scope: 'manage'})));
+      }
+      if (path === `/projects/${ids.projectId}`) result.data.github_sync = settings;
+      if (path === `/pm/workspaces/${ids.workspaceId}`) result.data.workspace.membership.role = 'owner';
+      return result;
+    });
+    await page.goto(surface === 'project' ? `/dashboard/#/project/${ids.projectId}` : `/dashboard/#/pm/${ids.workspaceId}/board`);
+    const panel = page.locator('[data-board-github]');
+    const submit = panel.locator('button[type=submit]').first();
+    const repository = panel.getByRole('textbox', {name: locale === 'en' ? 'GitHub repository' : 'GitHub 儲存庫', exact: true});
+    await expect(submit).toBeEnabled();
+    await repository.fill('example/kept-draft');
+    paused = true;
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true})));
+    await expect(page.locator('#live')).toHaveAttribute('data-connection', 'reconnecting');
+    const notice = panel.locator('[data-pm-client-gate][data-client-action-code="CLIENT_ACTION_SERVICE_ERROR"]');
+    await expect(notice.first()).toBeVisible();
+    await expect(notice.first()).toHaveText(STRINGS[locale].error_code_CLIENT_ACTION_SERVICE_ERROR);
+    await expect(submit).toBeDisabled();
+    await expect(panel.locator('[data-api-error], [data-error-summary]')).toHaveCount(0);
+    await expect(repository).toHaveValue('example/kept-draft');
+    paused = false;
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true})));
+    await expect(submit).toBeEnabled();
+    await expect(panel.locator('[data-pm-client-gate]:not([hidden])')).toHaveCount(0);
+    await page.reload();
+    await expect(repository).toHaveValue('example/kept-draft');
+    expect(writes).toEqual([]);
+  });
+}
 
 for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test(`GitHub empty board import and repeat sync ${locale} ${native ? 'IPC' : 'HTTP'}`, async ({page}, testInfo) => {
   await page.setViewportSize({width: native ? 390 : 1280, height: 900});

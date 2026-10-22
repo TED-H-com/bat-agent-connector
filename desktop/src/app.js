@@ -4004,8 +4004,11 @@ async function viewProject(main, pid) {
   const note = manageNote(); if (note) note.hidden = true;
   const github = boardGitHubPanel({t, api, alive: () => assertView(connection), caps: () => state.caps,
     form: options => pmDurableForm({h, t, api, caps: () => state.caps, namespace: connection.namespace,
-      guard: () => assertView(connection), errorBox, ...options}),
+      guard: () => assertView(connection), errorBox, ...options,
+      canSend: () => state.online && !state.nativeBusy && state.viewReady,
+      clientGate: () => clientActionGate(state, {post: true})}),
     permitted: () => may('manage'), projectId: pid, onSaved: () => render()});
+  const offGitHubOnline = onOnline(() => {try {assertView(connection); github.update();} catch { /* retired view */ }});
   main.append(note || "", out, head, github.element, work, itemCard);
   const rememberEditors = () => {
     if (currentEditor && !currentEditor.drawer.box.hidden) draft = currentEditor.values();
@@ -4148,7 +4151,7 @@ async function viewProject(main, pid) {
   showArchived.onchange = () => render();
   await render();
   const off = liveReload(render, ["project", "work_item", "operation", "task", "execution", "session", "integration"], prepare);
-  return () => {off?.(); github.dispose();};
+  return () => {off?.(); offGitHubOnline(); github.dispose();};
 }
 
 function linkTarget(l) {

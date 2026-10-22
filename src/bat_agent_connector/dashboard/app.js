@@ -13440,6 +13440,9 @@ function boardGitHubPanel({ t, api, alive, caps, form, permitted, workspaceId = 
 	return {
 		element,
 		refresh,
+		update: () => {
+			for (const f of forms) f.update();
+		},
 		message: () => status.textContent,
 		dispose: () => {
 			serial++;
@@ -72941,11 +72944,19 @@ async function viewProject(main, pid) {
 			namespace: connection.namespace,
 			guard: () => assertView(connection),
 			errorBox,
-			...options
+			...options,
+			canSend: () => state.online && !state.nativeBusy && state.viewReady,
+			clientGate: () => clientActionGate(state, { post: true })
 		}),
 		permitted: () => may("manage"),
 		projectId: pid,
 		onSaved: () => render()
+	});
+	const offGitHubOnline = onOnline(() => {
+		try {
+			assertView(connection);
+			github.update();
+		} catch {}
 	});
 	main.append(note || "", out, head, github.element, work, itemCard);
 	const rememberEditors = () => {
@@ -73203,6 +73214,7 @@ async function viewProject(main, pid) {
 	], prepare);
 	return () => {
 		off?.();
+		offGitHubOnline();
 		github.dispose();
 	};
 }

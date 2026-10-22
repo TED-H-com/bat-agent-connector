@@ -122,5 +122,6 @@ export function boardGitHubPanel({t, api, alive, caps, form, permitted, workspac
       }
     } catch {try {alive(); if (ticket === serial) {loaded = false; status.textContent = bt('bgh_read_failed'); for (const f of forms) f.update();}} catch { /* retired */ }}
   }
-  return {element, refresh, message: () => status.textContent, dispose: () => {serial++; for (const f of forms) f.dispose();}};
+  return {element, refresh, update: () => {for (const f of forms) f.update();}, message: () => status.textContent,
+    dispose: () => {serial++; for (const f of forms) f.dispose();}};
 }
