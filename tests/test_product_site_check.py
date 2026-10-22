@@ -2,13 +2,26 @@
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
+import re
+import subprocess
 from copy import deepcopy
+from pathlib import Path
 
 import pytest
 
-from scripts.check_product_site import LOCKFILE, LOCKFILE_DIGEST, ROOT, SITE, lockfile_digest, source_entry
+from scripts.check_product_site import (
+    LOCKFILE,
+    LOCKFILE_DIGEST,
+    PINNED_PATHS,
+    ROOT,
+    SITE,
+    capture_source_errors,
+    lockfile_digest,
+    source_entry,
+)
 
 
 def _sample_lockfile(version: str = "0.1.1") -> dict:
@@ -116,3 +129,81 @@ def test_malformed_lockfile_json_fails_clearly(payload: bytes) -> None:
         lockfile_digest(payload)
     with pytest.raises(ValueError, match="Malformed lockfile JSON"):
         source_entry(LOCKFILE, payload)
+
+
+CONVERSATION_FIXTURE = "desktop/tests/conversation-fixture.ts"
+
+
+@pytest.fixture
+def capture_repo(tmp_path: Path):
+    def git(*args: str) -> str:
+        return subprocess.check_output(["git", "-C", str(tmp_path), *args], text=True).strip()
+
+    git("init", "-q")
+    sources = {
+        "desktop/src/app.ts": b"// pinned frontend\n",
+        "desktop/tests/demo/index.ts": b"// pinned demo\n",
+        CONVERSATION_FIXTURE: b"// pinned conversation\n",
+        "src/bat_agent_connector/dashboard/app.js": b"// pinned browser asset\n",
+        "scripts/capture_site.mjs": b"// current capture helper\n",
+        LOCKFILE: json.dumps(_sample_lockfile()).encode(),
+    }
+    for name, data in sources.items():
+        file = tmp_path / name
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(data)
+    git("add", ".")
+    git("-c", "user.name=Capture Test", "-c", "user.email=capture@example.invalid",
+        "-c", "commit.gpgsign=false", "commit", "-qm", "Pinned capture inputs")
+    commit = git("rev-parse", "HEAD")
+    manifest = {
+        "frontend_source_commit": commit,
+        "frontend_source_tree": git("rev-parse", f"{commit}:desktop/src"),
+        "source_files": [source_entry(name, data) for name, data in sources.items()],
+    }
+    assert capture_source_errors(manifest, tmp_path, commit) == []
+    return tmp_path, commit, manifest
+
+
+def test_pinned_conversation_ignores_working_tree_edit(capture_repo) -> None:
+    root, commit, manifest = capture_repo
+    (root / CONVERSATION_FIXTURE).write_bytes(b"// later main fixture\n")
+    assert capture_source_errors(manifest, root, commit) == []
+
+
+def test_conversation_manifest_must_match_pinned_blob(capture_repo) -> None:
+    root, commit, manifest = capture_repo
+    changed = b"// later main fixture\n"
+    (root / CONVERSATION_FIXTURE).write_bytes(changed)
+    manifest["source_files"] = [source_entry(CONVERSATION_FIXTURE, changed)]
+    assert capture_source_errors(manifest, root, commit) == [
+        f"Capture source does not match its manifest: {CONVERSATION_FIXTURE}"
+    ]
+
+
+@pytest.mark.parametrize("file", [
+    "desktop/tests/new-helper.ts",
+    "desktop/tests/conversation-fixture.ts.bak",
+    "desktop/tests/demo-extra/helper.ts",
+])
+def test_unclassified_capture_source_fails_clearly(capture_repo, file: str) -> None:
+    root, commit, manifest = capture_repo
+    path = root / file
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"// new capture dependency\n")
+    manifest["source_files"].append(source_entry(file, path.read_bytes()))
+    assert capture_source_errors(manifest, root, commit) == [
+        f"Capture source is neither pinned nor an allowed working-tree input: {file}"
+    ]
+
+
+def test_capture_guard_paths_are_pinned_by_checker() -> None:
+    capture = (ROOT / "scripts/capture_site.mjs").read_text()
+    guard = re.search(r"git\('diff', '--exit-code', sourceCommit, '--', ([^;]+)\);", capture)
+    assert guard is not None
+    guard_paths = ast.literal_eval(f"[{guard[1]}]")
+    assert guard_paths
+    # The recorded script's guard is expected to gain the conversation fixture at
+    # the next recapture, when its recorded hash changes anyway. The checker is
+    # already authoritative for every pinned input, including that fixture.
+    assert {path.rstrip("/") for path in guard_paths} <= {path.rstrip("/") for path in PINNED_PATHS}

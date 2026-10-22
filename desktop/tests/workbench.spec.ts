@@ -194,6 +194,42 @@ test('background output in another perspective preserves the Work reading positi
   expect(f.data.posts).toEqual([]);
 });
 
+for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) test(`hidden conversation refresh preserves the observed reader position ${native ? 'IPC' : 'Web'} ${locale}`, async ({page}, info) => {
+  const f = workspaceFixture(locale);
+  f.data.messages = Array.from({length: 30}, (_, n) => ({id: 'message-' + n, role: 'assistant', ts: '2026-10-10T12:02:00Z', text: `Update ${n}\n` + 'Readable history. '.repeat(30)}));
+  let waiting = false, release!: () => void;
+  const gate = new Promise<void>(resolve => release = resolve), dispatch = f.dispatch;
+  f.dispatch = async input => {
+    if (f.data.events.length && input.path.includes('/messages')) {waiting = true; await gate;}
+    return dispatch(input);
+  };
+  await page.addInitScript(language => Object.defineProperty(navigator, 'language', {value: language}), locale);
+  await mountWorkspace(page, native, f);
+  await page.goto('/dashboard/?workbench=1' + workspaceRoute);
+  const scroll = page.locator('.conversation-scroll'), views = page.locator('[data-workbench-views]');
+  await expect(page.locator('.conversation .msg')).toHaveCount(30);
+  await scroll.scrollIntoViewIfNeeded();
+  await scroll.evaluate(node => {node.scrollTop = 250; node.dispatchEvent(new Event('scroll'));});
+  // Prove the reader has already observed the move before hiding its geometry.
+  await expect(page.getByRole('button', {name: locale === 'zh-TW' ? '回到最新訊息' : 'Back to latest', exact: true})).toBeVisible();
+  await views.getByRole('tab', {name: locale === 'zh-TW' ? '關聯' : 'Lineage', exact: true}).click();
+  await expect(scroll).toBeHidden();
+  expect(await scroll.evaluate(node => node.clientHeight)).toBe(0);
+  f.data.messages.push({id: 'new', role: 'assistant', ts: '2026-10-10T12:03:00Z', text: 'New output while reading Lineage'});
+  f.data.events.push({seq: 1, resource_type: 'session', resource_id: 'demo/search-results', kind: 'session.updated'});
+  await expect.poll(() => waiting).toBe(true);
+  release();
+  await expect.poll(() => f.data.after).toBe(1);
+  await expect(page.locator('.conversation .msg')).toHaveCount(31);
+  await views.getByRole('tab', {name: locale === 'zh-TW' ? '工作' : 'Work', exact: true}).click();
+  // The show transition must pass layout/ResizeObserver delivery before asserting.
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  const rendered = await scroll.evaluate(node => ({scrollTop: node.scrollTop, bottom: node.scrollHeight - node.clientHeight}));
+  await info.attach('shown-after-hidden-refresh', {body: JSON.stringify(rendered), contentType: 'application/json'});
+  expect(rendered.scrollTop).toBe(250);
+  expect(f.data.posts).toEqual([]);
+});
+
 test('a failed source read removes live claims and recovery restores the same draft', async ({page}) => {
   const f = workspaceFixture(); const dispatch = f.dispatch;
   let failed = false;
