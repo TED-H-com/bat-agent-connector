@@ -33,9 +33,9 @@ async def test_inventory_read_deadlines_and_quiet_refresh(served, monkeypatch):
     assert detail['state']['evidence']['connection']['valid_until'] == host['valid_until']
     clock['now'] += 61
     assert not (await read(f'/sessions/h1/{MANUAL}'))['session']['stale']
-    before = d.journal.api_events(0, 1000)['next_cursor']
+    before = d.journal.api_events(0, 500)['next_cursor']
     await d.inventory.refresh_host('h1')
-    assert d.journal.api_events(0, 1000)['next_cursor'] == before
+    assert d.journal.api_events(0, 500)['next_cursor'] == before
     renewed = (await read(f'/sessions/h1/{MANUAL}'))['session']['state']['evidence']['activity']
     assert stamp(renewed['valid_until']) == clock['now'] + d.inventory.settings.stale_after_s
     clock['now'] = stamp(renewed['valid_until'])

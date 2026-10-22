@@ -84,7 +84,7 @@ test('real poll failures retain their cause when they age; neither locale calls 
     for (const locale of ['en', 'zh-TW']) {
       const t = (key: string, args: any = {}) => Object.entries(args).reduce((s, [k, v]) => s.replaceAll(`{${k}}`, String(v)), STRINGS[locale][key]);
       const label = health.healthLabel(result.connection, t);
-      assert.match(label, /60/);
+      assert.ok(label.includes(t('health_age_minutes', {count: 1})));
       assert.ok(label.includes(STRINGS[locale].health_checking));
       assert.doesNotMatch(label, /offline|down|離線|停機/i);
       assert.ok(t('health_other_machines_many', {count: 2}).includes('2'));
