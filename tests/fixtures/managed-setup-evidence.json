@@ -44,6 +44,7 @@
   "states": {
     "unreachable": {
       "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "preview_contract_version": 1,
       "hosts": [
         {
           "name": "fixture",
@@ -80,6 +81,7 @@
     },
     "checking": {
       "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "preview_contract_version": 1,
       "hosts": [
         {
           "name": "fixture",
@@ -116,6 +118,7 @@
     },
     "connected": {
       "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "preview_contract_version": 1,
       "hosts": [
         {
           "name": "fixture",

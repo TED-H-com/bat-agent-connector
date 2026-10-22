@@ -108,6 +108,41 @@ test.beforeAll(async () => {
   await promisify(execFile)('npm', ['run', 'build:prototype'], {cwd: new URL('..', import.meta.url)});
 });
 
+for (const lang of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
+  for (const scene of ['idea', 'waiting_input', 'external_readonly']) {
+    test(`prototype transcript contains its content ${scene} ${lang} ${width}`, async ({page}, testInfo) => {
+      await page.setViewportSize({width, height: 844});
+      await page.goto(`/prototype/v1.3/?lang=${lang}&scene=${scene === 'waiting_input' ? 'running' : scene}`);
+      if (scene === 'waiting_input') {
+        await page.getByTestId('btn-queue-second-sentence').click();
+        await workState(page, 'turn_ended');
+        await workState(page, 'waiting_input');
+        await page.getByTestId('answer-question-keep').scrollIntoViewIfNeeded();
+      }
+      const transcript = page.locator('.session-workspace > .conversation-scroll');
+      await expect(transcript).toBeVisible();
+      const geometry = await transcript.evaluate(node => {
+        const rect = node.getBoundingClientRect();
+        const contentBottom = Math.max(...Array.from(node.children, child => child.getBoundingClientRect().bottom));
+        const answer = node.querySelector('[data-testid="answer-question-keep"]');
+        const button = answer?.getBoundingClientRect();
+        const hit = button ? document.elementFromPoint(button.x + button.width / 2, button.y + button.height / 2) : null;
+        const following = node.parentElement!.nextElementSibling?.getBoundingClientRect();
+        return {height: rect.height, bottom: rect.bottom, contentBottom, followingTop: following?.top,
+          receivesPointer: answer ? answer.contains(hit) : null, hit: hit?.outerHTML.slice(0, 500)};
+      });
+      await testInfo.attach('transcript-geometry', {body: JSON.stringify(geometry), contentType: 'application/json'});
+      expect.soft(geometry.contentBottom).toBeLessThanOrEqual(geometry.bottom + 1);
+      if (scene !== 'idea') expect.soft(geometry.contentBottom).toBeLessThanOrEqual(geometry.followingTop! + 1);
+      if (scene === 'waiting_input') {
+        expect(geometry.receivesPointer, geometry.hit).toBe(true);
+        await page.getByTestId('answer-question-keep').click();
+        await expect(page.getByTestId('view-work-main')).toHaveAttribute('data-question-answered', 'true');
+      }
+    });
+  }
+}
+
 async function walk(browser: Browser, lang: Locale, width: number, run: (flow: Flow) => Promise<void>) {
   // Screenshots/video can exceed 30 s; default assertion runs retain Playwright's timeout.
   if (EVIDENCE) test.setTimeout(120_000);

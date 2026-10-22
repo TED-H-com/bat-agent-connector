@@ -193,7 +193,7 @@ def state(daemon, principal):
         "allow_pr_update": repo.allow_pr_update, "allow_integrate": repo.integrate is not None}
         for repo in daemon.fleet.config.github.repos.values()]
     verification = _verification(document)
-    return {"revision": revision, "hosts": hosts, "repositories": repos, "profiles": profiles,
+    return {"revision": revision, "preview_contract_version": 1, "hosts": hosts, "repositories": repos, "profiles": profiles,
             "verification": {"commands": {name: list(argv) for name, argv in verification.commands.items()},
                              "timeout_s": verification.timeout_s},
             "profiles_error": profiles_error, "busy": _busy(daemon)}
@@ -375,21 +375,83 @@ def _candidate(daemon, action, target, params, *, expired=False):
     return config, document, encoded, revision, hashlib.sha256(encoded).hexdigest()
 
 
+def _review_candidate(daemon, principal, action, target, params, pre, *, reviewed=False):
+    """Read and validate one candidate without admitting work or probing a host."""
+    _installation(daemon, principal)
+    keys = {"config_revision"}
+    if reviewed and action == "setup.host" and isinstance(pre, dict) and "review_digest" in pre:
+        keys.add("review_digest")
+    if (not isinstance(pre, dict) or set(pre) != keys
+            or any(not isinstance(pre[key], str) or not re.fullmatch(r"[0-9a-f]{64}", pre[key]) for key in keys)):
+        raise _error("PRECONDITION_REQUIRED", "Read setup and supply its config_revision and optional host review_digest")
+    if not isinstance(target, dict) or not isinstance(params, dict):
+        raise _error("INVALID_PARAMS", "Setup target and params must be objects")
+    if _busy(daemon):
+        raise _error("SETUP_BUSY", "Wait for Connector operations and tasks to settle before changing connections", 409)
+    try:
+        candidate = _candidate(daemon, action, target, params)
+    except ConfigError:
+        raise _error("INVALID_CONFIGURATION", "Check the selected host trust, roots and connection settings") from None
+    if candidate[3] != pre["config_revision"]:
+        raise _error("CONFIGURATION_CHANGED", "Configuration changed; review setup again", 409)
+    return candidate
+
+
+def _review_digest(daemon, principal, action, target, params, before, after):
+    value = {"contract_version": 1, **dashboard_sync.identity(daemon.journal, principal),
+             "actor": principal.actor, "action": action, "target": target, "params": params,
+             "config_revision": before, "after_revision": after}
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
+
+
+def preview(daemon, principal, body):
+    """Return only the semantic host projection, never resolved credential paths."""
+    _installation(daemon, principal)
+    if (not isinstance(body, dict) or set(body) != {"action", "target", "params", "preconditions"}
+            or body["action"] != "setup.host"):
+        raise _error("INVALID_PARAMS", "Preview accepts only a typed setup.host request")
+    action, target, params = body["action"], body["target"], body["params"]
+    config, document, _, before, after = _review_candidate(daemon, principal, action, target, params, body["preconditions"])
+    _, _, original, revision = _configuration(daemon)
+    if revision != before:
+        raise _error("CONFIGURATION_CHANGED", "Configuration changed; review setup again", 409)
+    name = target["host"]
+    fields = ("url", "fingerprint", "profile_id", "git", "writes", "orchestrate", "shared_clone_worktrees", "managed_roots", "ssh_alias")
+    def projection(doc):
+        host = doc.get("hosts", {}).get(name)
+        if host is None:
+            return dict.fromkeys(fields)
+        return {**{key: host.get(key, {"git": "ssh", "profile_id": "default", "managed_roots": []}.get(key, False))
+                   for key in fields if key != "ssh_alias"},
+                "ssh_alias": doc.get("managed_setup", {}).get("ssh_hosts", {}).get(name)}
+    old, new = projection(original), projection(document)
+    if params.get("import_profile_id"):
+        source = {"kind": "bat_profile", "reference": params["import_profile_id"], "available": True}
+    elif params.get("secret_ref"):
+        source = {"kind": "staged_secret", "reference": params["secret_ref"], "available": True}
+    else:
+        source = {"kind": "existing_connection", "reference": name,
+                  "available": config.host(name).token_available()}
+    return {"preview": {"contract_version": 1, "action": action, "target": target,
+        "config_revision": before, "after_revision": after,
+        "review_digest": _review_digest(daemon, principal, action, target, params, before, after),
+        "changes": [{"field": key, "before": old[key], "after": new[key]} for key in fields if old[key] != new[key]],
+        "source": source, "warnings": ["READ_ONLY_VERIFICATION_ON_APPLY"],
+        "effects": {"configuration_written": False, "operation_created": False, "probe_started": False,
+                    "credential_staged": source["kind"] == "staged_secret",
+                    "on_apply": ["read_only_verification", "save_configuration"]}}}
+
+
 def _admit(action):
     def admit(ops, principal, target, params, pre):
         daemon = ops.context["daemon"]
-        _installation(daemon, principal)
-        if set(pre) != {"config_revision"} or not isinstance(pre["config_revision"], str) or not re.fullmatch(r"[0-9a-f]{64}", pre["config_revision"]):
-            raise _error("PRECONDITION_REQUIRED", "Read setup and supply its config_revision")
-        if _busy(daemon):
-            raise _error("SETUP_BUSY", "Wait for central operations and tasks to settle before changing connections", 409)
-        try:
-            config, document, _, before, after = _candidate(daemon, action, target, params)
-        except ConfigError:
-            raise _error("INVALID_CONFIGURATION", "Check the selected host trust, roots and connection settings") from None
-        if before != pre["config_revision"]:
-            raise _error("CONFIGURATION_CHANGED", "Configuration changed; review setup again", 409)
+        config, document, _, before, after = _review_candidate(daemon, principal, action, target, params, pre, reviewed=True)
         binding = {**dashboard_sync.identity(ops.journal, principal), "before_revision": before, "after_revision": after}
+        if "review_digest" in pre:
+            digest = _review_digest(daemon, principal, action, target, params, before, after)
+            if not secrets.compare_digest(digest, pre["review_digest"]):
+                raise _error("SETUP_REVIEW_CHANGED", "Settings changed; review again", 409)
+            binding["review_digest"] = digest
         if action == "setup.host":
             runner = daemon._git_runner(config, {**daemon.adapter.verifier.settings.ssh_hosts, **_aliases(document)})
             binding["git_execution"] = {target["host"]: runner.execution_binding(target["host"])}
