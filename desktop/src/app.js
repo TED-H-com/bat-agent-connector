@@ -178,7 +178,7 @@ function paintEarlierDrafts() {
   slot.dataset.scanState = earlierScanState;
   if (!earlierIdentity || !earlierEntries.length) {slot.replaceChildren(); return;}
   const identity = earlierIdentity, scope = managedStorageScope(identity), signature = JSON.stringify(earlierEntries);
-  const current = () => !!state.token && state.online && !state.nativeBusy && state.namespace === scope
+  const current = () => !!state.token && !state.nativeBusy && state.namespace === scope
     && earlierIdentity && managedStorageScope(earlierIdentity) === scope;
   if (!earlierPanel || earlierPanelLocale !== locale || earlierPanel.signature !== signature) {
     const expanded = earlierPanel?.open || false;

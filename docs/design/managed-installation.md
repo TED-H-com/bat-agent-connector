@@ -248,6 +248,8 @@ view activation; connection changes invalidate its result and controls. Cancelli
 a connection change retains the panel. A same-identity resnapshot preserves the
 open panel, reading position and focus instead of repeating the notice jump. An
 access-boundary reset withdraws cached text until bootstrap is verified again.
+Local inspection, copy and hide remain usable during a transport outage after
+identity verification; they do not require Connector writes.
 
 The recovery reader uses explicit fields from each producer, rather than walking
 arbitrary JSON. The inventory below is separate from the complete-scope migration
