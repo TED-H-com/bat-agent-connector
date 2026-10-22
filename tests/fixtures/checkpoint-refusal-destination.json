@@ -11,12 +11,13 @@
   },
   "preconditions": {},
   "status": "failed",
-  "status_reason": "checkpoint destination appeared; staging retained",
-  "error_code": "GIT_FAILED",
+  "status_reason": "The destination appeared while the copy was being prepared. Both paths have been kept.",
+  "error_code": "CHECKPOINT_DESTINATION_APPEARED",
   "result": null,
   "created_at": 1790000000,
   "external_refs": {
-    "clone_path": "/srv/managed/app-11111111"
+    "clone_path": "/srv/managed/app-11111111",
+    "retained_staging_path": "/srv/managed/app-11111111.batc-tmp-cccccccccccc"
   },
   "steps": [
     {
@@ -24,8 +25,8 @@
       "name": "worktree.prepare",
       "status": "failed",
       "error": {
-        "code": "GIT_FAILED",
-        "message": "checkpoint destination appeared; staging retained"
+        "code": "CHECKPOINT_DESTINATION_APPEARED",
+        "message": "The destination appeared while the copy was being prepared. Both paths have been kept."
       }
     }
   ]

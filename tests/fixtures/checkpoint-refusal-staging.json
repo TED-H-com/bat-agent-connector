@@ -11,12 +11,13 @@
   },
   "preconditions": {},
   "status": "failed",
-  "status_reason": "checkpoint staging already exists; creation is unproven",
-  "error_code": "GIT_FAILED",
+  "status_reason": "An earlier attempt may have left an incomplete copy. It has been kept.",
+  "error_code": "CHECKPOINT_STAGING_RETAINED",
   "result": null,
   "created_at": 1790000000,
   "external_refs": {
-    "clone_path": "/srv/managed/app-11111111"
+    "clone_path": "/srv/managed/app-11111111",
+    "retained_staging_path": "/srv/managed/app-11111111.batc-tmp-cccccccccccc"
   },
   "steps": [
     {
@@ -24,8 +25,8 @@
       "name": "worktree.prepare",
       "status": "failed",
       "error": {
-        "code": "GIT_FAILED",
-        "message": "checkpoint staging already exists; creation is unproven"
+        "code": "CHECKPOINT_STAGING_RETAINED",
+        "message": "An earlier attempt may have left an incomplete copy. It has been kept."
       }
     }
   ]

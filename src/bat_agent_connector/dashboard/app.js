@@ -2039,6 +2039,8 @@ var init_ui_strings = __esmMin((() => {
 		never_observed: ["Not observed yet", "尚未觀測"],
 		SOURCE_MOVED: ["Source moved", "來源已移動"],
 		SOURCE_UNAVAILABLE: ["Source unavailable", "來源無法取得"],
+		CHECKPOINT_STAGING_RETAINED: ["Earlier copy kept", "已保留先前副本"],
+		CHECKPOINT_DESTINATION_APPEARED: ["Destination appeared; copy kept", "目的地已出現，副本已保留"],
 		invalid_proposal: ["Needs review", "待審閱"],
 		adopted: ["Update adopted", "已採用更新"],
 		content_changed: ["Discussion changed", "討論內容已變更"],
@@ -10026,6 +10028,13 @@ var init_i18n = __esmMin((() => {
 			setup_view_sessions: "查看工作階段",
 			error_generic: "無法完成此要求，請查看詳細資料。",
 			error_generic_short: "無法完成此要求。",
+			error_code_CHECKPOINT_STAGING_RETAINED: "先前的嘗試可能留下未完成的副本，目前已保留。",
+			error_code_CHECKPOINT_DESTINATION_APPEARED: "準備副本時，目的地已出現；兩個路徑都已保留。",
+			checkpoint_retained_path: "保留的副本",
+			checkpoint_destination_path: "目的地路徑",
+			checkpoint_retained_why: "Connector 只會移除能證明由它建立的資料夾。",
+			checkpoint_retained_next: "請再次使用「從檢查點繼續」。新的嘗試會使用新的暫存資料夾。檢查舊副本後，若已不需要，請自行移除。",
+			checkpoint_destination_next: "請先檢查目的地，再使用「從檢查點繼續」。新的嘗試會使用新的暫存資料夾。檢查舊副本後，若已不需要，請自行移除。",
 			desktop_status_error: "無法使用本機 Connector 連線，請檢查設定。",
 			error_code_ARTIFACT_TOO_LARGE: "檔案過大，請選擇較小的檔案。",
 			connection_actor: "帳號識別碼",
@@ -11718,6 +11727,13 @@ var init_i18n = __esmMin((() => {
 			setup_view_sessions: "View sessions",
 			error_generic: "This request could not be completed. Check Details.",
 			error_generic_short: "This request could not be completed.",
+			error_code_CHECKPOINT_STAGING_RETAINED: "An earlier attempt may have left an incomplete copy. It has been kept.",
+			error_code_CHECKPOINT_DESTINATION_APPEARED: "The destination appeared while the copy was being prepared. Both paths have been kept.",
+			checkpoint_retained_path: "Kept copy",
+			checkpoint_destination_path: "Destination path",
+			checkpoint_retained_why: "The Connector only removes folders it can prove it created.",
+			checkpoint_retained_next: "Use Continue from checkpoint again. The new attempt uses a new temporary folder. After checking the old copy, remove it yourself if you no longer need it.",
+			checkpoint_destination_next: "Check the destination, then use Continue from checkpoint again. The new attempt uses a new temporary folder. After checking the old copy, remove it yourself if you no longer need it.",
 			desktop_status_error: "The local Connector connection is unavailable. Check its settings.",
 			error_code_ARTIFACT_TOO_LARGE: "This file is too large. Choose a smaller file.",
 			connection_actor: "Actor ID",
@@ -71212,6 +71228,8 @@ async function viewOperation(main, id) {
 				main.append(repair.box);
 			}
 			const refs = op.external_refs || {};
+			const retainedCheckpoint = op.action === "checkpoint.continue" && op.status === "failed" && ["CHECKPOINT_STAGING_RETAINED", "CHECKPOINT_DESTINATION_APPEARED"].includes(op.error_code);
+			const reason = retainedCheckpoint ? t("error_code_" + op.error_code) : op.status_reason;
 			const retry = refs.merged_sha && op.action === "delivery.merge_and_deploy" && op.status === "failed" ? h("button", {
 				class: "primary",
 				onclick: async () => {
@@ -71302,7 +71320,10 @@ async function viewOperation(main, id) {
 			fill(panel, pageHeader({
 				title: actionLabel$1(op.action),
 				pill: statusPill(operationStatusKey(op.status))
-			}), h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(reasonText$1(op.error_code) || t("reason_unavailable"), "bad") : null), ...linked?.length ? [linkedItems(linked)] : [], h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("actor")), h("dd", {}, `${op.actor} (${op.entry})`), h("dt", {}, t("created")), h("dd", {}, when(epoch(op.created_at))), op.status_reason ? [h("dt", {}, t("reason")), h("dd", {}, op.status_reason)] : null, op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, h("code", {}, op.error_code))] : null, h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target))), Object.keys(refs).length && op.action !== "worktree.merge" ? [h("dt", {}, t("global_refs")), h("dd", {}, h("code", {}, JSON.stringify(refs)))] : null, op.result && op.action !== "worktree.merge" ? [h("dt", {}, t("global_result")), h("dd", {}, h("code", {}, JSON.stringify(op.result)))] : null), ...receipts || [], mergeRecovery(op), op.action === "worktree.merge" ? h("details", {}, h("summary", {}, t("sessions_details")), h("pre", { class: "pre" }, JSON.stringify({
+			}), h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(reasonText$1(op.error_code) || t("reason_unavailable"), "bad") : null), ...linked?.length ? [linkedItems(linked)] : [], h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("actor")), h("dd", {}, `${op.actor} (${op.entry})`), h("dt", {}, t("created")), h("dd", {}, when(epoch(op.created_at))), reason ? [h("dt", {}, t("reason")), h("dd", {}, reason)] : null, op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, h("code", {}, op.error_code))] : null, h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target))), Object.keys(refs).length && op.action !== "worktree.merge" ? [h("dt", {}, t("global_refs")), h("dd", {}, h("code", {}, JSON.stringify(refs)))] : null, op.result && op.action !== "worktree.merge" ? [h("dt", {}, t("global_result")), h("dd", {}, h("code", {}, JSON.stringify(op.result)))] : null), retainedCheckpoint ? h("div", {
+				class: "note warn",
+				"data-checkpoint-retained": ""
+			}, h("dl", { class: "kv" }, typeof refs.retained_staging_path === "string" ? [h("dt", {}, t("checkpoint_retained_path")), h("dd", {}, h("code", {}, refs.retained_staging_path))] : null, op.error_code === "CHECKPOINT_DESTINATION_APPEARED" && typeof refs.clone_path === "string" ? [h("dt", {}, t("checkpoint_destination_path")), h("dd", {}, h("code", {}, refs.clone_path))] : null), h("p", {}, t("checkpoint_retained_why")), h("p", {}, t(op.error_code === "CHECKPOINT_DESTINATION_APPEARED" ? "checkpoint_destination_next" : "checkpoint_retained_next"))) : null, ...receipts || [], mergeRecovery(op), op.action === "worktree.merge" ? h("details", {}, h("summary", {}, t("sessions_details")), h("pre", { class: "pre" }, JSON.stringify({
 				refs,
 				result: op.result
 			}, null, 2))) : null, ...materialized.length ? [h("h2", {}, t("materializations")), ...materialized.map((m) => h("div", { class: "row" }, h("div", { class: "grow" }, `${m.artifact_id} · r${m.revision}`, h("div", { class: "muted" }, m.managed_path)), chip(t(`material_${m.state}`), m.state === "verified" ? "ok" : "")))] : [], ...cleanupReceipts?.length ? [h("h2", {}, t("cleanup_open_receipts")), ...cleanupReceipts.map((r) => h("details", { class: "row-details" }, h("summary", {}, r.resource_id, " · ", t("cleanup_receipt_" + r.status)), h("pre", { class: "pre" }, JSON.stringify(r, null, 2))))] : [], ...op.action === "integration.apply" ? [repairControl(op)] : [], (op.result?.merge || op.result || refs.merge_receipt)?.base_moved ? h("p", { class: "note warn" }, t("merged_newer_base", { count: (op.result?.merge || op.result || refs.merge_receipt).other_commits_count })) : null, refs.write_acknowledged && refs.verification_pending ? h("p", { class: "note warn" }, t("metadata_pending")) : null, h("h2", {}, t("steps")), ...op.steps.map((s) => h("div", { class: "row" }, h("div", { class: "grow" }, s.name), h("span", { class: `status-${s.status}` }, operationStatusLabel(s.status)), s.error ? chip(s.error.code || t("error"), "bad") : null)), h("div", { class: "actions" }, opened, ["artifact.capture.managed", "artifact.accept"].includes(op.action) && op.status === "succeeded" && /^art_[0-9a-f]{32}$/.test(op.result?.artifact_id) && Number.isSafeInteger(op.result?.revision) && op.result.revision > 0 ? h("a", { href: `#/artifact-review/artifact/${op.result.artifact_id}/${op.result.revision}` }, t("ar_review_title")) : null, state.caps?.artifacts?.capture?.managed_single_file && managedCaptureExecution(op) ? h("a", { href: `#/artifact-review/operation/${op.operation_id}` }, t("ar_open")) : null, confirmSource, resume, retry, cancel));
