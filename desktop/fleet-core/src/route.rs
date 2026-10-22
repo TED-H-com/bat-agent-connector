@@ -464,14 +464,22 @@ pub struct RouteChoice {
 pub(crate) struct RouteObservation {
     pub kind: RouteKind,
     pub generation: ProbeGeneration,
-    pub observed_ms: u64,
+    pub confirmed_ms: u64,
+}
+impl RouteObservation {
+    /// Called only after the supervisor proves the retained run is still in use.
+    pub(crate) fn confirm_use(&mut self, generation: &ProbeGeneration, now: u64) {
+        if self.generation == *generation {
+            self.confirmed_ms = now;
+        }
+    }
 }
 impl RouteChoice {
-    pub(crate) fn observation(&self) -> RouteObservation {
+    pub(crate) fn observation(&self, confirmed_ms: u64) -> RouteObservation {
         RouteObservation {
             kind: self.kind,
             generation: self.generation.clone(),
-            observed_ms: self.observed_ms,
+            confirmed_ms,
         }
     }
 

@@ -112,13 +112,19 @@ impl Entry {
                 version: probe.version.clone(),
             };
         }
-        if let Some(route) = route.filter(|r| selected && r.generation == *generation) {
-            row.route = Some(Route {
-                kind: route.kind,
-                observed_at: observation_time(route.observed_ms, now, now)?,
-                generation: route.generation.generation,
+        // A future/unrepresentable route confirmation cannot suppress the rest
+        // of the status row (for example after the producer clock steps back).
+        row.route = route
+            .filter(|r| selected && r.generation == *generation)
+            .and_then(|route| {
+                observation_time(route.confirmed_ms, now, now)
+                    .ok()
+                    .map(|observed_at| Route {
+                        kind: route.kind,
+                        observed_at,
+                        generation: route.generation.generation,
+                    })
             });
-        }
         if selected {
             if let Some((code, layer)) = failure {
                 row.level = if code == "TAILSCALE_WAKING" {
@@ -359,7 +365,9 @@ mod contract_tests {
             .run(&FixtureRoutes, std::time::Duration::from_secs(2))
             .await
             .unwrap();
-            let route = choice.observation();
+            let mut route = choice.observation(now - 300_000);
+            // The retained run is still in use at the snapshot's ownership check.
+            route.confirm_use(&generation, now);
             let row = Entry::observed(
                 (
                     expected["name"].as_str().unwrap(),
@@ -401,23 +409,39 @@ mod contract_tests {
         let route = RouteObservation {
             kind: RouteKind::Direct,
             generation: generation.clone(),
-            observed_ms: 2001,
+            confirmed_ms: 2001,
+        };
+        let probe = ProbeObservation {
+            generation: generation.clone(),
+            observed_ms: 2000,
+            kind: ProbeKind::Bat,
+            tunnel: true,
+            tls: true,
+            auth: Authentication::Ok,
+            bat: true,
+            workspace: true,
+            connector: false,
+            version: Some("3.2.5".into()),
+            code: None,
+            blocking: None,
+            reason: None,
         };
         let plain = Entry::observed(
             ("node-1", "Fixture 1"),
             true,
             ProbeKind::Bat,
-            (None, None),
+            (Some(&probe), None),
             &generation,
             2000,
             None,
         )
         .unwrap();
+        assert_eq!(plain.level, "ready");
         let with_route = Entry::observed(
             ("node-1", "Fixture 1"),
             true,
             ProbeKind::Bat,
-            (None, Some(&route)),
+            (Some(&probe), Some(&route)),
             &generation,
             2000,
             None,

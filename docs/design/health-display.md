@@ -38,7 +38,7 @@ their existing namespaces. No display state authorizes work or changes final gat
 | Needs attention | Session inventory's pending interaction or explicitly managed runtime status, never idle/streaming inference. | The same session observation; a stale recorded request remains visible as a last-known request, separately from staleness. |
 | Workspace membership used for the selected summary | Explicit session `host` + `workspace_id`; without a workspace ID only the explicitly selected session can be summarized. PM workspace `server_id` belongs to the activated Connector installation, not a Fleet alias. | Complete scoped page chain; invalidate currentness on bootstrap, discard withdrawn inventory, and preserve selection/last values only within the same verified namespace. No path/name matching. |
 | Native Fleet machine attention | Existing native `Entry::observed` readiness, through `fleet::sanitize_result` / `readiness_row`, consumed by the existing Fleet status/overview read. | Row `observed_at`, readiness stale state and the shared `fleetDiagnosis` (including monitor/selection state). Native aliases are a separate identity domain; never join them to central host names. |
-| Route kind and observation time | Native accepted `RouteChoice`, through `Entry::observed`, `Context::status` and the IPC allowlist. | Choice observation time, the shared 60-second deadline and active route generation. No new probes. |
+| Route kind and observation time | Native accepted `RouteChoice`, through `Entry::observed`, `Context::status` and the IPC allowlist. | Last supervisor-verified use, the shared 60-second deadline and active route generation. No new probes. |
 | Desktop and managed runtime versions | Existing native `app_build` and managed status producers; each remains its own version fact. | Bootstrap/version/build invalidation. Installed and launch-observed versions are separate. |
 | Loaded MCP process version (required, not built) | Missing process-owned MCP runtime identity producer; see the lifecycle follow-up below. Existing adapter/version facts cannot establish this identity. | The future observation must bind loaded version/build to process generation. Installing does not prove an existing process loaded new code. |
 
@@ -211,15 +211,53 @@ choice there is no route line. No producer path emits relay or SSH fallback, so 
 IPC allowlist and display do not invent those values. See [route policy](fleet-routes.md).
 
 `supervisor.rs::tick_host` retains the safe choice only after revalidating it and
-binding a launched process to the policy run. `Host::invalidate` clears it on
-selection/generation/configuration changes, deselection, lost ownership or exit;
-a replacement choice replaces it. `supervisor_status.rs::Entry::observed` emits
+binding a launched process to the policy run. Its retained `confirmed_ms` dates
+that acceptance, independently of the original choice's `observed_ms` (which still
+bounds choice admission). `reconcile_records` renews confirmation only after the
+matching owned record, positive process liveness, retained child identity, policy
+run, launch intent and ownership receipt have been checked, for the same generation.
+Unknown liveness does not renew it; a blocked or failed check never supplies a new
+confirmation. `Host::invalidate` clears the route on selection/generation/configuration
+changes, deselection, lost ownership or exit; a replacement choice replaces it.
+
+Every normal `tick_guarded` publication follows `reconcile_records`. A route newly
+launched later in that tick gets its initial confirmation from its bound run.
+Early verification/input errors do not publish or renew a route. Shutdown can
+publish without reconciliation, but it first invalidates all hosts and passes no
+route to `Entry::observed`, including an unconfirmed stop.
+
+`supervisor_status.rs::Entry::observed` emits
 `route: {kind, observed_at, generation}` independently of readiness layers.
-`observation_time` translates the observation age against the producer's Unix clock
+`observed_at` means the **last verified use**, not the original route selection.
+`observation_time` translates confirmation age against the producer's Unix clock
 anchor. The native caller `windows_supervisor.rs::now_ms` currently supplies Unix
-milliseconds for both clock coordinates; a monotonic observation must instead use
-its corresponding Unix anchor. A read or readiness probe never renews a route's time.
-There is one latest status snapshot, no route history or database persistence.
+milliseconds for both clock coordinates; a monotonic confirmation must instead use
+its corresponding Unix anchor. A future or unrepresentable confirmation omits only
+that row's route, preserving its readiness and the remaining publication. Retained
+`Snapshot::parse` still refuses future route timestamps, as it does row timestamps.
+
+A status-file read has no process ownership evidence. A readiness probe establishes
+protocol/authentication/workspace facts, not which owned transport is still in use.
+Neither can renew confirmation; neither can the UI. There is one latest status
+snapshot, no route history or database persistence.
+
+The configured native tick cadence is shared across these states (source:
+`windows_supervisor.rs::run`, `supervisor.rs::tick_host`, `route.rs::start_wake` and
+`ownership.rs::Recovery`). The scheduled wait begins after a tick's work:
+
+| State | Next supervisor tick | Independent work/backoff |
+| --- | --- | --- |
+| Normal running, including a live route | 1-second wait, or earlier route progress notification | Healthy readiness probes are scheduled 30 seconds apart; failed probes 15 seconds apart. These do not delay ownership checks. |
+| Route/probe/recovery backoff, including another host with a live route | The same 1-second wait, or earlier progress | Unavailable-route retry: 15 seconds. Recovery waits 5 seconds, then 15/45/45-second spacing; alias demotion lasts 10 minutes. These are per-host eligibility deadlines, not supervisor sleeps. |
+| Tailscale waking or wake cooldown, including another host with a live route | The same wait, interrupted by wake reservation/completion progress | Wake runs in a background task with a 5-second budget; cooldown is 5/10/20/40/60 seconds. Neither suspends the supervisor loop. |
+
+Code inspection establishes no state that intentionally schedules ownership checks
+60 seconds apart while a live route is retained. The paused-clock wake fixture also
+observes completion progress at 1.5 seconds. This is fixture/source evidence, not
+physical-host cadence measurement or an execution-time bound: synchronous local
+I/O, a stalled process or scheduling may delay a tick. In that case the unrenewed
+confirmation honestly ages to **Checking / 檢查中** at the unchanged 60-second
+deadline. No new timer or probe is added.
 
 `fleet.rs::readiness_route` rebuilds exactly `kind`, `observed_at`, `generation`
 and optional `latency_ms`. It accepts only the four kinds above, a required timestamp

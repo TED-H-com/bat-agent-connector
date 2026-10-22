@@ -24,7 +24,10 @@ behavior and sparse legacy status; they are not native readiness evidence.
 Route observations are generated from real `SelectionRequest` choices using a
 synthetic inventory and injected existing probes, then `Entry::observed`. Four hosts
 choose direct, node-4 chooses Cloudflare, and Connector chooses configured SSH.
-No latency is measured. The golden test passes those typed rows through
+Each choice is five minutes older than the snapshot. The same confirmation helper
+used by supervisor ownership reconciliation dates its last verified use at the
+snapshot time; this keeps the long-running route current. No latency is measured.
+The golden test passes those typed rows through
 `fleet::native_readiness`, the exact projection called by `fleet_native::Context::status`,
 then `sanitize_result`. Platform discovery and ownership use synthetic fixtures;
 this does not claim a live Windows Context read.
