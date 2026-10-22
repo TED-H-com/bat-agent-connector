@@ -113,6 +113,20 @@ it comes from that session's own detail GET. Other 404s can represent normal abs
 Selection remains so unknown is visible. Credential pausing stays with the existing
 client transport; the health projection does not duplicate that policy.
 
+Event-stream resets use the view's shared `IDENTITY_PRESERVING_RESETS` contract:
+`cursor_expired`, `cursor_ahead`, `history_changed` and `checkpoint_cursor_mismatch`
+retain the last scoped display while bootstrap verifies continuity. A verified
+same-namespace bootstrap retains selection and last observations for renewal;
+inventory completeness must still be established by current reads.
+Every other or unknown reset reason withdraws the entire health projection before
+bootstrap, alongside the view: no old workspace label, activity or machine count
+remains, and the Connector shows waiting/unknown instead of the old connected fact.
+Failed verification leaves it withdrawn. Successful verification starts with empty
+health facts and fills them only from the newly authorized reads. Drafts and
+operation keys stay in their original namespace. This uses the existing
+[identity reset boundary](two-service-isolation.md#managed-crashrebind-followed-by-a-producer-reset-m07m08),
+not a separate health classification or bootstrap path.
+
 Version/build/contract changes trigger one existing verified bootstrap when the
 principal and namespace can be verified unchanged. It preserves drafts, operation
 keys and the active view; static facts are replaced, cached Inventory becomes

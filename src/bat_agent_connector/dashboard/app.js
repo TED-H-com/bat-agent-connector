@@ -70016,6 +70016,10 @@ async function streamEvents() {
 				};
 				const accessChanged = !IDENTITY_PRESERVING_RESETS.has(error.reason);
 				if (accessChanged) {
+					state.health = null;
+					state.lastPoll = null;
+					state.pollHealth = "initial";
+					paintConnection(true);
 					clearEarlierDrafts();
 					generation++;
 					state.viewReady = false;

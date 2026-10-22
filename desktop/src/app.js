@@ -238,7 +238,7 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
   if (!retained) state.observations = new Map();
   state.connectionError = null;
   state.online = false; state.pollHealth = 'initial'; state.viewReady = false;
-  // Keep the last scoped display while verification is in flight.
+  // Continuity verification retains its display; identity resets withdraw it before activation.
   state.health ||= {sessions: [], hosts: []};
   state.caps = caps; state.endpoint = endpoint; state.sync = null;
   let bootstrap;
@@ -1295,6 +1295,9 @@ async function streamEvents() {
         const previous = { namespace: state.namespace, sync: state.sync };
         const accessChanged = !IDENTITY_PRESERVING_RESETS.has(error.reason);
         if (accessChanged) {
+          state.health = null;
+          state.lastPoll = null; state.pollHealth = 'initial';
+          paintConnection(true);
           clearEarlierDrafts();
           // A changed access boundary invalidates displayed facts immediately. Drafts stay
           // in their original principal namespace, even when bootstrap is unavailable.
