@@ -40,6 +40,8 @@ enum ManagedRequest {
     OpenBrowser,
 }
 
+struct ManagedBrowserMenu(MenuItem<tauri::Wry>);
+
 #[tauri::command]
 async fn managed_control(
     window: WebviewWindow,
@@ -286,12 +288,15 @@ async fn managed_select_role(
     window: WebviewWindow,
     state: State<'_, Arc<Bridge>>,
     managed: State<'_, Arc<managed::Managed>>,
+    browser: State<'_, ManagedBrowserMenu>,
     input: startup_role::Selection,
 ) -> Result<NativeStatus, String> {
     local_main(&window)?;
     state
         .select_startup_role(managed.inner().clone(), input)
         .await?;
+    // The menu was built while a clean installation was still role pending.
+    let _ = browser.0.set_enabled(managed.status().ready);
     let mut status = state.status();
     status.startup_role = managed.startup_role();
     Ok(status)
@@ -857,6 +862,7 @@ fn main() {
                 managed_status.ready,
                 None::<&str>,
             )?;
+            app.manage(ManagedBrowserMenu(browser.clone()));
             let settings =
                 MenuItem::with_id(app, "settings", "Background Settings", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit Dashboard", true, None::<&str>)?;
