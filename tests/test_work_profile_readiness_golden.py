@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
-from bat_agent_connector import platform_files, pm_native_runtime, pm_work_profiles, product_preferences
+from bat_agent_connector import inventory, platform_files, pm_native_runtime, pm_work_profiles, product_preferences
 from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.host_git import HostGitRunner
 from tests import test_pm_work_profiles as profiles
@@ -60,7 +60,7 @@ async def test_work_profile_readiness_matches_producer_golden(world, mock, tmp_p
     base = f"/api/v1/pm/workspaces/{wid}/work-profiles"
     status, profile = await http(port, "GET", base + "/" + ident, tok=auth)
     assert status == 200
-    cases = {}
+    cases, host_facts = {}, {}
 
     async def capture(name):
         before = (len(mock.invokes), len(write_frames(mock)), ops.db.total_changes)
@@ -79,6 +79,7 @@ async def test_work_profile_readiness_matches_producer_golden(world, mock, tmp_p
         host_status, host_body = await http(port, "GET", "/api/v1/hosts", tok=auth)
         assert host_status == 200
         host = next(item for item in host_body["hosts"] if item["host"] == "h1")
+        host_facts[name] = host
         for key, state in body["states"].items():
             dependent = (key == "discovered" and state["value"] == "ready"
                 or key == "can_observe" and (state["value"] == "ready"
@@ -87,9 +88,14 @@ async def test_work_profile_readiness_matches_producer_golden(world, mock, tmp_p
             if dependent:
                 assert "valid_until" in state, (name, key, state)
                 assert state["valid_until"] == host["valid_until"]
-                success = host["last_success_at"]
+                attempt = host["last_attempt_at"]
                 assert (int(state["observed_at"]) if state["observed_at"] is not None else None) == (
-                    int(datetime.fromisoformat(success.replace("Z", "+00:00")).timestamp()) if success else None)
+                    int(datetime.fromisoformat(attempt.replace("Z", "+00:00")).timestamp()) if attempt else None)
+                if name == "host_unreachable":
+                    # The frozen failure clock makes exact numeric equality
+                    # possible, beyond the ISO producer's second precision.
+                    assert state["observed_at"] == datetime.fromisoformat(attempt.replace("Z", "+00:00")).timestamp()
+                    assert state["observed_at"] != datetime.fromisoformat(host["last_success_at"].replace("Z", "+00:00")).timestamp()
             else:
                 assert "valid_until" not in state and "observed_at" not in state
         cases[name] = body
@@ -109,8 +115,9 @@ async def test_work_profile_readiness_matches_producer_golden(world, mock, tmp_p
     finally:
         daemon.inventory.settings.stale_after_s = original_window
     with daemon.journal.tx():
-        ops.db.execute("UPDATE hosts_observed SET last_success_at=? WHERE host=?",
-            (time.time() - daemon.inventory.settings.stale_after_s - 1, "h1"))
+        stale_at = time.time() - daemon.inventory.settings.stale_after_s - 1
+        ops.db.execute("UPDATE hosts_observed SET last_success_at=?, last_attempt_at=? WHERE host=?",
+            (stale_at, stale_at, "h1"))
     stale = await capture("host_not_refreshed")
     assert stale["states"]["can_observe"]["reason"] == "host_not_refreshed"
     await daemon.inventory._refresh_scheduled("h1")
@@ -141,11 +148,18 @@ async def test_work_profile_readiness_matches_producer_golden(world, mock, tmp_p
     owned = await capture("owned_execution")
     for name in ("can_continue_own", "last_verified_execution"):
         assert owned["states"][name]["verified"]["evidence_ref"]["operation_id"] == execution["operation_id"]
-    await daemon.inventory._refresh_scheduled("h1")
-    await capture("renewed_observation")
-    await mock.stop()
-    await daemon.inventory._refresh_scheduled("h1")
-    failed = await capture("host_unreachable")
+    clock = {"now": float(int(time.time()))}
+    with monkeypatch.context() as observation_clock:
+        observation_clock.setattr(inventory, "time", SimpleNamespace(
+            time=lambda: clock["now"], strftime=time.strftime, gmtime=time.gmtime))
+        observation_clock.setattr(pm_work_profiles, "time", SimpleNamespace(time=lambda: clock["now"], strptime=time.strptime))
+        await daemon.inventory._refresh_scheduled("h1")
+        await capture("renewed_observation")
+        clock["now"] += 300
+        await mock.stop()
+        await daemon.inventory._refresh_scheduled("h1")
+        clock["now"] += 60
+        failed = await capture("host_unreachable")
     assert failed["states"]["can_observe"]["value"] == "unavailable"
     assert failed["states"]["can_observe"]["verified"]["value"] == "ready"
 
@@ -156,9 +170,9 @@ async def test_work_profile_readiness_matches_producer_golden(world, mock, tmp_p
         .replace(saved["operation_id"], "op_" + "b" * 32)
         .replace(execution["operation_id"], "op_" + "c" * 32))
 
-    def normalize(value, observed=1790000540.0):
+    def normalize(value, observed=1790000540.0, success_at=None):
         if isinstance(value, list):
-            return [normalize(item, observed) for item in value]
+            return [normalize(item, observed, success_at) for item in value]
         if not isinstance(value, dict):
             return value
         result = {}
@@ -169,19 +183,27 @@ async def test_work_profile_readiness_matches_producer_golden(world, mock, tmp_p
             elif key == "valid_until" and item is not None:
                 # Redact the epoch, preserving the producer's validity window.
                 deadline = datetime.fromisoformat(item.replace("Z", "+00:00")).timestamp()
-                window = deadline - int(value["observed_at"])
+                window = deadline - success_at
                 result[key] = datetime.fromtimestamp(observed + window, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             elif key in {"observed_at", "last_success_at", "finished_at", "created_at", "updated_at"} and item is not None:
                 epoch = stamp if key == "observed_at" else observed
+                if key == "observed_at" and "valid_until" in value:
+                    epoch = observed + int(item) - success_at
                 result[key] = datetime.fromtimestamp(epoch, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if isinstance(item, str) else epoch
             else:
-                result[key] = normalize(item, observed)
+                result[key] = normalize(item, observed, success_at)
         return result
 
     bundle["profile"] = normalize(bundle["profile"])
     for name, body in bundle["cases"].items():
-        bundle["cases"][name] = normalize(body, {"host_not_refreshed": 1790000000.0, "renewed_observation": 1790000720.0}.get(name, 1790000540.0))
-        bundle["cases"][name]["observed_at"] = 1790000780.0 if name == "renewed_observation" else 1790000600.0
+        success = host_facts[name]["last_success_at"]
+        success_at = datetime.fromisoformat(success.replace("Z", "+00:00")).timestamp() if success else None
+        bundle["cases"][name] = normalize(body,
+            {"host_not_refreshed": 1790000000.0, "renewed_observation": 1790000720.0}.get(name, 1790000540.0),
+            success_at)
+        bundle["cases"][name]["observed_at"] = {
+            "renewed_observation": 1790000780.0, "host_unreachable": 1790000900.0,
+        }.get(name, 1790000600.0)
     raw = json.dumps(bundle, ensure_ascii=False, indent=2) + "\n"
     assert mock.token not in raw and str(tmp_path) not in raw
     if os.environ.get("BATC_UPDATE_PROFILE_GOLDEN") == "1":
@@ -199,6 +221,16 @@ def test_readiness_golden_declares_host_deadlines():
 
 
 def test_work_observation_expires_inclusively():
-    assert pm_work_profiles._observation_reason(
+    assert inventory._observation_reason(
         {"reachable": True, "last_success_at": 1000.0}, 1180.0, 180.0,
     ) == "host_not_refreshed"
+
+
+def test_unreachable_golden_separates_attempt_from_success():
+    failed = json.loads(GOLDEN.read_text(encoding="utf-8"))["cases"]["host_unreachable"]
+    success = failed["states"]["can_observe"]["verified"]["observed_at"]
+    for name in ("can_observe", "can_start_own"):
+        state = failed["states"][name]
+        assert state["observed_at"] == success + 300
+        assert failed["observed_at"] == state["observed_at"] + 60
+        assert datetime.fromisoformat(state["valid_until"].replace("Z", "+00:00")).timestamp() == success + 180

@@ -26,6 +26,35 @@ for (const locale of ['en-US', 'zh-TW']) test.describe(`shared readiness ${local
     await expect(page.locator('[data-check-state="passed"]')).toHaveCount(0);
   });
 
+  test('Work unreachable shows the last attempt age while success is five minutes older', async ({page}) => {
+    const body = profiles.cases.host_unreachable;
+    await page.clock.install({time: new Date(1790000900000)});
+    await page.clock.pauseAt(1790000900000);
+    let release;
+    const held = new Promise<void>(resolve => release = resolve);
+    const {facts, reads, posts} = await mountProfilePicker(page, body, profiles.profile, locale, async (route, n) => {
+      if (n > 1) await held;
+      await route.fulfill({status: 200, json: body});
+    });
+    try {
+      for (const name of ['can_observe', 'can_start_own']) {
+        await expect(facts.locator(`[data-work-profile-state="${name}"] [data-work-profile-value]`)).toHaveText(locale === 'en-US'
+          ? 'Unavailable · Last attempt: 1 min ago; host unreachable, last successful observation is stale'
+          : '不可用 · 上次嘗試：1 分鐘前；無法連至主機，上次成功觀察已過期');
+        expect(body.states[name].observed_at).toBe(1790000840);
+      }
+      expect(body.states.can_observe.verified.observed_at).toBe(1790000540);
+      await expect.poll(() => reads.filter(path => path.endsWith('/readiness')).length).toBe(2);
+      release();
+      await expect(facts.locator('[data-work-profile-state="can_observe"] [data-work-profile-value]')).toHaveText(locale === 'en-US'
+        ? 'Unavailable · 1 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)'
+        : '不可用 · 1 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）');
+      await page.clock.fastForward(600_000);
+      expect(reads.filter(path => path.endsWith('/readiness'))).toHaveLength(2);
+      expect(posts).toEqual([]);
+    } finally {release();}
+  });
+
   const body = profiles.cases.owned_execution;
   const deadline = 1790000720000;
   const copy = locale === 'en-US' ? {
