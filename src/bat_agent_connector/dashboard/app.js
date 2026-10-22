@@ -14277,13 +14277,14 @@ function rememberFleetDetails(content, detailsState) {
 }
 function fleetHealth(row, options = {}) {
 	const diagnosis = fleetDiagnosis(row, options);
+	const observedAt = ["checking", "unknown"].includes(diagnosis.state) ? null : row?.observed_at;
 	const fact = displayFact({
 		key: [
 			"checking",
 			"unknown",
 			"stale"
 		].includes(diagnosis.state) ? "health_unknown" : diagnosis.state === "ready" ? "ui_connected" : "fleet_check_title_" + diagnosis.state,
-		observed_at: row?.observed_at,
+		observed_at: observedAt,
 		stale: diagnosis.state === "stale"
 	}, { now: options.now });
 	const state = diagnosis.state === "ready" && fact.freshness !== "current" ? fact.freshness === "stale" ? "stale" : "checking" : diagnosis.state;

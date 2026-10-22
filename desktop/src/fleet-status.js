@@ -76,9 +76,11 @@ export function rememberFleetDetails(content, detailsState) {
 // the shared fact projection owns currentness and its localized wording.
 export function fleetHealth(row, options = {}) {
   const diagnosis = fleetDiagnosis(row, options);
+  // A probe time cannot establish a value while the diagnosis is still unknown.
+  const observedAt = ['checking', 'unknown'].includes(diagnosis.state) ? null : row?.observed_at;
   const fact = displayFact({key: ['checking', 'unknown', 'stale'].includes(diagnosis.state) ? 'health_unknown'
     : diagnosis.state === 'ready' ? 'ui_connected' : 'fleet_check_title_' + diagnosis.state,
-    observed_at: row?.observed_at, stale: diagnosis.state === 'stale'}, {now: options.now});
+    observed_at: observedAt, stale: diagnosis.state === 'stale'}, {now: options.now});
   const state = diagnosis.state === 'ready' && fact.freshness !== 'current'
     ? fact.freshness === 'stale' ? 'stale' : 'checking' : diagnosis.state;
   return {...diagnosis, state, fact, steps: fact.freshness === 'current' ? diagnosis.steps

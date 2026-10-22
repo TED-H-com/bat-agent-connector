@@ -83,6 +83,10 @@ claim current success. Unconfirmed stop and unsupported-version reasons remain
 visible, and each row expires independently. Native Fleet identities are never
 joined to central hosts by name, port, address or server string.
 
+Checking and unknown diagnoses establish no value even with a recent probe
+timestamp, so they always use Unknown and Checking; stale diagnoses retain the
+observation age.
+
 The 60-second display rule uses the same `observed_at` and observation window as
 the native producer: `desktop/fleet-core/src/supervisor_status.rs` marks a selected ready
 row `PROBE_STALE` after 60 seconds. Both Fleet views (`fleet.js` and
