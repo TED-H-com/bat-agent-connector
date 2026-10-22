@@ -8,7 +8,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
-from bat_agent_connector import inventory, platform_files, pm_native_runtime, pm_work_profiles, product_preferences
+from bat_agent_connector import (
+    inventory,
+    platform_files,
+    pm_native_runtime,
+    pm_work_profiles,
+    product_preferences,
+)
 from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.host_git import HostGitRunner
 from tests import test_pm_work_profiles as profiles

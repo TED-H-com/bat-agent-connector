@@ -96,15 +96,18 @@ adds neither a probe nor a polling loop.
 
 Work adopts the shared `displayFact` / `healthLabel` projection for the
 observation-derived states in `work-profile-readiness/v1`. Each declares
-`observed_at` (the host's last successful observation, epoch seconds) and
-`valid_until` (Inventory's ISO deadline, from the same `_valid_until` helper).
+`observed_at` (the host's `last_attempt_at`, epoch seconds, matching Inventory's
+connection evidence and the header) and `valid_until` (the last successful
+observation plus `stale_after_s`, Inventory's ISO deadline from the same
+`_valid_until` helper). Inventory and Work also share `_observation_reason` for
+missing, unreachable and expired host facts, including expiry at the deadline.
 `discovered` declares them only for `ready`, since discovery is ready only while
 the host observation is current. `can_observe` declares them for `ready` via
 `hosts_observed` and for `never_observed`, `host_unreachable` and
 `host_not_refreshed`. `can_start_own` declares them when its winning blocker is
-`host_unreachable` or `host_not_refreshed`. A missing successful observation has
-null fields and establishes no deadline. `host_unknown` is a configuration reason,
-not an observation. All other states omit validity: authentication,
+`host_unreachable` or `host_not_refreshed`. With no attempt, `observed_at` is null;
+with no successful observation, `valid_until` is null and establishes no deadline.
+`host_unknown` is a configuration reason, not an observation. All other states omit validity: authentication,
 `configured_unverified`, execution-based states and `action_unavailable` retain
 their existing text and never acquire Checking. This adoption declares no static facts.
 
@@ -113,6 +116,9 @@ and the saved-setting warning. Past `verified` evidence remains history; neither
 it nor the response's top-level read timestamp establishes currentness. A current
 declared state shows its value; expiry shows the last value, age and Checking.
 `host_unreachable` uses the shared unreachable wording and retains its reason.
+Its "Last attempt" age dates the failed attempt, while the success-based deadline
+and past verification keep their older instants. Successful observations update
+both attempt and success times together, so ready and unrefreshed ages are unchanged.
 
 The picker renews through its existing `read()` and contract/workspace/profile/
 revision/digest/ticket checks, following the delegated renewal rule below. One

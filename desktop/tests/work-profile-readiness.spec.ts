@@ -68,10 +68,12 @@ for(const locale of ['en-US','zh-TW'])test.describe(`${locale} producer profile 
         await expect(cell).toContainText(copy(reasonKey)||copy('wpf_unverified'));
         const value=copy('wpf_'+state.value);
         // Literal locale expectations for the producer's fixed golden instants.
+        // These expired cases have completed their one unchanged renewal; the
+        // held unreachable response and its attempt wording are in shared-readiness.
         const expected=state.valid_until&&state.reason==='host_not_refreshed'
           ?(locale==='en-US'?'Unavailable · 10 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)':'不可用 · 10 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）')
           :state.valid_until&&state.reason==='host_unreachable'
-            ?(locale==='en-US'?'Unavailable · Last attempt: 1 min ago; host unreachable, last successful observation is stale':'不可用 · 上次嘗試：1 分鐘前；無法連至主機，上次成功觀察已過期')
+            ?(locale==='en-US'?'Unavailable · 1 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)':'不可用 · 1 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）')
             :value;
         await expect(cell.locator('[data-work-profile-value]')).toHaveText(expected);
         expect((await cell.innerText()).trim().startsWith(copy('wpf_'+state.value))).toBe(true);
@@ -104,7 +106,7 @@ for(const locale of ['en-US','zh-TW'])test.describe(`${locale} producer profile 
       }
       expect(await facts.innerText()).not.toMatch(/scan_fixture|fixture-bat|\/srv\/|\/tmp\//);
       expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-      expect(reads.filter(path=>path.endsWith('/readiness'))).toHaveLength(name==='host_not_refreshed'?2:1);expect(posts).toEqual([]);
+      expect(reads.filter(path=>path.endsWith('/readiness'))).toHaveLength(['host_not_refreshed','host_unreachable'].includes(name)?2:1);expect(posts).toEqual([]);
       expect(await page.evaluate(()=>(window as any).__csp)).toEqual([]);
     });
 });

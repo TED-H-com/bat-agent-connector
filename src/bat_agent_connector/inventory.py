@@ -93,6 +93,17 @@ def _valid_until(observed, stale_after_s):
     return _iso(observed + stale_after_s) if observed is not None else None
 
 
+def _observation_reason(row, now: float, stale_after_s: float) -> str | None:
+    """The host fact's currentness, shared by Inventory and Work readiness."""
+    if not row:
+        return "never_observed"
+    if not row.get("reachable"):
+        return "host_unreachable"
+    if now - (row.get("last_success_at") or 0) >= stale_after_s:
+        return "host_not_refreshed"
+    return None
+
+
 class Inventory:
     def __init__(self, journal, config: Config, settings: InventorySettings | None = None,
                  fleet: Fleet | None = None) -> None:
@@ -400,13 +411,8 @@ class Inventory:
         return _valid_until(observed, self.settings.stale_after_s)
 
     def _host_stale(self, r: dict, now: float) -> tuple[bool, str | None]:
-        if not r:
-            return True, "never_observed"
-        if not r.get("reachable"):
-            return True, "host_unreachable"
-        if now - (r.get("last_success_at") or 0) >= self.settings.stale_after_s:
-            return True, "host_not_refreshed"
-        return False, None
+        reason = _observation_reason(r, now, self.settings.stale_after_s)
+        return reason is not None, reason
 
     def _session_out(self, r, hosts: dict, now: float) -> dict:
         from .session_metadata import read as metadata

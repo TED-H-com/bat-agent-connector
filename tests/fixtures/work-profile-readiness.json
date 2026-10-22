@@ -1205,7 +1205,7 @@
       "profile_id": "wpf_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "revision": 1,
       "digest": "ddb1f798456a5df8cab824894efe2c0e950b7f48d3bd1d126c741130b16ca0a8",
-      "observed_at": 1790000600.0,
+      "observed_at": 1790000900.0,
       "calls_bat": false,
       "coding_route_ready": false,
       "work_follow_up": {
@@ -1254,7 +1254,7 @@
             "verified": null,
             "observed_at": 1790000540.0
           },
-          "observed_at": 1790000540.0,
+          "observed_at": 1790000840.0,
           "valid_until": "2026-09-21T14:25:20Z"
         },
         "can_start_own": {
@@ -1262,7 +1262,7 @@
           "reason": "host_unreachable",
           "evidence_ref": null,
           "verified": null,
-          "observed_at": 1790000540.0,
+          "observed_at": 1790000840.0,
           "valid_until": "2026-09-21T14:25:20Z"
         },
         "can_continue_own": {
