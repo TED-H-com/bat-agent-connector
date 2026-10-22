@@ -390,11 +390,8 @@ async function foregroundRecovery(active, workUrl) {
       document.querySelector('main.session-view').scrollTop = 75;
     });
     await frames();
-    before = await snapshot();
-    assert.equal(before.focused, true);
-    assert.deepEqual(before.selection, [3, 19, 'backward']);
-    assert.ok(before.scrollTop > 0 && before.readerTop > 0, JSON.stringify(before));
-    const drafts = before.stored.filter(([key]) => key.startsWith('batc.pm.') && key.includes('.session.send.'));
+    const drafts = await page.evaluate(() => Object.entries(localStorage)
+      .filter(([key]) => key.startsWith('batc.pm.') && key.includes('.session.send.')));
     assert.equal(drafts.length, 1);
     const [draftKey, stored] = drafts[0];
     assert.ok(draftKey.endsWith(`.session.send.${JSON.stringify({workspace_id: f.workspace, work_item_id: f.work})}`));
@@ -403,6 +400,13 @@ async function foregroundRecovery(active, workUrl) {
     // app.js saveCursor writes this server checkpoint only after the events page
     // and its source refreshes settle. No draft or other storage key is exempt.
     syncKey = 'batc.sync.' + draftKey.slice('batc.pm.'.length, draftKey.indexOf('.session.send.'));
+    // The mounted composer can precede the reader's first saved checkpoint.
+    // Compare storage only after that real page has settled.
+    await expect.poll(() => page.evaluate(key => localStorage.getItem(key), syncKey)).not.toBeNull();
+    before = await snapshot();
+    assert.equal(before.focused, true);
+    assert.deepEqual(before.selection, [3, 19, 'backward']);
+    assert.ok(before.scrollTop > 0 && before.readerTop > 0, JSON.stringify(before));
     assert.ok(before.stored.some(([key]) => key === syncKey));
     const unchanged = async () => {
       assert.equal(page, originalPage); assert.equal(context, originalContext);
