@@ -73,8 +73,8 @@ The header and Connection settings use `healthDisplay` in
 the local display clock also expires observations while a request is pending.
 It replaces those consumers' direct transport-label projection. Action admission
 continues using `clientActionGate`; no TTL relaxes or adds a mutation requirement.
-Fleet rows and the Work profile picker also use its `displayFact` and `healthLabel`
-projection/formatter, now in the shared `desktop/src/health-fact.js` module and
+Fleet rows also use its `displayFact` and `healthLabel` projection/formatter,
+now in the shared `desktop/src/health-fact.js` module and
 re-exported from `health-display.js`. Fleet retains `fleetDiagnosis` as the single
 native reason/step interpretation. `fleetHealth` applies the same local display
 clock at render time: an expired connected observation keeps Connected, its age
@@ -83,25 +83,36 @@ claim current success. Unconfirmed stop and unsupported-version reasons remain
 visible, and each row expires independently. Native Fleet identities are never
 joined to central hosts by name, port, address or server string.
 
+The 60-second display rule uses the same `observed_at` and observation window as
+the native producer: `desktop/fleet-core/src/supervisor_status.rs` marks a selected ready
+row `PROBE_STALE` after 60 seconds. Both Fleet views (`fleet.js` and
+`fleet-desktop.js`) schedule their existing status/overview re-read after 5 seconds.
+Checking describes those ongoing reads and the supervisor's probes; this adoption
+adds neither a probe nor a polling loop.
+
 Work retains six independent producer values, reason codes and past verification,
 separate from PM analysis and from the saved profile. The profile response's
 `observed_at` dates the read, not a BAT observation. Its states currently lack
 `valid_until` and Inventory's `stale_after_s`; current evidence sometimes includes
-only `last_success_at`. The shared projection retains that age, but marks validity
-unknown instead of applying the event reader's 60-second fallback to Inventory.
-An explicit `host_not_refreshed` remains stale. Past verification never becomes
-current evidence, and a reachable Connector never supplies a missing capability.
-No readiness display changes admission, starts a check or adds a cache policy.
+only `last_success_at`. Work has not adopted the shared freshness display: its
+existing value text, producer reasons (including `host_not_refreshed` and
+`host_unreachable`) and timestamps remain unchanged. Nothing renews these values
+automatically, so missing validity must not produce a permanent Checking label.
+Adoption requires a producer validity envelope per capability: `observed_at` and
+`valid_until` from the underlying Inventory host observation, or an explicitly
+`static` fact with bootstrap/version invalidation. The existing readiness re-read
+must then serve as renewal. Past verification never becomes current evidence,
+and a reachable Connector never supplies a missing capability. No readiness
+display changes admission, starts a check or adds a cache policy.
 
 Fleet's existing status/overview renders consume the projection; updating mounted
 rows while a native read is pending still requires wiring the existing `app.js`
 display clock to the Fleet painter. `fleetHealth(row, {snapshot, readable, kind,
-now})` is the tested pure entry point; this change does not add another timer or
-alter those mounts. Work's missing per-capability validity needs producer evidence
-before timed currentness can be claimed. Workbench, Diagnostics and Result sources
-still need adoption of this freshness/compact contract. Existing source-specific
-facets are not replaced by a global boolean. Native and backend lifecycle behavior
-is unchanged here.
+now})` is the tested pure entry point; the remaining call site is `app.js`'s
+`tickHealth`. This change does not add another timer or alter those mounts.
+Work, Workbench, Diagnostics and Result sources still need adoption of this
+freshness/compact contract. Existing source-specific facets are not replaced by
+a global boolean. Native and backend lifecycle behavior is unchanged here.
 
 ## Delegated production display decisions
 

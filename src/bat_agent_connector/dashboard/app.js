@@ -14023,10 +14023,10 @@ var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}
 var clientActionReason = (code) => clientReasons.find((reason) => clientActionCode(reason) === code) || null;
 //#endregion
 //#region src/health-fact.js
-function displayFact(fact = {}, { now = Date.now(), bootstrap, version, defaultValidityMs = 6e4 } = {}) {
+function displayFact(fact = {}, { now = Date.now(), bootstrap, version } = {}) {
 	const observed = time$2(fact.observed_at), deadline = time$2(fact.valid_until);
 	const ageSeconds = Number.isFinite(observed) ? Math.max(0, Math.floor((now - observed) / 1e3)) : null;
-	const freshness = fact.static && (fact.bootstrap !== bootstrap || fact.version !== version) ? "invalidated" : fact.static ? "current" : fact.stale ? "stale" : !Number.isFinite(observed) ? "unknown" : Number.isFinite(deadline) ? now >= deadline ? "stale" : "current" : defaultValidityMs === null ? "unknown" : now - observed >= defaultValidityMs ? "stale" : "current";
+	const freshness = fact.static && (fact.bootstrap !== bootstrap || fact.version !== version) ? "invalidated" : fact.static ? "current" : fact.stale ? "stale" : !Number.isFinite(observed) ? "unknown" : Number.isFinite(deadline) ? now >= deadline ? "stale" : "current" : now - observed >= 6e4 ? "stale" : "current";
 	return {
 		...fact,
 		freshness,
@@ -41416,7 +41416,6 @@ function kanbanObservation({ h, t, api, alive, workspaceId, workId, caps, permit
 }
 //#endregion
 //#region src/pm-work-profile-state.js
-init_health_fact();
 var values$1 = new Set([
 	"ready",
 	"missing",
@@ -41448,19 +41447,11 @@ var reasons = new Set([
 var operation = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
 var valueKey = (value) => "wpf_" + (values$1.has(value) ? value : "unknown");
 var profileTimestamp = (value) => typeof value === "number" && Number.isFinite(value) && value > 0 && value < 253402300800 ? value : null;
-function profileStateFacts(state, { now = Date.now() } = {}) {
+function profileStateFacts(state) {
 	const reason = typeof state?.reason === "string" && /^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(state.reason) ? state.reason : null;
 	const past = state?.verified && typeof state.verified === "object" && !Array.isArray(state.verified) ? state.verified : null;
 	const pastAt = profileTimestamp(past?.observed_at), lastSuccessAt = profileTimestamp(state?.evidence_ref?.last_success_at);
 	return {
-		display: displayFact({
-			key: valueKey(state?.value),
-			observed_at: lastSuccessAt === null ? null : lastSuccessAt * 1e3,
-			stale: reason === "host_not_refreshed"
-		}, {
-			now,
-			defaultValidityMs: null
-		}),
 		valueKey: valueKey(state?.value),
 		reasonKey: reasons.has(reason) ? "wpf_reason_" + reason : "wpf_unverified",
 		reasonCode: reason,
@@ -41475,7 +41466,6 @@ function profileStateFacts(state, { now = Date.now() } = {}) {
 }
 //#endregion
 //#region src/pm-work-profile-picker.js
-init_health_fact();
 var identity = (value) => typeof value === "string" && /^wpf_[0-9a-f]{32}$/.test(value);
 var states$1 = [
 	"discovered",
@@ -41599,10 +41589,7 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		const list = h$1("dl", { class: "pm-work-profile-states" }), shownTimes = new Set();
 		for (const name of states$1) {
 			const state = profileStateFacts(data.states[name]);
-			const value = h$1("dd", { "data-work-profile-state": name }, h$1("p", {
-				"data-work-profile-value": "",
-				"data-freshness": state.display.freshness
-			}, healthLabel(state.display, t)), h$1("p", { "data-work-profile-reason": "" }, t(state.reasonKey), " · ", h$1("code", {}, state.reasonCode || t("wpf_reason_absent"))));
+			const value = h$1("dd", { "data-work-profile-state": name }, h$1("p", { "data-work-profile-value": "" }, t(state.valueKey)), h$1("p", { "data-work-profile-reason": "" }, t(state.reasonKey), " · ", h$1("code", {}, state.reasonCode || t("wpf_reason_absent"))));
 			list.append(h$1("dt", {}, t("wpf_" + name)), value);
 			const operationLink = (op) => h$1("a", { href: `#/op/${op}` }, t("pm_operation"));
 			if (state.operationId) value.append(h$1("p", {}, operationLink(state.operationId)));

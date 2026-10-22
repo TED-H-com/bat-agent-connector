@@ -22,7 +22,7 @@ const render = (row, t, now) => fleetStatus(row, {h, t, now, snapshot: fleet, re
 for (const locale of ['en', 'zh-TW']) {
   const t = translate(locale);
   const labels = locale === 'en' ? {
-    expired: 'Connected · 1 min ago · Checking', unknown: 'Unknown · Checking',
+    expired: 'Connected · 1 min ago · Checking', unknown: 'unknown · Checking',
     values: {ready: 'Ready', missing: 'Setup still missing', unknown: 'Not verified yet', unavailable: 'Unavailable'},
   } : {
     expired: '已連線 · 1 分鐘前 · 檢查中', unknown: '未知 · 檢查中',

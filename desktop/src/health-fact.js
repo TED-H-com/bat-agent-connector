@@ -2,17 +2,14 @@ const time = value => typeof value === 'number' && Number.isFinite(value) ? valu
   : typeof value === 'string' && value ? Date.parse(value) : NaN;
 
 // Display evidence only. This clock never participates in an action gate.
-// Inventory-derived facts with missing producer validity use null, never the
-// live-reader fallback or a successful HTTP receipt as a fresh BAT observation.
-export function displayFact(fact = {}, {now = Date.now(), bootstrap, version, defaultValidityMs = 60_000} = {}) {
+export function displayFact(fact = {}, {now = Date.now(), bootstrap, version} = {}) {
   const observed = time(fact.observed_at), deadline = time(fact.valid_until);
   const ageSeconds = Number.isFinite(observed) ? Math.max(0, Math.floor((now - observed) / 1000)) : null;
   const invalidated = fact.static && (fact.bootstrap !== bootstrap || fact.version !== version);
   const freshness = invalidated ? 'invalidated' : fact.static ? 'current'
     : fact.stale ? 'stale' : !Number.isFinite(observed) ? 'unknown'
     : Number.isFinite(deadline) ? now >= deadline ? 'stale' : 'current'
-    : defaultValidityMs === null ? 'unknown'
-    : now - observed >= defaultValidityMs ? 'stale' : 'current';
+    : now - observed >= 60_000 ? 'stale' : 'current';
   return {...fact, freshness, ageSeconds};
 }
 
