@@ -189,6 +189,9 @@ for(const locale of ['en','zh-TW'])for(const destination of ['same-work','other-
 test(`Resume keeps the original navigation across an earlier view disposal: ${destination} ${locale}`,async({page},testInfo)=>{
   const {state,id}=await landing(page,{locale,status:'needs_attention'});
   await followLanding(page,state,id,{ready:false});
+  // The child has reconciled its lost reply; the paused parent still records
+  // start_unknown until its original Resume completes the readback.
+  state.parent.result.stage='start_unknown';state.parent.result.works[0].stage='start_unknown';
   await page.evaluate(()=>(window as any).landingRefresh());
   await page.evaluate(()=>{(window as any).remountLanding();return (window as any).landingRefresh();});
   let release!:()=>void;state.writeHold=new Promise<void>(resolve=>{release=resolve;});
@@ -202,7 +205,7 @@ test(`Resume keeps the original navigation across an earlier view disposal: ${de
     location.hash=destination==='other-work'?`#/pm/${workspaceId}/board?select=${second}`:'#/settings';
   },{workspaceId,second,destination});
   await page.evaluate(()=>(window as any).disposeEarlierLanding());
-  state.parent.status='succeeded';state.parent.result.stage='started';release();
+  state.parent.status='succeeded';state.parent.result.stage='started';state.parent.result.works[0].stage='started';release();
   await expect(page.locator('[data-adopt-live]')).toHaveAttribute('href',new RegExp(`work=${work}&attempt=att_9{32}$`));
   await testInfo.attach('original-navigation', {contentType:'application/json',body:JSON.stringify({
     destination,locale,writes:state.writes,reads:state.reads,
