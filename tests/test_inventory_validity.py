@@ -1,7 +1,7 @@
 """The inventory producer owns deadlines; reading a cached result is not a BAT check."""
+import time
 from datetime import datetime
 from types import SimpleNamespace
-import time
 
 from bat_agent_connector import inventory
 from tests.test_api_v1 import MANUAL, http, token

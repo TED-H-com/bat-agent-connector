@@ -36,6 +36,13 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
       await expect(page).toHaveURL(/section=fleet/);
       await expect(page.locator('[data-fleet-diagnosis="node-1"]')).toHaveAttribute('data-fleet-state', 'identity');
       await expect(page.locator('#live')).toHaveText(copy.ui_connected);
+      await page.evaluate(() => {
+        Object.defineProperty(document, 'hidden', {configurable: true, get: () => true});
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      await expect(page.locator('#live')).toHaveAttribute('title', new RegExp(copy.sync_actions_paused));
+      await page.locator('[data-fleet-action=refresh]').click();
+      await expect(page.locator('#live')).toHaveAttribute('title', new RegExp(copy.sync_actions_paused));
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     } finally {await context.close();}
   });
@@ -143,6 +150,7 @@ for (const locale of ['en-US', 'zh-TW']) {
     await page.clock.install({time: at}); await page.clock.pauseAt(at);
     await mountConversation(page, false, async input => {
       const url = new URL(input.path, 'http://fixture');
+      if (url.pathname === '/hosts') return {status: 200, data: {hosts: []}};
       if (url.pathname === '/sessions' || url.pathname === '/sessions/demo/session-1') {
         reads.push(input.path);
         if (failed) return {status: 503, data: {error: {code: 'TEMPORARY_UNAVAILABLE', message: 'Fixture read unavailable'}}};
@@ -151,7 +159,9 @@ for (const locale of ['en-US', 'zh-TW']) {
       return fixture.dispatch(input);
     });
     try {
-      await page.goto('/dashboard/#/session/demo/session-1');
+      await page.goto('/dashboard/#/sessions');
+      await expect.poll(() => reads.some(path => path.startsWith('/sessions?'))).toBe(true);
+      await page.evaluate(() => {location.hash = '#/session/demo/session-1';});
       const pill = page.locator('#installation-health [data-health-compact]');
       await expect(pill).toHaveAttribute('data-health-compact', 'idle');
       const initial = reads.length;
@@ -175,7 +185,12 @@ for (const locale of ['en-US', 'zh-TW']) {
     const fixture = conversationFixture(), doc = structuredClone(fleetGolden);
     Object.assign(doc.readiness.hosts[0], {level: 'down', blocking: 'auth', code: 'BAT_AUTH_REFUSED'});
     await page.clock.install({time: at}); await page.clock.pauseAt(at);
-    await mountConversation(page, true, fixture.dispatch);
+    await mountConversation(page, true, async input => {
+      const result = structuredClone(await fixture.dispatch(input));
+      const caps = input.path === '/capabilities' ? result.data : input.path === '/bootstrap' ? result.data.capabilities : null;
+      if (caps) caps.managed_installation = bootstrap.capabilities.managed_installation;
+      return result;
+    });
     await page.addInitScript(doc => {
       const original = (window as any).__TAURI_INTERNALS__.invoke;
       (window as any).__TAURI_INTERNALS__.invoke = async (command, args) => {
@@ -187,6 +202,7 @@ for (const locale of ['en-US', 'zh-TW']) {
     try {
       await page.goto('/dashboard/#/settings?section=connection');
       const link = page.locator('[data-health-settings] a[data-health-other]');
+      await page.locator('[data-setup-advanced] > summary').click();
       await expect(link).toBeVisible(); await link.focus();
       await page.evaluate(() => {
         (window as any).healthFocused = document.activeElement;
@@ -207,19 +223,24 @@ for (const locale of ['en-US', 'zh-TW']) {
     } finally {await context.close();}
   });
 
-  for (const failure of [false, true]) test(`capability changes verify once or offer reload ${locale} ${failure}`, async ({browser}) => {
+  for (const failure of [false, true, 'identity', 'pending']) test(`capability changes verify once or offer reload ${locale} ${failure}`, async ({browser}) => {
     const context = await browser.newContext({locale}), page = await context.newPage();
     const fixture = conversationFixture(); let changed = false, bootstraps = 0;
+    let release!: () => void; const held = new Promise<void>(resolve => {release = resolve;});
     await page.clock.install({time: at}); await page.clock.pauseAt(at);
     await mountConversation(page, false, async input => {
       const path = new URL(input.path, 'http://fixture').pathname;
       if (path === '/bootstrap') {
         bootstraps++;
-        if (failure && bootstraps > 1) return {status: 503, data: {error: {code: 'TEMPORARY_UNAVAILABLE'}}};
+        if (failure === 'pending' && bootstraps > 1) await held;
+        if (failure === true && bootstraps > 1) return {status: 503, data: {error: {code: 'TEMPORARY_UNAVAILABLE'}}};
       }
-      const result = await fixture.dispatch(input);
+      const result = structuredClone(await fixture.dispatch(input));
       if (changed && path === '/capabilities') result.data.connector = '0.2.99';
-      if (changed && path === '/bootstrap') result.data.capabilities.connector = '0.2.99';
+      if (changed && path === '/bootstrap') {
+        result.data.capabilities.connector = '0.2.99';
+        if (failure === 'identity') result.data.sync.principal_id = 'another-principal';
+      }
       return result;
     });
     try {
@@ -228,14 +249,16 @@ for (const locale of ['en-US', 'zh-TW']) {
       await page.evaluate(() => localStorage.setItem('batc.key.fixture.health', 'retained-key'));
       changed = true;
       await page.evaluate(() => {location.hash = '#/settings?section=connection';});
-      await expect.poll(() => bootstraps).toBe(1);
-      await page.clock.runFor(2_000);
+      await expect(page.locator('.global-connection-facts')).toBeVisible();
+      await page.clock.runFor(1_000);
+      await page.clock.runFor(1_000);
       await expect.poll(() => bootstraps).toBe(2);
+      if (failure === 'pending') await page.clock.runFor(61_000);
       if (failure) await expect(page.locator('#installation-health [data-health-key=reload]')).toBeVisible();
       else await expect(page.locator('#installation-health [data-health-key=capabilities]')).toHaveCount(0);
       await expect(page.locator('#installation-health [data-health-selected]')).toBeVisible();
       await page.clock.runFor(10_000); expect(bootstraps).toBe(2);
       expect(await page.evaluate(() => localStorage.getItem('batc.key.fixture.health'))).toBe('retained-key');
-    } finally {await context.close();}
+    } finally {release(); await context.close();}
   });
 }

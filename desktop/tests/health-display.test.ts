@@ -249,6 +249,10 @@ test('localized labels have one Checking, coarse ages, plural forms and producer
     const t = (key, args = {}) => Object.entries(args).reduce((s, [k, v]) => s.replaceAll(`{${k}}`, String(v)), STRINGS[locale][key]);
     const unknown = health.healthLabel({key: 'health_unknown', freshness: 'unknown'}, t);
     assert.equal(unknown.split(t('health_checking')).length, 2);
+    const staleUnknown = health.healthLabel({key: 'health_unknown', freshness: 'stale', ageSeconds: 61}, t);
+    assert.equal(staleUnknown.split(t('health_checking')).length, 2);
+    const unreachable = health.healthLabel({key: 'health_connection_problem', freshness: 'stale', ageSeconds: 2, stale_reason: 'host_unreachable'}, t);
+    assert.ok(unreachable.includes(locale === 'en' ? 'host unreachable' : '無法連至主機'));
     const stale = {key: 'ui_connected', freshness: 'stale', ageSeconds: 61};
     assert.equal(health.healthLabel(stale, t), health.healthLabel({...stale, ageSeconds: 62}, t));
     assert.ok(t('health_other_machines_one', {count: 1}).includes('1'));
