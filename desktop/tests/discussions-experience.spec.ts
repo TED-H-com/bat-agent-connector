@@ -470,7 +470,7 @@ for (const locale of ['en', 'zh-TW']) test(`missing PM adapter occupies only the
   });
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
   const status = page.locator('.pd-composer-status');
-  await expect(status).toContainText(locale === 'en' ? 'Ordinary PM replies are unavailable. You can still save notes.' : '一般 PM 對話目前無法使用，仍可儲存筆記。');
+  await expect(status).toContainText(locale === 'en' ? 'PM availability is unknown. Refresh, or ask the Connector operator.' : 'PM 可用性未知。請重新整理，或詢問 Connector 管理員。');
   await expect(status.getByRole('link')).toHaveAttribute('href', '#/settings?section=agents&from=' + encodeURIComponent(`#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`));
   await expect(page.locator('[data-discussion-ask]')).toBeHidden();
   expect(f.discussion.writes).toHaveLength(0); await context.close();

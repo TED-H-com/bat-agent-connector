@@ -1,4 +1,4 @@
-import {runtimeStale, sessionPill} from './state/sessions.js';
+import {sessionFacets, sessionStatus, sessionPill} from './state/sessions.js';
 
 // A presentation over an authorized session envelope, not a new Work authority.
 // No path/title joins and no inferred requirement, dependency or queue edges.
@@ -7,11 +7,9 @@ export function workbenchProjection(data, record = null) {
   if (!session?.host || !session?.session_id) return null;
   const source = `/sessions/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}`;
   const href = '#/session/' + [session.host, session.session_id].map(encodeURIComponent).join('/');
-  const stale = runtimeStale(session) || Boolean(session.gone_at) || ['gone', 'missing'].includes(session.state?.enumeration);
-  const pill = sessionPill(session);
-  const state = stale ? 'stale' : pill?.status === 'failed' ? 'failed'
-    : session.pending ? 'wait' : session.state?.lifecycle !== 'ended' && session.streaming === true ? 'running'
-      : session.streaming === false ? 'idle' : 'unknown';
+  const facets = sessionFacets(session), status = sessionStatus(session), pill = sessionPill(session);
+  const state = ['asking_you', 'needs_you'].includes(status) ? 'wait' : status
+    || (facets.activity === 'not_streaming' && facets.lifecycle !== 'ended' ? 'idle' : 'unknown');
   const edges = [];
   for (const item of data.work_items || []) {
     if (!item.work_item_id) continue;
@@ -38,6 +36,6 @@ export function workbenchProjection(data, record = null) {
     goal: item?.goal || item?.request || '', recordState: item?.display_state || item?.completion?.display_state || item?.state || null, external: item?.external || null,
     href: item ? '#/item/' + encodeURIComponent(item.work_item_id) : href, source,
     host: session.host, runtime: session.agent_kind, model: session.model, observedAt: session.observed_at,
-    state, pill, managed: session.api_access === 'managed' && session.provenance === 'connector_managed',
+    state, pill, facets, managed: session.api_access === 'managed' && session.provenance === 'connector_managed',
     edges: [...new Map(edges.map(edge => [edge.key, edge])).values()]};
 }

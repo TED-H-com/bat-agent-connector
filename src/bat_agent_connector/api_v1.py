@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import json
 import re
 import time
@@ -52,6 +53,29 @@ _LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 # The Dashboard is four static files; nothing else under /dashboard/ is served.
 DASHBOARD_FILES = {"index.html": "text/html; charset=utf-8", "app.js": "text/javascript; charset=utf-8",
                    "i18n.js": "text/javascript; charset=utf-8", "app.css": "text/css; charset=utf-8"}
+_FRONTEND_PLACEHOLDER = b"__BATC_FRONTEND_DIGEST_PLACEHOLDER______________________________"
+
+
+def _dashboard_snapshot() -> tuple[dict[str, bytes], str | None]:
+    """Identify stored bytes, including the placeholder, never a process-cached build.
+
+    The app.js response uses this same read, so its substituted identity cannot
+    describe an earlier read of that file during an in-place upgrade.
+    """
+    directory = resources.files(__package__) / "dashboard"
+    try:
+        files = {name: (directory / name).read_bytes() for name in sorted(DASHBOARD_FILES)}
+    except OSError:
+        return {}, None
+    if files["app.js"].count(_FRONTEND_PLACEHOLDER) != 1:
+        return files, None
+    digest = hashlib.sha256(b"batc.frontend.files.v1\0")
+    for name, body in files.items():
+        digest.update(f"{len(name.encode())}:{name}\0{len(body)}\0".encode())
+        digest.update(body)
+    return files, digest.hexdigest()
+
+
 DASHBOARD_CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; "
                  "base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 _REASONS = {200: "OK", 202: "Accepted", 204: "No Content", 302: "Found", 400: "Bad Request", 401: "Unauthorized",
@@ -613,7 +637,13 @@ class ApiV1:
             name = path[len("/dashboard/"):] or "index.html"
             if name in DASHBOARD_FILES:
                 status, ctype = 200, DASHBOARD_FILES[name]
-                body = (resources.files(__package__) / "dashboard" / name).read_bytes()
+                if name == "app.js":
+                    files, digest = _dashboard_snapshot()
+                    body = files[name] if files else (resources.files(__package__) / "dashboard" / name).read_bytes()
+                    if digest is not None:
+                        body = body.replace(_FRONTEND_PLACEHOLDER, digest.encode("ascii"), 1)
+                else:
+                    body = (resources.files(__package__) / "dashboard" / name).read_bytes()
             else:
                 status, ctype, body = 404, "text/plain; charset=utf-8", b"not found\n"
         referrer_policy = "same-origin" if getattr(self, "browser_sessions", None) else "no-referrer"
@@ -1241,6 +1271,7 @@ class ApiV1:
                           "desktop_identity": dashboard_sync.identity(self.daemon.journal, principal)} if managed else {}
         return 200, {**managed_fields, "actor": principal.actor, "scopes": sorted(principal.scopes), "api_version": API_VERSION,
                      "contract_version": CONTRACT_VERSION, "connector": __version__, "build": build_identity(), "hosts": hosts,
+                     "frontend": {"digest": _dashboard_snapshot()[1]},
                      "artifacts": {"limits": self.daemon.artifact_store.settings.limits(),
                                    "capture": {"manual_single_file": True, "managed_single_file": True, "snapshot": False,
                                                "managed_selectors": ["execution_operation_id", "task_command"],

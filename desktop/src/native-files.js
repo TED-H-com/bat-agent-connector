@@ -1,6 +1,7 @@
 // Native paths, tokens, source bytes and credential bindings never enter this module.
 import {nativeFilesPick, nativeFilesStatus, nativeFilesUpload, nativeFilesControl,
   nativeFilesSave, nativeFilesPreview, nativeFilesDropTarget} from "./transport/index.ts";
+import {clientActionError} from './error-presentation.js';
 
 const pending = new Set(["checking", "uploading", "verifying", "downloading", "saving"]);
 const fixedRef = ref => ({artifact_id: ref.artifact_id, revision: ref.revision, digest: ref.digest});
@@ -13,7 +14,7 @@ export function nativeAttachments({h, t, guard, canWrite, draftId, onReceipt, on
   let armed = false, timer, refreshing, picking = false, objectUrl = null, stopped = false;
   const live = () => {guard(); if (!box.isConnected) throw new Error("Attachment form changed");};
   const failure = error => {try {live(); notice.textContent = String(error?.message || error);} catch { /* old view */ }};
-  const writable = () => {live(); if (!canWrite()) throw new Error(t("offline_actions_paused"));};
+  const writable = () => {live(); const gate = canWrite(); if (!gate.allowed) throw clientActionError(gate.reason, t);};
   const act = async (receipt, action) => {
     try {
       live(); if (["retry", "cancel_upload"].includes(action) && receipt.direction === "upload") writable();
@@ -32,9 +33,9 @@ export function nativeAttachments({h, t, guard, canWrite, draftId, onReceipt, on
         r.error ? h("p", {class: "muted"}, r.error) : null,
         h("div", {class: "actions"},
           active ? h("button", {class: "secondary", onclick: () => act(r, "stop")}, t("files_stop")) : null,
-          !active && !["ready", "saved", "failed", "cancelled"].includes(r.stage) ? h("button", {class: "secondary", disabled: r.direction === "upload" && !canWrite(), onclick: () => act(r, "retry")}, t(r.stage === "selected" ? "files_upload" : "files_retry")) : null,
+          !active && !["ready", "saved", "failed", "cancelled"].includes(r.stage) ? h("button", {class: "secondary", disabled: r.direction === "upload" && !canWrite().allowed, onclick: () => act(r, "retry")}, t(r.stage === "selected" ? "files_upload" : "files_retry")) : null,
           !active && r.direction === "upload" && r.stage !== "selected" && !["ready", "failed", "cancelled"].includes(r.stage) ? h("button", {class: "secondary", onclick: () => act(r, "check")}, t("files_check")) : null,
-          !active && r.operation_id && !["succeeded", "failed", "cancelled"].includes(r.operation_status) ? h("button", {class: "secondary", disabled: !canWrite(), onclick: () => act(r, "cancel_upload")}, t("files_cancel")) : null,
+          !active && r.operation_id && !["succeeded", "failed", "cancelled"].includes(r.operation_status) ? h("button", {class: "secondary", disabled: !canWrite().allowed, onclick: () => act(r, "cancel_upload")}, t("files_cancel")) : null,
           !active && (r.direction === "download" || r.stage === "selected" || ["ready", "failed", "cancelled"].includes(r.stage)) ? h("button", {class: "secondary", onclick: async () => {
             await act(r, "discard_local");
           }}, t("files_discard")) : null));

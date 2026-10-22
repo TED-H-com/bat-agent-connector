@@ -1,17 +1,13 @@
+import {runtimeStale} from './state/sessions.js';
+import {versionProjection, projectionBuild, version, commit, time} from './version-projection.js';
 // An explicit projection. Never spread server/client objects into an export.
 const code = value => typeof value === 'string' && /^[A-Z][A-Z0-9_]{0,79}$/.test(value) ? value : null;
 const reason = value => typeof value === 'string' && /^[a-z][a-z0-9_]{0,79}$/.test(value) ? value : null;
-const version = value => typeof value === 'string' && value === value.trim() && /^\d+(?:\.\d+){1,3}(?:-(?:alpha|beta|rc|dev)\.?\d{0,4})?$/i.test(value) ? value : null;
-const commit = value => typeof value === 'string' && [40,64].includes(value.length) && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value) ? value : null;
 const action = value => typeof value === 'string' && /^(?:session|checkpoint|integration|artifact|repository|project|work_item|task|delivery|deployment|setup|pm)[._][a-z_.]+$/.test(value) ? value : null;
 const protocols = ['bat-remote/v2','bat-remote/legacy-v1'];
 const contractVersion = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
 const bool = value => typeof value === 'boolean' ? value : null;
 const operationId = value => typeof value === 'string' && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
-const time = value => {
-  if(typeof value === 'number' && Number.isFinite(value) && value >= 0 && value < 253402300800) return new Date(value * 1000).toISOString();
-  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
-};
 const select = (value, values) => values.includes(value) ? value : null;
 const routeWords = new Set(('v1 hosts sessions projects work-items tasks operations capabilities bootstrap events managed setup secrets observation status pending attention reading permissions labels checkpoints checkpoint-preview instructions artifacts uploads content delivery receipts discovery pm workspaces plans threads messages snapshots brief-export resources roadmap dependencies registers governance').split(' '));
 const resourceNames = {hosts:'host',projects:'project','work-items':'work_item',tasks:'task',operations:'operation',workspaces:'workspace',threads:'thread',snapshots:'snapshot',artifacts:'artifact',uploads:'operation',checkpoints:'checkpoint'};
@@ -38,19 +34,24 @@ export function errorRing(limit = 50) {
   return {record(input) {entries.push(failedCall(input)); entries.splice(0, Math.max(0, entries.length - Math.min(50, limit)));},
     entries: () => entries.map(entry => ({...entry})), clear() {entries.length = 0;}};
 }
-export function clientIdentity({caps, appBuild, desktop = false, os = 'unknown', locale = 'en', width = 0}) {
-  return {app_version: desktop ? version(appBuild?.version) : version(caps?.build?.version ?? caps?.connector),
-    app_commit: desktop ? commit(appBuild?.commit) : commit(caps?.build?.commit),
-    connector_version: version(caps?.build?.version ?? caps?.connector), connector_commit: commit(caps?.build?.commit),
-    connector_source: select(caps?.build?.source, ['vcs','package','bundled']), api_version: Number.isInteger(caps?.api_version) ? caps.api_version : null,
+export function clientIdentity(input = {}, projection = versionProjection(input)) {
+  const {caps, desktop = false, os = 'unknown', locale = 'en', width = 0} = input;
+  const build = projectionBuild(projection);
+  return {...build, api_version: Number.isInteger(caps?.api_version) ? caps.api_version : null,
     contract_version: contractVersion(caps?.contract_version),
     platform: desktop ? 'desktop' : 'browser', os_family: select(os,['windows','macos','linux']) || 'unknown',
     locale: locale === 'zh-TW' ? 'zh-TW' : 'en', viewport_class: width > 0 ? width < 800 ? 'small' : width < 1200 ? 'medium' : 'large' : 'unknown'};
 }
-export function buildLine(client, t) {
+export function buildLine(projection, t) {
+  const client=projection.rows ? projectionBuild(projection) : projection;
   const unknown = t('diag_unknown');
-  const connector = t('diag_connector_build', {version: client.connector_version || unknown, commit: client.connector_commit?.slice(0,7) || unknown});
-  return client.platform === 'desktop' ? t('diag_desktop_build', {version: client.app_version || unknown, commit: client.app_commit?.slice(0,7) || unknown}) + ' · ' + connector : connector;
+  const frontend = client.platform !== 'desktop' || client.frontend_digest
+    ? t('diag_frontend_build', {digest: client.frontend_digest?.slice(0,12) || unknown}) : null;
+  const connector = t('diag_connector_build', {version: client.connector_version || unknown, commit: client.connector_commit?.slice(0,7) || unknown, source: client.connector_source || unknown});
+  const desktop = client.platform === 'desktop' ? t('diag_desktop_build', {version: client.app_version || unknown, commit: client.app_commit?.slice(0,7) || unknown}) : null;
+  const line = [desktop, frontend, connector].filter(Boolean).join(' · ');
+  return client.platform === 'browser' && client.frontend_digest && client.served_frontend_digest && client.frontend_digest !== client.served_frontend_digest
+    ? line + ' · ' + t('diag_frontend_stale') : line;
 }
 const APP = 'io.betteragent.dashboard';
 export function logLocations(os, managed) {
@@ -84,9 +85,24 @@ export function scrubDiagnostics(text) {
 }
 export function sessionFacts(session) {
   return {loaded: bool(session.loaded), streaming: bool(session.streaming),
-    unknown_activity: ![true,false].includes(session.streaming), stale: session.stale === true || session.fields_stale === true ? true : bool(session.stale ?? session.fields_stale),
+    unknown_activity: ![true,false].includes(session.streaming), stale: runtimeStale(session) ? true
+      : [session.stale, session.fields_stale, session.state?.evidence?.activity?.stale].some(value => typeof value === 'boolean') ? false : null,
     pending: session.pending !== undefined ? session.pending != null : bool(session.pending_interaction),
     history_reasons: Array.isArray(session.reading?.incomplete_reasons) ? [...new Set(session.reading.incomplete_reasons.map(reason).filter(Boolean))] : null};
+}
+// One classification for every source; read/decision time is client evidence.
+export function diagnosticsSource(read) {
+  const result = {status:'not_attempted', http_status:null, code:null, read_at:time(read?.at)};
+  if (!read || read.attempted === false) return result;
+  if (read.offered === false) return {...result, status:'not_offered'};
+  if (read.permitted === false) return {...result, status:'not_permitted'};
+  if (read.error) {
+    const status = read.error.status;
+    const http = Number.isInteger(status) && status >= 100 && status <= 599 ? status : null;
+    return {...result, status:'failed', http_status:http, code:code(read.error.code) || (http ? 'HTTP_ERROR' : 'NETWORK_ERROR')};
+  }
+  if (read.discarded) return {...result, status:'failed', code:'SOURCE_ACCESS_CHANGED'};
+  return read.completed === true ? {...result, status:'available'} : result;
 }
 export function buildDiagnostics(input) {
   const hosts = Array.isArray(input.hosts) ? [...input.hosts].sort((a,b) => String(a.host).localeCompare(String(b.host), 'en')) : [];
@@ -95,10 +111,14 @@ export function buildDiagnostics(input) {
   const count = key => sessions?.length === 0 ? 0 : sessions?.some(s => typeof s[key] === 'boolean') ? sessions.filter(s => s[key] === true).length : null;
   const history = sessions?.some(s => s.history_reasons !== null) ? Object.create(null) : null;
   if (history) for (const session of sessions) for (const why of session.history_reasons || []) history[why] = (history[why] || 0) + 1;
-  const sources = Object.fromEntries(['capabilities','hosts','operations','managed_setup','observation'].map(key => [key,
-    select(input.sources?.[key], ['available','not_available']) || 'not_available']));
+  const sourceReads = Object.fromEntries(['capabilities','hosts','operations','managed_setup','observation'].map(key => [key,
+    diagnosticsSource(input.sourceReads?.[key])]));
+  // Additive v1 compatibility: old consumers retain their binary source map.
+  const sources = Object.fromEntries(Object.entries(sourceReads).map(([key, read]) => [key,
+    read.status === 'available' ? 'available' : 'not_available']));
+  const versions=versionProjection(input);
   const bundle = {schema:'batc.diagnostics.v1', exported_at: time(input.exportedAt),
-    client: clientIdentity(input), sources,
+    client: clientIdentity(input,versions), versions, sources, source_reads:sourceReads,
     hosts: hosts.map((host,i) => {
       const policy = input.caps?.hosts?.find(h => h.host === host.host) || {};
       const policyFlags = flags(host.policy || policy, ['enabled','writes','orchestrate','shared_clone_worktrees','managed_roots_configured','ssh_configured','checkpoint_available']);
@@ -107,6 +127,7 @@ export function buildDiagnostics(input) {
       if(policyFlags.ssh_configured === null && setupHost && (typeof setupHost.ssh_alias === 'string' || setupHost.ssh_alias === null)) policyFlags.ssh_configured = Boolean(setupHost.ssh_alias);
       const discovery = Array.isArray(host.discovery) && policy.profile_id != null ? host.discovery.find(scan => scan.profile_id === policy.profile_id) : null;
       return {alias:`host-${i+1}`, connection_state: select(host.connection_state, ['connected','disconnected','reconnecting','never_connected','stale']) || (host.reachable === true ? 'reachable' : host.reachable === false ? 'unreachable' : 'unknown'),
+        last_attempt_at:time(host.last_attempt_at), last_success_at:time(host.last_success_at),
         stale: bool(host.stale), stale_reason: reason(host.stale_reason), last_error_code: code(host.last_error?.code ?? discovery?.error_code),
         bat: {status: select(host.bat?.status,['ready','unavailable','unknown']), version: version(host.bat?.version ?? host.server_version), protocol: select(host.bat?.protocol, protocols),
           capabilities: flags(host.bat?.capabilities ?? discovery?.authority?.capabilities, ['claude','codex','terminal','git'])},

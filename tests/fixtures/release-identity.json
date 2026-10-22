@@ -1,0 +1,65 @@
+[
+  {
+    "format": 1,
+    "component": "wheel",
+    "artifact": "<artifact>",
+    "version": "<version>",
+    "commit": "<commit>",
+    "sha256": "<sha256>",
+    "coverage": "package archive bytes"
+  },
+  {
+    "format": 1,
+    "component": "sdist",
+    "artifact": "<artifact>",
+    "version": "<version>",
+    "commit": "<commit>",
+    "sha256": "<sha256>",
+    "coverage": "package archive bytes"
+  },
+  {
+    "format": 1,
+    "component": "dashboard",
+    "artifact": "<artifact>",
+    "version": "<version>",
+    "commit": "<commit>",
+    "sha256": "<sha256>",
+    "coverage": "wheel dashboard bytes"
+  },
+  {
+    "format": 1,
+    "component": "managed_runtime",
+    "artifact": "<artifact>",
+    "version": "<version>",
+    "commit": "<commit>",
+    "sha256": "<sha256>",
+    "coverage": "runtime manifest and compressed payload"
+  },
+  {
+    "format": 1,
+    "component": "screenshots",
+    "artifact": "<artifact>",
+    "version": "<version>",
+    "commit": "<commit>",
+    "sha256": "<sha256>",
+    "coverage": "capture manifest and listed PNG bytes"
+  },
+  {
+    "format": 1,
+    "component": "readme",
+    "artifact": "<artifact>",
+    "version": "<version>",
+    "commit": "<commit>",
+    "sha256": "<sha256>",
+    "coverage": "README source bytes"
+  },
+  {
+    "format": 1,
+    "component": "site",
+    "artifact": "<artifact>",
+    "version": "<version>",
+    "commit": "<commit>",
+    "sha256": "<sha256>",
+    "coverage": "tracked site source bytes excluding images"
+  }
+]

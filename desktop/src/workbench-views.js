@@ -55,10 +55,22 @@ export function workbenchViews({main, head, work, results, namespace, workspace,
     panel.body.append(kind, name, link, h('details', {}, h('summary', {}, t('wc_source')), source, id));
     main.append(panel);
   }
+  const staleObservation = () => Object.values(projection.facets.staleness).some(Boolean);
+  const summaryKey = () => projection.state === 'wait' && staleObservation() ? 'wc_wait_observed' : 'wc_' + projection.state;
+  function facetLine() {
+    const {activity, attention, staleness, lifecycle} = projection.facets;
+    const facts = [t('wc_activity_' + activity), t('wc_attention_' + attention)];
+    if (staleness.runtime) facts.push(t('wc_observation_stale'));
+    if (staleness.gone) facts.push(t('wc_observation_gone'));
+    if (staleness.missing) facts.push(t('wc_observation_missing'));
+    facts.push(t('wc_lifecycle_' + (['active', 'ended'].includes(lifecycle) ? lifecycle : 'unknown')));
+    return t('wc_facets_observed', {facets: facts.join(' · ')});
+  }
   function card() {
     return h('article', {class: 'wc-live-card'}, h('h3', {}, projection.title || t('session_untitled')),
       h('p', {class: 'ui-meta'}, [projection.host, projection.runtime, projection.model].filter(Boolean).join(' · ')),
-      h('p', {}, t('wc_' + projection.state)),
+      h('p', {}, t(summaryKey())),
+      h('p', {class: 'ui-meta', 'data-runtime-facets': ''}, facetLine()),
       h('p', {class: 'ui-meta'}, t('wc_latest'), ' · ', timeStamp(projection.observedAt, {empty: t('obs_unknown')})),
       button({label: t('wc_work'), size: 'sm', 'data-live-work': '', onClick: () => {
         select('work'); controls.setValue('work'); activeTab()?.focus({preventScroll: true});
@@ -70,7 +82,7 @@ export function workbenchViews({main, head, work, results, namespace, workspace,
     source.replaceChildren(...(github ? [h('a', {href: github.url, target: '_blank', rel: 'noopener noreferrer'}, github.label)] : [])); source.hidden = !github;
     goal.textContent = projection.goal; goal.hidden = !projection.goal;
     responsibility.textContent = [t(projection.managed ? 'managed' : 'read_only'), projection.runtime, projection.host].filter(Boolean).join(' · ');
-    summary.textContent = t('wc_' + projection.state);
+    summary.textContent = t(summaryKey());
     const focused = lineage.contains(document.activeElement) ? document.activeElement?.dataset.edge : null;
     const liveFocused = live.contains(document.activeElement) && document.activeElement?.hasAttribute('data-live-work');
     const edges = projection.edges.slice(0, 30);

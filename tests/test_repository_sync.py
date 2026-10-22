@@ -83,7 +83,8 @@ async def world(mock, tmp_path, monkeypatch):
     daemon.ops.context["git_runner"] = runner
     server = await asyncio.start_server(daemon._handle, "127.0.0.1", 0)
     w = {"d": daemon, "gh": gh, "state": state, "human": human, "remote": remote, "managed": managed,
-         "sha": sha, "runner": runner, "raw": raw, "port": server.sockets[0].getsockname()[1]}
+         "sha": sha, "runner": runner, "raw": raw, "server": server,
+         "port": server.sockets[0].getsockname()[1]}
     yield w
     server.close()
     await server.wait_closed()

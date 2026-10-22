@@ -11,6 +11,7 @@ import pytest
 from bat_agent_connector import installer, updater
 from bat_agent_connector import platform_files as files
 from bat_agent_connector.update_install import package_files
+from bat_agent_connector.update_release import EPOCH, EntrypointDirectoryError, UpdateError, manifest
 from scripts import install_connector as bootstrap
 from tests.test_connector_updates import SKILL, make_package, publication, release
 
@@ -69,8 +70,8 @@ def test_existing_entrypoint_preserved(installation):
     assert not (root / "rollout-receipt.json").exists()
 
 
-def transport(edit=None):
-    item, raw = publication()
+def transport(edit=None, *, candidate=None):
+    item, raw = publication(candidate)
     if edit:
         doc = json.loads(raw)
         edit(doc)
@@ -82,6 +83,50 @@ def transport(edit=None):
             return json.dumps(item).encode()
         return checksum.encode() if url.endswith("SHA256SUMS") else raw
     return item, raw, download
+
+
+@pytest.mark.parametrize("epoch", [EPOCH - 1, EPOCH, EPOCH + 1])
+def test_bootstrap_accepted_epoch_matches_updater_constant(epoch):
+    item, _raw, download = transport(lambda doc: doc["connector_update"].update(compatibility_epoch=epoch))
+    if epoch == EPOCH:
+        assert bootstrap.resolve(item["tag_name"], "preview", download)["epoch"] == EPOCH
+    else:
+        with pytest.raises(bootstrap.InstallError, match="manifest_update_incompatible"):
+            bootstrap.resolve(item["tag_name"], "preview", download)
+
+
+@pytest.mark.parametrize("edit,accepted", [
+    pytest.param(None, True, id="valid"),
+    pytest.param(lambda d: d.update(format=2), False, id="format"),
+    pytest.param(lambda d: d.update(repository="https://example.invalid"), False, id="repository"),
+    pytest.param(lambda d: d.update(release="v0.2.8"), False, id="release"),
+    pytest.param(lambda d: d.update(source_commit="main"), False, id="source_commit"),
+    pytest.param(lambda d: d["versions"].update(connector="0.02.7"), False, id="version_format"),
+    pytest.param(lambda d: d["versions"].update(connector="0.2.8"), False, id="version_tag"),
+    pytest.param(lambda d: d["connector_update"].update(protocol=2), False, id="protocol"),
+    pytest.param(lambda d: d["connector_update"].update(compatibility_epoch=EPOCH + 1), False, id="epoch"),
+    pytest.param(lambda d: d["connector_update"].update(python="3.10"), False, id="python"),
+    pytest.param(lambda d: d["connector_update"].update(canonical_skill_sha256="invalid"), False, id="skill_digest"),
+    pytest.param(lambda d: d["validation"].update(status="pending"), False, id="validation"),
+])
+def test_bootstrap_and_updater_agree_on_shared_manifest_fields(edit, accepted):
+    # Existing publication producer and transport keep both parser inputs identical.
+    # Bootstrap's minimum package version and asset/checksum transport policy are separate.
+    item, raw, download = transport(edit)
+    if accepted:
+        assert bootstrap.resolve(item["tag_name"], "preview", download) == manifest(item, raw)
+    else:
+        with pytest.raises(bootstrap.InstallError):
+            bootstrap.resolve(item["tag_name"], "preview", download)
+        with pytest.raises(UpdateError):
+            manifest(item, raw)
+
+
+def test_bootstrap_minimum_version_floor_is_an_intentional_difference():
+    item, raw, download = transport(candidate=release(ver="0.2.6"))
+    assert manifest(item, raw)["version"] == "0.2.6"
+    with pytest.raises(bootstrap.InstallError, match="updater_release_required"):
+        bootstrap.resolve(item["tag_name"], "preview", download)
 
 
 @pytest.mark.parametrize("edit", [
@@ -139,9 +184,12 @@ def test_bootstrap_uv_install_and_finalizer_are_pinned(tmp_path, monkeypatch):
     item, raw, download = transport()
     home = tmp_path / "home"
     calls = []
+    uv_environments = []
     monkeypatch.setattr(bootstrap.shutil, "which", lambda name: "/usr/bin/" + name)
     def run(args, **kwargs):
         calls.append(args)
+        if args[0] == "/usr/bin/uv":
+            uv_environments.append(kwargs["env"])
         if "rev-parse" in args:
             return "a" * 40
         if "bat_agent_connector.installer" in args:
@@ -152,6 +200,11 @@ def test_bootstrap_uv_install_and_finalizer_are_pinned(tmp_path, monkeypatch):
     uv = next(c for c in calls if "install" in c)
     assert uv[-1] == "git+" + bootstrap.REPOSITORY + "@" + "a" * 40
     assert "--constraints" in uv and "--force" not in uv
+    assert uv_environments
+    for env in uv_environments:
+        assert env["GIT_CONFIG_COUNT"] == "2"
+        assert (env["GIT_CONFIG_KEY_0"], env["GIT_CONFIG_VALUE_0"]) == ("maintenance.auto", "false")
+        assert (env["GIT_CONFIG_KEY_1"], env["GIT_CONFIG_VALUE_1"]) == ("gc.auto", "0")
 
 
 def test_shell_syntax():
@@ -371,3 +424,90 @@ def test_adoption_version_policy(legacy):
     files.atomic_write(home / '.local/share/bat-agent-connector/update/state.json', b'{}')
     with pytest.raises(ValueError, match='already_update_managed'):
         bootstrap.verify_adoption(home, candidate)
+
+
+def test_entrypoint_directory_error_names_directory_without_chmod(installation):
+    home, root, source, candidate, inspect, finalize = installation
+    directory = home / '.local/bin'
+    directory.mkdir(parents=True, exist_ok=True)
+    directory.chmod(0o775)
+    with pytest.raises(UpdateError) as caught:
+        finalize()
+    assert str(caught.value) == 'entrypoint_directory_not_owned'
+    assert caught.value.diagnostic()['directory'] == str(directory)
+    assert caught.value.diagnostic()['hint'] == 'chmod g-w,o-w ' + str(directory)
+    assert directory.stat().st_mode & 0o777 == 0o775
+
+
+@pytest.mark.parametrize('verify_only', [False, True])
+@pytest.mark.parametrize('mode', [0o775, 0o757])
+def test_config_directory_error_names_directory_without_chmod(installation, verify_only, mode):
+    home, root, source, candidate, inspect, finalize = installation
+    if verify_only:
+        finalize()
+    directory = home / '.config'
+    directory.mkdir()
+    directory.chmod(mode)
+    before = {p: p.lstat() for p in home.rglob('*')}
+    with pytest.raises(EntrypointDirectoryError) as caught:
+        finalize(verify_only=verify_only)
+    assert caught.value.diagnostic() == {
+        'code': 'entrypoint_directory_not_owned', 'directory': str(directory),
+        'hint': 'chmod g-w,o-w ' + str(directory),
+    }
+    assert {p: p.lstat() for p in home.rglob('*')} == before
+
+
+@pytest.mark.parametrize('mode', [None, 0o700, 0o755])
+def test_healthy_or_missing_config_directory_passes_without_chmod(installation, mode):
+    home, root, source, candidate, inspect, finalize = installation
+    directory = home / '.config'
+    if mode is not None:
+        directory.mkdir()
+        directory.chmod(mode)
+    assert finalize()['status'] == 'installed'
+    assert finalize(verify_only=True)['writes'] is False
+    if mode is None:
+        assert not directory.exists()
+    else:
+        assert directory.stat().st_mode & 0o777 == mode
+
+
+@pytest.mark.parametrize('reason', ['directory', 'other'])
+def test_verify_only_surfaces_known_directory_diagnostic(tmp_path, monkeypatch, capsys, reason):
+    home = tmp_path / 'home'
+    root = home / 'release'
+    python = root / 'tools/bat-agent-connector/bin/python'
+    files.atomic_write(python, b'fixture')
+    monkeypatch.setattr(bootstrap.Path, 'home', lambda: home)
+    monkeypatch.setattr(bootstrap, 'resolve', lambda *a: release())
+    monkeypatch.setattr(bootstrap.shutil, 'which', lambda name: '/usr/bin/' + name)
+    directory = home / '.local/bin'
+    diagnostic = json.dumps({'code': 'entrypoint_directory_not_owned', 'directory': str(directory)}).encode()
+    def run(args, **kwargs):
+        assert '--verify-only' in args
+        assert kwargs['capture_output'] is True
+        return subprocess.CompletedProcess(args, 1, b'', diagnostic if reason == 'directory' else b'other_failure')
+    monkeypatch.setattr(bootstrap.subprocess, 'run', run)
+    assert bootstrap.main(['--tag', 'v0.2.7', '--root', str(root), '--verify-only', '--allow-root']) == 1
+    error = capsys.readouterr().err
+    if reason == 'directory':
+        assert 'entrypoint_directory_not_owned' in error
+        assert str(directory) in error
+        assert 'chmod g-w,o-w ' + str(directory) in error
+        assert 'verification_command_failed' not in error
+    else:
+        assert 'verification_command_failed' in error
+
+
+def test_verifier_cli_serializes_directory_detail(tmp_path, monkeypatch, capsys):
+    from bat_agent_connector.update_release import EntrypointDirectoryError
+
+    directory = tmp_path / '.config'
+    def fail(*args, **kwargs):
+        raise EntrypointDirectoryError(directory)
+    monkeypatch.setattr(installer, 'finalize', fail)
+    assert installer.main([str(tmp_path), '{}', '--verify-only']) == 1
+    detail = json.loads(capsys.readouterr().err)
+    assert detail == {'code': 'entrypoint_directory_not_owned', 'directory': str(directory),
+                      'hint': 'chmod g-w,o-w ' + str(directory)}

@@ -8,7 +8,8 @@ export function nativeFixture() {
   const native = {available: true, eligible: true, reason: null as string|null, pending: false};
   const bat = {available: false, eligible: true, reason: null as string|null, pending: false, binding: {host:'fixture-bat', workspace_id:'workspace-source', repository:'demo/library'} as any};
   const capability = () => ({adapter: 'codex-native-linux', contract: 'codex-pm-linux-v1', execution_scope: 'frozen_context_only',
-    eligible_for_preflight: native.eligible, reason: native.reason, options_confirmed: false, auth_validity: 'unverified', model_execution_verified: false});
+    eligible_for_preflight: native.eligible, reason: native.reason, action_registered: native.available,
+    authorized: f.state.manage && f.state.start, options_confirmed: false, auth_validity: 'unverified', model_execution_verified: false});
   const complete = (adapter = 'codex-native-linux') => {
     const run = f.state.runs.findLast(run => run.adapter === adapter && run.state !== 'completed');
     if (!run || run.state === 'completed') return;

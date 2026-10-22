@@ -427,6 +427,16 @@ This serves MCP at `http://127.0.0.1:8765/mcp`; it is not the Web Dashboard addr
 
 ## Troubleshooting
 
+### Connector installer: `entrypoint_directory_not_owned`
+
+The installer reports the offending directory and a `chmod g-w,o-w <dir>` hint.
+Directories such as `~/.local`, `~/.local/bin` or `~/.config` must be owned by you
+and must not be group- or world-writable. Review the reported path, then run the
+suggested command for that directory and retry installation or `--verify-only`.
+The installer never changes permissions automatically. If the owner is wrong,
+removing write permissions alone will not fix ownership; ask the administrator.
+
+
 | What you see | What to check / do |
 | --- | --- |
 | Desktop asks for an external central / actor | Check whether this is an older client-only artifact or an existing external configuration. On the matching managed candidate, ordinary first launch prepares local central automatically. |

@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -26,6 +27,27 @@ class InstallError(ValueError):
 def require(value, code):
     if not value:
         raise InstallError(code)
+
+
+def uv_git_env(environment):
+    """Bootstrap counterpart of update_install.uv_git_env; parity is tested."""
+    env = dict(environment)
+    raw = env.get("GIT_CONFIG_COUNT", "0")
+    if not isinstance(raw, str) or not raw.isascii() or not raw.isdecimal():
+        raise ValueError("invalid_git_config_count")
+    try:
+        count = int(raw)
+    except ValueError:
+        raise ValueError("invalid_git_config_count") from None
+    # Git parses a signed int; leave room for the two appended entries.
+    if count > 2**31 - 3:
+        raise ValueError("invalid_git_config_count")
+    for key, value in (("maintenance.auto", "false"), ("gc.auto", "0")):
+        env[f"GIT_CONFIG_KEY_{count}"] = key
+        env[f"GIT_CONFIG_VALUE_{count}"] = value
+        count += 1
+    env["GIT_CONFIG_COUNT"] = str(count)
+    return env
 
 
 class Redirect(urllib.request.HTTPRedirectHandler):
@@ -92,6 +114,20 @@ def resolve(tag, channel, download=fetch):
             "prerelease": bool(item.get("prerelease"))}
 
 
+def verification_failure(output):
+    # Propagate only the known diagnostic; child output can contain credentials.
+    try:
+        detail = json.loads(output)
+    except (ValueError, UnicodeError):
+        detail = None
+    if (isinstance(detail, dict) and detail.get("code") == "entrypoint_directory_not_owned"
+            and isinstance(detail.get("directory"), str) and Path(detail["directory"]).is_absolute()):
+        directory = detail["directory"]
+        raise InstallError("entrypoint_directory_not_owned: " + directory
+                           + "; chmod g-w,o-w " + shlex.quote(directory))
+    raise InstallError("verification_command_failed")
+
+
 def command(args, *, env, cwd=None):
     # Do not echo child diagnostics: Git/uv errors may contain local configuration.
     with tempfile.TemporaryFile(dir=env.get("TMPDIR")) as output:
@@ -100,6 +136,9 @@ def command(args, *, env, cwd=None):
         stage = ("verification" if "bat_agent_connector.installer" in args else
                  "uv_install" if "tool" in args else "dependency_lock" if "export" in args else
                  "source_checkout" if "git" in Path(args[0]).name else "update_enrollment")
+        if result.returncode and stage == "verification":
+            output.seek(0)
+            verification_failure(output.read(1024 * 1024 + 1))
         require(result.returncode == 0, stage + "_command_failed")
         require(output.tell() <= 4 * 1024 * 1024, "command_output_limit")
         output.seek(0)
@@ -107,9 +146,10 @@ def command(args, *, env, cwd=None):
 
 
 def readonly_command(args, *, env):
-    result = subprocess.run(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,  # noqa: S603
+    result = subprocess.run(args, env=env, capture_output=True,  # noqa: S603
                             stdin=subprocess.DEVNULL, timeout=180)
-    require(result.returncode == 0, "verification_command_failed")
+    if result.returncode:
+        verification_failure(result.stderr)
     require(len(result.stdout) <= 1024 * 1024, "verification_output_limit")
     return result.stdout.decode().strip()
 
@@ -209,9 +249,9 @@ def install(args, *, home=None, download=fetch, run=command):
     uv = shutil.which("uv")
     git = shutil.which("git")
     require(uv and git, "uv_and_git_required")
-    env = {"HOME": str(home), "PATH": os.environ.get("PATH", "/usr/bin:/bin"), "LANG": "C.UTF-8",
-           "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0",
-           "UV_NO_CONFIG": "true", "UV_TOOL_DIR": str(root / "tools"), "UV_TOOL_BIN_DIR": str(root / "bin")}
+    env = uv_git_env({"HOME": str(home), "PATH": os.environ.get("PATH", "/usr/bin:/bin"), "LANG": "C.UTF-8",
+                      "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0",
+                      "UV_NO_CONFIG": "true", "UV_TOOL_DIR": str(root / "tools"), "UV_TOOL_BIN_DIR": str(root / "bin")})
     python = root / "tools/bat-agent-connector/bin/python"
     if args.verify_only:
         # The installed verifier reads only; no uv invocation, checkout or receipt write.

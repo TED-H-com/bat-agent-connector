@@ -1,7 +1,9 @@
 import {h} from './ui/dom.js';
 import {button} from './ui/components.js';
-import {timeStamp} from './ui/stamps.js';
+import {timeLabel,timeStamp} from './ui/stamps.js';
 import {internalFrom} from './work-paths.js';
+import {profileStateFacts,profileTimestamp} from './pm-work-profile-state.js';
+import {hasEffectivePmRoute,renderEffectivePmRoute} from './pm-effective-route.js';
 
 const identity = value => typeof value === 'string' && /^wpf_[0-9a-f]{32}$/.test(value);
 const states = ['discovered','signed_in_or_available','can_observe','can_start_own','can_continue_own','last_verified_execution'];
@@ -50,10 +52,26 @@ export function workProfilePicker({t,api,alive,namespace,workspaceId,workId,caps
       else if(next.state==='unavailable'&&next.reason==='action_unavailable')nextKey='wpf_action_unavailable';
       else if(next.state==='requires_attempt'&&next.reason==='owned_attempt_required')nextKey='wpf_next_attempt';
     }
-    const list=h('dl',{class:'pm-work-profile-states'});
-    for(const name of states){const state=data.states[name],value=h('dd',{},t('wpf_'+state.value));list.append(h('dt',{},t('wpf_'+name)),value);
-      const op=state.evidence_ref?.operation_id;
-      if(name==='last_verified_execution'&&/^op_[0-9a-f]{32}$/.test(op))value.append(' · ',h('a',{href:`#/op/${op}`},t('pm_operation')));
+    const list=h('dl',{class:'pm-work-profile-states'}),shownTimes=new Set();
+    for(const name of states){
+      const state=profileStateFacts(data.states[name]);
+      const value=h('dd',{'data-work-profile-state':name},
+        h('p',{'data-work-profile-value':''},t(state.valueKey)),
+        h('p',{'data-work-profile-reason':''},t(state.reasonKey),' · ',h('code',{},state.reasonCode||t('wpf_reason_absent'))));
+      list.append(h('dt',{},t('wpf_'+name)),value);
+      const operationLink=op=>h('a',{href:`#/op/${op}`},t('pm_operation'));
+      if(state.operationId)value.append(h('p',{},operationLink(state.operationId)));
+      if(state.lastSuccessAt!==null){
+        value.append(h('p',{'data-work-profile-last-success':''},timeLabel(t,'wpf_last_success',{time:timeStamp(state.lastSuccessAt)})));
+        shownTimes.add(state.lastSuccessAt);
+      }
+      if(state.past){
+        if(state.past.at!==null)shownTimes.add(state.past.at);
+        const past=h('div',{'data-work-profile-past':''},h('p',{},state.past.at===null?t('wpf_last_verified_unknown')
+          :timeLabel(t,'wpf_last_verified',{time:timeStamp(state.past.at)}),' · ',t(state.past.valueKey)));
+        if(state.past.operationId&&state.past.operationId!==state.operationId)past.append(h('p',{},operationLink(state.past.operationId)));
+        value.append(past);
+      }
     }
     const gap=data.smallest_gap,details=[];
     if(gap){
@@ -63,16 +81,23 @@ export function workProfilePicker({t,api,alive,namespace,workspaceId,workId,caps
         details.push(h('a',{href:gap.fix.ui_hash+(from?'&from='+encodeURIComponent(from):''),onclick:()=>{try{sessionStorage.setItem(returnKey,row.profile_id);}catch{}}},t(action==='setup.host'?'wpf_setup_host':'wpf_setup_repository')));
       }else{
         const key=gap.reason==='git_execution_location_changed'?'wpf_git_changed':gap.reason?.startsWith('local_git_')?'wpf_local_git'
-          :['host_unreachable','host_not_refreshed'].includes(gap.reason)?'wpf_observation_only':gap.reason==='action_unavailable'?'wpf_action_unavailable':'wpf_unverified';
+          :['host_unreachable','host_not_refreshed'].includes(gap.reason)?'wpf_gap_observation'
+          :gap.reason==='action_unavailable'?'wpf_action_unavailable':'wpf_unverified';
         details.push(h('p',{class:'muted'},t(key)));
       }
-      if(typeof gap.last_success_at==='number'&&Number.isFinite(gap.last_success_at)&&gap.last_success_at>0)details.push(timeStamp(gap.last_success_at));
+      const gapAt=profileTimestamp(gap.last_success_at);
+      if(gapAt!==null&&!shownTimes.has(gapAt))details.push(timeStamp(gapAt));
     }
+    const readAt=profileTimestamp(data.observed_at);
     facts.replaceChildren(h('h4',{},t('wpf_coding')),
+      ...(readAt===null?[]:[h('p',{'data-work-profile-read-at':''},timeLabel(t,'wpf_read_at',{time:timeStamp(readAt)}))]),
       h('p',{class:'muted','data-work-profile-next-turn':''},h('strong',{},t('wpf_next_turn')+' · '),t(nextKey)),
       h('p',{class:'muted'},t('wpf_locked')),list,
-      ...(data.states.can_start_own.value!=='ready'?[h('p',{class:'muted'},t('wpf_unverified'))]:[]),...details,
-      h('h4',{},t('wpf_pm')),h('p',{},t(data.pm_analysis?.pm_ready===true?'wpf_pm_preflight':'wpf_pm_unverified')));
+      ...(data.states.can_start_own.value!=='ready'?[h('p',{class:'muted'},t('wpf_unverified'))]:[]),
+      ...(gap?[h('div',{'data-work-profile-gap':''},...details)]:[]),
+      h('h4',{},t('wpf_pm')),hasEffectivePmRoute(data.pm_analysis)
+        ?renderEffectivePmRoute(h('div',{'data-work-profile-pm':''}),{h,t,document:data.pm_analysis,readyKey:'wpf_pm_preflight'})
+        :h('p',{},t(data.pm_analysis?.pm_ready===true?'wpf_pm_preflight':'wpf_pm_unverified')));
     const gapName=states.find(name=>data.states[name].value!=='ready');
     announcement.textContent=[`${t('wpf_next_turn')}: ${t(nextKey)}`,
       gapName?`${t('wpf_'+gapName)}: ${t('wpf_'+data.states[gapName].value)}. ${t('wpf_unverified')}`:''].filter(Boolean).join(' ');

@@ -1,11 +1,13 @@
 import type {Page} from '@playwright/test';
 import {attentionFixture} from './attention-fixture.ts';
 
-export async function managedSetupFixture(page: Page, native: boolean, locale: string | null = 'en') {
+export async function managedSetupFixture(page: Page, native: boolean, locale: string | null = 'en',
+  evidence?: {state: any, operation: any}) {
   const base = attentionFixture();
   const state = {posts: [] as any[], staged: [] as any[], lost: false, refused: false,
     admissionRefused: true, refusalCode: 'CONFIGURATION_CHANGED', refusalMessage: 'Read the new configuration.', refusalStatus: 409, drop: false, setupStatus: 200, configuredHost: 'demo', configuredUrl: 'wss://demo.example:9876/', saved: false, connectionStatus: null as string | null, connected: true, extraHosts: [] as any[], repositories: [] as any[], reads: 0, revision: 'a'.repeat(64), scopes: ['observe', 'manage'], allowed: true, badActor: false, operation: null as any, hold: false, release: null as any, hasProfiles: true, profiles: null as any[] | null, profilesError: null as string | null, verification: {commands: {other: ['uv', 'run', 'pytest', '-q']}, timeout_s: 300}};
-  const caps = () => ({...base.caps(), scopes: state.scopes, hosts: state.saved ? [{host:state.configuredHost}] : [],
+  if (evidence) {state.saved = true; state.operation = evidence.operation; state.configuredHost = evidence.operation.target.host;}
+  const caps = () => ({...base.caps(), ...(evidence ? {actor: evidence.operation.actor} : {}), scopes: state.scopes, hosts: state.saved ? [{host:state.configuredHost}] : [],
     managed_installation: {runtime_version:'0.2.4', background:true},
     actions: [{action:'setup.host', allowed:state.allowed}, {action:'setup.repository', allowed:state.allowed}, {action:'setup.verification', allowed:state.allowed}]});
   const dispatch = async (input: any) => {
@@ -15,6 +17,7 @@ export async function managedSetupFixture(page: Page, native: boolean, locale: s
       server_id:'setup-central', principal_id:'setup-person', checkpoint:{cursor:0,token:'setup-0'}}}};
     if (path === '/managed/setup') {
       state.reads++;
+      if (evidence) return {status: 200, data: structuredClone(evidence.state)};
       const result = state.setupStatus !== 200 ? {status:state.setupStatus,data:{error:{code:state.setupStatus===403?'FORBIDDEN':'NOT_FOUND',message:'Setup source withdrawn'}}}
         : {status:200,data:{revision:state.revision, verification:structuredClone(state.verification),
           hosts:[...(state.saved ? [{name:state.configuredHost,url:state.configuredUrl,connected:state.connected, ...(state.connectionStatus ? {connection_status: state.connectionStatus} : {})}] : []), ...state.extraHosts],
@@ -40,6 +43,12 @@ export async function managedSetupFixture(page: Page, native: boolean, locale: s
     return base.dispatch(input);
   };
   await page.addInitScript(locale => {if (locale && !localStorage.getItem('batc.lang')) localStorage.setItem('batc.lang',locale);}, locale);
+  if (evidence) await page.addInitScript(operation => {
+    const namespace = [location.origin, 'setup-central', 'setup-person', operation.actor].map(encodeURIComponent).join(':');
+    const {action, target, params, preconditions, operation_id, idempotency_key: key} = operation;
+    localStorage.setItem(`batc.managed.setup.${namespace}`, JSON.stringify({
+      intent: {key, operation_id, request: {action, target, params, preconditions}}}));
+  }, evidence.operation);
   if (native) {
     await page.exposeFunction('setupConnector', dispatch);
     await page.addInitScript(c => Object.assign(window,{isTauri:true,__TAURI_INTERNALS__:{

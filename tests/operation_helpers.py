@@ -39,16 +39,69 @@ async def stop_workers(ops):
     await asyncio.gather(*pending, return_exceptions=True)
 
 
+async def wait_operation_attempts(ops, active, *, timeout=60, started=None, clock=None, wait=None,
+                                description=None, deadline=None):
+    """Wait for captured workers; each must make its own durable step progress.
+
+    The stall bound protects the suite from a hung attempt, not from CPU time
+    used by a progressing operation. An independent overall cap also bounds a
+    worker that persists steps forever. Callers retain scheduling and teardown.
+    """
+    clock = clock or asyncio.get_running_loop().time
+    wait = wait or asyncio.wait
+    started = clock() if started is None else started
+    deadline = started + 10 * timeout if deadline is None else deadline
+
+    def progress(oid):
+        return tuple(tuple(row) for row in ops.db.execute(
+            'SELECT seq,status FROM operation_steps WHERE operation_id=? ORDER BY seq', (oid,)))
+
+    receipts = {oid: progress(oid) for oid, _ in active}
+    changed = dict.fromkeys(receipts, started)
+    pending = {task for _, task in active}
+    while pending:
+        now = clock()
+        remaining = min(deadline - now, *(timeout - (now - changed[oid])
+            for oid, task in active if task in pending))
+        _, pending = await wait(pending, timeout=max(0, min(1, remaining)))
+        now = clock()
+        if now >= deadline:
+            raise AssertionError(f'{description or "Operation attempts"} exceeded overall {10 * timeout}s safety cap\n'
+                                 + worker_details(ops))
+        for oid, task in active:
+            if task not in pending:
+                continue
+            current = progress(oid)
+            if current != receipts[oid]:
+                receipts[oid], changed[oid] = current, now
+            if now - changed[oid] >= timeout:
+                outcome = ops.get(oid)
+                label = description or f"operation {oid}" + (
+                    " worker" if outcome['status'] not in {'accepted', 'running'} else "")
+                raise AssertionError(f"{label} did not settle within {timeout}s without persisted progress\n"
+                                     + worker_details(ops))
+    outcomes = []
+    for oid, task in active:
+        task.result()  # A persisted status does not prove worker cleanup finished.
+        outcome = ops.get(oid)
+        assert outcome['status'] not in {'accepted', 'running'}, outcome
+        outcomes.append((outcome['action'], outcome['status']))
+    return outcomes
+
+
 async def settle_operations(ops, *, timeout=60):
-    """Run due operations and wait for each attempt's persisted status and worker completion.
+    """Run due operations and wait for persisted results and worker completion.
 
     Uncertain/waiting attempts return without forcing their future retries. Yield after scheduling so a retry
     enters running before wait() observes the previous attempt's uncertain status.
+    timeout is a per-worker guard against missing durable step progress, not
+    an overall latency assertion. An independent 10x cap spans all worker
+    waves, including newly admitted children. Product budgets remain checked.
     On failure, stop and join this service's workers while its fixture journal is
     still open. This does not cancel durable operations or change their receipts.
     """
     loop = asyncio.get_running_loop()
-    deadline = loop.time() + timeout
+    deadline = loop.time() + 10 * timeout
     try:
         while True:
             await ops.run_due()
@@ -56,17 +109,8 @@ async def settle_operations(ops, *, timeout=60):
             if not active:
                 return
             await asyncio.sleep(0)
-            for op_id, task in active:
-                outcome = await ops.wait(op_id, timeout=max(0, deadline - loop.time()))
-                assert outcome["status"] not in {"accepted", "running"}, (
-                    f"operation {op_id} did not settle within {timeout}s: {outcome['status']}\n"
-                    + worker_details(ops)
-                )
-                try:
-                    await asyncio.wait_for(asyncio.shield(task), timeout=max(0, deadline - loop.time()))
-                except asyncio.TimeoutError:
-                    raise AssertionError(f"operation {op_id} worker did not settle within {timeout}s\n"
-                                         + worker_details(ops)) from None
+            await wait_operation_attempts(ops, active, timeout=timeout, clock=loop.time, wait=asyncio.wait,
+                deadline=deadline)
     except BaseException:
         await stop_workers(ops)
         raise

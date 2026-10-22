@@ -156,6 +156,33 @@ for (const lang of ['en', 'zh-TW'] as const) {
   });
 }
 
+for (const lang of ['en', 'zh-TW'] as const) {
+test(`${lang}: an acknowledgement during an admission reread frees the draft without another POST`, async ({page}) => {
+  const f = followUpFixture(lang);
+  let release = () => {};
+  f.follow.holdPost = new Promise<void>(resolve => {release = resolve;});
+  await openWork(page, f, lang);
+  await field(page).fill('Accepted while admission is being checked');
+  await send(page, lang).click();
+  await expect.poll(() => f.follow.postStarted).toBe(true);
+  f.follow.hold.result = true;
+  f.pushEvent();
+  await expect.poll(() => f.follow.held.length).toBeGreaterThan(0);
+  release();
+  await expect(receipts(page)).toHaveCount(1);
+  await expect(field(page)).toHaveValue('');
+  await expect(field(page)).toBeFocused();
+  await field(page).fill('  Keep this next draft 原文\n  ');
+  await expect(send(page, lang)).toBeDisabled();
+  expect(f.follow.posts).toHaveLength(1);
+  f.follow.hold.result = false;
+  f.follow.releaseHeld();
+  await expect(send(page, lang)).toBeEnabled();
+  await expect(field(page)).toHaveValue('  Keep this next draft 原文\n  ');
+  expect(f.follow.posts).toHaveLength(1);
+});
+}
+
 test('a held accept is not a local queue, and the field is free once the id exists', async ({page}) => {
   const f = followUpFixture('en');
   let release = () => {};
@@ -499,7 +526,7 @@ test('a missing operate scope keeps history without a composer', async ({page}) 
   const scoped = followUpFixture('en', {operate: false});
   scoped.follow.items = [queuedReceipt()];
   await openWork(page, scoped, 'en');
-  await expect(page.locator('[data-follow-up-pill]')).toContainText('Read-only');
+  await expect(page.locator('[data-follow-up-pill]')).toHaveText('API read-only');
   await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
   await expect(receipts(page)).toHaveCount(1);
 });

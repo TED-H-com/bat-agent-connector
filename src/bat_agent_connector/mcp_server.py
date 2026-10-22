@@ -24,7 +24,17 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp_types import ToolAnnotations
 from pydantic import StrictInt
 
-from . import __version__, deployment, lifecycle, orchestrate, pr_delivery, resource_policy, service, triage
+from . import (
+    __version__,
+    deployment,
+    lifecycle,
+    mcp_identity,
+    orchestrate,
+    pr_delivery,
+    resource_policy,
+    service,
+    triage,
+)
 from .config import Config, load_config
 from .errors import BatError, WriteRefused
 from .fleet import Fleet
@@ -370,6 +380,8 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
             raise WriteRefused("BATC_API_TOKEN is required for the principal-only profile (including reads)")
         return asyncio.to_thread(task_request, method, _auth_token=token,
                                  timeout=90.0 if method == "pm_spec_sources_get" else 40.0, entry="mcp", **params)
+
+    mcp_identity.register(mcp, lambda: daemon("api_capabilities"))
 
     def cleanup_read(path: str, **params):
         from .cleanup import http_request

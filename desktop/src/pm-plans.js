@@ -174,7 +174,7 @@ export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, 
       signature = nextSignature;
       current.replaceChildren(h('p', {}, h('strong', {}, accepted.plan ? accepted.plan.document.title : t('pm_plan_none_accepted'))));
       if (accepted.plan) current.append(h('p', {class: 'muted'}, t('pm_revision_number', {number: accepted.plan.sequence}), ' · ', t('pm_plan_accepted')));
-      if (accepted.plan?.adoption?.commit_sha) current.append(h('details', {}, h('summary', {}, t('pd_details')), h('code', {}, accepted.plan.adoption.commit_sha), h('button', {type: 'button', class: 'secondary', onclick: async event => {const details = event.currentTarget.parentElement; try {await navigator.clipboard.writeText(accepted.plan.adoption.commit_sha);} catch (error) {if (details.isConnected) details.append(errorBox(error, {within:details}));}}}, t('pd_copy'))));
+      if (accepted.plan?.adoption?.commit_sha) current.append(h('details', {}, h('summary', {}, t('pd_details')), h('code', {}, accepted.plan.adoption.commit_sha), h('button', {type: 'button', class: 'secondary', onclick: async event => {const details = event.currentTarget.parentElement; try {await navigator.clipboard.writeText(accepted.plan.adoption.commit_sha);} catch (error) {if (details.isConnected) details.append(errorBox(error, {sourceRefresh:false, within:details}));}}}, t('pd_copy'))));
       renderRows(page);
     }
     editor.update();
