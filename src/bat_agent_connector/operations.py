@@ -737,6 +737,9 @@ class OperationService:
         cancel_work_follow_up(self, principal, op)
         if op["status"] in TERMINAL:
             return op
+        if op["action"] == "setup.connection.apply" and op["status"] == "needs_attention":
+            from .setup_connections import abandon
+            return abandon(self, principal, op)
         if op["action"] == "worktree.merge":
             from .worktree_merge_operations import cancel
             return cancel(self, principal, op)

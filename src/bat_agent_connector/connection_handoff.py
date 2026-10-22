@@ -174,16 +174,22 @@ def receive(ops, principal, body):
         if not (operation.get("external_refs") or {}).get("native_effects_sent"):
             _refuse("Handoff has not been dispatched")
         receipt = {**value, "receipt_ref": "receipt_" + digest(value)}
-        if row["response"]:
-            if json.loads(row["response"]) != receipt:
-                _refuse("The challenge already recorded a different receipt")
+        history = receipts(row)
+        if operation["status"] == "cancelled":
+            raise OperationError("CONNECTION_OPERATION_TERMINAL", "This operation was cancelled; no further local evidence is accepted", 409)
+        if receipt in history:
             return {"receipt": receipt, "replayed": True}
-        if now() > request["expires_at"]:
-            _refuse("An expired challenge cannot report a new effect")
+        if operation["status"] in {"failed", "succeeded"}:
+            raise OperationError("CONNECTION_OPERATION_TERMINAL", "This operation is terminal", 409)
+        if history and (history[-1]["outcome"] != "uncertain" or receipt["outcome"] == "uncertain"):
+            _refuse("Only one definitive readback may supersede uncertain evidence")
+        # Expiry prohibits a new claim/write, not late evidence of the original claimed effect.
         ops.db.execute("UPDATE operation_steps SET response=? WHERE operation_id=? AND name=?",
-            (canonical(receipt).decode(), operation["operation_id"], STEP))
+            (canonical({"receipts": [*history, receipt]}).decode(), operation["operation_id"], STEP))
         ops.db.execute("UPDATE operations SET next_run_at=0 WHERE operation_id=?", (operation["operation_id"],))
         ops.journal.api_event("operation", operation["operation_id"], "connection.native.receipt",
             {"step": STEP, "receipt_ref": receipt["receipt_ref"], "outcome": body["outcome"]}, actor=principal.actor)
+        if operation["status"] == "needs_attention" and receipt["outcome"] != "uncertain":
+            ops.resume(principal, operation["operation_id"])
     ops.kick()
     return {"receipt": receipt, "replayed": False}

@@ -75,7 +75,7 @@ def source(installed):
             "directory": digest(str(directory.resolve()).encode()),
             "index": digest((directory / "index.json").read_bytes()),
             "credential": digest((directory / "remote-tokens.enc.json").read_bytes())})
-    return {"source": {"kind": "bat_profile", "profile_reference": "profile-a"},
+    return {"source": descriptor,
         "source_reference": descriptor["reference"], "remote_profile_id": "default",
         "label": "Fixture connection", "preferences": {"favorite": True},
         "service_ref": None, "workspace_ref": None}
@@ -206,6 +206,7 @@ async def test_e_existing_binding_refuses_rebind_or_foreign_access(installed, se
         from bat_agent_connector import setup_connections
         body["params"]["source_reference"] = setup_connections.source_descriptor(
             daemon.ops, principal, body["params"]["source"])["reference"]
+        body["params"]["source"] = setup_connections.source_descriptor(daemon.ops, principal, body["params"]["source"])
     elif fault == "profile":
         body["params"]["remote_profile_id"] = "other-profile"
     else:
@@ -217,15 +218,15 @@ async def test_e_existing_binding_refuses_rebind_or_foreign_access(installed, se
     assert daemon.journal.db.execute("SELECT count(*) FROM operations").fetchone()[0] == 1
 
 
-@pytest.mark.parametrize("phase", ["before_dispatch", "after_effect", "expired_new", "expired_readback", "uncertain"])
+@pytest.mark.parametrize("phase", ["never_claimed", "after_effect", "late_first", "expired_readback", "uncertain"])
 async def test_h_disk_participant_disconnect_expiry_and_third_value(installed, served_setup, source, tmp_path, phase):
     daemon, _, _ = installed
     body, ident = await accept(served_setup, intent(source, action="setup.connection.apply"))
     await settle_operations(daemon.ops)
     assert daemon.ops.get(ident)["status"] == "waiting_external"
-    if phase == "before_dispatch":
+    if phase == "never_claimed":
         assert daemon.ops.get(ident)["external_refs"].get("native_effects_sent") is False
-        await served_setup.disconnect()
+        assert (await served_setup("GET", f"/api/v1/operations/{ident}"))[0] == 200
         assert not (tmp_path / "participant.json").exists()
         status, _ = await served_setup("POST", HANDOFF, {"operation_id": ident, "installation_ref": "desktop-b"})
         assert status == 403
@@ -238,13 +239,14 @@ async def test_h_disk_participant_disconnect_expiry_and_third_value(installed, s
         await served_setup.disconnect()  # Local effect sent, receipt not delivered.
         assert not daemon.journal.db.execute("SELECT response FROM operation_steps WHERE name='native_effects'").fetchone()[0]
         participant = DiskParticipant(participant.path)
-    if phase == "expired_new":
-        # Expire using the module's clock, without replacing stdlib classes.
+    if phase == "late_first":
         from bat_agent_connector import connection_handoff
+        participant.effect(handoff)
         with patch.object(connection_handoff, "now", return_value=handoff["expires_at"] + 1):
-            (status, _), _ = await participant.send(served_setup, handoff)
-        assert status == 409 and not daemon.journal.db.execute(
-            "SELECT response FROM operation_steps WHERE name='native_effects'").fetchone()[0]
+            (status, response), receipt = await participant.send(served_setup, handoff)
+        assert status == 200, response
+        await settle_operations(daemon.ops)
+        assert daemon.ops.get(ident)["status"] == "succeeded"
     else:
         (status, response), receipt = await participant.send(served_setup, handoff,
             outcome="uncertain" if phase == "uncertain" else "applied")
@@ -407,7 +409,7 @@ async def test_configuration_is_guarded_inside_same_operation_then_native_wait(i
     await settle_operations(daemon.ops)
     result = daemon.ops.get(ident)
     assert result["status"] == "waiting_external", result
-    assert [step["name"] for step in result["steps"]] == ["managed_configuration", "connection_binding", "native_effects"]
+    assert [step["name"] for step in result["steps"]] == ["managed_configuration", "native_effects"]
     assert setup.tomllib.loads((root / "config/hosts.toml").read_text())["hosts"]["fixture"]["url"] == setup._url(mock.url)
     assert mock.auth_frames
     assert daemon.journal.db.execute("SELECT count(*) FROM operations").fetchone()[0] == 1
@@ -546,11 +548,10 @@ async def test_native_definitive_no_effect_outcomes_and_refusal_resume(installed
     (status, _), _ = await participant.send(served_setup, native, outcome=outcome)
     assert status == 200
     await settle_operations(daemon.ops)
-    assert daemon.ops.get(ident)["status"] == ("succeeded" if outcome == "unchanged" else "needs_attention")
+    assert daemon.ops.get(ident)["status"] == ("succeeded" if outcome == "unchanged" else "failed")
     if outcome == "refused":
         status, _ = await served_setup("POST", f"/api/v1/operations/{ident}/resume", {})
-        assert status == 200
-        await settle_operations(daemon.ops)
+        assert status == 409
         assert daemon.ops.get(ident)["error_code"] == "CONNECTION_NATIVE_REFUSED"
     assert daemon.journal.db.execute("SELECT count(*) FROM operation_steps WHERE name='native_effects'").fetchone()[0] == 1
 
@@ -682,8 +683,10 @@ async def test_r2_a_late_first_receipt(installed, served_setup, source, tmp_path
 @pytest.mark.parametrize("update", [False, True])
 async def test_r2_a_abandonment_releases_busy_and_stop(installed, served_setup, source, update):
     from bat_agent_connector import connection_handoff
+    from bat_agent_connector.browser_sessions import BrowserSessions
     from bat_agent_connector.operations import UNCERTAIN_RETRY_S
-    daemon, principal, _ = installed
+    daemon, principal, root = installed
+    daemon.api.browser_sessions = BrowserSessions(daemon, root, daemon.managed_installation["installation_id"])
     connection = None
     if update:
         _, first = await accept(served_setup, intent(source), key="initial")
@@ -696,6 +699,8 @@ async def test_r2_a_abandonment_releases_busy_and_stop(installed, served_setup, 
             daemon.journal.db.execute("UPDATE operations SET next_run_at=0 WHERE operation_id=?", (ident,))
             await settle_operations(daemon.ops)
     assert daemon.ops.get(ident)["status"] == "needs_attention"
+    status, response = await served_setup("POST", "/api/v1/managed/stop", {})
+    assert status == 409 and response["error"]["code"] == "SERVICE_BUSY"
     status, response = await served_setup("POST", f"/api/v1/operations/{ident}/cancel", {})
     assert status == 200, response
     assert response["operation"]["status"] == "cancelled"
@@ -751,6 +756,7 @@ async def test_r2_b_definitive_readback_appends_uncertain_history(installed, ser
     uncertain = DiskParticipant(tmp_path / "participant.json").effect(native, outcome="uncertain")
     assert (await served_setup("POST", RECEIPT, uncertain))[0] == 200
     await settle_operations(daemon.ops)
+    assert (await served_setup("POST", f"/api/v1/operations/{ident}/cancel", {}))[0] == 409
     definitive = {**uncertain, "outcome": outcome, "roles": [{**uncertain["roles"][0],
         "after_digest": uncertain["roles"][0]["before_digest"] if outcome in {"unchanged", "refused"} else digest(b"settled")} ]}
     status, response = await served_setup("POST", RECEIPT, definitive)
