@@ -26,13 +26,13 @@ Setup now uses an authenticated active write connection or existing inventory ev
 
 A succeeded `setup.host` receipt is evidence of that operation's verification and saved configuration at its `updated_at` completion time. When its target host's current row is checking, unreachable or absent, Setup shows that past evidence and time instead of the ready message. Each host row supplies its own current state, observation time when available, and next step. The existing ready copy remains when the receipt's target host is currently connected; without a host receipt, every displayed host must be connected to show it. An unrelated connected host cannot override the configured host's state. This readout makes no additional claim about starting Work and never resubmits setup.
 
-## 與「加入機器」共用的契約（待審查）
+## 與「加入機器」共用的契約（已定，尚未實作）
 
 本節補充上方現行首次設定，未實作新的角色精靈。程式查核基線為 `5615d6c0`
 （合併 main `f7a71405`），下列 `file:line` 已按此基線重核。
 責任分工只維護於 [Fleet 唯一責任表](fleet-configuration.md#責任表與退休條件)；
 共用欄位、狀態、變更、lifecycle、健康投影、驗收與 D1–D8 的產品決定／技術預設
-均引用 [Fleet 共用契約](fleet-configuration.md#加入機器共用契約待審查)，本處不另訂一份。
+均引用 [Fleet 共用契約](fleet-configuration.md#加入機器共用契約已定尚未實作)，本處不另訂一份。
 
 | 首次設定特有行為（現況） | 可核對的輸入／輸出 |
 | --- | --- |
