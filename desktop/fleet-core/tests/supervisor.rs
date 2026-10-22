@@ -625,6 +625,17 @@ async fn unresolved_stop_fixture(deselect: bool) -> serde_json::Value {
     let bytes = std::fs::read(dir.join("fleet-desktop-status.json")).unwrap();
     let now = if deselect { 1300 } else { 62001 };
     let parsed = Status::parse(&bytes, &f.load(), r.epoch(), now).unwrap();
+    let disk_reread = Status::parse(
+        &std::fs::read(dir.join("fleet-desktop-status.json")).unwrap(),
+        &f.load(),
+        r.epoch(),
+        now,
+    )
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(&parsed).unwrap(),
+        serde_json::to_value(&disk_reread).unwrap()
+    );
     let reread = Status::parse(
         &serde_json::to_vec(&parsed).unwrap(),
         &f.load(),
