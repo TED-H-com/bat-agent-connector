@@ -2,7 +2,7 @@
 
 [Windows guide](../windows.md) · [繁體中文摘要](#繁體中文設定摘要)
 
-「加入機器」的共用契約及已實作用途選擇、連線預覽與來源政策見[下方章節](#加入機器共用契約)。下列手動設定
+「加入機器」的共用契約及已實作用途選擇、連線預覽、來源政策與純產生器（發布、native apply 與 UI 尚未完成）見[下方章節](#加入機器共用契約)。下列手動設定
 仍作現有格式的參考；新流程的完成條件是退休重複填寫，不是另加一份設定表單。
 
 The packaged Windows client contains the Rust Fleet runtime. A new installation can
@@ -85,6 +85,106 @@ The example's required features are `inventory` and `events_stream` with contrac
 `2026-10-08`. A configured central credential must reference `windows-dpapi` and its
 API identity must have **exactly observe scope**. A running service or listening port
 alone does not establish API readiness.
+
+## Pure configuration generator — implemented; publication, native apply and UI pending
+
+The native-only [generator](../../desktop/fleet-core/src/connection_setup.rs) accepts a
+reviewed setup: a selected [BAT catalog](bat-source-catalog.md) profile with admission
+policy 1, credential/pin reference keys, an explicit literal SSH `Host`/`LocalForward`
+association, an authorized route reference, stable workspace bindings, label and four
+independent preferences (background connections, BAT windows, Dashboard, login).
+The caller supplies the protected installation root, exact existing bytes/digests,
+creation/owner evidence, configured BAT addresses and listening IPv4 sockets. The generator does no IO,
+enrollment, environment expansion or process execution, and accepts no token body.
+
+| Output | Generated or preserved source (A); remaining user choice (U) |
+| --- | --- |
+| `fleet.json` | A: native-selected root and explicit Rust backend for a new installation; an existing root/backend, including omitted legacy backend, stays unchanged. The pointer belongs at the existing native application-data location, separately from `kit_root`. |
+| `client/fleet-inventory.json` | A: stable host/reference keys, catalog profile/remote profile, `source_policy:1`, explicit forwarding local→target, reviewed route/probe/access-host, supplied binding IDs and workspace IDs, derived provisioning profiles, shipped compatibility policy. U: label, authorized profile/route/workspaces and `required`. Existing policy and `connector_endpoint` metadata are retained. New external Connector routes stay inactive: null alias and explicit parser-required template values, including an inactive DPAPI reference, are not live endpoints or enrolled credentials. |
+| `client/bat-profiles/index.json` | A: selected catalog profile, endpoint/pin and BAT metadata (`remoteProfileName`, `createdAt`, `updatedAt` when present); existing root metadata and unrelated profiles are retained. U: the selected BAT window independently controls its `activeProfileIds` membership. No BAT live index is written. |
+| `client/ssh-config` | A: an owned alias-only validation/reference artifact, with no copied key, login, forwarding or security directives. Existing bytes are retained as a prefix; every external SSH byte remains with its original authority. No manual `Include` is needed by this artifact. |
+
+Compatibility values come from the [shipped inventory example](../../desktop/fleet.example/client/fleet-inventory.json)
+at compile time: only `fleet_version`, BAT `min_version`/`protocol`, `direct_probe_ms`
+and Connector `local`, `target`, `dashboard_path`, `supported_api_versions`,
+`min_contract_version` and `required_features`. This keeps one policy authority without
+importing example hosts, credentials, fingerprints or aliases.
+
+The deterministic plan contains all four bounded outputs as bytes plus SHA-256,
+source bindings, independent preferences, a review digest and ordered single-file
+steps with before/after digests and owner evidence. Existing JSON with no semantic
+change retains its exact bytes; already-applied inputs yield no publication steps.
+The installation pointer is last, after inventory/profile/alias cross-validation.
+`ArtifactLocation` distinguishes `KitRelative` paths from `InstallationPointer`;
+the publisher must resolve the latter through the native application-data authority.
+Preferences are returned for the existing selection/startup owners; only BAT window
+membership is represented in these four files. There is no cross-file transaction,
+receipt persistence or automatic resume in this module.
+
+Typed gaps return **no plan**: missing mapping, duplicate forwards, unavailable or
+ambiguous profile/credential, profile/endpoint mismatch, an allocation requiring sourced
+mapping changes, unproven forward completeness, occupied endpoint, exhausted
+pool, changed source/review, unknown owner, reference-only file requiring modification,
+identity change, invalid input/output, and unsupported SSH syntax/Include/Match or
+reader bounds/encoding. The reader allows at most 1 MiB, 8,192 lines and 4,096 bytes per
+line. It never follows Includes (including cycles), evaluates Match or calls `ssh -G`.
+`Include`, `Match` and a global `LocalForward` refuse the whole source. Literal `Host`
+name lists share a block; all blocks naming the selected alias contribute forwards.
+An unrepresentable selected forward gives `UnsupportedSshSyntax`, otherwise multiple
+forwards give `DuplicateForwards`. Unsupported forwards for other literal aliases
+stay reference-only. Patterns, negation, quotes and other unrepresentable `Host` lines
+are never evaluated: without forwards they do not affect selection; with any forward
+they give every association `ForwardCompletenessUnproven`. A `#` starts a comment
+only at the start of a line or whitespace-separated token, so `Host foo#bar` cannot
+create an association for `foo`. All original external SSH bytes remain unchanged.
+Handwritten files remain references; the current fixed loaders cannot consume a new
+overlay for a required edit, so that case stops with `ReferenceOnly` instead of adoption.
+
+Allocation policy 1 scans `127.0.0.2`–`127.0.0.254`, retaining the reviewed service port
+and excluding configured BAT addresses. Other BAT hosts reserve their whole address,
+as required by the inventory. Listeners conflict only on the same address and port,
+or `0.0.0.0` on the same port; adapters map dual-stack `[::]:port` listeners to
+`0.0.0.0:port`. The Connector reserves only its exact local address and port. These
+rules apply to building, allocation and preview recheck. `.1` is reserved for new
+allocation only: Preserve can retain a proven `127.0.0.1:19001` forward, while the
+inactive Connector's exact `127.0.0.1:19796` endpoint conflicts.
+
+Allocation requires a proven profile/forward pair. A proposed address differing from
+that pair gives `AllocationRequiresSourcedMapping`, even though the existing profile
+and forward match each other. It stays a proposal until sourced changes to both exist;
+allocation does not create a profile or rewrite SSH. Preview recheck reports a conflict
+without selecting a replacement. Every plan is **reference-route only**: current SSH
+launch adds `-L`, so native wiring must settle the duplicate-listener boundary before
+publication/activation. Independent observe-handle enrollment, safe overlay consumption,
+native publication/readback, preference persistence and UI remain open.
+
+**繁體中文狀態：產生器已實作；發布、native apply 與 UI 尚未完成。**
+四檔由已審來源及版本化政策產生，缺關聯回傳具型別缺口，不猜 endpoint、不接管手寫檔。
+使用者仍選標籤、既有 profile／route／workspace 與四種獨立偏好；一般安裝流程的手填
+步驟尚未退休。測試以合成資料驗證正式 loaders；Tauri sanitizer
+(`src-tauri/src/fleet.rs`) 不在 fleet-core，產生 inventory 的 status-golden 檢查留待接線。
+本節不宣稱 Windows、真 BAT／SSH 或 E01／E03／E11、R0–R5／A01–A40 驗收完成。
+
+占用規則依權責分開：其他 BAT 主機保留整個位址；監聽器只在位址與 port 相同，或
+`0.0.0.0` 的 port 相同時衝突。呼叫端將雙棧 `[::]:port` 映射為 `0.0.0.0:port`。
+Connector 只保留其 local 的精確位址與 port。建置、配置與預覽重查使用相同規則；
+新配置仍只從 `127.0.0.2`–`127.0.0.254` 選擇，Preserve 可保留已證實的
+`127.0.0.1:19001`，但不可占用 Connector 的 `127.0.0.1:19796`。
+若新提案與已匹配的 profile／forward 不同，回傳 `AllocationRequiresSourcedMapping`，
+直到兩者都有來源可證的變更；重查衝突不會暗中改選位址。
+
+SSH reader 接受多個 literal 名稱的 `Host`，並彙集所有命名所選 alias 的區塊。
+所選 alias 的不可表達 forward 回傳 `UnsupportedSshSyntax`；否則多個 forward
+回傳 `DuplicateForwards`。其他 literal alias 的不支援語法僅保留為參照。
+pattern、否定、引號等不可表達的 Host 不會被求值：沒有 forward 時不影響關聯；
+有任一 forward 時，所有關聯都回傳 `ForwardCompletenessUnproven`。
+`Include`、`Match` 與首個 Host 之前的全域 `LocalForward` 仍拒絕整份來源；
+大小、行數、行長及編碼界限不變。`#` 只在行首或空白分隔的 token 開頭形成註解，
+不會將 `foo#bar` 截成 `foo`；外部 SSH 位元組完全保留。
+
+初始 inventory 的相容性欄位在編譯時從出貨範例擷取上述白名單，避免重複維護政策；
+不複製範例主機、credential、fingerprint 或 alias。`ArtifactLocation` 分別標示
+kit 相對路徑與安裝指標；後者必須由 native application-data 權責解析，不能接到 kit root。
 
 ## Credentials and optional bootstrap
 

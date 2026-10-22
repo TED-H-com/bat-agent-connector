@@ -427,17 +427,17 @@ function rememberOp(scope, key, op, namespace) {
 function dropKey(scope, namespace) { try { localStorage.removeItem(`batc.key.${namespace}.${scope}`); } catch { /* ignore */ } }
 
 // ------------------------------------------------------------------ API
-async function api(method, path, body, key, collectReceipt) {
+async function api(method, path, body, key, collectReceipt, renewalDeadline) {
   const revision=diagnosticRevision, epoch=state.epoch, readHealth=state.health, inventoryRevision=state.health?.inventoryRevision;
   try {
     const data=await apiRequest(method,path,body,key,collectReceipt);
     if(epoch===state.epoch && method==='GET') {
       if (state.health && state.health === readHealth && state.health.inventoryRevision === inventoryRevision) {
-        rememberHealthRead(state.health, path, data);
+        rememberHealthRead(state.health, path, data, {renewalDeadline});
         if (data && (Array.isArray(data.hosts) || Array.isArray(data.sessions) || data.session)) {
           state.health.readers ||= new Map();
           // Replay this existing GET exactly; do not synthesize a new route or BAT check.
-          state.health.readers.set(path, api.bind(null, 'GET', path));
+          state.health.readers.set(path.replace(/\?$/, ''), api.bind(null, 'GET', path, undefined, undefined, undefined));
         }
         if (/^\/(hosts|sessions)(?:[/?]|$)/.test(path)) paintConnection(...connectionPaintFlags);
       }
@@ -1164,7 +1164,7 @@ function tickHealth() {
   if (healthRenewal || !state.health || !state.token) return;
   const path = takeHealthRenewal(state.health);
   const read = state.health.readers?.get(path);
-  if (read) healthRenewal = read().catch(() => {}).finally(() => {healthRenewal = null; paintConnection(...connectionPaintFlags);});
+  if (read) healthRenewal = read(state.health.renewalDeadline).catch(() => {}).finally(() => {healthRenewal = null; paintConnection(...connectionPaintFlags);});
 }
 function rememberFleetHealth(snapshot) {
   // Native Fleet status belongs to its own configuration, not a Connector token.

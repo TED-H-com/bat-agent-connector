@@ -1,4 +1,4 @@
-import {displayFact} from './health-fact.js';
+import {displayFact, healthReadError} from './health-fact.js';
 // Readiness facts are independent: a past success never replaces today's value.
 const values=new Set(['ready','missing','unknown','unavailable']);
 const reasons=new Set(['REPOSITORY_NOT_BOUND','host_unknown','configured_unverified','DISCOVERY_SCOPE_CHANGED','SOURCE_UNAVAILABLE',
@@ -15,12 +15,9 @@ export function profileStateFacts(state, {now=Date.now(), error=null}={}){
   // Only the additive envelope establishes currentness. Never borrow the read
   // timestamp or past verification, and never apply the legacy 60-second fallback.
   const observed=profileTimestamp(state?.observed_at),deadline=typeof state?.valid_until==='string'?Date.parse(state.valid_until):NaN;
-  // An unreachable host cannot advance its success-based deadline. A successful
-  // read still confirms the latest failed attempt; actual read errors always win.
-  const readError=reason==='host_unreachable'&&error?.unchangedDeadline===true?null:error;
   const fact=observed!==null&&Number.isFinite(deadline)?displayFact({key:valueKey(state?.value),
     observed_at:observed*1000,valid_until:deadline,stale:['host_unreachable','host_not_refreshed'].includes(reason),
-    stale_reason:reason,error:readError}, {now}):null;
+    stale_reason:reason,error:healthReadError(reason,error)}, {now}):null;
   return {fact,valueKey:valueKey(state?.value),reasonKey:reasons.has(reason)?'wpf_reason_'+reason:'wpf_unverified',reasonCode:reason,
     operationId:operation(state?.evidence_ref?.operation_id),
     lastSuccessAt:lastSuccessAt===pastAt?null:lastSuccessAt,

@@ -40,6 +40,7 @@ from . import (
 from .build_identity import build_identity
 from .errors import BatError, ResourceReadOnly
 from .operations import STATES, OperationError
+from .updater import connector_update_status
 
 API_VERSION = 1
 CONTRACT_VERSION = "2026-10-08"  # delivery A/B contract changes share this UTC date; keep an ISO date
@@ -1283,8 +1284,10 @@ class ApiV1:
         managed_fields = {"managed_installation": {"installation_id": managed["installation_id"],
                             "runtime_version": managed["runtime_version"], "background": True},
                           "desktop_identity": dashboard_sync.identity(self.daemon.journal, principal)} if managed else {}
+        build = build_identity()
         return 200, {**managed_fields, "actor": principal.actor, "scopes": sorted(principal.scopes), "api_version": API_VERSION,
-                     "contract_version": CONTRACT_VERSION, "connector": __version__, "build": build_identity(), "hosts": hosts,
+                     "contract_version": CONTRACT_VERSION, "connector": __version__, "build": build,
+                     "connector_update": connector_update_status(build), "hosts": hosts,
                      "frontend": {"digest": _dashboard_snapshot()[1]},
                      "artifacts": {"limits": self.daemon.artifact_store.settings.limits(),
                                    "capture": {"manual_single_file": True, "managed_single_file": True, "snapshot": False,
