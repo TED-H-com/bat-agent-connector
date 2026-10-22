@@ -30,7 +30,7 @@ def affects_python(path: str) -> bool:
         or name in PYTHON_CONFIG
         or (name.startswith("requirements") and name.endswith(".txt"))
         # Include fixture data, shard weights/plugins and scripts that invoke Python.
-        or path.startswith(("tests/", "scripts/", "desktop/scripts/", ".github/workflows/"))
+        or path.startswith(("tests/", "scripts/", "desktop/scripts/", ".github/workflows/", ".github/actions/"))
     )
 
 
