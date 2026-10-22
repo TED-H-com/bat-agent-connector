@@ -280,9 +280,9 @@ try {
     Stop-Owned $reopened
     # Both state directories were absent before this fixture. The external-client
     # phase persisted a role, so reset the entire owned profile for a clean launch.
-    foreach ($path in @($configRoot, $dataRoot)) {
-        if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
-    }
+    $profileDeadline = [DateTime]::UtcNow.AddSeconds(15)
+    $receipt.clean_profile_removal = [ordered]@{attempts=0; retries=0}
+    foreach ($path in @($configRoot, $dataRoot)) { Remove-FixturePath $path $profileDeadline $receipt.clean_profile_removal }
     $app = Start-Dashboard $true
     Wait-Until { @([DashboardWindows]::Find($app.Id)).Count -eq 1 } 'Managed first-run window missing'
     $window = @([DashboardWindows]::Find($app.Id))[0]
