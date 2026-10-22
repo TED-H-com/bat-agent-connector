@@ -25,6 +25,14 @@ const git = (...args) => execFileSync('git', args, {cwd: root, encoding: 'utf8'}
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const lockfile = 'desktop/package-lock.json';
 const lockfileDigestName = 'without_root_version';
+// tests/test_product_site_check.py keeps this set identical to the Python checker.
+const pinnedPaths = [
+  'desktop/src/',
+  'desktop/tests/demo/',
+  'desktop/tests/conversation-fixture.ts',
+  'src/bat_agent_connector/dashboard/',
+];
+const workingTreeInputs = ['scripts/capture_site.mjs', lockfile];
 export function lockfileDigest(bytes) {
   let value;
   try {
@@ -187,8 +195,8 @@ async function prepare(page, scenario, locale) {
 
 if (path.resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
   const sourceCommit = git('rev-parse', source);
-  // Documentation commits may rerun the capture, but product and demo bytes must stay pinned.
-  git('diff', '--exit-code', sourceCommit, '--', 'desktop/src', 'desktop/tests/demo', 'src/bat_agent_connector/dashboard');
+  // Product, demo and conversation fixture bytes must stay pinned for a recapture.
+  git('diff', '--exit-code', sourceCommit, '--', ...pinnedPaths);
   await mkdir(output, {recursive: true});
   if (review) await mkdir(review, {recursive: true});
   const server = createServer(async (request, response) => {
@@ -207,7 +215,7 @@ if (path.resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
   let browser;
   try {
     browser = await chromium.launch({args: ['--disable-dev-shm-usage']});
-    const images = [], sources = new Set(['scripts/capture_site.mjs', 'desktop/package-lock.json', ...assets.map(file => 'src/bat_agent_connector/dashboard/' + file)]);
+    const images = [], sources = new Set([...workingTreeInputs, ...assets.map(file => 'src/bat_agent_connector/dashboard/' + file)]);
     async function include(file) {
       if (sources.has(file)) return;
       sources.add(file);
@@ -218,6 +226,10 @@ if (path.resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
     }
     const fixtures = ['desktop/tests/demo/index.ts', 'desktop/tests/conversation-fixture.ts'];
     for (const fixture of fixtures) await include(fixture);
+    for (const file of sources) {
+      assert.ok(workingTreeInputs.includes(file) || pinnedPaths.some(pinned => pinned.endsWith('/') ? file.startsWith(pinned) : file === pinned),
+        `Capture source is neither pinned nor an allowed working-tree input: ${file}`);
+    }
     for (const [language, locale] of [['en', 'en-US'], ['zh', 'zh-TW']]) for (const scenario of [...scenes, ...(review ? reviewScenes : [])]) {
       const responsive = [];
       // The work inspector scrolls independently; give its delivery/attempts room.
