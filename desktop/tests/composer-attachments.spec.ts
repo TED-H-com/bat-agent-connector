@@ -387,10 +387,11 @@ for (const locale of ['en-US', 'zh-TW']) {
     const context = await browser.newContext({locale}), page = await context.newPage();
     const state = await publishedFixture(page, true, {dispatch: true, bindings: [selected], failNativeUpload: true});
     try {
+      await page.clock.install({time: new Date('2026-10-22T12:00:00Z')});
       await page.goto('/dashboard/#/dispatch/' + dispatchProject);
       await expect.poll(() => state.reads.some(path => path.startsWith('/events'))).toBe(true);
       // Pause the periodic refresh so this checks the failure path's own readback.
-      await page.clock.install();
+      await page.clock.pauseAt(new Date('2026-10-22T12:05:00Z'));
       await pasteFile(page, '[data-published-start] textarea', 'screenshot.png', 'image/png', pngBuffer);
       await expect(form(page).locator('.attachments [data-error-summary]')).toHaveText('Native upload interrupted');
       await expect(form(page).locator('.native-transfers')).toContainText(locale === 'zh-TW'

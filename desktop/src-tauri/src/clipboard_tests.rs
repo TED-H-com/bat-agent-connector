@@ -251,3 +251,27 @@ fn clipboard_truncated_png_is_invalid_image() {
         assert_eq!(result.unwrap_err().reason, "invalid_image");
     }
 }
+
+#[test]
+fn clipboard_window_read_returns_owned_raw_bytes_without_processing_or_lock() {
+    let (_root, _bridge, files) = fixture();
+    struct RawReader(Arc<Files>);
+    impl ClipboardReader for RawReader {
+        fn read(&mut self) -> Result<ClipboardImage, ClipboardError> {
+            // The short lease lock must be released before calling the OS reader.
+            assert!(self.0.state.try_lock().unwrap().records.is_empty());
+            assert_eq!(self.0.cache_bytes().unwrap(), 0);
+            // Deliberately not a decodable image: a window read must only copy raw bytes.
+            Ok(ClipboardImage::Png(vec![1, 2, 3]))
+        }
+    }
+    files.paste_arm("draft".into(), true).unwrap();
+    let raw = files
+        .read_clipboard("draft", true, &mut RawReader(files.clone()))
+        .unwrap();
+    fn owned_and_send<T: Send + 'static>(_: &T) {}
+    owned_and_send(&raw);
+    assert!(matches!(raw.image, ClipboardImage::Png(bytes) if bytes == [1, 2, 3]));
+    assert!(files.state.try_lock().unwrap().records.is_empty());
+    assert_eq!(files.cache_bytes().unwrap(), 0);
+}
