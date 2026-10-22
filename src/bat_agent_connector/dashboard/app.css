@@ -2002,7 +2002,7 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .central-service-state { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .live { display: inline-flex; align-items: center; gap: var(--space-1); margin: 0; width: auto; text-decoration: none; font-size: var(--fs-caption); color: var(--text-2); background: var(--surface-2); padding: 2px var(--space-2); border-radius: var(--r-pill); white-space: nowrap; }
 .central-service-status .live { min-width: 0; }
-.health-summary { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-4); background: var(--surface); border-bottom: 1px solid var(--line); font-size: var(--fs-caption); }
+.health-summary { position: sticky; top: 48px; z-index: 29; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-4); background: var(--surface); border-bottom: 1px solid var(--line); font-size: var(--fs-caption); }
 .health-summary[hidden] { display: none; }
 .health-selected { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; overflow-wrap: anywhere; }
 .health-facets, .health-last-value { color: var(--text-2); }
@@ -2025,8 +2025,8 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .shell-workspace-block > .ui-pill { justify-self: start; }
 .shell-workspace-block .ui-menu-panel { left: 0; right: auto; }
 .shell-nav-label { margin: var(--space-3) var(--space-2) var(--space-2); color: var(--text-3); font-size: var(--fs-caption); font-weight: 500; }
-body.has-workspace #workspace { display: grid; grid-template-columns: var(--workspace-sidebar-width, 248px) minmax(0, 1fr); min-height: calc(100dvh - 48px); }
-body.has-workspace .workspace-nav { display: flex; position: sticky; top: 48px; height: calc(100dvh - 48px); min-width: 0; width: auto; padding: var(--space-4) var(--space-3); overflow-y: auto; background: var(--surface); border-right: 1px solid var(--line); gap: var(--space-2); }
+body.has-workspace #workspace { display: grid; grid-template-columns: var(--workspace-sidebar-width, 248px) minmax(0, 1fr); min-height: calc(100dvh - var(--shell-header-height, 48px)); }
+body.has-workspace .workspace-nav { display: flex; position: sticky; top: var(--shell-header-height, 48px); height: calc(100dvh - var(--shell-header-height, 48px)); min-width: 0; width: auto; padding: var(--space-4) var(--space-3); overflow-y: auto; background: var(--surface); border-right: 1px solid var(--line); gap: var(--space-2); }
 .workspace-nav .workspace-tree-scroll { flex: 1 0 auto; overflow: visible; }
 .workspace-search { position: relative; }
 .workspace-search > .ui-icon { position: absolute; left: var(--space-2); top: 50%; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
@@ -2043,7 +2043,7 @@ body.has-workspace .workspace-nav { display: flex; position: sticky; top: 48px; 
 .shell-all-projects { display: block; padding: var(--space-2); font-size: var(--fs-small); text-decoration: none; color: var(--text-2); }
 body.has-workspace main { min-width: 0; max-width: 1600px; width: 100%; margin: 0 auto; padding: var(--space-6); }
 body.pm-mode #main { padding: 0; }
-.pm-shell { display: block; min-height: calc(100dvh - 48px); }
+.pm-shell { display: block; min-height: calc(100dvh - var(--shell-header-height, 48px)); }
 .pm-main { padding: var(--space-6); min-width: 0; }
 .pm-shell > aside { display: none; }
 .pm-main > .ui-page-header { border: 0; }
@@ -2051,14 +2051,14 @@ body.pm-mode #main { padding: 0; }
 .pm-thread-link { display: flex; justify-content: space-between; gap: var(--space-2); padding: var(--space-3); border-bottom: 1px solid var(--line); color: var(--text); text-decoration: none; }
 .pm-thread-link:hover { background: var(--surface-2); }
 .pm-thread-link small { flex: none; }
-.shell-scrim { position: fixed; inset: 48px 0 0; background: var(--scrim); z-index: 35; }
+.shell-scrim { position: fixed; inset: var(--shell-header-height, 48px) 0 0; background: var(--scrim); z-index: 35; }
 #workspace-menu { display: none; }
 @media (min-width: 1000px) and (max-width: 1199px) { body.has-workspace #workspace { grid-template-columns: var(--workspace-sidebar-width, 232px) minmax(0, 1fr); } }
 @media (max-width: 999px) {
   .top { padding: 0 var(--space-3); gap: var(--space-2); }
   .top .brand, .shell-pending, .shell-top-actions > .ui-icon-button, .shell-breadcrumb-divider, .shell-crumb-view { display: none; }
   body.has-workspace #workspace { display: block; }
-  body.has-workspace .workspace-nav { display: none; position: fixed; inset: 48px auto 0 0; height: calc(100dvh - 48px); max-height: none; width: min(320px, calc(100vw - 44px)); z-index: 40; box-shadow: var(--shadow-overlay); }
+  body.has-workspace .workspace-nav { display: none; position: fixed; inset: var(--shell-header-height, 48px) auto 0 0; height: calc(100dvh - var(--shell-header-height, 48px)); max-height: none; width: min(320px, calc(100vw - 44px)); z-index: 40; box-shadow: var(--shadow-overlay); }
   body.workspace-nav-open .workspace-nav { display: flex; }
   .shell-drawer-open { overflow: hidden; }
   #workspace-menu, .pm-mode #workspace-menu { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; border: 0; background: transparent; }
@@ -2900,7 +2900,7 @@ body.pm-mode #main { padding: 0; }
 }
 /* Session workspace. Scoped so other views keep their own layout. */
 .session-workspace { min-width: 0; }
-main.session-view { display: flex; flex-direction: column; height: calc(100dvh - 48px); overflow: auto; }
+main.session-view { display: flex; flex-direction: column; height: calc(100dvh - var(--shell-header-height, 48px)); overflow: auto; }
 main.session-view > .workspace-session-heading { flex: none; }
 main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-items: stretch; }
 .session-workspace .workspace-conversation { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }

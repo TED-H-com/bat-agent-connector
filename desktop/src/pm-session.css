@@ -1,6 +1,6 @@
 /* Session workspace. Scoped so other views keep their own layout. */
 .session-workspace { min-width: 0; }
-main.session-view { display: flex; flex-direction: column; height: calc(100dvh - 48px); overflow: auto; }
+main.session-view { display: flex; flex-direction: column; height: calc(100dvh - var(--shell-header-height, 48px)); overflow: auto; }
 main.session-view > .workspace-session-heading { flex: none; }
 main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-items: stretch; }
 .session-workspace .workspace-conversation { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
