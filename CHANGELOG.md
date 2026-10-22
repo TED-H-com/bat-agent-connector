@@ -2,19 +2,174 @@
 
 ## Next release (unreleased)
 
+- Import and keep a project board synchronized with GitHub issues and pull requests through explicit
+  repository binding and managed polling. GitHub receives read requests only; source closure stays
+  separate from human completion and PM acceptance. Failed or incomplete traversals preserve the
+  previous cards and recoverable import choices. (#322)
+
+- Keep managed browser credentials on the cookie/CSRF path, refuse their use as API or RPC bearer
+  tokens, and pause refused bearer retries until explicit connection recovery. An action-specific
+  permission refusal does not disconnect a valid reader; saved drafts and pending operation keys
+  remain scoped to the original connection. (#383)
+
+- Offer local copying of ordinary drafts from earlier Connector addresses without automatically
+  migrating them or sending requests. Possibly sent requests retain separate warnings and original
+  identities; identity verification gates recovery, while a verified namespace can still offer local
+  copies during a transport outage. (#384)
+
+- Show one scoped health projection across the header and Settings using existing observations,
+  their age and producer deadlines. Unknown, stale, unconfigured and refused states remain distinct
+  from offline. Identity changes withdraw unproven facts, and the health summary preserves focus and
+  reachable conversation controls. (#385)
+
+- Simplify first-run and everyday navigation in English and Traditional Chinese. Host and Fleet
+  diagnosis follow current native route evidence, preserve failure details and withdraw stale
+  readiness rather than repeating an earlier successful check. (#319, #323)
+
+- Keep drafts, selections and operation keys tied to verified Connector identity across port
+  changes, relaunches and same-identity cursor resets. Two independent services retain separate
+  storage; ambiguous legacy scopes are preserved instead of guessed or consumed again. (#318, #333,
+  #336)
+
+- Retain the original PM retry target while an overlapping source refresh moves focus, so an
+  explicit recovery click still applies to its original request. (#328)
+
+- Use one Connector status decision across header, Settings and connection controls, preserving
+  transport, service and source-refresh reasons and the last successful poll time as separate
+  evidence. (#330, #343)
+
+- Explain client write refusals consistently in Work, PM and session forms, without repeating error
+  announcements or treating a source refresh failure as a new operation error. Existing drafts and
+  recovery targets remain available under their original gates. (#332, #376, #379)
+
+- Show the original follow-up admission reason from one decision and preserve the Work draft while
+  admission is rechecked. (#337)
+
+- Keep past setup verification receipts distinct from a host's current readiness, so saved success
+  does not imply that a host is ready now. (#338)
+
+- Retain diagnostics source reasons and observation times in both the on-screen report and its
+  export. (#339)
+
+- Explain PM availability and each profile state using capability/read evidence and the workspace's
+  saved effective runtime route. Previous verification and current readiness remain separate, with
+  evidence times shown once. (#340, #341, #346)
+
+- Share observed session/runtime and version facts across Work, Resources, Results and diagnostics.
+  Unread or partially unknown builds remain explicit, and revisions recorded by past PM runs are
+  labelled as historical facts. (#342, #362)
+
+- Reconcile concurrent private lease-file creation without claiming ownership from an unproven path.
+  (#344)
+
+- Refuse startup when a journal records a newer unsupported data step, before schema changes or
+  checkpointing its WAL, and carry the bounded diagnostic through managed startup. (#345)
+
+- Preserve foreground and selected-Attempt continuity while keeping an explicit Send immediately
+  after IME composition distinct from implicit keyboard submission. (#348)
+
+- Report the loaded build identity from both MCP entry points, independently of files installed
+  later. (#350)
+
+- Share canonical workflow-version validation between desktop updates and agent-skill generation,
+  accepting canonical CRLF checkout endings and rejecting inconsistent declarations. (#347)
+
+- Identify the frontend bytes loaded by the browser separately from the Connector build, and
+  describe mismatches without inventing release ordering. (#352)
+
+- Add read-only rollback compatibility preview for an explicitly selected or default journal.
+  Missing declarations and unversioned credentials remain unknown; preview does not activate a
+  package or change rollback policy. (#354)
+
+- Use one layout decision per Workbench page so preview-layout toggles preserve the selected view
+  and local state. (#353)
+
+- Keep lost acknowledgements and operation outcomes separate from source-read readiness, preserving
+  the original request and explaining explicit recovery clicks blocked by changing gates. (#356,
+  #357, #364)
+
+- Embed verifiable source provenance in wheel/sdist builds and distinguish a managed launcher's
+  bundled build from the service already running, including same-version builds. Conflicting or
+  missing provenance stays unknown; editable installs continue importing source. (#351, #355)
+
+- Provide offline release-component identity checks and candidate capability inventories bound to an
+  exact committed source. Partial receipts, unchecked claims and unavailable native/demo evidence
+  remain explicit and do not certify release acceptance. (#358, #368)
+
+- Reuse completed PM/GitHub observation proofs within verified journal snapshots to reduce repeated
+  source traversal while retaining source invalidation and permission checks; failed schema
+  initialization rolls back. (#331)
+
+- Disable automatic Git maintenance in installer/updater subprocesses while uv copies Git databases,
+  avoiding background repack races without changing the user's Git configuration. (#366)
+
+- Return the same shared Work/Attempt/Result read facts through HTTP and MCP while keeping personal
+  markers and principal-specific permissions distinct. (#371)
+
+- Publish a managed owner endpoint only while its listener is bound, refuse unserved origins and
+  join pending requests before closing the journal. (#372)
+
+- Renew interrupted and first-mount source reads after returning to the foreground, retiring late
+  replies from the previous view without losing drafts or reusing stale read results. (#370, #378)
+
+- Avoid rewriting unchanged managed connection configuration or identical updater policy,
+  installation and schedule state. Reconciliation still validates the current installation and
+  records real changes. (#375, #377, #382)
+
+- Report an unowned or writable entrypoint directory by its specific installer diagnostic and
+  remediation hint rather than the generic verification-command failure. (#381)
+
+- Documentation only: reconcile published delivery/source records and distinguish recovered test
+  results from original failures. (#317)
+
+- Documentation/site tooling only: refresh the published gallery and release links against the
+  0.2.12 source, preserving its screenshot pin independently of later candidate builds. (#320)
+
+- Specification only: document the approved shared add-machine and first-run responsibility
+  contract; this does not implement the proposed add-machine flow. (#324)
+
+- Tests only: synchronize Work route changes with event checkpoints and make continuation-brief
+  initial-response ordering deterministic. (#321, #326)
+
+- Tests only: keep Playwright screenshots and desktop integration scratch on disk with per-test
+  output isolation. (#325, #329)
+
+- Tests only: await durable maintenance/repair progress and bounded publication-seed readiness, with
+  explicit interruption handling and unchanged product deadlines. (#327, #367, #369)
+
+- Tests only: exercise accepted instructions across client closure/restart, preserve Work and
+  receipts through upgrade/rollback, and execute the selected previous package after plain rollback.
+  (#335, #349, #373)
+
+- Tests only: keep current shared fixtures importable by older publication seeds and verify
+  selected-Attempt identity across a real successor start. (#359, #361)
+
+- Tests/CI only: cover external closure without PM acceptance, reading an existing session after
+  managed setup, and event-page continuity across foreground return barriers. (#365, #374, #380)
+
+- CI/tooling only: derive desktop workflow inputs from fixture dependencies, split browser UI
+  coverage into five shards and bound apt mirror waits while retaining retries and test budgets.
+  (#363, #387, #388)
+
+- Tests only: exclude directory access times from installer no-change assertions while retaining
+  content, identity, mode and modification evidence. (#386)
+
+- Tests only: treat a concurrently deleted Windows registration key as absent in installed-smoke
+  inspection. (#389)
+
 - Checkpoint preparation preserves existing staging files, directories and links.
   A destination found during cloning keeps both paths for inspection. Refusal
   codes survive login-shell notices and report the kept path, source-session link
   and recovery guidance in English and Traditional Chinese, including Cleanup's
   existing review of creation evidence. Existing broken destination links fail
-  before cloning, and clones consistently use the `origin` remote name.
+  before cloning, and clones consistently use the `origin` remote name (#308).
 
-- Recover a dead local managed Connector in Dashboard without restarting the app, retaining the installation identity and original operation keys. Windows background Connector and native Fleet supervisor launches request job breakaway when permitted, with a bounded lifetime warning when the launching job prevents it. Recovery failures and identity changes have English and zh-TW status messages.
+- Recover a dead local managed Connector in Dashboard without restarting the app, retaining the installation identity and original operation keys. Windows background Connector and native Fleet supervisor launches request job breakaway when permitted, with a bounded lifetime warning when the launching job prevents it. Recovery failures and identity changes have English and zh-TW status messages (#316).
 
 - Fleet wakes uniquely identified idle Tailscale peers by their configured IP before
   declaring a route unavailable, with a separate bounded background wake window,
   a capped cooldown and localized
-  connection status in English and Traditional Chinese.
+  connection status in English and Traditional Chinese (#315).
 
 - Fix Windows SSH tunnel launches failing with OWNER_UNPROVEN by constructing native paths and comparing executable paths independently of separator spelling and ASCII case.
 
