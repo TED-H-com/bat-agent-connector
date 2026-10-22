@@ -21,6 +21,18 @@ for (const locale of ['en', 'zh-TW']) {
     await expect(page.locator('[data-managed-lifecycle]')).toHaveText(zh ? '背景服務運作中' : 'Background service running');
     expect(fixture.managedCalls.filter(action => ['stop', 'start'].includes(action))).toEqual(['stop', 'start']);
   });
+  test(`managed lifecycle serial contention on Start ${locale}`, async ({page}) => {
+    const fixture = await managedSetupFixture(page, true, locale);
+    fixture.managed.lifecycle = {state: 'stopped', requested_at: 1800000000, stopped_at: 1800000001};
+    fixture.startBusy = true;
+    await page.goto('/dashboard/#/settings'); await openSetupAdvanced(page);
+    await page.getByRole('button', {name: start, exact: true}).click();
+    const service = page.locator('[data-managed-service]');
+    await expect(service).toContainText(zh ? '另一個背景服務操作仍在進行中，請等它完成後再試。' : 'Another background service action is still running. Try again when it finishes.');
+    await expect(service).not.toContainText(zh ? '背景服務目前忙碌，請先完成或核對目前工作，再停止服務。' : 'The background service is busy. Finish or reconcile current work before stopping.');
+    await expect(page.locator('[data-managed-lifecycle]')).toHaveText(zh ? '背景服務已停止' : 'Background service stopped');
+    expect(fixture.managedCalls.filter(action => action === 'start')).toEqual(['start']);
+  });
   for (const kind of ['busy', 'unknown_busy', 'pending', 'client']) test(`managed lifecycle ${kind} ${locale}`, async ({page}) => {
     const fixture = await managedSetupFixture(page, true, locale);
     if (kind === 'client') fixture.managed = managedStatusFixture(false);
