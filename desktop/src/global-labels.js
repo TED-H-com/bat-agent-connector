@@ -39,6 +39,8 @@ const ACTIONS = {
   'work_item.link': 'action_work_item_link',
   'work_item.read': 'action_work_item_read',
   'setup.host': 'action_setup_host',
+  'setup.connection.apply': 'action_setup_connection',
+  'connection.reference.apply': 'action_connection_reference',
   'setup.repository': 'action_setup_repository',
   'setup.verification': 'action_setup_verification',
   'preferences.models.update': 'action_models_update',
