@@ -873,6 +873,7 @@ mod tests {
             let snapshot = serde_json::from_value(case["snapshot"].clone()).unwrap();
             let mut result = fixture()["result"].clone();
             result["selection"]["revision"] = case["selection_revision"].clone();
+            result["selection"]["connections"] = case["connections"].clone();
             result["readiness"] =
                 native_readiness(Some(&snapshot), case["now"].as_u64().unwrap()).unwrap();
             output[name] = sanitize_result(&result, "status").unwrap();
@@ -880,8 +881,17 @@ mod tests {
         output
     }
     #[test]
-    fn stop_evidence_survives_native_projection_and_sanitizer() {
-        for (name, status) in stop_cases().as_object().unwrap() {
+    fn stop_aged_evidence_survives_native_projection_and_sanitizer() {
+        assert_stop_evidence("aged");
+    }
+    #[test]
+    fn stop_deselected_evidence_survives_native_projection_and_sanitizer() {
+        assert_stop_evidence("deselected");
+    }
+    fn assert_stop_evidence(name: &str) {
+        let cases = stop_cases();
+        let status = &cases[name];
+        {
             let row = status["readiness"]["hosts"]
                 .as_array()
                 .unwrap()
@@ -937,6 +947,7 @@ mod tests {
     #[test]
     fn requirement_allowlist_rejects_anything_outside_the_closed_vocabulary() {
         for value in [
+            Value::Null,
             json!("relay"),
             json!("DIRECT_PEER_UNKNOWN private output"),
             json!("constructor"),

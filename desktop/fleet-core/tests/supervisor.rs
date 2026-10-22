@@ -620,6 +620,8 @@ async fn unresolved_stop_fixture(deselect: bool) -> serde_json::Value {
     }
     let stops = s.lock().unwrap().stops.clone();
     assert!(!stops.is_empty());
+    let stop_receipt_path = dir.join("fleet-tunnel-stop-intents/node-1.json");
+    let stop_receipt = std::fs::read(&stop_receipt_path).unwrap();
     let bytes = std::fs::read(dir.join("fleet-desktop-status.json")).unwrap();
     let now = if deselect { 1300 } else { 62001 };
     let parsed = Status::parse(&bytes, &f.load(), r.epoch(), now).unwrap();
@@ -642,17 +644,24 @@ async fn unresolved_stop_fixture(deselect: bool) -> serde_json::Value {
     assert_eq!(s.lock().unwrap().launches, launches);
     assert_eq!(s.lock().unwrap().stops, stops);
     assert_eq!(std::fs::read(receipt_path).unwrap(), receipt);
+    assert_eq!(std::fs::read(stop_receipt_path).unwrap(), stop_receipt);
     assert_eq!(
         std::fs::read(dir.join("fleet-monitor.json")).unwrap(),
         monitor
     );
+    let selection_bytes = std::fs::read(dir.join("fleet-client.json")).unwrap();
+    assert_eq!(
+        parsed.applied_selection_revision != bat_fleet_core::digest(&selection_bytes),
+        deselect
+    );
+    let selection: serde_json::Value = serde_json::from_slice(&selection_bytes).unwrap();
     let mut snapshot = serde_json::to_value(parsed).unwrap();
     // Only nondeterministic/native binding metadata is de-identified. Rows are
     // the actual file producer -> parse -> re-read result, never invented states.
     snapshot["monitor_epoch"] = json!("a".repeat(32));
     snapshot["configuration_binding"] = json!("c".repeat(64));
     snapshot["applied_selection_revision"] = json!("d".repeat(64));
-    json!({"now":now, "snapshot":snapshot, "selection_revision":
+    json!({"now":now, "snapshot":snapshot, "connections":selection["connections"], "selection_revision":
         if deselect { "e".repeat(64) } else { "d".repeat(64) }})
 }
 #[tokio::test]
@@ -680,6 +689,55 @@ async fn assert_unresolved_stop(deselect: bool) {
             assert_eq!(row["stale"], true);
         }
     }
+}
+#[tokio::test]
+async fn unresolved_stop_rows_match_native_fixture() {
+    let expected: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/fleet-stop.json")).unwrap();
+    assert_eq!(
+        json!({"aged":unresolved_stop_fixture(false).await, "deselected":unresolved_stop_fixture(true).await}),
+        expected
+    );
+}
+#[tokio::test]
+async fn deselected_stop_evidence_clears_only_after_positive_death() {
+    let (f, s, mut r) = fixture();
+    advance(&mut r, 1000).await;
+    s.lock().unwrap().unknown_stop = true;
+    let dir = f.0.join("BetterAgentTerminal");
+    let receipt = dir.join("fleet-tunnel-owners/node-1.json");
+    let owned = TunnelRecord::parse(&std::fs::read(&receipt).unwrap(), None).unwrap();
+    let selection = dir.join("fleet-client.json");
+    let mut doc: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&selection).unwrap()).unwrap();
+    doc["connections"] = json!(["connector"]);
+    std::fs::write(selection, serde_json::to_vec(&doc).unwrap()).unwrap();
+    let pending = r.tick(1200).await.unwrap();
+    assert_eq!(
+        pending
+            .entries
+            .iter()
+            .find(|e| e.name == "node-1")
+            .unwrap()
+            .code
+            .as_deref(),
+        Some("STOP_UNCONFIRMED")
+    );
+    let stops = s.lock().unwrap().stops.clone();
+    let launches = s.lock().unwrap().launches.clone();
+    s.lock().unwrap().processes.remove(&owned.process.pid);
+    let reconciled = r.tick(1300).await.unwrap();
+    let row = reconciled
+        .entries
+        .iter()
+        .find(|e| e.name == "node-1")
+        .unwrap();
+    assert_eq!(row.level, "off");
+    assert_eq!(row.code, None);
+    assert!(!receipt.exists());
+    assert!(!dir.join("fleet-tunnel-stop-intents/node-1.json").exists());
+    assert_eq!(s.lock().unwrap().stops, stops);
+    assert_eq!(s.lock().unwrap().launches, launches);
 }
 #[tokio::test]
 #[ignore = "explicit fixture regeneration only"]
