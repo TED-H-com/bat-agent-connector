@@ -87,6 +87,11 @@ Checking and unknown diagnoses establish no value even with a recent probe
 timestamp, so they always use Unknown and Checking; stale diagnoses retain the
 observation age.
 
+Mounted Fleet status and overview painters subscribe to the existing
+`health-display-tick` event and remove that listener on unmount. They repaint
+only the last snapshot, including while a native read is pending; ticks add no
+read, IPC call, timer or retry.
+
 The 60-second display rule uses the same `observed_at` and observation window as
 the native producer: `desktop/fleet-core/src/supervisor_status.rs` marks a selected ready
 row `PROBE_STALE` after 60 seconds. Both Fleet views (`fleet.js` and
@@ -124,30 +129,13 @@ The picker renews through its existing `read()` and contract/workspace/profile/
 revision/digest/ticket checks, following the delegated renewal rule below. One
 scheduled wakeup at the earliest declared deadline re-reads that same readiness
 path once per producer deadline. No renewal starts while hidden; returning to the
-page checks that same deadline. Every validated renewal response is stored and
-painted, even when its deadline is unchanged. With an unchanged deadline,
-`host_unreachable` keeps the shared unreachable wording and the newest attempt's
-age without a read error;
-other declared states show `health_read_failed` with `OBSERVATION_NOT_RENEWED`.
-An actual failed read preserves the last response and shows `health_read_failed`
-with the read's code for every reason, including `host_unreachable`. Each attempted
-deadline remains spent, with no retry on clock ticks or visibility changes.
-A later normal read with a new deadline permits renewal again. The existing shell
-display clock only repaints ages; it cannot
-start reads. Selection changes invalidate pending renewal tickets, disposal clears
+page checks that same deadline. Renewal uses the shared per-reason outcome below,
+preserving each validated response and retiring each attempted deadline. The
+existing shell display clock only repaints ages; it cannot start reads. Selection changes invalidate pending renewal tickets, disposal clears
 the wakeup/listeners, and renewal patches mounted content without changing the
 selection, focus, scroll or open disclosure. No new endpoint, probe, authorization,
 DDL, data step or action admission rule is involved.
 
-The header still shows Checking after an unchanged renewal of a non-unreachable
-fact; that known difference remains an orchestrator-owned follow-up and is
-unchanged here.
-
-Fleet's existing status/overview renders consume the projection; updating mounted
-rows while a native read is pending still requires wiring the existing `app.js`
-display clock to the Fleet painter. `fleetHealth(row, {snapshot, readable, kind,
-now})` is the tested pure entry point; the remaining call site is `app.js`'s
-`tickHealth`. This change does not add another timer or alter those mounts.
 Workbench, Diagnostics and Result sources still need adoption of this
 freshness/compact contract. Existing source-specific facets are not replaced by
 a global boolean. Native and backend lifecycle behavior is unchanged here.
@@ -170,10 +158,26 @@ Timestamp-only refreshes deliberately emit no event. Therefore the visible clien
 renews an expired observation with one GET of the same already-used Connector source
 path (including that page's scope/cursor), once per producer deadline. The client retains the successful GET callback and
 replays that exact request instead of synthesizing a route. It reads cached
-Inventory, never BAT, and adds no endpoint or probe. A failed/unchanged renewal does
-not retry on clock ticks; it retains the last value, age and its own failure reason.
-A later normal source read with a new deadline permits the next renewal. While the
-page is hidden no renewal starts. Older producers without deadlines retain the 60-second
+Inventory, never BAT, and adds no endpoint or probe.
+
+For Work, the header and Fleet, `displayFact` / `healthLabel` in
+`desktop/src/health-fact.js` preserve each value, observation age and producer
+reason. Work and the header also call that module's `healthReadError` for
+validated unchanged-deadline renewal outcomes: `host_unreachable` keeps its
+unreachable wording and newest attempt age without a read error; every other
+declared state shows `health_read_failed` with `OBSERVATION_NOT_RENEWED`.
+For these Connector renewals, an actual failed read overrides every reason with
+that read's code. The header
+stores the successful response and a source-path deadline cutoff alongside
+`readErrors`: each host or session activity/connection fact whose deadline is
+still at or before that cutoff is not renewed. Session axes have no host-reason
+exception. A normal read advancing a fact's deadline clears its outcome;
+bootstrap, namespace changes and inventory withdrawal discard the outcomes.
+Fleet continues to use its existing native status/overview reads and diagnosis;
+it has no Connector deadline renewal or synthetic not-renewed outcome.
+Failed or unchanged Connector renewals do not retry on ticks or visibility
+changes. A later normal source read with a new deadline permits the next renewal.
+While the page is hidden no renewal starts. Older producers without deadlines retain the 60-second
 display fallback. No additional validity delivery mechanism exists in steady state.
 
 `order`, `include_gone`, `limit` and `cursor` do not filter. A chain beginning without

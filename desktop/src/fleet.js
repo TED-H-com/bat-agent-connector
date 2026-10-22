@@ -158,10 +158,11 @@ export async function mountFleet(main, {h, t, onStatus = () => {}}) {
         }
       }
     } else {
+      document.addEventListener('health-display-tick', render);
       await read();
       const poll = async () => {if (!alive()) return; await read(); if (alive()) timer = setTimeout(poll, 5000);};
       timer = setTimeout(poll, 5000);
     }
   } catch { message.textContent = t("fleet_unavailable"); }
-  return () => {disposed = true; clearTimeout(timer); nativeCleanup?.(); bootstrapCleanup?.(); panel.remove();};
+  return () => {disposed = true; clearTimeout(timer); document.removeEventListener('health-display-tick', render); nativeCleanup?.(); bootstrapCleanup?.(); panel.remove();};
 }
