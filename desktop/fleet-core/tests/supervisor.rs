@@ -33,6 +33,7 @@ struct State {
     stops: Vec<u32>,
     next_pid: u32,
     unknown_stop: bool,
+    unknown_processes: HashSet<u32>,
     unknown_launch: HashSet<String>,
     installation_changed_on_launch: bool,
     hold: HashSet<String>,
@@ -69,9 +70,11 @@ impl Observation for FakeEffects {
         Ok(login())
     }
     fn state(&self, pid: u32) -> ProcessState {
-        self.0
-            .lock()
-            .unwrap()
+        let state = self.0.lock().unwrap();
+        if state.unknown_processes.contains(&pid) {
+            return ProcessState::Unknown;
+        }
+        state
             .processes
             .get(&pid)
             .map(|p| ProcessState::Live {
@@ -1394,4 +1397,186 @@ async fn wake_progress_publishes_pending_and_completion_reselects_without_fiftee
         .launches
         .contains(&"node-1".to_owned()));
     runtime.shutdown(2503).await.unwrap();
+}
+
+#[tokio::test]
+async fn chosen_route_is_published_without_private_transport_inputs() {
+    let (_f, _shared, mut runtime) = fixture();
+    let status = advance(&mut runtime, 1000).await;
+    let row =
+        serde_json::to_value(status.entries.iter().find(|r| r.name == "node-1").unwrap()).unwrap();
+    assert_eq!(row["route"]["kind"], "cf");
+    assert!(row["route"]["generation"].as_u64().unwrap() > 0);
+    let at = row["route"]["observed_at"].as_str().unwrap();
+    assert!(at.starts_with("1970-01-01T00:00:01"));
+    assert_eq!(row["route"].as_object().unwrap().len(), 3);
+    runtime.shutdown(2000).await.unwrap();
+}
+
+#[tokio::test]
+async fn route_confirmation_renews_only_use_and_clears_on_generation_and_deselection() {
+    let (f, shared, mut runtime) = fixture();
+    let first = advance(&mut runtime, 1000).await;
+    let route = serde_json::to_value(&first.entries[0]).unwrap()["route"].clone();
+    assert!(!route.is_null());
+    // The existing ownership check confirms use independently of readiness probes.
+    let renewed = advance(&mut runtime, 70_000).await;
+    assert_eq!(renewed.entries[0].level, "ready");
+    let confirmed = renewed.entries[0].route.as_ref().unwrap();
+    assert_eq!(confirmed.observed_at, "1970-01-01T00:01:10.007Z");
+    assert_eq!(
+        serde_json::to_value(confirmed).unwrap()["kind"],
+        route["kind"]
+    );
+    assert_eq!(
+        serde_json::to_value(confirmed).unwrap()["generation"],
+        route["generation"]
+    );
+    shared
+        .lock()
+        .unwrap()
+        .tokens
+        .insert("node-1".into(), "replacement".into());
+    let changed = advance(&mut runtime, 71_000).await;
+    assert!(changed
+        .entries
+        .iter()
+        .find(|r| r.name == "node-1")
+        .unwrap()
+        .route
+        .is_none());
+    let selection = f.0.join("BetterAgentTerminal/fleet-client.json");
+    std::fs::write(
+        selection,
+        br#"{"version":1,"connections":["connector"],"profiles":[],"dashboard":false}"#,
+    )
+    .unwrap();
+    let off = runtime.tick(72_000).await.unwrap();
+    assert!(off.entries.iter().all(|r| r.route.is_none()));
+    let shutdown = runtime.shutdown(73_000).await.unwrap();
+    assert!(shutdown.entries.iter().all(|r| r.route.is_none()));
+}
+
+#[tokio::test]
+async fn replacement_route_never_retains_the_previous_choices_time_or_generation() {
+    let (_f, shared, mut runtime) = fixture();
+    let first = advance(&mut runtime, 1000).await;
+    let before = first
+        .entries
+        .iter()
+        .find(|r| r.name == "node-1")
+        .unwrap()
+        .route
+        .as_ref()
+        .unwrap();
+    shared
+        .lock()
+        .unwrap()
+        .processes
+        .retain(|_, p| !p.arguments.iter().any(|a| a == "node-1-cf"));
+    let ended = runtime.tick(2000).await.unwrap();
+    assert!(ended
+        .entries
+        .iter()
+        .find(|r| r.name == "node-1")
+        .unwrap()
+        .route
+        .is_none());
+    let restarted = advance(&mut runtime, 8000).await;
+    let after = restarted
+        .entries
+        .iter()
+        .find(|r| r.name == "node-1")
+        .unwrap()
+        .route
+        .as_ref()
+        .unwrap();
+    assert_ne!(after.observed_at, before.observed_at);
+    assert_eq!(after.kind, before.kind);
+    runtime.shutdown(9000).await.unwrap();
+}
+
+#[tokio::test]
+async fn live_route_is_dated_by_the_latest_ownership_check() {
+    let (_f, _shared, mut runtime) = fixture();
+    advance(&mut runtime, 1000).await;
+    let checked = runtime.tick(301_000).await.unwrap();
+    let route = checked
+        .entries
+        .iter()
+        .find(|row| row.name == "node-1")
+        .unwrap()
+        .route
+        .as_ref()
+        .unwrap();
+    assert_eq!(route.observed_at, "1970-01-01T00:05:01Z");
+    runtime.shutdown(302_000).await.unwrap();
+}
+
+#[tokio::test]
+async fn unknown_ownership_keeps_route_age_despite_fresh_probe_and_snapshot_read() {
+    let (fixture, shared, mut runtime) = fixture();
+    let first = advance(&mut runtime, 1000).await;
+    let original = first
+        .entries
+        .iter()
+        .find(|row| row.name == "node-1")
+        .unwrap()
+        .route
+        .as_ref()
+        .unwrap()
+        .observed_at
+        .clone();
+    {
+        let mut state = shared.lock().unwrap();
+        let pid = *state
+            .processes
+            .iter()
+            .find(|(_, p)| p.arguments.iter().any(|a| a == "node-1-cf"))
+            .unwrap()
+            .0;
+        state.unknown_processes.insert(pid);
+    }
+    let checked = advance(&mut runtime, 301_000).await;
+    let row = checked
+        .entries
+        .iter()
+        .find(|row| row.name == "node-1")
+        .unwrap();
+    assert_eq!(row.level, "ready");
+    assert_eq!(row.route.as_ref().unwrap().observed_at, original);
+    let parsed = Status::parse(
+        &serde_json::to_vec(&checked).unwrap(),
+        &fixture.load(),
+        runtime.epoch(),
+        301_100,
+    )
+    .unwrap();
+    assert_eq!(
+        parsed
+            .entries
+            .iter()
+            .find(|row| row.name == "node-1")
+            .unwrap()
+            .route
+            .as_ref()
+            .unwrap()
+            .observed_at,
+        original
+    );
+    shared.lock().unwrap().unknown_processes.clear();
+    let verified = runtime.tick(302_000).await.unwrap();
+    assert_eq!(
+        verified
+            .entries
+            .iter()
+            .find(|row| row.name == "node-1")
+            .unwrap()
+            .route
+            .as_ref()
+            .unwrap()
+            .observed_at,
+        "1970-01-01T00:05:02Z"
+    );
+    runtime.shutdown(303_000).await.unwrap();
 }

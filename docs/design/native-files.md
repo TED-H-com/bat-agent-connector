@@ -12,6 +12,12 @@ Rust copies bounded bytes into a private app-local spool, hashes them and return
 plus name/size/type/digest. Dropped selections require an explicit Upload click; a two-second native lease is renewed only while the armed attachment form is visible. Paths never cross IPC or enter prompts. No JavaScript filesystem, dialog,
 raw drag-event, HTTP or shell plugin permission is added. The former raw-byte upload IPC permission is removed. Native source bytes are never written.
 
+In the desktop app, pasting image files is refused before an attachment or upload operation is created;
+use Choose files or explicitly enable file drop instead. Text paste and browser attachment flows are unchanged.
+
+Native clipboard-image paste is a follow-up requiring a Rust-side clipboard read into the existing spool,
+with no WebView clipboard API and no raw-byte IPC.
+
 Commands accept only handles, draft IDs, exact ArtifactRefs and fixed controls. Local transfer state
 is scoped by endpoint/actor/contract, backend/principal and the original credential (Rust-only hash),
 in addition to the active native generation. Two credentials with identical actor/scopes are distinct

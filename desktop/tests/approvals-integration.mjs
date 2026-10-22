@@ -1,3 +1,4 @@
+import {httpEventDelivery} from './event-delivery.mjs';
 // Shared generated UI against actual central bulk/child operations and MockBat only.
 import {spawn} from "node:child_process";
 import {createInterface} from "node:readline";
@@ -16,6 +17,7 @@ const browser = await chromium.launch();
 try {
   const fixture = await next(), origin = `http://127.0.0.1:${fixture.port}`, posts = [], errors = [];
   const page = await browser.newPage({locale: "en-US"});
+  const events = await httpEventDelivery(page);
   page.on("pageerror", error => errors.push(error.message));
   let loseReply = true;
   await page.route("**/api/v1/operations?wait=3", async route => {
@@ -27,14 +29,14 @@ try {
   await page.goto(origin+"/dashboard/#/approvals");
   const box = page.locator("[data-approvals]");
   await box.getByRole("combobox", {name: "Host", exact: true}).selectOption("h1");
-  await box.getByRole("button", {name: "Preview pending requests"}).click();
+  await events.post(box.getByRole("button", {name: "Preview pending requests"}));
   await expect(box.getByRole("checkbox", {name: "Approve "+fixture.manual, exact: true})).toBeDisabled();
   await box.getByRole("checkbox", {name: "Approve "+fixture.managed, exact: true}).check();
   await box.getByRole("combobox", {name: "Subsequent permission mode for "+fixture.managed}).selectOption("allow_all");
-  await box.getByRole("button", {name: "Approve selected requests"}).click();
+  await events.post(box.getByRole("button", {name: "Approve selected requests"}));
   await expect(box.locator(".error")).toBeVisible();
   await page.reload();
-  await box.getByRole("button", {name: "Retry original request"}).click();
+  await events.post(box.getByRole("button", {name: "Retry original request"}));
   await expect(box).toContainText("Each selected approval and mode change has an acceptance receipt", {timeout: 30000});
   const operationId = (await box.getByRole("link", {name: "View operation and step receipts"}).getAttribute("href")).split("/").at(-1);
   await page.reload();

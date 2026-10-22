@@ -38,7 +38,7 @@ their existing namespaces. No display state authorizes work or changes final gat
 | Needs attention | Session inventory's pending interaction or explicitly managed runtime status, never idle/streaming inference. | The same session observation; a stale recorded request remains visible as a last-known request, separately from staleness. |
 | Workspace membership used for the selected summary | Explicit session `host` + `workspace_id`; without a workspace ID only the explicitly selected session can be summarized. PM workspace `server_id` belongs to the activated Connector installation, not a Fleet alias. | Complete scoped page chain; invalidate currentness on bootstrap, discard withdrawn inventory, and preserve selection/last values only within the same verified namespace. No path/name matching. |
 | Native Fleet machine attention | Existing native `Entry::observed` readiness, through `fleet::sanitize_result` / `readiness_row`, consumed by the existing Fleet status/overview read. | Row `observed_at`, readiness stale state and the shared `fleetDiagnosis` (including monitor/selection state). Native aliases are a separate identity domain; never join them to central host names. |
-| Route kind, observation time, optional measured latency | Native route-selection observation, once the sanitized contract below exists. | Producer observation time/deadline and route generation. No new probes. |
+| Route kind and observation time | Native accepted `RouteChoice`, through `Entry::observed`, `Context::status` and the IPC allowlist. | Last supervisor-verified use, the shared 60-second deadline and active route generation. No new probes. |
 | Desktop and managed runtime versions | Existing native `app_build` and managed status producers; each remains its own version fact. | Bootstrap/version/build invalidation. Installed and launch-observed versions are separate. |
 | Loaded MCP process version (required, not built) | Missing process-owned MCP runtime identity producer; see the lifecycle follow-up below. Existing adapter/version facts cannot establish this identity. | The future observation must bind loaded version/build to process generation. Installing does not prove an existing process loaded new code. |
 
@@ -68,14 +68,89 @@ but cannot claim output is currently arriving. Gone rows are historical and supp
 neither aggregate attention/activity nor last-value spans. Connection problems are
 separate facts; only pending interactions or managed runtime status produce attention. Both locales preserve these meanings.
 
-The first consumer is `healthDisplay` in `desktop/src/health-display.js`, shared by
-the header and Connection settings. It reuses existing reads and `sessionFacets`;
+The header and Connection settings use `healthDisplay` in
+`desktop/src/health-display.js`. It reuses existing reads and `sessionFacets`;
 the local display clock also expires observations while a request is pending.
 It replaces those consumers' direct transport-label projection. Action admission
 continues using `clientActionGate`; no TTL relaxes or adds a mutation requirement.
-Fleet rows, Work, Workbench, Diagnostics and Result sources still need adoption of
-this freshness/compact contract. Existing source-specific facets are not replaced
-by a global boolean. Native and backend lifecycle behavior is unchanged here.
+Fleet rows also use its `displayFact` and `healthLabel` projection/formatter,
+now in the shared `desktop/src/health-fact.js` module and
+re-exported from `health-display.js`. Fleet retains `fleetDiagnosis` as the single
+native reason/step interpretation. `fleetHealth` applies the same local display
+clock at render time: an expired connected observation keeps Connected, its age
+and Checking; missing observations use Unknown and Checking. Expired layers cannot
+claim current success. Unconfirmed stop and unsupported-version reasons remain
+visible, and each row expires independently. Native Fleet identities are never
+joined to central hosts by name, port, address or server string.
+
+Checking and unknown diagnoses establish no value even with a recent probe
+timestamp, so they always use Unknown and Checking; stale diagnoses retain the
+observation age.
+
+The 60-second display rule uses the same `observed_at` and observation window as
+the native producer: `desktop/fleet-core/src/supervisor_status.rs` marks a selected ready
+row `PROBE_STALE` after 60 seconds. Both Fleet views (`fleet.js` and
+`fleet-desktop.js`) schedule their existing status/overview re-read after 5 seconds.
+Checking describes those ongoing reads and the supervisor's probes; this adoption
+adds neither a probe nor a polling loop.
+
+Work adopts the shared `displayFact` / `healthLabel` projection for the
+observation-derived states in `work-profile-readiness/v1`. Each declares
+`observed_at` (the host's `last_attempt_at`, epoch seconds, matching Inventory's
+connection evidence and the header) and `valid_until` (the last successful
+observation plus `stale_after_s`, Inventory's ISO deadline from the same
+`_valid_until` helper). Inventory and Work also share `_observation_reason` for
+missing, unreachable and expired host facts, including expiry at the deadline.
+`discovered` declares them only for `ready`, since discovery is ready only while
+the host observation is current. `can_observe` declares them for `ready` via
+`hosts_observed` and for `never_observed`, `host_unreachable` and
+`host_not_refreshed`. `can_start_own` declares them when its winning blocker is
+`host_unreachable` or `host_not_refreshed`. With no attempt, `observed_at` is null;
+with no successful observation, `valid_until` is null and establishes no deadline.
+`host_unknown` is a configuration reason, not an observation. All other states omit validity: authentication,
+`configured_unverified`, execution-based states and `action_unavailable` retain
+their existing text and never acquire Checking. This adoption declares no static facts.
+
+Work preserves all six independent values, producer reasons, separate PM analysis
+and the saved-setting warning. Past `verified` evidence remains history; neither
+it nor the response's top-level read timestamp establishes currentness. A current
+declared state shows its value; expiry shows the last value, age and Checking.
+`host_unreachable` uses the shared unreachable wording and retains its reason.
+Its "Last attempt" age dates the failed attempt, while the success-based deadline
+and past verification keep their older instants. Successful observations update
+both attempt and success times together, so ready and unrefreshed ages are unchanged.
+
+The picker renews through its existing `read()` and contract/workspace/profile/
+revision/digest/ticket checks, following the delegated renewal rule below. One
+scheduled wakeup at the earliest declared deadline re-reads that same readiness
+path once per producer deadline. No renewal starts while hidden; returning to the
+page checks that same deadline. Every validated renewal response is stored and
+painted, even when its deadline is unchanged. With an unchanged deadline,
+`host_unreachable` keeps the shared unreachable wording and the newest attempt's
+age without a read error;
+other declared states show `health_read_failed` with `OBSERVATION_NOT_RENEWED`.
+An actual failed read preserves the last response and shows `health_read_failed`
+with the read's code for every reason, including `host_unreachable`. Each attempted
+deadline remains spent, with no retry on clock ticks or visibility changes.
+A later normal read with a new deadline permits renewal again. The existing shell
+display clock only repaints ages; it cannot
+start reads. Selection changes invalidate pending renewal tickets, disposal clears
+the wakeup/listeners, and renewal patches mounted content without changing the
+selection, focus, scroll or open disclosure. No new endpoint, probe, authorization,
+DDL, data step or action admission rule is involved.
+
+The header still shows Checking after an unchanged renewal of a non-unreachable
+fact; that known difference remains an orchestrator-owned follow-up and is
+unchanged here.
+
+Fleet's existing status/overview renders consume the projection; updating mounted
+rows while a native read is pending still requires wiring the existing `app.js`
+display clock to the Fleet painter. `fleetHealth(row, {snapshot, readable, kind,
+now})` is the tested pure entry point; the remaining call site is `app.js`'s
+`tickHealth`. This change does not add another timer or alter those mounts.
+Workbench, Diagnostics and Result sources still need adoption of this
+freshness/compact contract. Existing source-specific facets are not replaced by
+a global boolean. Native and backend lifecycle behavior is unchanged here.
 
 ## Delegated production display decisions
 
@@ -150,26 +225,96 @@ starts at the 120 px reading minimum and fills the remaining space. Standalone
 transcripts retain automatic content height: sharing `.session-workspace` message
 styling does not opt them into the column's height constraint.
 
-## Route quality follow-up
+## Chosen route observation
 
-The frontend currently receives readiness layers, not a sanitized route observation.
-`desktop/fleet-core/src/route.rs` has `RouteChoice.kind`, `generation`,
-`observed_ms`, and `TailscalePeer::{Direct, Idle, Unknown}`. These are insufficient
-to label idle as relay. Carry a latest-only route observation through the supervisor
-status producer to `desktop/src-tauri/src/fleet.rs::sanitize_result` and
-`readiness_row`. The latter currently allowlists readiness `layers` and drops any
-route evidence. Extend its shared sanitizer golden before using the fields in
-`desktop/src/fleet-status.js::fleetStatus` and the shared display projection.
+The native supervisor retains one accepted route choice per selected host, including
+Connector. `desktop/fleet-core/src/route.rs::Routes::from_inventory` and
+`SelectionRequest::run` produce exactly these `RouteKind` values:
 
-The sanitized observation needs `kind` (direct, relay, SSH fallback, idle, unknown),
-`observed_at`, generation and optional already-measured latency. Translate monotonic
-`observed_ms` at the producer; never treat it as a wall-clock timestamp. Include
-latency only when an existing probe measured it; do not add a probe or packet-loss
-metric. Omit aliases, endpoints, addresses, raw peer payload and process output.
-Keep only the latest observation for the active route generation in memory; clear
-it on replacement and persist no history. Route quality never establishes protocol,
-authentication or workspace readiness. Those checks remain separate. Native
-sanitizer CI and physical route acceptance are required for that follow-up.
+| Kind | Meaning from the producer | English / zh-TW row text |
+| --- | --- | --- |
+| `direct` | Tailscale genuine-direct peer proof plus the existing successful TCP probe | Route: Tailscale direct / 路徑：Tailscale 直連 |
+| `lan` | Configured LAN route with the existing successful TCP probe | Route: LAN / 路徑：區域網路 |
+| `cf` | Configured Cloudflare fallback selected by the existing policy | Route: Cloudflare / 路徑：Cloudflare |
+| `configured` | Connector's single configured SSH alias; this path has no route probe | Route: Configured SSH / 路徑：已設定的 SSH |
+
+`route.rs::tailscale_peer` distinguishes `TailscalePeer::{Direct, Idle, Unknown}`.
+Idle and unknown do not supply direct proof and never mean relay. They are peer
+states, not chosen route kinds. A later choice may be LAN or Cloudflare; without a
+choice there is no route line. No producer path emits relay or SSH fallback, so the
+IPC allowlist and display do not invent those values. See [route policy](fleet-routes.md).
+
+`supervisor.rs::tick_host` retains the safe choice only after revalidating it and
+binding a launched process to the policy run. Its retained `confirmed_ms` dates
+that acceptance, independently of the original choice's `observed_ms` (which still
+bounds choice admission). `reconcile_records` renews confirmation only after the
+matching owned record, positive process liveness, retained child identity, policy
+run, launch intent and ownership receipt have been checked, for the same generation.
+Unknown liveness does not renew it; a blocked or failed check never supplies a new
+confirmation. `Host::invalidate` clears the route on selection/generation/configuration
+changes, deselection, lost ownership or exit; a replacement choice replaces it.
+
+Every normal `tick_guarded` publication follows `reconcile_records`. A route newly
+launched later in that tick gets its initial confirmation from its bound run.
+Early verification/input errors do not publish or renew a route. Shutdown can
+publish without reconciliation, but it first invalidates all hosts and passes no
+route to `Entry::observed`, including an unconfirmed stop.
+
+`supervisor_status.rs::Entry::observed` emits
+`route: {kind, observed_at, generation}` independently of readiness layers.
+`observed_at` means the **last verified use**, not the original route selection.
+`observation_time` translates confirmation age against the producer's Unix clock
+anchor. The native caller `windows_supervisor.rs::now_ms` currently supplies Unix
+milliseconds for both clock coordinates; a monotonic confirmation must instead use
+its corresponding Unix anchor. A future or unrepresentable confirmation omits only
+that row's route, preserving its readiness and the remaining publication. Retained
+`Snapshot::parse` still refuses future route timestamps, as it does row timestamps.
+
+A status-file read has no process ownership evidence. A readiness probe establishes
+protocol/authentication/workspace facts, not which owned transport is still in use.
+Neither can renew confirmation; neither can the UI. There is one latest status
+snapshot, no route history or database persistence.
+
+The configured native tick cadence is shared across these states (source:
+`windows_supervisor.rs::run`, `supervisor.rs::tick_host`, `route.rs::start_wake` and
+`ownership.rs::Recovery`). The scheduled wait begins after a tick's work:
+
+| State | Next supervisor tick | Independent work/backoff |
+| --- | --- | --- |
+| Normal running, including a live route | 1-second wait, or earlier route progress notification | Healthy readiness probes are scheduled 30 seconds apart; failed probes 15 seconds apart. These do not delay ownership checks. |
+| Route/probe/recovery backoff, including another host with a live route | The same 1-second wait, or earlier progress | Unavailable-route retry: 15 seconds. Recovery waits 5 seconds, then 15/45/45-second spacing; alias demotion lasts 10 minutes. These are per-host eligibility deadlines, not supervisor sleeps. |
+| Tailscale waking or wake cooldown, including another host with a live route | The same wait, interrupted by wake reservation/completion progress | Wake runs in a background task with a 5-second budget; cooldown is 5/10/20/40/60 seconds. Neither suspends the supervisor loop. |
+
+Code inspection establishes no state that intentionally schedules ownership checks
+60 seconds apart while a live route is retained. The paused-clock wake fixture also
+observes completion progress at 1.5 seconds. This is fixture/source evidence, not
+physical-host cadence measurement or an execution-time bound: synchronous local
+I/O, a stalled process or scheduling may delay a tick. In that case the unrenewed
+confirmation honestly ages to **Checking / 檢查中** at the unchanged 60-second
+deadline. No new timer or probe is added.
+
+`fleet.rs::readiness_route` rebuilds exactly `kind`, `observed_at`, `generation`
+and optional `latency_ms`. It accepts only the four kinds above, a required timestamp
+validated by the same `timestamp` sanitizer as readiness, and integer generation
+1–9007199254740991. Optional latency must be an integer 0–60000 ms. Current
+`RouteProbe` methods return boolean/peer eligibility, not measured latency, so the
+producer emits no latency and the row shows kind only. Extra keys are dropped;
+invalid declared fields refuse the response. Aliases, endpoints, addresses,
+hostnames, raw peer payload and process output never enter the typed observation or
+cross the IPC allowlist. No new probe, metric, timer, retry or fallback is added.
+
+`fleet-status.js::fleetStatus` uses #396's unchanged `displayFact` / `healthLabel`
+projection. At the inclusive 60-second deadline the last route kind remains with its
+age and **Checking / 檢查中**; the existing Fleet status/overview read supplies future
+observations. Missing route evidence adds no line. Failed/unavailable reads,
+unapplied selection, stopped monitoring, deselected/off rows and **down** rows hide
+it. In particular a last direct choice cannot reassure beside a down tunnel.
+Route age is independent of readiness age: even a current readiness observation
+cannot refresh the route. Route kind never changes readiness level, blocking layer,
+reason, protocol, authentication or workspace readiness, nor any action gate.
+Connector remains the name for the Connector service; a configured SSH route is not
+proof of Connector or BAT readiness. Native sanitizer fixtures do not establish
+physical route acceptance.
 
 ## Lifecycle ownership
 

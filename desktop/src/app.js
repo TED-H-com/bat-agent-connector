@@ -1,3 +1,4 @@
+import {startupRoleChoice} from "./startup-role.js";
 import {boardGitHubPanel} from './board-github.js';
 import {clientActionGate, pollFailure} from "./central-service-status.js";
 import {healthDisplay, healthLabel, healthAge, healthRevision, rememberHealthRead, withdrawHealthRead, selectHealthSession, resetHealthBootstrap, takeHealthRenewal} from './health-display.js';
@@ -53,7 +54,7 @@ import {createRecordDisclosure} from "./create-record.js";
 // sessions is always set with textContent (never parsed as HTML).
 import { t, locale, setLocale } from "./i18n.js";
 import {timeStamp, timeText, timeLabel, startTimeTicker} from "./ui/stamps.js";
-import { connectorRequest, connectorUploadArtifact, nativeDiagnosticsSave, nativeDesktop, nativeFileSupport, nativeStatus, nativeConnect, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal } from "./transport/index.ts";
+import { connectorRequest, connectorUploadArtifact, nativeDiagnosticsSave, nativeDesktop, nativeFileSupport, nativeStatus, nativeConnect, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, nativeSelectRole, openExternal } from "./transport/index.ts";
 import { nativeAttachments } from "./native-files.js";
 import { mountFleet } from "./fleet.js";
 import { mountTailscale } from "./tailscale.js";
@@ -620,7 +621,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
   const box = h("div", {class: "attachments", hidden: !supported}, nativeFiles ? h("div", {class: "actions"}, h("strong", {}, t("attachments")), choose) : h("label", {}, t("attachments"), choose),
     h("p", {class: "muted"}, t(nativeFiles ? "files_help" : "upload_on_choose")), rows, promptHint, status);
   const attachmentGate = requirements => clientActionGate({...state, manageAllowed: may("manage"),
-    attachmentsSupported: supported, uploadsAllowed: nativeUploadAllowed}, requirements);
+    attachmentsSupported: supported, uploadsAllowed: nativeUploadAllowed, nativeDesktop}, requirements);
   const refuseAttachment = reason => {
     if (!supported) {
       box.hidden = false;
@@ -846,7 +847,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
     }
     if (!imageCandidates.length) return;
     e.preventDefault();
-    const gate = attachmentGate({attachment: true, supported: true, manage: true, uploads: nativeFiles});
+    const gate = attachmentGate({attachment: true, paste: true, supported: true, manage: true, uploads: nativeFiles});
     if (!gate.allowed) {
       refuseAttachment(gate.reason);
       return;
@@ -1153,6 +1154,7 @@ async function refreshHealthCapabilities() {
 }
 function tickHealth() {
   if (document.hidden) return;
+  document.dispatchEvent(new Event('health-display-tick'));
   const verification = state.health?.capabilityRefresh;
   if (verification?.state === 'loading' && Date.now() - verification.startedAt >= 60_000) {
     verification.state = 'failed'; verification.reason = 'VERIFICATION_PENDING';
@@ -3810,6 +3812,28 @@ function viewSettings(main) {
   viewBrowserSignedOut(main);
 }
 
+function viewStartupRole(main, snapshot, mine) {
+  const body = startupRoleChoice({h, t, errorBox, snapshot, select: async input => {
+    const guard = () => {if (mine !== generation) throw new Error(t('desktop_role_changed'));};
+    guard();
+    try {
+      const selected = await nativeSelectRole(input);
+      guard();
+      if (selected.credential_available) await nativeTransition('connect');
+      else await route();
+    } catch (error) {
+      guard();
+      const current = await nativeStatus();
+      guard();
+      if (current.startup_role?.role) {state.connectionError = error; await route();}
+      else throw error;
+    }
+  }});
+  const root = firstRunCard({h, t, body});
+  root.querySelector('.global-first-card').prepend(languageSwitch());
+  main.append(root);
+}
+
 async function viewManagedSettings(main) {
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   const guard = () => assertView(connection);
@@ -3985,6 +4009,13 @@ async function viewNativeSettings(main) {
   try {
     const status = await nativeStatus();
     if (mine !== generation || !main.contains(details)) return;
+    // Reuse the settings read: another await before openSettings would move its
+    // capability refresh into the interval before native bootstrap validation.
+    const startup = status?.startup_role;
+    if (startup && startup.role === null) {
+      main.replaceChildren();
+      return viewStartupRole(main, startup, mine);
+    }
     if (status.updates === true) disposeUpdates = await mountUpdates(updateRoot, {h, t, versionInput:diagnosticsClient,
       onRead:(value,at)=>rememberVersionRead('updater',value,at),
       onVersions:paint=>{versionPainters.add(paint);return()=>versionPainters.delete(paint);}});
@@ -4015,7 +4046,10 @@ async function viewNativeSettings(main) {
         setup.append(h("h3", {}, t("managed_recovery_title")), h("p", {}, t("managed_recovery_help")),
           h("details", {}, h("summary", {}, t("setup_advanced")), h("h3", {}, t("managed_join_existing")), form));
         introduction.hidden = true;
-      } else setup.append(form);
+      } else {
+        if (status.startup_role?.role === "client") setup.append(h("h3", {}, t("managed_join_existing")));
+        setup.append(form);
+      }
       // Keep configuration recovery accessible without making it compete with the first step.
       connectionDetails.append(h("div", {class: "actions"}, reload));
     }

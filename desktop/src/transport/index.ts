@@ -4,7 +4,10 @@ import {browserCredentialRefusals} from "../credential-refusals.js";
 
 export const nativeDesktop = isTauri();
 export interface ConnectorResponse { status: number; data: any }
+export type StartupRole = "client" | "provider" | "both";
+export interface StartupRoleStatus {role: StartupRole | null; generation: number; installation_ref: string | null}
 export interface NativeStatus {
+  startup_role?: StartupRoleStatus | null;
   configuration_source?: "managed" | "external";
   managed_recovery?: string | null;
   managed_rebind?: number | null;
@@ -73,6 +76,8 @@ export interface BriefExportReceipt {
 export const nativeBriefSave = (reference: BriefExportReference) =>
   invoke<BriefExportReceipt | null>("native_brief_save", {reference});
 export const nativeFilesPreview = (reference: unknown) => invoke<any>("native_files_preview", {reference});
+export const nativeSelectRole = (input: {role: StartupRole; expected_generation: number}) =>
+  invoke<NativeStatus>("managed_select_role", {input});
 export const nativeConnect = () => invoke<any>("connector_connect");
 export const managedControl = (input: {action: "status" | "open_browser"} | {action: "set_login"; enabled: boolean}) =>
   invoke<any>("managed_control", {input});
@@ -132,11 +137,8 @@ export async function connectorRequest(method: string, path: string, body: unkno
 
 export async function connectorUploadArtifact(operationId: string, bytes: ArrayBuffer,
   browserToken: string): Promise<ConnectorResponse> {
+  if (nativeDesktop) throw new Error("Native uploads require the native file manager.");
   if (!/^op_[0-9a-f]{32}$/.test(operationId)) throw new Error("Invalid artifact upload operation ID");
-  if (nativeDesktop) {
-    if (bytes.byteLength > 16 * 1024 * 1024) throw new Error("Artifact exceeds the native 16 MiB upload limit");
-    return invoke<ConnectorResponse>("connector_upload_artifact", bytes, {headers: {"x-batc-upload-operation": operationId}});
-  }
   // Ignore content_url from operation metadata. Tokens only reach this same-origin fixed route.
   const res = await fetch(`/api/v1/artifacts/uploads/${operationId}/content`, {method: "POST", redirect: "error",
     credentials: "same-origin", headers: {...browserAuthHeaders(browserToken), "Content-Type": "application/octet-stream"}, body: bytes});

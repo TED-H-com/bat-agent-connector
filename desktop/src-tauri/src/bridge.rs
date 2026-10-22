@@ -514,6 +514,7 @@ pub struct NativeStatus {
     pub connected: bool,
     pub managed_recovery: Option<String>,
     pub managed_rebind: Option<u64>,
+    pub startup_role: Option<crate::startup_role::Snapshot>,
 }
 
 // Never serialized: credential identity remains native-only even for identical actor/scopes.
@@ -533,6 +534,7 @@ struct ConnectionState {
     generation: u64,
     managed: bool,
     recovery_enabled: bool,
+    startup_pending: bool,
     managed_rebind: u64,
     recovery_error: Option<String>,
     config: Result<Config, String>,
@@ -629,6 +631,105 @@ impl Bridge {
         }
         bridge
     }
+    pub fn role_pending(config_dir: &Path) -> Self {
+        let mut bridge = Self::new(
+            Err("STARTUP_ROLE_PENDING".into()),
+            Zeroizing::new(String::new()),
+        );
+        bridge.configuration_file = Some(config_dir.join("central.json"));
+        bridge.state.lock().unwrap().startup_pending = true;
+        bridge
+    }
+
+    pub async fn select_startup_role(
+        &self,
+        managed: Arc<crate::managed::Managed>,
+        input: crate::startup_role::Selection,
+    ) -> Result<(), String> {
+        let _guard = self
+            .connecting
+            .try_lock()
+            .map_err(|_| "MANAGED_SERVICE_BUSY")?;
+        let generation = {
+            let state = self.state.lock().unwrap();
+            if !state.startup_pending {
+                return Err("STARTUP_ROLE_CHANGED".into());
+            }
+            state.generation
+        };
+        let result = tauri::async_runtime::spawn_blocking(move || {
+            managed.select_role(input.role, input.expected_generation)
+        })
+        .await
+        .map_err(|_| "MANAGED_SERVICE_UNAVAILABLE")?;
+        match result {
+            Ok(launch) => self.install_startup_launch(generation, launch).await,
+            Err(error) => {
+                let mut state = self.state.lock().unwrap();
+                if state.generation == generation && state.startup_pending {
+                    // Keep failures visible; a persisted provider resumes via its owner on reopen.
+                    // Do not offer a second choice after an uncertain ensure.
+                    state.config = Err(error.clone());
+                }
+                Err(error)
+            }
+        }
+    }
+
+    async fn install_startup_launch(
+        &self,
+        generation: u64,
+        launch: Option<crate::managed::Launch>,
+    ) -> Result<(), String> {
+        let check = |state: &ConnectionState| -> Result<(), String> {
+            if !state.startup_pending || state.generation != generation || self.configuration_file.as_ref().is_none_or(|path|
+                !matches!(path.symlink_metadata(), Err(error) if error.kind() == std::io::ErrorKind::NotFound)) {
+                return Err("STARTUP_ROLE_CHANGED".into());
+            }
+            Ok(())
+        };
+        check(&self.state.lock().unwrap())?;
+        let verified = if let Some(launch) = launch {
+            let config = normalize(launch.config())?;
+            let (_, identity) = self
+                .verify(&config, &launch.token, Some(&launch.identity()), generation)
+                .await?;
+            Some((config, identity, launch.token))
+        } else {
+            None
+        };
+        let mut state = self.state.lock().unwrap();
+        check(&state)?;
+        state.generation += 1;
+        state.startup_pending = false;
+        state.recovery_error = None;
+        if let Some((config, identity, token)) = verified {
+            state.managed = true;
+            state.recovery_enabled = true;
+            state.managed_rebind += 1;
+            state.config = Ok(config.clone());
+            state.environment = Some(token.clone());
+            state.environment_identity = Some(identity.clone());
+            state.active = Some(Active {
+                config: config.clone(),
+                record: Record {
+                    version: 1,
+                    binding: binding(&config),
+                    identity,
+                    token,
+                },
+            });
+        } else {
+            state.managed = false;
+            state.recovery_enabled = false;
+            state.config = Err("Create central.json in the app configuration directory".into());
+            state.environment = None;
+            state.environment_identity = None;
+            state.active = None;
+        }
+        Ok(())
+    }
+
     pub fn managed_failure(config_dir: &Path, error: String) -> Self {
         let mut bridge = Self::new(Err(error), Zeroizing::new(String::new()));
         bridge.configuration_file = Some(config_dir.join("central.json"));
@@ -649,6 +750,7 @@ impl Bridge {
                 generation: 0,
                 managed: false,
                 recovery_enabled: false,
+                startup_pending: false,
                 managed_rebind: 0,
                 recovery_error: None,
                 config,
@@ -704,7 +806,7 @@ impl Bridge {
             credential_saved: saved,
             enrollment_supported: self.vault.supported(),
             configuration_reload: !state.managed && self.configuration_file.is_some(),
-            configuration_setup: (state.managed || state.config.is_err()) && self.configuration_file.as_ref().is_some_and(|path| {
+            configuration_setup: !state.startup_pending && (state.managed || state.config.is_err()) && self.configuration_file.as_ref().is_some_and(|path| {
                 matches!(path.symlink_metadata(), Err(error) if error.kind() == std::io::ErrorKind::NotFound)
             }),
             configuration_source: if state.managed { "managed" } else { "external" },
@@ -715,6 +817,7 @@ impl Bridge {
             connected: state.active.is_some(),
             managed_recovery: state.recovery_error.clone(),
             managed_rebind: state.managed.then_some(state.managed_rebind),
+            startup_role: None,
         }
     }
     // No bearer on the liveness read. Any HTTP response is reachable: authentication,
@@ -894,6 +997,9 @@ impl Bridge {
             .ok_or("Configuration setup is unavailable")?;
         let generation = {
             let state = self.state.lock().unwrap();
+            if state.startup_pending {
+                return Err("STARTUP_ROLE_PENDING".into());
+            }
             if !state.managed && (state.config.is_ok() || state.active.is_some()) {
                 return Err(
                     "A central configuration already exists; use the fixed file and reload".into(),
@@ -1607,7 +1713,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             r"delivery/previews/mpv_[0-9a-f]{32}|integrations/previews/ipv_[0-9a-f]{32}|integrations/op_[0-9a-f]{32})$")).unwrap())
     } else if input.method == "POST" {
         POST.get_or_init(|| {
-            Regex::new(r"^/(?:managed/setup/(?:secrets|preview)|repository-previews|approval-previews|artifact-capture-previews|artifact-managed-capture-previews|cleanup-previews|operations(?:/op_[0-9a-f]{32}/(?:cancel|resume))?|pm/workspaces/ws_[0-9a-f]{32}/(?:work/wi_[0-9a-f]{20}/start-preview|threads/pmt_[0-9a-f]{32}/adopt-and-start-preview))$")
+            Regex::new(r"^/(?:managed/setup/(?:secrets|preview|discover)|repository-previews|approval-previews|artifact-capture-previews|artifact-managed-capture-previews|cleanup-previews|operations(?:/op_[0-9a-f]{32}/(?:cancel|resume))?|pm/workspaces/ws_[0-9a-f]{32}/(?:work/wi_[0-9a-f]{20}/start-preview|threads/pmt_[0-9a-f]{32}/adopt-and-start-preview))$")
                 .unwrap()
         })
     } else {
@@ -1618,7 +1724,10 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     }
     if matches!(
         path,
-        "/managed/setup" | "/managed/setup/secrets" | "/managed/setup/preview"
+        "/managed/setup"
+            | "/managed/setup/secrets"
+            | "/managed/setup/preview"
+            | "/managed/setup/discover"
     ) {
         if input.path != path || input.idempotency_key.is_some() {
             return Err("Managed setup accepts no query or operation key".into());
@@ -2578,6 +2687,25 @@ mod tests {
         }
         assert!(validate_request(&request("GET", "/managed/setup?host=other")).is_err());
         assert!(validate_request(&request("GET", "/managed/setup/secrets")).is_err());
+    }
+    #[test]
+    fn setup_discovery_uses_the_existing_fixed_http_forwarder() {
+        let mut input = request("POST", "/managed/setup/discover");
+        input.body =
+            Some(serde_json::json!({"revision": "a".repeat(64), "import_profile_id": "profile-a"}));
+        assert!(validate_request(&input).is_ok());
+        for path in [
+            "/managed/setup/discover?",
+            "/managed/setup/discover?host=other",
+            "/managed/setup/discover/other",
+        ] {
+            input.path = path.into();
+            assert!(validate_request(&input).is_err());
+        }
+        input.path = "/managed/setup/discover".into();
+        input.idempotency_key = Some("discovery-is-a-read".into());
+        assert!(validate_request(&input).is_err());
+        assert!(validate_request(&request("GET", "/managed/setup/discover")).is_err());
     }
     #[test]
     fn setup_preview_uses_the_existing_fixed_http_forwarder() {
@@ -4479,6 +4607,104 @@ mod tests {
                 principal_id: "fixture-principal".into(),
             },
         )
+    }
+    #[tokio::test]
+    async fn startup_launch_is_verified_and_installed_in_the_same_bridge() {
+        let root = tempfile::tempdir().unwrap();
+        let bridge = Arc::new(Bridge::role_pending(root.path()));
+        let reader = bridge.clone();
+        assert!(!reader.status().configuration_setup);
+        let (endpoint, requests, handle) = server(vec![
+            json_response(&capabilities("fixture-server", "fixture-principal", true)),
+            managed_bootstrap_response("fixture-server", "fixture-principal"),
+        ]);
+        bridge
+            .install_startup_launch(
+                0,
+                Some(recovery_launch(
+                    &endpoint,
+                    "fixture-server",
+                    "fixture-principal",
+                )),
+            )
+            .await
+            .unwrap();
+        assert!(reader.status().connected);
+        assert_eq!(reader.status().configuration_source, "managed");
+        assert_eq!(reader.status().endpoint.as_deref(), Some(endpoint.as_str()));
+        assert!(reader.state.lock().unwrap().recovery_enabled);
+        for _ in 0..2 {
+            assert!(requests.recv().unwrap().starts_with("GET "));
+        }
+        handle.join().unwrap();
+    }
+    #[tokio::test]
+    async fn startup_launch_refuses_bootstrap_identity_mismatch_without_publishing() {
+        let root = tempfile::tempdir().unwrap();
+        let bridge = Bridge::role_pending(root.path());
+        let (endpoint, requests, handle) = server(vec![
+            json_response(&capabilities("fixture-server", "fixture-principal", true)),
+            managed_bootstrap_response("fixture-server", "another-principal"),
+        ]);
+        assert!(bridge
+            .install_startup_launch(
+                0,
+                Some(recovery_launch(
+                    &endpoint,
+                    "fixture-server",
+                    "fixture-principal"
+                ))
+            )
+            .await
+            .is_err());
+        assert!(!bridge.status().connected);
+        assert!(bridge.status().endpoint.is_none());
+        assert!(!bridge.state.lock().unwrap().recovery_enabled);
+        for _ in 0..2 {
+            assert!(requests.recv().unwrap().starts_with("GET "));
+        }
+        handle.join().unwrap();
+    }
+
+    #[tokio::test]
+    async fn startup_transition_refuses_stale_generation_and_appearing_external_configuration() {
+        let root = tempfile::tempdir().unwrap();
+        let bridge = Bridge::role_pending(root.path());
+        bridge.disconnect();
+        assert!(bridge.install_startup_launch(0, None).await.is_err());
+        assert!(!bridge.status().configuration_setup);
+        let bridge = Bridge::role_pending(root.path());
+        std::fs::write(
+            root.path().join("central.json"),
+            b"preserve this configuration",
+        )
+        .unwrap();
+        assert!(bridge
+            .install_startup_launch(
+                0,
+                Some(recovery_launch(
+                    "http://127.0.0.1:1/",
+                    "fixture-server",
+                    "fixture-principal"
+                ))
+            )
+            .await
+            .is_err());
+        assert_eq!(
+            std::fs::read(root.path().join("central.json")).unwrap(),
+            b"preserve this configuration"
+        );
+    }
+    #[tokio::test]
+    async fn startup_client_transition_only_enables_the_existing_configuration_entry() {
+        let root = tempfile::tempdir().unwrap();
+        let bridge = Bridge::role_pending(root.path());
+        bridge.install_startup_launch(0, None).await.unwrap();
+        assert_eq!(bridge.status().configuration_source, "external");
+        assert!(bridge.status().configuration_setup);
+        assert!(!bridge.status().credential_available);
+        assert!(!bridge.state.lock().unwrap().recovery_enabled);
+        assert!(!root.path().join("central.json").exists());
     }
     #[tokio::test]
     async fn managed_recovery_rebinds_endpoint_and_token_only_after_identity_verification() {

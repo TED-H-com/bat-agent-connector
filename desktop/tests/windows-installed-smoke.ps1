@@ -132,7 +132,7 @@ function Build-ManagedViewProbe {
         }
     } finally { $compiler.Dispose() }
 }
-function Wait-ManagedView([Diagnostics.Process]$Process, [IntPtr]$Window, [string]$Name) {
+function Wait-ManagedView([Diagnostics.Process]$Process, [IntPtr]$Window, [string]$Name, [switch]$RoleChoice) {
     $observed = @{state = @{}}
     $diagnostics = [ordered]@{attempt_count = 0; attempts = [Collections.Generic.List[object]]::new()}
     try {
@@ -164,7 +164,13 @@ function Wait-ManagedView([Diagnostics.Process]$Process, [IntPtr]$Window, [strin
                 Set-FixtureViewDiagnostics $attempt ($errors.GetAwaiter().GetResult())
                 # Exit 3 is a failed read, not readiness evidence. The existing
                 # Wait-Until loop retries it with the very same 30 s deadline.
-                Test-FixtureViewResult $attempt ($output.GetAwaiter().GetResult()) $observed
+                $ready = Test-FixtureViewResult $attempt ($output.GetAwaiter().GetResult()) $observed
+                if ($attempt.exit_code -eq 3) { return $false }
+                if ($RoleChoice) {
+                    return $observed.state.bounded -eq $true -and $observed.state.roleChoice -eq $true
+                }
+                if ($ready -and $observed.state.roleChoice -ne $false) { throw 'Role chooser reappeared after selection' }
+                return $ready
             } finally { $probe.Dispose() }
         } 'Managed WebView did not render authenticated first-run configuration'
     } catch {
@@ -175,6 +181,57 @@ function Wait-ManagedView([Diagnostics.Process]$Process, [IntPtr]$Window, [strin
         $observed.state | ConvertTo-Json | Set-Content (Join-Path $Evidence "$Name-readiness.json") -Encoding utf8
         $diagnostics | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Evidence "$Name-probe-phases.json") -Encoding utf8
     }
+}
+function Save-ManagedStartupView([Diagnostics.Process]$Process, [IntPtr]$Window) {
+    # One read only, outside the success/retry path. Never repeat the role action.
+    $state = @{available = $false}
+    $info = [Diagnostics.ProcessStartInfo]::new($managedViewProbe)
+    $info.UseShellExecute = $false
+    $info.CreateNoWindow = $true
+    $info.RedirectStandardOutput = $true
+    $info.RedirectStandardError = $true
+    foreach ($arg in @($Window.ToInt64().ToString(), $Process.Id.ToString())) { $info.ArgumentList.Add($arg) }
+    $probe = $null
+    try {
+        $probe = [Diagnostics.Process]::Start($info)
+        $output = $probe.StandardOutput.ReadToEndAsync()
+        $errors = $probe.StandardError.ReadToEndAsync()
+        if (-not $probe.WaitForExit(8000)) {
+            $probe.Kill()
+            if (-not $probe.WaitForExit(5000)) { throw 'Owned diagnostic UIA probe did not exit' }
+        }
+        if ($probe.ExitCode -eq 0) { $state = $output.GetAwaiter().GetResult() | ConvertFrom-Json }
+    } catch { Write-Warning 'Managed startup UIA diagnostic was unavailable' }
+    finally {
+        if ($null -ne $probe) { $probe.Dispose() }
+        $state | ConvertTo-Json | Set-Content (Join-Path $Evidence 'managed-startup-failed-readiness.json') -Encoding utf8
+    }
+}
+function Select-ProviderRole([Diagnostics.Process]$Process, [IntPtr]$Window) {
+    # Invoke once, outside the readiness retry loop. An uncertain action is fatal.
+    $info = [Diagnostics.ProcessStartInfo]::new($managedViewProbe)
+    $info.UseShellExecute = $false
+    $info.CreateNoWindow = $true
+    $info.RedirectStandardOutput = $true
+    $info.RedirectStandardError = $true
+    foreach ($arg in @($Window.ToInt64().ToString(), $Process.Id.ToString(), 'select-provider')) { $info.ArgumentList.Add($arg) }
+    $probe = [Diagnostics.Process]::Start($info)
+    try {
+        $output = $probe.StandardOutput.ReadToEndAsync()
+        $errors = $probe.StandardError.ReadToEndAsync()
+        if (-not $probe.WaitForExit(8000)) {
+            $probe.Kill()
+            if (-not $probe.WaitForExit(5000)) { throw 'Owned provider selection probe did not exit' }
+            throw 'Provider selection exceeded its deadline'
+        }
+        $errors.GetAwaiter().GetResult() | Set-Content (Join-Path $Evidence 'provider-selection-phases.log') -Encoding utf8
+        if ($probe.ExitCode -ne 0) { throw 'Owned provider role action failed' }
+        $selected = $output.GetAwaiter().GetResult() | ConvertFrom-Json
+        if ($selected.role -cne 'provider' -or $selected.pressed -ne $true -or $selected.matches -ne 1) {
+            throw 'Provider role action did not confirm exactly one button press'
+        }
+        Record-Step 'Clean managed first-run selected provider (Provide a local workspace / 提供本機工作區) through the owned UI Automation button'
+    } finally { $probe.Dispose() }
 }
 $app = $null
 $second = $null
@@ -246,20 +303,31 @@ try {
     Save-Window $windows[0] 'reopened.png'
     Record-Step 'Owned process termination/relaunch resumed WebView polling and preserved configuration'
     Stop-Owned $reopened
-    Remove-Item -LiteralPath $central
+    # Both state directories were absent before this fixture. The external-client
+    # phase persisted a role, so reset the entire owned profile for a clean launch.
+    $profileDeadline = [DateTime]::UtcNow.AddSeconds(15)
+    $receipt.clean_profile_removal = [ordered]@{attempts=0; retries=0}
+    foreach ($path in @($configRoot, $dataRoot)) { Remove-FixturePath $path $profileDeadline $receipt.clean_profile_removal }
     $app = Start-Dashboard $true
+    Wait-Until { @([DashboardWindows]::Find($app.Id)).Count -eq 1 } 'Managed first-run window missing'
+    $window = @([DashboardWindows]::Find($app.Id))[0]
+    Wait-ManagedView $app $window 'managed-role-choice' -RoleChoice
+    Select-ProviderRole $app $window
     $managedIdentity = node tests/managed-installed-probe.mjs wait $dataRoot (Join-Path $Evidence 'managed-startup-failure.json')
     if ($LASTEXITCODE -ne 0) {
         # Capture the owned native error surface before cleanup, even when the
         # central never reaches bootstrap and the UIA readiness probe cannot run.
         try {
             $failedWindows = @([DashboardWindows]::Find($app.Id))
-            if ($failedWindows.Count -eq 1) { Save-Window $failedWindows[0] 'managed-startup-failed.png' }
+            if ($failedWindows.Count -eq 1) {
+                Save-ManagedStartupView $app $failedWindows[0]
+                Save-Window $failedWindows[0] 'managed-startup-failed.png'
+            }
         } catch { Write-Warning 'Managed startup failure screenshot was unavailable' }
         throw 'Managed clean-profile first-run failed'
     }
-    Wait-Until { @([DashboardWindows]::Find($app.Id)).Count -eq 1 } 'Managed first-run window missing'
-    $window = @([DashboardWindows]::Find($app.Id))[0]
+    $servicePointer = Join-Path $dataRoot 'managed-central/state/task-service.json'
+    $serviceBefore = (Get-FileHash -LiteralPath $servicePointer).Hash
     Wait-ManagedView $app $window 'managed-first-run'
     Save-Window $window 'managed-first-run.png'
     if (-not [DashboardWindows]::PostMessage($window, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)) { throw 'Managed WM_CLOSE failed' }
@@ -275,11 +343,12 @@ try {
     Wait-Until { @([DashboardWindows]::Find($reopened.Id)).Count -eq 1 } 'Managed reopened window missing'
     $reopenedWindow = @([DashboardWindows]::Find($reopened.Id))[0]
     Wait-ManagedView $reopened $reopenedWindow 'managed-reopened'
+    if ((Get-FileHash -LiteralPath $servicePointer).Hash -cne $serviceBefore) { throw 'Relaunch replaced the running managed service' }
     Save-Window $reopenedWindow 'managed-reopened.png'
     Stop-Owned $reopened
     node tests/managed-installed-probe.mjs stop $dataRoot
     if ($LASTEXITCODE -ne 0) { throw 'Managed fixture service cleanup failed' }
-    Record-Step 'Clean managed first-run and relaunch rendered authenticated, enabled setup via UI Automation; same identity across close and relaunch; central survived UI termination'
+    Record-Step 'Provider first-run and relaunch rendered authenticated, enabled setup via UI Automation; chooser stayed absent; same identity and service across close and relaunch; central survived UI termination'
     $uninstaller = Join-Path $installDir 'uninstall.exe'
     Run-Installer $uninstaller '/S'
     Wait-Until { -not (Test-Path -LiteralPath $binary) -and @(Get-Registration).Count -eq 0 } 'Uninstall left binary or registration'

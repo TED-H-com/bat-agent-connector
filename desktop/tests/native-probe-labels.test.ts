@@ -11,7 +11,7 @@ const setup = readFileSync(new URL('../src/managed-setup.js', import.meta.url), 
 const locales = ['en', 'zh-TW'] as const;
 const readinessKeys = {
   authenticated: 'setup_waiting', setup: 'setup_title',
-  configurationLoaded: 'setup_waiting', saveEnabled: 'setup_review_connection',
+  configurationLoaded: 'setup_waiting', saveEnabled: 'setup_discover',
 } as const;
 const literals = (source: string) => [...source.matchAll(/"(?:\\.|[^"\\])*"/g)].map(match => JSON.parse(match[0]));
 
@@ -44,19 +44,56 @@ for (const [platform, read] of [['macOS', swiftLabels], ['Windows', csharpLabels
   });
 }
 
-test('the actual first setup action uses setup_review_connection', () => {
+test('macOS provider selection and readiness match desktop_role_provider in both locales', () => {
+  const labels = swift.match(/let providerRoleLabels\s*=\s*(\[[^\]\n]+\])/);
+  assert.ok(labels, 'Trace the provider labels shared by AXPress and readiness');
+  assert.deepEqual(JSON.parse(labels[1]), locales.map(locale => STRINGS[locale].desktop_role_provider));
+  assert.match(swift, /labels\.contains\(where:\s*\{\s*providerRoleLabels\.contains\(\$0\)\s*\}\)/);
+  assert.match(swift, /providerRoleLabels\.contains\(label\)\s*\{\s*result\["roleChoice"\]\s*=\s*true/);
+});
+
+test('Windows provider selection and readiness match desktop_role_provider in both locales', () => {
+  const predicate = csharp.match(/internal static bool IsLabel\(string label\)\s*\{([^{}]+)\}/);
+  assert.ok(predicate, 'Trace the provider predicate shared by InvokePattern and readiness');
+  assert.deepEqual(literals(predicate[1]), locales.map(locale => STRINGS[locale].desktop_role_provider));
+  assert.match(csharp, /if\s*\(!IsLabel\(read\(AutomationElement\.NameProperty\) as string\)\)/);
+  assert.match(csharp, /ProviderSelection\.IsLabel\(label\)\)\s*\{\s*RoleChoice\s*=\s*true/);
+});
+
+test('Windows provider probe test labels match desktop_role_provider in both locales', () => {
+  const loop = csharpTests.match(/foreach\s*\(string label in new string\[\]\s*\{([^{}]+)\}\)/);
+  assert.ok(loop, 'Trace the localized provider selection test loop');
+  assert.deepEqual(literals(loop[1]), locales.map(locale => STRINGS[locale].desktop_role_provider));
+});
+
+test('the actual first setup action traces the discovery-mode setup_discover branch', () => {
   const tree = parse(setup, {ecmaVersion: 'latest', sourceType: 'module'});
-  const buttons: any[] = [];
+  const assignments: any[] = [], capability: any[] = [];
   function visit(node: any) {
     if (!node || typeof node !== 'object') return;
-    if (node.type === 'VariableDeclarator' && node.id?.name === 'automaticButton') buttons.push(node.init);
+    if (node.type === 'AssignmentExpression' && node.left?.object?.name === 'automaticButton' &&
+        node.left.property?.name === 'textContent') assignments.push(node.right);
+    if (node.type === 'VariableDeclarator' && node.id?.name === 'discoverySupported') capability.push(node.init);
     for (const child of Object.values(node)) if (Array.isArray(child)) child.forEach(visit); else visit(child);
   }
   visit(tree);
-  assert.equal(buttons.length, 1, 'Trace the first setup button without guessing another action');
-  assert.equal(buttons[0].callee?.name, 'h');
-  assert.equal(buttons[0].arguments[2]?.callee?.name, 't');
-  assert.equal(buttons[0].arguments[2].arguments[0]?.value, 'setup_review_connection');
+  assert.equal(assignments.length, 1, 'Trace the current action text, not its static initializer');
+  assert.equal(assignments[0].callee?.name, 't');
+  const choice = assignments[0].arguments[0];
+  assert.equal(choice.type, 'ConditionalExpression');
+  assert.equal(choice.consequent.value, 'setup_discover', 'The bundled Connector first action must use discovery');
+  assert.equal(choice.alternate.value, 'setup_review_connection');
+  assert.equal(choice.test.type, 'LogicalExpression');
+  assert.equal(choice.test.operator, '&&');
+  assert.equal(choice.test.left.name, 'discoverySupported');
+  assert.equal(choice.test.right.operator, '!');
+  assert.equal(choice.test.right.argument.expression.object.name, 'discovery');
+  assert.equal(choice.test.right.argument.expression.property.name, 'profile_id');
+  assert.equal(capability.length, 1);
+  assert.equal(capability[0].operator, '===');
+  assert.equal(capability[0].left.expression.object.name, 'snapshot');
+  assert.equal(capability[0].left.expression.property.name, 'discovery_contract_version');
+  assert.equal(capability[0].right.value, 1);
 });
 
 const readinessLoop = csharpTests.match(/foreach\s*\(string\[\]\s+labels\s+in\s+new\s+string\[\]\[\]\s*\{([\s\S]*?)\}\s*\)/);
@@ -68,13 +105,13 @@ for (const [index, locale] of locales.entries()) test(`Windows readiness test la
   if (locale === 'en') {
     const absent = csharpTests.match(/Observe\(state, ControlType\.Button, ("(?:\\.|[^"\\])*"), absent\)/);
     assert.ok(absent, 'The missing-enabled-property regression must exercise the current action');
-    assert.equal(JSON.parse(absent[1]), STRINGS.en.setup_review_connection);
+    assert.equal(JSON.parse(absent[1]), STRINGS.en.setup_discover);
   }
 });
 
 for (const locale of locales) {
   test(`${locale} saved-connection guidance names the available first action`, () => {
-    assert.ok(STRINGS[locale].setup_choose_connection.includes(STRINGS[locale].setup_review_connection));
+    assert.ok(STRINGS[locale].setup_choose_connection.includes(STRINGS[locale].setup_discover));
   });
   test(`${locale} retires the unused automatic setup label`, () => {
     assert.equal(Object.hasOwn(STRINGS[locale], 'setup_automatic'), false);

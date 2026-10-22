@@ -1,12 +1,49 @@
 import {test, expect, type Page} from '@playwright/test';
-import {managedSetupFixture, openSetupAdvanced, applySetupReview} from './managed-setup-fixture.ts';
-import {STRINGS} from '../src/i18n.js';
+import {managedSetupFixture, reviewSetupConnection, expectLegacyProfileFallback, openSetupAdvanced, applySetupReview} from './managed-setup-fixture.ts';
 import {readFileSync} from 'node:fs';
+// Literal expectations remain independent of the runtime translation producer.
+const labels: Record<string, Record<string, string>> = {
+  en: {
+    setup_connection_connected: 'Connected', setup_connection_checking: 'Checking…', setup_connection_unreachable: 'Can’t reach this connection',
+    setup_connection_action: 'Make sure BAT is open, then select Refresh.', setup_connection_checking_help: 'There’s no recent connection result yet. Refresh in a moment.',
+    setup_operation_receipt: 'Setup operation · {status}', setup_operation_done: 'Done',
+    setup_ready: 'Setup is complete. You’re ready to go.', setup_profile: 'BAT connection profile',
+    setup_host_name: 'Host ID', setup_bat_token: 'BAT connection token (optional with a profile)', pm_refresh: 'Refresh',
+    error_generic: 'This request could not be completed. Check Details.', setup_save_host: 'Review connection', setup_recover: 'Check request',
+    error_code_CONFIGURATION_CHANGED: 'Configuration changed elsewhere. Refresh before trying again.',
+    setup_verification_title: '3. Configure verification commands', setup_verification_project: 'Task Service project name',
+    setup_verification_executable: 'Executable', setup_verification_arguments: 'Arguments (one per line)',
+    setup_verification_timeout: 'Timeout in seconds (1–3600)',
+    setup_verification_help: 'Configure an explicit command by Task Service project name. Saving changes configuration only; it never runs the command. Other project commands are preserved. The timeout applies to every project.',
+    setup_save_verification: 'Save verification command', setup_receipt_mismatch: 'The receipt does not match the original configuration request.',
+    setup_verification_changed: 'Connector configuration changed; your draft is preserved. Reload saved verification settings, review, and save again.',
+    setup_verification_reload: 'Reload saved verification settings', setup_scope_required: 'Your Connector identity is not permitted to change this setting.',
+    setup_managed_work: 'Allow managed work', setup_shared_clone: 'Allow Git worktrees sharing a clone',
+    setup_shared_clone_help: 'New worktrees share Git metadata with the source clone. This requires an explicit choice; manual sessions and working directories remain read-only.',
+    sessions_title: 'Sessions',
+  },
+  'zh-TW': {
+    setup_connection_connected: '已連線', setup_connection_checking: '確認連線中…', setup_connection_unreachable: '目前無法連線',
+    setup_connection_action: '請確認 BAT 已開啟，再按「重新整理」。', setup_connection_checking_help: '目前還沒有最新的連線結果，請稍後重新整理。',
+    setup_operation_receipt: '設定操作 · {status}', setup_operation_done: '完成', setup_ready: '設定完成，可以開始使用了。',
+    setup_profile: 'BAT 連線設定檔', setup_host_name: '主機代號', setup_bat_token: 'BAT 連線權杖（使用設定檔時可留白）', pm_refresh: '重新整理',
+    error_generic: '無法完成此要求，請查看詳細資料。', setup_save_host: '預覽連線', setup_recover: '查回請求',
+    error_code_CONFIGURATION_CHANGED: '設定已在別處變更，請重新整理後再試。', setup_verification_title: '3. 設定驗證命令',
+    setup_verification_project: '任務服務專案名稱', setup_verification_executable: '執行程式', setup_verification_arguments: '參數（每行一個）',
+    setup_verification_timeout: '逾時秒數（1–3600）', setup_verification_help: '依任務服務的專案名稱設定明確命令。儲存只變更設定，不執行命令；其他專案的命令會保留。逾時秒數套用到所有專案。',
+    setup_save_verification: '儲存驗證命令', setup_receipt_mismatch: '回執與原設定請求不一致。',
+    setup_verification_changed: 'Connector 設定已變更，草稿已保留；請重新載入已存的驗證設定，再檢視並儲存。',
+    setup_verification_reload: '重新載入已存驗證設定', setup_scope_required: '目前 Connector 帳號無權修改此設定。',
+    setup_managed_work: '允許受管工作', setup_shared_clone: '允許共用 Git 複本的獨立工作目錄',
+    setup_shared_clone_help: '新的獨立工作目錄會與來源複本共用 Git 中繼資料。只有明確開啟才允許；人工工作階段和工作目錄仍保持唯讀。',
+    sessions_title: '工作階段',
+  },
+};
 const setupEvidence = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-setup-evidence.json', import.meta.url), 'utf8'));
 for (const locale of ['en', 'zh-TW']) test.describe(locale + ' managed setup', () => {
   test.use({locale: locale === 'en' ? 'en-US' : locale});
   const fixture = (page: Page, native: boolean) => managedSetupFixture(page, native, locale);
-  const copy = (key: string, vars: Record<string, string> = {}) => STRINGS[locale][key].replace(/\{(\w+)\}/g, (_, name) => vars[name] || '');
+  const copy = (key: string, vars: Record<string, string> = {}) => labels[locale][key].replace(/\{(\w+)\}/g, (_, name) => vars[name] || '');
 
   async function expectSetupOperation(page: Page) {
     const details = page.locator('[data-setup-details]');
@@ -56,7 +93,7 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale + ' managed setup', (
       await form.getByLabel(copy('setup_bat_token'), {exact:false}).fill('private-bat-secret');
       await page.locator('#main > .ui-page-header').getByRole('button', {name: copy('pm_refresh'), exact: true}).click();
       await expect(form.getByLabel(copy('setup_host_name'),{exact:true})).toHaveValue('demo');
-      await form.getByRole('button',{name:copy('setup_save_host')}).click(); await applySetupReview(page);
+      await reviewSetupConnection(page,locale); await applySetupReview(page);
       await expect(panel).toContainText(copy('error_generic'));
       expect(state.posts).toHaveLength(1);expect(state.staged).toHaveLength(1);
       expect(state.posts[0].body.params).toMatchObject({secret_ref:'setup_'+'b'.repeat(32),writes:false,orchestrate:false});
@@ -79,12 +116,13 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale + ' managed setup', (
       await form.locator('[data-setup-manual] > summary').click();
       await form.getByLabel(copy('setup_profile'),{exact:true}).selectOption('profile-demo');
       await form.getByLabel(copy('setup_host_name'),{exact:true}).fill('demo');
-      await form.getByRole('button',{name:copy('setup_save_host')}).click(); await applySetupReview(page);
+      await reviewSetupConnection(page,locale); await applySetupReview(page);
       await expect(panel).toContainText(copy('error_code_CONFIGURATION_CHANGED'));
       await expect(page.locator('[data-setup-operation]')).toHaveCount(0);
       state.revision='d'.repeat(64);state.refused=false;
       await page.locator('#main > .ui-page-header').getByRole('button', {name: copy('pm_refresh'), exact: true}).click();
-      await form.getByRole('button',{name:copy('setup_save_host')}).click(); await applySetupReview(page);
+      await expect(page.locator('[data-setup-discovery]')).toBeHidden();
+      await reviewSetupConnection(page,locale); await applySetupReview(page);
       await expectSetupOperation(page);
       expect(state.posts[1].idempotency_key).not.toBe(state.posts[0].idempotency_key);
       expect(state.posts[1].body.preconditions.config_revision).toBe(state.revision);
@@ -174,7 +212,7 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale + ' managed setup', (
       await expect(shared).not.toBeChecked(); await shared.check(); await expect(form).toContainText(copy('setup_shared_clone_help'));
       await form.locator('[data-setup-manual] > summary').click();
       await form.getByLabel(copy('setup_profile'), {exact: true}).selectOption('profile-demo');
-      await form.getByLabel(copy('setup_host_name'), {exact: true}).fill('demo'); await form.getByRole('button', {name: copy('setup_save_host'), exact: true}).click(); await applySetupReview(page);
+      await form.getByLabel(copy('setup_host_name'), {exact: true}).fill('demo'); await reviewSetupConnection(page,locale); await applySetupReview(page);
       await expectSetupOperation(page);
       expect(state.posts[0].body.params).toMatchObject({shared_clone_worktrees: true, writes: false, orchestrate: false});
     });
@@ -190,4 +228,8 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale + ' managed setup', (
     });
   });
 
+});
+
+for (const locale of ['en', 'zh-TW']) test(`${locale} older Connector keeps the typed profile fallback`, async ({page}) => {
+  await expectLegacyProfileFallback(page, locale);
 });

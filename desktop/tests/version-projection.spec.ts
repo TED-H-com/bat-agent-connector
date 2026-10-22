@@ -6,6 +6,9 @@ const runtimes=JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-run
 for(const locale of ['en-US','zh-TW'])for(const width of [390,1440])for(const native of [false,true]) {
   test(`one version projection ${native?'desktop':'browser'} ${locale} ${width}`,async({browser},info)=>{
     const context=await browser.newContext({locale,viewport:{width,height:1000}}),page=await context.newPage();
+    const at=Date.UTC(2026,9,22);
+    await page.clock.install({time:at});
+    await page.clock.pauseAt(at);
     const producer=structuredClone(bootstrap);
     // Compatibility variant: an external Connector need not advertise managed
     // installation. Preserve the real producer build/capability fields.
@@ -48,6 +51,17 @@ for(const locale of ['en-US','zh-TW'])for(const width of [390,1440])for(const na
       // launch receipt. Values come from the managed producer golden.
       const answering=runtimes.differs.running_runtime;
       state.producer.bootstrap.capabilities.build={version:answering.version,commit:answering.commit,source:answering.build_source};
+      // Re-enter Settings so the app reads the changed capabilities before export.
+      await page.locator('#live').click();
+      await page.locator('#settings-tab-about').click();
+      const connector=about.locator('[data-version-row=connector]');
+      await expect(connector).toBeVisible();
+      await expect(connector).toContainText(answering.commit);
+      // tickHealth verifies the change through /bootstrap. Its completed read
+      // advances this visible timestamp; keep the clock paused after that barrier
+      // so activation cannot withdraw the preview during the assertions below.
+      await page.clock.runFor(1000);
+      await expect(connector).toContainText(new Date(at+1000).toISOString());
       await page.locator('[data-export-diagnostics]').click();
       await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');
       const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);

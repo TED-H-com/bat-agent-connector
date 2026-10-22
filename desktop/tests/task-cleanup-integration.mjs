@@ -1,3 +1,4 @@
+import {httpEventDelivery} from './event-delivery.mjs';
 // Task UI and recovery against real central cleanup; temporary Git and MockBat only.
 import {spawn} from "node:child_process";
 import {createInterface} from "node:readline";
@@ -20,6 +21,7 @@ const responses = [];
 try {
   const fixture = await next(), origin = `http://127.0.0.1:${fixture.port}`, writes = [], errors = [];
   page = await browser.newPage({locale: "en-US"});
+  const events = await httpEventDelivery(page);
   page.on("pageerror", error => errors.push(error.message));
   let loseReply = true;
   await page.route("**/api/v1/operations?wait=3", async route => {
@@ -45,13 +47,13 @@ try {
   await page.addInitScript(token => sessionStorage.setItem("batc.dashboard.token", token), fixture.token);
   await page.goto(origin+"/dashboard/#/cleanup/task/"+fixture.task_id);
   await expect(page.getByRole("combobox", {name: "Choose a scope"})).toHaveValue("task");
-  await page.getByRole("button", {name: "Preview cleanup", exact: true}).click();
+  await events.post(page.getByRole("button", {name: "Preview cleanup", exact: true}));
   await expect(page.getByText("Plan:", {exact: false}).first()).toBeVisible();
   await page.getByRole("checkbox", {name: "I reviewed the resources", exact: false}).check();
-  await page.getByRole("button", {name: "Apply reviewed cleanup"}).click();
+  await events.post(page.getByRole("button", {name: "Apply reviewed cleanup"}));
   await expect(page.locator("p.error")).toBeVisible();
   await page.reload();
-  await page.getByRole("button", {name: "Apply reviewed cleanup"}).click();
+  await events.post(page.getByRole("button", {name: "Apply reviewed cleanup"}));
   const receipt = page.getByRole("link", {name: "View item receipts"});
   await expect(receipt).toBeVisible({timeout: 30000});
   const operationId = (await receipt.getAttribute("href")).split("/").at(-1);

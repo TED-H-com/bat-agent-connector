@@ -166,11 +166,11 @@ History／relations 的 opaque cursor 在任何 journal read 前驗證 version�
 | `GET /api/v1/tasks/{task_id}/sessions`、`…/history` | observe | Execution 的 lead/reviewer/follow-up 關係分頁；不以最新 session pointer 取代歷史 |
 | `GET /api/v1/sessions/{host}/{id}/messages` | observe | 經 read-only fleet 讀對話；`reading` 隨當次讀取附 `incomplete_reasons`（`archive_unconfirmed`／`archive_budget`／`message_ids`）與可選 `unindexed_count`，見 [session-reading.md](session-reading.md) |
 | `GET /api/v1/policy` | observe | mutation 清單與各主機設定 |
-| `GET/POST /api/v1/operations` | observe／依 action | 列表；建立（`Idempotency-Key` 標頭或 `idempotency_key`，`?wait=0-60` 秒，格式錯誤時在保存前回 422） |
 | `GET /api/v1/connections?installation_ref=…&after=…&limit=…` | observe | 僅目前 principal 與 installation 的投影；limit 1–200，預設 50，`next_after` 分頁 |
 | `POST /api/v1/connections/preview` | observe；setup 另需 manage 與原 personal identity | 唯讀連線 before／after 與 review_digest；不 probe、不寫入、不建立 operation |
 | `POST /api/v1/connections/receipt` | manage 與原 personal identity | 固定 v1 native 收據；只能完成原 operation 的 native_effects，不能受理新意圖 |
 | `POST /api/v1/connections/handoff` | manage 與原 personal identity | exact body `{installation_ref,operation_id}`；claim 記錄 fence 並回傳 native_handoff；TTL 從 claim 起算，未 claim 的過期 epoch 可重發 |
+| `GET/POST /api/v1/operations` | observe／依 action | 列表；建立（`Idempotency-Key` 標頭或 `idempotency_key`，`?wait=0-60` 秒，格式錯誤時在保存前回 422） |
 | `GET /api/v1/operations/{id}`、`POST …/cancel`、`POST …/resume` | observe／actor 或 action scope | 含步驟；取消見上；resume 只用於 `needs_attention` |
 | `GET /api/v1/events`、`/events/stream` | observe | 事件分頁、SSE |
 | `GET /api/v1/tasks/{task_id}` | observe | 既有 `work_status` |
@@ -327,13 +327,32 @@ step 2 之後；backfilled snapshot 的 occurred_at=null，原事件不改寫。
 
 | 路徑／欄位 | 已實作契約 |
 | --- | --- |
-| `GET /api/v1/managed/setup` | 原安裝 personal identity 與 `manage`；新增 `preview_contract_version:1`，其餘 setup state 保留。未宣告此版本時，新 UI 要求先更新 Connector，不自動退回舊式套用。[managed_setup.py:183](../../src/bat_agent_connector/managed_setup.py#L183)、[managed-setup.js:424](../../desktop/src/managed-setup.js#L424) |
-| `POST /api/v1/managed/setup/preview` | 同一 route table／認證邊界，scope 為 `manage`；無 query，只接受 `{action,target,params,preconditions}`，action 必須為 `setup.host`，target 為 `{host}`，params 沿用候選 builder 的 allowlist，preconditions 只能含 `{config_revision}`。原安裝／personal identity、busy、revision、來源、型別與 parser roundtrip 均先驗；不建立 operation／step、不寫設定、不連 BAT／SSH／Git。[api_v1.py:249](../../src/bat_agent_connector/api_v1.py#L249)、[api_v1.py:1401](../../src/bat_agent_connector/api_v1.py#L1401)、[managed_setup.py:262](../../src/bat_agent_connector/managed_setup.py#L262)、[managed_setup.py:383](../../src/bat_agent_connector/managed_setup.py#L383) |
-| 成功回應 | `{preview:{contract_version:1,action,target,config_revision,after_revision,review_digest,changes,source,warnings,effects}}`。changes 是 allowlist 的 `{field,before,after}`，source 是 `{kind,reference,available}`；kind 為 `bat_profile`、`staged_secret` 或 `existing_connection`。不含原始 TOML、秘密本文或解析後的 `file:` 憑證路徑；正式形狀見 [producer golden](../../tests/fixtures/managed-setup-preview.json)。[managed_setup.py:412](../../src/bat_agent_connector/managed_setup.py#L412)、[test_managed_setup_preview_golden.py:16](../../tests/test_managed_setup_preview_golden.py#L16) |
-| `review_digest` | SHA-256 綁版本、server／principal／actor、literal action／target／params（只有不透明秘密引用）及 before／after revisions。不是操作授權或加密簽章；Apply 仍重跑原安裝／scope／來源／busy guards。來源或請求改變須重新預覽。[managed_setup.py:405](../../src/bat_agent_connector/managed_setup.py#L405)、[managed_setup.py:450](../../src/bat_agent_connector/managed_setup.py#L450) |
-| `POST /api/v1/operations` 的 `setup.host` | 新 UI 帶原 target／params、原 `config_revision` 與 `review_digest`；不符回 `409 SETUP_REVIEW_CHANGED`，在建立 operation 與 probe 前拒絕。沿用 `manage`、既有 action／journal／step；舊客戶端僅帶 `config_revision` 仍受支援，`setup.repository`／`setup.verification` 不接受 digest。已受理的重送仍先依原 key／request hash 查回，不能改成新意圖。[managed_setup.py:450](../../src/bat_agent_connector/managed_setup.py#L450)、[operations.py:556](../../src/bat_agent_connector/operations.py#L556)、[managed_setup.py:602](../../src/bat_agent_connector/managed_setup.py#L602) |
+| `GET /api/v1/managed/setup` | 原安裝 personal identity 與 `manage`；新增 `preview_contract_version:1`，其餘 setup state 保留。未宣告此版本時，新 UI 要求先更新 Connector，不自動退回舊式套用。[managed_setup.py:166](../../src/bat_agent_connector/managed_setup.py#L166)、[managed-setup.js:521](../../desktop/src/managed-setup.js#L521) |
+| `POST /api/v1/managed/setup/discover` | 明確唯讀查詢，與 preview 相同的 `manage`／personal installation 邊界，固定 route、無 query。輸入 `{revision, import_profile_id, profile_id?}` 或 `{revision, url, fingerprint, secret_ref, profile_id?}`，只能選一種來源。回傳 `{source, profiles:[{id,name}], profile_id:string或null, workspaces:[{workspace_id,name}]}`。`source` 是 [D3 固定 descriptor v1](fleet-configuration.md#d3-source-descriptor-v1固定契約)。只呼叫與 Apply 共用的 `_read_host`，pinned connect、10 秒 ping、既有 channel deadlines；discovery 共用 25 秒總期限（含收尾），每一步使用剩餘 budget，逾時回 `409 SETUP_DISCOVERY_TIMEOUT`；Apply 的 per-step timeouts 保留。profiles/workspaces 各最多 200。唯一有效 profile 可預選，多個則待選擇後再次明確查詢該 profile 的 workspaces。不建立 operation／journal、不消耗 staging、不寫設定，兩個 write gates 都關閉。 |
+| `POST /api/v1/managed/setup/preview` | 同一 route table／認證邊界，scope 為 `manage`；無 query，只接受 `{action,target,params,preconditions}`，action 必須為 `setup.host`，target 為 `{host}`，params 沿用候選 builder 的 allowlist，preconditions 只能含 `{config_revision}`。原安裝／personal identity、busy、revision、來源、型別與 parser roundtrip 均先驗；不建立 operation／step、不寫設定、不連 BAT／SSH／Git。[api_v1.py:252](../../src/bat_agent_connector/api_v1.py#L252)、[api_v1.py:1418](../../src/bat_agent_connector/api_v1.py#L1418)、[managed_setup.py:245](../../src/bat_agent_connector/managed_setup.py#L245)、[managed_setup.py:373](../../src/bat_agent_connector/managed_setup.py#L373) |
+| 成功回應 | `{preview:{contract_version:1,action,target,config_revision,after_revision,review_digest,changes,source,warnings,effects}}`。changes 是 allowlist 的 `{field,before,after}`，source 是 `{kind,reference,available}`；kind 為 `bat_profile`、`staged_secret` 或 `existing_connection`。不含原始 TOML、秘密本文或解析後的 `file:` 憑證路徑；正式形狀見 [producer golden](../../tests/fixtures/managed-setup-preview.json)。[managed_setup.py:402](../../src/bat_agent_connector/managed_setup.py#L402)、[test_managed_setup_preview_golden.py:16](../../tests/test_managed_setup_preview_golden.py#L16) |
+| `review_digest` | SHA-256 綁版本、server／principal／actor、literal action／target／params（只有不透明秘密引用）及 before／after revisions。不是操作授權或加密簽章；Apply 仍重跑原安裝／scope／來源／busy guards。來源或請求改變須重新預覽。[managed_setup.py:395](../../src/bat_agent_connector/managed_setup.py#L395)、[managed_setup.py:440](../../src/bat_agent_connector/managed_setup.py#L440) |
+| `POST /api/v1/operations` 的 `setup.host` | 新 UI 帶原 target／params、原 `config_revision` 與 `review_digest`；不符回 `409 SETUP_REVIEW_CHANGED`，在建立 operation 與 probe 前拒絕。沿用 `manage`、既有 action／journal／step；舊客戶端僅帶 `config_revision` 仍受支援，`setup.repository`／`setup.verification` 不接受 digest。已受理的重送仍先依原 key／request hash 查回，不能改成新意圖。[managed_setup.py:440](../../src/bat_agent_connector/managed_setup.py#L440)、[operations.py:556](../../src/bat_agent_connector/operations.py#L556)、[managed_setup.py:629](../../src/bat_agent_connector/managed_setup.py#L629) |
 | `connection.reference.apply`／`setup.connection.apply` | 既有 observe／manage scopes；target 為 installation_ref 與 optional existing connection_id，preconditions 為 expected_revision／review_digest。Create ID 由 accepted operation 決定，既有 endpoint／pin／remote profile 不重綁。固定交接 JSON、投影與恢復規則見 [Durable connection operations](fleet-configuration.md#durable-connection-operations)。`GET /managed/setup` 與 capabilities 皆宣告 connection_contract_version:1。 |
-| 秘密與取消 | 已存 BAT profile 的預覽不 staging；貼上秘密可先走既有 `POST /managed/setup/secrets`，畫面必須顯示已發生的私密暫存。取消不建立 operation、不存連線、不 probe／啟動服務，未用秘密仍按既有到期清理規則處理。預覽只在記憶體；新 Apply 才保存原 request／key。已知 operation ID 恢復只 GET，尚未取得 ID 才以原 key／request 重送查回。[managed_setup.py:207](../../src/bat_agent_connector/managed_setup.py#L207)、[managed-setup.js:493](../../desktop/src/managed-setup.js#L493)、[managed-setup.js:522](../../desktop/src/managed-setup.js#L522)、[managed-setup.js:536](../../desktop/src/managed-setup.js#L536) |
+| 秘密與取消 | 已存 BAT profile 的預覽不 staging；貼上秘密可先走既有 `POST /managed/setup/secrets`，畫面必須顯示已發生的私密暫存。取消不建立 operation、不存連線、不 probe／啟動服務，未用秘密仍按既有到期清理規則處理。預覽只在記憶體；新 Apply 才保存原 request／key。已知 operation ID 恢復只 GET，尚未取得 ID 才以原 key／request 重送查回。[managed_setup.py:190](../../src/bat_agent_connector/managed_setup.py#L190)、[managed-setup.js:604](../../desktop/src/managed-setup.js#L604)、[managed-setup.js:633](../../desktop/src/managed-setup.js#L633)、[managed-setup.js:647](../../desktop/src/managed-setup.js#L647) |
 
 此處只實作既有 managed setup 的連線預覽；角色選擇、四檔協調與 native apply 仍依
-[Fleet 共用契約](fleet-configuration.md#加入機器共用契約已定尚未實作) 的已定／尚未實作界線，不能視為實機驗收。
+[Fleet 共用契約](fleet-configuration.md#加入機器共用契約) 的已定／尚未實作界線，不能視為實機驗收。
+
+Discovery 的 capability 為 `GET /managed/setup` 的 `discovery_contract_version:1`。
+`/capabilities` 沒有 HTTP route 清單，因此不增加另一份 route advertisement。
+WebView 透過既有 `connector_request` 的固定 HTTP allowlist 存取 `/managed/setup/discover`；沒有新增 IPC。
+新版 UI 將選定的伺服器 `profile_id` 與 `source_digest` 放進既有 `setup.host` preview params，
+import 來源也可以攜帶這兩欄；未帶 discovery snapshot 的舊請求維持原有欄位限制。
+既有 review digest 繼續綁定 params、來源及候選設定；preview、admission、執行與寫檔前均重新依 D3
+讀來源快照，不一致或 staging 到期時走 `SETUP_REVIEW_CHANGED`。首次 discovery 到期則為 `INVALID_SECRET`；
+不符合 admission 的 import 為 `PROFILE_UNAVAILABLE`。唯讀 discovery 的 operation refusals 帶 `admission_refused:true`，證明沒有建立 durable intent。
+Preview error 保留原 `{error:{code,message}}` 形狀，不增加此欄位；Apply admission 繼續使用既有證明。
+來源 snapshot 參數型別／格式錯誤為 `INVALID_PARAMS`；格式有效但來源已變動／不可用則為 `SETUP_REVIEW_CHANGED`。
+Endpoint 在 digest 前共用同一個 canonical validator；空 query／fragment 與加尾斜線後超過 512 字元均為 `INVALID_HOST`。
+`GET /managed/setup` 與 preview 仍不執行 BAT／SSH 探測。
+
+既有設定中 endpoint／pin／BAT profile 相同且憑證可用時，UI 可以直接 Review／Apply 管理選項，
+不送 discovery 或重貼 token。要探索或改選既有連線的 profile，必須另貼 BAT token；
+禁用按鈕旁以雙語說明原因。本輪不以儲存的憑證建立 server-side discovery 路徑。
+既有 `HOST_IDENTITY_CHANGED` 拒絕與新 host name 要求仍保留。

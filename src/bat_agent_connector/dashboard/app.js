@@ -19,6 +19,50 @@ var __exportAll = (all, no_symbols) => {
 	return target;
 };
 //#endregion
+//#region src/startup-role.js
+function startupRoleChoice({ h, t, errorBox, snapshot, select }) {
+	let busy = false;
+	const info = h("div", { "aria-live": "polite" });
+	const buttons = [];
+	const options = [
+		"client",
+		"provider",
+		"both"
+	].map((role) => {
+		const button = h("button", {
+			type: "button",
+			class: "primary",
+			"data-role": role,
+			onclick: async () => {
+				if (busy) return;
+				busy = true;
+				for (const other of buttons) other.disabled = true;
+				info.replaceChildren(h("p", {}, t("desktop_role_saving")));
+				try {
+					await select({
+						role,
+						expected_generation: snapshot.generation
+					});
+				} catch (error) {
+					info.replaceChildren(errorBox(error, {
+						sourceRefresh: false,
+						within: info
+					}));
+				} finally {
+					busy = false;
+					for (const other of buttons) other.disabled = false;
+				}
+			}
+		}, t("desktop_role_" + role));
+		buttons.push(button);
+		return h("section", { class: "panel" }, button, h("p", {}, t("desktop_role_" + role + "_help")));
+	});
+	return h("section", {
+		"data-startup-role": "",
+		"aria-labelledby": "startup-role-title"
+	}, h("h2", { id: "startup-role-title" }, t("desktop_role_title")), h("p", {}, t("desktop_role_help")), ...options, info);
+}
+//#endregion
 //#region src/ui/dom.js
 function place(node, method, ...children) {
 	const kept = children.flat(Infinity).filter((child) => child !== null && child !== void 0 && child !== false);
@@ -2132,6 +2176,7 @@ var init_ui_strings = __esmMin((() => {
 			error_code_CLIENT_ACTION_MANAGE_REQUIRED: "This attachment action needs Manage access. Ask the Connector administrator for Manage access, then try again.",
 			error_code_CLIENT_ACTION_ATTACHMENTS_UNAVAILABLE: "Attachments are unavailable on this connection. Ask the Connector administrator to check attachment support.",
 			error_code_CLIENT_ACTION_UPLOADS_NOT_ALLOWED: "Attachment uploads are not allowed on this connection. Ask the Connector administrator to allow uploads, then try again.",
+			error_code_CLIENT_ACTION_NATIVE_PASTE_UNSUPPORTED: "Image paste is not supported in the desktop app. Use Choose files, or Enable file drop and drop the file.",
 			ui_switch_workspace: "Switch workspace",
 			ui_new_workspace: "New workspace",
 			ui_report: "Report",
@@ -2237,6 +2282,7 @@ var init_ui_strings = __esmMin((() => {
 			error_code_CLIENT_ACTION_MANAGE_REQUIRED: "此附件操作需要管理權限。請向 Connector 管理員申請管理權限，再試一次。",
 			error_code_CLIENT_ACTION_ATTACHMENTS_UNAVAILABLE: "目前連線無法使用附件。請聯絡 Connector 管理員確認附件支援。",
 			error_code_CLIENT_ACTION_UPLOADS_NOT_ALLOWED: "目前連線未允許附件上傳。請聯絡 Connector 管理員開放上傳，再試一次。",
+			error_code_CLIENT_ACTION_NATIVE_PASTE_UNSUPPORTED: "桌面版不支援貼上圖片。請使用「選擇檔案」，或先「啟用拖放」再拖入檔案。",
 			ui_switch_workspace: "切換工作空間",
 			ui_new_workspace: "新增工作空間",
 			ui_report: "報告",
@@ -10486,7 +10532,7 @@ var init_i18n = __esmMin((() => {
 			setup_copy_help: "請在 BAT 開啟「設定 → 遠端 → 遠端存取」，複製連線網址後貼到下方。如果尚未啟動，請先按「啟動伺服器」。",
 			setup_copy_label: "貼上從 BAT 複製的連線網址",
 			setup_continue: "繼續設定",
-			setup_choose_connection: "找到多個已儲存的連線。請選擇要使用的連線，再按「預覽連線」。",
+			setup_choose_connection: "找到多個已儲存的連線。請選擇要使用的連線，再按「尋找設定檔與工作區」。",
 			setup_connection_choice: "要使用的連線",
 			setup_choose_placeholder: "請選擇連線",
 			setup_failed_operation: "設定尚未完成，請查看詳細資料。",
@@ -10534,6 +10580,13 @@ var init_i18n = __esmMin((() => {
 			setup_allow_integrate: "允許整合成果到 PR",
 			setup_allow_merge: "允許合併 PR",
 			setup_allow_pr_update: "允許更新 PR 資料",
+			setup_choose_profile: "請選擇設定檔",
+			setup_discovery_required: "請先尋找設定檔與工作區，再預覽此連線。",
+			setup_profile_token_required: "若要為此連線選擇其他 BAT 設定檔，請貼上 BAT 連線權杖，再尋找設定檔與工作區。",
+			error_code_SETUP_DISCOVERY_TIMEOUT: "探索逾時，請重新尋找設定檔與工作區。",
+			setup_discover: "尋找設定檔與工作區",
+			setup_discovered_profile: "BAT 設定檔",
+			setup_discovery_read: "Connector 已唯讀查詢伺服器。選擇設定檔；工作區可帶入下方儲存庫設定。",
 			setup_find_workspaces: "讀取主機工作區",
 			setup_save_repository: "驗證並連結儲存庫",
 			setup_refresh: "重新檢查設定",
@@ -10548,6 +10601,16 @@ var init_i18n = __esmMin((() => {
 			setup_unverified: "等待連線驗證",
 			setup_busy: "目前仍有工作或操作；設定會等安全時機再變更。",
 			setup_profiles_unavailable: "無法讀取 BAT 連線設定檔，請貼上連線網址或手動輸入。",
+			desktop_role_title: "這個安裝要如何使用？",
+			desktop_role_help: "請先選擇用途，再準備本機 Connector。既有服務保留各自的資料與權限。",
+			desktop_role_client: "使用既有服務",
+			desktop_role_client_help: "加入既有的 Connector，依現有權限查看與操作其工作區。",
+			desktop_role_provider: "提供本機工作區",
+			desktop_role_provider_help: "準備此安裝的本機 Connector，再設定工作區連線。",
+			desktop_role_both: "兩者兼有",
+			desktop_role_both_help: "先準備本機 Connector。就緒後，可從設定加入既有的 Connector。",
+			desktop_role_saving: "正在儲存用途…",
+			desktop_role_changed: "此安裝已變更。請重新開啟以讀取已儲存的用途。",
 			managed_join_existing: "加入既有的 Connector",
 			managed_join_help: "輸入另一個 Connector 的位址與預期帳號，在原生視窗確認後，再加入該 Connector 的憑證。此電腦原有的背景工作會繼續運作。",
 			managed_background_help: "Connector 在背景持續運作。關閉這個畫面不會停止工作。",
@@ -11459,6 +11522,10 @@ var init_i18n = __esmMin((() => {
 			fleet_start: "啟動連線監控",
 			fleet_quit: "停止本機連線監控",
 			fleet_status_details: "詳細資料",
+			fleet_route_direct: "路徑：Tailscale 直連",
+			fleet_route_lan: "路徑：區域網路",
+			fleet_route_cf: "路徑：Cloudflare",
+			fleet_route_configured: "路徑：已設定的 SSH",
 			fleet_monitor_running: "監控執行中",
 			fleet_monitor_stopped: "監控已停止",
 			fleet_ready: "就緒",
@@ -12216,7 +12283,7 @@ var init_i18n = __esmMin((() => {
 			setup_copy_help: "In BAT, open Settings → Remote → Remote Access, copy the connection URL and paste it below. If it is not running, choose Start Server first.",
 			setup_copy_label: "Paste the connection link copied from BAT",
 			setup_continue: "Continue setup",
-			setup_choose_connection: "More than one saved connection was found. Choose the one you want, then select Review connection.",
+			setup_choose_connection: "More than one saved connection was found. Choose the one you want, then select Find profiles and workspaces.",
 			setup_connection_choice: "Connection to use",
 			setup_choose_placeholder: "Choose a connection",
 			setup_failed_operation: "Setup hasn’t finished. See details for more information.",
@@ -12264,6 +12331,13 @@ var init_i18n = __esmMin((() => {
 			setup_allow_integrate: "Allow result integration into PRs",
 			setup_allow_merge: "Allow PR merges",
 			setup_allow_pr_update: "Allow PR metadata updates",
+			setup_choose_profile: "Choose a profile",
+			setup_discovery_required: "Find profiles and workspaces before reviewing this connection.",
+			setup_profile_token_required: "To choose another BAT profile for this connection, paste its BAT connection token, then find profiles and workspaces.",
+			error_code_SETUP_DISCOVERY_TIMEOUT: "Discovery timed out. Find profiles and workspaces again.",
+			setup_discover: "Find profiles and workspaces",
+			setup_discovered_profile: "BAT profile",
+			setup_discovery_read: "Connector read the server without making changes. Choose a profile; a workspace can fill the repository settings below.",
 			setup_find_workspaces: "Read this host's workspaces",
 			setup_save_repository: "Verify and bind repository",
 			setup_refresh: "Recheck configuration",
@@ -12278,6 +12352,16 @@ var init_i18n = __esmMin((() => {
 			setup_unverified: "Awaiting connection verification",
 			setup_busy: "Work or operations are still active; configuration changes wait for a safe point.",
 			setup_profiles_unavailable: "BAT connection profiles could not be read. Paste a connection URL or enter the values manually.",
+			desktop_role_title: "How will you use this installation?",
+			desktop_role_help: "Choose before a local Connector is prepared. Existing services keep their own data and permissions.",
+			desktop_role_client: "Use existing services",
+			desktop_role_client_help: "Join another Connector to view and operate its workspaces with your existing permissions.",
+			desktop_role_provider: "Provide a local workspace",
+			desktop_role_provider_help: "Prepare this installation’s local Connector, then set up its workspace connections.",
+			desktop_role_both: "Both",
+			desktop_role_both_help: "Prepare the local Connector first. Join another Connector from Settings once it is ready.",
+			desktop_role_saving: "Saving your choice…",
+			desktop_role_changed: "This installation changed. Reopen to read its saved role.",
 			managed_join_existing: "Join another Connector",
 			managed_join_help: "Enter the address and expected account for another Connector, then confirm in the native window. Enroll its credential separately afterward. Existing background work on this computer keeps running.",
 			managed_background_help: "Connector keeps running in the background. Closing this view does not stop work.",
@@ -13190,6 +13274,10 @@ var init_i18n = __esmMin((() => {
 			fleet_start: "Start connection monitor",
 			fleet_quit: "Stop local connection monitor",
 			fleet_status_details: "Details",
+			fleet_route_direct: "Route: Tailscale direct",
+			fleet_route_lan: "Route: LAN",
+			fleet_route_cf: "Route: Cloudflare",
+			fleet_route_configured: "Route: Configured SSH",
 			fleet_monitor_running: "Monitor running",
 			fleet_monitor_stopped: "Monitor stopped",
 			fleet_ready: "Ready",
@@ -14047,6 +14135,10 @@ function centralServiceStatus({ token, pollHealth, online, managedRecovery }) {
 	};
 }
 function clientActionGate(facts, requirements) {
+	if (requirements.paste && facts.nativeDesktop) return {
+		allowed: false,
+		reason: "native_paste_unsupported"
+	};
 	const ready = requirements.post || requirements.attachment;
 	if (!(requirements.post && (!facts.token || facts.nativeBusy) || ready && (!facts.online || !facts.viewReady) || requirements.supported && !facts.attachmentsSupported || requirements.manage && !facts.manageAllowed || requirements.uploads && !facts.uploadsAllowed)) return {
 		allowed: true,
@@ -14066,13 +14158,60 @@ var clientReasons = [
 	"view_not_ready",
 	"manage_required",
 	"attachments_unavailable",
-	"uploads_not_allowed"
+	"uploads_not_allowed",
+	"native_paste_unsupported"
 ];
 var clientActionCode = (reason) => `CLIENT_ACTION_${reason.toUpperCase()}`;
 var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}`;
 var clientActionReason = (code) => clientReasons.find((reason) => clientActionCode(reason) === code) || null;
 //#endregion
+//#region src/health-fact.js
+function displayFact(fact = {}, { now = Date.now(), bootstrap, version } = {}) {
+	const observed = time$2(fact.observed_at), deadline = time$2(fact.valid_until);
+	const ageSeconds = Number.isFinite(observed) ? Math.max(0, Math.floor((now - observed) / 1e3)) : null;
+	const freshness = fact.static && (fact.bootstrap !== bootstrap || fact.version !== version) ? "invalidated" : fact.static ? "current" : fact.stale ? "stale" : !Number.isFinite(observed) ? "unknown" : Number.isFinite(deadline) ? now >= deadline ? "stale" : "current" : now - observed >= 6e4 ? "stale" : "current";
+	return {
+		...fact,
+		freshness,
+		ageSeconds
+	};
+}
+function healthAge(seconds, t) {
+	return seconds === null ? t("health_age_unknown") : seconds < 60 ? t("health_age_recent") : t("health_age_minutes", { count: Math.floor(seconds / 60) });
+}
+function healthLabel(fact, t, { age = true } = {}) {
+	const label = t(fact.key === "health_unknown" ? "obs_unknown" : fact.key || fact.value);
+	if (fact.error) return t("health_read_failed", {
+		value: label,
+		age: healthAge(fact.ageSeconds, t),
+		reason: fact.error.code || fact.error.status
+	});
+	if (fact.stale_reason === "host_unreachable") return t("health_unreachable_value", {
+		value: label,
+		age: healthAge(fact.ageSeconds, t)
+	});
+	if (fact.freshness === "stale" && age) return t("health_stale_value", {
+		value: label,
+		age: healthAge(fact.ageSeconds, t),
+		checking: t("health_checking")
+	});
+	if ([
+		"stale",
+		"unknown",
+		"invalidated"
+	].includes(fact.freshness) && fact.key !== "ui_connecting") return label.includes(t("health_checking")) ? label : t("health_unknown_value", {
+		value: label,
+		checking: t("health_checking")
+	});
+	return label;
+}
+var time$2;
+var init_health_fact = __esmMin((() => {
+	time$2 = (value) => typeof value === "number" && Number.isFinite(value) ? value : typeof value === "string" && value ? Date.parse(value) : NaN;
+}));
+//#endregion
 //#region src/state/sessions.js
+init_health_fact();
 var text$6 = (value) => typeof value === "string" ? value : "";
 function workspaceGroup(session) {
 	const host = text$6(session.host), id = text$6(session.workspace_id), name = text$6(session.workspace);
@@ -14279,12 +14418,35 @@ function fleetDiagnosis(row, { snapshot, readable, kind = "host" } = {}) {
 function rememberFleetDetails(content, detailsState) {
 	for (const details of content.querySelectorAll("details[data-fleet-details-key]")) detailsState.set(details.dataset.fleetDetailsKey, details.open);
 }
-function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState }) {
-	const { state, kind, steps } = fleetDiagnosis(row, {
+function fleetHealth(row, options = {}) {
+	const diagnosis = fleetDiagnosis(row, options);
+	const observedAt = ["checking", "unknown"].includes(diagnosis.state) ? null : row?.observed_at;
+	const fact = displayFact({
+		key: [
+			"checking",
+			"unknown",
+			"stale"
+		].includes(diagnosis.state) ? "health_unknown" : diagnosis.state === "ready" ? "ui_connected" : "fleet_check_title_" + diagnosis.state,
+		observed_at: observedAt,
+		stale: diagnosis.state === "stale"
+	}, { now: options.now });
+	const state = diagnosis.state === "ready" && fact.freshness !== "current" ? fact.freshness === "stale" ? "stale" : "checking" : diagnosis.state;
+	return {
+		...diagnosis,
+		state,
+		fact,
+		steps: fact.freshness === "current" ? diagnosis.steps : diagnosis.steps.map((step) => ({
+			...step,
+			state: "unchecked"
+		}))
+	};
+}
+function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState, now = Date.now() }) {
+	const { state, kind, steps, fact } = fleetHealth(row, {
 		snapshot,
 		readable,
-		name: entry.name,
-		kind: entry.kind
+		kind: entry.kind,
+		now
 	});
 	const key = `${snapshot.configuration.binding}:machine:${entry.name}`;
 	const details = h("details", {
@@ -14303,8 +14465,34 @@ function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState }) {
 	return h("div", {
 		class: "fleet-diagnosis",
 		"data-fleet-diagnosis": entry.name,
-		"data-fleet-state": state
-	}, h("p", { class: "fleet-diagnosis-title" }, t("fleet_check_title_" + state)), h("p", { class: "muted" }, t("fleet_check_help_" + helpKey)), details);
+		"data-fleet-state": state,
+		"data-freshness": fact.freshness
+	}, h("p", { class: "fleet-diagnosis-title" }, healthLabel(fact, t)), h("p", { class: "muted" }, t("fleet_check_help_" + helpKey)), details, ...fleetRoute(row, {
+		h,
+		t,
+		snapshot,
+		readable,
+		entry,
+		now
+	}));
+}
+function fleetRoute(row, { h, t, snapshot, readable, entry, now }) {
+	const route = row?.route;
+	if (!route || ![
+		"direct",
+		"lan",
+		"cf",
+		"configured"
+	].includes(route.kind) || !readable || row.selected !== true || ["off", "down"].includes(row.level) || snapshot.monitor.state !== "running" || snapshot.readiness.state === "unavailable" || snapshot.selection.applied_revision !== snapshot.selection.revision) return [];
+	const fact = displayFact({
+		key: "fleet_route_" + route.kind,
+		observed_at: route.observed_at
+	}, { now });
+	return [h("p", {
+		class: "muted",
+		"data-fleet-route": entry.name,
+		"data-freshness": fact.freshness
+	}, healthLabel(fact, t))];
 }
 var codeReason, layerReason, layerStep, lookup;
 var init_fleet_status = __esmMin((() => {
@@ -14364,6 +14552,7 @@ var init_fleet_status = __esmMin((() => {
 }));
 //#endregion
 //#region src/health-display.js
+init_health_fact();
 init_fleet_status();
 var time$1 = (value) => typeof value === "number" && Number.isFinite(value) ? value : typeof value === "string" && value ? Date.parse(value) : NaN;
 var healthRevision = (caps) => JSON.stringify([
@@ -14376,16 +14565,6 @@ var healthRevision = (caps) => JSON.stringify([
 var rowId = (row) => JSON.stringify([row.host, row.session_id]);
 var gone = (row) => Boolean(row.gone_at) || row.state?.enumeration === "gone";
 var selectedRows = (health) => (health.sessions || []).filter((row) => !gone(row) && row.host === health.selected?.host && (health.selected.workspaceId ? row.workspace_id === health.selected.workspaceId : row.session_id === health.selected.sessionId));
-function displayFact(fact = {}, { now = Date.now(), bootstrap, version } = {}) {
-	const observed = time$1(fact.observed_at), deadline = time$1(fact.valid_until);
-	const ageSeconds = Number.isFinite(observed) ? Math.max(0, Math.floor((now - observed) / 1e3)) : null;
-	const freshness = fact.static && (fact.bootstrap !== bootstrap || fact.version !== version) ? "invalidated" : fact.static ? "current" : fact.stale ? "stale" : !Number.isFinite(observed) ? "unknown" : Number.isFinite(deadline) ? now >= deadline ? "stale" : "current" : now - observed >= 6e4 ? "stale" : "current";
-	return {
-		...fact,
-		freshness,
-		ageSeconds
-	};
-}
 function compactHealth({ attention, stale, unknown, activity }) {
 	return attention ? "attention" : stale ? "stale" : unknown || activity === "unknown" ? "unknown" : activity === "working" ? "working" : "idle";
 }
@@ -14669,35 +14848,6 @@ function takeHealthRenewal(health, now = Date.now()) {
 	}
 	health.bootstrapRenewal = false;
 	return null;
-}
-function healthAge(seconds, t) {
-	return seconds === null ? t("health_age_unknown") : seconds < 60 ? t("health_age_recent") : t("health_age_minutes", { count: Math.floor(seconds / 60) });
-}
-function healthLabel(fact, t, { age = true } = {}) {
-	const label = t(fact.key === "health_unknown" ? "obs_unknown" : fact.key || fact.value);
-	if (fact.error) return t("health_read_failed", {
-		value: label,
-		age: healthAge(fact.ageSeconds, t),
-		reason: fact.error.code || fact.error.status
-	});
-	if (fact.stale_reason === "host_unreachable") return t("health_unreachable_value", {
-		value: label,
-		age: healthAge(fact.ageSeconds, t)
-	});
-	if (fact.freshness === "stale" && age) return t("health_stale_value", {
-		value: label,
-		age: healthAge(fact.ageSeconds, t),
-		checking: t("health_checking")
-	});
-	if ([
-		"stale",
-		"unknown",
-		"invalidated"
-	].includes(fact.freshness) && fact.key !== "ui_connecting") return label.includes(t("health_checking")) ? label : t("health_unknown_value", {
-		value: label,
-		checking: t("health_checking")
-	});
-	return label;
 }
 //#endregion
 //#region src/credential-storage-key.js
@@ -25193,11 +25343,8 @@ async function connectorRequest(method, path, body, key, browserToken, signal) {
 	};
 }
 async function connectorUploadArtifact(operationId, bytes, browserToken) {
+	if (nativeDesktop) throw new Error("Native uploads require the native file manager.");
 	if (!/^op_[0-9a-f]{32}$/.test(operationId)) throw new Error("Invalid artifact upload operation ID");
-	if (nativeDesktop) {
-		if (bytes.byteLength > 16777216) throw new Error("Artifact exceeds the native 16 MiB upload limit");
-		return invoke("connector_upload_artifact", bytes, { headers: { "x-batc-upload-operation": operationId } });
-	}
 	const res = await fetch(`/api/v1/artifacts/uploads/${operationId}/content`, {
 		method: "POST",
 		redirect: "error",
@@ -25214,7 +25361,7 @@ async function connectorUploadArtifact(operationId, bytes, browserToken) {
 		data: await res.json().catch(() => ({}))
 	};
 }
-var nativeDesktop, nativeFileSupport, nativeBriefExportSupport, browserSessionToken, browserCsrf, nativeDiagnosticsSave, nativeFilesStatus, nativeFilesPick, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeBriefSave, nativeFilesPreview, nativeConnect, managedControl, nativeDisconnect, nativeDialogLocale, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
+var nativeDesktop, nativeFileSupport, nativeBriefExportSupport, browserSessionToken, browserCsrf, nativeDiagnosticsSave, nativeFilesStatus, nativeFilesPick, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeBriefSave, nativeFilesPreview, nativeSelectRole, nativeConnect, managedControl, nativeDisconnect, nativeDialogLocale, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
 var init_transport = __esmMin((() => {
 	init_core();
 	init_i18n();
@@ -25238,6 +25385,7 @@ var init_transport = __esmMin((() => {
 	nativeFilesSave = (reference) => invoke("native_files_save", { reference });
 	nativeBriefSave = (reference) => invoke("native_brief_save", { reference });
 	nativeFilesPreview = (reference) => invoke("native_files_preview", { reference });
+	nativeSelectRole = (input) => invoke("managed_select_role", { input });
 	nativeConnect = () => invoke("connector_connect");
 	managedControl = (input) => invoke("managed_control", { input });
 	nativeDisconnect = () => invoke("connector_disconnect");
@@ -41437,6 +41585,7 @@ function kanbanObservation({ h, t, api, alive, workspaceId, workId, caps, permit
 }
 //#endregion
 //#region src/pm-work-profile-state.js
+init_health_fact();
 var values$1 = new Set([
 	"ready",
 	"missing",
@@ -41468,11 +41617,21 @@ var reasons = new Set([
 var operation = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
 var valueKey = (value) => "wpf_" + (values$1.has(value) ? value : "unknown");
 var profileTimestamp = (value) => typeof value === "number" && Number.isFinite(value) && value > 0 && value < 253402300800 ? value : null;
-function profileStateFacts(state) {
+function profileStateFacts(state, { now = Date.now(), error = null } = {}) {
 	const reason = typeof state?.reason === "string" && /^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(state.reason) ? state.reason : null;
 	const past = state?.verified && typeof state.verified === "object" && !Array.isArray(state.verified) ? state.verified : null;
 	const pastAt = profileTimestamp(past?.observed_at), lastSuccessAt = profileTimestamp(state?.evidence_ref?.last_success_at);
+	const observed = profileTimestamp(state?.observed_at), deadline = typeof state?.valid_until === "string" ? Date.parse(state.valid_until) : NaN;
+	const readError = reason === "host_unreachable" && error?.unchangedDeadline === true ? null : error;
 	return {
+		fact: observed !== null && Number.isFinite(deadline) ? displayFact({
+			key: valueKey(state?.value),
+			observed_at: observed * 1e3,
+			valid_until: deadline,
+			stale: ["host_unreachable", "host_not_refreshed"].includes(reason),
+			stale_reason: reason,
+			error: readError
+		}, { now }) : null,
 		valueKey: valueKey(state?.value),
 		reasonKey: reasons.has(reason) ? "wpf_reason_" + reason : "wpf_unverified",
 		reasonCode: reason,
@@ -41487,6 +41646,7 @@ function profileStateFacts(state) {
 }
 //#endregion
 //#region src/pm-work-profile-picker.js
+init_health_fact();
 var identity = (value) => typeof value === "string" && /^wpf_[0-9a-f]{32}$/.test(value);
 var states$1 = [
 	"discovered",
@@ -41541,6 +41701,51 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 	const box = h$1("section", { "data-work-profile-picker": "" }, h$1("label", {}, t("wpf_label"), select), more, status, announcement, facts);
 	const returnKey = `batc.pm.${namespace}.profile-return.${workspaceId}.${workId}`;
 	let serial = 0, loading = false, disposed = false, rows = new Map(), cursor = null, verified = null;
+	let observation = null, expiryTimer = null;
+	const renewed = new Map();
+	const renewalKey = (row, at) => `${row.profile_id}:${row.revision}:${row.digest}:${at}`;
+	const deadline = (data) => Math.min(...states$1.map((name) => profileStateFacts(data.states[name]).fact?.valid_until ?? Infinity));
+	function clearObservation() {
+		clearTimeout(expiryTimer);
+		expiryTimer = null;
+		observation = null;
+	}
+	function paintValues() {
+		if (!observation || !valid(observation.ticket) || document.hidden) return;
+		for (const name of states$1) {
+			const state = profileStateFacts(observation.data.states[name], { error: observation.error });
+			const node = facts.querySelector(`[data-work-profile-state="${name}"] [data-work-profile-value]`);
+			const text = state.fact ? healthLabel(state.fact, t) : t(state.valueKey);
+			if (node && node.textContent !== text) node.textContent = text;
+		}
+	}
+	function scheduleExpiry() {
+		clearTimeout(expiryTimer);
+		expiryTimer = null;
+		if (!observation || document.hidden || !valid(observation.ticket)) return;
+		paintValues();
+		const at = deadline(observation.data);
+		if (!Number.isFinite(at) || renewed.has(renewalKey(observation.row, at))) return;
+		if (Date.now() < at) expiryTimer = setTimeout(scheduleExpiry, Math.min(at - Date.now(), 2147483647));
+		else renew(observation, at);
+	}
+	async function renew(current, at) {
+		const attempt = { error: {
+			code: "OBSERVATION_NOT_RENEWED",
+			unchangedDeadline: true
+		} };
+		renewed.set(renewalKey(current.row, at), attempt);
+		try {
+			await read(current.row, current.ticket, true);
+		} catch (error) {
+			if (!valid(current.ticket) || observation !== current) return;
+			attempt.error = { code: error.code || error.status || "READ_FAILED" };
+			current.error = attempt.error;
+			paintValues();
+		}
+	}
+	document.addEventListener("health-display-tick", paintValues);
+	document.addEventListener("visibilitychange", scheduleExpiry);
 	const available = () => caps()?.features?.pm_workspaces?.work_profiles?.version === 1 && caps()?.features?.pm_workspaces?.work_profiles?.available === true && caps()?.scopes?.includes("observe");
 	const selected = () => {
 		try {
@@ -41577,6 +41782,7 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		const row = selected();
 		select.value = row?.profile_id || "";
 		if (!row) {
+			clearObservation();
 			facts.replaceChildren();
 			announcement.textContent = "";
 			verified = null;
@@ -41587,6 +41793,7 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		more.disabled = loading || Boolean(request()?.locked());
 	}
 	function forget(message) {
+		clearObservation();
 		const current = selected();
 		if (current) rows.delete(current.profile_id);
 		verified = null;
@@ -41599,7 +41806,30 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		status.replaceChildren(h$1("p", { class: "muted" }, t(message)));
 		options();
 	}
-	function display(data, row) {
+	function patch(current, next) {
+		if (current.isEqualNode(next)) return;
+		if (current.nodeType !== next.nodeType || current.nodeName !== next.nodeName) {
+			current.replaceWith(next);
+			return;
+		}
+		if (current.nodeType === Node.TEXT_NODE) {
+			current.data = next.data;
+			return;
+		}
+		for (const attr of [...current.attributes]) if (!next.hasAttribute(attr.name) && attr.name !== "open") current.removeAttribute(attr.name);
+		for (const attr of next.attributes) if (attr.name !== "open") current.setAttribute(attr.name, attr.value);
+		const old = [...current.childNodes], fresh = [...next.childNodes];
+		for (let i = 0; i < Math.max(old.length, fresh.length); i++) if (!old[i]) current.append(fresh[i]);
+		else if (!fresh[i]) old[i].remove();
+		else patch(old[i], fresh[i]);
+	}
+	function display(data, row, renewal = false) {
+		const scroll = [];
+		if (renewal) for (let node = facts; node; node = node.parentElement) scroll.push([
+			node,
+			node.scrollLeft,
+			node.scrollTop
+		]);
 		const next = data.work_follow_up;
 		let nextKey = "wpf_next_unknown";
 		if (next?.route === "bat_work_start" && next.agent === row.agent && next.admission_checked === false) {
@@ -41609,8 +41839,8 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		}
 		const list = h$1("dl", { class: "pm-work-profile-states" }), shownTimes = new Set();
 		for (const name of states$1) {
-			const state = profileStateFacts(data.states[name]);
-			const value = h$1("dd", { "data-work-profile-state": name }, h$1("p", { "data-work-profile-value": "" }, t(state.valueKey)), h$1("p", { "data-work-profile-reason": "" }, t(state.reasonKey), " · ", h$1("code", {}, state.reasonCode || t("wpf_reason_absent"))));
+			const state = profileStateFacts(data.states[name], { error: observation?.error });
+			const value = h$1("dd", { "data-work-profile-state": name }, h$1("p", { "data-work-profile-value": "" }, state.fact ? healthLabel(state.fact, t) : t(state.valueKey)), h$1("p", { "data-work-profile-reason": "" }, t(state.reasonKey), " · ", h$1("code", {}, state.reasonCode || t("wpf_reason_absent"))));
 			list.append(h$1("dt", {}, t("wpf_" + name)), value);
 			const operationLink = (op) => h$1("a", { href: `#/op/${op}` }, t("pm_operation"));
 			if (state.operationId) value.append(h$1("p", {}, operationLink(state.operationId)));
@@ -41646,7 +41876,10 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 			if (gapAt !== null && !shownTimes.has(gapAt)) details.push(timeStamp(gapAt));
 		}
 		const readAt = profileTimestamp(data.observed_at);
-		facts.replaceChildren(h$1("h4", {}, t("wpf_coding")), ...readAt === null ? [] : [h$1("p", { "data-work-profile-read-at": "" }, timeLabel(t, "wpf_read_at", { time: timeStamp(readAt) }))], h$1("p", {
+		const content = h$1("div", {
+			"data-work-profile-readiness": "",
+			tabindex: -1
+		}, h$1("h4", {}, t("wpf_coding")), ...readAt === null ? [] : [h$1("p", { "data-work-profile-read-at": "" }, timeLabel(t, "wpf_read_at", { time: timeStamp(readAt) }))], h$1("p", {
 			class: "muted",
 			"data-work-profile-next-turn": ""
 		}, h$1("strong", {}, t("wpf_next_turn") + " · "), t(nextKey)), h$1("p", { class: "muted" }, t("wpf_locked")), list, ...data.states.can_start_own.value !== "ready" ? [h$1("p", { class: "muted" }, t("wpf_unverified"))] : [], ...gap ? [h$1("div", { "data-work-profile-gap": "" }, ...details)] : [], h$1("h4", {}, t("wpf_pm")), hasEffectivePmRoute(data.pm_analysis) ? renderEffectivePmRoute(h$1("div", { "data-work-profile-pm": "" }), {
@@ -41655,6 +41888,8 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 			document: data.pm_analysis,
 			readyKey: "wpf_pm_preflight"
 		}) : h$1("p", {}, t(data.pm_analysis?.pm_ready === true ? "wpf_pm_preflight" : "wpf_pm_unverified")));
+		if (renewal) patch(facts, content);
+		else facts.replaceChildren(...content.childNodes);
 		const gapName = states$1.find((name) => data.states[name].value !== "ready");
 		announcement.textContent = [`${t("wpf_next_turn")}: ${t(nextKey)}`, gapName ? `${t("wpf_" + gapName)}: ${t("wpf_" + data.states[gapName].value)}. ${t("wpf_unverified")}` : ""].filter(Boolean).join(" ");
 		verified = {
@@ -41663,12 +41898,24 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 			digest: row.digest
 		};
 		request()?.update();
+		for (const [node, left, top] of scroll) {
+			node.scrollLeft = left;
+			node.scrollTop = top;
+		}
 	}
-	async function read(row, ticket) {
+	async function read(row, ticket, renewal = false) {
 		const data = await api("GET", `${base}/${row.profile_id}/readiness`);
 		if (!valid(ticket)) return;
 		if (data.contract !== "work-profile-readiness/v1" || data.workspace_id !== workspaceId || data.profile_id !== row.profile_id || data.revision !== row.revision || data.digest !== row.digest || data.calls_bat !== false || states$1.some((name) => !values.includes(data.states?.[name]?.value))) throw Error(t("wpf_invalid"));
-		display(data, row);
+		const at = deadline(data);
+		observation = {
+			data,
+			row,
+			ticket,
+			error: renewed.get(renewalKey(row, at))?.error || null
+		};
+		display(data, row, Boolean(renewal));
+		scheduleExpiry();
 	}
 	select.addEventListener("change", async () => {
 		if (request()?.locked()) {
@@ -41676,6 +41923,7 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 			return;
 		}
 		const ticket = ++serial, row = select.value ? checkedWorkProfile(rows.get(select.value)) : null;
+		clearObservation();
 		verified = null;
 		facts.replaceChildren();
 		status.replaceChildren();
@@ -41689,6 +41937,7 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		}
 	});
 	function handle(error) {
+		clearObservation();
 		verified = null;
 		facts.replaceChildren();
 		announcement.textContent = "";
@@ -41697,6 +41946,7 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 	}
 	async function load(append = false) {
 		const ticket = ++serial;
+		clearObservation();
 		verified = null;
 		facts.replaceChildren();
 		announcement.textContent = "";
@@ -41757,6 +42007,7 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		},
 		withdraw() {
 			serial++;
+			clearObservation();
 			loading = false;
 			verified = null;
 			rows.clear();
@@ -41768,6 +42019,9 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		dispose() {
 			disposed = true;
 			serial++;
+			clearObservation();
+			document.removeEventListener("health-display-tick", paintValues);
+			document.removeEventListener("visibilitychange", scheduleExpiry);
 			facts.replaceChildren();
 		},
 		focusOnReturn() {
@@ -42976,9 +43230,10 @@ function adoptStartLanding({ t, api, alive, namespace, workspaceId, caps, errorB
 			}
 		}
 	}
-	function withdraw() {
+	function withdraw({ preserveNavigation = false } = {}) {
+		const keep = preserveNavigation && current && requestedWork(current.operation_id) === current.work_item_ids[0] && selectedWork() === current.work_item_ids[0];
 		serial++;
-		if (current) stopFollowing(current.operation_id);
+		if (current && !keep) stopFollowing(current.operation_id);
 		current = null;
 		shown = null;
 		body.replaceChildren();
@@ -42992,7 +43247,7 @@ function adoptStartLanding({ t, api, alive, namespace, workspaceId, caps, errorB
 		pending: () => Boolean(current) && !shown,
 		dispose: () => {
 			disposed = true;
-			withdraw();
+			withdraw({ preserveNavigation: true });
 		}
 	};
 }
@@ -56257,6 +56512,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	let saved = {}, snapshot = null, busy = false, disposed = false, operation = null, readSerial = 0, readReady = false, hostDisclosureReady = false;
 	const stagedSecrets = new Map();
 	let review = null, reviewing = false, reviewSerial = 0, reviewChanged = false;
+	let discovery = null, discovering = false, discoverySerial = 0, secretTimer;
 	try {
 		saved = JSON.parse(localStorage.getItem(key) || "{}");
 	} catch {}
@@ -56371,6 +56627,12 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				"remote_url",
 				"github_secret"
 			].includes(name)) invalidateReview();
+			if ([
+				"url",
+				"fingerprint",
+				"connection_url",
+				"bat_secret"
+			].includes(name)) invalidateDiscovery();
 			if (name === "bat_secret") stagedSecrets.delete("host");
 			if ([
 				"url",
@@ -56451,7 +56713,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}, h("span", {}, t("setup_profile")), profile, profilesError);
 	profile.addEventListener("change", () => {
 		if (!alive() || saved.intent) return;
-		invalidateReview();
+		invalidateDiscovery();
 		stagedSecrets.delete("host");
 		const selected = snapshot?.profiles?.find((row) => row.id === profile.value);
 		if (selected) clearPasteRead();
@@ -56500,7 +56762,21 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		required: true,
 		maxlength: 64,
 		hint: "setup_host_hint"
-	})), manual, h("details", {}, h("summary", {}, t("setup_managed_work")), checkbox("writes", "setup_allow_messages"), checkbox("orchestrate", "setup_allow_start"), checkbox("shared_clone_worktrees", "setup_shared_clone"), h("p", { class: "muted" }, t("setup_shared_clone_help")), h("div", { class: "capture-fields" }, input("managed_roots", "setup_managed_roots"), input("ssh_alias", "setup_ssh_alias")), h("p", { class: "muted" }, t("setup_roots_help"))), h("button", {
+	})), manual, h("button", {
+		type: "button",
+		class: "secondary",
+		"data-setup-discover": "",
+		hidden: true,
+		onclick: () => findSources().catch(showError)
+	}, t("setup_discover")), h("p", {
+		class: "note",
+		hidden: true,
+		"data-setup-discovery-reason": ""
+	}), h("details", {}, h("summary", {}, t("setup_managed_work")), checkbox("writes", "setup_allow_messages"), checkbox("orchestrate", "setup_allow_start"), checkbox("shared_clone_worktrees", "setup_shared_clone"), h("p", { class: "muted" }, t("setup_shared_clone_help")), h("div", { class: "capture-fields" }, input("managed_roots", "setup_managed_roots"), input("ssh_alias", "setup_ssh_alias")), h("p", { class: "muted" }, t("setup_roots_help"))), h("p", {
+		class: "note",
+		hidden: true,
+		"data-setup-review-reason": ""
+	}), h("button", {
 		type: "submit",
 		class: "primary"
 	}, t("setup_review_connection")));
@@ -56652,7 +56928,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	const connectionChoice = h("select", { "aria-label": t("setup_connection_choice") });
 	connectionChoice.addEventListener("change", () => {
 		if (!alive() || busy || saved.intent) return;
-		invalidateReview();
+		invalidateDiscovery();
 		stagedSecrets.delete("host");
 		fields.get("bat_secret").value = "";
 		saved.import_profile_id = "";
@@ -56716,7 +56992,8 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			if (!copyReady || !alive() || busy || saved.intent || !readReady) return;
 			copyReady = false;
 			copyRead.hidden = true;
-			run("host", true);
+			if (snapshot.discovery_contract_version === 1) findSources().catch(showError);
+			else run("host", true);
 		}
 	}, h("p", { id: "setup-copy-help" }, t("setup_copy_help")), h("label", { class: "setup-field" }, t("setup_copy_label"), copyInput), copyError, copyRead, h("button", {
 		type: "submit",
@@ -56734,10 +57011,24 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		"data-setup-review": "",
 		"aria-label": t("setup_review_connection")
 	});
+	const discoveredProfile = h("select", {
+		"aria-label": t("setup_discovered_profile"),
+		"data-setup-discovered-profile": ""
+	});
+	discoveredProfile.addEventListener("change", () => {
+		if (!alive() || busy || saved.intent || discovering) return;
+		invalidateReview();
+		findSources(discoveredProfile.value).catch(showError);
+	});
+	const discoveredWorkspaces = h("div", { "data-setup-discovered-workspaces": "" });
+	const discoveryBox = h("section", {
+		hidden: true,
+		"data-setup-discovery": ""
+	}, h("label", { class: "setup-field" }, t("setup_discovered_profile"), discoveredProfile), h("p", { class: "muted" }, t("setup_discovery_read")), discoveredWorkspaces);
 	const box = h("section", {
 		class: "panel ui-section-card managed-setup",
 		"data-managed-setup": ""
-	}, h("header", {}, h("h2", {}, t("setup_title"), " ", unsaved)), simple, automaticStatus, reviewBox, connectionStatus, actions, message, receipt, advanced, h("details", { "data-setup-details": "" }, h("summary", {}, t("global_details")), summary, operationReceipt, h("p", {}, t("setup_resume_help"))));
+	}, h("header", {}, h("h2", {}, t("setup_title"), " ", unsaved)), simple, automaticStatus, discoveryBox, reviewBox, connectionStatus, actions, message, receipt, advanced, h("details", { "data-setup-details": "" }, h("summary", {}, t("global_details")), summary, operationReceipt, h("p", {}, t("setup_resume_help"))));
 	function defaultHost() {
 		if (fields.get("host").value || saved.intent) return;
 		const names = new Set((snapshot?.hosts || []).map((row) => row.name));
@@ -56754,7 +57045,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		fields.get("host").value = saved.host = name;
 	}
 	function applyConnection(parsed) {
-		invalidateReview();
+		invalidateDiscovery();
 		fields.get("connection_url").value = "";
 		for (const [name, value] of Object.entries({
 			url: parsed.endpoint,
@@ -56805,7 +57096,8 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		}
 		defaultHost();
 		persist();
-		await run("host", true);
+		if (snapshot.discovery_contract_version === 1 && !discovery?.profile_id) await findSources();
+		else await run("host", true);
 	}
 	function suggestLocal() {
 		if (!snapshot || snapshot.hosts?.length !== 0 || fields.get("host").value) return;
@@ -56855,8 +57147,110 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		const secret = stagedSecrets.get(kind);
 		if (secret && secret.expiresAt > Date.now()) return secret.ref;
 		stagedSecrets.delete(kind);
+		if (secret && kind === "host") invalidateDiscovery();
 		return null;
 	};
+	function invalidateDiscovery() {
+		discoverySerial++;
+		discovery = null;
+		clearTimeout(secretTimer);
+		invalidateReview();
+		if (typeof discoveryBox !== "undefined") {
+			discoveryBox.hidden = true;
+			update();
+		}
+	}
+	const hasFreshCredential = () => !!fields.get("bat_secret").value || (stagedSecrets.get("host")?.expiresAt || 0) > Date.now();
+	const configuredHost = () => snapshot?.hosts?.find((row) => row.name === fields.get("host").value.trim());
+	const profileId = () => fields.get("profile_id").value.trim() || configuredHost()?.profile_id || "default";
+	function reuseExistingConnection() {
+		const host = configuredHost();
+		return !!host?.token_available && !saved.import_profile_id && !hasFreshCredential() && host.url?.replace(/\/$/, "") === fields.get("url").value.trim().replace(/\/$/, "") && normalizeSetupFingerprint(host.fingerprint || "") === normalizeSetupFingerprint(fields.get("fingerprint").value) && (host.profile_id || "default") === profileId();
+	}
+	const needsDiscovery = () => snapshot?.discovery_contract_version === 1 && !reuseExistingConnection() && !discovery?.profile_id;
+	const discoveryReason = () => configuredHost() && !hasFreshCredential() ? "setup_profile_token_required" : "setup_discovery_required";
+	async function findSources(selected) {
+		if (!alive() || busy || reviewing || discovering || saved.intent || !readReady || snapshot?.busy || !allowed("host") || snapshot.discovery_contract_version !== 1) return;
+		defaultHost();
+		if (configuredHost() && !hasFreshCredential()) {
+			showError(Error(t("setup_profile_token_required")), { sourceRefresh: false });
+			return;
+		}
+		if (!validateHost(void 0, true)) return;
+		const serial = ++discoverySerial;
+		invalidateReview();
+		discovering = true;
+		update();
+		message.replaceChildren();
+		try {
+			const tokenField = fields.get("bat_secret");
+			let ref = usableSecret("host");
+			if (tokenField.value) {
+				const result = await api("POST", "/managed/setup/secrets", {
+					kind: "bat",
+					value: tokenField.value
+				});
+				guard();
+				if (serial !== discoverySerial) return;
+				ref = result.secret_ref;
+				tokenField.value = "";
+				stagedSecrets.set("host", {
+					ref,
+					expiresAt: Date.now() + 36e5
+				});
+				fieldHint("bat_secret", t("setup_secret_staged"));
+			}
+			const body = {
+				revision: snapshot.revision,
+				...saved.import_profile_id && !ref ? { import_profile_id: saved.import_profile_id } : {
+					url: fields.get("url").value.trim(),
+					fingerprint: fields.get("fingerprint").value.trim(),
+					secret_ref: ref
+				},
+				...selected ? { profile_id: selected } : {}
+			};
+			const result = await api("POST", "/managed/setup/discover", body);
+			guard();
+			if (serial !== discoverySerial || body.revision !== snapshot?.revision) return;
+			const row = (value, keys) => object(value) && Object.keys(value).length === keys.length && keys.every((key) => typeof value[key] === "string" && value[key].length > 0 && value[key].length <= 256 && value[key] === value[key].trim() && !/[\x00-\x1f]/.test(value[key]));
+			if (!result.source || !/^[a-f0-9]{64}$/.test(result.source.source_digest) || !Array.isArray(result.profiles) || result.profiles.length > 200 || !Array.isArray(result.workspaces) || result.workspaces.length > 200 || !result.profiles.every((value) => row(value, ["id", "name"])) || !result.workspaces.every((value) => row(value, ["workspace_id", "name"])) || result.profile_id !== null && !result.profiles.some((row) => row.id === result.profile_id)) throw Error(t("setup_receipt_mismatch"));
+			discovery = result;
+			discoveredProfile.replaceChildren(h("option", { value: "" }, t("setup_choose_profile")), ...result.profiles.map((row) => h("option", { value: row.id }, `${row.name} · ${row.id}`)));
+			discoveredProfile.value = result.profile_id || "";
+			fields.get("profile_id").value = saved.profile_id = result.profile_id || "";
+			discoveredWorkspaces.replaceChildren(...result.workspaces.map((row) => h("button", {
+				type: "button",
+				class: "secondary",
+				onclick: () => {
+					if (!alive() || busy || saved.intent) return;
+					fields.get("workspace_id").value = saved.workspace_id = row.workspace_id;
+					persist();
+					unsaved.hidden = false;
+				}
+			}, `${row.name} · ${row.workspace_id}`)));
+			discoveryBox.hidden = false;
+			persist();
+			clearTimeout(secretTimer);
+			const secret = stagedSecrets.get("host");
+			if (secret) secretTimer = setTimeout(() => {
+				if (!alive()) return;
+				stagedSecrets.delete("host");
+				invalidateDiscovery();
+				fieldHint("bat_secret", t("setup_paste_token_again"));
+			}, Math.max(0, secret.expiresAt - Date.now()));
+		} catch (error) {
+			if (serial !== discoverySerial) return;
+			invalidateDiscovery();
+			if (error.code === "INVALID_SECRET") {
+				stagedSecrets.delete("host");
+				fieldHint("bat_secret", t("setup_paste_token_again"));
+			}
+			showError(error, { sourceRefresh: false });
+		} finally {
+			discovering = false;
+			if (alive()) update();
+		}
+	}
 	function validateHost(only, defaults = false) {
 		const value = (name) => fields.get(name).value.trim(), faults = {};
 		if (fields.get("connection_url").value) faults.connection_url = "setup_invalid_connection_url";
@@ -56887,7 +57281,17 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	function showError(error, options) {
 		if (alive()) {
 			const codeKey = `error_code_${error?.code}`;
-			const summary = error?.code && t(codeKey) !== codeKey ? t(codeKey) : [t("setup_verification_invalid"), t("setup_receipt_mismatch")].includes(error?.message) ? error.message : t("error_generic");
+			const summary = error?.code && t(codeKey) !== codeKey ? t(codeKey) : [
+				"setup_verification_invalid",
+				"setup_receipt_mismatch",
+				"setup_discovery_required",
+				"setup_profile_token_required",
+				"setup_scope_required",
+				"setup_busy",
+				"setup_loading",
+				"setup_uncertain",
+				"setup_review_unsupported"
+			].some((key) => t(key) === error?.message) ? error.message : t("error_generic");
 			message.replaceChildren(errorBox(error, {
 				summary,
 				...options,
@@ -56916,11 +57320,26 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			scope.hidden = !!allowed(kind);
 		}
 		const supported = snapshot?.preview_contract_version === 1;
-		hostForm.querySelector("button[type=submit]").disabled ||= !supported || reviewing;
-		automaticButton.disabled = !!locked || !allowed("host") || !supported || reviewing;
+		const discoverySupported = snapshot?.discovery_contract_version === 1;
+		fields.get("profile_id").closest("label").hidden = discoverySupported;
+		const find = hostForm.querySelector("[data-setup-discover]");
+		find.hidden = !discoverySupported;
+		find.disabled ||= discovering || reviewing || !!configuredHost() && !hasFreshCredential();
+		const tokenReason = hostForm.querySelector("[data-setup-discovery-reason]");
+		tokenReason.hidden = !discoverySupported || !configuredHost() || hasFreshCredential();
+		tokenReason.textContent = t("setup_profile_token_required");
+		const reviewReason = hostForm.querySelector("[data-setup-review-reason]");
+		reviewReason.hidden = !needsDiscovery();
+		reviewReason.textContent = t(discoveryReason());
+		hostForm.querySelector("button[type=submit]").disabled ||= !supported || reviewing || discovering || needsDiscovery();
+		automaticButton.textContent = t(discoverySupported && !discovery?.profile_id ? "setup_discover" : "setup_review_connection");
+		automaticButton.disabled = !!locked || !allowed("host") || !supported || reviewing || discovering;
+		discoveredProfile.disabled = !!locked || discovering;
+		for (const button of discoveredWorkspaces.querySelectorAll("button")) button.disabled = !!locked || discovering;
 		automaticButton.hidden = !!review;
 		for (const field of copyForm.querySelectorAll("input,button")) field.disabled = !!locked || !allowed("host");
-		copyForm.querySelector("button").disabled ||= !supported || reviewing;
+		copyForm.querySelector("button").disabled ||= !supported || reviewing || discovering;
+		copyForm.querySelector("button").textContent = t(discoverySupported ? "setup_discover" : "setup_continue");
 		connectionChoice.disabled = !!locked || !allowed("host");
 		simple.hidden = !!snapshot?.hosts?.length;
 		connectionStatus.hidden = !readReady;
@@ -56961,7 +57380,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}
 	function invalidateReview() {
 		reviewSerial++;
-		reviewChanged = !!review || reviewing;
+		reviewChanged ||= !!review || reviewing;
 		review = null;
 		if (typeof reviewBox !== "undefined") {
 			reviewBox.hidden = true;
@@ -56992,7 +57411,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			digest: preview.review_digest
 		};
 		reviewChanged = false;
-		reviewBox.replaceChildren(h("h3", {}, t("setup_review_connection")), h("p", {}, t(`setup_review_source_${preview.source.kind}`, { reference: preview.source.reference })), h("p", {}, t(preview.source.available ? "setup_review_source_available" : "setup_review_source_unavailable")), preview.changes.length ? h("table", {}, h("thead", {}, h("tr", {}, ...[
+		reviewBox.replaceChildren(h("h3", {}, t("setup_review_connection")), request.params.profile_id ? h("p", {}, `${t("setup_workspace_profile")}: ${request.params.profile_id}`) : null, h("p", {}, t(`setup_review_source_${preview.source.kind}`, { reference: preview.source.reference })), h("p", {}, t(preview.source.available ? "setup_review_source_available" : "setup_review_source_unavailable")), preview.changes.length ? h("table", {}, h("thead", {}, h("tr", {}, ...[
 			"field",
 			"before",
 			"after"
@@ -57092,7 +57511,12 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}
 	async function run(kind, defaults = false) {
 		const form = kind === "host" ? hostForm : kind === "repository" ? repoForm : verificationForm;
-		if (!alive() || busy || reviewing || composing.size || !snapshot || !readReady || snapshot.busy || saved.intent || !allowed(kind) || kind === "host" && snapshot.preview_contract_version !== 1 || kind === "host" && !validateHost(void 0, defaults) || !setupFormValidity(form, t)) return;
+		const blocked = !allowed(kind) ? "setup_scope_required" : saved.intent ? "setup_uncertain" : busy || reviewing || composing.size || snapshot?.busy ? "setup_busy" : !snapshot || !readReady ? "setup_loading" : kind === "host" && snapshot.preview_contract_version !== 1 ? "setup_review_unsupported" : kind === "host" && needsDiscovery() ? discoveryReason() : null;
+		if (!alive() || blocked) {
+			showError(Error(t(blocked || "setup_loading")), { sourceRefresh: false });
+			return;
+		}
+		if (kind === "host" && !validateHost(void 0, defaults) || !setupFormValidity(form, t)) return;
 		const serial = ++reviewSerial;
 		if (kind === "host") {
 			reviewing = true;
@@ -57129,7 +57553,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				...imported ? { import_profile_id: imported } : {
 					url: value("url"),
 					fingerprint: value("fingerprint"),
-					profile_id: value("profile_id") || "default"
+					profile_id: profileId()
 				},
 				writes: checked("writes"),
 				orchestrate: checked("orchestrate"),
@@ -57152,6 +57576,10 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			};
 			if (kind === "verification" && !validVerification(params)) throw Error(t("setup_verification_invalid"));
 			if (secretRef) params.secret_ref = secretRef;
+			if (kind === "host" && snapshot.discovery_contract_version === 1 && !reuseExistingConnection()) {
+				params.profile_id = discovery.profile_id;
+				params.source_digest = discovery.source.source_digest;
+			}
 			const request = {
 				action: `setup.${kind}`,
 				target: kind === "host" ? { host: value("host") } : kind === "repository" ? { repository: value("repository") } : {},
@@ -57185,6 +57613,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}
 	function handleSubmissionError(error, kind, options = { sourceRefresh: false }) {
 		if (!alive()) return;
+		if (kind === "host" && ["INVALID_SECRET", "SETUP_REVIEW_CHANGED"].includes(error.code)) invalidateDiscovery();
 		let field;
 		if (saved.intent && !saved.intent.operation_id && error.admissionRefused === true) {
 			const previous = saved.intent;
@@ -57291,7 +57720,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				timeout_s: 600
 			};
 		}
-		if (snapshot && (snapshot.revision !== result.revision || !equal(snapshot.profiles, result.profiles) || result.preview_contract_version !== 1)) invalidateReview();
+		if (snapshot && (snapshot.revision !== result.revision || !equal(snapshot.profiles, result.profiles) || result.preview_contract_version !== 1 || snapshot.discovery_contract_version !== result.discovery_contract_version)) invalidateDiscovery();
 		snapshot = result;
 		readReady = true;
 		if (!hostDisclosureReady) {
@@ -57344,6 +57773,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		dispose() {
 			copyInput.value = "";
 			disposed = true;
+			clearTimeout(secretTimer);
 			stagedSecrets.clear();
 			for (const name of [
 				"connection_url",
@@ -69262,7 +69692,8 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		...state,
 		manageAllowed: may("manage"),
 		attachmentsSupported: supported,
-		uploadsAllowed: nativeUploadAllowed
+		uploadsAllowed: nativeUploadAllowed,
+		nativeDesktop
 	}, requirements);
 	const refuseAttachment = (reason) => {
 		if (!supported) {
@@ -69621,6 +70052,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		e.preventDefault();
 		const gate = attachmentGate({
 			attachment: true,
+			paste: true,
 			supported: true,
 			manage: true,
 			uploads: nativeFiles
@@ -70052,6 +70484,7 @@ async function refreshHealthCapabilities() {
 }
 function tickHealth() {
 	if (document.hidden) return;
+	document.dispatchEvent(new Event("health-display-tick"));
 	const verification = state.health?.capabilityRefresh;
 	if (verification?.state === "loading" && Date.now() - verification.startedAt >= 6e4) {
 		verification.state = "failed";
@@ -74188,6 +74621,40 @@ function viewSettings(main) {
 	if (state.token && state.caps) return viewBrowserSettings(main);
 	viewBrowserSignedOut(main);
 }
+function viewStartupRole(main, snapshot, mine) {
+	const root = firstRunCard({
+		h,
+		t,
+		body: startupRoleChoice({
+			h,
+			t,
+			errorBox,
+			snapshot,
+			select: async (input) => {
+				const guard = () => {
+					if (mine !== generation) throw new Error(t("desktop_role_changed"));
+				};
+				guard();
+				try {
+					const selected = await nativeSelectRole(input);
+					guard();
+					if (selected.credential_available) await nativeTransition("connect");
+					else await route();
+				} catch (error) {
+					guard();
+					const current = await nativeStatus();
+					guard();
+					if (current.startup_role?.role) {
+						state.connectionError = error;
+						await route();
+					} else throw error;
+				}
+			}
+		})
+	});
+	root.querySelector(".global-first-card").prepend(languageSwitch());
+	main.append(root);
+}
 async function viewManagedSettings(main) {
 	const connection = {
 		epoch: state.epoch,
@@ -74495,6 +74962,11 @@ async function viewNativeSettings(main) {
 	try {
 		const status = await nativeStatus();
 		if (mine !== generation || !main.contains(details)) return;
+		const startup = status?.startup_role;
+		if (startup && startup.role === null) {
+			main.replaceChildren();
+			return viewStartupRole(main, startup, mine);
+		}
 		if (status.updates === true) disposeUpdates = await mountUpdates(updateRoot, {
 			h,
 			t,
@@ -74566,7 +75038,10 @@ async function viewNativeSettings(main) {
 			if (status.configuration_source === "managed" && status.error) {
 				setup.append(h("h3", {}, t("managed_recovery_title")), h("p", {}, t("managed_recovery_help")), h("details", {}, h("summary", {}, t("setup_advanced")), h("h3", {}, t("managed_join_existing")), form));
 				introduction.hidden = true;
-			} else setup.append(form);
+			} else {
+				if (status.startup_role?.role === "client") setup.append(h("h3", {}, t("managed_join_existing")));
+				setup.append(form);
+			}
 			connectionDetails.append(h("div", { class: "actions" }, reload));
 		}
 		row("desktop_endpoint", status.endpoint || t("desktop_config_needed"));

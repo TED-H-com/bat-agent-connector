@@ -1,8 +1,10 @@
 import {expectClientError} from './api-error-assertions.ts';
 import {test, expect} from "@playwright/test";
+import {STRINGS} from '../src/i18n.js';
 
 for (const pause of ["digest", "lookup"]) {
-  test(`account switch during ${pause} never submits the previous account's draft`, async ({page}) => {
+  test(`account switch during ${pause} never submits the previous account's draft`, async ({page, locale}) => {
+    const copy = STRINGS[locale === 'zh-TW' ? 'zh-TW' : 'en'];
     const writes: string[] = [];
     let lookupPending = false;
     let releaseLookup: (() => void) | undefined;
@@ -40,7 +42,7 @@ for (const pause of ["digest", "lookup"]) {
     });
     await page.goto("/dashboard/#/session/demo/session-1");
     await page.locator("textarea").first().fill("This belongs to the first actor");
-    const send = page.getByRole("button", {name: "Send", exact: true});
+    const send = page.getByRole("button", {name: copy.send, exact: true});
     if (pause === "lookup") {
       await send.click();
       await page.locator(".session-send-record summary").click();
@@ -50,10 +52,10 @@ for (const pause of ["digest", "lookup"]) {
     if (pause === "lookup") await expect.poll(() => lookupPending).toBe(true);
     else await expect.poll(() => page.evaluate(() => !!(window as any).__digestPending)).toBe(true);
     await page.locator("#live").click();
-    await page.getByRole("button", {name: "Disconnect", exact: true}).click();
+    await page.getByRole("button", {name: copy.disconnect, exact: true}).click();
     await page.locator('input[type="password"]').fill("second-fixture-token");
-    await page.getByRole("button", {name: "Connect", exact: true}).click();
-    await expect(page.getByText("Nothing needs you right now.")).toBeVisible();
+    await page.getByRole("button", {name: copy.connect, exact: true}).click();
+    await expect(page.getByText(copy.empty_needs_you)).toBeVisible();
     if (pause === "lookup") releaseLookup!();
     else await page.evaluate(() => (window as any).__releaseDigest());
     await page.waitForTimeout(100);
@@ -63,7 +65,7 @@ for (const pause of ["digest", "lookup"]) {
   });
 }
 
-test("native bootstrap mismatch returns to connection settings without reading domain data", async ({page}) => {
+test("native bootstrap mismatch returns to connection settings without reading domain data", async ({page, locale}) => {
   await page.addInitScript(() => {
     const requests: string[] = [];
     Object.assign(window, {isTauri: true, __requests: requests, __TAURI_INTERNALS__: {invoke: async (command: string, args: any) => {
@@ -77,7 +79,7 @@ test("native bootstrap mismatch returns to connection settings without reading d
     }}});
   });
   await page.goto("/dashboard/");
-  await expect(page.getByRole("heading", {name: "Desktop Connector connection"})).toBeVisible();
+  await expect(page.getByRole("heading", {name: STRINGS[locale === 'zh-TW' ? 'zh-TW' : 'en'].desktop_connection})).toBeVisible();
   await expectClientError(page, "Invalid central bootstrap identity");
   expect(await page.evaluate(() => (window as any).__requests)).toEqual(["/bootstrap"]);
 });

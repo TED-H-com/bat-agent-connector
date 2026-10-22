@@ -40,6 +40,23 @@ async def test_setup_preview_matches_shared_golden(installed):
         for actual, example in [(revision, "a" * 64), (preview["after_revision"], "b" * 64), (preview["review_digest"], "c" * 64)]:
             normalized = normalized.replace(actual, example)
         result[kind] = json.loads(normalized)
+    # An existing connection reuses its configured credential without discovery.
+    connection = {"url": "wss://host-a.example.invalid:9876", "fingerprint": "A" * 64,
+        "profile_id": "default"}
+    params = {**connection, "secret_ref": ref, "writes": False, "orchestrate": False,
+        "shared_clone_worktrees": False, "managed_roots": []}
+    _, _, encoded, _, _ = setup._candidate(daemon, "setup.host", {"host": "bat"}, params)
+    platform_files.atomic_write(path, encoded)
+    revision = setup._configuration(daemon)[3]
+    request = {"action": "setup.host", "target": {"host": "bat"}, "params": {
+        **connection, "writes": False, "orchestrate": False, "shared_clone_worktrees": False,
+        "managed_roots": ["/srv/new-managed"]}, "preconditions": {"config_revision": revision}}
+    response = setup.preview(daemon, principal, request)
+    normalized = json.dumps({"request": request, **response})
+    for actual, example in [(revision, "a" * 64), (response["preview"]["after_revision"], "b" * 64),
+            (response["preview"]["review_digest"], "c" * 64)]:
+        normalized = normalized.replace(actual, example)
+    result["existing"] = json.loads(normalized)
     if os.environ.get("BATC_UPDATE_SETUP_GOLDEN") == "1":
         GOLDEN.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     assert result == json.loads(GOLDEN.read_text())

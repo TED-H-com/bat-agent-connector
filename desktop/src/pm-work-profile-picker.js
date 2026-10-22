@@ -2,6 +2,7 @@ import {h} from './ui/dom.js';
 import {button} from './ui/components.js';
 import {timeLabel,timeStamp} from './ui/stamps.js';
 import {internalFrom} from './work-paths.js';
+import {healthLabel} from './health-fact.js';
 import {profileStateFacts,profileTimestamp} from './pm-work-profile-state.js';
 import {hasEffectivePmRoute,renderEffectivePmRoute} from './pm-effective-route.js';
 
@@ -26,6 +27,46 @@ export function workProfilePicker({t,api,alive,namespace,workspaceId,workId,caps
   const box=h('section',{'data-work-profile-picker':''},h('label',{},t('wpf_label'),select),more,status,announcement,facts);
   const returnKey=`batc.pm.${namespace}.profile-return.${workspaceId}.${workId}`;
   let serial=0,loading=false,disposed=false,rows=new Map(),cursor=null,verified=null;
+  let observation=null,expiryTimer=null;
+  const renewed=new Map();
+  const renewalKey=(row,at)=>`${row.profile_id}:${row.revision}:${row.digest}:${at}`;
+  const deadline=data=>Math.min(...states.map(name=>profileStateFacts(data.states[name]).fact?.valid_until??Infinity));
+  function clearObservation(){clearTimeout(expiryTimer);expiryTimer=null;observation=null;}
+  function paintValues(){
+    if(!observation||!valid(observation.ticket)||document.hidden)return;
+    for(const name of states){
+      const state=profileStateFacts(observation.data.states[name],{error:observation.error});
+      const node=facts.querySelector(`[data-work-profile-state="${name}"] [data-work-profile-value]`);
+      const text=state.fact?healthLabel(state.fact,t):t(state.valueKey);
+      if(node&&node.textContent!==text)node.textContent=text;
+    }
+  }
+  function scheduleExpiry(){
+    clearTimeout(expiryTimer);expiryTimer=null;
+    if(!observation||document.hidden||!valid(observation.ticket))return;
+    paintValues();
+    const at=deadline(observation.data);
+    if(!Number.isFinite(at)||renewed.has(renewalKey(observation.row,at)))return;
+    // One deadline wakeup, never a polling/retry timer. Normal reads with a new
+    // producer deadline re-arm it; visibility changes reuse the same decision.
+    if(Date.now()<at)expiryTimer=setTimeout(scheduleExpiry,Math.min(at-Date.now(),2147483647));
+    else void renew(observation,at);
+  }
+  async function renew(current,at){
+    // Retire the deadline before awaiting. A later selection/read of this same
+    // deadline must not inherit a Checking label from a discarded ticket.
+    const attempt={error:{code:'OBSERVATION_NOT_RENEWED',unchangedDeadline:true}};
+    renewed.set(renewalKey(current.row,at),attempt);
+    try{await read(current.row,current.ticket,true);}
+    catch(error){
+      if(!valid(current.ticket)||observation!==current)return;
+      attempt.error={code:error.code||error.status||'READ_FAILED'};
+      current.error=attempt.error;paintValues();
+    }
+  }
+  // The shell's existing display clock updates ages only. It cannot start GETs.
+  document.addEventListener('health-display-tick',paintValues);
+  document.addEventListener('visibilitychange',scheduleExpiry);
   const available=()=>caps()?.features?.pm_workspaces?.work_profiles?.version===1
     && caps()?.features?.pm_workspaces?.work_profiles?.available===true && caps()?.scopes?.includes('observe');
   const selected=()=>{try{return checkedWorkProfile(JSON.parse(field.value||'null'));}catch{return null;}};
@@ -37,14 +78,29 @@ export function workProfilePicker({t,api,alive,namespace,workspaceId,workId,caps
     if(value&&!rows.has(value.profile_id))select.append(h('option',{value:value.profile_id},label(value)));
     select.value=value?.profile_id||'';update();
   }
-  function update(){const row=selected();select.value=row?.profile_id||'';if(!row){facts.replaceChildren();announcement.textContent='';verified=null;}
+  function update(){const row=selected();select.value=row?.profile_id||'';if(!row){clearObservation();facts.replaceChildren();announcement.textContent='';verified=null;}
     box.hidden=!available();select.disabled=loading||Boolean(request()?.locked())||!available();more.hidden=cursor===null;more.disabled=loading||Boolean(request()?.locked());}
   function forget(message){
-    const current=selected();if(current)rows.delete(current.profile_id);verified=null;facts.replaceChildren();announcement.textContent='';
+    clearObservation();const current=selected();if(current)rows.delete(current.profile_id);verified=null;facts.replaceChildren();announcement.textContent='';
     if(!request()?.locked()){request()?.set('profile','');onChange(null,false);}
     status.replaceChildren(h('p',{class:'muted'},t(message)));options();
   }
-  function display(data,row){
+  // Keep mounted controls/links, focus and enclosing disclosures while their
+  // read-only content changes. Unchanged subtrees retain their exact DOM nodes.
+  function patch(current,next){
+    if(current.isEqualNode(next))return;
+    if(current.nodeType!==next.nodeType||current.nodeName!==next.nodeName){current.replaceWith(next);return;}
+    if(current.nodeType===Node.TEXT_NODE){current.data=next.data;return;}
+    for(const attr of [...current.attributes])if(!next.hasAttribute(attr.name)&&attr.name!=='open')current.removeAttribute(attr.name);
+    for(const attr of next.attributes)if(attr.name!=='open')current.setAttribute(attr.name,attr.value);
+    const old=[...current.childNodes],fresh=[...next.childNodes];
+    for(let i=0;i<Math.max(old.length,fresh.length);i++){
+      if(!old[i])current.append(fresh[i]);else if(!fresh[i])old[i].remove();else patch(old[i],fresh[i]);
+    }
+  }
+  function display(data,row,renewal=false){
+    const scroll=[];
+    if(renewal)for(let node=facts;node;node=node.parentElement)scroll.push([node,node.scrollLeft,node.scrollTop]);
     const next=data.work_follow_up;
     let nextKey='wpf_next_unknown';
     if(next?.route==='bat_work_start'&&next.agent===row.agent&&next.admission_checked===false){
@@ -54,9 +110,9 @@ export function workProfilePicker({t,api,alive,namespace,workspaceId,workId,caps
     }
     const list=h('dl',{class:'pm-work-profile-states'}),shownTimes=new Set();
     for(const name of states){
-      const state=profileStateFacts(data.states[name]);
+      const state=profileStateFacts(data.states[name],{error:observation?.error});
       const value=h('dd',{'data-work-profile-state':name},
-        h('p',{'data-work-profile-value':''},t(state.valueKey)),
+        h('p',{'data-work-profile-value':''},state.fact?healthLabel(state.fact,t):t(state.valueKey)),
         h('p',{'data-work-profile-reason':''},t(state.reasonKey),' · ',h('code',{},state.reasonCode||t('wpf_reason_absent'))));
       list.append(h('dt',{},t('wpf_'+name)),value);
       const operationLink=op=>h('a',{href:`#/op/${op}`},t('pm_operation'));
@@ -89,7 +145,7 @@ export function workProfilePicker({t,api,alive,namespace,workspaceId,workId,caps
       if(gapAt!==null&&!shownTimes.has(gapAt))details.push(timeStamp(gapAt));
     }
     const readAt=profileTimestamp(data.observed_at);
-    facts.replaceChildren(h('h4',{},t('wpf_coding')),
+    const content=h('div',{'data-work-profile-readiness':'',tabindex:-1},h('h4',{},t('wpf_coding')),
       ...(readAt===null?[]:[h('p',{'data-work-profile-read-at':''},timeLabel(t,'wpf_read_at',{time:timeStamp(readAt)}))]),
       h('p',{class:'muted','data-work-profile-next-turn':''},h('strong',{},t('wpf_next_turn')+' · '),t(nextKey)),
       h('p',{class:'muted'},t('wpf_locked')),list,
@@ -98,33 +154,41 @@ export function workProfilePicker({t,api,alive,namespace,workspaceId,workId,caps
       h('h4',{},t('wpf_pm')),hasEffectivePmRoute(data.pm_analysis)
         ?renderEffectivePmRoute(h('div',{'data-work-profile-pm':''}),{h,t,document:data.pm_analysis,readyKey:'wpf_pm_preflight'})
         :h('p',{},t(data.pm_analysis?.pm_ready===true?'wpf_pm_preflight':'wpf_pm_unverified')));
+    if(renewal)patch(facts,content);else facts.replaceChildren(...content.childNodes);
     const gapName=states.find(name=>data.states[name].value!=='ready');
     announcement.textContent=[`${t('wpf_next_turn')}: ${t(nextKey)}`,
       gapName?`${t('wpf_'+gapName)}: ${t('wpf_'+data.states[gapName].value)}. ${t('wpf_unverified')}`:''].filter(Boolean).join(' ');
     verified={profile_id:row.profile_id,revision:row.revision,digest:row.digest};
     request()?.update();
+    for(const [node,left,top] of scroll){node.scrollLeft=left;node.scrollTop=top;}
   }
-  async function read(row,ticket){
+  async function read(row,ticket,renewal=false){
     const data=await api('GET',`${base}/${row.profile_id}/readiness`);if(!valid(ticket))return;
     if(data.contract!=='work-profile-readiness/v1'||data.workspace_id!==workspaceId||data.profile_id!==row.profile_id
       ||data.revision!==row.revision||data.digest!==row.digest||data.calls_bat!==false
       ||states.some(name=>!values.includes(data.states?.[name]?.value)))throw Error(t('wpf_invalid'));
-    display(data,row);
+    const at=deadline(data);
+    // A failed host attempt can advance observed_at without moving the
+    // success-based deadline. Store every validated read; the spent deadline's
+    // outcome controls each state's wording without discarding newer evidence.
+    const prior=renewed.get(renewalKey(row,at));
+    observation={data,row,ticket,error:prior?.error||null};
+    display(data,row,Boolean(renewal));scheduleExpiry();
   }
   select.addEventListener('change',async()=>{
     if(request()?.locked()){select.value=selected()?.profile_id||'';return;}
     const ticket=++serial,row=select.value?checkedWorkProfile(rows.get(select.value)):null;
-    verified=null;facts.replaceChildren();status.replaceChildren();announcement.textContent='';
+    clearObservation();verified=null;facts.replaceChildren();status.replaceChildren();announcement.textContent='';
     request().set('profile',row?JSON.stringify(row):'');onChange(row,true);
     if(row){try{await read(row,ticket);}catch(error){if(valid(ticket))handle(error);}}
   });
   function handle(error){
-    verified=null;facts.replaceChildren();announcement.textContent='';
+    clearObservation();verified=null;facts.replaceChildren();announcement.textContent='';
     if([403,404].includes(error.status)||error.code==='PM_WORK_PROFILE_WITHDRAWN')forget('wpf_withdrawn');
     else status.replaceChildren(errorBox(error,{within:status}));
   }
   async function load(append=false){
-    const ticket=++serial;verified=null;facts.replaceChildren();announcement.textContent='';
+    const ticket=++serial;clearObservation();verified=null;facts.replaceChildren();announcement.textContent='';
     if(!available()||!active()){if(!available()&&selected())forget('wpf_withdrawn');update();return;}
     loading=true;update();status.replaceChildren();
     try{
@@ -146,7 +210,7 @@ export function workProfilePicker({t,api,alive,namespace,workspaceId,workId,caps
   }
   options();
   return {box,selected,update,load,verified:()=>{const row=selected();return !row||Boolean(verified&&verified.profile_id===row.profile_id&&verified.revision===row.revision&&verified.digest===row.digest);},
-    withdraw(){serial++;loading=false;verified=null;rows.clear();facts.replaceChildren();status.replaceChildren();announcement.textContent='';box.hidden=true;},
-    dispose(){disposed=true;serial++;facts.replaceChildren();},
+    withdraw(){serial++;clearObservation();loading=false;verified=null;rows.clear();facts.replaceChildren();status.replaceChildren();announcement.textContent='';box.hidden=true;},
+    dispose(){disposed=true;serial++;clearObservation();document.removeEventListener('health-display-tick',paintValues);document.removeEventListener('visibilitychange',scheduleExpiry);facts.replaceChildren();},
     focusOnReturn(){try{if(verified&&sessionStorage.getItem(returnKey)===verified.profile_id&&facts.isConnected){sessionStorage.removeItem(returnKey);facts.focus();}}catch{}}};
 }

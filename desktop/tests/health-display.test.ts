@@ -34,9 +34,12 @@ test('producer validity takes precedence, including an earlier expiry', () => {
 
 test('bootstrap and version/build changes invalidate static facts without a time expiry', () => {
   const input = facts();
+  const [major, minor, patch] = input.caps.connector.split('.').map(Number);
+  const changedVersion = `${major}.${minor}.${patch + 1}`;
+  assert.notEqual(changedVersion, input.caps.connector);
   assert.equal(health.healthDisplay(input, at + 999_000).capabilities.freshness, 'current');
   for (const changed of [
-    {...input, caps: {...input.caps, connector: '0.2.13'}},
+    {...input, caps: {...input.caps, connector: changedVersion}},
     {...input, caps: {...input.caps, build: {...input.caps.build, commit: 'a'.repeat(40)}}},
     {...input, health: {...input.health, bootstrap: 2}},
   ]) assert.equal(health.healthDisplay(changed, at).capabilities.freshness, 'invalidated');

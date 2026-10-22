@@ -132,6 +132,8 @@ test('send and answer conflicts say what happened and offer the recovery', async
     await error.getByRole('button', {name: zh ? '排在後面' : 'Queue it', exact: true}).click();
     await expect.poll(() => s.writes.filter(row => row.body?.action === 'session.send').length).toBe(2);
     expect(s.writes.filter(row => row.body?.action === 'session.send')[1].body.params).toMatchObject({text: 'Please keep the five-attempt lockout.', queue: true});
+    // The queued send is the only event producer before opening the next source.
+    await expect.poll(()=>s.log.some(row=>row.path.startsWith('/events?after=1&'))).toBe(true);
     await go(page, `#/session/${s.ids.host}/${s.ids.sessions.review}`);
     await page.getByRole('button', {name: zh ? '允許' : 'Allow', exact: true}).click();
     await expect(page.locator('[data-session-error]')).toContainText(zh ? '問題已更新' : 'The question changed');
@@ -381,6 +383,7 @@ test('send retries and question drafts survive reload with their original operat
     if (url.pathname !== '/sessions/demo-host/ratelimit-review') return undefined;
     const base = await s.fixture.dispatch({method: 'GET', path: url.pathname}); base.data.session.pending = question; return base;
   });
+  await expect.poll(()=>s.log.some(row=>row.path.startsWith('/events?after=1&'))).toBe(true);
   refuse = true;
   await go(page, `#/session/${s.ids.host}/${s.ids.sessions.review}`);
   await page.getByRole('textbox', {name: 'Which threshold?'}).fill('5');

@@ -1,3 +1,4 @@
+import {eventDelivery, httpEventDelivery} from './event-delivery.mjs';
 // M04: one client, two independent real TaskDaemon HTTP services/journals.
 // See docs/design/two-service-isolation.md for the native boundary and evidence.
 import assert from 'node:assert/strict';
@@ -178,7 +179,7 @@ async function nativeBridge(page, services, run, initial) {
       connected = true;
       return managed ? bootstrap.data.capabilities : {...caps.data, desktop_identity:identity};
     }
-    if (command === 'connector_request') return http(selected, args.input);
+    if (command === 'connector_request') return eventDelivery(page).forward(args.input, input => http(selected, input));
     if (command === 'connector_disconnect') {connected = false; return;}
     if (command === 'connector_reload_configuration') {selected = next; connected = false; return status();}
     if (command === 'fleet_availability') return {configured:false, platform_supported:false};
@@ -199,6 +200,7 @@ async function pass(services, locale, native) {
   const [a, b] = services, run = `${native ? 'native' : 'browser'}-${locale}`, labels = texts(locale);
   const context = await browser.newContext({locale});
   const page = currentPage = await context.newPage(), errors = [];
+  const events = await httpEventDelivery(page);
   await page.addInitScript(() => {
     // Retained legacy globals have no source proof. No identity may adopt them.
     sessionStorage.setItem('batc.repo', 'example/UNOWNED_LEGACY_FACT');
@@ -253,7 +255,7 @@ async function pass(services, locale, native) {
     await composer(page).fill(draftA);
     await snapshot(page, run, 'A-typed', namespaces);
     const response = native ? null : page.waitForResponse(value => value.request().method() === 'POST' && value.url().includes('/operations?wait=3'));
-    await page.getByRole('button', {name:labels.send, exact:true}).click();
+    await events.post(page.getByRole('button', {name:labels.send, exact:true}));
     if (response) assert.equal((await response).status(), 202);
     const pending = () => page.evaluate(namespace => Object.entries(localStorage)
       .filter(([key]) => key.startsWith(`batc.key.${namespace}.send.`)).map(([key, value]) => ({storageKey:key, raw:value, ...JSON.parse(value)})), namespaces.A);
@@ -321,7 +323,7 @@ async function pass(services, locale, native) {
     await lists(page, a, b, 'h1');
     await expect(await delivery(page, labels)).toHaveValue(`example/${a.marker}`);
     await route(page, session);
-    await page.getByRole('button', {name:labels.send, exact:true}).click();
+    await events.post(page.getByRole('button', {name:labels.send, exact:true}));
     await expect.poll(() => requests.filter(value => value.run === run && value.method === 'POST' && value.idempotency_key === original.key).length).toBe(2);
     await expect.poll(async () => (await pending())[0]?.raw).toBe(original.raw);
     const sends = requests.filter(value => value.run === run && value.method === 'POST' && value.idempotency_key === original.key);
@@ -349,6 +351,7 @@ async function managedPass(service, locale, reason) {
   const run = `managed-${reason}-${locale}`, labels = texts(locale);
   const context = await browser.newContext({locale, viewport:{width:1280, height:900}});
   const page = currentPage = await context.newPage(), errors = [];
+  const events = await httpEventDelivery(page);
   page.on('pageerror', error => errors.push(error.message));
   const bridge = await nativeBridge(page, [service], run, service);
   let before, namespace;
@@ -368,7 +371,7 @@ async function managedPass(service, locale, reason) {
       .filter(([key]) => key.startsWith(`batc.key.${namespace}.send.`)).map(([storageKey, value]) => ({storageKey, raw:value, ...JSON.parse(value)})), namespace);
     const sentText = `Real accepted instruction ${run}`;
     await composer(page).fill(sentText);
-    await page.getByRole('button', {name:labels.send, exact:true}).click();
+    await events.post(page.getByRole('button', {name:labels.send, exact:true}));
     await expect.poll(async () => (await pending())[0]?.op || '').toMatch(/^op_/);
     const original = (await pending())[0];
     assert.equal((await service.control('report')).instructions.operations.find(value => value.operation_id === original.op).status, 'accepted');
@@ -453,7 +456,7 @@ async function managedPass(service, locale, reason) {
     assert.equal(await page.locator(`[data-instruction-operation="${original.op}"] button`).count(), 0);
     assert.equal(requests.slice(crashIndex).filter(value => value.method === 'POST').length, 0);
     await composer(page).fill(sentText);
-    await page.getByRole('button', {name:labels.send, exact:true}).click();
+    await events.post(page.getByRole('button', {name:labels.send, exact:true}));
     await expect.poll(() => requests.filter(value => value.run === run && value.method === 'POST' && value.idempotency_key === original.key).length).toBe(2);
     const sends = requests.filter(value => value.run === run && value.method === 'POST');
     await expect.poll(() => sends[1].status).toBe(200);

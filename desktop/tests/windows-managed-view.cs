@@ -24,13 +24,14 @@ internal static class ManagedViewProbe
         Phase("started");
         try
         {
-            if (args.Length != 2) throw new ArgumentException();
+            if (args.Length != 2 && (args.Length != 3 || args[2] != "select-provider")) throw new ArgumentException();
             IntPtr window = new IntPtr(long.Parse(args[0], CultureInfo.InvariantCulture));
             uint expected = uint.Parse(args[1], CultureInfo.InvariantCulture);
             uint owner;
             if (GetWindowThreadProcessId(window, out owner) == 0 || owner != expected) throw new InvalidOperationException();
             Phase("owner_verified");
-            ReadView(window);
+            if (args.Length == 3) PressProvider(window);
+            else ReadView(window);
             return 0;
         }
         catch (Exception error)
@@ -75,9 +76,63 @@ internal static class ManagedViewProbe
         }
     }
 
+    internal sealed class ProviderSelection
+    {
+        private int matches;
+        private Action invoke;
+
+        internal static bool IsLabel(string label)
+        {
+            return label == "Provide a local workspace" || label == "提供本機工作區";
+        }
+
+        internal void Observe(Func<AutomationProperty, object> read, Action press)
+        {
+            if (read(AutomationElement.ControlTypeProperty) as ControlType != ControlType.Button) return;
+            if (!IsLabel(read(AutomationElement.NameProperty) as string)) return;
+            object enabled = read(AutomationElement.IsEnabledProperty);
+            if (!(enabled is bool) || !(bool)enabled) return;
+            matches++;
+            invoke = press;
+        }
+
+        internal void Press()
+        {
+            if (matches != 1 || invoke == null) throw new InvalidOperationException();
+            Action press = invoke;
+            invoke = null;
+            // The caller never retries an action, including an uncertain Invoke result.
+            press();
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void PressProvider(IntPtr window)
+    {
+        AutomationElement root = AutomationElement.FromHandle(window);
+        Stopwatch clock = Stopwatch.StartNew();
+        AutomationElementCollection nodes = root.FindAll(TreeScope.Descendants,
+            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button));
+        if (nodes.Count > 2000) throw new InvalidOperationException();
+        ProviderSelection selection = new ProviderSelection();
+        for (int index = 0; index < nodes.Count; index++)
+        {
+            if (clock.ElapsedMilliseconds >= 2000) throw new TimeoutException();
+            AutomationElement node = nodes[index];
+            selection.Observe(property => node.GetCurrentPropertyValue(property, true),
+                () => ((InvokePattern)node.GetCurrentPattern(InvokePattern.Pattern)).Invoke());
+        }
+        if (clock.ElapsedMilliseconds >= 2000) throw new TimeoutException();
+        selection.Press();
+        Console.WriteLine("{\"role\":\"provider\",\"pressed\":true,\"matches\":1}");
+        Console.Out.Flush();
+        Phase("completed");
+    }
+
     internal sealed class Readiness
     {
-        internal bool WebContent, Authenticated, Setup, ConfigurationLoaded, SaveEnabled;
+        internal bool WebContent, Authenticated, Setup, ConfigurationLoaded, SaveEnabled, RoleChoice, ProviderEnabled;
+        internal string ErrorSummary;
 
         internal void Observe(Func<AutomationProperty, object> read)
         {
@@ -104,18 +159,30 @@ internal static class ManagedViewProbe
             // Commit evidence only after every needed property of this node was
             // read. A disappearing button must not contribute even its label.
             if (type == ControlType.Document) { WebContent = true; return; }
+            if (type == ControlType.Button && ProviderSelection.IsLabel(label))
+            {
+                RoleChoice = true;
+                if (enabled) ProviderEnabled = true;
+            }
+            // Only these fixed public summaries may leave the probe. Never emit
+            // arbitrary UI names, text-entry values or native error messages.
+            if (label == "This request could not be completed. Check Details." || label == "無法完成此要求，請查看詳細資料。")
+                ErrorSummary = label;
             if (label == "Ready to set up" || label == "可以開始設定了") Authenticated = true;
             if (label == "Get ready to work" || label == "準備開始工作") Setup = true;
             if (label == "Ready to set up" || label == "可以開始設定了") ConfigurationLoaded = true;
             if (type == ControlType.Button && enabled &&
-                (label == "Review connection" || label == "預覽連線")) SaveEnabled = true;
+                (label == "Find profiles and workspaces" || label == "尋找設定檔與工作區")) SaveEnabled = true;
         }
 
         internal string ToJson(bool bounded)
         {
             return "{\"webContent\":" + Bit(WebContent) + ",\"authenticated\":" + Bit(Authenticated)
                 + ",\"setup\":" + Bit(Setup) + ",\"configurationLoaded\":" + Bit(ConfigurationLoaded)
-                + ",\"saveEnabled\":" + Bit(SaveEnabled) + ",\"bounded\":" + Bit(bounded) + "}";
+                + ",\"saveEnabled\":" + Bit(SaveEnabled) + ",\"roleChoice\":" + Bit(RoleChoice)
+                + ",\"providerEnabled\":" + Bit(ProviderEnabled)
+                + ",\"errorSummary\":" + (ErrorSummary == null ? "null" : "\"" + ErrorSummary + "\"")
+                + ",\"bounded\":" + Bit(bounded) + "}";
         }
     }
 

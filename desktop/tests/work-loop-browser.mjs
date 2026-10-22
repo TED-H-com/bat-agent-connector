@@ -1,3 +1,4 @@
+import {httpEventDelivery} from './event-delivery.mjs';
 // User actions use the real UI/API; IPC also coordinates the independent MCP client.
 import assert from 'node:assert/strict';
 import {createInterface} from 'node:readline';
@@ -16,7 +17,7 @@ const zh = f.locale === 'zh-TW';
 const errors = [], operations = [], requests = [], responses = [], pending = new Map(), results = new Map();
 const resumedOperations = [];
 const allRequests = [], requestRecords = new Map();
-let browser, context, page, step = 'start', closeRestart = null;
+let browser, context, page, eventWrites, step = 'start', closeRestart = null;
 let observedBootstrap;
 const launch = async () => {
   const options = {locale: zh ? 'zh-TW' : 'en-US',
@@ -41,6 +42,7 @@ const launch = async () => {
   context.on('requestfailed', request => Object.assign(requestRecords.get(request), {
     end: Date.now(), end_step: step, failure: request.failure()?.errorText}));
   page = context.pages()[0] || await context.newPage();
+  eventWrites = await httpEventDelivery(page);
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {if (message.type() === 'error') console.error(message.text());});
   page.on('request', request => {
@@ -71,8 +73,9 @@ const operation = async response => {
   const data = await response.json(); operations.push(data.operation.operation_id); return data.operation;
 };
 const clickOperation = async (action, button) => {
-  // Observe both promises immediately so a response timeout reaches diagnostics.
-  const [response] = await Promise.all([post(action), button.click()]);
+  // Keep a sequence of normal writes quiet; stage handoffs below explicitly
+  // release real event delivery when their server-side changes must be read.
+  const [response] = await Promise.all([post(action), eventWrites.post(button, {resume:false})]);
   return operation(response);
 };
 const shot = name => page.screenshot({path: resolve(f.shots, name + '.png'), animations: 'disabled'});
@@ -396,11 +399,8 @@ async function foregroundRecovery(active, workUrl) {
       document.querySelector('main.session-view').scrollTop = 75;
     });
     await frames();
-    before = await snapshot();
-    assert.equal(before.focused, true);
-    assert.deepEqual(before.selection, [3, 19, 'backward']);
-    assert.ok(before.scrollTop > 0 && before.readerTop > 0, JSON.stringify(before));
-    const drafts = before.stored.filter(([key]) => key.startsWith('batc.pm.') && key.includes('.session.send.'));
+    const drafts = await page.evaluate(() => Object.entries(localStorage)
+      .filter(([key]) => key.startsWith('batc.pm.') && key.includes('.session.send.')));
     assert.equal(drafts.length, 1);
     const [draftKey, stored] = drafts[0];
     assert.ok(draftKey.endsWith(`.session.send.${JSON.stringify({workspace_id: f.workspace, work_item_id: f.work})}`));
@@ -409,6 +409,14 @@ async function foregroundRecovery(active, workUrl) {
     // app.js saveCursor writes this server checkpoint only after the events page
     // and its source refreshes settle. No draft or other storage key is exempt.
     syncKey = 'batc.sync.' + draftKey.slice('batc.pm.'.length, draftKey.indexOf('.session.send.'));
+    // The mounted composer can precede the reader's first saved checkpoint.
+    // Compare storage only after that real page has settled.
+    await expect.poll(() => page.evaluate(key => localStorage.getItem(key), syncKey)).not.toBeNull();
+    before = await snapshot();
+    assert.equal(before.value, draft);
+    assert.equal(before.focused, true);
+    assert.deepEqual(before.selection, [3, 19, 'backward']);
+    assert.ok(before.scrollTop > 0 && before.readerTop > 0, JSON.stringify(before));
     assert.ok(before.stored.some(([key]) => key === syncKey));
     const unchanged = async () => {
       assert.equal(page, originalPage); assert.equal(context, originalContext);
@@ -480,7 +488,7 @@ async function foregroundRecovery(active, workUrl) {
     await shot('02-foreground-recovered');
     holdAdmission = true;
     step = 'explicit-send';
-    const sending = Promise.all([post('session.send'), submit.click()]);
+    const sending = Promise.all([post('session.send'), eventWrites.post(submit, {resume:false})]);
     await expect.poll(() => operationPosts(recoveryStart).length).toBe(1);
     intent = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).intent, draftKey);
     const request = operationPosts(recoveryStart)[0];
@@ -555,7 +563,7 @@ try {
     const row = page.locator(`[data-adopt-work="${f.work}"]`);
     await row.locator('.pm-adopt-choice > input').first().check();
     await row.getByLabel('付費會員可使用 Email 登入', {exact: true}).check();
-    await page.getByRole('button', {name: zh ? '檢查就緒' : 'Check readiness', exact: true}).click();
+    await eventWrites.post(page.getByRole('button', {name: zh ? '檢查就緒' : 'Check readiness', exact: true}), {resume:false});
     const submit = page.getByRole('button', {name: zh ? '採用並開始' : 'Adopt and start', exact: true});
     await expect(submit).toBeEnabled();
     await submit.scrollIntoViewIfNeeded();
@@ -568,7 +576,7 @@ try {
     const instruction = page.locator('[data-work-start-instruction]');
     await expect(instruction).toBeVisible();
     await instruction.fill(zh ? '修正登入重複送出，補測試，先開 PR。' : 'Fix duplicate login submission, add tests and prepare a PR.');
-    await page.locator('[data-work-start-check]').click();
+    await eventWrites.post(page.locator('[data-work-start-check]'), {resume:false});
     const submit = page.locator('[data-pm-action="work.start"] button[type="submit"]');
     await expect(submit).toBeEnabled();
     start = await clickOperation('work.start', submit);
@@ -577,6 +585,7 @@ try {
     await expect(page.locator('[data-work-start-item]')).toBeVisible();
     await shot('01-started');
   }
+  eventWrites.resume();
   send({stage: 'started', operation_id: start.operation_id});
   let active = await receive();
   if (f.lost_start_reply) {
@@ -587,7 +596,7 @@ try {
     await expect(landing.getByRole('link', {name: 'Resume reconciliation', exact: true}))
       .toHaveAttribute('href', '#/op/' + recovery.handoff);
     const boardUrl = page.url();
-    await page.reload();
+    eventWrites.resume(); await page.reload();
     await expect(landing.getByRole('link', {name: 'Resume reconciliation', exact: true})).toBeVisible();
     await shot('00-unconfirmed-start');
     send({stage: 'unknown-shown'});
@@ -599,7 +608,7 @@ try {
       const [resumed] = await Promise.all([
         page.waitForResponse(response => response.request().method() === 'POST'
           && new URL(response.url()).pathname === `/api/v1/operations/${recovery[kind]}/resume`),
-        page.getByRole('button', {name: 'Resume', exact: true}).click(),
+        eventWrites.post(page.getByRole('button', {name: 'Resume', exact: true})),
       ]);
       assert.ok([200, 202].includes(resumed.status()), await resumed.text());
       assert.equal((await resumed.json()).operation.operation_id, recovery[kind]);
@@ -704,7 +713,7 @@ try {
     await expect(page.locator('[data-work-result]')).toContainText('Fixed double submission.');
     await expect.poll(() => results.get(active.attempt)?.changes?.fixed_result_commit?.commit_sha).toBe(fixed.candidate);
     await expect(page.locator('[data-work-publish-submit]')).toHaveCount(0);
-    await page.reload();
+    eventWrites.resume(); await page.reload();
     await expect(page.locator('[data-follow-up-receipt]')).toContainText(text);
     await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
     await expect(page.locator('.workspace-composer')).toBeHidden();
@@ -743,12 +752,15 @@ try {
   await expect(back).toHaveAttribute('href', returnHref);
   await expect(back).toBeVisible();
   await shot('03-discussion');
-  await page.reload();
+  eventWrites.resume(); await page.reload();
   await expect(back).toHaveAttribute('href', returnHref);
   await back.click();
   await expect(page.locator('[data-follow-up-input]')).toHaveValue(draft);
   await expect(page.locator('[data-follow-up-receipt]')).toContainText(text);
   assert.equal(requests.length, expectedOperations - 1, 'Discuss and return must not create or dispatch an operation');
+  // Opening this drawer holds the linked Work's deferred render. Fence
+  // delivery before opening it, not while that render is waiting for close.
+  await eventWrites.pause();
   await page.getByRole('button', {name: zh ? '成果' : 'Results', exact: true}).click();
   await expect(page.locator('[data-work-result]')).toContainText('Added the retry-after-failure case.');
   await expect(page.locator('[data-work-publish-commit]')).toHaveAttribute('title', fixed.candidate);
@@ -838,7 +850,7 @@ try {
     const answer=page.locator('[data-pm-role="assistant"]');
     await expect(answer).toContainText(fixed.candidate.slice(0,12));
     await expect(answer).toContainText(zh ? '還缺固定版本的驗證證據' : 'Fixed-revision verification evidence is missing');
-    await page.reload();
+    eventWrites.resume(); await page.reload();
     await expect(page.locator('[data-pm-role="assistant"]')).toHaveCount(1);
     await expect(page.locator('[data-pm-role="assistant"]')).toContainText(fixed.candidate.slice(0,12));
     await expect(page.locator('.pd-context [data-discussion-context="quality_assessment"]')).toBeVisible();
@@ -855,6 +867,7 @@ try {
     await page.keyboard.press('Escape');
     await page.locator('[data-discussion-back]').click();
     await expect(page.locator('[data-follow-up-input]')).toHaveValue(draft);
+    await eventWrites.pause();
     await page.getByRole('button', {name:zh ? '成果' : 'Results',exact:true}).click();
     await page.getByRole('button', {name:zh ? '審閱這份成果' : 'Review this result',exact:true}).click();
     await expect(page.locator('[data-work-quality]').getByLabel(zh ? '已保存審查' : 'Saved review',{exact:true})).toHaveValue(savedReviewId);
@@ -866,7 +879,7 @@ try {
   const published = await clickOperation('github.pr.publish', page.locator('[data-work-publish-submit]'));
   send({stage: 'published', operation_id: published.operation_id});
   assert.equal((await receive()).verified, true);
-  await page.reload();
+  eventWrites.resume(); await page.reload();
   await expect(page.locator('[data-follow-up-input]')).toHaveValue(draft);
   await page.getByRole('button', {name: zh ? '成果' : 'Results', exact: true}).click();
   await expect(page.locator('[data-work-publish-pr]')).toContainText('21');

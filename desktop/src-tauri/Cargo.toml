@@ -1,6 +1,6 @@
 [package]
 name = "better-agent-dashboard"
-version = "0.1.8"
+version = "0.1.9"
 description = "Better Agent Dashboard desktop client"
 authors = ["Better Agent Dashboard contributors"]
 edition = "2021"
@@ -43,7 +43,7 @@ tempfile = "=3.27.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "=0.61.2", features = ["Win32_Security_Credentials", "Win32_Graphics_Gdi"] }
+windows-sys = { version = "=0.61.2", features = ["Win32_Security_Credentials", "Win32_Graphics_Gdi", "Win32_Security_Authorization", "Win32_Storage_FileSystem"] }
 winreg = "=0.56.0"
 
 [target.'cfg(unix)'.dependencies]

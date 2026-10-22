@@ -78,6 +78,8 @@ test('a newer Attempt never replaces the selected Result or send precondition', 
   const readCount = f.follow.reads.length;
   f.pushEvent('operation');
   await expect.poll(() => f.follow.reads.length).toBeGreaterThan(readCount);
+  // The fixture emits nothing else before this explicit send.
+  await expect.poll(() => f.follow.reads.some(path => /^GET \/events\?.*after=1(?:&|$)/.test(path))).toBe(true);
   await page.getByRole('button', {name: 'Send next', exact: true}).click();
   expect(f.follow.posts.at(-1).body.preconditions).toEqual({expected_attempt_id: ATTEMPT});
   expect(f.follow.reads.filter(path => path.includes('/work-attempts/')).every(path => path.includes(ATTEMPT))).toBe(true);

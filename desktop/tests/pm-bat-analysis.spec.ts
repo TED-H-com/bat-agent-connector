@@ -1,3 +1,4 @@
+import {eventDelivery} from './event-delivery.mjs';
 import {openThreadAnalysis} from './pm-navigation.ts';
 import {test, expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
@@ -35,6 +36,8 @@ for (const native of [false,true]) test.describe(native ? 'native BAT analysis' 
   });
   test('unknown BAT receipt survives switching, reload and changed eligibility with its original key and CAS',async({page})=>{
     const f=nativeFixture();f.bat.available=true;f.state.lost=true;
+    const events=eventDelivery(page), originalDispatch=f.dispatch;
+    f.dispatch=input=>events.forward(input,originalDispatch);
     await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadAnalysis(page);
     await selector(page).selectOption('bat_analysis');await purpose(page).fill('Original BAT context only');await submit(page).click();
     await expect(form(page)).toContainText('Reply unavailable');
@@ -47,7 +50,7 @@ for (const native of [false,true]) test.describe(native ? 'native BAT analysis' 
     await selector(page).selectOption('bat_analysis');
     await expect(purpose(page)).toBeDisabled();await expect(purpose(page)).toHaveValue('Original BAT context only');
     await expect(page.locator('[data-pm-analysis-binding]')).toBeHidden();
-    await form(page).getByRole('button',{name:'Check original request',exact:true}).click();
+    await events.post(form(page).getByRole('button',{name:'Check original request',exact:true}));
     await expect(purpose(page)).toHaveValue('');
     expect(f.state.writes).toHaveLength(2);expect(f.state.ops.size).toBe(1);
     expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key);
@@ -56,13 +59,15 @@ for (const native of [false,true]) test.describe(native ? 'native BAT analysis' 
   });
   test('unknown central request remains recoverable after choosing BAT',async({page})=>{
     const f=nativeFixture();f.bat.available=true;f.state.lost=true;
+    const events=eventDelivery(page), originalDispatch=f.dispatch;
+    f.dispatch=input=>events.forward(input,originalDispatch);
     await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadAnalysis(page);
     await purpose(page,false).fill('Original central request');await submit(page,false).click();
     await expect(form(page,false)).toContainText('Reply unavailable');
     await selector(page).selectOption('bat_analysis');await expect(submit(page)).toBeDisabled();await page.reload();await openThreadAnalysis(page);
     await expect(selector(page)).toHaveValue('bat_analysis');await expect(submit(page)).toBeDisabled();
     await selector(page).selectOption('native_analysis');
-    await form(page,false).getByRole('button',{name:'Check original request',exact:true}).click();
+    await events.post(form(page,false).getByRole('button',{name:'Check original request',exact:true}));
     await expect.poll(() => f.state.writes.length).toBe(2);
     expect(f.state.writes).toHaveLength(2);expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);
     expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key);
