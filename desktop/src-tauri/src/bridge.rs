@@ -1713,7 +1713,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             r"delivery/previews/mpv_[0-9a-f]{32}|integrations/previews/ipv_[0-9a-f]{32}|integrations/op_[0-9a-f]{32})$")).unwrap())
     } else if input.method == "POST" {
         POST.get_or_init(|| {
-            Regex::new(r"^/(?:managed/setup/secrets|repository-previews|approval-previews|artifact-capture-previews|artifact-managed-capture-previews|cleanup-previews|operations(?:/op_[0-9a-f]{32}/(?:cancel|resume))?|pm/workspaces/ws_[0-9a-f]{32}/(?:work/wi_[0-9a-f]{20}/start-preview|threads/pmt_[0-9a-f]{32}/adopt-and-start-preview))$")
+            Regex::new(r"^/(?:managed/setup/(?:secrets|preview)|repository-previews|approval-previews|artifact-capture-previews|artifact-managed-capture-previews|cleanup-previews|operations(?:/op_[0-9a-f]{32}/(?:cancel|resume))?|pm/workspaces/ws_[0-9a-f]{32}/(?:work/wi_[0-9a-f]{20}/start-preview|threads/pmt_[0-9a-f]{32}/adopt-and-start-preview))$")
                 .unwrap()
         })
     } else {
@@ -1722,7 +1722,10 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     if !pattern.is_match(path) {
         return Err("Central route is not allowed".into());
     }
-    if matches!(path, "/managed/setup" | "/managed/setup/secrets") {
+    if matches!(
+        path,
+        "/managed/setup" | "/managed/setup/secrets" | "/managed/setup/preview"
+    ) {
         if input.path != path || input.idempotency_key.is_some() {
             return Err("Managed setup accepts no query or operation key".into());
         }
@@ -2681,6 +2684,28 @@ mod tests {
         }
         assert!(validate_request(&request("GET", "/managed/setup?host=other")).is_err());
         assert!(validate_request(&request("GET", "/managed/setup/secrets")).is_err());
+    }
+    #[test]
+    fn setup_preview_uses_the_existing_fixed_http_forwarder() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/managed-setup-preview.json"
+        ))
+        .unwrap();
+        let mut input = request("POST", "/managed/setup/preview");
+        input.body = Some(fixture["profile"]["request"].clone());
+        assert!(validate_request(&input).is_ok());
+        for path in [
+            "/managed/setup/preview?",
+            "/managed/setup/preview?host=other",
+            "/managed/setup/preview/other",
+        ] {
+            input.path = path.into();
+            assert!(validate_request(&input).is_err());
+        }
+        input.path = "/managed/setup/preview".into();
+        input.idempotency_key = Some("preview-must-not-create-an-intent".into());
+        assert!(validate_request(&input).is_err());
+        assert!(validate_request(&request("GET", "/managed/setup/preview")).is_err());
     }
     #[test]
     fn pm_installation_eligibility_is_an_exact_read_only_route() {

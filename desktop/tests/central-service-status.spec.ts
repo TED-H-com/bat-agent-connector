@@ -129,6 +129,9 @@ for (const locale of ['en-US', 'zh-TW']) {
     const context = await browser.newContext({locale, viewport: {width, height: 1000}}), page = await context.newPage();
     await baselineAssets(page);
     const doc = JSON.parse(readFileSync(new URL('./fixtures/fleet-status.golden.json', import.meta.url), 'utf8'));
+    // This scenario asserts a current BAT observation beside an unconfigured
+    // Connector; keep its display clock at the producer golden's instant.
+    await page.clock.setFixedTime(new Date(doc.readiness.observed_at));
     // Native overview wraps the shared sanitized status with these control facts.
     Object.assign(doc, {control_version: 1, backend: 'rust', pending_migration: null,
       login: {show_picker: true, revision: 'f'.repeat(64)},

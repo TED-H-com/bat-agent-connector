@@ -1,3 +1,4 @@
+import {httpEventDelivery} from './event-delivery.mjs';
 // Shared frontend against real central immutable uploads and verified local materialization.
 import {spawn} from "node:child_process";
 import {createInterface} from "node:readline";
@@ -17,6 +18,7 @@ const browser = await chromium.launch();
 try {
   const fixture = await next(), origin = `http://127.0.0.1:${fixture.port}`;
   const page = await browser.newPage({locale: "en-US"}), errors = [];
+  const events = await httpEventDelivery(page);
   page.on("pageerror", error => errors.push(error.message));
   await page.addInitScript(token => sessionStorage.setItem("batc.dashboard.token", token), fixture.token);
   await page.route("**/dashboard/**", async route => {
@@ -29,10 +31,12 @@ try {
   await page.goto(origin + "/dashboard/#/session/h1/" + fixture.session_id);
   await page.getByRole("button", {name: "Start from here", exact: true}).click();
   const bytes = Buffer.from([0, 255, 128, 13, 10, 60, 38, 34, 195, 169]);
+  await events.pause();
   await page.locator('input[type="file"]').setInputFiles({name: "fixture-input.dat", mimeType: "application/octet-stream", buffer: bytes});
   await expect(page.locator(".attachment-list")).toContainText("art_", {timeout: 30000});
+  events.resume();
   await page.getByPlaceholder("What should the agent do next…").fill("Use the verified fixture attachment.");
-  await page.getByRole("button", {name: "Start agent work", exact: true}).click();
+  await events.post(page.getByRole("button", {name: "Start agent work", exact: true}));
   const receipt = page.locator(".session-checkpoint-result");
   await receipt.getByText("Operation details", {exact: true}).click();
   const link = receipt.locator('a[href^="#/op/"]');

@@ -68,6 +68,8 @@ for (const lang of ['en', 'zh-TW'] as const) for (const native of [false, true])
       await page.getByRole('button', {name: text.save, exact: true}).scrollIntoViewIfNeeded();
       await page.screenshot({path: `${shot}/${lang}-draft.png`});
     }
+    // No new fixture event can start after this page has been acknowledged.
+    await expect.poll(() => f.follow.reads.some(path => /^GET \/events\?.*after=1(?:&|$)/.test(path))).toBe(true);
     await page.getByRole('button', {name: text.save, exact: true}).click();
     await expect(page.locator('[data-work-idea-result]').getByRole('link', {name: text.draft})).toHaveAttribute('href', `#/pm/${WS}/discussions/${THREAD}`);
     expect(state.posts).toHaveLength(1);

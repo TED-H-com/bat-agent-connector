@@ -34,6 +34,32 @@ fn profile_store(inner: Value) -> Vec<u8> {
 fn missing<T>(value: Result<T>) {
     assert!(matches!(value, Err("CREDENTIAL_MISSING")));
 }
+
+#[test]
+fn shared_source_policy_vectors_describe_legacy_fleet_runtime() {
+    let vectors: Value = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/bat-source-policy-v1.json"
+    ))
+    .unwrap();
+    assert_eq!(vectors["policy"], 1);
+    for row in vectors["token_stores"].as_array().unwrap() {
+        let result = profile_token(
+            row["store"].as_str().unwrap().as_bytes(),
+            row["profile_id"].as_str().unwrap(),
+        );
+        let expected = &row["expected"]["rust_legacy_fleet"];
+        assert_eq!(
+            result.is_ok(),
+            expected["state"] == "available",
+            "{}: legacy Fleet runtime (not admission)",
+            row["id"]
+        );
+        match result {
+            Ok(token) => assert_eq!(&*token, "synthetic-token"),
+            Err(reason) => assert_eq!(reason, expected["reason"].as_str().unwrap()),
+        }
+    }
+}
 #[test]
 fn fixed_profile_reference_reads_exact_kit_format_without_changing_bytes() {
     let temp = Temporary::new();

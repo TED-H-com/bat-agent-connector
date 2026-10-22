@@ -28,12 +28,14 @@ on:
       - "tests/conftest.py"
       - "tests/fakegithub.py"
       - "tests/fakeverifier.py"
+      - "tests/fixtures/bat-source-policy-v1.json"
       - "tests/fixtures/browser-credential-responses.json"
       - "tests/fixtures/checkpoint-refusal-destination.json"
       - "tests/fixtures/checkpoint-refusal-staging.json"
       - "tests/fixtures/managed-bootstrap.json"
       - "tests/fixtures/managed-runtime-identity.json"
       - "tests/fixtures/managed-setup-evidence.json"
+      - "tests/fixtures/managed-setup-preview.json"
       - "tests/fixtures/pm-availability.json"
       - "tests/fixtures/pm-effective-route.json"
       - "tests/fixtures/pm-version-facts.json"
@@ -133,12 +135,14 @@ on:
       - "tests/conftest.py"
       - "tests/fakegithub.py"
       - "tests/fakeverifier.py"
+      - "tests/fixtures/bat-source-policy-v1.json"
       - "tests/fixtures/browser-credential-responses.json"
       - "tests/fixtures/checkpoint-refusal-destination.json"
       - "tests/fixtures/checkpoint-refusal-staging.json"
       - "tests/fixtures/managed-bootstrap.json"
       - "tests/fixtures/managed-runtime-identity.json"
       - "tests/fixtures/managed-setup-evidence.json"
+      - "tests/fixtures/managed-setup-preview.json"
       - "tests/fixtures/pm-availability.json"
       - "tests/fixtures/pm-effective-route.json"
       - "tests/fixtures/pm-version-facts.json"
@@ -411,11 +415,16 @@ jobs:
         run: bash scripts/ci-central-ui.sh test:labels
       - name: test:attention
         run: bash scripts/ci-central-ui.sh test:attention
-      - name: PM decision walkthrough with actual central service (English and zh-TW)
+      - name: PM decision walkthrough with actual central service (English)
         timeout-minutes: 2
         env:
           BATC_WALKTHROUGH_SHOTS: test-results/walkthrough
-        run: npm run test:walkthrough
+        run: npm run test:walkthrough -- --locale=en
+      - name: PM decision walkthrough with actual central service (zh-TW)
+        timeout-minutes: 2
+        env:
+          BATC_WALKTHROUGH_SHOTS: test-results/walkthrough
+        run: npm run test:walkthrough -- --locale=zh-TW
       - name: Preserve shared UI fixture evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -438,7 +447,9 @@ jobs:
       matrix:
         include:
           - part: work
-            selection: not fixed_result and not foreground_recovery and not lost_start_reply and not refused_access and not other_form_refusal and not browser_credentials
+            selection: not fixed_result and not foreground_recovery and not lost_start_reply and not refused_access and not other_form_refusal and not discussion_adopt_start and not browser_credentials
+          - part: adoption
+            selection: discussion_adopt_start
           - part: evidence
             selection: fixed_result or other_form_refusal
           - part: recovery

@@ -52,8 +52,8 @@ PM v1.2 全生命週期及原 E／UX／R／V／K 範圍保留，改變的是先�
 本輪沿 E01／E03／E11、T3／T8、K02／K08／K16 收斂「加入機器」與首次設定，
 以同一份責任、來源、預覽／套用／讀回及驗收契約接續既有工作。
 規範中的第一個選擇提供三種用途：只查看與操作既有服務、本機提供 workspace 執行能力、兩者兼有。
-程式查核基線為 `5615d6c0`（合併 main `f7a71405`）；本輪只有文件提案，
-尚未實作或取得 R0–R5／A01–A40 驗收。
+程式查核包含 main `511fc618` 與 [managed setup 預覽子集](../design/fleet-configuration.md#已實作managed-setup-的連線預覽)；
+完整加入精靈尚未實作或取得 R0–R5／A01–A40 驗收。
 責任事實只維護於 [Fleet 唯一責任表](../design/fleet-configuration.md#責任表與退休條件)；
 [首次設定](../design/managed-installation.md#與加入機器共用的契約已定尚未實作)引用同一契約，產品決定與技術預設也集中於 Fleet 文件。
 

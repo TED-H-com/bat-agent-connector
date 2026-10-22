@@ -104,12 +104,13 @@ for (const native of [false,true]) test.describe(native ? 'native plans' : 'web 
     expect(f.state.writes.at(-1).body.params.repository_binding).toEqual({...target,source_ref:'refs/heads/main',source_sha:'a'.repeat(40),repository_id:7,binding_digest:'b'.repeat(64)});
   });
   for(const changedPrincipal of [false,true])test(`access remount ${changedPrincipal?'isolates another principal':'preserves the open plan editor'} while rereading sources`,async({page})=>{
-    const f=planning();let reset=false,bootstraps=0,held=false,release:()=>void=()=>{},reads=0;
+    const f=planning();let reset=false,bootstraps=0,held=false,release:()=>void=()=>{},reads=0,settled=false;
     const gate=new Promise<void>(resolve=>release=resolve);
     await mountConversation(page,native,async(input:any)=>{
       const path=new URL(input.path,'http://fixture').pathname;
       if(path==='/bootstrap'&&++bootstraps===2){held=true;await gate;}
       if(path==='/events'&&reset){reset=false;return {status:409,data:{error:{code:'EVENT_CURSOR_RESET',reason:'access_changed'}}};}
+      if(path==='/events'&&bootstraps===2)settled=true;
       if(path===`/pm/workspaces/${workspaceId}/threads/${threadId}`)reads++;
       return f.dispatch(input);
     });
@@ -137,6 +138,8 @@ for (const native of [false,true]) test.describe(native ? 'native plans' : 'web 
       await expect(editor).toHaveAttribute('open','');
       await expect(editor.getByLabel('Plan title',{exact:true})).toHaveValue('Original private plan draft');
       await expect(editor.getByLabel('Plan document (Markdown)',{exact:true})).toHaveValue('Keep the same reviewed text.');
+      // No further reset/event can start after the remounted reader polls.
+      await expect.poll(()=>settled).toBe(true);
       await editor.getByRole('button',{name:'Save plan revision',exact:true}).click();
       await expect(page.locator('[data-pm-revision]')).toHaveCount(1);
       expect(f.state.writes).toHaveLength(1);

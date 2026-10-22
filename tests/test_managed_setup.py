@@ -515,7 +515,7 @@ async def test_profile_import_respects_encryption_and_never_returns_credentials(
     assert state["profiles"][0]["token_state"] == "encrypted"
     with pytest.raises(OperationError):
         create(installed, "setup.host", {"host": "fixture"}, {"import_profile_id": "remote-1"})
-    (directory / "remote-tokens.enc.json").write_text(json.dumps({"enc": False, "data": {"tokens": {"remote-1": mock.token}}}))
+    (directory / "remote-tokens.enc.json").write_text(json.dumps({"enc": False, "data": json.dumps({"tokens": {"remote-1": mock.token}})}))
     state = setup.state(daemon, principal)
     assert state["profiles"][0]["token_available"]
     assert mock.token not in json.dumps(state)
@@ -568,7 +568,7 @@ async def test_profile_token_state_requires_private_token_store(installed, mock,
         "type": "remote", "remoteHost": endpoint.hostname, "remotePort": endpoint.port,
         "remoteFingerprint": mock.fingerprint}]}))
     store = directory / "remote-tokens.enc.json"
-    store.write_text(json.dumps({"enc": False, "data": {"tokens": {"remote-1": mock.token}}}))
+    store.write_text(json.dumps({"enc": False, "data": json.dumps({"tokens": {"remote-1": mock.token}})}))
     store.chmod(0o644)
     monkeypatch.setattr(setup, "_profile_directory", lambda _: directory)
     state = setup.state(daemon, principal)

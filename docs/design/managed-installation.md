@@ -9,7 +9,7 @@ This contract covers the ordinary local installation and its advanced external-c
 1. Install a matching Windows, Mac or Linux candidate package. It includes the matching Python runtime; the user does not first install Python, uv or developer tools.
 2. Launch the application. It verifies the bundled artifact, prepares private local data, one owned Python central and a personal identity, then connects the shared Dashboard. No endpoint, actor or copied API token is required for this local path.
 3. The first screen uses the OS/browser language: `zh-TW`, `zh-Hant`, `zh-HK` and `zh-MO` (including subtags) select Traditional Chinese; other locales select English. **English / 繁體中文** is visible before entering anything and in Settings. The explicit choice persists in `batc.lang`, overrides later OS changes, and controls the setup-guide language.
-4. Choose **Set up automatically / 自動設定**. One usable saved BAT remote connection is reused through the existing central profile import. Several usable connections require a plain-language choice. When none is available, paste a masked connection link copied from BAT's trusted Settings screen. Setup never guesses credentials, discovers trust pins or reads the clipboard automatically. Encrypted/damaged credentials remain unavailable. Central still probes the pinned host before publishing setup. Automatic setup uses connection-only defaults: writes, orchestration and shared clones stay off, even if an older advanced draft enabled them. No SSH, directories, model choices or paid API keys are required.
+4. Choose **Review connection / 預覽連線**, inspect the source, changes and effect boundary, then choose **Apply connection / 套用連線**. Review creates no operation and does not probe or save the connection; pasted credentials may already have been privately staged, which the review shows separately. Cancel leaves the connection unapplied. One usable saved BAT remote connection is reused through the existing central profile import. Several usable connections require a plain-language choice. When none is available, paste a masked connection link copied from BAT's trusted Settings screen. Setup never guesses credentials, discovers trust pins or reads the clipboard automatically. Encrypted/damaged credentials remain unavailable. Central still probes the pinned host before publishing setup. The simple review flow uses connection-only defaults: writes, orchestration and shared clones stay off, even if an older advanced draft enabled them. No SSH, directories, model choices or paid API keys are required.
 5. Expand **Advanced / 進階設定** only when needed for managed permissions, dedicated roots, SSH, exact repository bindings or verification commands. Existing validation and opt-in permissions apply. Repository setup does not push or create/merge PRs; saving verification commands does not execute them.
 6. Open Web through **Open Dashboard in browser** or the tray/menu-bar entry. The private one-use handoff signs into the same identity; the bearer never enters command arguments, URLs, browser storage or logs.
 7. Choose **Start when I sign in** for installation-owned autostart. Closing the browser or Dashboard does not stop central work. Fleet retains its own connection/startup ownership rules.
@@ -28,17 +28,17 @@ A succeeded `setup.host` receipt is evidence of that operation's verification an
 
 ## 與「加入機器」共用的契約（已定，尚未實作）
 
-本節補充上方現行首次設定，未實作新的角色精靈。程式查核基線為 `5615d6c0`
-（合併 main `f7a71405`），下列 `file:line` 已按此基線重核。
+本節補充上方現行首次設定，未實作新的角色精靈。程式查核包含 main `511fc618`
+與合併後的連線預覽實作；下列 `file:line` 已重核位置。預覽 API 見 [setup API 契約](api-v1.md#managed-setup連線預覽與受理)。
 責任分工只維護於 [Fleet 唯一責任表](fleet-configuration.md#責任表與退休條件)；
 共用欄位、狀態、變更、lifecycle、健康投影、驗收與 D1–D8 的產品決定／技術預設
 均引用 [Fleet 共用契約](fleet-configuration.md#加入機器共用契約)，本處不另訂一份。
 
 | 首次設定特有行為（現況） | 可核對的輸入／輸出 |
 | --- | --- |
-| UI 選 BAT 來源 | 自動模式沿用可讀 BAT profile，多項時選擇，無可用項目時貼遮蔽連結；parser 拆出 endpoint／pin／token。[managed-setup.js:10](../../desktop/src/managed-setup.js#L10)、[managed-setup.js:332](../../desktop/src/managed-setup.js#L332) |
-| 自動設定送出值 | writes／orchestrate／shared_clone_worktrees 為 false，managed_roots 為空；advanced 才送 SSH／管理選擇。[managed-setup.js:481](../../desktop/src/managed-setup.js#L481) |
-| UI 恢復原請求及接受收據 | 已知 operation ID 時用 GET 查原操作，否則帶原 request／key 送出；接受收據前核對 operation ID、actor、action、target、params、preconditions 及 key。[managed-setup.js:440](../../desktop/src/managed-setup.js#L440)、[managed-setup.js:455](../../desktop/src/managed-setup.js#L455) |
+| UI 選 BAT 來源 | 自動模式沿用可讀 BAT profile，多項時選擇，無可用項目時貼遮蔽連結；parser 拆出 endpoint／pin／token。[managed-setup.js:10](../../desktop/src/managed-setup.js#L10)、[managed-setup.js:342](../../desktop/src/managed-setup.js#L342) |
+| 簡易連線預覽送出值 | writes／orchestrate／shared_clone_worktrees 為 false，managed_roots 為空；advanced 才送 SSH／管理選擇。[managed-setup.js:551](../../desktop/src/managed-setup.js#L551) |
+| UI 恢復原請求及接受收據 | 已知 operation ID 時用 GET 查原操作，否則帶原 request／key 送出；接受收據前核對 operation ID、actor、action、target、params、preconditions 及 key。[managed-setup.js:507](../../desktop/src/managed-setup.js#L507)、[managed-setup.js:522](../../desktop/src/managed-setup.js#L522) |
 
 2026-10-22 經 owner 授權由整合者決定 D1＝A、D6＝A、D8＝A，角色入口須移至本機服務準備前，
 完整保留與驗收規則只維護於 [已定契約](fleet-configuration.md#已決定的產品契約2026-10-22經-owner-授權)。
