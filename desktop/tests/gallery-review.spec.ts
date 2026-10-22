@@ -47,6 +47,10 @@ for (const locale of ['en', 'zh-TW']) for (const duplicate of [false, true]) {
       await expect(page.locator('[data-dep-node-name]')).toHaveText((await node.getAttribute('aria-label'))!);
       expect(await node.locator('tspan').count()).toBeGreaterThan(1);
     }
+    names[0] = prefix + 'updated-api'; names[1] = prefix + 'updated-web';
+    await page.locator('.pm-main > header').getByRole('button', {name: locale === 'en' ? 'Refresh' : '重新整理', exact: true}).click();
+    await expect(nodes.first()).toHaveAttribute('aria-label', /updated-/);
+    await expect(page.locator('[data-dep-node-name]')).toBeHidden();
   });
 }
 async function shot(page: Page, defect: string, locale: string, width: number) {
@@ -87,6 +91,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
         await cell.focus();
         await expect(page.getByRole('tooltip')).toHaveText(full!);
         await expect(page.getByRole('tooltip')).toBeVisible();
+        if (full?.includes(zh ? '管理員' : 'administrator')) await shot(page, 'schedule-focus', locale, width);
         await expect(cell).toHaveAccessibleName(await title.innerText());
         await cell.blur(); await title.hover();
         await expect(page.getByRole('tooltip')).toHaveText(full!);
