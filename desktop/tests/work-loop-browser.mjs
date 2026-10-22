@@ -404,6 +404,7 @@ async function foregroundRecovery(active, workUrl) {
     // Compare storage only after that real page has settled.
     await expect.poll(() => page.evaluate(key => localStorage.getItem(key), syncKey)).not.toBeNull();
     before = await snapshot();
+    assert.equal(before.value, draft);
     assert.equal(before.focused, true);
     assert.deepEqual(before.selection, [3, 19, 'backward']);
     assert.ok(before.scrollTop > 0 && before.readerTop > 0, JSON.stringify(before));
