@@ -414,8 +414,9 @@ jobs:
   work-loop:
     name: work-loop (${{ matrix.part }})
     runs-on: ubuntu-24.04
-    # Five minutes for setup; each partition retains the three-minute script cap.
-    timeout-minutes: 8
+    # Allow twelve minutes for mirror/setup variance and evidence upload;
+    # each partition retains the separate three-minute script cap.
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -445,8 +446,29 @@ jobs:
       - run: uv sync --locked --extra dev
       - run: npm ci
         working-directory: desktop
-      - run: npx playwright install --with-deps chromium
+      - name: Read Playwright version
+        id: playwright
         working-directory: desktop
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Cache Chromium by Playwright version
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+      - name: Bound stalled apt downloads
+        run: |
+          # Shorter connection/data waits allow faster mirror failover; keep three retries.
+          sudo tee /etc/apt/apt.conf.d/99-playwright-ci > /dev/null <<'EOF'
+          Acquire::Retries "3";
+          Acquire::http::Timeout "15";
+          Acquire::https::Timeout "15";
+          EOF
+      - name: Chromium system dependencies
+        working-directory: desktop
+        run: npx playwright install-deps chromium
+      - name: Install Chromium
+        working-directory: desktop
+        run: npx playwright install chromium
       - name: Work loop through actual central
         timeout-minutes: 3
         run: |
