@@ -8,6 +8,7 @@ import signal
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -319,14 +320,9 @@ def policy_file_snapshot(path):
     return content, info.st_ino, info.st_mtime_ns
 
 
-def test_install_persists_pending_then_reconciled_state_without_rewriting(deployment):
-    u, receipt, _ = deployment
-    u.enroll(receipt, "preview")
-    candidate = release("b" * 40, "0.2.8")
-    u.find_release = lambda channel: candidate
-    u.install = lambda root, candidate, **kwargs: make_package(root, candidate)
-    path = u.root / "state.json"
-    directory = u.root.stat()
+@contextmanager
+def state_replacements(root):
+    directory = root.stat()
     replacements = []
     observing = True
     def observe(event, args):
@@ -343,9 +339,20 @@ def test_install_persists_pending_then_reconciled_state_without_rewriting(deploy
                 replacements.append((saved, reconciled))
     sys.addaudithook(observe)
     try:
-        result = u.apply()
+        yield replacements
     finally:
         observing = False
+
+
+def test_install_persists_pending_then_reconciled_state_without_rewriting(deployment):
+    u, receipt, _ = deployment
+    u.enroll(receipt, "preview")
+    candidate = release("b" * 40, "0.2.8")
+    u.find_release = lambda channel: candidate
+    u.install = lambda root, candidate, **kwargs: make_package(root, candidate)
+    path = u.root / "state.json"
+    with state_replacements(u.root) as replacements:
+        result = u.apply()
     assert result["installed"]["commit"] == candidate["commit"] and not result["pending"]
     assert len(replacements) == 2
     assert [reconciled for _, reconciled in replacements] == [False, True]
@@ -353,6 +360,34 @@ def test_install_persists_pending_then_reconciled_state_without_rewriting(deploy
     assert published["pending"]["to"] == candidate["commit"] and published["current"] == "a" * 40
     assert json.loads(replacements[1][0][0]) == u.read()
     assert policy_file_snapshot(path) == replacements[1][0]
+    assert u.status() == result
+
+
+def test_enable_after_pointer_refusal_only_saves_reconciled_state(deployment):
+    u, receipt, _ = deployment
+    u.enroll(receipt, "preview")
+    candidate = release("b" * 40, "0.2.8")
+    u.find_release = lambda channel: candidate
+    pointer = u.root / "current"
+    def install(root, candidate, **kwargs):
+        proof = make_package(root, candidate)
+        pointer.unlink()
+        pointer.symlink_to(u.home / "foreign-pointer-target")
+        return proof
+    u.install = install
+    with pytest.raises(UpdateError, match="update_pointer_changed"):
+        u.apply()
+    interrupted = u.read()
+    assert interrupted["enabled"] and interrupted["pending"]["to"] == candidate["commit"]
+    assert interrupted["last"]["code"] == "update_pointer_changed"
+    updater.replace_link(pointer, receipt.parent, updater.snapshot(pointer))
+    with state_replacements(u.root) as replacements:
+        result = u.policy(True, "preview")
+    assert result["installed"]["commit"] == candidate["commit"] and not result["pending"]
+    assert len(replacements) == 1
+    assert replacements[0][1] is True
+    assert policy_file_snapshot(u.root / "state.json") == replacements[0][0]
+    assert json.loads(replacements[0][0][0]) == u.read()
     assert u.status() == result
 
 
