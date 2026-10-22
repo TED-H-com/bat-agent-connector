@@ -50,7 +50,7 @@ with spaces; zh-TW uses `分鐘`, `小時`, `天`. Units roll over at 60 minutes
 retains its observation/deadline clock, Overview its projection clock, and shared
 timestamps their display clock and existing switch to calendar dates after a day.
 
-The compact installation strip retains each state and last-known age, then says
+The compact installation strip (including its Settings copy) retains each state and last-known age, then says
 Checking once after all facets, equally in visible and accessible text. Full
 health rows, Fleet rows and their per-fact descriptions retain Checking per fact;
 they do not repeat it inside a single fact. The priority and expiry rules below

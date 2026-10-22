@@ -230,7 +230,8 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
     try {
       await page.goto('/dashboard/#/session/fixture-host/fixture-session');
       await expect(page.locator('#installation-health [data-health-compact]')).toHaveAttribute('data-health-compact', 'attention');
-      await expect(page.locator('#installation-health .health-last-value')).toContainText(locale === 'zh-TW' ? '檢查中' : 'Checking');
+      await expect(page.locator('#installation-health .health-last-value')).not.toContainText(locale === 'zh-TW' ? '檢查中' : 'Checking');
+      await expect(page.locator('#installation-health [data-health-checking]')).toHaveText(locale === 'zh-TW' ? '檢查中' : 'Checking');
       await page.goto('/dashboard/#/settings');
       await expect(page.locator('[data-health-settings] [data-health-compact]')).toHaveAttribute('data-health-compact', 'attention');
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

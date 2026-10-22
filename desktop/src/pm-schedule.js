@@ -318,10 +318,12 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
         expand, h('span', {class: 'schedule-tree-copy'}, h('span', {class: 'schedule-title', title: scheduleTitle(row)}, label(row)), h('span', {id: descId, class: 'schedule-date-range'}, ...dateChildren)),
         pill);
       cell.title = scheduleTitle(row);
-      cell.addEventListener('mouseenter', () => {
+      const hoverLabel = () => {
         const focused = document.activeElement?.closest('.schedule-tree-cell');
         if (!focused || focused === cell) showLabel(cell, scheduleTitle(row));
-      });
+      };
+      cell.addEventListener('mouseenter', hoverLabel);
+      cell.addEventListener('mousemove', hoverLabel);
       cell.addEventListener('mouseleave', () => {if (tipCell === cell && !cell.contains(document.activeElement)) hideLabel();});
       cell.addEventListener('focusin', () => showLabel(cell, scheduleTitle(row)));
       cell.addEventListener('focusout', event => {if (tipCell === cell && !cell.contains(event.relatedTarget)) hideLabel();});

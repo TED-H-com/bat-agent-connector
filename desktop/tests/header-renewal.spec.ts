@@ -120,7 +120,8 @@ for (const locale of ['en-US', 'zh-TW']) {
       await expect.poll(() => counts.get('/hosts')).toBe(1);
       await page.evaluate(() => {location.hash = '#/session/fixture-host/fixture-session';});
       const activity = page.locator('#installation-health .health-last-value');
-      await expect(activity).toHaveText(locale === 'en-US' ? 'Idle · 10 min ago · Checking' : '閒置 · 10 分鐘前 · 檢查中');
+      await expect(activity).toHaveText(locale === 'en-US' ? 'Idle · 10 min ago' : '閒置 · 10 分鐘前');
+      await expect(page.locator('#installation-health [data-health-checking]')).toHaveText(locale === 'en-US' ? 'Checking' : '檢查中');
       await page.clock.fastForward(1_000);
       await expect.poll(() => counts.get(path)).toBe(2);
       release(); await expect.poll(() => completed).toBe(true);

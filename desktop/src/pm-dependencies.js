@@ -670,6 +670,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
   }
   function render() {
     const previous = document.activeElement?.getAttribute?.('data-dep-focus');
+    graphName.textContent = ''; graphName.hidden = true;
     element.dataset.depMode = mode;
     toolbar.hidden = !data; details.hidden = !data; holder.hidden = !data;
     if (mode === 'graph') graphBar.prepend(legend); else matrixHost.before(legend);

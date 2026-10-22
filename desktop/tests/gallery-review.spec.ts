@@ -101,11 +101,12 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
       const geometry = await page.locator('[data-schedule-row]').evaluateAll(rows => rows.map(row => {
         const cell = row.querySelector('.schedule-tree-cell')!.getBoundingClientRect();
         const lane = row.querySelector('.schedule-track')!.getBoundingClientRect();
-        return {cell: {top: cell.top, bottom: cell.bottom}, lane: {top: lane.top, bottom: lane.bottom}};
+        return {hasDates: row.getAttribute('data-has-dates') === 'true', cell: {top: cell.top, bottom: cell.bottom}, lane: {top: lane.top, bottom: lane.bottom}};
       }));
-      for (const {cell, lane} of geometry) {
+      for (const {cell, lane, hasDates} of geometry) {
         if (width >= 800) {expect(lane.top).toBeCloseTo(cell.top, 0); expect(lane.bottom).toBeCloseTo(cell.bottom, 0);}
-        else expect(lane.top).toBeGreaterThanOrEqual(cell.bottom - 1);
+        else if (hasDates) expect(lane.top).toBeGreaterThanOrEqual(cell.bottom - 1);
+        else expect(lane.bottom - lane.top).toBe(0);
       }
     });
     test('gallery graph nodes are distinct and all reachable', async ({page}) => {

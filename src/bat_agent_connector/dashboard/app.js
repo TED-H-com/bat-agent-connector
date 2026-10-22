@@ -30406,6 +30406,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	}
 	function render() {
 		const previous = document.activeElement?.getAttribute?.("data-dep-focus");
+		graphName.textContent = "";
+		graphName.hidden = true;
 		element.dataset.depMode = mode;
 		toolbar.hidden = !data;
 		details.hidden = !data;
@@ -46293,10 +46295,12 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 				class: "schedule-date-range"
 			}, ...dateChildren)), pill);
 			cell.title = scheduleTitle(row);
-			cell.addEventListener("mouseenter", () => {
+			const hoverLabel = () => {
 				const focused = document.activeElement?.closest(".schedule-tree-cell");
 				if (!focused || focused === cell) showLabel(cell, scheduleTitle(row));
-			});
+			};
+			cell.addEventListener("mouseenter", hoverLabel);
+			cell.addEventListener("mousemove", hoverLabel);
 			cell.addEventListener("mouseleave", () => {
 				if (tipCell === cell && !cell.contains(document.activeElement)) hideLabel();
 			});
