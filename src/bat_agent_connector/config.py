@@ -148,9 +148,9 @@ class HostConfig:
         return self.token_ref.split(":", 1)[0] if ":" in self.token_ref else "invalid"
 
     def token_available(self) -> bool:
-        """Admission readiness; existing resolve_token calls retain legacy decoding."""
+        """Readiness of this configured reference uses the actual runtime resolver."""
         try:
-            _resolve_token_ref(self.token_ref, self.bat_profiles_dir, mode=TokenMode.ADMISSION)
+            self.resolve_token()
             return True
         except TokenUnavailable:
             return False
@@ -161,9 +161,7 @@ class HostConfig:
         return tok
 
 
-def _resolve_token_ref(
-    ref: str, profiles_dir: str, *, mode: TokenMode = TokenMode.LEGACY_RUNTIME,
-) -> str:
+def _resolve_token_ref(ref: str, profiles_dir: str) -> str:
     kind, _, arg = ref.partition(":")
     arg = arg.strip()
     if not arg:
@@ -183,21 +181,33 @@ def _resolve_token_ref(
             raise TokenUnavailable(f"token file {p} is empty")
         return val
     if kind == "bat-profile":
-        return _token_from_bat_profiles(profiles_dir, arg, mode=mode)
+        return _token_from_bat_profiles(profiles_dir, arg)
     raise TokenUnavailable(f"unknown token_ref kind {kind!r}")
 
 
-def _token_from_bat_profiles(
-    pdir: str | Path | None, profile_id: str, *, mode: TokenMode = TokenMode.LEGACY_RUNTIME,
-) -> str:
+def _bat_token_unavailable(reason: str) -> TokenUnavailable:
+    """Stable policy code plus actionable, content-free runtime guidance."""
+    messages = {
+        "TOKEN_STORE_ENCRYPTED": "BAT token store is encrypted (OS keychain); use token_ref env: or file: instead",
+        "TOKEN_STORE_UNREADABLE": "cannot read BAT token store: validate private file permissions, type, size and JSON format",
+        "TOKEN_MISSING": "no token for BAT profile; configure its token in BAT or use token_ref env: or file: instead",
+        "DATA_DIRECTORY_UNAVAILABLE": "BAT profiles directory is unavailable; set APPDATA for this account on Windows or configure profiles_dir",
+        "DATA_DIRECTORY_INVALID": "BAT profiles directory is invalid; configure profiles_dir to point to a directory",
+        "DATA_DIRECTORY_UNREADABLE": "cannot read BAT profiles directory; check directory permissions or configure profiles_dir",
+    }
+    message = messages.get(reason, "BAT token store has an unexpected format")
+    return TokenUnavailable(f"{reason}: {message}")
+
+
+def _token_from_bat_profiles(pdir: str | Path | None, profile_id: str) -> str:
     try:
         directory = select_profiles_directory(
             pdir, platform=sys.platform, environment=os.environ, home=Path.home())
     except SourceUnavailable as error:
-        raise TokenUnavailable(str(error)) from None
-    result = read_token_store(directory, mode=mode).lookup(profile_id)
+        raise _bat_token_unavailable(str(error)) from None
+    result = read_token_store(directory, mode=TokenMode.LEGACY_RUNTIME).lookup(profile_id)
     if result.token is None:
-        raise TokenUnavailable(result.reason)
+        raise _bat_token_unavailable(result.reason)
     return result.token
 
 
@@ -399,7 +409,7 @@ class GitHubConfig:
     def token(self) -> str:
         if not self.token_ref:
             raise TokenUnavailable("[github] token_ref is not configured")
-        tok = _resolve_token_ref(self.token_ref, DEFAULT_BAT_PROFILES_DIR)
+        tok = _resolve_token_ref(self.token_ref, "")
         register_secret(tok)
         return tok
 

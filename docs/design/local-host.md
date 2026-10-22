@@ -141,14 +141,14 @@ These are mock tests, not desktop/server-mode or OS credential acceptance.
 | `index.json` | Guided import accepts only `type: remote` with `remoteHost`, `remotePort`, `remoteFingerprint`, and optional `remoteProfileId` (`managed_setup.py:123–165`). CLI import has the same filter (`importer.py:32–55`). It knows a remote endpoint from these fields. There is no supported mapping from a local profile to a local server endpoint. |
 | `token_ref = "env:NAME"` | Resolve the selected environment value in central, strip it and reject empty values (`config.py:141–150`). This existing operator option is not a desktop discovery source. |
 | `token_ref = "file:PATH"` | Read a private UTF-8 token file, at most 64 KiB, strip surrounding whitespace and reject empty values (`config.py:151–159`). This is a Connector reference, not a claim that BAT writes such a file. |
-| `token_ref = "bat-profile:ID"` | Read a private `remote-tokens.enc.json` of at most 1 MiB from the selected directory. Existing `resolve_token()` uses the shared parser’s legacy Python mode: object or JSON-string `data`, exact profile key, and the historical `enc` acceptance (false, absent/null or numeric zero). Setup and `token_available()` use admission: exactly false, JSON-string data, exact unambiguous key and native token bounds. This does not establish where the local BAT **server** token lives. |
+| `token_ref = "bat-profile:ID"` | Read a private `remote-tokens.enc.json` of at most 1 MiB from the selected directory. Existing `resolve_token()` and configured-host `token_available()` share the runtime resolver and use the shared parser’s legacy Python mode: object or JSON-string `data`, exact profile key, and the historical `enc` acceptance (false, absent/null or numeric zero). Only the setup profile listing and new `import_profile_id` selection use admission: exactly false, JSON-string data, exact unambiguous key and native token bounds. This does not establish where the local BAT **server** token lives. |
 | Private-file protection | `_private_files.py:8–51` rejects symlinks, nonregular files, excessive sizes, owner mismatch where `getuid` exists, and group/other access on non-Windows; checks opened-file identity too. Unix mode checks are skipped on Windows. Managed storage instead uses `platform_files` and Windows ACL/handle checks; do not call the older helper equivalent to Windows OS protection. `docs/getting-started.md:230–234` documents these distinctions. |
 
 The two Python modes are intentional compatibility boundaries in
 `BAT_SOURCE_POLICY = 1`, with shared vectors also checked by Rust's legacy Fleet
 reader. An admission failure does not narrow an existing Python reference's
-runtime decoding. Retiring that mode requires evidence about supported BAT
-writers; the server-store audit below is not evidence for every client store.
+runtime decoding or configured-host readiness. Retiring that mode requires evidence
+about supported BAT writers; the server-store audit below is not evidence for every client store.
 See [the trusted-source contract](fleet-configuration.md).
 
 `tests/test_mcp_and_config.py:71–101` supplies both local and remote profile

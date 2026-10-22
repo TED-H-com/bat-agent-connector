@@ -64,7 +64,7 @@ def select_profiles_directory(
     if profiles_dir:
         text = str(profiles_dir)
         path = home / text[2:] if text.startswith("~/") or text.startswith("~\\") else (
-            home if text == "~" else Path(text))
+            home if text == "~" else Path(text).expanduser())
     elif platform == "win32":
         roaming = environment.get("APPDATA")
         if not roaming:
