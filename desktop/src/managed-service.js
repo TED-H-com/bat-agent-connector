@@ -21,6 +21,7 @@ export async function managedServiceControls(root, {h, t, managedControl, errorB
       try {status = await managedControl({action: 'status'}); guard();} catch { /* retain the last observation */ }
       const code = String(error?.message || error);
       if (code.includes('SERVICE_STILL_STOPPING')) errors.replaceChildren(h('p', {}, t('managed_still_stopping')));
+      else if (code.includes('SERVICE_BUSY') && !code.includes('SERVICE_BUSY:')) errors.replaceChildren(h('p', {}, t('managed_busy')));
       else if (code.includes('SERVICE_STOPPED')) errors.replaceChildren(h('p', {}, t(status?.lifecycle?.state === 'stop_pending' ? 'managed_stopping' : 'managed_stopped')));
       else errors.replaceChildren(errorBox(error, {sourceRefresh: false, within: errors}));
     } finally {busy = false; paint();}
@@ -47,7 +48,7 @@ export async function managedServiceControls(root, {h, t, managedControl, errorB
     const at = lifecycle?.stopped_at || lifecycle?.requested_at;
     time.textContent = at ? new Date(at * 1000).toLocaleString() : '';
     if (at) time.dateTime = new Date(at * 1000).toISOString();
-    stop.hidden = held; start.hidden = !held; open.disabled = busy || held;
+    stop.hidden = lifecycle?.state === 'stopped'; start.hidden = !held; open.disabled = busy || held;
     for (const button of [stop, start, confirm]) button.disabled = busy;
     login.disabled = busy; login.checked = !!status?.login_enabled;
   }

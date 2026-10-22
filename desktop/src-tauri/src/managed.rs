@@ -385,6 +385,7 @@ impl Managed {
         if let Ok(mut facts) = self.runtime_facts.lock() {
             *facts = RuntimeFacts::from_launch(launch);
         }
+        self.status.lock().unwrap().lifecycle = Some(Lifecycle::running());
     }
 
     pub fn status(&self) -> Status {
@@ -400,24 +401,16 @@ impl Managed {
     }
 
     pub fn read_status(&self) -> Result<Status, String> {
-        let background = self.status.lock().unwrap().background;
-        if !background {
-            return Ok(self.status());
-        }
-        #[derive(Deserialize)]
-        #[serde(deny_unknown_fields)]
-        struct Reply {
-            protocol: u8,
-            lifecycle: Lifecycle,
-        }
-        let bytes = self.request("status")?;
-        let reply: Reply =
-            serde_json::from_slice(&bytes).map_err(|_| "MANAGED_RUNTIME_REPLY_INVALID")?;
-        if reply.protocol != 1 || !reply.lifecycle.valid() {
-            return Err("MANAGED_RUNTIME_REPLY_INVALID".into());
-        }
-        self.status.lock().unwrap().lifecycle = Some(reply.lifecycle);
         Ok(self.status())
+    }
+
+    pub fn is_held(&self) -> bool {
+        self.status
+            .lock()
+            .unwrap()
+            .lifecycle
+            .as_ref()
+            .is_some_and(|v| v.state != "running")
     }
 
     fn require_owned(&self) -> Result<(), String> {
@@ -596,11 +589,11 @@ impl Managed {
         if bytes.len() as u64 > MAX_REPLY {
             return Err("MANAGED_RUNTIME_START_FAILED".into());
         }
+        if let Some(lifecycle) = reply_lifecycle(&bytes) {
+            self.status.lock().unwrap().lifecycle = Some(lifecycle);
+        }
         if !result.success() {
-            if let Some((code, lifecycle)) = lifecycle_failure(&bytes) {
-                if let Some(lifecycle) = lifecycle {
-                    self.status.lock().unwrap().lifecycle = Some(lifecycle);
-                }
+            if let Some((code, _)) = lifecycle_failure(&bytes) {
                 return Err(code);
             }
             return Err(journal_startup_failure(&bytes)
@@ -608,6 +601,15 @@ impl Managed {
         }
         Ok(bytes)
     }
+}
+
+fn reply_lifecycle(bytes: &[u8]) -> Option<Lifecycle> {
+    let reply: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    if reply.get("protocol")?.as_u64()? != 1 {
+        return None;
+    }
+    let lifecycle: Lifecycle = serde_json::from_value(reply.get("lifecycle")?.clone()).ok()?;
+    lifecycle.valid().then_some(lifecycle)
 }
 
 fn lifecycle_failure(bytes: &[u8]) -> Option<(String, Option<Lifecycle>)> {
@@ -624,11 +626,14 @@ fn lifecycle_failure(bytes: &[u8]) -> Option<(String, Option<Lifecycle>)> {
         }
         return Some((code.into(), Some(lifecycle)));
     }
-    if code == "SERVICE_LIFECYCLE_UNPROVEN" {
+    if matches!(code, "SERVICE_LIFECYCLE_UNPROVEN" | "SERVICE_STOP_REFUSED") {
         return Some((code.into(), None));
     }
     if code == "SERVICE_BUSY" {
-        let message = failure.get("message")?.as_str()?;
+        let message = failure
+            .get("message")
+            .and_then(|value| value.as_str())
+            .unwrap_or("");
         if [
             "finish or reconcile current operations before stopping",
             "finish or pause service shutdown until current tasks settle",
@@ -638,6 +643,7 @@ fn lifecycle_failure(bytes: &[u8]) -> Option<(String, Option<Lifecycle>)> {
         {
             return Some((format!("SERVICE_BUSY: {message}"), None));
         }
+        return Some(("SERVICE_BUSY".into(), None));
     }
     None
 }
@@ -979,8 +985,16 @@ mod tests {
         assert_eq!(managed.recover().err().unwrap(), "SERVICE_STOPPED");
         bridge.managed_hold(Some(0));
         assert!(bridge.status().managed_recovery.is_none());
-        crate::managed_recovery::announce(&bridge, 1, &managed);
-        assert!(bridge.status().managed_recovery.is_none());
+        // Keep the bridge eligible: silence must come from the cached lifecycle,
+        // not from Bridge ignoring announcements after recovery was disabled.
+        let eligible = crate::bridge::Bridge::managed(
+            &config,
+            launch.config(),
+            launch.token.clone(),
+            launch.identity(),
+        );
+        crate::managed_recovery::announce(&eligible, 0, &managed);
+        assert!(eligible.status().managed_recovery.is_none());
         assert_eq!(managed.recover().err().unwrap(), "SERVICE_STOPPED");
         assert_eq!(
             fs::read(data.join("managed-central/launcher-count")).unwrap(),

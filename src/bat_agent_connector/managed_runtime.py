@@ -270,17 +270,19 @@ def _stop_owned(root, launch, until, *, lifecycle_stop=False):
     try:
         result = _request(launch["endpoint"], "/api/v1/managed/stop", token=launch["token"], body={})
     except urllib.error.HTTPError as error:
-        if error.code == 409:
-            if not lifecycle_stop:
-                raise ValueError("owned service is busy; finish or reconcile current work before upgrading") from None
+        if lifecycle_stop and 400 <= error.code < 500:
+            if error.code != 409:
+                raise LifecycleRefusal("SERVICE_STOP_REFUSED", "owned service refused shutdown") from None
             try:
                 reason = json.loads(error.read(4096))["error"]["message"]
             except (ValueError, KeyError, TypeError):
                 reason = None
             reasons = {"finish or reconcile current operations before stopping",
                        "finish or pause service shutdown until current tasks settle", "current work is still running"}
-            raise LifecycleRefusal("SERVICE_BUSY", reason if reason in reasons else
-                                   "owned service is busy; finish or reconcile current work before upgrading") from None
+            raise LifecycleRefusal("SERVICE_BUSY", reason if isinstance(reason, str) and reason in reasons else
+                                   "owned service is busy; finish or reconcile current work before stopping") from None
+        if error.code == 409:
+            raise ValueError("owned service is busy; finish or reconcile current work before upgrading") from None
         raise
     if result != {"protocol": PROTOCOL, "stopped": True}:
         raise ValueError("owned service did not acknowledge shutdown")
@@ -298,19 +300,21 @@ def stop(raw, *, timeout=30):
         state = lifecycle(root)
         if state["state"] != "running":
             state = _settle_hold(root, state)
-            return {"protocol": PROTOCOL, "stopped": state["state"] == "stopped", "lifecycle": state}
+            if state["state"] == "stopped":
+                return {"protocol": PROTOCOL, "stopped": True, "lifecycle": state}
         running = _running(root)
         launch = _verify(root, doc) if running else None
-        state = _save_lifecycle(root, {"state": "stop_pending", "requested_at": time.time(), "stopped_at": None})
+        if state["state"] == "running":
+            state = _save_lifecycle(root, {"state": "stop_pending", "requested_at": time.time(), "stopped_at": None})
         if launch is not None:
             try:
                 _stop_owned(root, launch, time.monotonic() + timeout, lifecycle_stop=True)
             except LifecycleRefusal as error:
-                if error.code == "SERVICE_BUSY":
-                    _clear_hold(root)  # authoritative refusal before any effect
+                _clear_hold(root)  # every 4xx is an authoritative refusal before any effect
+                error.lifecycle = lifecycle(root)
                 raise
             except (OSError, ValueError):
-                # Transport/ack/deadline uncertainty is durable. Never resend.
+                # Keep uncertainty durable. Only a later explicit stop may send again.
                 return {"protocol": PROTOCOL, "stopped": False, "lifecycle": state}
         state = _settle_hold(root, state)
         return {"protocol": PROTOCOL, "stopped": state["state"] == "stopped", "lifecycle": state}

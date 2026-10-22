@@ -38,7 +38,11 @@ impl Backoff {
 }
 
 // Keep the loop's visible announcement independently testable.
-pub(super) fn announce(_bridge: &Bridge, _current: u64, _managed: &Managed) {}
+pub(super) fn announce(bridge: &Bridge, current: u64, managed: &Managed) {
+    if !managed.is_held() {
+        bridge.recovery_state(current, Some("MANAGED_RECOVERING".into()));
+    }
+}
 
 pub fn start(bridge: Arc<Bridge>, managed: Arc<Managed>) {
     tauri::async_runtime::spawn(async move {

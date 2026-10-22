@@ -496,7 +496,8 @@ def test_explicit_stop_can_resend_after_connection_failure(counted_installation,
 
 
 @pytest.mark.parametrize('status', [401, 403, 405])
-def test_definitive_stop_refusal_clears_hold(counted_installation, monkeypatch, status):
+@pytest.mark.parametrize('pending', [False, True])
+def test_definitive_stop_refusal_clears_hold(counted_installation, monkeypatch, status, pending):
     from bat_agent_connector import api_auth
     root, children = counted_installation
     runtime.ensure(root, timeout=15)
@@ -514,8 +515,9 @@ def test_definitive_stop_refusal_clears_hold(counted_installation, monkeypatch, 
         return request(endpoint, path, **kwargs)
     monkeypatch.setattr(runtime, '_request', refused)
     # A pending hold from a previous uncertain attempt is also cleared by refusal.
-    runtime._write(root / 'state/lifecycle.json',
-                   {'version': 1, 'state': 'stop_pending', 'requested_at': time.time(), 'stopped_at': None})
+    if pending:
+        runtime._write(root / 'state/lifecycle.json',
+                       {'version': 1, 'state': 'stop_pending', 'requested_at': time.time(), 'stopped_at': None})
     with pytest.raises(runtime.LifecycleRefusal) as result:
         runtime.stop(root)
     assert result.value.code == 'SERVICE_STOP_REFUSED'
@@ -538,6 +540,16 @@ def test_repeated_stop_route_acknowledges_without_busy_gate(slow_stopping_instal
             'session.send', '{}', '{}', '{}', 'uncertain', time.time()+3600, time.time(), time.time()))
     assert runtime._request(launch['endpoint'], '/api/v1/managed/stop', token=launch['token'], body={}) == {
         'protocol': 1, 'stopped': True}
+    import urllib.error
+    # Idempotent acknowledgement still requires the same authenticated owner;
+    # the existing fence on other POST effects remains active during shutdown.
+    with pytest.raises(urllib.error.HTTPError) as refused:
+        runtime._request(launch['endpoint'], '/api/v1/managed/stop', token='unknown', body={})
+    assert refused.value.code == 401
+    with pytest.raises(urllib.error.HTTPError) as fenced:
+        runtime._request(launch['endpoint'], '/api/v1/managed/browser-file', token=launch['token'], body={})
+    assert fenced.value.code == 503
+    assert (root / 'stop-requests').read_text() == 'stop\nstop\nstop\n'
     assert (root / 'stop-signals').read_text() == 'stop\n'
     assert runtime._running(root) and len(children) == 1
 

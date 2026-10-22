@@ -21,10 +21,10 @@ for (const locale of ['en', 'zh-TW']) {
     await expect(page.locator('[data-managed-lifecycle]')).toHaveText(zh ? '背景服務運作中' : 'Background service running');
     expect(fixture.managedCalls.filter(action => ['stop', 'start'].includes(action))).toEqual(['stop', 'start']);
   });
-  for (const kind of ['busy', 'pending', 'client']) test(`managed lifecycle ${kind} ${locale}`, async ({page}) => {
+  for (const kind of ['busy', 'unknown_busy', 'pending', 'client']) test(`managed lifecycle ${kind} ${locale}`, async ({page}) => {
     const fixture = await managedSetupFixture(page, true, locale);
     if (kind === 'client') fixture.managed = managedStatusFixture(false);
-    fixture.stopBusy = kind === 'busy'; fixture.stopPending = kind === 'pending';
+    fixture.stopBusy = kind === 'busy'; fixture.stopBusyGeneric = kind === 'unknown_busy'; fixture.stopPending = kind === 'pending';
     await page.goto('/dashboard/#/settings'); await openSetupAdvanced(page);
     if (kind === 'client') {
       await expect(page.getByRole('button', {name: stop, exact: true})).toHaveCount(0);
@@ -33,7 +33,11 @@ for (const locale of ['en', 'zh-TW']) {
     }
     await page.getByRole('button', {name: stop, exact: true}).click();
     await page.locator('[data-managed-stop-preview]').getByRole('button', {name: zh ? '確認停止' : 'Confirm stop'}).click();
-    if (kind === 'busy') {
+    if (kind === 'unknown_busy') {
+      await expect(page.locator('[data-managed-service]')).toContainText(zh ? '背景服務目前忙碌，請先完成或核對目前工作，再停止服務。' : 'The background service is busy. Finish or reconcile current work before stopping.');
+      await expect(page.locator('[data-managed-lifecycle]')).toHaveText(zh ? '背景服務運作中' : 'Background service running');
+      await expect(page.locator('[data-managed-service]')).not.toContainText('MANAGED_RUNTIME_START_FAILED');
+    } else if (kind === 'busy') {
       await expect(page.locator('[data-managed-service]')).toContainText('finish or reconcile current operations before stopping');
       await expect(page.locator('[data-managed-lifecycle]')).toHaveText(zh ? '背景服務運作中' : 'Background service running');
     } else {
@@ -41,8 +45,17 @@ for (const locale of ['en', 'zh-TW']) {
       await expect(page.getByRole('button', {name: start, exact: true})).toBeVisible();
       fixture.startStillStopping = true;
       await page.getByRole('button', {name: start, exact: true}).click();
-      await expect(page.locator('[data-managed-service]')).toContainText(zh ? '背景服務仍在停止中，請稍後再啟動。' : 'The background service is still stopping. Try Start again shortly.');
+      await expect(page.locator('[data-managed-service]')).toContainText(zh ? '背景服務仍在停止中。你可以等待，或再次選擇停止服務。' : 'The background service is still stopping. You can wait or stop it again.');
       await expect(page.locator('[data-managed-lifecycle]')).toHaveText(zh ? '背景服務停止中' : 'Background service stopping');
+      await expect(page.getByRole('button', {name: stop, exact: true})).toBeVisible();
+      await page.getByRole('button', {name: stop, exact: true}).click();
+      const preview = page.locator('[data-managed-stop-preview]');
+      await expect(preview).toContainText(zh ? '本機 Connector 會停止。' : 'The local Connector will stop.');
+      expect(fixture.managedCalls.filter(action => action === 'stop')).toHaveLength(1);
+      fixture.stopPending = false;
+      await preview.getByRole('button', {name: zh ? '確認停止' : 'Confirm stop'}).click();
+      await expect(page.locator('[data-managed-lifecycle]')).toHaveText(zh ? '背景服務已停止' : 'Background service stopped');
+      expect(fixture.managedCalls.filter(action => action === 'stop')).toHaveLength(2);
     }
   });
 }
