@@ -9,6 +9,83 @@ use std::path::Path;
 mod support;
 use support::Fixture;
 
+#[test]
+fn shared_source_policy_directory_vectors() {
+    let vectors: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/bat-source-policy-v1.json"
+    ))
+    .unwrap();
+    assert_eq!(vectors["policy"], 1);
+    for row in vectors["directories"].as_array().unwrap() {
+        let expected = &row["expected"]["rust_legacy_fleet"];
+        // Python-only explicit paths/macOS/Linux have no native Fleet selector.
+        if expected.is_null() {
+            continue;
+        }
+        // chmod cannot model a Windows ACL denial; Windows is covered by CI's
+        // actual platform fixtures, not a fabricated Unix permission result.
+        if cfg!(windows) && row["unreadable"].is_string() {
+            continue;
+        }
+        let fixture = Fixture::new();
+        for (relative, kind) in row["entries"].as_object().unwrap() {
+            let path = fixture.0.join(relative);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            if kind == "directory" {
+                std::fs::create_dir_all(path).unwrap();
+            } else {
+                std::fs::write(path, "synthetic non-directory").unwrap();
+            }
+        }
+        #[cfg(unix)]
+        let denied = row["unreadable"].as_str().map(|relative| {
+            use std::os::unix::fs::PermissionsExt;
+            let path = fixture.0.join(relative);
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o0)).unwrap();
+            path
+        });
+        let actual = data_directory(&fixture.0.join("roaming"));
+        // The native selector returns a data root; admission binds its profiles
+        // child. Assert the shared admission entry as well as legacy compatibility.
+        let admission = &row["expected"]["admission"];
+        if let Some(reason) = admission["reason"].as_str() {
+            assert_eq!(
+                actual.as_ref().map(|_| ()).map_err(|e| *e),
+                Err(reason),
+                "{}",
+                row["id"]
+            );
+        } else {
+            assert_eq!(
+                actual.as_ref().unwrap().join("profiles"),
+                expected_root(&fixture).join(admission["path"].as_str().unwrap()),
+                "{}",
+                row["id"]
+            );
+        }
+        #[cfg(unix)]
+        if let Some(path) = denied {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        if let Some(reason) = expected["reason"].as_str() {
+            assert_eq!(
+                actual.as_ref().map(|_| ()).map_err(|e| *e),
+                Err(reason),
+                "{}",
+                row["id"]
+            );
+        } else {
+            assert_eq!(
+                actual.unwrap(),
+                expected_root(&fixture).join(expected["path"].as_str().unwrap()),
+                "{}",
+                row["id"]
+            );
+        }
+    }
+}
+
 fn expected_root(fixture: &Fixture) -> std::path::PathBuf {
     // Independent expected existing root: the final path of this synthetic
     // directory expands 8.3 aliases. Production deliberately does not use

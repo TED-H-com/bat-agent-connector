@@ -7,19 +7,143 @@ use std::{
     io::Read,
     path::Path,
 };
-use zeroize::{Zeroize, Zeroizing};
+#[cfg(windows)]
+use zeroize::Zeroize;
+use zeroize::Zeroizing;
 
 const MISSING: &str = "CREDENTIAL_MISSING";
 const REFERENCE: &str = "CREDENTIAL_REFERENCE_INVALID";
-const STORE_BOUND: usize = 1024 * 1024;
+pub const STORE_BOUND: usize = 1024 * 1024;
 const PROTECTED_BOUND: usize = 256 * 1024;
 const TOKEN_BOUND: usize = 64 * 1024;
+
+/// Shared BAT admission version. Absent references retain legacy Fleet semantics.
+pub const BAT_SOURCE_POLICY: u64 = 1;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct TokenStatus {
+    pub state: &'static str,
+    pub reason: &'static str,
+}
+impl TokenStatus {
+    fn new(state: &'static str, reason: &'static str) -> Self {
+        Self { state, reason }
+    }
+}
+
+/// The secret tree deliberately has no Debug or serialization implementation.
+/// Only fixed status codes leave lookup; resolution copies one zeroizing token.
+pub struct AdmissionStore {
+    status: TokenStatus,
+    inner: Option<SecretJson>,
+}
+impl AdmissionStore {
+    fn status(state: &'static str, reason: &'static str) -> Self {
+        Self {
+            status: TokenStatus::new(state, reason),
+            inner: None,
+        }
+    }
+    pub fn unreadable() -> Self {
+        Self::status("unavailable", "TOKEN_STORE_UNREADABLE")
+    }
+    pub fn parse(bytes: &[u8]) -> Self {
+        if bytes.len() > STORE_BOUND || std::str::from_utf8(bytes).is_err() {
+            return Self::unreadable();
+        }
+        match Self::decode(bytes) {
+            Ok(store) => store,
+            Err(reason) => Self::status("unsupported", reason),
+        }
+    }
+    fn decode(bytes: &[u8]) -> Result<Self> {
+        fn decode(bytes: &[u8]) -> Result<SecretJson> {
+            strict_json::parse_classified(bytes, STORE_BOUND)
+                .map(SecretJson)
+                .map_err(|reason| {
+                    if reason == "JSON_AMBIGUOUS" {
+                        "TOKEN_STORE_AMBIGUOUS"
+                    } else {
+                        "TOKEN_STORE_FORMAT"
+                    }
+                })
+        }
+        // Unlike legacy Fleet, admission does not remove an outer or inner BOM.
+        let outer = decode(bytes)?;
+        if !outer.0.is_object() {
+            return Err("TOKEN_STORE_FORMAT");
+        }
+        if outer.0.get("enc") != Some(&Value::Bool(false)) {
+            return Ok(Self::status("encrypted", "TOKEN_STORE_ENCRYPTED"));
+        }
+        let data = outer.0["data"].as_str().ok_or("TOKEN_DATA_NOT_STRING")?;
+        let inner = decode(data.as_bytes())?;
+        if !inner.0.is_object() && !inner.0.is_null() {
+            return Err("TOKEN_STORE_FORMAT");
+        }
+        if let Some(tokens) = inner.0.get("tokens") {
+            if !tokens.is_object() && !tokens.is_null() {
+                return Err("TOKEN_STORE_FORMAT");
+            }
+        }
+        Ok(Self {
+            status: TokenStatus::new("available", "TOKEN_STORE_AVAILABLE"),
+            inner: Some(inner),
+        })
+    }
+    fn tokens(&self) -> Option<&serde_json::Map<String, Value>> {
+        self.inner.as_ref()?.0.get("tokens")?.as_object()
+    }
+    pub fn lookup(&self, profile_id: &str) -> TokenStatus {
+        if self.status.state != "available" {
+            return self.status;
+        }
+        let Some(tokens) = self.tokens() else {
+            return TokenStatus::new("unavailable", "TOKEN_MISSING");
+        };
+        let Some(token) = tokens.get(profile_id) else {
+            let reason = if tokens
+                .keys()
+                .any(|key| key.to_lowercase() == profile_id.to_lowercase())
+            {
+                "TOKEN_KEY_MISMATCH"
+            } else {
+                "TOKEN_MISSING"
+            };
+            return TokenStatus::new("unavailable", reason);
+        };
+        let Some(token) = token.as_str().filter(|token| !token.is_empty()) else {
+            return TokenStatus::new("unavailable", "TOKEN_INVALID");
+        };
+        if token.len() > TOKEN_BOUND || token.contains('\0') {
+            return TokenStatus::new("unsupported", "TOKEN_INVALID");
+        }
+        TokenStatus::new("available", "TOKEN_AVAILABLE")
+    }
+    fn token(&self, profile_id: &str) -> Result<Zeroizing<String>> {
+        let status = self.lookup(profile_id);
+        if status.state != "available" {
+            return Err(status.reason);
+        }
+        let token = self
+            .tokens()
+            .and_then(|tokens| tokens.get(profile_id))
+            .and_then(Value::as_str)
+            .ok_or("TOKEN_MISSING")?;
+        Ok(Zeroizing::new(token.to_owned()))
+    }
+}
 
 // Neither the reference (private profile/name) nor resolved credential implements
 // Debug/Serialize. A caller can obtain references only from a validated inventory.
 enum Source {
-    BatProfile { profile_id: String },
-    Dpapi { name: String },
+    BatProfile {
+        profile_id: String,
+        source_policy: Option<u64>,
+    },
+    Dpapi {
+        name: String,
+    },
 }
 pub struct CredentialRef {
     source: Source,
@@ -44,6 +168,14 @@ impl CredentialRef {
         Ok(Self {
             source: Source::BatProfile {
                 profile_id: profile.into(),
+                source_policy: value
+                    .get("source_policy")
+                    .map(|v| {
+                        v.as_u64()
+                            .filter(|v| *v == BAT_SOURCE_POLICY)
+                            .ok_or(REFERENCE)
+                    })
+                    .transpose()?,
             },
         })
     }
@@ -91,9 +223,28 @@ pub fn resolve(data_dir: &Path, reference: &CredentialRef) -> Result<ProbeCreden
         return Err(MISSING);
     }
     let token = match &reference.source {
-        Source::BatProfile { profile_id } => {
-            let bytes = read_fixed(data_dir, "profiles", "remote-tokens.enc.json", STORE_BOUND)?;
-            profile_token(&bytes, profile_id)?
+        Source::BatProfile {
+            profile_id,
+            source_policy,
+        } => {
+            let reader = if source_policy.is_some() {
+                read_private_fixed
+            } else {
+                read_fixed
+            };
+            let bytes = reader(data_dir, "profiles", "remote-tokens.enc.json", STORE_BOUND)
+                .map_err(|reason| {
+                    if source_policy.is_some() {
+                        "TOKEN_STORE_UNREADABLE"
+                    } else {
+                        reason
+                    }
+                })?;
+            if source_policy.is_some() {
+                AdmissionStore::parse(&bytes).token(profile_id)?
+            } else {
+                profile_token(&bytes, profile_id)?
+            }
         }
         Source::Dpapi { name } => {
             if !valid_name(name) {
@@ -138,6 +289,23 @@ pub(crate) fn read_fixed(
     name: &str,
     bound: usize,
 ) -> Result<Zeroizing<Vec<u8>>> {
+    read_fixed_policy(data_dir, directory, name, bound, false)
+}
+pub(crate) fn read_private_fixed(
+    data_dir: &Path,
+    directory: &str,
+    name: &str,
+    bound: usize,
+) -> Result<Zeroizing<Vec<u8>>> {
+    read_fixed_policy(data_dir, directory, name, bound, true)
+}
+fn read_fixed_policy(
+    data_dir: &Path,
+    directory: &str,
+    name: &str,
+    bound: usize,
+    private: bool,
+) -> Result<Zeroizing<Vec<u8>>> {
     if !data_dir.is_absolute() {
         return Err(MISSING);
     }
@@ -152,7 +320,7 @@ pub(crate) fn read_fixed(
     }
     let path = parent.join(name);
     let metadata = path.symlink_metadata().map_err(|_| MISSING)?;
-    if !metadata.is_file() || !no_link(&metadata) {
+    if !metadata.is_file() || !no_link(&metadata) || private && !private_metadata(&metadata) {
         return Err(MISSING);
     }
     let mut options = OpenOptions::new();
@@ -169,20 +337,61 @@ pub(crate) fn read_fixed(
         options.custom_flags(0x0020_0000); // FILE_FLAG_OPEN_REPARSE_POINT
     }
     let file = options.open(path).map_err(|_| MISSING)?;
-    read_regular(file, bound)
+    if private {
+        read_regular_policy(file, bound, true)
+    } else {
+        read_regular(file, bound)
+    }
 }
 fn read_regular(file: File, bound: usize) -> Result<Zeroizing<Vec<u8>>> {
+    read_regular_policy(file, bound, false)
+}
+#[cfg(unix)]
+fn private_owner_mode(metadata: &Metadata, uid: u32) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    metadata.uid() == uid && metadata.mode() & 0o077 == 0
+}
+fn private_metadata(metadata: &Metadata) -> bool {
+    #[cfg(unix)]
+    {
+        private_owner_mode(metadata, unsafe { libc::getuid() })
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = metadata;
+        true
+    }
+}
+fn read_regular_policy(mut file: File, bound: usize, private: bool) -> Result<Zeroizing<Vec<u8>>> {
     let meta = file.metadata().map_err(|_| MISSING)?;
-    if !meta.is_file() || !no_link(&meta) || meta.len() > bound as u64 {
+    if !meta.is_file()
+        || !no_link(&meta)
+        || meta.len() > bound as u64
+        || private && !private_metadata(&meta)
+    {
         return Err(MISSING);
     }
-    let mut out = Zeroizing::new(Vec::new());
-    file.take(bound as u64 + 1)
-        .read_to_end(&mut out)
-        .map_err(|_| MISSING)?;
-    if out.len() > bound {
+    let length = meta.len() as usize;
+    let mut out = Zeroizing::new(Vec::with_capacity(length + 1));
+    out.resize(length + 1, 0);
+    // Fixed slice reads cannot reallocate. Refuse growth past the observed size
+    // rather than leaving old copies of a growing secret buffer behind.
+    let mut used = 0;
+    while used < out.len() {
+        let read = match file.read(&mut out[used..]) {
+            Ok(read) => read,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => return Err(MISSING),
+        };
+        if read == 0 {
+            break;
+        }
+        used += read;
+    }
+    if used > length {
         return Err(MISSING);
     }
+    out.truncate(used);
     Ok(out)
 }
 /// Successful parsed secret trees are scrubbed, including other profiles. Parser
@@ -194,17 +403,7 @@ impl Drop for SecretJson {
     }
 }
 fn scrub(value: &mut Value) {
-    match value {
-        Value::String(s) => s.zeroize(),
-        Value::Array(values) => values.iter_mut().for_each(scrub),
-        Value::Object(values) => {
-            for (mut key, mut value) in std::mem::take(values) {
-                key.zeroize();
-                scrub(&mut value);
-            }
-        }
-        _ => (),
-    }
+    strict_json::scrub(value);
 }
 fn profile_token(bytes: &[u8], profile_id: &str) -> Result<Zeroizing<String>> {
     // UTF8 BOM matches .NET ReadAllText; Kit writes UTF8 without a BOM.

@@ -39,7 +39,6 @@ Token values never live in this file.
 from __future__ import annotations
 
 import ipaddress
-import json
 import os
 import posixpath
 import re
@@ -49,6 +48,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ._private_files import read_private
+from .connection_sources import (
+    DEFAULT_BAT_PROFILES_DIR as DEFAULT_BAT_PROFILES_DIR,
+)
+from .connection_sources import SourceUnavailable, TokenMode, read_token_store, select_profiles_directory
 from .errors import ConfigError, TokenUnavailable
 from .redact import register_secret
 from .session_history_config import HistoryConfig, parse_history
@@ -60,7 +63,6 @@ else:  # pragma: no cover
     import tomli as tomllib
 
 APP = "bat-agent-connector"
-DEFAULT_BAT_PROFILES_DIR = "~/.local/share/org.tonyq.better-agent-terminal/profiles"
 _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 _FP_RE = re.compile(r"^[0-9A-F]{64}$")
 
@@ -128,7 +130,7 @@ class HostConfig:
     auto_cleanup: bool = False  # Deprecated: parses for compatibility; never enables cleanup writes.
     codex_model: str | None = None
     profile_id: str = "default"
-    bat_profiles_dir: str = DEFAULT_BAT_PROFILES_DIR
+    bat_profiles_dir: str = ""  # Empty selects the current platform's BAT source at resolution time.
     labels: list[str] = field(default_factory=list)
     managed_roots: tuple[str, ...] = ()
     shared_clone_worktrees: bool = True
@@ -146,6 +148,7 @@ class HostConfig:
         return self.token_ref.split(":", 1)[0] if ":" in self.token_ref else "invalid"
 
     def token_available(self) -> bool:
+        """Readiness of this configured reference uses the actual runtime resolver."""
         try:
             self.resolve_token()
             return True
@@ -178,38 +181,34 @@ def _resolve_token_ref(ref: str, profiles_dir: str) -> str:
             raise TokenUnavailable(f"token file {p} is empty")
         return val
     if kind == "bat-profile":
-        return _token_from_bat_profiles(Path(profiles_dir).expanduser(), arg)
+        return _token_from_bat_profiles(profiles_dir, arg)
     raise TokenUnavailable(f"unknown token_ref kind {kind!r}")
 
 
-def _token_from_bat_profiles(pdir: Path, profile_id: str) -> str:
-    path = pdir / "remote-tokens.enc.json"
+def _bat_token_unavailable(reason: str) -> TokenUnavailable:
+    """Stable policy code plus actionable, content-free runtime guidance."""
+    messages = {
+        "TOKEN_STORE_ENCRYPTED": "BAT token store is encrypted (OS keychain); use token_ref env: or file: instead",
+        "TOKEN_STORE_UNREADABLE": "cannot read BAT token store: validate private file permissions, type, size and JSON format",
+        "TOKEN_MISSING": "no token for BAT profile; configure its token in BAT or use token_ref env: or file: instead",
+        "DATA_DIRECTORY_UNAVAILABLE": "BAT profiles directory is unavailable; set APPDATA for this account on Windows or configure profiles_dir",
+        "DATA_DIRECTORY_INVALID": "BAT profiles directory is invalid; configure profiles_dir to point to a directory",
+        "DATA_DIRECTORY_UNREADABLE": "cannot read BAT profiles directory; check directory permissions or configure profiles_dir",
+    }
+    message = messages.get(reason, "BAT token store has an unexpected format")
+    return TokenUnavailable(f"{reason}: {message}")
+
+
+def _token_from_bat_profiles(pdir: str | Path | None, profile_id: str) -> str:
     try:
-        raw = json.loads(read_private(path, 1024 * 1024))
-    except (OSError, ValueError):
-        raise TokenUnavailable("cannot read BAT token store: validate private file permissions, type, size and JSON format") from None
-    if not isinstance(raw, dict):
-        raise TokenUnavailable("BAT token store has an unexpected format")
-    if raw.get("enc") not in (False, None):
-        raise TokenUnavailable(
-            "BAT token store is encrypted (OS keychain); use token_ref env: or file: instead"
-        )
-    data = raw.get("data")
-    if isinstance(data, str):
-        try:
-            data = json.loads(data)
-        except ValueError:
-            raise TokenUnavailable("BAT token store has an unexpected format") from None
-    if data is not None and not isinstance(data, dict):
-        raise TokenUnavailable("BAT token store has an unexpected format")
-    tokens = (data or {}).get("tokens")
-    if tokens is not None and not isinstance(tokens, dict):
-        raise TokenUnavailable("BAT token store has an unexpected format")
-    tokens = tokens or {}
-    tok = tokens.get(profile_id)
-    if not isinstance(tok, str) or not tok:
-        raise TokenUnavailable(f"no token for BAT profile {profile_id!r} in {path}")
-    return tok
+        directory = select_profiles_directory(
+            pdir, platform=sys.platform, environment=os.environ, home=Path.home())
+    except SourceUnavailable as error:
+        raise _bat_token_unavailable(str(error)) from None
+    result = read_token_store(directory, mode=TokenMode.LEGACY_RUNTIME).lookup(profile_id)
+    if result.token is None:
+        raise _bat_token_unavailable(result.reason)
+    return result.token
 
 
 @dataclass
@@ -410,7 +409,7 @@ class GitHubConfig:
     def token(self) -> str:
         if not self.token_ref:
             raise TokenUnavailable("[github] token_ref is not configured")
-        tok = _resolve_token_ref(self.token_ref, DEFAULT_BAT_PROFILES_DIR)
+        tok = _resolve_token_ref(self.token_ref, "")
         register_secret(tok)
         return tok
 
@@ -617,7 +616,7 @@ class Config:
 
 def parse_config(data: dict, path: Path | None = None) -> Config:
     bat = data.get("bat") or {}
-    pdir = str(bat.get("profiles_dir") or DEFAULT_BAT_PROFILES_DIR)
+    pdir = str(bat.get("profiles_dir") or "")
     hosts: dict[str, HostConfig] = {}
     for name, h in (data.get("hosts") or {}).items():
         if not _NAME_RE.match(name):

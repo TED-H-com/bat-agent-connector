@@ -1,3 +1,4 @@
+import {eventDelivery} from './event-delivery.mjs';
 import {mountProfilePicker} from './work-profile-picker-fixture.ts';
 import {effectiveGolden,effectiveExpected,effectiveReasonKeys,mountEffectiveGate} from './pm-effective-route-fixture.ts';
 import {pmEffectiveRouteStrings} from '../src/pm-effective-route-strings.js';
@@ -206,14 +207,14 @@ test('late readiness cannot restore the previously selected profile',async({page
 });
 
 test('lost start reply retains the original profile, request and key across reload',async({page})=>{
-  const {f,state}=fixture();f.state.lostReply=true;let panel=await mount(page,f);
+  const {f,state}=fixture(),events=eventDelivery(page),dispatch=f.dispatch;f.dispatch=input=>events.forward(input,dispatch);f.state.lostReply=true;let panel=await mount(page,f);
   await panel.getByLabel('Saved profile',{exact:true}).selectOption(first);
   await panel.getByRole('button',{name:'Start work',exact:true}).click();
   await expect(panel.getByRole('button',{name:'Check original request',exact:true})).toBeVisible();
   const original=structuredClone(f.state.writes[0]);state.profiles[0].revision=2;state.profiles[0].digest='3'.repeat(64);
   await page.reload();await page.locator(`[data-pm-kanban-work="${workId(1)}"] [data-board-open]`).click();panel=page.locator('[data-work-inspector]');
   await expect(panel.getByLabel('Saved profile',{exact:true})).toBeDisabled();expect(f.state.writes).toHaveLength(1);
-  await panel.getByRole('button',{name:'Check original request',exact:true}).click();await expect.poll(()=>f.state.writes.length).toBe(2);
+  await events.post(panel.getByRole('button',{name:'Check original request',exact:true}));await expect.poll(()=>f.state.writes.length).toBe(2);
   expect(f.state.writes[1].idempotency_key).toBe(original.idempotency_key);expect(f.state.writes[1].body).toEqual(original.body);
   await expect(panel.locator('[data-pm-saved]')).toBeVisible();
 });

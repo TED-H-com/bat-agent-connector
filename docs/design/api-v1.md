@@ -318,3 +318,17 @@ step 2 之後；backfilled snapshot 的 occurred_at=null，原事件不改寫。
 - Part B：其餘 legacy writes 的 operations、no-key sentinel／讀取投影、完整結果與外部 steps 拆分。Task controls 與 A07 共用 gate 已在 Part A 完成。
 - `import-bat --output PATH --force` 是 owner 啟動前的本機 config 安裝指令，僅寫指定設定檔，保留現有路徑。
 - operation cancel/resume 已授權且 evented，不新增其 control operations；api-token issue/revoke 只改 connector 資料、不觸及 BAT/Git/provider，也不新增 operation。
+
+## Managed setup：連線預覽與受理
+
+| 路徑／欄位 | 已實作契約 |
+| --- | --- |
+| `GET /api/v1/managed/setup` | 原安裝 personal identity 與 `manage`；新增 `preview_contract_version:1`，其餘 setup state 保留。未宣告此版本時，新 UI 要求先更新 Connector，不自動退回舊式套用。[managed_setup.py:172](../../src/bat_agent_connector/managed_setup.py#L172)、[managed-setup.js:424](../../desktop/src/managed-setup.js#L424) |
+| `POST /api/v1/managed/setup/preview` | 同一 route table／認證邊界，scope 為 `manage`；無 query，只接受 `{action,target,params,preconditions}`，action 必須為 `setup.host`，target 為 `{host}`，params 沿用候選 builder 的 allowlist，preconditions 只能含 `{config_revision}`。原安裝／personal identity、busy、revision、來源、型別與 parser roundtrip 均先驗；不建立 operation／step、不寫設定、不連 BAT／SSH／Git。[api_v1.py:249](../../src/bat_agent_connector/api_v1.py#L249)、[api_v1.py:1401](../../src/bat_agent_connector/api_v1.py#L1401)、[managed_setup.py:251](../../src/bat_agent_connector/managed_setup.py#L251)、[managed_setup.py:372](../../src/bat_agent_connector/managed_setup.py#L372) |
+| 成功回應 | `{preview:{contract_version:1,action,target,config_revision,after_revision,review_digest,changes,source,warnings,effects}}`。changes 是 allowlist 的 `{field,before,after}`，source 是 `{kind,reference,available}`；kind 為 `bat_profile`、`staged_secret` 或 `existing_connection`。不含原始 TOML、秘密本文或解析後的 `file:` 憑證路徑；正式形狀見 [producer golden](../../tests/fixtures/managed-setup-preview.json)。[managed_setup.py:401](../../src/bat_agent_connector/managed_setup.py#L401)、[test_managed_setup_preview_golden.py:16](../../tests/test_managed_setup_preview_golden.py#L16) |
+| `review_digest` | SHA-256 綁版本、server／principal／actor、literal action／target／params（只有不透明秘密引用）及 before／after revisions。不是操作授權或加密簽章；Apply 仍重跑原安裝／scope／來源／busy guards。來源或請求改變須重新預覽。[managed_setup.py:394](../../src/bat_agent_connector/managed_setup.py#L394)、[managed_setup.py:439](../../src/bat_agent_connector/managed_setup.py#L439) |
+| `POST /api/v1/operations` 的 `setup.host` | 新 UI 帶原 target／params、原 `config_revision` 與 `review_digest`；不符回 `409 SETUP_REVIEW_CHANGED`，在建立 operation 與 probe 前拒絕。沿用 `manage`、既有 action／journal／step；舊客戶端僅帶 `config_revision` 仍受支援，`setup.repository`／`setup.verification` 不接受 digest。已受理的重送仍先依原 key／request hash 查回，不能改成新意圖。[managed_setup.py:439](../../src/bat_agent_connector/managed_setup.py#L439)、[operations.py:556](../../src/bat_agent_connector/operations.py#L556)、[managed_setup.py:591](../../src/bat_agent_connector/managed_setup.py#L591) |
+| 秘密與取消 | 已存 BAT profile 的預覽不 staging；貼上秘密可先走既有 `POST /managed/setup/secrets`，畫面必須顯示已發生的私密暫存。取消不建立 operation、不存連線、不 probe／啟動服務，未用秘密仍按既有到期清理規則處理。預覽只在記憶體；新 Apply 才保存原 request／key。已知 operation ID 恢復只 GET，尚未取得 ID 才以原 key／request 重送查回。[managed_setup.py:196](../../src/bat_agent_connector/managed_setup.py#L196)、[managed-setup.js:493](../../desktop/src/managed-setup.js#L493)、[managed-setup.js:522](../../desktop/src/managed-setup.js#L522)、[managed-setup.js:536](../../desktop/src/managed-setup.js#L536) |
+
+此處只實作既有 managed setup 的連線預覽；角色選擇、四檔協調與 native apply 仍依
+[Fleet 共用契約](fleet-configuration.md#加入機器共用契約已定尚未實作) 的已定／尚未實作界線，不能視為實機驗收。

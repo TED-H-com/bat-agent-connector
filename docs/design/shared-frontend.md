@@ -40,6 +40,17 @@ desktop cannot change with a web deployment: API version/capability checks remai
 necessary, and missing native features need an explicit explanation. UI behavior
 tests exercise both transports; mock IPC is not real WebView/platform acceptance.
 
+## Writes during a refresh
+
+While the current view refreshes, the shared client action gate can briefly pause
+writes (about 60 ms in the observed background refresh). A click in that pause is
+refused with `CLIENT_ACTION_VIEW_NOT_READY`: wait for loading or refresh the view,
+then try again. Nothing is sent; the draft, target and original request stay intact.
+Automated UI tests hold event delivery at a settled reader boundary before a normal
+write, then release it after observing the request. They do not retry a refused click
+until it happens to succeed. A separate held-refresh check exercises the refusal and
+one explicit send after the refresh completes.
+
 ## First adoption slice: conversation reading
 
 See the [Project Hub audit](../product/project-hub-frontend-audit-2026-10-09.md),

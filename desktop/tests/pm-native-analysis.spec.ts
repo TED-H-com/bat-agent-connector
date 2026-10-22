@@ -1,3 +1,4 @@
+import {eventDelivery} from './event-delivery.mjs';
 import {openThreadAnalysis} from './pm-navigation.ts';
 import {effectiveGolden,effectiveExpected,effectiveReasonKeys,mountEffectiveDiscussion,mountEffectiveGate} from './pm-effective-route-fixture.ts';
 import {STRINGS} from '../src/i18n.js';
@@ -59,17 +60,19 @@ for (const nativeTransport of [false, true]) test.describe(nativeTransport ? 'na
 
   test('lost response and later unavailable runtime preserve exact intent and one reply', async({page}) => {
     const f=nativeFixture(); f.state.lost=true;
+    const events=eventDelivery(page), originalDispatch=f.dispatch;
+    f.dispatch=input=>events.forward(input,originalDispatch);
     await mountConversation(page,nativeTransport,f.dispatch); await page.goto(pmRoute);await openThreadAnalysis(page);
     await form(page).getByLabel('What should the PM help you work through?',{exact:true}).fill('Analyze once, preserve this request');
     await form(page).getByRole('button',{name:'Request PM analysis',exact:true}).click();
     await expect(form(page)).toContainText('Reply unavailable');
     f.state.reject={status:403,code:'FORBIDDEN'};
-    await form(page).getByRole('button',{name:'Check original request',exact:true}).click();
+    await events.post(form(page).getByRole('button',{name:'Check original request',exact:true}));
     await expect(form(page).getByRole('button',{name:'New request',exact:true})).toBeHidden();
     f.native.eligible=false; f.native.reason='PM_NATIVE_EXECUTABLE_UNAVAILABLE'; f.state.reject=null;
     await page.reload();await openThreadAnalysis(page);
     await expect(form(page).getByLabel('What should the PM help you work through?',{exact:true})).toBeDisabled();
-    await form(page).getByRole('button',{name:'Check original request',exact:true}).click();
+    await events.post(form(page).getByRole('button',{name:'Check original request',exact:true}));
     await expect(form(page).getByLabel('What should the PM help you work through?',{exact:true})).toHaveValue('');
     expect(f.state.ops.size).toBe(1); expect(f.state.messages.filter(message=>message.message_id===messageId)).toHaveLength(1);
     expect(f.state.writes).toHaveLength(3);

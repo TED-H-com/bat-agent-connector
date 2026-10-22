@@ -10,7 +10,7 @@ function fixture(){
   const base=pmFixture();
   const state={stage:'idea' as string|null,status:'active',revision:0,epoch:0,transition:null as any,filtered:false,
     maintenance:null as any,failed:false,admin:false,pageFiltered:false,historyDenied:false,historyGate:null as Promise<void>|null,readGate:null as Promise<void>|null,
-    lost:false,pending:false,writes:[] as any[],reads:[] as any[],ops:new Map<string,any>(),inflight:[] as any[]};
+    lost:false,pending:false,pollAfter:null as number|null,writes:[] as any[],reads:[] as any[],ops:new Map<string,any>(),inflight:[] as any[]};
   const stopped=()=>['paused','closed'].includes(state.stage||'');
   function stop(){state.stage='paused';state.status='pausing';state.revision++;state.epoch++;state.transition={transition_id:transitionId,reason:'Keep the released version while reviewing unresolved work.',actor:'reader'};
     state.inflight=[{sequence:1,operation_id:operationId,action:'pm.run.start',actor:'reader',operation_status:'unknown',captured_at:1,disposition:'unresolved',steps:[{name:'pm.native.execute',status:'sent'}],writer:{run_id:'pmr_'+'c'.repeat(32),generation:1,status:'unknown'},retention:null}];}
@@ -23,6 +23,7 @@ function fixture(){
       caps.actions.push(...['set_stage','pause','close','reopen','retain_inflight'].map(kind=>({action:'pm.lifecycle.'+kind,allowed:base.state.manage})));
       return result;
     }
+    if(path==='/events')state.pollAfter=Number(url.searchParams.get('after'));
     if(path.startsWith(endpoint)){
       state.reads.push(structuredClone(input));
       if(state.readGate)await state.readGate;
@@ -133,6 +134,9 @@ for(const native of [false,true])test.describe(native?'native lifecycle':'web li
     await expect.poll(()=>f.state.reads.length).toBeGreaterThan(reads);
     await expect(stage).toHaveValue('planning');
     await expect(editor.getByLabel('Reason and retained context')).toHaveValue('Keep the current delivery.');
+    // The next poll proves all listeners for this controlled event settled.
+    // The fixture emits nothing further until this test changes its cursor.
+    await expect.poll(()=>f.state.pollAfter).toBe(f.base.state.cursor);
     f.state.lost=true;await editor.getByRole('button',{name:'Record phase',exact:true}).click();
     await expect(editor).toContainText('Reply unavailable');
     const original=structuredClone(f.state.writes[0]);
@@ -265,6 +269,7 @@ test('a newer Maintain observation requires explicit review before a fresh decis
   const editor=await edit(page,'set_stage');await editor.getByLabel('Management phase').selectOption('maintain');await editor.getByLabel('Reason and retained context').fill('Review this observed idle state');
   f.state.maintenance.snapshot_digest='6'.repeat(64);f.base.state.cursor++;
   await expect(editor.getByRole('button',{name:'Record phase',exact:true})).toBeDisabled({timeout:10000});
+  await expect.poll(()=>f.state.pollAfter).toBe(f.base.state.cursor);
   await editor.getByRole('button',{name:'Review current activity state',exact:true}).click();await editor.getByRole('button',{name:'Record phase',exact:true}).click();
   await expect.poll(() => f.state.writes.length).toBe(1);
   expect(f.state.writes[0].body.params.maintenance_ref).toEqual(f.state.maintenance);

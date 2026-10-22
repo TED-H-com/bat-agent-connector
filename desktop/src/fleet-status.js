@@ -107,7 +107,8 @@ export function fleetStatus(row, {h, t, snapshot, readable, entry, detailsState,
     .map(value => h('code', {}, value)));
   return h('div', {class: 'fleet-diagnosis', 'data-fleet-diagnosis': entry.name, 'data-fleet-state': state, 'data-freshness': fact.freshness},
     h('p', {class: 'fleet-diagnosis-title'}, title),
-    h('p', {class: 'muted fleet-diagnosis-help'}, help), details);
+    h('p', {class: 'muted fleet-diagnosis-help'}, help), details,
+    ...fleetRoute(row, {h, t, snapshot, readable, entry, now}));
 }
 
 function paintDiagnosis(node, {state, steps, fact, title, help}, t) {
@@ -133,6 +134,33 @@ export function paintFleetHealth(content, {t, snapshot, readable, now = Date.now
   const entries = new Map(snapshot.configuration.connections.map(entry => [entry.name, entry]));
   for (const node of content.querySelectorAll('[data-fleet-diagnosis]')) {
     const entry = entries.get(node.dataset.fleetDiagnosis);
-    if (entry) paintDiagnosis(node, diagnosisPresentation(ready.get(entry.name), {t, snapshot, readable, entry, now}), t);
+    if (!entry) continue;
+    const row = ready.get(entry.name), options = {t, snapshot, readable, entry, now};
+    paintDiagnosis(node, diagnosisPresentation(row, options), t);
+    // Presence depends only on the snapshot; its full render owns adding or
+    // removing this independent fact. Clock ticks retain the existing node.
+    const routeNode = node.querySelector('[data-fleet-route]');
+    const route = routeNode && routePresentation(row, options);
+    if (route) {
+      routeNode.dataset.freshness = route.freshness;
+      if (routeNode.textContent !== route.label) routeNode.textContent = route.label;
+    }
   }
+}
+
+// Route is an independent secondary fact. It cannot change diagnosis or steps,
+// and a down tunnel must not be accompanied by a reassuring last route.
+function routePresentation(row, {t, snapshot, readable, now}) {
+  const route = row?.route;
+  if (!route || !['direct', 'lan', 'cf', 'configured'].includes(route.kind)
+    || !readable || row.selected !== true || ['off', 'down'].includes(row.level)
+    || snapshot.monitor.state !== 'running' || snapshot.readiness.state === 'unavailable'
+    || snapshot.selection.applied_revision !== snapshot.selection.revision) return null;
+  const fact = displayFact({key: 'fleet_route_' + route.kind, observed_at: route.observed_at}, {now});
+  return {...fact, label: healthLabel(fact, t)};
+}
+
+function fleetRoute(row, {h, t, snapshot, readable, entry, now}) {
+  const route = routePresentation(row, {t, snapshot, readable, now});
+  return route ? [h('p', {class: 'muted', 'data-fleet-route': entry.name, 'data-freshness': route.freshness}, route.label)] : [];
 }
