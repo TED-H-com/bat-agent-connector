@@ -181,3 +181,12 @@ test('real session writer output preserves its hashed operation evidence', async
   assert.equal(entry.text, 'Original session message'); assert.equal(entry.state, 'possibly-sent');
   assert.equal(entry.href, '#/op/op_' + 'a'.repeat(32));
 });
+
+test('ambiguous session names link to the session list without guessing the host boundary', async () => {
+  const local = new MemoryStorage();
+  local.setItem(`batc.sync.${old()}`, JSON.stringify({cursor: 1, token: 'fixture-proof'}));
+  local.setItem(`batc.draft.${old()}.send.demo.example.session-1`, 'Retained message');
+  local.setItem(`batc.key.${old()}.send.demo.example.session-1`, JSON.stringify({key: 'original-key'}));
+  const [entry] = await earlierDrafts(identity, local);
+  assert.equal(entry.state, 'possibly-sent'); assert.equal(entry.href, '#/sessions');
+});
