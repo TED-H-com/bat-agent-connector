@@ -37,6 +37,9 @@ its existing central functionality and never offers native controls.
 
 ## Shared machine checks
 
+The [health display contract](health-display.md) defines selected-workspace scope,
+freshness, attention/activity precedence, route-quality follow-up and lifecycle ownership.
+
 Both Fleet IPC surfaces use `desktop/src/fleet-status.js` to present each configured
 machine with a plain-language status, one next step and optional network, identity,
 service and workspace evidence. The Connector route has no BAT workspace check.

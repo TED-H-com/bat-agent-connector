@@ -105,6 +105,7 @@ Metadata uncertain write 從 step.started_at 起滿 600 秒，GET 仍為 before 
 - 一列要連續兩次成功列舉都沒出現，才標 `gone`。`workspace:load` 回 null 或格式不對時算失敗，不當成空清單。
 - 一次輪詢沒觀測到的欄位沿用上次的值：讀 meta 失敗的 session 保留上一列；這次沒重讀 state（`auto` 只在 session 執行中才讀）時保留上次的 pending；活動時間只會往後。
 - 每台主機各自排程輪詢，慢的主機不會拖住其他主機。已從設定移除的主機不出現在列表。
+- Inventory 的 host row 與 session `state.evidence.connection` 新增 `valid_until`（上次成功觀察 + `stale_after_s`）；`state.evidence.activity.valid_until` 使用活動軸自己的成功觀察時間。未知觀察為 null；到期（含邊界）或既有 stale flag 都不得宣稱 current。欄位為 additive，不增加 probe 或 timestamp-only 事件；GET 只讀取快取。
 - Host stale 在讀取時推導，不向 sessions 發送 host flap 事件；只有 session-specific 缺席／gone／scope change 記 stale/fresh。
 - 首次觀測寫 `session.added`；值或非時間欄位 freshness 改變寫 `session.updated`，gone 後重現寫 `session.reappeared`。三者的 body 都帶 `fields_stale` 與 `field_evidence`；digest 與 `changed_fields` 包含這兩欄，即使沿用的 loaded／streaming 值相同，meta 失敗及恢復也會通知。`field_observed_at`、`last_activity_ms` 等時間單獨變動不寫 update；連續相同失敗／成功不寫事件。
 - 欄位 freshness 與 `session.stale`／`session.fresh` 的單一 specific reason 分開，可同時 stale。成功列舉缺席的 `session.gone` 規則沿用上文。

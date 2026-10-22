@@ -17,6 +17,7 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import datetime
 
 from . import confinement, registry, service
 from .config import Config
@@ -382,17 +383,23 @@ class Inventory:
                         "server_version": r.get("server_version"), "sessions": r.get("session_count"),
                         "last_attempt_at": _iso(r.get("last_attempt_at")),
                         "last_success_at": _iso(r.get("last_success_at")),
+                        "valid_until": self._valid_until(r.get("last_success_at")),
                         "consecutive_failures": r.get("consecutive_failures", 0), "stale": stale,
                         "stale_reason": reason, "confinement": confinement.host_capability(self.fleet, name),
                         "discovery": [body(x[0]) for x in self.db.execute("SELECT body FROM discovery_latest WHERE host=?", (name,))]})
         return out
+
+    def _valid_until(self, observed):
+        if isinstance(observed, str):
+            observed = datetime.fromisoformat(observed.replace("Z", "+00:00")).timestamp()
+        return _iso(observed + self.settings.stale_after_s) if observed is not None else None
 
     def _host_stale(self, r: dict, now: float) -> tuple[bool, str | None]:
         if not r:
             return True, "never_observed"
         if not r.get("reachable"):
             return True, "host_unreachable"
-        if now - (r.get("last_success_at") or 0) > self.settings.stale_after_s:
+        if now - (r.get("last_success_at") or 0) >= self.settings.stale_after_s:
             return True, "host_not_refreshed"
         return False, None
 
@@ -405,7 +412,7 @@ class Inventory:
         stale, reason = self._host_stale(hosts.get(r["host"]) or {}, now)
         if r["gone_at"] is not None:
             stale, reason = True, "gone"
-        elif not stale and now - r["last_seen_at"] > self.settings.stale_after_s:
+        elif not stale and now - r["last_seen_at"] >= self.settings.stale_after_s:
             stale, reason = True, "not_enumerated"
         if body.get("specific_stale_reason"):
             stale, reason = True, body["specific_stale_reason"]
@@ -447,12 +454,15 @@ class Inventory:
         evidence["connection"]["observed_at"] = _iso(host_row.get("last_attempt_at"))
         host_stale = self._host_stale(host_row, now or time.time())[0]
         evidence["connection"]["stale"] = host_stale
+        evidence["connection"]["valid_until"] = self._valid_until(host_row.get("last_success_at"))
+        evidence["connection"]["stale_reason"] = self._host_stale(host_row, now or time.time())[1]
         evidence["tab"]["stale"] = host_stale or reason == "scope_changed"
         for axis in ("loading", "activity", "tab", "lifecycle", "enumeration"):
             if values[axis] == "unknown":
                 evidence[axis]["observed_at"] = None
         if row and row["missing_count"]:
             evidence["enumeration"]["observed_at"] = times.get("enumeration")
+        evidence["activity"]["valid_until"] = self._valid_until(evidence["activity"]["observed_at"])
         return {**values, "stale_reason": reason, "end_scope": None, "evidence": evidence}
 
     def _relation_summary(self, rid):
