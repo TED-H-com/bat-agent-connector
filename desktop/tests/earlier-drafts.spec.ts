@@ -207,15 +207,18 @@ for (const locale of ['en-US', 'zh-TW']) {
     await context.close();
   });
 
-  test(`cancelled credential replacement retains recovery and last hide keeps focus (${locale})`, async ({browser}) => {
+  test(`cancelled configuration change retains recovery and last hide keeps focus (${locale})`, async ({browser}) => {
     const context = await browser.newContext({locale}); const page = await context.newPage();
     await setup(page, {legacy: true, legacyCursors: [1, 2]});
     await page.evaluate(() => {
       const bridge = (window as any).__TAURI_INTERNALS__, invoke = bridge.invoke;
-      bridge.invoke = (command: string, args: any) => command === 'connector_enroll' ? Promise.resolve(null) : invoke(command, args);
+      bridge.invoke = async (command: string, args: any) => command === 'connector_setup_configuration' ? null
+        : command === 'native_status' ? {...await invoke(command, args), configuration_setup: true} : invoke(command, args);
     });
     await page.locator('#live').click();
-    await page.getByRole('button', {name: locale === 'zh-TW' ? '更換憑證' : 'Replace credential', exact: true}).click();
+    const join = page.locator('[data-managed-join]'); await join.locator('summary').click();
+    await join.locator('input').nth(0).fill('http://127.0.0.1:42001/'); await join.locator('input').nth(1).fill('other-actor');
+    await join.getByRole('button', {name: locale === 'zh-TW' ? '檢視連線設定' : 'Review connection settings', exact: true}).click();
     await page.evaluate(() => {location.hash = '#/settings?section=about&drafts=earlier';});
     await expect(page.locator('[data-earlier-draft]')).toHaveCount(4);
     for (let remaining = 4; remaining > 0; remaining--) {
@@ -252,6 +255,9 @@ for (const locale of ['en-US', 'zh-TW']) {
     await setup(page, {legacy: true, legacyCursors: [1, 2]});
     await expect(page.locator('[data-earlier-drafts-notice]')).toBeVisible();
     await page.addInitScript(() => {
+      const bridge = (window as any).__TAURI_INTERNALS__, invoke = bridge.invoke;
+      bridge.invoke = async (command: string, args: any) => command === 'native_status'
+        ? {...await invoke(command, args), configuration_setup: true} : invoke(command, args);
       const digest = crypto.subtle.digest.bind(crypto.subtle); let held = false;
       crypto.subtle.digest = async (algorithm: any, bytes: any) => {
         if (!held && new TextDecoder().decode(bytes).startsWith('["batc.')) {
@@ -266,10 +272,14 @@ for (const locale of ['en-US', 'zh-TW']) {
     await page.reload(); await expect.poll(() => page.evaluate(() => (window as any).__scanHeld)).toBe(true);
     // View readiness does not wait for the paused optional scan.
     await expect(page.locator('textarea').first()).toBeVisible();
-    await page.locator('#live').click(); await changeIdentity(page, {principal: 'different-principal'});
-    await page.getByRole('button', {name: locale === 'zh-TW' ? '更換憑證' : 'Replace credential', exact: true}).click();
+    await page.locator('#live').click();
+    const join = page.locator('[data-managed-join]'); await join.locator('summary').click();
+    await join.locator('input').nth(0).fill('http://127.0.0.1:42001/'); await join.locator('input').nth(1).fill('other-actor');
+    await changeIdentity(page, {principal: 'different-principal', endpoint: 'http://127.0.0.1:42001/', source: 'external'});
+    await join.getByRole('button', {name: locale === 'zh-TW' ? '檢視連線設定' : 'Review connection settings', exact: true}).click();
+    await page.getByRole('button', {name: locale === 'zh-TW' ? '連線' : 'Connect', exact: true}).click();
     await page.evaluate(() => {location.hash = '#/settings?section=about';});
-    await expect(page.locator('[data-earlier-drafts-slot]')).toHaveAttribute('data-scan-state', 'complete');
+    await expect(page.locator('[data-earlier-drafts-slot]')).toHaveAttribute('data-scan-state', 'skipped');
     await page.evaluate(() => (window as any).__releaseScan());
     await expect.poll(() => page.evaluate(() => (window as any).__digestReleased)).toBe(true);
     await expect(page.locator('[data-earlier-drafts], [data-earlier-drafts-notice]')).toHaveCount(0);
