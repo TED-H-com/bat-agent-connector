@@ -1182,3 +1182,197 @@ async def test_open_reference_update_blocks_personal_admission(installed, served
         assert status == 409 and response["error"]["code"] == "CONNECTION_BUSY"
     assert (await served_setup("POST", f"/api/v1/operations/{reference}/cancel", {}))[1]["operation"]["status"] == "cancelled"
     assert (await served_setup("POST", PREVIEW, personal))[0] == 200
+
+
+def _committed_operation(daemon, ident):
+    import sqlite3
+    from pathlib import Path
+    db = sqlite3.connect(Path(daemon.journal.path).resolve().as_uri() + "?mode=ro", uri=True)
+    try:
+        row = db.execute("SELECT status,error_code,external_refs FROM operations WHERE operation_id=?", (ident,)).fetchone()
+        return row[0], row[1], json.loads(row[2] or "{}")
+    finally:
+        db.close()
+
+
+@pytest.mark.parametrize("outcome", ["applied", "unchanged"])
+@pytest.mark.parametrize("seam", ["native_effects", "connection_binding"])
+async def test_sqlite_receipt_fault_exhausts_budget_then_resumes_original_completion(
+        installed, served_setup, source, tmp_path, monkeypatch, outcome, seam):
+    import sqlite3
+
+    from bat_agent_connector.operations import UNCERTAIN_RETRY_S
+    daemon, _, _ = installed
+    _, ident = await waiting_connection(installed, served_setup, source)
+    native = await claim_handoff(served_setup, ident)
+    participant = DiskParticipant(tmp_path / "participant.json")
+    (status, response), _ = await participant.send(served_setup, native, outcome=outcome)
+    assert status == 200
+    receipt_ref = response["receipt"]["receipt_ref"]
+    done = daemon.ops._step_done
+    def storage_fault(operation_id, name, response, **kwargs):
+        if operation_id == ident and name == seam:
+            raise sqlite3.OperationalError("Synthetic disk I/O error")
+        return done(operation_id, name, response, **kwargs)
+    monkeypatch.setattr(daemon.ops, "_step_done", storage_fault)
+    for _ in range(len(UNCERTAIN_RETRY_S) + 1):
+        daemon.journal.db.execute("UPDATE operations SET next_run_at=0 WHERE operation_id=?", (ident,))
+        await settle_operations(daemon.ops)
+    assert _committed_operation(daemon, ident)[:2] == ("needs_attention", "UNCERTAIN_UNRESOLVED")
+    assert not daemon.journal.db.execute("SELECT 1 FROM connection_bindings").fetchone()
+    monkeypatch.setattr(daemon.ops, "_step_done", done)
+    assert (await served_setup("POST", f"/api/v1/operations/{ident}/resume", {}))[0] == 200
+    await settle_operations(daemon.ops)
+    state, _, refs = _committed_operation(daemon, ident)
+    assert state == "succeeded" and refs["receipt_refs"] == [receipt_ref]
+    assert json.loads(daemon.journal.db.execute("SELECT receipt_refs FROM connection_bindings").fetchone()[0]) == [receipt_ref]
+    assert daemon.journal.db.execute("SELECT count(*) FROM connection_bindings").fetchone()[0] == 1
+    assert participant.writes == int(outcome == "applied")
+
+
+@pytest.mark.parametrize("outcome", ["applied", "unchanged"])
+async def test_cancel_projection_conflict_keeps_proof_and_releases_connection_gate(
+        installed, served_setup, source, tmp_path, monkeypatch, outcome):
+    from bat_agent_connector import setup_connections
+    from bat_agent_connector.browser_sessions import BrowserSessions
+    daemon, _, root = installed
+    daemon.api.browser_sessions = BrowserSessions(daemon, root, daemon.managed_installation["installation_id"])
+    connection = await _created_connection(daemon, served_setup, source)
+    gate = setup_connections._require_connection_available
+    monkeypatch.setattr(setup_connections, "_require_connection_available", lambda *args: None)
+    _, ident = await waiting_connection(installed, served_setup, source, connection=connection)
+    native = await claim_handoff(served_setup, ident)
+    _, reference = await accept(served_setup, _update_intent(source, connection,
+        action="connection.reference.apply", label="Browser label"), key="interleaved")
+    monkeypatch.setattr(setup_connections, "_require_connection_available", gate)
+    await settle_operations(daemon.ops)
+    (status, response), receipt = await DiskParticipant(tmp_path / "participant.json").send(served_setup, native, outcome=outcome)
+    receipt_ref = response["receipt"]["receipt_ref"]
+    assert status == 200
+    await settle_operations(daemon.ops)
+    assert _committed_operation(daemon, ident)[:2] == ("needs_attention", "CONNECTION_PROJECTION_CHANGED")
+    assert (await served_setup("POST", "/api/v1/managed/stop", {}))[1]["error"]["code"] == "SERVICE_BUSY"
+    status, cancelled = await served_setup("POST", f"/api/v1/operations/{ident}/cancel", {})
+    assert status == 200 and cancelled["operation"]["status"] == "cancelled"
+    state, _, refs = _committed_operation(daemon, ident)
+    assert state == "cancelled" and refs["receipt_refs"] == [receipt_ref]
+    assert refs["projection_decision"]["code"] == "CONNECTION_PROJECTION_NOT_SAVED"
+    assert "未儲存" in refs["projection_decision"]["message"]
+    row = daemon.journal.db.execute("SELECT status,response,error FROM operation_steps WHERE operation_id=? AND name='native_effects'", (ident,)).fetchone()
+    assert row["status"] == "succeeded" and row["error"] is None
+    assert json.loads(row["response"])["receipts"][-1]["outcome"] == outcome
+    assert (await served_setup("POST", RECEIPT, receipt))[1]["replayed"] is True
+    assert not setup._busy(daemon)
+    later = _update_intent(source, connection, action="connection.reference.apply", label="Later")
+    later["preconditions"]["expected_revision"] = 2
+    _, next_op = await accept(served_setup, later, key="review-again")
+    await settle_operations(daemon.ops)
+    assert daemon.ops.get(next_op)["status"] == "succeeded"
+    assert daemon.ops.get(reference)["status"] == "succeeded"
+    daemon.managed_stop = asyncio.Event()
+    assert (await served_setup("POST", "/api/v1/managed/stop", {}))[0] == 200
+
+
+async def test_refused_receipt_cancel_explains_automatic_failure_without_resume(installed, served_setup, source, tmp_path):
+    daemon, _, _ = installed
+    _, ident = await waiting_connection(installed, served_setup, source)
+    native = await claim_handoff(served_setup, ident)
+    (status, response), _ = await DiskParticipant(tmp_path / "participant.json").send(served_setup, native, outcome="refused")
+    assert status == 200
+    receipt_ref = response["receipt"]["receipt_ref"]
+    status, refused = await served_setup("POST", f"/api/v1/operations/{ident}/cancel", {})
+    assert status == 409 and refused["error"]["code"] == "CONNECTION_EFFECT_PROVEN"
+    assert "resume" not in refused["error"]["message"].lower() and "未寫入" in refused["error"]["message"]
+    await settle_operations(daemon.ops)
+    assert _committed_operation(daemon, ident)[:2] == ("failed", "CONNECTION_NATIVE_REFUSED")
+    _, response = await served_setup("GET", f"/api/v1/operations/{ident}")
+    assert response["operation"]["external_refs"]["receipt_refs"] == [receipt_ref]
+
+
+def test_connection_test_names_describe_behaviour():
+    import re
+    from pathlib import Path
+    assert not re.findall(r"def (test_[a-z]_\w+)", Path(__file__).read_text())
+
+
+async def _discovered_connection(installed, request, mock, kind, *, accepted_snapshot=False):
+    from bat_agent_connector import setup_connections
+    from tests import test_managed_setup_discovery as discovery
+    candidate, index = discovery.import_source(installed, mock) if kind == "bat_profile" else (discovery.candidate(installed, mock), None)
+    if accepted_snapshot and index is not None:
+        index.chmod(0o600)  # Isolate freshness from the old adapter's metadata-mode defect.
+    status, found = await request("POST", discovery.ROUTE, candidate)
+    assert status == 200, found
+    selected = found["source"] if kind == "bat_profile" else {"kind": kind,
+        **{key: candidate[key] for key in ("secret_ref", "url", "fingerprint")}}
+    descriptor = setup_connections.source_descriptor(installed[0].ops, installed[1], selected) if accepted_snapshot else found["source"]
+    body = intent({"source": selected, "source_reference": descriptor["reference"],
+        "remote_profile_id": found["profile_id"], "service_ref": None, "workspace_ref": None,
+        "label": "Discovered connection", "preferences": {}}, action="setup.connection.apply")
+    return body, found["source"], index, candidate
+
+
+@pytest.mark.parametrize("kind", ["bat_profile", "staged_secret"])
+async def test_discovery_descriptor_previews_and_applies_connection(installed, served_setup, mock, tmp_path, kind):
+    body, descriptor, _, _ = await _discovered_connection(installed, served_setup, mock, kind)
+    reviewed = await review(served_setup, body)
+    assert (await served_setup("POST", PREVIEW, body))[1]["preview"]["source"] == descriptor
+    status, response = await served_setup("POST", "/api/v1/operations", reviewed, key="discovered")
+    assert status == 202, response
+    ident = response["operation"]["operation_id"]
+    await settle_operations(installed[0].ops)
+    native = await claim_handoff(served_setup, ident)
+    assert (await DiskParticipant(tmp_path / "participant.json").send(served_setup, native))[0][0] == 200
+    await settle_operations(installed[0].ops)
+    assert _committed_operation(installed[0], ident)[0] == "succeeded"
+
+
+async def test_listed_public_bat_index_is_accepted_for_connection(installed, served_setup, mock, tmp_path):
+    body, _, index, _ = await _discovered_connection(installed, served_setup, mock, "bat_profile")
+    index.chmod(0o644)
+    assert (await served_setup("GET", "/api/v1/managed/setup"))[1]["profiles"][0]["id"] == "profile-a"
+    _, ident = await accept(served_setup, body)
+    await settle_operations(installed[0].ops)
+    native = await claim_handoff(served_setup, ident)
+    assert (await DiskParticipant(tmp_path / "participant.json").send(served_setup, native))[0][0] == 200
+    await settle_operations(installed[0].ops)
+    assert _committed_operation(installed[0], ident)[0] == "succeeded"
+
+
+@pytest.mark.parametrize("changed", ["index", "credential", "staged_metadata", "staged_credential", "staged_expiry"])
+@pytest.mark.parametrize("at", ["preview", "admission", "claim"])
+async def test_changed_discovery_source_is_refused_before_dispatch(installed, served_setup, mock, changed, at):
+    daemon, _, root = installed
+    kind = "bat_profile" if changed in {"index", "credential"} else "staged_secret"
+    # Isolate dispatch freshness using the adapter's accepted snapshot, even before discovery integration.
+    body, _, index, candidate = await _discovered_connection(installed, served_setup, mock, kind, accepted_snapshot=True)
+    if at != "preview":
+        reviewed = await review(served_setup, body)
+    if at == "claim":
+        status, response = await served_setup("POST", "/api/v1/operations", reviewed, key="pending-source")
+        assert status == 202, response
+        ident = response["operation"]["operation_id"]
+        await settle_operations(daemon.ops)
+    if changed == "index":
+        index.write_text(index.read_text() + "\n")
+    elif changed == "credential":
+        path = root / "profiles/remote-tokens.enc.json"
+        platform_files.atomic_write(path, path.read_bytes() + b"\n")
+    else:
+        path = root / "config/setup-secrets" / (candidate["secret_ref"] + (".token" if changed == "staged_credential" else ".json"))
+        if changed == "staged_expiry":
+            value = json.loads(path.read_bytes())
+            value["expires_at"] = 0
+            platform_files.atomic_write(path, json.dumps(value).encode())
+        else:
+            platform_files.atomic_write(path, path.read_bytes() + b"\n")
+    route = PREVIEW if at == "preview" else "/api/v1/operations" if at == "admission" else HANDOFF
+    request = body if at == "preview" else reviewed if at == "admission" else {"operation_id": ident, "installation_ref": "desktop-a"}
+    status, response = await served_setup("POST", route, request, key="changed-source")
+    assert status == 409 and response["error"]["code"] == "SETUP_REVIEW_CHANGED", response
+    if at == "claim":
+        op = daemon.ops.get(ident)
+        assert op["status"] == "failed" and op["external_refs"]["native_effects_sent"] is False
+    else:
+        assert not daemon.journal.db.execute("SELECT 1 FROM operations").fetchone()
+    assert not daemon.journal.db.execute("SELECT 1 FROM connection_bindings").fetchone()
