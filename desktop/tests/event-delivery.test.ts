@@ -67,3 +67,15 @@ test('resuming releases an obsolete poll as well as its renewed read', async () 
   gate.resume(); await Promise.all([old,renewed]);
   assert.deepEqual(calls,[1,2]);
 });
+
+test('a failed refresh can replay before the settled write boundary', async () => {
+  const {gate} = fixture();
+  let ready = false;
+  const quiet = gate.pause(() => ready);
+  assert.equal(await gate.through(() => 'replay'), 'replay');
+  ready = true;
+  const next = gate.through(() => 'held');
+  await quiet;
+  gate.resume();
+  assert.equal(await next, 'held');
+});
