@@ -7,7 +7,7 @@ const previewGolden = JSON.parse(readFileSync(new URL('../../tests/fixtures/mana
 export async function managedSetupFixture(page: Page, native: boolean, locale: string | null = 'en',
   evidence?: {state: any, operation: any}) {
   const base = attentionFixture();
-  const state = {posts: [] as any[], staged: [] as any[], lost: false, refused: false,
+  const state = {posts: [] as any[], previews: [] as any[], staged: [] as any[], lost: false, refused: false, previewRefused: false,
     admissionRefused: true, refusalCode: 'CONFIGURATION_CHANGED', refusalMessage: 'Read the new configuration.', refusalStatus: 409, drop: false, setupStatus: 200, configuredHost: 'demo', configuredUrl: 'wss://demo.example:9876/', saved: false, connectionStatus: null as string | null, connected: true, extraHosts: [] as any[], repositories: [] as any[], reads: 0, revision: 'a'.repeat(64), scopes: ['observe', 'manage'], allowed: true, badActor: false, operation: null as any, hold: false, release: null as any, hasProfiles: true, profiles: null as any[] | null, profilesError: null as string | null, verification: {commands: {other: ['uv', 'run', 'pytest', '-q']}, timeout_s: 300}};
   if (evidence) {state.saved = true; state.operation = evidence.operation; state.configuredHost = evidence.operation.target.host;}
   const caps = () => ({...base.caps(), ...(evidence ? {actor: evidence.operation.actor} : {}), scopes: state.scopes, hosts: state.saved ? [{host:state.configuredHost}] : [],
@@ -31,6 +31,8 @@ export async function managedSetupFixture(page: Page, native: boolean, locale: s
     }
     if (path === '/managed/setup/secrets') {state.staged.push(input); return {status:200,data:{secret_ref:'setup_'+(state.staged.length===1?'b':'d').repeat(32),kind:input.body.kind}};}
     if (path === '/managed/setup/preview') {
+      state.previews.push(input);
+      if (state.previewRefused) return {status:state.refusalStatus,data:{error:{code:state.refusalCode,message:state.refusalMessage}}};
       const params = input.body.params;
       const preview = structuredClone(previewGolden[params.secret_ref ? 'staged' : 'profile'].preview);
       preview.target = input.body.target; preview.config_revision = input.body.preconditions.config_revision;
