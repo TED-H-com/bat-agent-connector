@@ -105,8 +105,13 @@ Windows Fleet monitor and tunnels belong to the native application. Quit stops o
 its own resources, preserving uncertain ownership refusals. An external/plain
 Connector belongs to its service manager; the application never stops it.
 
-Long-running MCP processes are never restarted automatically. If a newer version is
-installed, show **Restart to load {version} / 重新啟動以載入 {version}**. A new install
-does not change the reported running version. These ownership decisions document
-the required behavior; this display slice makes no lifecycle changes or claim of
-native/live acceptance.
+Long-running MCP processes are never restarted automatically. The required display
+when a newer version is installed is **Restart to load {version} / 重新啟動以載入
+{version}**. **This notice is not built.** There is no producer reporting the loaded
+version/build of each running MCP process, and no corresponding UI copy/consumer.
+The follow-up needs a process-owned MCP runtime identity observation (loaded
+version/build and process generation), separately compared with the updater's
+installed-for-next-launch version. Installing must not change the loaded identity.
+Diagnostics' existing `diag_runtime_differs` compares bundled and launch-observed
+managed runtime versions; it cannot prove a running MCP process's loaded version.
+This display slice makes no lifecycle changes or claim of native/live acceptance.
