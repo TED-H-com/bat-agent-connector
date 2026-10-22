@@ -40,8 +40,8 @@ A succeeded `setup.host` receipt is evidence of that operation's verification an
 | 自動設定送出值 | writes／orchestrate／shared_clone_worktrees 為 false，managed_roots 為空；advanced 才送 SSH／管理選擇。[managed-setup.js:481](../../desktop/src/managed-setup.js#L481) |
 | UI 恢復原請求及接受收據 | 已知 operation ID 時用 GET 查原操作，否則帶原 request／key 送出；接受收據前核對 operation ID、actor、action、target、params、preconditions 及 key。[managed-setup.js:440](../../desktop/src/managed-setup.js#L440)、[managed-setup.js:455](../../desktop/src/managed-setup.js#L455) |
 
-owner 於 2026-10-22 採用 D1＝A，角色入口須移至本機服務準備前；D6／D8 同日採用 A，
-完整保留與驗收規則只維護於 [owner 已定契約](fleet-configuration.md#owner-已決定的產品契約2026-10-22)。
+2026-10-22 經 owner 授權由整合者決定 D1＝A、D6＝A、D8＝A，角色入口須移至本機服務準備前，
+完整保留與驗收規則只維護於 [已定契約](fleet-configuration.md#已決定的產品契約2026-10-22經-owner-授權)。
 這是上方 managed-first 旅程的後續改接，尚不代表現有首次設定可免建本機服務。
 後端對帳與新 setup 阻擋規則只引用
 [Fleet 的現況／規範狀態表](fleet-configuration.md#預覽--套用--讀回)。
