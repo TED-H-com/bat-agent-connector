@@ -15,7 +15,7 @@ use windows_sys::Win32::{
         Authorization::{GetSecurityInfo, SE_FILE_OBJECT},
         GetAce, GetLengthSid, GetSecurityDescriptorControl, IsValidAcl, IsValidSid,
         LookupAccountNameW, ACCESS_ALLOWED_ACE, ACL, DACL_SECURITY_INFORMATION,
-        OWNER_SECURITY_INFORMATION, SE_DACL_PROTECTED,
+        OWNER_SECURITY_INFORMATION, PSID, SE_DACL_PROTECTED,
     },
     Storage::FileSystem::{
         CreateDirectoryW, CreateFileW, GetFileInformationByHandle, GetFileType,
@@ -170,7 +170,7 @@ pub(in crate::publication_state) fn acl_file(
         {
             return Err(UNPROVEN);
         }
-        let sid = unsafe { ptr::addr_of_mut!((*ace).SidStart).cast() };
+        let sid: PSID = unsafe { ptr::addr_of_mut!((*ace).SidStart).cast() };
         let subauthorities = unsafe { *sid.cast::<u8>().add(1) };
         if subauthorities > 15
             || 8 + 4 * usize::from(subauthorities)
