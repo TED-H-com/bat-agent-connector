@@ -203,7 +203,7 @@ fn clipboard_bounds_precede_pixel_allocation() {
 fn clipboard_dib_converts_bgr_and_orientation_to_png() {
     use crate::clipboard::encode_image;
     for height in [2i32, -2] {
-        let mut dib = vec![0u8; 48];
+        let mut dib = [0u8; 48];
         dib[..4].copy_from_slice(&40u32.to_le_bytes());
         dib[4..8].copy_from_slice(&1i32.to_le_bytes());
         dib[8..12].copy_from_slice(&height.to_le_bytes());
