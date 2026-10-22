@@ -3,6 +3,7 @@ import {mkdirSync} from 'node:fs';
 import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture} from './demo/index.ts';
 import {DEMO_NOW} from './demo/project.ts';
+test.describe.configure({mode: 'parallel'});
 
 // The same producer-shaped demo responses used by the reviewed gallery, mounted
 // in the real Dashboard bundle. No copied view or screenshot-site dependency.
@@ -14,12 +15,16 @@ async function start(page: Page, locale: string, view: string) {
     const result = await f.dispatch(input);
     // OperationService._decode exposes updated_at (epoch seconds), not an
     // operation-level finished_at. The discussion fixture omits this optional field.
-    if (result.data?.operation) result.data.operation.updated_at = DEMO_NOW / 1000 - 120;
+    if (result.data?.operation) {
+      result.data.operation.created_at = DEMO_NOW / 1000 - 180;
+      result.data.operation.updated_at = DEMO_NOW / 1000 - 120;
+    }
     return result;
   });
   await page.goto(view === 'session' ? `/dashboard/#/session/${f.ids.host}/${f.ids.sessions.manual}`
     : `/dashboard/#/pm/${f.ids.workspaceId}/${view}${view === 'discussions' ? '/' + f.ids.threadIdea : ''}`);
   if (view === 'session') await expect(page.locator('.conversation .msg')).not.toHaveCount(0);
+  else if (view === 'discussions') await expect(page.locator('[data-discussion-composer]')).toBeVisible();
   else await expect(page.locator(`[data-pm-region="${view}"]`)).toBeVisible();
   return f;
 }
@@ -85,6 +90,8 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
       await shot(page, 'dependencies', locale, width);
       const names = await nodes.locator('.dep-node-name').allTextContents();
       expect(new Set(names).size).toBe(names.length);
+      if (await graph.evaluate(node => node.scrollWidth > node.clientWidth + 1))
+        await expect(page.locator('[data-dep-scroll-hint]')).toBeVisible();
       for (const node of await nodes.all()) {
         const name = await node.getAttribute('aria-label');
         await node.focus();
@@ -93,8 +100,6 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
         expect(bounds!.x).toBeGreaterThanOrEqual(frame!.x);
         expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(frame!.x + frame!.width + 1);
       }
-      if (await graph.evaluate(node => node.scrollWidth > node.clientWidth + 1))
-        await expect(page.locator('[data-dep-scroll-hint]')).toBeVisible();
       const before = await graph.locator('svg').getAttribute('width');
       await page.getByRole('button', {name: zh ? '放大' : 'Zoom in', exact: true}).click();
       expect(await graph.locator('svg').getAttribute('width')).not.toBe(before);
@@ -108,8 +113,8 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
       await expect(feedback).toContainText(zh ? '完成' : 'finished');
       await page.locator('.pd-composer').scrollIntoViewIfNeeded();
       await shot(page, 'discussions', locale, width);
-      await expect(page.locator('[data-pm-proposal-availability]')).toContainText(zh ? 'PM 可用性未知' : 'PM availability is unknown');
       await expect(feedback).toContainText(zh ? '此討論上次的 PM 執行：' : "This discussion’s last PM run:");
+      await expect(page.locator('.pd-composer [data-pm-availability=unknown]')).toContainText(zh ? 'PM 可用性未知' : 'PM availability is unknown');
       await expect(feedback).toContainText(zh ? '狀態更新於' : 'status updated');
       await expect(feedback.locator('time')).toHaveAttribute('datetime', new Date(DEMO_NOW - 120_000).toISOString());
     });

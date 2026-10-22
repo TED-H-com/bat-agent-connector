@@ -25,6 +25,7 @@
 .schedule-indent { width: 24px; flex: none; }
 .schedule-tree-copy { min-width: 0; flex: 1; }
 .schedule-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.schedule-label-tip { position: fixed; z-index: 100; max-width: min(36rem, calc(100vw - 16px)); max-height: calc(100dvh - 16px); overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: var(--space-2) var(--space-3); border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--text); box-shadow: var(--shadow-md); font-size: var(--fs-small); }
 .schedule-tree-cell > .ui-pill { flex: none; margin-left: var(--space-1); }
 .schedule-date-range { display: none; }
 .schedule-row.selected .schedule-tree-cell { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }

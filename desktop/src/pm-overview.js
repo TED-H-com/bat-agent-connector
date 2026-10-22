@@ -1,4 +1,5 @@
 import {overviewAssessment} from './pm-overview-assessment.js';
+import {relativeAge} from './relative-age.js';
 import {proof} from './pm-brief.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
 import {workspaceCharter, charterSections} from './pm-charter.js';
@@ -141,10 +142,7 @@ export function workspaceOverview(options) {
   function age(since, past = false) {
     if (!Number.isFinite(since) || !Number.isFinite(projection?.as_of)) return null;
     const seconds = Math.max(0, projection.as_of - since);
-    if (seconds < 60) return t(past ? 'ov_just_now' : 'ov_under_minute');
-    const [key, unit] = seconds >= 86400 ? ['ov_day', 86400] : seconds >= 3600 ? ['ov_hour', 3600] : ['ov_minute', 60];
-    const elapsed = t(key, {n: Math.floor(seconds / unit)});
-    return past ? t('ov_ago', {age: elapsed}) : elapsed;
+    return relativeAge(seconds, t, {direction: past ? 'past' : 'duration'});
   }
   const decisionMeta = row => [age(row.decided_at, true), row.actor].filter(Boolean).join(' · ');
   function recentDecisions(data) {

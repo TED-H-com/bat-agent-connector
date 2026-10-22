@@ -1,5 +1,6 @@
 export const discussionStrings = {
   en: {
+    pd_last_run: 'This discussion’s last PM run: {outcome}', pd_run_updated: 'status updated {when}',
     pcb_title: "Continue from here",
     pcb_purpose: "Focus for this summary",
     pcb_default_purpose: "Preserve the goal and decisions, review remaining work, and suggest the next one or two steps.",
@@ -55,6 +56,7 @@ export const discussionStrings = {
     pm_mode_follow_up: 'Follow-up',
   },
   'zh-TW': {
+    pd_last_run: '此討論上次的 PM 執行：{outcome}', pd_run_updated: '狀態更新於{when}',
     pcb_title: "從這裡接續",
     pcb_purpose: "本次整理重點",
     pcb_default_purpose: "保留原目標與決定，檢視剩餘工作，提出最值得處理的一至兩個下一步。",

@@ -161,11 +161,19 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
   const legend = h('div', {class: 'dep-legend', 'data-dep-legend': '', hidden: true});
   const matrixHost = h('div', {'data-dep-matrix-host': ''}, matrixScroll, listHost);
   const graphScroll = h('div', {class: 'dep-graph-scroll', 'data-dep-graph': ''});
+  const graphHint = h('p', {class: 'ui-meta', 'data-dep-scroll-hint': ''}, t('dep_scroll_hint'));
+  const graphName = h('p', {class: 'ui-meta', 'data-dep-node-name': '', hidden: true});
+  graphScroll.addEventListener('focusin', event => {
+    const node = event.target.closest?.('[data-dep-node]');
+    if (!node) return;
+    graphName.textContent = node.getAttribute('aria-label'); graphName.hidden = false;
+    node.scrollIntoView({block: 'nearest', inline: 'nearest'});
+  });
   const zoomOut = button({size: 'sm', label: '−', 'aria-label': t('dep_zoom_out'), title: t('dep_zoom_out'), onClick: () => setZoom(zoom - 0.2)});
   const zoomIn = button({size: 'sm', label: '+', 'aria-label': t('dep_zoom_in'), title: t('dep_zoom_in'), onClick: () => setZoom(zoom + 0.2)});
   const loaded = h('span', {class: 'dep-loaded', 'data-dep-loaded': ''}, `${Math.round(zoom * 100)}%`);
   const graphBar = h('div', {class: 'dep-graph-bar'}, h('div', {class: 'dep-graph-controls'}, loaded, zoomOut, zoomIn));
-  const graphHost = h('div', {'data-dep-graph-host': ''}, graphBar, graphScroll);
+  const graphHost = h('div', {'data-dep-graph-host': ''}, graphBar, graphHint, graphName, graphScroll);
   const detailBody = h('div');
   const details = disclosure({label: t('dep_details'), body: detailBody, key: JSON.stringify([namespace, workspaceId, 'dep-files'])});
   details.dataset.depDetails = '';
@@ -584,8 +592,24 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     }
     const layout = layoutGraph([...nodes.values()], links);
     const placed = new Map(layout.positions.map(position => [position.id, position]));
-    const nodeHeight = narrow() ? 44 : NODE_H;
-    const strideX = Math.max(NODE_W + GAP_X, (graphScroll.clientWidth - PAD * 2 - NODE_W) / Math.max(1, layout.layers - 1));
+    // Keep the complete name visible, including distinguishing suffixes. Text
+    // wraps inside each node instead of collapsing different names to one prefix.
+    const measure = document.createElement('canvas').getContext('2d');
+    measure.font = `12px ${getComputedStyle(graphScroll).fontFamily}`;
+    const names = new Map(), lines = new Map(), nameCounts = new Map();
+    for (const node of nodes.values()) nameCounts.set(node.name, (nameCounts.get(node.name) || 0) + 1);
+    [...nodes].sort(([a], [b]) => a.localeCompare(b)).forEach(([id, node], index) => {
+      const name = node.name + (nameCounts.get(node.name) > 1 ? ` [${index + 1}]` : '');
+      names.set(id, name);
+      const wrapped = []; let line = '';
+      for (const char of name) {
+        if (line && measure.measureText(line + char).width > NODE_W - 20) {wrapped.push(line); line = '';}
+        line += char;
+      }
+      wrapped.push(line); lines.set(id, wrapped);
+    });
+    const nodeHeight = Math.max(narrow() ? 44 : NODE_H, ...[...nodes].map(([id, node]) => lines.get(id).length * 16 + 16 + (node.external ? 16 : 0)));
+    const strideX = Math.max(NODE_W + (narrow() ? 16 : GAP_X), (graphScroll.clientWidth - 2 - PAD * 2 - NODE_W) / Math.max(1, layout.layers - 1));
     const width = Math.max(1, PAD * 2 + NODE_W + Math.max(0, layout.layers - 1) * strideX);
     const depth = layout.positions.reduce((max, position) => Math.max(max, position.y), 0);
     const height = Math.max(nodeHeight + PAD * 2, PAD * 2 + (layout.positions.length ? (depth + 1) * nodeHeight + depth * GAP_Y : 0));
@@ -629,11 +653,13 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
       if (!position) continue;
       const left = PAD + position.x * strideX, top = PAD + position.y * (nodeHeight + GAP_Y);
       const repo = node.external ? node.repository : '';
-      const accessible = repo ? `${node.name}, ${repo}` : node.name;
+      const accessible = repo ? `${names.get(id)}, ${repo}` : names.get(id);
       const group = svg('g', {class: node.external ? 'dep-node dep-node-external' : 'dep-node', tabindex: '-1', role: 'button', 'aria-label': accessible, 'aria-pressed': String(selectedIds.has(id)), 'data-dep-node': id, 'data-dep-external': node.external ? 'true' : null, 'data-dep-focus': id.startsWith('d:') ? `col:${id.slice(2)}` : `row:${id.slice(2)}`, 'data-dep-mark': markOf(id)});
-      const nameY = top + (repo ? Math.round(nodeHeight * 0.42) : nodeHeight / 2 + 5);
+      const wrapped = lines.get(id), nameY = top + (nodeHeight - wrapped.length * 16 - (repo ? 16 : 0)) / 2 + 12;
       const shownRepo = repo && repo.length > 22 ? repo.slice(0, 21) + '…' : repo;
-      place(group, 'append', svg('title', {}, accessible), svg('rect', {x: left, y: top, width: NODE_W, height: nodeHeight, rx: 6, class: 'dep-node-shape'}), svg('text', {x: left + 10, y: nameY, class: 'dep-node-name'}, abbreviate(node.name)), repo ? svg('text', {x: left + 10, y: top + Math.round(nodeHeight * 0.82), class: 'dep-node-repo'}, shownRepo) : null);
+      place(group, 'append', svg('title', {}, accessible), svg('rect', {x: left, y: top, width: NODE_W, height: nodeHeight, rx: 6, class: 'dep-node-shape'}),
+        svg('text', {class: 'dep-node-name'}, ...wrapped.map((line, index) => svg('tspan', {x: left + 10, y: nameY + index * 16}, line))),
+        repo ? svg('text', {x: left + 10, y: top + nodeHeight - 8, class: 'dep-node-repo'}, shownRepo) : null);
       picture.append(group);
     }
     const focusNode = picture.querySelector(`[data-dep-node="${CSS.escape(selectedId)}"]`) || picture.querySelector('[data-dep-node]');

@@ -1,4 +1,5 @@
 export const dependencyStrings = {en: {
+  dep_scroll_hint: 'Scroll or use the arrow keys to explore all nodes. Focus a node to read its full name.',
   dep_capture: 'Capture again', dep_meta: 'Captured at {commit} · {date}', dep_meta_commit: 'Captured at {commit}',
   dep_matrix: 'Matrix', dep_graph: 'Graph', dep_search: 'Search dependencies',
   dep_runtime: 'Runtime', dep_build: 'Build', dep_test: 'Test', dep_contract: 'Contract', dep_reference: 'Reference',
@@ -56,6 +57,7 @@ export const dependencyStrings = {en: {
 }, 'zh-TW': {
   dep_capture: '再次擷取', dep_meta: '擷取於 {commit} · {date}', dep_meta_commit: '擷取於 {commit}',
   dep_matrix: '矩陣', dep_graph: '關係圖', dep_search: '搜尋相依',
+  dep_scroll_hint: '捲動或使用方向鍵查看所有節點；聚焦節點可閱讀完整名稱。',
   dep_runtime: '執行期', dep_build: '建置', dep_test: '測試', dep_contract: '契約', dep_reference: '參考',
   dep_verified: '已核對', dep_declared: '已宣告', dep_inferred: '推測',
   dep_filter_relation: '關係', dep_filter_evidence: '證據',

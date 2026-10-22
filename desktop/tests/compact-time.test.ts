@@ -27,8 +27,8 @@ function absolute(date: Date, locale: string) {
 
 test('compact time stays relative for a day and drops seconds after that', () => {
   assert.equal(compactTime(new Date(now - 20_000).toISOString(), {locale: 'en-US', now}), 'just now');
-  assert.equal(compactTime(new Date(now - 5 * 60_000).toISOString(), {locale: 'en-US', now}), '5m ago');
-  assert.equal(compactTime(new Date(now - 2 * 60 * 60_000).toISOString(), {locale: 'en-US', now}), '2h ago');
+  assert.equal(compactTime(new Date(now - 5 * 60_000).toISOString(), {locale: 'en-US', now}), '5 min ago');
+  assert.equal(compactTime(new Date(now - 2 * 60 * 60_000).toISOString(), {locale: 'en-US', now}), '2 hr ago');
   assert.equal(compactTime(new Date(now - 2 * 60 * 60_000).toISOString(), {locale: 'zh-TW', now}), '2 小時前');
   assert.equal(compactTime(new Date(now - 12 * 60_000).toISOString(), {locale: 'zh-TW', now}), '12 分鐘前');
   const older = new Date(now - 25 * 60 * 60_000);
@@ -42,9 +42,9 @@ test('compact time stays relative for a day and drops seconds after that', () =>
 
 for (const locale of ['en', 'zh-TW']) test(`minute/hour/day and future boundaries ${locale}`, () => {
   const zh = locale === 'zh-TW';
-  for (const [distance, en, chinese] of [[59999, 'just now', '剛剛'], [60000, '1m ago', '1 分鐘前'], [3599999, '59m ago', '59 分鐘前'], [3600000, '1h ago', '1 小時前'], [86399999, '23h ago', '23 小時前']] as const)
+  for (const [distance, en, chinese] of [[59999, 'just now', '剛剛'], [60000, '1 min ago', '1 分鐘前'], [3599999, '59 min ago', '59 分鐘前'], [3600000, '1 hr ago', '1 小時前'], [86399999, '23 hr ago', '23 小時前']] as const)
     assert.equal(compactTime(now - distance, {locale, now}), zh ? chinese : en);
-  for (const [distance, en, chinese] of [[60000, 'in 1m', '1 分鐘後'], [300000, 'in 5m', '5 分鐘後'], [3600000, 'in 1h', '1 小時後'], [86399999, 'in 23h', '23 小時後']] as const)
+  for (const [distance, en, chinese] of [[60000, 'in 1 min', '1 分鐘後'], [300000, 'in 5 min', '5 分鐘後'], [3600000, 'in 1 hr', '1 小時後'], [86399999, 'in 23 hr', '23 小時後']] as const)
     assert.equal(compactTime(now + distance, {locale, now}), zh ? chinese : en);
   for (const direction of [-1, 1]) assert.equal(compactTime(now + direction * 86400000, {locale, now}), absolute(new Date(now + direction * 86400000), locale));
 });

@@ -181,7 +181,7 @@ test('pause freezes the screen and a live refresh reuses the trend', async ({bro
   await page.clock.fastForward(120000);
   expect(fixture.reads).toHaveLength(paused);
   await expect(pausedMeta.locator('time')).toHaveAttribute('datetime', frozen!);
-  await expect(pausedMeta).toContainText('2m ago');
+  await expect(pausedMeta).toContainText('2 min ago');
   await page.getByRole('button', {name: 'Resume updates', exact: true}).click();
   await expect.poll(() => fixture.reads.length).toBe(paused + 1);
   expect(fixture.reads.at(-1)).not.toContain('buckets=');

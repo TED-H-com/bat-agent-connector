@@ -52,6 +52,7 @@
 .dep-loaded { color: var(--text-3); font-size: var(--fs-caption); }
 .dep-graph-scroll { min-width: 0; width: 100%; max-height: min(70vh, 720px); display: flex; justify-content: safe center; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); touch-action: pan-x pan-y; cursor: grab; }
 .dep-graph { flex: none; }
+[data-dep-node-name] { overflow-wrap: anywhere; }
 .dep-graph text { fill: var(--text); font-size: 12px; font-family: var(--font-ui); }
 .dep-node-shape { fill: var(--surface); stroke: var(--line-strong); }
 .dep-node-repo { fill: var(--text-2); }

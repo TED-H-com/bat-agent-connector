@@ -166,7 +166,7 @@ test('unobserved sessions and inconsistent dates stay honest; full multiline tex
   const region = page.locator('[data-pm-schedule]'); await region.locator('.schedule-unscheduled summary').click();
   const unobserved = region.locator('.schedule-unscheduled li').filter({hasText: f.ids.sessions.manual});
   await expect(unobserved).toContainText('Not observed yet');
-  await region.getByRole('treeitem', {name: 'First requirement line', exact: true}).click();
+  await region.getByRole('treeitem', {name: 'First requirement line Full second line <script>safe text</script>', exact: true}).click();
   await expect(page.locator('[data-schedule-inspector]')).toContainText('Full second line <script>safe text</script>');
   await page.locator('[data-schedule-inspector] > .ui-inspector-body > div > details > summary').click();
   await expect(page.locator('[data-schedule-inspector]')).toContainText('End precedes start; end omitted');
