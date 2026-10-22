@@ -19,6 +19,50 @@ var __exportAll = (all, no_symbols) => {
 	return target;
 };
 //#endregion
+//#region src/startup-role.js
+function startupRoleChoice({ h, t, errorBox, snapshot, select }) {
+	let busy = false;
+	const info = h("div", { "aria-live": "polite" });
+	const buttons = [];
+	const options = [
+		"client",
+		"provider",
+		"both"
+	].map((role) => {
+		const button = h("button", {
+			type: "button",
+			class: "primary",
+			"data-role": role,
+			onclick: async () => {
+				if (busy) return;
+				busy = true;
+				for (const other of buttons) other.disabled = true;
+				info.replaceChildren(h("p", {}, t("desktop_role_saving")));
+				try {
+					await select({
+						role,
+						expected_generation: snapshot.generation
+					});
+				} catch (error) {
+					info.replaceChildren(errorBox(error, {
+						sourceRefresh: false,
+						within: info
+					}));
+				} finally {
+					busy = false;
+					for (const other of buttons) other.disabled = false;
+				}
+			}
+		}, t("desktop_role_" + role));
+		buttons.push(button);
+		return h("section", { class: "panel" }, button, h("p", {}, t("desktop_role_" + role + "_help")));
+	});
+	return h("section", {
+		"data-startup-role": "",
+		"aria-labelledby": "startup-role-title"
+	}, h("h2", { id: "startup-role-title" }, t("desktop_role_title")), h("p", {}, t("desktop_role_help")), ...options, info);
+}
+//#endregion
 //#region src/ui/dom.js
 function place(node, method, ...children) {
 	const kept = children.flat(Infinity).filter((child) => child !== null && child !== void 0 && child !== false);
@@ -10546,6 +10590,16 @@ var init_i18n = __esmMin((() => {
 			setup_unverified: "等待連線驗證",
 			setup_busy: "目前仍有工作或操作；設定會等安全時機再變更。",
 			setup_profiles_unavailable: "無法讀取 BAT 連線設定檔，請貼上連線網址或手動輸入。",
+			desktop_role_title: "這個安裝要如何使用？",
+			desktop_role_help: "請先選擇用途，再準備本機 Connector。既有服務保留各自的資料與權限。",
+			desktop_role_client: "使用既有服務",
+			desktop_role_client_help: "加入既有的 Connector，依現有權限查看與操作其工作區。",
+			desktop_role_provider: "提供本機工作區",
+			desktop_role_provider_help: "準備此安裝的本機 Connector，再設定工作區連線。",
+			desktop_role_both: "兩者兼有",
+			desktop_role_both_help: "先準備本機 Connector。就緒後，可從設定加入既有的 Connector。",
+			desktop_role_saving: "正在儲存用途…",
+			desktop_role_changed: "此安裝已變更。請重新開啟以讀取已儲存的用途。",
 			managed_join_existing: "加入既有的 Connector",
 			managed_join_help: "輸入另一個 Connector 的位址與預期帳號，在原生視窗確認後，再加入該 Connector 的憑證。此電腦原有的背景工作會繼續運作。",
 			managed_background_help: "Connector 在背景持續運作。關閉這個畫面不會停止工作。",
@@ -12280,6 +12334,16 @@ var init_i18n = __esmMin((() => {
 			setup_unverified: "Awaiting connection verification",
 			setup_busy: "Work or operations are still active; configuration changes wait for a safe point.",
 			setup_profiles_unavailable: "BAT connection profiles could not be read. Paste a connection URL or enter the values manually.",
+			desktop_role_title: "How will you use this installation?",
+			desktop_role_help: "Choose before a local Connector is prepared. Existing services keep their own data and permissions.",
+			desktop_role_client: "Use existing services",
+			desktop_role_client_help: "Join another Connector to view and operate its workspaces with your existing permissions.",
+			desktop_role_provider: "Provide a local workspace",
+			desktop_role_provider_help: "Prepare this installation’s local Connector, then set up its workspace connections.",
+			desktop_role_both: "Both",
+			desktop_role_both_help: "Prepare the local Connector first. Join another Connector from Settings once it is ready.",
+			desktop_role_saving: "Saving your choice…",
+			desktop_role_changed: "This installation changed. Reopen to read its saved role.",
 			managed_join_existing: "Join another Connector",
 			managed_join_help: "Enter the address and expected account for another Connector, then confirm in the native window. Enroll its credential separately afterward. Existing background work on this computer keeps running.",
 			managed_background_help: "Connector keeps running in the background. Closing this view does not stop work.",
@@ -25277,7 +25341,7 @@ async function connectorUploadArtifact(operationId, bytes, browserToken) {
 		data: await res.json().catch(() => ({}))
 	};
 }
-var nativeDesktop, nativeFileSupport, nativeBriefExportSupport, browserSessionToken, browserCsrf, nativeDiagnosticsSave, nativeFilesStatus, nativeFilesPick, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeBriefSave, nativeFilesPreview, nativeConnect, managedControl, nativeDisconnect, nativeDialogLocale, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
+var nativeDesktop, nativeFileSupport, nativeBriefExportSupport, browserSessionToken, browserCsrf, nativeDiagnosticsSave, nativeFilesStatus, nativeFilesPick, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeBriefSave, nativeFilesPreview, nativeSelectRole, nativeConnect, managedControl, nativeDisconnect, nativeDialogLocale, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
 var init_transport = __esmMin((() => {
 	init_core();
 	init_i18n();
@@ -25301,6 +25365,7 @@ var init_transport = __esmMin((() => {
 	nativeFilesSave = (reference) => invoke("native_files_save", { reference });
 	nativeBriefSave = (reference) => invoke("native_brief_save", { reference });
 	nativeFilesPreview = (reference) => invoke("native_files_preview", { reference });
+	nativeSelectRole = (input) => invoke("managed_select_role", { input });
 	nativeConnect = () => invoke("connector_connect");
 	managedControl = (input) => invoke("managed_control", { input });
 	nativeDisconnect = () => invoke("connector_disconnect");
@@ -74361,6 +74426,40 @@ function viewSettings(main) {
 	if (state.token && state.caps) return viewBrowserSettings(main);
 	viewBrowserSignedOut(main);
 }
+function viewStartupRole(main, snapshot, mine) {
+	const root = firstRunCard({
+		h,
+		t,
+		body: startupRoleChoice({
+			h,
+			t,
+			errorBox,
+			snapshot,
+			select: async (input) => {
+				const guard = () => {
+					if (mine !== generation) throw new Error(t("desktop_role_changed"));
+				};
+				guard();
+				try {
+					const selected = await nativeSelectRole(input);
+					guard();
+					if (selected.credential_available) await nativeTransition("connect");
+					else await route();
+				} catch (error) {
+					guard();
+					const current = await nativeStatus();
+					guard();
+					if (current.startup_role?.role) {
+						state.connectionError = error;
+						await route();
+					} else throw error;
+				}
+			}
+		})
+	});
+	root.querySelector(".global-first-card").prepend(languageSwitch());
+	main.append(root);
+}
 async function viewManagedSettings(main) {
 	const connection = {
 		epoch: state.epoch,
@@ -74668,6 +74767,11 @@ async function viewNativeSettings(main) {
 	try {
 		const status = await nativeStatus();
 		if (mine !== generation || !main.contains(details)) return;
+		const startup = status?.startup_role;
+		if (startup && startup.role === null) {
+			main.replaceChildren();
+			return viewStartupRole(main, startup, mine);
+		}
 		if (status.updates === true) disposeUpdates = await mountUpdates(updateRoot, {
 			h,
 			t,
@@ -74739,7 +74843,10 @@ async function viewNativeSettings(main) {
 			if (status.configuration_source === "managed" && status.error) {
 				setup.append(h("h3", {}, t("managed_recovery_title")), h("p", {}, t("managed_recovery_help")), h("details", {}, h("summary", {}, t("setup_advanced")), h("h3", {}, t("managed_join_existing")), form));
 				introduction.hidden = true;
-			} else setup.append(form);
+			} else {
+				if (status.startup_role?.role === "client") setup.append(h("h3", {}, t("managed_join_existing")));
+				setup.append(form);
+			}
 			connectionDetails.append(h("div", { class: "actions" }, reload));
 		}
 		row("desktop_endpoint", status.endpoint || t("desktop_config_needed"));

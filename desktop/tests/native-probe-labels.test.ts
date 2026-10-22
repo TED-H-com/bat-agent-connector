@@ -44,6 +44,28 @@ for (const [platform, read] of [['macOS', swiftLabels], ['Windows', csharpLabels
   });
 }
 
+test('macOS provider selection and readiness match desktop_role_provider in both locales', () => {
+  const labels = swift.match(/let providerRoleLabels\s*=\s*(\[[^\]\n]+\])/);
+  assert.ok(labels, 'Trace the provider labels shared by AXPress and readiness');
+  assert.deepEqual(JSON.parse(labels[1]), locales.map(locale => STRINGS[locale].desktop_role_provider));
+  assert.match(swift, /labels\.contains\(where:\s*\{\s*providerRoleLabels\.contains\(\$0\)\s*\}\)/);
+  assert.match(swift, /providerRoleLabels\.contains\(label\)\s*\{\s*result\["roleChoice"\]\s*=\s*true/);
+});
+
+test('Windows provider selection and readiness match desktop_role_provider in both locales', () => {
+  const predicate = csharp.match(/internal static bool IsLabel\(string label\)\s*\{([^{}]+)\}/);
+  assert.ok(predicate, 'Trace the provider predicate shared by InvokePattern and readiness');
+  assert.deepEqual(literals(predicate[1]), locales.map(locale => STRINGS[locale].desktop_role_provider));
+  assert.match(csharp, /if\s*\(!IsLabel\(read\(AutomationElement\.NameProperty\) as string\)\)/);
+  assert.match(csharp, /ProviderSelection\.IsLabel\(label\)\)\s*\{\s*RoleChoice\s*=\s*true/);
+});
+
+test('Windows provider probe test labels match desktop_role_provider in both locales', () => {
+  const loop = csharpTests.match(/foreach\s*\(string label in new string\[\]\s*\{([^{}]+)\}\)/);
+  assert.ok(loop, 'Trace the localized provider selection test loop');
+  assert.deepEqual(literals(loop[1]), locales.map(locale => STRINGS[locale].desktop_role_provider));
+});
+
 test('the actual first setup action uses setup_review_connection', () => {
   const tree = parse(setup, {ecmaVersion: 'latest', sourceType: 'module'});
   const buttons: any[] = [];
