@@ -296,6 +296,10 @@ digest，沒有逐欄比較所有 metadata。[supervisor_probe.rs:103](../../des
 選擇只允許 generation 0 的 pending 狀態，原子發布一次後不覆寫。沒有紀錄、manifest
 或 central.json 的安裝停在 pending，不讀 runtime package。保存 provider／both 後中斷，
 重開交原 `ensure` 在 launcher lock／service lease 下恢復同一份資料；不靠 UI 重送修復。
+原生 managed launcher 在 Linux／macOS 僅於 `spawn()` 回報 `ETXTBSY` 時最多嘗試六次
+（間隔 10／20／40／80／160 ms，合計等待 310 ms），因為 `execve` 失敗表示 runtime 尚未執行、
+未送出 `ensure`，這不是重送結果未知的啟動；Windows、其他 spawn 錯誤、ensure 回覆、逾時及
+exit code 均不套用此重試。
 解除連線、停止與角色變更不是這個首次選擇命令的能力。
 
 ```mermaid

@@ -20,8 +20,33 @@ use zeroize::Zeroizing;
 const MAX_RUNTIME: u64 = 512 * 1024 * 1024;
 const MAX_REPLY: u64 = 16384;
 
+fn runtime_executable_busy(error: &std::io::Error) -> bool {
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        error.raw_os_error() == Some(libc::ETXTBSY)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        let _ = error;
+        false
+    }
+}
+
 fn spawn_runtime<T>(mut spawn: impl FnMut() -> std::io::Result<T>) -> std::io::Result<T> {
-    spawn()
+    let mut delays = [10, 20, 40, 80, 160].into_iter();
+    loop {
+        match spawn() {
+            Err(error) if runtime_executable_busy(&error) => {
+                let Some(delay) = delays.next() else {
+                    return Err(error);
+                };
+                // ETXTBSY means execve never ran the runtime or sent ensure; this
+                // retries only that failed spawn, never an uncertain start.
+                std::thread::sleep(Duration::from_millis(delay));
+            }
+            result => return result,
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -372,41 +397,8 @@ impl Managed {
             use std::os::windows::process::CommandExt;
             command.creation_flags(0x08000000); // CREATE_NO_WINDOW; serve detaches itself.
         }
-        let mut child = spawn_runtime(|| command.spawn()).map_err(|error| {
-            #[cfg(test)]
-            {
-                eprintln!("managed launcher spawn: {error}");
-                #[cfg(target_os = "linux")]
-                if error.raw_os_error() == Some(libc::ETXTBSY) {
-                    use std::os::unix::fs::MetadataExt;
-                    let target = fs::metadata(&executable).unwrap();
-                    for process in fs::read_dir("/proc").unwrap().flatten() {
-                        let pid = process.file_name();
-                        if pid.to_string_lossy().parse::<u32>().is_err() {
-                            continue;
-                        }
-                        if let Ok(fds) = fs::read_dir(process.path().join("fd")) {
-                            for fd in fds.flatten() {
-                                if fs::metadata(fd.path()).is_ok_and(|meta| {
-                                    meta.dev() == target.dev() && meta.ino() == target.ino()
-                                }) {
-                                    eprintln!(
-                                        "runtime held by pid {:?} fd {:?}: {:?}",
-                                        pid,
-                                        fd.file_name(),
-                                        fs::read_to_string(
-                                            process.path().join("fdinfo").join(fd.file_name())
-                                        )
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            let _ = error;
-            "MANAGED_RUNTIME_START_FAILED"
-        })?;
+        let mut child =
+            spawn_runtime(|| command.spawn()).map_err(|_| "MANAGED_RUNTIME_START_FAILED")?;
         let output = child.stdout.take().ok_or("MANAGED_RUNTIME_PIPE_FAILED")?;
         let (sender, receiver) = std::sync::mpsc::sync_channel(1);
         std::thread::spawn(move || {
@@ -444,8 +436,6 @@ impl Managed {
             return Err("MANAGED_RUNTIME_START_FAILED".into());
         }
         if !result.success() {
-            #[cfg(test)]
-            eprintln!("managed launcher exit: {:?}", result.code());
             return Err(journal_startup_failure(&bytes)
                 .unwrap_or_else(|| "MANAGED_RUNTIME_START_FAILED".into()));
         }
@@ -599,9 +589,8 @@ fn materialize(resources: &Path, app_data: &Path) -> Result<(PathBuf, String), S
                 writer
                     .sync_all()
                     .map_err(|_| "MANAGED_RUNTIME_WRITE_FAILED")?;
-                // Publish only after closing the write handle. In particular, a
-                // concurrently spawned child must not inherit a writer to the
-                // executable we are about to launch (ETXTBSY on Unix).
+                // Close our writer before publication. A concurrent fork can
+                // retain its CLOEXEC copy; spawn_runtime bounds that exec-only race.
                 drop(writer);
                 if count != document.size || digest(&temporary)? != document.sha256 {
                     return Err("MANAGED_RUNTIME_INTEGRITY_FAILED".into());
@@ -796,6 +785,7 @@ printf '%s' '{"protocol":1,"endpoint":"http://127.0.0.1:41001/","actor":"fixture
         for kind in [
             std::io::ErrorKind::Interrupted,
             std::io::ErrorKind::WouldBlock,
+            std::io::ErrorKind::ExecutableFileBusy,
         ] {
             let mut attempts = 0;
             let result = spawn_runtime(|| {
@@ -803,6 +793,33 @@ printf '%s' '{"protocol":1,"endpoint":"http://127.0.0.1:41001/","actor":"fixture
                 Err::<(), _>(std::io::Error::from(kind))
             });
             assert_eq!(result.unwrap_err().kind(), kind);
+            assert_eq!(attempts, 1);
+        }
+    }
+
+    #[test]
+    fn runtime_spawn_busy_retry_is_platform_specific() {
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        let code = libc::ETXTBSY;
+        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        let code = 26;
+        let mut attempts = 0;
+        let result = spawn_runtime(|| {
+            attempts += 1;
+            if attempts == 1 {
+                Err(std::io::Error::from_raw_os_error(code))
+            } else {
+                Ok(())
+            }
+        });
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        {
+            assert!(result.is_ok());
+            assert_eq!(attempts, 2);
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        {
+            assert_eq!(result.unwrap_err().raw_os_error(), Some(code));
             assert_eq!(attempts, 1);
         }
     }
@@ -949,13 +966,13 @@ printf '%s' '{"protocol":1,"endpoint":"http://127.0.0.1:41001/","actor":"fixture
             let config = root.path().join("config");
             // An original installation predates the role record.
             let (executable, _) = materialize(&resources.join("managed-runtime"), &data).unwrap();
-            assert!(Command::new(executable)
-                .args(["ensure", "--data-dir"])
-                .arg(data.join("managed-central"))
-                .stdout(Stdio::null())
-                .status()
-                .unwrap()
-                .success());
+            assert!(
+                spawn_fixture_runtime(&executable, &data.join("managed-central"), |_| {})
+                    .unwrap()
+                    .wait()
+                    .unwrap()
+                    .success()
+            );
             if external {
                 fs::create_dir(&config).unwrap();
                 fs::write(config.join("central.json"), b"original-external").unwrap();
