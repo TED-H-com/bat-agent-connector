@@ -397,7 +397,10 @@ for (const locale of ['en-US', 'zh-TW']) {
       await expect(form(page).locator('.attachments [data-error-summary]')).toHaveText('Native upload interrupted');
       await expect(form(page).locator('.native-transfers')).toContainText(locale === 'zh-TW'
         ? '已停止，結果保留 · 0 / 1024 B' : 'Stopped; original result retained · 0 / 1024 B');
-      await expect(form(page).getByText('Native upload interrupted', {exact: true}).and(page.locator(':visible'))).toHaveCount(1);
+      // The row retains its recorded error; only the action message outside rows must be unique.
+      await expect(form(page).getByText('Native upload interrupted', {exact: true})
+        .and(page.locator(':visible:not(.native-transfers, .native-transfers *)'))).toHaveCount(1);
+      await expect(form(page).locator('.native-transfers').getByText('Native upload interrupted', {exact: true})).toBeVisible();
       const upload = state.invokes.findIndex(call => call.command === 'native_files_upload');
       expect(state.invokes.slice(upload + 1).some(call => call.command === 'native_files_status')).toBe(true);
       expect(state.invokes.filter(call => call.command === 'native_files_upload')).toHaveLength(1);
