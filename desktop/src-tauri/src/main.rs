@@ -457,22 +457,24 @@ async fn native_files_paste(
     local_main(&window)?;
     let files = state.get()?;
     let limit = files.paste_limit().await?;
-    // Execute on the window thread (AppKit and Win32 clipboard ownership).
+    // Only copy OS bytes on the window thread; decode/encode and spool on a blocking worker.
     let (tx, rx) = tokio::sync::oneshot::channel();
     let owner = window.clone();
+    let reader = files.clone();
     window
         .run_on_main_thread(move || {
-            let result = files.paste_with(
+            let result = reader.read_clipboard(
                 &draft_id,
                 owner.is_focused().unwrap_or(false),
                 &mut clipboard::SystemClipboard,
-                limit,
             );
             let _ = tx.send(result);
         })
         .map_err(|_| clipboard::ClipboardError::refused("window_unavailable"))?;
-    rx.await
-        .map_err(|_| clipboard::ClipboardError::refused("paste_interrupted"))?
+    let selected = rx
+        .await
+        .map_err(|_| clipboard::ClipboardError::refused("paste_interrupted"))??;
+    files.spool_clipboard(selected, limit).await
 }
 #[tauri::command]
 fn native_files_drop_target(

@@ -61432,7 +61432,8 @@ function nativeAttachments({ h, t, guard, canWrite, draftId, onReceipt, onDiscar
 	const failure = (error) => {
 		try {
 			live();
-			notice.textContent = String(error?.message || error);
+			const key = error?.code && `error_code_${error.code}`;
+			notice.textContent = key && t(key) !== key ? t(key) : String(error?.message || error);
 		} catch {}
 	};
 	const writable = () => {
@@ -61537,15 +61538,16 @@ function nativeAttachments({ h, t, guard, canWrite, draftId, onReceipt, onDiscar
 			if (refreshing === task) refreshing = null;
 		}
 	};
-	const pick = async () => {
+	const select = async (read, rethrow = false) => {
 		if (picking) return;
 		try {
 			writable();
 			picking = true;
-			const receipts = await nativeFilesPick(draftId);
+			const receipts = await read();
 			live();
 			for (const receipt of receipts) {
 				adopt(receipt);
+				render();
 				writable();
 				await nativeFilesUpload(receipt.transfer_id);
 				live();
@@ -61554,23 +61556,17 @@ function nativeAttachments({ h, t, guard, canWrite, draftId, onReceipt, onDiscar
 		} catch (error) {
 			failure(error);
 			await refresh().catch(failure);
+			if (rethrow) throw error;
 		} finally {
 			picking = false;
 		}
 	};
-	const paste = async () => {
-		writable();
+	const pick = () => select(() => nativeFilesPick(draftId));
+	const paste = () => select(async () => {
 		await nativeFilesPasteArm(draftId);
 		writable();
-		const receipt = await nativeFilesPaste(draftId);
-		live();
-		adopt(receipt);
-		render();
-		writable();
-		await nativeFilesUpload(receipt.transfer_id);
-		live();
-		await refresh();
-	};
+		return [await nativeFilesPaste(draftId)];
+	}, true);
 	const drop = h("button", {
 		class: "secondary",
 		"aria-pressed": false,

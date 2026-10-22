@@ -220,6 +220,12 @@ pub struct Files {
     root: Dir,
     state: Mutex<State>,
 }
+// A completed window-thread read. Only owned bytes and the original binding cross threads.
+pub(crate) struct ClipboardSelection {
+    scope: FileScope,
+    draft: String,
+    image: crate::clipboard::ClipboardImage,
+}
 pub struct Destination {
     directory: Dir,
     name: String,
@@ -618,15 +624,14 @@ impl Files {
         state.paste_lease = Some((self.scope()?, draft, std::time::Instant::now()));
         Ok(())
     }
-    pub(crate) fn paste_with(
+    pub(crate) fn read_clipboard(
         &self,
         draft: &str,
         focused: bool,
         reader: &mut impl crate::clipboard::ClipboardReader,
-        limit: u64,
-    ) -> Result<Receipt, crate::clipboard::ClipboardError> {
-        use crate::clipboard::{encode_image, ClipboardError};
-        // Consume even an invalid attempt, before invoking any clipboard API.
+    ) -> Result<ClipboardSelection, crate::clipboard::ClipboardError> {
+        use crate::clipboard::ClipboardError;
+        // Consume even an invalid attempt; release the short state lock before any OS call.
         let lease = self.state.lock().unwrap().paste_lease.take();
         let (scope, owner, armed) =
             lease.ok_or_else(|| ClipboardError::refused("paste_lease_required"))?;
@@ -635,24 +640,52 @@ impl Files {
             return Err(ClipboardError::refused("paste_lease_invalid"));
         }
         self.bridge.check_file_scope(&scope)?;
-        let bytes = reader.read(|image| encode_image(image, limit as usize))?;
+        let image = reader.read()?;
         self.bridge.check_file_scope(&scope)?;
-        // UTC Unix milliseconds; no local timezone or source filename enters the receipt.
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|_| ClipboardError::refused("clock_unavailable"))?
-            .as_millis();
-        let name = format!("pasted-image-{timestamp}Z.png");
-        let receipt = self.spool_source(
-            &scope,
-            draft,
-            &name,
-            bytes.len() as u64,
-            limit,
-            std::io::Cursor::new(bytes),
-            |_| Ok(()),
-        )?;
-        self.bridge.check_file_scope(&scope)?;
+        Ok(ClipboardSelection {
+            scope,
+            draft: owner,
+            image,
+        })
+    }
+    pub(crate) async fn spool_clipboard(
+        self: &Arc<Self>,
+        selected: ClipboardSelection,
+        limit: u64,
+    ) -> Result<Receipt, crate::clipboard::ClipboardError> {
+        use crate::clipboard::{encode_image, ClipboardError};
+        let this = self.clone();
+        let final_scope = selected.scope.clone();
+        let receipt = tokio::task::spawn_blocking(move || -> Result<Receipt, ClipboardError> {
+            let ClipboardSelection {
+                scope,
+                draft,
+                image,
+            } = selected;
+            this.bridge.check_file_scope(&scope)?;
+            let bytes = encode_image(image, limit as usize)?;
+            this.bridge.check_file_scope(&scope)?;
+            // UTC Unix milliseconds; no local timezone or source filename enters the receipt.
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|_| ClipboardError::refused("clock_unavailable"))?
+                .as_millis();
+            let name = format!("pasted-image-{timestamp}Z.png");
+            let receipt = this.spool_source(
+                &scope,
+                &draft,
+                &name,
+                bytes.len() as u64,
+                limit,
+                std::io::Cursor::new(bytes),
+                |_| Ok(()),
+            )?;
+            this.bridge.check_file_scope(&scope)?;
+            Ok(receipt)
+        })
+        .await
+        .map_err(|_| ClipboardError::refused("paste_interrupted"))??;
+        self.bridge.check_file_scope(&final_scope)?;
         Ok(receipt)
     }
     pub async fn paste_limit(&self) -> Result<u64, crate::clipboard::ClipboardError> {

@@ -1,4 +1,4 @@
-//! OS clipboard access stays native. Borrow OS-owned buffers until bounded validation completes.
+//! OS calls only copy bounded bytes; validation and encoding run on a blocking worker.
 use crate::bridge::MAX_ARTIFACT_BYTES;
 use serde::Serialize;
 use std::io::Cursor;
@@ -40,18 +40,16 @@ impl From<String> for ClipboardError {
         Self::refused(&reason)
     }
 }
-#[derive(Clone, Copy)]
-pub(crate) enum ClipboardImage<'a> {
+#[derive(Clone)]
+pub(crate) enum ClipboardImage {
     #[cfg_attr(not(any(windows, target_os = "macos", test)), allow(dead_code))]
-    Png(&'a [u8]),
+    Png(Vec<u8>),
     #[cfg(any(windows, test))]
-    Dib(&'a [u8]),
+    Dib(Vec<u8>),
 }
 pub(crate) trait ClipboardReader {
-    fn read(
-        &mut self,
-        consume: impl FnOnce(ClipboardImage<'_>) -> Result<Vec<u8>, ClipboardError>,
-    ) -> Result<Vec<u8>, ClipboardError>;
+    // Owned raw data only: the window-thread call cannot accept a processing callback.
+    fn read(&mut self) -> Result<ClipboardImage, ClipboardError>;
 }
 pub(crate) struct SystemClipboard;
 
@@ -64,13 +62,10 @@ pub(crate) fn validate_dimensions(width: u32, height: u32) -> Result<usize, Clip
     }
     Ok(pixels * 4)
 }
-pub(crate) fn encode_image(
-    image: ClipboardImage<'_>,
-    limit: usize,
-) -> Result<Vec<u8>, ClipboardError> {
+pub(crate) fn encode_image(image: ClipboardImage, limit: usize) -> Result<Vec<u8>, ClipboardError> {
     let limit = limit.min(MAX_ARTIFACT_BYTES);
     match image {
-        ClipboardImage::Png(bytes) => {
+        ClipboardImage::Png(mut bytes) => {
             if bytes.len() > limit {
                 return Err(ClipboardError::large());
             }
@@ -82,7 +77,7 @@ pub(crate) fn encode_image(
                 u32::from_be_bytes(bytes[16..20].try_into().unwrap()),
                 u32::from_be_bytes(bytes[20..24].try_into().unwrap()),
             )?;
-            let mut decoder = png::Decoder::new(Cursor::new(bytes));
+            let mut decoder = png::Decoder::new(Cursor::new(&bytes[..]));
             decoder.set_limits(png::Limits { bytes: MAX_DECODED });
             let mut reader = decoder.read_info().map_err(|_| ClipboardError::invalid())?;
             if reader.info().animation_control.is_some() {
@@ -97,10 +92,36 @@ pub(crate) fn encode_image(
                 .next_frame(&mut pixels)
                 .map_err(|_| ClipboardError::invalid())?;
             reader.finish().map_err(|_| ClipboardError::invalid())?;
-            Ok(bytes.to_vec())
+            drop(reader);
+            bytes.truncate(png_end(&bytes)?);
+            Ok(bytes)
         }
         #[cfg(any(windows, test))]
-        ClipboardImage::Dib(bytes) => encode_dib(bytes, limit),
+        ClipboardImage::Dib(bytes) => encode_dib(&bytes, limit),
+    }
+}
+
+// Walk actual chunk boundaries, never an IEND-looking sequence inside compressed data.
+// The decoder above validates the image; require a complete, zero-length IEND with its CRC.
+fn png_end(bytes: &[u8]) -> Result<usize, ClipboardError> {
+    let mut offset = 8usize;
+    loop {
+        let header = bytes
+            .get(offset..offset + 8)
+            .ok_or_else(ClipboardError::invalid)?;
+        let length = u32::from_be_bytes(header[..4].try_into().unwrap()) as usize;
+        let end = offset
+            .checked_add(12)
+            .and_then(|n| n.checked_add(length))
+            .filter(|end| *end <= bytes.len())
+            .ok_or_else(ClipboardError::invalid)?;
+        if &header[4..] == b"IEND" {
+            if length != 0 || bytes[end - 4..end] != [0xae, 0x42, 0x60, 0x82] {
+                return Err(ClipboardError::invalid());
+            }
+            return Ok(end);
+        }
+        offset = end;
     }
 }
 
@@ -218,10 +239,7 @@ fn encode_dib(bytes: &[u8], limit: usize) -> Result<Vec<u8>, ClipboardError> {
 
 #[cfg(not(any(windows, target_os = "macos")))]
 impl ClipboardReader for SystemClipboard {
-    fn read(
-        &mut self,
-        _consume: impl FnOnce(ClipboardImage<'_>) -> Result<Vec<u8>, ClipboardError>,
-    ) -> Result<Vec<u8>, ClipboardError> {
+    fn read(&mut self) -> Result<ClipboardImage, ClipboardError> {
         Err(ClipboardError::unsupported("platform"))
     }
 }
@@ -239,10 +257,7 @@ mod windows_clipboard {
         }
     }
     impl ClipboardReader for SystemClipboard {
-        fn read(
-            &mut self,
-            consume: impl FnOnce(ClipboardImage<'_>) -> Result<Vec<u8>, ClipboardError>,
-        ) -> Result<Vec<u8>, ClipboardError> {
+        fn read(&mut self) -> Result<ClipboardImage, ClipboardError> {
             unsafe {
                 if OpenClipboard(std::ptr::null_mut()) == 0 {
                     return Err(ClipboardError::refused("clipboard_busy"));
@@ -288,21 +303,20 @@ mod windows_clipboard {
                 }
                 let _locked = Locked(handle);
                 let bytes = std::slice::from_raw_parts(pointer.cast::<u8>(), size);
-                consume(if is_png {
-                    ClipboardImage::Png(bytes)
+                let owned = bytes.to_vec();
+                Ok(if is_png {
+                    ClipboardImage::Png(owned)
                 } else {
-                    ClipboardImage::Dib(bytes)
+                    ClipboardImage::Dib(owned)
                 })
+                // Guards release the clipboard before this owned value reaches the worker.
             }
         }
     }
 }
 #[cfg(target_os = "macos")]
 impl ClipboardReader for SystemClipboard {
-    fn read(
-        &mut self,
-        consume: impl FnOnce(ClipboardImage<'_>) -> Result<Vec<u8>, ClipboardError>,
-    ) -> Result<Vec<u8>, ClipboardError> {
+    fn read(&mut self) -> Result<ClipboardImage, ClipboardError> {
         use objc2_app_kit::NSPasteboard;
         use objc2_foundation::NSString;
         let board = NSPasteboard::generalPasteboard();
@@ -313,11 +327,11 @@ impl ClipboardReader for SystemClipboard {
         if data.len() > MAX_ARTIFACT_BYTES {
             return Err(ClipboardError::large());
         }
-        let result = consume(ClipboardImage::Png(unsafe { data.as_bytes_unchecked() }));
+        let owned = unsafe { data.as_bytes_unchecked() }.to_vec();
         if board.changeCount() != generation {
             return Err(ClipboardError::refused("clipboard_changed"));
         }
-        result
+        Ok(ClipboardImage::Png(owned))
     }
 }
 
@@ -377,9 +391,8 @@ mod os_tests {
                 panic!("SetClipboardData: {}", std::io::Error::last_os_error());
             }
             drop(opened);
-            let bytes = SystemClipboard
-                .read(|image| encode_image(image, MAX_ARTIFACT_BYTES))
-                .unwrap();
+            let raw = SystemClipboard.read().unwrap();
+            let bytes = encode_image(raw, MAX_ARTIFACT_BYTES).unwrap();
             let mut reader = png::Decoder::new(Cursor::new(bytes)).read_info().unwrap();
             let mut decoded = vec![0; reader.output_buffer_size().unwrap()];
             let info = reader.next_frame(&mut decoded).unwrap();

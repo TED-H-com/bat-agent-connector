@@ -18,7 +18,10 @@ only; no WebView clipboard API and no raw-byte IPC are used. Rust reads one OS c
 spools it through the same file manager as the picker and returns the identical `Receipt` fields.
 The existing attachment rows upload and verify through `native_files_upload`; Stop, Retry and Cancel
 retain their existing operation semantics. Manage, upload-allowed and attachment-support gates run
-before either native call. Text paste and browser attachment flows are unchanged.
+before either native call. Picker and paste share one in-flight selection guard; another paste while
+selection/upload/readback is pending makes no native call. A selection/upload failure displays the
+error and re-reads native status so the existing row reflects its retained transfer stage.
+Text paste and browser attachment flows are unchanged.
 
 The native lease binds the current file scope (including generation) and a valid draft ID, lasts less
 than two seconds, and is consumed by the first read attempt, including a refused attempt. Arming and
@@ -27,6 +30,13 @@ before any clipboard access; scope is checked before and after reading and durin
 cannot prove a keypress or independently observe the attachment form: this bounds access to a focused
 window with that attachment form open, using the form's short lease. It is not a cryptographic proof
 of a physical paste gesture. There is no background polling of clipboard contents.
+
+The window thread consumes the lease and checks focus/scope, copies bounded OS bytes into owned PNG
+or DIB buffers, then releases the clipboard. macOS rechecks `changeCount` after the copy. The reader
+cannot accept an encoding/spooling callback. PNG validation, DIB encoding, hashing, file writes and
+`sync_all` run in `spawn_blocking`, using the same spool path as picker selections. Scope is checked
+before and after processing and again on return to the async command; the short lease state lock is
+released before the OS reader runs.
 
 Windows reads the registered `PNG` format first, otherwise `CF_DIB` (including the OS-synthesized
 DIB for `CF_BITMAP`) and encodes PNG in Rust using the existing pinned `png` crate. Supported DIBs
@@ -37,8 +47,11 @@ unsupported. Copied files (`CF_HDROP` / pasteboard file URLs) are never read.
 
 Results use `pasted-image-<UTC Unix milliseconds>Z.png` and `image/png`. PNG input and final files
 are at most 16 MiB (or the smaller central limit); dimensions are at most 8192 per side and
-16,777,216 pixels, with at most 64 MiB decoded pixels. Byte lengths and dimensions are checked before
-copying OS buffers or allocating pixels. DIB input is bounded to 64 MiB plus its 124-byte header.
+16,777,216 pixels, with at most 64 MiB decoded pixels. OS byte lengths are checked before the owned
+copy; the worker checks dimensions before allocating pixels. DIB input is bounded to 64 MiB plus its
+124-byte header. After PNG validation, only bytes through a complete, zero-length `IEND` chunk with
+its valid CRC are retained; OS allocation padding is discarded before size/digest/spool publication.
+A missing, malformed or truncated `IEND` is `invalid_image`.
 PNG parsing has a separate 64 MiB decoder allocation limit; animated PNG is unsupported. The shared
 64 MiB spool and 1,000-record limits apply, with no separate clipboard cache. OS clipboard providers
 may allocate their own buffers before returning; these limits cover the client's copies and decode.
