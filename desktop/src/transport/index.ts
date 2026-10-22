@@ -1,5 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import {locale} from "../i18n.js";
+import {locale, t} from "../i18n.js";
 import {browserCredentialRefusals} from "../credential-refusals.js";
 
 export const nativeDesktop = isTauri();
@@ -28,10 +28,14 @@ export async function restoreBrowserSession(): Promise<boolean> {
   browserCsrf = data.csrf;
   return true;
 }
-export async function browserAuthHeaders(token: string): Promise<Record<string, string>> {
+export function browserCredentialError(refusal: {status: number; code: string; credentialRefused?: boolean}) {
+  return Object.assign(new Error(t(refusal.status === 401 || refusal.credentialRefused ? 'global_token_rejected' : 'error_code_FORBIDDEN')),
+    refusal, {localized: true});
+}
+export function browserAuthHeaders(token: string): Record<string, string> {
   if (token !== browserSessionToken) {
-    const refusal = await browserCredentialRefusals.read(token);
-    if (refusal) throw Object.assign(new Error("Token not accepted."), refusal);
+    const refusal = browserCredentialRefusals.read(token);
+    if (refusal) throw browserCredentialError(refusal);
     return {Authorization: `Bearer ${token}`};
   }
   if (!browserCsrf) throw new Error("Browser session needs to be restored");
@@ -39,7 +43,7 @@ export async function browserAuthHeaders(token: string): Promise<Record<string, 
 }
 export async function forgetBrowserSession() {
   if (!browserCsrf) return;
-  const headers = {...await browserAuthHeaders(browserSessionToken), "Content-Type": "application/json"};
+  const headers = {...browserAuthHeaders(browserSessionToken), "Content-Type": "application/json"};
   browserCsrf = null;
   return fetch("/api/v1/browser-session/logout", {method: "POST", credentials: "same-origin",
     mode: "same-origin", redirect: "error", headers, body: "{}"});
@@ -117,12 +121,12 @@ export async function connectorRequest(method: string, path: string, body: unkno
       method, path, body: body ?? null, idempotency_key: key ?? null
     } });
   }
-  const headers = await browserAuthHeaders(browserToken);
+  const headers = browserAuthHeaders(browserToken);
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (key) headers["Idempotency-Key"] = key;
   const res = await fetch(`/api/v1${path}`, { method, headers, credentials: "same-origin", redirect: "error",
     body: body === undefined ? undefined : JSON.stringify(body), signal });
-  if (browserToken !== browserSessionToken) await browserCredentialRefusals.refuse(browserToken, res.status, method, path);
+  if (browserToken !== browserSessionToken) browserCredentialRefusals.refuse(browserToken, res.status, method, path);
   return { status: res.status, data: await res.json().catch(() => ({})) };
 }
 
@@ -135,7 +139,7 @@ export async function connectorUploadArtifact(operationId: string, bytes: ArrayB
   }
   // Ignore content_url from operation metadata. Tokens only reach this same-origin fixed route.
   const res = await fetch(`/api/v1/artifacts/uploads/${operationId}/content`, {method: "POST", redirect: "error",
-    credentials: "same-origin", headers: {...await browserAuthHeaders(browserToken), "Content-Type": "application/octet-stream"}, body: bytes});
-  if (browserToken !== browserSessionToken) await browserCredentialRefusals.refuse(browserToken, res.status, 'POST', `/artifacts/uploads/${operationId}/content`);
+    credentials: "same-origin", headers: {...browserAuthHeaders(browserToken), "Content-Type": "application/octet-stream"}, body: bytes});
+  if (browserToken !== browserSessionToken) browserCredentialRefusals.refuse(browserToken, res.status, 'POST', `/artifacts/uploads/${operationId}/content`);
   return {status: res.status, data: await res.json().catch(() => ({}))};
 }

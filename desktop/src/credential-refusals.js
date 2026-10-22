@@ -1,3 +1,4 @@
+import {credentialStorageDigest} from './credential-storage-key.js';
 // Refusals belong to one credential at one endpoint. Store only its digest and
 // refusal status; keep the original credential and all work storage untouched.
 export const BROWSER_TOKEN_KEY = 'batc.dashboard.token';
@@ -7,45 +8,64 @@ export function isCredentialRefusal(status, method, path) {
 }
 
 export function credentialRefusals({stores = () => [sessionStorage, localStorage], endpoint = () => location.origin} = {}) {
-  const memory = new Map(), digests = new Map();
-  const keyFor = async token => {
-    if (!digests.has(token)) digests.set(token, crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))
-      .then(bytes => [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, '0')).join('')));
-    return `batc.credential-refused.${encodeURIComponent(endpoint())}.${await digests.get(token)}`;
-  };
+  const memory = new Map();
+  const identity = token => endpoint() + '\0' + token;
   const storage = () => {try {return stores();} catch {return [];}};
-  const forget = async token => {
-    const key = await keyFor(token);
-    memory.delete(key);
-    for (const store of storage()) {try {store.removeItem(key);} catch { /* unavailable */ }}
-    digests.delete(token);
+  const prepare = token => {
+    if (!token) return;
+    const id = identity(token);
+    if (!memory.has(id)) memory.set(id, {key: `batc.credential-refused.${encodeURIComponent(endpoint())}.${credentialStorageDigest(token)}`,
+      value: null, persisted: false});
+    return memory.get(id);
   };
+  const forget = token => {
+    const entry = prepare(token);
+    if (!entry) return;
+    entry.value = null; entry.persisted = false;
+    for (const store of storage()) {try {store.removeItem(entry.key);} catch { /* unavailable */ }}
+  };
+  // Preparing a loaded credential is separate from the synchronous request gate.
+  for (const store of storage()) {try {prepare(store.getItem(BROWSER_TOKEN_KEY));} catch { /* unavailable */ }}
   return {
-    async read(token) {
-      const key = await keyFor(token);
+    prepare,
+    read(token) {
+      const entry = memory.get(identity(token));
+      if (!entry) return null;
+      let ownerReadable = false;
       for (const store of storage()) {
         try {
-          const value = JSON.parse(store.getItem(key));
-          if (value?.status === 401 || value?.status === 403) return {...value, credentialRefused: true};
+          const value = JSON.parse(store.getItem(entry.key));
+          if (store === entry.owner) ownerReadable = true;
+          if (value?.status === 401 || value?.status === 403) {
+            entry.persisted = true;
+            entry.owner = store;
+            return entry.value = {...value, credentialRefused: true};
+          }
         } catch { /* The in-memory refusal still pauses this page. */ }
       }
-      return memory.get(key) || null;
+      // Another tab's explicit retry removes the shared record. Do not let a
+      // cached copy keep this tab paused after that removal.
+      if (ownerReadable && entry.persisted) {entry.value = null; entry.persisted = false;}
+      return entry.value;
     },
-    async refuse(token, status, method, path) {
-      if (!isCredentialRefusal(status, method, path)) return;
-      const key = await keyFor(token), value = {status, code: status === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN', credentialRefused: true};
-      memory.set(key, value);
-      // Prefer the durable token's store when it is also mirrored in this tab.
-      // A session-only token must never leave a durable refusal record behind.
+    refuse(token, status, method, path) {
+      if (!token || !isCredentialRefusal(status, method, path)) return;
+      const entry = prepare(token), value = {status, code: status === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN', credentialRefused: true};
+      entry.value = value;
       const stores = storage();
       const owner = [...stores].reverse().find(store => {
         try {return store.getItem(BROWSER_TOKEN_KEY) === token;} catch {return false;}
       });
       for (const store of stores) {
         try {
-          if (store === owner) store.setItem(key, JSON.stringify(value));
-          else store.removeItem(key);
+          if (store === owner) {store.setItem(entry.key, JSON.stringify(value)); entry.persisted = true; entry.owner = store;}
+          else store.removeItem(entry.key);
         } catch { /* The current page retains the refusal in memory. */ }
+      }
+    },
+    storageChanged(event) {
+      for (const entry of memory.values()) if (entry.persisted && (!event.key || event.key === entry.key)) {
+        entry.value = null; entry.persisted = false;
       }
     },
     retry: forget,

@@ -106,13 +106,13 @@ and file transfers. Once refused, the pause covers startup, page restore,
 polling, retries and file requests.
 
 The token remains stored because it may still be valid for the original service.
-A separate refusal record identifies its digest, endpoint and refusal status.
+A separate refusal record identifies its domain-separated digest, endpoint and refusal status.
 It is kept in memory and in the same store as the token, preferring local storage
 when the token is remembered there; session-only tokens leave no durable refusal
 record. The pause survives reloads, and remembered tokens stay paused in new
 tabs. The person can Connect with a new token or choose Retry remembered token.
 Disconnect, successful replacement with a different token and explicit retry
-remove the corresponding refusal record. Work drafts, pending intents and
+remove the corresponding refusal record. Tabs at the same origin observe stored refusal changes, including an explicit retry in another tab. Credential checks before requests are synchronous; preparing the storage key does not delay Connect or Retry. Work drafts, pending intents and
 operation keys stay in their original namespaces. If browser storage is
 unavailable, the current page retains the pause in memory.
 

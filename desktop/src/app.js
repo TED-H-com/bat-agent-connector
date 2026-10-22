@@ -203,20 +203,48 @@ function saveCursor() {
     try { localStorage.setItem(`batc.sync.${state.namespace}`, JSON.stringify(state.sync)); } catch { /* unavailable */ }
   }
 }
-function disconnect() {
-  if (state.token === browserSessionToken) forgetBrowserSession()?.catch(() => {});
+function resetConnection() {
   withdrawDiagnostics(); recentErrors.clear();
-  state.epoch++; const forgotten = clearToken(); state.token = null; state.caps = null; state.lastEvent = 0; state.lastEventAt = 0;
+  state.epoch++; state.token = null; state.caps = null; state.lastEvent = 0; state.lastEventAt = 0;
   state.scopeIdentity = null;
   state.online = false; state.viewReady = false; state.sync = null;
-  return forgotten;
+  state.namespace = ""; state.endpoint = ""; state.lastPoll = null;
+  state.pollHealth = 'initial'; state.connectionError = null; state.refreshCycle = null;
+}
+function disconnect() {
+  if (state.token === browserSessionToken) forgetBrowserSession()?.catch(() => {});
+  clearToken(); resetConnection();
+}
+async function connectBrowserToken(token) {
+  resetConnection();
+  browserCredentialRefusals.prepare(token);
+  browserCredentialRefusals.retry(token);
+  state.token = token;
+  paintConnection();
+  const connection = {epoch: state.epoch, namespace: state.namespace};
+  const caps = await api('GET', '/capabilities');
+  assertConnection(connection);
+  await activate(caps);
+}
+function retryRememberedTokenButton() {
+  if (state.token === browserSessionToken || !state.connectionError?.credentialRefused) return null;
+  const retry = h('button', {onclick: async () => {
+    try {await connectBrowserToken(state.token);}
+    catch (error) {if (error.code !== 'CONNECTION_CHANGED') state.connectionError = error;}
+    await route();
+  }}, t('connection_retry_remembered'));
+  const paint = () => {
+    if (!retry.isConnected || !state.connectionError?.credentialRefused) {retry.remove(); connectionPainters.delete(paint);}
+  };
+  connectionPainters.add(paint);
+  return retry;
 }
 
 function loadToken() {
   if (nativeDesktop) return null;
-  try { return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY); } catch { return null; }
+  try { const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY); browserCredentialRefusals.prepare(token); return token; } catch { return null; }
 }
-async function saveToken(token, remember) {
+function saveToken(token, remember) {
   if (nativeDesktop) return;
   const previous = new Set();
   try {
@@ -224,7 +252,8 @@ async function saveToken(token, remember) {
       const old = store.getItem(TOKEN_KEY); if (old && old !== token) previous.add(old);
     }
   } catch { /* unavailable */ }
-  await Promise.all([...previous].map(old => browserCredentialRefusals.forget(old)));
+  for (const old of previous) browserCredentialRefusals.forget(old);
+  browserCredentialRefusals.prepare(token);
   try {
     sessionStorage.setItem(TOKEN_KEY, token);
     if (remember) localStorage.setItem(TOKEN_KEY, token); else localStorage.removeItem(TOKEN_KEY);
@@ -238,7 +267,7 @@ function clearToken() {
       const token = store.getItem(TOKEN_KEY); if (token) forgotten.add(token); store.removeItem(TOKEN_KEY);
     }
   } catch { /* unavailable */ }
-  return Promise.all([...forgotten].map(token => browserCredentialRefusals.forget(token)));
+  for (const token of forgotten) browserCredentialRefusals.forget(token);
 }
 
 // ------------------------------------------------------------------ DOM helpers
@@ -345,7 +374,7 @@ async function api(method, path, body, key, collectReceipt) {
     return data;
   } catch(error) {
     if(epoch===state.epoch && !["VIEW_CHANGED", "FOREGROUND_READ_RETIRED"].includes(error.code)) {
-      if (!nativeDesktop && state.token !== browserSessionToken && (error.credentialRefused || isCredentialRefusal(error.status, method, path))) {
+      if (!nativeDesktop && state.token && state.token !== browserSessionToken && (error.credentialRefused || isCredentialRefusal(error.status, method, path))) {
         error.credentialRefused = true;
         state.connectionError = error;
         state.pollHealth = pollFailure(error, Date.now());
@@ -380,7 +409,7 @@ async function apiRequest(method, path, body, key, collectReceipt) {
   }
   catch (cause) {
     if (['FOREGROUND_READ_RETIRED', 'CONNECTION_CHANGED'].includes(cause?.code)) throw cause;
-    if (cause?.credentialRefused) throw Object.assign(new ApiError(cause.status, cause.code, cause.message), {credentialRefused: true});
+    if (cause?.credentialRefused) throw Object.assign(new ApiError(cause.status, cause.code, cause.message, {localized: cause.localized === true}), {credentialRefused: true});
     const timeout = ['AbortError', 'TimeoutError'].includes(cause?.name) || /timed?\s*out|timeout/i.test(cause?.message || String(cause));
     throw new ApiError(0, timeout ? 'TIMEOUT' : 'NETWORK_ERROR', cause?.message || String(cause));
   }
@@ -978,11 +1007,18 @@ function foregroundChanged() {
   if (state.token) {updateOnline(false); paintConnection(true, true);}
   wakeEventPoll?.();
 }
+window.addEventListener('storage', event => {
+  if (event.key && !event.key.startsWith('batc.credential-refused.')) return;
+  browserCredentialRefusals.storageChanged(event);
+  wakeEventPoll?.();
+});
 async function streamEvents() {
   for (;;) {
     await refreshManagedRecovery();
     if (!nativeDesktop && state.token && state.token !== browserSessionToken) {
-      const refusal = await browserCredentialRefusals.read(state.token);
+      const token = state.token, epoch = state.epoch;
+      const refusal = browserCredentialRefusals.read(token);
+      if (token !== state.token || epoch !== state.epoch) continue;
       if (refusal) {
         state.connectionError = refusal; state.pollHealth = pollFailure(refusal, Date.now());
         updateOnline(false); paintConnection();
@@ -1001,7 +1037,7 @@ async function streamEvents() {
       const checkpoint = state.sync ? `&checkpoint=${encodeURIComponent(state.sync.token)}` : "";
       const page = await api("GET", `/events?after=${before}&limit=100${checkpoint}`);
       if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
-      pollSucceeded = true; state.pollHealth = 'connected';
+      pollSucceeded = true; state.pollHealth = 'connected'; state.connectionError = null;
       state.lastPoll = {at: Date.now(), namespace: state.namespace}; paintConnection(true);
       if (view !== generation || !state.viewReady) continue;
       cycle = {error: null}; state.refreshCycle = cycle;
@@ -3485,14 +3521,7 @@ function viewBrowserSettings(main) {
     facts,
     managed ? h("h2", {}, t("ui_local_connector")) : null,
     disclosure({label: t("global_details"), body: h('div', {}, connectionIdentity(), managed ? h("p", {}, t("managed_browser_help")) : null)}),
-    !managed && state.connectionError?.credentialRefused
-      ? h('button', {onclick: async () => {
-        const token = state.token;
-        await browserCredentialRefusals.retry(token);
-        try {await activate(await api('GET', '/capabilities'));}
-        catch (error) {state.connectionError = error;}
-        await route();
-      }}, t('connection_retry_remembered')) : null,
+    retryRememberedTokenButton(),
     h("button", {class: "danger", onclick: async () => {await disconnect(); route();}}, t("disconnect"))));
   frame.show("fleet");
   frame.panel("fleet").append(fleetEmpty());
@@ -3509,12 +3538,9 @@ function viewBrowserSignedOut(main) {
   if (state.connectionError) showConnectError(state.connectionError);
   const connect = async (token, saved = false) => {
     if (!token) return;
-    state.epoch++; state.token = token; state.caps = null;
-    state.connectionError = null;
-    await browserCredentialRefusals.retry(token);
     try {
-      await activate(await api("GET", "/capabilities"));
-      if (!saved) await saveToken(token, remember.checked);
+      await connectBrowserToken(token);
+      if (!saved) saveToken(token, remember.checked);
       location.hash = "#/home";
       await route();
     } catch (error) {state.token = null; state.caps = null; state.connectionError = error; showConnectError(error);}
@@ -3608,7 +3634,7 @@ async function viewManagedSettings(main) {
     disposeFleet = await mountFleet(fleetRoot, {h, t});
     disposeTailscale = await fleetTailscale(fleetRoot, guard);
   } else {
-    local.append(h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect")));
+    local.append(...[retryRememberedTokenButton(), h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect"))].filter(Boolean));
     fleetRoot.append(fleetEmpty());
   }
   return () => {setup.dispose(); disposeFleet?.(); disposeTailscale?.();};
