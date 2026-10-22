@@ -128,6 +128,14 @@ export function adoptStartLanding({t,api,alive,namespace,workspaceId,caps,errorB
     }catch(error){if(!valid(own))return;body.replaceChildren();if([403,404].includes(error.status)){forget(hint.operation_id);withdraw();}
       else{status.replaceChildren(errorBox(error,{within:status}),button({label:t('ui_retry'),onClick:()=>void refresh()}));element.hidden=false;}}
   }
-  function withdraw(){serial++;if(current)stopFollowing(current.operation_id);current=null;shown=null;body.replaceChildren();status.replaceChildren();element.hidden=true;}
-  return {element,refresh,withdraw,pending:()=>Boolean(current)&&!shown,dispose:()=>{disposed=true;withdraw();}};
+  function withdraw({preserveNavigation=false}={}) {
+    // An earlier asynchronous view can finish disposing after its replacement
+    // mounts on the same selected Work. The tab's destination belongs to that
+    // selection, not the retiring instance. Leaving it still cancels following.
+    const keep=preserveNavigation&&current&&requestedWork(current.operation_id)===current.work_item_ids[0]
+      &&selectedWork()===current.work_item_ids[0];
+    serial++;if(current&&!keep)stopFollowing(current.operation_id);
+    current=null;shown=null;body.replaceChildren();status.replaceChildren();element.hidden=true;
+  }
+  return {element,refresh,withdraw,pending:()=>Boolean(current)&&!shown,dispose:()=>{disposed=true;withdraw({preserveNavigation:true});}};
 }
