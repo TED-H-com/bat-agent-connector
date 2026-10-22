@@ -21,6 +21,9 @@ use std::{
 #[path = "support/connection_setup.rs"]
 mod fixture;
 
+#[path = "connection_publish/recovery.rs"]
+mod recovery;
+
 struct Guard(Rc<Cell<bool>>);
 impl Drop for Guard {
     fn drop(&mut self) {
