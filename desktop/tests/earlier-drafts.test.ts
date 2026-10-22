@@ -196,7 +196,7 @@ test('recovery warnings and field labels have matching English and Traditional C
   const {pmText, collections, formText} = await import('../src/state/earlier-drafts.ts');
   const {actionMessageKey} = await import('../src/global-labels.js');
   const {STRINGS} = await import('../src/i18n.js');
-  const fields = [...Object.values(pmText).flat(), ...Object.values(formText).flat(), 'reason_0',
+  const fields = [...Object.values(pmText).flat(), ...Object.entries(formText).flatMap(([name, fields]) => fields.map(field => name === 'items' ? `items.0.${field}` : name === 'answers' ? `${field}.0` : field)), 'reason_0',
     ...Object.values(collections).flatMap(value => Object.entries(value).flatMap(([name, fields]) => fields.map(field => `${name}.0.${field}`)))];
   assert.deepEqual(Object.keys(earlierDraftStrings.en).sort(), Object.keys(earlierDraftStrings['zh-TW']).sort());
   for (const locale of ['en', 'zh-TW']) {

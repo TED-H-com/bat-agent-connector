@@ -1,5 +1,5 @@
 import {test, expect, type Page} from '@playwright/test';
-import {holdRecoveryReset, pressRetainedRecoveryControls} from './earlier-drafts-reset-fixture';
+import {holdRecoveryReset, pressRetainedRecoveryControls} from './earlier-drafts-reset-fixture.ts';
 import {readFile} from 'node:fs/promises';
 import {stripTypeScriptTypes} from 'node:module';
 import {unavailableBriefTransport} from './pm-source-transport-fixture';

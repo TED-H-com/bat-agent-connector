@@ -1,6 +1,6 @@
 import {test, expect} from '@playwright/test';
 import {setup, changeIdentity} from './managed-storage-fixture';
-import {holdRecoveryReset, pressRetainedRecoveryControls} from './earlier-drafts-reset-fixture';
+import {holdRecoveryReset, pressRetainedRecoveryControls} from './earlier-drafts-reset-fixture.ts';
 
 for (const locale of ['en-US', 'zh-TW']) test(`access changes withdraw cached recovery until verification (${locale})`, async ({browser}) => {
   const context = await browser.newContext({locale}), page = await context.newPage();
