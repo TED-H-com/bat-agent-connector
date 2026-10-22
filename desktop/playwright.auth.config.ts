@@ -5,5 +5,5 @@ export default defineConfig({
   testDir: 'tests',
   testMatch: ['remembered-credentials.spec.ts', 'credential-permissions.spec.ts'],
   outputDir: 'test-results/credential-service',
-  use: {headless: true},
+  use: {headless: true, trace: 'retain-on-failure'},
 });

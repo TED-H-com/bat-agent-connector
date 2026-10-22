@@ -53,15 +53,27 @@ async def browser(tmp_path):
     d._endpoint = f"http://127.0.0.1:{port}/rpc"
     d.managed_installation = {"installation_id": "test", "actor": principal.actor, "runtime_version": "test"}
     d.api.browser_sessions = BrowserSessions(d, tmp_path, "test")
-    yield d, principal, token, port
-    service.close()
-    await service.wait_closed()
-    if handlers:
-        await asyncio.wait_for(asyncio.gather(*handlers), 5)
-    await d.fleet.close()
-    await d.inventory.close()
-    d.journal.close()
-    d.release_owner()
+    try:
+        yield d, principal, token, port
+    finally:
+        service.close()
+        try:
+            try:
+                await asyncio.wait_for(service.wait_closed(), 5)
+            finally:
+                if handlers:
+                    await asyncio.wait_for(asyncio.gather(*handlers), 5)
+        finally:
+            try:
+                await d.fleet.close()
+            finally:
+                try:
+                    await d.inventory.close()
+                finally:
+                    try:
+                        d.journal.close()
+                    finally:
+                        d.release_owner()
 
 
 async def enter(browser):
@@ -198,12 +210,12 @@ async def test_cookie_event_stream_rechecks_session_and_parent(browser, monkeypa
     headers["X-Batc-CSRF"] = session["csrf"]
     monkeypatch.setattr(api_v1, "REAUTH_S", 0)
     monkeypatch.setattr(api_v1, "KEEPALIVE_S", 0)
-    reader, writer = await asyncio.open_connection("127.0.0.1", port)
+    reader, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", port), 5)
     lines = ["GET /api/v1/events/stream HTTP/1.1", f"Host: 127.0.0.1:{port}"]
     lines += [f"{key}: {value}" for key, value in headers.items()]
     try:
         writer.write(("\r\n".join(lines) + "\r\n\r\n").encode())
-        await writer.drain()
+        await asyncio.wait_for(writer.drain(), 5)
         assert (await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 5)).startswith(b"HTTP/1.1 200")
         # A keepalive is emitted only after the stream reauthenticates the cookie.
         await asyncio.wait_for(reader.readuntil(b": keepalive\n\n"), 5)
@@ -212,4 +224,4 @@ async def test_cookie_event_stream_rechecks_session_and_parent(browser, monkeypa
         assert reader.at_eof()
     finally:
         writer.close()
-        await writer.wait_closed()
+        await asyncio.wait_for(writer.wait_closed(), 5)

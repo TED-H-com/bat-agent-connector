@@ -31,7 +31,7 @@ import {workspaceNavigation} from "./workspace-nav.js";
 import {managedSetupPanel, setupFormValidity} from "./managed-setup.js";
 import {ApiError, errorPresentation, clientActionError, sessionErrorLine} from "./error-presentation.js";
 import {managedControl, fleetAvailability} from "./transport/index.ts";
-import {restoreBrowserSession, browserSessionToken, forgetBrowserSession} from "./transport/index.ts";
+import {restoreBrowserSession, browserSessionToken, forgetBrowserSession, browserCredentialError} from "./transport/index.ts";
 import {setupSidebarResizer, setupMobileSessionLayout} from "./workspace-layout.js";
 import {observeViewport} from './ui/viewport.js';
 import {attentionView} from "./attention.js";
@@ -230,7 +230,7 @@ async function connectBrowserToken(token) {
 function retryRememberedTokenButton() {
   const retry = h('button', {onclick: async () => {
     try {await connectBrowserToken(state.token);}
-    catch (error) {if (error.code !== 'CONNECTION_CHANGED') state.connectionError = error;}
+    catch (error) {if (error.code !== 'CONNECTION_CHANGED') {state.caps = null; state.connectionError = error;}}
     await route();
   }}, t('connection_retry_remembered'));
   const render = () => {retry.hidden = !state.token || state.token === browserSessionToken || !state.connectionError?.credentialRefused;};
@@ -457,7 +457,8 @@ async function submit(action, target, params, preconditions, scope) {
     else rememberOp(scope, key, out.operation.operation_id, connection.namespace);
     return out.operation;
   } catch (e) {
-    if (e.status && e.status < 500 && e.status !== 409) dropKey(scope, connection.namespace); // a conflict retains its original intent key
+    // A local credential gate has not resolved an earlier uncertain submission.
+    if (!e.credentialRefused && e.status && e.status < 500 && e.status !== 409) dropKey(scope, connection.namespace);
     throw e;
   }
 }
@@ -656,6 +657,8 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
         const response = await connectorUploadArtifact(op.operation_id, bytes, state.token);
         guard(true);
         if (epoch !== state.epoch) throw new ApiError(0, "CONNECTION_CHANGED", "Connection changed during upload");
+        if (response.status === 401) throw browserCredentialError({status: 401, code: 'UNAUTHORIZED',
+          credentialRefused: !nativeDesktop && state.token !== browserSessionToken});
         if (response.status < 200 || response.status >= 300)
           throw new ApiError(response.status, response.data.error?.code, response.data.error?.message);
         do {op = await readNext();} while (["accepted", "running", "waiting_external"].includes(op.status));
@@ -1010,11 +1013,6 @@ function foregroundChanged() {
   if (state.token) {updateOnline(false); paintConnection(true, true);}
   wakeEventPoll?.();
 }
-window.addEventListener('storage', event => {
-  if (event.key && !event.key.startsWith('batc.credential-refused.')) return;
-  browserCredentialRefusals.storageChanged(event);
-  wakeEventPoll?.();
-});
 async function streamEvents() {
   for (;;) {
     await refreshManagedRecovery();
@@ -1040,7 +1038,8 @@ async function streamEvents() {
       const checkpoint = state.sync ? `&checkpoint=${encodeURIComponent(state.sync.token)}` : "";
       const page = await api("GET", `/events?after=${before}&limit=100${checkpoint}`);
       if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
-      pollSucceeded = true; state.pollHealth = 'connected'; state.connectionError = null;
+      pollSucceeded = true; state.pollHealth = 'connected';
+      if (state.connectionError?.credentialRefused) state.connectionError = null;
       state.lastPoll = {at: Date.now(), namespace: state.namespace}; paintConnection(true);
       if (view !== generation || !state.viewReady) continue;
       cycle = {error: null}; state.refreshCycle = cycle;
@@ -3546,7 +3545,11 @@ function viewBrowserSignedOut(main) {
       if (!saved) saveToken(token, remember.checked);
       location.hash = "#/home";
       await route();
-    } catch (error) {state.token = null; state.caps = null; state.connectionError = error; showConnectError(error);}
+    } catch (error) {
+      if (error.code !== 'CONNECTION_CHANGED') {
+        state.token = null; state.caps = null; state.connectionError = error; showConnectError(error);
+      }
+    }
   };
   const form = h("form", {class: "global-connect-form", onsubmit: async event => {
     event.preventDefault();
@@ -5086,6 +5089,11 @@ async function start() {
   setLocale(locale);
   observeViewport();
   window.addEventListener("hashchange", route);
+  window.addEventListener('storage', event => {
+    if (event.key && !event.key.startsWith('batc.credential-refused.')) return;
+    browserCredentialRefusals.storageChanged(event);
+    wakeEventPoll?.();
+  });
   document.addEventListener('visibilitychange', foregroundChanged);
   window.addEventListener('pageshow', event => {if (event.persisted) foregroundChanged();});
   if (nativeDesktop) {

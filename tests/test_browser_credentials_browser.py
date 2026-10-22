@@ -30,5 +30,9 @@ async def test_browser_credentials_keep_refusal_and_work_across_explicit_recover
         finally:
             if child.returncode is None:
                 os.killpg(child.pid, signal.SIGTERM)
-                await asyncio.wait_for(child.wait(), 10)
+                try:
+                    await asyncio.wait_for(child.wait(), 10)
+                except asyncio.TimeoutError:
+                    os.killpg(child.pid, signal.SIGKILL)
+                    await child.wait()
     assert code == 0, output.read_text()

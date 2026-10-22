@@ -15,7 +15,7 @@ export function credentialRefusals({stores = () => [sessionStorage, localStorage
     if (!token) return;
     const id = identity(token);
     if (!memory.has(id)) memory.set(id, {key: `batc.credential-refused.${encodeURIComponent(endpoint())}.${credentialStorageDigest(token)}`,
-      value: null, persisted: false});
+      token, value: null, persisted: false});
     return memory.get(id);
   };
   const forget = token => {
@@ -24,18 +24,18 @@ export function credentialRefusals({stores = () => [sessionStorage, localStorage
     entry.value = null; entry.persisted = false;
     for (const store of storage()) {try {store.removeItem(entry.key);} catch { /* unavailable */ }}
   };
-  // Preparing a loaded credential is separate from the synchronous request gate.
-  for (const store of storage()) {try {prepare(store.getItem(BROWSER_TOKEN_KEY));} catch { /* unavailable */ }}
+  // The credential owner prepares loaded/saved tokens; importing this module
+  // must not read browser storage or start a connection.
   return {
     prepare,
     read(token) {
       const entry = memory.get(identity(token));
       if (!entry) return null;
-      let ownerReadable = false;
+      let ownerHasToken = false;
       for (const store of storage()) {
         try {
           const value = JSON.parse(store.getItem(entry.key));
-          if (store === entry.owner) ownerReadable = true;
+          if (store === entry.owner) ownerHasToken = store.getItem(BROWSER_TOKEN_KEY) === token;
           if (value?.status === 401 || value?.status === 403) {
             entry.persisted = true;
             entry.owner = store;
@@ -45,7 +45,7 @@ export function credentialRefusals({stores = () => [sessionStorage, localStorage
       }
       // Another tab's explicit retry removes the shared record. Do not let a
       // cached copy keep this tab paused after that removal.
-      if (ownerReadable && entry.persisted) {entry.value = null; entry.persisted = false;}
+      if (ownerHasToken && entry.persisted) {entry.value = null; entry.persisted = false;}
       return entry.value;
     },
     refuse(token, status, method, path) {
@@ -65,7 +65,13 @@ export function credentialRefusals({stores = () => [sessionStorage, localStorage
     },
     storageChanged(event) {
       for (const entry of memory.values()) if (entry.persisted && (!event.key || event.key === entry.key)) {
-        entry.value = null; entry.persisted = false;
+        try {
+          // Forgetting or replacing a token in another tab does not authorize
+          // this tab to present its old, refused token again.
+          if (entry.owner.getItem(BROWSER_TOKEN_KEY) === entry.token) {
+            entry.value = null; entry.persisted = false;
+          }
+        } catch { /* Keep the refusal while its owning store is unavailable. */ }
       }
     },
     retry: forget,

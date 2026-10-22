@@ -5,7 +5,7 @@ import {once} from 'node:events';
 
 export async function browserAuthService() {
   if (!process.env.BATC_AUTH_PYTHON) throw new Error('Run credential journeys through tests/test_browser_credentials_browser.py');
-  const child = spawn(process.env.BATC_AUTH_PYTHON, ['tests/browser-auth-fixture.py'], {stdio: ['pipe', 'pipe', 'pipe']});
+  const child = spawn(process.env.BATC_AUTH_PYTHON, ['tests/browser-auth-fixture.py'], {stdio: ['pipe', 'pipe', 'inherit']});
   const exited = once(child, 'exit');
   const lines = createInterface({input: child.stdout})[Symbol.asyncIterator]();
   const next = async () => {

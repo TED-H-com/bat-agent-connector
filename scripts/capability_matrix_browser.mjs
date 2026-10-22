@@ -33,6 +33,9 @@ function includeRegion(marker) {
   }
 }
 includeRegion('//#region src/transport/index.ts');
+// The bundler may hoist this shared module's initialization out of transport.
+// Keep it as an explicit probe root (and initialize it below); renamed regions
+// fail closed, while its dependencies still come from the shipped init chain.
 includeRegion('//#region src/credential-refusals.js');
 const producerBytes = [...producers.values()].join('\n');
 if (!sdk.includes('async function invoke(') || !sdk.includes('function isTauri(')) {

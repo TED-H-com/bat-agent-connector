@@ -80,7 +80,8 @@ test('refusal persists for its credential and endpoint until an explicit retry',
   const options = {stores: () => [storage], endpoint: () => endpoint};
   const gate = credentialRefusals(options);
   await gate.refuse('example-credential', 401, 'GET', '/capabilities');
-  assert.equal((await credentialRefusals(options).read('example-credential'))?.status, 401);
+  const restored = credentialRefusals(options); restored.prepare('example-credential');
+  assert.equal(restored.read('example-credential')?.status, 401);
   assert.equal(await gate.read('replacement'), null);
   endpoint = 'http://localhost:8001';
   assert.equal(await gate.read('example-credential'), null);
