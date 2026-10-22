@@ -227,6 +227,10 @@ class Journal:
                 token_hash TEXT PRIMARY KEY, actor TEXT NOT NULL, scopes TEXT NOT NULL, label TEXT,
                 created_at REAL NOT NULL, expires_at REAL, revoked_at REAL
             );
+            CREATE TABLE IF NOT EXISTS browser_sessions (
+                token_hash TEXT PRIMARY KEY, csrf TEXT NOT NULL, parent_hash TEXT NOT NULL,
+                expires_at REAL NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS operations (
                 operation_id TEXT PRIMARY KEY, actor TEXT NOT NULL, entry TEXT NOT NULL,
                 idem_key TEXT NOT NULL, request_hash TEXT NOT NULL, action TEXT NOT NULL,

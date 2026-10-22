@@ -1,5 +1,6 @@
 import {boardGitHubPanel} from './board-github.js';
 import {centralServiceStatus, clientActionGate, pollFailure} from "./central-service-status.js";
+import {browserCredentialRefusals, isCredentialRefusal, BROWSER_TOKEN_KEY as TOKEN_KEY} from './credential-refusals.js';
 import {layoutDecision} from './workbench-mode.js';
 import {workbenchViews} from './workbench-views.js';
 import {settingsAgents} from './settings-agents.js';
@@ -30,7 +31,7 @@ import {workspaceNavigation} from "./workspace-nav.js";
 import {managedSetupPanel, setupFormValidity} from "./managed-setup.js";
 import {ApiError, errorPresentation, clientActionError, sessionErrorLine} from "./error-presentation.js";
 import {managedControl, fleetAvailability} from "./transport/index.ts";
-import {restoreBrowserSession, browserSessionToken, forgetBrowserSession} from "./transport/index.ts";
+import {restoreBrowserSession, browserSessionToken, forgetBrowserSession, browserCredentialError} from "./transport/index.ts";
 import {setupSidebarResizer, setupMobileSessionLayout} from "./workspace-layout.js";
 import {observeViewport} from './ui/viewport.js';
 import {attentionView} from "./attention.js";
@@ -73,7 +74,6 @@ import {managedStorageScope, migrateManagedStorage} from './state/storage-identi
 import {renderDeliveryWork, renderObservedResource, unavailableProject} from "./observed-resource.js";
 import {observedText} from "./observed-resource-strings.js";
 
-const TOKEN_KEY = "batc.dashboard.token";
 const isWorkbench = layoutDecision.layout === 'workbench';
 
 const state = { token: null, caps: null, lastEvent: 0, lastEventAt: 0, lastPoll: null, listeners: new Set(), namespace: "", scopeIdentity: null, epoch: 0, online: false, pollHealth: 'initial', viewReady: false, sync: null, endpoint: "", connectionError: null, nativeBusy: false, nativeAttempt: 0, connectionNotice: null, refreshCycle: null };
@@ -204,27 +204,73 @@ function saveCursor() {
     try { localStorage.setItem(`batc.sync.${state.namespace}`, JSON.stringify(state.sync)); } catch { /* unavailable */ }
   }
 }
-function disconnect() {
-  if (state.token === browserSessionToken) forgetBrowserSession()?.catch(() => {});
+function resetConnection() {
   withdrawDiagnostics(); recentErrors.clear();
-  state.epoch++; clearToken(); state.token = null; state.caps = null; state.lastEvent = 0; state.lastEventAt = 0;
+  state.epoch++; state.token = null; state.caps = null; state.lastEvent = 0; state.lastEventAt = 0;
   state.scopeIdentity = null;
   state.online = false; state.viewReady = false; state.sync = null;
+  state.namespace = ""; state.endpoint = ""; state.lastPoll = null;
+  state.pollHealth = 'initial'; state.connectionError = null; state.refreshCycle = null;
+}
+function disconnect() {
+  if (state.token === browserSessionToken) forgetBrowserSession()?.catch(() => {});
+  clearToken(); resetConnection();
+}
+async function connectBrowserToken(token) {
+  resetConnection();
+  browserCredentialRefusals.prepare(token);
+  browserCredentialRefusals.retry(token);
+  state.token = token;
+  paintConnection();
+  const connection = {epoch: state.epoch, namespace: state.namespace};
+  const caps = await api('GET', '/capabilities');
+  assertConnection(connection);
+  await activate(caps);
+}
+function retryRememberedTokenButton() {
+  const retry = h('button', {onclick: async () => {
+    try {await connectBrowserToken(state.token);}
+    catch (error) {if (error.code !== 'CONNECTION_CHANGED') {state.caps = null; state.connectionError = error;}}
+    await route();
+  }}, t('connection_retry_remembered'));
+  const render = () => {retry.hidden = !state.token || state.token === browserSessionToken || !state.connectionError?.credentialRefused;};
+  render();
+  const paint = () => {
+    if (!retry.isConnected) connectionPainters.delete(paint);
+    else render();
+  };
+  connectionPainters.add(paint);
+  return retry;
 }
 
 function loadToken() {
   if (nativeDesktop) return null;
-  try { return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY); } catch { return null; }
+  try { const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY); browserCredentialRefusals.prepare(token); return token; } catch { return null; }
 }
 function saveToken(token, remember) {
   if (nativeDesktop) return;
+  const previous = new Set();
+  try {
+    for (const store of [sessionStorage, localStorage]) {
+      const old = store.getItem(TOKEN_KEY); if (old && old !== token) previous.add(old);
+    }
+  } catch { /* unavailable */ }
+  for (const old of previous) browserCredentialRefusals.forget(old);
+  browserCredentialRefusals.prepare(token);
   try {
     sessionStorage.setItem(TOKEN_KEY, token);
     if (remember) localStorage.setItem(TOKEN_KEY, token); else localStorage.removeItem(TOKEN_KEY);
   } catch { /* storage may be unavailable; the token stays in memory */ }
 }
 function clearToken() {
-  try { sessionStorage.removeItem(TOKEN_KEY); localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
+  const forgotten = new Set();
+  if (!nativeDesktop && state.token && state.token !== browserSessionToken) forgotten.add(state.token);
+  try {
+    for (const store of [sessionStorage, localStorage]) {
+      const token = store.getItem(TOKEN_KEY); if (token) forgotten.add(token); store.removeItem(TOKEN_KEY);
+    }
+  } catch { /* unavailable */ }
+  for (const token of forgotten) browserCredentialRefusals.forget(token);
 }
 
 // ------------------------------------------------------------------ DOM helpers
@@ -331,6 +377,12 @@ async function api(method, path, body, key, collectReceipt) {
     return data;
   } catch(error) {
     if(epoch===state.epoch && !["VIEW_CHANGED", "FOREGROUND_READ_RETIRED"].includes(error.code)) {
+      if (!nativeDesktop && state.token && state.token !== browserSessionToken && (error.credentialRefused || isCredentialRefusal(error.status, method, path))) {
+        error.credentialRefused = true;
+        state.connectionError = error;
+        state.pollHealth = pollFailure(error, Date.now());
+        updateOnline(false); paintConnection();
+      }
       if(method==='GET' && (path==='/capabilities' || path==='/bootstrap'))rememberVersionRead('capabilities',null,undefined,epoch);
       recentErrors.record({at:new Date().toISOString(),method,path,status:error.status,code:error.code,admissionRefused:error.admissionRefused,operation:error.operation});
       if([401,403,404].includes(error.status))withdrawDiagnostics();
@@ -360,6 +412,7 @@ async function apiRequest(method, path, body, key, collectReceipt) {
   }
   catch (cause) {
     if (['FOREGROUND_READ_RETIRED', 'CONNECTION_CHANGED'].includes(cause?.code)) throw cause;
+    if (cause?.credentialRefused) throw Object.assign(new ApiError(cause.status, cause.code, cause.message, {localized: cause.localized === true}), {credentialRefused: true});
     const timeout = ['AbortError', 'TimeoutError'].includes(cause?.name) || /timed?\s*out|timeout/i.test(cause?.message || String(cause));
     throw new ApiError(0, timeout ? 'TIMEOUT' : 'NETWORK_ERROR', cause?.message || String(cause));
   }
@@ -404,7 +457,8 @@ async function submit(action, target, params, preconditions, scope) {
     else rememberOp(scope, key, out.operation.operation_id, connection.namespace);
     return out.operation;
   } catch (e) {
-    if (e.status && e.status < 500 && e.status !== 409) dropKey(scope, connection.namespace); // a conflict retains its original intent key
+    // A local credential gate has not resolved an earlier uncertain submission.
+    if (!e.credentialRefused && e.status && e.status < 500 && e.status !== 409) dropKey(scope, connection.namespace);
     throw e;
   }
 }
@@ -603,6 +657,8 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
         const response = await connectorUploadArtifact(op.operation_id, bytes, state.token);
         guard(true);
         if (epoch !== state.epoch) throw new ApiError(0, "CONNECTION_CHANGED", "Connection changed during upload");
+        if (response.status === 401) throw browserCredentialError({status: 401, code: 'UNAUTHORIZED',
+          credentialRefused: !nativeDesktop && state.token !== browserSessionToken});
         if (response.status < 200 || response.status >= 300)
           throw new ApiError(response.status, response.data.error?.code, response.data.error?.message);
         do {op = await readNext();} while (["accepted", "running", "waiting_external"].includes(op.status));
@@ -960,7 +1016,17 @@ function foregroundChanged() {
 async function streamEvents() {
   for (;;) {
     await refreshManagedRecovery();
-    if (state.nativeBusy || !state.token || !state.viewReady || document.visibilityState === 'hidden') {
+    if (!nativeDesktop && state.token && state.token !== browserSessionToken) {
+      const token = state.token, epoch = state.epoch;
+      const refusal = browserCredentialRefusals.read(token);
+      if (token !== state.token || epoch !== state.epoch) continue;
+      if (refusal) {
+        state.connectionError = refusal; state.pollHealth = pollFailure(refusal, Date.now());
+        updateOnline(false); paintConnection();
+        await waitForEventPoll(1000); continue;
+      }
+    }
+    if (state.nativeBusy || !state.token || !state.namespace || !state.viewReady || document.visibilityState === 'hidden') {
       paintConnection(true);
       await waitForEventPoll(1000); continue;
     }
@@ -973,6 +1039,7 @@ async function streamEvents() {
       const page = await api("GET", `/events?after=${before}&limit=100${checkpoint}`);
       if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
       pollSucceeded = true; state.pollHealth = 'connected';
+      if (state.connectionError?.credentialRefused) state.connectionError = null;
       state.lastPoll = {at: Date.now(), namespace: state.namespace}; paintConnection(true);
       if (view !== generation || !state.viewReady) continue;
       cycle = {error: null}; state.refreshCycle = cycle;
@@ -3470,7 +3537,8 @@ function viewBrowserSettings(main) {
     facts,
     managed ? h("h2", {}, t("ui_local_connector")) : null,
     disclosure({label: t("global_details"), body: h('div', {}, connectionIdentity(), managed ? h("p", {}, t("managed_browser_help")) : null)}),
-    h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect"))));
+    retryRememberedTokenButton(),
+    h("button", {class: "danger", onclick: async () => {await disconnect(); route();}}, t("disconnect"))));
   frame.show("fleet");
   frame.panel("fleet").append(fleetEmpty());
   return () => {};
@@ -3481,23 +3549,30 @@ function viewBrowserSignedOut(main) {
   const info = h("div", {class: "global-connect-status"});
   const showConnectError = error => {
     info.setAttribute("role", "alert");
-    info.replaceChildren(error?.status === 401 ? h("p", {class: "error"}, t("global_token_rejected")) : errorBox(error, {within:info}));
+    info.replaceChildren(error?.credentialRefused ? h("p", {class: "error"}, t("global_token_rejected")) : errorBox(error, {within:info}));
   };
   if (state.connectionError) showConnectError(state.connectionError);
-  const form = h("form", {class: "global-connect-form", onsubmit: async event => {
-    event.preventDefault();
-    disconnect();
-    state.token = input.value.trim();
+  const connect = async (token, saved = false) => {
+    if (!token) return;
     try {
-      await activate(await api("GET", "/capabilities"));
-      saveToken(state.token, remember.checked);
+      await connectBrowserToken(token);
+      if (!saved) saveToken(token, remember.checked);
       location.hash = "#/home";
       await route();
-    } catch (e) {state.token = null; showConnectError(e);}
+    } catch (error) {
+      if (error.code !== 'CONNECTION_CHANGED') {
+        state.token = null; state.caps = null; state.connectionError = error; showConnectError(error);
+      }
+    }
+  };
+  const form = h("form", {class: "global-connect-form", onsubmit: async event => {
+    event.preventDefault();
+    await connect(input.value.trim());
   }}, h("label", {class: "connection-token"}, t("token"), input),
     h("label", {class: "global-remember"}, remember, " ", t("remember")),
     h("div", {class: "global-connect-actions"},
       h("button", {class: "primary", type: "submit"}, t("connect")),
+      loadToken() ? h('button', {type: 'button', onclick: () => connect(loadToken(), true)}, t('connection_retry_remembered')) : null,
       h("a", {class: "global-quiet-link", href: setupGuide()}, t("global_setup_guide"))),
     disclosure({label: t("global_details"), body: h("p", {}, t("token_help"))}), info);
   const root = firstRunCard({h, t, body: form});
@@ -3579,7 +3654,7 @@ async function viewManagedSettings(main) {
     disposeFleet = await mountFleet(fleetRoot, {h, t});
     disposeTailscale = await fleetTailscale(fleetRoot, guard);
   } else {
-    local.append(h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect")));
+    local.append(...[retryRememberedTokenButton(), h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect"))].filter(Boolean));
     fleetRoot.append(fleetEmpty());
   }
   return () => {setup.dispose(); disposeFleet?.(); disposeTailscale?.();};
@@ -5028,10 +5103,15 @@ async function start() {
   setLocale(locale);
   observeViewport();
   window.addEventListener("hashchange", route);
+  window.addEventListener('storage', event => {
+    if (event.key && !event.key.startsWith('batc.credential-refused.')) return;
+    browserCredentialRefusals.storageChanged(event);
+    wakeEventPoll?.();
+  });
   document.addEventListener('visibilitychange', foregroundChanged);
   window.addEventListener('pageshow', event => {if (event.persisted) foregroundChanged();});
   if (nativeDesktop) {
-    clearToken(); // discard obsolete browser credentials if an older build ever stored them
+    await clearToken(); // discard obsolete browser credentials if an older build ever stored them
     const attempt = ++state.nativeAttempt;
     let startupManaged = false;
     try {
@@ -5058,11 +5138,11 @@ async function start() {
     } finally { if (attempt === state.nativeAttempt) state.nativeBusy = false; }
   } else {
     const browserSession = await restoreBrowserSession().catch(() => false);
-    if (browserSession) clearToken();
+    if (browserSession) await clearToken();
     state.token = browserSession ? browserSessionToken : loadToken();
     if (state.token) {
       try { await activate(await api("GET", "/capabilities")); }
-      catch { state.token = null; }
+      catch (error) { state.token = null; state.caps = null; state.connectionError = error; }
     }
   }
   await route();

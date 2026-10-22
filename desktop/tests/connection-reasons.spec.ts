@@ -32,6 +32,54 @@ async function abortNetwork(page: Page, failed: () => boolean) {
 
 for (const locale of ['en-US', 'zh-TW']) {
   const copy = STRINGS[locale === 'zh-TW' ? 'zh-TW' : 'en'];
+  test(`Connect verifies the token before any event poll ${locale}`, async ({browser}) => {
+    const context = await browser.newContext({locale}), page = await context.newPage();
+    const fixture = conversationFixture();
+    let polls = 0, release!: () => void;
+    const pending = new Promise<void>(resolve => {release = resolve;});
+    await mountConversation(page, false, async input => {
+      if (input.path === '/capabilities') await pending;
+      if (input.path.startsWith('/events?')) polls++;
+      return fixture.dispatch(input);
+    });
+    await page.addInitScript(() => sessionStorage.clear());
+    await page.clock.install();
+    try {
+      await page.goto('/dashboard/');
+      await page.locator('input[type=password]').fill('fixture-token');
+      await page.getByRole('button', {name: copy.connect, exact: true}).click();
+      await page.evaluate(() => {location.hash = '#/settings';});
+      await page.clock.runFor(3000);
+      await expect(page.locator('#live')).toHaveText(copy.ui_connecting);
+      expect(polls).toBe(0);
+      release();
+      await expect(page.locator('#live')).toHaveText(copy.ui_connected);
+      await expect.poll(() => polls).toBeGreaterThan(0);
+    } finally {release(); await context.close();}
+  });
+  test(`inventory permission refusal stays visible while bearer polling continues ${locale}`, async ({browser}) => {
+    const context = await browser.newContext({locale}), page = await context.newPage();
+    const fixture = conversationFixture();
+    let denied = false;
+    await mountConversation(page, false, async input => {
+      if (denied && input.path === '/sessions/demo/session-1') return failures.forbidden;
+      return fixture.dispatch(input);
+    });
+    try {
+      await page.goto('/dashboard/#/session/demo/session-1');
+      await expect(page.locator('.msg')).toHaveCount(12);
+      denied = true; fixture.data.cursor = 1;
+      await expect(page.getByRole('heading', {name: copy.session_err_forbidden, exact: true})).toBeVisible();
+      await expect(page.locator('.msg')).toHaveCount(0);
+      await expect(page.locator('#live')).toHaveText(copy.ui_connected);
+      expect(await page.evaluate(() => [sessionStorage, localStorage].flatMap(store => Object.keys(store))
+        .filter(key => key.startsWith('batc.credential-refused.')))).toEqual([]);
+      const poll = await page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/events');
+      expect(poll.status()).toBe(200);
+      expect(poll.request().headers().authorization).toBe('Bearer fixture-token');
+      await expect(page.getByRole('heading', {name: copy.session_err_forbidden, exact: true})).toBeVisible();
+    } finally {await context.close();}
+  });
   test(`successful poll time does not wait for view refresh success ${locale}`, async ({browser}) => {
     const context = await browser.newContext({locale}), page = await context.newPage();
     const fixture = conversationFixture();
@@ -104,6 +152,12 @@ for (const locale of ['en-US', 'zh-TW']) {
         await expect(page.locator('[data-connection-card]')).not.toContainText(
           locale === 'zh-TW' ? '已連線至本機 Connector' : 'Connected to your local Connector');
         await expectHeaderFits(page, info);
+        if (!native && failure === 'forbidden') {
+          failed = false;
+          await page.getByRole('button', {name: copy.connection_retry_remembered, exact: true}).click();
+          await expect(page.locator('#live')).toHaveText(copy.ui_connected);
+          await expect(page.getByRole('button', {name: copy.connection_retry_remembered, exact: true})).toHaveCount(0);
+        }
       } finally {await context.close();}
     });
   }
@@ -174,6 +228,9 @@ for (const locale of ['en-US', 'zh-TW']) {
         const lastEvent = await event.getAttribute('data-observed-at');
         expect(lastSuccess).toBeTruthy(); expect(lastEvent).toBe('');
         failed = false; release();
+        if (failure === 'unauthorized' || failure === 'forbidden') {
+          await page.getByRole('button', {name: copy.connection_retry_remembered, exact: true}).click();
+        }
         await expect(page.locator('#live')).toHaveText(copy.ui_connected);
         await expect(page.locator('#live')).toHaveAttribute('title', `${copy.ui_connector_status.replace('{status}', copy.ui_connected)} — ${copy.desktop_polling}`);
         await expect(page.locator('.global-connection-facts .ui-pill')).toHaveText(copy.ui_connected);
