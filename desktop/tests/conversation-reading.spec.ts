@@ -182,10 +182,13 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) for (c
           return {failure: rect(node.closest('[data-api-error]')!), toggle: rect(node), reading: rect(reading),
             toolbar: rect(toolbar), transcript: rect(conversation.querySelector('.conversation-scroll')!),
             conversation: rect(conversation), composer: rect(document.querySelector('.workspace-composer')!),
+            transcriptScrolls: conversation.querySelector('.conversation-scroll')!.scrollHeight > conversation.querySelector('.conversation-scroll')!.clientHeight,
             toolbarShrink: getComputedStyle(toolbar).flexShrink, toolbarMinHeight: getComputedStyle(toolbar).minHeight,
             toggleReceivesPointer: node.contains(document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2))};
         });
         await testInfo.attach(`reading-geometry-${expanded ? 'expanded' : 'collapsed'}`, {body: JSON.stringify(geometry, null, 2), contentType: 'application/json'});
+        expect(geometry.transcript.height).toBeLessThanOrEqual(480);
+        expect(geometry.transcriptScrolls).toBe(true);
         expect.soft(geometry.failure.bottom).toBeLessThanOrEqual(geometry.reading.top + 1);
         expect.soft(geometry.toggle.bottom).toBeLessThanOrEqual(geometry.reading.top + 1);
         expect.soft(geometry.toggleReceivesPointer).toBe(true);
