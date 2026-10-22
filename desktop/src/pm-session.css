@@ -13,8 +13,9 @@ main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-it
 .session-workspace .conversation { position: relative; flex: 1 1 auto; min-height: auto; display: flex; flex-direction: column; }
 /* Keep controls in flow; the transcript yields space, then the session scrolls. */
 .session-workspace .conversation > :not(.conversation-scroll) { flex: none; }
-/* Start at the reading minimum, not the intrinsic height of the message history. */
-.session-workspace .conversation-scroll { flex: 1 1 auto; min-height: 120px; height: 120px; max-width: 760px; }
+.session-workspace .conversation-scroll { flex: 1 1 auto; min-height: 120px; height: auto; max-width: 760px; }
+/* Only the conversation column starts at the reading minimum and fills its available space. */
+.session-workspace .conversation > .conversation-scroll { height: 120px; }
 .session-workspace .conversation-scroll > .msg,
 .session-workspace .workspace-conversation .conversation-scroll > .msg.user {
   display: grid; grid-template-columns: 24px minmax(0, 1fr); column-gap: 8px; row-gap: var(--space-1);

@@ -129,6 +129,10 @@ so the composer uses the available viewport space. Conversation captions, notice
 diagnostics and reading controls retain their content height. The transcript yields
 space down to its reading minimum; if the controls still cannot fit, the session
 view scrolls instead of shrinking rows into each other. The summary stays sticky.
+Only a direct `.conversation-scroll` child of the product's `.conversation` column
+starts at the 120 px reading minimum and fills the remaining space. Standalone
+transcripts retain automatic content height: sharing `.session-workspace` message
+styling does not opt them into the column's height constraint.
 
 ## Route quality follow-up
 
