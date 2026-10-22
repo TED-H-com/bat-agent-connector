@@ -123,6 +123,73 @@ def check_link(source, value, errors):
             errors.append(f"{source.relative_to(ROOT)}: missing fragment: {value}")
 
 
+def read_screenshot_manifest(path):
+    """Shared capture-manifest reader; never infer a missing provenance claim."""
+    with path.open("rb") as stream:
+        data = stream.read(4 * 1024 * 1024 + 1)
+    if len(data) > 4 * 1024 * 1024:
+        raise ValueError("Screenshot manifest exceeds its size bound")
+    document = json.loads(data)
+    if not isinstance(document, dict) or document.get("schema") != "public_ui_screenshots_v1":
+        raise ValueError("Unsupported screenshot manifest")
+    for field in ("images", "source_files"):
+        if not isinstance(document.get(field), list) or not all(isinstance(row, dict) for row in document[field]):
+            raise ValueError("Malformed screenshot entries")
+        if not document[field]:
+            raise ValueError("Missing screenshot evidence")
+        for row in document[field]:
+            name = row.get("file")
+            if (not isinstance(name, str) or not name or Path(name).is_absolute()
+                    or ".." in Path(name).parts or "\\" in name or "\0" in name):
+                raise ValueError("Capture path must stay inside its source/artifact scope")
+            if field == "images" and Path(name).name != name:
+                raise ValueError("Screenshot file must be a PNG basename")
+    return document
+
+
+def screenshot_errors(manifest, directory):
+    """Existing capture/content checks, shared with candidate validation."""
+    errors = []
+    expected_images = {
+        f"{view}-{lang}.png"
+        for view in ("overview", "discussions", "requirements", "issues", "schedule", "dependencies", "board", "session")
+        for lang in ("en", "zh")
+    }
+    if {entry["file"] for entry in manifest["images"]} != expected_images:
+        errors.append("Screenshot manifest must describe all sixteen public images.")
+    if len(manifest["images"]) != len(expected_images):
+        errors.append("Screenshot manifest contains missing or duplicate images.")
+    for field, expected in {"synthetic_data": True, "native_or_live_acceptance": False,
+                            "dom_content_modified": False, "timezone": "UTC"}.items():
+        if manifest.get(field) != expected:
+            errors.append(f"Screenshot manifest has an invalid {field} guarantee.")
+    if not re.fullmatch(r"[0-9a-f]{40}", manifest.get("frontend_source_commit", "")):
+        errors.append("Screenshot manifest must pin a full source commit.")
+    if manifest.get("source_pin_kind") != "merged":
+        errors.append("Public screenshots must use a merged source pin.")
+    for entry in manifest["images"]:
+        path = directory / entry["file"]
+        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != entry["sha256"]:
+            errors.append(f"Screenshot does not match its capture manifest: {entry['file']}")
+        language = "zh-TW" if entry["file"].endswith("-zh.png") else "en-US"
+        height = 1600 if entry["scenario"] == "requirements" else 960
+        if entry.get("locale") != language or entry.get("theme") != "light" or entry.get("viewport") != {"width": 1440, "height": height}:
+            errors.append(f"Screenshot has incorrect capture settings: {entry['file']}")
+        if path.is_file():
+            png = path.read_bytes()
+            size = {"width": int.from_bytes(png[16:20], "big"), "height": int.from_bytes(png[20:24], "big")}
+            if entry.get("image_size") != size or size["width"] != 1440 or size["height"] < height or entry.get("full_page") is not True:
+                errors.append(f"Screenshot is missing full-page dimensions: {entry['file']}")
+        checks = entry.get("responsive_checks", [])
+        if [check.get("viewport") for check in checks] != [390, 768, 1440] or any(
+            check.get("horizontal_overflow") is not False or check.get("content", float("inf")) > check.get("viewport", 0)
+            for check in checks
+        ):
+            errors.append(f"Screenshot is missing passing responsive checks: {entry['file']}")
+
+    return errors
+
+
 def main() -> None:
     errors: list[str] = []
     links = 0
@@ -156,46 +223,10 @@ def main() -> None:
         for value in re.findall(r"\]\(([^\s)]+)\)", path.read_text()):
             check_link(path, value, errors)
             links += 1
-    manifest = json.loads((SITE / "images/manifest.json").read_text())
-    expected_images = {
-        f"{view}-{lang}.png"
-        for view in ("overview", "discussions", "requirements", "issues", "schedule", "dependencies", "board", "session")
-        for lang in ("en", "zh")
-    }
-    if {entry["file"] for entry in manifest["images"]} != expected_images:
-        errors.append("Screenshot manifest must describe all sixteen public images.")
-    if len(manifest["images"]) != len(expected_images):
-        errors.append("Screenshot manifest contains missing or duplicate images.")
-    for field, expected in {"synthetic_data": True, "native_or_live_acceptance": False,
-                            "dom_content_modified": False, "timezone": "UTC"}.items():
-        if manifest.get(field) != expected:
-            errors.append(f"Screenshot manifest has an invalid {field} guarantee.")
-    if not re.fullmatch(r"[0-9a-f]{40}", manifest.get("frontend_source_commit", "")):
-        errors.append("Screenshot manifest must pin a full source commit.")
-    if manifest.get("source_pin_kind") != "merged":
-        errors.append("Public screenshots must use a merged source pin.")
-    if manifest.get("frontend_source_commit") != "265026d4c1fc2bc04a9aaa727d566c1a2906b256":
-        errors.append("Public screenshots must pin merged main at 265026d4.")
-    for entry in manifest["images"]:
-        path = SITE / "images" / entry["file"]
-        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != entry["sha256"]:
-            errors.append(f"Screenshot does not match its capture manifest: {entry['file']}")
-        language = "zh-TW" if entry["file"].endswith("-zh.png") else "en-US"
-        height = 1600 if entry["scenario"] == "requirements" else 960
-        if entry.get("locale") != language or entry.get("theme") != "light" or entry.get("viewport") != {"width": 1440, "height": height}:
-            errors.append(f"Screenshot has incorrect capture settings: {entry['file']}")
-        if path.is_file():
-            png = path.read_bytes()
-            size = {"width": int.from_bytes(png[16:20], "big"), "height": int.from_bytes(png[20:24], "big")}
-            if entry.get("image_size") != size or size["width"] != 1440 or size["height"] < height or entry.get("full_page") is not True:
-                errors.append(f"Screenshot is missing full-page dimensions: {entry['file']}")
-        checks = entry.get("responsive_checks", [])
-        if [check.get("viewport") for check in checks] != [390, 768, 1440] or any(
-            check.get("horizontal_overflow") is not False or check.get("content", float("inf")) > check.get("viewport", 0)
-            for check in checks
-        ):
-            errors.append(f"Screenshot is missing passing responsive checks: {entry['file']}")
-
+    manifest = read_screenshot_manifest(SITE / "images/manifest.json")
+    if manifest.get("frontend_source_commit") != "14c62830240148b14a4d28a9c428f7f8b5ba8bf3":
+        errors.append("Public screenshots must pin merged release source at 14c62830.")
+    errors.extend(screenshot_errors(manifest, SITE / "images"))
     git = shutil.which("git")
     if git is None:
         raise SystemExit("Git is required to check screenshot capture sources.")

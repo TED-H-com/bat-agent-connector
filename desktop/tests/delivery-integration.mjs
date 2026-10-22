@@ -2,22 +2,26 @@
 // BATC_PLAYWRIGHT_MODULE may name an installation of Playwright outside the repository.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
-import os from 'node:os';
+import {testScratchRoot} from './test-scratch.mjs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import {once} from 'node:events';
 const { chromium } = createRequire(import.meta.url)(process.env.BATC_PLAYWRIGHT_MODULE || 'playwright');
 // Serve canonical generated assets over the real delivery daemon fixture. A separate backend worktree
 // may be supplied while this portable frontend commit waits for the delivery merge.
 const backend = path.resolve(process.env.BATC_DELIVERY_ROOT || '..');
 const assets = path.resolve('../src/bat_agent_connector/dashboard');
-const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'desktop-delivery-'));
+const folder = await fs.mkdtemp(path.join(testScratchRoot(), 'desktop-delivery-'));
+// Keep browser and child-process temporary files inside this owned directory.
+process.env.TMPDIR = process.env.TEMP = process.env.TMP = folder;
+let child, browser;
+try {
 const fixtureFile = path.join(folder, 'fixture.json');
-const output = process.env.BATC_BROWSER_OUTPUT || path.join(folder, 'screenshots');
+const output = process.env.BATC_BROWSER_OUTPUT || path.resolve('test-results/delivery');
 await fs.mkdir(output, {recursive: true});
 const {spawn} = await import('node:child_process');
-const {once} = await import('node:events');
 const python = path.join(backend, process.platform === 'win32' ? '.venv/Scripts/python.exe' : '.venv/bin/python');
-const child = spawn(python, [path.join(backend, 'tests/manual/delivery_dashboard_fixture.py')], {
+child = spawn(python, [path.join(backend, 'tests/manual/delivery_dashboard_fixture.py')], {
   cwd: backend, env: {...process.env, BATC_BROWSER_FIXTURE: fixtureFile, PYTHONPATH: backend},
   stdio: ['ignore', 'pipe', 'inherit'],
 });
@@ -28,7 +32,7 @@ await new Promise((resolve, reject) => {
   child.stdout.on('data', data => { if (data.toString().includes('fixture ready')) { clearTimeout(timeout); resolve(); } });
 });
 const fixture = JSON.parse(await fs.readFile(fixtureFile, 'utf8'));
-const browser = await chromium.launch({headless: true});
+browser = await chromium.launch({headless: true});
 async function generatedUI(context) {
   await context.route('**/dashboard/**', async route => {
     const name = new URL(route.request().url()).pathname.split('/').at(-1) || 'index.html';
@@ -57,7 +61,6 @@ async function clean(page) {
   assert.doesNotMatch(facts.text, /\b(?:null|undefined)\b|\[object/);
   assert.doesNotMatch(facts.text, /dep_[A-Za-z_]+/); // translated labels, not their keys
 }
-try {
   for (const lang of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
     await control('reset');
     const context = await browser.newContext({ viewport: { width, height: 900 }, locale: lang === 'en' ? 'en-US' : lang });
@@ -278,7 +281,14 @@ try {
   await fs.writeFile(path.join(output, 'matrix.json'), JSON.stringify(matrix, null, 2));
   console.log(`Generated delivery UI matrix and screenshots: ${output}`);
 } finally {
-  await browser.close();
-  child.kill('SIGTERM');
-  await once(child, 'exit');
+  try { await browser?.close(); }
+  finally {
+    try {
+      if (child?.pid && child.exitCode === null && child.signalCode === null) {
+        const stopped = once(child, 'exit');
+        child.kill('SIGTERM');
+        await stopped;
+      }
+    } finally { await fs.rm(folder, {recursive: true, force: true}); }
+  }
 }

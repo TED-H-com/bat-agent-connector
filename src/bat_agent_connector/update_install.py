@@ -22,10 +22,31 @@ from . import platform_files as files
 from .update_release import REPOSITORY, require
 
 
+def uv_git_env(environment):
+    """Keep automatic Git writers out of the database uv copies into checkouts."""
+    env = dict(environment)
+    raw = env.get("GIT_CONFIG_COUNT", "0")
+    if not isinstance(raw, str) or not raw.isascii() or not raw.isdecimal():
+        raise ValueError("invalid_git_config_count")
+    try:
+        count = int(raw)
+    except ValueError:
+        raise ValueError("invalid_git_config_count") from None
+    # Git parses a signed int; leave room for the two appended entries.
+    if count > 2**31 - 3:
+        raise ValueError("invalid_git_config_count")
+    for key, value in (("maintenance.auto", "false"), ("gc.auto", "0")):
+        env[f"GIT_CONFIG_KEY_{count}"] = key
+        env[f"GIT_CONFIG_VALUE_{count}"] = value
+        count += 1
+    env["GIT_CONFIG_COUNT"] = str(count)
+    return env
+
+
 def clean_env(home):
-    return {"HOME": str(home), "PATH": str(home / ".local/bin") + ":/usr/local/bin:/usr/bin:/bin",
-            "LANG": "C.UTF-8", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
-            "GIT_TERMINAL_PROMPT": "0", "UV_PYTHON_DOWNLOADS": "never", "UV_NO_CONFIG": "true"}
+    return uv_git_env({"HOME": str(home), "PATH": str(home / ".local/bin") + ":/usr/local/bin:/usr/bin:/bin",
+                       "LANG": "C.UTF-8", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
+                       "GIT_TERMINAL_PROMPT": "0", "UV_PYTHON_DOWNLOADS": "never", "UV_NO_CONFIG": "true"})
 
 
 def run(args, *, env, cwd=None, timeout=180):
@@ -91,6 +112,21 @@ def digest_files(values):
     for name, value in sorted(values.items()):
         digest.update(name.encode() + b"\0" + value.encode() + b"\n")
     return digest.hexdigest()
+
+
+def verify_source_package(source, package, commit):
+    expected, actual = package_files(source), package_files(package)
+    if "build-info.json" in actual:
+        try:
+            info = json.loads((package / "build-info.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            info = None
+        require(info == {"commit": commit}, "installed_identity_mismatch")
+        if "build-info.json" not in expected:
+            # This one generated file has no tracked source counterpart. It
+            # remains in the installed proof digest, including on repeat stage.
+            actual.pop("build-info.json")
+    require(expected == actual, "installed_source_mismatch")
 
 
 def prepare_tool_paths(root):
@@ -220,8 +256,7 @@ def stage(root, release, *, home, command=run):
                  "git+" + source.as_uri() + "@" + actual], env=env)
         packages = list((root / "tools/bat-agent-connector").glob("lib/python*/site-packages/bat_agent_connector"))
         require(len(packages) == 1, "installed_package_missing")
-        require(package_files(source / "src/bat_agent_connector") == package_files(packages[0]),
-                "installed_source_mismatch")
+        verify_source_package(source / "src/bat_agent_connector", packages[0], actual)
         proof = installed(root, release, home=home, command=command)
         files.atomic_write(root / "skill/SKILL.md", canonical.read_bytes())
         files.atomic_write(ready, json.dumps(proof, sort_keys=True).encode())

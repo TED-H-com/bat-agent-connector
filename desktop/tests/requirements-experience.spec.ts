@@ -12,7 +12,7 @@ async function tableFits(page: any) {
     nodes.filter(node => node.scrollWidth > node.clientWidth).map(node => ({column:node.getAttribute('data-column'),text:node.textContent,scroll:node.scrollWidth,width:node.clientWidth})))).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 }
-for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test(`requirements delivery experience ${locale} ${width}`, async ({browser, baseURL}) => {
+for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test(`requirements delivery experience ${locale} ${width}`, async ({browser, baseURL}, testInfo) => {
   const context = await browser.newContext({baseURL, locale, reducedMotion: 'reduce', viewport: {width, height: 900}}), page = await context.newPage();
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {if (message.type() === 'error') errors.push(message.text() + ' ' + message.location().url);});
@@ -38,7 +38,8 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
     await expect(emailRow.locator('[data-column=blocker]')).toBeVisible();
     await expect(emailRow.locator('.pm-requirement-milestone').first()).toHaveAttribute('title', /.+/);
   }
-  const out = process.env.BATC_WORK_VIEW_SCREENSHOTS || `${process.env.TMPDIR || '/tmp'}/shots`; await mkdir(out, {recursive: true});
+  const out = process.env.BATC_WORK_VIEW_SCREENSHOTS || testInfo.outputPath('screenshots');
+  await mkdir(out, {recursive: true});
   await page.screenshot({path: `${out}/requirements-${locale}-${width}.png`, fullPage: true});
   const search = rtm.locator('input[type=search]'); await search.fill('#41');
   await expect(rtm.locator('[data-rtm-requirement]')).toHaveCount(1);

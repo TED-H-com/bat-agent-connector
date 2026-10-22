@@ -371,14 +371,21 @@ async def test_verification_waits_for_quiet_candidate_window(task_controller, tm
     journal.close()
 
 
+@pytest.mark.parametrize("custom_journal", [False, True])
 @authenticated_task_test
-async def test_daemon_records_actual_journal_for_send_fence(task_controller, tmp_path, mock):
-    daemon = task_controller(TaskDaemon(make_config(mock), db_path=tmp_path / "custom" / "jobs.db"))
+async def test_daemon_records_actual_journal_for_send_fence(task_controller, tmp_path, mock, custom_journal):
+    # isolated_dirs selects BATC_STATE_DIR on disk; no --db uses that default.
+    override = tmp_path / "custom" / "jobs.db" if custom_journal else None
+    expected = override or tmp_path / "state" / "tasks.sqlite3"
+    daemon = task_controller(TaskDaemon(make_config(mock), db_path=override))
     daemon.acquire_owner()
     try:
-        assert service.task_service_db() == (tmp_path / "custom" / "jobs.db").resolve()
+        assert daemon.journal.path == expected
+        assert service.task_service_db() == expected.resolve()
     finally:
         daemon.release_owner()
+        await daemon.inventory.close()
+        await daemon.fleet.close()
         daemon.journal.close()
 
 

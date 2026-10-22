@@ -1,9 +1,12 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import {locale} from "../i18n.js";
 
 export const nativeDesktop = isTauri();
 export interface ConnectorResponse { status: number; data: any }
 export interface NativeStatus {
   configuration_source?: "managed" | "external";
+  managed_recovery?: string | null;
+  managed_rebind?: number | null;
   updates?: boolean; diagnostics_save?: boolean; app_build?: {version: string; commit: string | null};
   endpoint: string | null; error: string | null; credential_available: boolean;
   expected_actor?: string; credential_source?: "launch_environment" | "windows_credential_manager" | null;
@@ -65,13 +68,14 @@ export const nativeConnect = () => invoke<any>("connector_connect");
 export const managedControl = (input: {action: "status" | "open_browser"} | {action: "set_login"; enabled: boolean}) =>
   invoke<any>("managed_control", {input});
 export const nativeDisconnect = () => invoke<void>("connector_disconnect");
+const nativeDialogLocale = () => locale === "zh-TW" ? "zh-TW" : "en-US";
 export const nativeEnroll = () => invoke<any | null>("connector_enroll", {
-  locale: navigator.language.toLowerCase().startsWith("zh") ? "zh-TW" : "en-US"
+  locale: nativeDialogLocale()
 });
 export const nativeReloadConfiguration = () => invoke<NativeStatus>("connector_reload_configuration");
 export const nativeSetupConfiguration = (config: {endpoint: string; expected_actor: string; contract_version: string}) =>
   invoke<NativeStatus | null>("connector_setup_configuration", {config,
-    locale: navigator.language.toLowerCase().startsWith("zh") ? "zh-TW" : "en-US"});
+    locale: nativeDialogLocale()});
 export const nativeForgetCredential = () => invoke<void>("connector_forget_credential");
 export const openExternal = (url: string) => invoke<void>("open_external", { url });
 export const fleetAvailability = () => invoke<{configured: boolean; platform_supported: boolean; native_controls?: boolean; bootstrap_controls?: boolean; error?: string}>("fleet_availability");
@@ -102,7 +106,7 @@ export type UpdateRequest = {action: "status" | "check"} | {action: "download" |
 export const updateRequest = (input: UpdateRequest) => invoke<any>("desktop_update", {input});
 
 export async function connectorRequest(method: string, path: string, body: unknown, key: string | undefined,
-  browserToken: string): Promise<ConnectorResponse> {
+  browserToken: string, signal?: AbortSignal): Promise<ConnectorResponse> {
   if (nativeDesktop) {
     return invoke<ConnectorResponse>("connector_request", { input: {
       method, path, body: body ?? null, idempotency_key: key ?? null
@@ -112,7 +116,7 @@ export async function connectorRequest(method: string, path: string, body: unkno
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (key) headers["Idempotency-Key"] = key;
   const res = await fetch(`/api/v1${path}`, { method, headers, credentials: "same-origin", redirect: "error",
-    body: body === undefined ? undefined : JSON.stringify(body) });
+    body: body === undefined ? undefined : JSON.stringify(body), signal });
   return { status: res.status, data: await res.json().catch(() => ({})) };
 }
 

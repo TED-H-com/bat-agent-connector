@@ -485,6 +485,8 @@ def read(ops, principal, method, params):
                 "bat_analysis": bat,
                 "structured_analysis": pm_analysis_adapters.capabilities(ops, principal, workspace, native=native, bat=bat),
                 "workspace_adapter": choice,
+                "effective_pm_route": pm_workspace_adapter.effective_route(choice, native, bat,
+                    [scope for scope in pm_workspace_adapter.SCOPES if principal.allows(scope)]),
                 "follow_up_analysis": follow_up,
                 "overview_assessment": pm_overview_assessments.capabilities(ops, principal, workspace, native=native, bat=bat),
                 "conversation_proposals": {"version": 1, "analysis": native, "adoption_available": adoption_reason is None,

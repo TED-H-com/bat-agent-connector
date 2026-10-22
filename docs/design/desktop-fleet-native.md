@@ -35,6 +35,35 @@ nothing. Labels and rows reuse existing type, colors, controls and 44 px touch t
 desktop choices use two columns and narrow layouts use one. Browser fallback retains
 its existing central functionality and never offers native controls.
 
+## Shared machine checks
+
+Both Fleet IPC surfaces use `desktop/src/fleet-status.js` to present each configured
+machine with a plain-language status, one next step and optional network, identity,
+service and workspace evidence. The Connector route has no BAT workspace check.
+The view uses only the existing snapshot and fixed codes; it does not infer a route
+from `ROUTE_UNAVAILABLE`, create credentials, change trust, start remote work or
+introduce an additional check API. BAT connection readiness does not establish an
+execution profile or permission to create work.
+
+A failed status read withdraws cached readiness, including the aggregate freshness
+label and individual successful layers. Stopped monitoring, stale snapshots, stale
+rows and unapplied selection revisions also cannot present a previous success as
+current. A downstream layer is unconfirmed after a blocking failure; an untested
+layer is not itself labelled failed. Unsaved connection checkboxes are preserved
+and are never used as observed readiness. Initial read failures retain an explicit
+read-only retry, even when no snapshot has been loaded.
+
+Technical codes remain in Details. Open disclosures and keyboard focus survive
+polls and failed reads; disclosure state is captured synchronously before DOM
+replacement rather than depending on a queued `toggle` event. Native backend and
+Startup migration controls are folded into Advanced by default. Pending migration
+receipts remain recoverable there, with a visible summary and the original handles.
+No launch, migration, credential or central authorization gate is changed.
+
+Browser automation covers both native IPC contracts, English/zh-TW, narrow/wide
+layouts, failed first reads, stale success, drafts, polling focus and zero mutation
+from checking status. These are mock-native tests, not Windows/Fleet acceptance.
+
 ## Fixed IPC and receipts
 
 `fleet_control` is distinct from the existing six `fleet_request` actions. It accepts

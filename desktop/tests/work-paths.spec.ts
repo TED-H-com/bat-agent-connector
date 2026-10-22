@@ -82,12 +82,13 @@ for (const locale of ['en', 'zh-TW'] as const) for (const width of [1440, 390]) 
       await details.locator('summary').click(); await expect(details.locator('code')).toHaveText(reason); await details.locator('summary').click();
     }
     s.state.native = null; await check.click();
-    await expect(page.locator('[data-pm-eligibility]')).toHaveText(copy.agents_unchecked);
+    await expect(page.locator('[data-pm-eligibility]')).toHaveText(copy.agents_unknown_status);
     s.state.native = {action_registered: true, eligible_for_preflight: true, reason: null}; await check.click();
     await expect(page.locator('[data-pm-eligibility]')).toHaveText(copy.agents_ready);
     s.state.status = 403; await check.click();
-    await expect(page.locator('[data-pm-eligibility]')).toHaveText(copy.agents_unchecked);
-    await expect(page.locator('[data-settings-pm-agent] code')).toHaveCount(0);
+    // A completed refused read is failed, never an unperformed check.
+    await expect(page.locator('[data-pm-eligibility]')).toHaveText(copy.agents_failed);
+    await expect(page.locator('[data-settings-pm-agent] code')).toHaveText('FORBIDDEN');
     expect(s.writes).toHaveLength(0); await s.context.close();
   });
   test(`Agents Tab during initial eligibility check ${locale} ${width}`, async ({browser}) => {

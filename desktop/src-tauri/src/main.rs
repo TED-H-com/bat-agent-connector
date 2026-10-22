@@ -15,8 +15,10 @@ mod fleet_native;
 mod fleet_readiness;
 mod managed;
 mod managed_login;
+mod managed_recovery;
 mod tailscale_control;
 mod updates;
+mod workflow_version;
 
 use bridge::{Bridge, ConnectorRequest, ConnectorResponse, NativeStatus};
 use std::sync::Arc;
@@ -756,7 +758,9 @@ fn main() {
                         .unwrap_or_else(|| "MANAGED_SERVICE_UNAVAILABLE".into()),
                 ),
             });
-            app.manage(Arc::new(managed));
+            let managed = Arc::new(managed);
+            managed_recovery::start(bridge.clone(), managed.clone());
+            app.manage(managed);
             app.manage(NativeFiles(files::Files::open(
                 &app.path().app_local_data_dir()?.join("file-transfers"),
                 bridge.clone(),

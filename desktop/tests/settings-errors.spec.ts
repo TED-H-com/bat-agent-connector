@@ -1,6 +1,6 @@
 import {test, expect} from '@playwright/test';
 import {expectNoNestedErrorDetails} from './api-error-assertions.ts';
-import {managedSetupFixture} from './managed-setup-fixture.ts';
+import {managedSetupFixture, openSetupAdvanced} from './managed-setup-fixture.ts';
 const cases = [
   [404,'NOT_FOUND','This record is unavailable. Refresh the view.','找不到這筆資料，請重新整理。'],
   [409,'VERSION_CONFLICT','The record changed. Refresh before trying again.','資料版本已變更，請重新整理後再試。'],
@@ -13,7 +13,7 @@ for(const locale of ['en','zh-TW'])test.describe(`${locale} Settings`,()=>{
   test.use({locale});
   for(const [status,code,en,zh] of cases)test(`readable ${status} ${code} with technical details hidden`,async({page})=>{
     const state=await managedSetupFixture(page,false,locale);state.refused=true;state.refusalCode=code;state.refusalStatus=status;
-    await page.goto('/dashboard/');
+    await page.goto('/dashboard/'); await openSetupAdvanced(page);
     const form=page.locator('[data-setup-host]');await form.locator('[data-setup-field=connection_url]').fill(`wss://localhost?token=synthetic-bat-secret&fp=${'ab'.repeat(32)}`);
     await form.locator('button[type=submit]').click();const error=page.locator('[data-api-error]');
     await expect(error.locator('[data-error-summary]')).toHaveText(locale==='en'?en:zh);
@@ -24,7 +24,7 @@ for(const locale of ['en','zh-TW'])test.describe(`${locale} Settings`,()=>{
   });
   for(const native of [false,true])test(`quiet connection access and translated setup ${native?'native':'web'}`,async({page})=>{
     const state=await managedSetupFixture(page,native,locale);state.scopes=['observe','operate','manage','start','approve','cleanup','cleanup_discard','deploy','integrate','merge'];
-    await page.goto('/dashboard/#/settings');const card=page.locator('[data-connection-card]');await expect(card).toBeVisible();
+    await page.goto('/dashboard/#/settings'); await openSetupAdvanced(page);const card=page.locator('[data-connection-card]');await expect(card).toBeVisible();
     await expect(card.locator('details')).toHaveCount(1);await expect(card.locator('[data-connection-access]')).toContainText(locale==='en'?'View':'檢視');
     await expect(card.locator('[data-connection-access]')).toHaveJSProperty('tagName','DD');
     await expect(card.locator('[data-connection-access]').locator('xpath=preceding-sibling::dt[1]')).toHaveText(locale==='en'?'Access':'權限');
@@ -38,7 +38,7 @@ for(const locale of ['en','zh-TW'])test.describe(`${locale} Settings`,()=>{
     expect(state.posts).toEqual([]);expect(state.staged).toEqual([]);
   });
   test('client setup validation keeps its specific sentence and offers diagnostics in Details',async({page})=>{
-    const state=await managedSetupFixture(page,false,locale);state.verification.timeout_s=0;await page.goto('/dashboard/');
+    const state=await managedSetupFixture(page,false,locale);state.verification.timeout_s=0;await page.goto('/dashboard/'); await openSetupAdvanced(page);
     const error=page.locator('[data-api-error]');
     await expect(error.locator('[data-error-summary]')).toHaveText(locale==='en'
       ? 'Enter a valid project, executable, at most 63 nonempty arguments and a 1–3600 second timeout.'
@@ -52,7 +52,7 @@ for(const locale of ['en','zh-TW'])test.describe(`${locale} Settings`,()=>{
   });
   for (const unavailable of [false,true]) test(`empty BAT profiles ${unavailable?'unreadable':'without error'}`,async({page})=>{
     const state=await managedSetupFixture(page,false,locale);state.hasProfiles=false;
-    state.profilesError=unavailable?'Fixture directory cannot be read':null;await page.goto('/dashboard/');
+    state.profilesError=unavailable?'Fixture directory cannot be read':null;await page.goto('/dashboard/'); await openSetupAdvanced(page);
     await page.locator('[data-setup-manual]>summary').click();
     if(unavailable) {
       await expect(page.locator('[data-setup-profile] select')).toBeVisible();
@@ -63,7 +63,7 @@ for(const locale of ['en','zh-TW'])test.describe(`${locale} Settings`,()=>{
     expect(state.posts).toEqual([]);expect(state.staged).toEqual([]);
   });
   for (const width of [1440,1000,390]) test(`setup fields stay aligned with one page Refresh at ${width}`,async({page})=>{
-    await page.setViewportSize({width,height:900});await managedSetupFixture(page,false,locale);await page.goto('/dashboard/');
+    await page.setViewportSize({width,height:900});await managedSetupFixture(page,false,locale);await page.goto('/dashboard/'); await openSetupAdvanced(page);
     const geometry=await page.locator('[data-managed-setup]').evaluate(panel=>{
       const rect=(selector:string)=>panel.querySelector(selector)!.getBoundingClientRect();
       const input=rect('#setup-connection_url'), hint=rect('#setup-connection_url-hint'), label=rect('label[for=setup-host]');

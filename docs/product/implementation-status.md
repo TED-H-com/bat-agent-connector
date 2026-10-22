@@ -1,5 +1,48 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-10-19 發布與接續狀態
+
+本輪開工核對主線 `5fa1d1552945988394f0d3fe41db380a831717a5`，已包含
+#315 路線喚醒、#316 本機服務復原、#321 草稿測試同步及 #319 首次設定／主機狀態。
+它們不在下列 `14c62830` 安裝包；舊交接的「待合併」是歷史狀態。
+依產品負責人最新回饋，接續順序改為
+[穩定化與首次使用](experience-convergence.md#2026-10-19-優先順序實機穩定化與首次使用)。
+本工作分支將預設專案導覽收斂為四個日常入口，其他管理頁按需展開；
+分支改動尚未合併、發布、安裝或實機驗收。
+
+接續的 Fleet 增量將既有檢查整理為每台機器的狀態、下一步及可展開的網路／身分／
+服務／工作區證據。讀取失敗、過期、監控停止或選擇尚未套用時，不再顯示舊的就緒
+結果；初次讀取失敗也可直接重試查詢。背景刷新保留草稿、詳細資料與焦點，進階的
+連線方式與開機啟動設定預設收合。沿用原 IPC 和操作回執，不新增遠端修復寫入。
+對應 E03／E11 的可用性與恢復、A29／A30 的既有不重送回歸及 A39 的介面準備；
+不代表 A01–A40 或 R0–R5 的實機驗收完成。完整加入機器精靈、安裝角色選擇、
+統一工作能力修復與同版本日常實測仍待完成。設計及驗證邊界見
+[Fleet 共用檢查](../design/desktop-fleet-native.md#shared-machine-checks)。
+
+已發布 [v0.2.12](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.12)：
+Connector **0.2.12**／desktop **0.1.8**，固定來源
+`14c62830240148b14a4d28a9c428f7f8b5ba8bf3`（#314）。
+此版修正 Windows SSH executable 路徑分隔符比對；該來源的
+[後端 CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/39201873778) 與
+[桌面 CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/39201873842) 已通過。
+
+前一正式版 [v0.2.11](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.11)
+固定於 `d7876d64966e7e558a9232af58758568372106c7`，包含 #306 的工作區 PM runtime、
+人工序列輸入唯讀觀察與接續讀取修正，以及 #309–313 的設定分片、automation facade、
+固定 tag 安裝與既有 uv tool 安裝納管。#305／#307 的修正經 #306 整合，沒有另行合併。
+
+發布不代表每台已安裝或完成一般登入驗收。下方 0.2.10／0.1.6 的部署讀回保留為
+10 月 18 日歷史證據；本次文件更新沒有新一輪逐主機安裝回執。Classic 仍為預設。
+真 BAT／模型兩輪、實體手機、一般登入 Tauri、Native／AHP 路線及 PM v1.2 剩餘範圍
+仍按原 E／UX／R／V／K 編號接續，不重做已合併 Work loop。
+
+完整測試另依精確來源記錄：[#283 最新補記](https://github.com/TED-H-com/bat-agent-connector/issues/283#issuecomment-6262388027)
+確認 `0bf36674` 的 Python 3.13／3.10 各 7218 passed、60 skipped，
+`2c2b3a8f` 的 Python 3.13 為 7311 passed、60 skipped；後者 3.10 原紀錄未完成。
+原停滯、失敗與未完成紀錄保留，不能移用為本版完整本機測試或根因已修復的證據。
+#308 的暫存路徑保留修正、#315 的路線喚醒及 #316 的本機服務復原均不在上述發布來源內；
+各候選的整合與驗證狀態以其 PR 為準。以下日期段落保留較早快照。
+
 ## 2026-10-18 PM 判讀與外部歷史交付
 
 #300／#301 已合併，發布來源 `b44a83abc7d548747983298b8290ab1d544898d6`，Connector 0.2.10／desktop 0.1.6。

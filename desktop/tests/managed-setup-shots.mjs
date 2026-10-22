@@ -12,6 +12,7 @@ try {
     const state = await managedSetupFixture(page,false,locale), errors=[];
     page.on('pageerror', error=>errors.push(error.message));
     await page.goto(`http://127.0.0.1:${process.env.BATC_UI_TEST_PORT}/dashboard/`);
+    await page.locator('[data-setup-advanced] > summary').click();
     const panel=page.locator('[data-managed-setup]'), form=page.locator('[data-setup-host]'); await expect(form).toBeVisible();
     const shot = async name => {
       if (process.env.BATC_SETUP_SETTINGS_ONLY === '1' && !name.startsWith('settings')) return;

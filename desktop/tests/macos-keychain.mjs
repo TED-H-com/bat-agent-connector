@@ -1,4 +1,5 @@
 // Never change an operator's Keychain. Restore the disposable runner's configuration even on failure.
+import {testScratchRoot} from './test-scratch.mjs';
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -14,7 +15,7 @@ const unquote = value => value.trim().replace(/^"|"$/g, "");
 const originalDefault = unquote(security(["default-keychain", "-d", "user"]));
 const originalList = security(["list-keychains", "-d", "user"]).split("\n").filter(Boolean).map(unquote);
 assert(originalDefault && originalList.length);
-const root = await mkdtemp(join(process.env.RUNNER_TEMP, "dashboard-keychain-"));
+const root = await mkdtemp(join(testScratchRoot(), "dashboard-keychain-"));
 const keychain = join(root, "fixture.keychain-db");
 const password = randomUUID(); // Disposable synthetic keychain, no real credentials.
 let created = false;

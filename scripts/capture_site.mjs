@@ -12,8 +12,8 @@ import {DEMO_NOW} from '../desktop/tests/demo/project.ts';
 import {mountConversation} from '../desktop/tests/conversation-fixture.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-// Merged main through #205. Documentation-only commits may recapture this tree.
-const source = '265026d4c1fc2bc04a9aaa727d566c1a2906b256';
+// Published merged source for Connector 0.2.12 / desktop 0.1.8. Documentation-only commits may recapture this tree.
+const source = '14c62830240148b14a4d28a9c428f7f8b5ba8bf3';
 const output = path.join(root, 'site/images');
 const review = process.env.CAPTURE_REVIEW_DIR;
 const fixtureClock = new Date(DEMO_NOW).toISOString();

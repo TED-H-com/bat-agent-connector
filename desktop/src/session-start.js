@@ -82,7 +82,7 @@ export function sessionStartPanel({h, t, api, caps, guard, ready, errorBox, opSt
   const inputs = {host, workspace, agent, model, title, prompt};
   const models = modelChoice({h, t, api, caps, guard, host: () => saved.host, agent, model, submit: submitPreference, storageKey});
   const fill = () => {for (const [k, el] of Object.entries(inputs)) el.value = saved[k];};
-  const showError = e => {if (current()) status.replaceChildren(errorBox(e, {within:status}));};
+  const showError = (e, options = {}) => {if (current()) status.replaceChildren(errorBox(e, {...options, within:status}));};
   function renderWorkspaces() {
     workspace.replaceChildren(h("option", {value: ""}, t("start_choose_workspace")), ...workspaces.map(w =>
       h("option", {value: w.workspace_id}, `${w.name || w.workspace_id} · ${w.workspace_id}`)));
@@ -139,7 +139,7 @@ export function sessionStartPanel({h, t, api, caps, guard, ready, errorBox, opSt
       saved.intent = {request: request(), key: crypto.randomUUID(), operation_id: null};
     }
     if (!saved.intent.request || !saved.intent.key) return;
-    try {persist();} catch (e) {showError(e); update(); return;} // never submit without the durable original envelope/key
+    try {persist();} catch (e) {showError(e, {sourceRefresh:false}); update(); return;} // never submit without the durable original envelope/key
     // The shortcut activates Start from a field. Focus the button before those fields lock.
     if (Object.values(inputs).includes(document.activeElement)) apply.focus();
     busy = true; update(); const intent = saved.intent;
@@ -147,7 +147,7 @@ export function sessionStartPanel({h, t, api, caps, guard, ready, errorBox, opSt
       try {const data = await api("POST", "/operations?wait=3", intent.request, intent.key); guard(); accept(data.operation);}
       catch (e) {if (current()) {if (e.status >= 400 && e.status < 500 && admissionRefusals.has(e.code)) {
         intent.refused = e.code; try {persist();} catch { /* original intent remains frozen */ }
-      } showError(e);}}
+      } showError(e, {sourceRefresh:false});}}
       finally {busy = false; if (current()) update();}
     })();
     try {await submission;} finally {submission = null;}
@@ -160,14 +160,14 @@ export function sessionStartPanel({h, t, api, caps, guard, ready, errorBox, opSt
     if (!current() || busy || refreshing || readFailed || !(terminal(operation) || saved.intent?.refused)) return;
     const previous = saved;
     saved = {host: saved.host, workspace: "", agent: "claude", model: "", title: "", prompt: ""};
-    try {persist();} catch (e) {saved = previous; showError(e); return;}
+    try {persist();} catch (e) {saved = previous; showError(e, {sourceRefresh:false}); return;}
     operation = null; status.replaceChildren(); fill(); renderWorkspaces(); update(); await discover();
   }}, t("start_new"));
   for (const [key, el] of Object.entries(inputs)) el.addEventListener(key === "host" || key === "workspace" || key === "agent" ? "change" : "input", () => {
     if (!current() || saved.intent || busy) {fill(); return;}
     saved[key] = el.value;
     if (key === "host") {saved.workspace = ""; discoveredHost = ""; workspaces = []; discovery++; renderWorkspaces();}
-    try {persist();} catch (e) {showError(e);} update(); if (key === "host") discover();
+    try {persist();} catch (e) {showError(e, {sourceRefresh:false});} update(); if (key === "host") discover();
   });
   const label = (name, control) => h("label", {}, t(name), control);
   const shortcut = composerShortcut({h, t, input: prompt, button: apply, storageKey: `${storageKey}.shortcut`, guard});

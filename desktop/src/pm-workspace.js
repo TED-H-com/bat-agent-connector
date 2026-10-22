@@ -1,9 +1,11 @@
+import {pmAvailability, renderPmAvailability} from './pm-availability.js';
+import {hasEffectivePmRoute,workspacePmReady,renderEffectivePmRoute} from './pm-effective-route.js';
 import {workspaceExternalHistory} from './pm-external-history.js';
 import {continuationBrief} from './pm-continuation.js';
-import {workbenchEnabled} from './workbench-mode.js';
+import {layoutDecision} from './workbench-mode.js';
 import {operationStatusLabel} from './global-labels.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
-import {discussionContext, discussionLabel, discussionPanel, discussionDom, discussionTitle, discussionComposer} from './pm-discussions.js';
+import {discussionContext, discussionLabel, discussionPanel, discussionDom, discussionTitle, discussionComposer, discussionSettingsHref} from './pm-discussions.js';
 import {icon} from './ui/icons.js';
 import {parseDiscussRefs, discussHref} from './pm-discuss-link.js';
 import {locale} from './i18n.js';
@@ -50,6 +52,9 @@ import {planRevisions} from './pm-plans.js';
 import {pmWorktreeChoice} from './pm-worktree-choice.js';
 import {nativeRunState, pmDiscussionMessage, pmDiscussionRequest, pmNativeAnalysis} from './pm-native-analysis.js';
 import {retiredView as retired} from './pm-retired.js';
+import {clientActionError} from './error-presentation.js';
+const isWorkbench = layoutDecision.layout === 'workbench';
+
 const same = (a, b) => a === b || (a && b && typeof a === 'object' && typeof b === 'object'
   && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length
   && Object.keys(a).every(key => Object.hasOwn(b, key) && same(a[key], b[key])));
@@ -65,11 +70,11 @@ if (!customElements.get(formConnectionTag)) customElements.define(formConnection
   connectedCallback() {this.#changed(true);}
   disconnectedCallback() {this.#changed(false);}
 });
-export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes('observe');
+export const pmAvailable = caps => pmAvailability({caps, kind: 'workspace'}).ready;
 
 // Save the exact request before admission. A later authorization/validation error can never
 // release an earlier ambiguous request; only its matching terminal receipt permits replacement.
-function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, keepEditable = () => false, savedText = 'pm_saved', pendingText = 'pm_pending', releaseAfterAcknowledgement = false, acknowledgedText = '', onAcknowledged = () => {}, acknowledgeStatus = null}) {
+function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, clientGate = () => null, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, keepEditable = () => false, savedText = 'pm_saved', pendingText = 'pm_pending', releaseAfterAcknowledgement = false, acknowledgedText = '', onAcknowledged = () => {}, acknowledgeStatus = null}) {
   const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
   let saved = {version: 1, values: {}}, damaged = false, busy = false, operation = null;
   const receiptDelays = action === 'pm.conversation.adopt' ? [250, 500, 1000, 1500, 2000, 3000, 3000, 3000, 3000, 3000] : [250, 500, 1000, 1500, 2000, 3000];
@@ -87,6 +92,9 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     }
   } catch {damaged = true;}
   const status = h('div', {role: 'status'}), receipt = h('div', {class: 'pm-receipt'});
+  // The header announces connection changes. This quiet line explains a paused
+  // submit without adding an error summary or replacing the request's outcome.
+  const gateNotice = h('p', {class: 'muted', 'data-pm-client-gate': '', hidden: true});
   const persist = () => {guard(); if (pruneEmpty && !saved.intent && !Object.keys(saved.values).length) localStorage.removeItem(storage); else localStorage.setItem(storage, JSON.stringify(saved));};
   const capture = () => Object.fromEntries(Object.entries(fields).map(([name, input]) => [name, input.value]));
   const changed = () => {
@@ -94,7 +102,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     const values = capture();
     if (same(saved.values, values)) return;
     saved.values = values;
-    try {persist();} catch (error) {status.replaceChildren(errorBox(error, {within:status}));}
+    try {persist();} catch (error) {status.replaceChildren(errorBox(error, {sourceRefresh:false, within:status}));}
   };
   for (const [name, input] of Object.entries(fields)) {
     const value = saved.values[name] ?? input.value;
@@ -107,6 +115,12 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   // An acknowledged ID can be read while sending is paused. An unknown admission
   // still needs its explicit original-key POST once the transport admits sends.
   const sendReady = () => Boolean(saved.intent?.operation_id) || canSend();
+  const clientBlock = () => {
+    // An acknowledged receipt remains a GET, even while new POSTs are paused.
+    if (sendReady()) return null;
+    const gate = clientGate();
+    return gate && !gate.allowed && gate.reason ? clientActionError(gate.reason, t) : null;
+  };
   const receiveReceipt = () => {
     if (disposed || !form.isConnected || damaged || !saved.intent) return;
     try {
@@ -131,10 +145,31 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     try {
       guard(); if (!terminal() && !saved.intent?.initialAdmissionRefused) return;
       saved = {version: 1, values: capture()}; persist(); operation = null; initialChecking = false; status.replaceChildren(); receipt.replaceChildren(); update();
-    } catch (error) {if (!retired(error)) status.replaceChildren(errorBox(error, {within:status}));}
+    } catch (error) {if (!retired(error)) status.replaceChildren(errorBox(error, {sourceRefresh:false, within:status}));}
   }}, t('pm_edit_request'));
   const isFieldFocused = () => Object.values(fields).some(f => f === document.activeElement || f.contains?.(document.activeElement));
   const button = h('button', {type: 'submit', class: 'ui-button primary'}, t(label));
+  let pressing = false;
+  const releasePress = () => {
+    pressing = false;
+    document.removeEventListener('pointerup', releasePress, true);
+    document.removeEventListener('pointercancel', releasePress, true);
+  };
+  const explainBlockedPress = () => {
+    if (!disposed && form.isConnected && saved.intent && !busy && !damaged && (!allowed() || !sendReady())
+      && !status.querySelector('[data-pm-click-interrupted]'))
+      status.append(h('p', {class: 'muted', 'data-pm-click-interrupted': ''}, t('pm_click_interrupted')));
+  };
+  button.addEventListener('pointerdown', event => {
+    if (event.button !== 0) return;
+    releasePress(); pressing = true;
+    // Native disabled buttons still receive pointer events. A read gate may
+    // have closed after actionability but before this press, suppressing the
+    // mouse click/submit entirely. Explain it here; never queue a resend.
+    explainBlockedPress();
+    document.addEventListener('pointerup', releasePress, true);
+    document.addEventListener('pointercancel', releasePress, true);
+  });
   button.addEventListener('click', event => {
     if (busy || (initialChecking && (busy || receiptTimer !== null))) {
       event.preventDefault();
@@ -146,7 +181,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     if (isFieldFocused()) button.focus();
     void run();
   }},
-    extra, h('div', {class: 'actions'}, button, reset), status, receipt);
+    extra, h('div', {class: 'actions'}, button, reset), status, gateNotice, receipt);
   function pollReceipt() {
     // Only an acknowledged original ID may be checked automatically. An unknown
     // admission keeps its exact key and the existing explicit recovery control.
@@ -169,6 +204,14 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     if (!busy && receiptTimer === null) initialChecking = false;
     const autoChecking = initialChecking && (busy || receiptTimer !== null);
     const inFlight = busy || autoChecking;
+    // Domain/source readiness owns its own explanation, including the first
+    // snapshot. A failed view read is explained once by its region or header.
+    const block = !inFlight && !damaged && allowed() && !terminal() && !saved.intent?.initialAdmissionRefused ? clientBlock() : null;
+    const notice = block?.code !== 'CLIENT_ACTION_VIEW_NOT_READY' ? block : null;
+    gateNotice.hidden = !notice;
+    gateNotice.textContent = notice?.message || '';
+    if (notice) gateNotice.dataset.clientActionCode = notice.code;
+    else delete gateNotice.dataset.clientActionCode;
     const frozen = busy || damaged || Boolean(saved.intent), locked = frozen || !allowed();
     for (const [name, input] of Object.entries(fields)) {
       // A restored title draft must receive Escape while initial reads gate Save.
@@ -193,11 +236,14 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     button.textContent = t(saved.intent && !autoChecking ? 'pm_check_original' : label);
     reset.hidden = inFlight || (!terminal() && !saved.intent?.initialAdmissionRefused);
     reset.disabled = busy || !allowed();
+    if (pressing) explainBlockedPress();
     if (hadFocus && (button.hidden || button.disabled)) {
       if (!reset.hidden && !reset.disabled) reset.focus();
       else if (document.activeElement === document.body || document.activeElement === button) {
         status.tabIndex = -1;
-        status.focus();
+        // A background gate can disable a button during a pointer gesture. Keep
+        // its reading position so the eventual release still reaches that button.
+        status.focus({preventScroll: true});
       }
     } else if (hadResetFocus && reset.hidden && !button.hidden && !button.disabled) {
       button.focus();
@@ -208,7 +254,10 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     if (disposed || busy || damaged || (!automatic && initialChecking && (busy || receiptTimer !== null))
       || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
     if (!allowed() || !sendReady()) {
-      if (!automatic) {status.replaceChildren(h('p', {class: 'muted'}, t('pm_action_unavailable'))); update();}
+      if (!automatic) {
+        if (!clientBlock()) status.replaceChildren(h('p', {class: 'muted'}, t('pm_action_unavailable')));
+        update();
+      }
       return;
     }
     if (!automatic && isFieldFocused()) button.focus();
@@ -216,6 +265,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     if (!automatic) {receiptAttempt = 0; receiptPolling = true;}
     let firstAttempt = stagedHere; stagedHere = false;
     if (firstAttempt) initialChecking = true;
+    let requestStarted = false;
     try {
       guard(); busy = true; status.replaceChildren();
       if (!saved.intent) {
@@ -244,6 +294,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
         }
         collected = true;
       };
+      requestStarted = true;
       const data = intent.operation_id ? await api('GET', `/operations/${intent.operation_id}`, undefined, undefined, collectReceipt)
         : await api('POST', '/operations?wait=3', intent.request, intent.key, collectReceipt);
       collectReceipt(data);
@@ -293,7 +344,14 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
       // A detached request must not poison another view's successful refresh or
       // change an original intent after a route/authority boundary has moved.
       if (disposed) return;
-      try {guard();} catch {return;}
+      try {guard();} catch {
+        // An explicit refusal before any API call must not leave a previous
+        // network error masquerading as the outcome of this click. Late replies
+        // and automatic checks still cannot paint into a retired view.
+        if (!automatic && !requestStarted && form.isConnected)
+          status.replaceChildren(h('p', {class: 'muted'}, t('pm_stale')));
+        return;
+      }
       if (!retired(error)) {
         // Explicit server pre-admission refusal is useful only for the first attempt.
         // Only an explicit pre-admission refusal may be replaced. Any other error,
@@ -303,7 +361,10 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
           try {persist();} catch { /* keep the frozen original in memory */ }
         }
         const handled = onError(error);
-        if (!handled) status.replaceChildren(errorBox(error, error.code === 'VERSION_CONFLICT' ? {summary: t('pm_stale'), within: status} : {within: status}));
+        // This original request/receipt has its own outcome. Its failed reply
+        // must not fail an unrelated event-source read running at the same time.
+        if (!handled) status.replaceChildren(errorBox(error, {within: status, sourceRefresh: false,
+          ...(error.code === 'VERSION_CONFLICT' ? {summary: t('pm_stale')} : {})}));
       }
     } finally {
       busy = false; update();
@@ -344,7 +405,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
       if (!busy) void run(true);
     },
     dispose: () => {
-      disposed = true; receiptPolling = false; initialChecking = false; stopTimer(); unsubscribe(); onConnectionChange(false);
+      disposed = true; receiptPolling = false; initialChecking = false; releasePress(); stopTimer(); unsubscribe(); onConnectionChange(false);
       for (const input of Object.values(fields)) input.disabled = true;
       button.disabled = reset.disabled = true;
     },
@@ -355,8 +416,8 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
 // Test fixtures rewrite the declaration above to an export. This alias stays a second export.
 export {durableForm as pmDurableForm};
 
-export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, canSend = () => true, onOnline = () => () => {}, onContext = () => {}, openCreate = false}) {
-  if (!pmAvailable(caps())) {main.append(h('p', {}, t('pm_unavailable'))); return;}
+export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, canSend = () => true, clientGate = () => null, onOnline = () => () => {}, onContext = () => {}, openCreate = false}) {
+  if (!pmAvailable(caps())) {main.append(renderPmAvailability(h('div'), {h, t, state: pmAvailability({caps: caps(), kind: 'workspace'})})); return;}
   // Navigation preference must not wait for unrelated secondary reads to settle.
   if (workspaceId && threadId) rememberProjectView(namespace, workspaceId, 'discussions');
   let disposed = false, workspace = null, threadData = null, loaded = false, initialReadComplete = false, refreshing = true, sequence = 0, threadPages = 1, lifecycle = null;
@@ -542,6 +603,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const form = options => {
     const value = durableForm({h, t, api, caps, guard: alive, namespace, errorBox, statusText: threadId ? value => discussionLabel(t, 'pd_op_', value) : undefined, ...options,
       canSend: () => (options.canSend ? options.canSend() : true) && canSend(),
+      clientGate,
       permitted:()=>initialReadComplete&&options.permitted()&&(lifecycle?.newActionAllowed(options.action,()=>options.params(Object.fromEntries(Object.entries(options.fields).map(([key,input])=>[key,input.value]))))??true),
       recoverPermitted:()=>initialReadComplete&&(options.recoverPermitted||options.permitted)(),
       onConnectionChange: connected => {
@@ -566,7 +628,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const phasePill = h('span', {class: 'ui-pill tone-neutral', hidden: true});
   const viewMeta = h('p', {class: 'ui-meta', 'data-pm-work-meta': '', hidden: true});
   // Stay hidden until publishContext fills it. An empty select is still in the tab order.
-  const management = workbenchEnabled() ? h('select', {'aria-label': t('wc_management'), 'data-workbench-management': '', hidden: true, onchange: event => {
+  const management = isWorkbench ? h('select', {'aria-label': t('wc_management'), 'data-workbench-management': '', hidden: true, onchange: event => {
     location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${event.target.value}`;
   }}) : null;
   const heading = pageHeader({title, pill: phasePill, meta: viewMeta, actions: [management, refresh].filter(Boolean)});
@@ -613,7 +675,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   let replyRuns = [], replyPartial = false;
   let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null,
     sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = '', earlier = null, historyCursor = null, historyExpanded = false,
-    packages = null, packageSignature = '', revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, proposalReview = null, discussionHint = null, assessmentSources = null, continuation = null;
+    packages = null, packageSignature = '', revisions = null, pmCapabilities = null, pmCapabilitiesError = null, availabilityNode = null, worktreeChoice = null, nativeAnalysis = null, proposalReview = null, discussionHint = null, assessmentSources = null, continuation = null;
   lifecycle = workspaceId && caps()?.features?.pm_workspaces?.lifecycle?.version === 1
     ? workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted:()=>loaded&&workspace?.membership?.role==='owner',form,input,labelled,errorBox,onChange:()=>{updateForms();publishContext();}}) : null;
   if(lifecycle&&!threadId)body.insertBefore(lifecycle.element,content);
@@ -1179,7 +1241,11 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   };
   // Discarded forms leave the registry immediately; temporarily detached forms
   // rejoin and derive the current gates synchronously on reconnection.
-  const updateForms = () => {for (const value of forms) value.update(); continuation?.update();};
+  const updateAvailability = () => {
+    if (availabilityNode) renderPmAvailability(availabilityNode, {h, t, setupHref: discussionSettingsHref(),
+      state: pmAvailability({caps: caps(), document: pmCapabilities, readError: pmCapabilitiesError, checked: true})});
+  };
+  const updateForms = () => {for (const value of forms) value.update(); continuation?.update(); updateAvailability();};
   const offOnline = onOnline(() => {try {alive(); updateForms();} catch { /* a retired view keeps its original intent */ }});
   const timestamp = value => typeof value === 'number' ? value * 1000 : value;
   const time = value => timeStamp(value, {empty:''});
@@ -1241,13 +1307,13 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         h('header', {class: 'pd-thread-header'}, h('div', {class: 'pd-header-main'}, h('div', {class: 'pd-heading'}, backLink(), titleView.box)), h('div', {class: 'pd-thread-meta'}, mode, boundContext)), discussionHint, h('div', {class: 'pd-transcript'}, earlier, notes, coverage));
       if (caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis) {
         nativeAnalysis = pmNativeAnalysis({h, t, api, form, input, labelled, caps, namespace, errorBox, guard: alive,
-          capability: () => pmCapabilities, thread: () => threadData, permitted, target, refresh: load});
+          capability: () => pmCapabilities, capabilityError: () => pmCapabilitiesError, thread: () => threadData, permitted, target, refresh: load});
       }
       continuation = continuationBrief({h,t,form,input,labelled,caps,capability:()=>pmCapabilities,thread:()=>threadData,permitted,target,refresh:load,
         onOpen:()=>discussionTools.open('context')});
       column.querySelector('.pd-transcript').prepend(continuation.reader);
       if (caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1) {
-        proposalReview = planProposals({h,t,api,alive,form,input,labelled,caps,namespace,workspaceId,threadId,
+        proposalReview = planProposals({h,t,api,alive,form,input,labelled,caps,namespace,workspaceId,threadId, capabilityError: () => pmCapabilitiesError,
           thread:()=>threadData,permitted,refresh:load,errorBox, conversation: true, backLink, onRevision: id => {
             discussionTools.open('plan');
             // Let a new mobile sheet establish its focus boundary first.
@@ -1353,8 +1419,14 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           if (key === 'context' && initialReadComplete) for (const [section, details] of lazyThreadSections) if (details.open && !details.closest('[data-discussion-tab]')?.hidden) void refreshSection(section);
         }});
       column.querySelector('.pd-header-main').append(discussionTools.trigger);
+      availabilityNode = h('div', {'data-discussion-pm-unavailable': ''});
+      updateAvailability();
+      // Place the summary with the advertised reply module. This chooses its
+      // presentation host from capability facts, never a connection from DOM.
+      const standaloneAvailability = !caps()?.features?.pm_workspaces?.native_analysis && !caps()?.features?.pm_workspaces?.bat_analysis;
       const composer = discussionComposer({t, form: noteForm, details: threadDetails,
-        analysis: proposalReview?.composer(text, {connectionNotice: !nativeAnalysis}),
+        availability: standaloneAvailability ? availabilityNode : null,
+        analysis: proposalReview?.composer(text, {showAvailability: standaloneAvailability}),
         reply: nativeAnalysis?.composer(text, purpose => {
           if (!noteForm.locked() && noteForm.values().content.trim() === purpose) noteForm.set('content', '');
         }, () => {
@@ -1596,6 +1668,11 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   async function load({event = false} = {}) {
     const ticket = ++sequence; refreshing = true; refresh.disabled = true;
     const contextTicket = ++contextSequence;
+    let capabilityReadError = null;
+    const readCapabilities = async () => {
+      try {return await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`);}
+      catch (error) {capabilityReadError = error; throw error;}
+    };
     assessmentSources?.withdraw();
     if (!event) {invalidateSections(); withdrawNames(); lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();
       ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();qualityReviews?.withdraw();qualitySelections.clear();}
@@ -1614,7 +1691,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           threadId && threadId !== 'new' && caps()?.features?.pm_workspaces?.plan_drafting
             ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans/accepted`) : Promise.resolve(null),
           threadId && threadId !== 'new' && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis)
-            ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`) : Promise.resolve(null),
+            ? readCapabilities() : Promise.resolve(null),
           threadId === 'new' ? draftSourceRefs() : Promise.resolve(null)]);
         alive();
         for (let page = 1; page < threadPages && threadList.next_cursor; page++) {
@@ -1628,7 +1705,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       alive();
       if (ticket !== sequence) return;
       if (detail && detail.workspace?.workspace_id !== workspaceId || data && (data.thread?.workspace_id !== workspaceId || data.thread?.thread_id !== threadId)) throw Error(t('pm_scope_mismatch'));
-      workspace = detail?.workspace || null; pmCapabilities = workspaceCaps; loaded = true; status.replaceChildren();
+      workspace = detail?.workspace || null; pmCapabilities = workspaceCaps; pmCapabilitiesError = null; loaded = true; status.replaceChildren();
       draftSourceUnavailable = Boolean(draftRefs?.some(ref => ref.available === false));
       title.textContent = workspace ? t('ui_' + (threadId ? 'discussions' : workbench?.selected() || 'discussions')) : t('pm_title');
       lastList = list.workspaces || []; lastThreadList = threadList;
@@ -1672,14 +1749,14 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
             onEditing: (open, start, end) => {titleSession.open = open; if (open) {titleSession.caret = start; titleSession.caretEnd = end;}}}) : null;
           if (titleDraft) titleView = titleDraft;
           if (threadId === 'new' && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis)) {
-            workspaceCaps = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`); alive();
+            workspaceCaps = await readCapabilities(); alive();
             if (ticket !== sequence) return;
             pmCapabilities = workspaceCaps;
           }
-          const pmReady = Boolean(threadId === 'new' && (workspaceCaps?.structured_analysis?.version === 1
-            ? (workspaceCaps.structured_analysis.actions?.['pm.conversation.propose']?.adapters || []).some(row => ['codex-native-linux', 'bat-pm-linux-v1'].includes(row.adapter) && row.action_registered === true && row.authorized === true && row.eligible_for_preflight === true)
-            : workspaceCaps?.native_analysis?.authorized !== false && workspaceCaps?.native_analysis?.eligible_for_preflight === true
-              || workspaceCaps?.bat_analysis?.authorized !== false && workspaceCaps?.bat_analysis?.eligible_for_preflight === true));
+          const pmReady = threadId === 'new' && workspacePmReady(workspaceCaps);
+          const draftAvailability = h('div', {'data-discussion-pm-unavailable': ''});
+          if (hasEffectivePmRoute(workspaceCaps)) renderEffectivePmRoute(draftAvailability, {h, t, document: workspaceCaps});
+          else renderPmAvailability(draftAvailability, {h, t, setupHref: discussionSettingsHref(), state: pmAvailability({caps: caps(), document: pmCapabilities, checked: true})});
           const contextDraft = h('section', {'data-discussion-tab': 'context'}, ...discussionContext(t, draftRefs || launch.refs, {title: launch.title}));
           const draftPanel = discussionPanel({t, namespace, workspaceId, threadId, canRestore: canRestoreDiscussion, panes: {context: contextDraft}});
           if (threadId === 'new') discussionTools = draftPanel;
@@ -1689,7 +1766,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
             h('header', {class: 'pd-thread-header'}, h('div', {class: 'pd-header-main'}, h('div', {class: 'pd-heading'}, backLink(), titleDraft?.box || h('h2', {}, t('pd_new'))), draftPanel.trigger),
               h('div', {class: 'pd-thread-meta'}, h('span', {class: 'ui-pill tone-neutral'}, t('ui_status_draft')),
                 boundContext)),
-            h('div', {class: 'pd-transcript'}, emptyState({title:t('pd_notes_empty'),text:t('pd_empty')})), discussionComposer({t, form: create, draft: true, pmReady})),
+            h('div', {class: 'pd-transcript'}, emptyState({title:t('pd_notes_empty'),text:t('pd_empty')})), discussionComposer({t, form: create, draft: true, pmReady, availability: draftAvailability})),
             draftPanel.home));
 
 
@@ -1752,6 +1829,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (initialReadComplete) {proposalReview?.recheck(); nativeAnalysis?.recheck(); continuation?.recheck();}
     } catch (error) {
       if (!retired(error) && ticket === sequence) {
+        if (capabilityReadError) {pmCapabilitiesError = capabilityReadError; pmCapabilities = null;}
         loaded = false; workspace = null; threadData = null; withdrawNames();
         if ([403, 404].includes(error.status)) forgetWorkspace(namespace, workspaceId);
         brief?.withdraw();traceability?.withdraw();kanban?.withdraw();resources?.withdraw();schedule?.withdraw();dependencies?.withdraw();qualityReviews?.withdraw();proposalReview?.withdraw();qualitySelections.clear();
@@ -1759,7 +1837,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         detailPanel?.close(); discussionTools?.close(); phasePill.hidden = true;
         title.textContent = t('pm_title'); workspaceList.replaceChildren(); lastThreadList = null; publishContext();
         for (const section of sourceSections()) section.hidden = true;
-        updateForms(); status.replaceChildren(errorBox(error, {summary: t('pm_stale'), within: status}));
+        updateForms();
+        status.replaceChildren(capabilityReadError
+          ? renderPmAvailability(h('div'), {h, t, state: pmAvailability({caps: caps(), readError: capabilityReadError, checked: true})})
+          : errorBox(error, {summary: t('pm_stale'), within: status}));
       }
     } finally {
       if (ticket === sequence) {refreshing = false; refresh.disabled = false;}

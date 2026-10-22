@@ -8,7 +8,7 @@ import uuid
 
 import pytest
 
-from bat_agent_connector import api_auth, pm_quality_reviews, pm_sprints
+from bat_agent_connector import api_auth, pm_quality_reviews, pm_read_cache, pm_source_reads, pm_sprints
 from bat_agent_connector import pm_requirement_acceptance as acceptance
 from bat_agent_connector import pm_work_batch_evidence as evidence
 from bat_agent_connector import pm_work_batches as batches
@@ -81,6 +81,25 @@ async def test_real_verification_and_complete_responsible_review_prove_only_fixe
     # A quality review cannot recursively treat semantic acceptance as a verifier.
     with pytest.raises(OperationError):
         evidence.condition(w['condition'])
+
+
+async def test_completed_historical_dependencies_prove_sources_once_per_snapshot(qualified, monkeypatch):
+    w, ops = qualified, qualified['d'].ops
+    package, refs = dependent(w)
+    original, expanded = acceptance._original, []
+
+    def source(*args, **kwargs):
+        expanded.append(args[3]['operation_id'])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(acceptance, '_original', source)
+    for _ in range(2):
+        with pm_source_reads.scope(ops.db, OWNER):
+            acceptance.access_dependencies(ops, OWNER, package, refs)
+            acceptance.access_dependencies(ops, OWNER, package, refs)
+            with pm_read_cache.guarded(), pm_read_cache.guarded_scope(ops.db, OWNER):
+                acceptance.access_dependencies(ops, OWNER, package, refs)
+    assert len(expanded) == 2
 
 
 async def test_ci_without_responsible_acceptance_cannot_prove_requirements(owned):

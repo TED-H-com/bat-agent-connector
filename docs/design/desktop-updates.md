@@ -10,6 +10,8 @@ version to equal the announced version. Only a newer Windows x64 NSIS version is
 The native adapter overrides endpoints, target and headers, disables proxy inheritance,
 limits redirects to GitHub asset origins and caps downloads at 128 MiB and 185 seconds.
 The feed also identifies API 1, contract `2026-10-08`, source SHA and canonical workflow.
+The feed generator and updater share the `workflow_version` validator: ASCII
+`YYYY-MM-DD.revision` (one or more revision digits), at most 64 characters, independent of the contract date.
 These feed metadata fields are descriptive; the signature binds artifact bytes and version,
 not the feed's source/workflow assertions. Release tooling derives those from the reviewed
 checkout. A corrupted or relabelled download never becomes installable.
@@ -45,7 +47,7 @@ invoked `desktop-signed-candidate` workflow only builds and uploads an updater-s
 candidate and runs the disposable hosted-runner NSIS/WebView install fixture; it never
 creates a release, publishes a feed, installs on an operator machine or restarts a live host.
 Its exact 40-character source SHA must already belong to main. Version comes from the
-committed Tauri config; canonical workflow comes from the same checkout's skill.
+committed Tauri config; canonical workflow comes from the same checkout's skill and is checked against that shared format.
 
 The repository owner supplies a `desktop-release` environment with an independently
 backed-up signing identity: public `DESKTOP_UPDATER_PUBLIC_KEY` variable and
@@ -110,3 +112,73 @@ Ordinary Mac CI uses ad-hoc signing and cannot pass as notarized distribution ev
 This signed-DMG workflow is separate from Minisign updater signing; the in-app updater
 currently remains Windows-only. Until the maintained Apple identity is configured and
 this workflow passes, Developer ID/notarization is unverified.
+
+## Local candidate receipts
+
+`scripts/validate_release_candidate.py` compares local producer claims and the
+bytes they cover with one explicit candidate SHA. It never fetches, publishes,
+signs, tags, installs or starts a product process. For example:
+
+```sh
+uv run python scripts/validate_release_candidate.py receipt wheel dist/package.whl > wheel-receipt.json
+uv run python scripts/validate_release_candidate.py validate --candidate FULL_SHA --source . --receipt wheel-receipt.json
+```
+
+Each format-1 receipt contains `component`, `version`, `commit`, `artifact`,
+`sha256` and `coverage`. Package receipts cover the archive; the separate
+dashboard receipt covers only dashboard bytes inside its wheel and inherits
+that wheel's build identity. The source comparison uses the candidate's local
+Git objects, never the current checkout's modified files. Wheel/sdist package
+comparison reuses the Connector installer's source-verification rules; no old
+package is imported or executed. Runtime receipts cover the producer manifest
+and compressed payload, including both compressed and uncompressed integrity.
+The manifest's optional `build_commit` is the same build input embedded in the
+runtime; legacy manifests without it remain unknown. Native readers retain
+strict unknown-field rejection and accept the added optional field.
+
+Screenshot receipts reuse the capture-manifest reader and content checks,
+including listed PNG hashes, capture guarantees, the frontend Git tree and
+source-file hashes. README and static-site receipts cover their source bytes;
+their `version` comes from project metadata and must match candidate metadata.
+They do not certify the readable release captions or select a new published
+version. Screenshot `version` is its
+capture schema. These distinct version sources are not interchangeable.
+The static-site checker's `main()` keeps the published release pin at `14c62830`
+until a release workflow runs this validator. Moving that pin is an owner
+decision about pin timing. Shared capture/content checks do not enforce this
+fixed pin, so the validator can accept screenshots matching a different,
+explicit candidate. It refuses screenshots from another candidate even when
+their own images and capture manifest remain intact.
+
+Each required component has `matches`, `differs` or `unknown`, with its own
+reason. Missing/malformed claims, missing files, unavailable candidate objects
+or unsupported producer evidence never pass. Different commits, changed
+receipt digests or source/content mismatches are refused by component name.
+Receipts establish consistency of producer claims and bytes, not signatures,
+independent build attestation, running-process identity or product acceptance.
+
+The default required set includes wheel, sdist, dashboard, managed runtime,
+screenshots, README, static site, native Desktop and the site demo. Current
+Desktop installers and demo output do not ship a supported offline artifact
+receipt; these components stay unknown, so the full set cannot pass today.
+`--required COMPONENT` may be repeated for an explicit partial assembly check;
+the result always lists its required scope. Passing such a subset is not a
+complete release qualification. Native `app_build` remains a running-build
+observation, not an installer-digest receipt. No workflow or signing changes
+are made to manufacture missing evidence.
+
+Run the complete check after candidate artifacts and capture receipts exist,
+before uploading release assets or switching update channels, and before
+publishing the corresponding Pages output. Those workflow integration points
+remain separate work. Choosing the candidate, pin timing, tag/feed mapping,
+readable version and support wording remain owner decisions.
+
+Normalized producer goldens are regenerated with
+`uv run python -m tests.test_release_identity --scratch /path/on/disk`.
+The generator builds two real Hatch candidates from metadata-declared package
+inputs, invokes the runtime writer, and evaluates the capture producer's actual
+metadata statement with explicit fixture clock/browser inputs. Existing PNG
+bytes are fixtures; no browser capture or native installation is claimed.
+Golden hashes/commits/versions are placeholders, not committed hashes of all
+frontend sources. The separate runtime parser golden hashes only fixed,
+de-identified fixture text. Freshness tests compare both with their producers.

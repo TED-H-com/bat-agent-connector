@@ -1,6 +1,8 @@
 import {test, expect} from "@playwright/test";
 import {readFileSync} from "node:fs";
-const fixture = JSON.parse(readFileSync(new URL("./fixtures/fleet-status.json", import.meta.url), "utf8")).result;
+import {fleetDiagnosticsTests} from './fleet-diagnostics';
+const fixture = JSON.parse(readFileSync(new URL("./fixtures/fleet-status.golden.json", import.meta.url), "utf8"));
+fleetDiagnosticsTests(setup, false);
 
 async function setup(page: any, options: any = {}) {
   if (options.clock) await page.clock.install();
@@ -202,4 +204,20 @@ test("delayed settings status cannot mount Fleet into a later route", async ({pa
   await page.evaluate(async () => {(window as any).__fleet.releaseStatus(); await new Promise(resolve => requestAnimationFrame(resolve));});
   await expect(page.getByRole("region", {name: "Local Fleet connections"})).toHaveCount(0);
   expect(await page.evaluate(() => (window as any).__fleet.availabilityReads)).toBe(0);
+});
+
+test('Fleet preserves native ownership codes in their real tunnel layer', async ({page}) => {
+  await setup(page);
+  const region = page.locator('[aria-label="Local Fleet connections"]');
+  await page.evaluate(() => {
+    const row = (window as any).__fleet.doc.readiness.hosts[0];
+    Object.assign(row, {level: 'down', code: 'OWNER_UNPROVEN', blocking: 'tunnel',
+      layers: {tunnel: false, tls: false, bat: false, workspace: false}});
+  });
+  await region.getByRole('button', {name: 'Read status', exact: true}).click();
+  const status = page.locator('[data-fleet-diagnosis="node-1"]');
+  await expect(status.getByText('The background connection outcome is unconfirmed', {exact: true})).toBeVisible();
+  await status.locator('summary').click();
+  await expect(status.locator('code').filter({hasText: 'OWNER_UNPROVEN'})).toBeVisible();
+  await expect(status.locator('code').filter({hasText: 'tunnel'})).toBeVisible();
 });

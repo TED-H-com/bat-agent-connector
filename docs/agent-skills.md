@@ -26,6 +26,15 @@ revision is bundle metadata, not an invented server `skill_version` API field.
 
 ## Installation and diagnosis
 
+Both MCP entry points, `bat` and task-local `bat-task`, initialize with the loaded
+product version and expose the read-only `batc://identity` resource. `mcp.build`
+is the process's startup build snapshot (version, commit and source), with
+`mcp.started_at` recording identity initialization during startup; unknown provenance
+stays unknown. `central` separately reports an authorized capabilities read's build,
+source and observation time, or an unavailable/unknown reason. A task capability
+alone does not grant capabilities access. These facts do not prove an on-disk
+update is running, and do not restart either process.
+
 Use the generic bundle, [`Hermes`](../skills/hermes/bat-agent-connector/SKILL.md),
 or [`Grokbot`](../skills/grokbot/bat-agent-connector/SKILL.md) from the same verified
 Connector checkout/release. Place its `bat-agent-connector` directory in the

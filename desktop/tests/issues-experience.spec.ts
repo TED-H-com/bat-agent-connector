@@ -1,3 +1,4 @@
+import {revealPmView} from './pm-navigation.ts';
 import {mkdirSync} from 'node:fs';
 import {expect, test, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
@@ -9,18 +10,10 @@ import {parseDiscussRefs} from '../src/pm-discuss-link.js';
 const locales = ['en', 'zh-TW'] as const;
 type Locale = typeof locales[number];
 
-function shotDir() {
-  return process.env.BATC_ISSUES_SHOTS_DIR || `${process.env.TMPDIR || '/tmp'}/issues-shots`;
-}
-
 async function openView(page: Page, id: string) {
   await expect.poll(() => page.locator('[data-pm-view]').count()).toBeGreaterThan(0);
-  const entry = page.locator(`[data-pm-view="${id}"]`);
+  const entry = await revealPmView(page, id);
   const narrow = (page.viewportSize()?.width ?? 0) < 1000;
-  if (!await entry.isVisible()) {
-    await page.locator('#workspace-menu').click();
-    await expect(page.locator('.workspace-nav')).toHaveAttribute('aria-modal', 'true');
-  }
   await entry.click();
   await expect(page.locator(`[data-pm-region="${id}"]`)).toBeVisible();
   if (narrow) await expect(page.locator('.workspace-nav')).toBeHidden();
@@ -304,10 +297,11 @@ for (const locale of locales) {
     await context.close();
   });
 
-  test(`issues register layout (${locale})`, async ({browser, baseURL}) => {
+  test(`issues register layout (${locale})`, async ({browser, baseURL}, testInfo) => {
     test.setTimeout(60_000);
     const {page, context, errors, copy} = await boot(browser, baseURL, locale, 1440);
-    mkdirSync(shotDir(), {recursive: true});
+    const directory = process.env.BATC_ISSUES_SHOTS_DIR || testInfo.outputPath('screenshots');
+    mkdirSync(directory, {recursive: true});
     await openView(page, 'issues');
     await expect(page.locator('[data-reg-summary]')).toBeVisible();
     for (const width of [1440, 390, 768]) {
@@ -320,17 +314,17 @@ for (const locale of locales) {
         await expect(page.locator('[data-pm-register] tbody tr').first()).toBeVisible();
       }
       await expectNoOverflow(page);
-      await page.screenshot({path: `${shotDir()}/issues-${locale}-${width}.png`, fullPage: true});
+      await page.screenshot({path: `${directory}/issues-${locale}-${width}.png`, fullPage: true});
       if (width === 1440) {
         await page.locator(`[data-row-key="${copy.rows.finding}"]`).click();
         await expect(page.locator('[data-reg-inspector]')).toBeVisible();
         await expect(page.locator('[data-reg-timeline] [data-reg-step]').nth(0)).toHaveAttribute('data-reg-step', 'finding');
-        await page.screenshot({path: `${shotDir()}/issues-${locale}-1440-finding.png`});
+        await page.screenshot({path: `${directory}/issues-${locale}-1440-finding.png`});
         await page.keyboard.press('Escape');
         await expect(page.locator('[data-reg-inspector]')).toHaveCount(0);
         await page.locator(`[data-row-key="${copy.rows.decision}"]`).click();
         await expect(page.locator('[data-reg-step="decision"]')).toBeVisible();
-        await page.screenshot({path: `${shotDir()}/issues-${locale}-1440-decision.png`});
+        await page.screenshot({path: `${directory}/issues-${locale}-1440-decision.png`});
         await page.keyboard.press('Escape');
         await expect(page.locator('[data-reg-inspector]')).toHaveCount(0);
       }
@@ -338,7 +332,7 @@ for (const locale of locales) {
         await page.locator(`[data-row-key="${copy.rows.finding}"]`).click();
         await expect(page.locator('[data-reg-inspector]')).toBeVisible();
         await expectNoOverflow(page);
-        await page.screenshot({path: `${shotDir()}/issues-${locale}-390-inspector.png`});
+        await page.screenshot({path: `${directory}/issues-${locale}-390-inspector.png`});
         await page.keyboard.press('Escape');
         await expect(page.locator('[data-reg-inspector]')).toHaveCount(0);
       }
@@ -347,7 +341,7 @@ for (const locale of locales) {
         await expect(page.locator('[data-reg-summary]')).toBeVisible();
         await expect(page.locator('[data-reg-trends]')).toContainText(copy.zh ? '趨勢' : 'Trends');
         await expectNoOverflow(page);
-        await page.screenshot({path: `${shotDir()}/issues-${locale}-768-trends.png`, fullPage: true});
+        await page.screenshot({path: `${directory}/issues-${locale}-768-trends.png`, fullPage: true});
         await page.locator('[data-reg-trends] > summary').click();
         await expect(page.locator('[data-reg-summary]')).toBeHidden();
         await page.locator('[data-reg-more]').click();
@@ -361,7 +355,7 @@ for (const locale of locales) {
           return Boolean(fold && fold.contains(document.activeElement));
         })).toBe(true);
         await expectNoOverflow(page);
-        await page.screenshot({path: `${shotDir()}/issues-${locale}-768-revise.png`, fullPage: true});
+        await page.screenshot({path: `${directory}/issues-${locale}-768-revise.png`, fullPage: true});
       }
     }
     await expectNoJunk(page);
@@ -684,13 +678,14 @@ test('issues overflow tools open their folds', async ({browser, baseURL}) => {
   await context.close();
 });
 
-test('issues register dark layout', async ({browser, baseURL}) => {
+test('issues register dark layout', async ({browser, baseURL}, testInfo) => {
   const {page, context, errors} = await boot(browser, baseURL, 'en', 1440, {dark: true});
-  mkdirSync(shotDir(), {recursive: true});
   await openView(page, 'issues');
   await expect(page.locator('[data-reg-summary]')).toBeVisible();
   await expectNoOverflow(page);
-  await page.screenshot({path: `${shotDir()}/issues-en-1440-dark.png`, fullPage: true});
+  const directory = process.env.BATC_ISSUES_SHOTS_DIR || testInfo.outputPath('screenshots');
+  mkdirSync(directory, {recursive: true});
+  await page.screenshot({path: `${directory}/issues-en-1440-dark.png`, fullPage: true});
   expect(errors.filter(line => !line.startsWith('Failed to load resource:'))).toEqual([]);
   await context.close();
 });

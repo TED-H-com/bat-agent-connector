@@ -5,6 +5,7 @@ import json
 
 import pytest
 
+from bat_agent_connector import __version__, task_scoped_mcp
 from bat_agent_connector.mcp_server import OPERATION_TOOLS, build_server
 from tests import test_api_v1 as api
 
@@ -17,6 +18,32 @@ LEGACY = {"hosts_list", "sessions_list", "session_send", "session_continue",
 CENTRAL_ORCHESTRATION = {"worktree_merge", "session_relay", "session_failover", "fanout_plan_session", "fanout_from_plan",
                          "session_record_verification"}
 TASK_WRITES = {"work_submit", "work_pause", "work_resume", "work_mark_stage"}
+
+
+@pytest.mark.parametrize("entry", ["bat", "bat-task"])
+async def test_identity_resource_reads_authorized_central_build_over_real_rpc(served, monkeypatch, entry):
+    d, port = served
+    tok = api.token(d, "identity-reader", "observe")
+    monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
+    monkeypatch.setenv("BATC_API_TOKEN", tok)
+    status, caps = await api.http(port, "GET", "/api/v1/capabilities", tok=tok)
+    assert status == 200
+    if entry == "bat":
+        server, fleet = build_server(d.fleet.config, principal_only=True, read_only=True)
+    else:
+        server, fleet = task_scoped_mcp.build("fixture-task"), None
+    try:
+        contents = list(await server.read_resource("batc://identity"))
+        identity = json.loads(contents[0].content)
+        assert identity["mcp"]["build"]["version"] == __version__
+        assert identity["central"]["build"] == caps["build"]
+        assert identity["central"]["status"] == "available"
+        assert identity["central"]["reason"] is None
+        assert identity["central"]["observed_at"] > 0
+        assert not d.journal.db.execute("SELECT 1 FROM operations").fetchone()
+    finally:
+        if fleet:
+            await fleet.close()
 
 
 async def call(server, name, args):

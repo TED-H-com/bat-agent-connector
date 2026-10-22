@@ -1,5 +1,6 @@
 import {test, expect, type Page} from "@playwright/test";
-import {mkdir} from "node:fs/promises";
+import {STRINGS} from '../src/i18n.js';
+import {serveGateBaseline} from './action-gate-baseline';
 const wid="wi_"+"d".repeat(20), oid="op_"+"a".repeat(32), aid="art_"+"b".repeat(32), digest="c".repeat(64);
 const ref={artifact_id:aid,revision:1,digest};
 async function fixture(page:Page) {
@@ -60,6 +61,38 @@ async function open(page:Page,locale="en-US"){
   await expect(page.getByRole("button",{name:locale==="en-US"?"Choose files":"選擇檔案",exact:true})).toBeVisible();
 }
 async function choose(page:Page){await page.getByRole("button",{name:"Choose files",exact:true}).click();await expect(page.getByRole("progressbar")).toBeVisible();}
+
+for (const locale of ['en-US', 'zh-TW']) test(`native picker rechecks the view reason before uploading ${locale}`, async ({browser}) => {
+  const context = await browser.newContext({locale}), page = await context.newPage();
+  const copy = STRINGS[locale === 'zh-TW' ? 'zh-TW' : 'en'];
+  await serveGateBaseline(page);
+  const state = await fixture(page);
+  state.held = true;
+  try {
+    await open(page, locale);
+    await page.getByRole('button', {name: locale === 'zh-TW' ? '選擇檔案' : 'Choose files', exact: true}).click();
+    await expect.poll(() => Boolean(state.release)).toBe(true);
+    await page.evaluate(() => {
+      const bridge = (window as any).__TAURI_INTERNALS__, invoke = bridge.invoke;
+      const releases: (() => void)[] = [];
+      (window as any).releaseGatePolls = () => {bridge.invoke = invoke; releases.forEach(release => release());};
+      bridge.invoke = async (command: string, args: any) => {
+        if (command === 'connector_request' && args.input.path.startsWith('/events'))
+          await new Promise<void>(resolve => releases.push(resolve));
+        return invoke(command, args);
+      };
+      window.dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}));
+    });
+    state.release!();
+    await expect(page.locator('.native-files').getByText(copy.error_code_CLIENT_ACTION_VIEW_NOT_READY, {exact: true})).toBeVisible();
+    await expect(page.locator('#live')).toHaveAccessibleName(copy.ui_connector_status.replace('{status}', copy.ui_connected));
+    expect(state.calls.filter(c => c.command === 'native_files_upload')).toHaveLength(0);
+    expect(state.errors).toEqual([]);
+  } finally {
+    await page.evaluate(() => (window as any).releaseGatePolls?.()).catch(() => {});
+    await context.close();
+  }
+});
 
 test("opaque upload retains original receipt across stop and reload; full progress is not completion",async({page})=>{
   const state=await fixture(page);await open(page);await choose(page);
@@ -140,7 +173,7 @@ test("same-principal unavailable native receipt stays visible without retargetin
   expect(state.receipts[0].intent_key).toBe(original.intent_key);expect(state.calls.some(c=>c.command==="native_files_control"&&c.args.action==="cancel_upload")).toBe(false);expect(state.errors).toEqual([]);
 });
 
-for(const locale of ["en-US","zh-TW"])for(const width of [390,768,1440])test(`native transfers ${locale} ${width}px`,async({browser})=>{
+for(const locale of ["en-US","zh-TW"])for(const width of [390,768,1440])test(`native transfers ${locale} ${width}px`,async({browser}, testInfo)=>{
   const context=await browser.newContext({locale,viewport:{width,height:900}});const page=await context.newPage();
   try{
     const state=await fixture(page);await open(page,locale);await page.getByRole("button",{name:locale==="en-US"?"Choose files":"選擇檔案",exact:true}).click();
@@ -148,6 +181,6 @@ for(const locale of ["en-US","zh-TW"])for(const width of [390,768,1440])test(`na
     await page.locator(".attachments select").first().selectOption(aid+":1");await page.getByRole("button",{name:locale==="en-US"?"Add attachment":"加入附件",exact:true}).click();
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await page.evaluate(()=>scrollTo(0,0));await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
-    await mkdir("/tmp/bac-native-files-after",{recursive:true});await page.screenshot({path:`/tmp/bac-native-files-after/native-${locale}-${width}.png`,fullPage:true});expect(state.errors).toEqual([]);
+    await page.screenshot({path:testInfo.outputPath(`native-${locale}-${width}.png`),fullPage:true});expect(state.errors).toEqual([]);
   }finally{await context.close();}
 });

@@ -1,13 +1,11 @@
-// Reviewed mock-only Session screenshots. Store artifacts in the task's disk TMPDIR.
-import {mkdirSync} from 'node:fs';
+// Reviewed mock-only Session screenshots. Store artifacts in Playwright's per-test output directory.
 import {expect, test, type Page} from '@playwright/test';
 import {checkpointHost, consoleNoise, fromRequirements, notFound, openSession} from './session-fixture.ts';
 
-const shots = `${process.env.TMPDIR || '/tmp'}/shots`;
 async function capture(page: Page, name: string) {
-  mkdirSync(shots, {recursive: true});
+  const testInfo = test.info();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
-  await page.screenshot({path: `${shots}/${name}.png`, animations: 'disabled'});
+  await page.screenshot({path: testInfo.outputPath(`${name}.png`), animations: 'disabled'});
 }
 for (const locale of ['en', 'zh-TW'] as const) {
   const zh = locale === 'zh-TW';

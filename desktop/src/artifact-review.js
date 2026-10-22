@@ -92,7 +92,7 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
   }
   const persist = (required = false) => {guard(); try {localStorage.setItem(storageKey, JSON.stringify(saved)); return true;}
     catch {if (required) throw new Error(t('ar_storage')); return false;} };
-  const showError = error => {if (currentView()) notice.replaceChildren(errorBox(error, {within:notice}));};
+  const showError = (error, options = {}) => {if (currentView()) notice.replaceChildren(errorBox(error, {...options, within:notice}));};
   const supported = () => caps()?.artifacts?.capture?.managed_single_file === true;
   const scope = name => caps()?.scopes?.includes(name);
   const allowed = name => caps()?.actions?.some(a => a.action === name && a.allowed === true);
@@ -176,7 +176,7 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
         const safe = kind === 'capture' ? ['PREVIEW_EXPIRED', 'PREVIEW_TOKEN_INVALID', 'PREVIEW_MISMATCH', 'INVALID_PARAMS']
           : ['INVALID_PARAMS', 'ARTIFACT_REVISION_MISMATCH', 'ARTIFACT_LINEAGE_UNPROVEN'];
         if (!saved[kind].operation_id && error.status >= 400 && error.status < 500 && safe.includes(error.code)) saved[kind].refused = error.code;
-        persist(); showError(error);
+        persist(); showError(error, {sourceRefresh:false});
         if (kind === 'capture' && error.status === 403) notice.append(h('p', {class: 'muted'}, t('ar_original_credential')));
       } finally {busy = false; pressed.delete(button); finish(); submission = null; if (currentView()) render();}
     } finally {
@@ -197,7 +197,7 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
         if (ticket !== revision) return;
         if (!validPreview(doc, fixed)) throw new Error(t('capture_invalid_preview'));
         saved.preview = doc; readFailed = false; persist(); notice.replaceChildren();
-      } catch (error) {if (ticket === revision) showError(error);}
+      } catch (error) {if (ticket === revision) showError(error, {sourceRefresh:false});}
       finally {busy = false; pressed.delete(preview); if (currentView()) render();}
     } finally {pressed.delete(preview); settle(null, notice, currentView());}
   }}, t('capture_preview'));

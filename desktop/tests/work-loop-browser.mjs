@@ -2,7 +2,10 @@
 import assert from 'node:assert/strict';
 import {createInterface} from 'node:readline';
 import {resolve} from 'node:path';
+import {readFileSync, writeFileSync} from 'node:fs';
 import {chromium, expect as baseExpect} from '@playwright/test';
+import {uiStrings} from '../src/ui/ui-strings.js';
+import {workbenchStrings} from '../src/workbench-strings.js';
 
 const expect = baseExpect.configure({timeout: 30000});
 const lines = createInterface({input: process.stdin})[Symbol.asyncIterator]();
@@ -12,13 +15,32 @@ const f = await receive(), origin = `http://127.0.0.1:${f.port}`;
 const zh = f.locale === 'zh-TW';
 const errors = [], operations = [], requests = [], responses = [], pending = new Map(), results = new Map();
 const resumedOperations = [];
-let browser, page, step = 'start';
+const allRequests = [], requestRecords = new Map();
+let browser, context, page, step = 'start', closeRestart = null;
+let observedBootstrap;
 const launch = async () => {
-  browser = await chromium.launch();
-  const context = await browser.newContext({locale: zh ? 'zh-TW' : 'en-US',
-    viewport: {width: f.width, height: f.width === 390 ? 844 : 900}, reducedMotion: 'reduce'});
+  const options = {locale: zh ? 'zh-TW' : 'en-US',
+    viewport: {width: f.width, height: f.width === 390 ? 844 : 900}, reducedMotion: 'reduce'};
+  if (f.browser_profile) {
+    // Closing the app keeps its origin's storage on disk, as an ordinary
+    // phone/browser close does. Do not copy or reconstruct application state.
+    context = await chromium.launchPersistentContext(f.browser_profile, options);
+    browser = context.browser();
+  } else {
+    browser = await chromium.launch();
+    context = await browser.newContext(options);
+  }
   await context.addInitScript(token => sessionStorage.setItem('batc.dashboard.token', token), f.token);
-  page = await context.newPage();
+  context.on('request', request => {
+    const row = {id: allRequests.length + 1, start: Date.now(), step, method: request.method(), url: request.url(),
+      key: request.headers()['idempotency-key'], ...(request.postData() === null ? {} : {body: request.postData()})};
+    allRequests.push(row); requestRecords.set(request, row);
+  });
+  context.on('response', response => {requestRecords.get(response.request()).status = response.status();});
+  context.on('requestfinished', request => Object.assign(requestRecords.get(request), {end: Date.now(), end_step: step}));
+  context.on('requestfailed', request => Object.assign(requestRecords.get(request), {
+    end: Date.now(), end_step: step, failure: request.failure()?.errorText}));
+  page = context.pages()[0] || await context.newPage();
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {if (message.type() === 'error') console.error(message.text());});
   page.on('request', request => {
@@ -32,6 +54,8 @@ const launch = async () => {
   page.on('response', response => {
     pending.delete(response.request());
     if (new URL(response.url()).pathname.startsWith('/api/')) responses.push({path: new URL(response.url()).pathname, status: response.status()});
+    if (response.ok() && new URL(response.url()).pathname === '/api/v1/bootstrap')
+      response.json().then(data => {observedBootstrap = data;}).catch(() => {});
     if (response.ok() && /\/work-attempts\/[^/]+\/result$/.test(new URL(response.url()).pathname)) {
       response.json().then(result => results.set(result.attempt_id, result)).catch(() => {});
     }
@@ -52,6 +76,441 @@ const clickOperation = async (action, button) => {
   return operation(response);
 };
 const shot = name => page.screenshot({path: resolve(f.shots, name + '.png'), animations: 'disabled'});
+const deferred = () => {
+  let release;
+  const promise = new Promise(resolve => {release = resolve;});
+  return {promise, release};
+};
+async function refusedAccess(active, workUrl) {
+  // The principal, revocation and all HTTP bodies are real. Only BAT/model
+  // are doubles; this journey does not probe a separate Fleet credential.
+  const copy = uiStrings[zh ? 'zh-TW' : 'en'];
+  // Cross-check the real reply's contract; this golden never answers a request.
+  const golden = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-bootstrap.json', import.meta.url), 'utf8'));
+  await expect.poll(() => Boolean(observedBootstrap)).toBe(true);
+  for (const key of ['api_version', 'contract_version'])
+    assert.equal(observedBootstrap.capabilities[key], golden.capabilities[key]);
+  assert.deepEqual(observedBootstrap.capabilities.features.pm_workspaces.work_follow_up.routes,
+    golden.capabilities.features.pm_workspaces.work_follow_up.routes);
+  const surface = f.refusal_surface || 'work';
+  let field = page.locator('[data-follow-up-input]');
+  let work = page.locator('[data-work-section="next-turn"]');
+  let submit = work.getByRole('button', {name: zh ? '送出下一步' : 'Send next', exact: true});
+  const draft = '  尚未送出 📝\nKeep this instruction unsent.\n  ';
+  await field.fill(draft);
+  await expect(submit).toBeEnabled();
+  await page.getByRole('button', {name: zh ? '成果' : 'Results', exact: true}).click();
+  const resultHref = await page.locator('[data-work-result-focus="live-output"]').getAttribute('href');
+  assert.ok(resultHref.includes(`attempt=${active.attempt}`));
+  await page.keyboard.press('Escape');
+  const sessionRoute = resultHref.split('?')[0];
+  const [, , host, sid] = sessionRoute.split('/');
+  let target = {workspace_id: f.workspace, work_item_id: f.work};
+  let suffix = `.session.send.${JSON.stringify(target)}`;
+  if (surface !== 'work') step = 'refusal-setup-' + surface;
+  if (surface === 'pm-form') {
+    target = {workspace_id: f.workspace, thread_id: f.thread};
+    suffix = `.pm.message.append.${JSON.stringify(target)}`;
+    await page.evaluate(hash => {location.hash = hash;}, `#/pm/${f.workspace}/discussions/${f.thread}`);
+    work = page.locator('form[data-pm-action="pm.message.append"]');
+    field = work.locator('[data-discussion-composer]');
+    submit = work.locator('button[type=submit]');
+  } else if (surface === 'session-toolbar') {
+    // The Result supplies this managed session's existing route. A plain session
+    // route has no Work selection; Classic exposes its original Send/Interrupt toolbar.
+    await page.goto(`${origin}/dashboard/${sessionRoute}`);
+    target = {host, session_id: sid};
+    suffix = `.send.${host}.${sid}`;
+    await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
+    work = page.locator('.workspace-composer');
+    field = page.locator('#workspace-message-input > textarea');
+    submit = page.locator('#workspace-message-input .composer-row button.primary');
+    const queue = work.locator('input[type=checkbox]');
+    await expect(field).toBeVisible();
+    await queue.setChecked(!await queue.isChecked());
+    await expect(page.locator('.workspace-session-heading button.danger')).toBeEnabled();
+  }
+  await field.fill(draft);
+  await expect(submit).toBeEnabled();
+  const surfaceUrl = page.url();
+  const originalField = await field.elementHandle();
+  const draftEntries = () => page.evaluate(({suffix, surface}) => Object.entries(localStorage)
+    .filter(([key]) => surface === 'work' ? key.includes('.session.send.')
+      : key.endsWith(suffix) || key.endsWith(suffix + '.queue')).sort(([a], [b]) => a.localeCompare(b)), {suffix, surface});
+  const saved = await draftEntries();
+  assert.equal(saved.length, surface === 'session-toolbar' ? 2 : 1);
+  const [draftKey, raw] = saved.find(([key]) => key.endsWith(suffix));
+  assert.ok(draftKey.endsWith(suffix));
+  if (surface === 'session-toolbar') assert.deepEqual(Buffer.from(raw), Buffer.from(draft));
+  else {
+    assert.deepEqual(Buffer.from(JSON.parse(raw).values[surface === 'pm-form' ? 'content' : 'text']), Buffer.from(draft));
+    assert.equal(Object.hasOwn(JSON.parse(raw), 'intent'), false);
+  }
+  const originalContext = context, originalPage = page;
+  const since = allRequests.length;
+  const refusedResults = [];
+  const resultPath = `/api/v1/pm/workspaces/${f.workspace}/work-attempts/${active.attempt}/result`;
+  const observeResultRefusal = async response => {
+    if (new URL(response.url()).pathname === resultPath && response.status() === 401)
+      refusedResults.push({path: resultPath, status: response.status(), body: await response.json()});
+  };
+  context.on('response', observeResultRefusal);
+  const unchanged = async () => {
+    assert.equal(context, originalContext); assert.equal(page, originalPage);
+    assert.deepEqual(await draftEntries(), saved);
+    assert.deepEqual(allRequests.slice(since).filter(row => row.method === 'POST'
+      && new URL(row.url).pathname.startsWith('/api/v1/operations')), []);
+    assert.equal(requests.length, 1, 'Only the initial Work start may submit an operation');
+    for (const row of allRequests.slice(since).filter(row => row.method === 'GET')) {
+      const url = new URL(row.url);
+      if (url.pathname.endsWith('/inputs')) assert.equal(url.searchParams.get('attempt_id'), active.attempt);
+      if (/\/work-attempts\//.test(url.pathname)) assert.ok(url.pathname.includes('/' + active.attempt));
+    }
+    for (const href of await page.locator('#main a[href*="attempt="]').evaluateAll(nodes => nodes.map(node => node.getAttribute('href'))))
+      assert.equal(new URLSearchParams(href.split('?')[1]).get('attempt'), active.attempt);
+    await expect(page.locator('[data-answer-action]:enabled')).toHaveCount(0);
+  };
+  const header = page.locator('#live');
+  const scoped = copy.ui_connector_status.replace('{status}', copy.ui_connection_refused);
+  const headerRefused = async () => {
+    await expect(header).toHaveText(copy.ui_connection_refused);
+    await expect(header).toHaveAccessibleName(scoped);
+    await expect(header).toHaveAttribute('title', `${scoped} — ${copy.error_code_CLIENT_ACTION_REFUSED}`);
+    await expect(header).toHaveAttribute('data-connection', 'reconnecting');
+    await expect(page.locator('.central-service-scope')).toHaveText(copy.ui_connector_scope);
+  };
+  step = 'revoke-access';
+  await expect(header).toHaveText(copy.ui_connected);
+  // A checkpoint is committed only after its listener refreshes settle. It
+  // establishes the retained-source case without assuming Connected means idle.
+  send({stage: 'refusal-checkpoint'});
+  const {cursor} = await receive();
+  await expect.poll(() => page.evaluate(cursor => Object.entries(localStorage)
+    .some(([key, value]) => key.startsWith('batc.sync.') && JSON.parse(value).cursor >= cursor), cursor)).toBe(true);
+  let refreshRace = null, debug;
+  if (f.late_refusal_refresh) {
+    // Pause JavaScript, not HTTP: a real inventory event starts a source refresh,
+    // and the debugger stops its read before fetch sends it. ApiV1 alone
+    // authenticates and produces every reply after the real principal is revoked.
+    debug = await context.newCDPSession(page);
+    await debug.send('Debugger.enable');
+    const sourcePath = surface === 'work' ? resultPath : surface === 'pm-form'
+      ? `/api/v1/pm/workspaces/${f.workspace}/threads/${f.thread}` : `/api/v1/sessions/${host}/${sid}`;
+    const caller = surface === 'work' ? 'setAttempt' : surface === 'pm-form' ? 'refreshDiscussionSources' : 'loadObservation';
+    let paused = null;
+    const eventPages = [];
+    const observePage = async response => {
+      if (new URL(response.url()).pathname === '/api/v1/events' && response.status() === 200)
+        eventPages.push(await response.json());
+    };
+    context.on('response', observePage);
+    debug.on('Debugger.paused', async event => {
+      if (event.callFrames.some(frame => frame.functionName === caller)) paused = event;
+      else await debug.send('Debugger.resume');
+    });
+    await debug.send('DOMDebugger.setXHRBreakpoint', {url: sourcePath});
+    step = 'refusal-refresh';
+    send({stage: 'refusal-refresh'});
+    const {event} = await receive();
+    await expect.poll(() => Boolean(paused)).toBe(true);
+    assert.ok(eventPages.some(page => page.events.some(row => row.seq === event.seq)));
+    refreshRace = {event, paused_at: Date.now(), frames: paused.callFrames.map(frame => ({
+      name: frame.functionName, location: frame.location})), source_path: sourcePath};
+    context.off('response', observePage);
+  }
+  const refusal = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/events'
+    && response.status() === 401);
+  send({stage: 'revoke-access'});
+  assert.equal((await receive()).revoked, true);
+  if (debug) {
+    const refusedSource = page.waitForResponse(response => new URL(response.url()).pathname === refreshRace.source_path
+      && response.status() === 401);
+    refreshRace.revoked_at = Date.now();
+    await debug.send('DOMDebugger.removeXHRBreakpoint', {url: refreshRace.source_path});
+    await debug.send('Debugger.resume');
+    await debug.detach();
+    const source = await refusedSource;
+    refreshRace.source = {path: new URL(source.url()).pathname, status: source.status(), body: await source.json()};
+    assert.equal(refreshRace.source.body.error.code, 'UNAUTHORIZED');
+    writeFileSync(resolve(f.shots, 'refusal-refresh.json'), JSON.stringify(refreshRace, null, 2) + '\n');
+  }
+  const response = await refusal;
+  const body = await response.json();
+  assert.equal(body.error.code, 'UNAUTHORIZED');
+  step = 'refused-' + surface;
+  await headerRefused();
+  await expect(submit).toBeDisabled();
+  await expect(field).toHaveValue(draft);
+  assert.equal(await field.evaluate((node, old) => node === old, originalField), true);
+  assert.equal(page.url(), surfaceUrl);
+  let resultOutcome = null;
+  if (surface === 'session-toolbar') {
+    const reason = page.locator('.session-send-reason');
+    await expect(reason).toHaveText(copy.error_code_CLIENT_ACTION_REFUSED);
+    await expect(reason).toHaveAttribute('data-client-action-code', 'CLIENT_ACTION_REFUSED');
+    await expect(page.locator('.workspace-session-heading button.danger')).toBeDisabled();
+  } else {
+    if (surface === 'pm-form') {
+      const reason = work.locator('[data-pm-client-gate]');
+      await expect(reason).toHaveAttribute('data-client-action-code', 'CLIENT_ACTION_REFUSED');
+      await expect(reason).toHaveText(copy.error_code_CLIENT_ACTION_REFUSED);
+      await expect(reason.locator('[data-api-error], [data-error-summary], [aria-live]')).toHaveCount(0);
+      // A submit queued before the disabled state must explain the same gate,
+      // without generating an intent, a key or an operation POST.
+      await work.evaluate(node => node.requestSubmit());
+      await expect(work).toContainText(copy.error_code_CLIENT_ACTION_REFUSED);
+    } else {
+      await expect(work.locator('[data-api-error]')).toContainText('CLIENT_ACTION_REFUSED');
+      await expect(work.getByText(copy.error_code_CLIENT_ACTION_REFUSED, {exact: true})).toBeVisible();
+      // Revoking during a refresh can withdraw a previously validated Result.
+      // Preserve its target, not the presence of a link that is now unreadable.
+      const resultState = () => page.evaluate(() => ({
+        hrefs: [...document.querySelectorAll('[data-work-result-focus="live-output"]')].map(node => node.getAttribute('href')),
+        summary: document.querySelector('[data-workbench-summary]')?.textContent,
+        refused: Boolean(document.querySelector('.session-status [data-session-error="UNAUTHORIZED"]')),
+      }));
+      const classify = async () => {
+        const source = await resultState();
+        if (source.hrefs.length === 1 && source.hrefs[0] === resultHref) return 'retained';
+        if (source.hrefs.length === 0 && source.summary === workbenchStrings[zh ? 'zh-TW' : 'en'].wc_unavailable && source.refused
+          && refusedResults.some(row => row.body.error.code === 'UNAUTHORIZED')) return 'refused';
+        return 'unsettled';
+      };
+      await expect.poll(async () => resultOutcome = await classify())
+        .toMatch(f.late_refusal_refresh ? /^refused$/ : /^(retained|refused)$/);
+    }
+  }
+  await unchanged();
+  await shot('02-refused-work');
+  step = 'refused-settings';
+  await page.evaluate(() => {location.hash = '#/settings?section=connection';});
+  await expect(page.locator('.global-connection-facts .ui-pill')).toHaveText(await header.innerText());
+  const settingsReason = await page.locator('.global-connection-facts .ui-pill').innerText();
+  await headerRefused();
+  await unchanged();
+  await shot('03-refused-settings');
+  if (surface === 'work') {
+    step = 'refused-work-return';
+    const returned = page.waitForResponse(response => response.status() === 401
+      && new URL(response.url()).pathname === `/api/v1/work-items/${f.work}`);
+    await page.evaluate(hash => {location.hash = hash;}, new URL(workUrl).hash);
+    await returned;
+    await expect(page).toHaveURL(workUrl);
+    // Refused source reads cannot recreate actionable controls from cached data.
+    await expect(page.locator('#main [data-api-error]')).toContainText('UNAUTHORIZED');
+    await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
+    await headerRefused();
+    await unchanged();
+  }
+  assert.deepEqual(errors, []);
+  await shot('04-refused-work-return');
+  const proof = {surface, target, draft_key: draftKey, draft_unchanged: true, attempt: active.attempt, result_href: resultHref,
+    result_outcome: resultOutcome, late_refresh: refreshRace,
+    events_status: response.status(), server_code: body.error.code,
+    header_reason: await header.innerText(), settings_reason: settingsReason, draft_has_intent: false,
+    reason_key: 'ui_connection_refused', gate_code: 'CLIENT_ACTION_REFUSED', operation_posts: 0};
+  writeFileSync(resolve(f.shots, 'refused-access.json'), JSON.stringify({proof, requests: allRequests.slice(since)}, null, 2) + '\n');
+  context.off('response', observeResultRefusal);
+  send({stage: 'refused-done', operations, browser: browser.version(), refusal: proof});
+}
+
+async function foregroundRecovery(active, workUrl) {
+  // HTTP, the bundle and storage are real. BAT/model and OS lifecycle events
+  // are doubles; this sequence does not establish physical-phone acceptance.
+  const originalPage = page, originalContext = context;
+  const field = page.locator('[data-follow-up-input]');
+  const submit = page.getByRole('button', {name: zh ? '送出下一步' : 'Send next', exact: true});
+  const draft = '  尚未送出 📝 — keep this draft\n' + Array.from({length: 36}, (_, i) =>
+    `第 ${i + 1} 行：登入修正 / unchanged text 🙂`).join('\n') + '\n  ';
+  const frames = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const visibility = value => page.evaluate(value => {
+    Object.defineProperty(document, 'visibilityState', {configurable: true, value});
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, value);
+  const snapshot = () => field.evaluate(node => ({
+    focused: document.activeElement === node, value: node.value,
+    selection: [node.selectionStart, node.selectionEnd, node.selectionDirection],
+    scrollY, scrollTop: node.scrollTop, readerTop: document.querySelector('main.session-view').scrollTop,
+    stored: Object.entries(localStorage).sort(([a], [b]) => a.localeCompare(b)),
+  }));
+  const events = deferred(), sources = deferred(), admission = deferred(), preResume = deferred(), preparationEvents = deferred();
+  const heldEvents = [], heldSources = [], eventPages = [], preResumeReads = [], preparationPolls = [];
+  let holdEvents = false, holdSources = false, holdAdmission = false, holdPreResume = false, holdPreparation = false;
+  let before, after, syncKey, intent, changedKeys, recoveryStart, recoveryEnd;
+  const operationPosts = since => allRequests.slice(since).filter(row => row.method === 'POST'
+    && new URL(row.url).pathname.startsWith('/api/v1/operations'));
+  const readTargets = since => {
+    const reads = allRequests.slice(since).filter(row => row.method === 'GET');
+    const inputs = reads.filter(row => new URL(row.url).pathname.endsWith('/inputs'));
+    const results = reads.filter(row => /\/work-attempts\/[^/]+\/result$/.test(new URL(row.url).pathname));
+    assert.ok(inputs.length && results.length, 'Recovery must read real inputs and the original Result');
+    assert.ok(inputs.every(row => new URL(row.url).searchParams.get('attempt_id') === active.attempt));
+    assert.ok(results.every(row => new URL(row.url).pathname.endsWith(`/${active.attempt}/result`)));
+  };
+  await context.route('**/api/v1/**', async route => {
+    const request = route.request(), path = new URL(request.url()).pathname;
+    if (holdPreparation && request.method() === 'GET' && path === '/api/v1/events') {
+      preparationPolls.push(request.url()); await preparationEvents.promise;
+    } else if (holdPreResume && request.method() === 'GET' && /^\/api\/v1\/sessions\/[^/]+\/[^/]+(?:\/messages)?$/.test(path)) {
+      preResumeReads.push({at: Date.now(), path, online: await page.evaluate(() => navigator.onLine)});
+      await preResume.promise;
+    } else if (holdEvents && request.method() === 'GET' && path === '/api/v1/events') {
+      heldEvents.push(request.url()); await events.promise;
+    } else if (holdSources && request.method() === 'GET'
+      && (path.includes('/sessions/') || path.endsWith('/inputs') || path.endsWith('/result'))) {
+      heldSources.push(request.url()); await sources.promise;
+    } else if (holdAdmission && request.method() === 'POST' && path.startsWith('/api/v1/operations')) {
+      await admission.promise;
+    }
+    // Hold the actual request, then let ApiV1 produce its response unchanged.
+    await route.continue();
+  });
+  context.on('response', response => {
+    if (response.ok() && new URL(response.url()).pathname === '/api/v1/events') {
+      response.json().then(body => eventPages.push(body)).catch(() => {});
+    }
+  });
+  try {
+    step = 'foreground-setup';
+    await field.fill(draft);
+    await expect(submit).toBeEnabled();
+    await page.getByRole('button', {name: zh ? '成果' : 'Results', exact: true}).click();
+    const selectedResult = page.locator('[data-work-result-focus="live-output"]');
+    const originalHref = await selectedResult.getAttribute('href');
+    assert.ok(originalHref.includes(`attempt=${active.attempt}`));
+    await page.keyboard.press('Escape');
+    await field.fill(draft);
+    const original = await field.elementHandle();
+    await field.evaluate(node => {
+      node.setSelectionRange(3, 19, 'backward');
+      node.scrollTop = 45;
+      document.querySelector('main.session-view').scrollTop = 75;
+    });
+    await frames();
+    before = await snapshot();
+    assert.equal(before.focused, true);
+    assert.deepEqual(before.selection, [3, 19, 'backward']);
+    assert.ok(before.scrollTop > 0 && before.readerTop > 0, JSON.stringify(before));
+    const drafts = before.stored.filter(([key]) => key.startsWith('batc.pm.') && key.includes('.session.send.'));
+    assert.equal(drafts.length, 1);
+    const [draftKey, stored] = drafts[0];
+    assert.ok(draftKey.endsWith(`.session.send.${JSON.stringify({workspace_id: f.workspace, work_item_id: f.work})}`));
+    assert.equal(JSON.parse(stored).values.text, draft);
+    assert.equal(Object.hasOwn(JSON.parse(stored), 'intent'), false);
+    // app.js saveCursor writes this server checkpoint only after the events page
+    // and its source refreshes settle. No draft or other storage key is exempt.
+    syncKey = 'batc.sync.' + draftKey.slice('batc.pm.'.length, draftKey.indexOf('.session.send.'));
+    assert.ok(before.stored.some(([key]) => key === syncKey));
+    const unchanged = async () => {
+      assert.equal(page, originalPage); assert.equal(context, originalContext);
+      assert.equal(await field.evaluate((node, old) => node === old, original), true);
+      const current = await snapshot();
+      assert.deepEqual(Buffer.from(current.value, 'utf8'), Buffer.from(draft, 'utf8'));
+      const withoutCheckpoint = state => ({...state, stored: state.stored.filter(([key]) => key !== syncKey)});
+      assert.deepEqual(withoutCheckpoint(current), withoutCheckpoint(before));
+      assert.equal(Object.hasOwn(JSON.parse(current.stored.find(([key]) => key === draftKey)[1]), 'intent'), false);
+      assert.equal(page.url(), workUrl);
+      await expect(selectedResult).toHaveAttribute('href', originalHref);
+      assert.deepEqual(operationPosts(recoveryStart), []);
+      await expect(page.locator('[data-follow-up-receipt], [data-follow-up-ack]')).toHaveCount(0);
+    };
+    await expect(submit).toBeEnabled();
+    recoveryStart = allRequests.length;
+    step = 'pre-resume-refresh';
+    holdPreparation = true;
+    send({stage: 'prepare-refresh'});
+    const preparation = await receive();
+    await expect.poll(() => preparationPolls.length).toBeGreaterThan(0);
+    holdPreResume = true; holdPreparation = false; preparationEvents.release();
+    await expect.poll(() => preResumeReads.length).toBe(2);
+    assert.ok(preResumeReads.every(row => row.online), 'Both unanswered reads must start before going offline');
+    await expect.poll(() => eventPages.some(body => body.events.some(row => row.seq === preparation.refresh_event.seq))).toBe(true);
+    holdPreResume = false;
+    step = 'hidden';
+    await visibility('hidden');
+    await expect(submit).toBeDisabled();
+    step = 'offline';
+    await context.setOffline(true);
+    assert.equal(await page.evaluate(() => navigator.onLine), false);
+    assert.equal(await page.evaluate(async () => {
+      try {await fetch('/dashboard/index.html?foreground-offline', {cache: 'no-store'}); return false;}
+      catch {return true;}
+    }), true, 'Chromium must fail a real HTTP fetch while offline');
+    await unchanged();
+    send({stage: 'background-offline'});
+    const changed = await receive();
+    assert.equal(changed.event.kind, 'session.updated');
+    step = 'resume-events';
+    await context.setOffline(false);
+    holdEvents = true; holdSources = true;
+    await visibility('visible');
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true})));
+    await expect(submit).toBeDisabled();
+    await expect.poll(() => heldEvents.length).toBeGreaterThan(0);
+    await unchanged();
+    step = 'resume-sources';
+    events.release();
+    await expect.poll(() => heldSources.filter(url => new URL(url).pathname.endsWith('/inputs')).length).toBeGreaterThan(0);
+    await expect(submit).toBeDisabled();
+    await unchanged();
+    sources.release();
+    await expect(submit).toBeEnabled();
+    await expect(page.locator('#live')).toHaveAttribute('data-connection', 'connected');
+    await expect.poll(() => eventPages.some(body => body.events.some(row => row.seq === changed.event.seq
+      && row.resource_id === changed.event.resource_id && row.kind === changed.event.kind))).toBe(true);
+    await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)).cursor, syncKey)).toBeGreaterThanOrEqual(changed.event.seq);
+    await frames();
+    await unchanged();
+    after = await snapshot();
+    changedKeys = [...new Set([...before.stored, ...after.stored].map(([key]) => key))]
+      .filter(key => new Map(before.stored).get(key) !== new Map(after.stored).get(key));
+    assert.deepEqual(changedKeys, [syncKey]);
+    recoveryEnd = allRequests.length;
+    readTargets(recoveryStart);
+    step = 'recovered';
+    await shot('02-foreground-recovered');
+    holdAdmission = true;
+    step = 'explicit-send';
+    const sending = Promise.all([post('session.send'), submit.click()]);
+    await expect.poll(() => operationPosts(recoveryStart).length).toBe(1);
+    intent = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).intent, draftKey);
+    const request = operationPosts(recoveryStart)[0];
+    assert.equal(request.key, intent.key);
+    assert.deepEqual(JSON.parse(request.body), intent.request);
+    assert.deepEqual(intent.request.target, {workspace_id: f.workspace, work_item_id: f.work});
+    assert.deepEqual(intent.request.preconditions, {expected_attempt_id: active.attempt});
+    assert.deepEqual(intent.request.params, {text: draft.trim(), schedule: 'after_current'});
+    admission.release();
+    const [response] = await sending;
+    const sent = await operation(response);
+    send({stage: 'sent-after-recovery', operation_id: sent.operation_id, intent, draft});
+    assert.equal((await receive()).sent, sent.operation_id);
+    step = 'receipt';
+    await expect(page.locator(`[data-follow-up-receipt="${sent.operation_id}"]`)).toContainText(zh ? '已送出' : 'Sent');
+    assert.equal(operationPosts(recoveryStart).length, 1);
+    readTargets(recoveryStart);
+    assert.deepEqual(errors, []);
+    assert.equal(requests.length, 2);
+    assert.equal(new Set(requests.map(row => row.key)).size, 2);
+    send({stage: 'foreground-done', operations, browser: browser.version(), recovery: {
+      changed_storage_keys: changedKeys, sync_key: syncKey, recovery_posts: 0, explicit_posts: 1,
+      event: changed.event, original_result: originalHref, same_context: true, same_node: true,
+    }});
+  } finally {
+    step = 'cleanup';
+    events.release(); sources.release(); admission.release(); preResume.release(); preparationEvents.release();
+    await context.setOffline(false);
+    const ledger = {};
+    for (const row of allRequests) {
+      const key = `${row.method} ${new URL(row.url).pathname}`;
+      ledger[row.step] ||= {};
+      ledger[row.step][key] = (ledger[row.step][key] || 0) + 1;
+    }
+    writeFileSync(resolve(f.shots, 'foreground-recovery.json'), JSON.stringify({before, after, syncKey,
+      changedKeys, intent, recoveryStart, recoveryEnd, heldEvents, heldSources, preResumeReads, preparationPolls, ledger, requests: allRequests}, null, 2) + '\n');
+  }
+}
+
 try {
   await launch();
   let start;
@@ -153,10 +612,29 @@ try {
   if (f.mode === 'adopt') await shot('01-started');
   const workUrl = page.url();
   assert.equal(new URL(workUrl).hash.includes(active.attempt), true);
+  if (f.refused_access) {
+    await refusedAccess(active, workUrl);
+  } else if (f.foreground_recovery) {
+    await foregroundRecovery(active, workUrl);
+  } else {
   const text = zh ? '再補一個失敗後重新送出的案例。' : 'Add a retry-after-failure case.';
   await page.locator('[data-follow-up-input]').fill(text);
   const queued = await clickOperation('session.send', page.locator('[data-work-section="next-turn"]').getByRole('button', {name: zh ? '送出下一步' : 'Send next', exact: true}));
   await expect(page.locator('[data-follow-up-receipt]')).toContainText(zh ? '排隊中' : 'Queued');
+  const draft = f.browser_profile
+    ? (zh ? '  保留這段尚未送出的草稿。\n還不要送出。📝  ' : '  Keep this unsent draft.\nDo not send yet. 📝  ')
+    : (zh ? '保留這段尚未送出的草稿。' : 'Keep this unsent draft.');
+  let savedDraft;
+  if (f.browser_profile) {
+    send({stage: 'awaiting-admission', operation_id: queued.operation_id});
+    assert.equal((await receive()).admitted, queued.operation_id);
+    await expect(page.locator('[data-follow-up-input]')).toHaveValue('');
+    await page.locator('[data-follow-up-input]').fill(draft);
+    savedDraft = await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.includes('.session.send.')));
+    assert.equal(savedDraft.length, 1);
+    assert.equal(JSON.parse(savedDraft[0][1]).values.text, draft);
+    assert.equal(JSON.parse(savedDraft[0][1]).intent, undefined);
+  }
   await shot('02-queued');
   const layout = await page.locator('.workspace-conversation').evaluate(lane => ({
     readingBottom: Math.max(...[...lane.querySelectorAll('.conversation > .actions > *')]
@@ -166,15 +644,48 @@ try {
   }));
   assert.ok(layout.readingBottom <= layout.nextTop, `Reading controls overlap the next step: ${JSON.stringify(layout)}`);
   assert.ok(layout.overflow <= 1, `Page overflows: ${JSON.stringify(layout)}`);
-  await browser.close(); browser = null;
-  send({stage: 'closed', operation_id: queued.operation_id, instruction: text});
+  if (f.browser_profile) await context.close();
+  else await browser.close();
+  browser = null;
+  send({stage: 'closed', operation_id: queued.operation_id, instruction: text, draft});
   const fixed = await receive();
   assert.equal(fixed.attempt, active.attempt);
   step = 'reconnect';
+  const reconnectStart = allRequests.length;
   await launch();
   await page.goto(workUrl);
   await expect(page.locator('[data-follow-up-receipt]')).toContainText(text);
   await expect(page.locator('[data-follow-up-receipt]')).not.toContainText(zh ? '排隊中' : 'Queued');
+  if (f.browser_profile) {
+    const receipt = page.locator(`[data-follow-up-receipt="${queued.operation_id}"]`);
+    await expect(receipt).toHaveCount(1);
+    await expect(receipt).toHaveAttribute('data-follow-up-state', 'sent');
+    await expect(receipt).toContainText(zh ? '已送出' : 'Sent');
+    await expect(page.locator('[data-follow-up-input]')).toHaveValue(draft);
+    assert.deepEqual(await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.includes('.session.send.'))), savedDraft);
+    const receiptPath = `/api/v1/operations/${queued.operation_id}`;
+    const [reply] = await Promise.all([
+      page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === receiptPath),
+      receipt.locator(`a[href="#/op/${queued.operation_id}"]`).click(),
+    ]);
+    assert.equal(reply.status(), 200);
+    const original = (await reply.json()).operation;
+    assert.equal(original.operation_id, queued.operation_id);
+    assert.equal(original.input_receipt.operation_id, queued.operation_id);
+    assert.equal(original.input_receipt.state, 'sent');
+    await page.goto(workUrl);
+    await expect(page.locator(`[data-follow-up-receipt="${queued.operation_id}"]`)).toHaveAttribute('data-follow-up-state', 'sent');
+    await expect(page.locator('[data-follow-up-input]')).toHaveValue(draft);
+    assert.deepEqual(Buffer.from(await page.locator('[data-follow-up-input]').inputValue()), Buffer.from(draft));
+    const reconnectRequests = allRequests.slice(reconnectStart);
+    const posts = reconnectRequests.filter(row => row.method === 'POST' && new URL(row.url).pathname.startsWith('/api/v1/operations'));
+    assert.deepEqual(posts, [], 'Reconnect reads the original receipt; it must never submit or resume an operation');
+    assert.ok(reconnectRequests.some(row => row.method === 'GET' && new URL(row.url).pathname === receiptPath));
+    writeFileSync(resolve(f.shots, 'reconnect-requests.json'), JSON.stringify(reconnectRequests, null, 2) + '\n');
+    closeRestart = {operation_id: queued.operation_id, receipt_state: original.input_receipt.state,
+      operation_posts: posts.length, draft_utf8: Buffer.from(draft).toString('hex'), same_storage: true};
+    await shot('02-reconnected-draft');
+  }
   if (f.withdraw_writer) {
     step = 'withdrawn-writer';
     await expect(page.locator('[data-follow-up-receipt]')).toContainText(zh ? '目前權限不允許送出此指令；指令尚未送出。' : 'Your current permissions do not allow sending this instruction. It was not sent.');
@@ -199,8 +710,7 @@ try {
     assert.equal(new Set(requests.map(row => row.key)).size, 2);
     send({stage: 'withdrawn', operations, browser: browser.version()});
   } else {
-  const draft = zh ? '保留這段尚未送出的草稿。' : 'Keep this unsent draft.';
-  await page.locator('[data-follow-up-input]').fill(draft);
+  if (!f.browser_profile) await page.locator('[data-follow-up-input]').fill(draft);
   const views = page.locator('[data-workbench-views]');
   for (const name of zh ? ['關聯', '現場', '工作'] : ['Lineage', 'Live', 'Work']) {
     await views.getByRole('tab', {name, exact: true}).click();
@@ -392,7 +902,8 @@ try {
   assert.deepEqual(follow.body.preconditions, {expected_attempt_id: active.attempt});
   assert.equal(requests.at(-1).body.params.candidate_sha, fixed.candidate);
   assert.equal(requests.at(-1).body.params.draft, true);
-  send({stage: 'done', operations, resumed_operations: resumedOperations, browser: browser.version(), discussion_return: selection});
+  send({stage: 'done', operations, resumed_operations: resumedOperations, browser: browser.version(), discussion_return: selection, close_restart: closeRestart});
+  }
   }
 } catch (error) {
   console.error(JSON.stringify({step, url: page?.url(), errors, requests, responses, pending: [...pending.values()]}));
@@ -403,6 +914,8 @@ try {
   console.error(error);
   process.exitCode = 1;
 } finally {
-  await browser?.close();
+  writeFileSync(resolve(f.shots, 'browser-requests.json'), JSON.stringify(allRequests, null, 2) + '\n');
+  if (f.browser_profile) await context?.close();
+  else await browser?.close();
   process.stdin.destroy();
 }

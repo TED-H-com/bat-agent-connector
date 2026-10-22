@@ -1,4 +1,5 @@
-import {iconButton} from './ui/components.js';
+import {fleetStatus, rememberFleetDetails} from "./fleet-status.js";
+import {button} from './ui/components.js';
 import {fleetAvailability, fleetRequest} from "./transport/index.ts";
 
 // Local Fleet state never shares the central event cursor, principal or operation journal.
@@ -10,6 +11,7 @@ export async function mountFleet(main, {h, t}) {
   main.append(panel);
   let nativeCleanup, bootstrapCleanup;
   let disposed = false, busy = false, readable = false, timer, snapshot, draft, binding, pressed = null;
+  const detailsState = new Map();
   const alive = () => !disposed && panel.isConnected;
   const key = () => `batc.desktop.fleet.selection.${binding}`;
   const save = () => { try { if (draft) sessionStorage.setItem(key(), JSON.stringify(draft)); else sessionStorage.removeItem(key()); } catch { /* Keep the mounted draft when storage is unavailable. */ } };
@@ -18,7 +20,7 @@ export async function mountFleet(main, {h, t}) {
   // Static reasons stay disabled. Only an in-flight read blocks a control with aria-disabled, so it stays focusable.
   const canEdit = () => readable && snapshot?.configuration.valid && (snapshot.monitor.state === "stopped" || snapshot.monitor.controllable);
   const gate = (blocked, action) => busy && action && pressed === action ? {"aria-disabled": "true"} : blocked ? {disabled: true} : busy ? {"aria-disabled": "true"} : {};
-  const focusKeys = ["data-fleet-action", "data-fleet-name"];
+  const focusKeys = ["data-fleet-action", "data-fleet-name", "data-fleet-details"];
   const focusKey = node => {
     for (let current = node; current && current !== panel; current = current.parentElement) {
       for (const attr of focusKeys) if (current.hasAttribute?.(attr)) return [attr, current.getAttribute(attr)];
@@ -27,7 +29,7 @@ export async function mountFleet(main, {h, t}) {
   };
   const controlByKey = key => {
     if (!key) return null;
-    for (const node of content.querySelectorAll("button, input, select")) if (node.getAttribute(key[0]) === key[1]) return node;
+    for (const node of content.querySelectorAll("button, input, select, summary")) if (node.getAttribute(key[0]) === key[1]) return node;
     return null;
   };
   // Forward within the same action row. A removed or disabled control continues at the status text.
@@ -44,7 +46,13 @@ export async function mountFleet(main, {h, t}) {
     return message;
   };
   const render = () => {
-    if (!alive() || !snapshot) return;
+    if (!alive()) return;
+    rememberFleetDetails(content, detailsState);
+    if (!snapshot) {
+      content.replaceChildren(h('button', {class: 'secondary', disabled: busy, 'data-fleet-action': 'refresh',
+        onclick: () => read(true)}, t('fleet_refresh')));
+      return;
+    }
     const names = draft?.connections || snapshot.selection.connections;
     const ready = new Map([...(snapshot.readiness.hosts || []), snapshot.readiness.connector].filter(Boolean).map(row => [row.name, row]));
     const previous = panel.contains(document.activeElement) ? focusKey(document.activeElement) : null;
@@ -62,14 +70,13 @@ export async function mountFleet(main, {h, t}) {
           save(); render();
         }});
       const observed = ready.get(entry.name);
-      return h("div", {class: "row"}, h("label", {class: "grow fleet-choice"}, input, " ", entry.label),
-        h("span", {class: "chip"}, t("fleet_" + (observed?.level || "unavailable"))),
-        observed?.blocking ? h("span", {class: "muted"}, observed.blocking) : null);
+      return h("div", {class: "fleet-machine"}, h("label", {class: "fleet-choice"}, input, " ", entry.label),
+        fleetStatus(observed, {h, t, snapshot, readable, entry, detailsState}));
     });
-    content.replaceChildren(...[h("p", {}, t("fleet_monitor_" + snapshot.monitor.state), " · ",
-      t("fleet_" + snapshot.readiness.state)),
+    content.replaceChildren(...[h("p", {}, readable ? t("fleet_monitor_" + snapshot.monitor.state) : t('fleet_check_title_unavailable')),
       !snapshot.configuration.valid ? h("p", {class: "error"}, t("fleet_invalid", {n: snapshot.configuration.issue_count})) : null,
       snapshot.monitor.state === "running" && !snapshot.monitor.controllable ? h("p", {class: "note"}, t("fleet_other_owner")) : null,
+      h('div', {class: 'actions'}, button({icon: "refresh-cw", label: t("fleet_refresh"), ...gate(false, "refresh"), "data-fleet-action": "refresh", onclick: () => { if (busy) return; read(true); }})),
       ...rows,
       h("p", {class: "muted"}, t(snapshot.selection.applied_revision === snapshot.selection.revision ? "fleet_applied" : "fleet_waiting")),
       changed() ? h("p", {class: "error"}, t("fleet_changed")) : h("span"),
@@ -79,7 +86,6 @@ export async function mountFleet(main, {h, t}) {
           mutate({action: "set_connections", connections: [...draft.connections], expected_selection_revision: draft.revision,
             expected_monitor_epoch: draft.epoch, expected_configuration_binding: binding}, "apply");
         }}, t("fleet_apply")),
-        iconButton({icon: "refresh-cw", label: t("fleet_refresh"), ...gate(false, "refresh"), "data-fleet-action": "refresh", onclick: () => { if (busy) return; read(true); }}),
         h("button", {class: "secondary", ...gate(!readable || !draft, "use-current"), "data-fleet-action": "use-current", onclick: () => {
           if (busy || !readable || !draft) return;
           draft = null; save(); message.textContent = ""; render();
@@ -102,7 +108,7 @@ export async function mountFleet(main, {h, t}) {
   const accept = value => {
     if (!value?.configuration?.connections || !value?.monitor || !value?.selection || !value?.readiness) throw new Error(t("fleet_unavailable"));
     if (binding !== value.configuration.binding) {
-      binding = value.configuration.binding; draft = null;
+      binding = value.configuration.binding; draft = null; detailsState.clear();
       try {
         const old = JSON.parse(sessionStorage.getItem(key()) || "null");
         if (old && Array.isArray(old.connections) && old.connections.every(x => typeof x === "string") && typeof old.revision === "string") draft = old;

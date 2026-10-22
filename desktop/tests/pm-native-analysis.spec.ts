@@ -1,4 +1,6 @@
 import {openThreadAnalysis} from './pm-navigation.ts';
+import {effectiveGolden,effectiveExpected,effectiveReasonKeys,mountEffectiveDiscussion,mountEffectiveGate} from './pm-effective-route-fixture.ts';
+import {STRINGS} from '../src/i18n.js';
 import {test, expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
 import {mountConversation} from './conversation-fixture';
@@ -7,6 +9,27 @@ import {pmRoute, threadId, workspaceId} from './pm-fixture';
 import {answer, messageId, nativeFixture, nativeModel} from './pm-analysis-fixture';
 
 const form = (page:any) => page.locator('[data-pm-action="pm.run.analyze"]');
+
+for(const locale of ['en-US','zh-TW'])test.describe(`${locale} effective PM composer route`,()=>{
+  test.use({locale});
+  for(const [name,row] of Object.entries(effectiveGolden) as [keyof typeof effectiveExpected,any][])
+    test(`effective ${name}: new discussion agrees with the PM gate`,async({page})=>{
+      const requests=await mountEffectiveDiscussion(page,row),expected=effectiveExpected[name];
+      const gate=await mountEffectiveGate(page,row,locale);
+      expect(gate.ready).toBe(expected.ready);
+      await expect(page.locator('[data-discussion-draft-ready]')).toHaveCount(expected.ready?1:0);
+      if(expected.adapter)expect(gate.adapter).toBe(expected.adapter);
+      if(!expected.ready){
+        await expect(page.locator('[data-discussion-pm-unavailable]')).toContainText(expected.reason!);
+        expect(gate.reason).toContain(expected.reason!);
+      }
+      for(const key of effectiveReasonKeys[name]){
+        const message=STRINGS[locale==='en-US'?'en':'zh-TW'][key];
+        await expect(page.locator('[data-discussion-pm-unavailable]')).toContainText(message);expect(gate.reason).toContain(message);
+      }
+      expect(requests.filter(row=>row.method==='POST')).toEqual([]);
+    });
+});
 
 for (const nativeTransport of [false, true]) test.describe(nativeTransport ? 'native PM bridge' : 'web PM bridge', () => {
   test('one bounded analysis preserves original source roles and model provenance', async({page}) => {

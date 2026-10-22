@@ -326,6 +326,7 @@ test.describe('retired Board HTTP failure leaves the destination batch usable', 
 
   test('a left Board HTTP 503 does not pause the destination event batch (en)', async ({page}) => {
     const copy = STRINGS.en;
+    const pollingTitle = `${copy.ui_connector_status.replace('{status}', copy.ui_connected)} — ${copy.desktop_polling}`;
     await page.addInitScript(language => Object.defineProperty(navigator, 'language', {value: language}), 'en');
     await installHeldBodyProbe(page);
     await page.setViewportSize({width: 1440, height: 900});
@@ -338,7 +339,7 @@ test.describe('retired Board HTTP failure leaves the destination batch usable', 
     await expect(page.locator('[data-work-inspector] h2')).toHaveText(fixture.selectedTitle());
     await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
     await expect.poll(() => checkpoint(page)).toEqual({cursor: 0, token: 'w-0'});
-    await expect(page.locator('#live')).toHaveAttribute('title', copy.desktop_polling);
+    await expect(page.locator('#live')).toHaveAttribute('title', pollingTitle);
 
     fixture.holdNext(fixture.boardPath(workspaceA), 503);
     await openBoard(page, workspaceA);
@@ -352,7 +353,7 @@ test.describe('retired Board HTTP failure leaves the destination batch usable', 
     await expect(page.locator('[data-pm-kanban] .pm-kanban-card')).toHaveCount(2);
     await expect(page.locator('[data-work-inspector] h2')).toHaveText(fixture.selectedTitle());
     await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
-    await expect(page.locator('#live')).toHaveAttribute('title', copy.desktop_polling);
+    await expect(page.locator('#live')).toHaveAttribute('title', pollingTitle);
 
     fixture.holdNext(fixture.boardPath(workspaceB));
     fixture.ws.data.events.push({seq: 1, kind: 'work_item.updated', resource_type: 'work_item', resource_id: selectedWork});
@@ -369,7 +370,7 @@ test.describe('retired Board HTTP failure leaves the destination batch usable', 
       checkpoint: await checkpoint(page),
       title: await page.locator('#live').getAttribute('title'),
       refreshEnabled: await page.locator('button[data-pm-refresh]').isEnabled(),
-    })).toEqual({checkpoint: {cursor: 1, token: 'w-1'}, title: copy.desktop_polling, refreshEnabled: true});
+    })).toEqual({checkpoint: {cursor: 1, token: 'w-1'}, title: pollingTitle, refreshEnabled: true});
     await expectSelected(page, copy.ui_board, fixture.selectedTitle(), copy.wv_board_unavailable);
     expect(fixture.unexpected).toEqual([]);
   });

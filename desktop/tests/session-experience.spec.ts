@@ -1,15 +1,13 @@
-import {mkdirSync} from 'node:fs';
 import {expect, test, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture} from './demo/index.ts';
 import {parseDiscussRefs} from '../src/pm-discuss-link.js';
 import {fromRequirements, openSession, type Override} from './session-fixture.ts';
 
-const shotDir = `${process.env.TMPDIR || '/tmp'}/session-shots`;
-
 async function shot(page: Page, name: string) {
-  mkdirSync(shotDir, {recursive: true});
-  await page.screenshot({path: `${shotDir}/${name}.png`, animations: 'disabled'});
+  const testInfo = test.info();
+
+  await page.screenshot({path: testInfo.outputPath(`${name}.png`), animations: 'disabled'});
 }
 
 // Hash assignment stays in the same document, so the session can remember the PM view.

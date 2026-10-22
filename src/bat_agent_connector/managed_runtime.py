@@ -22,7 +22,8 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from . import __version__, api_auth, dashboard_sync, platform_files
+from . import __version__, api_auth, dashboard_sync, detached_process, platform_files
+from .build_identity import _commit, build_identity
 from .platform_files import (
     atomic_write,
     ensure_private_directory,
@@ -31,6 +32,7 @@ from .platform_files import (
     read_private,
     unlock,
 )
+from .task_journal import LATEST_DATA_STEP, JournalNewerDataStep
 
 PROTOCOL = 1
 MANIFEST = "installation.json"
@@ -98,6 +100,8 @@ def _endpoint(root):
     if pointer.get("db_path") != str(root / "state" / "tasks.sqlite3"):
         raise ValueError("service pointer belongs to another database")
     value = pointer.get("endpoint", "")
+    if not value:
+        raise ValueError("owned service is not listening yet")
     parsed = urlsplit(value)
     if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or not parsed.port
             or parsed.path != "/rpc" or parsed.username or parsed.password or parsed.query or parsed.fragment):
@@ -129,7 +133,23 @@ def _proof(key, challenge, endpoint, server_id):
     return hmac.new(key, data, hashlib.sha256).hexdigest()
 
 
+def _runtime_identity(build, source):
+    build = build if isinstance(build, dict) else {}
+    version = build.get("version")
+    return {"version": version if isinstance(version, str) and 0 < len(version) <= 128 else None,
+            "commit": _commit(build.get("commit")),
+            "build_source": build.get("source") if build.get("source") in ("package", "vcs", "bundled") else None,
+            "source": source, "observed_at": time.time()}
+
+
+def _runtime_difference(bundled, running):
+    if any(fact[key] is None for fact in (bundled, running) for key in ("version", "commit")):
+        return "unknown"
+    return "same" if (bundled["version"], bundled["commit"]) == (running["version"], running["commit"]) else "differs"
+
+
 def _verify(root, doc):
+    bundled = _runtime_identity(build_identity(), "this_process")
     endpoint = _endpoint(root)
     challenge = secrets.token_hex(32)
     result = _request(endpoint, "/api/v1/managed/identity?challenge=" + challenge)
@@ -141,9 +161,14 @@ def _verify(root, doc):
     if (caps.get("actor") != doc["actor"] or caps.get("desktop_identity") !=
             {"server_id": doc["server_id"], "principal_id": doc["principal_id"]}):
         raise ValueError("owned service personal identity changed; automatic replacement is refused")
+    # Capabilities already comes from this proven owner and contains the build
+    # identity it loaded at startup. Old services without provenance remain unknown.
+    running = _runtime_identity(caps.get("build"), "capabilities")
     return {"protocol": PROTOCOL, "endpoint": endpoint, "actor": doc["actor"],
             "server_id": doc["server_id"], "principal_id": doc["principal_id"],
-            "runtime_version": result.get("runtime_version", doc["runtime_version"]), "token": token}
+            "runtime_version": result.get("runtime_version", doc["runtime_version"]), "token": token,
+            "bundled_runtime": bundled, "running_runtime": running,
+            "runtime_difference": _runtime_difference(bundled, running)}
 
 
 def _service_command(root):
@@ -162,7 +187,7 @@ def _spawn(root):
         options["start_new_session"] = True
     with os.fdopen(open_private_file(root / "service.log", os.O_WRONLY | os.O_CREAT | os.O_TRUNC), "wb") as log:
         options["stderr"] = log
-        return subprocess.Popen(_service_command(root), **options)  # noqa: S603 - fixed bundled self executable
+        return detached_process.spawn(_service_command(root), windows=os.name == "nt", **options)
 
 
 def _check_upgrade(previous):
@@ -214,6 +239,21 @@ def stop(raw, *, timeout=30):
         return _stop_owned(root, _verify(root, doc), time.monotonic() + timeout)
 
 
+def _journal_startup_failure(root):
+    """Forward only the child's fixed, numeric journal refusal, never arbitrary logs."""
+    try:
+        failure = json.loads(read_private(root / "service.log", max_bytes=16384))
+    except (OSError, ValueError):
+        return None
+    if (isinstance(failure, dict) and failure.get("protocol") == PROTOCOL
+            and failure.get("error") == JournalNewerDataStep.code
+            and type(failure.get("recorded_data_step")) is int
+            and 0 <= failure["recorded_data_step"] <= 2147483647
+            and failure.get("supported_data_step") == LATEST_DATA_STEP):
+        return JournalNewerDataStep(failure["recorded_data_step"])
+    return None
+
+
 def ensure(raw, *, timeout=45):
     root = _root(raw)
     with _locked(root / "launcher.lock"):
@@ -243,6 +283,8 @@ def ensure(raw, *, timeout=45):
                 # A later ensure can recover this installation if spawning fails.
                 child = _spawn(root)
             if child and child.poll() is not None:
+                if failure := _journal_startup_failure(root):
+                    raise failure
                 raise ValueError("managed service initialization failed; existing data was preserved")
             time.sleep(0.1)
         # Never kill a PID read from a pointer or create a second database after a failure.
@@ -299,10 +341,11 @@ async def serve(raw):
         from . import managed_setup
         managed_setup.install(daemon)
         from .browser_sessions import BrowserSessions
-        daemon.api.browser_sessions = BrowserSessions(daemon, root, doc["installation_id"])
+        browser_sessions = BrowserSessions(daemon, root, doc["installation_id"])
+        daemon.api.browser_sessions = browser_sessions
 
         def prove(challenge, host):
-            endpoint = daemon._endpoint.removesuffix("/rpc")
+            endpoint = browser_sessions.origin
             if not re.fullmatch(r"[0-9a-f]{64}", challenge) or host != urlsplit(endpoint).netloc:
                 raise ValueError("invalid managed identity challenge")
             return {"protocol": PROTOCOL, "runtime_version": __version__,
@@ -389,6 +432,9 @@ def main():
                    "message": type(error).__name__ + ": managed installation needs recovery",
                    "errno": getattr(error, "errno", None), "winerror": getattr(error, "winerror", None),
                    "location": _failure_location(error)}
+        if isinstance(error, JournalNewerDataStep):
+            failure.update(error=error.code, message=str(error), recorded_data_step=error.recorded,
+                           supported_data_step=LATEST_DATA_STEP)
         print(json.dumps(failure), file=sys.stderr if args.command == "serve" else sys.stdout, flush=True)
         raise SystemExit(1) from None
 

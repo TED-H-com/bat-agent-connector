@@ -99,7 +99,7 @@ export function followUpFixture(locale = 'en', options: Record<string, any> = {}
     if (follow.result === 'bad') return {contract: 'other'};
     if (follow.result === 'codex') return {...head, next_allowed_actions: [], blocked_actions: [{action: 'session.send', reason: 'codex_uncorrelated_turn_boundary'}]};
     if (follow.result === 'not_controller') return {...head, next_allowed_actions: [], blocked_actions: [{action: 'session.send', reason: 'not_controller'}]};
-    if (follow.result === 'missing_scope') return {...head, next_allowed_actions: [], blocked_actions: [{action: 'session.send', reason: 'missing_scope'}]};
+    if (follow.result === 'missing_scope' || !follow.operate) return {...head, next_allowed_actions: [], blocked_actions: [{action: 'session.send', reason: 'missing_scope'}]};
     if (follow.result === 'none') return {...head, next_allowed_actions: [], blocked_actions: []};
     return {...head, blocked_actions: [], next_allowed_actions: [{
       kind: 'action', action: 'session.send', allowed: true,

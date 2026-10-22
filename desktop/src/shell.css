@@ -4,11 +4,14 @@
 .brand-mark { width: 20px; height: 20px; background: var(--accent); border-radius: var(--r-sm); }
 #nav { flex: 1; flex-wrap: nowrap; align-items: center; min-width: 0; gap: var(--space-2); }
 .shell-top-actions { display: flex; align-items: center; gap: var(--space-2); flex: none; margin-left: auto; }
+.central-service-status { display: inline-flex; align-items: center; gap: var(--space-1); min-width: 0; font-size: var(--fs-caption); color: var(--text-2); }
+.central-service-scope { flex: none; white-space: nowrap; }
+.central-service-state { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .live { display: inline-flex; align-items: center; gap: var(--space-1); margin: 0; width: auto; text-decoration: none; font-size: var(--fs-caption); color: var(--text-2); background: var(--surface-2); padding: 2px var(--space-2); border-radius: var(--r-pill); white-space: nowrap; }
+.central-service-status .live { min-width: 0; }
 .live::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--neutral); flex: none; }
-.live.ok::before { content: ''; background: var(--ok); }
-.live.down::before { content: ''; background: var(--bad); }
-.live.reconnecting::before { background: var(--warn); }
+.live.tone-ok::before { content: ''; background: var(--ok); }
+.live.tone-warn::before { background: var(--warn); }
 .shell-count { font-size: var(--fs-caption); font-variant-numeric: tabular-nums; background: var(--surface-3); color: var(--text-2); padding: 0 6px; border-radius: var(--r-xs); margin-left: auto; }
 .shell-crumb-workspace, .shell-workspace-switch { border: 0; background: transparent; color: var(--text); font: inherit; cursor: pointer; padding: var(--space-1) 0; display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
 .shell-workspace-switch { font-size: var(--fs-read); font-weight: 600; text-align: left; overflow-wrap: anywhere; justify-content: space-between; width: 100%; }
@@ -61,7 +64,9 @@ body.pm-mode #main { padding: 0; }
   #workspace-menu, .pm-mode #workspace-menu { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; border: 0; background: transparent; }
   .shell-crumb-workspace { max-width: calc(100vw - 112px); white-space: normal; font-weight: 600; text-align: left; }
   #nav > .ui-menu { min-width: 0; }
-  .shell-top-actions .live { font-size: 0; padding: var(--space-2); background: transparent; min-height: 44px; }
+  /* Crumbs yield first; exceptionally long service labels can use two lines. */
+  .shell-top-actions { flex-shrink: 1; min-width: 0; }
+  .central-service-status .live { font-size: var(--fs-caption); padding: var(--space-1); background: transparent; min-height: 44px; white-space: normal; }
   .live::before { width: 8px; height: 8px; }
   body.has-workspace main, .pm-main { padding: var(--space-4); }
   .workspace-resizer { display: none; }
@@ -160,6 +165,17 @@ body.pm-mode #main { padding: 0; }
 @media (min-width: 1000px) and (max-width: 1199px) { body.has-workspace #workspace::before { width: var(--workspace-sidebar-width, 232px); } }
 .workspace-nav-footer :is(a, button)[aria-current=page] { background: var(--accent-soft); color: var(--accent); border-radius: var(--r-sm); }
 .workspace-nav-footer [data-shell-tools] > .ui-icon:last-child { margin-left: auto; width: 16px; height: 16px; }
+
+/* Four everyday destinations; the full management set opens when needed. */
+.shell-project-nav .pm-project-views button { min-height: 56px; padding-block: var(--space-2); }
+.shell-view-copy { display: grid; gap: 2px; min-width: 0; }
+.shell-view-hint { color: var(--text-2); font-size: var(--fs-small); font-weight: 400; line-height: 1.5; white-space: normal; }
+.shell-management { margin-top: var(--space-2); border-top: 1px solid var(--line); padding-top: var(--space-2); }
+.shell-management > summary { display: flex; align-items: center; gap: var(--rail-gap); padding: var(--space-2) var(--rail-inset); min-height: 44px; cursor: pointer; list-style: none; color: var(--text-2); }
+.shell-management > summary::-webkit-details-marker { display: none; }
+.shell-management[open] > summary > .ui-icon { transform: rotate(90deg); }
+.shell-management-views { display: grid; gap: var(--space-1); }
+.shell-management > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r-sm); }
 
 /* Fixed nested docks reserve space; panels in their own grid column do not. */
 @media (min-width: 1200px) {

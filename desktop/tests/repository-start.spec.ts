@@ -1,5 +1,4 @@
 import {test, expect} from '@playwright/test';
-import {mkdir} from 'node:fs/promises';
 import {publishedFixture, openPublished, previewPublished, publishedId, publishedSha, bindingDigest, selected} from './repository-start-fixture';
 const apply = (form: any) => form.getByRole('button', {name: 'Start from this version', exact: true});
 const instructions = (form: any) => form.getByRole('textbox', {name: 'Original instructions', exact: true});
@@ -72,13 +71,13 @@ test('published: storage refusal prevents operation submission', async ({page}) 
   await page.evaluate(() => {const original = Storage.prototype.setItem; Storage.prototype.setItem = function(k, v) {if (k.startsWith('batc.published.')) throw new Error('Storage unavailable'); return original.call(this, k, v);};});
   await apply(form).click(); await expect(form).toContainText('Storage unavailable'); expect(state.posts).toEqual([]);
 });
-for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) test(`published form fits ${locale} ${width}`, async ({browser}) => {
+for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) test(`published form fits ${locale} ${width}`, async ({browser}, testInfo) => {
   const context = await browser.newContext({locale, viewport: {width, height: width === 390 ? 844 : 900}}), page = await context.newPage();
   const state = await publishedFixture(page, false); await openPublished(page); const form = page.locator('[data-published-start]');
   await form.locator('select').first().selectOption(JSON.stringify(selected)); await form.locator('input').first().fill('refs/heads/main'); await form.locator('button').first().click();
   await expect(form.locator('[data-published-preview]')).toContainText(publishedSha); await form.locator('textarea').fill(locale === 'zh-TW' ? '請在此固定版本新增測試，保留既有人工工作。' : 'Add tests on this fixed version. Keep existing manual work unchanged.'); await form.locator('textarea').blur();
   await page.evaluate(() => window.scrollTo(0, 0)); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await mkdir('/tmp/bac-published-ui', {recursive: true}); await page.screenshot({path: `/tmp/bac-published-ui/${locale}-${width}.png`, fullPage: true}); expect(state.errors).toEqual([]); await context.close();
+  await page.screenshot({path: testInfo.outputPath(`${locale}-${width}.png`), fullPage: true}); expect(state.errors).toEqual([]); await context.close();
 });
 
 for (const native of [false, true]) test(`short branch names preserve fixed preview and replay (${native ? 'IPC' : 'HTTP'})`, async ({page}) => {

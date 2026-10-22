@@ -1,11 +1,9 @@
-import {mkdirSync} from 'node:fs';
+import {revealPmView} from './pm-navigation.ts';
 import {expect, test, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture, demoRoute} from './demo/index.ts';
 import {demoProject} from './demo/project.ts';
 import {registerIds} from './demo/register.ts';
-
-const shots = `${process.env.TMPDIR || '/tmp'}/finding-name-shots`;
 
 function copyFor(locale: 'en' | 'zh-TW') {
   const zh = locale === 'zh-TW';
@@ -33,12 +31,8 @@ function copyFor(locale: 'en' | 'zh-TW') {
 
 async function openView(page: Page, id: string) {
   await expect.poll(() => page.locator('[data-pm-view]').count()).toBeGreaterThan(0);
-  const entry = page.locator(`[data-pm-view="${id}"]`);
+  const entry = await revealPmView(page, id);
   const narrow = (page.viewportSize()?.width ?? 0) < 1000;
-  if (!await entry.isVisible()) {
-    await page.locator('#workspace-menu').click();
-    await expect(page.locator('.workspace-nav')).toHaveAttribute('aria-modal', 'true');
-  }
   await entry.click();
   await expect(page.locator(`[data-pm-region="${id}"]`)).toBeVisible();
   if (narrow) await expect(page.locator('.workspace-nav')).toBeHidden();
@@ -54,13 +48,12 @@ async function boot(browser: import('@playwright/test').Browser, baseURL: string
 }
 
 for (const [locale, width] of [['en', 1440], ['zh-TW', 1440], ['zh-TW', 390]] as const) {
-  test(`finding names in the register, overview and a chip (${locale} ${width})`, async ({browser, baseURL}) => {
+  test(`finding names in the register, overview and a chip (${locale} ${width})`, async ({browser, baseURL}, testInfo) => {
     test.setTimeout(90_000);
     const copy = copyFor(locale);
     const fixture = demoFixture({locale});
     const ids = registerIds(demoProject(locale));
     const {page, context} = await boot(browser, baseURL, locale, width, fixture.dispatch);
-    mkdirSync(shots, {recursive: true});
     await openView(page, 'issues');
     const register = page.locator('[data-pm-register]');
     await expect(register.locator(`[data-row-key="${ids.finding}"]`)).toContainText(copy.issue);
@@ -69,7 +62,7 @@ for (const [locale, width] of [['en', 1440], ['zh-TW', 1440], ['zh-TW', 390]] as
     await expect(register.locator(`[data-row-key="${ids.alert}"]`)).toContainText(copy.alert);
     await expect(register.locator(`[data-row-key="${ids.bare}"]`)).toContainText(copy.bare);
     await expect(register).not.toContainText('undefined');
-    await register.screenshot({path: `${shots}/register-list-${locale}-${width}.png`});
+    await register.screenshot({path: testInfo.outputPath(`register-list-${locale}-${width}.png`)});
 
     await register.locator(`[data-row-key="${ids.finding}"]`).click();
     const inspector = page.locator('[data-reg-inspector]');
@@ -103,7 +96,7 @@ for (const [locale, width] of [['en', 1440], ['zh-TW', 1440], ['zh-TW', 390]] as
     expect(box!.width).toBeGreaterThanOrEqual(12);
     expect(box!.height).toBeGreaterThanOrEqual(12);
     expect(Math.abs(box!.width - box!.height)).toBeLessThan(0.5);
-    await inspector.screenshot({path: `${shots}/register-alert-${locale}-${width}.png`});
+    await inspector.screenshot({path: testInfo.outputPath(`register-alert-${locale}-${width}.png`)});
     await page.keyboard.press('Escape');
 
     await register.locator(`[data-row-key="${ids.bare}"]`).click();
@@ -123,7 +116,7 @@ for (const [locale, width] of [['en', 1440], ['zh-TW', 1440], ['zh-TW', 390]] as
     const href = await attention.locator('a').getAttribute('href');
     expect(new URLSearchParams(href!.split('?')[1]).get('title')).toBe(copy.alert);
     await expect(attention.locator('strong')).not.toHaveText('14');
-    await attention.screenshot({path: `${shots}/overview-attention-${locale}-${width}.png`});
+    await attention.screenshot({path: testInfo.outputPath(`overview-attention-${locale}-${width}.png`)});
 
     await openView(page, 'discussions');
     const chip = page.locator('[data-discussion-context=finding]');
@@ -131,7 +124,7 @@ for (const [locale, width] of [['en', 1440], ['zh-TW', 1440], ['zh-TW', 390]] as
     await expect(chip).not.toContainText('#14');
     await expect(chip).not.toContainText(copy.zh ? '發現 ·' : 'Finding ·');
     const thread = page.locator('.pm-thread-link').filter({has: chip});
-    await thread.screenshot({path: `${shots}/discussion-chip-${locale}-${width}.png`});
+    await thread.screenshot({path: testInfo.outputPath(`discussion-chip-${locale}-${width}.png`)});
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await context.close();
   });

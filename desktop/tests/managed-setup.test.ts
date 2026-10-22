@@ -1,5 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {normalizeSetupFingerprint, parseBatConnectionUrl, validSetupEndpoint, validSetupHostId} from '../src/managed-setup.js';
 
 const fingerprint = 'ab'.repeat(32);
@@ -31,4 +32,35 @@ test('explicit protocol-default BAT ports survive URL normalization', () => {
   assert.equal(parseBatConnectionUrl(`wss://localhost:443?token=synthetic-secret&fp=${fingerprint}`)?.endpoint, 'wss://localhost:443');
   assert.equal(parseBatConnectionUrl(`ws://localhost:80?token=synthetic-secret&fp=${fingerprint}`)?.endpoint, 'wss://localhost:80');
   assert.equal(validSetupEndpoint('wss://localhost:443/'), true);
+});
+
+test('an absent legacy socket is unknown reachability, while explicit observation states are preserved', async () => {
+  const {setupConnectionStatus} = await import('../src/managed-setup.js');
+  assert.equal(setupConnectionStatus({connected: false}), 'checking');
+  assert.equal(setupConnectionStatus({}), 'checking');
+  assert.equal(setupConnectionStatus({connected: true}), 'connected');
+  for (const status of ['connected', 'checking', 'unreachable'])
+    assert.equal(setupConnectionStatus({connected: false, connection_status: status}), status);
+});
+
+test('setup status separates the original operation from each current host observation', async () => {
+  const {setupStatusLine} = await import('../src/managed-setup.js');
+  const {operation, states} = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-setup-evidence.json', import.meta.url), 'utf8'));
+  const status = (hosts: any[], op: any = operation, extra = {}) => setupStatusLine({hosts, operation: op, readReady: true, ...extra});
+  const past = {key: 'setup_verified_saved', verifiedAt: operation.updated_at};
+  for (const condition of ['unreachable', 'checking']) {
+    assert.deepEqual(status(states[condition].hosts), past);
+    assert.deepEqual(status([...states[condition].hosts, {...states.connected.hosts[0], name: 'other'}]), past);
+  }
+  assert.deepEqual(status(states.connected.hosts), {key: 'setup_ready'});
+  assert.deepEqual(status([{...states.connected.hosts[0], name: 'other'}]), past);
+  assert.deepEqual(status([]), past);
+  assert.deepEqual(status(states.connected.hosts, operation, {readReady: false}), past);
+  assert.deepEqual(status(states.connected.hosts, operation, {busy: true}), {key: 'setup_checking'});
+  assert.deepEqual(status(states.connected.hosts, null), {key: 'setup_ready'});
+  assert.deepEqual(status([...states.checking.hosts, {...states.connected.hosts[0], name: 'other'}], null), {key: ''});
+  assert.deepEqual(status(states.checking.hosts, {...operation, status: 'running'}), {key: 'setup_saving'});
+  assert.deepEqual(status(states.checking.hosts, {...operation, status: 'failed'}), {key: 'setup_failed_operation'});
+  assert.deepEqual(status([], null), {key: 'setup_waiting'});
+  assert.deepEqual(status([], null, {readReady: false}), {key: 'setup_loading'});
 });

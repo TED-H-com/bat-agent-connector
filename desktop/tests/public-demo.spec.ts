@@ -1,3 +1,4 @@
+import {revealPmView} from './pm-navigation.ts';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {mkdirSync} from 'node:fs';
@@ -24,8 +25,7 @@ for (const lang of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) {
     await expect(page.locator('#demo-bar')).toContainText(lang === 'en' ? 'Sample data' : '合成資料');
     const views = ['requirements', 'board', 'schedule', 'dependencies', 'issues', 'agents', 'discussions', 'overview'];
     for (const view of views) {
-      const entry = page.locator(`[data-pm-view="${view}"]`);
-      if (!await entry.isVisible()) await page.locator('#workspace-menu').click();
+      const entry = await revealPmView(page, view);
       await entry.click();
       await expect(page.locator(`[data-pm-region="${view}"]`)).toBeVisible();
       await expect(page.locator('#main [data-api-error]:visible')).toHaveCount(0);
@@ -112,4 +112,16 @@ test('global pages and manual session expose records without write controls', as
   await expect(page.locator('#main')).toContainText('Reset notes');
   await expect(page.locator('#main')).toContainText('read-only');
   await expect(page.locator('#main form button[type=submit]:enabled')).toHaveCount(0);
+});
+
+
+test('Settings language switch stays inside the localized public tour', async ({page}) => {
+  await page.goto('/demo/?lang=en#/settings');
+  await page.locator('[data-language-switch]').getByRole('button', {name: '繁體中文', exact: true}).click();
+  await expect(page).toHaveURL(/lang=zh-TW#\/settings$/);
+  await expect(page.locator('#demo-bar')).toContainText('合成資料');
+  await expect(page.locator('[data-language-switch]').getByRole('button', {name: '繁體中文', exact: true})).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('[data-language-switch]').getByRole('button', {name: 'English', exact: true}).click();
+  await expect(page).toHaveURL(/lang=en#\/settings$/);
+  await expect(page.locator('#demo-bar')).toContainText('Sample data');
 });

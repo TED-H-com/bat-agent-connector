@@ -125,6 +125,57 @@ test('lost resolution acknowledgement and reload recover the original key withou
   expect(f.state.writes).toHaveLength(2); expect(f.state.writes[1]).toEqual(f.state.writes[0]); expect(f.state.effects).toBe(1);
 });
 
+for (const locale of ['en', 'zh-TW']) for (const native of [false, true])
+test(`resolution retry remains at the same pointer during a source refresh ${locale} ${native ? 'IPC' : 'HTTP'}`, async ({page}) => {
+  const f = fixture({locale}); let dropped = false;
+  await page.setViewportSize({width: 1440, height: 900});
+  await page.addInitScript(locale => Object.defineProperty(navigator, 'language', {value: locale}), locale);
+  await mountConversation(page, native, async input => {
+    const result = await f.dispatch(input);
+    if (input.method === 'POST' && input.body?.action === 'pm.governance.revise') {
+      if (!dropped) {dropped = true; throw Error('Synthetic lost acknowledgement');}
+      return {...result, status: 202};
+    }
+    return result;
+  });
+  if (!native) await page.route('**/api/v1/operations?wait=3', async route => {
+    const request = route.request();
+    const result = await f.dispatch({method: request.method(), path: '/operations?wait=3',
+      body: request.postDataJSON(), idempotency_key: request.headers()['idempotency-key']});
+    if (!dropped) {dropped = true; await route.abort('failed');}
+    else await route.fulfill({status: 202, json: result.data});
+  });
+  await page.goto(f.route);
+  await resolution(page).locator('[data-issue-resolve-open]').click();
+  await resolution(page).getByRole('textbox').fill('Recover the original resolution once.');
+  await resolution(page).getByRole('button', {name: locale === 'en' ? 'Resolve issue' : '回報解決', exact: true}).click();
+  const retry = resolution(page).getByRole('button', {name: locale === 'en' ? 'Check original request' : '查回原請求', exact: true});
+  await expect(resolution(page).locator('[data-api-error]')).toBeVisible();
+  await expect(retry).toBeEnabled();
+  expect(f.state.writes).toHaveLength(1); expect(f.state.effects).toBe(1);
+  // Leave the retry visible near the reading pane's bottom, with the error below.
+  // A background gate must not scroll this target away during a person's press.
+  await retry.evaluate(button => {
+    const pane = button.closest('.pd-transcript')!;
+    pane.scrollTop += button.getBoundingClientRect().bottom - pane.getBoundingClientRect().bottom + 8;
+  });
+  const pane = page.locator('.pd-transcript'), scroll = await pane.evaluate(node => node.scrollTop);
+  const original = await retry.elementHandle();
+  await retry.hover(); await page.mouse.down();
+  let release!: () => void;
+  f.state.planHeld = new Promise<void>(resolve => {release = resolve;}); f.state.cursor++;
+  try {
+    await expect.poll(() => f.state.planWaiting).toBe(true);
+    await expect(retry).toBeDisabled();
+    release();
+    await expect(retry).toBeEnabled();
+    expect(await retry.evaluate((node, old) => node === old, original)).toBe(true);
+    expect(await pane.evaluate(node => node.scrollTop)).toBe(scroll);
+  } finally {release(); await page.mouse.up();}
+  await expect(resolution(page).locator('[data-issue-resolved]')).toContainText(locale === 'en' ? 'Reported resolved' : '回報已解決');
+  expect(f.state.writes).toHaveLength(2); expect(f.state.writes[1]).toEqual(f.state.writes[0]); expect(f.state.effects).toBe(1);
+});
+
 test('a changed finding requires review of its full new baseline and retains the resolution rationale', async ({page}) => {
   const f = fixture(); await mountConversation(page, false, f.dispatch); await page.goto(f.route);
   await resolution(page).locator('[data-issue-resolve-open]').click();

@@ -512,6 +512,8 @@ pub struct NativeStatus {
     pub configuration_source: &'static str,
     pub configuration_file: Option<String>,
     pub connected: bool,
+    pub managed_recovery: Option<String>,
+    pub managed_rebind: Option<u64>,
 }
 
 // Never serialized: credential identity remains native-only even for identical actor/scopes.
@@ -530,6 +532,9 @@ struct Active {
 struct ConnectionState {
     generation: u64,
     managed: bool,
+    recovery_enabled: bool,
+    managed_rebind: u64,
+    recovery_error: Option<String>,
     config: Result<Config, String>,
     environment: Option<Zeroizing<String>>,
     environment_identity: Option<Identity>,
@@ -620,6 +625,7 @@ impl Bridge {
             let mut state = bridge.state.lock().unwrap();
             state.environment_identity = Some(identity);
             state.managed = true;
+            state.recovery_enabled = true;
         }
         bridge
     }
@@ -642,6 +648,9 @@ impl Bridge {
             state: Mutex::new(ConnectionState {
                 generation: 0,
                 managed: false,
+                recovery_enabled: false,
+                managed_rebind: 0,
+                recovery_error: None,
                 config,
                 environment,
                 environment_identity: None,
@@ -704,10 +713,132 @@ impl Bridge {
                 .as_ref()
                 .map(|p| p.to_string_lossy().into_owned()),
             connected: state.active.is_some(),
+            managed_recovery: state.recovery_error.clone(),
+            managed_rebind: state.managed.then_some(state.managed_rebind),
         }
     }
+    // No bearer on the liveness read. Any HTTP response is reachable: authentication,
+    // protocol and identity failures must not provision a service.
+    pub async fn managed_probe(&self) -> Option<(u64, bool)> {
+        let (generation, config) = {
+            let state = self.state.lock().unwrap();
+            if !state.managed
+                || !state.recovery_enabled
+                || state.environment_identity.is_none()
+                || state.environment.is_none()
+            {
+                return None;
+            }
+            (state.generation, state.config.as_ref().ok()?.clone())
+        };
+        let url = config.validate().ok()?.join("api/v1/capabilities").ok()?;
+        let reachable = self
+            .client
+            .get(url)
+            .timeout(Duration::from_secs(2))
+            .send()
+            .await
+            .is_ok();
+        self.unchanged(generation).ok()?;
+        Some((generation, reachable))
+    }
+
+    pub fn recovery_state(&self, generation: u64, error: Option<String>) {
+        let mut state = self.state.lock().unwrap();
+        if state.generation == generation && state.managed && state.recovery_enabled {
+            if error.as_deref() == Some("MANAGED_RECOVERY_IDENTITY_CHANGED") {
+                state.active = None;
+                state.generation += 1;
+                state.recovery_enabled = false;
+            }
+            state.recovery_error = error;
+        }
+    }
+
+    pub async fn recover_managed(
+        &self,
+        generation: u64,
+        managed: Arc<crate::managed::Managed>,
+    ) -> Result<(), String> {
+        // Keep configuration setup/enrollment serialized with ensure and verification.
+        let _guard = self
+            .connecting
+            .try_lock()
+            .map_err(|_| "MANAGED_RECOVERY_BUSY")?;
+        {
+            let state = self.state.lock().unwrap();
+            if !state.managed || !state.recovery_enabled || state.generation != generation
+                || self.configuration_file.as_ref().is_some_and(|path|
+                    !matches!(path.symlink_metadata(), Err(error) if error.kind() == std::io::ErrorKind::NotFound)) {
+                return Err("MANAGED_RECOVERY_CANCELLED".into());
+            }
+        }
+        let launch = tauri::async_runtime::spawn_blocking(move || managed.recover())
+            .await
+            .map_err(|_| "MANAGED_RECOVERY_FAILED")??;
+        self.rebind_managed(generation, launch).await
+    }
+
+    pub async fn rebind_managed(
+        &self,
+        generation: u64,
+        launch: crate::managed::Launch,
+    ) -> Result<(), String> {
+        let config = normalize(launch.config()).map_err(|_| "MANAGED_RUNTIME_ENDPOINT_INVALID")?;
+        let expected = {
+            let state = self.state.lock().unwrap();
+            if !state.managed || !state.recovery_enabled || state.generation != generation {
+                return Err("MANAGED_RECOVERY_CANCELLED".into());
+            }
+            let identity = state
+                .environment_identity
+                .clone()
+                .ok_or("MANAGED_RECOVERY_IDENTITY_CHANGED")?;
+            if identity != launch.identity()
+                || state.config.as_ref().ok().map(|c| &c.expected_actor)
+                    != Some(&config.expected_actor)
+            {
+                return Err("MANAGED_RECOVERY_IDENTITY_CHANGED".into());
+            }
+            identity
+        };
+        // Same bootstrap/capabilities verification as connect; do not publish a candidate
+        // endpoint or credential until both reads prove the original personal identity.
+        let (_, identity) = self
+            .verify(&config, &launch.token, Some(&expected), generation)
+            .await
+            .map_err(|error| {
+                if error.contains("Saved backend or principal identity changed") {
+                    "MANAGED_RECOVERY_IDENTITY_CHANGED"
+                } else {
+                    "MANAGED_RECOVERY_VERIFICATION_FAILED"
+                }
+            })?;
+        let mut state = self.state.lock().unwrap();
+        if !state.managed || !state.recovery_enabled || state.generation != generation {
+            return Err("MANAGED_RECOVERY_CANCELLED".into());
+        }
+        state.generation += 1;
+        state.managed_rebind += 1;
+        state.config = Ok(config.clone());
+        state.environment = Some(launch.token.clone());
+        state.active = Some(Active {
+            config: config.clone(),
+            record: Record {
+                version: 1,
+                binding: binding(&config),
+                identity,
+                token: launch.token,
+            },
+        });
+        state.recovery_error = None;
+        Ok(())
+    }
+
     pub fn disconnect(&self) {
         let mut state = self.state.lock().unwrap();
+        state.recovery_enabled = false;
+        state.recovery_error = None;
         state.generation += 1;
         state.active = None;
     }
@@ -820,6 +951,8 @@ impl Bridge {
             saved?;
             state.generation += 1;
             state.managed = false;
+            state.recovery_enabled = false;
+            state.recovery_error = None;
             state.config = Ok(config);
             state.environment = None;
             state.environment_identity = None;
@@ -831,6 +964,8 @@ impl Bridge {
         let mut state = self.state.lock().unwrap();
         let config = state.config.as_ref().map_err(Clone::clone)?;
         self.vault.remove(&binding(config))?;
+        state.recovery_enabled = false;
+        state.recovery_error = None;
         state.generation += 1;
         state.active = None;
         state.environment = None;
@@ -877,6 +1012,8 @@ impl Bridge {
         if state.environment.is_some() {
             state.environment_identity = Some(identity.clone());
         }
+        state.recovery_enabled = state.managed;
+        state.recovery_error = None;
         state.active = Some(Active {
             record: Record {
                 version: 1,
@@ -4295,14 +4432,233 @@ mod tests {
     fn json_response(body: &str) -> String {
         format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body)
     }
-    const CAPS: &str = r#"{"actor":"fixture-operator","api_version":1,"contract_version":"2026-10-08","scopes":["observe","operate"]}"#;
+    fn recovery_launch(
+        endpoint: &str,
+        server_id: &str,
+        principal_id: &str,
+    ) -> crate::managed::Launch {
+        serde_json::from_value(serde_json::json!({
+            "protocol": 1, "runtime_version": "fixture-1", "endpoint": endpoint,
+            "actor": "fixture-operator", "token": "replacement-fixture-token",
+            "server_id": server_id, "principal_id": principal_id,
+        }))
+        .unwrap()
+    }
+    fn recovery_bridge() -> Bridge {
+        Bridge::managed(
+            Path::new("unused-fixture-config"),
+            config("http://127.0.0.1:9/"),
+            Zeroizing::new("old-fixture-token".into()),
+            Identity {
+                server_id: "fixture-server".into(),
+                principal_id: "fixture-principal".into(),
+            },
+        )
+    }
+    #[tokio::test]
+    async fn managed_recovery_rebinds_endpoint_and_token_only_after_identity_verification() {
+        let (endpoint, requests, handle) = server(vec![
+            json_response(&capabilities("fixture-server", "fixture-principal", true)),
+            managed_bootstrap_response("fixture-server", "fixture-principal"),
+            json_response("{\"events\":[]}"),
+        ]);
+        let bridge = recovery_bridge();
+        let old_generation = bridge.state.lock().unwrap().generation;
+        bridge
+            .rebind_managed(
+                old_generation,
+                recovery_launch(&endpoint, "fixture-server", "fixture-principal"),
+            )
+            .await
+            .unwrap();
+        assert_eq!(bridge.status().endpoint.as_deref(), Some(endpoint.as_str()));
+        assert!(bridge.status().connected);
+        assert_eq!(bridge.status().managed_rebind, Some(1));
+        assert!(bridge.state.lock().unwrap().generation > old_generation);
+        bridge
+            .request(get("/events?after=0&limit=100"))
+            .await
+            .unwrap();
+        for _ in 0..3 {
+            let request = requests.recv().unwrap();
+            assert!(request.contains("Bearer replacement-fixture-token"));
+            assert!(!request.contains("old-fixture-token"));
+            assert!(request.starts_with("GET "));
+        }
+        handle.join().unwrap();
+    }
+    #[tokio::test]
+    async fn managed_recovery_refuses_changed_launch_identity_before_any_network() {
+        for (server_id, principal_id) in [
+            ("another-server", "fixture-principal"),
+            ("fixture-server", "another-principal"),
+        ] {
+            let bridge = recovery_bridge();
+            let error = bridge
+                .rebind_managed(
+                    0,
+                    recovery_launch("http://127.0.0.1:1/", server_id, principal_id),
+                )
+                .await
+                .unwrap_err();
+            assert_eq!(error, "MANAGED_RECOVERY_IDENTITY_CHANGED");
+            assert_eq!(
+                bridge.status().endpoint.as_deref(),
+                Some("http://127.0.0.1:9/")
+            );
+            assert!(!bridge.status().connected);
+        }
+    }
+    #[tokio::test]
+    async fn managed_recovery_refuses_changed_live_bootstrap_identity() {
+        let (endpoint, _, handle) = server(vec![
+            json_response(&capabilities("another-server", "fixture-principal", true)),
+            managed_bootstrap_response("another-server", "fixture-principal"),
+        ]);
+        let bridge = recovery_bridge();
+        assert_eq!(
+            bridge
+                .rebind_managed(
+                    0,
+                    recovery_launch(&endpoint, "fixture-server", "fixture-principal")
+                )
+                .await
+                .unwrap_err(),
+            "MANAGED_RECOVERY_IDENTITY_CHANGED"
+        );
+        assert_eq!(
+            bridge.status().endpoint.as_deref(),
+            Some("http://127.0.0.1:9/")
+        );
+        assert!(!bridge.status().connected);
+        handle.join().unwrap();
+    }
+    #[tokio::test]
+    async fn external_mode_and_explicit_disconnect_never_probe_or_rebind() {
+        let external = Bridge::new(
+            Ok(config("http://127.0.0.1:9/")),
+            Zeroizing::new("fixture-token".into()),
+        );
+        assert!(external.managed_probe().await.is_none());
+        assert_eq!(
+            external
+                .rebind_managed(
+                    0,
+                    recovery_launch("http://127.0.0.1:1/", "fixture-server", "fixture-principal")
+                )
+                .await
+                .unwrap_err(),
+            "MANAGED_RECOVERY_CANCELLED"
+        );
+        let managed = recovery_bridge();
+        managed.disconnect();
+        assert!(managed.managed_probe().await.is_none());
+        assert_eq!(
+            managed
+                .rebind_managed(
+                    0,
+                    recovery_launch("http://127.0.0.1:1/", "fixture-server", "fixture-principal")
+                )
+                .await
+                .unwrap_err(),
+            "MANAGED_RECOVERY_CANCELLED"
+        );
+    }
+    #[tokio::test]
+    async fn identity_failure_stops_probes_and_fences_in_flight_reads() {
+        let bridge = recovery_bridge();
+        bridge.recovery_state(0, Some("MANAGED_RECOVERY_IDENTITY_CHANGED".into()));
+        assert!(bridge.managed_probe().await.is_none());
+        assert!(bridge.unchanged(0).is_err());
+        assert!(!bridge.status().connected);
+        assert_eq!(
+            bridge.status().managed_recovery.as_deref(),
+            Some("MANAGED_RECOVERY_IDENTITY_CHANGED")
+        );
+    }
+
+    #[tokio::test]
+    async fn failed_recovery_candidate_preserves_original_binding_and_reports_bounded_details() {
+        let bridge = recovery_bridge();
+        assert_eq!(
+            bridge
+                .rebind_managed(
+                    0,
+                    recovery_launch("http://127.0.0.1:1/", "fixture-server", "fixture-principal")
+                )
+                .await
+                .unwrap_err(),
+            "MANAGED_RECOVERY_VERIFICATION_FAILED"
+        );
+        bridge.recovery_state(0, Some("MANAGED_RECOVERY_VERIFICATION_FAILED".into()));
+        assert_eq!(
+            bridge.status().managed_recovery.as_deref(),
+            Some("MANAGED_RECOVERY_VERIFICATION_FAILED")
+        );
+        assert_eq!(
+            bridge.status().endpoint.as_deref(),
+            Some("http://127.0.0.1:9/")
+        );
+    }
+
+    // Producer-pinned by tests/test_api_v1_bootstrap_golden.py. Capabilities
+    // uses the same handler as bootstrap.capabilities (ApiV1.bootstrap).
+    fn bootstrap_document(server_id: &str, principal_id: &str, managed: bool) -> Value {
+        let mut value: Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/managed-bootstrap.json"
+        ))
+        .unwrap();
+        let identity = serde_json::json!({"server_id": server_id, "principal_id": principal_id});
+        value["sync"]["server_id"] = identity["server_id"].clone();
+        value["sync"]["principal_id"] = identity["principal_id"].clone();
+        value["capabilities"]["identity"] = identity.clone();
+        value["capabilities"]["desktop_identity"] = identity;
+        if !managed {
+            // Exactly the external derivation in the Python producer golden test.
+            let caps = value["capabilities"].as_object_mut().unwrap();
+            caps.remove("desktop_identity");
+            caps.remove("managed_installation");
+        }
+        value
+    }
+
+    fn capabilities(server_id: &str, principal_id: &str, managed: bool) -> String {
+        bootstrap_document(server_id, principal_id, managed)["capabilities"].to_string()
+    }
+
+    fn actor_document(actor: &str) -> Value {
+        let mut value = bootstrap_document("fixture", "other-principal", false);
+        value["capabilities"]["actor"] = Value::String(actor.into());
+        value
+    }
 
     fn bootstrap_response(server_id: &str, principal_id: &str) -> String {
-        json_response(
-            &serde_json::json!({"capabilities": serde_json::from_str::<Value>(CAPS).unwrap(),
-            "sync": {"version": 1, "server_id":server_id, "principal_id":principal_id}})
-            .to_string(),
-        )
+        json_response(&bootstrap_document(server_id, principal_id, false).to_string())
+    }
+
+    fn managed_bootstrap_response(server_id: &str, principal_id: &str) -> String {
+        json_response(&bootstrap_document(server_id, principal_id, true).to_string())
+    }
+
+    #[test]
+    fn identity_variants_retain_the_complete_producer_contract() {
+        for managed in [true, false] {
+            let value = bootstrap_document("changed-server", "changed-principal", managed);
+            let caps = &value["capabilities"];
+            assert_eq!(value["sync"]["server_id"], caps["identity"]["server_id"]);
+            assert_eq!(
+                value["sync"]["principal_id"],
+                caps["identity"]["principal_id"]
+            );
+            assert_eq!(caps.get("desktop_identity").is_some(), managed);
+            assert_eq!(caps.get("managed_installation").is_some(), managed);
+            if managed {
+                assert_eq!(caps["desktop_identity"], caps["identity"]);
+            }
+            assert!(value["sync"]["checkpoint"]["token"].is_string());
+            assert!(value["snapshot"].is_object());
+            assert!(caps["features"].is_object());
+        }
     }
 
     #[tokio::test]
@@ -4321,7 +4677,7 @@ mod tests {
         target.set_nonblocking(true).unwrap();
         let redirect=format!("HTTP/1.1 302 Found\r\nLocation: http://{}/never\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",target.local_addr().unwrap());
         let (endpoint, received, server) = server(vec![
-            json_response(CAPS),
+            json_response(&capabilities("fixture-server", "fixture-principal", false)),
             bootstrap_response("fixture-server", "fixture-principal"),
             redirect,
         ]);
@@ -4384,9 +4740,9 @@ mod tests {
         let (send, receive) = mpsc::channel();
         let worker = thread::spawn(move || {
             for reply in [
-                json_response(CAPS),
+                json_response(&capabilities("fixture", "principal", false)),
                 bootstrap_response("fixture", "principal"),
-                json_response(CAPS),
+                json_response(&capabilities("fixture", "principal", false)),
                 bootstrap_response("fixture", "principal"),
                 json_response(r#"{"operation":{"status":"running"}}"#),
             ] {
@@ -4456,9 +4812,9 @@ mod tests {
         target.set_nonblocking(true).unwrap();
         let redirect = format!("HTTP/1.1 307 Temporary Redirect\r\nLocation: http://{}/capture\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", target.local_addr().unwrap());
         let (endpoint, requests, worker) = server(vec![
-            json_response(CAPS),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
-            json_response(CAPS),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
             redirect,
         ]);
@@ -4854,8 +5210,9 @@ mod tests {
 
     #[tokio::test]
     async fn contract_mismatch_cannot_unlock_operations() {
+        // An unsupported contract must be refused before any operation is unlocked.
         let (endpoint, received, handle) = server(vec![json_response(
-            &CAPS.replace("2026-10-08", "unsupported"),
+            &capabilities("fixture", "principal", false).replace("2026-10-08", "unsupported"),
         )]);
         let bridge = Bridge::new(
             Ok(config(&endpoint)),
@@ -4872,8 +5229,9 @@ mod tests {
 
     #[tokio::test]
     async fn wrong_identity_cannot_unlock_operations() {
+        // A valid document for another actor must not unlock this binding.
         let (endpoint, received, handle) = server(vec![json_response(
-            &CAPS.replace("fixture-operator", "other-actor"),
+            &actor_document("other-actor")["capabilities"].to_string(),
         )]);
         let bridge = Bridge::new(
             Ok(config(&endpoint)),
@@ -4892,9 +5250,9 @@ mod tests {
     #[tokio::test]
     async fn native_credentials_and_original_operation_envelope_reach_only_the_fixed_central() {
         let (endpoint, received, handle) = server(vec![
-            json_response(CAPS),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
-            json_response(CAPS),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
             json_response(r#"{"operation":{"operation_id":"op_fixture","status":"accepted"}}"#),
         ]);
@@ -4951,12 +5309,12 @@ mod tests {
             serde_json::json!({"contract":"pm-work-attempt-result/v1","workspace_id":ws,"attempt_id":att,"identity":{"work_item_id":wi}}),
         ];
         let mut responses = vec![
-            json_response(CAPS),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
         ];
         responses.extend(views.iter().map(|view| json_response(&view.to_string())));
         responses.extend([
-            json_response(CAPS),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
             json_response(r#"{"operation":{"operation_id":"op_fixture","status":"queued"}}"#),
         ]);
@@ -5099,12 +5457,101 @@ mod tests {
         bytes
     }
 
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn saved_vault_record_authenticates_after_real_updater_rollback() {
+        // Same data handlers/epoch, real updater pointers + real authenticated API.
+        // Only the OS vault is doubled; no native-vault acceptance is claimed.
+        struct Peer(std::process::Child);
+        impl Drop for Peer {
+            fn drop(&mut self) {
+                let _ = self.0.kill();
+                let _ = self.0.wait();
+            }
+        }
+        let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let scratch = std::env::var_os("RUNNER_TEMP")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| repository.join(".test-tmp"));
+        std::fs::create_dir_all(&scratch).unwrap();
+        let directory = tempfile::Builder::new()
+            .prefix("updater-vault-")
+            .tempdir_in(scratch)
+            .unwrap();
+        let python = repository.join(".venv/bin/python");
+        assert!(
+            python.is_file(),
+            "Prepare the dev Python environment before native integration tests"
+        );
+        let mut peer = Peer(
+            std::process::Command::new(python)
+                .arg(repository.join("desktop/tests/updater-credentials-fixture.py"))
+                .arg("--data-dir")
+                .arg(directory.path())
+                .env("TMPDIR", directory.path())
+                .env("PYTHONPATH", &repository)
+                .current_dir(&repository)
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::inherit())
+                .spawn()
+                .unwrap(),
+        );
+        let output = peer.0.stdout.take().unwrap();
+        let (send, receive) = mpsc::channel();
+        let reader = thread::spawn(move || {
+            for line in std::io::BufRead::lines(std::io::BufReader::new(output)) {
+                if send.send(line.unwrap()).is_err() {
+                    break;
+                }
+            }
+        });
+        let response = || {
+            let line = receive.recv_timeout(Duration::from_secs(20)).unwrap();
+            serde_json::from_str::<serde_json::Value>(&line).unwrap()
+        };
+        let hello = response();
+        let endpoint = hello["endpoint"].as_str().unwrap();
+        let vault = Arc::new(MockVault::default());
+        *vault.answer.lock().unwrap() = Some(hello["token"].as_str().unwrap().into());
+        let bridge = credential_bridge(endpoint, vault.clone());
+        let first = bridge.enroll(Locale::English, 0).await.unwrap().unwrap();
+        let original = vault.records.lock().unwrap().clone();
+        assert_eq!(original.len(), 1);
+        drop(bridge);
+        for (action, commit) in [
+            ("apply", "b".repeat(40)),
+            ("rollback", "a".repeat(40)),
+            ("apply", "b".repeat(40)),
+        ] {
+            writeln!(
+                peer.0.stdin.as_mut().unwrap(),
+                "{}",
+                serde_json::json!({"action": action})
+            )
+            .unwrap();
+            let switched = response();
+            assert_eq!(switched["commit"], commit);
+            assert_eq!(switched["credential_unchanged"], true);
+            *vault.answer.lock().unwrap() = None; // Reopen must read, never prompt/re-enroll.
+            let restarted = credential_bridge(endpoint, vault.clone());
+            let current = restarted.connect().await.unwrap();
+            assert_eq!(current["desktop_identity"], first["desktop_identity"]);
+            assert!(restarted.status().connected);
+            assert!(*vault.records.lock().unwrap() == original);
+        }
+        writeln!(peer.0.stdin.as_mut().unwrap(), "{{\"action\":\"stop\"}}").unwrap();
+        assert_eq!(response()["stopped"], true);
+        assert!(peer.0.wait().unwrap().success());
+        reader.join().unwrap();
+    }
+
     #[tokio::test]
     async fn enrollment_is_verified_before_persistence_and_survives_native_restart() {
         let (endpoint, requests, server) = server(vec![
-            json_response(CAPS),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
-            json_response(CAPS),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
         ]);
         let vault = Arc::new(MockVault::default());
@@ -5136,11 +5583,12 @@ mod tests {
 
     #[tokio::test]
     async fn cancelled_invalid_or_unsavable_replacement_keeps_old_record_and_connection() {
+        // A rejected replacement identity must preserve the original credential and connection.
         let (endpoint, _, server) = server(vec![
-            json_response(CAPS),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
-            json_response(&CAPS.replace("fixture-operator", "wrong-actor")),
-            json_response(CAPS),
+            json_response(&actor_document("wrong-actor")["capabilities"].to_string()),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
         ]);
         let vault = Arc::new(MockVault::default());
@@ -5195,12 +5643,12 @@ mod tests {
             let mut replies = vec![];
             if !on_reconnect {
                 replies.extend([
-                    json_response(CAPS),
+                    json_response(&capabilities("fixture", "principal", false)),
                     bootstrap_response("fixture", "principal"),
                 ]);
             }
             replies.extend([
-                json_response(CAPS),
+                json_response(&capabilities("replacement", "principal", false)),
                 bootstrap_response("replacement", "principal"),
             ]);
             let (endpoint, requests, server) = server(replies);
@@ -5236,10 +5684,14 @@ mod tests {
     #[tokio::test]
     async fn bootstrap_principal_mismatch_and_contract_missing_cannot_enroll() {
         for response in [
-            bootstrap_response("fixture", "principal").replace("fixture-operator", "wrong-actor"),
+            json_response(&actor_document("wrong-actor").to_string()),
+            // Keep this document minimal to exercise missing contract and identity fields.
             json_response(r#"{"capabilities":{},"sync":{"version":1}}"#),
         ] {
-            let (endpoint, _, server) = server(vec![json_response(CAPS), response]);
+            let (endpoint, _, server) = server(vec![
+                json_response(&capabilities("fixture", "principal", false)),
+                response,
+            ]);
             let vault = Arc::new(MockVault::default());
             *vault.answer.lock().unwrap() = Some("synthetic-token".into());
             let bridge = credential_bridge(&endpoint, vault.clone());
@@ -5283,7 +5735,7 @@ mod tests {
     #[tokio::test]
     async fn forget_failure_preserves_connection_and_success_cannot_fall_back_to_environment() {
         let (endpoint, _, server) = server(vec![
-            json_response(CAPS),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
         ]);
         let vault = Arc::new(MockVault::default());
@@ -5540,9 +5992,9 @@ mod tests {
     #[tokio::test]
     async fn launch_credential_keeps_first_backend_identity_across_disconnect() {
         let (endpoint, requests, server) = server(vec![
-            json_response(CAPS),
+            json_response(&capabilities("fixture", "principal", false)),
             bootstrap_response("fixture", "principal"),
-            json_response(CAPS),
+            json_response(&capabilities("different-server", "principal", false)),
             bootstrap_response("different-server", "principal"),
         ]);
         let mut bridge = Bridge::new(
@@ -5578,7 +6030,9 @@ mod tests {
             assert!(count > 0);
             started.send(()).unwrap();
             wait.recv_timeout(Duration::from_secs(5)).unwrap();
-            socket.write_all(json_response(CAPS).as_bytes()).unwrap();
+            socket
+                .write_all(json_response(&capabilities("fixture", "principal", false)).as_bytes())
+                .unwrap();
             listener.set_nonblocking(true).unwrap();
             listener
         });

@@ -1,6 +1,5 @@
 import {expectErrorDetails} from './api-error-assertions.ts';
 import {test, expect} from '@playwright/test';
-import {mkdir} from 'node:fs/promises';
 import {taskFixture, taskId, opId} from './task-controls-fixture';
 const form = (page: any) => page.locator('[data-task-controls]');
 const open = async (page: any) => {await page.goto('/dashboard/#/task/'+taskId); await expect(form(page)).toBeVisible();};
@@ -146,13 +145,12 @@ for (const native of [false,true]) {
     expect(state.posts[1].idempotency_key).not.toBe(state.posts[0].idempotency_key);
   });
 }
-for (const language of ['en-US','zh-TW']) for (const width of [390,768,1440]) test(`task layout ${language} ${width}`, async ({browser})=>{
+for (const language of ['en-US','zh-TW']) for (const width of [390,768,1440]) test(`task layout ${language} ${width}`, async ({browser}, testInfo)=>{
   const page=await browser.newPage({locale:language,viewport:{width,height:900}});
   await taskFixture(page); await open(page);
   await expect(form(page).getByRole('button').first()).toBeEnabled();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  await mkdir('/tmp/bac-task-controls-after',{recursive:true});
-  await page.screenshot({path:`/tmp/bac-task-controls-after/${language}-${width}.png`,fullPage:true}); await page.close();
+  await page.screenshot({path:testInfo.outputPath(`${language}-${width}.png`),fullPage:true}); await page.close();
 });
 
 const pauseButton = (page: any) => form(page).locator('.actions button').nth(0);

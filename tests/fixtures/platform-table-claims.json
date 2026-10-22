@@ -1,0 +1,535 @@
+[
+  {
+    "file": "README.md",
+    "entry": "Windows x64",
+    "column": "features",
+    "text_sha256": "da5afe9fe859cc35765a9eb74e466ea430075aa77e10d09c7a51727da5ec0432",
+    "claims": [
+      {
+        "entry": "Windows x64",
+        "capability": "installer",
+        "expected": true
+      },
+      {
+        "entry": "Windows x64",
+        "capability": "bundled_central",
+        "expected": true
+      },
+      {
+        "entry": "Windows x64",
+        "capability": "tray",
+        "expected": true
+      },
+      {
+        "entry": "Windows x64",
+        "capability": "native_fleet",
+        "expected": true
+      },
+      {
+        "entry": "Windows x64",
+        "capability": "credential_vault",
+        "expected": true
+      }
+    ],
+    "unchecked_reason": "CODED_ONLY_PACKAGE_AND_RUNTIME_UNVERIFIED"
+  },
+  {
+    "file": "README.md",
+    "entry": "Windows x64",
+    "column": "boundary",
+    "text_sha256": "eefa6caf3ac64f1b9e1585c6dc7300c5cc1395ba1936cca9d7366220667fdae5",
+    "claims": [],
+    "unchecked_reason": "SIGNING_AND_FLEET_EFFECTS_UNVERIFIED"
+  },
+  {
+    "file": "README.md",
+    "entry": "macOS Apple Silicon / Intel",
+    "column": "features",
+    "text_sha256": "b0631dc886eda51be889b13b93dbee9362460de76510d1fba24ec92fc15e155a",
+    "claims": [
+      {
+        "entry": "macOS arm64",
+        "capability": "installer",
+        "expected": true
+      },
+      {
+        "entry": "macOS arm64",
+        "capability": "bundled_central",
+        "expected": true
+      },
+      {
+        "entry": "macOS arm64",
+        "capability": "tray",
+        "expected": true
+      },
+      {
+        "entry": "macOS arm64",
+        "capability": "credential_vault",
+        "expected": true
+      },
+      {
+        "entry": "macOS x64",
+        "capability": "installer",
+        "expected": true
+      },
+      {
+        "entry": "macOS x64",
+        "capability": "bundled_central",
+        "expected": true
+      },
+      {
+        "entry": "macOS x64",
+        "capability": "tray",
+        "expected": true
+      },
+      {
+        "entry": "macOS x64",
+        "capability": "credential_vault",
+        "expected": true
+      }
+    ],
+    "unchecked_reason": "CODED_ONLY_PACKAGE_AND_RUNTIME_UNVERIFIED"
+  },
+  {
+    "file": "README.md",
+    "entry": "macOS Apple Silicon / Intel",
+    "column": "boundary",
+    "text_sha256": "db35baac93c4a6831057cf591023c3e112392197a5011c1b923554e2513f5a22",
+    "claims": [
+      {
+        "entry": "macOS arm64",
+        "capability": "native_fleet",
+        "expected": false
+      },
+      {
+        "entry": "macOS x64",
+        "capability": "native_fleet",
+        "expected": false
+      }
+    ],
+    "unchecked_reason": "SIGNING_UNVERIFIED"
+  },
+  {
+    "file": "README.md",
+    "entry": "Linux",
+    "column": "features",
+    "text_sha256": "06d5ac364a69c513928547a3e32b50389a5235ff53cab13dbe3a2621ed9cdc4d",
+    "claims": [
+      {
+        "entry": "Linux",
+        "capability": "installer",
+        "expected": true
+      },
+      {
+        "entry": "Linux",
+        "capability": "bundled_central",
+        "expected": true
+      }
+    ],
+    "unchecked_reason": "CODED_ONLY_PACKAGE_AND_RUNTIME_UNVERIFIED"
+  },
+  {
+    "file": "README.md",
+    "entry": "Linux",
+    "column": "boundary",
+    "text_sha256": "f311276b840a8eef07821cafe96f2d4598b8d5e5cc0f19966ed0a48f25c50e5c",
+    "claims": [
+      {
+        "entry": "Linux",
+        "capability": "credential_vault",
+        "expected": false
+      }
+    ],
+    "unchecked_reason": "CREDENTIAL_LIFECYCLE_UNVERIFIED"
+  },
+  {
+    "file": "README.md",
+    "entry": "Browser",
+    "column": "features",
+    "text_sha256": "3e9c9b28dbb9531cfac3c217a093b5fd8e922b4f73b28115a405e010d7528001",
+    "claims": [
+      {
+        "entry": "Browser",
+        "capability": "shared_ui",
+        "expected": true
+      }
+    ],
+    "unchecked_reason": "CODED_ONLY_PACKAGE_AND_RUNTIME_UNVERIFIED"
+  },
+  {
+    "file": "README.md",
+    "entry": "Browser",
+    "column": "boundary",
+    "text_sha256": "fd84ebef4bd2b3a3f182efa5c124bbd6a8570277ddbbeca1cce44aeaa29ffa27",
+    "claims": [
+      {
+        "entry": "Browser",
+        "capability": "native_fleet",
+        "expected": false
+      },
+      {
+        "entry": "Browser",
+        "capability": "credential_vault",
+        "expected": false
+      }
+    ],
+    "unchecked_reason": "SHARED_DATA_AND_LOGIN_UNVERIFIED"
+  },
+  {
+    "file": "README.zh-TW.md",
+    "entry": "Windows x64",
+    "column": "features",
+    "text_sha256": "e5a15778589d6156522d182367129c71b8c7a816b3dc472e2239256bc2ed1da0",
+    "claims": [
+      {
+        "entry": "Windows x64",
+        "capability": "installer",
+        "expected": true
+      },
+      {
+        "entry": "Windows x64",
+        "capability": "bundled_central",
+        "expected": true
+      },
+      {
+        "entry": "Windows x64",
+        "capability": "tray",
+        "expected": true
+      },
+      {
+        "entry": "Windows x64",
+        "capability": "native_fleet",
+        "expected": true
+      },
+      {
+        "entry": "Windows x64",
+        "capability": "credential_vault",
+        "expected": true
+      }
+    ],
+    "unchecked_reason": "CODED_ONLY_PACKAGE_AND_RUNTIME_UNVERIFIED"
+  },
+  {
+    "file": "README.zh-TW.md",
+    "entry": "Windows x64",
+    "column": "boundary",
+    "text_sha256": "e89b0d48d3424d56e4f511f8506bc0e003877568dedb3564e09246e311f7483c",
+    "claims": [],
+    "unchecked_reason": "SIGNING_AND_FLEET_EFFECTS_UNVERIFIED"
+  },
+  {
+    "file": "README.zh-TW.md",
+    "entry": "macOS Apple Silicon／Intel",
+    "column": "features",
+    "text_sha256": "0c6502e7b196d6aaf44d4291a6a5cb064889ea12ce8beb203bbc75fd5a405a5c",
+    "claims": [
+      {
+        "entry": "macOS arm64",
+        "capability": "installer",
+        "expected": true
+      },
+      {
+        "entry": "macOS arm64",
+        "capability": "bundled_central",
+        "expected": true
+      },
+      {
+        "entry": "macOS arm64",
+        "capability": "tray",
+        "expected": true
+      },
+      {
+        "entry": "macOS arm64",
+        "capability": "credential_vault",
+        "expected": true
+      },
+      {
+        "entry": "macOS x64",
+        "capability": "installer",
+        "expected": true
+      },
+      {
+        "entry": "macOS x64",
+        "capability": "bundled_central",
+        "expected": true
+      },
+      {
+        "entry": "macOS x64",
+        "capability": "tray",
+        "expected": true
+      },
+      {
+        "entry": "macOS x64",
+        "capability": "credential_vault",
+        "expected": true
+      }
+    ],
+    "unchecked_reason": "CODED_ONLY_PACKAGE_AND_RUNTIME_UNVERIFIED"
+  },
+  {
+    "file": "README.zh-TW.md",
+    "entry": "macOS Apple Silicon／Intel",
+    "column": "boundary",
+    "text_sha256": "d280470808fab4e1e7b014d37f9dcc249ca92d0e7cd274088ea7b3530062a858",
+    "claims": [
+      {
+        "entry": "macOS arm64",
+        "capability": "native_fleet",
+        "expected": false
+      },
+      {
+        "entry": "macOS x64",
+        "capability": "native_fleet",
+        "expected": false
+      }
+    ],
+    "unchecked_reason": "SIGNING_UNVERIFIED"
+  },
+  {
+    "file": "README.zh-TW.md",
+    "entry": "Linux",
+    "column": "features",
+    "text_sha256": "bbd8446dee853101e56eb74d24153a14ea2432608cf96bbb5e54a7ad96c9e49c",
+    "claims": [
+      {
+        "entry": "Linux",
+        "capability": "installer",
+        "expected": true
+      },
+      {
+        "entry": "Linux",
+        "capability": "bundled_central",
+        "expected": true
+      }
+    ],
+    "unchecked_reason": "CODED_ONLY_PACKAGE_AND_RUNTIME_UNVERIFIED"
+  },
+  {
+    "file": "README.zh-TW.md",
+    "entry": "Linux",
+    "column": "boundary",
+    "text_sha256": "3f6ff747bafa16d5ed2e11ca8bad73af359570b93be49a41f1a068f23cd3d981",
+    "claims": [
+      {
+        "entry": "Linux",
+        "capability": "credential_vault",
+        "expected": false
+      }
+    ],
+    "unchecked_reason": "CREDENTIAL_LIFECYCLE_UNVERIFIED"
+  },
+  {
+    "file": "README.zh-TW.md",
+    "entry": "瀏覽器",
+    "column": "features",
+    "text_sha256": "8a96f41a863f43b32a58ca38db650ea32c8373c9af40925a2843928b1d4f11e3",
+    "claims": [
+      {
+        "entry": "Browser",
+        "capability": "shared_ui",
+        "expected": true
+      }
+    ],
+    "unchecked_reason": "CODED_ONLY_PACKAGE_AND_RUNTIME_UNVERIFIED"
+  },
+  {
+    "file": "README.zh-TW.md",
+    "entry": "瀏覽器",
+    "column": "boundary",
+    "text_sha256": "e79c307778c82ed73d0a27e32f5af6c5a2ce5d945e6433879fb5a922f2c3c4dd",
+    "claims": [
+      {
+        "entry": "Browser",
+        "capability": "native_fleet",
+        "expected": false
+      },
+      {
+        "entry": "Browser",
+        "capability": "credential_vault",
+        "expected": false
+      }
+    ],
+    "unchecked_reason": "SHARED_DATA_AND_LOGIN_UNVERIFIED"
+  },
+  {
+    "file": "scripts/build_product_site.py",
+    "entry": "Browser",
+    "column": "features",
+    "text_sha256": "4b6c55ec009250f150da135b7925cfc4456bfb5192eb4845b89b5c8d45f928ed",
+    "claims": [
+      {
+        "entry": "Browser",
+        "capability": "shared_ui",
+        "expected": true
+      },
+      {
+        "entry": "Browser",
+        "capability": "authenticated_central",
+        "expected": true
+      }
+    ],
+    "unchecked_reason": "CODED_ONLY_PACKAGE_AND_RUNTIME_UNVERIFIED"
+  },
+  {
+    "file": "scripts/build_product_site.py",
+    "entry": "Browser",
+    "column": "boundary",
+    "text_sha256": "966b6a89d4f3b913c60cc65e3dbdcbbf1797125f845ce7dfd990bb7420cee5d2",
+    "claims": [
+      {
+        "entry": "Browser",
+        "capability": "native_fleet",
+        "expected": false
+      },
+      {
+        "entry": "Browser",
+        "capability": "credential_vault",
+        "expected": false
+      }
+    ],
+    "unchecked_reason": "SHARED_DATA_AND_LOGIN_UNVERIFIED"
+  },
+  {
+    "file": "scripts/build_product_site.py",
+    "entry": "Windows x64",
+    "column": "features",
+    "text_sha256": "53b2fd735e6ec8d411f82dfefbeafd9c77e37328c370ef35c2e689cfb0e8b37c",
+    "claims": [
+      {
+        "entry": "Windows x64",
+        "capability": "installer",
+        "expected": true
+      },
+      {
+        "entry": "Windows x64",
+        "capability": "bundled_central",
+        "expected": true
+      },
+      {
+        "entry": "Windows x64",
+        "capability": "tray",
+        "expected": true
+      },
+      {
+        "entry": "Windows x64",
+        "capability": "native_fleet",
+        "expected": true
+      },
+      {
+        "entry": "Windows x64",
+        "capability": "credential_vault",
+        "expected": true
+      }
+    ],
+    "unchecked_reason": "CODED_ONLY_PACKAGE_AND_RUNTIME_UNVERIFIED"
+  },
+  {
+    "file": "scripts/build_product_site.py",
+    "entry": "Windows x64",
+    "column": "boundary",
+    "text_sha256": "b64011978a8655204da6bb6e1f8653ecb1cbafc10e451a433eb7a3861dbfbfe2",
+    "claims": [],
+    "unchecked_reason": "SIGNING_UNVERIFIED"
+  },
+  {
+    "file": "scripts/build_product_site.py",
+    "entry": "Mac Apple Silicon / Intel",
+    "column": "features",
+    "text_sha256": "07ff6fb0b216ed9a5186f9b2c9c5b6c14bf30a7762cf6c8c8274c7ee4402d6c9",
+    "claims": [
+      {
+        "entry": "macOS arm64",
+        "capability": "installer",
+        "expected": true
+      },
+      {
+        "entry": "macOS arm64",
+        "capability": "bundled_central",
+        "expected": true
+      },
+      {
+        "entry": "macOS arm64",
+        "capability": "tray",
+        "expected": true
+      },
+      {
+        "entry": "macOS arm64",
+        "capability": "credential_vault",
+        "expected": true
+      },
+      {
+        "entry": "macOS x64",
+        "capability": "installer",
+        "expected": true
+      },
+      {
+        "entry": "macOS x64",
+        "capability": "bundled_central",
+        "expected": true
+      },
+      {
+        "entry": "macOS x64",
+        "capability": "tray",
+        "expected": true
+      },
+      {
+        "entry": "macOS x64",
+        "capability": "credential_vault",
+        "expected": true
+      }
+    ],
+    "unchecked_reason": "CODED_ONLY_PACKAGE_AND_RUNTIME_UNVERIFIED"
+  },
+  {
+    "file": "scripts/build_product_site.py",
+    "entry": "Mac Apple Silicon / Intel",
+    "column": "boundary",
+    "text_sha256": "e90ead3b963cb3258e7e7e47e152b02068576745122056604e413a5271b9c858",
+    "claims": [
+      {
+        "entry": "macOS arm64",
+        "capability": "native_fleet",
+        "expected": false
+      },
+      {
+        "entry": "macOS x64",
+        "capability": "native_fleet",
+        "expected": false
+      }
+    ],
+    "unchecked_reason": "SIGNING_UNVERIFIED"
+  },
+  {
+    "file": "scripts/build_product_site.py",
+    "entry": "Linux",
+    "column": "features",
+    "text_sha256": "4ed38877e6dda10abde6b8a99595cad23aa9b232304457466cd095309da0ebc3",
+    "claims": [
+      {
+        "entry": "Linux",
+        "capability": "installer",
+        "expected": true
+      },
+      {
+        "entry": "Linux",
+        "capability": "bundled_central",
+        "expected": true
+      }
+    ],
+    "unchecked_reason": "CODED_ONLY_PACKAGE_AND_RUNTIME_UNVERIFIED"
+  },
+  {
+    "file": "scripts/build_product_site.py",
+    "entry": "Linux",
+    "column": "boundary",
+    "text_sha256": "a04c9b7b6711c4807a0fceb80340afea6259cfed30ecee12263edf91fdf6ea9a",
+    "claims": [
+      {
+        "entry": "Linux",
+        "capability": "credential_vault",
+        "expected": false
+      }
+    ],
+    "unchecked_reason": "CREDENTIAL_LIFECYCLE_UNVERIFIED"
+  }
+]

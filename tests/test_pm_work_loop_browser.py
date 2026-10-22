@@ -14,13 +14,14 @@ import os
 import re
 import shutil
 import sys
+from contextlib import AsyncExitStack
 from pathlib import Path
 from urllib.parse import unquote
 
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
-from bat_agent_connector import pm_discussions, pm_native_runtime, pm_plans, pm_runs, pr_publication
+from bat_agent_connector import api_auth, pm_discussions, pm_native_runtime, pm_plans, pm_runs, pr_publication
 from bat_agent_connector.errors import InvokeTimeout
 from bat_agent_connector.task_verifier import ObservedVerifier, VerificationSettings
 from tests import test_pm_conversation_proposals as conversation
@@ -40,7 +41,7 @@ from tests.test_pm_work_attempt_result import (
     start_ready,
     world,
 )
-from tests.test_pm_work_follow_up import _get_op
+from tests.test_pm_work_follow_up import _get_op, _restarted
 from tests.test_pm_work_packages import member as add_member
 from tests.test_pm_work_start import STARTER_OWNER
 
@@ -82,7 +83,26 @@ async def eventually(predicate, *, seconds=60):
 
 @pytest.mark.parametrize(("locale", "width"), [("en", 1440), ("zh-TW", 768), ("zh-TW", 390)])
 async def test_start_queue_close_reconnect_result_and_pr(start_ready, mock, tmp_path, locale, width):
-    await work_loop(start_ready, mock, tmp_path, locale, width)
+    await work_loop(start_ready, mock, tmp_path, locale, width, close_restart=True)
+
+
+@pytest.mark.parametrize("locale", ["en", "zh-TW"])
+async def test_work_foreground_recovery_keeps_unsent_draft_and_attempt(start_ready, mock, tmp_path, locale):
+    """Real HTTP/storage; BAT/model and lifecycle events are doubles, not a physical phone."""
+    await work_loop(start_ready, mock, tmp_path, locale, 390, foreground_recovery=True)
+
+
+@pytest.mark.parametrize("locale", ["en", "zh-TW"])
+async def test_work_refused_access_keeps_draft_and_attempt(start_ready, mock, tmp_path, locale):
+    """Revoke the real principal; one locale crosses a real inventory-triggered refresh."""
+    await work_loop(start_ready, mock, tmp_path, locale, 390, refused_access=True)
+
+
+@pytest.mark.parametrize("locale", ["en", "zh-TW"])
+@pytest.mark.parametrize("surface", ["pm-form", "session-toolbar"])
+async def test_other_form_refusal_keeps_draft_and_target(start_ready, mock, tmp_path, locale, surface):
+    """The existing journey's principal is revoked while each draft stays mounted."""
+    await work_loop(start_ready, mock, tmp_path, locale, 390, refused_access=True, refusal_surface=surface)
 
 
 @pytest.mark.parametrize(("locale", "width"), [("en", 1440), ("zh-TW", 390)])
@@ -187,8 +207,10 @@ async def discussion_loop(start_ready, mock, tmp_path, monkeypatch, locale, widt
 
 
 async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_token=None, monkeypatch=None,
-                    withdraw_writer=False, lost_reply=None, review_result=False, verify_result=False):
+                    withdraw_writer=False, lost_reply=None, review_result=False, verify_result=False,
+                    close_restart=False, foreground_recovery=False, refused_access=False, refusal_surface="work"):
     ops = w["d"].ops
+    late_refusal_refresh = refused_access and locale == "zh-TW"
     # The handoff test runner decodes a single protocol. This journey also runs
     # checkpoint and publication shell scripts, so execute every actual script.
     ops.context["git_runner"] = LocalRunner()
@@ -214,6 +236,10 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             commands={project_id: (sys.executable, "-c", script)}, artifact_dir=str(tmp_path / "verifier-logs")))
     adoptions_before = ops.db.execute("SELECT count(*) FROM pm_plan_adoptions").fetchone()[0]
     entry = "verify-result" if verify_result else "review-result" if review_result else "lost-start-reply" if lost_reply else "withdraw-writer" if withdraw_writer else mode
+    if foreground_recovery:
+        entry = "foreground-recovery"
+    if refused_access:
+        entry = "refused-access" + ("-" + refusal_surface if refusal_surface != "work" else "")
     shots = ROOT / "desktop/test-results/work-loop" / f"{entry}-{locale}-{width}"
     shutil.rmtree(shots, ignore_errors=True)
     shots.mkdir(parents=True, exist_ok=True)
@@ -221,6 +247,8 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
     browser_temp.mkdir()
     worker = asyncio.create_task(ops.loop(0.03))
     child = None
+    restarts = AsyncExitStack()
+    restarted_server = None
 
     async def produce_commit(wt, path, content, message):
         sha = await asyncio.to_thread(commit, wt, path, content, message)
@@ -330,7 +358,10 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 "mode": mode, "thread": thread_target(w)["thread_id"], "peer_agent": bool(peer_token),
                 "create_work": create_work, "project": project_id, "withdraw_writer": withdraw_writer,
                 "lost_start_reply": lost_reply is not None, "review_result": review_result,
-                "reviewer_actor": STARTER_OWNER.actor, "verify_result": verify_result})
+                "reviewer_actor": STARTER_OWNER.actor, "verify_result": verify_result,
+                "foreground_recovery": foreground_recovery, "refused_access": refused_access, "refusal_surface": refusal_surface,
+                "late_refusal_refresh": late_refusal_refresh,
+                "browser_profile": str(browser_temp / "profile") if close_restart or foreground_recovery or refused_access else None})
             if create_work:
                 created = await receive("created")
                 await wait_status(created["operation_id"], "succeeded")
@@ -392,9 +423,141 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             mock.ws_doc["terminals"].append({"id": sid, "workspaceId": "ws-1", "title": "Login repair",
                 "type": "terminal", "cwd": wt, "worktreePath": wt, "worktreeBranch": execution["branch"],
                 "agentPreset": "claude-code", "sdkSessionId": "sdk-work-loop", "model": "claude-sonnet-4-5"})
-            _set_turn_messages(mock, sid, marker, streaming=True, assistant_text="Working on the login repair.")
+            assistant_text = ("\n\n".join(f"Progress {i}: 正在檢查登入修正與測試，等待下一步指示。" for i in range(60))
+                if foreground_recovery else "Working on the login repair.")
+            _set_turn_messages(mock, sid, marker, streaming=True, assistant_text=assistant_text)
             await w["d"].inventory._refresh_scheduled("h1")
             await send({"ready": True, "attempt": att["attempt_id"], "execution": result["children"]["handoff"]})
+            if refused_access:
+                await receive("refusal-checkpoint")
+                cursor = (await _result(w, att))["cursor"]
+                await send({"cursor": cursor})
+                if late_refusal_refresh:
+                    await receive("refusal-refresh")
+                    mock.ws_doc["terminals"][-1]["title"] = "Login repair: refreshed observation"
+                    await w["d"].inventory._refresh_scheduled("h1")
+                    status, page = await http(w["port"], "GET", f"/api/v1/events?after={cursor}&limit=100",
+                        tok=w["owner_token"])
+                    assert status == 200, page
+                    event = next(row for row in page["events"] if row["resource_type"] == "session"
+                        and row["resource_id"] == "h1/" + sid and row["kind"] == "session.updated")
+                    await send({"event": event})
+                await receive("revoke-access")
+                original_operations = {row[0] for row in ops.db.execute("SELECT operation_id FROM operations")}
+                original_attempts = [tuple(row) for row in ops.db.execute(
+                    "SELECT attempt_id FROM work_attempts WHERE work_item_id=?", (att["work_item_id"],))]
+                original_frames = copy.deepcopy(bat_writes(mock))
+                with w["d"].journal.tx():
+                    assert api_auth.revoke(ops.db, STARTER_OWNER.actor) == 1
+                assert api_auth.authenticate(ops.db, w["owner_token"], w["d"]._admin_token) is None
+                await send({"revoked": True})
+                done = await receive("refused-done")
+                assert await asyncio.wait_for(child.wait(), 10) == 0, (shots / "browser.log").read_text()
+                assert done["operations"] == [start["operation_id"]]
+                assert {row[0] for row in ops.db.execute("SELECT operation_id FROM operations")} == original_operations
+                assert [tuple(row) for row in ops.db.execute(
+                    "SELECT attempt_id FROM work_attempts WHERE work_item_id=?", (att["work_item_id"],))] == original_attempts
+                assert original_attempts == [(att["attempt_id"],)]
+                assert not ops.db.execute("SELECT 1 FROM work_inputs WHERE attempt_id=?", (att["attempt_id"],)).fetchall()
+                assert bat_writes(mock) == original_frames
+                assert [frame["channel"] for frame in original_frames] == ["claude:start-session", "claude:send-message"]
+                assert snapshot(w["human"]) == before
+                assert (mock.metas[MANUAL], mock.states[MANUAL]) == manual
+                assert not any(row[0] == "POST" for row in w["gh"].requests)
+                (shots / "evidence.json").write_text(json.dumps({"locale": locale, "width": width,
+                    "source_sha": git(ROOT, "rev-parse", "HEAD"), "same_attempt": att["attempt_id"],
+                    "revoked_tokens": 1, "new_operations": 0, "new_bat_frames": 0,
+                    "browser": done["browser"], "refusal": done["refusal"]}, indent=2) + "\n")
+                # End while access remains refused: neither reconnect nor resend
+                # may repair it. Other modes retain publication assertions.
+                return
+            if foreground_recovery:
+                await receive("prepare-refresh")
+                cursor = (await _result(w, att))["cursor"]
+                # Inventory emits a real session event. Its listener's reads are
+                # left unanswered while still online, before the network switch.
+                mock.ws_doc["terminals"][-1]["title"] = "Login repair."
+                await w["d"].inventory._refresh_scheduled("h1")
+                status, page = await http(w["port"], "GET", f"/api/v1/events?after={cursor}&limit=100",
+                    tok=w["owner_token"])
+                assert status == 200, page
+                refresh_event = next(row for row in page["events"] if row["resource_type"] == "session"
+                    and row["resource_id"] == "h1/" + sid and row["kind"] == "session.updated")
+                await send({"refresh_event": refresh_event})
+                await receive("background-offline")
+                cursor = (await _result(w, att))["cursor"]
+                # A real BAT observation advances the turn while the browser is
+                # offline. Inventory, not the test, writes the resulting event.
+                _set_turn_messages(mock, sid, marker, streaming=False, assistant_text=assistant_text,
+                    last_data_at=1_790_001_020_000)
+                await w["d"].inventory._refresh_scheduled("h1")
+                status, page = await http(w["port"], "GET", f"/api/v1/events?after={cursor}&limit=100",
+                    tok=w["owner_token"])
+                assert status == 200, page
+                event = next(row for row in page["events"] if row["resource_type"] == "session"
+                    and row["resource_id"] == "h1/" + sid and row["kind"] == "session.updated")
+                assert event["seq"] > cursor
+                assert mock.channels().count("claude:send-message") == 1
+                assert not any(ops.get(row[0])["action"] == "session.send"
+                    for row in ops.db.execute("SELECT operation_id FROM operations"))
+                await send({"event": event})
+                sent = await receive("sent-after-recovery")
+                oid, intent = sent["operation_id"], sent["intent"]
+                await wait_status(oid, "succeeded")
+                follow = ops.get(oid)
+                assert follow["idempotency_key"] == intent["key"]
+                assert {key: follow[key] for key in ("action", "target", "params", "preconditions")} == intent["request"]
+                assert follow["target"] == w["target"]
+                assert follow["preconditions"] == {"expected_attempt_id": att["attempt_id"]}
+                assert follow["params"] == {"text": sent["draft"].strip(), "schedule": "after_current"}
+                assert (await _get_op(w, oid))["input_receipt"]["state"] == "sent"
+                await send({"sent": oid})
+                done = await receive("foreground-done")
+                assert await asyncio.wait_for(child.wait(), 10) == 0, (shots / "browser.log").read_text()
+                assert done["operations"] == [start["operation_id"], oid]
+                user_ops = [ops.get(identity) for identity in done["operations"]]
+                assert all(op["actor"] == STARTER_OWNER.actor and op["status"] == "succeeded" for op in user_ops)
+                assert len({op["idempotency_key"] for op in user_ops}) == 2
+                created = {row[0] for row in ops.db.execute("SELECT operation_id FROM operations")} - seed_ids
+                assert created == set(done["operations"]) | {identity for identity in result["children"].values() if identity}
+                sends = [ops.get(row[0]) for row in ops.db.execute("SELECT operation_id FROM operations")
+                    if ops.get(row[0])["action"] == "session.send"]
+                assert [op["operation_id"] for op in sends] == [oid]
+                rows = ops.db.execute("SELECT operation_id, message_id FROM work_inputs WHERE attempt_id=?",
+                    (att["attempt_id"],)).fetchall()
+                assert [tuple(row) for row in rows] == [(oid, "batc-" + oid)]
+                frames = bat_writes(mock)
+                assert [frame["channel"] for frame in frames] == [
+                    "claude:start-session", "claude:send-message", "claude:send-message"]
+                assert all(frame["params"]["sessionId"] == sid for frame in frames)
+                assert sum(frame["params"].get("clientMessageId") == "batc-" + oid for frame in frames) == 1
+                assert frames[-1]["params"]["prompt"] == sent["draft"].strip()
+                assert snapshot(w["human"]) == before
+                assert (mock.metas[MANUAL], mock.states[MANUAL]) == manual
+                assert not any(row[0] == "POST" for row in w["gh"].requests)
+                assert git(w["remote"], "rev-parse", "refs/heads/main") == w["sha"]
+                (shots / "bat-frames.json").write_text(json.dumps(frames, indent=2) + "\n")
+                (shots / "evidence.json").write_text(json.dumps({"locale": locale, "width": width,
+                    "source_sha": git(ROOT, "rev-parse", "HEAD"), "source_dirty": bool(git(ROOT, "status", "--porcelain")),
+                    "python": sys.version, "browser": done["browser"], "same_attempt": att["attempt_id"],
+                    "event": event, "browser_operations": 2, "receipt_rows": 1, "matching_bat_frames": 1,
+                    "manual_unchanged": True, "recovery": done["recovery"]}, indent=2) + "\n")
+                # This mode ends at its sent receipt. The shared journey's other
+                # modes still exercise commits, restart, review and publication.
+                return
+            if close_restart:
+                queued = await receive("awaiting-admission")
+
+                async def admitted():
+                    while True:
+                        receipt = (await _get_op(w, queued["operation_id"]))["input_receipt"]
+                        assert receipt["operation_id"] == queued["operation_id"]
+                        if receipt["state"] == "queued":
+                            return receipt
+                        await asyncio.sleep(0.05)
+
+                admission = await asyncio.wait_for(admitted(), 60)
+                await send({"admitted": admission["operation_id"]})
             closed = await receive("closed")
             queued_id = closed["operation_id"]
             await wait_status(queued_id, "waiting_external")
@@ -457,6 +620,9 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             assert first["changes"]["fixed_result_commit"]["commit_sha"] == first_sha
             candidate = await produce_commit(wt, "retry-test.txt", "retry after failure\n", "Add retry case")
             second_marker = "batc-" + queued_id
+            if close_restart:
+                assert sum(frame.get("params", {}).get("clientMessageId") == second_marker
+                    for frame in mock.invokes) == 1
             _set_turn_messages(mock, sid, marker, assistant_id="second-answer",
                 assistant_text="Added the retry-after-failure case.", last_data_at=1_790_001_020_000,
                 extra_items=[{"id": second_marker, "role": "user", "content": closed["instruction"],
@@ -464,6 +630,34 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             await w["d"].inventory._refresh_scheduled("h1")
             final = await _result(w, att)
             assert final["changes"]["fixed_result_commit"]["commit_sha"] == candidate, final
+            if close_restart:
+                # Stop the HTTP listener and worker, then use the same journal/owner
+                # reconstruction as the waiting-input restart tests. Keep the port:
+                # changing it would change the browser's localStorage origin.
+                original = w["d"]
+                w["server"].close()
+                await w["server"].wait_closed()
+                worker.cancel()
+                await asyncio.gather(worker, return_exceptions=True)
+                await ops.drain()
+                await original.artifact_store.close_reaper()
+                await original.api.session_observation.close()
+                await original.result_collector.close()
+                await original.inventory.close()
+                await original.fleet.close()
+                original.journal.close()
+                restarted = await restarts.enter_async_context(_restarted(original))
+                assert restarted._db_path == original._db_path
+                w = {**w, "d": restarted}
+                ops = restarted.ops
+                # Reinstall only the external GitHub fixture's integrate config.
+                # No operation, receipt or browser state is reconstructed here.
+                publication_provider(w)
+                restarted_server = await asyncio.start_server(restarted._handle, "127.0.0.1", w["port"])
+                assert restarted_server.sockets[0].getsockname()[1] == w["port"]
+                worker = asyncio.create_task(ops.loop(0.03))
+                receipt = (await _get_op(w, queued_id))["input_receipt"]
+                assert receipt["operation_id"] == admission["operation_id"] and receipt["state"] == "sent"
             await send({"candidate": candidate, "attempt": att["attempt_id"]})
             quality = verification = None
             if verify_result:
@@ -586,6 +780,15 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
             assert bat_writes(mock) == expected_writes
             assert all(f["params"]["sessionId"] == sid for f in starts[:1] + sends[:2])
             assert sends[1]["params"]["clientMessageId"] == second_marker
+            if close_restart:
+                assert sum(frame.get("params", {}).get("clientMessageId") == second_marker
+                    for frame in mock.invokes) == 1
+                rows = ops.db.execute("SELECT operation_id, message_id FROM work_inputs WHERE attempt_id=?",
+                    (att["attempt_id"],)).fetchall()
+                assert [tuple(row) for row in rows] == [(queued_id, second_marker)]
+                assert all(frame.get("params", {}).get("prompt") != closed["draft"].strip()
+                    for frame in mock.invokes)
+                (shots / "bat-frames.json").write_text(json.dumps(bat_writes(mock), indent=2) + "\n")
             if peer:
                 assert starts[-1]["params"]["sessionId"] == sends[-1]["params"]["sessionId"] == peer["session_id"]
             assert len([r for r in w["gh"].requests if r[:2] == ("POST", "/repos/o/r/pulls")]) == 1
@@ -609,7 +812,10 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
                 "entry": entry, "recovery": recovery, "quality_review": quality, "verification": verification, "created_work_in_ui": created_work, "same_attempt": att["attempt_id"],
                 "discussion_return": done["discussion_return"], "browser_operations": len(user_ops), "bat_starts": len(starts),
                 "bat_sends": len(sends), "github_posts": 1, "manual_unchanged": True, "mcp_peer": peer,
-                "candidate": candidate, "browser_closed_during_dispatch": True}, indent=2) + "\n")
+                "candidate": candidate, "browser_closed_during_dispatch": True,
+                "close_restart": {**done["close_restart"], "receipt_rows": len(rows),
+                    "matching_bat_frames": 1, "same_journal": True, "same_port": True}
+                    if close_restart else None}, indent=2) + "\n")
     finally:
         (shots / "operations.json").write_text(json.dumps([ops.get(row[0]) for row in
             ops.db.execute("SELECT operation_id FROM operations") if row[0] not in seed_ids], indent=2) + "\n")
@@ -624,3 +830,9 @@ async def work_loop(w, mock, tmp_path, locale, width, *, mode="start", peer_toke
         await asyncio.gather(worker, return_exceptions=True)
         await ops.drain()
         await w["d"].artifact_store.close_reaper()
+        if restarted_server:
+            restarted_server.close()
+            await restarted_server.wait_closed()
+            await w["d"].api.session_observation.close()
+            await w["d"].result_collector.close()
+        await restarts.aclose()

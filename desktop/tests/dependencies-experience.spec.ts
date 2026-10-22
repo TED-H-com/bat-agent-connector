@@ -1,3 +1,4 @@
+import {revealPmView} from './pm-navigation.ts';
 import {mkdirSync} from 'node:fs';
 import {expect, test, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
@@ -8,14 +9,12 @@ import {parseDiscussRefs} from '../src/pm-discuss-link.js';
 const ids = dependencyFixtureIds;
 const files = ['api/pyproject.toml', 'api/uv.lock', 'api/constraints.txt', 'web/package.json', 'web/package-lock.json', 'web/vendor.lock', 'tools/broken.toml', 'vendor/closed'];
 
-function shotDir() {
-  return process.env.BATC_DEP_SHOT_DIR || `${process.env.TMPDIR || '/tmp'}/shots`;
-}
-
 async function shot(page: Page, name: string) {
+  const testInfo = test.info();
   if (process.env.BATC_DEP_SHOTS !== '1') return;
-  mkdirSync(shotDir(), {recursive: true});
-  await page.screenshot({path: `${shotDir()}/${name}.png`, fullPage: true, animations: 'disabled'});
+  const directory = process.env.BATC_DEP_SHOT_DIR || testInfo.outputPath('screenshots');
+  mkdirSync(directory, {recursive: true});
+  await page.screenshot({path: `${directory}/${name}.png`, fullPage: true, animations: 'disabled'});
 }
 
 async function expectNoOverflow(page: Page) {
@@ -25,12 +24,8 @@ async function expectNoOverflow(page: Page) {
 
 async function openView(page: Page, id: string) {
   await expect.poll(() => page.locator('[data-pm-view]').count()).toBeGreaterThan(0);
-  const entry = page.locator(`[data-pm-view="${id}"]`);
+  const entry = await revealPmView(page, id);
   const narrow = (page.viewportSize()?.width ?? 0) < 1000;
-  if (!await entry.isVisible()) {
-    await page.locator('#workspace-menu').click();
-    await expect(page.locator('.workspace-nav')).toHaveAttribute('aria-modal', 'true');
-  }
   await entry.click();
   await expect(page.locator(`[data-pm-region="${id}"]`)).toBeVisible();
   if (narrow) await expect(page.locator('.workspace-nav')).toBeHidden();

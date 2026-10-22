@@ -2,18 +2,20 @@
 
 [產品介紹](../README.zh-TW.md) · [English](getting-started.md) · **繁體中文**
 
-## 選擇相符的候選安裝包
+## 選擇相符的安裝包
 
-目前最新已發布預覽版為 [v0.2.10-preview.20261018](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.10-preview.20261018)：Connector 0.2.10、desktop 0.1.6，附來源清單及 SHA-256 校驗碼。後續版本請從[發布頁](https://github.com/TED-H-com/bat-agent-connector/releases)選擇，核對 tag、manifest 與平台套件；預覽版不一定標記為 Latest。新版驗證安裝器尚未發布，0.2.10 不含安裝腳本；發布後的一行安裝與收據流程見[英文安裝說明](getting-started.md#2-install-connector)。CI 與安裝 fixture 不代表實機驗收。
+2026 年 10 月 19 日核對的已發布版本為 [v0.2.12](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.12)：Connector **0.2.12**、desktop **0.1.8**，來源為 `14c62830240148b14a4d28a9c428f7f8b5ba8bf3`。下載相符套件及 `release-manifest.json`、`SHA256SUMS`；後續版本須核對自己的 tag、來源清單與平台套件。v0.2.12 原始碼已包含驗證安裝器，一行安裝與收據流程見[英文安裝說明](getting-started.md#2-install-connector)。CI 與安裝 fixture 不代表實機驗收。
 
-| 平台 | Artifact | 格式 |
+這個安裝包尚未包含 #315 路線喚醒、#316 本機服務復原與 #319 首次設定／狀態修正。重裝同一包不會取得這些修正；來源、發布與安裝證據見[目前交付狀態](product/implementation-status.md)。下方首次啟動步驟描述已發布套件，主線介面改動不代表安裝版已更新。
+
+| 平台 | Release 資產 | 格式 |
 | --- | --- | --- |
-| Windows x64 | `desktop-Windows-unsigned` | NSIS `.exe` |
-| Mac Apple Silicon | `desktop-macOS-arm64-validation` | `.dmg` |
-| Mac Intel | `desktop-macOS-x64-validation` | `.dmg` |
-| Linux | `desktop-Linux-unsigned` | `.deb` |
+| Windows x64 | `better-agent-dashboard_0.1.8_windows_x64.exe` | NSIS `.exe` |
+| Mac Apple Silicon | `better-agent-dashboard_0.1.8_macos_arm64.dmg` | `.dmg` |
+| Mac Intel | `better-agent-dashboard_0.1.8_macos_x64.dmg` | `.dmg` |
+| Linux | `better-agent-dashboard_0.1.8_linux_amd64.deb` | `.deb` |
 
-GitHub artifact 可能要求登入，也會到期。Windows 驗證包未正式簽署，Mac 採 ad-hoc 簽署。正式簽章、Mac 公證、正式更新通道及 Linux 原生憑證持久儲存不在本次交付範圍；此處不宣稱已發布新的穩定版本。
+請使用發布頁的相符平台資產；另行提供的 GitHub Actions 候選 artifact 可能要求登入，也會到期。Windows 包未正式簽署，Mac 採 ad-hoc 簽署。正式簽章、Mac 公證、正式更新通道及 Linux 原生憑證持久儲存不在本次交付範圍；GitHub 發布標記不等於實機穩定性通過。
 
 ## 首次啟動：你的本機 Connector
 
@@ -339,6 +341,15 @@ bat-agent-connector-mcp --principal-only --read-only --http --port 8765
 MCP 位址是 `http://127.0.0.1:8765/mcp`，不是 Dashboard 網址。Durable 工作及復原請使用[共用 skill](../skills/bat-agent-connector/SKILL.md)與[同版 Agent 配接](agent-skills.md)。Task Service recipes 另有設定；planner 關閉時 task 排隊，不代表派工出錯。[Task Service](design/task-service.md)。
 
 ## 常見問題
+
+### Connector 安裝錯誤：`entrypoint_directory_not_owned`
+
+安裝程式會顯示有問題的目錄與 `chmod g-w,o-w <dir>` 修正提示。
+例如 `~/.local`、`~/.local/bin` 或 `~/.config` 必須由目前使用者擁有，
+且不可允許群組或其他使用者寫入。確認顯示的路徑後，對該目錄執行提示中的
+指令，再重試安裝或 `--verify-only`。安裝程式不會自動修改權限。
+若目錄擁有者不正確，僅移除寫入權限仍無法解決，請洽系統管理員。
+
 
 | 畫面／情況 | 檢查與處理 |
 | --- | --- |

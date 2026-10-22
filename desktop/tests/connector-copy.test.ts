@@ -25,8 +25,8 @@ for (const locale of ['en', 'zh-TW'] as const) {
     const copy = STRINGS[locale];
     assert.equal(copy.managed_join_existing, locale === 'en' ? 'Join another Connector' : '加入既有的 Connector');
     assert.equal(copy.managed_recovery_help, locale === 'en'
-      ? 'Existing data and background work are retained. If an older version still has work, let it finish, then quit and reopen the desktop app. The startup error appears below. You can also join another Connector.'
-      : '既有資料與背景工作會保留。若舊版本仍有工作，先讓它完成，再結束並重新開啟桌面程式。此次啟動錯誤列在下方，也可以展開「加入既有的 Connector」設定連線。');
+      ? 'Existing data and background work are retained. If an older version still has work, let it finish, then quit and reopen the desktop app. The startup error appears below. You can also expand Advanced to join another Connector.'
+      : '既有資料與背景工作會保留。若舊版本仍有工作，先讓它完成，再結束並重新開啟桌面程式。此次啟動錯誤列在下方，也可以展開「進階設定」，加入其他 Connector。');
     assert.equal(copy.pmc_schedule, locale === 'en' ? 'Connector schedule' : 'Connector 排程');
     if (locale === 'en') assert.match(copy.projects_help, /^Projects and work items are Connector's own records:/);
   });

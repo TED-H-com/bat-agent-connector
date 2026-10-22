@@ -1,10 +1,10 @@
-import {openPmPanel, openThreadTab, openThreadBrief} from './pm-navigation.ts';
+import {openPmPanel, openThreadTab, openThreadBrief, revealPmView} from './pm-navigation.ts';
 // One browser flow against actual PM HTTP actions; the central has no BAT hosts.
 import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
 import {delimiter, resolve} from 'node:path';
-import {mkdir, mkdtemp, readFile, rm} from 'node:fs/promises';
-import {homedir} from 'node:os';
+import {mkdtemp, readFile, rm} from 'node:fs/promises';
+import {testScratchRoot} from './test-scratch.mjs';
 import assert from 'node:assert/strict';
 import {chromium, expect as baseExpect} from '@playwright/test';
 const expect = baseExpect.configure({timeout: 30000});
@@ -17,9 +17,9 @@ async function openDisclosure(summary) {
 }
 const source = resolve('..'), backend = resolve(process.env.BATC_PM_BACKEND || source);
 const python = process.env.BATC_PM_PYTHON || resolve(backend, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
-const scratch = resolve(homedir(), 'agent-work/tmp/pytest');
-await mkdir(scratch, {recursive:true});
-const temporary = await mkdtemp(resolve(scratch, 'pm-central-run-'));
+const temporary = await mkdtemp(resolve(testScratchRoot(), 'pm-central-run-'));
+// Keep browser and child-process temporary files inside this owned directory.
+process.env.TMPDIR = process.env.TEMP = process.env.TMP = temporary;
 let child, browser, output, stopped, spawnError, failureDetails=async()=>({});
 async function bounded(promise, milliseconds, message) {
   let timer;
@@ -335,13 +335,13 @@ try {
   await expect(page.locator('[data-overview-metric=progress]')).toContainText('No adopted plan');
   child.stdin.write(JSON.stringify({action:'connect_usage',workspace_id:workspaceId})+'\n');
   assert.equal((await next()).usage_connected,true);
-  await page.locator('[data-pm-view="agents"]').click();
+  await (await revealPmView(page, 'agents')).click();
   await expect(page.locator('[data-pm-resources]')).toContainText('1,000');
   await page.locator('[data-resource-select="Implementation"]').click();
   await expect(page.locator('[data-resource-detail]')).toContainText('fixture-model');
   await expect(page.locator('[data-resource-detail]')).toContainText('Input includes cache');
   await expect(page.locator('[data-resource-quota]')).toContainText('No current quota balance');
-  await page.locator('[data-pm-view="requirements"]').click();
+  await (await revealPmView(page, 'requirements')).click();
   await expect(page.locator('[data-pm-rtm]')).toContainText('First useful action');
   await expect(page.locator('[data-rtm-unassigned] > summary')).toHaveText('Unassigned (1)');
   await page.evaluate(hash=>{location.hash=hash;},`#/pm/${workspaceId}/requirements?select=${work.work_item_id}`);

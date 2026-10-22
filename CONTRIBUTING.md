@@ -22,8 +22,11 @@ workers before the fixture can close their journal. This leaves original durable
 operation IDs, keys and uncertain step receipts available for normal reconciliation;
 it does not call the product's operation-cancel action or rerun a test.
 
-Captured-wave helpers such as joined maintenance's `advance` keep their existing
-per-wave deadlines. Use `tests.operation_helpers.worker_details` before stopping
+Joined maintenance's `advance` waits for each captured worker to finish, using
+recorded step/receipt progress and a 60-second per-worker stall guard. A progressing
+wave can exceed 60 seconds under local load; this is a test hang bound, not a
+product runtime promise. Product provider/deadline limits remain unchanged.
+Use `tests.operation_helpers.worker_details` before stopping
 workers to preserve the suspended await chain, and `stop_workers` on failure or
 caller cancellation to join all pending workers belonging to that service while
 its journal is still open. Workers admitted during a wave also need this cleanup.
@@ -40,6 +43,22 @@ old integration stand-ins: doing so repeats source validation before each step
 and frame, consuming the settling budget even when provider replies are prompt.
 Keep original-key, withdrawal, write-count and retry-budget assertions against
 the production hooks; mock only the external providers and managed test resources.
+
+ApiV1 capability fixtures share `tests/fixtures/managed-bootstrap.json`; do not
+add another golden for the same producer and setup. Platform table interpretations
+live in `tests/fixtures/platform-table-claims.json`. Ordinary pytest checks the
+working tree's claims and cells; `scripts/generate_capability_matrix.py` reads the
+candidate's committed copy by default and records its source and digest. An explicit
+`--claims` review draft is recorded separately. When editing a platform
+table row in either README or the site producer, re-review its capability claims
+and uncovered prose in the same PR. New, changed or removed cells fail the guard;
+do not merely refresh a digest. A record binds file, table entry label, column
+and SHA-256 of exact text, not the candidate or a line number. Text is UTF-8; the
+site's ordered English/Traditional Chinese pair is encoded as a JSON array with
+`ensure_ascii=False` and separators `(',', ':')` before hashing. Each record lists
+explicit entry/capability/expected-coded claims and an `unchecked_reason` for the
+remaining prose. Such unchecked prose does not fail the guard or prove support,
+installation, runtime readiness or acceptance.
 
 Public documentation, screenshots, examples and issue/PR text must work without a
 maintainer's private Fleet inventory or deployment. Use synthetic host names, reserved
@@ -76,7 +95,7 @@ pytest versions; the `desktop.yml` summary explains only native builds.
 | `ci.yml` | `pytest-complete` | Successful shards and exact collection coverage for exactly the selected versions |
 | `desktop.yml` | `frontend` | Regenerate/check browser assets and run Node tests |
 | `desktop.yml` | `browser-ui (i/3)` | Three Playwright shards on committed browser assets |
-| `desktop.yml` | `central-ui` | Nineteen named central-service UI script steps |
+| `desktop.yml` | `central-ui` | Twenty-one named central-service UI script steps |
 | `desktop.yml` | `build` | PRs select no builds, Linux only, or all four builds; triggered `main` runs always select all four. Selected entries retain every native/packaged fixture |
 | `desktop.yml` | `windows-endpoint-oracle` | Windows endpoint fixtures on every run |
 
@@ -136,6 +155,23 @@ If a native step or dependency loads TypeScript, its failure instructs maintaine
 to remove `desktop/tests/**/*.ts` from the allowlist. Untraceable computed imports
 also fail the guard. PyYAML is a locked dev-only dependency for this guard; the
 scope classifier uses only the standard library.
+
+Desktop PR and main-push path filters also contain generated, exact fixture inputs.
+Run `uv run python scripts/desktop_fixture_inputs.py --write` after changing a
+fixture's dependencies. The ordinary pytest guard follows workflow/npm entrypoints,
+local imports and script references, and checks imports and file reads in a fresh
+process, including the publication seed. It checks both identical path lists and
+their generated blocks. A shared fixture test change runs desktop CI and retains
+all four native builds; an unrelated test change runs Python CI without starting
+desktop CI. The native scope rules above remain unchanged.
+
+The guard also parses Python and JavaScript/TypeScript paths in the whole closure,
+including test bodies. Literal joins and constant aliases are resolved; a computed
+path into root `tests/` or `scripts/` that it cannot resolve fails with `file:line`.
+Use literal fixture names at the read site. Bare JSON/TSV names conservatively
+include every tracked file with that basename. The TypeScript grammar is a locked
+Python dev dependency, so ordinary pytest needs neither Node nor npm installs;
+the parser never executes a fixture body.
 
 After `uv sync --locked --extra dev`, run one shard from the repository root.
 Use a disk-backed `TMPDIR`:

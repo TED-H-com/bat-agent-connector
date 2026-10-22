@@ -198,6 +198,19 @@ Draft, Adopted, Historical. Done describes content only; it does not mean delive
 
 ## Shell and information architecture
 
+October 19 stabilization revision: the default layout shows four everyday project
+destinations in this order: Overview, Discussions, Board, Issues & changes. Each
+has one short explanation of what a person can do there, in English and zh-TW.
+Requirements, Schedule, Dependencies and Agents remain under **More project tools**.
+Only capability-supported entries appear. A bookmarked secondary view opens its
+group; collapsing the group does not close the view or discard its form. The
+expansion preference belongs to the current connection/principal and workspace.
+Keyboard users can open the group with Enter/Space and Tab to its destinations.
+Mobile uses the same group inside the existing drawer. Refresh preserves a focused
+navigation control when it remains visible. Existing routes, source gates, drafts,
+operation keys and Workbench preview remain in place. This presentation change
+does not claim completed Fleet onboarding or a validated installation candidate.
+
 The topbar is 48px. At ≥1000px it shows the product mark/name, a plain workspace
 link to Overview and one current-view breadcrumb; only the connection pill is on
 the right. The workspace switcher exists once, in the sidebar. At smaller widths,
@@ -547,7 +560,7 @@ controls follow the durable create form's gates and lock with its original inten
 An already open rename stays editable through a background lifecycle withdrawal:
 the draft, caret and focus remain, and Save still commits the local title. A closed
 rename stays gated, and an admitted intent still locks the field.
-An access reset clears the page immediately, including while that field is focused.
+Access reset follows the [shared resnapshot contract](../docs/design/two-service-isolation.md#managed-crashrebind-followed-by-a-producer-reset-m07m08).
 The open rename is remembered only as a UI preference and reopens on the rebuilt
 draft with the same text, caret and focus. Save still commits the local title.
 Cancel, a completed Save, or sending the discussion closes that remembered rename.

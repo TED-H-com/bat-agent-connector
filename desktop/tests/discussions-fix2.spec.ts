@@ -74,9 +74,9 @@ for(const locale of ['en','zh-TW']){
     await context.close();
   });
 
-  for(const width of [1440,1000,390])test(`the disconnected composer and info title use plain copy ${locale} ${width}`,async({browser,baseURL})=>{
+  for(const width of [1440,1000,390])test(`unsupported analysis and info title use facts rather than a connection guess ${locale} ${width}`,async({browser,baseURL})=>{
     const context=await browser.newContext({baseURL,locale,viewport:{width,height:900}}),page=await context.newPage(),f=pmFixture();await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);
-    const note=page.locator('.pd-composer-status > p');await expect(note).toHaveText(zh?'訊息會儲存；PM 尚未連線，不會回覆。 設定 PM':'Messages are saved. The PM is not connected and will not reply. Set up PM');
+    const note=page.locator('[data-discussion-pm-unavailable]');await expect(note.locator('p')).toHaveText(zh?'此 Connector 未提供 PM 分析；請安裝相容版本':'PM analysis is unavailable in this Connector; install a compatible version');
     await expect(note.getByRole('link',{name:zh?'設定 PM':'Set up PM',exact:true})).toHaveAttribute('href','#/settings?section=agents&from='+encodeURIComponent(new URL(page.url()).hash));
     await openThreadTab(page,'context');await expect(page.locator('.pd-panel-overlay > header h2')).toHaveText(zh?'討論資料':'Discussion info');
     await expect(page.getByRole('tablist',{name:zh?'討論資料':'Discussion info',exact:true})).toBeVisible();expect(f.state.writes).toEqual([]);await context.close();

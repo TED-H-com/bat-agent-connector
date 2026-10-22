@@ -59,7 +59,7 @@ export function taskControlsPanel({h, t, api, caps, guard, ready, task, taskId, 
   const writable = () => ready() && observed() && permitted() && (saved.intent || !["done", "failed"].includes(task()?.state));
   const abort = h("input", {type: "checkbox", checked: saved.abort});
   const message = h("div", {role: "status"}), result = h("div", {"data-task-result": ""}), restriction = h("p", {class: "muted"});
-  const showError = error => {if (live()) {message.replaceChildren(errorBox(error, {within:message})); update();}};
+  const showError = (error, options = {}) => {if (live()) {message.replaceChildren(errorBox(error, {...options, within:message})); update();}};
   const accept = candidate => {
     guard(); const intent = saved.intent;
     if (!intent || !opId(candidate?.operation_id) || !["task.pause", "task.resume"].includes(candidate.action) ||
@@ -77,13 +77,13 @@ export function taskControlsPanel({h, t, api, caps, guard, ready, task, taskId, 
     if (!saved.intent) saved = {...saved, intent: {request: {action: action(), target: {task_id: taskId},
       params: action() === "task.pause" ? {abort_current: saved.abort} : {},
       preconditions: {control_version: task().control_version}}, key: crypto.randomUUID(), operation_id: null}};
-    try {persist();} catch (e) {saved = previous; showError(e); return;}
+    try {persist();} catch (e) {saved = previous; showError(e, {sourceRefresh:false}); return;}
     busy = true; update(); const intent = saved.intent;
     submission = (async () => {
       try {const response = await api("POST", "/operations?wait=3", intent.request, intent.key); guard(); accept(response.operation);}
       catch (e) {if (live()) {
         if (e.code === "CONTROL_VERSION_CONFLICT" && e.status === 409) {intent.refused = e.code; try {persist();} catch { /* retained in memory */ }}
-        showError(e);
+        showError(e, {sourceRefresh:false});
       }} finally {busy = false; if (live()) update();}
     })();
     try {await submission;} finally {submission = null;}
@@ -101,13 +101,13 @@ export function taskControlsPanel({h, t, api, caps, guard, ready, task, taskId, 
   const another = button({variant: "secondary", label: t("task_control_new"), onClick: () => {
     if (!live() || busy || refreshing || checking || readFailed || !writable() || !(terminal(operation) || saved.intent?.refused)) return;
     const previous = saved; saved = {abort: false};
-    try {persist();} catch (e) {saved = previous; showError(e); return;}
+    try {persist();} catch (e) {saved = previous; showError(e, {sourceRefresh:false}); return;}
     operation = null; abort.checked = false; message.replaceChildren(); update();
   }});
   const abortLabel = h("label", {class: "capture-choice muted"}, abort, " ", t("task_abort"));
   abort.onchange = () => {
     if (!live() || saved.intent || busy) {abort.checked = saved.abort; return;}
-    saved.abort = abort.checked; try {persist();} catch (e) {showError(e);} update();
+    saved.abort = abort.checked; try {persist();} catch (e) {showError(e, {sourceRefresh:false});} update();
   };
   const help = h("p", {class: "muted"}, t("task_control_help"));
   const box = sectionCard({title: t("task_controls"), body: h("div", {}, help, abortLabel,

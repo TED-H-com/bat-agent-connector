@@ -95,7 +95,12 @@ impl Entry {
         }
         if selected {
             if let Some((code, layer)) = failure {
-                row.level = "down".into();
+                row.level = if code == "TAILSCALE_WAKING" {
+                    "degraded"
+                } else {
+                    "down"
+                }
+                .into();
                 row.code = Some(code.into());
                 row.blocking = Some(layer);
                 row.layers = Layers::default();
@@ -229,5 +234,68 @@ impl Snapshot {
             }
         }
         Ok(value)
+    }
+}
+
+#[cfg(test)]
+mod contract_tests {
+    use super::*;
+    use serde_json::Value;
+
+    #[test]
+    fn observed_rows_match_native_status_fixture() {
+        // De-identified Context::status input for the Tauri sanitizer test.
+        // Build with the real producer, including Connector's false BAT layers.
+        let raw: Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/fleet-status.json")).unwrap();
+        let status = &raw["result"];
+        let now = millis(status["readiness"]["observed_at"].as_str().unwrap()).unwrap();
+        let generation = ProbeGeneration {
+            epoch: "a".repeat(32),
+            configuration_binding: "c".repeat(64),
+            selection_revision: "d".repeat(64),
+            generation: 1,
+        };
+        for expected in status["readiness"]["hosts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .chain(std::iter::once(&status["readiness"]["connector"]))
+        {
+            let bat = expected["name"] != "connector";
+            let probe = ProbeObservation {
+                generation: generation.clone(),
+                observed_ms: now,
+                kind: if bat {
+                    ProbeKind::Bat
+                } else {
+                    ProbeKind::Connector
+                },
+                tunnel: true,
+                tls: bat,
+                auth: Authentication::Ok,
+                bat,
+                workspace: bat,
+                connector: !bat,
+                version: bat.then(|| "3.2.5".into()),
+                code: None,
+                blocking: None,
+                reason: None,
+            };
+            let row = Entry::observed(
+                (
+                    expected["name"].as_str().unwrap(),
+                    expected["label"].as_str().unwrap(),
+                ),
+                true,
+                probe.kind,
+                Some(&probe),
+                &generation,
+                now,
+                None,
+            )
+            .unwrap();
+            assert_eq!(serde_json::to_value(row).unwrap(), *expected);
+        }
     }
 }

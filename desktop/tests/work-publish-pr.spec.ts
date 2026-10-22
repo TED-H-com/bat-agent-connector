@@ -1,7 +1,7 @@
+import {revealPmView} from './pm-navigation.ts';
 import {test, expect} from '@playwright/test';
 import {followUpFixture, ATTEMPT as LIVE_ATTEMPT} from './work-next-turn-fixture.ts';
 import {mountWorkspace} from './workspace-fixture.ts';
-import {mkdirSync} from 'node:fs';
 import {mountConversation} from './conversation-fixture.ts';
 import {workResultFixture, buildResultEnvelope, workspaceId, workId, route} from './work-result-fixture.ts';
 
@@ -278,7 +278,7 @@ test.describe('Work Result pull request publication', () => {
     const before = f.state.resultRequests.length;
     f.emitResultRecorded(ATT);
     await expect.poll(() => f.state.resultRequests.length).toBeGreaterThan(before);
-    await page.locator('[data-pm-view="requirements"]').click();
+    await (await revealPmView(page, 'requirements')).click();
     const response = page.waitForResponse(row => row.url().endsWith('/result') && row.status() === 200);
     release();
     await response;
@@ -308,7 +308,7 @@ test.describe('Work Result pull request publication', () => {
     });
   }
 
-  test('zh-TW publication layout at 1440, 768 and 390', async ({page}) => {
+  test('zh-TW publication layout at 1440, 768 and 390', async ({page}, testInfo) => {
     const f = workResultFixture();
     f.state.currentEnvelope = resultEnvelope([publishEntry(CANDIDATE)]);
     await page.addInitScript(() => Object.defineProperty(navigator, 'language', {value: 'zh-TW'}));
@@ -316,14 +316,12 @@ test.describe('Work Result pull request publication', () => {
     await page.locator('[data-work-publish-title]').fill('修正登入按鈕重複送出，保留失敗後重新送出的操作與回歸測試');
     await page.locator('[data-work-publish-body]').fill('修改登入流程，補上重複送出與失敗後再次送出的測試。\n\n目前只建立 PR，尚未合併或部署。');
     await page.locator('[data-work-publish-draft="true"]').check();
-    const dir = `${process.env.TMPDIR || '/tmp'}/work-publication`;
-    mkdirSync(dir, {recursive: true});
     for (const width of [1440, 768, 390]) {
       await page.setViewportSize({width, height: width === 390 ? 844 : 900});
       await page.locator('[data-work-publish]').scrollIntoViewIfNeeded();
       const radio = await page.locator('[data-work-publish-draft="true"]').boundingBox();
       expect(radio?.width).toBeLessThanOrEqual(24);
-      await page.screenshot({path: `${dir}/publish-${width}.png`, animations: 'disabled'});
+      await page.screenshot({path: testInfo.outputPath(`publish-${width}.png`), animations: 'disabled'});
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     }
     expect(f.state.publishWrites).toEqual([]);

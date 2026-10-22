@@ -78,8 +78,8 @@ def render(root: Path) -> dict[Path, bytes]:
         raise ValueError(f"skill/package version mismatch: {version}, {package}, {project_version}")
     if api != str(literal(api_path, "API_VERSION")) or contract != literal(api_path, "CONTRACT_VERSION"):
         raise ValueError("skill API/contract metadata differs from api_v1.py; review canonical workflow first")
-    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}\.\d+", workflow):
-        raise ValueError("workflow_version must be YYYY-MM-DD.revision")
+    if len(workflow) > 64 or not re.fullmatch(r"\d{4}-\d{2}-\d{2}\.\d+", workflow):
+        raise ValueError("workflow_version must be YYYY-MM-DD.revision (at most 64 characters)")
     digest = hashlib.sha256(source).hexdigest()
     outputs = {}
     for adapter, intro in ADAPTERS.items():

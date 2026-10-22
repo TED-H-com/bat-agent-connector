@@ -6,7 +6,9 @@ import {icon} from './ui/icons.js';
 import {searchField, iconButton} from './ui/components.js';
 import {observedText} from './observed-resource-strings.js';
 import {sessionHref, workSessionContext} from './session-navigation.js';
-import {workbenchEnabled} from './workbench-mode.js';
+import {layoutDecision} from './workbench-mode.js';
+
+const isWorkbench = layoutDecision.layout === 'workbench';
 
 export function workspaceNavigation({h, t, api, guard, onEvents, namespace, errorBox, caps = () => null}) {
   const key = `batc.tree.${namespace}`;
@@ -77,7 +79,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     || (node.dataset.workOperations || '').split(',').includes(selectedExecution());
   const workIdentity = item => {
     const value = item.work_identity;
-    if (!workbenchEnabled() || item.kind !== 'execution' || item.id !== item.operation_id || !value
+    if (!isWorkbench || item.kind !== 'execution' || item.id !== item.operation_id || !value
         || typeof item.host !== 'string' || !item.host || typeof item.session_id !== 'string' || !item.session_id) return null;
     const context = workSessionContext(new URLSearchParams({workspace: value.workspace_id,
       work: value.work_item_id, attempt: value.attempt_id}));
@@ -289,7 +291,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     return pendingEventRead;
   });
   refresh().catch(() => {});
-  return {box, setWorkspace(id, source, all = false) {
+  return {box, refresh, setWorkspace(id, source, all = false) {
     if (pmWorkspace === id && bindingSource === source && globalTree === all) return;
     pmWorkspace = id; bindingSource = source; globalTree = all; contextVersion++; catalogRows = null; catalogKnown = false;
     roots = []; bindingKnown = false; bindingPartial = false; projects.clear(); sessionRows.replaceChildren(); sessionsLoaded = false; status.replaceChildren();
@@ -297,7 +299,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     render(); refresh().catch(() => {});
   }, select(hash) {
     // The list is a location, not a different selected Work. Keep its last highlight.
-    if (hash === '#/work-list' && workbenchEnabled()) return;
+    if (hash === '#/work-list' && isWorkbench) return;
     selected = hash;
     const [type, pid] = hash.replace(/^#\//, '').split('/');
     if (['project', 'dispatch', 'work'].includes(type) && pid) {

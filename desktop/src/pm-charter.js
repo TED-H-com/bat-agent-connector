@@ -68,7 +68,7 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
     h('div', {class: 'pm-workbench-toolbar'}, previous, picker, next, compare, print, status), report, comparison,
     h('div', {class: 'pm-charter-save'}, create.box, more));
   const exports = caps()?.features?.pm_workspaces?.brief_export ? briefExport({h, t, api, alive, workspaceId, caps,
-    snapshot: () => snapshot, readable: canRead, onUnavailable: error => {withdraw(); status.replaceChildren(errorBox(error, {within:status})); onChange(null, 'error', error);}, errorBox}) : null;
+    snapshot: () => snapshot, readable: canRead, onUnavailable: (error, options) => {withdraw(); status.replaceChildren(errorBox(error, {...options, within:status})); onChange(null, 'error', error);}, errorBox}) : null;
   if (exports) box.append(exports.element);
   const stamp = value => timeStamp(value, {empty:t('wb_unknown')});
   const check = data => {if (data?.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch')); return data;};

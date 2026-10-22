@@ -1,4 +1,7 @@
 //! Release-only verifier. It writes a feed for an already signed artifact; it never signs or publishes.
+#[path = "../src/workflow_version.rs"]
+mod workflow_version;
+
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -27,9 +30,7 @@ fn manifest(
             .all(|b| b.is_ascii_alphanumeric() || b".-+".contains(&b))
         || source.len() != 40
         || !source.bytes().all(|b| b.is_ascii_hexdigit())
-        || !workflow
-            .strip_prefix("2026-10-08.")
-            .is_some_and(|v| !v.is_empty() && v.bytes().all(|b| b.is_ascii_digit()))
+        || !workflow_version::valid(workflow)
     {
         return Err("invalid release metadata".into());
     }
@@ -58,6 +59,8 @@ fn manifest(
     }))
 }
 
+// The updater's tests include this producer module, without invoking its CLI.
+#[cfg_attr(test, allow(dead_code))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.len() != 7 {
@@ -87,8 +90,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+
+    pub(crate) fn signed_feed(workflow: &str) -> serde_json::Value {
+        let keys = minisign::KeyPair::generate_unencrypted_keypair().unwrap();
+        let public = STANDARD.encode(keys.pk.to_box().unwrap().to_string());
+        let bytes = b"temporary artifact";
+        let signature = STANDARD.encode(
+            minisign::sign(
+                Some(&keys.pk),
+                &keys.sk,
+                bytes.as_slice(),
+                Some("timestamp:1\tversion:2.0.0"),
+                None,
+            )
+            .unwrap()
+            .to_string(),
+        );
+        manifest(
+            bytes,
+            "fixture.exe",
+            &public,
+            &signature,
+            "2.0.0",
+            &"a".repeat(40),
+            workflow,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn current_canonical_workflow_accepted() {
+        let workflow = workflow_version::canonical();
+        let feed = signed_feed(workflow);
+        assert_eq!(feed["bat_dashboard"]["workflow_version"], workflow);
+    }
+
     #[test]
     fn release_feed_requires_exact_artifact_key_and_signed_version() {
         let keys = minisign::KeyPair::generate_unencrypted_keypair().unwrap();

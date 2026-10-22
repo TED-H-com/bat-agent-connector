@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import { createServer } from 'node:http';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import {testScratchRoot} from './test-scratch.mjs';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { probeManagedOnce, serviceFailure } from './managed-installed-probe.mjs';
+import { probeManaged, probeManagedOnce, serviceFailure } from './managed-installed-probe.mjs';
 
 async function fixture(t: any) {
-  const root = await mkdtemp(join(tmpdir(), 'managed-probe-'));
+  const root = await mkdtemp(join(testScratchRoot(), 'managed-probe-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(join(root, 'managed-central/state'), { recursive: true });
   return root;
@@ -31,6 +32,10 @@ test('startup evidence identifies missing, initializing and invalid pointer phas
   await rejects('installation_ready', 'ERR_ASSERTION');
   await put(root, 'installation.json', { state: 'ready' });
   await rejects('service_pointer', 'ENOENT');
+  await put(root, 'state/task-service.json', { pid: process.pid });
+  await rejects('service_pointer', 'ERR_ASSERTION');
+  await put(root, 'state/task-service.json', { endpoint: 'http://127.0.0.1:18796/rpc' });
+  await rejects('service_pointer', 'ERR_ASSERTION');
   await put(root, 'state/task-service.json', { endpoint: 'https://private-secret.invalid/rpc' });
   await rejects('service_pointer', 'ERR_ASSERTION');
 });
@@ -39,7 +44,18 @@ test('startup still requires authenticated bootstrap and the exact original iden
   const root = await fixture(t);
   let status = 401;
   let serverId = 'wrong-private-secret';
+  let proven = false;
+  let bootstrapCalls = 0;
   const server = createServer((request, response) => {
+    if (request.url?.startsWith('/api/v1/managed/identity?challenge=')) {
+      assert.equal(request.headers.authorization, undefined);
+      const challenge = request.url.split('=')[1];
+      const proof = createHmac('sha256', 'fixture-installation-key')
+        .update(JSON.stringify([1, challenge, `http://127.0.0.1:${port}`, 'server'])).digest('hex');
+      response.end(JSON.stringify({ protocol: 1, runtime_version: '0.1.0', proof: proven ? proof : '0'.repeat(64) }));
+      return;
+    }
+    bootstrapCalls++;
     assert.equal(request.url, '/api/v1/bootstrap');
     assert.equal(request.headers.authorization, 'Bearer private-secret');
     response.writeHead(status, { 'Content-Type': 'application/json' });
@@ -51,7 +67,14 @@ test('startup still requires authenticated bootstrap and the exact original iden
   await put(root, 'installation.json', { state: 'ready', installation_id: 'installation',
     server_id: 'server', principal_id: 'principal', runtime_version: '0.1.0' });
   await put(root, 'state/task-service.json', { endpoint: `http://127.0.0.1:${port}/rpc` });
+  await writeFile(join(root, 'managed-central/installation.key'), 'fixture-installation-key');
   await writeFile(join(root, 'managed-central/identity.token'), 'private-secret');
+  await assert.rejects(probeManagedOnce(root), (error: any) => {
+    assert.deepEqual(error.diagnostic, { phase: 'owner_identity', failure: 'ERR_ASSERTION' });
+    return true;
+  });
+  assert.equal(bootstrapCalls, 0);
+  proven = true;
   for (const phase of ['authenticated_bootstrap', 'identity']) {
     await assert.rejects(probeManagedOnce(root), (error: any) => {
       assert.deepEqual(error.diagnostic, { phase, failure: 'ERR_ASSERTION' });
@@ -63,6 +86,10 @@ test('startup still requires authenticated bootstrap and the exact original iden
   serverId = 'server';
   assert.deepEqual(await probeManagedOnce(root), { installation_id: 'installation', server_id: 'server',
     principal_id: 'principal', runtime_version: '0.1.0', authenticated_bootstrap: true });
+  await put(root, 'state/task-service.json', { pid: process.pid });
+  const waiting = probeManaged(root);
+  await put(root, 'state/task-service.json', { endpoint: `http://127.0.0.1:${port}/rpc` });
+  assert.equal((await waiting).authenticated_bootstrap, true);
 });
 
 test('bounded runtime failure evidence only retains fixed codes and numeric OS errors', async t => {

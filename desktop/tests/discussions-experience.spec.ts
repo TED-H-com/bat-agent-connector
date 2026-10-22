@@ -1,6 +1,5 @@
 import {openThreadTab, recoverOriginalAdoption} from './pm-navigation.ts';
 import {test, expect} from '@playwright/test';
-import {mkdir} from 'node:fs/promises';
 import {demoFixture} from './demo/index.ts';
 import {mountConversation} from './conversation-fixture.ts';
 import {discussHref, parseDiscussRefs} from '../src/pm-discuss-link.js';
@@ -71,11 +70,10 @@ for (const locale of ['en', 'zh-TW']) test(`new discussion stays focused when ce
 });
 
 for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
-  test(`discussion with context, review and return ${locale} ${width}`, async ({browser, baseURL}) => {
+  test(`discussion with context, review and return ${locale} ${width}`, async ({browser, baseURL}, testInfo) => {
     test.setTimeout(60000);
     const context = await browser.newContext({baseURL, locale, viewport: {width, height: width === 390 ? 844 : 900}});
     const page = await context.newPage(), errors: string[] = [];
-    const dir = `${process.env.TMPDIR || '/tmp'}/shots3`; await mkdir(dir, {recursive: true});
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => {
       // The shared bearer-only fixture deliberately returns 404 for this optional
@@ -117,7 +115,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
     expect(f.discussion.writes[0].body.params.title).toBe(draftTitle);
     await page.reload(); expect(f.discussion.threads).toHaveLength(4);
     await expect(page.locator('[data-discussion-composer]')).toBeVisible();
-    await page.screenshot({path: `${dir}/discussions-default-${locale}-${width}.png`});
+    await page.screenshot({path: testInfo.outputPath(`discussions-default-${locale}-${width}.png`)});
     await page.locator('[data-discussion-ask]').click();
     await expect(page.locator('[data-pm-plan-proposals]')).toContainText(f.copy.proposalSummary);
     await expect(page.locator('[data-discussion-panel]')).toBeHidden();
@@ -132,7 +130,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
     const ask = await page.locator('[data-discussion-ask]').boundingBox();
     expect(send!.y).toBe(ask!.y); expect(send!.x).toBeLessThan(ask!.x);
     await expect(page.locator('[data-discussion-working]')).toHaveText(zh ? 'PM 已完成' : 'PM finished');
-    await page.screenshot({path: `${dir}/discussions-proposed-${locale}-${width}.png`});
+    await page.screenshot({path: testInfo.outputPath(`discussions-proposed-${locale}-${width}.png`)});
     await page.locator('[data-proposal-review]').press('Enter');
     const adopt = page.locator('[data-pm-action="pm.conversation.adopt"]');
     await expect(adopt.locator('.pd-candidate input[type="checkbox"]').first()).toBeFocused();
@@ -146,15 +144,15 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
     expect(f.discussion.writes.at(-1).body.action).toBe('pm.conversation.adopt');
     await page.locator('[data-discussion-panel-toggle]').click();
     if (width < 1200) await expect(page.locator('.pd-panel-overlay')).toHaveAttribute('aria-modal', 'true');
-    if (width === 390) await page.screenshot({path: `${dir}/discussions-sheet-${locale}-390.png`});
+    if (width === 390) await page.screenshot({path: testInfo.outputPath(`discussions-sheet-${locale}-390.png`)});
     await page.getByRole('tab', {name: zh ? '計畫' : 'Plan', exact: true}).click();
     await page.locator('[data-pm-section=pm_brief_title] > details > summary').click();
     expect(await page.locator('.pm-brief').innerText()).not.toMatch(/\b(undefined|null|NaN)\b/);
     if (width < 1200) {await page.keyboard.press('Escape'); await expect(page.locator('[data-discussion-panel-toggle]')).toBeFocused();}
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(await page.locator('#main').innerText()).not.toMatch(/pm_mode_|\b(undefined|null|NaN)\b/);
-    await page.screenshot({path: `${dir}/discussions-${locale}-${width}.png`});
-    if (width === 1440 && !zh) {await page.evaluate(() => document.documentElement.dataset.theme = 'dark'); await page.screenshot({path: `${dir}/discussions-en-1440-dark.png`, animations: 'disabled'});}
+    await page.screenshot({path: testInfo.outputPath(`discussions-${locale}-${width}.png`)});
+    if (width === 1440 && !zh) {await page.evaluate(() => document.documentElement.dataset.theme = 'dark'); await page.screenshot({path: testInfo.outputPath(`discussions-en-1440-dark.png`), animations: 'disabled'});}
     // The origin link belongs to the single-pane header; use that real return path.
     if (width >= 800) {await page.setViewportSize({width: 390, height: 844}); await page.keyboard.press('Escape');}
     await page.locator('[data-discussion-back]').first().click(); await expect(page).toHaveURL(/\/overview$/);
@@ -472,7 +470,7 @@ for (const locale of ['en', 'zh-TW']) test(`missing PM adapter occupies only the
   });
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
   const status = page.locator('.pd-composer-status');
-  await expect(status).toContainText(locale === 'en' ? 'Ordinary PM replies are unavailable. You can still save notes.' : '一般 PM 對話目前無法使用，仍可儲存筆記。');
+  await expect(status).toContainText(locale === 'en' ? 'PM availability is unknown. Refresh, or ask the Connector operator.' : 'PM 可用性未知。請重新整理，或詢問 Connector 管理員。');
   await expect(status.getByRole('link')).toHaveAttribute('href', '#/settings?section=agents&from=' + encodeURIComponent(`#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`));
   await expect(page.locator('[data-discussion-ask]')).toBeHidden();
   expect(f.discussion.writes).toHaveLength(0); await context.close();
@@ -503,7 +501,7 @@ test('a new multi-context draft opens Context after leaving the Plan tab', async
   expect(f.discussion.writes).toHaveLength(0);
 });
 
-for (const outcome of ['failed', 'uncertain']) test(`first-message ${outcome} never redirects another launch or resends an edited draft`, async ({page}) => {
+for (const outcome of ['failed', 'uncertain']) test(`first-message ${outcome} never redirects another launch or resends an edited draft`, async ({page}, testInfo) => {
   await page.setViewportSize({width: 1440, height: 900});
   const f = demoFixture({discussions: true}); let original: any;
   await mountConversation(page, false, async (input: any) => {
@@ -524,7 +522,7 @@ for (const outcome of ['failed', 'uncertain']) test(`first-message ${outcome} ne
   const thread = page.url().split('/').at(-1)!;
   expect(await page.evaluate(() => Object.keys(localStorage).filter(key => key.includes('discussion-send')))).toEqual([]);
   const before = f.discussion.writes.length;
-  if (outcome === 'failed') {const dir = `${process.env.TMPDIR}/shots3`; await mkdir(dir, {recursive: true}); await page.screenshot({path: `${dir}/discussions-failed-first-message.png`});}
+  if (outcome === 'failed') {await page.screenshot({path: testInfo.outputPath(`discussions-failed-first-message.png`)});}
   await page.reload(); await expect(composer).toHaveValue('Original first note');
   if (outcome === 'failed') {
     await page.getByRole('button', {name: 'New request', exact: true}).click();
@@ -585,14 +583,14 @@ test('refresh reads one proposal list and only its selected document, with revis
   expect(revisions()).toHaveLength(2);
 });
 
-for (const locale of ['en', 'zh-TW']) for (const width of [390, 1440]) test(`centrally adopted proposal survives reload and links to the accepted revision ${locale} ${width}`, async ({browser, baseURL}) => {
+for (const locale of ['en', 'zh-TW']) for (const width of [390, 1440]) test(`centrally adopted proposal survives reload and links to the accepted revision ${locale} ${width}`, async ({browser, baseURL}, testInfo) => {
   const context = await browser.newContext({baseURL, locale, viewport: {width, height: width === 390 ? 844 : 900}}), page = await context.newPage();
   const f = demoFixture({locale, discussions: true}); await mountConversation(page, false, f.dispatch);
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadFollow}`); await page.reload();
   const card = page.locator('[data-pm-plan-proposals]');
   await expect(card.locator('[data-status=adopted]')).toHaveText(locale === 'en' ? 'Adopted' : '已採用');
   await expect(card.locator('[data-proposal-again], [data-proposal-review]')).toHaveCount(0);
-  const dir = `${process.env.TMPDIR}/shots3`; await mkdir(dir, {recursive: true}); await page.screenshot({path: `${dir}/discussions-adopted-${locale}-${width}.png`});
+  await page.screenshot({path: testInfo.outputPath(`discussions-adopted-${locale}-${width}.png`)});
   await card.locator('[data-proposal-adopted-revision]').click();
   await expect(page.locator('[data-discussion-tab=plan]')).toBeVisible();
   await expect(page.locator(`[data-pm-revision="${f.ids.planV3}"] [data-pm-revision-open]`)).toBeFocused();
@@ -688,13 +686,13 @@ test('central adoption keeps an uncertain original receipt recoverable without a
   expect(checks.every(path => path === '/operations/' + op.operation_id)).toBe(true); expect(f.discussion.writes).toHaveLength(2);
 });
 
-test('the desktop list header leaves room for Search and an accessible New discussion icon', async ({page}) => {
+test('the desktop list header leaves room for Search and an accessible New discussion icon', async ({page}, testInfo) => {
   await page.setViewportSize({width: 1440, height: 900}); const f = demoFixture({discussions: true}); await mountConversation(page, false, f.dispatch);
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
   const header = page.locator('.pd-list-header'), search = header.getByRole('searchbox', {name: 'Search', exact: true});
   await expect(search).toHaveAttribute('placeholder', 'Search'); expect((await search.boundingBox())!.width).toBeGreaterThan(180);
   const create = header.getByRole('button', {name: 'New discussion', exact: true}); await expect(create).toHaveText(''); await expect(create).toHaveAttribute('title', 'New discussion');
-  const dir = `${process.env.TMPDIR}/shots3`; await mkdir(dir, {recursive: true}); await header.screenshot({path: `${dir}/discussions-list-header-en-1440.png`});
+  await header.screenshot({path: testInfo.outputPath(`discussions-list-header-en-1440.png`)});
 });
 
 test('reload during the first thread mount preserves the staged intent without auto-sending', async ({page}) => {
