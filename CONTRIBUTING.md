@@ -106,6 +106,14 @@ still execute the whole suite once per version. `central-ui` also runs the Conne
 on Python 3.13. Frontend, browser UI, central UI and Windows endpoint jobs are not
 gated by scope.
 
+All CI apt installs use `.github/actions/bounded-apt`. Completed `.deb` files
+are cached in `/var/cache/bat-ci-apt/<package-set>`, outside the runner's private
+home and workspace. The runner owns the `0755` archive directory for cache
+restore/save; `_apt` owns its `0700` `partial/` directory. Setup fails if `_apt`
+cannot reach that directory. The pinned cache action restores before installation
+and saves after a successful job; a cold cache still downloads normally with
+three retries and 15-second HTTP/HTTPS stall timeouts.
+
 The full Python matrix is required by any `.py`/`.pyi` file, Python environment or
 test configuration (`pyproject.toml`, `uv.lock`, `uv.toml`, `.python-version`,
 `pytest.ini`, `tox.ini`, `setup.cfg`, `.coveragerc`, `requirements*.txt`), or anything

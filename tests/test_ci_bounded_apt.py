@@ -75,6 +75,8 @@ def test_archives_cache_matches_apt_directory_and_is_best_effort():
         assert action['inputs'][name]['required'] is True
     prepare, cache, configure = action['runs']['steps']
     assert prepare['id'] == 'archives'
+    # The combined action restores in main and saves in post, unlike /restore or /save.
+    assert cache['uses'].split('@')[0] == 'actions/cache'
     assert cache['uses'] == CACHE
     assert cache['continue-on-error'] is True
     assert cache['if'] == "steps.archives.outputs.cache-needed == 'true'"
@@ -89,6 +91,8 @@ def test_archives_cache_matches_apt_directory_and_is_best_effort():
     assert 'Binary::apt::APT::Keep-Downloaded-Packages "true";' in configure['run']
     assert 'sudo install -d -o _apt -g root -m 0700 "$APT_ARCHIVES/partial"' in configure['run']
     assert 'sudo -u _apt test -w "$APT_ARCHIVES/partial"' in configure['run']
+    assert configure.get('continue-on-error', False) is False
+    assert configure['shell'] == 'bash'
     assert 'test -w "$APT_ARCHIVES"' in configure['run']
     assert 'APT::Sandbox::User' not in configure['run']
     for workflow in ('desktop.yml', 'pages.yml'):
@@ -99,7 +103,7 @@ def test_archives_cache_matches_apt_directory_and_is_best_effort():
 
 
 def test_cache_identity_fallback_and_repeated_native_setup(tmp_path):
-    """Execute the real key preparation: no sudo, apt, network or Actions service."""
+    """Run key preparation with only privileged directory creation replaced by a recorder."""
     action = yaml.safe_load((ROOT / '.github/actions/bounded-apt/action.yml').read_text())
     prepare = action['runs']['steps'][0]
     assert prepare.get('id') == 'archives'
@@ -109,9 +113,17 @@ def test_cache_identity_fallback_and_repeated_native_setup(tmp_path):
     }
     runner_temp = tmp_path / 'work' / '_temp'
     runner_temp.mkdir(parents=True)
+    commands = tmp_path / 'commands'
+    commands.mkdir()
+    sudo_log = tmp_path / 'sudo.log'
+    sudo = commands / 'sudo'
+    sudo.write_text('#!/bin/bash\nprintf "%s\\n" "$*" >> "$SUDO_LOG"\n')
+    sudo.chmod(0o755)
     output = tmp_path / 'output'
     env = {
         **os.environ, 'RUNNER_TEMP': str(runner_temp), 'GITHUB_OUTPUT': str(output),
+        'PATH': f'{commands}{os.pathsep}{os.environ["PATH"]}', 'SUDO_LOG': str(sudo_log),
+        'GITHUB_WORKSPACE': str(tmp_path / 'work' / 'repo' / 'repo'),
         'RUNNER_OS': 'Linux', 'RUNNER_ARCH': 'X64', 'ImageOS': 'ubuntu24', 'ImageVersion': '20261019.1',
         'PACKAGE_SET': 'native-linux', 'PACKAGE_SET_HASH': 'a' * 64,
     }
@@ -124,19 +136,21 @@ def test_cache_identity_fallback_and_repeated_native_setup(tmp_path):
 
     cold = run()
     directory = Path(cold['directory'])
-    assert directory == tmp_path / 'work' / 'apt-archives' / 'native-linux'
-    assert directory.stat().st_uid == os.getuid()
-    assert directory.stat().st_mode & 0o777 == 0o755
+    assert directory == Path('/var/cache/bat-ci-apt/native-linux')
+    for private_root in (runner_temp, Path.home(), Path(env['GITHUB_WORKSPACE'])):
+        assert not directory.is_relative_to(private_root)
+    assignment, = [line for line in prepare['run'].splitlines() if line.startswith('archives=')]
+    assert not any(name in assignment for name in ('RUNNER_TEMP', 'HOME', 'GITHUB_WORKSPACE'))
+    assert sudo_log.read_text().splitlines() == [
+        f'install -d -o {os.getuid()} -g {os.getgid()} -m 0755 {directory}',
+    ]
     assert cold['cache-needed'] == 'true'
     assert cold['key'] == f"apt-v1-Linux-X64-ubuntu24-native-linux-{'a' * 64}-20261019.1"
     assert cold['exact-prefix'] == cold['key'].removesuffix('20261019.1')
     assert cold['set-prefix'] == 'apt-v1-Linux-X64-ubuntu24-native-linux-'
 
     # The first invocation's cache post saves packages from both native install steps.
-    downloaded = directory / 'example_1.0_amd64.deb'
-    downloaded.write_bytes(b'completed package placeholder')
     assert run()['cache-needed'] == 'false'
-    assert downloaded.read_bytes() == b'completed package placeholder'
     newer = run(ImageVersion='20261026.1')
     assert newer['cache-needed'] == 'true'
     assert newer['key'] != cold['key']
@@ -147,3 +161,25 @@ def test_cache_identity_fallback_and_repeated_native_setup(tmp_path):
     for changes in ({'RUNNER_ARCH': 'ARM64'}, {'RUNNER_OS': 'Other'}, {'ImageOS': 'ubuntu26'},
                     {'PACKAGE_SET': 'playwright-chromium'}):
         assert not run(**changes)['key'].startswith(cold['set-prefix'])
+
+
+def test_apt_sandbox_access_failure_stops_configuration(tmp_path):
+    """A denied sandbox check must stop the real shell before it writes apt settings."""
+    action = yaml.safe_load((ROOT / '.github/actions/bounded-apt/action.yml').read_text())
+    configure = action['runs']['steps'][-1]
+    commands = tmp_path / 'commands'
+    commands.mkdir()
+    log = tmp_path / 'sudo.log'
+    sudo = commands / 'sudo'
+    sudo.write_text('#!/bin/bash\nprintf "%s\\n" "$*" >> "$SUDO_LOG"\n'
+                    'if [[ "$1" == "-u" && "$2" == "_apt" ]]; then exit 1; fi\n')
+    sudo.chmod(0o755)
+    env = {**os.environ, 'PATH': f'{commands}{os.pathsep}{os.environ["PATH"]}',
+           'SUDO_LOG': str(log), 'APT_ARCHIVES': str(tmp_path)}
+    result = subprocess.run(['bash', '-eo', 'pipefail', '-c', configure['run']], env=env,
+                            capture_output=True, text=True)
+    assert result.returncode == 1
+    assert log.read_text().splitlines() == [
+        f'install -d -o _apt -g root -m 0700 {tmp_path}/partial',
+        f'-u _apt test -w {tmp_path}/partial',
+    ]

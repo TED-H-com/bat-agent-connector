@@ -19,8 +19,9 @@ runs:
       run: |
         [[ "$PACKAGE_SET" =~ ^[a-z0-9][a-z0-9-]*$ ]]
         [[ "$PACKAGE_SET_HASH" =~ ^[a-f0-9]{64}$ ]]
-        archives=$(realpath -m "$RUNNER_TEMP/../apt-archives/$PACKAGE_SET")
-        install -d -m 0755 "$archives"
+        # Hosted runner homes can be 0750; keep _apt's path outside those ancestors.
+        archives="/var/cache/bat-ci-apt/$PACKAGE_SET"
+        sudo install -d -o "$(id -u)" -g "$(id -g)" -m 0755 "$archives"
         set_prefix="apt-v1-$RUNNER_OS-$RUNNER_ARCH-${ImageOS:?}-$PACKAGE_SET-"
         exact_prefix="$set_prefix$PACKAGE_SET_HASH-"
         key="$exact_prefix${ImageVersion:?}"
