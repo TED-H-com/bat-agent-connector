@@ -3234,6 +3234,9 @@ async function viewOperation(main, id) {
         main.append(repair.box);
       }
       const refs = op.external_refs || {};
+      const retainedCheckpoint = op.action === "checkpoint.continue" && op.status === "failed" &&
+        ["CHECKPOINT_STAGING_RETAINED", "CHECKPOINT_DESTINATION_APPEARED"].includes(op.error_code);
+      const reason = retainedCheckpoint ? t("error_code_" + op.error_code) : op.status_reason;
       const retry = refs.merged_sha && op.action === "delivery.merge_and_deploy" && op.status === "failed"
         ? h("button", { class: "primary", onclick: async () => {
           let sourceRefresh = true;
@@ -3290,11 +3293,22 @@ async function viewOperation(main, id) {
           h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")),
           h("dt", {}, t("actor")), h("dd", {}, `${op.actor} (${op.entry})`),
           h("dt", {}, t("created")), h("dd", {}, when(epoch(op.created_at))),
-          op.status_reason ? [h("dt", {}, t("reason")), h("dd", {}, op.status_reason)] : null,
+          reason ? [h("dt", {}, t("reason")), h("dd", {}, reason)] : null,
           op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, h("code", {}, op.error_code))] : null,
           h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target))),
           Object.keys(refs).length && op.action !== "worktree.merge" ? [h("dt", {}, t("global_refs")), h("dd", {}, h("code", {}, JSON.stringify(refs)))] : null,
           op.result && op.action !== "worktree.merge" ? [h("dt", {}, t("global_result")), h("dd", {}, h("code", {}, JSON.stringify(op.result)))] : null),
+        retainedCheckpoint ? h("div", {class: "note warn", "data-checkpoint-retained": ""},
+          h("dl", {class: "kv"},
+            typeof refs.retained_staging_path === "string" ? [h("dt", {}, t("checkpoint_retained_path")),
+              h("dd", {}, h("code", {}, refs.retained_staging_path))] : null,
+            op.error_code === "CHECKPOINT_DESTINATION_APPEARED" && typeof refs.clone_path === "string"
+              ? [h("dt", {}, t("checkpoint_destination_path")), h("dd", {}, h("code", {}, refs.clone_path))] : null),
+          h("p", {}, t("checkpoint_retained_why")),
+          h("p", {}, t(op.error_code === "CHECKPOINT_DESTINATION_APPEARED" ? "checkpoint_destination_next" : "checkpoint_retained_next")),
+          typeof refs.source_host === "string" && refs.source_host && typeof refs.source_session_id === "string" && refs.source_session_id
+            ? h("a", {href: sessionHref({host: refs.source_host, sessionId: refs.source_session_id})}, t("source_session")) : null,
+          h("p", {}, t("checkpoint_retained_cleanup"))) : null,
         ...(receipts || []),
         mergeRecovery(op),
         op.action === "worktree.merge" ? h("details", {}, h("summary", {}, t("sessions_details")),

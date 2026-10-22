@@ -48,6 +48,15 @@ MAX_EXCERPT_MESSAGES = 50
 EXCERPT_CHARS = 8_000
 MAX_INSTRUCTIONS = 12_000
 GIT_TIMEOUT_S = 600.0
+PREPARE_REFUSALS = {
+    "CHECKPOINT_STAGING_RETAINED": (
+        "An earlier attempt may have left an incomplete copy. It has been kept. "
+        "Start a new checkpoint.continue operation with a new idempotency key to use a new staging path."),
+    "CHECKPOINT_DESTINATION_APPEARED": (
+        "The destination appeared while the copy was being prepared. Both paths have been kept. "
+        "Check the destination first, then start a new checkpoint.continue operation with a new idempotency key "
+        "to use a new staging path."),
+}
 _SESSION_NS = uuid.UUID("6f1c9a52-3d4e-4b8a-9c1d-2e7f5a8b0c3d")
 _clone_locks: dict[tuple[str, str], asyncio.Lock] = {}
 _LOCKED_CHECK = contextvars.ContextVar("git_locked_check", default=None)
@@ -447,20 +456,24 @@ def prepare_script(src: str, dest: str, worktree: str, branch: str, commit: str,
     The person's repository is only read: ``git clone`` and ``git fetch`` read it. The clone's origin becomes the
     source's own origin only when that is a network URL (credentials stripped); a local-path origin is removed, so
     nothing pushed from the clone can land in a person's folder. One script runs per clone at a time (``flock`` on
-    the host): a re-run after a lost SSH reply waits for a first run that is still going instead of racing it.
+    the host, when available): a re-run after a lost SSH reply waits for a first run that is still going.
+    Preparation never removes existing staging content. Cleanup separately reviews exact recorded temporary paths
+    against creation markers and its other checks; half-built copies without markers remain unknown.
+    A destination that appears during cloning also leaves the staged copy for inspection.
     ``same_clone``: the source is already inside this managed clone, so there is nothing to clone or fetch.
     """
     q = shlex.quote
     clone_steps = [] if same_clone else [
-        'if [ ! -e "$dest" ]; then',
-        '  rm -rf "$tmp"',
-        '  git clone --quiet --no-checkout --no-hardlinks "$src" "$tmp"',
+        'if [ ! -e "$dest" ] && [ ! -L "$dest" ]; then',
+        '  test ! -e "$tmp" && test ! -L "$tmp" || { echo "error CHECKPOINT_STAGING_RETAINED"; exit 0; }',
+        '  git clone --quiet --origin origin --no-checkout --no-hardlinks "$src" "$tmp"',
         '  url=$(git -C "$src" config --get remote.origin.url || true)',
         '  case "$url" in https://*|http://*|ssh://*|git@*) url=$(printf %s "$url" | sed -E "s#^(https?://)[^/@]*@#\\1#");; *) url="";; esac',
         '  if [ -n "$url" ]; then git -C "$tmp" remote set-url origin "$url"; else git -C "$tmp" remote remove origin; fi',
         '  git -C "$tmp" config batc.managed-clone true',
         '  git -C "$tmp" config batc.source "$src"',
-        '  if [ -e "$dest" ]; then rm -rf "$tmp"; else mv "$tmp" "$dest"; fi',
+        '  test ! -e "$dest" && test ! -L "$dest" || { echo "error CHECKPOINT_DESTINATION_APPEARED"; exit 0; }',
+        '  mv "$tmp" "$dest"',
         "fi",
     ]
     source_check = [] if same_clone else [
@@ -729,18 +742,25 @@ async def _run_continue(ctx: OpContext) -> dict:
     dest, same_clone = target_clone(hc.managed_roots, host, cp["repo_root"])
     worktree = posixpath.join(dest, ".bat-worktrees", f"batc-cp-{suffix}")
     branch = f"batc/cp-{suffix}"
+    staging = f"{dest}.batc-tmp-{suffix}"
     resource_policy.check_checkpoint_worktree(hc, dest, worktree, branch)  # before any host write
     sid = str(uuid.uuid5(_SESSION_NS, ctx.operation_id))
     ctx.set_refs(checkpoint_id=cp["checkpoint_id"], clone_path=dest, worktree_path=worktree, branch=branch,
-                 session_id=sid)
+                 session_id=sid, source_host=host, source_session_id=cp["source_session_id"])
 
     async def prepare() -> dict:
         lock = _clone_locks.setdefault((host, dest), asyncio.Lock())
         async with lock:
             ctx.require_controller()
             out = await runner.run(host, prepare_script(cp["repo_root"], dest, worktree, branch, cp["commit_sha"],
-                                                        f"{dest}.batc-tmp-{suffix}", same_clone=same_clone))
+                                                        staging, same_clone=same_clone))
         lines = out.splitlines()
+        for line in lines:
+            if line.startswith("error "):
+                code, _, detail = line[6:].partition(" ")
+                if code in PREPARE_REFUSALS:
+                    ctx.set_refs(retained_staging_path=staging)
+                raise StepFailed(code, PREPARE_REFUSALS.get(code, f"{code} {detail}".strip()))
         if len(lines) < 2 or not SHA.fullmatch(lines[-2]):
             raise StepFailed("GIT_FAILED", "the worktree script did not report its HEAD")
         return {"head": lines[-2], "dirty": int(lines[-1]) if lines[-1].isdigit() else -1}
