@@ -19,6 +19,7 @@ from tests.test_api_v1 import http, token
 installed = producer.installed
 PREVIEW = "/api/v1/connections/preview"
 RECEIPT = "/api/v1/connections/receipt"
+HANDOFF = "/api/v1/connections/handoff"
 
 
 @pytest.fixture
@@ -35,6 +36,17 @@ async def served_setup(installed):
         writer.close()
         await writer.wait_closed()
     request.disconnect = disconnect
+    async def raw_request(path, raw):
+        reader, writer = await asyncio.open_connection("127.0.0.1", port)
+        headers = (f"POST {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {bearer}\r\n"
+            f"Content-Length: {len(raw)}\r\n\r\n").encode()
+        writer.write(headers + raw)
+        await writer.drain()
+        response = await asyncio.wait_for(reader.read(), 10)
+        writer.close()
+        await writer.wait_closed()
+        return int(response.split(b" ", 2)[1]), response
+    request.raw_request = raw_request
     yield request
     server.close()
     await server.wait_closed()
@@ -633,3 +645,292 @@ async def test_source_snapshot_guard_precedes_configuration_publication(installe
     assert (root / "config/hosts.toml").read_bytes() == before
     if phase == "before_execution":
         assert not mock.auth_frames
+
+
+async def _r2_dispatch(request, ident):
+    status, response = await request("POST", HANDOFF, {"operation_id": ident, "installation_ref": "desktop-a"})
+    if status == 404:  # Red evidence on the reviewed r1 contract, removed when POST is introduced.
+        return await read_handoff(request, ident)
+    assert status == 200, response
+    return response["native_handoff"]
+
+
+async def _r2_waiting(installed, request, source, *, connection=None):
+    body = intent(source, action="setup.connection.apply", connection=connection)
+    if connection:
+        body["preconditions"]["expected_revision"] = 1
+    body, ident = await accept(request, body, key="pending")
+    await settle_operations(installed[0].ops)
+    return body, ident
+
+
+@pytest.mark.parametrize("outcome", ["applied", "unchanged", "refused", "uncertain"])
+async def test_r2_a_late_first_receipt(installed, served_setup, source, tmp_path, outcome):
+    from bat_agent_connector import connection_handoff
+    daemon, _, _ = installed
+    _, ident = await _r2_waiting(installed, served_setup, source)
+    native = await _r2_dispatch(served_setup, ident)
+    participant = DiskParticipant(tmp_path / "participant.json")
+    receipt = participant.effect(native, outcome=outcome)  # Effect/evidence precedes laptop sleep.
+    with patch.object(connection_handoff, "now", return_value=native["expires_at"] + 1):
+        status, response = await served_setup("POST", RECEIPT, receipt)
+    assert status == 200, response
+    await settle_operations(daemon.ops)
+    expected = {"applied": "succeeded", "unchanged": "succeeded", "refused": "failed", "uncertain": "uncertain"}
+    assert daemon.ops.get(ident)["status"] == expected[outcome]
+    assert participant.writes <= 1
+
+
+@pytest.mark.parametrize("update", [False, True])
+async def test_r2_a_abandonment_releases_busy_and_stop(installed, served_setup, source, update):
+    from bat_agent_connector import connection_handoff
+    from bat_agent_connector.operations import UNCERTAIN_RETRY_S
+    daemon, principal, _ = installed
+    connection = None
+    if update:
+        _, first = await accept(served_setup, intent(source), key="initial")
+        await settle_operations(daemon.ops)
+        connection = daemon.ops.get(first)["result"]["connection_id"]
+    _, ident = await _r2_waiting(installed, served_setup, source, connection=connection)
+    native = await _r2_dispatch(served_setup, ident)
+    with patch.object(connection_handoff, "now", return_value=native["expires_at"] + 1):
+        for _ in range(len(UNCERTAIN_RETRY_S) + 1):
+            daemon.journal.db.execute("UPDATE operations SET next_run_at=0 WHERE operation_id=?", (ident,))
+            await settle_operations(daemon.ops)
+    assert daemon.ops.get(ident)["status"] == "needs_attention"
+    status, response = await served_setup("POST", f"/api/v1/operations/{ident}/cancel", {})
+    assert status == 200, response
+    assert response["operation"]["status"] == "cancelled"
+    row = daemon.journal.db.execute("SELECT response,error FROM operation_steps WHERE operation_id=? AND name='native_effects'", (ident,)).fetchone()
+    assert "LOCAL_EFFECT_NEVER_PROVEN" in str(tuple(row))
+    assert not setup._busy(daemon)
+    rows = daemon.journal.db.execute("SELECT * FROM connection_bindings").fetchall()
+    assert len(rows) == int(update)
+    if update:
+        assert rows[0]["revision"] == 1 and rows[0]["connection_id"] == connection
+    body = {key: native[key] for key in ("contract_version", "installation_ref", "operation_id", "step",
+        "review_digest", "expected_revision", "epoch", "effect_id", "challenge")}
+    body.update(outcome="refused", roles=[{"role": "inventory", "before_digest": "a" * 64, "after_digest": "a" * 64}])
+    status, response = await served_setup("POST", RECEIPT, body)
+    assert status == 409 and response["error"]["code"] == "CONNECTION_OPERATION_TERMINAL"
+    assert daemon.ops.get(ident)["status"] == "cancelled"
+    assert (await served_setup("POST", PREVIEW, intent(source, action="setup.connection.apply")))[0] == 200
+    daemon.managed_stop = asyncio.Event()
+    status, response = await served_setup("POST", "/api/v1/managed/stop", {})
+    assert status == 200, response
+
+
+@pytest.mark.parametrize("update", [False, True])
+@pytest.mark.parametrize("end", ["cancelled", "failed"])
+async def test_r2_a_projection_follows_terminal_operation(installed, served_setup, source, monkeypatch, update, end):
+    from bat_agent_connector import connection_handoff
+    from bat_agent_connector.operations import OperationError
+    daemon, _, _ = installed
+    connection = None
+    if update:
+        _, first = await accept(served_setup, intent(source), key="initial")
+        await settle_operations(daemon.ops)
+        connection = daemon.ops.get(first)["result"]["connection_id"]
+    if end == "failed":
+        def refuse(ctx):
+            raise OperationError("FIXTURE_PARTICIPANT_REFUSED", "Synthetic participant preparation failure", 409)
+        monkeypatch.setattr(connection_handoff, "prepare", refuse)
+    _, ident = await _r2_waiting(installed, served_setup, source, connection=connection)
+    if end == "cancelled":
+        assert (await served_setup("POST", f"/api/v1/operations/{ident}/cancel", {}))[0] == 200
+    assert daemon.ops.get(ident)["status"] == end
+    rows = daemon.journal.db.execute("SELECT * FROM connection_bindings").fetchall()
+    assert len(rows) == int(update)
+    if update:
+        assert rows[0]["revision"] == 1 and rows[0]["connection_id"] == connection
+
+
+@pytest.mark.parametrize("outcome", ["applied", "unchanged", "refused"])
+async def test_r2_b_definitive_readback_appends_uncertain_history(installed, served_setup, source, tmp_path, outcome):
+    daemon, _, _ = installed
+    _, ident = await _r2_waiting(installed, served_setup, source)
+    native = await _r2_dispatch(served_setup, ident)
+    uncertain = DiskParticipant(tmp_path / "participant.json").effect(native, outcome="uncertain")
+    assert (await served_setup("POST", RECEIPT, uncertain))[0] == 200
+    await settle_operations(daemon.ops)
+    definitive = {**uncertain, "outcome": outcome, "roles": [{**uncertain["roles"][0],
+        "after_digest": uncertain["roles"][0]["before_digest"] if outcome in {"unchanged", "refused"} else digest(b"settled")} ]}
+    status, response = await served_setup("POST", RECEIPT, definitive)
+    assert status == 200, response
+    await settle_operations(daemon.ops)
+    row = daemon.journal.db.execute("SELECT response FROM operation_steps WHERE operation_id=? AND name='native_effects'", (ident,)).fetchone()
+    history = json.loads(row[0])["receipts"]
+    assert [item["outcome"] for item in history] == ["uncertain", outcome]
+    assert history[0]["roles"] == uncertain["roles"]
+    for body in (uncertain, definitive):
+        assert (await served_setup("POST", RECEIPT, body))[0] == 200
+    assert len(json.loads(daemon.journal.db.execute("SELECT response FROM operation_steps WHERE operation_id=? AND name='native_effects'", (ident,)).fetchone()[0])["receipts"]) == 2
+    changed = {**definitive, "roles": [{**definitive["roles"][0], "after_digest": "f" * 64}]}
+    assert (await served_setup("POST", RECEIPT, changed))[0] in {409, 422}
+    assert daemon.ops.get(ident)["status"] == ("failed" if outcome == "refused" else "succeeded")
+
+
+@pytest.mark.parametrize("change", ["index", "token"])
+async def test_r2_s2_unrelated_source_refresh_allows_reference_update(installed, served_setup, source, change):
+    from bat_agent_connector import setup_connections
+    daemon, principal, root = installed
+    _, first = await accept(served_setup, intent(source), key="first")
+    await settle_operations(daemon.ops)
+    connection = daemon.ops.get(first)["result"]["connection_id"]
+    if change == "index":
+        path = root / "profiles/index.json"
+        index = json.loads(path.read_text())
+        index["profiles"].append({"id": "unrelated", "name": "Unrelated profile"})
+        path.write_text(json.dumps(index))
+    else:
+        platform_files.atomic_write(root / "profiles/remote-tokens.enc.json", json.dumps({"enc": False,
+            "data": json.dumps({"tokens": {"profile-a": "refreshed-synthetic-token"}})}).encode())
+    body = intent(source, connection=connection)
+    body["params"]["source_reference"] = setup_connections.source_descriptor(daemon.ops, principal, source["source"])["reference"]
+    body["params"]["label"] = "Updated after source refresh"
+    body["preconditions"]["expected_revision"] = 1
+    await accept(served_setup, body, key="update")
+    await settle_operations(daemon.ops)
+    assert daemon.journal.db.execute("SELECT revision FROM connection_bindings").fetchone()[0] == 2
+
+
+async def test_r2_s2_reference_update_survives_expired_staged_secret(installed, served_setup, source, mock):
+    from bat_agent_connector import setup_connections
+    daemon, principal, root = installed
+    params = producer.host_params(daemon, principal, mock)
+    selected = {"kind": "staged_secret", "secret_ref": params["secret_ref"], "url": params["url"], "fingerprint": params["fingerprint"]}
+    descriptor = setup_connections.source_descriptor(daemon.ops, principal, selected)
+    body = intent({**source, "source": selected, "source_reference": descriptor["reference"]})
+    _, first = await accept(served_setup, body, key="first")
+    await settle_operations(daemon.ops)
+    connection = daemon.ops.get(first)["result"]["connection_id"]
+    path = root / "config/setup-secrets" / (params["secret_ref"] + ".json")
+    metadata = json.loads(path.read_text())
+    metadata["expires_at"] = 0
+    platform_files.atomic_write(path, json.dumps(metadata).encode())
+    body["target"]["connection_id"] = connection
+    body["preconditions"]["expected_revision"] = 1
+    body["params"]["label"] = "Updated without a credential"
+    await accept(served_setup, body, key="update")
+    await settle_operations(daemon.ops)
+    assert daemon.journal.db.execute("SELECT revision FROM connection_bindings").fetchone()[0] == 2
+
+
+@pytest.mark.parametrize("profile", ["profile-a", "not-present"])
+async def test_r2_s3_source_resolution_requires_personal_manage(installed, served_setup, source, profile):
+    daemon, _, _ = installed
+    body = intent(source)
+    body["params"]["source"] = {"kind": "bat_profile", "profile_reference": profile}
+    status, _ = await served_setup("POST", PREVIEW, body, credential=token(daemon, "reader", "observe"))
+    assert status == 403
+    assert not daemon.journal.db.execute("SELECT 1 FROM operations").fetchone()
+
+
+async def test_r2_s3_reference_preview_observe_returns_no_source_details(installed, served_setup, source):
+    from bat_agent_connector import setup_connections
+    daemon, principal, _ = installed
+    descriptor = setup_connections.source_descriptor(daemon.ops, principal, source["source"])
+    body = intent({**source, "source": descriptor})
+    observer = token(daemon, "reader", "observe")
+    status, response = await served_setup("POST", PREVIEW, body, credential=observer)
+    assert status == 200, response
+    assert response["preview"]["source"] is None
+    assert descriptor["association"]["url"] not in json.dumps(response)
+    assert descriptor["association"]["fingerprint"] not in json.dumps(response)
+
+
+async def test_r2_s4_reference_update_preserves_receipt_refs(installed, served_setup, source, tmp_path):
+    daemon, _, _ = installed
+    _, ident = await _r2_waiting(installed, served_setup, source)
+    native = await _r2_dispatch(served_setup, ident)
+    assert (await DiskParticipant(tmp_path / "participant.json").send(served_setup, native))[0][0] == 200
+    await settle_operations(daemon.ops)
+    before = dict(daemon.journal.db.execute("SELECT * FROM connection_bindings").fetchone())
+    body = intent(source, connection=before["connection_id"])
+    body["preconditions"]["expected_revision"] = 1
+    body["params"]["label"] = "New display label"
+    await accept(served_setup, body, key="update")
+    await settle_operations(daemon.ops)
+    assert daemon.journal.db.execute("SELECT receipt_refs FROM connection_bindings").fetchone()[0] == before["receipt_refs"]
+
+
+async def test_r2_create_intent_binding_is_enforced_on_replay(installed, served_setup, source):
+    daemon, _, _ = installed
+    body, ident = await accept(served_setup, intent(source))
+    refs = daemon.ops.get(ident)["external_refs"]
+    refs["admission_binding"]["create_intent"] = "0" * 64
+    daemon.journal.db.execute("UPDATE operations SET external_refs=? WHERE operation_id=?", (json.dumps(refs), ident))
+    status, _ = await served_setup("POST", "/api/v1/operations", body, key="original-key")
+    assert status == 409
+
+
+@pytest.mark.parametrize("restart", [False, True])
+async def test_r2_s1_published_configuration_survives_source_drift(installed, served_setup, source, mock, monkeypatch, tmp_path, restart):
+    from urllib.parse import urlsplit
+
+    from bat_agent_connector import setup_connections
+    from bat_agent_connector.config import parse_config
+    from bat_agent_connector.task_daemon import TaskDaemon
+    daemon, principal, root = installed
+    index_path = root / "profiles/index.json"
+    index = json.loads(index_path.read_text())
+    endpoint = urlsplit(mock.url)
+    index["profiles"][0].update(remoteHost=endpoint.hostname, remotePort=endpoint.port, remoteFingerprint=mock.fingerprint)
+    index_path.write_text(json.dumps(index))
+    platform_files.atomic_write(root / "profiles/remote-tokens.enc.json", json.dumps({"enc": False,
+        "data": json.dumps({"tokens": {"profile-a": mock.token}})}).encode())
+    descriptor = setup_connections.source_descriptor(daemon.ops, principal, source["source"])
+    body = intent({**source, "source_reference": descriptor["reference"], "service_ref": "fixture",
+        "server_configuration": {"target": {"host": "fixture"}, "params": {"import_profile_id": "profile-a"},
+            "preconditions": {"config_revision": setup._configuration(daemon)[3]}}}, action="setup.connection.apply")
+    original = daemon.ops._step_done
+    def publication(operation, step, response, **kwargs):
+        if step == "managed_configuration":
+            index["profiles"][0]["name"] = "Changed after publication"
+            index_path.write_text(json.dumps(index))
+            if restart:
+                raise OSError("Synthetic loss of configuration receipt before restart")
+        return original(operation, step, response, **kwargs)
+    monkeypatch.setattr(daemon.ops, "_step_done", publication)
+    _, ident = await accept(served_setup, body)
+    await settle_operations(daemon.ops)
+    path = root / "config/hosts.toml"
+    published = path.read_bytes()
+    assert "fixture" in setup.tomllib.loads(published.decode())["hosts"]
+    if not restart:
+        assert daemon.ops.get(ident)["status"] == "waiting_external"
+        native = await _r2_dispatch(served_setup, ident)
+        assert (await DiskParticipant(tmp_path / "participant.json").send(served_setup, native))[0][0] == 200
+        await settle_operations(daemon.ops)
+        assert daemon.ops.get(ident)["status"] == "succeeded"
+        assert path.read_bytes() == published
+        return
+    assert daemon.ops.get(ident)["status"] == "uncertain"
+    bearer = token(daemon, principal.actor, *principal.scopes)
+    await daemon.ops.drain()
+    await daemon.fleet.close()
+    await daemon.inventory.close()
+    daemon.journal.close()
+    restored = TaskDaemon(parse_config(setup.tomllib.loads(path.read_text()), path), root / "state/tasks.sqlite3")
+    restored.managed_installation = dict(daemon.managed_installation)
+    setup.install(restored)
+    server = await asyncio.start_server(restored._handle, "127.0.0.1", 0)
+    async def request(method, route, body=None, *, key=None):
+        return await http(server.sockets[0].getsockname()[1], method, route, tok=bearer, body=body,
+            headers={"Idempotency-Key": key} if key else None)
+    try:
+        restored.journal.db.execute("UPDATE operations SET next_run_at=0 WHERE operation_id=?", (ident,))
+        await settle_operations(restored.ops)
+        assert restored.ops.get(ident)["status"] == "waiting_external"
+        native = await _r2_dispatch(request, ident)
+        assert (await DiskParticipant(tmp_path / "participant.json").send(request, native))[0][0] == 200
+        await settle_operations(restored.ops)
+        assert restored.ops.get(ident)["status"] == "succeeded"
+        assert path.read_bytes() == published
+    finally:
+        server.close()
+        await server.wait_closed()
+        await restored.ops.drain()
+        await restored.fleet.close()
+        await restored.inventory.close()
+        restored.journal.close()
