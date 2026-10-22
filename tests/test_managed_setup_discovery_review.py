@@ -1,4 +1,4 @@
-"""Review regressions N1–N4 and secret snapshot hardening at the HTTP boundary."""
+"""Source discovery and credential snapshot contracts at the HTTP boundary."""
 import asyncio
 import hashlib
 import json
@@ -17,7 +17,7 @@ served_setup = producer.served_setup
 
 @pytest.mark.parametrize("reported", [{"profiles": None}, {"profiles": [{"id": ["x"]}, {"id": "default"}]}])
 @pytest.mark.parametrize("caller", ["apply", "discovery"])
-async def test_n1_malformed_profiles_preserve_apply_refusal(installed, served_setup, mock, reported, caller):
+async def test_malformed_profiles_preserve_apply_refusal(installed, served_setup, mock, reported, caller):
     body = producer.candidate(installed, mock)
     mock.handlers["profile:list"] = lambda _: reported
     if caller == "discovery":
@@ -37,7 +37,7 @@ async def test_n1_malformed_profiles_preserve_apply_refusal(installed, served_se
 
 @pytest.mark.parametrize("url", ["wss://h:1/?", "wss://h:1/#", "wss://" + "h" * 504 + ":1"])
 @pytest.mark.parametrize("caller", ["discovery", "preview", "apply"])
-async def test_n2_url_edges_are_invalid_host(installed, served_setup, mock, url, caller):
+async def test_url_edges_are_invalid_host(installed, served_setup, mock, url, caller):
     body = {**producer.candidate(installed, mock), "url": url}
     request = body
     route = producer.ROUTE
@@ -53,7 +53,7 @@ async def test_n2_url_edges_are_invalid_host(installed, served_setup, mock, url,
     assert not installed[0].journal.db.execute("SELECT 1 FROM operations").fetchone()
 
 
-async def test_n3_discovery_has_one_total_deadline(installed, served_setup, mock, monkeypatch):
+async def test_discovery_has_one_total_deadline(installed, served_setup, mock, monkeypatch):
     body = producer.candidate(installed, mock)
     monkeypatch.setattr(discovery, "DISCOVERY_TIMEOUT_S", 0.03, raising=False)
     async def slow(_):
@@ -66,7 +66,7 @@ async def test_n3_discovery_has_one_total_deadline(installed, served_setup, mock
     assert not installed[0].journal.db.execute("SELECT 1 FROM operations").fetchone()
 
 
-async def test_n3_steps_share_remaining_budget_but_apply_keeps_its_timeouts(installed, served_setup, mock, monkeypatch):
+async def test_steps_share_remaining_budget_but_apply_keeps_its_timeouts(installed, served_setup, mock, monkeypatch):
     body = producer.candidate(installed, mock)
     monkeypatch.setattr(discovery, "DISCOVERY_TIMEOUT_S", 0.03)
     closed = []
@@ -92,7 +92,7 @@ async def test_n3_steps_share_remaining_budget_but_apply_keeps_its_timeouts(inst
     assert closed == [True, True]
 
 
-async def test_s1_existing_connection_review_reuses_credentials_without_discovery(installed, served_setup, mock, monkeypatch):
+async def test_existing_connection_review_reuses_credentials_without_discovery(installed, served_setup, mock, monkeypatch):
     from tests.test_managed_setup import create, host_params, settle
     first = await settle(installed, create(installed, "setup.host", {"host": "bat"}, host_params(*installed[:2], mock)))
     assert first["status"] == "succeeded", first
@@ -122,7 +122,7 @@ async def test_s1_existing_connection_review_reuses_credentials_without_discover
 
 @pytest.mark.parametrize("patch", [{"source_digest": None}, {"source_digest": "é" * 64},
     {"profile_id": []}, {"secret_ref": None}, {"import_profile_id": "mixed"}, {"fingerprint": "malformed"}])
-async def test_n4_invalid_snapshot_params_are_not_review_changes(installed, served_setup, mock, patch):
+async def test_invalid_snapshot_params_are_not_review_changes(installed, served_setup, mock, patch):
     body = producer.candidate(installed, mock)
     request = {"action": "setup.host", "target": {"host": "bat"}, "params": {
         **{k: body[k] for k in ("url", "fingerprint", "secret_ref")}, "source_digest": "a" * 64, **patch},
@@ -132,7 +132,7 @@ async def test_n4_invalid_snapshot_params_are_not_review_changes(installed, serv
     assert "admission_refused" not in result["error"]
 
 
-async def test_n4_preview_error_keeps_original_contract(installed, served_setup, mock):
+async def test_preview_error_keeps_original_contract(installed, served_setup, mock):
     body = producer.candidate(installed, mock)
     status, result = await served_setup("POST", "/api/v1/managed/setup/preview", {
         "action": "setup.host", "target": {}, "params": {}, "preconditions": {"config_revision": body["revision"]}})
