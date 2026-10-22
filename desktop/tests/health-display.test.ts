@@ -46,11 +46,13 @@ test('other central machines cannot change a nonempty selected workspace summary
   const input = workspaceFacts();
   const before = health.healthDisplay(input, at).summary;
   assert.equal(before?.compact, 'idle');
-  health.rememberHealthRead(input.health, '/hosts', {hosts: [host('fixture-host', false), host('other', false)]});
+  health.rememberHealthRead(input.health, '/hosts', {hosts: [host('fixture-host'), host('other', false)]});
   const after = health.healthDisplay(input, at);
   assert.deepEqual(after.summary, before);
   assert.equal(after.otherAttention, 1);
   assert.equal(after.other.href, null); // native aliases cannot list central identities
+  health.rememberHealthRead(input.health, '/hosts', {hosts: [host('fixture-host', false)]});
+  assert.equal(health.healthDisplay(input, at).otherAttention, 0);
 });
 
 test('compact precedence preserves attention, staleness and output as separate facets', () => {

@@ -38,11 +38,12 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
       await expect(page.locator('#live')).toHaveText(copy.ui_connected);
       await page.evaluate(() => {
         Object.defineProperty(document, 'hidden', {configurable: true, get: () => true});
+        Object.defineProperty(document, 'visibilityState', {configurable: true, get: () => 'hidden'});
         document.dispatchEvent(new Event('visibilitychange'));
       });
-      await expect(page.locator('#live')).toHaveAttribute('title', new RegExp(copy.sync_actions_paused));
+      await expect(page.locator('#live')).toHaveAttribute('title', new RegExp(copy.sync_waiting));
       await page.locator('[data-fleet-action=refresh]').click();
-      await expect(page.locator('#live')).toHaveAttribute('title', new RegExp(copy.sync_actions_paused));
+      await expect(page.locator('#live')).toHaveAttribute('title', new RegExp(copy.sync_waiting));
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     } finally {await context.close();}
   });
