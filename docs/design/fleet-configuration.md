@@ -2,7 +2,7 @@
 
 [Windows guide](../windows.md) · [繁體中文摘要](#繁體中文設定摘要)
 
-「加入機器」的共用契約及用途選擇實作範圍見[下方章節](#加入機器共用契約已定尚未實作)。下列手動設定
+「加入機器」的共用契約及用途選擇實作範圍見[下方章節](#加入機器共用契約)。下列手動設定
 仍作現有格式的參考；新流程的完成條件是退休重複填寫，不是另加一份設定表單。
 
 The packaged Windows client contains the Rust Fleet runtime. A new installation can
@@ -179,8 +179,6 @@ Dashboard 不需要先設定 Fleet。
 原生遷移與擁有權檢查。只有選用舊 backend 才需要外部的 PS／VBS 檔案，公開 Rust
 範例不附帶它們。自動啟動遠端中央的 helper 與 recipe 另依公開 bootstrap 合約配置；
 缺少設定不會偷偷建立新服務或新資料庫。
-
-<a id="加入機器共用契約已定尚未實作"></a>
 
 ## 加入機器：共用契約
 
