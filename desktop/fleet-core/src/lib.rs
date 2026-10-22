@@ -23,6 +23,7 @@ pub mod route;
 mod route_probe;
 pub mod selection;
 pub mod selection_io;
+pub mod source_catalog;
 pub mod strict_json;
 pub mod supervisor;
 pub mod supervisor_control;

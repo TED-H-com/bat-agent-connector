@@ -2,6 +2,103 @@ use super::*;
 use serde_json::json;
 use std::path::PathBuf;
 
+#[test]
+fn store_bound_is_named_independently_from_index_bound() {
+    assert_eq!(crate::source_catalog::STORE_BOUND, STORE_BOUND);
+}
+
+#[test]
+fn format_errors_precede_ambiguity_after_a_complete_parse() {
+    let vectors: Value = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/bat-source-policy-v1.json"
+    ))
+    .unwrap();
+    let mut failures = vec![];
+    for row in vectors["token_stores"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|r| r["id"].as_str().unwrap().starts_with("format-precedence-"))
+    {
+        let result =
+            AdmissionStore::parse(row["store"].as_str().unwrap().as_bytes()).lookup("remote-1");
+        eprintln!("{}: {} / {}", row["id"], result.state, result.reason);
+        if result != TokenStatus::new("unsupported", "TOKEN_STORE_FORMAT") {
+            failures.push(row["id"].clone());
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "format precedence failures: {failures:?}"
+    );
+}
+
+#[test]
+fn file_buffer_is_allocated_once_from_bounded_metadata() {
+    let temp = Temporary::new();
+    for length in [0, 1000, STORE_BOUND] {
+        let path = temp.write("profiles/buffer", &vec![b'x'; length]);
+        let bytes = read_regular(File::open(path).unwrap(), STORE_BOUND).unwrap();
+        assert_eq!(bytes.len(), length);
+        assert_eq!(
+            bytes.capacity(),
+            length + 1,
+            "secret buffers must not grow by reallocation"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn policy_file_modes_are_private_while_legacy_stays_compatible() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = Temporary::new();
+    let path = temp.write(
+        "profiles/remote-tokens.enc.json",
+        &profile_store(json!({"tokens":{"profile-1":"fixture-secret"}})),
+    );
+    let legacy_inv = inventory();
+    let legacy = CredentialRef::for_bat(&legacy_inv, "node-1").unwrap();
+    let mut doc = legacy_inv.document().clone();
+    doc["credentials"]["bat-node-1"]["source_policy"] = json!(1);
+    let inv = Inventory::parse(&serde_json::to_vec(&doc).unwrap()).unwrap();
+    let policy = CredentialRef::for_bat(&inv, "node-1").unwrap();
+    let mut failures = vec![];
+    for mode in [0o600, 0o644, 0o640, 0o604] {
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+        assert!(resolve(&temp.0, &legacy).is_ok());
+        let result = resolve(&temp.0, &policy);
+        eprintln!(
+            "policy mode {mode:04o}: {}",
+            result
+                .as_ref()
+                .map(|_| "TOKEN_AVAILABLE")
+                .unwrap_or_else(|e| *e)
+        );
+        if mode == 0o600 {
+            assert!(result.is_ok());
+        } else if !matches!(result, Err("TOKEN_STORE_UNREADABLE")) {
+            failures.push(mode);
+        }
+    }
+    assert!(failures.is_empty(), "unsafe policy modes: {failures:?}");
+}
+
+#[cfg(unix)]
+#[test]
+fn foreign_owner_metadata_is_refused_against_real_uid() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = Temporary::new();
+    let path = temp.write("profiles/remote-tokens.enc.json", b"{}");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    let metadata = File::open(&path).unwrap().metadata().unwrap();
+    let uid = unsafe { libc::getuid() };
+    assert!(private_owner_mode(&metadata, uid));
+    // The actual held-file predicate is tested against a different owner ID,
+    // without a privileged chown or replacing any stdlib metadata class.
+    assert!(!private_owner_mode(&metadata, uid.wrapping_add(1)));
+}
+
 struct Temporary(PathBuf);
 impl Temporary {
     fn new() -> Self {
@@ -17,6 +114,11 @@ impl Temporary {
         let path = self.0.join(relative);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, bytes).unwrap();
+        #[cfg(unix)]
+        if relative.ends_with("remote-tokens.enc.json") {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        }
         path
     }
 }
@@ -58,6 +160,231 @@ fn shared_source_policy_vectors_describe_legacy_fleet_runtime() {
             Ok(token) => assert_eq!(&*token, "synthetic-token"),
             Err(reason) => assert_eq!(reason, expected["reason"].as_str().unwrap()),
         }
+    }
+}
+
+#[test]
+fn native_admission_matches_shared_token_vectors() {
+    let vectors: Value = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/bat-source-policy-v1.json"
+    ))
+    .unwrap();
+    for row in vectors["token_stores"].as_array().unwrap() {
+        let store = AdmissionStore::parse(row["store"].as_str().unwrap().as_bytes());
+        let result = store.lookup(row["profile_id"].as_str().unwrap());
+        assert_eq!(
+            serde_json::to_value(result).unwrap(),
+            row["expected"]["admission"],
+            "{}",
+            row["id"]
+        );
+    }
+}
+
+#[test]
+fn listing_accepts_additive_bat_fields_without_relaxing_kit_drift() {
+    let bytes = br#"{"profiles":[{"id":"remote-1","name":"Fixture","type":"remote","remoteHost":"example.test","remotePort":9876,"remoteFingerprint":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","futureDisplayOption":true}],"activeProfileIds":[]}"#;
+    let result = crate::inventory::ProfileIndex::parse(bytes, &[]);
+    eprintln!(
+        "baseline native listing via kit reader: {:?}",
+        result
+            .as_ref()
+            .map(|index| index.document())
+            .map_err(|reason| *reason)
+    );
+    assert!(result.is_err(), "Kit drift validation must remain strict");
+    let listing = crate::source_catalog::parse_profile_index(bytes);
+    assert_eq!(listing.profiles.len(), 1);
+    assert_eq!(listing.reason, "PROFILE_CATALOG_AVAILABLE");
+}
+
+#[test]
+fn policy_bound_reference_refuses_case_only_store_replacement() {
+    let bytes = include_bytes!("../tests/fixtures/inventory.json");
+    let mut doc: Value = serde_json::from_slice(bytes).unwrap();
+    let key = doc["hosts"][0]["bat"]["credential_ref"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    doc["credentials"][&key]["source_policy"] = json!(1);
+    let inv = Inventory::parse(&serde_json::to_vec(&doc).unwrap()).unwrap();
+    let reference = CredentialRef::for_bat(&inv, "node-1").unwrap();
+    let temp = Temporary::new();
+    let path = temp.write(
+        "profiles/remote-tokens.enc.json",
+        &profile_store(json!({"tokens":{"profile-1":"fixture-secret"}})),
+    );
+    assert!(resolve(&temp.0, &reference).is_ok());
+    std::fs::write(
+        &path,
+        profile_store(json!({"tokens":{"PROFILE-1":"fixture-secret"}})),
+    )
+    .unwrap();
+    let result = resolve(&temp.0, &reference);
+    eprintln!("case-only replacement resolves: {}", result.is_ok());
+    assert!(matches!(result, Err("TOKEN_KEY_MISMATCH")));
+    std::fs::remove_file(path).unwrap();
+    assert!(matches!(
+        resolve(&temp.0, &reference),
+        Err("TOKEN_STORE_UNREADABLE")
+    ));
+}
+
+#[test]
+fn optional_policy_preserves_old_inventory_bytes_and_legacy_reference_behavior() {
+    let bytes = include_bytes!("../tests/fixtures/inventory.json");
+    let original: Value = serde_json::from_slice(bytes).unwrap();
+    let inv = Inventory::parse(bytes).unwrap();
+    assert_eq!(inv.document(), &original);
+    assert!(inv.document()["credentials"]
+        .as_object()
+        .unwrap()
+        .values()
+        .all(|v| v.get("source_policy").is_none()));
+    let temp = Temporary::new();
+    let inventory_path = temp.write("inventory.json", bytes);
+    let mut body = vec![0xef, 0xbb, 0xbf];
+    body.extend(profile_store(
+        json!({"tokens":{"PROFILE-1":"legacy-case-compatible"}}),
+    ));
+    let path = temp.write("profiles/remote-tokens.enc.json", &body);
+    let reference = CredentialRef::for_bat(&inv, "node-1").unwrap();
+    assert_eq!(
+        resolve(&temp.0, &reference).unwrap().fixture_value(),
+        "legacy-case-compatible"
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), body);
+    assert_eq!(std::fs::read(inventory_path).unwrap(), bytes);
+    std::fs::remove_file(path).unwrap();
+    missing(resolve(&temp.0, &reference));
+    let key = original["hosts"][0]["bat"]["credential_ref"]
+        .as_str()
+        .unwrap();
+    for policy in [
+        json!(0),
+        json!(2),
+        json!(-1),
+        json!(true),
+        json!(null),
+        json!("1"),
+        json!(1.0),
+    ] {
+        let mut doc = original.clone();
+        doc["credentials"][key]["source_policy"] = policy;
+        assert!(Inventory::parse(&serde_json::to_vec(&doc).unwrap()).is_err());
+    }
+    let mut doc = original;
+    doc["credentials"]["connector-observe"]["source_policy"] = json!(1);
+    assert!(Inventory::parse(&serde_json::to_vec(&doc).unwrap()).is_err());
+}
+
+#[test]
+fn bound_references_report_every_shared_admission_reason() {
+    let vectors: Value = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/bat-source-policy-v1.json"
+    ))
+    .unwrap();
+    for row in vectors["token_stores"].as_array().unwrap() {
+        // Inventory host IDs use the Kit's ASCII identifier contract. All store
+        // bytes remain unchanged, including escaped competing token keys.
+        if row["profile_id"] != "remote-1" {
+            continue;
+        }
+        let mut doc: Value =
+            serde_json::from_slice(include_bytes!("../tests/fixtures/inventory.json")).unwrap();
+        let key = doc["hosts"][0]["bat"]["credential_ref"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        doc["credentials"][&key]["source_policy"] = json!(1);
+        doc["credentials"][&key]["profile_id"] = json!("remote-1");
+        let pin = doc["hosts"][0]["bat"]["fingerprint_ref"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        doc["fingerprints"][&pin]["profile_id"] = json!("remote-1");
+        doc["hosts"][0]["profile"] = json!("remote-1");
+        for profile in doc["provisioning_profiles"].as_array_mut().unwrap() {
+            if profile == "profile-1" {
+                *profile = json!("remote-1");
+            }
+        }
+        let inv = Inventory::parse(&serde_json::to_vec(&doc).unwrap()).unwrap();
+        let reference = CredentialRef::for_bat(&inv, "node-1").unwrap();
+        let temp = Temporary::new();
+        temp.write(
+            "profiles/remote-tokens.enc.json",
+            row["store"].as_str().unwrap().as_bytes(),
+        );
+        let result = resolve(&temp.0, &reference);
+        let expected = &row["expected"]["admission"];
+        assert_eq!(
+            result.is_ok(),
+            expected["state"] == "available",
+            "{}",
+            row["id"]
+        );
+        if let Err(reason) = result {
+            assert_eq!(
+                reason,
+                expected["reason"].as_str().unwrap(),
+                "{}",
+                row["id"]
+            );
+        }
+    }
+}
+
+#[test]
+fn admission_enforces_byte_bounds_bom_and_nested_secret_shapes() {
+    let check = |bytes: &[u8]| AdmissionStore::parse(bytes).lookup("profile-1");
+    assert_eq!(
+        check(&profile_store(
+            json!({"tokens":{"profile-1":"t".repeat(TOKEN_BOUND)}})
+        ))
+        .reason,
+        "TOKEN_AVAILABLE"
+    );
+    let valid = profile_store(json!({"tokens":{"profile-1":"繁".repeat(TOKEN_BOUND / 3)}}));
+    assert_eq!(check(&valid).reason, "TOKEN_AVAILABLE");
+    let over = profile_store(json!({"tokens":{"profile-1":"繁".repeat(TOKEN_BOUND / 3 + 1)}}));
+    assert_eq!(
+        check(&over),
+        TokenStatus::new("unsupported", "TOKEN_INVALID")
+    );
+    let mut bytes = vec![b' '; STORE_BOUND - valid.len()];
+    bytes.extend(valid);
+    assert_eq!(check(&bytes).reason, "TOKEN_AVAILABLE");
+    bytes.push(b' ');
+    assert_eq!(
+        check(&bytes),
+        TokenStatus::new("unavailable", "TOKEN_STORE_UNREADABLE")
+    );
+    for data in ["null", "{}", "{\"tokens\":null}"] {
+        assert_eq!(
+            check(&serde_json::to_vec(&json!({"enc":false,"data":data})).unwrap()).reason,
+            "TOKEN_MISSING"
+        );
+    }
+    assert_eq!(
+        check(&serde_json::to_vec(&json!({"enc":false,"data":"\u{feff}{}"})).unwrap()).reason,
+        "TOKEN_STORE_FORMAT"
+    );
+    for depth in [126, 127] {
+        let data = format!(
+            "{{\"tokens\":{{\"profile-1\":\"fixture\"}},\"extra\":{}0{}}}",
+            "[".repeat(depth),
+            "]".repeat(depth)
+        );
+        let result = check(&serde_json::to_vec(&json!({"enc":false,"data":data})).unwrap());
+        assert_eq!(
+            result.reason,
+            if depth == 126 {
+                "TOKEN_AVAILABLE"
+            } else {
+                "TOKEN_STORE_FORMAT"
+            }
+        );
     }
 }
 #[test]
