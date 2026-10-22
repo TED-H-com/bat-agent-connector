@@ -1,5 +1,8 @@
 import type {Page} from '@playwright/test';
 import {attentionFixture} from './attention-fixture.ts';
+import {readFileSync} from 'node:fs';
+
+const previewGolden = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-setup-preview.json', import.meta.url), 'utf8'));
 
 export async function managedSetupFixture(page: Page, native: boolean, locale: string | null = 'en',
   evidence?: {state: any, operation: any}) {
@@ -19,7 +22,7 @@ export async function managedSetupFixture(page: Page, native: boolean, locale: s
       state.reads++;
       if (evidence) return {status: 200, data: structuredClone(evidence.state)};
       const result = state.setupStatus !== 200 ? {status:state.setupStatus,data:{error:{code:state.setupStatus===403?'FORBIDDEN':'NOT_FOUND',message:'Setup source withdrawn'}}}
-        : {status:200,data:{revision:state.revision, verification:structuredClone(state.verification),
+        : {status:200,data:{revision:state.revision, preview_contract_version:1, verification:structuredClone(state.verification),
           hosts:[...(state.saved ? [{name:state.configuredHost,url:state.configuredUrl,connected:state.connected, ...(state.connectionStatus ? {connection_status: state.connectionStatus} : {})}] : []), ...state.extraHosts],
           repositories:structuredClone(state.repositories), profiles:state.profiles ?? (state.hasProfiles ? [{id:'profile-demo',name:locale==='zh-TW'?'示範連線設定檔':'Demo profile',url:'wss://demo.example:9876/',
             fingerprint:'a'.repeat(64),profile_id:'default',token_available:true}] : []), profiles_error: state.profilesError, busy:false}};
@@ -27,6 +30,14 @@ export async function managedSetupFixture(page: Page, native: boolean, locale: s
       return result;
     }
     if (path === '/managed/setup/secrets') {state.staged.push(input); return {status:200,data:{secret_ref:'setup_'+(state.staged.length===1?'b':'d').repeat(32),kind:input.body.kind}};}
+    if (path === '/managed/setup/preview') {
+      const params = input.body.params;
+      const preview = structuredClone(previewGolden[params.secret_ref ? 'staged' : 'profile'].preview);
+      preview.target = input.body.target; preview.config_revision = input.body.preconditions.config_revision;
+      for (const change of preview.changes) if (Object.hasOwn(params, change.field)) change.after = params[change.field];
+      preview.source.reference = params.secret_ref || params.import_profile_id || input.body.target.host;
+      return {status:200, data:{preview}};
+    }
     if (path.startsWith('/operations/') && state.operation) return {status:200,data:{operation:state.operation}};
     if (path === '/operations' && input.method === 'POST') {
       state.posts.push(input);
@@ -37,7 +48,7 @@ export async function managedSetupFixture(page: Page, native: boolean, locale: s
       if (input.body.action === 'setup.host') {state.configuredHost = input.body.target.host;state.configuredUrl = input.body.params.url || 'wss://demo.example:9876/';}
       if (input.body.action === 'setup.verification') state.verification = input.body.params;
       state.operation = {...input.body,actor:state.badActor ? 'other' : caps().actor,operation_id:'op_'+'c'.repeat(32),
-        idempotency_key:input.idempotency_key,status:'succeeded'};
+        idempotency_key:input.idempotency_key,status:'succeeded',result:{configured:true,revision:state.revision}};
       return {status:200,data:{operation:state.operation}};
     }
     return base.dispatch(input);
@@ -70,6 +81,11 @@ export async function managedSetupFixture(page: Page, native: boolean, locale: s
     else await route.fulfill({status:result.status,json:result.data});
   });
   return state;
+}
+
+// Review is a distinct user choice. Keep original receipt/refusal assertions after Apply.
+export async function applySetupReview(page: Page) {
+  await page.locator('[data-setup-review] button.primary').click();
 }
 
 // Existing manual/recovery regressions deliberately exercise the advanced path.
