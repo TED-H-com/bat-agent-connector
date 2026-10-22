@@ -1,6 +1,7 @@
 use bat_fleet_core::connection_setup::{
-    build, Artifact, EndpointChoice, ExistingFile, FileOwnership, OwnerEvidence, Preferences,
-    PublicationPlan, ReviewedRoute, ReviewedSetup, RouteKind, SourceReference, WorkspaceBinding,
+    build, Artifact, ArtifactLocation, EndpointChoice, ExistingFile, FileOwnership, OwnerEvidence,
+    Preferences, PublicationPlan, ReviewedRoute, ReviewedSetup, RouteKind, SourceReference,
+    WorkspaceBinding,
 };
 use bat_fleet_core::{
     connection_setup::{
@@ -127,6 +128,21 @@ fn clean_plan_has_four_bounded_outputs_pointer_last_and_no_implicit_preferences(
     assert_eq!(plan, build(&input).unwrap());
 }
 
+#[test]
+fn installation_pointer_is_separate_from_kit_relative_artifacts() {
+    assert_eq!(
+        Artifact::Installation.location(),
+        ArtifactLocation::InstallationPointer
+    );
+    for (artifact, relative) in [
+        (Artifact::Inventory, "client/fleet-inventory.json"),
+        (Artifact::ProfileIndex, "client/bat-profiles/index.json"),
+        (Artifact::SshReference, "client/ssh-config"),
+    ] {
+        assert_eq!(artifact.location(), ArtifactLocation::KitRelative(relative));
+    }
+}
+
 struct DiskFixture(PathBuf);
 impl Drop for DiskFixture {
     fn drop(&mut self) {
@@ -152,10 +168,9 @@ fn assert_round_trip(mut input: ReviewedSetup) {
     let plan = build(&input).unwrap();
     assert!(!input.root.exists());
     for output in &plan.outputs {
-        let path = if output.artifact == Artifact::Installation {
-            fixture.0.join("fleet.json")
-        } else {
-            input.root.join(output.artifact.relative_path())
+        let path = match output.artifact.location() {
+            ArtifactLocation::InstallationPointer => fixture.0.join("fleet.json"),
+            ArtifactLocation::KitRelative(relative) => input.root.join(relative),
         };
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, &output.bytes).unwrap();
@@ -379,7 +394,26 @@ fn allocation_never_rewrites_a_bat_profile_to_fit_a_new_address() {
         .addresses
         .configured
         .insert("127.0.0.2".parse().unwrap());
-    assert_eq!(build(&input), Err(Gap::ProfileEndpointMismatch));
+    assert_eq!(build(&input), Err(Gap::AllocationRequiresSourcedMapping));
+}
+
+#[test]
+fn allocation_proposal_requires_sourced_endpoint_changes() {
+    let mut input = setup();
+    input.endpoint_choice = EndpointChoice::Allocate;
+    input
+        .addresses
+        .configured
+        .insert("127.0.0.2".parse().unwrap());
+    let proven = ProvenAssociation::new(&input.selected, input.forward.as_ref()).unwrap();
+    let proposal = allocate_loopback(&proven, &input.addresses).unwrap();
+    assert_eq!(proposal.local.to_string(), "127.0.0.3:19001");
+    assert_eq!(build(&input), Err(Gap::AllocationRequiresSourcedMapping));
+    assert_eq!(
+        input.forward.as_ref().unwrap().local().to_string(),
+        "127.0.0.2:19001"
+    );
+    assert_eq!(input.selected.profile().endpoint.host, "127.0.0.2");
 }
 
 #[test]
@@ -733,6 +767,36 @@ fn selection_reuses_catalog_admission_and_rejects_ambiguity_or_drift() {
         SelectedProfile::from_catalog(&unavailable, &changed, "example-profile"),
         Err(Gap::SourceChanged)
     );
+}
+
+#[test]
+fn catalog_selection_requires_an_exact_source_record_without_panicking() {
+    let original = profile_index("example-profile", "127.0.0.2");
+    let tokens = serde_json::to_vec(&json!({"enc":false,"data":json!({"tokens":{"example-profile":"synthetic-bat-token"}}).to_string()})).unwrap();
+    let catalog = source_catalog::parse(&original, &AdmissionStore::parse(&tokens));
+    // A caller-held catalog can outlive a case-only edit to the source index.
+    let changed = profile_index("EXAMPLE-PROFILE", "127.0.0.2");
+    let result = std::panic::catch_unwind(|| {
+        SelectedProfile::from_catalog(&catalog, &changed, "example-profile")
+    });
+    assert_eq!(
+        result.expect("source changes must return typed gaps"),
+        Err(Gap::ProfileUnavailable)
+    );
+    for malformed in [
+        b"{}".as_slice(),
+        b"{\"profiles\":[null]}",
+        b"{\"profiles\":false}",
+        b"not json",
+    ] {
+        let result = std::panic::catch_unwind(|| {
+            SelectedProfile::from_catalog(&catalog, malformed, "example-profile")
+        });
+        assert_eq!(
+            result.expect("malformed input must return typed gaps"),
+            Err(Gap::ProfileUnavailable)
+        );
+    }
 }
 
 #[test]

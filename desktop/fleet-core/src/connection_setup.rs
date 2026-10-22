@@ -39,6 +39,7 @@ pub enum Gap {
     ProfileUnavailable,
     CredentialUnavailable,
     ProfileEndpointMismatch,
+    AllocationRequiresSourcedMapping,
     SourceChanged,
     OccupiedEndpoint,
     PoolExhausted,
@@ -270,6 +271,10 @@ impl SelectedProfile {
             .iter()
             .find(|p| p.profile.id == id)
             .ok_or(Gap::ProfileUnavailable)?;
+        let source = records
+            .iter()
+            .find(|v| v["id"] == id)
+            .ok_or(Gap::ProfileUnavailable)?;
         let listing = source_catalog::parse_profile_index(index);
         if !listing.profiles.contains(&selected.profile) {
             return Err(Gap::SourceChanged);
@@ -281,7 +286,6 @@ impl SelectedProfile {
         if !literal(&p.id, 64) || p.id.eq_ignore_ascii_case("default") {
             return Err(Gap::ProfileUnavailable);
         }
-        let source = records.iter().find(|v| v["id"] == id).unwrap();
         let mut record = json!({"id":p.id,"name":p.name,"type":"remote", "remoteHost":p.endpoint.host,
             "remotePort":p.endpoint.port,"remoteProfileId":p.remote_profile_id,"remoteFingerprint":p.fingerprint});
         for field in ["createdAt", "updatedAt", "remoteProfileName"] {
@@ -836,10 +840,10 @@ pub fn build(input: &ReviewedSetup) -> SetupResult<PublicationPlan> {
     ));
     let allocation = if input.endpoint_choice == EndpointChoice::Allocate && !retained {
         let allocation = allocate_loopback(&proven, &addresses)?;
-        // Allocating a new address cannot rewrite the catalog or source SSH. The
-        // selected BAT profile and explicit forwarding association must match it.
+        // The profile and forward already match each other. A different proposed
+        // address stays unavailable until both have an independently sourced change.
         if allocation.local != forward.local {
-            return Err(Gap::ProfileEndpointMismatch);
+            return Err(Gap::AllocationRequiresSourcedMapping);
         }
         Some(allocation)
     } else {
@@ -962,13 +966,20 @@ pub fn build(input: &ReviewedSetup) -> SetupResult<PublicationPlan> {
         review_digest: digest(&serde_json::to_vec(&review).map_err(|_| Gap::InvalidInput)?),
     })
 }
+/// A publisher must obtain the native application-data pointer path separately;
+/// it cannot resolve every artifact by joining a filename onto `kit_root`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ArtifactLocation {
+    KitRelative(&'static str),
+    InstallationPointer,
+}
 impl Artifact {
-    pub fn relative_path(self) -> &'static str {
+    pub fn location(self) -> ArtifactLocation {
         match self {
-            Self::Inventory => "client/fleet-inventory.json",
-            Self::ProfileIndex => "client/bat-profiles/index.json",
-            Self::SshReference => "client/ssh-config",
-            Self::Installation => "fleet.json",
+            Self::Inventory => ArtifactLocation::KitRelative("client/fleet-inventory.json"),
+            Self::ProfileIndex => ArtifactLocation::KitRelative("client/bat-profiles/index.json"),
+            Self::SshReference => ArtifactLocation::KitRelative("client/ssh-config"),
+            Self::Installation => ArtifactLocation::InstallationPointer,
         }
     }
 }
