@@ -9,6 +9,35 @@ function store() {
     setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key)};
 }
 
+test('importing credential helpers does not read browser storage', async () => {
+  let reads = 0;
+  const names = ['sessionStorage', 'localStorage'];
+  const descriptors = names.map(name => Object.getOwnPropertyDescriptor(globalThis, name));
+  try {
+    for (const name of names) Object.defineProperty(globalThis, name, {configurable: true,
+      get: () => {reads++; return store();}});
+    await import('../src/credential-refusals.js?without-startup');
+    assert.equal(reads, 0);
+  } finally {
+    names.forEach((name, i) => {if (descriptors[i]) Object.defineProperty(globalThis, name, descriptors[i]!);
+      else Reflect.deleteProperty(globalThis, name);});
+  }
+});
+
+for (const replacement of [null, 'new-token']) for (const event of [false, true]) {
+  test(`another tab forgetting or replacing its token retains the old refusal ${replacement !== null} ${event}`, () => {
+    const storage = store(); storage.setItem(BROWSER_TOKEN_KEY, 'example');
+    const options = {stores: () => [storage], endpoint: () => 'http://localhost'};
+    const first = credentialRefusals(options), second = credentialRefusals(options);
+    first.refuse('example', 401, 'GET', '/events');
+    const key = [...storage.values.keys()].find(key => key.startsWith('batc.credential-refused.'))!;
+    second.forget('example');
+    if (replacement) storage.setItem(BROWSER_TOKEN_KEY, replacement); else storage.removeItem(BROWSER_TOKEN_KEY);
+    if (event) first.storageChanged({key});
+    assert.equal(first.read('example')?.status, 401);
+  });
+}
+
 test('prepared credential lookups and retries are synchronous and domain separated', () => {
   for (const token of ['example', '權杖🙂', 'x'.repeat(1000), ...Array.from({length: 128}, (_, i) => 'x'.repeat(i + 1))]) {
     const storage = store(); storage.setItem(BROWSER_TOKEN_KEY, token);

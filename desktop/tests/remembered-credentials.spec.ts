@@ -5,6 +5,43 @@ import {STRINGS} from '../src/i18n.js';
 test.describe.configure({mode: 'parallel'});
 const tokenKey = 'batc.dashboard.token';
 
+for (const locale of ['en-US', 'zh-TW']) {
+  const copy = STRINGS[locale === 'zh-TW' ? 'zh-TW' : 'en'];
+  test(`Retry after a bootstrap failure remains available and preserves saved work ${locale}`, async ({browser}) => {
+    const central = await service(), context = await browser.newContext({locale});
+    try {
+      const page = await context.newPage();
+      await page.goto(central.origin + '/dashboard/');
+      await page.locator('input[type=password]').fill(central.token);
+      await page.locator('input[type=checkbox]').check();
+      await page.getByRole('button', {name: copy.connect, exact: true}).click();
+      await expect(page.locator('#live')).toHaveText(copy.ui_connected);
+      const saved = {'batc.draft.example': JSON.stringify({text: 'Keep this work', attempt_id: 'att_example'}),
+        'batc.key.example.pending': JSON.stringify({key: 'original-key', intent: {action: 'project.create', params: {name: 'Example'}}}),
+        'batc.key.example.accepted': JSON.stringify({key: 'accepted-key', op: 'op_' + 'a'.repeat(32)})};
+      await page.evaluate(saved => {for (const [key, value] of Object.entries(saved)) localStorage.setItem(key, value);}, saved);
+      const unchanged = async () => {
+        for (const [key, value] of Object.entries(saved)) expect(await page.evaluate(key => localStorage.getItem(key), key)).toBe(value);
+        expect(await page.evaluate(key => localStorage.getItem(key), tokenKey)).toBe(central.token);
+      };
+      await central.status(401);
+      await expect(page.locator('#live')).toHaveText(copy.ui_connection_refused);
+      await page.evaluate(() => {location.hash = '#/settings';});
+      await central.status(200);
+      await page.route('**/api/v1/bootstrap', route => route.fulfill({status: 503,
+        json: {error: {code: 'UNAVAILABLE', message: 'Bootstrap temporarily unavailable'}}}));
+      await page.getByRole('button', {name: copy.connection_retry_remembered, exact: true}).click();
+      await expect(page.getByRole('alert')).toBeVisible();
+      await expect(page.locator('input[type=password]')).toBeVisible();
+      await unchanged();
+      await page.unroute('**/api/v1/bootstrap');
+      await page.getByRole('button', {name: copy.connection_retry_remembered, exact: true}).click();
+      await expect(page.locator('#live')).toHaveText(copy.ui_connected);
+      await unchanged();
+    } finally {await context.close(); await central.close();}
+  });
+}
+
 for (const locale of ['en-US', 'zh-TW']) for (const status of [401, 403]) {
   const copy = STRINGS[locale === 'zh-TW' ? 'zh-TW' : 'en'];
   for (const storage of ['sessionStorage', 'localStorage'] as const) {
