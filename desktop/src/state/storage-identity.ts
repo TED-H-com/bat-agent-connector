@@ -14,14 +14,14 @@ function keys(storage: Storage): string[] {
 
 // Namespace-bearing keys share this envelope, including nested PM selector
 // prefixes and form suffixes. Globals, credentials and Fleet bindings do not.
-function rebase(key: string, source: string, target: string): string | null {
+export function rebase(key: string, source: string, target: string): string | null {
   const prefix = key.match(/^(batc\.[a-z.-]+\.)(?=https?%3A%2F%2F|managed:v1:)/)?.[1];
   if (!prefix) return null;
   const rest = key.slice(prefix.length);
   return rest === source || rest.startsWith(source + '.') ? prefix + target + rest.slice(source.length) : null;
 }
 
-function legacyIdentity(scope: string): StorageIdentity | null {
+export function legacyIdentity(scope: string): StorageIdentity | null {
   try {
     const parts = scope.split(':');
     if (parts.length !== 4) return null;
@@ -32,6 +32,17 @@ function legacyIdentity(scope: string): StorageIdentity | null {
       || scope !== storageScope(endpoint, actor, server_id, principal_id)) return null;
     return {server_id, principal_id, actor};
   } catch {return null;}
+}
+
+// A checkpoint delimits the actor field. Dotted overlapping boundaries are
+// reported, never guessed; migration and text inspection use the same sources.
+export function matchingLegacySources(identity: StorageIdentity, keys: string[]): {scope: string; ambiguous: boolean}[] {
+  const candidates = keys.filter(key => key.startsWith('batc.sync.')).map(key => key.slice('batc.sync.'.length));
+  return candidates.flatMap(scope => {
+    const old = legacyIdentity(scope);
+    return old?.server_id === identity.server_id && old.principal_id === identity.principal_id && old.actor === identity.actor
+      ? [{scope, ambiguous: candidates.some(other => other !== scope && (other.startsWith(scope + '.') || scope.startsWith(other + '.')))}] : [];
+  });
 }
 
 // Call only after native managed bootstrap verification, before any view mounts
@@ -49,13 +60,9 @@ export function migrateManagedStorage(identity: StorageIdentity, local: Storage,
   if (allKeys.some(list => list.some(key => rebase(key, target, target) !== null))) return;
   // The exact checkpoint key delimits all four old identity fields. A draft's
   // action/workspace suffix alone cannot prove where its actor field ends.
-  const candidates = allKeys[0].filter(key => key.startsWith('batc.sync.')).map(key => key.slice('batc.sync.'.length));
-  const matching = candidates.filter(scope => {
-    const old = legacyIdentity(scope);
-    return old?.server_id === identity.server_id && old.principal_id === identity.principal_id && old.actor === identity.actor;
-  });
-  if (matching.length !== 1) return;
-  const source = matching[0];
+  const matching = matchingLegacySources(identity, allKeys[0]);
+  if (matching.length !== 1 || matching[0].ambiguous) return;
+  const source = matching[0].scope;
   // An orphan draft or tab preference from another port is still another scope,
   // even if that port never saved a checkpoint. Its actor suffix may be ambiguous;
   // that is evidence to leave everything in place, never to choose the other port.
@@ -67,8 +74,6 @@ export function migrateManagedStorage(identity: StorageIdentity, local: Storage,
     catch {continue;}
     if (possible !== source && legacyIdentity(possible) && rebase(key, possible, possible) !== null) return;
   }
-  // Ambiguous prefix boundaries must not adopt another actor's dotted suffix.
-  if (candidates.some(scope => scope !== source && (scope.startsWith(source + '.') || source.startsWith(scope + '.')))) return;
   const copies = areas.flatMap((storage, area) => allKeys[area].flatMap(key => {
     const destination = rebase(key, source, target), value = storage.getItem(key);
     return destination !== null && value !== null ? [{storage, destination, value}] : [];

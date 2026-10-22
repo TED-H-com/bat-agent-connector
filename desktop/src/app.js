@@ -71,6 +71,8 @@ import { mountArtifactReview, managedCaptureExecution } from "./artifact-review.
 import {retiredRead, readThroughResume, retiredReadError} from "./state/retired-read.ts";
 import { consumePageAsync, settleRefreshes, storageScope } from "./state/events.ts";
 import {managedStorageScope, migrateManagedStorage} from './state/storage-identity.ts';
+import {earlierDrafts, hideEarlierDraft, firstEarlierDraftNotice, markEarlierDraftNotice} from './state/earlier-drafts.ts';
+import {earlierDraftPanel} from './earlier-drafts.js';
 import {renderDeliveryWork, renderObservedResource, unavailableProject} from "./observed-resource.js";
 import {observedText} from "./observed-resource-strings.js";
 
@@ -150,7 +152,73 @@ async function openDiagnostics() {
     setTimeout(()=>URL.revokeObjectURL(url),1000);return true;
   }});
 }
+let earlierEntries = [], earlierIdentity = null, earlierScan = 0, earlierPanel = null, earlierPanelLocale = null;
+let earlierScanState = nativeDesktop ? 'waiting' : 'skipped', earlierJump = false;
+function clearEarlierDrafts(status = nativeDesktop ? 'waiting' : 'skipped') {
+  earlierScan++; earlierEntries = []; earlierIdentity = null; earlierPanel = null; earlierJump = false; earlierScanState = status;
+  document.querySelector('[data-earlier-drafts-notice]')?.remove();
+  document.querySelector('[data-earlier-drafts]')?.remove();
+  paintEarlierDrafts();
+}
+function acknowledgeEarlierDrafts() {
+  if (!earlierIdentity) return;
+  markEarlierDraftNotice(earlierIdentity, localStorage);
+  document.querySelector('[data-earlier-drafts-notice]')?.remove();
+}
+function paintEarlierNotice() {
+  document.querySelector('[data-earlier-drafts-notice]')?.remove();
+  if (!state.token || !earlierIdentity || !earlierEntries.length || !firstEarlierDraftNotice(earlierIdentity, localStorage)) return;
+  document.getElementById('main')?.prepend(h('aside', {'data-earlier-drafts-notice': '', class: 'earlier-drafts-notice', role: 'status'},
+    h('span', {}, t('earlier_notice')), ' ', h('a', {href: '#/settings?section=about&drafts=earlier', onclick: () => {
+      earlierJump = false; acknowledgeEarlierDrafts();
+    }}, t('earlier_title'))));
+}
+function paintEarlierDrafts() {
+  const slot = document.querySelector('[data-earlier-drafts-slot]');
+  if (!slot) return;
+  slot.dataset.scanState = earlierScanState;
+  if (!earlierIdentity || !earlierEntries.length) {slot.replaceChildren(); return;}
+  const identity = earlierIdentity, scope = managedStorageScope(identity), signature = JSON.stringify(earlierEntries);
+  const current = () => earlierScanState === 'complete' && !!state.token && !state.nativeBusy && state.namespace === scope
+    && earlierIdentity && managedStorageScope(earlierIdentity) === scope;
+  if (!earlierPanel || earlierPanelLocale !== locale || earlierPanel.signature !== signature) {
+    const expanded = earlierPanel?.open || false;
+    earlierPanel = earlierDraftPanel({h, t, entries: earlierEntries, current, expanded, opened: acknowledgeEarlierDrafts,
+      emptyFocus: () => {const heading = document.querySelector('[data-settings-panel="about"] h2'); if (heading) {heading.tabIndex = -1; heading.focus({preventScroll: true});}},
+      hide: entry => {
+        if (!current() || !hideEarlierDraft(identity, localStorage, entry)) return false;
+        earlierEntries = earlierEntries.filter(row => row.id !== entry.id);
+        earlierPanel.signature = JSON.stringify(earlierEntries);
+        if (!earlierEntries.length) document.querySelector('[data-earlier-drafts-notice]')?.remove();
+        return true;
+      }});
+    earlierPanel.signature = signature; earlierPanelLocale = locale;
+  }
+  if (earlierPanel.parentElement !== slot) slot.replaceChildren(earlierPanel);
+  earlierPanel.resume();
+  if (!earlierJump && new URLSearchParams(location.hash.split('?')[1] || '').get('drafts') === 'earlier') {
+    earlierJump = true;
+    const panel = earlierPanel;
+    setTimeout(() => {if (panel === earlierPanel && panel.isConnected && current()) panel.reveal();}, 0);
+  }
+}
+function scanEarlierDrafts(identity) {
+  const scan = earlierScan; earlierScanState = 'scanning'; paintEarlierDrafts();
+  setTimeout(async () => {
+    try {
+      if (scan !== earlierScan) return;
+      const entries = await earlierDrafts(identity, localStorage);
+      if (scan !== earlierScan || !state.token || state.namespace !== managedStorageScope(identity)) return;
+      earlierIdentity = identity; earlierEntries = entries; earlierScanState = 'complete'; paintEarlierDrafts(); paintEarlierNotice();
+    } catch {
+      console.debug('draft_recovery_unreadable');
+      if (scan === earlierScan) {earlierScanState = 'failed'; paintEarlierDrafts();}
+    }
+  }, 0);
+}
 async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource, retainView = false) {
+  if (reset && earlierIdentity) {earlierScan++; earlierScanState = 'waiting'; paintEarlierDrafts();}
+  else clearEarlierDrafts();
   withdrawDiagnostics(); recentErrors.clear();
   const retained = retainView ? {namespace: state.namespace, ready: state.viewReady} : null;
   // A same-identity resnapshot can retain an editing view and its guarded reads.
@@ -175,6 +243,7 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
     // route treats a random loopback port as transport rather than storage identity.
     const identity = {actor: caps.actor, server_id: sync.server_id, principal_id: sync.principal_id};
     const managed = nativeDesktop && configurationSource === 'managed';
+    if (!managed || earlierIdentity && managedStorageScope(earlierIdentity) !== managedStorageScope(identity)) clearEarlierDrafts(managed ? 'waiting' : 'skipped');
     if (managed) migrateManagedStorage(identity, localStorage, sessionStorage);
     state.scopeIdentity = {...identity, configurationSource};
     state.namespace = managed ? managedStorageScope(identity) : storageScope(endpoint, caps.actor, sync.server_id, sync.principal_id);
@@ -187,7 +256,9 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
       } catch { /* use the bootstrap checkpoint */ }
     }
     state.lastEvent = state.sync.cursor;
+    if (managed) scanEarlierDrafts(identity);
   } else {
+    clearEarlierDrafts('skipped');
     state.scopeIdentity = null;
     state.namespace = storageScope(endpoint, caps.actor);
     // A legacy central has no continuity proof; always read current views after reconnect.
@@ -205,6 +276,7 @@ function saveCursor() {
   }
 }
 function resetConnection() {
+  clearEarlierDrafts();
   withdrawDiagnostics(); recentErrors.clear();
   state.epoch++; state.token = null; state.caps = null; state.lastEvent = 0; state.lastEventAt = 0;
   state.scopeIdentity = null;
@@ -1013,6 +1085,10 @@ function foregroundChanged() {
   if (state.token) {updateOnline(false); paintConnection(true, true);}
   wakeEventPoll?.();
 }
+// For checkpointed polls, dashboard_sync.check proves server/principal identity
+// before these continuity failures. All other or unknown reasons withdraw the
+// whole view immediately; they cannot retain facts or an editing view.
+const IDENTITY_PRESERVING_RESETS = new Set(['cursor_expired', 'cursor_ahead', 'history_changed', 'checkpoint_cursor_mismatch']);
 async function streamEvents() {
   for (;;) {
     await refreshManagedRecovery();
@@ -1080,8 +1156,9 @@ async function streamEvents() {
       paintConnection(false, pollSucceeded);
       if (error.code === "EVENT_CURSOR_RESET") {
         const previous = { namespace: state.namespace, sync: state.sync };
-        const accessChanged = error.reason === "access_changed";
+        const accessChanged = !IDENTITY_PRESERVING_RESETS.has(error.reason);
         if (accessChanged) {
+          clearEarlierDrafts();
           // A changed access boundary invalidates displayed facts immediately. Drafts stay
           // in their original principal namespace, even when bootstrap is unavailable.
           generation++; state.viewReady = false;
@@ -3510,6 +3587,8 @@ function openSettings(main, {exclusive = false, refreshButton} = {}) {
     h('div',{class:'actions'},button({label:t('diag_export'),onClick:openDiagnostics,'data-export-diagnostics':''}),
       h("a", {href: setupGuide()}, t("global_setup_guide")))));
   main.append(languageSwitch(), frame.root);
+  frame.panel('about').append(h('div', {'data-earlier-drafts-slot': ''}));
+  paintEarlierDrafts();
   const identityEpoch = state.epoch;
   const paintBuild = () => {
     if(!frame.root.isConnected || identityEpoch !== state.epoch){versionPainters.delete(paintBuild);return;}
@@ -5058,6 +5137,7 @@ async function route() {
   // immediately instead of leaving the connection control blank during startup.
   paintConnection(true);
   const main = document.getElementById("main");
+  const recoveryPanel = earlierPanel, recoveryFocus = earlierPanel?.contains(document.activeElement) ? document.activeElement : null, recoveryScroll = main.scrollTop;
   main.replaceChildren();
   if (!state.token && name !== "settings") {
     const off = await viewSettings(main);
@@ -5096,6 +5176,10 @@ async function route() {
   teardown = () => {off?.(); preferences?.dispose(); skills?.dispose();};
   if (off?.navigate) teardown.navigate = off.navigate;
   state.viewReady = true;
+  paintEarlierDrafts(); paintEarlierNotice();
+  if (recoveryPanel === earlierPanel && recoveryFocus?.isConnected && document.activeElement === document.body) {
+    main.scrollTop = recoveryScroll; recoveryFocus.focus({preventScroll: true});
+  }
 }
 
 async function start() {
