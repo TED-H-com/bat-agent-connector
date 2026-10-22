@@ -16,10 +16,11 @@ export function earlierDraftPanel({h, t, entries, current, hide, opened, emptyFo
   let position = 0, rendering = false;
   function append(entry) {
     const name = `${t(actionMessageKey(entry.action) || entry.label)} · ${earlierFieldLabel(t, entry.field)}`;
-    const text = h('textarea', {readonly: true, rows: 4, 'aria-label': name}); text.value = entry.text;
+    const addressId = 'earlier-address-' + entry.id;
+    const text = h('textarea', {readonly: true, rows: 4, 'aria-label': name, 'aria-describedby': addressId}); text.value = entry.text;
     const status = h('span', {role: 'status', class: 'muted'});
     const row = h('article', {'data-earlier-draft': '', class: 'panel'}, h('h4', {}, name),
-      h('p', {class: 'muted'}, t('earlier_address', {address: entry.address})), text);
+      h('p', {id: addressId, class: 'muted'}, t('earlier_address', {address: entry.address})), text);
     const actions = h('div', {class: 'actions'});
     if (entry.state === 'possibly-sent') {
       row.insertBefore(h('p', {}, t('earlier_pending_warning')), text);

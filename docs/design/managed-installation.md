@@ -212,7 +212,8 @@ boundaries are excluded. Browser clients and external native connections do not
 scan. A completed migration receipt excludes its source, even if the migrated
 draft has subsequently been consumed. No cursor ranks drafts. The panel does not
 cover orphan scopes, ambiguous boundaries, different identities, non-loopback
-addresses, unverified connections or unrecognized key families. Those sources
+addresses, unverified connections, generated Work checkpoint-continuation summaries
+(`draft.continue.<checkpoint>.<work item>`) or unrecognized key families. Those sources
 remain available for explicit manual review/export of the original storage,
 including their operation evidence; the panel does not activate or repair them.
 
@@ -225,9 +226,11 @@ original loopback address and read-only text. The audited writers do not store a
 draft-edit timestamp; checkpoint cursors, operation receipt times and dates typed
 inside a form are not presented as an edit time.
 
-Entries with an `intent`, `submission`, artifact-review `accept`/`capture`, or a
+Entries with an `intent`, `submission`, artifact-review `accept`, or a
 sibling `batc.key` record are **possibly sent requests**, even when their result
-is unknown, unreadable or has no operation ID. Session writers may append a
+is unknown, unreadable or has no operation ID. Artifact capture alone does not
+classify review text as possibly sent: `artifact.capture.managed` carries a preview
+token, while `artifact.accept` carries the review receipt. Session writers may append a
 request digest to the sibling key. Mirrored form/attachment text retains the
 submission evidence from either writer. These entries are shown in a separate
 read-only group labelled **May already have been sent — check it before sending
@@ -245,27 +248,34 @@ automatically deleted. Current drafts, operation keys and checkpoints are untouc
 Unreadable storage is skipped with a content-free console diagnostic, without an
 error dialog or error summary. The scan yields between batches and never gates
 view activation; connection changes invalidate its result and controls. Cancelling
-a connection change retains the panel. A same-identity resnapshot preserves the
-open panel, reading position and focus instead of repeating the notice jump. An
-access-boundary reset withdraws cached text until bootstrap is verified again.
-Local inspection, copy and hide remain usable during a transport outage after
-identity verification; they do not require Connector writes.
+a connection change retains the panel. The identity-preserving reset reasons
+`cursor_expired`, `cursor_ahead`, `history_changed` and `checkpoint_cursor_mismatch`
+preserve the panel instance, expansion, focus and reading position, but Copy/Hide
+remain inert during bootstrap verification and until the current identity's rescan
+completes. Every other reset reason, including `principal_changed`, `server_changed`,
+`identity_unavailable`, `checkpoint_invalid` and `access_changed`, withdraws cached
+text before re-verification; failed bootstrap cannot revive its controls. An
+ordinary transport outage does not revoke the completed identity scan, so local
+inspection, copy and hide remain usable without Connector writes.
 
-The recovery reader uses explicit fields from each producer, rather than walking
-arbitrary JSON. The inventory below is separate from the complete-scope migration
+The recovery reader uses explicit editable-text fields from each producer, rather
+than walking arbitrary JSON. Some writers persist all fields when one changes,
+including loaded values and defaults. Legacy storage has no per-field authorship
+proof, so the sources marked below may contain server text; their writers are
+unchanged. The inventory below is separate from the complete-scope migration
 inventory: migration still preserves all original bytes together.
 
 | Key family (without `batc.`) | Text recovery decision |
 | --- | --- |
-| `draft` | Raw session `send` text; `answer.answers`; Work edit `fields.title/goal/request/acceptance`; published/dispatch attachment `text`. Generated checkpoint-continuation text, queue flags, attachments and agent choices are excluded. Submission metadata is used only to classify possibly sent requests. Identical published/dispatch prompts mirrored in the corresponding form appear once; orphan or differing attachment text remains recoverable. |
+| `draft` | Raw session `send` text; `answer.answers`; Work edit `fields.title/goal/request/acceptance`; published/dispatch attachment `text`; session continuation `continue.<checkpoint>.text`. Only the Work continuation key `continue.<checkpoint>.<work item>` is excluded as a generated summary. Work edit fields may include text loaded from the server, not only what the person typed. Generated Work continuation text, queue flags, attachments and agent choices are excluded. Submission metadata is used only to classify possibly sent requests. Identical published/dispatch prompts mirrored in the corresponding form appear once; orphan or differing attachment text remains recoverable. |
 | `create` | Project `values.name/description/task_project`; Work `values.title/goal/request/acceptance/steps`. Repository, ancestry and state selectors are excluded. |
-| `pm.<scope>.<action>.<target>` (including nested form scopes) | Allowlisted editable fields for discussion messages/titles, Work instructions/follow-ups, plan text, analysis purposes, input values/references, rationale/reasons, governance prose, product-goal/definition-of-done rationale (not their server-prefilled text), sprint goals/capacity notes, meeting notes/output, maintenance review prose, PR title/body and handoff prompts. Per-criterion review reasons and authored text within meeting decisions/follow-ups/outcomes, maintenance follow-ups/public sources and roadmap milestones are extracted field by field. Hidden inputs (including the overview-assessment carrier title), structured source-reference selectors, model/adapter choices, IDs, policy configuration, selected receipts, structured plan snapshots and intent/request bodies are excluded from displayed text. The editable `pm.input.record.reference` is included; it is not a structured source selector. Intent presence and operation IDs only classify/link possibly sent requests. Malformed collections are skipped independently without discarding other fields. New action/field shapes require an explicit reader update. |
+| `pm.<scope>.<action>.<target>` (including nested form scopes) | Allowlisted editable fields for discussion messages/titles, Work instructions/follow-ups, plan text, analysis purposes, input values/references, rationale/reasons, governance prose, product-goal/definition-of-done rationale (not their server-prefilled text), sprint goals/capacity notes, meeting notes/output, maintenance review prose, PR title/body and handoff prompts. Per-criterion review reasons and authored text within meeting decisions/follow-ups/outcomes, maintenance follow-ups/public sources and roadmap milestones are extracted field by field. Hidden inputs (including the overview-assessment carrier title), structured source-reference selectors, model/adapter choices, IDs, policy configuration, selected receipts, structured plan snapshots and intent/request bodies are excluded from displayed text. The editable `pm.input.record.reference` is included; it is not a structured source selector. Intent presence and operation IDs only classify/link possibly sent requests. Malformed collections are skipped independently without discarding other fields. PM form values may include text loaded from the server, not only what the person typed, as well as form defaults. New action/field shapes require an explicit reader update. |
 | `pm.<scope>.discussion-send` | Handoff `content` only; thread identity is excluded. |
 | Other `pm` keys | Exclude discussion origins/indexes, follow-up/assessment pointers, adopt/start landing records, adapter/profile-return/release selectors and all nested selection/navigation/verifier keys. They contain provenance or navigation, not authored drafts. |
 | `start`, `published`, `dispatch` | `title` and `prompt` only. Repair-dispatch keys (`<project>.<repair work item>`) and `.shortcut` keys are excluded. Targets, agent/model/source choices and previews are excluded; intents only classify/link possibly sent requests. |
 | `orchestrate` | `message` and each item's `title/prompt` only; host, session/workspace, queue, agent and limits are excluded; intents only classify/link possibly sent requests. |
-| `labels` | Editable `text` only; base version is excluded; intents only classify/link possibly sent requests. |
-| `artifact-review` | `reviewText` only; paths, selected evidence and previews are excluded; the `accept`/`capture` intents only classify/link possibly sent requests. |
+| `labels` | Editable `text` only; reviewing current labels may persist server values. These may include text loaded from the server, not only what the person typed. Base version is excluded; intents only classify/link possibly sent requests. |
+| `artifact-review` | `reviewText` only; paths, selected evidence and previews are excluded; only `accept` classifies/links possibly sent review text; `capture` never carries it. |
 | `managed.setup`, `repair`, `capture`, `task-control`, `session-bat`, `permissions`, `approvals` | Exclude configuration, credentials, paths/identifiers, resource choices, previews, control flags and durable request/recovery data. |
 | `model-preferences`, `project-skills`, `cleanup.draft/pending/intent` | Exclude preferences, skill selections and cleanup selections/receipts. |
 | `key`, `sync`, `tree`, `sessions`, `attention`, `composer-shortcut`, sessionStorage `delivery` | Do not display or adopt keys, checkpoint proof, navigation, filters or preferences. Sibling operation metadata only classifies/links possibly sent requests. |

@@ -7,9 +7,9 @@ const diagnostic: Diagnostic = code => console.debug(code);
 const problem = 'draft_recovery_unreadable';
 const record = (value: unknown): value is Record<string, any> => !!value && typeof value === 'object' && !Array.isArray(value);
 
-// Only authored fields from the audited writers. In particular, never walk an
-// intent/request, arbitrary JSON, hidden selectors or attachment metadata.
-const pmText: Record<string, string[]> = {};
+// Editable text fields from the audited writers can include server-loaded defaults.
+// Never walk an intent/request, arbitrary JSON, hidden selectors or attachment metadata.
+export const pmText: Record<string, string[]> = {};
 function forms(actions: string, fields: string) {
   for (const action of actions.split(' ')) pmText[action] = fields.split(' ');
 }
@@ -51,27 +51,35 @@ forms('pm.quality.review.revoke', 'reason');
 forms('repository.continue', 'basis prompt title');
 forms('pm.meeting.draft', 'why delivery_approach capacity_discussion dependency_notes goal_review feedback environment_changes next_steps observations previous_improvement_review no_improvement_rationale unresolved_questions rationale');
 
-const collections: Record<string, Record<string, string[]>> = {
+export const collections: Record<string, Record<string, string[]>> = {
   'pm.meeting.draft': {decisions: ['text', 'rationale'], follow_ups: ['text', 'expected_effect', 'verification'], outcomes: ['observation']},
   'pm.maintenance_review.complete': {follow_ups: ['text', 'expected_effect', 'verification']},
   'pm.maintenance_review.candidate.record': {public_sources: ['url', 'title', 'claim']},
   'pm.roadmap.baseline.set': {milestones: ['title', 'baseline_date']},
 };
 
+export const formText = {
+  session: ['text'], answers: ['answers'], work: ['title', 'goal', 'request', 'acceptance'],
+  attachment: ['text'], discussion: ['content'], project: ['name', 'description', 'task_project'],
+  createWork: ['title', 'goal', 'request', 'acceptance', 'steps'], start: ['title', 'prompt'],
+  orchestration: ['message'], items: ['title', 'prompt'], labels: ['text'], review: ['reviewText'],
+};
+const formTypes = ['draft', 'pm', 'create', 'start', 'published', 'dispatch', 'orchestrate', 'labels', 'artifact-review'];
+const pmAction = (suffix: string) => suffix.match(/(?:^|\.)(pm\.[a-z_.]+|session\.send|work\.start|repository\.continue|github\.pr\.(?:publish|update))\.\{/);
+
 type TextField = {field: string; text: string; label: string; action?: string};
 export function draftText(family: string, suffix: string, raw: string, report: Diagnostic = diagnostic): TextField[] {
   const result: TextField[] = [];
-  if ((suffix === 'shortcut' || suffix.endsWith('.shortcut')) || family === 'draft' && suffix.startsWith('continue.')
+  if ((suffix === 'shortcut' || suffix.endsWith('.shortcut')) || family === 'draft' && /^continue\.[^.]+\.[^.]+$/.test(suffix)
     || family === 'dispatch' && /^prj_[0-9a-f]{20}\.wi_[0-9a-f]{20}$/.test(suffix)) return result;
   const add = (field: string, value: unknown, label: string, action?: string) => {
     if (typeof value === 'string' && value.trim()) result.push({field, text: value, label, action});
   };
   if (family === 'draft' && /^send\..+/.test(suffix) && !suffix.endsWith('.queue')) {
-    add('text', raw, 'earlier_session'); return result;
+    add(formText.session[0], raw, 'earlier_session'); return result;
   }
-  const eligible = ['draft', 'pm', 'create', 'start', 'published', 'dispatch', 'orchestrate', 'labels', 'artifact-review'];
-  if (!eligible.includes(family)) return result;
-  const action = family === 'pm' ? suffix.match(/(?:^|\.)(pm\.[a-z_.]+|session\.send|work\.start|repository\.continue|github\.pr\.(?:publish|update))\.\{/)?.[1] : undefined;
+  if (!formTypes.includes(family)) return result;
+  const action = family === 'pm' ? pmAction(suffix)?.[1] : undefined;
   if (family === 'pm' && !action && !/^discussion-send\./.test(suffix)) return result;
   const value = JSON.parse(raw);
   if (!record(value)) return result;
@@ -80,11 +88,12 @@ export function draftText(family: string, suffix: string, raw: string, report: D
   };
   if (family === 'draft') {
     if (/^answer\./.test(suffix) && Array.isArray(value.answers))
-      value.answers.forEach((answer: unknown, index: number) => add(`answers.${index}`, answer, 'earlier_answers'));
-    else if (/^wi\.edit\./.test(suffix)) fields(['title', 'goal', 'request', 'acceptance'], value.fields, 'earlier_work');
-    else if (suffix === 'published' || /^dispatch\./.test(suffix)) add('text', value.text, 'earlier_start');
+      value.answers.forEach((answer: unknown, index: number) => add(`${formText.answers[0]}.${index}`, answer, 'earlier_answers'));
+    else if (/^wi\.edit\./.test(suffix)) fields(formText.work, value.fields, 'earlier_work');
+    else if (/^continue\.[^.]+$/.test(suffix)) fields(formText.attachment, value, 'continue_from_checkpoint');
+    else if (suffix === 'published' || /^dispatch\./.test(suffix)) fields(formText.attachment, value, 'earlier_start');
   } else if (family === 'pm') {
-    if (/^discussion-send\./.test(suffix)) add('content', value.content, 'earlier_discussion');
+    if (/^discussion-send\./.test(suffix)) fields(formText.discussion, value, 'earlier_discussion');
     else if (value.version === 1 && record(value.values)) {
       if (action && Object.hasOwn(pmText, action)) {
         const names = action === 'pm.thread.create' && suffix.startsWith('overview-assessment.')
@@ -103,16 +112,16 @@ export function draftText(family: string, suffix: string, raw: string, report: D
       }
     }
   } else if (family === 'create' && value.version === 1) {
-    if (/^project\./.test(suffix)) fields(['name', 'description', 'task_project'], value.values, 'earlier_project');
-    else if (/^work_item\./.test(suffix)) fields(['title', 'goal', 'request', 'acceptance', 'steps'], value.values, 'earlier_work');
-  } else if (['start', 'published', 'dispatch'].includes(family)) fields(['title', 'prompt'], value, 'earlier_start');
+    if (/^project\./.test(suffix)) fields(formText.project, value.values, 'earlier_project');
+    else if (/^work_item\./.test(suffix)) fields(formText.createWork, value.values, 'earlier_work');
+  } else if (['start', 'published', 'dispatch'].includes(family)) fields(formText.start, value, 'earlier_start');
   else if (family === 'orchestrate') {
-    fields(['message'], value, 'earlier_orchestration');
+    fields(formText.orchestration, value, 'earlier_orchestration');
     if (Array.isArray(value.items)) value.items.forEach((item: any, index: number) => {
-      if (record(item)) for (const field of ['title', 'prompt']) add(`items.${index}.${field}`, item[field], 'earlier_orchestration');
+      if (record(item)) for (const field of formText.items) add(`items.${index}.${field}`, item[field], 'earlier_orchestration');
     });
-  } else if (family === 'labels') add('text', value.text, 'earlier_labels');
-  else if (family === 'artifact-review') add('reviewText', value.reviewText, 'earlier_review');
+  } else if (family === 'labels') fields(formText.labels, value, 'earlier_labels');
+  else if (family === 'artifact-review') fields(formText.review, value, 'earlier_review');
   return result;
 }
 
@@ -124,14 +133,19 @@ async function entryId(key: string, field: string): Promise<string> {
 
 const operationId = (value: unknown): value is string => typeof value === 'string' && /^op_[0-9a-f]{32}$/.test(value);
 function evidence(value: unknown) {
-  // Artifact review names its frozen requests accept/capture, not intent.
-  const intents = record(value) ? [value.intent, value.submission, value.accept, value.capture].filter(item => item != null) : [];
+  // Only artifact.accept carries reviewText as params.receipt. The separate
+  // artifact.capture.managed request sends a preview token, never that text.
+  const intents = record(value) ? [value.intent, value.submission, value.accept].filter(item => item != null) : [];
   return {pending: intents.length > 0, operations: intents.flatMap(intent => operationId(intent?.operation_id) ? [intent.operation_id] : [])};
 }
 function formHref(family: string, suffix: string): string {
   const part = (value: unknown) => encodeURIComponent(typeof value === 'string' ? value : '');
   let target: Record<string, any> = {};
-  try {const json = suffix.indexOf('{'); if (json >= 0) target = JSON.parse(suffix.slice(json));} catch { /* use the form landing */ }
+  try {
+    const match = family === 'pm' ? pmAction(suffix) : null;
+    const json = match ? match.index! + match[0].length - 1 : suffix.indexOf('{');
+    if (json >= 0) target = JSON.parse(suffix.slice(json));
+  } catch { /* use the form landing */ }
   if (family === 'pm') {
     const workspace = target.workspace_id || (suffix.startsWith('discussion-send.') ? suffix.slice('discussion-send.'.length) : '');
     return '#/pm' + (workspace ? '/' + part(workspace) : '') + (target.thread_id ? '/discussions/' + part(target.thread_id) : '');
@@ -174,7 +188,7 @@ export async function earlierDrafts(identity: StorageIdentity, local: Storage, r
     const source = sources.find(source => rebase(key, source, source) !== null);
     if (!source) continue;
     const boundary = key.indexOf(source), family = key.slice('batc.'.length, boundary - 1), suffix = key.slice(boundary + source.length + 1);
-    if (!['draft', 'pm', 'create', 'start', 'published', 'dispatch', 'orchestrate', 'labels', 'artifact-review'].includes(family) || (suffix === 'shortcut' || suffix.endsWith('.shortcut'))) continue;
+    if (!formTypes.includes(family) || (suffix === 'shortcut' || suffix.endsWith('.shortcut'))) continue;
     try {
       const raw = local.getItem(key); if (raw === null) continue;
       const fields = draftText(family, suffix, raw, report); if (!fields.length) continue;

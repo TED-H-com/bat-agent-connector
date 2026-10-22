@@ -330,13 +330,12 @@ var init_earlier_drafts_strings = __esmMin((() => {
 			earlier_answers: "Session answers",
 			earlier_work: "Work form",
 			earlier_project: "Project form",
-			earlier_continue: "Continue from checkpoint",
 			earlier_discussion: "PM discussion",
 			earlier_pm: "PM form",
 			earlier_start: "Start work",
 			earlier_orchestration: "Orchestrate work",
 			earlier_labels: "Session labels",
-			earlier_review: "Artifact review"
+			earlier_review: "Artifacts and review"
 		},
 		"zh-TW": {
 			earlier_draft_group: "草稿文字",
@@ -356,7 +355,6 @@ var init_earlier_drafts_strings = __esmMin((() => {
 			earlier_answers: "工作階段回答",
 			earlier_work: "工作表單",
 			earlier_project: "專案表單",
-			earlier_continue: "從檢查點接續",
 			earlier_discussion: "PM 討論",
 			earlier_pm: "PM 表單",
 			earlier_start: "開始工作",
@@ -66424,9 +66422,50 @@ var collections = {
 	] },
 	"pm.roadmap.baseline.set": { milestones: ["title", "baseline_date"] }
 };
+var formText = {
+	session: ["text"],
+	answers: ["answers"],
+	work: [
+		"title",
+		"goal",
+		"request",
+		"acceptance"
+	],
+	attachment: ["text"],
+	discussion: ["content"],
+	project: [
+		"name",
+		"description",
+		"task_project"
+	],
+	createWork: [
+		"title",
+		"goal",
+		"request",
+		"acceptance",
+		"steps"
+	],
+	start: ["title", "prompt"],
+	orchestration: ["message"],
+	items: ["title", "prompt"],
+	labels: ["text"],
+	review: ["reviewText"]
+};
+var formTypes = [
+	"draft",
+	"pm",
+	"create",
+	"start",
+	"published",
+	"dispatch",
+	"orchestrate",
+	"labels",
+	"artifact-review"
+];
+var pmAction = (suffix) => suffix.match(/(?:^|\.)(pm\.[a-z_.]+|session\.send|work\.start|repository\.continue|github\.pr\.(?:publish|update))\.\{/);
 function draftText(family, suffix, raw, report = diagnostic) {
 	const result = [];
-	if (suffix === "shortcut" || suffix.endsWith(".shortcut") || family === "draft" && suffix.startsWith("continue.") || family === "dispatch" && /^prj_[0-9a-f]{20}\.wi_[0-9a-f]{20}$/.test(suffix)) return result;
+	if (suffix === "shortcut" || suffix.endsWith(".shortcut") || family === "draft" && /^continue\.[^.]+\.[^.]+$/.test(suffix) || family === "dispatch" && /^prj_[0-9a-f]{20}\.wi_[0-9a-f]{20}$/.test(suffix)) return result;
 	const add = (field, value, label, action) => {
 		if (typeof value === "string" && value.trim()) result.push({
 			field,
@@ -66436,21 +66475,11 @@ function draftText(family, suffix, raw, report = diagnostic) {
 		});
 	};
 	if (family === "draft" && /^send\..+/.test(suffix) && !suffix.endsWith(".queue")) {
-		add("text", raw, "earlier_session");
+		add(formText.session[0], raw, "earlier_session");
 		return result;
 	}
-	if (![
-		"draft",
-		"pm",
-		"create",
-		"start",
-		"published",
-		"dispatch",
-		"orchestrate",
-		"labels",
-		"artifact-review"
-	].includes(family)) return result;
-	const action = family === "pm" ? suffix.match(/(?:^|\.)(pm\.[a-z_.]+|session\.send|work\.start|repository\.continue|github\.pr\.(?:publish|update))\.\{/)?.[1] : void 0;
+	if (!formTypes.includes(family)) return result;
+	const action = family === "pm" ? pmAction(suffix)?.[1] : void 0;
 	if (family === "pm" && !action && !/^discussion-send\./.test(suffix)) return result;
 	const value = JSON.parse(raw);
 	if (!record(value)) return result;
@@ -66458,16 +66487,12 @@ function draftText(family, suffix, raw, report = diagnostic) {
 		if (record(source)) for (const name of names) add(name, source[name], label, action);
 	};
 	if (family === "draft") {
-		if (/^answer\./.test(suffix) && Array.isArray(value.answers)) value.answers.forEach((answer, index) => add(`answers.${index}`, answer, "earlier_answers"));
-		else if (/^wi\.edit\./.test(suffix)) fields([
-			"title",
-			"goal",
-			"request",
-			"acceptance"
-		], value.fields, "earlier_work");
-		else if (suffix === "published" || /^dispatch\./.test(suffix)) add("text", value.text, "earlier_start");
+		if (/^answer\./.test(suffix) && Array.isArray(value.answers)) value.answers.forEach((answer, index) => add(`${formText.answers[0]}.${index}`, answer, "earlier_answers"));
+		else if (/^wi\.edit\./.test(suffix)) fields(formText.work, value.fields, "earlier_work");
+		else if (/^continue\.[^.]+$/.test(suffix)) fields(formText.attachment, value, "continue_from_checkpoint");
+		else if (suffix === "published" || /^dispatch\./.test(suffix)) fields(formText.attachment, value, "earlier_start");
 	} else if (family === "pm") {
-		if (/^discussion-send\./.test(suffix)) add("content", value.content, "earlier_discussion");
+		if (/^discussion-send\./.test(suffix)) fields(formText.discussion, value, "earlier_discussion");
 		else if (value.version === 1 && record(value.values)) {
 			if (action && Object.hasOwn(pmText, action)) {
 				fields(action === "pm.thread.create" && suffix.startsWith("overview-assessment.") ? pmText[action].filter((name) => name !== "title") : pmText[action], value.values, "earlier_pm", action);
@@ -66486,30 +66511,20 @@ function draftText(family, suffix, raw, report = diagnostic) {
 			}
 		}
 	} else if (family === "create" && value.version === 1) {
-		if (/^project\./.test(suffix)) fields([
-			"name",
-			"description",
-			"task_project"
-		], value.values, "earlier_project");
-		else if (/^work_item\./.test(suffix)) fields([
-			"title",
-			"goal",
-			"request",
-			"acceptance",
-			"steps"
-		], value.values, "earlier_work");
+		if (/^project\./.test(suffix)) fields(formText.project, value.values, "earlier_project");
+		else if (/^work_item\./.test(suffix)) fields(formText.createWork, value.values, "earlier_work");
 	} else if ([
 		"start",
 		"published",
 		"dispatch"
-	].includes(family)) fields(["title", "prompt"], value, "earlier_start");
+	].includes(family)) fields(formText.start, value, "earlier_start");
 	else if (family === "orchestrate") {
-		fields(["message"], value, "earlier_orchestration");
+		fields(formText.orchestration, value, "earlier_orchestration");
 		if (Array.isArray(value.items)) value.items.forEach((item, index) => {
-			if (record(item)) for (const field of ["title", "prompt"]) add(`items.${index}.${field}`, item[field], "earlier_orchestration");
+			if (record(item)) for (const field of formText.items) add(`items.${index}.${field}`, item[field], "earlier_orchestration");
 		});
-	} else if (family === "labels") add("text", value.text, "earlier_labels");
-	else if (family === "artifact-review") add("reviewText", value.reviewText, "earlier_review");
+	} else if (family === "labels") fields(formText.labels, value, "earlier_labels");
+	else if (family === "artifact-review") fields(formText.review, value, "earlier_review");
 	return result;
 }
 var marker = (identity, id) => `batc.earlier-drafts.${managedStorageScope(identity)}.${id}`;
@@ -66522,8 +66537,7 @@ function evidence(value) {
 	const intents = record(value) ? [
 		value.intent,
 		value.submission,
-		value.accept,
-		value.capture
+		value.accept
 	].filter((item) => item != null) : [];
 	return {
 		pending: intents.length > 0,
@@ -66534,7 +66548,8 @@ function formHref(family, suffix) {
 	const part = (value) => encodeURIComponent(typeof value === "string" ? value : "");
 	let target = {};
 	try {
-		const json = suffix.indexOf("{");
+		const match = family === "pm" ? pmAction(suffix) : null;
+		const json = match ? match.index + match[0].length - 1 : suffix.indexOf("{");
 		if (json >= 0) target = JSON.parse(suffix.slice(json));
 	} catch {}
 	if (family === "pm") {
@@ -66589,17 +66604,7 @@ async function earlierDrafts(identity, local, report = diagnostic) {
 		const source = sources.find((source) => rebase(key, source, source) !== null);
 		if (!source) continue;
 		const boundary = key.indexOf(source), family = key.slice(5, boundary - 1), suffix = key.slice(boundary + source.length + 1);
-		if (![
-			"draft",
-			"pm",
-			"create",
-			"start",
-			"published",
-			"dispatch",
-			"orchestrate",
-			"labels",
-			"artifact-review"
-		].includes(family) || suffix === "shortcut" || suffix.endsWith(".shortcut")) continue;
+		if (!formTypes.includes(family) || suffix === "shortcut" || suffix.endsWith(".shortcut")) continue;
 		try {
 			const raw = local.getItem(key);
 			if (raw === null) continue;
@@ -66696,10 +66701,12 @@ function earlierDraftPanel({ h, t, entries, current, hide, opened, emptyFocus, e
 	let position = 0, rendering = false;
 	function append(entry) {
 		const name = `${t(actionMessageKey(entry.action) || entry.label)} · ${earlierFieldLabel(t, entry.field)}`;
+		const addressId = "earlier-address-" + entry.id;
 		const text = h("textarea", {
 			readonly: true,
 			rows: 4,
-			"aria-label": name
+			"aria-label": name,
+			"aria-describedby": addressId
 		});
 		text.value = entry.text;
 		const status = h("span", {
@@ -66709,7 +66716,10 @@ function earlierDraftPanel({ h, t, entries, current, hide, opened, emptyFocus, e
 		const row = h("article", {
 			"data-earlier-draft": "",
 			class: "panel"
-		}, h("h4", {}, name), h("p", { class: "muted" }, t("earlier_address", { address: entry.address })), text);
+		}, h("h4", {}, name), h("p", {
+			id: addressId,
+			class: "muted"
+		}, t("earlier_address", { address: entry.address })), text);
 		const actions = h("div", { class: "actions" });
 		if (entry.state === "possibly-sent") {
 			row.insertBefore(h("p", {}, t("earlier_pending_warning")), text);
@@ -67318,7 +67328,7 @@ function paintEarlierDrafts() {
 		return;
 	}
 	const identity = earlierIdentity, scope = managedStorageScope(identity), signature = JSON.stringify(earlierEntries);
-	const current = () => !!state.token && !state.nativeBusy && state.namespace === scope && earlierIdentity && managedStorageScope(earlierIdentity) === scope;
+	const current = () => earlierScanState === "complete" && !!state.token && !state.nativeBusy && state.namespace === scope && earlierIdentity && managedStorageScope(earlierIdentity) === scope;
 	if (!earlierPanel || earlierPanelLocale !== locale || earlierPanel.signature !== signature) {
 		const expanded = earlierPanel?.open || false;
 		earlierPanel = earlierDraftPanel({
@@ -67373,7 +67383,7 @@ function scanEarlierDrafts(identity) {
 		} catch {
 			console.debug("draft_recovery_unreadable");
 			if (scan === earlierScan) {
-				earlierScanState = "complete";
+				earlierScanState = "failed";
 				paintEarlierDrafts();
 			}
 		}
@@ -67383,6 +67393,7 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
 	if (reset && earlierIdentity) {
 		earlierScan++;
 		earlierScanState = "waiting";
+		paintEarlierDrafts();
 	} else clearEarlierDrafts();
 	withdrawDiagnostics();
 	recentErrors.clear();
@@ -68598,7 +68609,12 @@ async function streamEvents() {
 					namespace: state.namespace,
 					sync: state.sync
 				};
-				const accessChanged = error.reason === "access_changed";
+				const accessChanged = ![
+					"cursor_expired",
+					"cursor_ahead",
+					"history_changed",
+					"checkpoint_cursor_mismatch"
+				].includes(error.reason);
 				if (accessChanged) {
 					clearEarlierDrafts();
 					generation++;

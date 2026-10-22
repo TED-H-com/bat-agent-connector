@@ -178,7 +178,7 @@ function paintEarlierDrafts() {
   slot.dataset.scanState = earlierScanState;
   if (!earlierIdentity || !earlierEntries.length) {slot.replaceChildren(); return;}
   const identity = earlierIdentity, scope = managedStorageScope(identity), signature = JSON.stringify(earlierEntries);
-  const current = () => !!state.token && !state.nativeBusy && state.namespace === scope
+  const current = () => earlierScanState === 'complete' && !!state.token && !state.nativeBusy && state.namespace === scope
     && earlierIdentity && managedStorageScope(earlierIdentity) === scope;
   if (!earlierPanel || earlierPanelLocale !== locale || earlierPanel.signature !== signature) {
     const expanded = earlierPanel?.open || false;
@@ -211,12 +211,12 @@ function scanEarlierDrafts(identity) {
       earlierIdentity = identity; earlierEntries = entries; earlierScanState = 'complete'; paintEarlierDrafts(); paintEarlierNotice();
     } catch {
       console.debug('draft_recovery_unreadable');
-      if (scan === earlierScan) {earlierScanState = 'complete'; paintEarlierDrafts();}
+      if (scan === earlierScan) {earlierScanState = 'failed'; paintEarlierDrafts();}
     }
   }, 0);
 }
 async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource, retainView = false) {
-  if (reset && earlierIdentity) {earlierScan++; earlierScanState = 'waiting';}
+  if (reset && earlierIdentity) {earlierScan++; earlierScanState = 'waiting'; paintEarlierDrafts();}
   else clearEarlierDrafts();
   withdrawDiagnostics(); recentErrors.clear();
   const retained = retainView ? {namespace: state.namespace, ready: state.viewReady} : null;
@@ -1084,7 +1084,10 @@ async function streamEvents() {
       paintConnection(false, pollSucceeded);
       if (error.code === "EVENT_CURSOR_RESET") {
         const previous = { namespace: state.namespace, sync: state.sync };
-        const accessChanged = error.reason === "access_changed";
+        // dashboard_sync.check proves identity before these continuity failures.
+        // Other reasons (including an invalid checkpoint or unknown reason) do
+        // not establish that cached recovery still belongs to this connection.
+        const accessChanged = !['cursor_expired', 'cursor_ahead', 'history_changed', 'checkpoint_cursor_mismatch'].includes(error.reason);
         if (accessChanged) {
           clearEarlierDrafts();
           // A changed access boundary invalidates displayed facts immediately. Drafts stay
