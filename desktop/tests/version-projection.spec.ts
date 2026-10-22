@@ -8,7 +8,8 @@ for(const locale of ['en-US','zh-TW'])for(const scenario of ['differs','outside_
 test(`next-launch installation ${scenario} ${native?'desktop':'browser'} ${locale}`,async({browser})=>{
   const context=await browser.newContext({locale}),page=await context.newPage();
   const at=Date.UTC(2026,9,22);
-  await page.clock.install({time:at});await page.clock.pauseAt(at);
+  // A single fixed Date avoids racing two clock calls before navigation.
+  await page.clock.setFixedTime(at);
   const producer=structuredClone(bootstrap);
   if(scenario==='absent')delete producer.capabilities.connector_update;
   else Object.assign(producer.capabilities,connectorUpdates[scenario]);
