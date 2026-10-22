@@ -1,0 +1,12 @@
+[
+  {
+    "family": "labels",
+    "suffix": "[\"demo\",\"manual-full-session\"]",
+    "raw": "{\"text\":\"Authored label\",\"base_version\":0}"
+  },
+  {
+    "family": "labels",
+    "suffix": "[\"demo\",\"manual-full-session\"]",
+    "raw": "{\"text\":\"Authored label\",\"base_version\":0,\"intent\":{\"key\":\"00000000-0000-4000-8000-000000000001\",\"operation_id\":null,\"request\":{\"action\":\"session.labels.set\",\"target\":{\"host\":\"demo\",\"session_id\":\"manual-full-session\"},\"params\":{\"labels\":[\"Authored label\"]},\"preconditions\":{\"expected_version\":0}}}}"
+  }
+]

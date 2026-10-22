@@ -1,0 +1,17 @@
+[
+  {
+    "family": "published",
+    "suffix": "",
+    "raw": "{\"target\":{\"repository\":\"example/project\",\"host\":\"demo\",\"workspace_id\":\"demo-ws\"},\"source_ref\":\"refs/heads/main\",\"agent\":\"claude\",\"prompt\":\"  Work from this version.\\nPreserve these instructions.  \",\"model\":\"\",\"title\":\"\"}"
+  },
+  {
+    "family": "published",
+    "suffix": "",
+    "raw": "{\"target\":{\"repository\":\"example/project\",\"host\":\"demo\",\"workspace_id\":\"demo-ws\"},\"source_ref\":\"refs/heads/main\",\"agent\":\"claude\",\"prompt\":\"  Work from this version.\\nPreserve these instructions.  \",\"model\":\"\",\"title\":\"\",\"intent\":{\"request\":{\"action\":\"repository.continue\",\"target\":{\"repository\":\"example/project\",\"host\":\"demo\",\"workspace_id\":\"demo-ws\"},\"params\":{\"source_ref\":\"refs/heads/main\",\"source_sha\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"agent\":\"claude\",\"prompt\":\"  Work from this version.\\nPreserve these instructions.  \"},\"preconditions\":{\"repository_id\":123,\"binding_digest\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}},\"key\":\"00000000-0000-4000-8000-000000000001\",\"operation_id\":null}}"
+  },
+  {
+    "family": "draft",
+    "suffix": "published",
+    "raw": "{\"text\":\"  Work from this version.\\nPreserve these instructions.  \",\"attachments\":[]}"
+  }
+]

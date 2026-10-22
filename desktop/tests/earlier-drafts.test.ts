@@ -1,8 +1,9 @@
+import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {storageScope} from '../src/state/events.ts';
 import {managedStorageScope, migrateManagedStorage} from '../src/state/storage-identity.ts';
-import {draftText, earlierDrafts, hideEarlierDraft} from '../src/state/earlier-drafts.ts';
+import {draftText, earlierDrafts, hideEarlierDraft, firstEarlierDraftNotice} from '../src/state/earlier-drafts.ts';
 
 const identity = {server_id: 'fixture-server', principal_id: 'fixture-principal', actor: 'fixture-operator'};
 const old = (port = 41001, who = identity, endpoint = `http://127.0.0.1:${port}/`) =>
@@ -89,18 +90,84 @@ test('attachment prompt mirrors appear once while orphan or differing text stays
   assert.deepEqual((await earlierDrafts(identity, local)).map(row => row.text).sort(), ['Different prompt', 'Mirrored prompt', 'Typed message']);
 });
 
-test('non-PM text readers omit surrounding metadata and preserve exact authored whitespace', () => {
-  const cases: [string, string, unknown, string[]][] = [
-    ['draft', 'answer.demo.session-1.tool-1', {identity: 'pending', answers: [' One\n', 'Two']}, [' One\n', 'Two']],
-    ['draft', 'wi.edit.wi_fixture', {text: 'Request', fields: {title: 'Title', request: 'Request', agent: 'claude'}, attachments: [{name: 'private'}]}, ['Title', 'Request']],
-    ['draft', 'continue.cp_fixture', {text: 'Continue here', fields: {agent: 'claude'}, submission: {key: 'private'}}, ['Continue here']],
-    ['create', 'project.root', {version: 1, values: {name: 'Project', description: 'Description', repository: 'private'}}, ['Project', 'Description']],
-    ['start', '', {title: 'Title', prompt: 'Prompt', host: 'private', model: 'private'}, ['Title', 'Prompt']],
-    ['orchestrate', 'items.{}', {message: 'Message', items: [{title: 'Title', prompt: 'Prompt'}], selection: 'private'}, ['Message', 'Title', 'Prompt']],
-    ['labels', '[]', {text: 'label', base_version: 2}, ['label']],
-    ['artifact-review', '{}', {reviewText: 'Review', relative_path: 'private'}, ['Review']],
-    ['pm', 'discussion-send.ws_fixture', {threadId: 'private', content: 'Discussion'}, ['Discussion']],
-  ];
-  for (const [family, suffix, value, expected] of cases)
-    assert.deepEqual(draftText(family, suffix, JSON.stringify(value)).map(row => row.text), expected, family);
+test('real writer snapshots distinguish retained requests from ordinary text', async () => {
+  for (const name of ['start', 'published', 'dispatch', 'orchestrate', 'labels', 'forms']) {
+    const rows = JSON.parse(readFileSync(new URL(`./fixtures/earlier-drafts-${name}.json`, import.meta.url), 'utf8'));
+    for (const row of rows) {
+      const value = JSON.parse(row.raw), local = new MemoryStorage();
+      local.setItem(`batc.sync.${old()}`, JSON.stringify({cursor: 1, token: 'fixture-proof'}));
+      local.setItem(`batc.${row.family}.${old()}${row.suffix ? '.' + row.suffix : ''}`, row.raw);
+      const entries = await earlierDrafts(identity, local);
+      assert.ok(entries.length, row.family);
+      const state = value.intent || value.submission || value.accept ? 'possibly-sent' : 'draft';
+      assert.ok(entries.every(entry => entry.state === state), row.family + ' ' + state);
+      assert.ok(entries.every(entry => entry.field && entry.href.startsWith('#/')), row.family);
+      assert.deepEqual(entries.map(entry => entry.text), draftText(row.family, row.suffix, row.raw).map(field => field.text));
+    }
+  }
+});
+
+test('retained session requests with exact or hashed sibling keys are possibly sent', async () => {
+  for (const suffix of ['', '.' + 'a'.repeat(24)]) for (const raw of [
+    JSON.stringify({key: 'original-key', op: 'op_' + 'a'.repeat(32)}),
+    JSON.stringify({key: 'original-key'}), 'legacy-key', '{damaged', '',
+  ]) {
+    const local = new MemoryStorage(); seed(local, old());
+    local.removeItem(`batc.key.${old()}.send.demo.session-1`);
+    local.setItem(`batc.key.${old()}.send.demo.session-1${suffix}`, raw);
+    const [entry] = await earlierDrafts(identity, local, () => {});
+    assert.equal(entry.state, 'possibly-sent');
+    assert.equal(entry.href, raw.includes('op_') ? '#/op/op_' + 'a'.repeat(32) : '#/session/demo/session-1');
+  }
+});
+
+test('unreadable sibling key never becomes an ordinary draft', async () => {
+  const local = new MemoryStorage(); seed(local, old());
+  const read = local.getItem.bind(local), diagnostics: string[] = [];
+  local.getItem = key => {if (key.startsWith('batc.key.')) throw Error('private'); return read(key);};
+  const [entry] = await earlierDrafts(identity, local, code => diagnostics.push(code));
+  assert.equal(entry.state, 'possibly-sent');
+  assert.equal(entry.href, '#/session/demo/session-1');
+  assert.ok(diagnostics.length > 0);
+  assert.ok(diagnostics.every(code => code === 'draft_recovery_unreadable'));
+});
+
+test('generated continuation, repair prompts, hidden titles and seeded goals are not authored drafts', () => {
+  assert.deepEqual(draftText('draft', 'continue.cp_fixture', JSON.stringify({text: 'Generated Work summary', attachments: []})), []);
+  assert.deepEqual(draftText('dispatch', 'prj_' + 'a'.repeat(20) + '.wi_' + 'b'.repeat(20), JSON.stringify({prompt: 'Server repair instructions', title: ''})), []);
+  assert.deepEqual(draftText('pm', 'overview-assessment.ws_fixture.pm.thread.create.{"workspace_id":"ws_fixture"}',
+    JSON.stringify({version: 1, values: {title: 'Project overview assessment', _version: '1', _refs: '[]'}})), []);
+  for (const action of ['pm.product_goal.revise', 'pm.dod.revise'])
+    assert.deepEqual(draftText('pm', action + '.{"workspace_id":"ws_fixture"}', JSON.stringify({version: 1,
+      values: {text: 'Existing server text', rationale: 'My reason'}})).map(entry => entry.text), ['My reason']);
+  assert.deepEqual(draftText('pm', 'pm.issue.update.{}', JSON.stringify({version: 1, values: {title: 'No such writer'}})), []);
+});
+
+test('shortcuts are skipped and a malformed collection does not discard other fields', async () => {
+  const local = new MemoryStorage(); seed(local, old());
+  const diagnostics: string[] = [];
+  local.setItem(`batc.published.${old()}.shortcut`, 'ctrl-enter');
+  local.setItem(`batc.pm.${old()}.pm.meeting.draft.{"workspace_id":"ws_fixture"}`, JSON.stringify({version: 1,
+    values: {why: 'Keep the purpose', decisions: '{broken', follow_ups: JSON.stringify([{text: 'Keep this follow-up'}])}}));
+  assert.deepEqual((await earlierDrafts(identity, local, code => diagnostics.push(code))).map(entry => entry.text).sort(),
+    ['Typed message', 'Keep the purpose', 'Keep this follow-up'].sort());
+  assert.deepEqual(diagnostics, ['draft_recovery_unreadable']);
+});
+
+test('notice inspection does not consume the notice', () => {
+  const local = new MemoryStorage();
+  assert.equal(firstEarlierDraftNotice(identity, local), true);
+  assert.equal(firstEarlierDraftNotice(identity, local), true);
+  assert.equal(local.length, 0);
+});
+
+
+test('mirrored text preserves submission evidence even when only the attachment knows it', async () => {
+  const local = new MemoryStorage(); seed(local, old());
+  local.setItem(`batc.published.${old()}`, JSON.stringify({target: null, source_ref: '', agent: 'claude', prompt: 'Original prompt', model: '', title: ''}));
+  local.setItem(`batc.draft.${old()}.published`, JSON.stringify({text: 'Original prompt', attachments: [],
+    submission: {key: 'original-key', operation_id: 'op_' + 'a'.repeat(32), request: {action: 'repository.continue'}, snapshot: '{}', scope: 'published'}}));
+  const entries = (await earlierDrafts(identity, local)).filter(entry => entry.text === 'Original prompt');
+  assert.equal(entries.length, 1); assert.equal(entries[0].state, 'possibly-sent');
+  assert.equal(entries[0].href, '#/op/op_' + 'a'.repeat(32));
 });

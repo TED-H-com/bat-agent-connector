@@ -1,0 +1,12 @@
+[
+  {
+    "family": "orchestrate",
+    "suffix": "items.{}",
+    "raw": "{\"host\":\"demo\",\"selection\":\"demo-ws\",\"message\":\"\",\"queue\":false,\"agent\":\"codex\",\"max_items\":3,\"items\":[{\"title\":\"Review login\",\"prompt\":\"  Literal first item.  \"},{\"title\":\"Add tests\",\"prompt\":\"Second literal item.\"}]}"
+  },
+  {
+    "family": "orchestrate",
+    "suffix": "items.{}",
+    "raw": "{\"host\":\"demo\",\"selection\":\"demo-ws\",\"message\":\"\",\"queue\":false,\"agent\":\"codex\",\"max_items\":3,\"items\":[{\"title\":\"Review login\",\"prompt\":\"  Literal first item.  \"},{\"title\":\"Add tests\",\"prompt\":\"Second literal item.\"}],\"intent\":{\"request\":{\"action\":\"fanout.start\",\"target\":{\"host\":\"demo\",\"workspace\":\"demo-ws\"},\"params\":{\"agent\":\"codex\",\"plan\":[{\"index\":1,\"title\":\"Review login\",\"prompt\":\"  Literal first item.  \"},{\"index\":2,\"title\":\"Add tests\",\"prompt\":\"Second literal item.\"}]},\"preconditions\":{}},\"key\":\"00000000-0000-4000-8000-000000000001\",\"operation_id\":null}}"
+  }
+]

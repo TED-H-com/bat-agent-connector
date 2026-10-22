@@ -1,0 +1,12 @@
+[
+  {
+    "family": "start",
+    "suffix": "",
+    "raw": "{\"host\":\"demo\",\"workspace\":\"demo-ws\",\"agent\":\"claude\",\"model\":\"\",\"title\":\"\",\"prompt\":\"  Original start\\n\"}"
+  },
+  {
+    "family": "start",
+    "suffix": "",
+    "raw": "{\"host\":\"demo\",\"workspace\":\"demo-ws\",\"agent\":\"claude\",\"model\":\"\",\"title\":\"\",\"prompt\":\"  Original start\\n\",\"intent\":{\"request\":{\"action\":\"session.start\",\"target\":{\"host\":\"demo\",\"workspace\":\"demo-ws\"},\"params\":{\"agent\":\"claude\",\"use_worktree\":true,\"prompt\":\"  Original start\\n\"},\"preconditions\":{}},\"key\":\"00000000-0000-4000-8000-000000000001\",\"operation_id\":null}}"
+  }
+]

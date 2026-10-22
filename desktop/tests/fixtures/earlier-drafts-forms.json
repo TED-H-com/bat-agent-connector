@@ -1,0 +1,32 @@
+[
+  {
+    "family": "pm",
+    "suffix": "session.send.{\"workspace_id\":\"ws_cccccccccccccccccccccccccccccccc\",\"work_item_id\":\"wi_dddddddddddddddddddd\"}",
+    "raw": "{\"version\":1,\"values\":{\"text\":\"  Authored follow-up\\n\"}}"
+  },
+  {
+    "family": "pm",
+    "suffix": "session.send.{\"workspace_id\":\"ws_cccccccccccccccccccccccccccccccc\",\"work_item_id\":\"wi_dddddddddddddddddddd\"}",
+    "raw": "{\"version\":1,\"values\":{\"text\":\"  Authored follow-up\\n\"},\"intent\":{\"key\":\"00000000-0000-4000-8000-000000000001\",\"request\":{\"action\":\"session.send\",\"target\":{\"workspace_id\":\"ws_cccccccccccccccccccccccccccccccc\",\"work_item_id\":\"wi_dddddddddddddddddddd\"},\"params\":{\"text\":\"Authored follow-up\",\"schedule\":\"after_current\"},\"preconditions\":{\"expected_attempt_id\":\"att_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\"}}}}"
+  },
+  {
+    "family": "create",
+    "suffix": "work_item.prj_aaaaaaaaaaaaaaaaaaaa",
+    "raw": "{\"version\":1,\"values\":{\"title\":\"Authored work title\",\"goal\":\"\",\"request\":\"\",\"acceptance\":\"\",\"steps\":\"\",\"state\":\"\",\"parent_id\":\"\",\"derived_from\":\"\"}}"
+  },
+  {
+    "family": "create",
+    "suffix": "work_item.prj_aaaaaaaaaaaaaaaaaaaa",
+    "raw": "{\"version\":1,\"values\":{\"title\":\"Authored work title\",\"goal\":\"\",\"request\":\"\",\"acceptance\":\"\",\"steps\":\"\",\"state\":\"\",\"parent_id\":\"\",\"derived_from\":\"\"},\"intent\":{\"key\":\"00000000-0000-4000-8000-000000000001\",\"request\":{\"action\":\"work_item.create\",\"target\":{\"project_id\":\"prj_aaaaaaaaaaaaaaaaaaaa\"},\"params\":{\"title\":\"Authored work title\"},\"preconditions\":{}}}}"
+  },
+  {
+    "family": "artifact-review",
+    "suffix": "{\"kind\":\"artifact\",\"artifact_id\":\"art_dddddddddddddddddddddddddddddddd\",\"revision\":1}",
+    "raw": "{\"relative_path\":\"\",\"selector\":null,\"reviewText\":\"Authored artifact review\"}"
+  },
+  {
+    "family": "artifact-review",
+    "suffix": "{\"kind\":\"artifact\",\"artifact_id\":\"art_dddddddddddddddddddddddddddddddd\",\"revision\":1}",
+    "raw": "{\"relative_path\":\"\",\"selector\":null,\"reviewText\":\"Authored artifact review\",\"accept\":{\"key\":\"00000000-0000-4000-8000-000000000001\",\"actor\":\"fixture-operator\",\"request\":{\"action\":\"artifact.accept\",\"target\":{\"artifact_id\":\"art_dddddddddddddddddddddddddddddddd\",\"revision\":1},\"params\":{\"digest\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"source_fingerprint\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"receipt\":\"Authored artifact review\"},\"preconditions\":{}},\"expected\":{\"capture_operation_id\":\"op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_commit\":\"1111111111111111111111111111111111111111\",\"lineage\":{\"kind\":\"execution_operation\",\"execution_operation_id\":\"op_cccccccccccccccccccccccccccccccc\"}}}}"
+  }
+]
