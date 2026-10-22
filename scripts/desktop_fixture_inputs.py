@@ -109,6 +109,33 @@ def referenced_files(root, source, directory, tracked, *, command=False):
     return result
 
 
+def workflow_steps(root, job):
+    """Include local composite steps so moving a command cannot hide its inputs."""
+    root = root.resolve()
+
+    def visit(steps, default, source, ancestors):
+        for step in steps:
+            directory = root / step['working-directory'] if 'working-directory' in step else default
+            yield step, directory, source
+            action = step.get('uses', '')
+            if not action.startswith('./'):
+                continue
+            folder = (root / action).resolve()
+            assert folder.is_relative_to(root), f'Local action escapes repository: {action}'
+            metadata = next((folder / name for name in ('action.yml', 'action.yaml')
+                             if (folder / name).is_file()), None)
+            assert metadata is not None, f'Cannot trace local action: {action}'
+            assert metadata not in ancestors, f'Local action cycle: {action}'
+            runs = yaml.safe_load(metadata.read_text(encoding='utf-8'))['runs']
+            assert runs['using'] == 'composite', f'Cannot trace non-composite local action: {action}'
+            # Local uses paths and composite run defaults resolve from the workspace,
+            # not the caller job's defaults.run.working-directory.
+            yield from visit(runs['steps'], root, metadata.relative_to(root).as_posix(), (*ancestors, metadata))
+
+    default = root / job.get('defaults', {}).get('run', {}).get('working-directory', '.')
+    yield from visit(job['steps'], default, WORKFLOW, ())
+
+
 def command_inputs(root, tracked):
     jobs = workflow(root)['jobs']
     result = {}
@@ -133,12 +160,14 @@ def command_inputs(root, tracked):
             if 'playwright test' in command:
                 found.update(path for path in tracked if path.startswith('desktop/tests/') and path.endswith('.spec.ts'))
 
-        default = root / job.get('defaults', {}).get('run', {}).get('working-directory', '.')
-        for step in job['steps']:
+        steps = list(workflow_steps(root, job))
+        for step, directory, source in steps:
+            if source in tracked:
+                found.add(source)
             if 'run' in step:
-                collect(step['run'], root / step['working-directory'] if 'working-directory' in step else default)
+                collect(step['run'], directory)
         # Cargo discovers in-crate tests/helpers without listing each in shell.
-        if any('cargo ' in step.get('run', '') for step in job['steps']):
+        if any('cargo ' in step.get('run', '') for step, _, _ in steps):
             found.update(path for path in tracked if path.startswith('desktop/') and path.endswith('.rs'))
         result[name] = found
     return result
