@@ -368,9 +368,12 @@ impl Managed {
             use std::os::windows::process::CommandExt;
             command.creation_flags(0x08000000); // CREATE_NO_WINDOW; serve detaches itself.
         }
-        let mut child = command
-            .spawn()
-            .map_err(|_| "MANAGED_RUNTIME_START_FAILED")?;
+        let mut child = command.spawn().map_err(|error| {
+            #[cfg(test)]
+            eprintln!("managed launcher spawn: {error}");
+            let _ = error;
+            "MANAGED_RUNTIME_START_FAILED"
+        })?;
         let output = child.stdout.take().ok_or("MANAGED_RUNTIME_PIPE_FAILED")?;
         let (sender, receiver) = std::sync::mpsc::sync_channel(1);
         std::thread::spawn(move || {
@@ -408,6 +411,8 @@ impl Managed {
             return Err("MANAGED_RUNTIME_START_FAILED".into());
         }
         if !result.success() {
+            #[cfg(test)]
+            eprintln!("managed launcher exit: {:?}", result.code());
             return Err(journal_startup_failure(&bytes)
                 .unwrap_or_else(|| "MANAGED_RUNTIME_START_FAILED".into()));
         }

@@ -2,7 +2,7 @@
 
 [Windows guide](../windows.md) · [繁體中文摘要](#繁體中文設定摘要)
 
-「加入機器」的共用契約（已定，尚未實作）見[下方章節](#加入機器共用契約已定尚未實作)。下列手動設定
+「加入機器」的共用契約及用途選擇實作範圍見[下方章節](#加入機器共用契約已定尚未實作)。下列手動設定
 仍作現有格式的參考；新流程的完成條件是退休重複填寫，不是另加一份設定表單。
 
 The packaged Windows client contains the Rust Fleet runtime. A new installation can
@@ -180,12 +180,15 @@ Dashboard 不需要先設定 Fleet。
 範例不附帶它們。自動啟動遠端中央的 helper 與 recipe 另依公開 bootstrap 合約配置；
 缺少設定不會偷偷建立新服務或新資料庫。
 
-## 加入機器：共用契約（已定，尚未實作）
+<a id="加入機器共用契約已定尚未實作"></a>
 
-本節是文件提案，沒有實作精靈。程式查核基線為 `5615d6c0`（合併 main `f7a71405`）；
-所有 `file:line` 已按此基線重核，本輪修訂只改文件。「現況」表示程式可證實；
+## 加入機器：共用契約
+
+新桌面安裝已實作在準備本機 Connector 前選擇用途；下方用途表與 D1 列記錄此邊界。
+解除連線、停止自有服務、共用設定 writer 與實機驗收仍未完成。其餘程式查核基線為
+`5615d6c0`（合併 main `f7a71405`），未觸及段落的引用保留該基線。「現況」表示程式可證實；
 「規範」表示後續驗收要求；2026-10-22 經 owner 授權由整合者決定 D1＝A、D6＝A、D8＝A，
-D2／D3／D4／D5／D7 的整合者技術預設維持原文，均不能當成已支援或已驗收行為。
+D2／D3／D4／D5／D7 的整合者技術預設維持原文；已決定項目仍須逐項區分實作與驗收。
 本節沿 E01／E03／E11、T3／T8、K02／K08／K16 接續，不增加平行 backlog。
 
 ### 現況：兩條入口與邊界
@@ -281,10 +284,33 @@ digest，沒有逐欄比較所有 metadata。[supervisor_probe.rs:103](../../des
 
 | 用途選擇（規範） | 本機資料／服務 | 完成判準與現況差額 |
 | --- | --- | --- |
-| 只查看與操作既有服務 | 引用所選中央及 workspace，依該 principal 權限操作；依 D1 可跳過本機 Connector，不得為此建立第二份專案、身分或 journal | 可閱讀合法歷史；沒有寫權限仍能完成加入。現行 managed prepare 仍先 ensure 本機中央，setup 限 personal identity；D1 已決定將既有加入入口移至服務準備前，尚未實作。[managed.rs:157](../../desktop/src-tauri/src/managed.rs#L157)、[managed_setup.py:46](../../src/bat_agent_connector/managed_setup.py#L46) |
-| 本機提供 workspace 執行能力 | 只有明確選擇後才準備自有服務；驗證安裝／server／principal／workspace，不因安裝就取得 BAT 寫權限 | 讀歷史只需觀察能力；要開始自有工作時一次檢查其完整必要條件。現有自動設定刻意關閉 writes／orchestrate／shared_clone；不能把此成功叫作可開工。[managed-setup.js:481](../../desktop/src/managed-setup.js#L481)、[pm_work_profiles.py:39](../../src/bat_agent_connector/pm_work_profiles.py#L39) |
-| 兩者兼有 | 各服務的資料、principal、workspace 清楚分開；同 repo 或同名 host 不合併 | 切換只選來源，不移動工作／草稿／已送操作；只在明確啟用的本機角色 ensure。身分依 bootstrap 驗證。[bridge.rs:1097](../../desktop/src-tauri/src/bridge.rs#L1097) |
-| 已設定安裝 | 沿用已驗證原角色、ID、history、credential refs 及原 key；變更用途是另外的明確意圖 | 不在升級／重開時偷偷改角色。現有 external config 保留選取，只有已有 managed manifest 才附帶恢復原背景服務。[managed.rs:177](../../desktop/src-tauri/src/managed.rs#L177) |
+| 只查看與操作既有服務 | 新原生安裝先選「使用既有服務」，再進「加入既有的 Connector」的原生設定與憑證 enrollment；不解包 runtime、不 ensure、不建 Python journal／身分／專案 | 已實作；權限仍由所選 Connector 的 principal 決定，純 client 不額外要求 manage。瀏覽器入口不顯示原生用途選擇。[startup_role.rs](../../desktop/src-tauri/src/startup_role.rs)、[main.rs](../../desktop/src-tauri/src/main.rs) |
+| 本機提供 workspace 執行能力 | 新安裝明確選「提供本機工作區」後，先保存用途，再由原 managed ensure owner 準備一個服務；不因安裝取得 BAT 寫權限 | 已實作用途與啟動邊界；bootstrap 驗證後才將 launch 裝入同一 Bridge，沿用既有 workspace 設定。可開工仍須其完整能力檢查。[managed.rs](../../desktop/src-tauri/src/managed.rs)、[bridge.rs](../../desktop/src-tauri/src/bridge.rs) |
+| 兩者兼有 | 先保存「兩者兼有」並準備本機服務；就緒後沿用設定中的「加入既有的 Connector」，各服務保留自己的 principal、workspace、草稿與原 key | 已實作既有兩種模式的接線；沒有新增來源切換或工作搬移。外部中央選取仍優先，原本機服務只由已有用途／安裝證據恢復。[managed.rs](../../desktop/src-tauri/src/managed.rs)、[bridge.rs](../../desktop/src-tauri/src/bridge.rs) |
+| 已設定安裝 | 無用途紀錄時，只依既有檔案推定一次：managed manifest＝provider、只有 central.json＝client、兩者都有＝both；保留 ID、history、credential refs 及原 key | 已實作並保留空白安裝的原服務。重開不改用途；外部失敗不轉為 provisioning。紀錄不可讀／符號連結會拒絕，絕不 fallback 建服務。解除連線與獨立安全停止仍待實作。[startup_role.rs](../../desktop/src-tauri/src/startup_role.rs) |
+
+原生用途紀錄位於 `app_local_data_dir/startup-role/role.json`，格式為
+`{version: 1, installation_ref: <UUID>, generation: 1, role: client|provider|both}`。
+這是本安裝的用途引用，與 Python Connector identity 及 Windows Fleet login-picker
+設定分開；Unix 使用私有目錄／檔案權限，Windows 新目錄採 owner／SYSTEM DACL。
+選擇只允許 generation 0 的 pending 狀態，原子發布一次後不覆寫。沒有紀錄、manifest
+或 central.json 的安裝停在 pending，不讀 runtime package。保存 provider／both 後中斷，
+重開交原 `ensure` 在 launcher lock／service lease 下恢復同一份資料；不靠 UI 重送修復。
+解除連線、停止與角色變更不是這個首次選擇命令的能力。
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: 無紀錄及既有設定
+    pending --> client: 保存用途
+    pending --> provider: 保存用途
+    pending --> both: 保存用途
+    client --> external: 既有設定與 enrollment
+    provider --> local: serial ensure + generation guard
+    both --> local: serial ensure + generation guard
+    local --> external: 既有加入入口
+    local --> recovery: 服務失聯
+    recovery --> local: 原 owner ensure + 身分驗證
+```
 
 ### 預覽 → 套用 → 讀回
 
@@ -389,7 +415,7 @@ client 與非正式環境 Linux BAT host 的指派由整合者私下保存，不
 
 | 決策／適用範圍 | 已採用選項與契約（2026-10-22） | 採用理由 | 實作／驗收前的限制 |
 | --- | --- | --- | --- |
-| D1 純 client 入口與既有空白安裝 | 已決定 A：允許，將既有「進階／加入既有的 Connector」入口前移到準備本機服務之前；已有空白安裝保留原資料、身分及服務，另由使用者明確選擇是否停止可證屬於本安裝且閒置的服務。後果：新安裝可純 client，舊安裝不自動變角色，停止服務須另作安全預覽。 | 讓新舊使用者都有清楚入口，並保留既有資料及可追溯停止步驟。 | 不為純 client 建第二份 journal／身分／專案；不自動刪除或轉換空白安裝。既有入口存在，但不宣稱目前已能跳過 managed prepare。[app.js:3560](../../desktop/src/app.js#L3560)、[managed.rs:157](../../desktop/src-tauri/src/managed.rs#L157) |
+| D1 新安裝與既有本機安裝 | 已決定 A；已實作新桌面安裝先選「使用既有服務／提供本機工作區／兩者兼有」，再進各既有流程。用途先持久化，client 不準備本機 Connector；舊安裝依既有檔案推定一次，保留原角色及服務。 | 純 client 不建立第二份 Python journal／身分／專案；provider／both 在 Managed.serial 下 ensure，以 generation guard 安裝到既有 Bridge；中斷後重開沿原安裝恢復。 | 尚未實作解除連線、獨立停止自有且閒置服務的安全預覽及設定 writer；Windows／macOS 原生保護與同候選實機驗收仍待完成，fixture 不等於接受。[startup_role.rs](../../desktop/src-tauri/src/startup_role.rs)、[managed.rs](../../desktop/src-tauri/src/managed.rs)、[bridge.rs](../../desktop/src-tauri/src/bridge.rs) |
 | D6 移除機器連線的保留範圍 | 已決定 A：只解除本機連線引用；保留歷史、收據及憑證引用的追溯紀錄，不撤銷憑證、不改服務狀態（已停止的仍停止）。後果：遠端與其他 client 不受影響，需另處管理憑證。 | 解除連線的效果最清楚，停止或撤銷留給各資源正式管理入口。 | 依共用變更表只解除引用；不刪歷史、BAT profile、SSH key／known_hosts，不撤銷外部共用憑證、不停止非 owned 服務。現有 setup registry 沒有 remove action，尚未實作本契約。[managed_setup.py:623](../../src/bat_agent_connector/managed_setup.py#L623) |
 | D8 整合者、設備與五事件承諾 | 已決定 A：指定一位具名整合者與一組設備（公開示例 `integrator-a`／`client-a`／`host-a`），同候選完成五事件驗收後才承諾：關視窗／鎖屏繼續背景工作；登出／重開機中斷後於支援的正常登入方式恢復原 queue／Work，不重播已送效果；主動停止只停本安裝自有資源且確認退出。後果：完整背景承諾須等五格及平台政策都通過。 | 由同一人負責同一候選的完整證據，避免不同安裝或政策的結果拼成通過。真實指派由整合者私下保存；公開只用示例名稱。 | 五事件逐格記正式安裝／登入方式、OS 政策及原操作讀回；停機期間不承諾運算。未完成五事件實測前只交 fixture 證據、不作平台承諾。程式能證明 lease／owned 邊界，不能證明各 OS 生存性。[managed_runtime.py:257](../../src/bat_agent_connector/managed_runtime.py#L257)、[windows_tunnel.rs:113](../../desktop/fleet-core/src/windows_tunnel.rs#L113) |
 

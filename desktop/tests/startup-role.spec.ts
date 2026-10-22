@@ -6,10 +6,11 @@ async function pending(page: Page, role: string | null = null) {
     const fixture = {role, generation: role ? 1 : 0, calls: [] as any[], busy: false, fail: false};
     const status = () => ({endpoint: fixture.role && fixture.role !== 'client' ? 'http://127.0.0.1:41001/' : null,
       expected_actor: fixture.role && fixture.role !== 'client' ? 'fixture-user' : null,
-      configuration_source: fixture.role === 'client' ? 'external' : 'managed',
-      error: fixture.role ? null : 'STARTUP_ROLE_PENDING', credential_available: false,
+      configuration_source: fixture.role && fixture.role !== 'client' ? 'managed' : 'external',
+      error: fixture.role ? null : 'STARTUP_ROLE_PENDING', credential_available: !!fixture.role && fixture.role !== 'client',
       credential_saved: false, enrollment_supported: true, configuration_reload: fixture.role === 'client',
-      configuration_setup: fixture.role === 'client', configuration_file: 'example/central.json', connected: false,
+      configuration_setup: !!fixture.role, configuration_file: 'example/central.json', connected: !!fixture.role && fixture.role !== 'client',
+      managed_rebind: fixture.role && fixture.role !== 'client' ? 1 : null, managed_recovery: null,
       startup_role: {role: fixture.role, generation: fixture.generation,
         installation_ref: fixture.role ? '00000000-0000-4000-8000-000000000001' : null}});
     Object.assign(window, {isTauri: true, __startupRole: fixture, __TAURI_INTERNALS__: {invoke: async (command: string, args: any) => {
@@ -38,6 +39,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 1440]) {
     await pending(page);
     const choice = page.locator('[data-startup-role]');
     await expect(choice).toBeVisible();
+    await expect(choice.getByRole('heading')).toHaveText(locale === 'zh-TW' ? '這個安裝要如何使用？' : 'How will you use this installation?');
     await expect(page.locator('[data-native-setup]')).toHaveCount(0);
     await expect(choice.getByRole('button')).toHaveCount(3);
     expect(await page.evaluate(() => (window as any).__startupRole.calls.filter((c: any) =>
@@ -65,3 +67,15 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 1440]) {
     await context.close();
   });
 }
+
+for (const locale of ['en-US', 'zh-TW']) test(`selection refusal keeps the pending role and sends no setup (${locale})`, async ({browser}) => {
+  const context = await browser.newContext({locale}), page = await context.newPage();
+  await pending(page);
+  await page.evaluate(() => {(window as any).__startupRole.fail = true;});
+  await page.locator('[data-role=client]').click();
+  await expect(page.locator('[data-startup-role] [data-api-error]')).toBeVisible();
+  await expect(page.locator('[data-role=provider]')).toBeEnabled();
+  expect(await page.evaluate(() => (window as any).__startupRole.calls.filter((c: any) =>
+    c.command === 'connector_setup_configuration' || c.command === 'connector_enroll'))).toEqual([]);
+  await context.close();
+});
