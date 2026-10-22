@@ -190,3 +190,16 @@ test('ambiguous session names link to the session list without guessing the host
   const [entry] = await earlierDrafts(identity, local);
   assert.equal(entry.state, 'possibly-sent'); assert.equal(entry.href, '#/sessions');
 });
+
+test('recovery warnings and field labels have matching English and Traditional Chinese strings', async () => {
+  const {earlierDraftStrings} = await import('../src/earlier-drafts-strings.js');
+  const {earlierFieldLabel} = await import('../src/earlier-drafts.js');
+  assert.deepEqual(Object.keys(earlierDraftStrings.en).sort(), Object.keys(earlierDraftStrings['zh-TW']).sort());
+  for (const locale of ['en', 'zh-TW']) {
+    const strings = earlierDraftStrings[locale], t = (key: string) => strings[key] || key;
+    assert.ok(Object.values(strings).every(value => typeof value === 'string' && value.trim()));
+    for (const field of ['title', 'goal', 'rationale', 'reason_0', 'follow_ups.0.verification', 'items.1.prompt', 'reviewText'])
+      assert.ok(!earlierFieldLabel(t, field).includes('earlier_field_'), `${locale}: ${field}`);
+    assert.equal(earlierFieldLabel(t, 'reason_0'), t('earlier_field_reason') + ' 1');
+  }
+});
