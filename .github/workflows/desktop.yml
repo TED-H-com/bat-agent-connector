@@ -12,6 +12,7 @@ on:
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/desktop*.yml"
+      - ".github/actions/**"
       # BEGIN generated fixture inputs
       - ".gitignore"
       - "LICENSE"
@@ -116,6 +117,7 @@ on:
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/desktop*.yml"
+      - ".github/actions/**"
       # BEGIN generated fixture inputs
       - ".gitignore"
       - "LICENSE"
@@ -304,6 +306,8 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+      - name: Bound stalled apt downloads
+        uses: ./.github/actions/bounded-apt
       - name: Chromium dependencies and existing DejaVu font environment
         run: |
           npx playwright install-deps chromium
@@ -354,6 +358,8 @@ jobs:
         working-directory: .
         run: uv sync --locked --extra dev
       - run: npm ci
+      - name: Bound stalled apt downloads
+        uses: ./.github/actions/bounded-apt
       - run: npx playwright install --with-deps chromium
       - name: Start shared ten-minute UI script budget
         run: echo "BATC_CENTRAL_UI_DEADLINE=$(($(date +%s) + 600))" >> "$GITHUB_ENV"
@@ -462,13 +468,7 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
       - name: Bound stalled apt downloads
-        run: |
-          # Shorter connection/data waits allow faster mirror failover; keep three retries.
-          sudo tee /etc/apt/apt.conf.d/99-playwright-ci > /dev/null <<'EOF'
-          Acquire::Retries "3";
-          Acquire::http::Timeout "15";
-          Acquire::https::Timeout "15";
-          EOF
+        uses: ./.github/actions/bounded-apt
       - name: Chromium system dependencies
         working-directory: desktop
         run: npx playwright install-deps chromium
@@ -535,11 +535,17 @@ jobs:
         with:
           toolchain: "1.98.1"
           components: rustfmt, clippy
+      - name: Bound apt for Linux native libraries
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/bounded-apt
       - name: Linux native build libraries
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xvfb xdotool x11-utils dbus-x11 python3-pil
       - run: npm ci
       - run: npm run build
+      - name: Bound apt for packaged Chromium
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/bounded-apt
       - name: Chromium for packaged managed setup
         if: runner.os == 'Linux'
         run: npx playwright install --with-deps chromium

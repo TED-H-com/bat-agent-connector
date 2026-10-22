@@ -11,6 +11,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from scripts.desktop_fixture_inputs import workflow_steps
+
 ROOT = Path(__file__).resolve().parents[1]
 REMOVE_ALLOWLIST = "Remove desktop/tests/**/*.ts from the native allowlist."
 SCRIPT_PATH = re.compile(r'''[^\s"'`;|&()<>]+\.(?:mjs|cjs|js|py|ts|swift|ps1)\b''')
@@ -22,7 +24,6 @@ JS_LITERAL_ARGUMENT = re.compile(r'''(["'`])([^"'`]+)\1\s*\)''')
 
 def build_scripts(root: Path) -> set[Path]:
     job = yaml.safe_load((root / ".github/workflows/desktop.yml").read_text())["jobs"]["build"]
-    default_cwd = root / job.get("defaults", {}).get("run", {}).get("working-directory", ".")
     tests = (root / "desktop/tests").resolve()
     scripts: set[Path] = set()
     npm_seen: set[tuple[Path, str]] = set()
@@ -43,9 +44,8 @@ def build_scripts(root: Path) -> set[Path]:
                 package = json.loads((cwd / "package.json").read_text())
                 collect(package["scripts"][script], cwd)
 
-    for step in job["steps"]:
+    for step, cwd, _ in workflow_steps(root, job):
         if "run" in step:
-            cwd = root / step["working-directory"] if "working-directory" in step else default_cwd
             collect(step["run"], cwd)
     return scripts
 
@@ -139,6 +139,21 @@ def fixture_repository(tmp_path, command, *, root_cwd=False):
 ])
 def test_guard_rejects_direct_typescript_steps_and_npm_scripts(tmp_path, command, root_cwd):
     fixture_repository(tmp_path, command, root_cwd=root_cwd)
+    with pytest.raises(AssertionError, match=re.escape(REMOVE_ALLOWLIST)):
+        native_dependency_closure(tmp_path)
+
+
+def test_guard_rejects_typescript_in_local_composite_action(tmp_path):
+    fixture_repository(tmp_path, 'echo setup')
+    workflow = tmp_path / '.github/workflows/desktop.yml'
+    document = yaml.safe_load(workflow.read_text())
+    document['jobs']['build']['steps'] = [{'uses': './.github/actions/native'}]
+    workflow.write_text(yaml.safe_dump(document))
+    action = tmp_path / '.github/actions/native/action.yml'
+    action.parent.mkdir(parents=True)
+    action.write_text(yaml.safe_dump({'runs': {'using': 'composite', 'steps': [
+        {'shell': 'bash', 'run': 'node desktop/tests/helper.ts'},
+    ]}}))
     with pytest.raises(AssertionError, match=re.escape(REMOVE_ALLOWLIST)):
         native_dependency_closure(tmp_path)
 

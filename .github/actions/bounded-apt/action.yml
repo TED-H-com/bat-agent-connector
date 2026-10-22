@@ -1,0 +1,14 @@
+name: Bound stalled apt downloads
+description: Keep three apt retries while shortening stalled connection and data waits.
+runs:
+  using: composite
+  steps:
+    - name: Configure apt download bounds
+      shell: bash
+      run: |
+        # Shorter connection/data waits allow faster mirror failover; keep three retries.
+        sudo tee /etc/apt/apt.conf.d/99-playwright-ci > /dev/null <<'EOF'
+        Acquire::Retries "3";
+        Acquire::http::Timeout "15";
+        Acquire::https::Timeout "15";
+        EOF

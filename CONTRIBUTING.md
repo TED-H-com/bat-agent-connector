@@ -109,9 +109,10 @@ gated by scope.
 The full Python matrix is required by any `.py`/`.pyi` file, Python environment or
 test configuration (`pyproject.toml`, `uv.lock`, `uv.toml`, `.python-version`,
 `pytest.ini`, `tox.ini`, `setup.cfg`, `.coveragerc`, `requirements*.txt`), or anything
-under `tests/`, `scripts/`, `desktop/scripts/` or `.github/workflows/`. This includes
-conftests, the shard plugin, measured weights, fixture data and Python invocation
-scripts. Other PR changes use the oldest supported Python, 3.10.
+under `tests/`, `scripts/`, `desktop/scripts/`, `.github/workflows/` or
+`.github/actions/`. This includes conftests, the shard plugin, measured weights,
+fixture data and Python invocation scripts. Other PR changes use the oldest
+supported Python, 3.10.
 
 Native level `none` skips builds when **every** changed path matches this allowlist:
 
@@ -159,7 +160,8 @@ scope classifier uses only the standard library.
 Desktop PR and main-push path filters also contain generated, exact fixture inputs.
 Run `uv run python scripts/desktop_fixture_inputs.py --write` after changing a
 fixture's dependencies. The ordinary pytest guard follows workflow/npm entrypoints,
-local imports and script references, and checks imports and file reads in a fresh
+local composite action steps and their metadata, local imports and script
+references, and checks imports and file reads in a fresh
 process, including the publication seed. It checks both identical path lists and
 their generated blocks. A shared fixture test change runs desktop CI and retains
 all four native builds; an unrelated test change runs Python CI without starting
