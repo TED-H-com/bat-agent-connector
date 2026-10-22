@@ -19,12 +19,14 @@ import pytest
 
 from bat_agent_connector import (
     api_auth,
+    board_github,
     managed_runtime,
     platform_files,
 )
 from bat_agent_connector.errors import ConnectionLost
 from bat_agent_connector.task_daemon import TaskDaemon
 from tests import test_repository_sync
+from tests.conftest import make_config
 from tests.operation_helpers import settle_operations, stop_workers
 from tests.test_api_v1 import http
 from tests.test_checkpoints import snapshot
@@ -39,6 +41,7 @@ from tests.test_pm_work_attempt_result import (
 from tests.test_pm_work_follow_up import _get_op, _patch_roundtrip, _post, _settle
 from tests.test_pr_publication import DELIVERER, delivery_ready, envelope, fixed, pub
 from tests.test_repository_sync import world as repository_world
+from tests.test_work_items import item, project
 from tests.upgrade_continuity_helpers import crash_after_201, rows, seed_publication
 
 _ = deployment, pm, ready, start_ready, delivery_ready, fixed, pub, installation, versioned_installation
@@ -103,6 +106,36 @@ def assert_retained(db, saved):
         assert actual[:len(expected)] == expected, table
         if table != 'api_events':
             assert actual == expected, table
+
+
+async def test_startup_preserves_old_work_rows_when_github_column_is_added(mock, tmp_path, monkeypatch):
+    config = make_config(mock, writes=True)
+    path = tmp_path / 'journal/tasks.sqlite3'
+    # Seed through the real actions on the base schema, before the additive installer existed.
+    with monkeypatch.context() as previous:
+        previous.setattr(board_github, 'install', lambda ops: None)
+        daemon = TaskDaemon(config, path)
+        daemon.acquire_owner()
+    try:
+        pid = await project(daemon)
+        for title in ('First preserved item', 'Second preserved item'):
+            await item(daemon, pid, title, state='waiting', request='Keep the original request')
+        assert 'github_external' not in {column[1] for column in daemon.ops.db.execute('PRAGMA table_info(work_items)')}
+        saved = retained(daemon.ops.db)
+    finally:
+        await daemon.fleet.close()
+        await daemon.inventory.close()
+        daemon.journal.close()
+
+    # TaskDaemon -> ApiV1 -> board_github.install is the actual upgraded startup path.
+    daemon = TaskDaemon(config, path)
+    try:
+        assert [tuple(row) for row in daemon.ops.db.execute('SELECT github_external FROM work_items')] == [(None,), (None,)]
+        assert_retained(daemon.ops.db, saved)
+    finally:
+        await daemon.fleet.close()
+        await daemon.inventory.close()
+        daemon.journal.close()
 
 
 def differences(before, after, path=''):
