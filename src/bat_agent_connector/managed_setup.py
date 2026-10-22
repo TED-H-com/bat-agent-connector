@@ -29,7 +29,7 @@ from .config import git_transport, normalize_fingerprint, parse_config, tomllib
 from .connection_sources import (
     SourceUnavailable,
     TokenMode,
-    parse_profile_index,
+    read_profile_index,
     read_token_store,
     select_profiles_directory,
 )
@@ -124,14 +124,8 @@ def _profiles(document):
         directory = _profile_directory(document)
     except SourceUnavailable as error:
         return [], str(error)
-    try:
-        path = directory / "index.json"
-        if path.is_symlink() or path.stat().st_size > MAX_CONFIG:
-            raise ValueError
-        listing = parse_profile_index(path.read_text())
-        if listing.reason == "PROFILE_INDEX_INVALID":
-            raise ValueError
-    except (OSError, ValueError, AttributeError):
+    listing = read_profile_index(directory)
+    if listing.reason in {"PROFILE_INDEX_INVALID", "PROFILE_INDEX_UNAVAILABLE"}:
         return [], "BAT profiles are unavailable; enter the host and its trusted fingerprint"
     store = read_token_store(directory, mode=TokenMode.ADMISSION)
     result = []

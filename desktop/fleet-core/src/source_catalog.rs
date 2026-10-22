@@ -1,8 +1,9 @@
 //! Bounded current-account BAT listing. No IPC, locks, writes or BAT contact.
 //! This is deliberately separate from the Kit's reviewed-copy drift validator.
+pub use crate::credential::STORE_BOUND;
 use crate::{
     configuration,
-    credential::{read_fixed, AdmissionStore, TokenStatus},
+    credential::{read_fixed, read_private_fixed, AdmissionStore, TokenStatus},
     strict_json,
 };
 use serde::Serialize;
@@ -68,6 +69,9 @@ fn default_text<'a>(value: &'a Value, default: &'a str) -> Option<&'a str> {
 fn remote_profile(profile: &Value) -> Option<RemoteProfile> {
     let id = text(&profile["id"], 256)?;
     let host = text(&profile["remoteHost"], 256)?;
+    if !host.is_ascii() {
+        return None;
+    }
     let host = if let Some(inner) = host.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
         if !inner.contains(':') {
             return None;
@@ -222,21 +226,44 @@ pub fn read(roaming: &Path) -> Catalog {
         Ok(_) => (),
         Err(error) => {
             return Catalog::unavailable(if error.kind() == std::io::ErrorKind::NotFound {
-                "DATA_DIRECTORY_UNAVAILABLE"
+                "PROFILE_INDEX_UNAVAILABLE"
             } else {
                 "DATA_DIRECTORY_UNREADABLE"
             })
         }
     }
+    let profiles = directory.join("profiles");
+    match std::fs::symlink_metadata(&profiles) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            return Catalog::unavailable("PROFILE_INDEX_UNAVAILABLE")
+        }
+        Ok(metadata) if !metadata.is_dir() => {
+            return Catalog::unavailable("DATA_DIRECTORY_INVALID")
+        }
+        Ok(_) => (),
+        Err(error) => {
+            return Catalog::unavailable(if error.kind() == std::io::ErrorKind::NotFound {
+                "PROFILE_INDEX_UNAVAILABLE"
+            } else {
+                "DATA_DIRECTORY_UNREADABLE"
+            })
+        }
+    }
+    if std::fs::read_dir(&profiles).is_err() {
+        return Catalog::unavailable("DATA_DIRECTORY_UNREADABLE");
+    }
     let index = match read_fixed(&directory, "profiles", "index.json", INDEX_BOUND) {
         Ok(index) => index,
-        Err(_) => return Catalog::unavailable("PROFILE_INDEX_INVALID"),
+        Err(_) => return Catalog::unavailable("PROFILE_INDEX_UNAVAILABLE"),
     };
-    let store = match read_fixed(
+    if std::str::from_utf8(&index).is_err() {
+        return Catalog::unavailable("PROFILE_INDEX_UNAVAILABLE");
+    }
+    let store = match read_private_fixed(
         &directory,
         "profiles",
         "remote-tokens.enc.json",
-        INDEX_BOUND,
+        STORE_BOUND,
     ) {
         Ok(bytes) => AdmissionStore::parse(&bytes),
         Err(_) => AdmissionStore::unreadable(),

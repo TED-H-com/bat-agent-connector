@@ -45,6 +45,24 @@ fn shared_source_policy_directory_vectors() {
             path
         });
         let actual = data_directory(&fixture.0.join("roaming"));
+        // The native selector returns a data root; admission binds its profiles
+        // child. Assert the shared admission entry as well as legacy compatibility.
+        let admission = &row["expected"]["admission"];
+        if let Some(reason) = admission["reason"].as_str() {
+            assert_eq!(
+                actual.as_ref().map(|_| ()).map_err(|e| *e),
+                Err(reason),
+                "{}",
+                row["id"]
+            );
+        } else {
+            assert_eq!(
+                actual.as_ref().unwrap().join("profiles"),
+                expected_root(&fixture).join(admission["path"].as_str().unwrap()),
+                "{}",
+                row["id"]
+            );
+        }
         #[cfg(unix)]
         if let Some(path) = denied {
             use std::os::unix::fs::PermissionsExt;

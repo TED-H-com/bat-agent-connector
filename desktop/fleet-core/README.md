@@ -26,7 +26,8 @@ The native-only credential reader resolves the selected inventory's BAT profile 
 observe DPAPI reference from fixed, bounded files. It never falls back to a desktop mutation token,
 another profile, another data directory or an environment variable. See the
 [format and evidence contract](../../docs/design/fleet-credentials.md); Windows DPAPI runtime
-compatibility remains a Windows-runner gate.
+compatibility remains a Windows-runner gate. The [native BAT admission and bounded catalog](../../docs/design/bat-source-catalog.md)
+shares versioned admission expectations with Python and preserves legacy references.
 
 Malformed existing preferences fail closed instead of silently enabling every connection. JSON field
 spelling is exact and decoded keys must be unique ignoring case. Profile IDs are also unique ignoring

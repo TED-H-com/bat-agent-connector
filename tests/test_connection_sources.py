@@ -17,10 +17,17 @@ from bat_agent_connector.connection_sources import (
     TokenMode,
     parse_profile_index,
     parse_token_store,
+    read_profile_index,
     read_token_store,
     select_profiles_directory,
 )
-from tests.source_policy_inputs import profile_index_inputs
+from tests.source_policy_inputs import (
+    format_error_store_inputs,
+    prepare_profile_files,
+    profile_file_inputs,
+    profile_index_inputs,
+    token_file_inputs,
+)
 
 GOLDEN = Path(__file__).parent / "fixtures" / "bat-source-policy-v1.json"
 VECTORS = json.loads(GOLDEN.read_text())
@@ -75,6 +82,11 @@ def test_policy_vectors_match_producer(tmp_path):
         row["expected"].pop("python_admission", None)
         row["expected"]["admission"] = outcome
         row["expected"]["python_runtime"] = outcome
+    existing = {row["id"] for row in actual["token_stores"]}
+    for row in format_error_store_inputs():
+        if row["id"] not in existing:
+            actual["token_stores"].append({**row, "expected": {
+                "rust_legacy_fleet": {"state": "unavailable", "reason": "CREDENTIAL_MISSING"}}})
     for row in actual["token_stores"]:
         row["expected"].pop("python_admission", None)
         row["expected"]["admission"] = token_result(row, TokenMode.ADMISSION)
@@ -83,9 +95,47 @@ def test_policy_vectors_match_producer(tmp_path):
         {**row, "expected": asdict(parse_profile_index(row["index"]))}
         for row in profile_index_inputs()
     ]
+    actual["token_files"] = []
+    for row in token_file_inputs():
+        directory = tmp_path / row["id"]
+        directory.mkdir()
+        path = directory / "remote-tokens.enc.json"
+        path.write_bytes(bytes(row["store_bytes"]))
+        path.chmod(row["mode"])
+        result = read_token_store(directory, mode=TokenMode.ADMISSION).lookup("remote-1")
+        actual["token_files"].append({**row, "expected": {"state": result.state, "reason": result.reason}})
+    actual["profile_files"] = []
+    for row in profile_file_inputs():
+        directory = prepare_profile_files(tmp_path / row["id"], row)
+        result = read_profile_index(directory)
+        actual["profile_files"].append({**row, "expected": asdict(result)})
+    actual["provenance"]["file_admission"] = "token_files use raw byte arrays and explicit POSIX modes through read_token_store; profile_files use prepare_profile_files and read_profile_index plus setup._profiles. Native consumes the same expected entry through its real catalog and policy resolver. POSIX-only fixtures are skipped on Windows."
     if os.environ.get("BATC_UPDATE_SOURCE_POLICY") == "1":
         GOLDEN.write_text(json.dumps(actual, ensure_ascii=True, indent=2) + "\n")
     assert actual == json.loads(GOLDEN.read_text())
+
+
+@pytest.mark.parametrize("row", VECTORS.get("token_files", []), ids=lambda r: r["id"])
+def test_token_file_vectors_through_private_reader(tmp_path, row):
+    if row.get("posix_only") and os.name == "nt":
+        pytest.skip("POSIX mode checks do not model Windows access")
+    path = tmp_path / "remote-tokens.enc.json"
+    path.write_bytes(bytes(row["store_bytes"]))
+    path.chmod(row["mode"])
+    result = read_token_store(tmp_path, mode=TokenMode.ADMISSION).lookup("remote-1")
+    assert {"state": result.state, "reason": result.reason} == row["expected"]
+
+
+@pytest.mark.parametrize("row", VECTORS.get("profile_files", []), ids=lambda r: r["id"])
+def test_profile_file_vectors_through_real_listing(tmp_path, row):
+    if row.get("posix_only") and os.name == "nt":
+        pytest.skip("POSIX symlink fixture; Windows reparse handling stays a native CI gate")
+    directory = prepare_profile_files(tmp_path, row)
+    assert asdict(read_profile_index(directory)) == row["expected"]
+    actual, error = setup._profiles({"bat": {"profiles_dir": str(directory)}})
+    assert [p["id"] for p in actual] == [p["id"] for p in row["expected"]["profiles"]]
+    if not actual:
+        assert error == "BAT profiles are unavailable; enter the host and its trusted fingerprint"
 
 
 @pytest.mark.parametrize("row", VECTORS.get("profile_indexes", []), ids=lambda row: row["id"])

@@ -124,6 +124,10 @@ class _AmbiguousStore(ValueError):
     pass
 
 
+class _ObjectPairs(list):
+    """Retain overwritten values until format/Unicode/depth validation finishes."""
+
+
 def _unique_object(pairs):
     # Match native strict_json's decoded, lowercase collision check at every
     # level. Lookup itself remains exact, including for non-ASCII profile IDs.
@@ -147,7 +151,11 @@ def _native_json_values(value, depth=0):
         # serde_json's default recursion budget refuses the 128th container.
         if depth >= 127:
             raise ValueError
-        if isinstance(value, dict):
+        if isinstance(value, _ObjectPairs):
+            for key, _ in value:
+                key.encode("utf-8")
+            values = (child for _, child in value)
+        elif isinstance(value, dict):
             for key in value:
                 key.encode("utf-8")
             values = value.values()
@@ -161,15 +169,28 @@ def _native_json_values(value, depth=0):
         raise ValueError
 
 
+def _admission_json(contents):
+    decoded = json.loads(contents, object_pairs_hook=_ObjectPairs, parse_constant=_invalid_constant)
+    # Format wins even when a bad value would be overwritten by a duplicate.
+    _native_json_values(decoded)
+
+    def objects(value):
+        if isinstance(value, _ObjectPairs):
+            return _unique_object((key, objects(child)) for key, child in value)
+        if isinstance(value, list):
+            return [objects(child) for child in value]
+        return value
+
+    return objects(decoded)
+
+
 def parse_token_store(contents: str, *, mode: TokenMode) -> TokenStore:
     """Decode once; all states/reasons/reprs are free of credential material."""
     strict = mode is TokenMode.ADMISSION
 
     def decode(value):
         if strict:
-            decoded = json.loads(value, object_pairs_hook=_unique_object, parse_constant=_invalid_constant)
-            _native_json_values(decoded)
-            return decoded
+            return _admission_json(value)
         return json.loads(value)
 
     try:
@@ -227,6 +248,8 @@ def _remote_profile(profile):
 
     ident = _profile_text(profile.get("id"))
     host = _profile_text(profile.get("remoteHost"))
+    if not host.isascii():
+        raise ValueError
     if host.startswith("[") and host.endswith("]"):
         host = host[1:-1]
         if ":" not in host:
@@ -266,8 +289,7 @@ def parse_profile_index(contents: str) -> ProfileListing:
     try:
         if len(contents.encode("utf-8")) > STORE_BOUND:
             raise ValueError
-        index = json.loads(contents, object_pairs_hook=_unique_object, parse_constant=_invalid_constant)
-        _native_json_values(index)
+        index = _admission_json(contents)
         profiles = index.get("profiles", [])
         if not isinstance(profiles, list) or len(profiles) > PROFILE_BOUND:
             raise ValueError
@@ -294,3 +316,22 @@ def parse_profile_index(contents: str) -> ProfileListing:
             skipped.append({"entry": entry, "reason": reason})
     reason = ("PROFILE_INDEX_PARTIAL" if skipped else "PROFILE_CATALOG_AVAILABLE") if result else "NO_COMPLETE_PROFILES"
     return ProfileListing(result, reason, skipped)
+
+
+def read_profile_index(directory: Path) -> ProfileListing:
+    """Admission listing only. Legacy runtime token reads retain their rules."""
+    try:
+        # Match native's no-descendant-link listing; never relax native admission
+        # to follow a linked profiles directory. Source selection itself is unchanged.
+        if directory.is_symlink():
+            raise ValueError
+        path = directory / "index.json"
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > STORE_BOUND:
+            raise ValueError
+        with path.open("rb") as stream:
+            contents = stream.read(STORE_BOUND + 1)
+        if len(contents) > STORE_BOUND:
+            raise ValueError
+        return parse_profile_index(contents.decode("utf-8"))
+    except (OSError, ValueError):
+        return ProfileListing([], "PROFILE_INDEX_UNAVAILABLE", [])

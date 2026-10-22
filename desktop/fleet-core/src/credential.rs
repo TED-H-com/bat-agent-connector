@@ -7,11 +7,13 @@ use std::{
     io::Read,
     path::Path,
 };
-use zeroize::{Zeroize, Zeroizing};
+#[cfg(windows)]
+use zeroize::Zeroize;
+use zeroize::Zeroizing;
 
 const MISSING: &str = "CREDENTIAL_MISSING";
 const REFERENCE: &str = "CREDENTIAL_REFERENCE_INVALID";
-const STORE_BOUND: usize = 1024 * 1024;
+pub const STORE_BOUND: usize = 1024 * 1024;
 const PROTECTED_BOUND: usize = 256 * 1024;
 const TOKEN_BOUND: usize = 64 * 1024;
 
@@ -46,7 +48,7 @@ impl AdmissionStore {
         Self::status("unavailable", "TOKEN_STORE_UNREADABLE")
     }
     pub fn parse(bytes: &[u8]) -> Self {
-        if bytes.len() > STORE_BOUND {
+        if bytes.len() > STORE_BOUND || std::str::from_utf8(bytes).is_err() {
             return Self::unreadable();
         }
         match Self::decode(bytes) {
@@ -225,7 +227,12 @@ pub fn resolve(data_dir: &Path, reference: &CredentialRef) -> Result<ProbeCreden
             profile_id,
             source_policy,
         } => {
-            let bytes = read_fixed(data_dir, "profiles", "remote-tokens.enc.json", STORE_BOUND)
+            let reader = if source_policy.is_some() {
+                read_private_fixed
+            } else {
+                read_fixed
+            };
+            let bytes = reader(data_dir, "profiles", "remote-tokens.enc.json", STORE_BOUND)
                 .map_err(|reason| {
                     if source_policy.is_some() {
                         "TOKEN_STORE_UNREADABLE"
@@ -282,6 +289,23 @@ pub(crate) fn read_fixed(
     name: &str,
     bound: usize,
 ) -> Result<Zeroizing<Vec<u8>>> {
+    read_fixed_policy(data_dir, directory, name, bound, false)
+}
+pub(crate) fn read_private_fixed(
+    data_dir: &Path,
+    directory: &str,
+    name: &str,
+    bound: usize,
+) -> Result<Zeroizing<Vec<u8>>> {
+    read_fixed_policy(data_dir, directory, name, bound, true)
+}
+fn read_fixed_policy(
+    data_dir: &Path,
+    directory: &str,
+    name: &str,
+    bound: usize,
+    private: bool,
+) -> Result<Zeroizing<Vec<u8>>> {
     if !data_dir.is_absolute() {
         return Err(MISSING);
     }
@@ -296,7 +320,7 @@ pub(crate) fn read_fixed(
     }
     let path = parent.join(name);
     let metadata = path.symlink_metadata().map_err(|_| MISSING)?;
-    if !metadata.is_file() || !no_link(&metadata) {
+    if !metadata.is_file() || !no_link(&metadata) || private && !private_metadata(&metadata) {
         return Err(MISSING);
     }
     let mut options = OpenOptions::new();
@@ -313,20 +337,61 @@ pub(crate) fn read_fixed(
         options.custom_flags(0x0020_0000); // FILE_FLAG_OPEN_REPARSE_POINT
     }
     let file = options.open(path).map_err(|_| MISSING)?;
-    read_regular(file, bound)
+    if private {
+        read_regular_policy(file, bound, true)
+    } else {
+        read_regular(file, bound)
+    }
 }
 fn read_regular(file: File, bound: usize) -> Result<Zeroizing<Vec<u8>>> {
+    read_regular_policy(file, bound, false)
+}
+#[cfg(unix)]
+fn private_owner_mode(metadata: &Metadata, uid: u32) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    metadata.uid() == uid && metadata.mode() & 0o077 == 0
+}
+fn private_metadata(metadata: &Metadata) -> bool {
+    #[cfg(unix)]
+    {
+        private_owner_mode(metadata, unsafe { libc::getuid() })
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = metadata;
+        true
+    }
+}
+fn read_regular_policy(mut file: File, bound: usize, private: bool) -> Result<Zeroizing<Vec<u8>>> {
     let meta = file.metadata().map_err(|_| MISSING)?;
-    if !meta.is_file() || !no_link(&meta) || meta.len() > bound as u64 {
+    if !meta.is_file()
+        || !no_link(&meta)
+        || meta.len() > bound as u64
+        || private && !private_metadata(&meta)
+    {
         return Err(MISSING);
     }
-    let mut out = Zeroizing::new(Vec::new());
-    file.take(bound as u64 + 1)
-        .read_to_end(&mut out)
-        .map_err(|_| MISSING)?;
-    if out.len() > bound {
+    let length = meta.len() as usize;
+    let mut out = Zeroizing::new(Vec::with_capacity(length + 1));
+    out.resize(length + 1, 0);
+    // Fixed slice reads cannot reallocate. Refuse growth past the observed size
+    // rather than leaving old copies of a growing secret buffer behind.
+    let mut used = 0;
+    while used < out.len() {
+        let read = match file.read(&mut out[used..]) {
+            Ok(read) => read,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => return Err(MISSING),
+        };
+        if read == 0 {
+            break;
+        }
+        used += read;
+    }
+    if used > length {
         return Err(MISSING);
     }
+    out.truncate(used);
     Ok(out)
 }
 /// Successful parsed secret trees are scrubbed, including other profiles. Parser
@@ -338,17 +403,7 @@ impl Drop for SecretJson {
     }
 }
 fn scrub(value: &mut Value) {
-    match value {
-        Value::String(s) => s.zeroize(),
-        Value::Array(values) => values.iter_mut().for_each(scrub),
-        Value::Object(values) => {
-            for (mut key, mut value) in std::mem::take(values) {
-                key.zeroize();
-                scrub(&mut value);
-            }
-        }
-        _ => (),
-    }
+    strict_json::scrub(value);
 }
 fn profile_token(bytes: &[u8], profile_id: &str) -> Result<Zeroizing<String>> {
     // UTF8 BOM matches .NET ReadAllText; Kit writes UTF8 without a BOM.

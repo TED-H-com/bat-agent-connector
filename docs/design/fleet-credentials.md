@@ -62,6 +62,8 @@ The runtime must keep blocking filesystem/DPAPI work off its UI thread.
 Owned file buffers, retained parsed secret strings, UTF-16 buffers, tokens and Windows plaintext
 allocations are zeroed on drop; allocated Windows output is then freed. Parser failure internals,
 OS/crypto internals and later transport libraries may make temporary copies outside this guarantee.
+Serde JSON's success-path unescape scratch can also retain the decoded `data` briefly
+and is freed without zeroing; scrubbing the retained tree does not erase that copy.
 Errors expose only fixed missing/invalid-reference or admission reason codes, never paths, profile names, credential
 contents or OS exception text. The resolver never changes a credential file.
 

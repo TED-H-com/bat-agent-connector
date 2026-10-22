@@ -2,6 +2,103 @@ use super::*;
 use serde_json::json;
 use std::path::PathBuf;
 
+#[test]
+fn store_bound_is_named_independently_from_index_bound() {
+    assert_eq!(crate::source_catalog::STORE_BOUND, STORE_BOUND);
+}
+
+#[test]
+fn format_errors_precede_ambiguity_after_a_complete_parse() {
+    let vectors: Value = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/bat-source-policy-v1.json"
+    ))
+    .unwrap();
+    let mut failures = vec![];
+    for row in vectors["token_stores"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|r| r["id"].as_str().unwrap().starts_with("format-precedence-"))
+    {
+        let result =
+            AdmissionStore::parse(row["store"].as_str().unwrap().as_bytes()).lookup("remote-1");
+        eprintln!("{}: {} / {}", row["id"], result.state, result.reason);
+        if result != TokenStatus::new("unsupported", "TOKEN_STORE_FORMAT") {
+            failures.push(row["id"].clone());
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "format precedence failures: {failures:?}"
+    );
+}
+
+#[test]
+fn file_buffer_is_allocated_once_from_bounded_metadata() {
+    let temp = Temporary::new();
+    for length in [0, 1000, STORE_BOUND] {
+        let path = temp.write("profiles/buffer", &vec![b'x'; length]);
+        let bytes = read_regular(File::open(path).unwrap(), STORE_BOUND).unwrap();
+        assert_eq!(bytes.len(), length);
+        assert_eq!(
+            bytes.capacity(),
+            length + 1,
+            "secret buffers must not grow by reallocation"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn policy_file_modes_are_private_while_legacy_stays_compatible() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = Temporary::new();
+    let path = temp.write(
+        "profiles/remote-tokens.enc.json",
+        &profile_store(json!({"tokens":{"profile-1":"fixture-secret"}})),
+    );
+    let legacy_inv = inventory();
+    let legacy = CredentialRef::for_bat(&legacy_inv, "node-1").unwrap();
+    let mut doc = legacy_inv.document().clone();
+    doc["credentials"]["bat-node-1"]["source_policy"] = json!(1);
+    let inv = Inventory::parse(&serde_json::to_vec(&doc).unwrap()).unwrap();
+    let policy = CredentialRef::for_bat(&inv, "node-1").unwrap();
+    let mut failures = vec![];
+    for mode in [0o600, 0o644, 0o640, 0o604] {
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+        assert!(resolve(&temp.0, &legacy).is_ok());
+        let result = resolve(&temp.0, &policy);
+        eprintln!(
+            "policy mode {mode:04o}: {}",
+            result
+                .as_ref()
+                .map(|_| "TOKEN_AVAILABLE")
+                .unwrap_or_else(|e| *e)
+        );
+        if mode == 0o600 {
+            assert!(result.is_ok());
+        } else if !matches!(result, Err("TOKEN_STORE_UNREADABLE")) {
+            failures.push(mode);
+        }
+    }
+    assert!(failures.is_empty(), "unsafe policy modes: {failures:?}");
+}
+
+#[cfg(unix)]
+#[test]
+fn foreign_owner_metadata_is_refused_against_real_uid() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = Temporary::new();
+    let path = temp.write("profiles/remote-tokens.enc.json", b"{}");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    let metadata = File::open(&path).unwrap().metadata().unwrap();
+    let uid = unsafe { libc::getuid() };
+    assert!(private_owner_mode(&metadata, uid));
+    // The actual held-file predicate is tested against a different owner ID,
+    // without a privileged chown or replacing any stdlib metadata class.
+    assert!(!private_owner_mode(&metadata, uid.wrapping_add(1)));
+}
+
 struct Temporary(PathBuf);
 impl Temporary {
     fn new() -> Self {
@@ -17,6 +114,11 @@ impl Temporary {
         let path = self.0.join(relative);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, bytes).unwrap();
+        #[cfg(unix)]
+        if relative.ends_with("remote-tokens.enc.json") {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        }
         path
     }
 }

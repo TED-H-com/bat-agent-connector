@@ -1,5 +1,5 @@
 //! Native port of the reviewed Fleet Kit inventory/profile contract. No secrets in errors.
-use crate::{strict_json, Result};
+use crate::{credential::BAT_SOURCE_POLICY, strict_json, Result};
 use regex::Regex;
 use serde_json::{Map, Value};
 use std::{collections::HashSet, net::Ipv4Addr};
@@ -224,7 +224,7 @@ impl Inventory {
                     text(&value["profile_id"])?;
                     if value
                         .get("source_policy")
-                        .is_some_and(|v| v.as_u64() != Some(1))
+                        .is_some_and(|v| v.as_u64() != Some(BAT_SOURCE_POLICY))
                     {
                         return Err(INVALID);
                     }
